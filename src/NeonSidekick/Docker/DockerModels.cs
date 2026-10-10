@@ -13,7 +13,8 @@ public sealed record DockerMount(string Type, string? Name, string? Source, stri
 /// One container as <c>GET /containers/json</c> lists it (2026-10-02): the id, the name without its <c>/</c>, the image as it
 /// was asked for, the state word (<c>running</c>, <c>exited</c>, <c>paused</c>, <c>created</c>, <c>restarting</c>,
 /// <c>removing</c>, <c>dead</c>), the status sentence (<c>Up 40 hours (healthy)</c>), the creation time, the ports, the
-/// labels (the compose project's among them), the networks it is on and its mounts.
+/// labels (the compose project's among them), the networks it is on and its mounts; since 2026-10-10 the command it runs as the
+/// list gives it (<c>vllm serve Qwen/…</c>), blank where the list left it out, for <see cref="DockerServerWords.Matches"/>.
 /// </summary>
 public sealed record DockerContainer(
     string Id,
@@ -26,7 +27,8 @@ public sealed record DockerContainer(
     IReadOnlyList<DockerPort> Ports,
     IReadOnlyDictionary<string, string> Labels,
     IReadOnlyList<string> Networks,
-    IReadOnlyList<DockerMount> Mounts)
+    IReadOnlyList<DockerMount> Mounts,
+    string Command = "")
 {
     /// <summary>The compose project label.</summary>
     public const string ProjectLabel = "com.docker.compose.project";
@@ -174,7 +176,8 @@ public static class DockerJson
                 ports,
                 Labels(c, "Labels"),
                 networks,
-                mounts));
+                mounts,
+                Str(c, "Command") ?? ""));
         }
 
         return list;

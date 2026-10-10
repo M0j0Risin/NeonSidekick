@@ -4039,7 +4039,7 @@ internal sealed partial class ChatScreen
     public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false, Func<IReadOnlyList<CompletionItem>>? Plans = null, Func<string, IReadOnlyList<CompletionItem>>? Home = null, Func<string, MentionResult>? AnyFiles = null, Func<string, IReadOnlyList<CompletionItem>>? Print = null, Func<IReadOnlyList<CompletionItem>>? Themes = null, Func<string, IReadOnlyList<CompletionItem>>? Docker = null,
         Func<string, IReadOnlyList<CompletionItem>>? Screen = null, Func<string, IReadOnlyList<CompletionItem>>? Server = null,
         Func<IReadOnlyList<CompletionItem>>? Models = null, bool LogFile = false, Func<IReadOnlyList<CompletionItem>>? Processes = null,
-        Func<string, MentionResult>? MachineFolders = null);
+        Func<string, MentionResult>? MachineFolders = null, Func<IReadOnlyList<CompletionItem>>? Advisors = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -4225,7 +4225,7 @@ internal sealed partial class ChatScreen
     /// here: their argument is a path list, <see cref="ArgumentPaths"/>. Since 2026-10-04 (the user's report and audit) also
     /// <c>/screen</c>'s words, monitors and windows, <c>/server</c>'s words (<see cref="ServerItems"/>), <c>/model</c>'s installed
     /// embedded models while the embedded server is in use (read from disk, no probe), <c>/log --file</c> under <c>--log</c> and
-    /// <c>/claude new</c>. Pure.
+    /// <c>/claude new</c>; since 2026-10-10 <c>/advisor</c>'s advisors by profile name, the first word only. Pure.
     /// </summary>
     public static IReadOnlyList<CompletionItem> ArgumentItems(string command, string argText, ArgumentSources sources)
     {
@@ -4592,6 +4592,10 @@ internal sealed partial class ChatScreen
                 // --shell, then the shells by name (2026-10-09); the command itself is free text.
                 return CmdChoices(argText);
 
+            case SlashCommand.Advisor:
+                // The advisors by profile name, each with its role (2026-10-10, the user's ask); the question after the name is free text.
+                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(sources.Advisors?.Invoke() ?? [], argText);
+
             default:
                 return [];
         }
@@ -4857,7 +4861,8 @@ internal sealed partial class ChatScreen
             EmbeddedModelChoices,
             _logFile is not null,
             ProcessChoices,
-            prefix => FolderCompleter.Complete(prefix, FileBrowserMode.Resolve(_effective())));
+            prefix => FolderCompleter.Complete(prefix, FileBrowserMode.Resolve(_effective())),
+            AdvisorChoices);
         return ArgumentPaths(command, argText, sources) is { } paths
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));
@@ -7191,6 +7196,7 @@ internal sealed partial class ChatScreen
         (SettingsField.EmbeddedDrafter, (from, to) => to.EmbeddedDrafter = from.EmbeddedDrafter),
         (SettingsField.DockerServers, (from, to) => to.DockerServers = from.DockerServers),
         (SettingsField.DockerServerContainers, (from, to) => to.DockerServerContainers = from.DockerServerContainers is { } containers ? [.. containers] : null),
+        (SettingsField.DockerServerMatchWords, (from, to) => to.DockerServerMatchWords = [.. from.DockerServerMatchWords]),
         (SettingsField.DockerServerStopTimeoutSeconds, (from, to) => to.DockerServerStopTimeoutSeconds = from.DockerServerStopTimeoutSeconds),
         (SettingsField.DockerServerPostStopDelaySeconds, (from, to) => to.DockerServerPostStopDelaySeconds = from.DockerServerPostStopDelaySeconds),
         (SettingsField.DockerServerReadyTimeoutSeconds, (from, to) => to.DockerServerReadyTimeoutSeconds = from.DockerServerReadyTimeoutSeconds),

@@ -999,8 +999,11 @@ public enum SettingsField
     /// <summary>A picker over <see cref="App.BotChatMultiEmbedded.Names"/>: an embedded advisor naming another model (<see cref="Settings.AppSettingsData.AdvisorEmbedded"/>). The Advisors tab (2026-10-10).</summary>
     AdvisorEmbedded,
 
-    /// <summary>A toggle: whether each advisor call asks first (<see cref="Settings.AppSettingsData.AdvisorConfirm"/>). The Advisors tab's last row (2026-10-10). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether each advisor call asks first (<see cref="Settings.AppSettingsData.AdvisorConfirm"/>). The Advisors tab's last row (2026-10-10). Last in the enum until <see cref="DockerServerMatchWords"/>.</summary>
     AdvisorConfirm,
+
+    /// <summary>A list the user types into: the words that make a container an LLM server in <see cref="DockerServerContainers"/>' checklist (<see cref="Settings.AppSettingsData.DockerServerMatchWords"/>), its top row adding one, Enter on one removing it, a button restoring the defaults. The Docker tab, under the containers (2026-10-10, the user's ask); no reconnect. Last in the enum, as every newcomer.</summary>
+    DockerServerMatchWords,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1397,7 +1400,7 @@ internal sealed partial class SettingsMenu
          SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate,
          SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
         [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
-        [SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit],
+        [SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerMatchWords, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit],
         [SettingsField.ClaudeCodeServer, SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort,
          SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching],
         [SettingsField.OpenAIApi, SettingsField.OpenAIApiKey, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject],
@@ -2122,6 +2125,7 @@ internal sealed partial class SettingsMenu
         SettingsField.DockerEnginePipe => "Docker engine pipe",
         SettingsField.DockerServers => "Docker servers enabled",
         SettingsField.DockerServerContainers => "Docker server containers",
+        SettingsField.DockerServerMatchWords => "Docker server match words",
         SettingsField.DockerServerStopTimeoutSeconds => "Docker server stop timeout (s)",
         SettingsField.DockerServerPostStopDelaySeconds => "Docker server post-stop delay (s)",
         SettingsField.DockerServerReadyTimeoutSeconds => "Docker server ready timeout (s)",
@@ -2475,6 +2479,7 @@ internal sealed partial class SettingsMenu
             SettingsField.DockerEnginePipe => Docker.DockerPipe.Display(data.DockerEnginePipe),
             SettingsField.DockerServers => OnOff(data.DockerServers),
             SettingsField.DockerServerContainers => DockerServerContainersValue(data.DockerServerContainers),
+            SettingsField.DockerServerMatchWords => DockerServerWordsValue(data.DockerServerMatchWords),
             SettingsField.DockerServerStopTimeoutSeconds => Seconds(data.DockerServerStopTimeoutSeconds),
             SettingsField.DockerServerPostStopDelaySeconds => Seconds(data.DockerServerPostStopDelaySeconds),
             SettingsField.DockerServerReadyTimeoutSeconds => Seconds(data.DockerServerReadyTimeoutSeconds),
@@ -4949,6 +4954,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.DockerServerContainers)
         {
             return await EditDockerServerContainersAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.DockerServerMatchWords)
+        {
+            return await EditDockerServerWordsAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.UncAddShare)

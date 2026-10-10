@@ -143,4 +143,18 @@ public partial class ChatScreenTests
         Assert.Equal("x", AdvisorText.ForUser("Error: x"));
         Assert.Equal("[to dba] q", AdvisorText.HistoryUser("dba", " q "));
     }
+
+    /// <summary><c>/advisor</c>'s argument list (2026-10-10, the user's ask): the advisors by profile name with their roles, the first word only.</summary>
+    [Fact]
+    public void AdvisorCommand_ArgumentList_OffersTheAdvisorNames_ThenNothingForTheQuestion()
+    {
+        var sources = new ChatScreen.ArgumentSources(() => [], "default", [], _ => [], _ => new Files.MentionResult(Files.FileOutcome.Ok, [], false), _ => new Files.MentionResult(Files.FileOutcome.Ok, [], false),
+            Advisors: () => [new("dba", "database architect"), new("doug", "expert .NET solution architect"), new("pm", "")]);
+
+        Assert.Equal(["dba", "doug", "pm"], ChatScreen.ArgumentItems("/advisor", "", sources).Select(i => i.Text));
+        Assert.Equal(["dba", "doug"], ChatScreen.ArgumentItems("/advisor", "D", sources).Select(i => i.Text));
+        Assert.Equal(new CompletionItem("doug", "expert .NET solution architect"), Assert.Single(ChatScreen.ArgumentItems("/advisor", "do", sources)));
+        Assert.Empty(ChatScreen.ArgumentItems("/advisor", "dba why", sources));
+        Assert.Empty(ChatScreen.ArgumentItems("/advisor", "", sources with { Advisors = null }));
+    }
 }

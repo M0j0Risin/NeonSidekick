@@ -2062,6 +2062,15 @@ public sealed class AppSettingsData
     /// </summary>
     public List<string>? DockerServerContainers { get; set; }
 
+    /// <summary>
+    /// The words that make a container an LLM server in <see cref="DockerServerContainers"/>' checklist (2026-10-10, the user's ask:
+    /// every container the engine had was listed, the databases among them): one held in its image or its command, case ignored, or
+    /// the <c>neonsidekick.llm=true</c> label (<see cref="Docker.DockerServerWords"/>). Starts as the known engines
+    /// (<see cref="Docker.DockerServerWords.Defaults"/>); empty shows every container. Only what the checklist shows: a ticked
+    /// container stays ticked whatever the words say. No reconnect, no variable.
+    /// </summary>
+    public List<string> DockerServerMatchWords { get; set; } = Docker.DockerServerWords.Defaults;
+
     /// <summary>Seconds a stopping container gets before the engine kills it (2026-10-02; DockerLlmPicker's 30): <see cref="MinDockerServerStopTimeoutSeconds"/> to <see cref="MaxDockerServerStopTimeoutSeconds"/>. No variable.</summary>
     public int DockerServerStopTimeoutSeconds { get; set; } = DefaultDockerServerStopTimeoutSeconds;
 

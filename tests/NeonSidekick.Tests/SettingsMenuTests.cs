@@ -938,6 +938,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.ImageTools,   // 2026-10-10, /tools › Files › Image: the picture tools' own switch
                 SettingsField.Advisors, SettingsField.AdvisorList, SettingsField.AdvisorContext, SettingsField.AdvisorCallsPerTurn,   // 2026-10-10, /settings › Advisors
                 SettingsField.AdvisorMaxToolIterations, SettingsField.AdvisorThreadPairs, SettingsField.AdvisorEmbedded, SettingsField.AdvisorConfirm,
+                SettingsField.DockerServerMatchWords,   // later on 2026-10-10, the Docker tab under the containers: which are LLM servers
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.

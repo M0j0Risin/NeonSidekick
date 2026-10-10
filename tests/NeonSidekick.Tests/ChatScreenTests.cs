@@ -8949,7 +8949,7 @@ public partial class ChatScreenTests : IDisposable
                 SettingsField.LlmReasoning, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace,   // 2026-10-10
                 SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers,
                 SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter,
-                SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerStopTimeoutSeconds,
+                SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerMatchWords, SettingsField.DockerServerStopTimeoutSeconds,
                 SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit,
                 SettingsField.ClaudeCodeServer,
                 SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort,   // later on 2026-10-10, on the Anthropic tab
@@ -8965,7 +8965,7 @@ public partial class ChatScreenTests : IDisposable
             LlmSampling = new() { ["*"] = new() { Temperature = 0.6 }, ["qwen3"] = new() { TopK = 20 } },
             EmbeddedLlmServer = false, EmbeddedBackend = "vulkan", EmbeddedContextSize = 16384, EmbeddedGpuLayers = "20",
             EmbeddedVramBudget = 80, EmbeddedVramOnly = false, EmbeddedVision = false, EmbeddedDrafter = false,
-            DockerServers = true, DockerServerContainers = ["vllm_qwen", "sglang"], DockerServerStopTimeoutSeconds = 45,
+            DockerServers = true, DockerServerContainers = ["vllm_qwen", "sglang"], DockerServerMatchWords = ["vllm"], DockerServerStopTimeoutSeconds = 45,
             DockerServerPostStopDelaySeconds = 5, DockerServerReadyTimeoutSeconds = 600, DockerServerStopOnExit = true,
             AnthropicApi = true, AnthropicApiMaxTokens = 8_000, AnthropicApiPromptCaching = false, ClaudeCodeServer = true,
             ClaudeCodeExecutable = @"D:\bin\claude.exe", ClaudeCodePermissions = "read-write", ClaudeCodeModel = "opus", ClaudeCodeEffort = "high",
@@ -8985,6 +8985,7 @@ public partial class ChatScreenTests : IDisposable
         }
 
         Assert.NotSame(from.DockerServerContainers, to.DockerServerContainers);   // a list of its own
+        Assert.NotSame(from.DockerServerMatchWords, to.DockerServerMatchWords);
         Assert.NotSame(from.LlmSampling, to.LlmSampling);   // the sampling a map of its own, every entry too
         Assert.NotSame(from.LlmSampling["qwen3"], to.LlmSampling!["qwen3"]);
         Assert.Equal(0.6, to.LlmSampling["*"].Temperature);

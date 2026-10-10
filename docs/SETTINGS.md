@@ -371,7 +371,8 @@ Your own LLM containers (vLLM, SGLang, anything serving `/v1/models`) as `/serve
 | Setting | What it does | Default |
 |---|---|---|
 | Docker servers enabled | Offers the chosen containers in `/server`. Turning it off while one is in use stops it at the reconnect. | off |
-| Docker server containers | A checklist of every container the engine lists, with state, image and ports. A ticked name the engine no longer lists is dropped when the checklist opens, and the status line names it. | none |
+| Docker server containers | A checklist of the LLM servers the engine lists, with state, image and ports: a container whose image or command holds one of *Docker server match words*, one labelled `neonsidekick.llm=true`, and any already ticked. `a` / `n` tick all or none of the rows shown. A ticked name the engine no longer lists is dropped when the checklist opens, and the status line names it. | none |
+| Docker server match words | The words that make a container an LLM server in the checklist above, matched in its image or its command, case ignored. The top row adds one, Enter on one removes it after a yes, `r` restores the defaults. Empty, the checklist lists every container. | `aphrodite`, `koboldcpp`, `llama-server`, `llama.cpp`, `lmdeploy`, `localai`, `nvcr.io/nim`, `ollama`, `sglang`, `text-generation`, `trtllm`, `vllm` |
 | Docker server stop timeout (s) | How long a stopping container gets before the engine kills it (0–120). | 30 |
 | Docker server post-stop delay (s) | The wait between stopping the others and starting this one, so the GPU's memory frees up (0–60). | 2 |
 | Docker server ready timeout (s) | How long a started container may take to answer on `/v1/models` (30–3600). Past it, the switch fails and the container keeps running. | 900 |

@@ -921,6 +921,7 @@ public sealed class AppSettings : IDisposable
         DockerEnginePipe = source.DockerEnginePipe,
         DockerServers = source.DockerServers,
         DockerServerContainers = source.DockerServerContainers is null ? null : [.. source.DockerServerContainers],
+        DockerServerMatchWords = [.. source.DockerServerMatchWords],
         DockerServerStopTimeoutSeconds = source.DockerServerStopTimeoutSeconds,
         DockerServerPostStopDelaySeconds = source.DockerServerPostStopDelaySeconds,
         DockerServerReadyTimeoutSeconds = source.DockerServerReadyTimeoutSeconds,

@@ -25,6 +25,48 @@ internal sealed partial class SettingsMenu
     /// <summary>The checklist's notice when the engine lists no container at all. Pinned.</summary>
     public const string NoDockerContainersNotice = "(the Docker engine lists no containers)";
 
+    /// <summary>The checklist's notice when the engine lists containers but none is an LLM server by the words and none is ticked (2026-10-10). Pinned.</summary>
+    public const string NoLlmContainersNotice = "(no container matches Docker server match words; empty the list to see every container)";
+
+    /// <summary>The match words' first row, always there (2026-10-10): Enter on it opens the slot to type one into. Pinned.</summary>
+    public const string AddDockerWordRow = "+ Add a word…";
+
+    /// <summary>What the match words' description band says under a word (2026-10-10). Pinned.</summary>
+    public const string DockerWordNote = "a container whose image or command holds this is listed as a server";
+
+    /// <summary>The yes/no before a match word is removed (2026-10-10, every list's remove asks). Pinned.</summary>
+    public static string RemoveDockerWordQuestion(string word) => $"Remove \"{word}\" from the match words? Containers only it matched are no longer listed.";
+
+    /// <summary>The notice after a word is added: <c>Docker server match words: tgi added</c>. Pinned.</summary>
+    public static string DockerWordAddedNotice(string word) => FieldName(SettingsField.DockerServerMatchWords) + ": " + word + " added";
+
+    /// <summary>The notice when the typed word is in the list already (case ignored, as the match is): nothing saved. Pinned.</summary>
+    public static string DockerWordDuplicateNotice(string word) => FieldName(SettingsField.DockerServerMatchWords) + ": " + word + " is already in the list";
+
+    /// <summary>The notice after a word is removed: <c>Docker server match words: ollama removed</c>. Pinned.</summary>
+    public static string DockerWordRemovedNotice(string word) => FieldName(SettingsField.DockerServerMatchWords) + ": " + word + " removed";
+
+    /// <summary>The yes/no before the restore button replaces the words (2026-10-10): an empty list is filled, a list with words is replaced and the question says what goes. Pinned.</summary>
+    public static string RestoreDockerWordsQuestion(int count, int defaults) => count == 0
+        ? $"Restore the {defaults} default match words?"
+        : $"Replace the list ({Words(count)}) with the {defaults} default words? Any you added are removed.";
+
+    /// <summary>The notice after the defaults are back: <c>Docker server match words: 12 defaults restored</c>. Pinned.</summary>
+    public static string DockerWordsRestoredNotice(int defaults) => FieldName(SettingsField.DockerServerMatchWords) + ": " + defaults.ToString(CultureInfo.InvariantCulture) + " defaults restored";
+
+    /// <summary>The notice when the list already is the defaults (case ignored): nothing asked, nothing saved. Pinned.</summary>
+    public static string DockerWordsAlreadyDefaultsNotice => FieldName(SettingsField.DockerServerMatchWords) + ": already the defaults";
+
+    /// <summary>The value of <c>Docker server match words</c> (2026-10-10): how many, or <c>none (every container)</c> for an empty list. Pinned.</summary>
+    public static string DockerServerWordsValue(IReadOnlyList<string>? words)
+    {
+        int count = DockerServerWords.Sorted(words ?? []).Count;
+        return count == 0 ? "none (every container)" : Words(count);
+    }
+
+    /// <summary><c>1 word</c>, <c>12 words</c>.</summary>
+    private static string Words(int count) => count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " word" : " words");
+
     public static readonly string DockerServerStopTimeoutRangeError =
         "must be " + AppSettingsData.MinDockerServerStopTimeoutSeconds.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxDockerServerStopTimeoutSeconds.ToString(CultureInfo.InvariantCulture) + " seconds";
 
@@ -49,11 +91,15 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// <c>Docker server containers</c> (2026-10-02, <see cref="EditUncOfferedAsync"/>'s twin): every container the engine lists,
+    /// <c>Docker server containers</c> (2026-10-02, <see cref="EditUncOfferedAsync"/>'s twin): the containers the engine lists,
     /// running or not, read under a spinner, ticked or not; Enter or Space flips one until ESC, the buttons tick all or none.
     /// The order kept is the engine's list order. A ticked name the engine no longer lists is dropped as the list opens (2026-10-04,
     /// the user's call; it was kept until then, for an image being rebuilt, and nothing could untick it): only once the engine has
     /// answered with at least one container.
+    /// Only the LLM servers are shown since 2026-10-10 (the user's ask: the databases buried them): a container
+    /// <see cref="DockerServerWords.Matches"/> by <see cref="AppSettingsData.DockerServerMatchWords"/>, plus any already ticked so it
+    /// can still be unticked; an empty word list shows every container. A hidden container is not stale (the prune reads the
+    /// whole list), the buttons and a flip touch the shown rows only, and a ticked name not shown stays ticked.
     /// Not a reconnect: a container ticked or unticked here counts at the next <c>/server</c> or connect, so the one in use
     /// never stops as a side effect of the list. True when anything changed.
     /// </summary>
@@ -78,9 +124,19 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        var containers = DockerText.Ordered(listed);
+        var all = DockerText.Ordered(listed);
         var before = _settings.Current.DockerServerContainers;
-        bool changed = PruneStale(SettingsField.DockerServerContainers, before, OfferedNames.Stale(before, containers.Select(c => c.Name), [], StringComparer.Ordinal), StringComparer.Ordinal, (d, kept) => d.DockerServerContainers = kept);
+        bool changed = PruneStale(SettingsField.DockerServerContainers, before, OfferedNames.Stale(before, all.Select(c => c.Name), [], StringComparer.Ordinal), StringComparer.Ordinal, (d, kept) => d.DockerServerContainers = kept);
+        var words = DockerServerWords.Sorted(_settings.Current.DockerServerMatchWords);
+        var ticked = (_settings.Current.DockerServerContainers ?? []).Select(n => n.Trim()).ToHashSet(StringComparer.Ordinal);
+        var containers = words.Count == 0 ? all : all.Where(c => ticked.Contains(c.Name) || DockerServerWords.Matches(c, words)).ToList();
+        if (containers.Count == 0)
+        {
+            Sink.Notice(NoLlmContainersNotice);
+            return changed;
+        }
+
+        var shown = containers.Select(c => c.Name).ToHashSet(StringComparer.Ordinal);
         int cursor = 0;
         int width = containers.Max(c => c.Name.Length) + 2;
         while (true)
@@ -101,10 +157,10 @@ internal sealed partial class SettingsMenu
 
             cursor = pick.Row;
             string name = containers[pick.Row].Name;
-            var next = pick.Button == SelectAllIndex ? containers.Select(c => c.Name).ToList()
-                : pick.Button == SelectNoneIndex ? []
-                : containers.Select(c => c.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.Ordinal)).ToList();
-            if (next.Count == containers.Count(c => on.Contains(c.Name)) && next.All(on.Contains))
+            // A shown row takes the press; a hidden one keeps its tick.
+            var next = all.Select(c => c.Name).Where(n => !shown.Contains(n) ? on.Contains(n)
+                : pick.Button == SelectAllIndex || (pick.Button != SelectNoneIndex && on.Contains(n) != string.Equals(n, name, StringComparison.Ordinal))).ToList();
+            if (next.Count == all.Count(c => on.Contains(c.Name)) && next.All(on.Contains))
             {
                 continue;
             }
@@ -112,5 +168,107 @@ internal sealed partial class SettingsMenu
             Apply(SettingsField.DockerServerContainers, d => d.DockerServerContainers = next);
             changed = true;
         }
+    }
+
+    /// <summary>
+    /// The <c>Docker server match words</c> list (2026-10-10, the user's ask), <see cref="EditForbiddenStringsAsync"/>'s twin:
+    /// <see cref="AddDockerWordRow"/> on top, then each word (<see cref="DockerServerWords.Sorted"/>). Enter on the top row opens the
+    /// input slot under it (without the pane, the prompt line) and a typed word is saved at once (<see cref="DockerWordAddedNotice"/>,
+    /// or <see cref="DockerWordDuplicateNotice"/> and nothing saved); Enter on a word removes it after a yes. On the pane the title
+    /// row carries the forbidden list's restore button: the known engines back after a yes, or
+    /// <see cref="DockerWordsAlreadyDefaultsNotice"/> and nothing asked when the list already is them. True when anything changed.
+    /// </summary>
+    private async Task<bool> EditDockerServerWordsAsync(CancellationToken cancellationToken)
+    {
+        bool changed = false;
+        int cursor = 0;
+        string title = FieldName(SettingsField.DockerServerMatchWords);
+        while (true)
+        {
+            var words = DockerServerWords.Sorted(_settings.Current.DockerServerMatchWords);
+            IReadOnlyList<string> rows = [Markup.Escape(AddDockerWordRow), .. words.Select(Markup.Escape)];
+            var page = new MenuPage(Crumb(title), rows, _pane.Enabled ? ForbiddenPaneKeys : ForbiddenKeys) { Footer = (_, row) => row > 0 && row <= words.Count ? new MenuFooter(words[row - 1], DockerWordNote) : null };
+            if (await PickChecklistAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken, ForbiddenButtons).ConfigureAwait(false) is not { } pick)
+            {
+                if (!changed)
+                {
+                    Sink.Notice(UnchangedNotice);
+                }
+
+                return changed;
+            }
+
+            cursor = pick.Row;
+            if (pick.Button >= 0)
+            {
+                changed |= await RestoreDockerWordsAsync(words, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            if (pick.Row > 0)
+            {
+                string word = words[pick.Row - 1];
+                var removing = new MenuPage(RemoveDockerWordQuestion(word), ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
+                if (await PickAsync(removing, 0, cancellationToken).ConfigureAwait(false) != 1)
+                {
+                    Sink.Notice(ChatScreen.KeptNotice);
+                    continue;
+                }
+
+                _settings.Update(d => d.DockerServerMatchWords = DockerServerWords.Without(d.DockerServerMatchWords, word));
+                Sink.Notice(DockerWordRemovedNotice(word));
+                changed = true;
+                continue;
+            }
+
+            InputResult result;
+            if (_pane.Enabled)
+            {
+                result = await _pane.EditAsync(page with { Hint = EditKeys }, 0, _input, "", allowEmpty: false, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                Flow.Notice(PromptTitle(title, EditKeys));
+                result = await _input.ReadAsync("", remember: false, allowEmpty: false, cancellationToken: cancellationToken, escapeCancels: true).ConfigureAwait(false);
+            }
+
+            string typed = result is InputResult.Submitted submitted ? DockerServerWords.Normalize(submitted.Text) : "";
+            if (typed.Length == 0)
+            {
+                continue;   // ESC or a blank line: back on the list, nothing saved
+            }
+
+            if (DockerServerWords.Contains(_settings.Current.DockerServerMatchWords, typed))
+            {
+                Sink.Notice(DockerWordDuplicateNotice(typed));
+                continue;
+            }
+
+            _settings.Update(d => d.DockerServerMatchWords = DockerServerWords.Add(d.DockerServerMatchWords, typed));
+            Sink.Notice(DockerWordAddedNotice(typed));
+            changed = true;
+        }
+    }
+
+    /// <summary>The restore button's press on the match words (2026-10-10), <see cref="RestoreForbiddenDefaultsAsync"/>'s twin. True when saved.</summary>
+    private async Task<bool> RestoreDockerWordsAsync(IReadOnlyList<string> words, CancellationToken cancellationToken)
+    {
+        var defaults = DockerServerWords.Defaults;
+        if (words.SequenceEqual(defaults, StringComparer.OrdinalIgnoreCase))
+        {
+            Sink.Notice(DockerWordsAlreadyDefaultsNotice);
+            return false;
+        }
+
+        var restoring = new MenuPage(RestoreDockerWordsQuestion(words.Count, defaults.Count), ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
+        if (await PickAsync(restoring, 0, cancellationToken).ConfigureAwait(false) != 1)
+        {
+            Sink.Notice(ChatScreen.KeptNotice);
+            return false;
+        }
+
+        _settings.Update(d => d.DockerServerMatchWords = DockerServerWords.Defaults);
+        Sink.Notice(DockerWordsRestoredNotice(defaults.Count));
+        return true;
     }
 }

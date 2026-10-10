@@ -4,6 +4,7 @@ using NeonSidekick.Diagnostics;
 using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Settings;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.App;
 
@@ -103,6 +104,10 @@ internal sealed partial class ChatScreen
 
         return yes ?? false;
     }
+
+    /// <summary><c>/advisor</c>'s names (2026-10-10): the advisor list as <c>/advisor</c> reads it, each profile with its role as the note.</summary>
+    private IReadOnlyList<CompletionItem> AdvisorChoices() =>
+        AdvisorRoster.Entries(_effective().AdvisorList).Select(entry => new CompletionItem(entry.Profile, entry.Role)).ToList();
 
     /// <summary>
     /// <c>/advisor</c> (2026-10-10, the user's own hand on the profile advisors): bare, the advisors listed; <c>/advisor &lt;name&gt;
