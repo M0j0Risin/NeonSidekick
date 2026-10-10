@@ -745,7 +745,7 @@ public sealed class AppSettings : IDisposable
         NewProfileMode = source.NewProfileMode,
         PastePreviewLines = source.PastePreviewLines,
         QueueCancelMode = source.QueueCancelMode,
-        QueueMessages = source.QueueMessages,
+        QueueMode = source.QueueMode,
         ShowImageThumbnails = source.ShowImageThumbnails,
         ShowWorkingDirectory = source.ShowWorkingDirectory,
         ShowHeader = source.ShowHeader,

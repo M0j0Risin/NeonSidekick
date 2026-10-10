@@ -211,10 +211,10 @@ public enum SettingsField
     /// <summary>A toggle: whether the working directory sits at the right edge of the banner's title line (<see cref="Settings.AppSettingsData.ShowWorkingDirectory"/>). The General tab's row under Show header (2026-10-01; before Draft editor from 2026-09-19, its last row until then); no reconnect (read at each banner draw).</summary>
     ShowWorkingDirectory,
 
-    /// <summary>A toggle: whether a message sent while a reply runs is queued rather than only left for the idle line (<see cref="Settings.AppSettingsData.QueueMessages"/>). The General tab's input-line run's first row, after Memory (2026-10-01; after Working directory from 2026-09-18, the user's order); no reconnect (read at each mid-turn Enter).</summary>
-    QueueMessages,
+    /// <summary>A picker: how messages meet the queue — <c>automatic</c> / <c>manual</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.QueueMode"/>; the toggle <c>Queue messages</c> until 2026-10-09, the user's call). The General tab's input-line run's first row, after Memory (2026-10-01; after Working directory from 2026-09-18, the user's order); no reconnect (read at each Enter).</summary>
+    QueueMode,
 
-    /// <summary>A picker: what a cancelled reply does to the queue — <c>hold</c> / <c>drain</c> / <c>empty</c> (<see cref="Settings.AppSettingsData.QueueCancelMode"/>). The General tab's row after Queue messages (2026-09-18); no reconnect (read when a turn ends).</summary>
+    /// <summary>A picker: what a cancelled reply does to the queue — <c>hold</c> / <c>drain</c> / <c>empty</c> (<see cref="Settings.AppSettingsData.QueueCancelMode"/>). The General tab's row after Queue mode (2026-09-18); no reconnect (read when a turn ends).</summary>
     QueueCancelMode,
 
     /// <summary>A toggle: whether every completed turn is written to the profile's <c>sessions.db</c> (<see cref="Settings.AppSettingsData.SessionLogging"/>). The Sessions tab's first row (2026-09-18); no reconnect (read at each turn's end).</summary>
@@ -1345,7 +1345,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
         [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.MemoryMode,
-         SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.KeepCommandHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete,
+         SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepCommandHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete,
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle,
          SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight,
          SettingsField.DraftEditor, SettingsField.ImageEditor],
@@ -1825,7 +1825,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.AgentSkills or SettingsField.ExternalSkills or SettingsField.ProjectFile or SettingsField.TranscriptMarkdown
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
             or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedExternalWindows or SettingsField.ThemedBackground
-            or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
+            or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
             or SettingsField.ToolsDollarMention or SettingsField.ShowFileDiffs or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPolice or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
@@ -2147,7 +2147,7 @@ internal sealed partial class SettingsMenu
         SettingsField.Theme => "Theme",
         SettingsField.ThemedExternalWindows => "Themed external windows",   // the user's name, under "Themed background" (2026-10-03; "Themed image viewer" beside "Image viewer" from later on 2026-09-27)
         SettingsField.ThemedBackground => "Themed background",   // the user's name, under "Theme" (2026-10-03)
-        SettingsField.QueueMessages => "Queue messages",
+        SettingsField.QueueMode => "Queue mode",   // "Queue messages", a toggle, until 2026-10-09 (the user's call)
         SettingsField.QueueCancelMode => "Queue cancel mode",
         SettingsField.SessionLogging => "Session logging",
         SettingsField.SessionNamingMode => "Session naming mode",
@@ -2494,7 +2494,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ThemedExternalWindows => OnOff(data.ThemedExternalWindows),
             SettingsField.ThemedBackground => OnOff(data.ThemedBackground),
             SettingsField.Theme => data.Theme,
-            SettingsField.QueueMessages => OnOff(data.QueueMessages),
+            SettingsField.QueueMode => data.QueueMode,
             SettingsField.QueueCancelMode => data.QueueCancelMode,
             _ => "",
         };
@@ -3261,6 +3261,10 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the network-mode picker: the mode and its hint (padded to nineteen: <c>local_area_network</c> is eighteen). Pinned.</summary>
     public static string NetworkModeLabel(string name) =>
         Markup.Escape(name.PadRight(19)) + Theme.DimMarkup(Web.NetworkMode.Describe(name));
+
+    /// <summary>One row of the queue-mode picker (2026-10-09): the mode and its hint (padded to ten: <c>automatic</c> is nine). Pinned.</summary>
+    public static string QueueModeLabel(string name) =>
+        Markup.Escape(name.PadRight(10)) + Theme.DimMarkup(QueueMode.Describe(name));
 
     /// <summary>One row of the queue-cancel-mode picker: the mode and its hint (padded to six: <c>drain</c> and <c>empty</c> are five). Pinned.</summary>
     public static string QueueCancelModeLabel(string name) =>
@@ -4555,6 +4559,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.SessionShowName)
         {
             return await PickSessionShowNameAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.QueueMode)
+        {
+            return await PickQueueModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.QueueCancelMode)
@@ -6889,7 +6898,6 @@ internal sealed partial class SettingsMenu
             SettingsField.ShowWorkingDirectory => data.ShowWorkingDirectory,
             SettingsField.ThemedExternalWindows => data.ThemedExternalWindows,
             SettingsField.ThemedBackground => data.ThemedBackground,
-            SettingsField.QueueMessages => data.QueueMessages,
             SettingsField.SessionLogging => data.SessionLogging,
             SettingsField.SessionTool => data.SessionTool,
             SettingsField.ShellToolBridge => data.ShellToolBridge,
@@ -6995,7 +7003,6 @@ internal sealed partial class SettingsMenu
             case SettingsField.ShowWorkingDirectory: data.ShowWorkingDirectory = on; break;
             case SettingsField.ThemedExternalWindows: data.ThemedExternalWindows = on; break;
             case SettingsField.ThemedBackground: data.ThemedBackground = on; break;
-            case SettingsField.QueueMessages: data.QueueMessages = on; break;
             case SettingsField.SessionLogging: data.SessionLogging = on; break;
             case SettingsField.SessionTool: data.SessionTool = on; break;
             case SettingsField.ShellToolBridge: data.ShellToolBridge = on; break;
@@ -7105,7 +7112,6 @@ internal sealed partial class SettingsMenu
         SettingsField.ShowWorkingDirectory => on ? "show the working directory in the header" : "hide the working directory in the header",
         SettingsField.ThemedExternalWindows => on ? "theme the external windows" : "keep the external windows black",
         SettingsField.ThemedBackground => on ? "theme the terminal's background" : "keep the terminal profile's background",
-        SettingsField.QueueMessages => on ? "a message sent while a reply runs is queued and sent when the reply ends" : "a message sent during a reply goes when it ends, unlisted; no /queue",
         SettingsField.SessionLogging => on ? "every completed turn is written to this profile's session store" : "nothing is written; stored sessions can still be restored or purged",
         SettingsField.SessionTool => on ? "the model can search, list and read this profile's earlier sessions" : "the model never sees an earlier session",
         SettingsField.ShellToolBridge => on ? "a script may call this app's other tools through its neon_tools module" : "a script does everything itself: no neon_tools module, no tool calls",
@@ -7899,6 +7905,21 @@ internal sealed partial class SettingsMenu
             Apply(SettingsField.ToolbarItems, d => d.ToolbarItems = App.ToolbarItems.Save(next));
             changed = true;
         }
+    }
+
+    /// <summary>The queue-mode picker under the settings list (2026-10-09): one <see cref="QueueModeLabel"/> row per <see cref="QueueMode.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickQueueModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var page = new MenuPage(Crumb(FieldName(SettingsField.QueueMode)), QueueMode.Names.Select(QueueModeLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Array.IndexOf(QueueMode.Names, saved.QueueMode), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = QueueMode.Names[index];
+        Apply(SettingsField.QueueMode, d => d.QueueMode = name);
+        return true;
     }
 
     /// <summary>The queue-cancel-mode picker under the settings list: one <see cref="QueueCancelModeLabel"/> row per <see cref="QueueCancelMode.Names"/> entry, the saved one under the cursor.</summary>

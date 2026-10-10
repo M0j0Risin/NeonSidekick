@@ -553,15 +553,19 @@ public sealed partial class InputLine
     /// on a draft is ignored as ever.
     /// <paramref name="emptySpace"/> (2026-10-09, the user's ask: Space plays and pauses a <c>/read</c> reading) is asked on a
     /// plain Space over an empty draft, before the character is typed: true means the key was spent, false or null types the space as ever.
+    /// <paramref name="take"/> (2026-10-09, the user's ask: <c>Queue mode</c> <c>manual</c> queues a message typed at the idle line) is asked
+    /// once per Enter that would send, after the intercept let the line through and ahead of <paramref name="beforeCommit"/>, with the line
+    /// as the watcher would hand it back (<see cref="SubmittedLine"/>): true means the screen took it — it is remembered as a sent line is,
+    /// the row empties, nothing is committed and the read goes on; false or null sends it as ever. A masked read never asks it.
     /// Throws <see cref="OperationCanceledException"/> when <paramref name="cancellationToken"/> fires.
     /// </summary>
-    public async Task<InputResult> ReadAsync(string initialText = "", bool remember = true, bool allowEmpty = false, ConsoleKey? pushToTalk = null, CancellationToken cancellationToken = default, CancellationToken wake = default, CancellationToken alert = default, bool escapeCancels = false, bool multiline = false, MentionFolderAction? mentions = null, int pastePreview = 0, Func<bool>? softEscape = null, Func<bool>? interrupt = null, Func<string, CancellationToken, Task<string?>>? intercept = null, Action? beforeCommit = null, IReadOnlyList<InputEvent>? replay = null, Func<int, bool>? emptyArrow = null, bool mask = false, Func<bool, bool>? emptyDelete = null, Func<bool>? emptyEnter = null, Editor? editor = null, bool shortcuts = false, bool pushToTalkOverDraft = false, Func<bool>? emptySpace = null)
+    public async Task<InputResult> ReadAsync(string initialText = "", bool remember = true, bool allowEmpty = false, ConsoleKey? pushToTalk = null, CancellationToken cancellationToken = default, CancellationToken wake = default, CancellationToken alert = default, bool escapeCancels = false, bool multiline = false, MentionFolderAction? mentions = null, int pastePreview = 0, Func<bool>? softEscape = null, Func<bool>? interrupt = null, Func<string, CancellationToken, Task<string?>>? intercept = null, Action? beforeCommit = null, IReadOnlyList<InputEvent>? replay = null, Func<int, bool>? emptyArrow = null, bool mask = false, Func<bool, bool>? emptyDelete = null, Func<bool>? emptyEnter = null, Editor? editor = null, bool shortcuts = false, bool pushToTalkOverDraft = false, Func<bool>? emptySpace = null, Func<SubmittedLine, bool>? take = null)
     {
         ArgumentNullException.ThrowIfNull(initialText);
 
         // The chat line's own editor carries its draft from read to read (2026-09-25); any other read starts one over initialText.
         var line = editor ?? new Editor(this, initialText);
-        line.Begin(new ReadOptions(false, remember, allowEmpty, pushToTalk, escapeCancels, multiline, mentions, pastePreview, softEscape, interrupt, intercept, beforeCommit, emptyArrow, mask, emptyDelete, emptyEnter, shortcuts, pushToTalkOverDraft, emptySpace));
+        line.Begin(new ReadOptions(false, remember, allowEmpty, pushToTalk, escapeCancels, multiline, mentions, pastePreview, softEscape, interrupt, intercept, beforeCommit, emptyArrow, mask, emptyDelete, emptyEnter, shortcuts, pushToTalkOverDraft, emptySpace, take));
 
         using var linked = wake.CanBeCanceled || alert.CanBeCanceled ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, wake, alert) : null;
         var readToken = linked?.Token ?? cancellationToken;

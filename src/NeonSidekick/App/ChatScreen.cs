@@ -2730,6 +2730,40 @@ internal sealed partial class ChatScreen
         }
     }
 
+    /// <summary>
+    /// The <c>Queue mode</c> in force (2026-10-09, the user's call): the saved word, except that <c>manual</c> is <c>automatic</c>
+    /// without the bottom pane — its <c>/queue</c> send is the only way a manual queue moves. Read at each Enter and keystroke.
+    /// </summary>
+    private Queueing QueueModeNow()
+    {
+        var mode = QueueMode.Resolve(_effective());
+        return mode == Queueing.Manual && !_menuPane.Enabled ? Queueing.Automatic : mode;
+    }
+
+    /// <summary>
+    /// Whether the loop top may send the next queued message by itself: not while the queue is held (<c>Queue cancel mode</c>
+    /// <c>hold</c>) nor ever under <c>Queue mode</c> <c>manual</c> (2026-10-09), where each one waits for the <c>/queue</c> send.
+    /// </summary>
+    private bool QueueDrains => !_queue.Held && QueueModeNow() != Queueing.Manual;
+
+    /// <summary>
+    /// The chat line's take hook (2026-10-09, the user's ask: <c>Queue mode</c> <c>manual</c> queues every typed message, at the
+    /// idle line too): a message — a line no command parses, or any line of a <c>/draft</c> replay, which is a message whatever it
+    /// reads — joins the queue rather than going to the model; a command is left to run. False under any other mode.
+    /// </summary>
+    private bool TakeIntoQueue(SubmittedLine line, bool fromDraft)
+    {
+        string label = line.Label.Trim();
+        if (QueueModeNow() != Queueing.Manual || label.Length == 0
+            || (!fromDraft && line.CommandText is { } command && ParseLine(command).Command != SlashCommand.None))
+        {
+            return false;
+        }
+
+        _queue.Enqueue(new QueuedMessage(label, line));
+        return true;
+    }
+
     /// <summary><c>Queue cancel mode hold applied after a cancelled reply (2 waiting)</c> — only with something queued. Pinned.</summary>
     public static string QueueCancelLogLine(QueueCancel mode, int waiting) =>
         string.Create(CultureInfo.InvariantCulture, $"Queue cancel mode {QueueCancelMode.Name(mode)} applied after a cancelled reply ({waiting} waiting)");
@@ -2827,8 +2861,9 @@ internal sealed partial class ChatScreen
         {
             case QueueAction.List:
                 // The send button (2026-10-05, the user's ask): the front message of a held queue, left for the idle loop's
-                // top, which takes a pending line ahead of the hold — sent as if typed, hold's rule after it.
-                if (await _queueMenu.ShowAsync(cancellationToken, offerSend: true).ConfigureAwait(false) is { } send)
+                // top, which takes a pending line ahead of the hold — sent as if typed, hold's rule after it. Under Queue mode
+                // manual (2026-10-09) it is always offered: the one way a message leaves the queue, one per press.
+                if (await _queueMenu.ShowAsync(cancellationToken, () => _queue.Held || QueueModeNow() == Queueing.Manual).ConfigureAwait(false) is { } send)
                 {
                     Pend(send);
                 }
@@ -3314,7 +3349,7 @@ internal sealed partial class ChatScreen
     /// starts once the loop top has sent the last (the same test as the loop's own take).
     /// </summary>
     private bool LearnWaitsForQueue =>
-        _effective().ReflectionYieldsToTurns && _restoreDraft is null && !_queue.Held && _queue.Count > 0;
+        _effective().ReflectionYieldsToTurns && _restoreDraft is null && QueueDrains && _queue.Count > 0;
 
     /// <summary>A cancel the user asked for (the brain's double-click): the paused reflection, if any, never runs again. Safe from the watcher task.</summary>
     private void ForgetPausedLearn() => Interlocked.Exchange(ref _pausedLearn, null);
@@ -3779,15 +3814,15 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The input line's command list (2026-09-17): the base commands — less <c>/exit</c> under
-    /// <c>Hide /exit autocomplete</c> (2026-09-18) and less <c>/queue</c> while <c>Queue messages</c>
-    /// is off (later that day; a pane there would list nothing). Every switch is read at each call
+    /// <c>Hide /exit autocomplete</c> (2026-09-18) and less <c>/queue</c> while <c>Queue mode</c>
+    /// is <c>disabled</c> (later that day, as <c>Queue messages</c> off; a pane there would list nothing). Every switch is read at each call
     /// (every keystroke). The loaded skills sat in it as <c>/name</c> under <c>Skill slash commands</c>
     /// until later on 2026-09-18, when the switch went (the user's call: the <c>#</c>-mention covers it).
     /// </summary>
     private IReadOnlyList<CompletionItem> CommandChoices()
     {
         var effective = _effective();
-        return CommandItems(effective.HideExitAutocomplete, hideQueue: !effective.QueueMessages);
+        return CommandItems(effective.HideExitAutocomplete, hideQueue: QueueModeNow() == Queueing.Disabled);
     }
 
     /// <summary>
@@ -9219,12 +9254,13 @@ internal sealed partial class ChatScreen
                     // off, or the command that cancelled the reply — sent before anything else.
                     send = pendingLine;
                 }
-                else if (_restoreDraft is null && !_queue.Held && _queue.TryDequeue(out var queued))
+                else if (_restoreDraft is null && QueueDrains && _queue.TryDequeue(out var queued))
                 {
                     // The next queued message is sent now (2026-09-18; its events were replayed through
                     // a read until the row became a live editor, 2026-09-25): the › row with a paste's
                     // label and preview, then the Submitted arm as for any line. A withdrawn draft is
-                    // sent or cleared first: it came back to the row ahead of the queue.
+                    // sent or cleared first: it came back to the row ahead of the queue. Never under Queue
+                    // mode manual (2026-10-09): the /queue send pends the one it sends, taken above.
                     send = queued.Line;
                 }
 
@@ -9240,7 +9276,7 @@ internal sealed partial class ChatScreen
                 }
                 else
                 {
-                    (result, hit, tailArmed) = await ReadLineAsync(cancellationToken, replay).ConfigureAwait(false);
+                    (result, hit, tailArmed) = await ReadLineAsync(cancellationToken, replay, fromDraft).ConfigureAwait(false);
                     if (result is InputResult.Submitted && _input.History.Count > 0)
                     {
                         _sentDraft = _input.History[^1];
@@ -9534,7 +9570,7 @@ internal sealed partial class ChatScreen
     /// <see cref="SpeechStoppedNotice"/> is printed here once the microphone is closed; the next
     /// ESC clears the draft. The flag, not the speaker's completion, decides the second press.
     /// </summary>
-    private async Task<(InputResult Result, WakeHit? Hit, bool TailArmed)> ReadLineAsync(CancellationToken cancellationToken, IReadOnlyList<InputEvent>? replay = null)
+    private async Task<(InputResult Result, WakeHit? Hit, bool TailArmed)> ReadLineAsync(CancellationToken cancellationToken, IReadOnlyList<InputEvent>? replay = null, bool fromDraft = false)
     {
         using var wake = new CancellationTokenSource();
         using var alert = new CancellationTokenSource();
@@ -9651,7 +9687,9 @@ internal sealed partial class ChatScreen
                 shortcuts: true,
                 // STT destination draft (2026-10-02): the key listens over a draft too, unless it is one the editor moves with.
                 pushToTalkOverDraft: SpokenToDraft() && SttDestinationMode.PushToTalkOverDraft(_voice.PushToTalk),
-                emptySpace: replay is null ? () => ToggleReading(StopTailFirst) : null).ConfigureAwait(false);
+                emptySpace: replay is null ? () => ToggleReading(StopTailFirst) : null,
+                // Queue mode manual (2026-10-09, the user's ask): a typed message joins the queue at the Enter, never committed.
+                take: line => TakeIntoQueue(line, fromDraft)).ConfigureAwait(false);
         }
         finally
         {
@@ -12636,7 +12674,7 @@ internal sealed partial class ChatScreen
     /// <summary>A <c>/botchat</c> turn is running (2026-09-24): its usage events stay out of the main conversation's tally. Set and cleared on the turn task.</summary>
     private bool _botTurnRunning;
 
-    /// <summary><c>/botchat</c> is running (2026-09-24): a line typed under a reply is queued whatever <c>Queue messages</c> says (<c>QueueLine</c>). Read on the watcher task.</summary>
+    /// <summary><c>/botchat</c> is running (2026-09-24): a line typed under a reply is queued whatever <c>Queue mode</c> says (<c>QueueLine</c>). Read on the watcher task.</summary>
     private volatile bool _botChatRunning;
 
     /// <summary>The running <c>/botchat</c>'s cast (2026-09-30, the user's ask), for the upper rule (<see cref="UpperRuleTitle"/>): set with <see cref="_botChatRunning"/> once the cast is final, null otherwise. Read on the pane's tick.</summary>

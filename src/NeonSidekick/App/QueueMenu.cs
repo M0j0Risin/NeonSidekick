@@ -22,6 +22,9 @@ namespace NeonSidekick.App;
 /// hold's own rule follows: its reply's normal end releases the hold and the rest drains, a cancel holds it again. Not offered
 /// under a reply (nothing can start a turn until it ends, and a normal end releases the hold anyway) nor over a queue that
 /// drains by itself.</para>
+/// <para>Under <c>Queue mode</c> <c>manual</c> (2026-10-09, the user's ask) the send is always offered, under a reply too: nothing
+/// leaves that queue by itself, so each press sends the front message and the next waits for the next press. Under a reply the
+/// line waits for the idle loop, which sends it first once the reply ends. The caller says when (<c>canSend</c>).</para>
 /// </summary>
 internal sealed class QueueMenu
 {
@@ -39,7 +42,7 @@ internal sealed class QueueMenu
     /// <summary>The key that is the button.</summary>
     public const char ClearAllKey = 'c';
 
-    /// <summary>The button that sends the front message now (2026-10-05), first on the title row while the queue is held at the idle line.</summary>
+    /// <summary>The button that sends the front message now (2026-10-05), first on the title row while the queue is held at the idle line, and always under <c>Queue mode</c> <c>manual</c> (2026-10-09).</summary>
     public const string SendButton = "➤ send";
 
     /// <summary>The key that is the send button.</summary>
@@ -93,10 +96,11 @@ internal sealed class QueueMenu
     // ── Screen ──────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The pane, until it closes. <paramref name="offerSend"/> (the idle line's) offers the <see cref="SendButton"/> while the
-    /// queue is held; its press takes the front message off the queue and returns its line for the caller to send. Null otherwise.
+    /// The pane, until it closes. <paramref name="canSend"/>, asked at each showing of the list, offers the <see cref="SendButton"/>
+    /// while it says so (the idle line's while the queue is held, and under <c>Queue mode</c> <c>manual</c> anywhere, 2026-10-09);
+    /// its press takes the front message off the queue and returns its line for the caller to send. Null otherwise.
     /// </summary>
-    public async Task<SubmittedLine?> ShowAsync(CancellationToken cancellationToken, bool offerSend = false)
+    public async Task<SubmittedLine?> ShowAsync(CancellationToken cancellationToken, Func<bool>? canSend = null)
     {
         var entries = _queue.Snapshot();
         if (!_pane.Enabled)
@@ -120,7 +124,7 @@ internal sealed class QueueMenu
         {
             while (true)
             {
-                bool send = offerSend && _queue.Held;
+                bool send = canSend?.Invoke() == true;
                 var buttons = send ? ButtonsWithSend : Buttons;
                 var shownEntries = entries;
                 var page = new MenuPage(Title, entries.Select((entry, i) => RowMarkup(i, entry.Label)).ToList(), send ? KeysWithSend : Keys)

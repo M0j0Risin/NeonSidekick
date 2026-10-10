@@ -272,7 +272,7 @@ public enum SlashCommand
     /// <summary><c>/echo &lt;text&gt;</c>: the line printed as a reply and read aloud when speech is on — <c>/read</c>'s block and voice over typed text, never resumed (2026-09-17).</summary>
     Echo,
 
-    /// <summary><c>/queue</c>: the messages queued while a reply runs, on a pane where Enter removes one and a button drops them all (2026-09-18, behind <c>Queue messages</c>); <c>/queue clear</c> (2026-09-21) drops them all without the pane.</summary>
+    /// <summary><c>/queue</c>: the messages queued while a reply runs, on a pane where Enter removes one and a button drops them all (2026-09-18, behind <c>Queue mode</c>; its send under <c>manual</c>, 2026-10-09); <c>/queue clear</c> (2026-09-21) drops them all without the pane.</summary>
     Queue,
 
     /// <summary><c>/sessions</c>: this profile's stored sessions on a pane (restore, rename, purge), or <c>/sessions &lt;id&gt; | purge &lt;id&gt; | purge older &lt;age&gt; | purge all | title &lt;text&gt;</c> typed (2026-09-18; <c>/session</c> until later on 2026-09-21, the user's call — the singular reads as an unknown command now).</summary>

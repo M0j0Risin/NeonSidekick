@@ -124,7 +124,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/profile push\|pull history <name> [overwrite]` | Copies the command history to or from another profile (added, or replacing with `overwrite`); refused when the target has *Keep command history* off. |
 | `/profile push\|pull policestrings <name> [overwrite]` | Copies *Shell police forbidden strings* to or from another profile (added, or replacing with `overwrite`). |
 | `/profile edit\|reload` | `edit` opens `profile.json`; `reload` reads it back and reconnects what changed. |
-| `/queue [clear]` | Lists and prunes the queued messages (Enter removes one after a yes; `⊠ clear all` or `c` drops them all). While the queue is held (*Queue cancel mode* `hold`, after a cancelled reply), `➤ send` or `s` sends the next one now, and its reply's end releases the hold. `/queue clear` drops them without the pane. |
+| `/queue [clear]` | Lists and prunes the queued messages (Enter removes one after a yes; `⊠ clear all` or `c` drops them all). While the queue is held (*Queue cancel mode* `hold`, after a cancelled reply), `➤ send` or `s` sends the next one now, and its reply's end releases the hold. Under *Queue mode* `manual`, `➤ send` is always there: each press sends the next message, and under a reply it goes when the reply ends. `/queue clear` drops them without the pane. |
 | `/read [<file> [<n>]\|<n>]` | Reads a text file from the working directory aloud. Alone it resumes; a number starts at that sentence. On an empty line, Space pauses and resumes it, and ←/→ step a sentence back or forward (while paused they only move the position; Space or `/read` plays from it). |
 | `/reasoning [none\|low\|medium\|high\|xhigh]` | Picks the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |
 | `/rewind [<n>]` | Goes back to an earlier message: pick one (n back), confirm, and it and everything after leave the conversation (and the stored session), its text returning to the input row, pictures and pastes included. Only the conversation rewinds; the confirmation names the tools whose changes stay. Compacted messages can't be picked. |
@@ -577,7 +577,7 @@ Every list pane works the same way: ↑/↓ move, Enter picks the highlighted ro
 | Pane | Keys |
 |---|---|
 | `/memory` | Enter forgets (asks) · `w` read-write · `o` read-only · `x` disabled |
-| `/queue` | Enter removes (asks) · `c` clear all · `s` send (while held) |
+| `/queue` | Enter removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) |
 | `/rewind` | Enter rewinds to before the message |
 | `/sessions` | Enter opens · type to filter |
 | `/process` | Enter opens the window · `k` kills (asks) |

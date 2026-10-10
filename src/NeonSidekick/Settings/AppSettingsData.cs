@@ -285,13 +285,16 @@ public sealed class AppSettingsData
     public string QueueCancelMode { get; set; } = App.QueueCancelMode.Default;
 
     /// <summary>
-    /// Whether a message sent while a reply runs waits in the queue (<see cref="App.MessageQueue"/>,
-    /// sent when the reply ends, listed by <c>/queue</c>) or stays type-ahead on the input line as
-    /// before (2026-09-18) — since the row became a live editor under the reply (2026-09-25), off means the line waits
-    /// for the idle line unlisted and is sent as the reply ends all the same; off, <c>/queue</c> leaves the input line's
-    /// <c>/</c> list too (later on 2026-09-18). Pane only, read at each mid-turn Enter and each keystroke. No variable.
+    /// How messages meet the queue (<see cref="App.MessageQueue"/>, listed by <c>/queue</c>) — <see cref="App.QueueMode"/>:
+    /// <c>automatic</c> (the default: a message sent while a reply runs is queued and sent when the reply ends), <c>manual</c>
+    /// (every typed message is queued, at the idle line too, and goes only on the <c>/queue</c> pane's <c>➤ send</c>, one per
+    /// press; commands and spoken requests are never queued) or <c>disabled</c> (a line sent under a reply waits for the idle line
+    /// unlisted and is sent as the reply ends all the same; <c>/queue</c> leaves the input line's <c>/</c> list). The on/off
+    /// <c>QueueMessages</c> until 2026-10-09 (the user's call; on was automatic, off disabled), retired with no migration, so an
+    /// old profile reads automatic. Without the bottom pane manual is automatic: nothing could press send. Pane only, read at
+    /// each Enter and each keystroke. No variable.
     /// </summary>
-    public bool QueueMessages { get; set; } = true;
+    public string QueueMode { get; set; } = App.QueueMode.Default;
 
     /// <summary>
     /// Whether each picture sent with a message is drawn under the user's line as a thumbnail

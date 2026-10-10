@@ -13430,11 +13430,11 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("work", _settings.ProfileName);
     }
 
-    /// <summary>With <c>Queue messages</c> off a waiting command waits for the idle line all the same (later on 2026-09-27).</summary>
+    /// <summary>Under <c>Queue mode</c> <c>disabled</c> a waiting command waits for the idle line all the same (later on 2026-09-27).</summary>
     [Fact]
     public async Task MidTurn_AWaitingCommand_WithTheQueueOff_RunsAtTheIdleLine()
     {
-        _settings.Update(d => d.QueueMessages = false);
+        _settings.Update(d => d.QueueMode = "disabled");
         WorkProfile();
         MidTurnFixture(i =>
         {
@@ -13902,7 +13902,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task MidTurn_AMessage_IsQueued_TheCountOnTheBusyRow_ItsRowWrittenWhenItIsSent()
     {
-        // Queue messages (2026-09-18, on by default): the line typed under the reply is taken off
+        // Queue mode automatic (2026-09-18, the default; Queue messages on until 2026-10-09): the line typed under the reply is taken off
         // the input row and waits; the busy row counts it; when the reply ends the idle loop writes
         // its row and sends it — the transcript reads in the conversation's order.
         MidTurnFixture(i =>
@@ -13931,7 +13931,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task MidTurn_AMessage_WithTheQueueOff_WaitsForTheIdleLine_AndIsSentAfterTheReply()
     {
         // The switch off: the line waits for the idle line (type-ahead until the live row, 2026-09-25) and is sent there; no count.
-        _settings.Update(d => d.QueueMessages = false);
+        _settings.Update(d => d.QueueMode = "disabled");
         MidTurnFixture(i =>
         {
             if (i == 1)
@@ -14039,6 +14039,156 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("Again.", output);
         Assert.Contains("Later.", output);
         Assert.DoesNotContain(ChatScreen.QueueDroppedNotice(1), output);
+    }
+
+    // ── Queue mode manual (2026-10-09, the user's ask) ──────────────────────
+
+    /// <summary>Queue mode manual with the pane on and speech off: every typed message waits for the /queue pane's send.</summary>
+    private void ManualQueueFixture()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.QueueMode = "manual"; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+    }
+
+    /// <summary>
+    /// Under manual a message typed at the idle line joins the queue (no row, no request; the count on the idle row), and the
+    /// /queue pane's send sends the front one alone: its reply's end sends nothing more, the next waits for the next press.
+    /// </summary>
+    [Fact]
+    public async Task Manual_IdleMessages_AreQueued_AndEachSendSendsOne()
+    {
+        ManualQueueFixture();
+        _chat.EnqueueText("First.");
+        _chat.EnqueueText("Second.");
+        StepsWhenIdle(Line("first"), Line("second"), Line("third"), Line("/queue"), Key(Keys.Char('s')), Line("/queue"), Key(Keys.Char('s')), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("first", UserText(_chat.Requests[0]));
+        Assert.Equal("second", _chat.Requests[1][^1].Text);
+        Assert.Equal(1, _running!.QueuedCount);   // third waits for a third press
+        Assert.Contains("\n" + ChatScreen.QueuedHintPart(3), output);   // the count on the idle row before any send
+        Assert.Contains(Titled(QueueMenu.Title + " │ " + QueueMenu.SendButton + " · " + QueueMenu.ClearAllButton + " "), output);
+        Assert.Contains("› first", output);
+        Assert.Contains("Second.", output);
+        Assert.DoesNotContain("› third", output);
+    }
+
+    /// <summary>Under manual a command typed at the idle line still runs: /queue clear drops the message queued before it.</summary>
+    [Fact]
+    public async Task Manual_ACommandAtTheIdleLine_StillRuns()
+    {
+        ManualQueueFixture();
+        StepsWhenIdle(Line("later"), Line("/queue clear"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Empty(_chat.Requests);
+        Assert.Contains("  · " + ChatScreen.QueueDroppedNotice(1), output);
+        Assert.Contains("› /queue clear", output);
+        Assert.Equal(0, _running!.QueuedCount);
+    }
+
+    /// <summary>
+    /// Under manual a message typed under a reply is queued and stays there when the reply ends; the send on the /queue pane over the
+    /// reply takes the front one, which goes once the reply ends, and only that one.
+    /// </summary>
+    [Fact]
+    public async Task Manual_MidTurn_TheSendOverTheReply_GoesWhenItEnds_AndOnlyThatOne()
+    {
+        ManualQueueFixture();
+        _chat.EnqueueText("One ", "two ", "three.");
+        _chat.EnqueueText("Later.");
+        _chat.BeforeUpdate = async (i, _) =>
+        {
+            if (_chat.Requests.Count != 1)
+            {
+                return;
+            }
+
+            if (i == 1)
+            {
+                PushLine("later");
+                PushLine("and later");
+                Assert.True(SpinWait.SpinUntil(() => _running!.QueuedCount == 2, TimeSpan.FromSeconds(5)), "the two never queued");
+                PushLine("/queue");
+                _scripted!.Push(Keys.Char('s'));
+                Assert.True(SpinWait.SpinUntil(() => _running!.QueuedCount == 1, TimeSpan.FromSeconds(5)), "the send never took one");
+            }
+
+            await Task.Delay(40, CancellationToken.None);
+        };
+        StepsWhenIdle(Line("hi"), Line("/queue"), Key(Keys.Char('s')), Line("/exit"));   // hi is queued too: sent by the press
+
+        string output = await RunAsync();
+
+        Assert.Contains(QueueMenu.KeysWithSend, output);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("later", _chat.Requests[1][^1].Text);
+        Assert.Contains("Later.", output);
+        Assert.Equal(1, _running!.QueuedCount);   // and later waits for the next press
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+    }
+
+    /// <summary>Under manual a cancelled reply sends nothing by itself, even under Queue cancel mode drain: the queue waits at the idle line.</summary>
+    [Fact]
+    public async Task Manual_AnEscUnderDrain_SendsNothing()
+    {
+        CancelledWithAQueuedLineFixture("drain");
+        _settings.Update(d => d.QueueMode = "manual");
+        StepsWhenIdle(Line("hi"), Line("/queue"), Key(Keys.Char('s')), Line("/exit"));   // hi is queued too: sent by the press
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.CancelledNotice, output);
+        Assert.Single(_chat.Requests);
+        Assert.Contains("\n" + ChatScreen.QueuedHintPart(1), output);
+        Assert.Equal(1, _running!.QueuedCount);
+    }
+
+    /// <summary>Without the pane nothing could press send, so manual is automatic: the idle line's message is sent as typed.</summary>
+    [Fact]
+    public async Task Manual_WithoutThePane_IsAutomatic()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.QueueMode = "manual"; });
+        _chat.EnqueueText("Hi.");
+        PushLine("hi");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Single(_chat.Requests);
+        Assert.Equal("hi", UserText(_chat.Requests[0]));
+        Assert.Contains("Hi.", output);
+    }
+
+    /// <summary>Under manual a spoken request is sent as ever (the user's call): only typed messages are queued.</summary>
+    [Fact]
+    public async Task Manual_APushToTalkRequest_IsSent_NotQueued()
+    {
+        VoiceOn();
+        _settings.Update(d => d.QueueMode = "manual");
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        SpeakTwoBuffers();
+        _chat.EnqueueText("Hi there.");
+        _chat.BeforeUpdate = async (i, _) =>
+        {
+            if (i == 0)
+            {
+                PushLine("/exit");
+                await Task.Delay(40, CancellationToken.None);   // let the watcher buffer it
+            }
+        };
+        _console.Input.PushKey(Keys.F4);
+
+        await RunAsync();
+
+        Assert.Single(_chat.Requests);
+        Assert.Equal("hello", UserText(_chat.Requests[0]));
+        Assert.Equal(0, _running!.QueuedCount);   // the pane's /exit cancels the reply: the request is what counts
     }
 
     [Fact]
@@ -14309,7 +14459,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task MidTurn_APastedLine_WithTheQueueOff_StaysTypeAhead()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.QueueMessages = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.QueueMode = "disabled"; });
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText("One ", "two ", "three.");
@@ -22404,7 +22554,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    // ── /queue out of the list while Queue messages is off (later on 2026-09-18) ──
+    // ── /queue out of the list under Queue mode disabled (later on 2026-09-18, Queue messages off until 2026-10-09) ──
 
     [Fact]
     public void CommandItems_LeavesQueueOut_WhenHidden()
@@ -22424,14 +22574,14 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Line_ASlashWord_HidesQueue_WhenTheQueueIsOff_AndListsIt_WhenOn()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.QueueMessages = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.QueueMode = "disabled"; });
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle([.. Typed("/qu"), Key(Keys.Escape), Key(Keys.Escape), Line("/exit")]);
         string off = await RunAsync();
         Assert.DoesNotContain("/queue" + new string(' ', MentionCompleter.NoteGap), off);
         Assert.DoesNotContain(MenuPane.Pointer + "/queue", off);
 
-        _settings.Update(d => d.QueueMessages = true);
+        _settings.Update(d => d.QueueMode = "automatic");
         StepsWhenIdle([.. Typed("/qu"), Key(Keys.Escape), Key(Keys.Escape), Line("/exit")]);
         string on = await RunAsync();
         Assert.Contains(MenuPane.Pointer + "/queue" + new string(' ', MentionCompleter.NoteGap) + Entry("/queue").Summary, on[off.Length..]);

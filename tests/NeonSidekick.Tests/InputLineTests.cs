@@ -3015,6 +3015,68 @@ public class InputLineTests : IDisposable
         Assert.Contains("› hi", _console.Output);
     }
 
+    /// <summary>
+    /// The take hook (2026-10-09, Queue mode manual): asked after the intercept and ahead of the commit; a line it takes leaves no
+    /// row and runs no beforeCommit, is remembered as a sent line is, and the read goes on to the next Enter, which it declines.
+    /// </summary>
+    [Fact]
+    public async Task Take_IsAskedAfterTheIntercept_ATakenLineIsRememberedNeverCommitted_AndTheReadGoesOn()
+    {
+        var (line, keys, _, _) = WordLine();
+        var order = new List<string>();
+        var taken = new List<string>();
+        int commits = 0;
+        Task<string?> Intercept(string text, CancellationToken _)
+        {
+            order.Add("intercept " + text);
+            return Task.FromResult<string?>(null);
+        }
+
+        bool Take(SubmittedLine submitted)
+        {
+            order.Add("take " + submitted.Text);
+            if (submitted.Text == "queued")
+            {
+                taken.Add(submitted.Label);
+                return true;
+            }
+
+            return false;
+        }
+
+        keys.Push(Chars("queued"));
+        keys.Push(Keys.Enter);           // taken: no row, the read goes on
+        keys.Push(Chars("sent"));
+        keys.Push(Keys.Enter);           // declined: sent as ever
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply, intercept: Intercept, beforeCommit: () => commits++, take: Take));
+
+        Assert.Equal("sent", submitted.Text);
+        Assert.Equal(["intercept queued", "take queued", "intercept sent", "take sent"], order);
+        Assert.Equal(["queued"], taken);
+        Assert.Equal(1, commits);
+        Assert.DoesNotContain("› queued", _console.Output);
+        Assert.Contains("› sent", _console.Output);
+        Assert.Equal(new[] { "queued", "sent" }, line.History);
+    }
+
+    /// <summary>An intercepted line never reaches the take hook (2026-10-09): the replacement is the draft, nothing was sent.</summary>
+    [Fact]
+    public async Task Take_IsNeverAskedForAnInterceptedLine()
+    {
+        var (line, keys, _, _) = WordLine();
+        int asked = 0;
+        keys.Push(Chars("clear"));
+        keys.Push(Keys.Enter);           // intercepted
+        keys.Push(Keys.Enter);           // the replacement sent
+        Task<string?> Intercept(string text, CancellationToken _) => Task.FromResult(text == "clear" ? "/clear" : null);
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, intercept: Intercept, take: _ => { asked++; return false; }));
+
+        Assert.Equal("/clear", submitted.Text);
+        Assert.Equal(1, asked);
+    }
+
     // ── The #-mention list (2026-09-17) ─────────────────────────────────────
 
     /// <summary>

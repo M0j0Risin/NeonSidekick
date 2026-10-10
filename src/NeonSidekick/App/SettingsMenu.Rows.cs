@@ -18,7 +18,7 @@ internal sealed partial class SettingsMenu
             [SettingsTab.General] =
             [
                 (SettingsField.Profile, "Who and where"),
-                (SettingsField.QueueMessages, "Input line"),
+                (SettingsField.QueueMode, "Input line"),
                 (SettingsField.TranscriptMarkdown, "Transcript"),
                 (SettingsField.Theme, "Screen"),
                 (SettingsField.DraftEditor, "Outside apps"),

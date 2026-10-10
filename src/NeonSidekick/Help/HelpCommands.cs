@@ -244,7 +244,7 @@ public static class HelpCommands
         ]),
         new("/queue",
         [
-            new("/queue [clear]", "List and prune the messages queued during a reply (`⊠ clear all` or `c` drops them all). While the queue is held (*Queue cancel mode* `hold`, after a cancelled reply), `➤ send` or `s` sends the next one now; its reply's end releases the hold. `/queue clear` drops them without opening the pane. Ctrl+Q runs `/queue`, Ctrl+Alt+Q `/queue clear`."),
+            new("/queue [clear]", "List and prune the messages queued during a reply (`⊠ clear all` or `c` drops them all). While the queue is held (*Queue cancel mode* `hold`, after a cancelled reply), `➤ send` or `s` sends the next one now; its reply's end releases the hold. Under *Queue mode* `manual` the send is always there: each press sends the next message (under a reply, when it ends). `/queue clear` drops them without opening the pane. Ctrl+Q runs `/queue`, Ctrl+Alt+Q `/queue clear`."),
         ]),
         new("/read",
         [

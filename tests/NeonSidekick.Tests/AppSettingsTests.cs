@@ -61,7 +61,7 @@ public class AppSettingsTests : IDisposable
         NewProfileMode = "advanced",
         PastePreviewLines = 7,
         QueueCancelMode = "drain",
-        QueueMessages = false,
+        QueueMode = "manual",
         ShowImageThumbnails = false,
         TranscriptMarkdown = false,
         WelcomeSplashMode = "tiled",
@@ -198,7 +198,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.NewProfileMode, actual.NewProfileMode);
         Assert.Equal(expected.PastePreviewLines, actual.PastePreviewLines);
         Assert.Equal(expected.QueueCancelMode, actual.QueueCancelMode);
-        Assert.Equal(expected.QueueMessages, actual.QueueMessages);
+        Assert.Equal(expected.QueueMode, actual.QueueMode);
         Assert.Equal(expected.ShowImageThumbnails, actual.ShowImageThumbnails);
         Assert.Equal(expected.TranscriptMarkdown, actual.TranscriptMarkdown);
         Assert.Equal(expected.WelcomeSplashMode, actual.WelcomeSplashMode);
@@ -358,7 +358,7 @@ public class AppSettingsTests : IDisposable
             d.NewProfileMode = full.NewProfileMode;
             d.PastePreviewLines = full.PastePreviewLines;
             d.QueueCancelMode = full.QueueCancelMode;
-            d.QueueMessages = full.QueueMessages;
+            d.QueueMode = full.QueueMode;
             d.ShowImageThumbnails = full.ShowImageThumbnails;
             d.TranscriptMarkdown = full.TranscriptMarkdown;
             d.WelcomeSplashMode = full.WelcomeSplashMode;
@@ -504,7 +504,7 @@ public class AppSettingsTests : IDisposable
                 d.NewProfileMode = full.NewProfileMode;
                 d.PastePreviewLines = full.PastePreviewLines;
                 d.QueueCancelMode = full.QueueCancelMode;
-                d.QueueMessages = full.QueueMessages;
+                d.QueueMode = full.QueueMode;
                 d.ShowImageThumbnails = full.ShowImageThumbnails;
                 d.TranscriptMarkdown = full.TranscriptMarkdown;
                 d.WelcomeSplashMode = full.WelcomeSplashMode;
@@ -1581,8 +1581,9 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("all-names", s.SessionShowName);   // the rule above the input row names the session (later on 2026-09-18)
         Assert.True(s.SessionTool);
         Assert.False(s.SessionSaveThinking);
-        // The message queue (2026-09-18): on, a cancelled reply holds it.
-        Assert.True(s.QueueMessages);
+        // The message queue (2026-09-18): automatic (Queue messages on until 2026-10-09), a cancelled reply empties it.
+        Assert.Equal("automatic", s.QueueMode);
+        Assert.Equal("automatic", QueueMode.Default);
         Assert.Equal("empty", s.QueueCancelMode);   // hold until 2026-09-20
         // The paste preview (2026-09-16): 25 lines of a collapsed paste under the sent line, 0 = the label alone.
         Assert.Equal(25, s.PastePreviewLines);

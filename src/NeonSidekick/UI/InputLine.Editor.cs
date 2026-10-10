@@ -71,7 +71,8 @@ public sealed partial class InputLine
         Func<bool>? EmptyEnter = null,
         bool Shortcuts = false,
         bool PushToTalkOverDraft = false,
-        Func<bool>? EmptySpace = null);
+        Func<bool>? EmptySpace = null,
+        Func<SubmittedLine, bool>? Take = null);
 
     /// <summary>
     /// The input line's editing state and its keys, pulled out of <see cref="ReadAsync"/> on 2026-09-25 (the user's ask:
@@ -557,6 +558,23 @@ public sealed partial class InputLine
                     {
                         _text.Clear().Append(replacement);
                         _cursor = _text.Length;
+                        _anchor = -1;
+                        _dismissed = null;
+                        Redraw();
+                        break;
+                    }
+
+                    // The take hook's chance (2026-10-09, Queue mode manual): a line it takes is remembered and gone from the
+                    // row, never committed — the screen queued it — and the read goes on.
+                    if (_o.Take is not null && !_o.Mask && _o.Take(_line.Line(draftText)))
+                    {
+                        if (_o.Remember)
+                        {
+                            _line.Remember(draftText);
+                        }
+
+                        _text.Clear();
+                        _cursor = 0;
                         _anchor = -1;
                         _dismissed = null;
                         Redraw();

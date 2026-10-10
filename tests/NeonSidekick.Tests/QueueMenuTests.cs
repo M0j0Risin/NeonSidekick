@@ -293,7 +293,7 @@ public class QueueMenuTests : IDisposable
         int flow = pane.FlowRow;
         Push(Keys.Char('s'));
 
-        var sent = await menu.ShowAsync(CancellationToken.None, offerSend: true);
+        var sent = await menu.ShowAsync(CancellationToken.None, () => _queue.Held);
 
         Assert.Equal("one", sent?.Text);
         Assert.Contains(Titled(SendStrip) + "\n \n▸ " + Row(0, "one") + "\n", _console.Output);
@@ -313,7 +313,7 @@ public class QueueMenuTests : IDisposable
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
         input.PushClick(12, 100);                        // the strip row: the label, the gap, the send button from column 10
 
-        var sent = await menu.ShowAsync(CancellationToken.None, offerSend: true);
+        var sent = await menu.ShowAsync(CancellationToken.None, () => _queue.Held);
 
         Assert.Equal("one", sent?.Text);
         Assert.Equal(new[] { "two" }, Labels());
@@ -332,12 +332,49 @@ public class QueueMenuTests : IDisposable
         var (menu, pane) = PaneMenu();
         Push(Keys.Char('s'), Keys.Escape);
 
-        var sent = await menu.ShowAsync(CancellationToken.None, offerSend);
+        var sent = await menu.ShowAsync(CancellationToken.None, () => offerSend && _queue.Held);
 
         Assert.Null(sent);
         Assert.Contains(Titled(Strip) + "\n", _console.Output);
         Assert.DoesNotContain(QueueMenu.SendButton, _console.Output);
         Assert.Equal(new[] { "one", "two" }, Labels());
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// Queue mode manual (2026-10-09, the user's ask): the caller's say-so offers the send with no hold at all, and its press takes
+    /// the front message alone — the next stays for the next press.
+    /// </summary>
+    [Fact]
+    public async Task TheCallersSaySo_OffersTheSend_WithoutAHold_AndOnePressTakesOneMessage()
+    {
+        Seed("one", "two");
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Char('s'));
+
+        var sent = await menu.ShowAsync(CancellationToken.None, () => true);
+
+        Assert.Equal("one", sent?.Text);
+        Assert.Contains(Titled(SendStrip) + "\n", _console.Output);
+        Assert.Equal(new[] { "two" }, Labels());
+        Assert.False(_queue.Held);
+        pane.Dispose();
+    }
+
+    /// <summary>The say-so is asked at each showing of the list (2026-10-09): a send that stops being allowed after a removal leaves the strip.</summary>
+    [Fact]
+    public async Task TheCallersSaySo_IsAskedAtEachShowing()
+    {
+        Seed("one", "two");
+        var (menu, pane) = PaneMenu();
+        int asked = 0;
+        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // remove "one" (then Yes), the list again, then close
+
+        var sent = await menu.ShowAsync(CancellationToken.None, () => ++asked == 1);
+
+        Assert.Null(sent);
+        Assert.Equal(2, asked);
+        Assert.Equal(new[] { "two" }, Labels());
         pane.Dispose();
     }
 }

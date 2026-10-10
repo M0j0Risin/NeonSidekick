@@ -15,7 +15,8 @@ public sealed record QueuedMessage(string Label, SubmittedLine Line);
 
 /// <summary>
 /// The messages sent while a reply runs, waiting to be sent one by one (2026-09-18, behind
-/// <c>Queue messages</c>). One leaf lock: <see cref="Enqueue"/> runs on the watcher task (the line
+/// <c>Queue mode</c>, the switch <c>Queue messages</c> until 2026-10-09; under <c>manual</c> every typed message, each sent by the
+/// <c>/queue</c> pane's send). One leaf lock: <see cref="Enqueue"/> runs on the watcher task (the line
 /// hook), <see cref="TryDequeue"/> and <see cref="Held"/> on the idle loop, <see cref="Remove"/>
 /// on whichever task shows the <c>/queue</c> pane, <see cref="Count"/> on the pane's tick thread
 /// under its own gate. No sentences here: <see cref="ChatScreen"/> and <see cref="QueueMenu"/>

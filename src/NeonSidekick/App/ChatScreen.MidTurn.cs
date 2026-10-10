@@ -24,7 +24,7 @@ public enum MidTurnClass
     /// <summary>
     /// Waits for the reply to end, then runs as if typed at the idle line (<c>/profile</c>, <c>/server</c>, <c>/compact</c> …).
     /// Dropped with a notice until later on 2026-09-27 (the user's call): now the line joins the queue as a message does
-    /// (the pending lines with <c>Queue messages</c> off or under <c>/botchat</c>), so it follows <c>Queue cancel mode</c> too.
+    /// (the pending lines under <c>Queue mode</c> <c>disabled</c> or <c>/botchat</c>), so it follows <c>Queue cancel mode</c> too.
     /// </summary>
     Deferred,
 }
@@ -234,7 +234,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The watcher's line hook (<see cref="KeySource.WatchAsync(CancellationTokenSource, CancellationToken, Func{ConsoleKeyInfo, bool}?, CancellationTokenSource?, Func{KeySource.WatchedLine, Task{bool}}?, Func{bool}?, Func{InputEvent, bool}?, Func{ConsoleKeyInfo, bool}?, Func{InputEvent.Click, string?}?, InputLine.Editor?)"/>),
     /// on the watcher task. True when the line was taken (a pane ran, an act was posted, a refusal
-    /// was posted, a message was queued under <c>Queue messages</c> — a line holding a paste is always one, its
+    /// was posted, a message was queued unless <c>Queue mode</c> is <c>disabled</c> — a line holding a paste is always one, its
     /// <c>Text</c> null — or left for the idle line, <see cref="_pendingLines"/>); false leaves it where it was —
     /// on the live row (2026-09-25: the typo intercept's replacement is there instead), or type-ahead for a clicked word.
     /// Since the row became the idle line's editor under a reply (2026-09-25) a message with the queue off and
@@ -319,11 +319,12 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// A message typed under the reply (2026-09-18), on the watcher task: under <c>Queue messages</c>
-    /// it goes into the queue and the idle loop sends it once the reply ends; with the switch off it waits in
+    /// A message typed under the reply (2026-09-18), on the watcher task: under <c>Queue mode</c> <c>automatic</c>
+    /// it goes into the queue and the idle loop sends it once the reply ends, under <c>manual</c> (2026-10-09) into the queue
+    /// to wait for the <c>/queue</c> send; under <c>disabled</c> (the switch <c>Queue messages</c> off until then) it waits in
     /// <see cref="_pendingLines"/> (2026-09-25: it was type-ahead until the live row) and is sent as the reply ends
     /// all the same, only never shown as queued. The setting is read here, at each Enter. Under <c>/botchat</c>
-    /// (2026-09-24) a line is always queued whatever the switch says: the chat takes it between two
+    /// (2026-09-24) a line is always queued whatever the mode says: the chat takes it between two
     /// replies as the user's interjection. A blank line, or one with no live row behind it, stays where it was.
     /// </summary>
     private bool QueueLine(KeySource.WatchedLine line)
@@ -334,7 +335,7 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        if (!_effective().QueueMessages && !_botChatRunning)
+        if (QueueModeNow() == Queueing.Disabled && !_botChatRunning)
         {
             return Pend(submitted);
         }
@@ -350,7 +351,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The lines left for the idle line (2026-09-25): a message with <c>Queue messages</c> off, a command that cancels the
+    /// The lines left for the idle line (2026-09-25): a message under <c>Queue mode</c> <c>disabled</c>, a command that cancels the
     /// reply (<c>/clear</c>, <c>/new</c>, <c>/exit</c>…), or a line sent under a spinner that takes no command. Filled on the
     /// watcher task, emptied by the idle loop ahead of every other line, oldest first.
     /// </summary>
@@ -482,7 +483,13 @@ internal sealed partial class ChatScreen
                 await HandleMemoryAsync(args, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Queue:
-                await _queueMenu.ShowAsync(cancellationToken).ConfigureAwait(false);
+                // Under Queue mode manual (2026-10-09, the user's ask) the send is offered over the reply too: the message it takes
+                // waits for the idle line, which sends it first once the reply ends.
+                if (await _queueMenu.ShowAsync(cancellationToken, () => QueueModeNow() == Queueing.Manual).ConfigureAwait(false) is { } send)
+                {
+                    Pend(send);
+                }
+
                 break;
             case SlashCommand.Rename:
             case SlashCommand.Session when ParseSessionArgs(args).Kind == SessionActionKind.TitlePane:
