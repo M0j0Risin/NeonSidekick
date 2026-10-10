@@ -79,6 +79,10 @@ internal sealed class LlmSession : IDisposable
     // have started it; cleared when another server is picked and the containers are stopped.
     private string? _dockerInUse;
 
+    // That container's live endpoint (2026-10-10): kept while it runs though this session connected elsewhere (a server that leaves the
+    // GPU alone), so a bot or an advisor naming it still shares it. Set and cleared with _dockerInUse.
+    private LlmEndpoint? _dockerLive;
+
     // The settings that container was switched to under (2026-10-02, the user's ask): a profile switch leaves it by the old
     // profile's chosen list, stop timeout and post-stop delay — the new profile's list may not name it at all, and a stop by
     // that list stopped nothing while the next model loaded beside it.
@@ -207,8 +211,10 @@ internal sealed class LlmSession : IDisposable
 
         // Another server than a chosen container (2026-10-02, the user's call): the running one stops first, before an embedded
         // model loads, so the GPU never holds the two — and the GPU's memory is given the post-stop delay before that load.
+        // Since 2026-10-10 (the user's call) only a server that would compete for this machine's GPU: the Claude Code server, the hosted
+        // APIs and another machine's server leave the container running (KeepsDocker), a bot or an advisor still sharing it.
         bool docker = _docker is not null && DockerEndpoint.Chosen(effective);
-        if (!docker)
+        if (!docker && !KeepsDocker(effective))
         {
             await LeaveDockerAsync(effective, except: null, settle: EmbeddedEndpoint.Chosen(effective), phase, cancellationToken).ConfigureAwait(false);
         }
@@ -355,7 +361,41 @@ internal sealed class LlmSession : IDisposable
         string model = saved is not null && (listed.Count == 0 || listed.Contains(saved, StringComparer.Ordinal)) ? saved
             : listed.Count > 0 ? listed[0] : saved ?? LlmEndpoint.FallbackModelId;
         var window = result.Models.ModelsJson is { } json ? ContextLengthProbe.ParseModelsWindow(json, model) : null;
-        return new LlmEndpoint(DockerEndpoint.BaseUrl(name), model, _apiKey, DockerServerText.Source(name, result.Port), window) { LiveUrl = result.LiveUrl };
+        _dockerLive = new LlmEndpoint(DockerEndpoint.BaseUrl(name), model, _apiKey, DockerServerText.Source(name, result.Port), window) { LiveUrl = result.LiveUrl };
+        return _dockerLive;
+    }
+
+    /// <summary>
+    /// Whether a connect under <paramref name="effective"/> keeps the chosen container in use running (2026-10-10, the user's call): its
+    /// URL is a server that leaves this machine's GPU alone (<see cref="DockerEndpoint.LeavesTheGpuAlone"/>) and is offered — a Claude Code,
+    /// Anthropic or OpenAI URL switched off connects as a blank URL does, and a blank URL scans this machine's ports, where the
+    /// container's own would be found.
+    /// </summary>
+    private bool KeepsDocker(AppSettingsData effective)
+    {
+        if (string.IsNullOrWhiteSpace(effective.LlmUrl) || DockerEndpoint.IsDocker(effective.LlmUrl) || EmbeddedEndpoint.IsEmbedded(effective.LlmUrl))
+        {
+            return false;
+        }
+
+        if (ClaudeCliEndpoint.IsClaudeCli(effective.LlmUrl))
+        {
+            return _claudeCliOffered(effective);
+        }
+
+        Uri url;
+        try
+        {
+            url = LlmEndpoint.NormalizeBaseUrl(effective.LlmUrl);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UriFormatException)
+        {
+            return false;
+        }
+
+        return ClaudeApi.IsClaudeApi(url) ? ClaudeApi.Offered(effective)
+            : OpenAIApi.IsOpenAIApi(url) ? OpenAIApi.Offered(effective)
+            : DockerEndpoint.LeavesTheGpuAlone(url);
     }
 
     /// <summary>
@@ -375,6 +415,7 @@ internal sealed class LlmSession : IDisposable
         var left = await _docker.StopAllAsync(_dockerSettings ?? effective, except, settle, phase, cancellationToken).ConfigureAwait(false);
         _dockerInUse = null;
         _dockerSettings = null;
+        _dockerLive = null;
         if (left.Stopped.Count > 0)
         {
             DiagnosticLog.Info(Category, DockerServerText.Left(left.Stopped));
@@ -413,6 +454,7 @@ internal sealed class LlmSession : IDisposable
         var left = await _docker.StopAllAsync(_dockerSettings ?? effective, except: null, settle: false, null, cancellationToken).ConfigureAwait(false);
         _dockerInUse = null;
         _dockerSettings = null;
+        _dockerLive = null;
         foreach (string error in left.Errors)
         {
             DiagnosticLog.Warn(Category, error);
@@ -551,9 +593,10 @@ internal sealed class LlmSession : IDisposable
     public async Task<bool> ConnectAsync(AppSettingsData effective, LlmEndpoint endpoint, CancellationToken cancellationToken, Action<string>? phase = null)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
-        if (!DockerEndpoint.IsDocker(endpoint.BaseUrl))
+        if (!DockerEndpoint.IsDocker(endpoint.BaseUrl) && !DockerEndpoint.LeavesTheGpuAlone(endpoint.BaseUrl))
         {
             // A scan row picked (2026-10-02): a chosen container in use stops first, the user's call. Its server runs already: no settle.
+            // Not for a server that leaves the GPU alone (2026-10-10): Claude Code, the hosted APIs, another machine's.
             await LeaveDockerAsync(effective, except: null, settle: false, phase, cancellationToken).ConfigureAwait(false);
         }
 
@@ -793,7 +836,9 @@ internal sealed class LlmSession : IDisposable
         {
             // A bot's own container (2026-10-02): only the one running is shared — a botchat never starts or stops one.
             string wanted = DockerEndpoint.ContainerOf(profile.LlmUrl)!;
-            if (Endpoint is not { LiveUrl: not null } running || DockerEndpoint.ContainerOf(running.BaseUrl) is not { } current)
+            // The session's own server, or (2026-10-10) the container it kept running when it connected to a server that leaves the GPU alone.
+            var live = Endpoint is { LiveUrl: not null } main && DockerEndpoint.IsDocker(main.BaseUrl) ? main : _dockerLive;
+            if (live is not { LiveUrl: not null } running || DockerEndpoint.ContainerOf(running.BaseUrl) is not { } current)
             {
                 return (null, DockerServerText.BotNoneRunning);
             }

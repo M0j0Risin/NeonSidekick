@@ -43,6 +43,34 @@ public static class DockerEndpoint
         return new Uri("http://" + Host + "/" + container + "/v1");
     }
 
+    /// <summary>
+    /// Whether a server at <paramref name="baseUrl"/> leaves this machine's GPU alone (2026-10-10, the user's call): the Claude Code
+    /// server, the Anthropic and OpenAI APIs, and any host but this machine. Connecting to one then keeps a chosen container running
+    /// (bots and advisors may still share it); the embedded model, another container and a server on this machine (loopback, a
+    /// <c>.localhost</c> name, or <paramref name="machine"/>, the computer's own name) would compete for the GPU, so the container
+    /// stops first, as every connect did until now. A LAN address that happens to be this machine's own is not recognised. Pure.
+    /// </summary>
+    public static bool LeavesTheGpuAlone(Uri baseUrl, string? machine = null)
+    {
+        ArgumentNullException.ThrowIfNull(baseUrl);
+        if (IsDocker(baseUrl) || EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(baseUrl))
+        {
+            return false;
+        }
+
+        if (Claude.ClaudeCliEndpoint.IsClaudeCli(baseUrl) || Llm.ApiKeys.IsHostedApi(baseUrl))
+        {
+            return true;
+        }
+
+        string host = baseUrl.Host;
+        bool thisMachine = baseUrl.IsLoopback
+            || string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+            || host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(host, machine ?? Environment.MachineName, StringComparison.OrdinalIgnoreCase);
+        return !thisMachine;
+    }
+
     /// <summary>Whether <paramref name="baseUrl"/> is a Docker container's sentinel.</summary>
     public static bool IsDocker(Uri? baseUrl) =>
         baseUrl is not null && string.Equals(baseUrl.Host, Host, StringComparison.OrdinalIgnoreCase);

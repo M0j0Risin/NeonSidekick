@@ -21,7 +21,7 @@ public sealed class LlmSessionDockerTests
     /// <summary>No spinner: typed, since a bare null would fit the endpoint overload too.</summary>
     private static readonly Action<string>? NoPhase = null;
 
-    private LlmSession Session(FakeEmbeddedLlm? embedded = null) => new(
+    private LlmSession Session(FakeEmbeddedLlm? embedded = null, bool claudeCode = false) => new(
         new LlmEndpointProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)),
         new ContextLengthProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)),
         (endpoint, _) =>
@@ -30,6 +30,7 @@ public sealed class LlmSessionDockerTests
             return new FakeChatClient();
         },
         embedded: embedded,
+        claudeCliOffered: _ => claudeCode,
         dockerServers: _docker);
 
     private static AppSettingsData Docker(string name, string model = "", bool on = true) => new()
@@ -272,6 +273,85 @@ public sealed class LlmSessionDockerTests
         var listed = await session.ListModelsAsync(CancellationToken.None);
         Assert.Equal(["sglang-model"], listed!.Value.ModelIds);
         Assert.Equal("http://127.0.0.1:30000/v1/models", _http.Requests.Single().Uri.AbsoluteUri);
+    }
+
+    /// <summary>
+    /// A server that leaves this machine's GPU alone keeps the container running (2026-10-10, the user's call): the Claude Code server and
+    /// another machine's server, by either connect path; a bot or an advisor still shares it, and a connect to this machine stops it then.
+    /// </summary>
+    [Fact]
+    public async Task AServerThatLeavesTheGpuAlone_KeepsTheContainer_StillShared_UntilALocalOne()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        _http.Map("http://gpu-box:8000/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("remote"));
+        _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("lm"));
+        using var session = Session(claudeCode: true);
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+
+        var claude = Docker("sglang_a");
+        claude.LlmUrl = Claude.ClaudeCliEndpoint.BaseUrl.ToString();
+        Assert.True(await session.ConnectAsync(claude, NoPhase, CancellationToken.None));
+        var remote = Docker("sglang_a");
+        remote.LlmUrl = "http://gpu-box:8000/v1";
+        Assert.True(await session.ConnectAsync(remote, NoPhase, CancellationToken.None));
+        Assert.Equal(["switch sglang_a"], _docker.Calls);   // nothing stopped
+        Assert.Equal("sglang_a", session.DockerInUse);
+
+        var (link, problem) = await session.LinkAsync(new AppSettingsData { LlmUrl = "docker:sglang_a" }, CancellationToken.None);
+        Assert.Null(problem);
+        Assert.Equal(FakeDockerServers.LiveUrl, link!.Endpoint.LiveUrl);   // shared, though the chat is elsewhere
+        link.Dispose();
+        var (other, otherProblem) = await session.LinkAsync(new AppSettingsData { LlmUrl = "docker:vllm_b" }, CancellationToken.None);
+        Assert.Null(other);
+        Assert.Equal(DockerServerText.BotOtherContainer("vllm_b", "sglang_a"), otherProblem);
+
+        var local = Docker("sglang_a");
+        local.LlmUrl = "http://127.0.0.1:1234/v1";
+        Assert.True(await session.ConnectAsync(local, NoPhase, CancellationToken.None));
+        Assert.Equal(["switch sglang_a", "stop-all"], _docker.Calls);   // this machine's server: the GPU freed first
+        Assert.Null(session.DockerInUse);
+        var (gone, goneProblem) = await session.LinkAsync(new AppSettingsData { LlmUrl = "docker:sglang_a" }, CancellationToken.None);
+        Assert.Null(gone);
+        Assert.Equal(DockerServerText.BotNoneRunning, goneProblem);
+    }
+
+    [Fact]
+    public async Task AClaudeCodeUrlSwitchedOff_IsABlankUrl_AndStopsTheContainer()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var session = Session(claudeCode: false);
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+        var claude = Docker("sglang_a");
+        claude.LlmUrl = Claude.ClaudeCliEndpoint.BaseUrl.ToString();
+
+        await session.ConnectAsync(claude, NoPhase, CancellationToken.None);
+
+        Assert.Equal(["switch sglang_a", "stop-all"], _docker.Calls);   // it scans as a blank URL would, on this machine's ports
+    }
+
+    [Theory]
+    [InlineData("http://127.0.0.1:1234/v1", false)]
+    [InlineData("http://localhost:8000/v1", false)]
+    [InlineData("http://[::1]:8000/v1", false)]
+    [InlineData("http://BOX:8000/v1", false)]   // this machine by name
+    [InlineData("http://embedded.localhost/v1", false)]
+    [InlineData("http://docker.localhost/sglang_a/v1", false)]
+    [InlineData("http://claude-code.localhost/v1", true)]
+    [InlineData("https://api.anthropic.com/v1", true)]
+    [InlineData("https://api.openai.com/v1", true)]
+    [InlineData("http://gpu-box:8000/v1", true)]
+    [InlineData("http://192.168.1.20:8000/v1", true)]
+    public void LeavesTheGpuAlone_IsAnotherMachine_OrAHostedServer(string url, bool alone)
+    {
+        Assert.Equal(alone, DockerEndpoint.LeavesTheGpuAlone(new Uri(url), machine: "box"));
     }
 
     [Fact]
