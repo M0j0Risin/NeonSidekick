@@ -46,17 +46,21 @@ public static class FolderText
     public const string ShortcutGlyph = "⌂";
 
     /// <summary>
-    /// Ahead of the <see cref="SplashLabel"/> shortcut's label (2026-09-24): the framed square, a picture
-    /// frame — the user's pick over ✦ ❖ ☼. One cell, like the house; an emoji (🖼) is two and would
+    /// Ahead of the <see cref="ImagesLabel"/> shortcut's label (2026-09-24, the splash shortcut's until 2026-10-10): the framed
+    /// square, a picture frame — the user's pick over ✦ ❖ ☼. One cell, like the house; an emoji (🖼) is two and would
     /// push the label off the house's column.
     /// </summary>
-    public const string SplashGlyph = "▣";
+    public const string ImagesGlyph = "▣";
 
     /// <summary>The profile's own <c>files</c> folder's label at the top of the tree (later on 2026-09-21, the user's word).</summary>
     public const string ProfileLabel = "profile";
 
-    /// <summary>The profile's <c>splash</c> folder's label, the row under <see cref="ProfileLabel"/> (2026-09-24, the user's ask).</summary>
-    public const string SplashLabel = "splash";
+    /// <summary>
+    /// The profile's <c>images</c> folder's label, the row under <see cref="ProfileLabel"/> (2026-10-10, the user's call: the
+    /// splash folder moved under it as <c>splash_images</c>, so the shortcut names the folder holding every picture folder;
+    /// <c>splash</c> on the splash folder itself from 2026-09-24).
+    /// </summary>
+    public const string ImagesLabel = "images";
 
     /// <summary>Each depth's indent, ahead of the glyph.</summary>
     public const int IndentCells = 2;

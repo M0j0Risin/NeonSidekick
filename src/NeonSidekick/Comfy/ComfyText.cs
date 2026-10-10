@@ -356,6 +356,9 @@ public static class ComfyText
     /// <summary>A splash source that is no picture. Pinned.</summary>
     public static string SplashNotAnImage(string relative) => $"Error: '{relative}' is not a picture the splash can show (png, jpg, gif, webp or bmp)";
 
+    /// <summary>A splash source already in the splash folder (2026-10-10, once a full path in the images folder could name one): copied, it would land beside itself. Pinned.</summary>
+    public static string SplashAlready(string relative) => $"Error: '{relative}' is already in the splash folder";
+
     /// <summary>A splash copy that failed on disk. Pinned.</summary>
     public static string SplashFailed(string target, string detail) => $"Error: could not copy into {target}: {Diagnostics.LogText.Excerpt(detail)}";
 

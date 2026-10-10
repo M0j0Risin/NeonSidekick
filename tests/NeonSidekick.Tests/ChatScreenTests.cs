@@ -17303,7 +17303,7 @@ public partial class ChatScreenTests : IDisposable
         PaneOf40Rows();
         _random = new Random(7);
         SplashOf((2380, 100), (2380, 200));   // the embedded stand-in: never drawn while the folder holds a picture
-        string folder = Path.Combine(_settings.ProfileDirectory, SplashImages.ProfileFolderName);
+        string folder = _settings.ProfileSplashDirectory;
         Directory.CreateDirectory(folder);
         File.WriteAllBytes(Path.Combine(folder, "one.bmp"), SmokeChecks.SolidBmp(2380, 100));   // five half-block rows
         File.WriteAllBytes(Path.Combine(folder, "two.bmp"), SmokeChecks.SolidBmp(2380, 60));    // three
@@ -17346,7 +17346,7 @@ public partial class ChatScreenTests : IDisposable
         _random = new Random(7);
         SplashOf(2380, 100);   // the embedded stand-in: the startup picture (the default profile has no folder)
         WorkProfile();
-        string folder = Path.Combine(ProfileDir("work"), SplashImages.ProfileFolderName);
+        string folder = Path.Combine(ProfileDir("work"), AppSettings.ImagesFolderName, SplashImages.ProfileFolderName);
         Directory.CreateDirectory(folder);
         File.WriteAllBytes(Path.Combine(folder, "one.bmp"), SmokeChecks.SolidBmp(2380, 60));   // three half-block rows
         File.WriteAllBytes(Path.Combine(folder, "two.bmp"), SmokeChecks.SolidBmp(2380, 40));   // two
@@ -17382,7 +17382,7 @@ public partial class ChatScreenTests : IDisposable
         PaneOf40Rows();
         _random = new Random(7);
         SplashOf(2380, 100);
-        string folder = Path.Combine(_settings.ProfileDirectory, SplashImages.ProfileFolderName);
+        string folder = _settings.ProfileSplashDirectory;
         Directory.CreateDirectory(folder);
         File.WriteAllText(Path.Combine(folder, "prompt.txt"), "notes alone");
         StepsWhenIdle(Line("/exit"));
@@ -17493,7 +17493,7 @@ public partial class ChatScreenTests : IDisposable
         PaneOf40Rows();
         _random = new Random(7);
         SplashOf((2380, 100), (2380, 200));   // the embedded stand-in: never drawn while the folder holds a picture
-        string folder = Path.Combine(_settings.ProfileDirectory, SplashImages.ProfileFolderName);
+        string folder = _settings.ProfileSplashDirectory;
         Directory.CreateDirectory(folder);
         string[] names = ["one.bmp", "two.bmp"];
         File.WriteAllBytes(Path.Combine(folder, names[0]), SmokeChecks.SolidBmp(2380, 100));   // five half-block rows
@@ -17545,7 +17545,7 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => d.TtsOutput = false);
         PaneOf40Rows();
         SplashOf(2380, 100);
-        string folder = Path.Combine(_settings.ProfileDirectory, SplashImages.ProfileFolderName);
+        string folder = _settings.ProfileSplashDirectory;
         Directory.CreateDirectory(folder);
         File.WriteAllBytes(Path.Combine(folder, "one.bmp"), SmokeChecks.SolidBmp(2380, 100));
         File.WriteAllBytes(Path.Combine(folder, "two.bmp"), SmokeChecks.SolidBmp(2380, 60));
@@ -17650,7 +17650,7 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "tiled"; });
         PaneOf40Rows();
         SplashOf((480, 240));
-        string folder = Path.Combine(_settings.ProfileDirectory, SplashImages.ProfileFolderName);
+        string folder = _settings.ProfileSplashDirectory;
         Directory.CreateDirectory(folder);
         File.WriteAllBytes(Path.Combine(folder, "one.bmp"), SmokeChecks.SolidBmp(480, 240));
         File.WriteAllBytes(Path.Combine(folder, "two.bmp"), SmokeChecks.SolidBmp(480, 240));
@@ -17711,7 +17711,7 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => d.TtsOutput = false);
         PaneOf40Rows();
         SplashOf(2380, 100);   // the embedded stand-in: five rows
-        string folder = Path.Combine(_settings.ProfileDirectory, SplashImages.ProfileFolderName);
+        string folder = _settings.ProfileSplashDirectory;
         Directory.CreateDirectory(folder);
         File.WriteAllBytes(Path.Combine(folder, "only.bmp"), SmokeChecks.SolidBmp(2380, 60));   // three
         StepsWhenIdle(

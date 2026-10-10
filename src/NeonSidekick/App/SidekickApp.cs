@@ -743,7 +743,7 @@ public sealed class SidekickApp
         var uncTools = ChatScreen.UncTools(unc, files, () => EffectiveSettings);
         // The image tools (2026-09-24): no console needed, so headless has them too.
         using var comfy = new Comfy.ComfyStudio(ChatScreen.ComfyCatalog(_settings), files, () => EffectiveSettings, _comfyClient, images: images);
-        var comfyTools = ChatScreen.ComfyTools(comfy, files, () => _settings.ProfileSplashDirectory);
+        var comfyTools = ChatScreen.ComfyTools(comfy, files, () => _settings.ProfileSplashDirectory, images);
         // The Home Assistant tools (2026-09-28): no pane to ask on, so an asked call is refused; the policy's safe list runs.
         using var ha = new HomeAssistant.HaSession(() => EffectiveSettings, _haClient, _time);
         var haTools = ChatScreen.HomeAssistantTools(ha, confirm: null);

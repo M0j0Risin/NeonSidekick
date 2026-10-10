@@ -352,28 +352,31 @@ public class FolderTreeTests
         Assert.Equal(0, tree.JumpFrom(1, 'p'));   // one root off Windows: it is row 1
     }
 
-    /// <summary>Two shortcuts (2026-09-24): profile then splash, each behind its own glyph; a path in splash opens under the splash row, not under the drive.</summary>
+    /// <summary>
+    /// Two shortcuts (2026-09-24): profile then images (splash until 2026-10-10, when the splash folder moved under images as
+    /// splash_images), each behind its own glyph; a path in images opens under the images row, not under the drive.
+    /// </summary>
     [Fact]
     public void TwoShortcuts_EachDrawItsOwnGlyph_AndThePathUnderTheSecond_OpensThere()
     {
         string profileDir = P(C, "Users", "alice", ".neonsidekick", "profiles", "default");
         string files = P(profileDir, "files");
-        string splash = P(profileDir, "splash");
+        string images = P(profileDir, "images");
         var folders = Disks(hidden: true)
             .Add(P(C, "Users", "alice", ".neonsidekick"), "profiles")
             .Add(P(C, "Users", "alice", ".neonsidekick", "profiles"), "default")
-            .Add(profileDir, "files", "splash")
-            .Add(splash, "comfy");
+            .Add(profileDir, "files", "images")
+            .Add(images, "splash_images");
         var tree = new FolderTree(folders,
-            [new FolderShortcut(FolderText.ProfileLabel, files, FolderText.ShortcutGlyph), new FolderShortcut(FolderText.SplashLabel, splash, FolderText.SplashGlyph)]);
+            [new FolderShortcut(FolderText.ProfileLabel, files, FolderText.ShortcutGlyph), new FolderShortcut(FolderText.ImagesLabel, images, FolderText.ImagesGlyph)]);
 
-        Assert.Equal(["profile", "splash", .. Roots], Names(tree));
+        Assert.Equal(["profile", "images", .. Roots], Names(tree));
         Assert.Equal(FolderText.CollapsedGlyph + " ⌂ profile", FolderText.RowMarkup(tree.Visible[0]));
-        Assert.Equal(FolderText.CollapsedGlyph + " ▣ splash", FolderText.RowMarkup(tree.Visible[1]));
+        Assert.Equal(FolderText.CollapsedGlyph + " ▣ images", FolderText.RowMarkup(tree.Visible[1]));
         Assert.Null(tree.Visible[2].ShortcutGlyph);
 
-        Assert.Equal(2, tree.ExpandTo(P(splash, "comfy")));
-        Assert.Equal(["profile", "splash", "comfy", .. Roots], Names(tree));
+        Assert.Equal(2, tree.ExpandTo(P(images, "splash_images")));
+        Assert.Equal(["profile", "images", "splash_images", .. Roots], Names(tree));
         Assert.Equal(1, tree.RootOf(2));
     }
 

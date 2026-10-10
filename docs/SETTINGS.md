@@ -187,7 +187,7 @@ Settings that an environment variable or flag can override for one launch are li
 
 * `fullsize` fills the screen with one picture; ←/→ step through the set. Delete twice on an empty line moves one of the profile's own pictures to the folder's `.trash` (move it back to restore it).
 * `tiled` shows thumbnails at *Image thumbnail size*; ←/→ page and a double-click opens one.
-* Pictures in the profile's `splash\` folder replace the built-in ones.
+* Pictures in the profile's `images\splash_images\` folder replace the built-in ones (`set_splash_image` copies one there). Until 2026-10-10 the folder was the profile's `splash\`; pictures left there no longer show, so move them across.
 * `/splash` shows the splash whatever the setting (tiled under `tiled`, otherwise one picture). A theme change restarts the screen like `/clear`.
 
 #### Performance bar

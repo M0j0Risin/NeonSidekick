@@ -133,8 +133,12 @@ public sealed class AppSettings : IDisposable
     /// <summary>The loaded profile's own skills folder: <c>skills</c> under <see cref="ProfileDirectory"/>.</summary>
     public string ProfileSkillsDirectory => Path.Combine(ProfileDirectory, Skills.SkillRoots.DirectoryName);
 
-    /// <summary>The loaded profile's own splash folder: <c>splash</c> under <see cref="ProfileDirectory"/>, whose pictures stand in for the embedded set (<see cref="UI.SplashImages.FromDirectory"/>).</summary>
-    public string ProfileSplashDirectory => Path.Combine(ProfileDirectory, UI.SplashImages.ProfileFolderName);
+    /// <summary>
+    /// The loaded profile's own splash folder, whose pictures stand in for the embedded set (<see cref="UI.SplashImages.FromDirectory"/>):
+    /// <c>splash_images</c> under <see cref="ProfileImagesDirectory"/> since 2026-10-10 (the user's call), <c>splash</c> under
+    /// <see cref="ProfileDirectory"/> until then.
+    /// </summary>
+    public string ProfileSplashDirectory => Path.Combine(ProfileImagesDirectory, UI.SplashImages.ProfileFolderName);
 
     /// <summary>The name of the profile's images folder (<see cref="ProfileImagesDirectory"/>). Pinned.</summary>
     public const string ImagesFolderName = "images";
@@ -238,7 +242,8 @@ public sealed class AppSettings : IDisposable
     /// after <c>/profile add</c> included), a reset of the loaded profile, a reload. Never for a
     /// profile that is not loaded (nothing is created for a look). A failure is a warning, never an
     /// exception. Named <c>EnsureSkillsDirectories</c> until the splash folder joined it. <see cref="ProfileComfyDirectory"/>
-    /// joined on 2026-09-24, so the place a ComfyUI workflow goes is there to be found.
+    /// joined on 2026-09-24, so the place a ComfyUI workflow goes is there to be found. Since the splash folder moved under
+    /// <see cref="ProfileImagesDirectory"/> (2026-10-10) a load makes the images folder too, made on first use until then.
     /// </summary>
     private void EnsureProfileDirectories()
     {

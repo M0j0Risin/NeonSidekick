@@ -1251,11 +1251,14 @@ public class AppSettingsTests : IDisposable
     {
         // 2026-09-22, the user's ask: nothing created it before, so using a profile's own splash
         // pictures meant making the folder by hand. Empty, it is no splash at all — SplashImages
-        // reads a folder with no picture as none and the embedded set stands.
+        // reads a folder with no picture as none and the embedded set stands. Under the images folder as splash_images since
+        // 2026-10-10 (the user's call), so a load makes the images folder too.
         using var settings = new AppSettings(_dir);
 
         Assert.True(Directory.Exists(settings.ProfileSplashDirectory));
-        Assert.Equal(Path.Combine(Profiles.Directory(_dir, Profiles.DefaultName), "splash"), settings.ProfileSplashDirectory);
+        Assert.Equal(Path.Combine(Profiles.Directory(_dir, Profiles.DefaultName), "images", "splash_images"), settings.ProfileSplashDirectory);
+        Assert.Equal(settings.ProfileImagesDirectory, Path.GetDirectoryName(settings.ProfileSplashDirectory));
+        Assert.False(Directory.Exists(Path.Combine(Profiles.Directory(_dir, Profiles.DefaultName), "splash")));   // the old place is never made
         Assert.Equal(SplashImages.ProfileFolderName, Path.GetFileName(settings.ProfileSplashDirectory));
         Assert.Null(SplashImages.FromDirectory(settings.ProfileSplashDirectory));   // made, but empty: the embedded set is still in force
     }
@@ -1266,13 +1269,13 @@ public class AppSettingsTests : IDisposable
         Directory.CreateDirectory(Profiles.Directory(_dir, "work"));
         Directory.CreateDirectory(Profiles.Directory(_dir, "other"));
         using var settings = new AppSettings(_dir);
-        Assert.False(Directory.Exists(Path.Combine(Profiles.Directory(_dir, "work"), "splash")));
+        Assert.False(Directory.Exists(Path.Combine(Profiles.Directory(_dir, "work"), "images")));
 
         await settings.SwitchProfileAsync("work");
 
         Assert.True(Directory.Exists(settings.ProfileSplashDirectory));
-        Assert.EndsWith(Path.Combine("work", "splash"), settings.ProfileSplashDirectory);
-        Assert.False(Directory.Exists(Path.Combine(Profiles.Directory(_dir, "other"), "splash")));   // nothing is created for a look
+        Assert.EndsWith(Path.Combine("work", "images", "splash_images"), settings.ProfileSplashDirectory);
+        Assert.False(Directory.Exists(Path.Combine(Profiles.Directory(_dir, "other"), "images")));   // nothing is created for a look
     }
 
     [Fact]

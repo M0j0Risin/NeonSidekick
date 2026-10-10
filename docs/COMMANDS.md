@@ -298,7 +298,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 
 `/cwd browse`, and the *Working directory* and *Obsidian vault* rows, open a folder tree headed **📂 Folders**, on the directory in use.
 
-* `⌂ profile` (the profile's `files\`) and `▣ splash` (its `splash\`) sit above the drives.
+* `⌂ profile` (the profile's `files\`) and `▣ images` (its `images\`, the splash pictures in `splash_images\` among the rest) sit above the drives.
 * Space, → and ← open and close folders; `-` collapses all. A click on a folder's glyph or a double-click on its name opens or closes it.
 * Only Enter chooses. Choosing `⌂ profile` saves the default, like `/cwd ~`.
 

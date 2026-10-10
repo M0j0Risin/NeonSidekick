@@ -1120,7 +1120,7 @@ internal sealed partial class ChatScreen
         // call time — the input line is built below, so the lambda reads the field then, not now. Saved first when it was not
         // sent yet (2026-10-09, PastedForComfy). The pictures go to the profile's images folder (2026-10-09).
         _comfy = new ComfyStudio(ComfyCatalog(settings), _files, _effective, comfyClient, _random, pasted: PastedForComfy, time: _time, images: _images);
-        _comfyTools = ComfyTools(_comfy, _files, () => _settings.ProfileSplashDirectory);
+        _comfyTools = ComfyTools(_comfy, _files, () => _settings.ProfileSplashDirectory, _images);
         // The Home Assistant tools (2026-09-28): the client made for the URL and token in force; an asked call waits on the pane.
         _ha = new HaSession(_effective, haClient, _time);
         _haTools = HomeAssistantTools(_ha, ConfirmHomeAsync);
@@ -5663,11 +5663,12 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The image tools (2026-09-24): <c>generate_image</c> over the ComfyUI server and the workflows, and <c>set_splash_image</c>
     /// into the loaded profile's splash folder, offered on every turn while <see cref="ComfyOffered"/> says so (headless too).
+    /// <paramref name="images"/> (2026-10-10) lets <c>set_splash_image</c> take a picture in the profile's images folder by its full path.
     /// </summary>
-    public static IReadOnlyList<AIFunction> ComfyTools(ComfyStudio studio, WorkingDirectory files, Func<string> splashDirectory) => new AIFunction[]
+    public static IReadOnlyList<AIFunction> ComfyTools(ComfyStudio studio, WorkingDirectory files, Func<string> splashDirectory, WorkingDirectory? images = null) => new AIFunction[]
     {
         new GenerateImageTool(studio),
-        new SetSplashImageTool(files, splashDirectory),
+        new SetSplashImageTool(files, splashDirectory, images),
     };
 
     /// <summary>Whether the image group is offered (2026-09-24): the setting <c>ComfyUI tools</c> on, <c>ComfyUI URL</c> an http(s) URL and at least one workflow in a <c>comfy</c> folder.</summary>
@@ -7628,15 +7629,16 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The tree both pickers show (the drives <c>File browser roots</c> allows; above them the profile's <c>files</c>
-    /// folder and, since 2026-09-24, its <c>splash</c> folder as shortcuts), opened on <paramref name="openOn"/>; the full
-    /// path picked, or null.
+    /// folder and its <c>images</c> folder as shortcuts — the second its <c>splash</c> folder from 2026-09-24 until 2026-10-10,
+    /// when the splash folder moved under <c>images</c> as <c>splash_images</c> and the shortcut went up a level, the user's
+    /// call), opened on <paramref name="openOn"/>; the full path picked, or null.
     /// </summary>
     private async Task<string?> BrowseFolderAsync(string openOn, CancellationToken cancellationToken)
     {
         var effective = _effective();
         string profileFiles = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
-        string splash = _settings.ProfileSplashDirectory;
-        foreach (string folder in (string[])[profileFiles, splash])
+        string images = _settings.ProfileImagesDirectory;
+        foreach (string folder in (string[])[profileFiles, images])
         {
             try
             {
@@ -7650,7 +7652,7 @@ internal sealed partial class ChatScreen
 
         var tree = new FolderTree(
             new FileSystemFolders(FileBrowserMode.Resolve(effective)),
-            [new FolderShortcut(FolderText.ProfileLabel, profileFiles, FolderText.ShortcutGlyph), new FolderShortcut(FolderText.SplashLabel, splash, FolderText.SplashGlyph)]);
+            [new FolderShortcut(FolderText.ProfileLabel, profileFiles, FolderText.ShortcutGlyph), new FolderShortcut(FolderText.ImagesLabel, images, FolderText.ImagesGlyph)]);
         int cursor = tree.ExpandTo(openOn);
         return await _folderPane.PickAsync(tree, cursor, cancellationToken).ConfigureAwait(false);
     }
@@ -10077,7 +10079,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The pictures in force (later on 2026-09-19, the user's ask): the loaded profile's own
-    /// <c>splash</c> folder while it holds an image file (<see cref="SplashImages.FromDirectory"/>,
+    /// splash folder (<see cref="AppSettings.ProfileSplashDirectory"/>, <c>images\splash_images</c> since 2026-10-10)
+    /// while it holds an image file (<see cref="SplashImages.FromDirectory"/>,
     /// read live so a switch or a dropped file counts), else the source the screen was built with
     /// — the embedded set in the app, a test's list, or nothing (headless, tests that pass none:
     /// then no folder is looked at either).
@@ -10089,7 +10092,7 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        string folder = Path.Combine(_settings.ProfileDirectory, SplashImages.ProfileFolderName);
+        string folder = _settings.ProfileSplashDirectory;
         if (SplashImages.FromDirectory(folder) is { } own)
         {
             if (log)

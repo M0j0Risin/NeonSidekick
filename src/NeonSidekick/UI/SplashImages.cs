@@ -163,8 +163,13 @@ public static class SplashImages
     /// <summary>The production splash: the embedded names over <see cref="Load"/>. What <c>SidekickApp</c> hands the screen.</summary>
     public static SplashSource Source { get; } = new(Names, Load);
 
-    /// <summary>The folder under the loaded profile's directory whose pictures replace the embedded set (later on 2026-09-19, the user's ask).</summary>
-    public const string ProfileFolderName = "splash";
+    /// <summary>
+    /// The folder whose pictures replace the embedded set (later on 2026-09-19, the user's ask): <c>splash</c> under the loaded
+    /// profile's directory until 2026-10-10, <c>splash_images</c> under its images folder since (the user's call: every picture
+    /// folder under <c>images</c>, the camera's, the screen's, ComfyUI's and the pasted ones' shape; a fixed name, no setting; no
+    /// migration — an old <c>splash</c> folder is left as it is and no longer read).
+    /// </summary>
+    public const string ProfileFolderName = "splash_images";
 
     /// <summary>
     /// The profile's own splash (later on 2026-09-19): the files under <paramref name="directory"/>
