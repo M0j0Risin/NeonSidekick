@@ -441,29 +441,93 @@ public class MenuPaneTests : IDisposable
         Assert.Equal(0, MenuPane.TabBodyRows(Page("one", "two"), 40));
     }
 
+    // ── Sub-tabs (2026-10-10) ───────────────────────────────────────────────
+
+    /// <summary>One, then Group holding X and Y, then Three: <c>/tools</c>' Database and Media in small.</summary>
+    private static MenuPage Grouped(int tab = 0, int sub = 0) => MenuPage.Tabbed(
+        "Settings",
+        [new MenuTab("One", ["a"]), new MenuTab("Group", []) { SubTabs = [new MenuTab("X", ["x1", "x2"]), new MenuTab("Y", ["y1"]) { Hint = "y keys" }], Sub = sub }, new MenuTab("Three", ["d"])],
+        tab,
+        "Enter = pick · ←/→ tabs · ESC = back");
+
+    /// <summary>The second strip under the first: the label's width of blanks, the bar, the hook, then the sub-tabs' titles.</summary>
+    private const string SubStrip = "         │ ↳ X · Y ";
+
     [Fact]
-    public void TabBodyRows_KeepsTheHeightOfThePageItOpenedFrom_NeverLess()
+    public void ATabWithSubTabs_ShowsTheShownOnesRows_HintAndSub()
     {
-        // 2026-10-09, the user's ask: Tools › Database and Tools › Media keep the Tools pane's height.
-        var sub = MenuPage.Tabbed("Sub", [new MenuTab("X", ["x"])], 0, "h");
-        Assert.Equal(1, MenuPane.TabBodyRows(sub, 40));
-        Assert.Equal(3, MenuPane.TabBodyRows(sub with { HeightOf = Tabbed() }, 40));
-        var tall = MenuPage.Tabbed("Sub", [new MenuTab("X", ["v", "w", "x", "y"])], 0, "h");
-        Assert.Equal(4, MenuPane.TabBodyRows(tall with { HeightOf = Tabbed() }, 40));   // its own when taller
+        var page = Grouped(1, 1);
+        Assert.Equal(["y1"], page.Rows);
+        Assert.Equal("y keys", page.Hint);
+        Assert.Equal(1, page.Sub);
+        Assert.Equal(["x1", "x2"], Grouped(1).Rows);
+        Assert.Equal(1, Grouped(1, 7).Sub);              // clamped
+        Assert.Equal(-1, Grouped(0).Sub);                // One holds none
+        Assert.Equal([SubStrip], MenuPane.SubStripRows(Grouped(1), 40).Select(Markup.Remove));
+        Assert.Empty(MenuPane.SubStripRows(Grouped(0), 40));
     }
 
     [Fact]
-    public async Task APageWithHeightOf_IsPaddedToThatPagesTallestTab()
+    public void TabBodyRows_CountsTheSecondStrip_AndTheTallestSubTab()
+    {
+        // The strip's row and X's two rows: One and Three are padded to three.
+        Assert.Equal(3, MenuPane.TabBodyRows(Grouped(), 40));
+    }
+
+    [Fact]
+    public void StepLeaf_WalksEverySubTab_AndTabStepsPastThem()
+    {
+        var tabs = Grouped().Tabs!;
+        Assert.Equal((1, (int?)0), MenuPane.StepLeaf(tabs, 0, +1, whole: false));       // into Group at its first
+        Assert.Equal((1, (int?)1), MenuPane.StepLeaf(tabs, 1, +1, whole: false));       // X → Y
+        Assert.Equal((2, (int?)null), MenuPane.StepLeaf(Grouped(0, 1).Tabs!, 1, +1, whole: false));   // Y → Three
+        Assert.Equal((1, (int?)1), MenuPane.StepLeaf(tabs, 2, -1, whole: false));       // back into Group at its last
+        Assert.Equal((0, (int?)null), MenuPane.StepLeaf(tabs, 1, -1, whole: false));    // X ← One
+        Assert.Equal((1, (int?)null), MenuPane.StepLeaf(tabs, 0, +1, whole: true));     // Tab: Group on the one it holds
+        Assert.Equal((2, (int?)null), MenuPane.StepLeaf(tabs, 1, +1, whole: true));     // Tab past it
+        Assert.Equal((0, (int?)null), MenuPane.StepLeaf(tabs, 2, +1, whole: false));    // wraps
+        var flat = Tabbed().Tabs!;
+        Assert.Equal(MenuPane.StepLeaf(flat, 2, +1, whole: true), MenuPane.StepLeaf(flat, 2, +1, whole: false));   // no sub-tabs: the same
+    }
+
+    [Fact]
+    public async Task TheArrowsWalkEverySubTab_TabKeepsTheOneShown_AndThePickSaysWhich()
     {
         using var pane = Pane();
         pane.Show();
         var menu = new MenuPane(pane, _keys);
-        Push(Keys.Escape);
+        Push(Keys.Right, Keys.Right, Keys.Right);        // X, Y, Three
+        Push(Keys.ShiftTab, Keys.ShiftTab, Keys.Tab);    // Group (Y kept), One, Group again
+        Push(Keys.Enter);
 
-        var sub = MenuPage.Tabbed("Sub", [new MenuTab("X", ["x"])], 0, "Enter = pick · ESC = back") with { HeightOf = Tabbed() };
-        Assert.Null(await menu.PickAsync(sub, 0, CancellationToken.None));
+        Assert.Equal(new MenuPick(1, 0, Sub: 1), await menu.PickAsync(Grouped(), 0, CancellationToken.None));
+        Assert.Equal([0, 1, 0], menu.ShownSubs);
 
-        Assert.Contains("\n" + Titled("Sub │ X ") + "\n \n▸ x\n \n \n" + Rule(40), Output);   // one row and two blanks: Three's height
+        string strip = Titled("Settings │ One · Group · Three ");
+        Assert.Contains("\n" + strip + "\n" + SubStrip + "\n \n▸ x1\n  x2\n" + Rule(40), Output);   // X: the second strip's row counted in the height
+        Assert.Contains("\n" + strip + "\n" + SubStrip + "\n \n▸ y1\n \n" + Rule(40) + "\ny keys", Output);
+        Assert.Contains("\n" + strip + "\n \n▸ d\n \n \n" + Rule(40), Output);    // Three: padded by the strip's row too
+        menu.Close();
+    }
+
+    /// <summary>"Settings │ One · Group · Three ", the second strip at row 101: X at columns 12–14, the dot 15, Y 16–18.</summary>
+    [Fact]
+    public async Task AClickOnASubTabsTitle_SwitchesToIt_AndOnTheGroupsTitle_ComesBackToIt()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var menu = new MenuPane(pane, keys);
+        input.PushClick(18, 100);                        // Group: X
+        input.PushClick(11, 101);                        // the hook: nothing
+        input.PushClick(17, 101);                        // Y
+        input.PushClick(12, 100);                        // One
+        input.PushClick(18, 100);                        // Group: Y kept
+        input.Push(Keys.Enter);
+
+        Assert.Equal(new MenuPick(1, 0, Sub: 1), await menu.PickAsync(Grouped(), 0, CancellationToken.None));
+        Assert.Contains("\n" + SubStrip + "\n \n▸ x1\n", Output);
+        Assert.Contains("\n" + SubStrip + "\n \n▸ y1\n", Output);
         menu.Close();
     }
 

@@ -167,9 +167,33 @@ public sealed class InfoPane
     public static (int Rows, (int Row, int Column)[] Places) TabStripLayout(string label, IReadOnlyList<string> titles, int width, IReadOnlyList<string?>? badges = null)
     {
         ArgumentNullException.ThrowIfNull(label);
+        return Layout(StripIndent(label), titles, width, badges);
+    }
+
+    /// <summary>
+    /// The second strip under a tab that holds sub-tabs (2026-10-10, the user's call: <c>/tools</c>' Database and Media), laid out as
+    /// <see cref="TabStripLayout"/> lays out the first's later rows, its titles starting <see cref="SubStripLead"/>'s cells further in,
+    /// under the strip of <paramref name="label"/>. Pure.
+    /// </summary>
+    public static (int Rows, (int Row, int Column)[] Places) SubStripLayout(string label, IReadOnlyList<string> titles, int width, IReadOnlyList<string?>? badges = null)
+    {
+        ArgumentNullException.ThrowIfNull(label);
+        return Layout(StripIndent(label) + TextCells.Width(SubStripLead), titles, width, badges);
+    }
+
+    /// <summary>
+    /// What leads the second strip's first row, after the bar (2026-10-10): a space and a hook, so its titles read as the active tab's
+    /// own; a later row of it is indented by as many cells.
+    /// </summary>
+    public const string SubStripLead = " ↳";
+
+    /// <summary>The column the first title's highlight starts in, after <paramref name="label"/> and the <see cref="LabelSeparator"/>.</summary>
+    private static int StripIndent(string label) => TextCells.Width(TextCells.Spaced(label)) + LabelGap;
+
+    private static (int Rows, (int Row, int Column)[] Places) Layout(int indent, IReadOnlyList<string> titles, int width, IReadOnlyList<string?>? badges)
+    {
         ArgumentNullException.ThrowIfNull(titles);
         int budget = width - 1 - ScreenPane.TrailerGap - TextCells.Width(ScreenPane.CloseGlyph);
-        int indent = TextCells.Width(TextCells.Spaced(label)) + LabelGap;
         var places = new (int Row, int Column)[titles.Count];
         int row = 0;
         int column = indent;
@@ -203,6 +227,13 @@ public sealed class InfoPane
     public static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, IReadOnlySet<int> active, int width) =>
         TabStripRows(label, titles, active, Theme.TabLit, width, null);
 
+    /// <summary>
+    /// The second strip (2026-10-10, <see cref="SubStripLayout"/>): every row the label's width of blanks and the bar carried down, the
+    /// first then <see cref="SubStripLead"/>, the titles drawn as the first strip draws them, <paramref name="active"/> underlined. Pinned.
+    /// </summary>
+    public static IReadOnlyList<string> SubStripRows(string label, IReadOnlyList<string> titles, int active, int width, IReadOnlyList<string?>? badges = null) =>
+        TabStripRows(label, titles, Set(active), Theme.TabActive, width, badges, sub: true);
+
     private static IReadOnlySet<int> Set(int active) => active < 0 ? new HashSet<int>() : new HashSet<int> { active };
 
     /// <summary>The badge of title <paramref name="i"/>: null for none, and for an empty one.</summary>
@@ -213,22 +244,27 @@ public sealed class InfoPane
     private static int TitleCells(IReadOnlyList<string> titles, IReadOnlyList<string?>? badges, int i) =>
         TextCells.Width(titles[i]) + 2 + (BadgeOf(badges, i) is { } badge ? TextCells.Width(badge) : 0);
 
-    private static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, IReadOnlySet<int> active, Style lit, int width, IReadOnlyList<string?>? badges)
+    private static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, IReadOnlySet<int> active, Style lit, int width, IReadOnlyList<string?>? badges, bool sub = false)
     {
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(titles);
         ArgumentNullException.ThrowIfNull(active);
-        var (rows, places) = TabStripLayout(label, titles, width, badges);
+        var (rows, places) = sub ? SubStripLayout(label, titles, width, badges) : TabStripLayout(label, titles, width, badges);
         string separator = Theme.TabSeparator.ToMarkup();
         string bar = $"[{separator}]{Markup.Escape(LabelSeparator)}[/]";
         var lines = new System.Text.StringBuilder[rows];
         for (int r = 0; r < rows; r++)
         {
             // A later row starts with the label's width of spaces and the bar, so its first title lands in the first title's column.
-            lines[r] = new System.Text.StringBuilder(r == 0 ? $"[{Theme.Label.ToMarkup()}]{Markup.Escape(TextCells.Spaced(label))}[/]" : new string(' ', TextCells.Width(TextCells.Spaced(label))));
+            lines[r] = new System.Text.StringBuilder(r == 0 && !sub ? $"[{Theme.Label.ToMarkup()}]{Markup.Escape(TextCells.Spaced(label))}[/]" : new string(' ', TextCells.Width(TextCells.Spaced(label))));
             if (titles.Count > 0)
             {
                 lines[r].Append(bar);
+                if (sub)
+                {
+                    // The second strip's hook on its first row, blanks as wide under it (2026-10-10).
+                    lines[r].Append(r == 0 ? $"[{separator}]{Markup.Escape(SubStripLead)}[/]" : new string(' ', TextCells.Width(SubStripLead)));
+                }
             }
         }
 
@@ -275,9 +311,15 @@ public sealed class InfoPane
     /// <paramref name="row"/> of the strip as well as its column; null on the indent of a later row. A click on a badge is
     /// its tab's. Pure.
     /// </summary>
-    public static int? TabAt(string label, IReadOnlyList<string> titles, int width, int x, int row, IReadOnlyList<string?>? badges = null)
+    public static int? TabAt(string label, IReadOnlyList<string> titles, int width, int x, int row, IReadOnlyList<string?>? badges = null) =>
+        At(TabStripLayout(label, titles, width, badges).Places, titles, badges, x, row);
+
+    /// <summary>Which sub-tab a click at column <paramref name="x"/> of the second strip's <paramref name="row"/> lands on (2026-10-10, <see cref="SubStripLayout"/>); null off every title. Pure.</summary>
+    public static int? SubTabAt(string label, IReadOnlyList<string> titles, int width, int x, int row, IReadOnlyList<string?>? badges = null) =>
+        At(SubStripLayout(label, titles, width, badges).Places, titles, badges, x, row);
+
+    private static int? At((int Row, int Column)[] places, IReadOnlyList<string> titles, IReadOnlyList<string?>? badges, int x, int row)
     {
-        var (_, places) = TabStripLayout(label, titles, width, badges);
         for (int i = 0; i < titles.Count; i++)
         {
             int cells = TitleCells(titles, badges, i);
@@ -291,19 +333,9 @@ public sealed class InfoPane
     }
 
     /// <summary>
-    /// Whether a click at column <paramref name="x"/> of the strip's <paramref name="row"/> lands on its label (2026-10-09, the
-    /// user's ask: <c>Tools › Database</c>'s crumb takes them back): the first row's label cells as <see cref="TabStripRows(string, IReadOnlyList{string}, int, int, IReadOnlyList{string?}?)"/>
-    /// draws them; not the gap and bar after it, nor a later row's indent. Pure.
-    /// </summary>
-    public static bool OnLabel(string label, int x, int row)
-    {
-        ArgumentNullException.ThrowIfNull(label);
-        return row == 0 && x >= 0 && x < TextCells.Width(TextCells.Spaced(label));
-    }
-
-    /// <summary>
     /// The tab keys, shared with the <see cref="MenuPane"/>: +1 for → or Tab, -1 for ← or
-    /// Shift+Tab, null for any other key. Pure.
+    /// Shift+Tab, null for any other key. On a strip with sub-tabs (2026-10-10) the arrows walk every sub-tab and Tab a whole
+    /// tab (<see cref="MenuPane.StepLeaf"/>); elsewhere the two are the same. Pure.
     /// </summary>
     public static int? TabStep(ConsoleKeyInfo key)
     {

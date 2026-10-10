@@ -506,18 +506,31 @@ public class InfoPaneTests : IDisposable
         Assert.Equal(strip, MenuPane.TopMarkup(page));
     }
 
+    /// <summary>
+    /// The second strip (2026-10-10, <c>/tools</c>' Database and Media): under "Help │ …" its titles start two cells past the first
+    /// strip's (the hook " ↳" at 6–7), so at 28 columns (a budget of 24) Alpha is 8–14, the dot 15, Beta 16–21, and Gamma wraps to 8.
+    /// </summary>
     [Fact]
-    public void OnLabel_IsTheFirstRowsLabel_NotTheBarNorALaterRow()
+    public void TheSubStrip_HangsUnderTheFirstTitle_ItsHookFirst_AndWrapsAsTheStripDoes()
     {
-        // "Help │ One · Two ": the label at 0–3, the gap at 4, the bar at 5, One from 6.
-        Assert.True(InfoPane.OnLabel("Help", 0, 0));
-        Assert.True(InfoPane.OnLabel("Help", 3, 0));
-        Assert.False(InfoPane.OnLabel("Help", 4, 0));
-        Assert.False(InfoPane.OnLabel("Help", 5, 0));       // the bar
-        Assert.False(InfoPane.OnLabel("Help", 6, 0));       // One
-        Assert.False(InfoPane.OnLabel("Help", -1, 0));
-        Assert.False(InfoPane.OnLabel("Help", 1, 1));       // a later row's indent
-        Assert.True(InfoPane.OnLabel("🛠️ Tools › Database", 0, 0));
+        string[] titles = ["Alpha", "Beta", "Gamma", "Delta"];
+        var (rows, places) = InfoPane.SubStripLayout("Help", titles, 28);
+        Assert.Equal(2, rows);
+        Assert.Equal([(0, 8), (0, 16), (1, 8), (1, 16)], places);
+        Assert.Equal(["     │ ↳ Alpha · Beta ", "     │   Gamma · Delta "], InfoPane.SubStripRows("Help", titles, 2, 28).Select(Markup.Remove));
+        Assert.Contains($"[{Theme.TabActive.ToMarkup()}]Gamma[/]", InfoPane.SubStripRows("Help", titles, 2, 28)[1]);
+        Assert.Equal(["     │ ↳ Alpha · Beta · Gamma · Delta "], InfoPane.SubStripRows("Help", titles, 0, 80).Select(Markup.Remove));
+
+        Assert.Equal(0, InfoPane.SubTabAt("Help", titles, 28, 8, 0));
+        Assert.Equal(0, InfoPane.SubTabAt("Help", titles, 28, 14, 0));
+        Assert.Null(InfoPane.SubTabAt("Help", titles, 28, 15, 0));     // the dot
+        Assert.Equal(1, InfoPane.SubTabAt("Help", titles, 28, 16, 0));
+        Assert.Null(InfoPane.SubTabAt("Help", titles, 28, 7, 0));      // the hook
+        Assert.Equal(3, InfoPane.SubTabAt("Help", titles, 28, 16, 1));
+        Assert.Null(InfoPane.SubTabAt("Help", titles, 28, 9, 2));      // no third row
+
+        // A badge counts in its title's cells, as on the first strip.
+        Assert.Equal([(0, 8), (0, 15)], InfoPane.SubStripLayout("Help", ["SQL", "MySQL"], 80, ["²", null]).Places);
     }
 
     [Fact]

@@ -4652,7 +4652,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · Home · Database · Media · Options ", output);
-        Assert.Contains("\n  ComfyUI  on\n", output);   // a menu on Media since 2026-10-09 (its own tab from 2026-09-24): its switch on the tab's row, its rows a strip of their own (ToolsMenuTests)
+        Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.ComfyTools) + " ", output);   // a menu on Media since 2026-10-09 (its own tab from 2026-09-24), a sub-tab the arrows walk since 2026-10-10 (ToolsMenuTests)
         Assert.Contains("\n▸ Claude Code executable                   (looked up)\n  Claude Code slash command permissions    read-only\n  Claude Code slash command model          (Claude Code's default)\n  Claude Code slash command effort         (Claude Code's default)\n  Claude Code advisor tool                 off\n  Claude Code advisor tool context         brief\n  Claude Code advisor tool calls per turn  2 calls\n  Claude Code advisor tool model           (as Claude Code slash command model)\n  Claude Code advisor tool effort          (as Claude Code slash command effort)\n  Claude Code advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
         Assert.Contains("\n  · camera_capture: off\n" + HeadingRow("── Camera · 0 of 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        off  ", output);
@@ -4665,7 +4665,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
         Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
         Assert.Contains("\n▸ Web tools                 on\n", output);
-        Assert.Contains("\n▸ SQL       on\n", output);   // a menu on Database since 2026-10-09 (its own tab from 2026-09-23)
+        Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.SqlTools) + " ", output);   // a menu on Database since 2026-10-09 (its own tab from 2026-09-23), a sub-tab since 2026-10-10
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
         Assert.Empty(_chat.Requests);
     }
@@ -4707,7 +4707,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · Home · Database · Media · Options ", output);
-        Assert.Contains("\n  ComfyUI  on\n", output);   // a menu on Media since 2026-10-09 (its own tab from 2026-09-24): its switch on the tab's row, its rows a strip of their own (ToolsMenuTests)
+        Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.ComfyTools) + " ", output);   // a menu on Media since 2026-10-09 (its own tab from 2026-09-24), a sub-tab the arrows walk since 2026-10-10 (ToolsMenuTests)
         Assert.Contains("\n▸ Claude Code executable                   (looked up)\n  Claude Code slash command permissions    read-only\n  Claude Code slash command model          (Claude Code's default)\n  Claude Code slash command effort         (Claude Code's default)\n  Claude Code advisor tool                 off\n  Claude Code advisor tool context         brief\n  Claude Code advisor tool calls per turn  2 calls\n  Claude Code advisor tool model           (as Claude Code slash command model)\n  Claude Code advisor tool effort          (as Claude Code slash command effort)\n  Claude Code advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
         Assert.Contains("\n  · camera_capture: off\n" + HeadingRow("── Camera · 0 of 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        off  ", output);
@@ -4720,7 +4720,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
         Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   zsh\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
         Assert.Contains("\n▸ Web tools                 on\n", output);
-        Assert.Contains("\n▸ SQL       on\n", output);   // a menu on Database since 2026-10-09 (its own tab from 2026-09-23)
+        Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.SqlTools) + " ", output);   // a menu on Database since 2026-10-09 (its own tab from 2026-09-23), a sub-tab since 2026-10-10
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
         Assert.Empty(_chat.Requests);
     }

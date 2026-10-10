@@ -8,20 +8,15 @@ namespace NeonSidekick.App;
 internal sealed partial class SettingsMenu
 {
     /// <summary>
-    /// A group tab of <c>/tools</c> (2026-10-09, the user's call: the five database tabs on one Database tab, the five media tabs on one
-    /// Media tab): one row per menu of <paramref name="menus"/> (indexes into <see cref="ToolsTabFields"/>), its title padded as a
-    /// row's label and its switch's value after it — the menu's first row, drawn as <see cref="FieldsTab"/> draws it, so a value
-    /// not the default reads in the secondary accent and a variable's override shows. Space flips the switch, Enter opens the menu
-    /// (<see cref="ToolsMenu"/>); the strip's badge counts every row of the five whose value is not the default.
+    /// The strip badge of a group tab of <c>/tools</c> (2026-10-09, the user's call: the five database tabs on one Database tab, the five
+    /// media tabs on one Media tab): every row of its <paramref name="menus"/> (indexes into <see cref="ToolsTabFields"/>) whose value is not
+    /// the default, as <see cref="ChangedBadge"/> writes it; null for none. Until 2026-10-10 it came with a row per menu and its switch
+    /// (<c>MenusTab</c>); the menus are sub-tabs since (<see cref="ToolsMenu"/>, <see cref="MenuTab.SubTabs"/>).
     /// </summary>
-    internal MenuTab MenusTab(string title, IReadOnlyList<int> menus, AppSettingsData saved)
+    internal string? GroupBadge(IReadOnlyList<int> menus, AppSettingsData saved)
     {
         ArgumentNullException.ThrowIfNull(menus);
         ArgumentNullException.ThrowIfNull(saved);
-        string? located = _locateBrowser("");
-        int width = menus.Max(m => ToolsText.MenuTitles[m].Length) + LabelGap;
-        var rows = menus.Select(m => LiveLabel(ToolsTabFields[m][0], saved, width, located, ToolsText.MenuTitles[m])).ToList();
-        string? badge = ChangedBadge(menus.Sum(m => ToolsTabFields[m].Count(f => IsChanged(f, saved, _settings.ProfileDirectory))));
-        return new MenuTab(title, rows) { SpaceToggles = true, Badge = badge };
+        return ChangedBadge(menus.Sum(m => ToolsTabFields[m].Count(f => IsChanged(f, saved, _settings.ProfileDirectory))));
     }
 }

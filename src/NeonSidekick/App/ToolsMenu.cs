@@ -31,10 +31,12 @@ namespace NeonSidekick.App;
 /// <see cref="ShowPoliceAsync"/> (the toolbar's officer). Their typed words were <c>/cmdlist</c> and <c>/police</c> until
 /// 2026-10-09, <c>/tools shell allowed</c> and <c>/tools shell police</c> since (<see cref="ShowShellSubAsync"/>, the user's call).
 /// The Media and Database tabs (later on 2026-10-09, the user's call: the strip had grown to 22 tabs) hold five menus each, every one a
-/// tab of its own until then (<see cref="ToolsText.TabMenus"/>): a row per menu with its switch's value (<see cref="SettingsMenu.MenusTab"/>),
-/// Space flipping that switch, Enter opening <see cref="ShowGroupAsync"/> — a strip of the five under the crumb <c>Tools › Database</c>,
-/// on the menu picked, its rows edited as a plain tab's are; ESC there, or a click on the crumb (later on 2026-10-09, the user's ask),
-/// comes back to the group tab with the cursor on the menu last shown.
+/// tab of its own until then (<see cref="ToolsText.TabMenus"/>). Until 2026-10-10 each was a row per menu with its switch, Enter opening
+/// the five as a page of their own under the crumb <c>Tools › Database</c>; the user found reaching a menu through its switch unintuitive,
+/// so since then they are sub-tabs (<see cref="MenuTab.SubTabs"/>): a second strip under the first while the group is on show, the
+/// menu's rows under it edited as a plain tab's are, ←/→ walking every menu along both strips and Tab / Shift+Tab stepping past a group,
+/// which keeps the menu last shown (<see cref="MenuPane.StepLeaf"/>). A picker under a group is still titled <c>Tools › Database › …</c>
+/// (<see cref="GroupCrumb"/>).
 /// </summary>
 internal sealed class ToolsMenu
 {
@@ -70,8 +72,9 @@ internal sealed class ToolsMenu
     /// <paramref name="filter"/>, <paramref name="total"/> the tools there are, for the caption while a filter is typed.
     /// <paramref name="toolFooter"/> (2026-10-05, the user's ask) says under the list what the cursor's tool does, whole
     /// (<see cref="ToolsText.ToolFooter"/>); null leaves the band blank on the Offered tab, as it stood until then.
+    /// <paramref name="subs"/> (2026-10-10) is the menu on show on each group tab, by tab index (<see cref="MenuPane.ShownSubs"/>); null for each one's first.
     /// </summary>
-    public static MenuPage Page(IReadOnlyList<(string Markup, string? Tool, bool Heading)> offered, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int total = 0, Func<string, MenuFooter?>? toolFooter = null)
+    public static MenuPage Page(IReadOnlyList<(string Markup, string? Tool, bool Heading)> offered, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int total = 0, Func<string, MenuFooter?>? toolFooter = null, IReadOnlyList<int>? subs = null)
     {
         ArgumentNullException.ThrowIfNull(offered);
         ArgumentNullException.ThrowIfNull(saved);
@@ -87,10 +90,10 @@ internal sealed class ToolsMenu
         };
         for (int t = 1; t < tabs.Length; t++)
         {
-            // A group tab (2026-10-09) is a row per menu; a plain tab is its one menu's rows.
+            // A group tab holds its menus as sub-tabs (2026-10-10); a plain tab is its one menu's rows.
             var menus = ToolsText.TabMenus[t - 1];
             tabs[t] = menus.Count > 1
-                ? menu.MenusTab(ToolsText.TabTitles[t], menus, saved)
+                ? GroupTab(t, saved, menu, subs is not null && t < subs.Count ? subs[t] : 0)
                 : menu.FieldsTab(ToolsText.TabTitles[t], SettingsMenu.ToolsTabFields[menus[0]], saved);
         }
 
@@ -99,52 +102,42 @@ internal sealed class ToolsMenu
             SpaceToggles = true,
             TabCursors = [ToolsText.FirstToolRow(offered), .. Enumerable.Repeat(0, tabs.Length - 1)],
             // The Offered tab's band says the cursor's tool (2026-10-05): a heading, a gap, the off line and the no-match row name none.
-            // A group tab's says the cursor's menu's switch (2026-10-09).
+            // A group's menus say their own rows (2026-10-10, each sub-tab's Footer).
             Footer = (t, row) => t == 0
                 ? row < offered.Count && offered[row].Tool is { } name ? toolFooter?.Invoke(name) : null
-                : RowField(t, row) is { } field ? menu.FieldFooter(field, saved) : null,
+                : RowField(t, 0, row) is { } field ? menu.FieldFooter(field, saved) : null,
         };
+    }
+
+    /// <summary>
+    /// Group tab <paramref name="tab"/> (2026-10-10): its menus as sub-tabs, each with its rows as its tab had them
+    /// (<see cref="SettingsMenu.FieldsTab"/>) and its own band, <paramref name="sub"/> the one on show; the strip's badge counts every
+    /// row of the five whose value is not the default (<see cref="SettingsMenu.GroupBadge"/>).
+    /// </summary>
+    private static MenuTab GroupTab(int tab, AppSettingsData saved, SettingsMenu menu, int sub)
+    {
+        var menus = ToolsText.TabMenus[tab - 1];
+        var subs = menus.Select(m =>
+        {
+            var fields = SettingsMenu.ToolsTabFields[m];
+            return menu.FieldsTab(ToolsText.MenuTitles[m], fields, saved) with { Footer = row => row >= 0 && row < fields.Count ? menu.FieldFooter(fields[row], saved) : null };
+        }).ToList();
+        return new MenuTab(ToolsText.TabTitles[tab], []) { SubTabs = subs, Sub = Math.Clamp(sub, 0, subs.Count - 1), Badge = menu.GroupBadge(menus, saved) };
     }
 
     /// <summary>
     /// The field behind row <paramref name="row"/> of tab <paramref name="tab"/> (after Offered): a plain tab's row, or on a group tab
-    /// (2026-10-09) the menu's switch, its first row; null past the rows.
+    /// (2026-10-10) the row of its menu <paramref name="sub"/>; null past the rows.
     /// </summary>
-    private static SettingsField? RowField(int tab, int row)
+    private static SettingsField? RowField(int tab, int sub, int row)
     {
         var menus = ToolsText.TabMenus[tab - 1];
-        if (menus.Count > 1)
-        {
-            return row >= 0 && row < menus.Count ? SettingsMenu.ToolsTabFields[menus[row]][0] : null;
-        }
-
-        var fields = SettingsMenu.ToolsTabFields[menus[0]];
+        var fields = SettingsMenu.ToolsTabFields[menus[menus.Count > 1 ? Math.Clamp(sub, 0, menus.Count - 1) : 0]];
         return row >= 0 && row < fields.Count ? fields[row] : null;
     }
 
-    /// <summary>The crumb over group tab <paramref name="tab"/>'s menus (2026-10-09): <c>🛠️ Tools › Database</c>. Pinned.</summary>
+    /// <summary>The root a picker under group tab <paramref name="tab"/> is titled from (2026-10-09; the group's page's crumb until 2026-10-10): <c>🛠️ Tools › Database</c>. Pinned.</summary>
     public static string GroupCrumb(int tab) => ToolsText.Label + " › " + ToolsText.TabTitles[tab];
-
-    /// <summary>
-    /// A group tab's menus as a page of their own (2026-10-09, <see cref="ShowGroupAsync"/>): a strip of the five under
-    /// <see cref="GroupCrumb"/>, each menu's rows as its tab was (<see cref="SettingsMenu.FieldsTab"/>), <paramref name="shown"/> the
-    /// menu on show (an index into the tab's menus), the band under the list the cursor's row's. <paramref name="heightOf"/> is the
-    /// Tools page it opened from, whose height it keeps (later on 2026-10-09, the user's ask: it shrank to its tallest menu; <see cref="MenuPage.HeightOf"/>).
-    /// A click on the crumb is ESC (later still that day, the user's ask; <see cref="MenuPage.LabelBacks"/>).
-    /// </summary>
-    public static MenuPage GroupPage(int tab, AppSettingsData saved, SettingsMenu menu, int shown, MenuPage? heightOf = null)
-    {
-        ArgumentNullException.ThrowIfNull(saved);
-        ArgumentNullException.ThrowIfNull(menu);
-        var menus = ToolsText.TabMenus[tab - 1];
-        var tabs = menus.Select(m => menu.FieldsTab(ToolsText.MenuTitles[m], SettingsMenu.ToolsTabFields[m], saved)).ToList();
-        return MenuPage.Tabbed(GroupCrumb(tab), tabs, shown, SettingsMenu.TabKeys) with
-        {
-            Footer = (t, row) => row < SettingsMenu.ToolsTabFields[menus[t]].Count ? menu.FieldFooter(SettingsMenu.ToolsTabFields[menus[t]][row], saved) : null,
-            HeightOf = heightOf,
-            LabelBacks = true,
-        };
-    }
 
     /// <summary>The tabs as plain lines, for a console without the pane: each tab's title as a heading, its content indented; a group tab's menus (2026-10-09) each a heading under it, their rows indented again.</summary>
     public static IEnumerable<string> Lines(ToolsFacts facts, AppSettingsData saved, SettingsMenu menu)
@@ -201,6 +194,7 @@ internal sealed class ToolsMenu
         int tab = 0;
         int cursor = -1;
         string filter = "";
+        IReadOnlyList<int>? subs = null;   // each group's menu on show (2026-10-10)
         _menu.Root = ToolsText.Label;
         try
         {
@@ -209,7 +203,7 @@ internal sealed class ToolsMenu
                 var facts = _facts();
                 var saved = _settings.Current;
                 var offered = ToolsText.OfferedRows(facts, filter);
-                var page = Page(offered, saved, _menu, tab, filter, facts.Groups.Sum(g => g.Tools.Count), name => ToolsText.ToolFooter(facts, name));
+                var page = Page(offered, saved, _menu, tab, filter, facts.Groups.Sum(g => g.Tools.Count), name => ToolsText.ToolFooter(facts, name), subs);
                 if (cursor < 0)
                 {
                     cursor = ToolsText.FirstToolRow(offered);
@@ -222,6 +216,7 @@ internal sealed class ToolsMenu
 
                 tab = pick.Tab;
                 cursor = pick.Row;
+                subs = _pane.ShownSubs;
                 if (pick.Filter is { } typed)
                 {
                     // The Offered tab's filter (later on 2026-10-03): the rows again under it, the cursor on the first tool left.
@@ -243,22 +238,23 @@ internal sealed class ToolsMenu
                     continue;
                 }
 
-                if (RowField(tab, cursor) is not { } field)
+                if (RowField(tab, pick.Sub, cursor) is not { } field)
                 {
                     continue;
                 }
 
-                if (ToolsText.IsGroupTab(tab) && !pick.Toggle)
+                // The page on the tab (and the group's menu) the pane ended on, so a typed edit under it keeps those rows (PickSettingAsync's shape).
+                var shown = pick.Tab == page.Tab && pick.Sub == page.Sub ? page : Page(offered, saved, _menu, tab, filter, 0, null, subs);
+                bool group = ToolsText.IsGroupTab(tab);
+                _menu.Root = group ? GroupCrumb(tab) : ToolsText.Label;   // a group's pickers titled Tools › Database › … (2026-10-09)
+                try
                 {
-                    // Enter on a menu of Media or Database (2026-10-09): its strip, and back here on the menu last shown.
-                    (var opened, cursor) = await ShowGroupAsync(tab, cursor, page, midTurn, cancellationToken).ConfigureAwait(false);
-                    changes |= opened;
-                    continue;
+                    changes |= await RowAsync(field, pick.Toggle, saved, shown, cursor, midTurn, cancellationToken).ConfigureAwait(false);
                 }
-
-                // The page on the tab the pane ended on, so a typed edit under it keeps that tab's rows (PickSettingAsync's shape).
-                var shown = pick.Tab == page.Tab ? page : MenuPage.Tabbed(ToolsText.Label, page.Tabs!, pick.Tab, SettingsMenu.TabKeys);
-                changes |= await RowAsync(field, pick.Toggle, saved, shown, cursor, midTurn, cancellationToken).ConfigureAwait(false);
+                finally
+                {
+                    _menu.Root = ToolsText.Label;
+                }
             }
         }
         finally
@@ -285,47 +281,6 @@ internal sealed class ToolsMenu
             ? await _menu.FlipAsync(field, cancellationToken).ConfigureAwait(false)
             : await _menu.EditAsync(field, saved, shown, cursor, cancellationToken).ConfigureAwait(false);
         return done && SettingsMenu.IsLlmField(field) ? SettingsChanges.Llm : SettingsChanges.None;
-    }
-
-    /// <summary>
-    /// Group tab <paramref name="tab"/>'s menus on a strip of their own (2026-10-09, the user's call), opened on <paramref name="menu"/>
-    /// (an index into the tab's menus): each menu's rows as its tab had them, edited the same way, the pickers titled under the crumb
-    /// (<c>Tools › Database › MySQL mode</c>). ESC, the × or a click on the crumb returns the menu last shown, for the group tab's cursor. The strip keeps
-    /// <paramref name="parent"/>'s height, the Tools page it opened from (later on 2026-10-09, the user's ask).
-    /// </summary>
-    private async Task<(SettingsChanges Changes, int Menu)> ShowGroupAsync(int tab, int menu, MenuPage parent, bool midTurn, CancellationToken cancellationToken)
-    {
-        var changes = SettingsChanges.None;
-        var menus = ToolsText.TabMenus[tab - 1];
-        int cursor = 0;
-        _menu.Root = GroupCrumb(tab);
-        try
-        {
-            while (true)
-            {
-                var saved = _settings.Current;
-                var page = GroupPage(tab, saved, _menu, menu, parent);
-                if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
-                {
-                    return (changes, _pane.ShownTab);   // the menu on show at ESC, ←/→ included
-                }
-
-                menu = pick.Tab;
-                cursor = pick.Row;
-                var fields = SettingsMenu.ToolsTabFields[menus[menu]];
-                if (cursor >= fields.Count)
-                {
-                    continue;
-                }
-
-                var shown = pick.Tab == page.Tab ? page : GroupPage(tab, saved, _menu, pick.Tab, parent);
-                changes |= await RowAsync(fields[cursor], pick.Toggle, saved, shown, cursor, midTurn, cancellationToken).ConfigureAwait(false);
-            }
-        }
-        finally
-        {
-            _menu.Root = ToolsText.Label;
-        }
     }
 
     /// <summary>

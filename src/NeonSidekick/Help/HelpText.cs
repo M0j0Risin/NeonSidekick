@@ -25,7 +25,7 @@ public static class HelpText
 
     // The panes' one-liners: README's Available Panes, kept short.
     public const string SettingsPaneSummary = "the app's settings: the profile and screen, the embedded model, Docker servers, the Anthropic and OpenAI APIs and the Claude Code server, the LLM connection, speech output (TTS), voice input (STT), sessions and /botchat";
-    public const string ToolsPaneSummary = "the model's tools: Offered lists every tool, on or off (Enter flips one); the other tabs hold each tool group's settings, Media and Database a menu per group (Enter opens one)";
+    public const string ToolsPaneSummary = "the model's tools: Offered lists every tool, on or off (Enter flips one); the other tabs hold each tool group's settings, Media and Database a menu per group on a second strip (←/→ walk every menu, Tab skips past a group)";
     public const string SkillsPaneSummary = "agent skills (SKILL.md folders) and the model's self-reflection";
     public const string McpPaneSummary = "external MCP servers: Servers lists and edits them, Tools shows what each offers, Options holds the switch and timeout";
 
@@ -138,11 +138,14 @@ public static class HelpText
         return sb.ToString();
     }
 
-    /// <summary>What a group tab holds (2026-10-09): <c>the menus Print, Camera, … (Enter opens one, each a strip of its rows)</c>. Pinned.</summary>
+    /// <summary>
+    /// What a group tab holds (2026-10-09): <c>the menus Print, Camera, … (a second strip under the tab; ←/→ walk them)</c>. Pinned. "Enter opens
+    /// one, each a strip of its rows" until 2026-10-10, when the menus became sub-tabs.
+    /// </summary>
     public static string MenusTab(IReadOnlyList<string> menus)
     {
         ArgumentNullException.ThrowIfNull(menus);
-        return "the menus " + string.Join(", ", menus) + " (Enter opens one, each a strip of its rows)";
+        return "the menus " + string.Join(", ", menus) + " (a second strip under the tab; ←/→ walk them)";
     }
 
     /// <summary>

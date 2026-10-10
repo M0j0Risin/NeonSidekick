@@ -149,23 +149,27 @@ public partial class ToolsMenuTests : IDisposable
         : ToolsText.MenuIndex(title) is var m and >= 0 ? ToolsText.TabOfMenu(m)
         : throw new ArgumentException("no tab " + title, nameof(title));
 
-    /// <summary>Whether menu <paramref name="title"/> sits on Media or Database (2026-10-09): reaching it is one level more, so leaving it one ESC more.</summary>
+    /// <summary>Whether menu <paramref name="title"/> sits on Media or Database (2026-10-09): a sub-tab of the group since 2026-10-10.</summary>
     internal static bool InGroup(string title) => ToolsText.TabTitles.ToList().IndexOf(title) < 0 && ToolsText.IsGroupTab(TabIndex(title));
 
     /// <summary>
-    /// The keys that walk from Offered to <paramref name="title"/>: Right presses along the strip, then on Media or Database (2026-10-09)
-    /// Down to the menu's row and Enter, the menu's own rows under the cursor as a tab's were.
+    /// The keys that walk from Offered to <paramref name="title"/>: Right presses along the strip, one per tab and, since 2026-10-10, one
+    /// per menu of Media and Database (→ walks their sub-tabs), so a group's menu is its place among them and a group tab is its first menu.
     /// </summary>
-    private static ConsoleKeyInfo[] ToTab(string title)
+    private static ConsoleKeyInfo[] ToTab(string title) => Enumerable.Repeat(Keys.Right, LeafIndex(title)).ToArray();
+
+    /// <summary>How many → presses from Offered reach <paramref name="title"/>, a tab or a group's menu (2026-10-10).</summary>
+    internal static int LeafIndex(string title)
     {
-        var right = Enumerable.Repeat(Keys.Right, TabIndex(title));
-        if (!InGroup(title))
+        int tab = TabIndex(title);
+        int leaves = 0;
+        for (int t = 1; t < tab; t++)
         {
-            return right.ToArray();
+            leaves += ToolsText.TabMenus[t - 1].Count;
         }
 
-        int row = ToolsText.TabMenus[TabIndex(title) - 1].ToList().IndexOf(ToolsText.MenuIndex(title));
-        return [.. right, .. Enumerable.Repeat(Keys.Down, row), Keys.Enter];
+        int within = InGroup(title) ? ToolsText.TabMenus[tab - 1].ToList().IndexOf(ToolsText.MenuIndex(title)) : 0;
+        return tab == 0 ? 0 : leaves + 1 + within;
     }
 
     /// <summary>A tool row as the pane prints it at width 120 (the markup rendered): the name padded to 22, the state to 5, then the description, cut to 119 cells and an ellipsis (FittedMarkup; every description is longer).</summary>

@@ -43,6 +43,27 @@ public sealed record MenuTab(string Title, IReadOnlyList<string> Rows)
     /// <see cref="MenuPage.SpaceToggles"/> says (<see cref="MenuPage.SpaceFlips"/>); false leaves it to the page.
     /// </summary>
     public bool SpaceToggles { get; init; }
+
+    /// <summary>
+    /// The tabs this one holds (2026-10-10, the user's call: <c>/tools</c>' Database and Media, whose five menus each sat behind their
+    /// switches on a page of their own): while it is the tab on show a second strip of their titles is drawn under the first
+    /// (<see cref="InfoPane.SubStripRows"/>), and the rows, hint, caption, headings, filter and footer below are the shown one's
+    /// (<see cref="Shown"/>); ←/→ walk them as tabs of the strip, Tab steps past them (<see cref="MenuPane.StepLeaf"/>). Its own
+    /// <see cref="Rows"/> are not drawn. Null or empty for none (every other tab).
+    /// </summary>
+    public IReadOnlyList<MenuTab>? SubTabs { get; init; }
+
+    /// <summary>The sub-tab on show (2026-10-10), an index into <see cref="SubTabs"/>, kept while the strip moves elsewhere so coming back finds it.</summary>
+    public int Sub { get; init; }
+
+    /// <summary>
+    /// What the band under the list says for row r of this tab (2026-10-10: each of <see cref="SubTabs"/> describes its own rows),
+    /// over the page's <see cref="MenuPage.Footer"/>, which still decides whether the band is drawn at all; null for the page's.
+    /// </summary>
+    public Func<int, MenuFooter?>? Footer { get; init; }
+
+    /// <summary>The tab whose rows show: the sub-tab on show, or this one when it holds none (2026-10-10).</summary>
+    public MenuTab Shown => SubTabs is { Count: > 0 } subs ? subs[Math.Clamp(Sub, 0, subs.Count - 1)] : this;
 }
 
 /// <summary>
@@ -96,7 +117,10 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public bool SpaceToggles { get; init; }
 
     /// <summary>Whether Space flips here: the page's <see cref="SpaceToggles"/>, or the shown tab's own (<see cref="MenuTab.SpaceToggles"/>, 2026-10-04).</summary>
-    public bool SpaceFlips => SpaceToggles || (Tabs is { } tabs && Tab >= 0 && Tab < tabs.Count && tabs[Tab].SpaceToggles);
+    public bool SpaceFlips => SpaceToggles || (Tabs is { } tabs && Tab >= 0 && Tab < tabs.Count && (tabs[Tab].SpaceToggles || tabs[Tab].Shown.SpaceToggles));
+
+    /// <summary>The sub-tab on show on the active tab (2026-10-10, <see cref="MenuTab.SubTabs"/>); −1 when it holds none.</summary>
+    public int Sub => Tabs is { } tabs && Tab >= 0 && Tab < tabs.Count && tabs[Tab].SubTabs is { Count: > 0 } subs ? Math.Clamp(tabs[Tab].Sub, 0, subs.Count - 1) : -1;
 
     /// <summary>
     /// The row the cursor lands on after a switch to each tab, by tab index (clamped to the tab's
@@ -163,23 +187,10 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public string? Filter { get; init; }
 
     /// <summary>
-    /// The page whose tab height this one keeps (2026-10-09, the user's ask: <c>Tools › Database</c> and <c>Tools › Media</c>
-    /// shrank to their tallest menu under the Tools pane, which its Offered tab holds at <c>Menus max height</c>): every tab is
-    /// padded to at least that page's <see cref="MenuPane.TabBodyRows"/>, within the same cap. Null (every other page): its own.
-    /// </summary>
-    public MenuPage? HeightOf { get; init; }
-
-    /// <summary>
-    /// A left click on the strip's label (<see cref="InfoPane.OnLabel"/>) is ESC: nothing picked, one level back (later on 2026-10-09,
-    /// the user's ask: a click on <c>🛠️ Tools › Database</c> or <c>› Media</c> goes back to the Tools pane). False (every other page):
-    /// the label is no target, as it always was.
-    /// </summary>
-    public bool LabelBacks { get; init; }
-
-    /// <summary>
     /// A page over <paramref name="tabs"/> showing <paramref name="tab"/>: the strip labelled
     /// <paramref name="title"/>, that tab's rows, its caption, and its hint when it has one else
-    /// <paramref name="hint"/> (kept as <see cref="BaseHint"/> for the tabs without).
+    /// <paramref name="hint"/> (kept as <see cref="BaseHint"/> for the tabs without); a tab with sub-tabs gives its shown one's
+    /// (<see cref="MenuTab.Shown"/>, 2026-10-10).
     /// </summary>
     public static MenuPage Tabbed(string title, IReadOnlyList<MenuTab> tabs, int tab, string hint)
     {
@@ -190,7 +201,8 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
         }
 
         tab = Math.Clamp(tab, 0, tabs.Count - 1);
-        return new MenuPage(title, tabs[tab].Rows, tabs[tab].Hint ?? hint) { Tabs = tabs, Tab = tab, Caption = tabs[tab].Caption, BaseHint = hint, Headings = tabs[tab].Headings, Filter = tabs[tab].Filter };
+        var shown = tabs[tab].Shown;
+        return new MenuPage(title, shown.Rows, shown.Hint ?? hint) { Tabs = tabs, Tab = tab, Caption = shown.Caption, BaseHint = hint, Headings = shown.Headings, Filter = shown.Filter };
     }
 
     /// <summary>Whether the cursor may rest on <paramref name="row"/>: any row of a page without <see cref="Headings"/>; on one with them, a row neither a heading nor empty. Pure.</summary>
@@ -267,9 +279,10 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
 /// <see cref="MenuPage.SpaceToggles"/> (<see cref="Toggle"/> true): the tab shown (0 on a one-list
 /// page) and the cursor's row within it. A press on one of the page's <see cref="MenuPage.Buttons"/>
 /// (2026-09-21) is <see cref="Button"/> at its index, the row still the cursor's; −1 otherwise. A key that edits the page's
-/// <see cref="MenuPage.Filter"/> (2026-10-03) is <see cref="Filter"/>, the text it leaves; null otherwise.
+/// <see cref="MenuPage.Filter"/> (2026-10-03) is <see cref="Filter"/>, the text it leaves; null otherwise. <see cref="Sub"/> is the sub-tab
+/// on show on a tab that holds them (2026-10-10, <see cref="MenuTab.SubTabs"/>), −1 on one that does not.
 /// </summary>
-public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, int Button = -1, string? Filter = null);
+public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, int Button = -1, string? Filter = null, int Sub = -1);
 
 /// <summary>
 /// A menu in the bottom pane: the <see cref="InfoPane"/> shape for a list — a title, a status line
@@ -305,7 +318,7 @@ public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, in
 /// switching once; one on a one-list page's button (<see cref="MenuPage.Buttons"/>, 2026-09-21) is
 /// the button's pick, as its key is (the status cleared as Enter clears it: the press's result
 /// fills it); one on the <see cref="ScreenPane.CloseGlyph"/> at the first row's right edge is
-/// ESC (null), as is one on the label of a page that <see cref="MenuPage.LabelBacks"/> (later on 2026-10-09); two left clicks off the pane — the transcript, a rule, the hint row — within the
+/// ESC (null); one on a title of the second strip (<see cref="MenuTab.SubTabs"/>, 2026-10-10) switches to that sub-tab; two left clicks off the pane — the transcript, a rule, the hint row — within the
 /// interval close every level at once (<see cref="ScreenPane.Dismiss"/>, later on 2026-09-18: the
 /// hosts above find <see cref="ScreenPane.Dismissed"/> and back out without a draw), where the × is
 /// one level back; a single click there, a right click and a drag do nothing. The pane takes the mouse for the
@@ -317,7 +330,7 @@ public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, in
 /// room the window leaves scrolls behind a viewport, the last row saying so
 /// (<see cref="MoreHint"/>); the room is the <c>Menus max height</c> share of the window
 /// (<see cref="ScreenPane.MenuContentRows"/>, 2026-10-01), and a tabbed page keeps its tallest
-/// tab's height on every tab (<see cref="TabBodyRows"/>, the same day). Without the pane (no geometry) there is nothing to draw: the callers
+/// tab's height on every tab (<see cref="TabBodyRows"/>, the same day; a second strip counted in, 2026-10-10). Without the pane (no geometry) there is nothing to draw: the callers
 /// branch to a Spectre prompt, and a call here throws.</para>
 /// </summary>
 public sealed class MenuPane : INoticeSink
@@ -402,6 +415,7 @@ public sealed class MenuPane : INoticeSink
     private int _shown;
     private int _captionRows;
     private int _stripRows = 1;
+    private int _subRows;
     private int _inputRows;
     private int _sideWidth;
     private int _listWidth;
@@ -559,10 +573,10 @@ public sealed class MenuPane : INoticeSink
     // ── The visit ───────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The tab the last level showed as its <see cref="PickAsync"/> returned, an ESC's included (2026-10-09: <c>/tools</c>' group menus
-    /// come back to their tab on the menu last shown, though ←/→ moved along the strip with no pick); 0 before any.
+    /// Each tab's sub-tab on show as the last <see cref="PickAsync"/> returned (2026-10-10, <see cref="MenuTab.Sub"/>): ←/→ move them with no
+    /// pick, so a host that builds the page again after one carries them over; 0 for a tab without, empty before any.
     /// </summary>
-    public int ShownTab => _page?.Tab ?? 0;
+    public IReadOnlyList<int> ShownSubs => _page?.Tabs?.Select(t => t.Sub).ToList() ?? [];
 
     /// <summary>
     /// Shows <paramref name="page"/> with the cursor on row <paramref name="cursor"/> and reads
@@ -583,7 +597,7 @@ public sealed class MenuPane : INoticeSink
             return null;
         }
 
-        if (_page is null || _page.Tab != page.Tab)
+        if (_page is null || _page.Tab != page.Tab || _page.Sub != page.Sub)
         {
             // Another tab (a host that moved on) starts at the top of its list; the same one re-shown keeps its viewport.
             _first = 0;
@@ -648,21 +662,23 @@ public sealed class MenuPane : INoticeSink
 
                     if (at < _stripRows)
                     {
-                        // Any row of the strip (2026-09-27): a strip wider than the window takes more than one.
+                        // Any row of the strip (2026-09-27): a strip wider than the window takes more than one. The second strip's rows
+                        // (2026-10-10) are the last ones, a click there the shown tab's sub-tab.
                         _clicks.Reset();
-                        if (page.LabelBacks && InfoPane.OnLabel(page.Title, click.X, at))
+                        int main = _stripRows - _subRows;
+                        if (at >= main && page.Tabs is { } held && held[page.Tab].SubTabs is { Count: > 0 } subs
+                            && InfoPane.SubTabAt(page.Title, Titles(subs), Width, click.X, at - main, Badges(subs)) is int sub && sub != page.Sub)
                         {
-                            return null;   // the crumb is the way back (later on 2026-10-09), as the × is
+                            count = SwitchTab(page, held, page.Tab, sub);
                         }
-
-                        if (page.Tabs is { Count: > 1 } strip && InfoPane.TabAt(page.Title, Titles(strip), Width, click.X, at, Badges(strip)) is int hit && hit != page.Tab)
+                        else if (at < main && page.Tabs is { Count: > 1 } strip && InfoPane.TabAt(page.Title, Titles(strip), Width, click.X, at, Badges(strip)) is int hit && hit != page.Tab)
                         {
                             count = SwitchTab(page, strip, hit);
                         }
                         else if (page.Tabs is null && page.Buttons is { Count: > 0 } buttons && InfoPane.TabAt(page.Title, Titles(buttons), Width, click.X, at) is int button)
                         {
                             _status.Clear();
-                            return new MenuPick(page.Tab, _cursor, Button: button);
+                            return new MenuPick(page.Tab, _cursor, Button: button, Sub: page.Sub);
                         }
                     }
                     else if (_sideWidth > 0 && click.X >= _listWidth)
@@ -678,7 +694,7 @@ public sealed class MenuPane : INoticeSink
                         if (count > 0 && _clicks.Second(hitRow))
                         {
                             _status.Clear();
-                            return new MenuPick(page.Tab, _cursor);
+                            return new MenuPick(page.Tab, _cursor, Sub: page.Sub);
                         }
                     }
                     else
@@ -724,7 +740,7 @@ public sealed class MenuPane : INoticeSink
                 {
                     // A filter typed (2026-10-03): the first ESC clears it, the next backs out.
                     _status.Clear();
-                    return new MenuPick(page.Tab, _cursor, Filter: "");
+                    return new MenuPick(page.Tab, _cursor, Filter: "", Sub: page.Sub);
                 }
 
                 if ((input as InputEvent.Key)?.Info is not { } k || Keys.IsCancel(k) || Keys.IsInterrupt(k))
@@ -741,7 +757,7 @@ public sealed class MenuPane : INoticeSink
                     }
 
                     _status.Clear();
-                    return new MenuPick(page.Tab, _cursor);
+                    return new MenuPick(page.Tab, _cursor, Sub: page.Sub);
                 }
 
                 if (page.SpaceFlips && k.KeyChar == ' ')
@@ -753,12 +769,14 @@ public sealed class MenuPane : INoticeSink
                     }
 
                     _status.Clear();
-                    return new MenuPick(page.Tab, _cursor, Toggle: true);
+                    return new MenuPick(page.Tab, _cursor, Toggle: true, Sub: page.Sub);
                 }
 
-                if (page.Tabs is { Count: > 1 } tabs && InfoPane.TabStep(k) is int step)
+                if (page.Tabs is { } tabs && (tabs.Count > 1 || page.Sub >= 0) && InfoPane.TabStep(k) is int step)
                 {
-                    count = SwitchTab(page, tabs, (page.Tab + step + tabs.Count) % tabs.Count);
+                    // The arrows walk every sub-tab, Tab and Shift+Tab whole tabs (2026-10-10); the same on a strip without sub-tabs.
+                    var (tab, sub) = StepLeaf(tabs, page.Tab, step, whole: k.Key == ConsoleKey.Tab);
+                    count = SwitchTab(page, tabs, tab, sub);
                     continue;
                 }
 
@@ -775,14 +793,14 @@ public sealed class MenuPane : INoticeSink
                     }
 
                     _status.Clear();
-                    return new MenuPick(page.Tab, _cursor, Filter: typed);
+                    return new MenuPick(page.Tab, _cursor, Filter: typed, Sub: page.Sub);
                 }
 
                 if (page.Tabs is null && page.Buttons is { Count: > 0 } keyed && k.KeyChar is not '\0' && !char.IsControl(k.KeyChar)
                     && ButtonFor(keyed, k.KeyChar) is int pressed)
                 {
                     _status.Clear();
-                    return new MenuPick(page.Tab, _cursor, Button: pressed);
+                    return new MenuPick(page.Tab, _cursor, Button: pressed, Sub: page.Sub);
                 }
 
                 int next = _cursor;
@@ -869,15 +887,43 @@ public sealed class MenuPane : INoticeSink
     }
 
     /// <summary>
+    /// Where a tab key goes from <paramref name="tab"/> (2026-10-10, <see cref="MenuTab.SubTabs"/>): by <paramref name="step"/> (±1) through
+    /// every sub-tab and on to the next tab, wrapping — a tab with sub-tabs entered at its first going right, its last going left — or,
+    /// <paramref name="whole"/> (Tab, Shift+Tab), to the next tab, the one it holds on show kept. Returns the tab and the sub-tab to
+    /// show, null to keep the tab's own <see cref="MenuTab.Sub"/>. On a strip without sub-tabs both are the next tab. Pure.
+    /// </summary>
+    public static (int Tab, int? Sub) StepLeaf(IReadOnlyList<MenuTab> tabs, int tab, int step, bool whole)
+    {
+        ArgumentNullException.ThrowIfNull(tabs);
+        step = step < 0 ? -1 : 1;
+        if (!whole && tabs[tab].SubTabs is { Count: > 0 } subs && Math.Clamp(tabs[tab].Sub, 0, subs.Count - 1) + step is var within && within >= 0 && within < subs.Count)
+        {
+            return (tab, within);
+        }
+
+        int next = (tab + step + tabs.Count) % tabs.Count;
+        return !whole && tabs[next].SubTabs is { Count: > 0 } entered ? (next, step > 0 ? 0 : entered.Count - 1) : (next, null);
+    }
+
+    /// <summary>
     /// A switch to <paramref name="tab"/>: the other tab's rows, caption and hint (the page's hint
     /// when the tab has none), the cursor on the page's <see cref="MenuPage.TabCursors"/> row for
     /// it else the first, the status dropped (what the last action did belongs to the tab it ran on)
-    /// and every other page setting kept. Returns the row count shown.
+    /// and every other page setting kept. <paramref name="sub"/> (2026-10-10) is the sub-tab to show on a tab that holds them,
+    /// kept on it for the next visit; null keeps the one it had. Returns the row count shown.
     /// </summary>
-    private int SwitchTab(MenuPage page, IReadOnlyList<MenuTab> tabs, int tab)
+    private int SwitchTab(MenuPage page, IReadOnlyList<MenuTab> tabs, int tab, int? sub = null)
     {
+        if (sub is int s && tabs[tab].SubTabs is { Count: > 0 } subs)
+        {
+            var held = tabs.ToArray();
+            held[tab] = held[tab] with { Sub = Math.Clamp(s, 0, subs.Count - 1) };
+            tabs = held;
+        }
+
         // A `with`, never Tabbed() again: the hotkeys, the toggle and the cursors would go with a rebuild.
-        _page = page with { Rows = tabs[tab].Rows, Tab = tab, Caption = tabs[tab].Caption, Hint = tabs[tab].Hint ?? page.BaseHint ?? page.Hint, Headings = tabs[tab].Headings, Filter = tabs[tab].Filter };
+        var shown = tabs[tab].Shown;
+        _page = page with { Tabs = tabs, Rows = shown.Rows, Tab = tab, Caption = shown.Caption, Hint = shown.Hint ?? page.BaseHint ?? page.Hint, Headings = shown.Headings, Filter = shown.Filter };
         int count = _page.Rows.Count;
         _cursor = _page.StopFrom(page.TabCursors is { } cursors && tab < cursors.Count && count > 0 ? cursors[tab] : 0, +1);
         _first = 0;
@@ -1006,15 +1052,25 @@ public sealed class MenuPane : INoticeSink
     public static IReadOnlyList<string> TopRows(MenuPage page, int width)
     {
         ArgumentNullException.ThrowIfNull(page);
-        return page.Tabs is { } tabs ? InfoPane.TabStripRows(page.Title, Titles(tabs), page.Tab, width, Badges(tabs))
+        return page.Tabs is { } tabs ? [.. InfoPane.TabStripRows(page.Title, Titles(tabs), page.Tab, width, Badges(tabs)), .. SubStripRows(page, width)]
             : page.Buttons is { Count: > 0 } buttons ? InfoPane.TabStripRows(page.Title, Titles(buttons), Lit(buttons), width)
             : [TitleMarkup(page.Title)];
+    }
+
+    /// <summary>The second strip's rows under <paramref name="page"/>'s first (2026-10-10, <see cref="MenuTab.SubTabs"/>): none when the tab on show holds no sub-tabs. Pure.</summary>
+    public static IReadOnlyList<string> SubStripRows(MenuPage page, int width)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        return page.Tabs is { } tabs && page.Tab >= 0 && page.Tab < tabs.Count && tabs[page.Tab].SubTabs is { Count: > 0 } subs
+            ? InfoPane.SubStripRows(page.Title, Titles(subs), page.Sub, width, Badges(subs))
+            : [];
     }
 
     /// <summary>
     /// The rows under the strip of <paramref name="page"/>'s tallest tab laid out for <paramref name="width"/> cells: its
     /// caption's rows (<see cref="CaptionRows"/>) and its list rows; 0 on a one-list page. What every tab of the page is
-    /// padded to (2026-10-01, the user's ask), so the pane keeps its height as one tabs through it. Pure.
+    /// padded to (2026-10-01, the user's ask), so the pane keeps its height as one tabs through it. A tab with sub-tabs
+    /// (2026-10-10) counts its second strip's rows and its tallest sub-tab's, so arriving on it moves nothing either. Pure.
     /// </summary>
     public static int TabBodyRows(MenuPage page, int width)
     {
@@ -1027,12 +1083,19 @@ public sealed class MenuPane : INoticeSink
         int tallest = 0;
         foreach (var tab in tabs)
         {
-            int caption = tab.Caption is { } text ? CaptionRows(text, width, CaptionMaxRows).Count : 0;
-            tallest = Math.Max(tallest, caption + tab.Rows.Count);
+            if (tab.SubTabs is { Count: > 0 } subs)
+            {
+                int strip = InfoPane.SubStripLayout(page.Title, Titles(subs), width, Badges(subs)).Rows;
+                tallest = Math.Max(tallest, strip + subs.Max(s => Body(s)));
+                continue;
+            }
+
+            tallest = Math.Max(tallest, Body(tab));
         }
 
-        // A page opened from another keeps that one's height (2026-10-09, MenuPage.HeightOf).
-        return page.HeightOf is { } other ? Math.Max(tallest, TabBodyRows(other, width)) : tallest;
+        return tallest;
+
+        int Body(MenuTab tab) => (tab.Caption is { } text ? CaptionRows(text, width, CaptionMaxRows).Count : 0) + tab.Rows.Count;
     }
 
     /// <summary>
@@ -1051,6 +1114,7 @@ public sealed class MenuPane : INoticeSink
         _captionRows = caption.Count;
         var top = TopRows(page, Width);
         _stripRows = top.Count;
+        _subRows = SubStripRows(page, Width).Count;
         int header = Header;
         int footer = page.Footer is null ? 0 : FooterRuleRows + FooterRows;
         int capacity = _pane.MenuContentRows(Height, _inputRows) - header - footer;
@@ -1062,7 +1126,8 @@ public sealed class MenuPane : INoticeSink
 
         (_first, _shown) = Viewport(page.Rows.Count, _cursor, capacity, _first);
         bool more = _shown < page.Rows.Count;
-        int pad = Math.Min(TabBodyRows(page, Width), _captionRows + Math.Max(0, capacity)) - (_captionRows + _shown + (more ? 1 : 0));
+        // The second strip (2026-10-10) is drawn in the header but counts in the tab's body height: the padding is the less by it.
+        int pad = Math.Min(TabBodyRows(page, Width) - _subRows, _captionRows + Math.Max(0, capacity)) - (_captionRows + _shown + (more ? 1 : 0));
         if (_sideWidth > 0)
         {
             // The side column's rows under the title, at least SideMinRows within the cap: a short list is padded to them.
@@ -1115,7 +1180,7 @@ public sealed class MenuPane : INoticeSink
             // The cursor's row described under the list (2026-10-04), its rows kept, right under the rows (the padding to the
             // tallest tab goes below it); a click there lands on no row. Since 2026-10-05 a rule over it and the text on a slab
             // to the list's edge, a row with nothing to say too, so the shape holds as the cursor moves.
-            var text = page.Rows.Count > 0 ? page.Footer!(page.Tab, _cursor) : null;
+            var text = page.Rows.Count > 0 ? FooterFor(page, _cursor) : null;
             var rows = text is null ? [] : FooterLines(text, _listWidth - TextCells.Width(NoPointer));
             lines.Add(new Markup(Theme.StyleMarkup(Theme.PaneRule, new string(ScreenPane.RuleGlyph, Math.Max(1, _listWidth)))).Overflow(Overflow.Crop));
             for (int i = 0; i < FooterRows; i++)
@@ -1144,6 +1209,10 @@ public sealed class MenuPane : INoticeSink
 
         _pane.ShowOverlay(new Rows(lines), page.Hint, input: _inputRows > 0, close: true);
     }
+
+    /// <summary>What the band says for <paramref name="row"/>: the shown tab's own footer (2026-10-10, <see cref="MenuTab.Footer"/>), else the page's.</summary>
+    private static MenuFooter? FooterFor(MenuPage page, int row) =>
+        page.Tabs is { } tabs && page.Tab >= 0 && page.Tab < tabs.Count && tabs[page.Tab].Shown.Footer is { } own ? own(row) : page.Footer?.Invoke(page.Tab, row);
 
     /// <summary>
     /// One footer row on its slab (2026-10-05): <see cref="NoPointer"/> and <paramref name="text"/> (already cut to the width by

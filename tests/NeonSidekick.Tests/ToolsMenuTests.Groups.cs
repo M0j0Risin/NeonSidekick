@@ -1,139 +1,150 @@
 using NeonSidekick.App;
 using NeonSidekick.Settings;
 using NeonSidekick.UI;
+using Spectre.Console;
 
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// <c>/tools</c>' Media and Database tabs (2026-10-09, the user's call): a row per menu with its switch, Space flipping it, Enter
-/// opening the five menus as a strip of their own under <c>Tools › Database</c>, ESC coming back to the tab on the menu last shown.
+/// <c>/tools</c>' Media and Database tabs (2026-10-09, the user's call): five menus each. Until 2026-10-10 a row per menu with its switch,
+/// Enter opening the five as a page of their own; since then sub-tabs (the user's call: reaching a menu through its switch was not
+/// intuitive) — a second strip under the first, the menu's rows under it, ←/→ walking every menu, Tab / Shift+Tab stepping past a group.
 /// </summary>
 public partial class ToolsMenuTests
 {
     private static readonly ConsoleKeyInfo Space = new(' ', ConsoleKey.Spacebar, false, false, false);
 
+    /// <summary>A group's second strip as the pane prints it (badges cut as <see cref="Output"/> cuts them): the hook, then its menus' titles.</summary>
+    private static string SubStrip(string group) =>
+        Markup.Remove(InfoPane.SubStripRows(ToolsText.Label, ToolsText.TabMenus[TabIndex(group) - 1].Select(m => ToolsText.MenuTitles[m]).ToList(), 0, 240)[0]);
+
+    /// <summary>The strips over a group's menu: the first, the second under it, then the spacer.</summary>
+    private string Strips(string group) => "\n" + Titled(Strip) + "\n" + SubStrip(group) + "\n \n";
+
     [Fact]
-    public async Task OnThePane_TheDatabaseTab_IsARowPerMenu_WithItsSwitch()
+    public void TheSubStrips_ArePinned()
     {
-        _settings.Update(d => { d.SqlTools = true; d.MySqlTools = false; d.SqliteTools = true; d.PostgresTools = false; d.OracleTools = false; });
+        Assert.Equal("         │ ↳ SQL · MySQL · SQLite · Postgres · Oracle ", SubStrip(ToolsText.DatabaseTabTitle));
+        Assert.Equal("         │ ↳ Print · Camera · Screen · ComfyUI · YouTube ", SubStrip(ToolsText.MediaTabTitle));
+    }
+
+    [Fact]
+    public async Task OnThePane_TheDatabaseTab_ShowsTheSecondStrip_AndTheFirstMenusRows()
+    {
         var (menu, pane, _) = PaneMenu();
-        Push(Enumerable.Repeat(Keys.Right, TabIndex(ToolsText.DatabaseTabTitle)).ToArray());
+        Push(ToTab(ToolsText.DatabaseTabTitle));
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        // The titles padded to the longest, Postgres's 8, and the gap: the switch's value after them, the menus in their old strip order.
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ SQL       on\n  MySQL     off\n  SQLite    on\n  Postgres  off\n  Oracle    off\n", 100);
+        Assert.Equal(LeafIndex(ToolsText.SqlTabTitle), LeafIndex(ToolsText.DatabaseTabTitle));
+        Assert.Contains(Strips(ToolsText.DatabaseTabTitle) + "▸ " + SettingsMenu.FieldName(SettingsField.SqlTools) + "  ", Output);
+        Assert.DoesNotContain("\n" + Titled(Strip) + "\n \n▸ SQL  ", Output);   // no row per menu any more
         pane.Dispose();
     }
 
     [Fact]
-    public async Task OnThePane_TheMediaTab_IsARowPerMenu_WithItsSwitch()
+    public async Task OnThePane_TheMediaTab_ShowsTheSecondStrip_AndTheFirstMenusRows()
     {
-        _settings.Update(d => { d.PrintTools = false; d.CameraTools = true; d.ScreenTools = false; d.ComfyTools = true; d.YouTubeTools = false; });
         var (menu, pane, _) = PaneMenu();
-        Push(Enumerable.Repeat(Keys.Right, TabIndex(ToolsText.MediaTabTitle)).ToArray());
+        Push(ToTab(ToolsText.MediaTabTitle));
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Print    off\n  Camera   on\n  Screen   off\n  ComfyUI  on\n  YouTube  off\n", 100);
+        Assert.Contains(Strips(ToolsText.MediaTabTitle) + "▸ " + SettingsMenu.FieldName(SettingsField.PrintTools) + "  ", Output);
         pane.Dispose();
     }
 
     [Fact]
-    public async Task OnThePane_SpaceOnAMenuRow_FlipsItsSwitch_AndTheRowFollows()
+    public async Task OnThePane_TheArrowsWalkEveryMenu_FromOneGroupIntoTheNext_AndBack()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push(ToTab(ToolsText.OracleTabTitle));      // Database's last menu
+        Push(Keys.Right);                           // Media's first
+        Push(Keys.Left);                            // Oracle again
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        string oracle = Strips(ToolsText.DatabaseTabTitle) + "▸ " + SettingsMenu.FieldName(SettingsField.OracleTools) + "  ";
+        string print = Strips(ToolsText.MediaTabTitle) + "▸ " + SettingsMenu.FieldName(SettingsField.PrintTools) + "  ";
+        Assert.Contains(print, Output);
+        Assert.True(Output.LastIndexOf(oracle, StringComparison.Ordinal) > Output.IndexOf(print, StringComparison.Ordinal));
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_TabStepsPastAGroup_AndShiftTabComesBackToTheMenuLastShown()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push(ToTab(ToolsText.SqliteTabTitle));      // Database, SQLite
+        Push(Keys.Tab);                             // Media, on its first
+        Push(Keys.Tab);                             // Options: past Media's five
+        Push(Keys.ShiftTab, Keys.ShiftTab);         // Media, then Database on SQLite
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ " + SettingsMenu.FieldName(SettingsField.ToolsDollarMention) + "  ", Output);
+        string sqlite = Strips(ToolsText.DatabaseTabTitle) + "▸ " + SettingsMenu.FieldName(SettingsField.SqliteTools) + "  ";
+        Assert.True(Output.LastIndexOf(sqlite, StringComparison.Ordinal) > Output.LastIndexOf(Strips(ToolsText.MediaTabTitle), StringComparison.Ordinal));
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_SpaceOnAMenusSwitch_FlipsIt_AndTheMenuStaysOnShow()
     {
         _settings.Update(d => d.MySqlTools = false);
         var (menu, pane, _) = PaneMenu();
-        Push(Enumerable.Repeat(Keys.Right, TabIndex(ToolsText.DatabaseTabTitle)).ToArray());
-        Push(Keys.Down, Space);                     // MySQL on
+        Push(ToTab(ToolsText.MySqlTabTitle));
+        Push(Space);                                // MySQL tools on
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.True(_settings.Current.MySqlTools);
-        Assert.Contains("\n▸ MySQL     on\n", Output);   // the cursor kept on its row
+        string name = SettingsMenu.FieldName(SettingsField.MySqlTools);
+        Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.DatabaseTabTitle) + "\n  · " + name + ": on\n▸ " + name + "  ", Output);   // the rebuilt page kept MySQL
+        pane.Dispose();
+    }
+
+    /// <summary>A click on a menu's title in the second strip shows it: Postgres, the strip at row 101 under the first at 100.</summary>
+    [Fact]
+    public async Task OnThePane_AClickOnAMenusTitle_ShowsIt()
+    {
+        var (menu, pane, input) = ClickablePaneMenu(100);
+        var titles = ToolsText.TabMenus[TabIndex(ToolsText.DatabaseTabTitle) - 1].Select(m => ToolsText.MenuTitles[m]).ToList();
+        var (_, places) = InfoPane.SubStripLayout(ToolsText.Label, titles, 240);
+        input.Push(ToTab(ToolsText.DatabaseTabTitle));
+        input.PushClick(places[3].Column + 1, 101);     // Postgres
+        input.Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains("\n" + SubStrip(ToolsText.DatabaseTabTitle) + "\n \n▸ " + SettingsMenu.FieldName(SettingsField.PostgresTools) + "  ", Output);
         pane.Dispose();
     }
 
     [Fact]
-    public async Task OnThePane_EnterOnAMenu_OpensTheFiveAsAStrip_OnIt_AndEscComesBackToTheTab_OnTheMenuLastShown()
+    public async Task OnThePane_AMenusPicker_IsTitledUnderTheGroup_AndItSaves()
     {
         var (menu, pane, settings) = PaneMenu();
-        Push(Enumerable.Repeat(Keys.Right, TabIndex(ToolsText.DatabaseTabTitle)).ToArray());
-        Push(Keys.Down, Keys.Down, Keys.Enter);     // SQLite: its rows under the group's strip
-        Push(Keys.Right);                           // Postgres, the next menu
-        Push(Keys.Escape);                          // back on the Database tab, the cursor on Postgres
+        Push(ToTab(ToolsText.CameraTabTitle));      // Media, Camera
+        Push(Keys.Down, Keys.Enter);                // Camera shutter: the picker
+        Push(Keys.Down, Keys.Enter);                // the second choice
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        string strip = ToolsMenu.GroupCrumb(TabIndex(ToolsText.DatabaseTabTitle)) + " │ SQL · MySQL · SQLite · Postgres · Oracle ";
-        Assert.Equal(ToolsText.Label + " › Database", ToolsMenu.GroupCrumb(TabIndex(ToolsText.DatabaseTabTitle)));
-        Assert.Contains("\n" + Titled(strip) + "\n \n▸ SQLite tools  ", Output);
-        Assert.Contains("\n" + Titled(strip) + "\n \n▸ PostgreSQL tools  ", Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n \n  SQL       ", Output);
-        Assert.Contains("\n▸ Postgres  ", Output);
-        Assert.Equal(SettingsMenu.Title, settings.Root);   // restored for /settings
-        pane.Dispose();
-    }
-
-    /// <summary>A click on the group's crumb is ESC (later on 2026-10-09, the user's ask): back on the Database tab, the cursor on the menu shown.</summary>
-    [Fact]
-    public async Task OnThePane_AClickOnTheGroupsCrumb_ComesBackToTheTab_OnTheMenuLastShown()
-    {
-        var (menu, pane, input) = ClickablePaneMenu(100);
-        input.Push(Enumerable.Repeat(Keys.Right, TabIndex(ToolsText.DatabaseTabTitle)).ToArray());
-        input.Push(Keys.Down, Keys.Down, Keys.Enter);   // SQLite: its rows under the group's strip
-        input.PushClick(2, 100);                        // the crumb, the strip's first row at 100
-        input.Push(Keys.Escape);                        // the Tools pane closes
-
-        await menu.ShowAsync(CancellationToken.None);
-
-        string group = Titled(ToolsMenu.GroupCrumb(TabIndex(ToolsText.DatabaseTabTitle)) + " │ SQL · MySQL · SQLite · Postgres · Oracle ");
-        Assert.Contains("\n" + group + "\n \n▸ SQLite tools  ", Output);
-        string after = Output[Output.LastIndexOf(group, StringComparison.Ordinal)..];
-        Assert.Contains("\n" + Titled(Strip) + "\n \n  SQL       ", after);
-        Assert.Contains("\n▸ SQLite  ", after);
-        pane.Dispose();
-    }
-
-    /// <summary>A click on one of the group's own titles still switches the menu: only the crumb goes back.</summary>
-    [Fact]
-    public async Task OnThePane_AClickOnAGroupsTitle_SwitchesTheMenu_AndStaysInTheGroup()
-    {
-        var (menu, pane, input) = ClickablePaneMenu(100);
-        int database = TabIndex(ToolsText.DatabaseTabTitle);
-        string crumb = ToolsMenu.GroupCrumb(database);
-        var (_, places) = InfoPane.TabStripLayout(crumb, ["SQL", "MySQL", "SQLite", "Postgres", "Oracle"], 100);
-        input.Push(Enumerable.Repeat(Keys.Right, database).ToArray());
-        input.Push(Keys.Enter);                         // SQL's rows
-        input.PushClick(places[3].Column + 1, 100);     // Postgres
-        input.Push(Keys.Escape, Keys.Escape);
-
-        await menu.ShowAsync(CancellationToken.None);
-
-        string group = Titled(crumb + " │ SQL · MySQL · SQLite · Postgres · Oracle ");
-        Assert.Contains("\n" + group + "\n \n▸ PostgreSQL tools  ", Output);
-        Assert.Contains("\n▸ Postgres  ", Output);      // ESC back on the menu the click showed
-        pane.Dispose();
-    }
-
-    [Fact]
-    public async Task OnThePane_AMenusPicker_IsTitledUnderTheGroupsCrumb_AndItSaves()
-    {
-        var (menu, pane, _) = PaneMenu();
-        Push(ToTab(ToolsText.CameraTabTitle));      // Media, then Camera's rows
-        Push(Keys.Down, Keys.Enter);                // Camera shutter: the picker
-        Push(Keys.Down, Keys.Enter);                // the second choice
-        Push(Keys.Escape, Keys.Escape);
-
-        await menu.ShowAsync(CancellationToken.None);
-
         Assert.NotEqual(new AppSettingsData().CameraShutter, _settings.Current.CameraShutter);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Media › Camera shutter") + "\n", Output);
-        Assert.Contains("\n" + Titled(ToolsMenu.GroupCrumb(TabIndex(ToolsText.MediaTabTitle)) + " │ Print · Camera · Screen · ComfyUI · YouTube ") + "\n", Output);
+        Assert.Equal(ToolsText.Label + " › Media", ToolsMenu.GroupCrumb(TabIndex(ToolsText.MediaTabTitle)));
+        string picker = "\n" + Titled(ToolsText.Label + " › Media › Camera shutter") + "\n";
+        Assert.Contains(picker, Output);
+        string after = Output[Output.LastIndexOf(picker, StringComparison.Ordinal)..];
+        Assert.Contains("\n" + SubStrip(ToolsText.MediaTabTitle) + "\n", after);   // back on Camera's rows
+        Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.CameraShutter) + "  ", after);
+        Assert.Equal(SettingsMenu.Title, settings.Root);   // restored for /settings
         pane.Dispose();
     }
 
@@ -144,7 +155,7 @@ public partial class ToolsMenuTests
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.YouTubeTabTitle));
         Push(Keys.Down, Keys.Down, Keys.Down, Space);   // YouTube autoplay off
-        Push(Keys.Escape, Keys.Escape);
+        Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -153,52 +164,45 @@ public partial class ToolsMenuTests
     }
 
     [Fact]
-    public void TheGroupTabs_FooterSaysTheMenusSwitch()
+    public void AGroupTab_HoldsItsMenusAsSubTabs_EachWithItsOwnFooter_AndTheBadgeCountsThemAll()
     {
+        _settings.Update(d => { d.SqlTools = true; d.SqliteTools = true; });
         var saved = _settings.Current;
         var (_, pane, settings) = PaneMenu();
-        var page = ToolsMenu.Page(ToolsText.OfferedRows(Facts()), saved, settings, TabIndex(ToolsText.DatabaseTabTitle));
-
-        Assert.Equal(SettingsMenu.FieldFooter(SettingsField.OracleTools).Text, page.Footer!(TabIndex(ToolsText.DatabaseTabTitle), 4)!.Text);
-        Assert.Null(page.Footer!(TabIndex(ToolsText.DatabaseTabTitle), 5));
-        Assert.Equal(5, page.Tabs![TabIndex(ToolsText.MediaTabTitle)].Rows.Count);
-        var group = ToolsMenu.GroupPage(TabIndex(ToolsText.MediaTabTitle), saved, settings, 1);
-        Assert.Equal(["Print", "Camera", "Screen", "ComfyUI", "YouTube"], group.Tabs!.Select(t => t.Title));
-        Assert.Equal(1, group.Tab);
-        Assert.Equal(SettingsMenu.FieldFooter(SettingsField.CameraShutter).Text, group.Footer!(1, 1)!.Text);
-        pane.Dispose();
-    }
-
-    /// <summary>The group's strip keeps the Tools pane's height (later on 2026-10-09, the user's ask: it shrank to its tallest menu).</summary>
-    [Fact]
-    public void AGroupPage_KeepsTheToolsPagesHeight()
-    {
-        var saved = _settings.Current;
-        var (_, pane, settings) = PaneMenu();
-        var tools = ToolsMenu.Page(ToolsText.OfferedRows(Facts()), saved, settings, TabIndex(ToolsText.DatabaseTabTitle));
+        int database = TabIndex(ToolsText.DatabaseTabTitle);
         int media = TabIndex(ToolsText.MediaTabTitle);
-        var alone = ToolsMenu.GroupPage(media, saved, settings, 0);
-        var kept = ToolsMenu.GroupPage(media, saved, settings, 0, tools);
+        var subs = new int[ToolsText.TabTitles.Count];
+        subs[database] = 4;
+        var page = ToolsMenu.Page(ToolsText.OfferedRows(Facts()), saved, settings, database, subs: subs);
 
-        Assert.Equal(alone.Tabs!.Max(t => t.Rows.Count), MenuPane.TabBodyRows(alone, 100));
-        Assert.True(MenuPane.TabBodyRows(tools, 100) > MenuPane.TabBodyRows(alone, 100));   // the Offered list is the taller
-        Assert.Equal(MenuPane.TabBodyRows(tools, 100), MenuPane.TabBodyRows(kept, 100));
-        Assert.Same(tools, kept.HeightOf);
+        Assert.Equal(["SQL", "MySQL", "SQLite", "Postgres", "Oracle"], page.Tabs![database].SubTabs!.Select(t => t.Title));
+        Assert.Equal(["Print", "Camera", "Screen", "ComfyUI", "YouTube"], page.Tabs[media].SubTabs!.Select(t => t.Title));
+        Assert.Equal(4, page.Sub);
+        Assert.Equal(TabFields(ToolsText.OracleTabTitle).Count, page.Rows.Count);
+        Assert.Equal(SettingsMenu.FieldFooter(SettingsField.OracleTools).Text, page.Tabs[database].Shown.Footer!(0)!.Text);
+        Assert.Null(page.Tabs[database].Shown.Footer!(TabFields(ToolsText.OracleTabTitle).Count));
+        Assert.Equal(SettingsMenu.FieldFooter(SettingsField.CameraShutter).Text, page.Tabs[media].SubTabs![1].Footer!(1)!.Text);
+        Assert.True(page.Tabs[media].SubTabs!.All(t => t.SpaceToggles));
+        Assert.Equal(settings.GroupBadge(ToolsText.TabMenus[database - 1], saved), page.Tabs[database].Badge);
+        Assert.NotNull(page.Tabs[database].Badge);
+        Assert.Equal(0, ToolsMenu.Page(ToolsText.OfferedRows(Facts()), saved, settings, media).Sub);   // no subs: each group's first
         pane.Dispose();
     }
 
-    /// <summary>On the pane, the group's strip is padded down to where the Tools pane's list ended: the hint row stays put.</summary>
+    /// <summary>The Tools pane keeps its height on a group: the second strip's row is taken out of the padding under the list.</summary>
     [Fact]
-    public async Task OnThePane_AGroupsStrip_IsAsTallAsTheToolsPane()
+    public async Task OnThePane_AGroupsMenu_IsAsTallAsAPlainTab()
     {
         var (menu, pane, _) = PaneMenu();
-        Push(ToTab(ToolsText.SqlTabTitle));     // Database, then SQL's rows
-        Push(Keys.Escape, Keys.Escape);
+        Push(ToTab(ToolsText.AskTabTitle));
+        Push(Enumerable.Repeat(Keys.Right, LeafIndex(ToolsText.SqlTabTitle) - LeafIndex(ToolsText.AskTabTitle)).ToArray());
+        Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        string group = Titled(ToolsMenu.GroupCrumb(TabIndex(ToolsText.DatabaseTabTitle)) + " │ SQL · MySQL · SQLite · Postgres · Oracle ");
-        Assert.Equal(FrameRows(Output, Titled(Strip), "▸ SQL  "), FrameRows(Output, group, "▸ SQL tools"));   // the Database tab's frame, the cursor on SQL
+        string askRow = "▸ " + SettingsMenu.FieldName(SettingsField.AskUser);
+        string sqlRow = "▸ " + SettingsMenu.FieldName(SettingsField.SqlTools);
+        Assert.Equal(FrameRows(Output, Titled(Strip), askRow), FrameRows(Output, Titled(Strip) + "\n" + SubStrip(ToolsText.DatabaseTabTitle), sqlRow));
         pane.Dispose();
     }
 
