@@ -442,6 +442,32 @@ public class MenuPaneTests : IDisposable
     }
 
     [Fact]
+    public void TabBodyRows_KeepsTheHeightOfThePageItOpenedFrom_NeverLess()
+    {
+        // 2026-10-09, the user's ask: Tools › Database and Tools › Media keep the Tools pane's height.
+        var sub = MenuPage.Tabbed("Sub", [new MenuTab("X", ["x"])], 0, "h");
+        Assert.Equal(1, MenuPane.TabBodyRows(sub, 40));
+        Assert.Equal(3, MenuPane.TabBodyRows(sub with { HeightOf = Tabbed() }, 40));
+        var tall = MenuPage.Tabbed("Sub", [new MenuTab("X", ["v", "w", "x", "y"])], 0, "h");
+        Assert.Equal(4, MenuPane.TabBodyRows(tall with { HeightOf = Tabbed() }, 40));   // its own when taller
+    }
+
+    [Fact]
+    public async Task APageWithHeightOf_IsPaddedToThatPagesTallestTab()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Escape);
+
+        var sub = MenuPage.Tabbed("Sub", [new MenuTab("X", ["x"])], 0, "Enter = pick · ESC = back") with { HeightOf = Tabbed() };
+        Assert.Null(await menu.PickAsync(sub, 0, CancellationToken.None));
+
+        Assert.Contains("\n" + Titled("Sub │ X ") + "\n \n▸ x\n \n \n" + Rule(40), Output);   // one row and two blanks: Three's height
+        menu.Close();
+    }
+
+    [Fact]
     public async Task EveryTab_KeepsTheTallestTabsHeight_TheBlankUnderTheList()
     {
         // 2026-10-01, the user's ask: the pane jumped up and down as one tabbed through /settings.

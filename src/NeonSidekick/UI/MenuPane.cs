@@ -163,6 +163,13 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public string? Filter { get; init; }
 
     /// <summary>
+    /// The page whose tab height this one keeps (2026-10-09, the user's ask: <c>Tools › Database</c> and <c>Tools › Media</c>
+    /// shrank to their tallest menu under the Tools pane, which its Offered tab holds at <c>Menus max height</c>): every tab is
+    /// padded to at least that page's <see cref="MenuPane.TabBodyRows"/>, within the same cap. Null (every other page): its own.
+    /// </summary>
+    public MenuPage? HeightOf { get; init; }
+
+    /// <summary>
     /// A page over <paramref name="tabs"/> showing <paramref name="tab"/>: the strip labelled
     /// <paramref name="title"/>, that tab's rows, its caption, and its hint when it has one else
     /// <paramref name="hint"/> (kept as <see cref="BaseHint"/> for the tabs without).
@@ -1012,7 +1019,8 @@ public sealed class MenuPane : INoticeSink
             tallest = Math.Max(tallest, caption + tab.Rows.Count);
         }
 
-        return tallest;
+        // A page opened from another keeps that one's height (2026-10-09, MenuPage.HeightOf).
+        return page.HeightOf is { } other ? Math.Max(tallest, TabBodyRows(other, width)) : tallest;
     }
 
     /// <summary>

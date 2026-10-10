@@ -127,9 +127,10 @@ internal sealed class ToolsMenu
     /// <summary>
     /// A group tab's menus as a page of their own (2026-10-09, <see cref="ShowGroupAsync"/>): a strip of the five under
     /// <see cref="GroupCrumb"/>, each menu's rows as its tab was (<see cref="SettingsMenu.FieldsTab"/>), <paramref name="shown"/> the
-    /// menu on show (an index into the tab's menus), the band under the list the cursor's row's.
+    /// menu on show (an index into the tab's menus), the band under the list the cursor's row's. <paramref name="heightOf"/> is the
+    /// Tools page it opened from, whose height it keeps (later on 2026-10-09, the user's ask: it shrank to its tallest menu; <see cref="MenuPage.HeightOf"/>).
     /// </summary>
-    public static MenuPage GroupPage(int tab, AppSettingsData saved, SettingsMenu menu, int shown)
+    public static MenuPage GroupPage(int tab, AppSettingsData saved, SettingsMenu menu, int shown, MenuPage? heightOf = null)
     {
         ArgumentNullException.ThrowIfNull(saved);
         ArgumentNullException.ThrowIfNull(menu);
@@ -138,6 +139,7 @@ internal sealed class ToolsMenu
         return MenuPage.Tabbed(GroupCrumb(tab), tabs, shown, SettingsMenu.TabKeys) with
         {
             Footer = (t, row) => row < SettingsMenu.ToolsTabFields[menus[t]].Count ? menu.FieldFooter(SettingsMenu.ToolsTabFields[menus[t]][row], saved) : null,
+            HeightOf = heightOf,
         };
     }
 
@@ -246,7 +248,7 @@ internal sealed class ToolsMenu
                 if (ToolsText.IsGroupTab(tab) && !pick.Toggle)
                 {
                     // Enter on a menu of Media or Database (2026-10-09): its strip, and back here on the menu last shown.
-                    (var opened, cursor) = await ShowGroupAsync(tab, cursor, midTurn, cancellationToken).ConfigureAwait(false);
+                    (var opened, cursor) = await ShowGroupAsync(tab, cursor, page, midTurn, cancellationToken).ConfigureAwait(false);
                     changes |= opened;
                     continue;
                 }
@@ -285,9 +287,10 @@ internal sealed class ToolsMenu
     /// <summary>
     /// Group tab <paramref name="tab"/>'s menus on a strip of their own (2026-10-09, the user's call), opened on <paramref name="menu"/>
     /// (an index into the tab's menus): each menu's rows as its tab had them, edited the same way, the pickers titled under the crumb
-    /// (<c>Tools › Database › MySQL mode</c>). ESC returns the menu last shown, for the group tab's cursor.
+    /// (<c>Tools › Database › MySQL mode</c>). ESC returns the menu last shown, for the group tab's cursor. The strip keeps
+    /// <paramref name="parent"/>'s height, the Tools page it opened from (later on 2026-10-09, the user's ask).
     /// </summary>
-    private async Task<(SettingsChanges Changes, int Menu)> ShowGroupAsync(int tab, int menu, bool midTurn, CancellationToken cancellationToken)
+    private async Task<(SettingsChanges Changes, int Menu)> ShowGroupAsync(int tab, int menu, MenuPage parent, bool midTurn, CancellationToken cancellationToken)
     {
         var changes = SettingsChanges.None;
         var menus = ToolsText.TabMenus[tab - 1];
@@ -298,7 +301,7 @@ internal sealed class ToolsMenu
             while (true)
             {
                 var saved = _settings.Current;
-                var page = GroupPage(tab, saved, _menu, menu);
+                var page = GroupPage(tab, saved, _menu, menu, parent);
                 if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
                 {
                     return (changes, _pane.ShownTab);   // the menu on show at ESC, ←/→ included
@@ -312,7 +315,7 @@ internal sealed class ToolsMenu
                     continue;
                 }
 
-                var shown = pick.Tab == page.Tab ? page : GroupPage(tab, saved, _menu, pick.Tab);
+                var shown = pick.Tab == page.Tab ? page : GroupPage(tab, saved, _menu, pick.Tab, parent);
                 changes |= await RowAsync(fields[cursor], pick.Toggle, saved, shown, cursor, midTurn, cancellationToken).ConfigureAwait(false);
             }
         }

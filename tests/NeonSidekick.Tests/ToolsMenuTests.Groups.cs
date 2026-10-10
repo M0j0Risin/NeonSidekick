@@ -127,4 +127,59 @@ public partial class ToolsMenuTests
         Assert.Equal(SettingsMenu.FieldFooter(SettingsField.CameraShutter).Text, group.Footer!(1, 1)!.Text);
         pane.Dispose();
     }
+
+    /// <summary>The group's strip keeps the Tools pane's height (later on 2026-10-09, the user's ask: it shrank to its tallest menu).</summary>
+    [Fact]
+    public void AGroupPage_KeepsTheToolsPagesHeight()
+    {
+        var saved = _settings.Current;
+        var (_, pane, settings) = PaneMenu();
+        var tools = ToolsMenu.Page(ToolsText.OfferedRows(Facts()), saved, settings, TabIndex(ToolsText.DatabaseTabTitle));
+        int media = TabIndex(ToolsText.MediaTabTitle);
+        var alone = ToolsMenu.GroupPage(media, saved, settings, 0);
+        var kept = ToolsMenu.GroupPage(media, saved, settings, 0, tools);
+
+        Assert.Equal(alone.Tabs!.Max(t => t.Rows.Count), MenuPane.TabBodyRows(alone, 100));
+        Assert.True(MenuPane.TabBodyRows(tools, 100) > MenuPane.TabBodyRows(alone, 100));   // the Offered list is the taller
+        Assert.Equal(MenuPane.TabBodyRows(tools, 100), MenuPane.TabBodyRows(kept, 100));
+        Assert.Same(tools, kept.HeightOf);
+        pane.Dispose();
+    }
+
+    /// <summary>On the pane, the group's strip is padded down to where the Tools pane's list ended: the hint row stays put.</summary>
+    [Fact]
+    public async Task OnThePane_AGroupsStrip_IsAsTallAsTheToolsPane()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push(ToTab(ToolsText.SqlTabTitle));     // Database, then SQL's rows
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        string group = Titled(ToolsMenu.GroupCrumb(TabIndex(ToolsText.DatabaseTabTitle)) + " │ SQL · MySQL · SQLite · Postgres · Oracle ");
+        Assert.Equal(FrameRows(Output, Titled(Strip), "▸ SQL  "), FrameRows(Output, group, "▸ SQL tools"));   // the Database tab's frame, the cursor on SQL
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// The rows of the first frame drawn under <paramref name="strip"/> whose list starts with <paramref name="firstRow"/> (a tab without
+    /// headings, whose rules would read as the band's): from the strip down to the hint row, the band included.
+    /// </summary>
+    private static int FrameRows(string output, string strip, string firstRow)
+    {
+        int start = output.IndexOf("\n" + strip + "\n \n" + firstRow, StringComparison.Ordinal);
+        Assert.True(start >= 0, "no frame under " + strip);
+        var lines = output[(start + 1)..].Split('\n');
+        int ruleCount = 0;
+        for (int i = 0; i < lines.Length; i++)
+        {
+            // The footer's rule, then the hint row's: the frame ends on the line after the second rule.
+            if (lines[i].StartsWith('─') && ++ruleCount == 2)
+            {
+                return i + 2;
+            }
+        }
+
+        throw new InvalidOperationException("no hint rule under " + strip);
+    }
 }
