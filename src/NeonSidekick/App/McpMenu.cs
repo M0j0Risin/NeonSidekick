@@ -16,7 +16,9 @@ namespace NeonSidekick.App;
 /// (later on 2026-09-20, the user's ask) a server row answers <see cref="McpText.OffNotice"/> and
 /// changes nothing, the reload row is left out and the two edit rows work. The Tools tab lists every connected
 /// server's tools (<see cref="McpRows.ToolRows"/>) and flips one by its prefixed name into
-/// <c>ToolsDisabled</c>, the <c>/tools</c> list, read at the next turn. The Options tab is
+/// <c>ToolsDisabled</c>, the <c>/tools</c> list, read at the next turn; with two servers or more connected (2026-10-10, the user's pick)
+/// it holds a sub-tab per server after <c>all</c> on the second strip (<see cref="McpRows.ToolTabs"/>), the one filter typed running on
+/// each and the one on show kept by name across the rebuilds. The Options tab is
 /// <see cref="SettingsMenu.McpTabFields"/> through the settings menu's seams under this pane's strip,
 /// its pickers titled <c>MCP › …</c>. Mid-turn the tool flips and the edit rows work; a server flip, a
 /// retry, a reload and the Options rows that reconnect are refused (a call could be in flight, the
@@ -61,8 +63,14 @@ internal sealed class McpMenu
     /// filters (2026-10-03, <see cref="MenuFilter"/>, <c>/tools</c>' Offered shape): <paramref name="tools"/> are the rows under
     /// <paramref name="filter"/>, <paramref name="total"/> the tools there are, for the caption while a filter is typed.
     /// </summary>
-    /// <remarks><paramref name="toolFooter"/> (2026-10-05) says under the list what the Tools tab's cursor tool does, whole (<see cref="McpRows.ToolFooter"/>).</remarks>
-    public static MenuPage Page(IReadOnlyList<(string Markup, McpRow? Row)> servers, IReadOnlyList<(string Markup, string? Tool, bool Heading)> tools, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int total = 0, Func<string, MenuFooter?>? toolFooter = null, Func<McpRow?, MenuFooter?>? serverFooter = null)
+    /// <remarks>
+    /// <paramref name="toolFooter"/> (2026-10-05) says under the list what the Tools tab's cursor tool does, whole (<see cref="McpRows.ToolFooter"/>).
+    /// <paramref name="byServer"/> (2026-10-10, the user's pick) makes the Tools tab hold a sub-tab per entry on the second strip
+    /// (<see cref="McpRows.ToolTabs"/>: all, then each connected server) — its title, its rows under the same filter and the tools it
+    /// holds for the caption — <paramref name="sub"/> the one on show; null or empty leaves the tab plain over <paramref name="tools"/>.
+    /// </remarks>
+    public static MenuPage Page(IReadOnlyList<(string Markup, McpRow? Row)> servers, IReadOnlyList<(string Markup, string? Tool, bool Heading)> tools, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int total = 0, Func<string, MenuFooter?>? toolFooter = null, Func<McpRow?, MenuFooter?>? serverFooter = null,
+        IReadOnlyList<(string Title, IReadOnlyList<(string Markup, string? Tool, bool Heading)> Rows, int Total)>? byServer = null, int sub = 0)
     {
         ArgumentNullException.ThrowIfNull(servers);
         ArgumentNullException.ThrowIfNull(tools);
@@ -72,13 +80,13 @@ internal sealed class McpMenu
         var tabs = new MenuTab[]
         {
             new(McpText.ServersTabTitle, servers.Select(r => r.Markup).ToList()) { Hint = McpText.ServersKeys },
-            new(McpText.ToolsTabTitle, tools.Select(r => r.Markup).ToList())
-            {
-                Hint = MenuFilter.Hint(ToolsText.OfferedKeys, filter),
-                Headings = ToolsText.HeadingRows(tools),
-                Filter = filter,
-                Caption = MenuFilter.CaptionOrNull(filter, ToolsText.ToolCount(tools), total),
-            },
+            byServer is { Count: > 0 }
+                ? new MenuTab(McpText.ToolsTabTitle, [])
+                {
+                    SubTabs = byServer.Select(s => ToolsTab(s.Title, s.Rows, s.Total)).ToList(),
+                    Sub = Math.Clamp(sub, 0, byServer.Count - 1),
+                }
+                : ToolsTab(McpText.ToolsTabTitle, tools, total),
             menu.FieldsTab(McpText.OptionsTabTitle, SettingsMenu.McpTabFields[0], saved),
         };
         return MenuPage.Tabbed(McpText.Label, tabs, tab, SettingsMenu.TabKeys) with
@@ -93,6 +101,16 @@ internal sealed class McpMenu
                 2 => row < SettingsMenu.McpTabFields[0].Count ? menu.FieldFooter(SettingsMenu.McpTabFields[0][row], saved) : null,
                 _ => null,
             },
+        };
+
+        // The Tools rows (or one server's): the filter's hint and caption, the headings, the band saying the cursor's tool.
+        MenuTab ToolsTab(string title, IReadOnlyList<(string Markup, string? Tool, bool Heading)> rows, int held) => new(title, rows.Select(r => r.Markup).ToList())
+        {
+            Hint = MenuFilter.Hint(ToolsText.OfferedKeys, filter),
+            Headings = ToolsText.HeadingRows(rows),
+            Filter = filter,
+            Caption = MenuFilter.CaptionOrNull(filter, ToolsText.ToolCount(rows), held),
+            Footer = row => row >= 0 && row < rows.Count && rows[row].Tool is { } name ? toolFooter?.Invoke(name) : null,
         };
     }
 
@@ -139,6 +157,7 @@ internal sealed class McpMenu
         int tab = 0;
         int cursor = -1;
         string filter = "";
+        string? shownServer = null;   // the Tools tab's server on show (2026-10-10), by name so a reconnect that reorders keeps it; null = all
         _menu.Root = McpText.Label;
         try
         {
@@ -147,8 +166,12 @@ internal sealed class McpMenu
                 var facts = _facts();
                 var saved = _settings.Current;
                 var servers = McpRows.ServerRows(facts);
-                var tools = McpRows.ToolRows(facts, filter);
-                var page = Page(servers, tools, saved, _menu, tab, filter, facts.Servers.Where(s => s.State == McpState.Connected).Sum(s => s.Tools.Count), name => McpRows.ToolFooter(facts, name), row => McpRows.ServerFooter(facts, row));
+                var toolTabs = McpRows.ToolTabs(facts);
+                int sub = Math.Max(0, IndexOf(toolTabs, shownServer));
+                var connected = facts.Servers.Where(s => s.State == McpState.Connected).ToList();
+                var byServer = toolTabs.Select(s => (McpRows.ToolTabTitle(s), McpRows.ToolRows(facts, filter, s), connected.Where(c => s is null || c.Name == s).Sum(c => c.Tools.Count))).ToList();
+                var tools = byServer.Count > 0 ? byServer[sub].Item2 : McpRows.ToolRows(facts, filter);
+                var page = Page(servers, tools, saved, _menu, tab, filter, connected.Sum(s => s.Tools.Count), name => McpRows.ToolFooter(facts, name), row => McpRows.ServerFooter(facts, row), byServer, sub);
                 if (cursor < 0)
                 {
                     cursor = tab == 1 ? ToolsText.FirstToolRow(tools) : McpRows.FirstServerRow(servers);
@@ -161,6 +184,13 @@ internal sealed class McpMenu
 
                 tab = pick.Tab;
                 cursor = pick.Row;
+                // ←/→ move the server with no pick, so it is read off the pane (ToolsMenu's shape), and the tools picked from are its.
+                if (byServer.Count > 0 && _pane.ShownSubs is { Count: > 1 } shownSubs)
+                {
+                    sub = Math.Clamp(shownSubs[1], 0, byServer.Count - 1);
+                    shownServer = toolTabs[sub];
+                    tools = byServer[sub].Item2;
+                }
                 if (pick.Filter is { } typed)
                 {
                     // The Tools tab's filter (2026-10-03): the rows again under it, the cursor on the first tool left.
@@ -229,6 +259,19 @@ internal sealed class McpMenu
             _menu.Root = SettingsMenu.Title;
             _pane.Close();
         }
+    }
+
+    private static int IndexOf(IReadOnlyList<string?> tabs, string? server)
+    {
+        for (int i = 0; i < tabs.Count; i++)
+        {
+            if (string.Equals(tabs[i], server, StringComparison.Ordinal))
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     /// <summary>One Servers-tab act: a flip (with its connect or disconnect), a retry, an edit row, the reload; under the master switch off every row but the two edit ones is the off notice.</summary>

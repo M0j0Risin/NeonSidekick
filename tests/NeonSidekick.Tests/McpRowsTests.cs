@@ -186,6 +186,29 @@ public class McpRowsTests : IAsyncDisposable
         Assert.Equal(McpRows.ToolRows(facts), McpRows.ToolRows(facts, ""));
     }
 
+    /// <summary>The Tools tab's sub-tabs (2026-10-10, the user's pick): one server's section alone, its heading and the whole list's name column; all, then each connected server, only with two or more.</summary>
+    [Fact]
+    public async Task ToolRows_ForOneServer_KeepItsSection_AndToolTabsNeedTwoConnected()
+    {
+        await using var session = await ConnectedAsync(Two);
+        var facts = Facts(session, disabled: ["docker__fail"]);
+
+        Assert.Equal(["── chrome · 1", "chrome__navigate  on   Opens a page."], McpRows.ToolRows(facts, "", "chrome").Select(r => Plain(r.Markup)));
+        Assert.Equal(["── docker · 1 of 2", "docker__echo      on   Echoes the text back."], McpRows.ToolRows(facts, "echo", "docker").Select(r => Plain(r.Markup)));
+        Assert.Equal([MenuFilter.NoMatchLine("echo")], McpRows.ToolRows(facts, "echo", "chrome").Select(r => Plain(r.Markup)));
+        Assert.Equal(McpRows.ToolRows(facts), McpRows.ToolRows(facts, "", null));
+
+        Assert.Equal([null, "docker", "chrome"], McpRows.ToolTabs(facts));
+        await session.DisconnectServerAsync("chrome");
+        Assert.Empty(McpRows.ToolTabs(Facts(session)));
+
+        Assert.Equal("all", McpRows.ToolTabTitle(null));
+        Assert.Equal("docker", McpRows.ToolTabTitle("docker"));
+        Assert.Equal("a b", McpRows.ToolTabTitle("a\nb"));
+        Assert.Equal(new string('x', 23) + "…", McpRows.ToolTabTitle(new string('x', 30)));
+        Assert.Equal(new string('x', 24), McpRows.ToolTabTitle(new string('x', 24)));
+    }
+
     [Fact]
     public async Task ToolRows_NoneConnected_OrTheSwitchesOff()
     {

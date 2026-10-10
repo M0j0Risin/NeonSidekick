@@ -4,6 +4,7 @@ using NeonSidekick.Settings;
 using NeonSidekick.Speech;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
+using Spectre.Console;
 using Spectre.Console.Testing;
 
 namespace NeonSidekick.Tests;
@@ -93,6 +94,9 @@ public class McpMenuTests : IAsyncDisposable
 
     /// <summary>The strip as the pane prints it. Pinned.</summary>
     private const string Strip = McpText.Label + " │ Servers · Tools · Options ";
+
+    /// <summary>The Tools tab's servers on the second strip (2026-10-10) as the pane prints it, the fixture's two connected.</summary>
+    private static readonly string Servers = Markup.Remove(InfoPane.SubStripRows(McpText.Label, ["all", "docker", "chrome"], 0, 100)[0]);
 
     [Fact]
     public async Task OnThePane_OpensOnTheFirstServer_TheThreeTabsOnTheStrip()
@@ -265,7 +269,7 @@ public class McpMenuTests : IAsyncDisposable
         Assert.Equal(["docker__fail"], _settings.Current.ToolsDisabled);
         // The servers' headings are rules with a gap between them (2026-10-03), the /tools look.
         // The band under the list says the cursor's tool whole (2026-10-05, the user's ask: it stood blank on this tab).
-        Assert.Contains("\n" + Titled(Strip) + "\n  · 🔌 docker__fail: off\n" + Heading("── docker · 1 of 2") + "\n  docker__echo      on   Echoes the text back.\n▸ docker__fail      off  Always fails.\n  \n" + Heading("── chrome · 1") + "\n  chrome__navigate  on   Opens a page.\n" + MenuLayout.Footer(new MenuFooter("Always fails."), 100) + Rule(100), Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n" + Servers + "\n  · 🔌 docker__fail: off\n" + Heading("── docker · 1 of 2") + "\n  docker__echo      on   Echoes the text back.\n▸ docker__fail      off  Always fails.\n  \n" + Heading("── chrome · 1") + "\n  chrome__navigate  on   Opens a page.\n" + MenuLayout.Footer(new MenuFooter("Always fails."), 100) + Rule(100), Output);
         Assert.Contains("\n" + MenuLayout.Footer(new MenuFooter("Echoes the text back."), 100) + Rule(100), Output);   // the first, before the move
         Assert.Contains("  · 🔌 docker__fail: on\n" + Heading("── docker · 2") + "\n", Output);
         Assert.Contains(ToolsText.OfferedKeys, Output);
@@ -292,12 +296,51 @@ public class McpMenuTests : IAsyncDisposable
         pane.Dispose();
     }
 
+    /// <summary>
+    /// The Tools tab's servers (2026-10-10, the user's pick): all, then each connected server on the second strip; → walks onto one, its
+    /// tools alone under it, and Enter flips the tool of the server shown — chrome's first here, not docker's; the filter runs on it too.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheToolsTab_HoldsASubTabPerServer_AndEnterFlipsTheShownServersTool()
+    {
+        await ConnectedAsync();
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Right, Keys.Right, Keys.Right);  // Tools: all, docker, chrome
+        Push(Keys.Enter);                          // chrome__navigate off
+        Push(Keys.Char('z'));                      // a filter nothing in chrome holds
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["chrome__navigate"], _settings.Current.ToolsDisabled);
+        Assert.EndsWith(" │ ↳ all · docker · chrome ", Servers);
+        Assert.Contains("\n" + Titled(Strip) + "\n" + Servers + "\n  · 🔌 chrome__navigate: off\n" + Heading("── chrome · 0 of 1") + "\n▸ chrome__navigate  off  Opens a page.\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n" + Servers + "\n \n" + Heading("── docker · 2") + "\n▸ docker__echo      on   Echoes the text back.\n  docker__fail      on   Always fails.\n", Output);   // docker's on the way
+        Assert.Contains(MenuFilter.Caption("z", 0, 1), Output);   // the caption counts chrome's one tool
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_OneServerConnected_TheToolsTabIsPlain()
+    {
+        await ConnectedAsync();
+        await _session.DisconnectServerAsync("chrome");
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Right, Keys.Escape);             // Tools
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── docker · 2") + "\n", Output);
+        Assert.DoesNotContain("↳", Output);
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task OnThePane_TheOptionsTab_TheMasterSwitch_ReturnsTheFlag_TheTimeoutTypes()
     {
         await ConnectedAsync();
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Right, Keys.Right);              // Options
+        Push(Keys.Tab, Keys.Tab);                  // Options (Tab past the Tools tab's servers since 2026-10-10)
         Push(Keys.Enter, Keys.Down, Keys.Enter);   // MCP servers: the page, off picked
         Push(Keys.Down, Keys.Enter);               // MCP connect timeout (s): typed over the 30 in the slot
         Push(Keys.Backspace, Keys.Backspace);
@@ -346,7 +389,7 @@ public class McpMenuTests : IAsyncDisposable
         Push(Keys.Down, Keys.Down, Keys.Enter);    // edit profile: fine
         Push(Keys.Down, Keys.Down, Keys.Enter);    // reload: refused
         Push(Keys.Right, Keys.Enter);              // docker__echo off: fine
-        Push(Keys.Right, Keys.Enter);              // MCP servers: refused
+        Push(Keys.Tab, Keys.Enter);                // MCP servers: refused (Tab past the Tools tab's servers since 2026-10-10)
         Push(Keys.Down, Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Char('9'), Keys.Char('0'), Keys.Enter);   // the timeout: fine
         Push(Keys.Escape);
 

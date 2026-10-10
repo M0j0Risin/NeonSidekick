@@ -96,7 +96,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/expand` | Unfolds every tool run, code block, diff and thinking block, now and from here on. Ctrl+O switches between this and `/collapse`. |
 | `/collapse` | Folds them again. |
 | `/find [<words>]` | Finds words in the transcript: a find row opens over the input row, every match marked, the newest shown; matches inside folded tool runs, code, diffs and thinking unfold until the find ends. Keys under [Pane keys](#pane-keys). A word the window wraps across two rows is not found. Ctrl+Shift+F runs it too (in Windows Terminal once its own Ctrl+Shift+F find is unbound; a Mac terminal sends it as Ctrl+F, which is `/perfbar`, so type `/find` there). |
-| `/mcp` | Connects MCP servers and switches their tools. On the Tools tab, typing narrows the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
+| `/mcp` | Connects MCP servers and switches their tools. On the Tools tab, with two servers or more connected, a second strip shows *all* or one server's tools (←/→ walk them, Tab skips past); typing narrows the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
 | `/memory` | Lists memories on a pane, one line each, with the highlighted one in full under the list (Enter forgets it after a yes); **read-write** (`w`), **read-only** (`o`) and **disabled** (`x`) on its title row set *Memory mode*. |
 | `/memory read-write\|read-only\|disabled\|on\|off` | Sets *Memory mode* (`on` is read-write, `off` disabled). |
 | `/memory forget\|edit` | `forget` forgets all, after a confirmation; `edit` opens `memory.json` in your editor. |

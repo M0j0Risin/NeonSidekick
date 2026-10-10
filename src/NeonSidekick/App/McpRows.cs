@@ -166,12 +166,17 @@ public static class McpRows
     /// <paramref name="filter"/> (2026-10-03, <see cref="MenuFilter"/>) the <c>/tools</c> Offered shape: only the tools whose
     /// name or description holds it, a server with none left out, <see cref="MenuFilter.NoMatchRow"/> alone when none is left.
     /// </summary>
-    public static IReadOnlyList<(string Markup, string? Tool, bool Heading)> ToolRows(McpFacts facts, string filter = "")
+    /// <remarks>
+    /// <paramref name="only"/> (2026-10-10, the Tools tab's sub-tabs, <see cref="ToolTabs"/>) keeps that connected server's section
+    /// alone, its heading and count as on the whole list; null is every server's. The name column stays the whole list's either way.
+    /// </remarks>
+    public static IReadOnlyList<(string Markup, string? Tool, bool Heading)> ToolRows(McpFacts facts, string filter = "", string? only = null)
     {
         ArgumentNullException.ThrowIfNull(facts);
         ArgumentNullException.ThrowIfNull(filter);
         var rows = new List<(string, string?, bool)>(32);
-        var connected = facts.Servers.Where(s => s.State == McpState.Connected).ToList();
+        var all = facts.Servers.Where(s => s.State == McpState.Connected).ToList();
+        var connected = only is null ? all : all.Where(s => string.Equals(s.Name, only, StringComparison.Ordinal)).ToList();
         if (!facts.ToolsEnabled)
         {
             rows.Add((Theme.DimMarkup(ToolsText.OffLine), null, false));
@@ -189,7 +194,7 @@ public static class McpRows
         }
 
         bool offered = facts.ToolsEnabled && facts.Enabled;
-        int width = NameWidth(connected.SelectMany(s => s.Tools).Select(t => t.Name));
+        int width = NameWidth(all.SelectMany(s => s.Tools).Select(t => t.Name));
         int shownServers = 0;
         foreach (var server in connected)
         {
@@ -222,6 +227,39 @@ public static class McpRows
         }
 
         return rows;
+    }
+
+    /// <summary>The Tools tab's first sub-tab (2026-10-10, the user's pick): every connected server's tools, the list as it was. Pinned.</summary>
+    public const string AllSubTitle = "all";
+
+    /// <summary>The widest a server's sub-tab title grows, in characters, its end cut by an ellipsis (a server's name is any JSON key). Pinned.</summary>
+    public const int MaxSubTitleLength = 24;
+
+    /// <summary>
+    /// The Tools tab's sub-tabs (2026-10-10, the user's pick: one per connected server, the Skills pane's scopes' shape): null for
+    /// <see cref="AllSubTitle"/>, then each connected server's name in the session's order; none while fewer than two are connected, the
+    /// tab then a plain one with no second strip (a strip of one server says nothing the list does not).
+    /// </summary>
+    public static IReadOnlyList<string?> ToolTabs(McpFacts facts)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        var names = facts.Servers.Where(s => s.State == McpState.Connected).Select(s => s.Name).ToList();
+        return names.Count < 2 ? [] : [null, .. names];
+    }
+
+    /// <summary>
+    /// A Tools sub-tab's title (2026-10-10): <see cref="AllSubTitle"/> for null, else the server's name with any control character a space
+    /// and cut to <see cref="MaxSubTitleLength"/> with an ellipsis. Pure.
+    /// </summary>
+    public static string ToolTabTitle(string? server)
+    {
+        if (server is null)
+        {
+            return AllSubTitle;
+        }
+
+        string name = string.Concat(server.Select(c => char.IsControl(c) ? ' ' : c));
+        return name.Length > MaxSubTitleLength ? name[..(MaxSubTitleLength - 1)] + "…" : name;
     }
 
     /// <summary>

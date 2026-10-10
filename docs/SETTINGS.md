@@ -932,7 +932,7 @@ One row per server in `mcp.json` (the profile's, then the home folder's; the pro
 
 ### Tools
 
-Every connected server's tools, as `<server>__<tool>`, with the server's description. Enter or Space switches one.
+Every connected server's tools, as `<server>__<tool>`, with the server's description. Enter or Space switches one. With two servers or more connected, the tab's second strip shows *all* of them or one server's alone (←/→ walk them on the way to Options, Tab steps past), and the typed filter works on each.
 
 ### Options
 
