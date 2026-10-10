@@ -947,16 +947,16 @@ public enum SettingsField
     /// <summary>Typed: how many rows an edit's diff may have before it folds once its tool run is over, 0 (off) to 500 (<see cref="Settings.AppSettingsData.DiffCollapseCount"/>). The Options tab of <c>/tools</c>, under <see cref="DiffMaxLines"/> (2026-10-04, the user's ask and place); no reconnect (read at each result). Last in the enum, as every newcomer.</summary>
     DiffCollapseCount,
 
-    /// <summary>Typed: the quality <c>image_edit</c> writes a JPEG, JPEG XL or HEIF at when the call gives none, 1 to 100 (<see cref="Settings.AppSettingsData.ImageEditQuality"/>). The Files tab of <c>/tools</c>, after File search max results (2026-10-04, the user's pick, with the image tools); no reconnect (read at each call).</summary>
+    /// <summary>Typed: the quality <c>image_edit</c> writes a JPEG, JPEG XL or HEIF at when the call gives none, 1 to 100 (<see cref="Settings.AppSettingsData.ImageEditQuality"/>). The Files tab of <c>/tools</c>, after File search max results (2026-10-04, the user's pick, with the image tools); the Image menu's first row since 2026-10-10 (<c>/tools</c> › Files › Image, the user's ask); no reconnect (read at each call).</summary>
     ImageEditQuality,
 
-    /// <summary>A picker over none, basic and all: the metadata <c>image_edit</c> keeps when the call does not say (<see cref="Settings.AppSettingsData.ImageEditMetadata"/>). The Files tab, under Image edit quality (2026-10-04); no reconnect.</summary>
+    /// <summary>A picker over none, basic and all: the metadata <c>image_edit</c> keeps when the call does not say (<see cref="Settings.AppSettingsData.ImageEditMetadata"/>). The Files tab, under Image edit quality (2026-10-04); the Image menu since 2026-10-10; no reconnect.</summary>
     ImageEditMetadata,
 
-    /// <summary>Typed: the folder under the working directory <c>image_edit</c> writes into when the call gives no <c>to</c>, empty = beside the source (<see cref="Settings.AppSettingsData.ImageEditOutputFolder"/>). The Files tab's last row (2026-10-04), the Camera output folder's rule; no reconnect.</summary>
+    /// <summary>Typed: the folder under the working directory <c>image_edit</c> writes into when the call gives no <c>to</c>, empty = beside the source (<see cref="Settings.AppSettingsData.ImageEditOutputFolder"/>). The Files tab's last row (2026-10-04), the Image menu's under Image edit mode since 2026-10-10; the Camera output folder's rule; no reconnect.</summary>
     ImageEditOutputFolder,
 
-    /// <summary>A picker over beside-original and overwrite-original: where an edited picture goes, for the picture windows' right-click menu and <c>image_edit</c> (<see cref="Settings.AppSettingsData.ImageEditMode"/>). The Files tab, under Image edit metadata (later on 2026-10-04, the user's ask); no reconnect. Last in the enum, as every newcomer.</summary>
+    /// <summary>A picker over beside-original and overwrite-original: where an edited picture goes, for the picture windows' right-click menu and <c>image_edit</c> (<see cref="Settings.AppSettingsData.ImageEditMode"/>). The Files tab, under Image edit metadata (later on 2026-10-04, the user's ask); the Image menu since 2026-10-10; no reconnect. Last in the enum, as every newcomer.</summary>
     ImageEditMode,
 
     /// <summary>How the transcript draws the user's sent line (<see cref="Settings.AppSettingsData.UserLineStyle"/>, 2026-10-04): a picker, no reconnect. Last, so the flat list's rows above keep their places.</summary>
@@ -989,7 +989,7 @@ public enum SettingsField
     /// <summary>Typed: the language a search favours, empty for none (<see cref="Settings.AppSettingsData.YouTubeLanguage"/>). The YouTube tab's last row (2026-10-08); no reconnect.</summary>
     YouTubeLanguage,
 
-    /// <summary>Typed: the folder under the profile's images folder a clipboard picture is saved in when its message is sent (<see cref="Settings.AppSettingsData.PastedImagesFolder"/>). The Files tab's last row (2026-10-09), the Camera output folder's rule; no reconnect. Last in the enum, as every newcomer.</summary>
+    /// <summary>Typed: the folder under the profile's images folder a clipboard picture is saved in when its message is sent (<see cref="Settings.AppSettingsData.PastedImagesFolder"/>). The Files tab's last row (2026-10-09), the Image menu's since 2026-10-10; the Camera output folder's rule; no reconnect. Last in the enum, as every newcomer.</summary>
     PastedImagesFolder,
 }
 
@@ -1402,6 +1402,7 @@ internal sealed partial class SettingsMenu
     /// the advisor's six (<c>claude_code_advisor</c>): its switch, the context, the per-turn cap, the model, the effort and the confirm switch;
     /// from 2026-09-29 (the user's call: one tab named <c>Claude</c>, <c>Claude (CLI)</c> until then) the Anthropic API's four rows and
     /// later the Claude Code server's followed, until 2026-10-03 (the user's call), when the five went to <c>/settings</c>' Anthropic tab.
+    /// Image (2026-10-10, the user's ask, after File) is the File list's last five until then: <c>image_edit</c>'s quality, metadata, the edit mode, its output folder and the pasted pictures' folder.
     /// With <see cref="TabFields"/> and <see cref="SkillsTabFields"/> they are every <see cref="SettingsField"/> once (pinned); the flat no-pane list keeps them all.
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
@@ -1409,7 +1410,8 @@ internal sealed partial class SettingsMenu
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
         [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
-        [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
+        [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
+        [SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
         [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine],
         [SettingsField.CameraTools, SettingsField.CameraShutter, SettingsField.CameraPreview, SettingsField.CameraDevice, SettingsField.CameraResolution, SettingsField.CameraOutputFolder, SettingsField.CameraKeepInSessions, SettingsField.CameraWatchSeconds, SettingsField.CameraWatchThreshold, SettingsField.CameraWatchUnprompted, SettingsField.CameraWatchMinGapSeconds],

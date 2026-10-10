@@ -130,11 +130,17 @@ public static class ToolsText
     /// <summary>The last tab (second from later on 2026-09-19, the user's ask, until 2026-09-22, the user's ask again): the pane's own settings — the <c>$</c>-mention switch and the two folds — in the <c>/skills</c> Options tab's shape (<see cref="SettingsMenu.ToolsTabFields"/>' last list).</summary>
     public const string OptionsTabTitle = "Options";
     public const string AskTabTitle = "Ask";
-    /// <summary>The file tools' Offered heading and, since 2026-10-10 (the user's pick), the tab holding the File, UNC, GitLib and Obsidian menus; their tab until then.</summary>
+    /// <summary>The file tools' Offered heading and, since 2026-10-10 (the user's pick), the tab holding the File, UNC, GitLib and Obsidian menus (Image after File since later that day); their tab until then.</summary>
     public const string FilesTabTitle = "Files";
 
     /// <summary>The file tools' menu on the Files tab (2026-10-10, the user's pick: the tab "Files" over the menu "File", so <c>/tools file</c> and <c>/tools files</c> each name one). Pinned.</summary>
     public const string FileMenuTitle = "File";
+
+    /// <summary>
+    /// The picture rows' menu on the Files tab, after File, before UNC (2026-10-10, the user's ask): <c>image_edit</c>'s quality, metadata
+    /// and output folder, <c>Image edit mode</c> (the picture menu's too) and the pasted pictures' folder, the File menu's last five until then. Pinned.
+    /// </summary>
+    public const string ImageMenuTitle = "Image";
     /// <summary><c>Git</c> until 2026-09-21, when the user asked for <c>Git (native)</c> (the in-process LibGit2Sharp tools as against git through the shell), and <c>Git</c> again since 2026-09-29, the user's call: the tab and the Offered heading, the rows keep their <c>Git native …</c> labels. <c>GitLib</c> since 2026-09-30 (the user's ask), the tab, the heading, the rows and the tools' names (<c>gitlib_status</c> …) alike.</summary>
     public const string GitTabTitle = "GitLib";
     public const string ShellTabTitle = "Shell";
@@ -205,7 +211,7 @@ public static class ToolsText
     /// The settings menus in <see cref="SettingsMenu.ToolsTabFields"/>' order, each list's title (2026-10-09): every one was a tab of its own
     /// until then, and the constants above stay its name — the Offered tab's group heading and <c>/sys</c>' group too. Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, ClaudeCodeTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle];
+    public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, ImageMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, ClaudeCodeTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle];
 
     /// <summary>The tabs in strip order — Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Screen (2026-10-04), Obsidian, SQL, MySQL, Oracle, ClaudeCLI, Docker, HA, ComfyUI, GitLib, Options, the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04); before it (Camera after Ask since 2026-10-02; Docker after UNC since 2026-10-02; Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down until 2026-10-09.
     /// Since then (the user's call) the five database tabs are menus on one Database tab, where SQL stood, and Print, Camera, Screen,
@@ -214,7 +220,8 @@ public static class ToolsText
     /// Media, Options (<see cref="TabMenus"/>; <see cref="MenuTitles"/> keeps its order). Since 2026-10-10 (the user's pick: the strip still ran
     /// to fourteen) Files holds File, UNC, GitLib and Obsidian and Integrations ClaudeCode, Docker, Home, ComfyUI and YouTube (the last two off
     /// Media, the user's ask): Offered, Ask, Web, Shell, Files, Integrations, Database, Media, Options — the arrows walking the menus as before
-    /// up to Home, then ComfyUI and YouTube, the five databases, Print, Camera, Screen.</summary>
+    /// up to Home, then ComfyUI and YouTube, the five databases, Print, Camera, Screen. Later on 2026-10-10 (the user's ask) the Image menu
+    /// after File on Files (<see cref="ImageMenuTitle"/>).</summary>
     public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, AskTabTitle, WebTabTitle, ShellTabTitle, FilesTabTitle, IntegrationsTabTitle, DatabaseTabTitle, MediaTabTitle, OptionsTabTitle];
 
     /// <summary>
@@ -222,7 +229,7 @@ public static class ToolsText
     /// one for a plain tab, its rows the tab's; more for a group tab — <see cref="FilesTabTitle"/>, <see cref="IntegrationsTabTitle"/> (2026-10-10),
     /// <see cref="DatabaseTabTitle"/> and <see cref="MediaTabTitle"/> — whose menus are sub-tabs on a second strip (<see cref="ToolsMenu"/>). Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[0], [1], [2], [3, 4, 19, 8], [14, 15, 16, 17, 18], [9, 10, 11, 12, 13], [5, 6, 7], [20]];
+    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[0], [1], [2], [3, 4, 5, 20, 9], [15, 16, 17, 18, 19], [10, 11, 12, 13, 14], [6, 7, 8], [21]];
 
     /// <summary>Whether tab <paramref name="tab"/> (a <see cref="TabTitles"/> index) holds menus rather than rows: Files, Integrations, Database and Media.</summary>
     public static bool IsGroupTab(int tab) => tab > 0 && tab < TabTitles.Count && TabMenus[tab - 1].Count > 1;

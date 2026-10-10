@@ -4645,6 +4645,7 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Right);     // Home Assistant (2026-09-28)
         _console.Input.PushKey(Keys.Right);     // Print (later on 2026-09-28)
         _console.Input.PushKey(Keys.Right);     // YouTube (2026-10-05)
+        _console.Input.PushKey(Keys.Right);     // Image (2026-10-10: the File menu's picture rows, a menu of their own)
         _console.Input.PushKey(Keys.Right);     // Options (second until later on 2026-09-22, last since — the user's ask)
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
@@ -4662,6 +4663,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n▸ $-mention enabled    on\n  Tool collapse count  off\n  Code collapse count  off\n", output);   // the fixture's 0s (2026-09-22)
         Assert.Contains("\n▸ Ask user                      on\n", output);
         Assert.Contains("\n▸ File tools                      on\n", output);
+        Assert.Contains("\n▸ Image edit quality        90\n", output);   // the Image menu (2026-10-10), padded to its own column
         Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
         Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
         Assert.Contains("\n▸ Web tools                 on\n", output);
@@ -4700,6 +4702,7 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Right);     // Home Assistant (2026-09-28)
         _console.Input.PushKey(Keys.Right);     // Print (later on 2026-09-28)
         _console.Input.PushKey(Keys.Right);     // YouTube (2026-10-05)
+        _console.Input.PushKey(Keys.Right);     // Image (2026-10-10: the File menu's picture rows, a menu of their own)
         _console.Input.PushKey(Keys.Right);     // Options (second until later on 2026-09-22, last since — the user's ask)
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
@@ -4717,6 +4720,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n▸ $-mention enabled    on\n  Tool collapse count  off\n  Code collapse count  off\n", output);   // the fixture's 0s (2026-09-22)
         Assert.Contains("\n▸ Ask user                      on\n", output);
         Assert.Contains("\n▸ File tools                      on\n", output);
+        Assert.Contains("\n▸ Image edit quality        90\n", output);   // the Image menu (2026-10-10), padded to its own column
         Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
         Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   zsh\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
         Assert.Contains("\n▸ Web tools                 on\n", output);

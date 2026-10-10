@@ -677,7 +677,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 
 ### Files
 
-The file tools and the places beyond the working directory they reach, four menus on one tab, each a tab of the second strip (File · UNC · GitLib · Obsidian): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10.
+The file tools and the places beyond the working directory they reach, five menus on one tab, each a tab of the second strip (File · Image · UNC · GitLib · Obsidian): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10.
 
 #### File
 
@@ -690,6 +690,13 @@ The file tools and the places beyond the working directory they reach, four menu
 | File browser/tree mode | `default` hides hidden, system and dot entries in the folder browsers, `/tree` and `/browse`; `show-hidden` lists them (`/tree` and `/browse` still leave out `.git`). | `default` |
 | File view image max (per call) | Pictures one `view_image` call may load (1–100). | 10 |
 | File search max results | The most rows one `search_files` or `unc_search` call returns, whatever its `limit` (1–5000). Without `limit`: 50 hits, 200 entries, 100 names or 10 recent files. | 200 |
+
+#### Image
+
+The picture rows: `image_edit`'s defaults, where an edit goes (the picture menu's too) and where a pasted picture is saved. On File until 2026-10-10.
+
+| Setting | What it does | Default |
+|---|---|---|
 | Image edit quality | The quality `image_edit` writes a JPEG (or JPEG XL, HEIF) at when the model gives none (1–100), and where `max_kb` starts lowering it from. A Mac writes JPEG and HEIF with it (its ImageIO has no JPEG XL encoder). | 90 |
 | Image edit metadata | What metadata `image_edit` keeps unless the model asks otherwise: `none` (no camera, date or place), `basic` (author, copyright, title, comment, date taken, camera, exposure) or `all` (basic and the GPS position). | `none` |
 | Image edit mode | Where an edited picture goes, for the picture windows' right-click menu and `image_edit` (when the model names no `to`): `beside-original` writes a new file beside the source (`image_edit` uses *Image edit output folder* when set), `overwrite-original` replaces the source (a format change writes the new file and deletes the old). No confirmation. | `beside-original` |

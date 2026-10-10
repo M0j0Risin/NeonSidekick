@@ -203,11 +203,20 @@ public class NeonHelpTests
     {
         Assert.StartsWith("Tab /tools › Files › File:", Invoke("/tools file"), StringComparison.Ordinal);
         string group = Invoke("/tools files");
-        Assert.StartsWith("Tab /tools › Files: " + HelpText.MenusTab(["File", "UNC", "GitLib", "Obsidian"]), group, StringComparison.Ordinal);
+        Assert.StartsWith("Tab /tools › Files: " + HelpText.MenusTab(["File", "Image", "UNC", "GitLib", "Obsidian"]), group, StringComparison.Ordinal);
         Assert.EndsWith("\nAsk for one menu (/tools file) for its rows' defaults and what each does.", group, StringComparison.Ordinal);
         Assert.StartsWith("Tab /tools › Files › File:", Invoke("file tab"), StringComparison.Ordinal);
         Assert.DoesNotContain("Tab /tools › Files:", Invoke("file tab"));
         Assert.StartsWith("Tab /tools › Integrations: ", Invoke("/tools integ"), StringComparison.Ordinal);   // a start still finds one
+    }
+
+    /// <summary>The picture rows' own menu (2026-10-10, the user's ask): /tools image answers it, and a row on it names the menu as its place.</summary>
+    [Fact]
+    public void TheImageMenu_IsFound_AndItsRowsNameIt()
+    {
+        Assert.StartsWith("Tab /tools › Files › Image:", Invoke("/tools image"), StringComparison.Ordinal);
+        Assert.Contains("\n  Where: /tools › Files › Image › Image edit mode (open /tools, go to the Files tab, then Image on the second strip, Enter on the row edits it)\n", Invoke("Image edit mode", "setting"));
+        Assert.Contains("\n  Where: /tools › Files › Image › Pasted images folder ", Invoke("Pasted images folder", "setting"));
     }
 
     /// <summary>A group tab (2026-10-09) lists its menus and their rows' names, and says how to ask for one. Pinned.</summary>
@@ -220,7 +229,7 @@ public class NeonHelpTests
         Assert.Contains("\n- Oracle: Oracle tools, ", text);
         Assert.EndsWith("\nAsk for one menu (/tools sql) for its rows' defaults and what each does.", text, StringComparison.Ordinal);
         Assert.Equal("the menus Print, Camera (a second strip under the tab; ←/→ walk them)", HelpText.MenusTab(["Print", "Camera"]));
-        Assert.Equal([(ToolsText.FilesTabTitle, "File"), (ToolsText.FilesTabTitle, "UNC"), (ToolsText.FilesTabTitle, "GitLib")], HelpLocation.Menus("/tools").Take(3));   // the Files group first since 2026-10-10   // Database before Media since later on 2026-10-09
+        Assert.Equal([(ToolsText.FilesTabTitle, "File"), (ToolsText.FilesTabTitle, "Image"), (ToolsText.FilesTabTitle, "UNC")], HelpLocation.Menus("/tools").Take(3));   // the Files group first since 2026-10-10, Image after File later that day   // Database before Media since later on 2026-10-09
         Assert.Equal([(SettingsMenu.ServersTabTitle, "LLM"), (SettingsMenu.ServersTabTitle, "Embedded")], HelpLocation.Menus("/settings").Take(2));   // the Servers and Voice groups since 2026-10-10
     }
 

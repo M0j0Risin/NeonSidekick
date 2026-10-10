@@ -26,7 +26,7 @@ public partial class ToolsMenuTests
     {
         Assert.Equal("         │ ↳ SQL · MySQL · SQLite · PostgreSQL · Oracle ", SubStrip(ToolsText.DatabaseTabTitle));
         Assert.Equal("         │ ↳ Print · Camera · Screen ", SubStrip(ToolsText.MediaTabTitle));   // ComfyUI and YouTube on Integrations since 2026-10-10
-        Assert.Equal("         │ ↳ File · UNC · GitLib · Obsidian ", SubStrip(ToolsText.FilesTabTitle));   // 2026-10-10
+        Assert.Equal("         │ ↳ File · Image · UNC · GitLib · Obsidian ", SubStrip(ToolsText.FilesTabTitle));   // 2026-10-10; Image later that day
         Assert.Equal("         │ ↳ ClaudeCode · Docker · HomeAssistant · ComfyUI · YouTube ", SubStrip(ToolsText.IntegrationsTabTitle));   // 2026-10-10
     }
 

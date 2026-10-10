@@ -37,7 +37,7 @@ namespace NeonSidekick.App;
 /// so since then they are sub-tabs (<see cref="MenuTab.SubTabs"/>): a second strip under the first while the group is on show, the
 /// menu's rows under it edited as a plain tab's are, ←/→ walking every menu along both strips and Tab / Shift+Tab stepping past a group,
 /// which keeps the menu last shown (<see cref="MenuPane.StepLeaf"/>). A picker under a group is still titled <c>Tools › Database › …</c>
-/// (<see cref="GroupCrumb"/>).
+/// (<see cref="GroupCrumb"/>). Files holds File, Image (later on 2026-10-10, the user's ask: the File menu's picture rows), UNC, GitLib and Obsidian.
 /// </summary>
 internal sealed class ToolsMenu
 {
