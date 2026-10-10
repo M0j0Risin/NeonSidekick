@@ -551,7 +551,7 @@ A reflection must `load_skill` a skill before rewriting its instructions or a su
 
 ### Skill records and purging unused skills
 
-`skills.db` in the home folder records every global and profile skill: its folder, scope, when it was created, last modified and last used (loaded).
+`skills.db` in the home folder's `db\skills` records every global and profile skill: its folder, scope, when it was created, last modified and last used (loaded).
 
 - `skill_editor`, reflections, `/skills add` and the `/skills` pane update the record as they act.
 - At startup and every profile load, the app reconciles the folders: a new folder gets a record (dated from its `SKILL.md`), a newer `SKILL.md` moves the modified date, and a record whose folder is gone is removed.

@@ -104,7 +104,7 @@ public sealed record SkillUseFacts(int Loads, int Sessions, int FollowedByErrors
 public sealed record SkillWriteMark(SkillEvent Event, SkillRecord Skill);
 
 /// <summary>
-/// <c>&lt;home&gt;\skills.db</c> (2026-09-30, the user's ask): one row per global or profile skill, holding where it lives, when it
+/// <c>&lt;home&gt;\db\skills\skills.db</c> (2026-09-30, the user's ask; the home's root until 2026-10-10, <see cref="FolderName"/>): one row per global or profile skill, holding where it lives, when it
 /// was created, modified and last used, and a category reserved for sorting skills into subfolders later. It lives at the home
 /// rather than in a profile's <c>sessions.db</c> (the user's pick). A global skill is shared by every profile, so its one row's
 /// last use counts loads from any of them, and a purge from one profile never deletes a skill another one used.
@@ -124,6 +124,13 @@ public sealed class SkillRecordStore : IDisposable
 {
     public const string FileName = "skills.db";
 
+    /// <summary>
+    /// The folder under the home that holds <see cref="FileName"/> and its WAL siblings: <c>db\skills</c> since 2026-10-10 (the user's
+    /// call, beside the profiles' <c>db\sessions</c>), the home's root until then. No migration in the app: the user's existing file was
+    /// moved by hand once. Pinned.
+    /// </summary>
+    public static readonly string FolderName = Path.Combine("db", "skills");
+
     /// <summary>The store's schema number in <c>meta</c>; a file at any other is refused (<see cref="SchemaMismatchWarning"/>).</summary>
     public const int SchemaVersion = 1;
 
@@ -137,11 +144,11 @@ public sealed class SkillRecordStore : IDisposable
     private bool _failed;
     private bool _disposed;
 
-    /// <param name="directory">The home directory; the file is <see cref="FileName"/> under it.</param>
+    /// <param name="directory">The home directory; the file is <see cref="FileName"/> in its <see cref="FolderName"/>, made at the first open.</param>
     public SkillRecordStore(string directory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
-        _filePath = Path.Combine(Path.GetFullPath(directory), FileName);
+        _filePath = Path.Combine(Path.GetFullPath(directory), FolderName, FileName);
     }
 
     public string FilePath => _filePath;

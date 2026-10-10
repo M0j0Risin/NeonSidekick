@@ -672,7 +672,7 @@ internal sealed partial class ChatScreen
     private readonly SkillCatalog _catalog;
 
     /// <summary>
-    /// The skill records (2026-09-30, the user's ask): <c>&lt;home&gt;\skills.db</c>, shared by every profile, over the live roots.
+    /// The skill records (2026-09-30, the user's ask): <c>&lt;home&gt;\db\skills\skills.db</c> (the home's root until 2026-10-10), shared by every profile, over the live roots.
     /// Told by the tools, the reflection, <c>/skills add</c> and the Skills pane; reconciled at every profile load
     /// (<see cref="BindProfile"/>); read by <c>/skills purge</c>.
     /// </summary>

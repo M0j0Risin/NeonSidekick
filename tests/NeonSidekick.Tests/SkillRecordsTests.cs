@@ -99,7 +99,8 @@ public class SkillRecordsTests : IDisposable
     public void Store_ARecordedSchemaItDoesNotKnow_IsRefused()
     {
         _store.Dispose();
-        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + Path.Combine(_dir, SkillRecordStore.FileName)))
+        Directory.CreateDirectory(Path.GetDirectoryName(_store.FilePath)!);
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + _store.FilePath))
         {
             connection.Open();
             using var command = connection.CreateCommand();
@@ -112,6 +113,14 @@ public class SkillRecordsTests : IDisposable
         Assert.False(other.Available);
         Assert.Empty(other.All());
         Assert.Equal("skills.db is at schema 9, this version reads 1; skill records are off until it is moved away.", SkillRecordStore.SchemaMismatchWarning(9));
+    }
+
+    [Fact]
+    public void Store_LivesUnderTheHomesDbSkillsFolder()
+    {
+        Assert.Equal("skills.db", SkillRecordStore.FileName);
+        Assert.Equal(Path.Combine("db", "skills"), SkillRecordStore.FolderName);   // the home's root until 2026-10-10
+        Assert.Equal(Path.Combine(Path.GetFullPath(_dir), "db", "skills", "skills.db"), _store.FilePath);
     }
 
     [Fact]
