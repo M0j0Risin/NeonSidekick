@@ -131,6 +131,11 @@ public sealed class UncMacTests : IDisposable
         Assert.True(MacMountRules.IsSignedInAs("//svc@fs01/eng", @"CORP\svc"));
         Assert.True(MacMountRules.IsSignedInAs("//CORP%3Bsvc@fs01/eng", @"CORP\SVC"));
         Assert.False(MacMountRules.IsSignedInAs("//jdoe@fs01/eng", "svc"));
+        // The forms macOS recorded for a runas mount in the spike (2026-10-11, loopback, a local account): DOMAIN\name becomes DOMAIN;name, a name@x is kept percent-encoded.
+        Assert.True(MacMountRules.IsSignedInAs("//WORKGROUP;nstest@127.0.0.1/Public", @"WORKGROUP\nstest"));
+        Assert.True(MacMountRules.IsSignedInAs("//nstest%40127.0.0.1@127.0.0.1/Public", "nstest@127.0.0.1"));
+        Assert.True(MacMountRules.IsSignedInAs("//nstest@127.0.0.1/Public", "nstest"));
+        Assert.False(MacMountRules.IsSignedInAs("//com.apple.idms.appleid.prd.0-1@127.0.0.1/Public", "nstest"));
         Assert.False(MacMountRules.IsSignedInAs("//fs01/eng", "svc"));
 
         Assert.Equal("00000000000000ff.txt", MacMountRules.RecordName(255));
