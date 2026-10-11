@@ -72,42 +72,94 @@ internal static partial class JobObjectNative
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool CloseHandle(nint handle);
 
-    // 2026-10-11 (code review): the process snapshot ChildJob.AssignTree reads for a child started before its parent joined the job.
+    // 2026-10-11 (code review of the headless browser): a start inside the job from the first instruction — CreateProcessW
+    // suspended with an extended STARTUPINFO whose attribute list names the only handles the child inherits, the job assigned,
+    // then the thread resumed (ChildJob.Start). Process.Start can do neither.
 
-    /// <summary><c>TH32CS_SNAPPROCESS</c>.</summary>
-    internal const uint SnapProcess = 0x2;
+    /// <summary><c>CREATE_SUSPENDED</c>.</summary>
+    internal const uint CreateSuspended = 0x4;
 
-    /// <summary><c>INVALID_HANDLE_VALUE</c>, what a failed snapshot returns.</summary>
-    internal const nint InvalidHandle = -1;
+    /// <summary><c>CREATE_NO_WINDOW</c>.</summary>
+    internal const uint CreateNoWindow = 0x08000000;
 
-    /// <summary><c>PROCESSENTRY32W</c>, the name as UTF-16 units so the struct stays blittable (568 bytes on x64).</summary>
+    /// <summary><c>EXTENDED_STARTUPINFO_PRESENT</c>.</summary>
+    internal const uint ExtendedStartupInfoPresent = 0x80000;
+
+    /// <summary><c>STARTF_USESTDHANDLES</c>.</summary>
+    internal const uint StartfUseStdHandles = 0x100;
+
+    /// <summary><c>HANDLE_FLAG_INHERIT</c>.</summary>
+    internal const uint HandleFlagInherit = 0x1;
+
+    /// <summary><c>PROC_THREAD_ATTRIBUTE_HANDLE_LIST</c>.</summary>
+    internal const nint ProcThreadAttributeHandleList = 0x20002;
+
+    /// <summary><c>STARTUPINFOW</c> (104 bytes on x64).</summary>
     [StructLayout(LayoutKind.Sequential)]
-    internal unsafe struct ProcessEntry32
+    internal struct StartupInfo
     {
         public uint Size;
-        public uint Usage;
-        public uint ProcessId;
-        public nuint DefaultHeapId;
-        public uint ModuleId;
-        public uint Threads;
-        public uint ParentProcessId;
-        public int PriorityClassBase;
+        public nint Reserved;
+        public nint Desktop;
+        public nint Title;
+        public uint X;
+        public uint Y;
+        public uint XSize;
+        public uint YSize;
+        public uint XCountChars;
+        public uint YCountChars;
+        public uint FillAttribute;
         public uint Flags;
-        public fixed ushort ExeFile[260];
+        public ushort ShowWindow;
+        public ushort Reserved2Count;
+        public nint Reserved2;
+        public nint StdInput;
+        public nint StdOutput;
+        public nint StdError;
     }
 
+    /// <summary><c>STARTUPINFOEXW</c>.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct StartupInfoEx
+    {
+        public StartupInfo StartupInfo;
+        public nint AttributeList;
+    }
+
+    /// <summary><c>PROCESS_INFORMATION</c>.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct ProcessInformation
+    {
+        public nint Process;
+        public nint Thread;
+        public uint ProcessId;
+        public uint ThreadId;
+    }
+
+    [LibraryImport("kernel32.dll", EntryPoint = "CreateProcessW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static unsafe partial bool CreateProcess(string applicationName, char* commandLine, nint processAttributes, nint threadAttributes, [MarshalAs(UnmanagedType.Bool)] bool inheritHandles, uint creationFlags, nint environment, string? currentDirectory, ref StartupInfoEx startupInfo, out ProcessInformation processInformation);
+
     [LibraryImport("kernel32.dll", SetLastError = true)]
-    internal static partial nint CreateToolhelp32Snapshot(uint flags, uint processId);
-
-    [LibraryImport("kernel32.dll", EntryPoint = "Process32FirstW", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    internal static partial bool Process32First(nint snapshot, ref ProcessEntry32 entry);
-
-    [LibraryImport("kernel32.dll", EntryPoint = "Process32NextW", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    internal static partial bool Process32Next(nint snapshot, ref ProcessEntry32 entry);
+    internal static partial bool InitializeProcThreadAttributeList(nint attributeList, int attributeCount, uint flags, ref nint size);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    internal static partial bool IsProcessInJob(nint process, nint job, [MarshalAs(UnmanagedType.Bool)] out bool result);
+    internal static partial bool UpdateProcThreadAttribute(nint attributeList, uint flags, nint attribute, nint value, nint size, nint previousValue, nint returnSize);
+
+    [LibraryImport("kernel32.dll")]
+    internal static partial void DeleteProcThreadAttributeList(nint attributeList);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool SetHandleInformation(nint handle, uint mask, uint flags);
+
+    /// <summary>The thread's previous suspend count, or <c>0xFFFFFFFF</c> on failure.</summary>
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    internal static partial uint ResumeThread(nint thread);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool TerminateProcess(nint process, uint exitCode);
 }

@@ -14,7 +14,7 @@ namespace NeonSidekick.Web;
 /// </summary>
 public sealed record BrowserDump(string? Html, string Detail, string FinalUrl = "", IReadOnlyList<BrowserCookie>? Cookies = null)
 {
-    /// <summary>Whether the run's browser, and all it had started by then, went into the app's kill-on-close job (2026-10-11, <see cref="EmbeddedLlm.ChildJob.AssignTree"/>); false for a run that never started, and off Windows.</summary>
+    /// <summary>Whether the run's browser began in the app's kill-on-close job, so all it started was born there too (2026-10-11, <see cref="EmbeddedLlm.ChildJob.Start"/>); false for a run that never started, and off Windows.</summary>
     public bool InJob { get; init; }
 }
 
@@ -51,7 +51,9 @@ public interface IHeadlessBrowser
 /// folders or named by the setting <c>Web browser path</c>. <b>The second <c>Process.Start</c> site in the app</b> (the
 /// editor opener is the first): no shell, no window, a throwaway profile folder under the temp
 /// directory — without one a running Edge takes the URL over and this process exits with nothing —
-/// one run at a time, killed with its tree at <see cref="Timeout"/>.
+/// one run at a time, killed with its tree at <see cref="Timeout"/>. On Windows the start itself is <see cref="ChildJob.Start"/>'s
+/// since 2026-10-11 (code review: started suspended in the app's kill-on-close job, which <c>Process.Start</c> cannot do), the same
+/// one site moved, not a second.
 /// <para>
 /// Since 2026-10-11 (the user's ask: get past more bot checks) a page is read over the DevTools protocol (<see cref="DevToolsClient"/>)
 /// rather than <c>--dump-dom</c>, which dumps at the load event or after fast-forwarded virtual time: the page runs in real time and is
@@ -136,72 +138,149 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     /// <summary>Win32 <c>ERROR_SHARING_VIOLATION</c> as an <see cref="IOException.HResult"/>.</summary>
     private const int SharingViolation = unchecked((int)0x80070020);
 
+    /// <summary>How many times <see cref="ProfileInUse(string, int)"/> looks at a held lockfile before it calls the folder held, and how far apart.</summary>
+    public const int HeldLooks = 3;
+
+    private static readonly TimeSpan LookInterval = TimeSpan.FromMilliseconds(50);
+
     /// <summary>
     /// Whether a running browser holds <paramref name="userDataDirectory"/> (2026-10-11). A second browser started on a held folder
     /// hands its page to the holder and exits (code 21), so a run checks first and says so rather than "exited before it opened
     /// its DevTools port".
     /// <para>On Windows its <see cref="LockFileName"/> there will not open for a write that shares everything: only a holder that
     /// refuses writers (the browser) stops it, not a scanner or an indexer that reads with everything shared, and only a sharing
-    /// violation counts, seen three times 50 ms apart (code review, later that day: the first version opened it unshared, so any
-    /// brief reader read as a browser, and its own open could stop a browser starting then). Elsewhere (code review, the macOS
-    /// build) its <see cref="SingletonLockName"/> names a process still running (<see cref="SingletonPid"/>).</para>
+    /// violation counts, seen <paramref name="looks"/> times 50 ms apart (code review, later that day: the first version opened it
+    /// unshared, so any brief reader read as a browser). A probe that sees the browser's handle must conflict with it, so it would
+    /// conflict with a browser opening the file at that instant just the same (a read that shares writes opens beside the browser's
+    /// handle and sees nothing; code review, later still, checked on this machine) — but the browser deletes the file as it closes it,
+    /// however it ends, so the probe opens only a file that is there: one a browser holds, where its failed open costs nothing, or
+    /// one left by a machine that lost power, where a browser starting within the same few microseconds is the whole risk.
+    /// Elsewhere (code review, the macOS build) its <see cref="SingletonLockName"/> names a browser on this machine still running
+    /// (<see cref="SingletonHeld"/>).</para>
     /// </summary>
-    public static bool ProfileInUse(string userDataDirectory)
+    public static bool ProfileInUse(string userDataDirectory, int looks = HeldLooks)
     {
         ArgumentNullException.ThrowIfNull(userDataDirectory);
+        for (int look = 1; ; look++)
+        {
+            if (LookOnce(userDataDirectory) is { } held)
+            {
+                return held;
+            }
+
+            if (look >= looks)
+            {
+                return true;
+            }
+
+            Thread.Sleep(LookInterval);
+        }
+    }
+
+    /// <summary>
+    /// <see cref="ProfileInUse(string, int)"/> for the runs, whose waits between looks are delays, not a pool thread asleep (code review,
+    /// later on 2026-10-11).
+    /// </summary>
+    public static async Task<bool> ProfileInUseAsync(string userDataDirectory, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(userDataDirectory);
+        for (int look = 1; ; look++)
+        {
+            if (LookOnce(userDataDirectory) is { } held)
+            {
+                return held;
+            }
+
+            if (look >= HeldLooks)
+            {
+                return true;
+            }
+
+            await Task.Delay(LookInterval, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>One look: false when the folder is free, true when held (off Windows), null when the lockfile refused a writer just now (look again).</summary>
+    private static bool? LookOnce(string userDataDirectory)
+    {
         if (!OperatingSystem.IsWindows())
         {
-            return SingletonHeld(userDataDirectory);
+            return SingletonHeld(userDataDirectory, IsBrowser);
         }
 
         string lockFile = Path.Combine(userDataDirectory, LockFileName);
-        for (int look = 0; look < 3; look++)
+        if (!File.Exists(lockFile))
         {
-            if (look > 0)
-            {
-                Thread.Sleep(50);
-            }
-
-            if (!File.Exists(lockFile))
-            {
-                return false;
-            }
-
-            try
-            {
-                using var open = new FileStream(lockFile, FileMode.Open, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
-                return false;
-            }
-            catch (IOException ex) when (ex.HResult == SharingViolation)
-            {
-                // Held now: a browser, or a reader that will let go; look again.
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                return false;
-            }
+            return false;
         }
 
-        return true;
+        try
+        {
+            using var open = new FileStream(lockFile, FileMode.Open, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+            return false;
+        }
+        catch (IOException ex) when (ex.HResult == SharingViolation)
+        {
+            return null;   // held now: a browser, or a reader that will let go
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
-    /// <summary>Whether <paramref name="userDataDirectory"/>'s <see cref="SingletonLockName"/> points at a process that is running.</summary>
-    private static bool SingletonHeld(string userDataDirectory)
+    /// <summary>
+    /// Whether <paramref name="userDataDirectory"/>'s <see cref="SingletonLockName"/> names a running browser on this machine: the host
+    /// this one (<see cref="SingletonOnHost"/>) and the process <paramref name="isBrowser"/> (code review, later on 2026-10-11: a lock
+    /// left by a browser killed or a crash names a process id that some other program may have now, and that blocked every run until
+    /// it ended; Chromium itself checks the host and that the process is a browser).
+    /// </summary>
+    internal static bool SingletonHeld(string userDataDirectory, Func<Process, bool> isBrowser)
     {
         try
         {
-            if (new FileInfo(Path.Combine(userDataDirectory, SingletonLockName)).LinkTarget is not { } target || SingletonPid(target) is not { } pid)
+            if (new FileInfo(Path.Combine(userDataDirectory, SingletonLockName)).LinkTarget is not { } target
+                || !SingletonOnHost(target, Environment.MachineName) || SingletonPid(target) is not { } pid)
             {
                 return false;
             }
 
             using var holder = Process.GetProcessById(pid);
-            return !holder.HasExited;
+            return !holder.HasExited && isBrowser(holder);
         }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or NotSupportedException)
         {
             return false;
         }
+    }
+
+    /// <summary>Whether <paramref name="process"/> is a Chromium browser by its name: Edge, Chrome, Brave or Chromium.</summary>
+    private static bool IsBrowser(Process process) => IsBrowserName(process.ProcessName);
+
+    /// <summary>Whether a process name is a Chromium browser's (<c>Microsoft Edge</c>, <c>msedge</c>, <c>Google Chrome</c>, <c>chrome</c>, <c>Brave Browser</c>, <c>Chromium</c>…). Pure.</summary>
+    public static bool IsBrowserName(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        return name.Contains("edge", StringComparison.OrdinalIgnoreCase) || name.Contains("chrome", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("brave", StringComparison.OrdinalIgnoreCase) || name.Contains("chromium", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Whether a <see cref="SingletonLockName"/> target, <c>host-pid</c>, names <paramref name="machineName"/>'s host: their first labels
+    /// equal, case aside (Chromium writes the full host name, <c>MacBook-Pro.local</c>; .NET's machine name stops at the first dot). Pure.
+    /// </summary>
+    public static bool SingletonOnHost(string target, string machineName)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(machineName);
+        int dash = target.LastIndexOf('-');
+        if (dash <= 0)
+        {
+            return false;
+        }
+
+        static string First(string host) => host.Split('.')[0];
+        return machineName.Length > 0 && string.Equals(First(target[..dash]), First(machineName), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>The process id at the end of a <see cref="SingletonLockName"/> target, <c>host-pid</c> (a host name may hold dashes); null for anything else. Pure.</summary>
@@ -399,7 +478,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
                 return new BrowserDump(null, $"no page within {Llm.LlmTimeouts.Format(Timeout)}") { InJob = run.InJob };
             }
 
-            return new BrowserDump(null, run.Failure(read.Failure ?? "it showed no page")) { InJob = run.InJob };
+            return new BrowserDump(null, await run.FailureAsync(read.Failure ?? "it showed no page", cancellationToken).ConfigureAwait(false)) { InJob = run.InJob };
         }
         finally
         {
@@ -431,7 +510,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
 
             if (!File.Exists(outputPath))
             {
-                return new BrowserPdf(false, run.Failure("it wrote no PDF")) { InJob = run.InJob };
+                return new BrowserPdf(false, await run.FailureAsync("it wrote no PDF", cancellationToken).ConfigureAwait(false)) { InJob = run.InJob };
             }
 
             return (Printing.PrintToFile.IsPdf(outputPath) ? new BrowserPdf(true, "") : new BrowserPdf(false, "it wrote a file that is not a PDF")) with { InJob = run.InJob };
@@ -659,10 +738,10 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     }
 
     /// <summary>
-    /// One finished browser run: what it printed, how it ended, or why it never started; the profile folder it ran on, whether its
-    /// browser was gone at the end, and whether it went into the app's job (<see cref="BrowserDump.InJob"/>).
+    /// One finished browser run: what it said on stderr, how it ended, or why it never started; the profile folder it ran on, whether
+    /// its browser was gone at the end, and whether it began in the app's job (<see cref="BrowserDump.InJob"/>).
     /// </summary>
-    private sealed record BrowserRun(string? StartError, int ExitCode, string Stdout, string Stderr, bool TimedOut, string Summary, string UserData = "", bool Exited = false, bool InJob = false)
+    private sealed record BrowserRun(string? StartError, int ExitCode, string Stderr, bool TimedOut, string Summary, string UserData = "", bool Exited = false, bool InJob = false)
     {
         public string StderrTail => Stderr.Length > 0 ? $"; stderr: {LastLine(Stderr)}" : "";
 
@@ -671,9 +750,9 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         /// at here, only for a run that made nothing, since code review the same day), else the exit code when it was not 0, else
         /// <paramref name="quiet"/>; stderr's last line after.
         /// </summary>
-        public string Failure(string quiet)
+        public async Task<string> FailureAsync(string quiet, CancellationToken cancellationToken)
         {
-            if (Exited && UserData.Length > 0 && ProfileInUse(UserData))
+            if (Exited && UserData.Length > 0 && await ProfileInUseAsync(UserData, cancellationToken).ConfigureAwait(false))
             {
                 DiagnosticLog.Debug(Category, $"{Summary}, the profile folder held by another browser");
                 return WebText.BrowserProfileInUse(UserData);
@@ -687,21 +766,23 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
 
     /// <summary>
     /// The one place the browser is started: the profile folder made (and a stale <see cref="DevToolsClient.ActivePortFile"/> gone,
-    /// so a watch never dials the last run's port), the process run with no window, stdout and stderr read, and
-    /// <paramref name="watch"/> run on it — true when the run is done and the browser must be stopped, false when it exited by
-    /// itself — killed with its tree then or when <paramref name="timeout"/> runs out. The caller holds <c>_oneAtATime</c>.
+    /// so a watch never dials the last run's port), the process run with no window, its stderr kept, and <paramref name="watch"/>
+    /// run on it — true when the run is done and the browser must be stopped, false when it exited by itself — killed with its tree
+    /// then or when <paramref name="timeout"/> runs out. The caller holds <c>_oneAtATime</c>.
     ///
     /// <para>2026-10-11 (a relaunched Edge outlived the app and held the folder): a folder another browser holds is refused before
-    /// a start (<see cref="ProfileInUse"/>) and named after a run that made nothing; the browser goes into the app's kill-on-close
-    /// job (<see cref="ChildJob"/>, as <c>llama-server</c> does), so on Windows whatever it starts dies with the app however the app
-    /// ends. The job is made before the start and the browser's tree swept into it after (<see cref="ChildJob.AssignTree"/>, code
-    /// review the same day: a child started before the assignment was outside it, and the assignment's answer went unread).</para>
+    /// a start (<see cref="ProfileInUseAsync"/>) and named after a run that made nothing; on Windows the browser is in the app's
+    /// kill-on-close job (<see cref="ChildJob"/>, as <c>llama-server</c> is), so whatever it starts dies with the app however the app
+    /// ends. Since code review the same day, later still, it is started in the job (<see cref="ChildJob.Start"/>: suspended, assigned,
+    /// then let run) rather than assigned after <c>Process.Start</c> and its tree swept in from a snapshot, which a child starting
+    /// children of its own could still slip; its stdout goes to <c>NUL</c> (nothing read it since the DevTools reading) and its
+    /// stderr to a file in the profile folder, read and deleted after. Elsewhere <c>Process.Start</c> as before, the output piped.</para>
     /// </summary>
     private static async Task<BrowserRun> RunProcessAsync(string executable, Uri page, string userData, Func<string, IReadOnlyList<string>> arguments, TimeSpan timeout, Func<Process, string, CancellationToken, Task<bool>> watch, CancellationToken cancellationToken)
     {
-        if (ProfileInUse(userData))
+        if (await ProfileInUseAsync(userData, cancellationToken).ConfigureAwait(false))
         {
-            return new BrowserRun(WebText.BrowserProfileInUse(userData), 0, "", "", false, "");
+            return new BrowserRun(WebText.BrowserProfileInUse(userData), 0, "", false, "");
         }
 
         try
@@ -711,48 +792,20 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new BrowserRun($"could not create the profile folder {userData} ({ex.Message})", 0, "", "", false, "");
+            return new BrowserRun($"could not create the profile folder {userData} ({ex.Message})", 0, "", false, "");
         }
 
-        var start = new ProcessStartInfo(executable)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = new UTF8Encoding(false),
-            StandardErrorEncoding = new UTF8Encoding(false),
-        };
-        foreach (var argument in arguments(userData))
-        {
-            start.ArgumentList.Add(argument);
-        }
-
-        ChildJob.Prepare();
         var clock = Stopwatch.StartNew();
-        Process? process;
-        try
+        var started = Start(executable, arguments(userData), userData);
+        if (started.Process is not { } process)
         {
-            process = Process.Start(start);
-        }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
-        {
-            return new BrowserRun($"could not start {Path.GetFileName(executable)} ({ex.Message})", 0, "", "", false, "");
+            return new BrowserRun($"could not start {Path.GetFileName(executable)} ({started.Error})", 0, "", false, "");
         }
 
-        if (process is null)
-        {
-            return new BrowserRun($"could not start {Path.GetFileName(executable)}", 0, "", "", false, "");
-        }
-
-        bool inJob = ChildJob.AssignTree(process);
         using (process)
         {
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             budget.CancelAfter(timeout);
-            var stdoutText = new StringBuilder();
-            var stdout = PumpAsync(process.StandardOutput, stdoutText);
-            var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
             bool timedOut = false;
             bool stopped = false;
             try
@@ -765,6 +818,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
                 TryKill(process);
                 if (!timedOut)
                 {
+                    _ = started.ReadStderr();   // on Windows, its file read and gone
                     throw;
                 }
             }
@@ -787,12 +841,85 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
                 }
             }
 
-            await stdout.ConfigureAwait(false);
-            string output = Snapshot(stdoutText);
-            string errors = await stderr.ConfigureAwait(false);
+            string errors = await started.ReadStderr().ConfigureAwait(false);
             string how = stopped ? "stopped" : process.HasExited ? $"exit {process.ExitCode.ToString(CultureInfo.InvariantCulture)}" : "still running";
             string summary = $"{Path.GetFileName(executable)} {page}: {how} after {clock.Elapsed.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)} s";
-            return new BrowserRun(null, stopped || !process.HasExited ? 0 : process.ExitCode, output, errors, timedOut, summary, userData, process.HasExited, inJob);
+            return new BrowserRun(null, stopped || !process.HasExited ? 0 : process.ExitCode, errors, timedOut, summary, userData, process.HasExited, started.InJob);
+        }
+    }
+
+    /// <summary>A browser started: the process (null with <see cref="Error"/> when it did not start), its stderr (read when asked, once the run is over), whether it began in the app's job.</summary>
+    private sealed record Started(Process? Process, Func<Task<string>> ReadStderr, bool InJob, string Error);
+
+    /// <summary>
+    /// The browser started as <see cref="RunProcessAsync"/> describes: on Windows in the app's job with stderr to a file in
+    /// <paramref name="userData"/> (read when the run is over, then deleted); elsewhere by <c>Process.Start</c> with both streams
+    /// piped, stdout drained.
+    /// </summary>
+    private static Started Start(string executable, IReadOnlyList<string> arguments, string userData)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            string log = Path.Combine(userData, "stderr-" + Guid.NewGuid().ToString("N") + ".log");
+            var process = ChildJob.Start(executable, arguments, log, out bool inJob, out string error);
+            if (process is null)
+            {
+                Files.WorkingDirectory.DeleteQuietly(log);
+                return new Started(null, Nothing, false, error);
+            }
+
+            return new Started(process, () => ReadStderrAsync(log), inJob, "");
+        }
+
+        var start = new ProcessStartInfo(executable)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = new UTF8Encoding(false),
+            StandardErrorEncoding = new UTF8Encoding(false),
+        };
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        try
+        {
+            if (Process.Start(start) is not { } process)
+            {
+                return new Started(null, Nothing, false, "no process");
+            }
+
+            _ = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
+            var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
+            return new Started(process, () => stderr, false, "");
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            return new Started(null, Nothing, false, ex.Message);
+        }
+    }
+
+    private static Task<string> Nothing() => Task.FromResult("");
+
+    /// <summary>The stderr file of a browser started on Windows, read as it stands (the run is over), then deleted.</summary>
+    private static async Task<string> ReadStderrAsync(string log)
+    {
+        try
+        {
+            using var stream = new FileStream(log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream, new UTF8Encoding(false));
+            return await reader.ReadToEndAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return "";
+        }
+        finally
+        {
+            Files.WorkingDirectory.DeleteQuietly(log);
         }
     }
 
@@ -829,28 +956,6 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             {
                 return true;
             }
-        }
-    }
-
-    /// <summary>Reads <paramref name="reader"/> to its end into <paramref name="text"/>, so the output can be looked at while the browser runs.</summary>
-    private static async Task PumpAsync(StreamReader reader, StringBuilder text)
-    {
-        var buffer = new char[8192];
-        int read;
-        while ((read = await reader.ReadAsync(buffer, CancellationToken.None).ConfigureAwait(false)) > 0)
-        {
-            lock (text)
-            {
-                text.Append(buffer, 0, read);
-            }
-        }
-    }
-
-    private static string Snapshot(StringBuilder text)
-    {
-        lock (text)
-        {
-            return text.ToString();
         }
     }
 

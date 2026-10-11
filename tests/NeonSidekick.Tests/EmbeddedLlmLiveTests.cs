@@ -90,45 +90,44 @@ public class EmbeddedLlmLiveTests
     }
 
     /// <summary>
-    /// Code review, 2026-10-11: a child the process started before it joined the job (the headless browser's crash handler, a
-    /// relaunched copy) was outside it. <c>cmd</c> starts <c>ping</c> at once; it is assigned only after, and closing the job still
-    /// ends both.
+    /// Code review, 2026-10-11: a child the headless browser started before it joined the job (its crash handler, a relaunched copy)
+    /// was outside it, and a snapshot swept in after could still miss what such a child started. Started in the job, the process is
+    /// in it before it runs: <c>cmd</c>'s <c>ping</c> is born there, and closing the job ends both.
     /// </summary>
     [WindowsFact]
-    public void AssignTree_TakesTheChildrenStartedBeforeTheAssignment()
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void Start_PutsTheProcessInTheJobBeforeItRuns_SoItsChildrenAreToo()
     {
         var (job, error) = ChildJob.CreateKillOnClose();
         Assert.True(job != 0, error);
-        using var parent = Process.Start(new ProcessStartInfo("cmd.exe", "/c ping -n 60 127.0.0.1 >nul") { UseShellExecute = false, CreateNoWindow = true })!;
-        var children = new List<Process>();
+        string log = Path.Combine(Path.GetTempPath(), "NeonSidekick.tests." + Guid.NewGuid().ToString("N") + ".log");
+        var before = DateTime.Now.AddSeconds(-1);
+        using var parent = ChildJob.Start(job, Path.Combine(Environment.SystemDirectory, "cmd.exe"), ["/c", "echo started 1>&2 & ping -n 60 127.0.0.1 >nul"], log, out bool inJob, out string startError);
+        var pings = new List<Process>();
         try
         {
-            // Until ping is running (cmd's conhost may come first).
-            var deadline = Stopwatch.StartNew();
-            while (deadline.Elapsed < TimeSpan.FromSeconds(10))
-            {
-                children.ForEach(child => child.Dispose());
-                children.Clear();
-                children.AddRange(ChildJob.Descendants(ChildJob.Snapshot(), parent.Id).Select(Process.GetProcessById));
-                if (children.Any(child => child.ProcessName.Equals("ping", StringComparison.OrdinalIgnoreCase)))
-                {
-                    break;
-                }
+            Assert.True(parent is not null, startError);
+            Assert.True(inJob);
 
+            // Until ping is running: cmd says so on stderr first.
+            var deadline = Stopwatch.StartNew();
+            while (deadline.Elapsed < TimeSpan.FromSeconds(10) && pings.Count == 0)
+            {
                 Thread.Sleep(50);
+                pings.AddRange(Process.GetProcessesByName("PING").Where(ping => Started(ping) >= before));
             }
 
-            Assert.Contains(children, child => child.ProcessName.Equals("ping", StringComparison.OrdinalIgnoreCase));
+            Assert.NotEmpty(pings);
+            Assert.Contains("started", ReadShared(log), StringComparison.Ordinal);
 
-            Assert.True(ChildJob.AssignTree(job, parent));
             ChildJob.Close(job);
 
-            Assert.True(parent.WaitForExit(10_000), "the parent outlived its job");
-            Assert.All(children, child => Assert.True(child.WaitForExit(10_000), "a child started before the assignment outlived the job"));
+            Assert.True(parent!.WaitForExit(10_000), "the process outlived its job");
+            Assert.All(pings, ping => Assert.True(ping.WaitForExit(10_000), "a child it started outlived the job"));
         }
         finally
         {
-            foreach (var process in children.Append(parent))
+            foreach (var process in pings.Append(parent).OfType<Process>())
             {
                 if (!process.HasExited)
                 {
@@ -136,18 +135,86 @@ public class EmbeddedLlmLiveTests
                 }
             }
 
-            children.ForEach(child => child.Dispose());
+            pings.ForEach(ping => ping.Dispose());
+            WorkingDirectory.DeleteQuietly(log);
+        }
+
+        static DateTime Started(Process process)
+        {
+            try
+            {
+                return process.StartTime;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                return DateTime.MinValue;
+            }
         }
     }
 
-    [Fact]
-    public void Descendants_AreTheTreeUnderTheRoot_ChildrenFirst_ACycleEnded()
+    /// <summary>What a start in the job hands back works as <c>Process.Start</c>'s did: the exit code after it ends, stderr in its file (cmd splits its line its own way, so the quoting is <see cref="CommandLine_QuotesEachArgument_AsTheCRuntimeSplitsIt"/>'s).</summary>
+    [WindowsFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void Start_TheProcess_ItsExitCode_AndItsStderr()
     {
-        (int, int)[] processes = [(10, 1), (11, 10), (12, 11), (13, 10), (20, 2), (30, 12), (1, 30)];
+        string log = Path.Combine(Path.GetTempPath(), "NeonSidekick.tests." + Guid.NewGuid().ToString("N") + ".log");
+        try
+        {
+            using var process = ChildJob.Start(0, Path.Combine(Environment.SystemDirectory, "cmd.exe"), ["/c", "echo oops 1>&2 & exit 7"], log, out bool inJob, out string error);
+            Assert.True(process is not null, error);
+            Assert.False(inJob);   // no job given
+            Assert.True(process!.WaitForExit(10_000));
+            Assert.Equal(7, process.ExitCode);
+            Assert.Contains("oops", ReadShared(log), StringComparison.Ordinal);
+        }
+        finally
+        {
+            WorkingDirectory.DeleteQuietly(log);
+        }
 
-        Assert.Equal([10, 11, 13, 12, 30], ChildJob.Descendants(processes, 1));   // 30's child 1 is the root again: not repeated
-        Assert.Equal([11, 13, 12, 30, 1], ChildJob.Descendants(processes, 10));   // nor is 10 under 1
-        Assert.Empty(ChildJob.Descendants(processes, 99));
+        Assert.Null(ChildJob.Start(0, Path.Combine(Path.GetTempPath(), "no-such-" + Guid.NewGuid().ToString("N") + ".exe"), [], log, out _, out string missing));
+        Assert.Contains("CreateProcess failed", missing, StringComparison.Ordinal);
+        WorkingDirectory.DeleteQuietly(log);
+    }
+
+    /// <summary>The command line as the C runtime splits it back into the arguments (code review, 2026-10-11): <c>ProcessStartInfo.ArgumentList</c>'s quoting.</summary>
+    [Fact]
+    public void CommandLine_QuotesEachArgument_AsTheCRuntimeSplitsIt()
+    {
+        Assert.Equal("\"C:\\b r\\x.exe\"", ChildJob.CommandLine(@"C:\b r\x.exe", []));
+        Assert.Equal(
+            "\"x.exe\" --a=1 \"two words\" \"\" \"say \\\"hi\\\"\" \"C:\\dir with space\\\\\" C:\\plain\\ \"a\\\\\\\"b\"",
+            ChildJob.CommandLine("x.exe", ["--a=1", "two words", "", "say \"hi\"", @"C:\dir with space\", @"C:\plain\", "a\\\"b"]));
+    }
+
+    /// <summary>A process gone before it could join the job runs nowhere: no warning that it runs outside (code review, 2026-10-11).</summary>
+    [WindowsFact]
+    public void AssignTo_AProcessAlreadyGone_WarnsOfNothing()
+    {
+        var (job, error) = ChildJob.CreateKillOnClose();
+        Assert.True(job != 0, error);
+        var warnings = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Category == "EmbeddedLlm" && e.Level >= NeonSidekick.Diagnostics.DiagnosticLevel.Warning) warnings.Add(e.Message); };
+        using var gone = Process.Start(new ProcessStartInfo("cmd.exe", "/c exit 0") { UseShellExecute = false, CreateNoWindow = true })!;
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        try
+        {
+            Assert.True(gone.WaitForExit(10_000));
+            ChildJob.AssignTo(job, gone);
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+            ChildJob.Close(job);
+        }
+
+        Assert.Empty(warnings);
+    }
+
+    private static string ReadShared(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        return new StreamReader(stream).ReadToEnd();
     }
 
     [Fact]

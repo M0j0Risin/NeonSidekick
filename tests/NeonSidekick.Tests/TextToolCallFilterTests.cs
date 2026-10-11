@@ -747,6 +747,55 @@ public class TextToolCallFilterTests
         }
     }
 
+    /// <summary>
+    /// Code review of that rule, the same day: in a list or a nested object a path's <c>\"</c> is followed by <c>]</c>, <c>}</c> or the
+    /// next element, not by the next key, and it reopened the string there, so the call never closed. And the streamed reading took
+    /// any comma after one for a close while <see cref="TextToolCallFilter.ParseArguments"/> wanted a key after it, so the <c>)</c> in <c>\"a\", b)</c>
+    /// closed the call early and it was lost. Both readings now go by the same rule.
+    /// </summary>
+    [Theory]
+    [InlineData("Here: generate_image(prompt=\"a dog\", image=[\"C:\\a\\\", \"C:\\b\\\"])\nNice.", "[\"C:\\a\\\", \"C:\\b\\\"]", "a dog")]
+    [InlineData("Here: generate_image(prompt=\"a dog\", image={\"dir\":\"C:\\a\\\"})\nNice.", "{\"dir\":\"C:\\a\\\"}", "a dog")]
+    [InlineData("Here: generate_image{prompt: \"a dog\", image: [\"C:\\a\\\" , 'C:\\b\\']}\nNice.", "[\"C:\\a\\\" , 'C:\\b\\']", "a dog")]
+    [InlineData("Here: generate_image(image=\"C:\\x.exe /c echo \\\"a\\\", b)\", prompt=\"a dog\")\nNice.", "C:\\x.exe /c echo \"a\", b)", "a dog")]
+    [InlineData("Here: generate_image(image=\"C:\\x.exe \\\", \\\"y\\\"\", prompt=\"a dog\")\nNice.", "C:\\x.exe \", \"y\"", "a dog")]
+    public void APathsQuote_ClosesInALists_AndOnlyBeforeTheNextKey_StreamedOrNot(string reply, string image, string prompt)
+    {
+        var (whole, filter) = Run(reply);
+        Assert.Equal("Here: Nice.", whole);
+        var arguments = TextToolCallFilter.ParseArguments(Assert.Single(filter.Calls).Arguments)!;
+        Assert.Equal(image, arguments["image"]);
+        Assert.Equal(prompt, arguments["prompt"]);
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            var (text, split) = Run(reply[..i], reply[i..]);
+            Assert.Equal(whole, text);
+            Assert.Equal(filter.Calls, split.Calls);
+        }
+
+        var (one, each) = Run(reply.Select(c => c.ToString()).ToArray());
+        Assert.Equal(whole, one);
+        Assert.Equal(filter.Calls, each.Calls);
+    }
+
+    [Theory]
+    [InlineData("{\"prompt\": \"a dog\", \"image\": [\"C:\\a\\\", \"C:\\b\\\"]}\nNice.", "[\"C:\\a\\\", \"C:\\b\\\"]")]
+    [InlineData("{\"prompt\": \"a dog\", \"image\": {\"dir\": \"C:\\a\\\"}}\nNice.", "{\"dir\": \"C:\\a\\\"}")]
+    public void TheObjectForm_APathsQuote_ClosesInAList_OrANestedObject(string reply, string image)
+    {
+        var (whole, filter) = RunAliased(reply);
+        Assert.Equal("Nice.", whole);
+        Assert.Equal(image, Argument(filter, "image").GetString());
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            var (text, split) = RunAliased(reply[..i], reply[i..]);
+            Assert.Equal(whole, text);
+            Assert.Equal(filter.Calls, split.Calls);
+        }
+    }
+
     [Theory]
     [InlineData("my_generate_image{prompt: \"x\"} stays")]
     [InlineData("a set like {generate_image} stays")]

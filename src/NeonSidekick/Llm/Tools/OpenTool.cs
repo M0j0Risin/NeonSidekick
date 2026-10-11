@@ -121,6 +121,14 @@ public sealed class OpenTool : FileTool
 
             _opener(full);
         });
+
+        // FileText.InImagesFolder names open among the tools that reach the folder: one built without it says outside instead of
+        // sending the model back to itself (code review, 2026-10-11).
+        if (result.Outcome == FileOutcome.InImagesFolder && Images is null)
+        {
+            result = result with { Outcome = FileOutcome.OutsideRoot };
+        }
+
         return FileText.Opened(result, where);
     }
 

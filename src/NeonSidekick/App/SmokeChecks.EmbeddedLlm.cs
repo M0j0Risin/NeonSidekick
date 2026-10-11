@@ -12,7 +12,8 @@ public static partial class SmokeChecks
     /// <c>llm:job-object</c> (2026-09-29): the embedded model's kill-on-close job in the published binary — a job created,
     /// <c>KILL_ON_JOB_CLOSE</c> set through the extended-limit struct, the flags read back through the same struct (which
     /// proves the source-generated marshalling kept its layout under AOT), and the job closed. No process is put in it. Since
-    /// 2026-10-11 a process snapshot too (<see cref="ChildJob.Snapshot"/>, the headless browser's late children), this process in it.
+    /// 2026-10-11 (code review) the attribute list the headless browser's start in the job hands <c>CreateProcessW</c> too
+    /// (<see cref="ChildJob.ProbeAttributeList"/>), made with a handle list and deleted; the browser probes start one in it.
     /// </summary>
     public static SmokeCheck ProbeJobObject()
     {
@@ -44,11 +45,11 @@ public static partial class SmokeChecks
                     return new SmokeCheck(name, false, string.Create(CultureInfo.InvariantCulture, $"limit flags 0x{flags:X4}: kill-on-close is not set"));
                 }
 
-                // 2026-10-11: the process snapshot ChildJob.AssignTree reads, its PROCESSENTRY32W crossing intact: this process in it.
-                var processes = ChildJob.Snapshot();
-                return processes.Any(p => p.Id == Environment.ProcessId)
-                    ? new SmokeCheck(name, true, string.Create(CultureInfo.InvariantCulture, $"limit flags 0x{flags:X4}; a process snapshot of {processes.Count} holds this one"))
-                    : new SmokeCheck(name, false, string.Create(CultureInfo.InvariantCulture, $"a process snapshot of {processes.Count} does not hold this process ({Environment.ProcessId})"));
+                // 2026-10-11 (code review): the browser's start in the job, its attribute list made and given a handle list.
+                var (listed, listError) = ChildJob.ProbeAttributeList();
+                return listed
+                    ? new SmokeCheck(name, true, string.Create(CultureInfo.InvariantCulture, $"limit flags 0x{flags:X4}; a handle list for a start in it"))
+                    : new SmokeCheck(name, false, "no handle list for a start in the job: " + listError);
             }
             finally
             {

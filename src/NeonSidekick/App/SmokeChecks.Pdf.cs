@@ -78,7 +78,7 @@ public static partial class SmokeChecks
         {
             Files.WorkingDirectory.DeleteQuietly(html);
             Files.WorkingDirectory.DeleteQuietly(pdf);
-            DeleteProbeProfile(folder);
+            Files.WorkingDirectory.DeleteDirectoryQuietly(folder);
         }
     }
 
@@ -122,7 +122,7 @@ public static partial class SmokeChecks
         finally
         {
             Files.WorkingDirectory.DeleteQuietly(html);
-            DeleteProbeProfile(folder);
+            Files.WorkingDirectory.DeleteDirectoryQuietly(folder);
         }
     }
 
@@ -131,28 +131,22 @@ public static partial class SmokeChecks
 
     /// <summary>
     /// A profile folder of the probe's own (code review, 2026-10-11: on the app's shared folder, a running copy of the app reading a
-    /// page read as the probe's browser left behind), under the temp folder beside the app's; <see cref="DeleteProbeProfile"/> after.
+    /// page read as the probe's browser left behind), under the temp folder beside the app's; removed after
+    /// (<see cref="Files.WorkingDirectory.DeleteDirectoryQuietly"/>: a temp folder left behind is harmless, and a browser still in it
+    /// was already reported).
     /// </summary>
     private static string ProbeProfileFolder() => Path.Combine(Path.GetTempPath(), "NeonSidekick", "smoke-browser-" + Guid.NewGuid().ToString("N"));
 
-    private static void DeleteProbeProfile(string folder)
-    {
-        try
-        {
-            Directory.Delete(folder, recursive: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // A temp folder left behind is harmless (and a browser still in it was already reported).
-        }
-    }
+    /// <summary>How long a browser probe gives its browser to let go of the profile folder after the run.</summary>
+    private static readonly TimeSpan LetGo = TimeSpan.FromSeconds(3);
 
     /// <summary>
     /// What a browser probe's run left wrong on Windows (2026-10-11, an Edge that relaunched itself outlived the app and held the
-    /// profile folder, so every later run failed): the browser, or anything it had started, outside the app's kill-on-close job
-    /// (<paramref name="inJob"/>, the run's own answer since code review the same day, no longer a warning's words in the log), or a
-    /// browser still holding the probe's own <paramref name="folder"/> 3 s after the run (<see cref="HeadlessBrowser.ProfileInUse"/>);
-    /// null when neither, and off Windows, where there is no job.
+    /// profile folder, so every later run failed): the browser started outside the app's kill-on-close job (<paramref name="inJob"/>,
+    /// the run's own answer), or a browser still holding the probe's own <paramref name="folder"/> <see cref="LetGo"/> after the run
+    /// (<see cref="HeadlessBrowser.ProfileInUse"/>, one look at a time inside that budget and its full looks once at the end — code
+    /// review, later that day: thirty full looks of up to 100 ms each, 100 ms apart, ran to 6 s); null when neither, and off Windows,
+    /// where there is no job.
     /// </summary>
     private static string? BrowserLeftovers(bool inJob, string folder)
     {
@@ -166,7 +160,8 @@ public static partial class SmokeChecks
             return "the browser ran outside the app's job (the log's EmbeddedLlm lines say why)";
         }
 
-        for (int i = 0; i < 30 && HeadlessBrowser.ProfileInUse(folder); i++)
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        while (waited.Elapsed < LetGo && HeadlessBrowser.ProfileInUse(folder, looks: 1))
         {
             Thread.Sleep(100);
         }

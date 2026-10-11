@@ -306,7 +306,7 @@ public sealed class ModelStore
         finally
         {
             DeleteFileQuietly(tempPath);
-            DeleteDirectoryQuietly(extractPath);
+            Files.WorkingDirectory.DeleteDirectoryQuietly(extractPath);
         }
     }
 
@@ -577,7 +577,7 @@ public sealed class ModelStore
             }
 
             System.IO.Directory.Move(root, path);
-            DeleteDirectoryQuietly(partsPath);
+            Files.WorkingDirectory.DeleteDirectoryQuietly(partsPath);
             DiagnosticLog.Info(_category, $"Downloaded {spec.Display} ({SizeLabel(total)}) to {path}.");
             return new ModelResult(true, path, $"downloaded {SizeLabel(total)}");
         }
@@ -591,7 +591,7 @@ public sealed class ModelStore
         }
         finally
         {
-            DeleteDirectoryQuietly(extractPath);
+            Files.WorkingDirectory.DeleteDirectoryQuietly(extractPath);
         }
     }
 
@@ -788,20 +788,6 @@ public sealed class ModelStore
             if (File.Exists(path))
             {
                 File.Delete(path);
-            }
-        }
-        catch
-        {
-        }
-    }
-
-    private static void DeleteDirectoryQuietly(string path)
-    {
-        try
-        {
-            if (System.IO.Directory.Exists(path))
-            {
-                System.IO.Directory.Delete(path, recursive: true);
             }
         }
         catch

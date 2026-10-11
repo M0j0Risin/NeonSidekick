@@ -130,19 +130,78 @@ public class HeadlessBrowserTests
 
     /// <summary>Off Windows the held folder is a <c>SingletonLock</c> naming a running process: this one; a dead one is not held.</summary>
     [UnixFact]
-    public void ProfileInUse_OffWindows_IsTheSingletonLocksProcessRunning()
+    public void ProfileInUse_OffWindows_IsTheSingletonLocksBrowserRunningHere()
     {
         string folder = Path.Combine(Path.GetTempPath(), "NeonSidekick.tests." + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
         try
         {
             string link = Path.Combine(folder, HeadlessBrowser.SingletonLockName);
+            string here = Environment.MachineName + "-";
+            string me = Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture);
             Assert.False(HeadlessBrowser.ProfileInUse(folder));
-            File.CreateSymbolicLink(link, "host-" + Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            Assert.True(HeadlessBrowser.ProfileInUse(folder));
+            File.CreateSymbolicLink(link, here + me);
+            Assert.True(HeadlessBrowser.SingletonHeld(folder, _ => true));   // this process, running, taken for a browser
+            Assert.False(HeadlessBrowser.ProfileInUse(folder));              // code review, later on 2026-10-11: but it is no browser
             File.Delete(link);
-            File.CreateSymbolicLink(link, "host-" + int.MaxValue.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            Assert.False(HeadlessBrowser.ProfileInUse(folder));
+            File.CreateSymbolicLink(link, "elsewhere-" + me);
+            Assert.False(HeadlessBrowser.SingletonHeld(folder, _ => true));  // another machine's lock
+            File.Delete(link);
+            File.CreateSymbolicLink(link, here + int.MaxValue.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Assert.False(HeadlessBrowser.SingletonHeld(folder, _ => true));  // nothing running by that id
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>The lock's host against .NET's machine name (code review, later on 2026-10-11): first labels, case aside.</summary>
+    [Theory]
+    [InlineData("MacBook-Pro.local-4242", "MacBook-Pro", true)]
+    [InlineData("macbook-pro.local-4242", "MACBOOK-PRO", true)]
+    [InlineData("MacBook-Pro-4242", "MacBook-Pro", true)]
+    [InlineData("other.local-4242", "MacBook-Pro", false)]
+    [InlineData("4242", "MacBook-Pro", false)]
+    [InlineData("host-1", "", false)]
+    public void SingletonOnHost_ComparesTheFirstLabels(string target, string machine, bool here)
+    {
+        Assert.Equal(here, HeadlessBrowser.SingletonOnHost(target, machine));
+    }
+
+    [Theory]
+    [InlineData("Microsoft Edge", true)]
+    [InlineData("msedge", true)]
+    [InlineData("Google Chrome", true)]
+    [InlineData("chrome", true)]
+    [InlineData("Brave Browser", true)]
+    [InlineData("Chromium", true)]
+    [InlineData("testhost", false)]
+    [InlineData("zsh", false)]
+    public void IsBrowserName_IsAChromiumBrowsers(string name, bool browser)
+    {
+        Assert.Equal(browser, HeadlessBrowser.IsBrowserName(name));
+    }
+
+    /// <summary>One look gives no second chance to a holder that lets go (code review, later on 2026-10-11: the smoke's polling loop counts its own time).</summary>
+    [WindowsFact]
+    public void ProfileInUse_LooksAsOftenAsAsked()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "NeonSidekick.tests." + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            string lockFile = Path.Combine(folder, HeadlessBrowser.LockFileName);
+            File.WriteAllText(lockFile, "");
+            using (new FileStream(lockFile, FileMode.Open, FileAccess.Write, FileShare.Read))
+            {
+                var one = System.Diagnostics.Stopwatch.StartNew();
+                Assert.True(HeadlessBrowser.ProfileInUse(folder, looks: 1));
+                Assert.True(one.ElapsedMilliseconds < 50, $"one look took {one.ElapsedMilliseconds} ms");
+                Assert.True(HeadlessBrowser.ProfileInUseAsync(folder, CancellationToken.None).GetAwaiter().GetResult());
+            }
+
+            Assert.False(HeadlessBrowser.ProfileInUseAsync(folder, CancellationToken.None).GetAwaiter().GetResult());
         }
         finally
         {

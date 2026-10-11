@@ -205,7 +205,8 @@ public sealed class ImageStoreTests : IDisposable
         Assert.Equal(new[] { saved }, pictures);
         Assert.Empty(opened);
         Assert.Contains(FileText.ImagesFolderInfoSentence(_images.Root), open.Description, StringComparison.Ordinal);
-        Assert.Equal(FileText.InImagesFolder(saved), new OpenTool(_files, opened.Add).Describe(saved));   // without the folder, refused
+        // Without the folder, refused as outside: the images-folder sentence names open itself (code review, later that day).
+        Assert.Equal(FileText.OutsideRoot(saved), new OpenTool(_files, opened.Add).Describe(saved));
     }
 
     [Fact]

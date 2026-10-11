@@ -3047,6 +3047,25 @@ public sealed class WorkingDirectory
         }
     }
 
+    /// <summary>
+    /// <see cref="DeleteQuietly"/> for a folder and all in it (code review, 2026-10-11: the model downloads' and the smoke's browser
+    /// probes' copies of this made one): gone when it can be, a debug line when not.
+    /// </summary>
+    internal static void DeleteDirectoryQuietly(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            DiagnosticLog.Debug(Category, $"Could not remove {path}: {ex.Message}");
+        }
+    }
+
     /// <summary>UTF-8 without a leading byte-order mark (PowerShell writes one; the model must never see U+FEFF).</summary>
     public static string Decode(byte[] bytes, out bool bom)
     {
