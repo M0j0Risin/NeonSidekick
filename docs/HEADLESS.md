@@ -18,6 +18,8 @@ in their *… offered* lists (the `/tools` tabs, or an add wizard's offer row; i
 The SQLite, PostgreSQL, MySQL, SQL and Oracle tools only read headless: `sqlite_execute` (*SQLite mode* `read-write`), `postgres_execute`
 (*PostgreSQL mode* `read-write`), `mysql_execute` (*MySQL mode* `read-write`), `sql_execute` (*SQL mode* `read-write`) and
 `oracle_execute` (*Oracle mode* `read-write`) are never offered, since each change waits for an allow on a pane and there is none.
+The shopping tools (*Shopping tools*, 2026-10-11) work headless on the profile's list, except that `shopping_clear` with `all`
+is refused: emptying the whole list waits for a yes on a pane.
 
 **On a Mac** ([Building on a Mac](BUILD.md#building-on-a-mac)) the executable is `NeonSidekick`, with no `.exe`, and
 `run_command` runs in `zsh` unless the profile names another shell. The examples carry over to zsh:

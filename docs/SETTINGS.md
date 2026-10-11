@@ -133,7 +133,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/tools shell allowed` |
 | 👮 / 🥷 | *Shell police* is on / off, and the policy isn't `off` | `/tools shell police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first; `c` the allowed commands, `p` the police) |
-| 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 📁 🌄 💎 🖨️'s have setting buttons at the top (see *File tools*, *Image tools*, *Obsidian tools*, *Print tools*). 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (`w`), **live** (`l`), **snap** (`s`) and **screen** (`c`); see *Camera tool* |
+| 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 🛒 | always; on the slab while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping`: that group's on/off page. 📁 🌄 💎 🖨️'s have setting buttons at the top (see *File tools*, *Image tools*, *Obsidian tools*, *Print tools*). 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (`w`), **live** (`l`), **snap** (`s`) and **screen** (`c`); see *Camera tool* |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
 | ⚡ | always | `/process`, the background processes' list |
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
@@ -665,7 +665,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 
 ### Core
 
-The tools most profiles use and the pane's own options, four menus on one tab, each a tab of the second strip (Ask · Web · Shell · Options): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10; the tab was Standard until later that day.
+The tools most profiles use and the pane's own options, five menus on one tab, each a tab of the second strip (Ask · Web · Shell · Shopping · Options): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10; the tab was Standard until later that day.
 
 #### Ask
 
@@ -748,6 +748,14 @@ The pane heads its runs **Policy**, **Guards**, **Commands** and **Scripts**.
   * `net use` / `net share` / `net view` / `Get-SmbShare` / `Get-SmbMapping` → `unc_shares`; `dir \\server`, `copy \\server` → the UNC tools
 
   A lone command such a tool covers comes back as `Not run: 'cat' has a tool of its own — call read_file instead…`, once a turn (sent again, it goes to the pane). Pipes and compound lines, commands with no tool (`git push`) and tools switched off are never sent back.
+
+#### Shopping
+
+The pane heads its run **The list**.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Shopping tools | Offers the shopping list's tools: `shopping_list`, `shopping_add`, `shopping_check`, `shopping_remove`, `shopping_clear`, `shopping_locate`, `shopping_place`, `shopping_stores` and `shopping_layout` (see [Tools](TOOLS.md#shopping-list)). The list and its stores live in the profile's `db\shopping\shopping.db`. `/tools shopping` and the toolbar's 🛒 open its on/off page. | off |
 
 #### Options
 

@@ -1606,6 +1606,15 @@ public sealed class AppSettingsData
     public bool ImageTools { get; set; }
 
     /// <summary>
+    /// Whether a turn offers the model the shopping list's tools (2026-10-11, the user's ask: the list a feature of its own, in the
+    /// profile's <c>db\shopping\shopping.db</c>, in place of a hand-built SQLite file driven through the SQLite tools and a skill):
+    /// <c>shopping_list</c>, <c>shopping_add</c>, <c>shopping_check</c>, <c>shopping_remove</c>, <c>shopping_clear</c>, and the store's
+    /// facts, <c>shopping_locate</c>, <c>shopping_place</c>, <c>shopping_stores</c> and <c>shopping_layout</c>. The first row of
+    /// <c>/tools</c> › Core › Shopping. Read at each turn, no reconnect. Off by default, as every tool group. No variable.
+    /// </summary>
+    public bool ShoppingTools { get; set; }
+
+    /// <summary>
     /// The quality <c>image_edit</c> writes a JPEG, JPEG XL or HEIF at when the call gives none (2026-10-04, the user's pick, with the
     /// image tools): <see cref="MinImageEditQuality"/> to <see cref="MaxImageEditQuality"/>; also where <c>max_kb</c> starts its search
     /// down. The tool clamps a hand-edited value. Read at each call, no reconnect. No variable.

@@ -9485,7 +9485,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ToolsText.SwitchStateLine(SettingsField.SqlTools, _settings.Current) + "\n", output);
         Assert.Equal("SQL tools: off", ToolsText.SwitchStateLine(SettingsField.SqlTools, new AppSettingsData { SqlTools = false }));
         Assert.Contains("  · Shell command policy: ask\n", output);
-        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, or nothing for the pane.", ToolsText.SwitchUsageError);
+        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, shopping, or nothing for the pane.", ToolsText.SwitchUsageError);
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Tools, hasArgs: true));   // as /police: the rows are never refused under a reply
         Assert.Equal(SettingsField.HomeAssistantTools, ToolsText.SwitchField(" HA "));
         Assert.Null(ToolsText.SwitchField("git"));
@@ -11180,7 +11180,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("⚙️ 🔓", ChatScreen.ToolbarStripFor(Items("cmdlist", "settings"), CommandPolicyMode.Yolo, true));   // strip order, not the list's
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("cmdlist", "police"), CommandPolicyMode.Off, true));
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("path"), CommandPolicyMode.Ask, true));
-        Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 📈", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03)
+        Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 🛒 📄 ⚡ 🎞️ 🪟 📺 📈", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03)
         Assert.Equal("🐚 🌐", ChatScreen.ToolbarStripFor(Items("web", "shell"), CommandPolicyMode.Off, true));   // the switches always drawn, the shell under off too
         Assert.Equal("🪪 📈", ChatScreen.ToolbarStripFor(Items("perf", "profile"), CommandPolicyMode.Ask, true));   // strip order (later on 2026-09-29)
     }
@@ -11252,7 +11252,7 @@ public partial class ChatScreenTests : IDisposable
         // 2026-09-29; the ID card and the rising chart later that day; the tool switches, the log and the viewers in the user's
         // order, the rising chart behind the log, 2026-10-03, and behind the viewers later that day.
         const string Panes = "⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊";   // 🧮 Themes 2026-10-04
-        const string Rest = "🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 📈";   // 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04
+        const string Rest = "🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 🛒 📄 ⚡ 🎞️ 🪟 📺 📈";   // 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04; 🛒 Shopping after the printer, 2026-10-11
         Assert.Equal(Panes + " 💾 🙋 " + Rest, ChatScreen.ToolbarStrip);   // the disk always drawn since later on 2026-10-03 (the user's ask); 🙋 after it, 2026-10-09
         Assert.Equal(Panes + " 💾 🙋 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, false));
         Assert.Equal(Panes + " 💾 🙋 🔒 🥷 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, false));   // the ninja while the police is off (2026-10-02, the user's ask)
@@ -11324,7 +11324,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.ToolbarWord(ChatScreen.TtsGlyph));
         Assert.Null(ChatScreen.ToolbarWord(""));
         string[] glyphs = ChatScreen.ToolbarStrip.Split(' ');
-        Assert.Equal(34, glyphs.Length);   // ✴️ gone later on 2026-10-10 (the Claude Code advisor tool retired); 🦉 2026-10-10 (the advisors); 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04, 🧮 and 🪟 later that day, ⚡ 2026-10-05, 🙋 2026-10-09, 🌄 2026-10-10
+        Assert.Equal(35, glyphs.Length);   // 🛒 2026-10-11 (the shopping list); ✴️ gone later on 2026-10-10 (the Claude Code advisor tool retired); 🦉 2026-10-10 (the advisors); 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04, 🧮 and 🪟 later that day, ⚡ 2026-10-05, 🙋 2026-10-09, 🌄 2026-10-10
         for (int i = 0; i < glyphs.Length; i++)
         {
             Assert.Equal(2, TextCells.Width(glyphs[i]));

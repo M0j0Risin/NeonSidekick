@@ -73,6 +73,10 @@ internal sealed record TurnToolInputs
     public bool ScreenEnabled { get; init; }
     public IReadOnlyList<AIFunction>? YouTube { get; init; }
     public bool YouTubeEnabled { get; init; }
+
+    /// <summary>The shopping list's tools (2026-10-11): offered while <see cref="ShoppingEnabled"/> (<c>Shopping tools</c>).</summary>
+    public IReadOnlyList<AIFunction>? Shopping { get; init; }
+    public bool ShoppingEnabled { get; init; }
     public IReadOnlySet<string>? Disabled { get; init; }
     public PlanTurn? Plan { get; init; }
     public bool PlanReadOnly { get; init; }
@@ -131,6 +135,7 @@ internal sealed partial class ChatScreen
         var cameraTools = inputs.Camera;
         var screenTools = inputs.Screen;
         var youTubeTools = inputs.YouTube;
+        var shoppingTools = inputs.Shopping;
         var mcpTools = inputs.Mcp;
         var neonAdvisorTools = inputs.NeonAdvisor;
         var plan = inputs.Plan;
@@ -140,13 +145,13 @@ internal sealed partial class ChatScreen
         {
             // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
             // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
-            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, homeTools, printTools, youTubeTools, neonAdvisorTools);
+            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
         }
 
         if (inputs.OnlyTools is { } only)
         {
             // Botchat limited tools (2026-10-04): every name not on the list joins the disabled set, the same way.
-            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, homeTools, printTools, youTubeTools, neonAdvisorTools);
+            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
         }
 
         if (disabledTools is { Count: > 0 })
@@ -176,6 +181,7 @@ internal sealed partial class ChatScreen
             cameraTools = cameraTools is null ? null : Without(cameraTools, disabledTools);
             screenTools = screenTools is null ? null : Without(screenTools, disabledTools);
             youTubeTools = youTubeTools is null ? null : Without(youTubeTools, disabledTools);
+            shoppingTools = shoppingTools is null ? null : Without(shoppingTools, disabledTools);
             mcpTools = mcpTools is null ? null : Without(mcpTools, disabledTools);
             neonAdvisorTools = neonAdvisorTools is null ? null : Without(neonAdvisorTools, disabledTools);
         }
@@ -279,12 +285,15 @@ internal sealed partial class ChatScreen
         // The YouTube tools after the screen's (2026-10-05): YouTube tools on, the search with a key, the rest with a video window; no rule — the descriptions carry it.
         bool youTube = inputs.YouTubeEnabled && youTubeTools is { Count: > 0 };
         tools = youTube ? [.. tools, .. youTubeTools!] : tools;
+        // The shopping tools after YouTube's (2026-10-11): Shopping tools on; their sentence after the Home Assistant one, which names the other lists.
+        bool shopping = inputs.ShoppingEnabled && shoppingTools is { Count: > 0 };
+        tools = shopping ? [.. tools, .. shoppingTools!] : tools;
         // present_plan while planning (2026-09-26): after everything else, ahead of the question tool, which stays last.
         tools = plan is not null ? [.. tools, plan.Tool] : tools;
         tools = ask is not null ? [.. tools, .. askTools!] : tools;
         // … and the rules say so after the shell sentence, naming the groups offered.
         bool native = shell && inputs.ShellNative;
-        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, ServerWritesOf(tools), images, advisors);
+        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, ServerWritesOf(tools), images, advisors, shopping);
         return new TurnToolSet(
             tools,
             offered,

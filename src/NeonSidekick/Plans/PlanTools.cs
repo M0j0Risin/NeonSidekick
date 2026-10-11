@@ -59,6 +59,8 @@ public static class PlanTools
         "neon_advisor",
         // YouTube (2026-10-05): a search and a playlist's listing (2026-10-08) read the Data API; the status reads the window's last report; the saved list (2026-10-07) reads the profile's file
         "youtube_search", "youtube_playlist", "youtube_status", "youtube_saved",
+        // the shopping list (2026-10-11): the list, a product's place and the stores' layouts read the profile's shopping.db
+        "shopping_list", "shopping_locate", "shopping_stores",
     };
 
     /// <summary>The tools plan mode drops because they change something or start something: named, so the classification test can hold every tool to one list.</summary>
@@ -85,6 +87,8 @@ public static class PlanTools
         "mysql_execute",
         // YouTube (2026-10-05): a video opened and played on the user's screen, or its playback changed; a video saved or taken off the list (2026-10-07)
         "youtube_play", "youtube_control", "youtube_save",
+        // the shopping list (2026-10-11): a line or a store's layout changed
+        "shopping_add", "shopping_check", "shopping_remove", "shopping_clear", "shopping_place", "shopping_layout",
     };
 
     /// <summary>Whether plan mode keeps <paramref name="tool"/>.</summary>

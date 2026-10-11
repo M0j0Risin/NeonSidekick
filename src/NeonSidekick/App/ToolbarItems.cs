@@ -61,6 +61,7 @@ public static class ToolbarItems
     public const string Comfy = "comfy";
     public const string Camera = "camera";
     public const string Print = "print";
+    public const string Shopping = "shopping";   // 2026-10-11, the user's ask: 🛒, the Shopping tools switch (/tools shopping), after Print
 
     // The windows (2026-10-03, the user's ask): each opens or closes its window as its Ctrl+Alt chord does.
     public const string Log = "log";
@@ -81,7 +82,7 @@ public static class ToolbarItems
     public static readonly string[] Names =
     [
         Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Ask, CmdList, Police,
-        Shell, Files, Image, Web, Advisors, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
+        Shell, Files, Image, Web, Advisors, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print, Shopping,
         Log, Process, ComfyView, ComfyThumbs, YouTube, Perf, Path,
     ];
 
@@ -132,6 +133,7 @@ public static class ToolbarItems
         Comfy => ChatScreen.ComfyToolGlyph,
         Camera => ChatScreen.CameraToolGlyph,
         Print => ChatScreen.PrintToolGlyph,
+        Shopping => ChatScreen.ShoppingToolGlyph,
         Log => ChatScreen.LogToolGlyph,
         Process => ChatScreen.ProcessToolGlyph,
         ComfyView => ChatScreen.ComfyViewToolGlyph,
@@ -175,6 +177,7 @@ public static class ToolbarItems
         Comfy => "ComfyUI",
         Camera => "Camera",
         Print => "Print",
+        Shopping => "Shopping",
         Log => "Log",
         Process => "Process",
         ComfyView => "Comfy viewer",
