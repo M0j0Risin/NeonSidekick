@@ -62,6 +62,9 @@ public sealed class EnvironmentOverrides
     /// <summary>The terminal's own variable, read by <see cref="TerminalProgram"/>: not an override, so not in <see cref="AllVariables"/>.</summary>
     public const string TerminalProgramVariable = "TERM_PROGRAM";
 
+    /// <summary>iTerm2's own variable, read by <see cref="ItermProfile"/>: not an override, so not in <see cref="AllVariables"/>.</summary>
+    public const string ItermProfileVariable = "ITERM_PROFILE";
+
     /// <summary>Every variable this class reads, for documentation.</summary>
     public static readonly string[] AllVariables =
     {
@@ -271,6 +274,12 @@ public sealed class EnvironmentOverrides
     /// in <c>Program</c> so this class stays the one door).
     /// </summary>
     public string? TerminalProgram => Read(TerminalProgramVariable);
+
+    /// <summary>
+    /// <c>ITERM_PROFILE</c>, the name of the iTerm2 profile this session started with, or null: which profile's Option key a Mac's
+    /// <c>/keycheck</c> reads (2026-10-11).
+    /// </summary>
+    public string? ItermProfile => Read(ItermProfileVariable);
 
     /// <summary>The names of the variables that are currently set to a usable value.</summary>
     public IReadOnlyList<string> ActiveVariables()

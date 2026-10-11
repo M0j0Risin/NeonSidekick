@@ -27,4 +27,42 @@ public static partial class SmokeChecks
             return new SmokeCheck(name, false, $"{e.GetType().Name}: {e.Message}");
         }
     }
+
+    /// <summary>
+    /// <c>keys:carbon</c> (2026-10-11, a Mac's <c>/keycheck</c>): HIToolbox bound by its install name in the published binary,
+    /// <c>CopySymbolicHotKeys</c> answering 0 with entries, and the exclusive register and release through
+    /// <see cref="MacHotkeyNative.ProbeExclusive"/> on Ctrl+Option+Shift+F19 (a chord no shortcut uses) answering free or held. Any other
+    /// answer fails. Skipped off a Mac, and without a window server (over SSH), where HIToolbox has no session to ask.
+    /// </summary>
+    public static SmokeCheck ProbeCarbonHotkeys()
+    {
+        const string name = "keys:carbon";
+        if (!OperatingSystem.IsMacOS())
+        {
+            return new SmokeCheck(name, true, "skipped: not macOS");
+        }
+
+        if (!Viewer.AppKitNative.HasWindowServer())
+        {
+            return new SmokeCheck(name, true, "skipped: no window server");
+        }
+
+        try
+        {
+            var shortcuts = MacHotkeyNative.SymbolicHotKeys(out int listed);
+            int status = MacHotkeyNative.ProbeExclusive(80, MacHotkeyRules.ControlKey | MacHotkeyRules.OptionKeyBit | MacHotkeyRules.ShiftKey, 0xF19);
+            bool passed = listed == MacHotkeyRules.NoErr && shortcuts.Count > 0 && status is MacHotkeyRules.NoErr or MacHotkeyRules.HotKeyExists;
+            string answer = status switch
+            {
+                MacHotkeyRules.NoErr => KeyCheckText.FreeWord,
+                MacHotkeyRules.HotKeyExists => KeyCheckText.HeldWord,
+                _ => KeyCheckText.UnknownWord(status),
+            };
+            return new SmokeCheck(name, passed, $"{shortcuts.Count} macOS shortcuts (status {listed.ToString(System.Globalization.CultureInfo.InvariantCulture)}); Ctrl+Option+Shift+F19 is {answer}");
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return new SmokeCheck(name, false, $"{e.GetType().Name}: {e.Message}");
+        }
+    }
 }

@@ -14,6 +14,23 @@ public sealed class FakeHotkeyProbe : IHotkeyProbe
     /// <summary>Every chord asked about, in order.</summary>
     public List<KeyChord> Asked { get; } = [];
 
+    /// <summary>A held chord's cause (a Mac's), by chord; <see cref="HotkeyCause.None"/> (Windows') for the rest.</summary>
+    public Dictionary<KeyChord, HotkeyCause> Causes { get; } = [];
+
+    /// <summary>Whether the fake speaks a Mac's words (2026-10-11); Windows' by default.</summary>
+    public bool Mac { get; set; }
+
+    /// <summary>What <see cref="Begin"/> answers, and how many runs began.</summary>
+    public List<string> Notes { get; } = [];
+
+    public int Begun { get; private set; }
+
+    public IReadOnlyList<string> Begin()
+    {
+        Begun++;
+        return Notes;
+    }
+
     public HotkeyProbeResult Probe(KeyChord chord)
     {
         Asked.Add(chord);
@@ -22,6 +39,6 @@ public sealed class FakeHotkeyProbe : IHotkeyProbe
             return new HotkeyProbeResult(HotkeyStatus.Unknown, error);
         }
 
-        return new HotkeyProbeResult(Held.Contains(chord) ? HotkeyStatus.Held : HotkeyStatus.Free);
+        return Held.Contains(chord) ? new HotkeyProbeResult(HotkeyStatus.Held, 0, Causes.GetValueOrDefault(chord)) : new HotkeyProbeResult(HotkeyStatus.Free);
     }
 }

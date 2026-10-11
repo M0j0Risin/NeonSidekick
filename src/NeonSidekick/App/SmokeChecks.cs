@@ -156,6 +156,7 @@ public static partial class SmokeChecks
         results.Add(ProbeScreenCg());
         results.Add(ProbeScreenSck());
         results.Add(ProbeHotkey());
+        results.Add(ProbeCarbonHotkeys());
         results.Add(ProbeShortcut());
         results.Add(ProbeSqlite());
         results.Add(ProbePostgres());

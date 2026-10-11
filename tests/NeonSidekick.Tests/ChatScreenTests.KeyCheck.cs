@@ -5,7 +5,7 @@ using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
 
-/// <summary><c>/keycheck</c> on the screen (2026-10-04): the pane with the held chords first, the lines without one, the error off Windows.</summary>
+/// <summary><c>/keycheck</c> on the screen (2026-10-04): the pane with the held chords first, the lines without one, a Mac's words, the error elsewhere.</summary>
 public partial class ChatScreenTests
 {
     /// <summary>The probe the chat screen gets; null (the default) is a platform without one.</summary>
@@ -52,8 +52,35 @@ public partial class ChatScreenTests
         Assert.Contains("free  Ctrl+Alt+M", output);
     }
 
+    /// <summary>A Mac's probe (2026-10-11): its header, caveat and note on the pane, the held chord by its cause, in the Mac's rows.</summary>
     [Fact]
-    public async Task KeyCheck_WithNoProbe_SaysItNeedsWindows_AndAWord_IsRefused()
+    public async Task KeyCheck_AMacProbe_ItsWordsAndTheTerminalsNote_OnThePane()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _hotkeyProbe = new FakeHotkeyProbe { Mac = true };
+        _hotkeyProbe.Notes.Add("Terminal's default profile, Pro: Use Option as Meta key is on, so the Option chords arrive.");
+        var left = new KeyChord(true, false, false, ConsoleKey.LeftArrow);
+        _hotkeyProbe.Held.Add(left);
+        _hotkeyProbe.Causes[left] = HotkeyCause.System;
+        _console.Profile.Height = 60;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/keycheck");
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        int total = KeyCheck.Chords(ChatScreen.KeyRows(false, ConsoleKey.F4, false, "").Select(r => r.Pair), null).Count;
+        Assert.Contains(KeyCheckText.MacHeader(1, total), output);
+        Assert.Contains(KeyCheckText.MacCaveat[..60], output);
+        Assert.Contains("Use Option as Meta key is on", output);
+        Assert.Contains(KeyCheckText.SystemWord, output);
+        Assert.DoesNotContain(KeyCheckText.Caveat[..40], output);
+        Assert.Equal(1, _hotkeyProbe.Begun);
+    }
+
+    [Fact]
+    public async Task KeyCheck_WithNoProbe_SaysItNeedsWindowsOrMacOS_AndAWord_IsRefused()
     {
         _settings.Update(d => d.TtsOutput = false);
         PushLine("/keycheck");

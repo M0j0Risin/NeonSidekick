@@ -60,10 +60,33 @@ public class KeyCheckTests
         var chords = KeyCheck.Chords(rows.Select(r => r.Pair), ConsoleKey.F4);
         Assert.Contains(chords, c => c.Label == "F4" && !c.Chord.HasModifier);
         Assert.Contains(chords, c => c.Label == "Ctrl+Alt+M" && c.Chord == CtrlAlt(ConsoleKey.M) && c.Meaning == (OperatingSystem.IsMacOS() ? "open the memory pane (in the app's windows; Ctrl+Alt+A in the terminal) (/memory)" : "open the memory pane (/memory)"));
-        Assert.DoesNotContain(chords, c => c.Label is "Enter" or "ESC" or "Up / Down" or "PgUp / PgDn");
-        Assert.Equal(rows.Where(r => KeyChord.TryParse(r.Key, out var k) && k.HasModifier).Select(r => r.Key), chords.Where(c => c.Chord.HasModifier).Select(c => c.Label));   // the tab's order
+        Assert.DoesNotContain(chords, c => c.Label is "Enter" or "ESC" or "Up / Down" or "PgUp / PgDn" or "Up" or "PgUp");
+        Assert.Equal(rows.Where(r => KeyChord.TryParse(r.Key, out var k) && k.HasModifier).Select(r => r.Key), chords.Where(c => c.Chord.HasModifier && rows.Any(r => r.Key == c.Label)).Select(c => c.Label));   // the tab's order
 
         Assert.DoesNotContain(KeyCheck.Chords(ChatScreen.KeyRows(voiceOn: false, ConsoleKey.F4, false, "").Select(r => r.Pair), null), c => !c.Chord.HasModifier);
+    }
+
+    /// <summary>
+    /// A row naming two keys is two chords (2026-10-11): <c>Ctrl+Left / Right</c> (Mission Control's on a Mac, kept out until then),
+    /// a Mac's <c>Ctrl+V / Alt+V</c> as written, Windows' <c>Ctrl+Backspace / Delete</c>; each with the row's meaning, in its place.
+    /// </summary>
+    [Fact]
+    public void ARowNamingTwoKeys_IsTwoChords_TheBareOneTakingTheFirstsModifiers()
+    {
+        var chords = KeyCheck.Chords([("Up / Down", "move"), ("Ctrl+Left / Right", "word"), ("Ctrl+V / Alt+V", "paste"), ("Ctrl+Backspace / Delete", "delete"), ("Ctrl+A / Nope", "x")], null);
+        Assert.Equal(["Ctrl+Left", "Ctrl+Right", "Ctrl+V", "Alt+V", "Ctrl+Backspace", "Ctrl+Delete", "Ctrl+A"], chords.Select(c => c.Label));
+        Assert.Equal(Ctrl(ConsoleKey.RightArrow), chords[1].Chord);
+        Assert.Equal(new KeyChord(false, true, false, ConsoleKey.V), chords[3].Chord);
+        Assert.Equal(Ctrl(ConsoleKey.Delete), chords[5].Chord);
+        Assert.Equal("word", chords[1].Meaning);
+
+        var mac = KeyCheck.Chords(ChatScreen.KeyRows(false, ConsoleKey.F4, false, "", mac: true).Select(r => r.Pair), null).Select(c => c.Label).ToList();
+        Assert.Contains("Ctrl+Left", mac);
+        Assert.Contains("Ctrl+Right", mac);
+        Assert.Contains("Alt+V", mac);
+        var windows = KeyCheck.Chords(ChatScreen.KeyRows(false, ConsoleKey.F4, false, "", mac: false).Select(r => r.Pair), null).Select(c => c.Label).ToList();
+        Assert.Contains("Ctrl+Right", windows);
+        Assert.Contains("Ctrl+Delete", windows);
     }
 
     /// <summary>
@@ -103,6 +126,52 @@ public class KeyCheckTests
         Assert.Equal(["Ctrl+A", "Ctrl+Alt+S", "Ctrl+E", "Ctrl+Alt+X"], report.Rows.Select(r => r.Label));
         Assert.Equal(new HotkeyProbeResult(HotkeyStatus.Unknown, 5), report.Rows[^1].Result);
         Assert.Equal(4, probe.Asked.Count);   // Enter is no chord: never asked
+        Assert.Equal(1, probe.Begun);
+        Assert.False(report.Mac);
+    }
+
+    /// <summary>A Mac's report (2026-10-11): the probe's words and notes ride on it, and the lines carry them under the caveat.</summary>
+    [Fact]
+    public void AMacProbe_GivesTheReportItsWords_AndItsNotes()
+    {
+        var probe = new FakeHotkeyProbe { Mac = true };
+        probe.Notes.Add("note one");
+        probe.Held.Add(Ctrl(ConsoleKey.LeftArrow));
+        probe.Causes[Ctrl(ConsoleKey.LeftArrow)] = HotkeyCause.System;
+        probe.Held.Add(new KeyChord(false, true, false, ConsoleKey.V));
+        probe.Causes[new KeyChord(false, true, false, ConsoleKey.V)] = HotkeyCause.Terminal;
+
+        var report = KeyCheck.Run([("Ctrl+E", "explore"), ("Ctrl+Left / Right", "word"), ("Ctrl+V / Alt+V", "paste")], null, probe);
+
+        Assert.True(report.Mac);
+        Assert.Equal(2, report.Held);
+        Assert.Equal(
+        [
+            KeyCheckText.MacHeader(2, 5),
+            KeyCheckText.MacCaveat,
+            "note one",
+            "  macOS shortcut        Ctrl+Left   word",
+            "  held by the terminal  Alt+V       paste",
+            "  free                  Ctrl+E      explore",
+            "  free                  Ctrl+Right  word",
+            "  free                  Ctrl+V      paste",
+        ], KeyCheckText.Lines(report));
+    }
+
+    [Fact]
+    public void TheMacWording_HeaderCausesAndTheTerminalsOptionKey()
+    {
+        Assert.Equal("All 3 chords are free: no macOS shortcut, exclusive app hotkey or terminal setting takes them.", KeyCheckText.MacHeader(0, 3));
+        Assert.Equal("2 of 40 chords taken: macOS, another app or the terminal may keep those keys from the app.", KeyCheckText.MacHeader(2, 40));
+        Assert.Equal("macOS shortcut", KeyCheckText.Status(new HotkeyProbeResult(HotkeyStatus.Held, 0, HotkeyCause.System)));
+        Assert.Equal("held by an app", KeyCheckText.Status(new HotkeyProbeResult(HotkeyStatus.Held, 0, HotkeyCause.OtherApp)));
+        Assert.Equal("held by the terminal", KeyCheckText.Status(new HotkeyProbeResult(HotkeyStatus.Held, 0, HotkeyCause.Terminal)));
+        Assert.Equal("not checked", KeyCheckText.Status(new HotkeyProbeResult(HotkeyStatus.Unknown, 0, HotkeyCause.NoKeyCode)));
+        Assert.Equal("Terminal's default profile, Pro: Use Option as Meta key is on, so the Option chords arrive.", KeyCheckText.TerminalAppOption("Pro", true));
+        Assert.Equal("iTerm2, profile Default: the left Option key sends Esc+, so the Option chords arrive with it (not with the right one).", KeyCheckText.ItermOption("Default", true, false));
+        Assert.Equal("The Option key's setting in Ghostty is not known here: if Option types characters, the Option chords never arrive.", KeyCheckText.UnknownOption("Ghostty"));
+        Assert.Equal("The key check needs Windows or macOS: it asks the system which keys other programs hold.", KeyCheckText.Unsupported);
+        Assert.StartsWith("Only macOS's own shortcuts, hotkeys an app holds exclusively and the terminal's Option key show here;", KeyCheckText.MacCaveat, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -138,5 +207,28 @@ public class KeyCheckTests
         var result = new WindowsHotkeyProbe().Probe(new KeyChord(true, true, true, ConsoleKey.F24));
         Assert.NotEqual(HotkeyStatus.Unknown, result.Status);
         Assert.True(SmokeChecks.ProbeHotkey().Passed);
+    }
+
+    /// <summary>
+    /// The Mac probe for real (2026-10-11): HIToolbox binds, macOS lists its shortcuts, the terminal's note comes, and a chord no shortcut
+    /// uses answers free or held, never an error (the smoke's keys:carbon too). Without a window server there is nothing to ask.
+    /// </summary>
+    [MacFact]
+    public void TheMacProbe_Answers_OnAChordNoShortcutUses()
+    {
+        if (!OperatingSystem.IsMacOS() || !NeonSidekick.Viewer.AppKitNative.HasWindowServer())
+        {
+            return;
+        }
+
+        var probe = new MacHotkeyProbe("Apple_Terminal", null);
+        var notes = ((IHotkeyProbe)probe).Begin();
+        Assert.NotEmpty(notes);
+        Assert.DoesNotContain(notes, n => n.StartsWith("macOS did not list", StringComparison.Ordinal));
+        var result = probe.Probe(new KeyChord(true, true, true, ConsoleKey.F19));
+        Assert.NotEqual(HotkeyStatus.Unknown, result.Status);
+        Assert.Equal(HotkeyStatus.Unknown, probe.Probe(new KeyChord(true, false, false, ConsoleKey.F24)).Status);   // no Mac key: not asked
+        var smoke = SmokeChecks.ProbeCarbonHotkeys();
+        Assert.True(smoke.Passed, smoke.Detail);
     }
 }

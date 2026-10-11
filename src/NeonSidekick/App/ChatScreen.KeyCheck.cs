@@ -9,14 +9,15 @@ namespace NeonSidekick.App;
 
 internal sealed partial class ChatScreen
 {
-    /// <summary>Asks Windows whether another program holds a chord (<see cref="WindowsHotkeyProbe"/> in the app, a fake in tests); null off Windows.</summary>
+    /// <summary>Asks the system whether another program holds a chord (<see cref="WindowsHotkeyProbe"/>, a Mac's <see cref="MacHotkeyProbe"/>, a fake in tests); null elsewhere.</summary>
     private readonly IHotkeyProbe? _hotkeyProbe;
 
     /// <summary>
     /// <c>/keycheck</c> (2026-10-04, the user's ask, after the NVIDIA overlay was found holding Ctrl+Alt+M and Ctrl+Alt+R): every
     /// chord of <c>/help</c>'s Keys tab (<see cref="KeyRows"/>, the push-to-talk key too while voice is on) asked of Windows — free,
     /// or held by another program — on the info pane, the held ones first; without the pane, the same as lines through
-    /// <paramref name="sink"/>. Off Windows, an error. The probe is synchronous and quick (a register and a release per chord).
+    /// <paramref name="sink"/>. On a Mac (2026-10-11) the same over <see cref="MacHotkeyProbe"/>, in a Mac's words; elsewhere, an
+    /// error. The probe is synchronous and quick (a register and a release per chord; on a Mac a list read first).
     /// </summary>
     private async Task ShowKeyCheckAsync(INoticeSink sink, CancellationToken cancellationToken)
     {
@@ -40,7 +41,7 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>The pane's one tab: the header, the caveat dim, then chord · status · meaning, held in the warning colour. Text cells, never Markup.</summary>
+    /// <summary>The pane's one tab: the header, the caveat dim, a Mac's notes on the terminal, then chord · status · meaning, held in the warning colour. Text cells, never Markup.</summary>
     internal static IRenderable KeyCheckTab(KeyCheckReport report)
     {
         ArgumentNullException.ThrowIfNull(report);
@@ -59,10 +60,14 @@ internal sealed partial class ChatScreen
             grid.AddRow(new Text(row.Label, Theme.AccentSecondary), new Text(KeyCheckText.Status(row.Result), status), new Text(row.Meaning, Theme.Body));
         }
 
-        return new Rows(
-            new Text(KeyCheckText.Header(report.Held, report.Rows.Count), report.Held > 0 ? new Style(Theme.Warn) : Theme.Body),
-            new Text(KeyCheckText.Caveat, new Style(Theme.Dim)),
-            new Text(""),
-            grid);
+        var lines = new List<IRenderable>
+        {
+            new Text(KeyCheckText.HeaderFor(report), report.Held > 0 ? new Style(Theme.Warn) : Theme.Body),
+            new Text(KeyCheckText.CaveatFor(report), new Style(Theme.Dim)),
+        };
+        lines.AddRange((report.Notes ?? []).Select(note => new Text(note, Theme.Body)));
+        lines.Add(new Text(""));
+        lines.Add(grid);
+        return new Rows(lines);
     }
 }

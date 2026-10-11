@@ -92,7 +92,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 * **Ctrl+L** cancels a running skill-learning reflection (the 🧠 on the hint row), as a double-click on the 🧠 does; *(🧠 learning cancelled)* prints once the reply, if any, ends. With none running it does nothing.
 * An AltGr key that types a character on your layout still types it.
 * **F9 and F10** are chords only with no modifier held, so they can't be the push-to-talk key. Inside the picture viewer and the thumbnail browser they keep their own meanings (the slide show and the shuffle).
-* **A chord that does nothing** may be held by another program as a global hotkey (a graphics card's overlay, say), so it never reaches the app. On Windows, `/keycheck` lists every chord here and whether another program holds it; free it in that program.
+* **A chord that does nothing** may be held by another program as a global hotkey (a graphics card's overlay, say), so it never reaches the app. `/keycheck` lists every chord here and whether another program holds it; free it in that program. On a Mac it also names macOS's own shortcuts (Mission Control has Ctrl+Left and Ctrl+Right) and the terminal's Option key.
 
 ## Commands typed during a reply
 
