@@ -12,20 +12,24 @@ namespace NeonSidekick.Web;
 public sealed class WebAccess
 {
     /// <param name="openUrl">What <c>open_url</c> hands a link to: the user's default browser (<see cref="Llm.PersonaFile.OpenInBrowser"/>) in the app, a recorder in tests.</param>
-    public WebAccess(HttpClient http, IHeadlessBrowser browser, TimeProvider time, Func<string, CancellationToken, Task<System.Net.IPAddress[]>>? resolve = null, Action<string>? openUrl = null)
+    /// <param name="cookies">The jar <paramref name="http"/> sends from, which the fetcher fills from the headless browser (2026-10-11); null keeps the browser's cookies out.</param>
+    public WebAccess(HttpClient http, IHeadlessBrowser browser, TimeProvider time, Func<string, CancellationToken, Task<System.Net.IPAddress[]>>? resolve = null, Action<string>? openUrl = null, System.Net.CookieContainer? cookies = null)
     {
         OpenUrl = openUrl ?? Llm.PersonaFile.OpenInBrowser;
         Http = http ?? throw new ArgumentNullException(nameof(http));
         Browser = browser ?? throw new ArgumentNullException(nameof(browser));
         Time = time ?? throw new ArgumentNullException(nameof(time));
-        Fetcher = new WebFetcher(http, browser, resolve);
+        Fetcher = new WebFetcher(http, browser, resolve, cookies);
         Pages = new PageCache(time);
         DuckDuckGo = new DuckDuckGoSearch(Fetcher, time);
     }
 
-    /// <summary>The app's own: the client over <see cref="LanPolicy"/> and the real browser.</summary>
-    public static WebAccess Create(Func<NetworkReach> reach, TimeProvider time) =>
-        new(WebHttp.Create(new LanPolicy(reach)), new HeadlessBrowser(), time);
+    /// <summary>The app's own: the client over <see cref="LanPolicy"/> and the real browser, sharing one cookie jar.</summary>
+    public static WebAccess Create(Func<NetworkReach> reach, TimeProvider time)
+    {
+        var cookies = new System.Net.CookieContainer();
+        return new(WebHttp.Create(new LanPolicy(reach), cookies), new HeadlessBrowser(), time, cookies: cookies);
+    }
 
     public HttpClient Http { get; }
     public IHeadlessBrowser Browser { get; }

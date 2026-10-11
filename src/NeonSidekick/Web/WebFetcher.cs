@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net;
@@ -109,6 +110,12 @@ public sealed record SavedBody(FetchOutcome Outcome, string Url, long Bytes, str
 /// when the client's answer was a refusal (403 / 429 / 503, a challenge page) or a script shell with
 /// nothing readable. Every failure is a <see cref="FetchOutcome"/> with a detail, never an exception;
 /// only cancellation escapes.
+/// <para>
+/// Since 2026-10-11 (the user's ask: get the HTTP client past more bot checks) a page the browser read hands the client its
+/// cookies (<see cref="BrowserDump.Cookies"/>, into the jar the client sends from), so a clearance the browser earned holds for
+/// the next fetch from that site. Cloudflare ties its clearance to the user agent as well as the address, so from then on the
+/// client claims for that host the browser that earned it (<see cref="ClaimFor"/>) rather than Chrome.
+/// </para>
 /// </summary>
 public sealed class WebFetcher
 {
@@ -146,13 +153,19 @@ public sealed class WebFetcher
     private readonly HttpClient _http;
     private readonly IHeadlessBrowser _browser;
     private readonly Func<string, CancellationToken, Task<IPAddress[]>> _resolve;
+    private readonly CookieContainer? _cookies;
+
+    /// <summary>The hosts the browser handed cookies for, and the browser that earned them: what the client claims there.</summary>
+    private readonly ConcurrentDictionary<string, BrowserIdentity> _earned = new(StringComparer.OrdinalIgnoreCase);
 
     /// <param name="resolve">Name resolution for the LAN rule's pre-check; <c>Dns.GetHostAddressesAsync</c> in the app, a lookup in tests.</param>
-    public WebFetcher(HttpClient http, IHeadlessBrowser browser, Func<string, CancellationToken, Task<IPAddress[]>>? resolve = null)
+    /// <param name="cookies">The jar <paramref name="http"/> sends from (<see cref="WebHttp.Create"/>), which the browser's cookies go into; null keeps them out.</param>
+    public WebFetcher(HttpClient http, IHeadlessBrowser browser, Func<string, CancellationToken, Task<IPAddress[]>>? resolve = null, CookieContainer? cookies = null)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
         _browser = browser ?? throw new ArgumentNullException(nameof(browser));
         _resolve = resolve ?? ((host, ct) => Dns.GetHostAddressesAsync(host, ct));
+        _cookies = cookies;
     }
 
     /// <summary>The <c>http</c> / <c>https</c> rule, applied to every URL and every redirect.</summary>
@@ -385,7 +398,7 @@ public sealed class WebFetcher
     {
         var current = url;
         var referer = options.Referer;
-        var identity = HttpIdentity(options);
+        var claimed = HttpIdentity(options);
         for (int hop = 0; hop <= MaxRedirects; hop++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -395,12 +408,7 @@ public sealed class WebFetcher
             {
                 budget.CancelAfter(FetchTimeout);
                 using var request = new HttpRequestMessage(HttpMethod.Get, current);
-                BrowserHeaders.Apply(request, identity, referer);
-                if (options.Accept is { } accept)
-                {
-                    request.Headers.Remove("Accept");
-                    request.Headers.TryAddWithoutValidation("Accept", accept);
-                }
+                BrowserHeaders.Apply(request, ClaimFor(current, claimed), referer, options.Accept);
 
                 response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, budget.Token).ConfigureAwait(false);
                 int status = (int)response.StatusCode;
@@ -714,6 +722,42 @@ public sealed class WebFetcher
     /// </summary>
     private BrowserIdentity HttpIdentity(FetchOptions options) => _browser.Identify(options.BrowserPath) with { Brand = BrowserBrand.Chrome };
 
+    /// <summary>What the client claims on <paramref name="url"/>'s host: the browser that handed it cookies there (<see cref="Adopt"/>), else <paramref name="claimed"/>.</summary>
+    private BrowserIdentity ClaimFor(Uri url, BrowserIdentity claimed) => _earned.TryGetValue(url.Host, out var earned) ? earned : claimed;
+
+    /// <summary>
+    /// The browser's cookies from a page it read (<see cref="BrowserDump.Cookies"/>) put into the client's jar, and the hosts they are
+    /// for (the one asked for, the one the page ended on) marked with the browser that earned them (<see cref="ClaimFor"/>).
+    /// </summary>
+    private void Adopt(BrowserDump dump, Uri url, FetchOptions options)
+    {
+        if (_cookies is null || dump.Cookies is not { Count: > 0 } cookies)
+        {
+            return;
+        }
+
+        int kept = cookies.Count(c => c.AddTo(_cookies));
+        if (kept == 0)
+        {
+            return;
+        }
+
+        var identity = _browser.Identify(options.BrowserPath);
+        var hosts = new List<string> { url.Host };
+        if (Uri.TryCreate(dump.FinalUrl, UriKind.Absolute, out var final) && !hosts.Contains(final.Host, StringComparer.OrdinalIgnoreCase))
+        {
+            hosts.Add(final.Host);
+        }
+
+        hosts.RemoveAll(host => !cookies.Any(c => c.AppliesTo(host)));
+        foreach (var host in hosts)
+        {
+            _earned[host] = identity;
+        }
+
+        DiagnosticLog.Info(Category, $"{url}: {kept.ToString(CultureInfo.InvariantCulture)} of the browser's cookies handed to the HTTP client, which claims {identity.BrandName} {identity.Major.ToString(CultureInfo.InvariantCulture)} on {string.Join(", ", hosts)} from now on.");
+    }
+
     private async Task<FetchResult> BrowserAsync(Uri url, FetchOptions options, CancellationToken cancellationToken, string? executable = null)
     {
         executable ??= _browser.Locate(options.BrowserPath);
@@ -737,6 +781,7 @@ public sealed class WebFetcher
             return new FetchResult(FetchOutcome.Blocked, url.AbsoluteUri, url.AbsoluteUri, 200, "text/html", page, dump.Html, WebText.BrowserEngine, "the headless browser got a bot challenge page", false);
         }
 
+        Adopt(dump, url, options);
         return new FetchResult(FetchOutcome.Ok, url.AbsoluteUri, url.AbsoluteUri, 200, "text/html", page, dump.Html, WebText.BrowserEngine, "", false);
     }
 

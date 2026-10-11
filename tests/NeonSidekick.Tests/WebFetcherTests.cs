@@ -348,6 +348,78 @@ public class WebFetcherTests
     }
 
     [Fact]
+    public async Task TheBrowsersCookies_GoIntoTheJar_AndTheClientClaimsThatBrowserOnTheirHosts()
+    {
+        // 2026-10-11, the user's ask: a clearance the browser earned lets the client in next time, as the browser it was earned by.
+        var jar = new CookieContainer();
+        var fetcher = new WebFetcher(new HttpClient(_http), _browser, (host, _) => Task.FromResult(_dns[host]), jar);
+        var requests = new List<HttpRequestMessage>();
+        bool cleared = false;
+        _http.Map("https://example.com/", (r, _) => { requests.Add(r); return Task.FromResult(cleared ? Html(HttpStatusCode.OK, Article) : Html(HttpStatusCode.Forbidden, Cloudflare)); });
+        _http.Map("https://www.iana.org/", (r, _) => { requests.Add(r); return Task.FromResult(Html(HttpStatusCode.OK, Article)); });
+        _browser.Html = Article;
+        _browser.Identity = new BrowserIdentity(BrowserBrand.Edge, 155, BrowserPlatform.Windows);
+        _browser.FinalUrl = "https://example.com/";
+        _browser.Cookies.Add(new BrowserCookie("cf_clearance", "abc", ".example.com", "/", -1, true, true));
+        _browser.Cookies.Add(new BrowserCookie("other", "x", ".example.org", "/", -1, true, false));
+
+        var first = await fetcher.FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
+        cleared = true;
+        var second = await fetcher.FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
+        await fetcher.FetchAsync(new Uri("https://www.iana.org/"), Options(), CancellationToken.None);
+
+        Assert.Equal(WebText.BrowserEngine, first.Engine);
+        Assert.Equal(WebText.HttpEngine, second.Engine);
+        Assert.Single(_browser.Runs);
+        Assert.Equal("cf_clearance=abc", jar.GetCookieHeader(new Uri("https://example.com/")));
+        // The first request claimed Chrome, as every host does until the browser hands it cookies; then Edge on that host alone.
+        string chrome = (_browser.Identity with { Brand = BrowserBrand.Chrome }).UserAgent;
+        Assert.Equal(chrome, requests[0].Headers.UserAgent.ToString());
+        Assert.Equal(_browser.Identity.UserAgent, requests[1].Headers.UserAgent.ToString());
+        Assert.Equal(_browser.Identity.SecChUa, requests[1].Headers.GetValues("Sec-CH-UA").Single());
+        Assert.Equal(chrome, requests[2].Headers.UserAgent.ToString());
+    }
+
+    [Fact]
+    public async Task TheBrowsersCookies_StayOut_WhenItStillShowsABotCheck_OrThereIsNoJar()
+    {
+        var jar = new CookieContainer();
+        var withJar = new WebFetcher(new HttpClient(_http), _browser, (host, _) => Task.FromResult(_dns[host]), jar);
+        var requests = new List<HttpRequestMessage>();
+        _http.Map("https://example.com/", (r, _) => { requests.Add(r); return Task.FromResult(Html(HttpStatusCode.Forbidden, "<p>denied</p>")); });
+        _browser.Identity = new BrowserIdentity(BrowserBrand.Edge, 155, BrowserPlatform.Windows);
+        _browser.Cookies.Add(new BrowserCookie("__cf_bm", "abc", ".example.com", "/", -1, true, true));
+
+        _browser.Html = Cloudflare;
+        Assert.Equal(FetchOutcome.Blocked, (await withJar.FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None)).Outcome);
+        await withJar.FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
+        Assert.Equal(0, jar.Count);
+
+        // No jar: the page is the browser's, and the client goes on claiming Chrome there.
+        var without = Fetcher();
+        _browser.Html = Article;
+        Assert.True((await without.FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None)).Ok);
+        await without.FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
+        Assert.All(requests, r => Assert.DoesNotContain("Edg/", r.Headers.UserAgent.ToString(), StringComparison.Ordinal));
+        Assert.Equal(4, requests.Count);
+    }
+
+    [Fact]
+    public async Task Headers_GoInChromesOrder_WithAnAcceptGivenInItsPlace()
+    {
+        var requests = new List<HttpRequestMessage>();
+        _http.Map("https://example.com/", (r, _) => { requests.Add(r); return Task.FromResult(Html(HttpStatusCode.OK, Article)); });
+
+        await Fetcher().FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
+        await Fetcher().FetchAsync(new Uri("https://example.com/b"), Options() with { Referer = new Uri("https://other.org/"), Accept = "application/vnd.github+json" }, CancellationToken.None);
+
+        Assert.Equal(BrowserHeaders.Order.Where(h => h != "Referer"), requests[0].Headers.Select(h => h.Key));
+        Assert.Equal(BrowserHeaders.Order, requests[1].Headers.Select(h => h.Key));
+        Assert.Equal("application/vnd.github+json", requests[1].Headers.GetValues("Accept").Single());
+        Assert.Equal("gzip, deflate, br", string.Join(", ", requests[0].Headers.GetValues("Accept-Encoding")));
+    }
+
+    [Fact]
     public async Task Blocked_UnderDefault_WithNoBrowser_SaysSo()
     {
         _http.Map("https://example.com/", HttpStatusCode.Forbidden, "<p>denied</p>", "text/html");

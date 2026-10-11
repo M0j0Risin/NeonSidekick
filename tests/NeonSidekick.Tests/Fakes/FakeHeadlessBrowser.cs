@@ -18,6 +18,11 @@ public sealed class FakeHeadlessBrowser : IHeadlessBrowser
 
     public string? Html { get; set; }
 
+    /// <summary>The cookies a run with <see cref="Html"/> hands back (2026-10-11), and the address it says the page ended on.</summary>
+    public List<BrowserCookie> Cookies { get; } = new();
+
+    public string FinalUrl { get; set; } = "";
+
     /// <summary>What <see cref="Identify"/> answers (2026-10-11): never the machine's own browser, so a header pin holds anywhere.</summary>
     public BrowserIdentity Identity { get; set; } = BrowserIdentity.Fallback;
 
@@ -47,7 +52,7 @@ public sealed class FakeHeadlessBrowser : IHeadlessBrowser
     public Task<BrowserDump> DumpDomAsync(string executable, Uri url, CancellationToken cancellationToken)
     {
         Runs.Add(url);
-        return Task.FromResult(Html is null ? new BrowserDump(null, Failure) : new BrowserDump(Html, ""));
+        return Task.FromResult(Html is null ? new BrowserDump(null, Failure) : new BrowserDump(Html, "", FinalUrl, Cookies.ToList()));
     }
 
     public Task<BrowserPdf> PrintToPdfAsync(string executable, Uri page, string outputPath, CancellationToken cancellationToken)

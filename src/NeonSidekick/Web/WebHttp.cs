@@ -14,7 +14,8 @@ public static class WebHttp
     /// <summary>How long a pooled connection lives before it is replaced.</summary>
     public static readonly TimeSpan ConnectionLifetime = TimeSpan.FromMinutes(5);
 
-    public static HttpClient Create(LanPolicy policy)
+    /// <param name="cookies">The jar to send from (2026-10-11: <see cref="WebAccess"/> hands the same one to its fetcher, which fills it from the headless browser); a new one when null.</param>
+    public static HttpClient Create(LanPolicy policy, CookieContainer? cookies = null)
     {
         ArgumentNullException.ThrowIfNull(policy);
         var handler = new SocketsHttpHandler
@@ -22,7 +23,7 @@ public static class WebHttp
             AutomaticDecompression = DecompressionMethods.All,
             AllowAutoRedirect = false,
             UseCookies = true,
-            CookieContainer = new CookieContainer(),
+            CookieContainer = cookies ?? new CookieContainer(),
             PooledConnectionLifetime = ConnectionLifetime,
             ConnectCallback = policy.ConnectAsync,
         };

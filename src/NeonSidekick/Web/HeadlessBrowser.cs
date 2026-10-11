@@ -6,8 +6,12 @@ using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.Web;
 
-/// <summary>What a headless run produced: the rendered DOM, or null with the reason.</summary>
-public sealed record BrowserDump(string? Html, string Detail);
+/// <summary>
+/// What a headless run produced: the rendered DOM, or null with the reason. Since 2026-10-11 a page that settled with no bot check
+/// showing also brings the address it ended on (<see cref="FinalUrl"/>, <c>""</c> when unknown) and the browser's cookies for the
+/// host asked for and that one (<see cref="Cookies"/>), for the HTTP client's jar.
+/// </summary>
+public sealed record BrowserDump(string? Html, string Detail, string FinalUrl = "", IReadOnlyList<BrowserCookie>? Cookies = null);
 
 /// <summary>What a print-to-PDF run produced (2026-10-03): whether the PDF is at the output path, else why not.</summary>
 public sealed record BrowserPdf(bool Ok, string Detail);
@@ -49,6 +53,8 @@ public interface IHeadlessBrowser
 /// said <c>HeadlessChrome</c>, and its client hints follow the flag), <c>--disable-gpu</c> went (WebGL named a software renderer), and
 /// the window and screen are a desktop's 1920×1080 (they were 756×488 inside an 800×600 screen). <c>navigator.webdriver</c>, false
 /// under <c>--dump-dom</c>, turned true with the DevTools port; <c>--disable-blink-features=AutomationControlled</c> puts it back.
+/// Later that day, a page that settled with no bot check showing hands back the browser's cookies for its host
+/// (<see cref="HarvestAsync"/>), so a clearance the browser earned also lets the HTTP client in (<see cref="WebFetcher"/>).
 /// </para>
 /// <para>
 /// Since 2026-10-03 it also prints pages to PDF (<c>convert_to_pdf</c>, <c>/pdf</c>): Chromium's <c>--print-to-pdf</c> on a page
@@ -77,6 +83,9 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
 
     /// <summary>What a page is asked for when its DOM is read: its ready state and its DOM.</summary>
     public const string PageExpression = "({ s: document.readyState, h: document.documentElement ? document.documentElement.outerHTML : '' })";
+
+    /// <summary>What a settled page is asked for before its cookies are read: the address it ended on, after any redirect.</summary>
+    public const string LocationExpression = "({ u: location.href })";
 
     /// <summary>
     /// What a page is asked for at each look (2026-10-11, the review: the whole DOM, up to megabytes, crossed the socket and was
@@ -271,10 +280,11 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             }
 
             string how = run.TimedOut ? $"timed out with {(read.Html is null ? "no page" : "the page as it was")}" : read.Settled ? "settled" : "stopped";
-            DiagnosticLog.Debug(Category, $"{run.Summary}, {how} after {read.Looks.ToString(CultureInfo.InvariantCulture)} looks, {(read.Html?.Length ?? 0).ToString(CultureInfo.InvariantCulture)} chars{(read.ChallengeSeen ? (read.Gated ? ", still a bot check" : ", a bot check cleared") : "")}" + (read.Failure is null ? "" : $"; {read.Failure}") + run.StderrTail);
+            string cookies = read.Cookies is { } kept ? $", {kept.Count.ToString(CultureInfo.InvariantCulture)} cookies for its host" : "";
+            DiagnosticLog.Debug(Category, $"{run.Summary}, {how} after {read.Looks.ToString(CultureInfo.InvariantCulture)} looks, {(read.Html?.Length ?? 0).ToString(CultureInfo.InvariantCulture)} chars{(read.ChallengeSeen ? (read.Gated ? ", still a bot check" : ", a bot check cleared") : "")}{cookies}" + (read.Failure is null ? "" : $"; {read.Failure}") + run.StderrTail);
             if (read.Html is not null)
             {
-                return new BrowserDump(read.Html, "");
+                return new BrowserDump(read.Html, "", read.FinalUrl, read.Cookies);
             }
 
             if (run.TimedOut)
@@ -334,6 +344,8 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         public bool ChallengeSeen;
         public int Looks;
         public string? Failure;
+        public string FinalUrl = "";
+        public IReadOnlyList<BrowserCookie>? Cookies;
     }
 
     /// <summary>
@@ -406,6 +418,11 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
                 await Task.Delay(DomSettle.PollInterval, cancellationToken).ConfigureAwait(false);
             }
 
+            if (!read.Gated)
+            {
+                await HarvestAsync(client, session!, url, read, cancellationToken).ConfigureAwait(false);
+            }
+
             await client.NotifyAsync("Browser.close", cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is DevToolsException or System.Net.WebSockets.WebSocketException or IOException or JsonException or InvalidOperationException)
@@ -424,6 +441,33 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return true;
+        }
+    }
+
+    /// <summary>
+    /// The address the settled page ended on and the browser's cookies for it and for <paramref name="url"/>'s host, into
+    /// <paramref name="read"/> (2026-10-11). <c>Storage.getCookies</c> reads the browser's store (the profile folder keeps earlier
+    /// runs' cookies too), and only those that would be sent to one of the two hosts are kept. A refusal of either call leaves the
+    /// cookies out; the page is still the run's answer.
+    /// </summary>
+    private static async Task HarvestAsync(DevToolsClient client, string session, Uri url, PageRead read, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (await EvaluateAsync(client, session, LocationExpression, cancellationToken).ConfigureAwait(false) is { } where
+                && where.TryGetProperty("u", out var u) && u.ValueKind == JsonValueKind.String
+                && Uri.TryCreate(u.GetString(), UriKind.Absolute, out var final) && WebFetcher.IsHttp(final))
+            {
+                read.FinalUrl = final.AbsoluteUri;
+            }
+
+            string? finalHost = read.FinalUrl.Length > 0 ? new Uri(read.FinalUrl).Host : null;
+            var all = BrowserCookie.Parse(await client.SendAsync("Storage.getCookies", null, null, cancellationToken).ConfigureAwait(false));
+            read.Cookies = all.Where(c => c.AppliesTo(url.Host) || (finalHost is not null && c.AppliesTo(finalHost))).ToList();
+        }
+        catch (DevToolsException ex)
+        {
+            DiagnosticLog.Debug(Category, $"{url}: no cookies from the browser ({ex.Message})");
         }
     }
 
