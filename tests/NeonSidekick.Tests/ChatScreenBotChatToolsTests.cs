@@ -142,20 +142,30 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// view_image with Botchat vision enabled off (later on 2026-10-10, the user's ask): the bot's model gets the result's text and
-    /// the note, never the picture; the transcript still draws the thumbnail. On, the carrier follows the result as in the main chat.
+    /// view_image, and image_edit with view, under Botchat vision enabled off (later on 2026-10-10, the user's asks): the bot's model
+    /// gets the result's text and the note, never the picture; the transcript still draws the thumbnail. On, the carrier follows the
+    /// result as in the main chat.
     /// </summary>
     [WindowsTheory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task BotChat_ViewImage_VisionOff_ThePictureIsTheUsersAlone(bool vision)
+    [InlineData(ViewImageTool.ToolName, false)]
+    [InlineData(ViewImageTool.ToolName, true)]
+    [InlineData(ImageEditTool.ToolName, false)]
+    [InlineData(ImageEditTool.ToolName, true)]
+    public async Task BotChat_PictureFileTools_VisionOff_ThePictureIsTheUsersAlone(string tool, bool vision)
     {
         BotChatFixture();
-        _settings.Update(d => { d.ImageTools = true; d.BotChatLimitedTools = [ViewImageTool.ToolName]; d.BotChatVision = vision; });
+        _settings.Update(d => { d.ImageTools = true; d.BotChatLimitedTools = [tool]; d.BotChatVision = vision; });
         string folder = Path.Combine(_settings.ProfileDirectory, Files.WorkingDirectory.DefaultFolderName);
         Directory.CreateDirectory(folder);
         File.WriteAllBytes(Path.Combine(folder, "square.bmp"), SmokeChecks.SolidBmp(4, 4));
-        _chat.Enqueue(FakeChatClient.Call("v1", ViewImageTool.ToolName, new Dictionary<string, object?> { ["path"] = "square.bmp" }));
+        var arguments = new Dictionary<string, object?> { ["path"] = "square.bmp" };
+        if (tool == ImageEditTool.ToolName)
+        {
+            arguments[ImageEditTool.FlipArgument] = "horizontal";
+            arguments[ImageEditTool.ViewArgument] = true;
+        }
+
+        _chat.Enqueue(FakeChatClient.Call("v1", tool, arguments));
         _chat.EnqueueText("A square.");
         _chat.EnqueueText("Ada ", "answers.");
         EscDuringRequest(3);

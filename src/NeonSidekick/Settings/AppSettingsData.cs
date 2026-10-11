@@ -1039,7 +1039,8 @@ public sealed class AppSettingsData
     /// itself, seen as it drew them) — the newest <see cref="App.BotChat.MaxVisionPictures"/>, with a caption saying whose.
     /// Only for models that read images: a text-only server fails the turn (in <c>multi</c> mode every bot's own model
     /// counts). Not kept for <c>/botchat --resume</c> or the stored session. Off (the default), the bots see text alone: since
-    /// 2026-10-10 (the user's calls) a bot's own <c>generate_image</c>, <c>view_image</c> and <c>camera_capture</c> pictures too,
+    /// 2026-10-10 (the user's calls) a bot's own <c>generate_image</c>, <c>view_image</c>, <c>camera_capture</c>, <c>screen_capture</c>
+    /// and <c>image_edit</c> pictures too,
     /// which it saw in the tool's result until then (<see cref="App.BotChat.UnseenToolPictures"/>; the result tells it so,
     /// <see cref="Llm.Assistant.PicturesUnseenNote"/>), so a text-only server never fails a bot's turn over one.
     /// Read per reply. The Botchat tab of <c>/settings</c>, its last row. No variable.
