@@ -59,7 +59,7 @@ Besides `--smoke`, the published exe has checks for real hardware and servers: `
 
 ## Building on a Mac
 
-The Mac build is for Apple Silicon (`osx-arm64`). Each release since v0.5.0 has its package (`NeonSidekick-v<version>-osx-arm64.tar.gz`, built on GitHub's Mac runner), so building it yourself is only needed for a change of your own. It leaves out the features that have no macOS backend yet: Docker servers and UNC shares. Everything else works; see [The Mac build](#the-mac-build) for what differs.
+The Mac build is for Apple Silicon (`osx-arm64`). Each release since v0.5.0 has its package (`NeonSidekick-v<version>-osx-arm64.tar.gz`, built on GitHub's Mac runner), so building it yourself is only needed for a change of your own. It leaves out the one feature that has no macOS backend yet: Docker servers. Everything else works; see [The Mac build](#the-mac-build) for what differs.
 
 NativeAOT can't build a Mac binary from Windows, so build on the Mac itself. You need:
 
@@ -121,6 +121,7 @@ A downloaded build isn't notarized, so macOS quarantines it. Clear that once aft
 | `/shortcut` | Works | A `.command` file on the Desktop with the app's icon, opening in iTerm2 or Terminal as `/terminal` does. |
 | Printing | Works (CUPS) | Drawn into a PDF in Helvetica Neue and Menlo on the printer's paper; a PDF goes as it is; an Office file is refused. See [Printing](TOOLS.md#printing). |
 | Docker tools and `/docker` | Works (Unix socket) | Docker Desktop, OrbStack, Colima or Rancher Desktop, found as the `docker` command finds them ([Docker on a Mac](TOOLS.md#docker-on-a-mac)). Stats are the Linux VM's. |
+| UNC shares and outside folders | Works (NetFS) | A share is `smb://server/share` (`\\server\share` reads as it); the app mounts it under `/Volumes`, hidden from Finder, and unmounts it at exit ([UNC shares on a Mac](TOOLS.md#unc-shares-on-a-mac)). |
 | Docker servers | Left out | Docker Desktop on a Mac passes no GPU to containers; the embedded model on Metal is the Mac's local server. |
 | `/keycheck` | Works (Carbon) | macOS's own shortcuts, apps' exclusive hotkeys and the terminal's Option key; most apps' hotkeys, held the shared way, never show. |
 | `convert_to_pdf` and `/pdf` | Works, browser only | Edge, Chrome, Brave or Chromium from `/Applications`; the `printer` engine (Microsoft Print to PDF) needs Windows. |

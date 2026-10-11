@@ -76,7 +76,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 
 ### Integrations
 * **Databases:** SQL Server, Oracle, MySQL/MariaDB, PostgreSQL and SQLite over named connections. Read-only by default; writes are opt-in per connection and ask first. Passwords are stored encrypted.
-* **Files elsewhere (Windows):** `\\server\share` paths and folders outside the working directory, as you or another Windows account.
+* **Files elsewhere:** `\\server\share` paths (`smb://server/share` on a Mac) and folders outside the working directory, as you or another account.
 * **Obsidian:** search, read, write and link notes in your vault; Obsidian needn't be running.
 * **Docker:** Docker Desktop's containers (on a Mac also OrbStack's or Colima's): logs, health and resource use; starting, stopping and cleaning up are opt-in and ask first. `/docker` does the same by hand.
 * **Home Assistant:** lights, scenes, the TV, to-do lists and sensors ("dim the den to 30%"). `/ha` drives the house directly.
@@ -98,7 +98,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Windows Terminal** is recommended (it comes with Windows 11); the app is designed for it. On a Mac, Terminal or iTerm2 (iTerm2 shows pictures in full colour).
 * **A language model** for it to talk to. The app can download one for you (see below), or use one you already run.
 
-**On a Mac?** It runs on Apple Silicon Macs (M1 and later) in Terminal or iTerm2. Everything above works except `\\server` shares and Docker servers. Screen capture, the camera and YouTube playback need macOS 14 or later, and macOS asks your terminal app for the Microphone, Camera or Screen Recording permission the first time. Download it as below, or [build it yourself](docs/BUILD.md#building-on-a-mac).
+**On a Mac?** It runs on Apple Silicon Macs (M1 and later) in Terminal or iTerm2. Everything above works except Docker servers. Screen capture, the camera and YouTube playback need macOS 14 or later, and macOS asks your terminal app for the Microphone, Camera or Screen Recording permission the first time. Download it as below, or [build it yourself](docs/BUILD.md#building-on-a-mac).
 
 Only for some features:
 * **Running a model inside the app:** an NVIDIA graphics card (driver 580 or newer) or any card that supports Vulkan. Without one it still works, but slowly. On a Mac it runs on the Apple Silicon GPU; a 16 GB Mac suits the smaller Gemma models.
