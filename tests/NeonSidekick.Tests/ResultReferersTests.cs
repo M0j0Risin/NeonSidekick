@@ -27,4 +27,20 @@ public class ResultReferersTests
         Assert.Equal(Ddg, referers.For(new Uri("https://e.example/5")));
         Assert.Equal(Ddg, referers.For(new Uri($"https://e.example/{ResultReferers.Capacity + 4}")));
     }
+
+    [Fact]
+    public void AHitListedAgain_MovesToTheBack()
+    {
+        // Code review, 2026-10-11: a hit listed again kept its first place, and the latest search's hit went first.
+        var referers = new ResultReferers();
+        var engine = new Uri("https://search.example/");
+        referers.Remember([new SearchResult("X", "https://x.example/", "")], Ddg);
+        referers.Remember(Enumerable.Range(0, ResultReferers.Capacity - 1).Select(i => new SearchResult("", $"https://e.example/{i}", "")), Ddg);
+        referers.Remember([new SearchResult("X", "https://x.example/", "")], engine);
+        referers.Remember([new SearchResult("", "https://e.example/new", "")], Ddg);
+
+        Assert.Equal(engine, referers.For(new Uri("https://x.example/")));
+        Assert.Null(referers.For(new Uri("https://e.example/0")));
+        Assert.Equal(Ddg, referers.For(new Uri("https://e.example/new")));
+    }
 }

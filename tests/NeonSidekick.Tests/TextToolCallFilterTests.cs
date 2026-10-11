@@ -643,6 +643,46 @@ public class TextToolCallFilterTests
         Assert.Equal([(Tool, "prompt=\"a\", seed=7")], filter.Calls);
     }
 
+    /// <summary>Code review, 2026-10-11: a <c>{</c> that never closed held back the rest of the reply until 8 KB or the stream's end.</summary>
+    [Theory]
+    [InlineData("{sighs\nThen he walked off.\nAnd that was that.\n", "{sighs\nThen he walked off.\n")]                 // a word, no key
+    [InlineData("{ this is an aside and it runs on", "{ this is")]                                                   // decided mid-line
+    [InlineData("{\n  \"mood\": \"dark\nThen he walked off.\nAnd that was that.\n", "{\n  \"mood\": \"dark\nThen")]  // a string open at a break
+    [InlineData("{\n  \"mood\": \"dark\",\nThen he walked off.\nAnd that was that.\n", "{\n  \"mood\": \"dark\",\nThen")]  // a later line no call has
+    public void TheObjectForm_AnObjectThatCannotBeACall_IsLetGo_WithoutWaitingForTheEnd(string reply, string soon)
+    {
+        var filter = new TextToolCallFilter([(Tool, (IReadOnlyList<string>)DrawParameters)]);
+        string pushed = filter.Push(reply);
+        Assert.StartsWith(soon, pushed, StringComparison.Ordinal);
+        Assert.Equal(reply, pushed + filter.Flush());
+        Assert.Empty(filter.Calls);
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            Assert.Equal(reply, RunAliased(reply[..i], reply[i..]).Text);
+        }
+    }
+
+    /// <summary>Code review, 2026-10-11: <c>"C:\pics\"</c>'s last backslash escaped the quote; in a path it is the path's, and the quote closes.</summary>
+    [Theory]
+    [InlineData("{\"prompt\": \"a dog\", \"image\": \"C:\\pics\\\"}\nNice.")]
+    [InlineData("{\n  \"image\": \"C:\\pics\\\",\n  \"prompt\": \"a dog\"\n}\nNice.")]
+    public void TheObjectForm_APathEndingInABackslash_ClosesItsString_AndIsTheCall(string reply)
+    {
+        var (whole, filter) = RunAliased(reply);
+        Assert.Equal("Nice.", whole);
+        Assert.Equal(Tool, Assert.Single(filter.Calls).Name);
+        Assert.Equal("a dog", Argument(filter, "prompt").GetString());
+        Assert.Equal(@"C:\pics\", Argument(filter, "image").GetString());
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            var (text, split) = RunAliased(reply[..i], reply[i..]);
+            Assert.Equal(whole, text);
+            Assert.Equal(filter.Calls, split.Calls);
+        }
+    }
+
     [Theory]
     [InlineData("my_generate_image{prompt: \"x\"} stays")]
     [InlineData("a set like {generate_image} stays")]

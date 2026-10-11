@@ -100,6 +100,39 @@ public class WebFetcherTests
     }
 
     [Fact]
+    public async Task ARedirect_KeepsTheFetchsOwnReferer_AndFoldsTheSiteOverTheChain()
+    {
+        // Code review, 2026-10-11: each hop named the hop before it as its Referer and judged the site afresh from there.
+        var seen = new List<HttpRequestMessage>();
+        HttpResponseMessage Moved(string to) => new(HttpStatusCode.MovedPermanently) { Headers = { Location = new Uri(to) } };
+        _http.Map("http://example.com/page", (r, _) => { seen.Add(r); return Task.FromResult(Moved("https://www.example.com/page")); });
+        _http.Map("https://example.com/typed", (r, _) => { seen.Add(r); return Task.FromResult(Moved("https://www.example.com/page")); });
+        _http.Map("https://www.example.com/page", (r, _) => { seen.Add(r); return Task.FromResult(Html(HttpStatusCode.OK, Article)); });
+
+        await Fetcher().FetchAsync(new Uri("http://example.com/page"), Options() with { Referer = DuckDuckGoSearch.Origin }, CancellationToken.None);
+        await Fetcher().FetchAsync(new Uri("https://example.com/typed"), Options(), CancellationToken.None);
+        await Fetcher().FetchAsync(new Uri("https://example.com/typed"), Options() with { Referer = new Uri("https://example.com/from#frag") }, CancellationToken.None);
+
+        // A click from the results page: none to the plain-http hop (a downgrade), the results page's origin after; cross-site throughout.
+        Assert.False(seen[0].Headers.Contains("Referer"));
+        Assert.Equal(DuckDuckGoSearch.Origin.AbsoluteUri, seen[1].Headers.GetValues("Referer").Single());
+        Assert.All(seen.Take(2), r => Assert.Equal("cross-site", r.Headers.GetValues("Sec-Fetch-Site").Single()));
+
+        // A typed address stays typed, redirected or not.
+        Assert.All(seen.Skip(2).Take(2), r =>
+        {
+            Assert.False(r.Headers.Contains("Referer"));
+            Assert.Equal("none", r.Headers.GetValues("Sec-Fetch-Site").Single());
+        });
+
+        // From a page on the site: the whole URL (no fragment) to its own origin, the origin alone to www; same-origin, then same-site.
+        Assert.Equal("https://example.com/from", seen[4].Headers.GetValues("Referer").Single());
+        Assert.Equal("same-origin", seen[4].Headers.GetValues("Sec-Fetch-Site").Single());
+        Assert.Equal("https://example.com/", seen[5].Headers.GetValues("Referer").Single());
+        Assert.Equal("same-site", seen[5].Headers.GetValues("Sec-Fetch-Site").Single());
+    }
+
+    [Fact]
     public async Task TooManyRedirects_Fail()
     {
         _http.Map("https://example.com/loop", (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Found) { Headers = { Location = new Uri("https://example.com/loop") } }));
@@ -381,6 +414,37 @@ public class WebFetcherTests
     }
 
     [Fact]
+    public async Task TheClaim_CoversTheCookiesScope_ForAsLongAsTheyLast_AndOnlyForCookiesTheJarTook()
+    {
+        // Code review, 2026-10-11: the claim was by exact host and for ever, from every cookie handed over rather than those the jar took.
+        var time = new ManualTimeProvider();
+        var jar = new CookieContainer();
+        var fetcher = new WebFetcher(new HttpClient(_http), _browser, (host, _) => Task.FromResult(_dns.TryGetValue(host, out var a) ? a : throw new System.Net.Sockets.SocketException(11001)), jar, time);
+        var agents = new List<(string Url, string Agent)>();
+        foreach (string page in new[] { "https://shop.example.com/", "https://www.iana.org/" })
+        {
+            _http.Map(page, (r, _) => { agents.Add((page, r.Headers.UserAgent.ToString())); return Task.FromResult(Html(HttpStatusCode.OK, Article)); });
+        }
+
+        _http.Map("https://example.com/", HttpStatusCode.Forbidden, Cloudflare, "text/html");
+        _browser.Html = Article;
+        _browser.Identity = new BrowserIdentity(BrowserBrand.Edge, 155, BrowserPlatform.Windows);
+        _browser.Cookies.Add(new BrowserCookie("cf_clearance", "abc", ".example.com", "/", time.GetUtcNow().ToUnixTimeSeconds() + 60, true, true));
+        _browser.Cookies.Add(new BrowserCookie("bad", "a;b", "www.iana.org", "/", -1, true, false));
+
+        Assert.Equal(WebText.BrowserEngine, (await fetcher.FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None)).Engine);
+        await fetcher.FetchAsync(new Uri("https://shop.example.com/"), Options(), CancellationToken.None);
+        await fetcher.FetchAsync(new Uri("https://www.iana.org/"), Options(), CancellationToken.None);
+        time.Advance(TimeSpan.FromSeconds(61));
+        await fetcher.FetchAsync(new Uri("https://shop.example.com/"), Options(), CancellationToken.None);
+
+        string chrome = (_browser.Identity with { Brand = BrowserBrand.Chrome }).UserAgent;
+        Assert.Equal(
+            [("https://shop.example.com/", _browser.Identity.UserAgent), ("https://www.iana.org/", chrome), ("https://shop.example.com/", chrome)],
+            agents);
+    }
+
+    [Fact]
     public async Task TheBrowsersCookies_StayOut_WhenItStillShowsABotCheck_OrThereIsNoJar()
     {
         var jar = new CookieContainer();
@@ -490,6 +554,26 @@ public class WebFetcherTests
     }
 
     [Fact]
+    public async Task ARateLimit_RefusedAgainWithNoWaitNamed_StillKeepsTheBrowserOut()
+    {
+        // Code review, 2026-10-11: the second answer named no wait, so the rate limit was forgotten and the browser sent in.
+        int asked = 0;
+        _http.Map("https://example.com/", (_, _) => Task.FromResult(++asked == 1 ? RateLimited(HttpStatusCode.TooManyRequests, TimeSpan.FromSeconds(3)) : Html(HttpStatusCode.TooManyRequests, "<p>slow down</p>")));
+        _browser.Html = Article;
+
+        var fetch = Timed().FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
+        await OnATimerAsync();
+        _time.Advance(TimeSpan.FromSeconds(3));
+        var page = await fetch;
+
+        Assert.Equal(FetchOutcome.Blocked, page.Outcome);
+        Assert.Equal(TimeSpan.FromSeconds(3), page.RetryAfter);
+        Assert.EndsWith(WebText.AskedToWait(TimeSpan.FromSeconds(3)) + ")", page.Error);
+        Assert.Equal(2, asked);
+        Assert.Empty(_browser.Runs);
+    }
+
+    [Fact]
     public async Task AChallengePage_ThatNamesAWait_IsStillABotCheck_ForTheBrowser()
     {
         _http.Map("https://example.com/", (_, _) => Task.FromResult(RateLimited(HttpStatusCode.ServiceUnavailable, TimeSpan.FromSeconds(5), Cloudflare)));
@@ -521,19 +605,45 @@ public class WebFetcherTests
         Assert.Equal("https://example.com/b", _http.Requests[^1].Uri.AbsoluteUri);
     }
 
+    /// <summary>Code review, 2026-10-11: the browser sent in after the HTTP leg waited for that leg's own turn, up to a second for nothing.</summary>
     [Fact]
-    public async Task Pacing_HoldsTheBrowser_AfterTheRequestItFollows()
+    public async Task Pacing_TheBrowserAfterTheHttpLeg_GoesAtOnce_AndTheNextRequestStillWaits()
     {
         _http.Map("https://example.com/", HttpStatusCode.Forbidden, "<p>denied</p>", "text/html");
         _browser.Html = Article;
+        var fetcher = Timed(TimeSpan.FromSeconds(1));
 
-        var fetch = Timed(TimeSpan.FromSeconds(1)).FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
-        await OnATimerAsync();
-
-        Assert.Empty(_browser.Runs);
-        _time.Advance(TimeSpan.FromSeconds(1));
-        Assert.True((await fetch).Ok);
+        var first = fetcher.FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
+        Assert.Same(first, await Task.WhenAny(first, Task.Delay(TimeSpan.FromSeconds(10))));
+        Assert.True((await first).Ok);
         Assert.Single(_browser.Runs);
+
+        var next = fetcher.FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
+        await OnATimerAsync();
+        Assert.False(next.IsCompleted);
+        _time.Advance(TimeSpan.FromSeconds(1));
+        Assert.True((await next).Ok);
+    }
+
+    /// <summary>Code review, 2026-10-11: a cancelled wait kept its slot, so the next request waited a turn for nothing.</summary>
+    [Fact]
+    public async Task Pacing_ACancelledWait_GivesItsTurnBack()
+    {
+        _http.Map("https://example.com/", HttpStatusCode.OK, Article, "text/html");
+        var fetcher = Timed(TimeSpan.FromSeconds(1));
+        Assert.True((await fetcher.FetchAsync(new Uri("https://example.com/a"), Options(), CancellationToken.None)).Ok);
+
+        using var cancel = new CancellationTokenSource();
+        var cancelled = fetcher.FetchAsync(new Uri("https://example.com/b"), Options(), cancel.Token);
+        await OnATimerAsync();
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelled);
+        _time.Advance(TimeSpan.FromSeconds(1));
+
+        var next = fetcher.FetchAsync(new Uri("https://example.com/c"), Options(), CancellationToken.None);
+        Assert.Same(next, await Task.WhenAny(next, Task.Delay(TimeSpan.FromSeconds(10))));
+        Assert.True((await next).Ok);
+        Assert.Equal(2, _http.Requests.Count);
     }
 
     [Fact]

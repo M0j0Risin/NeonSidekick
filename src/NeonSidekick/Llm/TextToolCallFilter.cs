@@ -63,6 +63,13 @@ namespace NeonSidekick.Llm;
 /// (spaces before it) is held to its matching <c>}</c> and is a call when <see cref="ObjectCall"/> finds one — the arguments of one tool
 /// alone, or the Hermes object naming one. Anything else is its text, scanned again for the other forms as a held line is; one the
 /// stream ends in too.</para>
+///
+/// <para>The same day (code review: an unclosed <c>{sighs</c> held back the rest of a bot's reply, and <c>"C:\pics\"</c>'s last
+/// backslash escaped its closing quote, so the object never closed and the call was missed): the hold gives up early. Each of the
+/// object's lines, the first from after its <c>{</c>, must start as a call's would (<see cref="ObjectLineFits"/>: a quote, a
+/// bracket, a value, or a key and <c>=</c> or <c>:</c>), and a string still open at a line break is no JSON — either way the object
+/// is its text from there. In a string that starts like a Windows path, <c>\"</c> is its last backslash and its close (a path holds
+/// no quote), here and in <see cref="ReadQuoted"/>.</para>
 /// </summary>
 public sealed class TextToolCallFilter
 {
@@ -83,11 +90,15 @@ public sealed class TextToolCallFilter
     private StringBuilder? _line;
 
     // The bare object form (later still on 2026-10-11): the object held to its close (null = none), its brace depth, inside a
-    // string, a pending escape.
+    // string, a pending escape; where the open string began, where the current line's text began (-1 before the first '{') and
+    // whether that line has been found to start as a call's would.
     private StringBuilder? _object;
     private int _objectDepth;
     private bool _objectQuote;
     private bool _objectEscape;
+    private int _objectQuoteStart;
+    private int _objectLine;
+    private bool _objectLineFits;
 
     // Inside a call: its name, what opened it ('(' or '{'), its arguments so far, the paren depth, the open quote (none = '\0'),
     // a pending escape.
@@ -367,6 +378,8 @@ public sealed class TextToolCallFilter
                     _objectDepth = 0;
                     _objectQuote = false;
                     _objectEscape = false;
+                    _objectLine = -1;
+                    _objectLineFits = false;
                     continue;
                 }
             }
@@ -471,20 +484,31 @@ public sealed class TextToolCallFilter
     }
 
     /// <summary>
-    /// Reads the bare object form's object from <paramref name="pos"/> to its matching <c>}</c> (JSON strings honoured). Where it
-    /// stopped, and the object's text when it closed as no call or ran past <see cref="ObjectLimit"/> (null while open, or caught).
+    /// Reads the bare object form's object from <paramref name="pos"/> to its matching <c>}</c> (JSON strings honoured, a path's
+    /// <c>\"</c> its close). Where it stopped, and the object's text when it closed as no call, ran past <see cref="ObjectLimit"/>,
+    /// had a line no call would (<see cref="ObjectLineFits"/>) or a string open at a line break (null while open, or caught).
     /// </summary>
     private (int Pos, string? Text) ReadObject(string s, int pos)
     {
         for (; pos < s.Length; pos++)
         {
             char c = s[pos];
-            _object!.Append(c);
+            var held = _object!;
+            held.Append(c);
+            bool text = false;
             if (_objectQuote)
             {
-                if (_objectEscape)
+                if (c == '\n')
+                {
+                    text = true;
+                }
+                else if (_objectEscape)
                 {
                     _objectEscape = false;
+                    if (c == '"' && LooksLikePath(held, _objectQuoteStart + 1))
+                    {
+                        _objectQuote = false;
+                    }
                 }
                 else if (c == '\\')
                 {
@@ -498,18 +522,23 @@ public sealed class TextToolCallFilter
             else if (c == '"')
             {
                 _objectQuote = true;
+                _objectQuoteStart = held.Length - 1;
             }
             else if (c == '{')
             {
-                _objectDepth++;
+                if (_objectDepth++ == 0)
+                {
+                    _objectLine = held.Length;
+                    _objectLineFits = false;
+                }
             }
             else if (c == '}' && --_objectDepth == 0)
             {
-                string text = _object.ToString();
+                string whole = held.ToString();
                 _object = null;
-                if (ObjectCall(text) is not { } call)
+                if (ObjectCall(whole) is not { } call)
                 {
-                    return (pos + 1, text);
+                    return (pos + 1, whole);
                 }
 
                 Catch(call.Name, call.Arguments);
@@ -519,15 +548,81 @@ public sealed class TextToolCallFilter
                 return (pos + 1, null);
             }
 
-            if (_object.Length > ObjectLimit)
+            if (!text && _objectLine >= 0 && !_objectLineFits)
             {
-                string text = _object.ToString();
+                bool complete = c == '\n';
+                switch (ObjectLineFits(held, _objectLine, complete ? held.Length - 1 : held.Length, complete))
+                {
+                    case true:
+                        _objectLineFits = true;
+                        break;
+                    case false:
+                        text = true;
+                        break;
+                }
+            }
+
+            if (c == '\n' && !_objectQuote)
+            {
+                _objectLine = held.Length;
+                _objectLineFits = false;
+            }
+
+            if (text || held.Length > ObjectLimit)
+            {
                 _object = null;
-                return (pos + 1, text);
+                return (pos + 1, held.ToString());
             }
         }
 
         return (pos, null);
+    }
+
+    /// <summary>
+    /// Whether the bare object's line from <paramref name="start"/> to <paramref name="end"/> starts as a call's would: blank, a
+    /// quote, a bracket, a comma, a number, or a key (a word) and <c>=</c> or <c>:</c>. Null while too little of an unfinished
+    /// line (<paramref name="complete"/> false) is in to say. <c>{sighs</c> and <c>{ this is an aside</c> are not.
+    /// </summary>
+    private static bool? ObjectLineFits(StringBuilder held, int start, int end, bool complete)
+    {
+        int i = start;
+        while (i < end && char.IsWhiteSpace(held[i]))
+        {
+            i++;
+        }
+
+        if (i == end)
+        {
+            return complete ? true : null;
+        }
+
+        char c = held[i];
+        if (c is '"' or '\'' or '{' or '}' or '[' or ']' or ',' or '-' || char.IsAsciiDigit(c))
+        {
+            return true;
+        }
+
+        if (!IsWordChar(c))
+        {
+            return false;
+        }
+
+        while (i < end && IsWordChar(held[i]))
+        {
+            i++;
+        }
+
+        while (i < end && char.IsWhiteSpace(held[i]))
+        {
+            i++;
+        }
+
+        if (i == end)
+        {
+            return complete ? false : null;
+        }
+
+        return held[i] is '=' or ':';
     }
 
     /// <summary>How long a bare object may run before it is taken for text: a call's arguments are a few hundred characters.</summary>
@@ -1336,7 +1431,8 @@ public sealed class TextToolCallFilter
     /// (2026-10-11, the user's <c>/botchat</c> log: <c>image="C:\Users\cnels\.neonsidekick\profiles\neon\…"</c> reached the tool as
     /// <c>C:Userscnels.neonsidekickprofiles</c>, a line break, <c>eon…</c>): any other escape keeps its backslash, and a value that
     /// starts like a path (<see cref="LooksLikePath"/>) keeps <c>\n</c> and <c>\t</c> as written, so a path comes through whether the
-    /// model doubled its backslashes or not.</para>
+    /// model doubled its backslashes or not. In such a value <c>\"</c> is the path's last backslash and the close (later that day,
+    /// code review: <c>"C:\pics\"</c> ran on to the next quote).</para>
     /// </summary>
     private static string? ReadQuoted(string t, ref int pos)
     {
@@ -1356,6 +1452,9 @@ public sealed class TextToolCallFilter
                 char next = t[pos++];
                 switch (next)
                 {
+                    case var close when path && close == quote:
+                        // A path's last backslash, then its close: a path holds no quote (code review, 2026-10-11: "C:\pics\").
+                        return value.Append('\\').ToString();
                     case '\\' or '"' or '\'':
                         value.Append(next);
                         break;
@@ -1381,6 +1480,11 @@ public sealed class TextToolCallFilter
 
     /// <summary>Whether the text at <paramref name="pos"/> starts like a Windows path: a drive letter, <c>:</c> and a slash, or <c>\\</c>.</summary>
     private static bool LooksLikePath(string t, int pos) =>
+        (pos + 2 < t.Length && char.IsAsciiLetter(t[pos]) && t[pos + 1] == ':' && t[pos + 2] is '\\' or '/')
+        || (pos + 1 < t.Length && t[pos] == '\\' && t[pos + 1] == '\\');
+
+    /// <summary><see cref="LooksLikePath(string, int)"/> on the bare object held so far.</summary>
+    private static bool LooksLikePath(StringBuilder t, int pos) =>
         (pos + 2 < t.Length && char.IsAsciiLetter(t[pos]) && t[pos + 1] == ':' && t[pos + 2] is '\\' or '/')
         || (pos + 1 < t.Length && t[pos] == '\\' && t[pos + 1] == '\\');
 }

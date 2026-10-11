@@ -177,8 +177,8 @@ public sealed class WebFetcher
     private readonly CookieContainer? _cookies;
     private readonly TimeProvider _time;
 
-    /// <summary>The hosts the browser handed cookies for, and the browser that earned them: what the client claims there.</summary>
-    private readonly ConcurrentDictionary<string, BrowserIdentity> _earned = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>The cookie scopes (a cookie's <see cref="BrowserCookie.Domain"/>) the browser handed cookies for, and the browser that earned them: what the client claims there.</summary>
+    private readonly ConcurrentDictionary<string, Earned> _earned = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The earliest each host may be asked again (<see cref="PaceAsync"/>), under <see cref="_paceGate"/>.</summary>
     private readonly Dictionary<string, DateTimeOffset> _nextSlot = new(StringComparer.OrdinalIgnoreCase);
@@ -434,7 +434,8 @@ public sealed class WebFetcher
 
     /// <summary>
     /// The redirect walk both legs share (2026-09-18): GET after GET, each hop headed like Chrome
-    /// (<see cref="BrowserHeaders"/>), under its own <see cref="FetchTimeout"/> budget and judged by
+    /// (<see cref="BrowserHeaders"/>; since 2026-10-11, code review, every hop with the fetch's own <c>Referer</c> and
+    /// <c>Sec-Fetch-Site</c> folded over the chain, <see cref="BrowserHeaders.SiteOf"/>), under its own <see cref="FetchTimeout"/> budget and judged by
     /// <see cref="PreflightAsync"/> before it is followed, up to <see cref="MaxRedirects"/>. The arrival
     /// is the caller's to dispose; a failure is the fetch result to answer with. Exceptions escape to
     /// the caller's <see cref="Failure"/>.
@@ -443,7 +444,7 @@ public sealed class WebFetcher
     {
         await PaceAsync(url.Host, cancellationToken).ConfigureAwait(false);
         var current = url;
-        var referer = options.Referer;
+        var chain = new List<Uri> { url };
         var claimed = HttpIdentity(options);
         for (int hop = 0; hop <= MaxRedirects; hop++)
         {
@@ -454,7 +455,9 @@ public sealed class WebFetcher
             {
                 budget.CancelAfter(FetchTimeout);
                 using var request = new HttpRequestMessage(HttpMethod.Get, current);
-                BrowserHeaders.Apply(request, ClaimFor(current, claimed), referer, options.Accept);
+
+                // Every hop comes from the page the fetch did (none when typed), its site folded over the chain, as Chrome's redirects do.
+                BrowserHeaders.Apply(request, ClaimFor(current, claimed), options.Referer, options.Accept, BrowserHeaders.SiteOf(options.Referer, chain));
 
                 response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, budget.Token).ConfigureAwait(false);
                 int status = (int)response.StatusCode;
@@ -472,8 +475,8 @@ public sealed class WebFetcher
                     }
 
                     DiagnosticLog.Debug(Category, $"GET {current} → {status.ToString(CultureInfo.InvariantCulture)} to {next}");
-                    referer = current;
                     current = next;
+                    chain.Add(next);
                     continue;
                 }
 
@@ -528,7 +531,8 @@ public sealed class WebFetcher
     /// <summary>
     /// The HTTP leg with a rate limit heeded (2026-10-11): an answer that names a <c>Retry-After</c> of at most <see cref="MaxRetryWait"/>
     /// is waited out on the clock and the page asked for once more; a longer one, or a second that names one again, is the answer,
-    /// its detail saying how long the site asks to wait (<see cref="WebText.AskedToWait"/>).
+    /// its detail saying how long the site asks to wait (<see cref="WebText.AskedToWait"/>). A second refused (429 / 503) with no wait
+    /// named carries the first's, so the rate limit still keeps the headless browser out.
     /// </summary>
     private async Task<FetchResult> PoliteHttpAsync(Uri url, FetchOptions options, CancellationToken cancellationToken)
     {
@@ -552,27 +556,47 @@ public sealed class WebFetcher
         }
 
         var second = await HttpAsync(url, options, cancellationToken).ConfigureAwait(false);
-        return second.RetryAfter is { } again ? second with { Detail = second.Detail + WebText.AskedToWait(again) } : second;
+        if (second.RetryAfter is { } again)
+        {
+            return second with { Detail = second.Detail + WebText.AskedToWait(again) };
+        }
+
+        // Refused again with no wait named (code review, 2026-10-11): the limit still stands, so the first wait goes with it and the
+        // headless browser stays out. A challenge page is a bot check, the browser's to try.
+        bool challenge = second.Page is not null && LooksLikeChallenge(second.Text, second.Page.Markdown);
+        return second.Outcome == FetchOutcome.Blocked && second.Status is 429 or 503 && !challenge
+            ? second with { RetryAfter = wait, Detail = second.Detail + WebText.AskedToWait(wait) }
+            : second;
     }
 
     /// <summary>
     /// Waits for <paramref name="host"/>'s turn: <see cref="HostInterval"/> after the last request to it began (the walk's first hop
     /// or a browser run), reserved under the lock so two fetches at once queue rather than both going. Nothing when no interval is set.
+    /// <para>Code review, 2026-10-11: a wait cancelled (ESC) gives its slot back when no later request has queued behind it, and the
+    /// log names the wait alone (it read "asked -1 s ago" with two queued). <paramref name="wait"/> false only marks the host as asked
+    /// now (the browser sent in right after the HTTP leg's own turn, which need not wait a second more).</para>
     /// </summary>
-    private async Task PaceAsync(string host, CancellationToken cancellationToken)
+    private async Task PaceAsync(string host, CancellationToken cancellationToken, bool wait = true)
     {
         if (HostInterval <= TimeSpan.Zero)
         {
             return;
         }
 
-        TimeSpan wait;
+        TimeSpan delay;
+        DateTimeOffset slot, reserved;
         lock (_paceGate)
         {
             var now = _time.GetUtcNow();
-            var slot = _nextSlot.TryGetValue(host, out var next) && next > now ? next : now;
-            wait = slot - now;
-            _nextSlot[host] = slot + HostInterval;
+            var next = _nextSlot.TryGetValue(host, out var n) && n > now ? n : now;
+            slot = wait ? next : now;
+            delay = slot - now;
+            reserved = slot + HostInterval;
+            if (reserved > next)
+            {
+                _nextSlot[host] = reserved;
+            }
+
             if (_nextSlot.Count > MaxPacedHosts)
             {
                 foreach (var gone in _nextSlot.Where(e => e.Value <= now).Select(e => e.Key).ToList())
@@ -582,10 +606,27 @@ public sealed class WebFetcher
             }
         }
 
-        if (wait > TimeSpan.Zero)
+        if (delay <= TimeSpan.Zero)
         {
-            DiagnosticLog.Debug(Category, $"{host}: asked {Llm.LlmTimeouts.Format(HostInterval - wait)} ago; waiting {Llm.LlmTimeouts.Format(wait)}.");
-            await Task.Delay(wait, _time, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        DiagnosticLog.Debug(Category, $"{host}: its next turn is in {Llm.LlmTimeouts.Format(delay)}; waiting.");
+        try
+        {
+            await Task.Delay(delay, _time, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            lock (_paceGate)
+            {
+                if (_nextSlot.TryGetValue(host, out var last) && last == reserved)
+                {
+                    _nextSlot[host] = slot;
+                }
+            }
+
+            throw;
         }
     }
 
@@ -836,12 +877,40 @@ public sealed class WebFetcher
     /// </summary>
     private BrowserIdentity HttpIdentity(FetchOptions options) => _browser.Identify(options.BrowserPath) with { Brand = BrowserBrand.Chrome };
 
-    /// <summary>What the client claims on <paramref name="url"/>'s host: the browser that handed it cookies there (<see cref="Adopt"/>), else <paramref name="claimed"/>.</summary>
-    private BrowserIdentity ClaimFor(Uri url, BrowserIdentity claimed) => _earned.TryGetValue(url.Host, out var earned) ? earned : claimed;
+    /// <summary>
+    /// What the client claims on <paramref name="url"/>'s host: the browser that handed it cookies sent there (<see cref="Adopt"/>; the
+    /// narrowest such scope's), else <paramref name="claimed"/>. A scope whose cookies have all expired is dropped on the way.
+    /// </summary>
+    private BrowserIdentity ClaimFor(Uri url, BrowserIdentity claimed)
+    {
+        var now = _time.GetUtcNow();
+        Earned? best = null;
+        foreach (var entry in _earned)
+        {
+            var earned = entry.Value;
+            if (earned.Until is { } until && until <= now)
+            {
+                _earned.TryRemove(entry);
+                continue;
+            }
+
+            if (earned.Scope.AppliesTo(url.Host) && (best is null || earned.Scope.Domain.Length > best.Scope.Domain.Length))
+            {
+                best = earned;
+            }
+        }
+
+        return best?.Identity ?? claimed;
+    }
 
     /// <summary>
-    /// The browser's cookies from a page it read (<see cref="BrowserDump.Cookies"/>) put into the client's jar, and the hosts they are
-    /// for (the one asked for, the one the page ended on) marked with the browser that earned them (<see cref="ClaimFor"/>).
+    /// The browser's cookies from a page it read (<see cref="BrowserDump.Cookies"/>, already those for the host asked for and the one the
+    /// page ended on, <see cref="HeadlessBrowser"/>) put into the client's jar, and each scope the jar took one for — a host-only
+    /// cookie's host, a domain cookie's domain and every host under it — marked with the browser that earned it (<see cref="ClaimFor"/>)
+    /// until its last cookie there expires (a session cookie's, for the run).
+    /// <para>Code review, 2026-10-11: the claim was by exact host and for ever, from every cookie handed over rather than those the jar
+    /// took — a <c>.example.com</c> clearance went to <c>shop.example.com</c> under Chrome's name, and a host whose only cookie the jar
+    /// refused was claimed as Edge with no clearance.</para>
     /// </summary>
     private void Adopt(BrowserDump dump, Uri url, FetchOptions options)
     {
@@ -850,37 +919,38 @@ public sealed class WebFetcher
             return;
         }
 
-        int kept = cookies.Count(c => c.AddTo(_cookies));
-        if (kept == 0)
+        var taken = cookies.Where(c => c.AddTo(_cookies)).ToList();
+        if (taken.Count == 0)
         {
             return;
         }
 
         var identity = _browser.Identify(options.BrowserPath);
-        var hosts = new List<string> { url.Host };
-        if (Uri.TryCreate(dump.FinalUrl, UriKind.Absolute, out var final) && !hosts.Contains(final.Host, StringComparer.OrdinalIgnoreCase))
+        var scopes = taken.GroupBy(c => c.Domain.ToLowerInvariant()).ToList();
+        foreach (var scope in scopes)
         {
-            hosts.Add(final.Host);
+            DateTimeOffset? until = scope.Any(c => c.Expires <= 0) ? null : DateTimeOffset.UnixEpoch.AddSeconds(scope.Max(c => c.Expires));
+            _earned[scope.Key] = new Earned(scope.First(), identity, until);
         }
 
-        hosts.RemoveAll(host => !cookies.Any(c => c.AppliesTo(host)));
-        foreach (var host in hosts)
-        {
-            _earned[host] = identity;
-        }
-
-        DiagnosticLog.Info(Category, $"{url}: {kept.ToString(CultureInfo.InvariantCulture)} of the browser's cookies handed to the HTTP client, which claims {identity.BrandName} {identity.Major.ToString(CultureInfo.InvariantCulture)} on {string.Join(", ", hosts)} from now on.");
+        DiagnosticLog.Info(Category, $"{url}: {taken.Count.ToString(CultureInfo.InvariantCulture)} of the browser's cookies handed to the HTTP client, which claims {identity.BrandName} {identity.Major.ToString(CultureInfo.InvariantCulture)} on {string.Join(", ", scopes.Select(s => s.Key))} while they last.");
     }
 
+    /// <summary>A scope the browser's cookies were taken for (one of them, for <see cref="BrowserCookie.AppliesTo"/>), the browser, and when the last of them expires (null: a session cookie).</summary>
+    private sealed record Earned(BrowserCookie Scope, BrowserIdentity Identity, DateTimeOffset? Until);
+
+    /// <param name="executable">The browser the default engine's fallback found, right after the HTTP leg; that leg took the host's
+    /// turn, so this run only marks it (code review, 2026-10-11: it waited up to a second more for nothing). Null: located here, paced.</param>
     private async Task<FetchResult> BrowserAsync(Uri url, FetchOptions options, CancellationToken cancellationToken, string? executable = null)
     {
+        bool fallback = executable is not null;
         executable ??= _browser.Locate(options.BrowserPath);
         if (executable is null)
         {
             return FetchResult.Fail(FetchOutcome.NoBrowser, url.AbsoluteUri, "", engine: WebText.BrowserEngine);
         }
 
-        await PaceAsync(url.Host, cancellationToken).ConfigureAwait(false);
+        await PaceAsync(url.Host, cancellationToken, wait: !fallback).ConfigureAwait(false);
         var watch = Stopwatch.StartNew();
         var dump = await _browser.DumpDomAsync(executable, url, cancellationToken).ConfigureAwait(false);
         if (dump.Html is null)
