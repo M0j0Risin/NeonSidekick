@@ -394,12 +394,13 @@ public class BotChatPicturesTests
     }
 
     [Fact]
-    public void TheBotchatTab_IsLast_ItsRowsDefaultingToSingle_ParentServer_KillOn_NoComfy_NoWorkflows_Automatic_Latest_Async_AFiveSecondPause_NoTools_NoSkills_MemoryShared_AndNoVision()
+    public void TheBotchatTab_IsThirdUnderClient_ItsRowsDefaultingToSingle_ParentServer_KillOn_NoComfy_NoWorkflows_Automatic_Latest_Async_AFiveSecondPause_NoTools_NoSkills_MemoryShared_AndNoVision()
     {
         var data = new AppSettingsData();
 
         Assert.Equal("Botchat", SettingsMenu.TabTitles[(int)SettingsTab.BotChat]);
-        Assert.Equal((int)SettingsTab.BotChat, SettingsMenu.TabTitles.Count - 2);   // before the Advisors tab since 2026-10-10; last again from later on 2026-09-27 (the Claude tab moved to /tools)
+        Assert.Equal(2, (int)SettingsTab.BotChat);   // third, under Client after Chat and Sessions, since later on 2026-10-10 (the user's order); before the Advisors tab from 2026-10-10; last again from later on 2026-09-27 (the Claude tab moved to /tools)
+        Assert.Equal((0, 2), SettingsMenu.PlaceOf(SettingsTab.BotChat));
         Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
         Assert.Equal(["Botchat LLM mode", "Botchat multi-embedded", "Botchat multi-embedded kill", "Botchat ComfyUI enabled", "Botchat ComfyUI limited workflows", "Botchat image mode", "Botchat img2img mode", "Botchat image async", "Botchat non-TTS delay", "Botchat tools enabled", "Botchat limited tools", "Botchat skills enabled", "Botchat limited skills", "Botchat memory enabled", "Botchat memory mode", "Botchat vision enabled", "Botchat camera"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatLlmMode));

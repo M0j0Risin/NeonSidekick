@@ -20,7 +20,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyDictionary<SettingsTab, IReadOnlyList<(SettingsField First, string Title)>> TabSections =
         new Dictionary<SettingsTab, IReadOnlyList<(SettingsField First, string Title)>>
         {
-            [SettingsTab.General] =
+            [SettingsTab.Chat] =
             [
                 (SettingsField.Profile, "Who and where"),
                 (SettingsField.QueueMode, "Input line"),

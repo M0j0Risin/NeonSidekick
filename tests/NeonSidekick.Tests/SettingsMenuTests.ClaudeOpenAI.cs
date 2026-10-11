@@ -10,8 +10,9 @@ public partial class SettingsMenuTests
     [Fact]
     public void TheClaudeAndOpenAITabs_AreAfterDocker_BeforeTts()
     {
-        // Common and Http in its place since 2026-10-10 (the user's call: the LLM tab split); LLM second since 2026-10-04 (the user's order); after OpenAI from 2026-10-03 until then.
-        Assert.Equal(["General", "Common", "Http", "Embedded", "Docker", "Anthropic", "OpenAI", "TTS", "STT", "Sessions", "Botchat", "Advisors"], SettingsMenu.TabTitles);
+        // Chat (General until then), Sessions and Botchat first, the Client group, since later on 2026-10-10 (the user's call); Common and Http in its place since 2026-10-10
+        // (the user's call: the LLM tab split); LLM second since 2026-10-04 (the user's order); after OpenAI from 2026-10-03 until then.
+        Assert.Equal(["Chat", "Sessions", "Botchat", "Common", "Http", "Embedded", "Docker", "Anthropic", "OpenAI", "TTS", "STT", "Advisors"], SettingsMenu.TabTitles);
         Assert.Equal(SettingsMenu.AnthropicTabTitle, SettingsMenu.TabTitles[(int)SettingsTab.Anthropic]);
         Assert.Equal(SettingsMenu.OpenAITabTitle, SettingsMenu.TabTitles[(int)SettingsTab.OpenAI]);
         Assert.Equal(39, SettingsMenu.LabelWidthOf(SettingsMenu.TabFields[(int)SettingsTab.Anthropic]));   // "Claude Code slash command permissions" since 2026-10-10 (/claude's rows here); "Anthropic API prompt caching" (30) from 2026-10-04, "Claude API prompt caching" (27) before

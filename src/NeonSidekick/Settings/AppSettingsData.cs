@@ -10,7 +10,7 @@ namespace NeonSidekick.Settings;
 ///
 /// <para><b>The key is the label (2026-09-17, the user's call):</b> the tab's prefix as the row shows
 /// it (<c>Llm</c>, <c>Tts</c>, <c>Stt</c>, <c>Ask</c>, <c>File</c>/<c>Tree</c>, <c>Web</c>,
-/// <c>Skill</c>/<c>Reflection</c>, <c>Session</c>, <c>GitLib</c> for the GitLib tab (<c>GitNative</c> 2026-09-21 to 2026-09-30); none on General) and the label's words, no <c>Enabled</c> suffix on a
+/// <c>Skill</c>/<c>Reflection</c>, <c>Session</c>, <c>GitLib</c> for the GitLib tab (<c>GitNative</c> 2026-09-21 to 2026-09-30); none on Chat) and the label's words, no <c>Enabled</c> suffix on a
 /// switch; a relabelled row is renamed with it. <see cref="SchemaVersion"/> first, then the five
 /// <c>/settings</c> tabs' blocks in the tabs' order, then the <c>/skills</c> pane's Options tab (Skills),
 /// then the <c>/tools</c> pane's (Tools, Ask, Files, Git, Shell, Web — the strip's order until 2026-09-21, when it became
@@ -34,16 +34,17 @@ public sealed class AppSettingsData
     /// <summary>Bumped when a field changes meaning rather than merely being added: 1 until 2026-09-17, 2 since the keys were renamed to follow their labels and regrouped by tab (no migration: an old key is skipped, its default stands).</summary>
     public int SchemaVersion { get; set; } = 2;
 
-    // ─── General ────────────────────────────────────────────────────────────────
+    // ─── Chat (General until 2026-10-10) ────────────────────────────────────────
 
     /// <summary>
-    /// The profile's avatar (2026-10-10, the user's ask): one emoji, picked on <c>/settings</c> › General's grid picker or with
+    /// The profile's avatar (2026-10-10, the user's ask): one emoji, picked on <c>/settings</c> › Client › Chat's grid picker or with
     /// <c>/avatar</c>. It opens each reply in place of <c>●</c>, stands on the profile's speaker line in <c>/botchat</c> in place of
-    /// <c>◆</c>, and goes before the profile's name in the window title. Empty (the default) for none; anything that is not one
-    /// two-cell emoji (<see cref="Emojis.AvatarRules"/>) reads as none. Kept by <c>/profile reset</c>, blanked in a profile
-    /// <c>/profile add</c> makes, never carried by <c>/profile push|pull</c>. No variable.
+    /// <c>◆</c>, and goes before the profile's name in the window title. 🤖 by default (<see cref="Emojis.AvatarRules.DefaultAvatar"/>,
+    /// later on 2026-10-10, the user's call; none until then); empty for none; anything that is not one two-cell emoji
+    /// (<see cref="Emojis.AvatarRules"/>) reads as none. Kept by <c>/profile reset</c>, the default in a profile <c>/profile add</c>
+    /// makes, never carried by <c>/profile push|pull</c>. No variable.
     /// </summary>
-    public string Avatar { get; set; } = "";
+    public string Avatar { get; set; } = Emojis.AvatarRules.DefaultAvatar;
 
     /// <summary>
     /// Whether a sent line that is exactly a command's name without its slash (<c>clear</c>) is
@@ -98,7 +99,7 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Whether the terminal's page wears the theme's <c>bg</c> (2026-10-03, the user's ask: Windows Terminal never showed it;
-    /// the General tab's <c>Themed background</c> row, under <c>Theme</c>): on (the default), the screen sets the terminal's default background
+    /// the Chat tab's <c>Themed background</c> row, under <c>Theme</c>): on (the default), the screen sets the terminal's default background
     /// to the palette's <see cref="UI.ThemePalette.Bg"/> while it holds the alternate buffer (OSC 11) and gives the profile's
     /// own back as it leaves (OSC 111); off, nothing is written and the terminal profile's background (an acrylic, a picture)
     /// stays. Read on every frame, so a flip shows at once. No variable.

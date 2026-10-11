@@ -69,7 +69,9 @@ public class NeonHelpTests
         Assert.Equal("/tools › Database › PostgreSQL › PostgreSQL mode", HelpLocation.Of(SettingsField.PostgresMode).Path);
         Assert.Equal("/tools › Shell › Shell police", HelpLocation.Of(SettingsField.ShellPolice).Path);   // a plain tab names no menu
         Assert.Null(HelpLocation.Of(SettingsField.ShellPolice).Menu);
-        Assert.Equal("/settings › General › Profile", HelpLocation.Of(SettingsField.Profile).Path);
+        Assert.Equal("/settings › Client › Chat › Profile", HelpLocation.Of(SettingsField.Profile).Path);   // General's until later on 2026-10-10
+        Assert.Equal("/settings › Client › Botchat › Botchat camera", HelpLocation.Of(SettingsField.BotChatCamera).Path);
+        Assert.Equal("/settings › Advisors › Advisor list", HelpLocation.Of(SettingsField.AdvisorList).Path);   // a plain tab names no menu
         Assert.Equal("/skills › Reflection", HelpLocation.Of(SettingsField.ReflectionAutoLearn).Pane + HelpText.PathSeparator + HelpLocation.Of(SettingsField.ReflectionAutoLearn).Tab);
         Assert.Equal("/mcp › Options › MCP servers", HelpLocation.Of(SettingsField.McpServers).Path);
         Assert.Equal("10", HelpLocation.Default(SettingsField.CameraWatchSeconds));   // the unit is the label's, (s)
@@ -230,7 +232,7 @@ public class NeonHelpTests
         Assert.EndsWith("\nAsk for one menu (/tools sql) for its rows' defaults and what each does.", text, StringComparison.Ordinal);
         Assert.Equal("the menus Print, Camera (a second strip under the tab; ←/→ walk them)", HelpText.MenusTab(["Print", "Camera"]));
         Assert.Equal([(ToolsText.FilesTabTitle, "File"), (ToolsText.FilesTabTitle, "Image"), (ToolsText.FilesTabTitle, "UNC")], HelpLocation.Menus("/tools").Take(3));   // the Files group first since 2026-10-10, Image after File later that day   // Database before Media since later on 2026-10-09
-        Assert.Equal([(SettingsMenu.ServersTabTitle, "Common"), (SettingsMenu.ServersTabTitle, "Http"), (SettingsMenu.ServersTabTitle, "Embedded")], HelpLocation.Menus("/settings").Take(3));   // the Servers and Voice groups since 2026-10-10; Common and Http (the LLM tab) later that day
+        Assert.Equal([(SettingsMenu.ClientTabTitle, "Chat"), (SettingsMenu.ClientTabTitle, "Sessions"), (SettingsMenu.ClientTabTitle, "Botchat"), (SettingsMenu.ServersTabTitle, "Common")], HelpLocation.Menus("/settings").Take(4));   // the Servers and Voice groups since 2026-10-10; Common and Http (the LLM tab) later that day; the Client group first later still
     }
 
     [Fact]
@@ -291,7 +293,7 @@ public class NeonHelpTests
     [Fact]
     public void ALongAnswer_IsCut_WithTheNote()
     {
-        string text = Invoke("/settings general");
+        string text = Invoke("/settings chat");
         string capped = HelpText.Cap(text + "\n" + new string('x', HelpText.MaxChars));
 
         Assert.True(capped.Length <= HelpText.MaxChars, capped.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));

@@ -4,7 +4,7 @@ using NeonSidekick.Settings;
 namespace NeonSidekick.UI;
 
 /// <summary>
-/// The theme setting (2026-09-23, the user's ask): the names the operator picks from on the General
+/// The theme setting (2026-09-23, the user's ask): the names the operator picks from on the Chat
 /// tab's <c>Theme</c> row or with <c>/theme</c>, the way <see cref="ThumbnailSize"/> maps its words.
 /// <see cref="Resolve"/> is the one place the saved string becomes a <see cref="ThemePalette"/>: a
 /// hand-edited value that is none of them falls back to <see cref="Default"/> with a warning.

@@ -102,7 +102,7 @@ public enum SettingsField
 
     /// <summary>Model round trips a message may spend on tools (<see cref="Settings.AppSettingsData.LlmMaxToolIterations"/>). On the Common tab under <see cref="LlmOfferTools"/>, above the two timeouts (2026-10-01, the user's call); no reconnect (read at each turn).</summary>
     LlmMaxToolIterations,
-    /// <summary>A picker over <see cref="UI.ThumbnailSize.Names"/>: how big the thumbnail under a sent picture is. On the General tab beside <see cref="ShowImageThumbnails"/>; no reconnect (read at each turn).</summary>
+    /// <summary>A picker over <see cref="UI.ThumbnailSize.Names"/>: how big the thumbnail under a sent picture is. On the Chat tab beside <see cref="ShowImageThumbnails"/>; no reconnect (read at each turn).</summary>
     ImageThumbnailSize,
 
     /// <summary>Entries a <c>/tree</c> lists before it stops (<see cref="Settings.AppSettingsData.FileTreeMaxLength"/>). On the Files tab under <see cref="FileTools"/> (on General until 2026-09-15); no reconnect (read at each <c>/tree</c>).</summary>
@@ -111,7 +111,7 @@ public enum SettingsField
     /// <summary>Whether a <c>/tree</c> line carries the file's size (<see cref="Settings.AppSettingsData.FileTreeShowSizes"/>). The Files tab's row under Tree max length (on General until 2026-09-15; the last until the @-mention folder mode, 2026-09-17); no reconnect.</summary>
     FileTreeShowSizes,
 
-    /// <summary>A picker over <see cref="Settings.NewProfileMode.Names"/>: what <c>/profile add</c> copies. On the General tab under <see cref="Profile"/>; no reconnect (read at each <c>/profile add</c>).</summary>
+    /// <summary>A picker over <see cref="Settings.NewProfileMode.Names"/>: what <c>/profile add</c> copies. On the Chat tab under <see cref="Profile"/>; no reconnect (read at each <c>/profile add</c>).</summary>
     NewProfileMode,
 
     /// <summary>Whether the thinking spinner reads a random <see cref="ThinkingVerbs"/> entry (<see cref="Settings.AppSettingsData.LlmUseFunVerbs"/>). Labelled <c>LLM use fun verbs</c> since 2026-09-15 (the member and the JSON key keep their name so a saved profile still loads); the Common tab's last row (the LLM tab's until 2026-10-10), alone as the cosmetic one (2026-10-01, the user's call); no reconnect (read at each spinner start).</summary>
@@ -174,10 +174,10 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Skills.SkillCompactMode.Names"/>: whether a loaded skill survives a prune (<see cref="Settings.AppSettingsData.SkillCompactMode"/>). The Options tab of <c>/skills</c>' third row (2026-09-16); no reconnect.</summary>
     SkillCompactMode,
 
-    /// <summary>A toggle: whether replies are shown as styled Markdown and asked for as such (<see cref="Settings.AppSettingsData.TranscriptMarkdown"/>). The General tab's first transcript row, above Paste preview lines (2026-10-01; under Image thumbnail size from 2026-09-16, once under @-mention folder mode; the last until Paste preview lines); no reconnect (read at each turn).</summary>
+    /// <summary>A toggle: whether replies are shown as styled Markdown and asked for as such (<see cref="Settings.AppSettingsData.TranscriptMarkdown"/>). The Chat tab's first transcript row, above Paste preview lines (2026-10-01; under Image thumbnail size from 2026-09-16, once under @-mention folder mode; the last until Paste preview lines); no reconnect (read at each turn).</summary>
     TranscriptMarkdown,
 
-    /// <summary>Lines of a collapsed paste the transcript shows under the sent line (<see cref="Settings.AppSettingsData.PastePreviewLines"/>); 0 = the label alone. The General tab's row under Transcript markdown (2026-10-01; its last row from 2026-09-16 until the two switches of 2026-09-18); no reconnect (read at each idle read).</summary>
+    /// <summary>Lines of a collapsed paste the transcript shows under the sent line (<see cref="Settings.AppSettingsData.PastePreviewLines"/>); 0 = the label alone. The Chat tab's row under Transcript markdown (2026-10-01; its last row from 2026-09-16 until the two switches of 2026-09-18); no reconnect (read at each idle read).</summary>
     PastePreviewLines,
 
     /// <summary>A toggle: whether <c>#</c> and part of a name lists the loaded skills on the chat line (<see cref="Settings.AppSettingsData.SkillHashMention"/>). The Options tab of <c>/skills</c>' fourth row (2026-09-17; fifth until later on 2026-09-18, when Skill slash commands went); no reconnect (read at each keystroke).</summary>
@@ -198,25 +198,25 @@ public enum SettingsField
     /// <summary>Typed: the model requests one reflection may make before it is given up, 1 to 20 (<see cref="Settings.AppSettingsData.ReflectionMaxRequests"/>, <c>Skills.ReflectionMaxRequests</c>). The Options tab of <c>/skills</c>' tenth row (2026-09-17; the verbose switch under it until later still on 2026-09-19); no reconnect (read when a reflection starts).</summary>
     ReflectionMaxRequests,
 
-    /// <summary>A toggle: whether the <c>/</c> completion list leaves <c>/exit</c> out (<see cref="Settings.AppSettingsData.HideExitAutocomplete"/>). The General tab's input-line run's last row, under Command typo intercept (2026-10-01; after Paste preview lines from 2026-09-18); no reconnect (read at each keystroke).</summary>
+    /// <summary>A toggle: whether the <c>/</c> completion list leaves <c>/exit</c> out (<see cref="Settings.AppSettingsData.HideExitAutocomplete"/>). The Chat tab's input-line run's last row, under Command typo intercept (2026-10-01; after Paste preview lines from 2026-09-18); no reconnect (read at each keystroke).</summary>
     HideExitAutocomplete,
 
-    /// <summary>A toggle: whether a sent line that is a command's bare name offers the command first (<see cref="Settings.AppSettingsData.CommandTypoIntercept"/>). The General tab's row under Keep message history (2026-10-01; before Welcome splash from 2026-09-18); no reconnect (read at each Enter).</summary>
+    /// <summary>A toggle: whether a sent line that is a command's bare name offers the command first (<see cref="Settings.AppSettingsData.CommandTypoIntercept"/>). The Chat tab's row under Keep message history (2026-10-01; before Welcome splash from 2026-09-18); no reconnect (read at each Enter).</summary>
     CommandTypoIntercept,
 
-    /// <summary>A picker: how the splash greets you under the banner at startup — <c>fullsize</c> / <c>tiled</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.WelcomeSplashMode"/>; a toggle until 2026-09-24). The General tab's row under Theme (2026-10-01; before Show working directory from 2026-09-18, the user's order); no reconnect (read at each show).</summary>
+    /// <summary>A picker: how the splash greets you under the banner at startup — <c>fullsize</c> / <c>tiled</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.WelcomeSplashMode"/>; a toggle until 2026-09-24). The Chat tab's row under Theme (2026-10-01; before Show working directory from 2026-09-18, the user's order); no reconnect (read at each show).</summary>
     WelcomeSplash,
 
-    /// <summary>A toggle: whether the banner is drawn at all — startup, <c>/clear</c>, <c>/splash</c>, <c>/theme</c>, a profile switch (<see cref="Settings.AppSettingsData.ShowHeader"/>, on by default). The General tab's row under Welcome splash (2026-10-01, the user's ask); no reconnect (read at each banner draw). <c>/header</c> and Ctrl+Alt+H flip it too (later that day).</summary>
+    /// <summary>A toggle: whether the banner is drawn at all — startup, <c>/clear</c>, <c>/splash</c>, <c>/theme</c>, a profile switch (<see cref="Settings.AppSettingsData.ShowHeader"/>, on by default). The Chat tab's row under Welcome splash (2026-10-01, the user's ask); no reconnect (read at each banner draw). <c>/header</c> and Ctrl+Alt+H flip it too (later that day).</summary>
     ShowHeader,
 
-    /// <summary>A toggle: whether the working directory sits at the right edge of the banner's title line (<see cref="Settings.AppSettingsData.ShowWorkingDirectory"/>). The General tab's row under Show header (2026-10-01; before Draft editor from 2026-09-19, its last row until then); no reconnect (read at each banner draw).</summary>
+    /// <summary>A toggle: whether the working directory sits at the right edge of the banner's title line (<see cref="Settings.AppSettingsData.ShowWorkingDirectory"/>). The Chat tab's row under Show header (2026-10-01; before Draft editor from 2026-09-19, its last row until then); no reconnect (read at each banner draw).</summary>
     ShowWorkingDirectory,
 
-    /// <summary>A picker: how messages meet the queue — <c>automatic</c> / <c>manual</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.QueueMode"/>; the toggle <c>Queue messages</c> until 2026-10-09, the user's call). The General tab's input-line run's first row, after Memory (2026-10-01; after Working directory from 2026-09-18, the user's order); no reconnect (read at each Enter).</summary>
+    /// <summary>A picker: how messages meet the queue — <c>automatic</c> / <c>manual</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.QueueMode"/>; the toggle <c>Queue messages</c> until 2026-10-09, the user's call). The Chat tab's input-line run's first row, after Memory (2026-10-01; after Working directory from 2026-09-18, the user's order); no reconnect (read at each Enter).</summary>
     QueueMode,
 
-    /// <summary>A picker: what a cancelled reply does to the queue — <c>hold</c> / <c>drain</c> / <c>empty</c> (<see cref="Settings.AppSettingsData.QueueCancelMode"/>). The General tab's row after Queue mode (2026-09-18); no reconnect (read when a turn ends).</summary>
+    /// <summary>A picker: what a cancelled reply does to the queue — <c>hold</c> / <c>drain</c> / <c>empty</c> (<see cref="Settings.AppSettingsData.QueueCancelMode"/>). The Chat tab's row after Queue mode (2026-09-18); no reconnect (read when a turn ends).</summary>
     QueueCancelMode,
 
     /// <summary>A toggle: whether every completed turn is written to the profile's <c>sessions.db</c> (<see cref="Settings.AppSettingsData.SessionLogging"/>). The Sessions tab's first row (2026-09-18); no reconnect (read at each turn's end).</summary>
@@ -249,7 +249,7 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Skills.ReflectionCooldownMode.Names"/>: what the cooldown holds back (<see cref="Settings.AppSettingsData.ReflectionCooldownMode"/>). The Options tab of <c>/skills</c>' row after the cooldown minutes (2026-09-19); no reconnect (read at each reply's end).</summary>
     ReflectionCooldownMode,
 
-    /// <summary>Typed: the command line <c>/draft</c> opens its file with, or empty for the shell's default (<see cref="Settings.AppSettingsData.DraftEditor"/>). The General tab's outside-apps run's first row, after Menus max height (2026-10-01; its last row from 2026-09-19); no reconnect (read at each <c>/draft</c>).</summary>
+    /// <summary>Typed: the command line <c>/draft</c> opens its file with, or empty for the shell's default (<see cref="Settings.AppSettingsData.DraftEditor"/>). The Chat tab's outside-apps run's first row, after Menus max height (2026-10-01; its last row from 2026-09-19); no reconnect (read at each <c>/draft</c>).</summary>
     DraftEditor,
 
     /// <summary>Typed: the most pictures one <c>view_image</c> call loads, 1 to 100 (<see cref="Settings.AppSettingsData.FileViewImageMaxPerCall"/>). The Files tab of <c>/tools</c>' last row (2026-09-19); no reconnect (read at each call).</summary>
@@ -312,7 +312,7 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Files.FileBrowserMode.Names"/>: what the <c>/cwd browse</c> tree and <c>/tree</c> (2026-09-23) list (<see cref="Settings.AppSettingsData.FileBrowserMode"/>). The Files tab's row under the @-mention folder mode (2026-09-21); no reconnect (read when the pane opens).</summary>
     FileBrowserMode,
 
-    /// <summary>What the toolbar under the hint row shows (<see cref="Settings.AppSettingsData.ToolbarItems"/>): a toggle until 2026-09-29, a checklist since (the user's ask). The General tab's row after Show working directory (2026-09-21); no reconnect (read at each pane draw).</summary>
+    /// <summary>What the toolbar under the hint row shows (<see cref="Settings.AppSettingsData.ToolbarItems"/>): a toggle until 2026-09-29, a checklist since (the user's ask). The Chat tab's row after Show working directory (2026-09-21); no reconnect (read at each pane draw).</summary>
     ToolbarItems,
 
     /// <summary>A toggle: whether a command line, a script or text to a background process may name a path outside the working directory (<see cref="Settings.AppSettingsData.ShellPolice"/>). The Shell tab's third row (2026-09-22), under the list it guards beside; no reconnect (read at each call and each turn). Last in the enum, as every newcomer: the flat no-pane list's row numbers are pinned.</summary>
@@ -367,7 +367,7 @@ public enum SettingsField
     /// <summary>An action row, no setting behind it (later on 2026-09-23, the user's ask): Enter walks a new connection through every choice — the file, the name, the server, the sign-in, the password (masked), the TLS pair — tests it and adds it to that <c>sql.json</c> (<c>SettingsMenu.SqlWizard.cs</c>). The SQL tab's fifth row, under <see cref="SqlSetPassword"/>. Last in the enum, as every newcomer.</summary>
     SqlAddConnection,
 
-    /// <summary>A pick among <see cref="UI.ThemeName.Names"/>: the look (<see cref="Settings.AppSettingsData.Theme"/>, 2026-09-23). The General tab's screen run's first row, after Copy user prompt (2026-10-01; its last row before); a change puts the theme in force at once (the pane re-colours) and raises <see cref="SettingsChanges.Theme"/>, so the screen starts over as <c>/splash</c> does when the pane closes. No reconnect. Last in the enum, as every newcomer.</summary>
+    /// <summary>A pick among <see cref="UI.ThemeName.Names"/>: the look (<see cref="Settings.AppSettingsData.Theme"/>, 2026-09-23). The Chat tab's screen run's first row, after Copy user prompt (2026-10-01; its last row before); a change puts the theme in force at once (the pane re-colours) and raises <see cref="SettingsChanges.Theme"/>, so the screen starts over as <c>/splash</c> does when the pane closes. No reconnect. Last in the enum, as every newcomer.</summary>
     Theme,
 
     /// <summary>A toggle: whether a turn offers the image tools (<see cref="Settings.AppSettingsData.ComfyTools"/>). The ComfyUI tab of <c>/tools</c>' first row (2026-09-24); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
@@ -388,7 +388,7 @@ public enum SettingsField
     /// <summary>An action row, no setting behind it (later on 2026-09-24, the user's ask): Enter walks a new workflow — built from the server's models, or imported from a ComfyUI export — through every choice, tests it and saves it into a comfy folder (<c>SettingsMenu.ComfyWizard.cs</c>). The ComfyUI tab's fourth row. Last in the enum, as every newcomer.</summary>
     ComfyAddWorkflow,
 
-    /// <summary>Typed (the <c>Image viewer</c> row, <c>Image editor</c> until later still on 2026-09-24): where a double-clicked picture opens: empty for the built-in viewer (later on 2026-09-27; the app Windows registers before), <c>system</c> for that app, else a command line (<see cref="Settings.AppSettingsData.ImageEditor"/>). The General tab, under <see cref="DraftEditor"/> (later on 2026-09-24); no reconnect (read at each double-click). Last in the enum, as every newcomer.</summary>
+    /// <summary>Typed (the <c>Image viewer</c> row, <c>Image editor</c> until later still on 2026-09-24): where a double-clicked picture opens: empty for the built-in viewer (later on 2026-09-27; the app Windows registers before), <c>system</c> for that app, else a command line (<see cref="Settings.AppSettingsData.ImageEditor"/>). The Chat tab, under <see cref="DraftEditor"/> (later on 2026-09-24); no reconnect (read at each double-click). Last in the enum, as every newcomer.</summary>
     ImageEditor,
 
     /// <summary>Typed: the most pictures one <c>generate_image</c> call or <c>/imagine --count</c> makes, 1 to 16 (<see cref="Settings.AppSettingsData.ComfyMaxPicturesPerCall"/>). The ComfyUI tab, under the timeout (later on 2026-09-24); no reconnect. Last in the enum, as every newcomer.</summary>
@@ -421,7 +421,7 @@ public enum SettingsField
     /// <summary>A picker: what the busy row's token tally shows while a turn runs — <c>estimate</c> / <c>last-known</c> (<see cref="Settings.AppSettingsData.LlmMidTurnUsage"/>). On the Common tab under <see cref="LlmContextLength"/> (2026-09-25); no reconnect (read on every draw).</summary>
     LlmMidTurnUsage,
 
-    /// <summary>A toggle: whether the input line's Up/Down history is stored in <c>sessions.db</c> and recalled after a restart (<see cref="Settings.AppSettingsData.KeepMessageHistory"/>). The General tab's row under Queue cancel mode (2026-10-01; under Command typo intercept from 2026-09-25, the user's ask); no reconnect (read at each remembered line and each load).</summary>
+    /// <summary>A toggle: whether the input line's Up/Down history is stored in <c>sessions.db</c> and recalled after a restart (<see cref="Settings.AppSettingsData.KeepMessageHistory"/>). The Chat tab's row under Queue cancel mode (2026-10-01; under Command typo intercept from 2026-09-25, the user's ask); no reconnect (read at each remembered line and each load).</summary>
     KeepMessageHistory,
 
     /// <summary>Typed: the seconds <c>/botchat</c> rests after a reply when no voice plays, 0 (off) to 30 (<see cref="Settings.AppSettingsData.BotChatNonTtsDelaySeconds"/>). The Botchat tab's last row (2026-09-26, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
@@ -463,7 +463,7 @@ public enum SettingsField
     /// <summary>A toggle: whether the <c>/botchat</c> bots are shown the chat's pictures (<see cref="Settings.AppSettingsData.BotChatVision"/>). The Botchat tab's last row (2026-09-27, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
     BotChatVision,
 
-    /// <summary>A toggle (the <c>Themed external windows</c> row): whether the app's own windows — the built-in picture viewer, the camera's live window and the log window — wear the theme or stay black (<see cref="Settings.AppSettingsData.ThemedExternalWindows"/>). The General tab, under <see cref="ThemedBackground"/> since 2026-10-03 (the user's ask, name and place; <c>ThemedViewer</c>, <c>Themed image viewer</c>, the tab's last row under <see cref="ImageEditor"/> from later on 2026-09-27); no reconnect (read when a window opens or is focused). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle (the <c>Themed external windows</c> row): whether the app's own windows — the built-in picture viewer, the camera's live window and the log window — wear the theme or stay black (<see cref="Settings.AppSettingsData.ThemedExternalWindows"/>). The Chat tab, under <see cref="ThemedBackground"/> since 2026-10-03 (the user's ask, name and place; <c>ThemedViewer</c>, <c>Themed image viewer</c>, the tab's last row under <see cref="ImageEditor"/> from later on 2026-09-27); no reconnect (read when a window opens or is focused). Last in the enum, as every newcomer.</summary>
     ThemedExternalWindows,
 
     /// <summary>A toggle: whether a reflection may write a skill's supporting files with <c>skill_editor</c>'s <c>write_file</c> / <c>edit_file</c> (<see cref="Settings.AppSettingsData.ReflectionEditsSupportingFiles"/>). The Reflection tab of <c>/skills</c>' last row (2026-09-27, the user's ask and name); no reconnect (read when a reflection is decided). Last in the enum, as every newcomer.</summary>
@@ -561,7 +561,7 @@ public enum SettingsField
     /// <summary>
     /// A checklist: the performance bar's meters (<see cref="Settings.AppSettingsData.PerformanceBarItems"/>, 2026-09-30, the
     /// user's ask; a picker of <c>off</c> or a look from 2026-09-29), with the look on the page's title row
-    /// (<see cref="Settings.AppSettingsData.PerformanceBarLook"/>). The General tab's row after Show toolbar; no reconnect (the
+    /// (<see cref="Settings.AppSettingsData.PerformanceBarLook"/>). The Chat tab's row after Show toolbar; no reconnect (the
     /// pane reads it at every tick).
     /// </summary>
     ShowPerformanceBar,
@@ -705,7 +705,7 @@ public enum SettingsField
     /// <summary>
     /// A picker: the most of the window a menu, info or folder pane takes — <c>half-screen</c> / <c>three-quarters</c> /
     /// <c>full-screen</c> (<see cref="Settings.AppSettingsData.MenuMaxHeight"/>, 2026-10-01, the user's ask, with every tab
-    /// held at its tallest tab's height). The General tab's screen run's last row, after Show performance bar (2026-10-01; after Theme before); no reconnect (read at each pane draw). Last in
+    /// held at its tallest tab's height). The Chat tab's screen run's last row, after Show performance bar (2026-10-01; after Theme before); no reconnect (read at each pane draw). Last in
     /// the enum until <see cref="ProjectFile"/>.
     /// </summary>
     MenuMaxHeight,
@@ -791,7 +791,7 @@ public enum SettingsField
     /// <summary>Typed: the folder under the working directory the camera's photos are saved in (<see cref="Settings.AppSettingsData.CameraOutputFolder"/>). The Camera tab (2026-10-02), the ComfyUI output folder's shape; no reconnect. Last in the enum, as every newcomer.</summary>
     CameraOutputFolder,
 
-    /// <summary>A toggle (the <c>Themed background</c> row): whether the terminal's page wears the theme's background (<see cref="Settings.AppSettingsData.ThemedBackground"/>). The General tab, under <see cref="Theme"/> (2026-10-03, the user's ask, name and place); no reconnect (read on every frame). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle (the <c>Themed background</c> row): whether the terminal's page wears the theme's background (<see cref="Settings.AppSettingsData.ThemedBackground"/>). The Chat tab, under <see cref="Theme"/> (2026-10-03, the user's ask, name and place); no reconnect (read on every frame). Last in the enum, as every newcomer.</summary>
     ThemedBackground,
 
     /// <summary>A toggle: whether a file edit shows its diff under its 🛠️ line (<see cref="Settings.AppSettingsData.ShowFileDiffs"/>). The Options tab of <c>/tools</c>, under <see cref="CodeCollapseCount"/> (2026-10-03, the user's ask); no reconnect (read at each result). Last in the enum, as every newcomer.</summary>
@@ -1006,14 +1006,25 @@ public enum SettingsField
     /// <summary>A list the user types into: the words that make a container an LLM server in <see cref="DockerServerContainers"/>' checklist (<see cref="Settings.AppSettingsData.DockerServerMatchWords"/>), its top row adding one, Enter on one removing it, a button restoring the defaults. The Docker tab, under the containers (2026-10-10, the user's ask); no reconnect. Last in the enum until <see cref="Avatar"/>.</summary>
     DockerServerMatchWords,
 
-    /// <summary>A grid picker over the emoji catalog: the profile's avatar (<see cref="Settings.AppSettingsData.Avatar"/>), opening its replies, its /botchat speaker line and the window title (2026-10-10, the user's ask). The General tab, right under Profile; no reconnect. Last in the enum, as every newcomer.</summary>
+    /// <summary>A grid picker over the emoji catalog: the profile's avatar (<see cref="Settings.AppSettingsData.Avatar"/>), opening its replies, its /botchat speaker line and the window title (2026-10-10, the user's ask). The Chat tab, right under Profile; no reconnect. Last in the enum, as every newcomer.</summary>
     Avatar,
 }
 
-/// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
+/// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
 public enum SettingsTab
 {
-    General,
+    /// <summary>
+    /// The profile, the input line, the transcript, the screen and the outside apps: what the chat itself looks and behaves like.
+    /// "General" until 2026-10-10, renamed Chat (the user's call: "General" said nothing) and made the first tab of the Client group,
+    /// Sessions and Botchat beside it (<see cref="SettingsMenu.ClientTabTitle"/>).
+    /// </summary>
+    Chat,
+
+    /// <summary>The session store's rows (2026-09-18): second, under Client after Chat, since 2026-10-10 (the user's order); after STT from 2026-09-29 (the user's order; second from later on 2026-09-18, last that morning).</summary>
+    Sessions,
+
+    /// <summary>The <c>/botchat</c> rows (2026-09-25, the user's ask: a Botchat tab on <c>/settings</c>): third, under Client after Sessions, since 2026-10-10 (the user's order); after Sessions on the root strip until then (a Claude tab followed it on 2026-09-27 until later that day, when its rows moved to <c>/tools</c>' ClaudeCode tab, the user's call; <c>/claude</c>'s four came back to the Anthropic tab on 2026-10-10).</summary>
+    BotChat,
 
     /// <summary>
     /// The LLM rows every server reads, whatever its kind: the URL and model, the reasoning, the tools and limits, the context, the
@@ -1060,16 +1071,10 @@ public enum SettingsTab
 
     Tts,
 
-    /// <summary>The voice rows, last since 2026-09-19 (Ask, Files and Web after it until then) until the Botchat tab came after them.</summary>
+    /// <summary>The voice rows, last since 2026-09-19 (Ask, Files and Web after it until then) until the Sessions and Botchat tabs came after them; before Advisors since Sessions and Botchat moved under Client (2026-10-10).</summary>
     Stt,
 
-    /// <summary>The session store's rows (2026-09-18), after STT since 2026-09-29 (the user's order; second from later on 2026-09-18, last that morning).</summary>
-    Sessions,
-
-    /// <summary>The <c>/botchat</c> picture rows (2026-09-25, the user's ask: a Botchat tab on <c>/settings</c>), last (a Claude tab followed it on 2026-09-27 until later that day, when its rows moved to <c>/tools</c>' ClaudeCode tab, the user's call; <c>/claude</c>'s four came back to the Anthropic tab on 2026-10-10).</summary>
-    BotChat,
-
-    /// <summary>The profile advisors' rows (2026-10-10, the user's ask: a tab of its own under <c>/settings</c>, after Botchat): the switch, the list, then how a call goes.</summary>
+    /// <summary>The profile advisors' rows (2026-10-10, the user's ask: a tab of its own under <c>/settings</c>, after Botchat; after STT once Sessions and Botchat moved under Client, later that day): the switch, the list, then how a call goes.</summary>
     Advisors,
 }
 
@@ -1105,8 +1110,8 @@ public enum SettingsChanges
 
 /// <summary>
 /// The <c>/settings</c> and <c>/model</c> screens and every other picker: a list in the bottom pane
-/// (<see cref="MenuPane"/>: <c>/settings</c> is one level — its rows under the General / LLM / TTS /
-/// STT tabs of <see cref="TabFields"/>, the strip and keys the info pane's — a row's picker or typed
+/// (<see cref="MenuPane"/>: <c>/settings</c> is one level — its rows under the Client / Servers / Voice / Advisors
+/// groups' tabs of <see cref="TabFields"/>, the strip and keys the info pane's — a row's picker or typed
 /// edit a second, ESC backs out one level, the notices on the pane's status line) — or, on a
 /// console without the pane, a themed <see cref="SelectionPrompt{T}"/> over
 /// <see cref="PromptResult{T}"/> at the flow end (one flat list: tabs are a pane thing) with the
@@ -1354,8 +1359,11 @@ internal sealed partial class SettingsMenu
 
     private static readonly SettingsField[] Fields = Enum.GetValues<SettingsField>();
 
-    /// <summary>The strip titles, one per <see cref="SettingsTab"/> (five since 2026-09-19: Ask, Files and Web are <c>/tools</c>' tabs, <see cref="ToolsText.TabTitles"/>, and Skills is <c>/skills</c>' Options tab, <see cref="SkillsText.OptionsTabTitle"/>). Pinned.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = ["General", CommonTabTitle, HttpTabTitle, EmbeddedTabTitle, DockerTabTitle, AnthropicTabTitle, OpenAITabTitle, "TTS", "STT", "Sessions", "Botchat", AdvisorsTabTitle];
+    /// <summary>The leaf tabs' titles, one per <see cref="SettingsTab"/>, each a sub-tab of <see cref="StripTitles"/>' groups (five since 2026-09-19: Ask, Files and Web are <c>/tools</c>' tabs, <see cref="ToolsText.TabTitles"/>, and Skills is <c>/skills</c>' Options tab, <see cref="SkillsText.OptionsTabTitle"/>). Pinned.</summary>
+    public static readonly IReadOnlyList<string> TabTitles = [ChatTabTitle, "Sessions", "Botchat", CommonTabTitle, HttpTabTitle, EmbeddedTabTitle, DockerTabTitle, AnthropicTabTitle, OpenAITabTitle, "TTS", "STT", AdvisorsTabTitle];
+
+    /// <summary>The title of the tab of the chat's own rows: the profile, the input line, the transcript, the screen, the outside apps (2026-10-10, the user's pick; "General" until then). Pinned.</summary>
+    public const string ChatTabTitle = "Chat";
 
     /// <summary>The title of the tab of LLM rows every server reads (2026-10-10, the user's call; "LLM" until then). Pinned.</summary>
     public const string CommonTabTitle = "Common";
@@ -1368,13 +1376,14 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The rows of each tab on the pane, indexed by <see cref="SettingsTab"/>, in the order shown
-    /// (General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, the
-    /// user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04;
+    /// (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat, and Sessions
+    /// and Botchat beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic,
+    /// OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04;
     /// General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03;
     /// General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; General, Sessions, LLM, TTS, STT from 2026-09-18, Sessions right after General; the Ask,
     /// Files and Web tabs are <c>/tools</c>' since 2026-09-19, <see cref="ToolsTabFields"/>, and the Skills tab
     /// <c>/skills</c>' Options tab since later that day, <see cref="SkillsTabFields"/>).
-    /// General is spelled out in five runs (2026-10-01, the user's call: 24 rows grown by "under X" and "last" had scattered their
+    /// Chat (General until 2026-10-10) is spelled out in five runs (2026-10-01, the user's call: 24 rows grown by "under X" and "last" had scattered their
     /// kin — the working directory at the top and its header switch far below, the theme apart from the themed viewer): who and where
     /// (the profile, what a new one copies, where its files live, the memory it carries), the input line (the message queue's switch and
     /// its cancel mode, the message history, the typo intercept, the hidden <c>/exit</c>), the transcript (its Markdown, the paste preview,
@@ -1407,6 +1416,10 @@ internal sealed partial class SettingsMenu
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle,
          SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight,
          SettingsField.DraftEditor, SettingsField.ImageEditor],
+        [SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays,
+         SettingsField.SessionNamingMode, SettingsField.SessionShowName,
+         SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
+        [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera],
         [SettingsField.LlmUrl, SettingsField.LlmModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
@@ -1424,10 +1437,6 @@ internal sealed partial class SettingsMenu
         [SettingsField.SttInput, SettingsField.SttDestination, SettingsField.SttPushToTalkKey, SettingsField.SttWhisperModel,
          SettingsField.SttWake, SettingsField.SttWakePhrase, SettingsField.SttVoskModel,
          SettingsField.SttInterrupt, SettingsField.SttInterruptEchoGuard, SettingsField.SttInterruptConfirmMs],
-        [SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays,
-         SettingsField.SessionNamingMode, SettingsField.SessionShowName,
-         SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
-        [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera],
         [SettingsField.Advisors, SettingsField.AdvisorList,
          SettingsField.AdvisorContext, SettingsField.AdvisorCallsPerTurn, SettingsField.AdvisorMaxToolIterations, SettingsField.AdvisorConfirm,
          SettingsField.AdvisorThreadPairs, SettingsField.AdvisorEmbedded],
@@ -3731,9 +3740,10 @@ internal sealed partial class SettingsMenu
                     continue;   // Space on a row that is no switch: nothing (2026-10-04); Enter opens its page
                 }
 
-                // A group's row picks under its crumb (2026-10-10, /tools' groups' shape): Settings › Servers › LLM reasoning.
+                // A group's row picks under its crumb (2026-10-10, /tools' groups' shape): Settings › Servers › LLM reasoning. The pane's
+                // tabbed page only: the flat list has no tabs, and its tab 0 is the Client group since later that day.
                 string root = Root;
-                Root = GroupCrumb((SettingsTab)tab) is var crumb && crumb != Title ? crumb : root;
+                Root = page.Tabs is not null && GroupCrumb((SettingsTab)tab) is var crumb && crumb != Title ? crumb : root;
                 bool edited;
                 try
                 {

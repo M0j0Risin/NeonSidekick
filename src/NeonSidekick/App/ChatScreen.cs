@@ -3006,7 +3006,7 @@ internal sealed partial class ChatScreen
     public const string LearnSessionsNote = "learn from the last 5 stored sessions, or N, or the text to search for";
 
     /// <summary>The refusal for <c>/learn sessions</c> while nothing is written to the store. Pinned.</summary>
-    public const string LearnSessionsOffError = "Session logging is off (the Sessions tab of /settings); /learn sessions reads the store.";
+    public const string LearnSessionsOffError = "Session logging is off (/settings › Client › Sessions); /learn sessions reads the store.";
 
     /// <summary>The refusal for <c>/learn sessions</c> with nothing stored, or nothing matching. Pinned.</summary>
     public const string LearnNoSessionsError = "No stored session to learn from yet.";
@@ -12290,7 +12290,7 @@ internal sealed partial class ChatScreen
                     // exists on disk (every one is written synchronously, so the disk is current).
                     var seed = AppSettings.Copy(_settings.Current);
                     seed.WorkingDirectory = "";
-                    seed.Avatar = "";   // 2026-10-10: a face is the profile's own, as its sandbox; two profiles never share one by accident
+                    seed.Avatar = Emojis.AvatarRules.DefaultAvatar;   // 2026-10-10: a picked face is the profile's own, as its sandbox, so a new one starts on the default (none until later that day)
                     Profiles.Create(home, action.Name, seed);
                     IReadOnlyList<string> copied = Profiles.CopySidekickFiles(
                         _settings.ProfileDirectory, home, action.Name, NewProfileMode.FilesFor(NewProfileMode.Resolve(_effective())));

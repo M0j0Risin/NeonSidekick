@@ -3,10 +3,17 @@ using NeonSidekick.UI;
 
 namespace NeonSidekick.App;
 
-// ── /settings' strip: the Servers and Voice groups (2026-10-10) ─────────────
+// ── /settings' strip: the Client, Servers and Voice groups (2026-10-10) ─────
 
 internal sealed partial class SettingsMenu
 {
+    /// <summary>
+    /// The group tab holding the Chat, Sessions and Botchat tabs (2026-10-10, the user's pick after a naming round: "General" said
+    /// nothing; this side of the connection, as <see cref="ServersTabTitle"/> is the other; Chat the old General, Sessions and Botchat
+    /// off the root strip beside it, in that order). Pinned.
+    /// </summary>
+    public const string ClientTabTitle = "Client";
+
     /// <summary>The group tab holding the six server tabs (2026-10-10, the user's pick: the LLM, Embedded, Docker, Anthropic and OpenAI tabs, <c>/profile push|pull servers</c>' five; six later that day, the LLM tab split into Common and Http, the user's call). Pinned.</summary>
     public const string ServersTabTitle = "Servers";
 
@@ -15,24 +22,24 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The strip <c>/settings</c> shows (2026-10-10, the user's pick, <c>/tools</c>' Database and Media shape: the strip had grown to ten):
-    /// General, Servers, Voice, Sessions, Botchat, and Advisors after it (later that day, the profile advisors). <see cref="TabTitles"/> and <see cref="TabFields"/> stay the leaf tabs (twelve since the LLM tab's split, later that day), in the order the
+    /// General, Servers, Voice, Sessions, Botchat, and Advisors after it (later that day, the profile advisors); Client, Servers, Voice, Advisors
+    /// since later still (the user's call: General renamed Chat and grouped with Sessions and Botchat under <see cref="ClientTabTitle"/>).
+    /// <see cref="TabTitles"/> and <see cref="TabFields"/> stay the leaf tabs (twelve since the LLM tab's split, later that day), in the order the
     /// arrows walk them (<see cref="StripTabs"/>), each a sub-tab of its group on the second strip. Pinned.
     /// </summary>
     /// <remarks>Spelled out, never read off <see cref="TabTitles"/>: a static of another part of the class may not be set yet.</remarks>
-    public static readonly IReadOnlyList<string> StripTitles = ["General", ServersTabTitle, VoiceTabTitle, "Sessions", "Botchat", AdvisorsTabTitle];
+    public static readonly IReadOnlyList<string> StripTitles = [ClientTabTitle, ServersTabTitle, VoiceTabTitle, AdvisorsTabTitle];
 
-    /// <summary>The tabs each of <see cref="StripTitles"/> holds, in <see cref="SettingsTab"/> order: one for a plain tab, more for a group. Pinned.</summary>
+    /// <summary>The tabs each of <see cref="StripTitles"/> holds, in <see cref="SettingsTab"/> order (the enum follows the walk): one for a plain tab, more for a group. Pinned.</summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsTab>> StripTabs =
     [
-        [SettingsTab.General],
+        [SettingsTab.Chat, SettingsTab.Sessions, SettingsTab.BotChat],
         [SettingsTab.Common, SettingsTab.Http, SettingsTab.Embedded, SettingsTab.Docker, SettingsTab.Anthropic, SettingsTab.OpenAI],
         [SettingsTab.Tts, SettingsTab.Stt],
-        [SettingsTab.Sessions],
-        [SettingsTab.BotChat],
         [SettingsTab.Advisors],
     ];
 
-    /// <summary>Whether strip tab <paramref name="strip"/> (a <see cref="StripTitles"/> index) is a group: Servers and Voice. Pure.</summary>
+    /// <summary>Whether strip tab <paramref name="strip"/> (a <see cref="StripTitles"/> index) is a group: Client, Servers and Voice. Pure.</summary>
     public static bool IsGroup(int strip) => strip >= 0 && strip < StripTabs.Count && StripTabs[strip].Count > 1;
 
     /// <summary>Where settings tab <paramref name="tab"/> sits on the strip: its group's index and its own among the group's (0 on a plain tab). Pure.</summary>
@@ -61,8 +68,9 @@ internal sealed partial class SettingsMenu
     private static int TabOf(MenuPage page) => (int)TabAt(page.Tab, page.Sub);
 
     /// <summary>
-    /// The picker's root under a group's tab (2026-10-10, <c>/tools</c>' <c>GroupCrumb</c>): <c>⚙️ Settings › Servers</c> for a row of Common,
-    /// Http, Embedded, Docker, Anthropic or OpenAI, <c>⚙️ Settings › Voice</c> for TTS and STT; the title alone elsewhere. Pinned.
+    /// The picker's root under a group's tab (2026-10-10, <c>/tools</c>' <c>GroupCrumb</c>): <c>⚙️ Settings › Client</c> for a row of Chat,
+    /// Sessions or Botchat, <c>⚙️ Settings › Servers</c> for a row of Common, Http, Embedded, Docker, Anthropic or OpenAI,
+    /// <c>⚙️ Settings › Voice</c> for TTS and STT; the title alone elsewhere (Advisors). Pinned.
     /// </summary>
     public static string GroupCrumb(SettingsTab tab) => PlaceOf(tab) is var (strip, _) && IsGroup(strip) ? Title + " › " + StripTitles[strip] : Title;
 

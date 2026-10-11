@@ -6,8 +6,9 @@ using NeonSidekick.UI;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// <c>/settings</c>' Servers and Voice groups (2026-10-10, the user's pick, <c>/tools</c>' Database and Media shape): the six server tabs
-/// (Common and Http the LLM tab until later that day) on a second strip under Servers, TTS and STT under Voice; ←/→ walk every tab in the old order, Tab and Shift+Tab step past a group,
+/// <c>/settings</c>' Client, Servers and Voice groups (2026-10-10, the user's pick, <c>/tools</c>' Database and Media shape): Chat (General
+/// until later that day), Sessions and Botchat on a second strip under Client, the six server tabs
+/// (Common and Http the LLM tab until later that day) under Servers, TTS and STT under Voice; ←/→ walk every tab in the old order, Tab and Shift+Tab step past a group,
 /// a group's pickers are titled under it, and a row opened by name lands on its tab inside its group.
 /// </summary>
 public partial class SettingsMenuTests
@@ -15,14 +16,12 @@ public partial class SettingsMenuTests
     [Fact]
     public void TheStrip_AndItsGroups_ArePinned()
     {
-        Assert.Equal(["General", "Servers", "Voice", "Sessions", "Botchat", "Advisors"], SettingsMenu.StripTitles);
+        Assert.Equal(["Client", "Servers", "Voice", "Advisors"], SettingsMenu.StripTitles);   // Client since later on 2026-10-10 (the user's pick)
         Assert.Equal(
             [
-                [SettingsTab.General],
+                [SettingsTab.Chat, SettingsTab.Sessions, SettingsTab.BotChat],
                 [SettingsTab.Common, SettingsTab.Http, SettingsTab.Embedded, SettingsTab.Docker, SettingsTab.Anthropic, SettingsTab.OpenAI],
                 [SettingsTab.Tts, SettingsTab.Stt],
-                [SettingsTab.Sessions],
-                [SettingsTab.BotChat],
                 [SettingsTab.Advisors],
             ],
             SettingsMenu.StripTabs);
@@ -31,23 +30,28 @@ public partial class SettingsMenuTests
         Assert.Equal((1, 1), SettingsMenu.PlaceOf(SettingsTab.Http));   // right after Common (2026-10-10, the user's place)
         Assert.Equal((1, 5), SettingsMenu.PlaceOf(SettingsTab.OpenAI));
         Assert.Equal((2, 1), SettingsMenu.PlaceOf(SettingsTab.Stt));
-        Assert.Equal((3, 0), SettingsMenu.PlaceOf(SettingsTab.Sessions));
+        Assert.Equal((0, 1), SettingsMenu.PlaceOf(SettingsTab.Sessions));   // Chat, Sessions, Botchat: the user's order
+        Assert.Equal((0, 2), SettingsMenu.PlaceOf(SettingsTab.BotChat));
+        Assert.Equal((3, 0), SettingsMenu.PlaceOf(SettingsTab.Advisors));
         Assert.Equal(SettingsTab.Docker, SettingsMenu.TabAt(1, 3));
-        Assert.Equal(SettingsTab.Sessions, SettingsMenu.TabAt(3, -1));   // a plain tab's sub (none) is its one tab
+        Assert.Equal(SettingsTab.Advisors, SettingsMenu.TabAt(3, -1));   // a plain tab's sub (none) is its one tab
+        Assert.True(SettingsMenu.IsGroup(0));
         Assert.True(SettingsMenu.IsGroup(1));
-        Assert.False(SettingsMenu.IsGroup(0));
+        Assert.False(SettingsMenu.IsGroup(3));
 
         Assert.Equal(SettingsMenu.Title + " › Servers", SettingsMenu.GroupCrumb(SettingsTab.Anthropic));
         Assert.Equal(SettingsMenu.Title + " › Servers", SettingsMenu.GroupCrumb(SettingsTab.Http));
         Assert.Equal(SettingsMenu.Title + " › Voice", SettingsMenu.GroupCrumb(SettingsTab.Tts));
-        Assert.Equal(SettingsMenu.Title, SettingsMenu.GroupCrumb(SettingsTab.BotChat));
+        Assert.Equal(SettingsMenu.Title + " › Client", SettingsMenu.GroupCrumb(SettingsTab.BotChat));
+        Assert.Equal(SettingsMenu.Title + " › Client", SettingsMenu.GroupCrumb(SettingsTab.Chat));
+        Assert.Equal(SettingsMenu.Title, SettingsMenu.GroupCrumb(SettingsTab.Advisors));
     }
 
     [Fact]
     public async Task OnThePane_TheServersTab_ShowsTheSecondStrip_TheArrowsWalkIt_TabStepsPast()
     {
         var (menu, pane) = PaneMenu();
-        Push(Keys.Right);                     // Servers, on Common
+        Push(Keys.Tab);                       // Servers, on Common
         Push(Keys.Tab);                       // Voice, on TTS
         Push(Keys.Escape);
 
@@ -65,7 +69,7 @@ public partial class SettingsMenuTests
     public async Task OnThePane_ShiftTab_ComesBackToTheServersTabLastShown()
     {
         var (menu, pane) = PaneMenu();
-        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Right);   // Common, Http, Embedded, Docker
+        GoTo(SettingsTab.Docker);                   // Sessions, Botchat, Common, Http, Embedded, Docker
         Push(Keys.Tab, Keys.ShiftTab);              // Voice, then Servers again — on Docker
         Push(Keys.Enter, Keys.Escape, Keys.Escape); // Docker's first row: the group's crumb on its page
 

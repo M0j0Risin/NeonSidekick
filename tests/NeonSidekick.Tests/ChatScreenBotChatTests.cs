@@ -28,7 +28,7 @@ public partial class ChatScreenTests
         // section to every bot's request; the memory tests switch it on.
         _settings.Update(d => { d.TtsOutput = false; d.BotChatNonTtsDelaySeconds = 0; d.BotChatMemory = false; });
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName), "You are Neon. " + NeonMarker);
-        Profiles.Create(_dir, "ada", new AppSettingsData { LlmUrl = "http://ada-only-server:9999", LlmModel = "ada-only-model", TtsVoice = "bm_george" });
+        Profiles.Create(_dir, "ada", new AppSettingsData { LlmUrl = "http://ada-only-server:9999", LlmModel = "ada-only-model", TtsVoice = "bm_george", Avatar = "" });   // no avatar: the speaker lines here pin ◆ (🤖 the default since later on 2026-10-10)
         File.WriteAllText(Path.Combine(ProfileDir("ada"), PersonaFile.FileName), "You are Ada. " + AdaMarker);
     }
 

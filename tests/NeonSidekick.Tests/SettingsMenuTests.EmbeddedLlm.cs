@@ -31,7 +31,7 @@ public partial class SettingsMenuTests
         Assert.Equal("Embedded", SettingsMenu.TabTitles[tab]);
         Assert.Equal("Http", SettingsMenu.TabTitles[tab - 1]);   // fourth since 2026-10-10 (the LLM tab split into Common and Http); third since 2026-10-04 (the user's order: LLM second); second from later on 2026-09-29, after STT until then
         Assert.Equal("Common", SettingsMenu.TabTitles[tab - 2]);
-        Assert.Equal("General", SettingsMenu.TabTitles[tab - 3]);
+        Assert.Equal("Botchat", SettingsMenu.TabTitles[tab - 3]);   // Chat, Sessions and Botchat (the Client group) before it since later on 2026-10-10
         Assert.Equal("Docker", SettingsMenu.TabTitles[tab + 1]);   // the Docker servers' tab next to it (2026-10-02, the user's ask)
         Assert.Equal("Anthropic", SettingsMenu.TabTitles[tab + 2]);   // the Anthropic ("Claude" until 2026-10-04) and OpenAI tabs after Docker since 2026-10-03
         // The switch first and MTP last (2026-09-29, the user's asks); the VRAM budget under the GPU layers (later that day), the HF

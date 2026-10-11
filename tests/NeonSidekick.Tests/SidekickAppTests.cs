@@ -46,6 +46,7 @@ public partial class SidekickAppTests : IDisposable
         // Eight settings went off by default on 2026-09-29 (the user's call): the scripts here were written with every tool group
         // offered, the shell under ask and the local scan, so the fixture puts them back; the fresh-profile tests start from new ones.
         _settings.Update(PreFlipDefaults.Apply);
+        _settings.Update(d => d.Avatar = "");   // 🤖 by default since later on 2026-10-10: the renders here pin a reply's ●, as ChatScreenTests' fixture
     }
 
     public void Dispose()

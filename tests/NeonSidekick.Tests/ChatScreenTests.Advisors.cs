@@ -157,4 +157,66 @@ public partial class ChatScreenTests
         Assert.Empty(ChatScreen.ArgumentItems("/advisor", "dba why", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/advisor", "", sources with { Advisors = null }));
     }
+
+    /// <summary>
+    /// Under <c>/advisor</c> a chord works as under a reply (2026-10-10, the user's report: the chords and the mouse were dead while an
+    /// advisor answered, every line pended for the idle line): Ctrl+H opens the help pane while the advisor is still asked, and its
+    /// answer lands after.
+    /// </summary>
+    [Fact]
+    public async Task AdvisorCommand_UnderTheAsk_CtrlH_OpensTheHelpPane_AndTheAnswerLandsAfter()
+    {
+        AdvisorProfiles(on: false);
+        LoadOnThePane();
+        _chat.EnqueueText("Index the foreign key.");   // the advisor, on the borrowed server
+        var opened = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var input = WhenIdle(
+            i => PushLine(i, "/advisor dba Which index?"),
+            i => { i.Push(Keys.Escape); opened.TrySetResult(); },   // the help pane's read, the advisor still asked
+            i => PushLine(i, "/exit"));
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (i == 0)
+            {
+                input.Push(Keys.CtrlH);
+                await opened.Task.WaitAsync(TimeSpan.FromSeconds(10), ct);   // a bounded wait: a chord pended for the idle line (the bug) fails the ask, not the run
+            }
+        };
+
+        string output = await RunAsync(input);
+
+        int help = output.IndexOf(Titled(InfoPane.Title + " │ Basic · Advanced · Keys "), StringComparison.Ordinal);
+        int answer = output.IndexOf(TranscriptRenderer.ToolAnswerIndent + "Index the foreign key.\n", StringComparison.Ordinal);
+        Assert.True(help > 0 && answer > help, output);
+        Assert.DoesNotContain("  · " + ChatScreen.CancelledNotice, output);
+    }
+
+    /// <summary>Under <c>/advisor</c> the toolbar's 📈 toggles the performance bar while the advisor is still asked (2026-10-10): a quick act runs then, not at the idle line.</summary>
+    [Fact]
+    public async Task AdvisorCommand_UnderTheAsk_TheToolbarsRisingChart_TogglesTheBar_BeforeTheAnswer()
+    {
+        AdvisorProfiles(on: false);
+        _settings.Update(d => d.ToolbarItems = ["profile", "perf"]);
+        LoadOnThePane();
+        _chat.EnqueueText("Index the foreign key.");
+        var input = WhenIdle(
+            i => PushLine(i, "/advisor dba Which index?"),
+            i => PushLine(i, "/exit"));
+        bool toggledUnderTheAsk = false;
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (i == 0)
+            {
+                input.PushClick(3, 103);   // 📈 on the toolbar: /perfbar, a quick act run while the advisor is asked
+                input.PushClick(3, 103);
+                await UntilAsync(() => Output.Contains(Perf.PerfText.BarNotice("led"), StringComparison.Ordinal), ct);
+                toggledUnderTheAsk = true;
+            }
+        };
+
+        string output = await RunAsync(input);
+
+        Assert.True(toggledUnderTheAsk);
+        Assert.Contains(TranscriptRenderer.ToolAnswerIndent + "Index the foreign key.\n", output);
+    }
 }

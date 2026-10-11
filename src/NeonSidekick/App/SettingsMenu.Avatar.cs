@@ -6,7 +6,7 @@ using Spectre.Console;
 
 namespace NeonSidekick.App;
 
-// ── The avatar picker: /settings › General › Avatar and /avatar (2026-10-10) ──
+// ── The avatar picker: /settings › Client › Chat › Avatar and /avatar (2026-10-10) ──
 
 internal sealed partial class SettingsMenu
 {

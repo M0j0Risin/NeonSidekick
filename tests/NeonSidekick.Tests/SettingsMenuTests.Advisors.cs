@@ -9,12 +9,13 @@ namespace NeonSidekick.Tests;
 public partial class SettingsMenuTests
 {
     [Fact]
-    public void TheAdvisorsTab_IsAfterBotchat_WithItsEightRows()
+    public void TheAdvisorsTab_IsLast_WithItsEightRows()
     {
         int tab = (int)SettingsTab.Advisors;
         Assert.Equal("Advisors", SettingsMenu.TabTitles[tab]);
-        Assert.Equal("Botchat", SettingsMenu.TabTitles[tab - 1]);
-        Assert.Equal((5, 0), SettingsMenu.PlaceOf(SettingsTab.Advisors));
+        Assert.Equal("STT", SettingsMenu.TabTitles[tab - 1]);   // after STT since Sessions and Botchat went under Client (later on 2026-10-10); after Botchat until then
+        Assert.Equal(SettingsMenu.TabTitles.Count - 1, tab);
+        Assert.Equal((3, 0), SettingsMenu.PlaceOf(SettingsTab.Advisors));
         // The confirm under the iterations, in the Each call run, since later on 2026-10-10 (the user's ask; last until then).
         Assert.Equal(["Advisors enabled", "Advisor list", "Advisor context", "Advisor calls per turn", "Advisor tool iterations", "Advisor confirm", "Advisor thread length", "Advisor embedded mode"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
         Assert.Equal(["The panel", "Each call", "Threads and servers"], SettingsMenu.TabSections[SettingsTab.Advisors].Select(s => s.Title));

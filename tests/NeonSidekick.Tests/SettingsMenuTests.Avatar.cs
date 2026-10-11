@@ -12,13 +12,15 @@ namespace NeonSidekick.Tests;
 public partial class SettingsMenuTests
 {
     [Fact]
-    public void TheAvatarRow_IsUnderProfile_OnGeneral_ItsValueTheEmojiAndItsName()
+    public void TheAvatarRow_IsUnderProfile_OnChat_ItsValueTheEmojiAndItsName_TheRobotByDefault()
     {
-        Assert.Equal(SettingsField.Avatar, SettingsMenu.TabFields[(int)SettingsTab.General][1]);
+        Assert.Equal(SettingsField.Avatar, SettingsMenu.TabFields[(int)SettingsTab.Chat][1]);
         Assert.Equal("Avatar", SettingsMenu.FieldName(SettingsField.Avatar));
         Assert.False(SettingsMenu.IsToggle(SettingsField.Avatar));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.Avatar));
-        Assert.Equal(SettingsMenu.NoAvatarLabel, SettingsMenu.FieldValue(SettingsField.Avatar, new AppSettingsData(), "C:\\p"));
+        Assert.Equal("🤖", Emojis.AvatarRules.DefaultAvatar);   // the user's call, later on 2026-10-10 (none until then)
+        Assert.Equal("🤖 robot", SettingsMenu.FieldValue(SettingsField.Avatar, new AppSettingsData(), "C:\\p"));
+        Assert.Equal(SettingsMenu.NoAvatarLabel, SettingsMenu.FieldValue(SettingsField.Avatar, new AppSettingsData { Avatar = "" }, "C:\\p"));   // cleared: none
         Assert.Equal("🦊 fox", SettingsMenu.FieldValue(SettingsField.Avatar, new AppSettingsData { Avatar = "🦊" }, "C:\\p"));
         Assert.Equal("👍🏽 thumbs up: medium skin tone", SettingsMenu.FieldValue(SettingsField.Avatar, new AppSettingsData { Avatar = "👍🏽" }, "C:\\p"));
         Assert.Equal(SettingsMenu.NoAvatarLabel, SettingsMenu.FieldValue(SettingsField.Avatar, new AppSettingsData { Avatar = "fox" }, "C:\\p"));   // not an emoji: none
@@ -109,7 +111,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal("", _settings.Current.Avatar);
+        Assert.Equal(Emojis.AvatarRules.DefaultAvatar, _settings.Current.Avatar);   // unchanged: the default 🤖
         Assert.Contains("used by ada", Output);
         Assert.Contains(SettingsMenu.UnchangedNotice, Output);
         pane.Dispose();

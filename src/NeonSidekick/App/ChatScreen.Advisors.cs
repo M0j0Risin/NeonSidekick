@@ -160,14 +160,19 @@ internal sealed partial class ChatScreen
         var recent = AdvisorContextMode.IsRecent(effective.AdvisorContext) ? AdvisorRecent.Lines(_session.History.Messages) : null;
         using var askCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
-        _queuedClicks.Reset();
-        var watcher = _keys.WatchAsync(askCts, stop.Token, null, null, LiveLineHook, spend: SpendScroll, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
+        using var killScope = BeginKillScope(askCts);
+        // The reply's watch (2026-10-10, the user's report: the chords and the mouse were dead while an advisor answered; the /test and
+        // /cmd shape, as /imagine's and the embedded load's fixes): a line typed, a chord or a glyph's word goes through the mid-turn
+        // policy — a pane opens at once, a quick act runs while the advisor thinks, a message is queued — never pended for the idle line.
+        var watcher = StartReplyWatch(askCts, stop.Token, cancellationToken);
         string? answer = null;
         try
         {
             using (_transcript.BeginBusy(AdvisorText.AskingLabel))
             {
-                answer = await _neonAdvisor.AskAsync(advisor, question, "", recent, effective, askCts.Token).ConfigureAwait(false);
+                var asking = _neonAdvisor.AskAsync(advisor, question, "", recent, effective, askCts.Token);
+                await RunActsUntilAsync(asking).ConfigureAwait(false);
+                answer = await asking.ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (askCts.IsCancellationRequested)
@@ -178,6 +183,7 @@ internal sealed partial class ChatScreen
         {
             stop.Cancel();
             await watcher.ConfigureAwait(false);
+            await EndTurnAsync(closePane: askCts.IsCancellationRequested, cancellationToken).ConfigureAwait(false);
         }
 
         DrainDiagnostics();

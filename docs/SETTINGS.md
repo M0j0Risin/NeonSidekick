@@ -18,15 +18,15 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 
 ## Navigation
 * **Keyboard:** ←/→ switch tabs, ↑/↓ move, Enter edits or toggles, Space flips an on/off row at once, ESC closes.
-* **What a row does:** under the list, the highlighted setting's description and its default. On the Offered tabs of `/tools` and `/skills`, and `/mcp`'s Tools tab, it is the highlighted tool's or skill's whole description, with why it isn't offered (a tool's) or its warning (a skill's) on the last line. A long tab is split into sections (General, Common, Http, Botchat), and a tab whose rows all start with its name drops the name (the Botchat tab's *Botchat LLM mode* reads *LLM mode*; notices and this file keep the full name).
+* **What a row does:** under the list, the highlighted setting's description and its default. On the Offered tabs of `/tools` and `/skills`, and `/mcp`'s Tools tab, it is the highlighted tool's or skill's whole description, with why it isn't offered (a tool's) or its warning (a skill's) on the last line. A long tab is split into sections (Chat, Common, Http, Botchat), and a tab whose rows all start with its name drops the name (the Botchat tab's *Botchat LLM mode* reads *LLM mode*; notices and this file keep the full name).
 * **Under a list:** the other list panes show the highlighted row whole under the list too, with what the row has no room for: `/sessions` (when it started and last ran, its turns and model), `/queue` and `/rewind` (the whole message), `/process` (the whole command, its state and run time), `/docker` (image, project, ports, networks, status), `/youtube list` and a YouTube search's results, the `/server` and `/model` pickers (the URL, the probe's detail, the whole model id), `/mcp`'s Servers tab (a failed server's whole error, a connected one's tools, the file an edit row opens), and the allowed commands and police strings.
 * **Typing to filter:** on `/sessions`, `/server`, `/docker`, `/youtube list` and the allowed commands, as on `/model` and the Offered tabs, typing narrows the list (the caption counts what is left); Backspace erases, the first ESC clears it. A pane's own key letters (`/docker`'s `r`, `/youtube list`'s `d` and `c`) still work until you start typing.
 * **Keys:** the hint row names each key in lowercase (`w = watch`), and ESC reads *close* on a pane's top level and *back* on a page opened from it. Removing anything from a list asks first, with No on the cursor, and an empty list opens its pane on one dim line. Every pane's keys are listed under [Pane keys](COMMANDS.md#pane-keys).
 * **Finding in an info pane:** on the read-only panes (`/help`, `/sys`, `/about`, `/tree`, `/docker logs`, an approval's `v` view…), typing finds: every match is marked, the view goes to the first from where it was, and the hint row reads `find: tab · 3 of 12`. Enter or F3 goes to the next (wrapping), Shift+Enter or Shift+F3 to the one before (Shift+F3 on a Mac, whose terminal sends Shift+Enter as Enter), Backspace erases, and the first ESC clears the find (the next closes the pane). A tab switch keeps the find and looks in the new tab. It finds what is on the screen, so a word the window wraps across two rows is not found.
-* **Tabs:** the tab you are on is underlined. A small number after a tab's name (`General³`) counts its settings that differ from the default; those settings' values show in the same colour.
+* **Tabs:** the tab you are on is underlined. A small number after a tab's name (`Client³`) counts its settings that differ from the default; those settings' values show in the same colour.
 * **Scrolling:** a list cut by the window ends in a row like `▲▼ 13–25 of 58`, an arrow for each way there is more.
 * **`/tools` Offered:** a group that is off says why on its heading (the one reason that holds), and a tool switched on under it reads `(on)`.
-* **Second strip:** some tabs hold tabs of their own, shown as a second row of tabs under the first while you are on it: `/settings`' Servers (Common, Http, Embedded, Docker, Anthropic, OpenAI) and Voice (TTS, STT), `/tools`' Files, Integrations, Database and Media (their menus), `/skills`' Offered (all, profile, global) and `/mcp`'s Tools with two servers or more connected (all, then each server). ←/→ step through every one in turn and on into the next tab (on `/tools` from Obsidian into Docker, from YouTube into SQL, from Oracle into Print), Tab and Shift+Tab jump a whole tab and skip past them, and coming back finds the one you left. A click on a name shows it.
+* **Second strip:** some tabs hold tabs of their own, shown as a second row of tabs under the first while you are on it: `/settings`' Client (Chat, Sessions, Botchat), Servers (Common, Http, Embedded, Docker, Anthropic, OpenAI) and Voice (TTS, STT), `/tools`' Files, Integrations, Database and Media (their menus), `/skills`' Offered (all, profile, global) and `/mcp`'s Tools with two servers or more connected (all, then each server). ←/→ step through every one in turn and on into the next tab (on `/tools` from Obsidian into Docker, from YouTube into SQL, from Oracle into Print), Tab and Shift+Tab jump a whole tab and skip past them, and coming back finds the one you left. A click on a name shows it.
 * **Mouse:** a click moves the cursor; a double-click picks a row or tab (on the input line, selects a word). The × at the top right works like ESC, and a double-click outside an open pane closes it. A double-click on a picture in the transcript opens it in the [picture viewer](COMMANDS.md#picture-viewer).
 
 ## The input line
@@ -141,7 +141,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | performance bar (anywhere on it) | *Show performance bar* has a meter checked | `/settings` |
 
 ## Panes
-* `/settings`: the app (General), the LLM and its servers (Servers: Common, Http, Embedded, Docker, Anthropic with Claude Code and `/claude`, OpenAI), voice (Voice: TTS, STT), sessions and `/botchat`
+* `/settings`: the app (Client: Chat, Sessions, Botchat), the LLM and its servers (Servers: Common, Http, Embedded, Docker, Anthropic with Claude Code and `/claude`, OpenAI), voice (Voice: TTS, STT) and the profile advisors (Advisors)
 * `/skills`: agent skills and self-reflection
 * `/tools`: the model's tools
 * `/mcp`: external MCP servers
@@ -152,14 +152,18 @@ Settings that an environment variable or flag can override for one launch are li
 
 ## App settings (`/settings`)
 
-### General
+### Client
+
+The app itself, this side of the connection: three tabs on one, each a tab of the second strip under the first (Chat · Sessions · Botchat): ←/→ walk them, Tab skips past them. Chat was the General tab, and Sessions and Botchat tabs of their own, until 2026-10-10.
+
+#### Chat
 
 The pane heads its runs **Who and where**, **Input line**, **Transcript**, **Screen** and **Outside apps**; every tab's runs are headed the same way, and the cursor skips the headings.
 
 | Setting | What it does | Default |
 |---|---|---|
 | Profile | Switches profile (each has its own settings, persona, memory, skills and sessions); a typed letter jumps to the next profile starting with it. | `neon` |
-| Avatar | The profile's emoji: it opens each of the profile's replies in place of ●, marks its `/botchat` speaker line in place of ◆, and goes before its name in the window title. Enter opens a grid picker (see [The avatar picker](#the-avatar-picker)); `/avatar` opens it too. `/profile reset` keeps it; a profile `/profile add` makes starts with none; `/profile push`/`pull` never carry it. | none |
+| Avatar | The profile's emoji: it opens each of the profile's replies in place of ●, marks its `/botchat` speaker line in place of ◆, and goes before its name in the window title. Enter opens a grid picker (see [The avatar picker](#the-avatar-picker)); `/avatar` opens it too. 🚫 on the picker (or `/avatar clear`) leaves none. `/profile reset` keeps it; a profile `/profile add` makes starts with 🤖; `/profile push`/`pull` never carry it. | 🤖 |
 | New profile mode | What `/profile add` copies: `basic` the settings and memories; `advanced` also the persona, operating-rules and voice-directive files. | `basic` |
 | Working directory (cwd) | The folder the file and GitLib tools work in; empty is the profile's `files\` folder. The row opens the `/cwd browse` folder picker; `/cwd <path>` sets one by hand. | profile's `files\` |
 | Memory mode | `read-write` offers `save_memory` / `recall_memory` and opens every conversation with what is remembered; `read-only` offers `recall_memory` alone, so the model reads but never saves (your `/remember` still does); `disabled` turns memory off and refuses `/remember`. | read-write |
@@ -186,7 +190,7 @@ The pane heads its runs **Who and where**, **Input line**, **Transcript**, **Scr
 | Draft editor | The program `/draft` opens with (`code --wait`, `notepad`…); it must wait for the file to close. Empty uses the app the system opens `.txt` files with (TextEdit on a Mac unless you chose another). | (default .txt editor) |
 | Image viewer | Where a double-clicked picture opens: empty for the built-in viewer, `system` for Windows' app for the file type, or a command the path is appended to (`mspaint`, `"C:\Program Files\GIMP 3\bin\gimp-3.exe"`). On a Mac `system` is the app macOS opens the file with (Preview unless you chose another), and empty falls back to it with no desktop to draw on (over SSH). | (built-in viewer) |
 
-#### The avatar picker
+##### The avatar picker
 
 * Enter on *Avatar* (or `/avatar`) opens a grid of every emoji Windows Terminal draws: 1,637 from Unicode's Emoji 15.1, without the country and regional flags (Windows has no flag pictures and draws the two letters) or anything newer.
 * The tabs: **⭐ For you** (emoji whose names and keywords match the words of the profile's name and the opening of its `persona.md`; shown when any do), **🕘 Recent** (*In use*, the avatars of this and the other profiles, then the ones you picked last, shared by every profile), then one per Unicode group (Smileys, People, Animals, Food, Travel, Activities, Objects, Symbols, Flags), each in its subgroups' sections. Tab and Shift+Tab step the tabs; the arrows move in the grid; a click moves to a cell and a double-click takes it.
@@ -196,14 +200,14 @@ The pane heads its runs **Who and where**, **Input line**, **Transcript**, **Scr
 * The profile's avatar sits on a highlighted slab, another profile's on a darker one, so bots in `/botchat` stay easy to tell apart. The band under the grid names the emoji, its keywords, code points and emoji version, who wears it, and how the title and a reply will read.
 * The recent picks and the last tone live in `emoji.json` in the home folder.
 
-#### Welcome splash
+##### Welcome splash
 
 * `fullsize` fills the screen with one picture; ←/→ step through the set. Delete twice on an empty line moves one of the profile's own pictures to the folder's `.trash` (move it back to restore it).
 * `tiled` shows thumbnails at *Image thumbnail size*; ←/→ page and a double-click opens one.
 * Pictures in the profile's `images\splash_images\` folder replace the built-in ones (`set_splash_image` copies one there). Until 2026-10-10 the folder was the profile's `splash\`; pictures left there no longer show, so move them across.
 * `/splash` shows the splash whatever the setting (tiled under `tiled`, otherwise one picture). A theme change restarts the screen like `/clear`.
 
-#### Performance bar
+##### Performance bar
 
 * Values turn amber from 60 % and red from 85 %. A meter the machine can't read (no GPU, no network) is left out.
 * On Windows an NVIDIA GPU is read through its driver (NVML); any other through Windows' GPU counters, for the card with the most memory.
@@ -211,6 +215,54 @@ The pane heads its runs **Who and where**, **Input line**, **Transcript**, **Scr
 * The network meters follow the busiest adapter that is up and has a gateway, so a VPN over Wi-Fi isn't counted twice. NET↓ and NET↑ show bits per second (`850K`, `12.4M`, `1.2G`); their gauges show the share of the link.
 * PROC counts the model's background processes still running (`/process` lists them). It is a number in every look, with no gauge, sparkline or LEDs, dim at none.
 * `/perfbar` or the toolbar's 📈 hides the bar, or brings it back with the meters it last had.
+
+#### Sessions
+
+The pane heads its runs **Saving**, **Titles** and **Search tool**.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Session logging | Saves every turn to the profile's `sessions.db` for `/sessions` to list, search and restore. | on |
+| Session save thinking | Saves each reply's thinking, so a resumed session can send it back under *LLM preserve thinking*. | off |
+| Session retention (days) | Deletes sessions older than this at startup (0–3650; 0 = keep forever). | 0 |
+| Session naming mode | `model-written` asks the model for a title after the first turn; `first-line` uses your first line. | `model-written` |
+| Session show name | Which titles show on the rule above the input row: `all-names`, `model-written` (a model-written or typed name only) or `none`. | `all-names` |
+| Session tool | Offers `session_manager`, to search, list and read earlier sessions (never restore or purge). | on |
+| Session search max results | Sessions one search or list returns (1–20). | 10 |
+
+#### Botchat
+
+The pane heads its runs **Models**, **Pictures**, **Pace**, **Tools and skills**, **Memory** and **Seeing**.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Botchat LLM mode | `single`: every bot uses this profile's server, model and reasoning. `multi`: each bot uses its own profile's (a blank URL borrows this one's). A bot whose server doesn't answer sits the chat out. Read when a chat starts or resumes. | `single` |
+| Botchat multi-embedded | Under `multi`, for bots wanting a different embedded model from the one running. `parent-server`: they share the running model, with a warning. `multi-server`: one extra `llama-server` per model, started in turn under that bot's profile's Embedded settings so each fits in what's left. Bots on one model share its server. | `parent-server` |
+| Botchat multi-embedded kill | Stops `multi-server`'s extra servers when the chat ends. Off, they run until `/botchat --kill` or you quit, and a later chat reuses them. | on |
+| Botchat ComfyUI enabled | Gives the bots this profile's *ComfyUI workflows offered* for pictures. Off, *Botchat ComfyUI limited workflows* says; with neither, the chat is talk alone. Needs *ComfyUI tools* and a *ComfyUI URL*. | off |
+| Botchat ComfyUI limited workflows | With *Botchat ComfyUI enabled* off, the workflows the bots get: tick them (`a` / `n`), any installed workflow, offered to this chat or not. None ticked: no pictures. A ticked workflow no longer installed is dropped when the checklist opens. | (none) |
+| Botchat image mode | `automatic`: the app writes a prompt from each reply and draws it. `autonomous`: the bots get `generate_image` over the botchat workflows and draw when they choose. See [Botchat pictures](#botchat-pictures). | `automatic` |
+| Botchat img2img mode | Which pictures a rework may start from: the `latest`, or any in `chat-history` (the last 8). Only with an image → image workflow among the botchat workflows. | `latest` |
+| Botchat image async | On: the next bot speaks while a picture renders. Off: each reply waits for its picture and appears with it. | on |
+| Botchat non-TTS delay | A reading pause after each reply when *TTS output* is off (0–30 s). A line you send meanwhile, or one queued while the bot was replying, ends the pause and goes to the bots at once; ESC ends the chat. | 5 |
+| Botchat tools enabled | Offers every bot the tools a turn of this chat would get: the same switches, `/tools` list and panes (the shell's approval, the Docker, Home Assistant and print confirms, `ask_user`, the camera's shutter); while you plan, only plan mode's read-only tools. Not memory, skills or the ComfyUI tools, which have their own rows. Off, *Botchat limited tools* says. | off |
+| Botchat limited tools | With *Botchat tools enabled* off, the tools the bots get: tick them, grouped as on `/tools` (`a` / `n`). Each is offered only while this chat would offer it. None ticked: no tools. The ComfyUI tools aren't listed. A ticked tool not listed now (an MCP server not connected) shows at the end under *Not available now*; untick it there, or `n` clears it. | (none) |
+| Botchat skills enabled | Offers every bot `load_skill` over the starting profile's, the global and (with *Use external skills*) the external skills, never a bot's own profile's. The `automatic` prompt writer gets them too. Needs *Agent skills*; switching `load_skill` off in `/tools` turns this off. Off, *Botchat limited skills* says. | off |
+| Botchat limited skills | With *Botchat skills enabled* off, the skills the bots (and the `automatic` prompt writer) may load: tick them (`a` / `n`), and `load_skill` is offered for those alone. None ticked: no skill tool. Needs *Agent skills*. A ticked skill not listed now shows after the others as *not available now*; untick it there, or `n` clears it. | (none) |
+| Botchat memory enabled | Gives every bot memories: the list in its prompt, plus `save_memory` and `recall_memory`. Inside `/botchat` this alone decides, over every profile's *Memory mode*. | on |
+| Botchat memory mode | Whose memories: `shared-parent` (every bot uses the starting profile's) or `independent` (each bot its own profile's). | `shared-parent` |
+| Botchat vision enabled | Shows each bot, on its turn, the newest 4 pictures since it last spoke (not its own), captioned with whose they are. Needs models that read images. Not kept for `--resume` or the session. | off |
+| Botchat camera | The bots see you: each turn gets a fresh camera picture, captioned as a photo of you. Kept in memory only. Needs models that read images; a failing camera is one warning. Read when a chat starts. | off |
+
+##### Botchat pictures
+
+* **The botchat workflows** are *Botchat ComfyUI enabled*'s (this profile's offered ones) or *Botchat ComfyUI limited workflows*' (any installed ones). Their text → image workflows draw new pictures and their image → image ones rework the chat's pictures; other kinds are skipped. The bots never get the main chat's own `generate_image`, so these rows alone say which workflows they use. Pictures are drawn at *Image thumbnail size*.
+* **`automatic`:** after each reply, the model writes an image prompt in the workflow family's style and the app draws it. With several workflows of a kind, the writer is shown each one's style and names its pick (`WORKFLOW name`). The bots get no tool.
+* **`autonomous`:** the bots get `generate_image`, limited to the botchat workflows. A reply that describes a picture the bot never drew gets it drawn anyway. A tool call written out as text (`<tool_call>` markup included) runs as a real call and is never shown or spoken.
+* **Reworks:** once there's a picture and an image → image workflow, the next prompt's writer chooses between a new picture and a rework (`REWORK` or `REWORK n` in `automatic`; an `image` path in `autonomous`). A picture still rendering can't be reworked.
+* **Async on:** 🖼️ (🎨 for a rework) shows on the hint row while a picture renders, with a count when several are pending. Each picture is labelled with whose reply it shows. Without speech, pictures go to ComfyUI one at a time.
+* **Async off:** ESC on a held reply cuts that bot short; ESC under the picture's spinner skips just that picture.
+* **Skills:** with *Botchat skills enabled*, the `automatic` prompt writer may load a skill first, so "use the pony-prompts skill for pictures" holds from the first picture. With it off, *Botchat limited skills* offers the writer the ticked skills alone.
 
 ### Servers
 
@@ -480,54 +532,6 @@ Voice input sets up in the background (🎙️ on the hint row); until it's read
 | STT interrupt | Saying the wake phrase while a reply is spoken cuts it short and listens (`/stt interrupt`). | off |
 | STT interrupt echo guard | Ignores the assistant's own voice: speech this close to the wake phrase that it just spoke is an echo (50–100 %; 100 = the exact phrase only). | 100 |
 | STT interrupt confirm | How long the phrase must hold in the recogniser's interim results before it counts (0–2000 ms). | 200 |
-
-### Sessions
-
-The pane heads its runs **Saving**, **Titles** and **Search tool**.
-
-| Setting | What it does | Default |
-|---|---|---|
-| Session logging | Saves every turn to the profile's `sessions.db` for `/sessions` to list, search and restore. | on |
-| Session save thinking | Saves each reply's thinking, so a resumed session can send it back under *LLM preserve thinking*. | off |
-| Session retention (days) | Deletes sessions older than this at startup (0–3650; 0 = keep forever). | 0 |
-| Session naming mode | `model-written` asks the model for a title after the first turn; `first-line` uses your first line. | `model-written` |
-| Session show name | Which titles show on the rule above the input row: `all-names`, `model-written` (a model-written or typed name only) or `none`. | `all-names` |
-| Session tool | Offers `session_manager`, to search, list and read earlier sessions (never restore or purge). | on |
-| Session search max results | Sessions one search or list returns (1–20). | 10 |
-
-### Botchat
-
-The pane heads its runs **Models**, **Pictures**, **Pace**, **Tools and skills**, **Memory** and **Seeing**.
-
-| Setting | What it does | Default |
-|---|---|---|
-| Botchat LLM mode | `single`: every bot uses this profile's server, model and reasoning. `multi`: each bot uses its own profile's (a blank URL borrows this one's). A bot whose server doesn't answer sits the chat out. Read when a chat starts or resumes. | `single` |
-| Botchat multi-embedded | Under `multi`, for bots wanting a different embedded model from the one running. `parent-server`: they share the running model, with a warning. `multi-server`: one extra `llama-server` per model, started in turn under that bot's profile's Embedded settings so each fits in what's left. Bots on one model share its server. | `parent-server` |
-| Botchat multi-embedded kill | Stops `multi-server`'s extra servers when the chat ends. Off, they run until `/botchat --kill` or you quit, and a later chat reuses them. | on |
-| Botchat ComfyUI enabled | Gives the bots this profile's *ComfyUI workflows offered* for pictures. Off, *Botchat ComfyUI limited workflows* says; with neither, the chat is talk alone. Needs *ComfyUI tools* and a *ComfyUI URL*. | off |
-| Botchat ComfyUI limited workflows | With *Botchat ComfyUI enabled* off, the workflows the bots get: tick them (`a` / `n`), any installed workflow, offered to this chat or not. None ticked: no pictures. A ticked workflow no longer installed is dropped when the checklist opens. | (none) |
-| Botchat image mode | `automatic`: the app writes a prompt from each reply and draws it. `autonomous`: the bots get `generate_image` over the botchat workflows and draw when they choose. See [Botchat pictures](#botchat-pictures). | `automatic` |
-| Botchat img2img mode | Which pictures a rework may start from: the `latest`, or any in `chat-history` (the last 8). Only with an image → image workflow among the botchat workflows. | `latest` |
-| Botchat image async | On: the next bot speaks while a picture renders. Off: each reply waits for its picture and appears with it. | on |
-| Botchat non-TTS delay | A reading pause after each reply when *TTS output* is off (0–30 s). A line you send meanwhile, or one queued while the bot was replying, ends the pause and goes to the bots at once; ESC ends the chat. | 5 |
-| Botchat tools enabled | Offers every bot the tools a turn of this chat would get: the same switches, `/tools` list and panes (the shell's approval, the Docker, Home Assistant and print confirms, `ask_user`, the camera's shutter); while you plan, only plan mode's read-only tools. Not memory, skills or the ComfyUI tools, which have their own rows. Off, *Botchat limited tools* says. | off |
-| Botchat limited tools | With *Botchat tools enabled* off, the tools the bots get: tick them, grouped as on `/tools` (`a` / `n`). Each is offered only while this chat would offer it. None ticked: no tools. The ComfyUI tools aren't listed. A ticked tool not listed now (an MCP server not connected) shows at the end under *Not available now*; untick it there, or `n` clears it. | (none) |
-| Botchat skills enabled | Offers every bot `load_skill` over the starting profile's, the global and (with *Use external skills*) the external skills, never a bot's own profile's. The `automatic` prompt writer gets them too. Needs *Agent skills*; switching `load_skill` off in `/tools` turns this off. Off, *Botchat limited skills* says. | off |
-| Botchat limited skills | With *Botchat skills enabled* off, the skills the bots (and the `automatic` prompt writer) may load: tick them (`a` / `n`), and `load_skill` is offered for those alone. None ticked: no skill tool. Needs *Agent skills*. A ticked skill not listed now shows after the others as *not available now*; untick it there, or `n` clears it. | (none) |
-| Botchat memory enabled | Gives every bot memories: the list in its prompt, plus `save_memory` and `recall_memory`. Inside `/botchat` this alone decides, over every profile's *Memory mode*. | on |
-| Botchat memory mode | Whose memories: `shared-parent` (every bot uses the starting profile's) or `independent` (each bot its own profile's). | `shared-parent` |
-| Botchat vision enabled | Shows each bot, on its turn, the newest 4 pictures since it last spoke (not its own), captioned with whose they are. Needs models that read images. Not kept for `--resume` or the session. | off |
-| Botchat camera | The bots see you: each turn gets a fresh camera picture, captioned as a photo of you. Kept in memory only. Needs models that read images; a failing camera is one warning. Read when a chat starts. | off |
-
-#### Botchat pictures
-
-* **The botchat workflows** are *Botchat ComfyUI enabled*'s (this profile's offered ones) or *Botchat ComfyUI limited workflows*' (any installed ones). Their text → image workflows draw new pictures and their image → image ones rework the chat's pictures; other kinds are skipped. The bots never get the main chat's own `generate_image`, so these rows alone say which workflows they use. Pictures are drawn at *Image thumbnail size*.
-* **`automatic`:** after each reply, the model writes an image prompt in the workflow family's style and the app draws it. With several workflows of a kind, the writer is shown each one's style and names its pick (`WORKFLOW name`). The bots get no tool.
-* **`autonomous`:** the bots get `generate_image`, limited to the botchat workflows. A reply that describes a picture the bot never drew gets it drawn anyway. A tool call written out as text (`<tool_call>` markup included) runs as a real call and is never shown or spoken.
-* **Reworks:** once there's a picture and an image → image workflow, the next prompt's writer chooses between a new picture and a rework (`REWORK` or `REWORK n` in `automatic`; an `image` path in `autonomous`). A picture still rendering can't be reworked.
-* **Async on:** 🖼️ (🎨 for a rework) shows on the hint row while a picture renders, with a count when several are pending. Each picture is labelled with whose reply it shows. Without speech, pictures go to ComfyUI one at a time.
-* **Async off:** ESC on a held reply cuts that bot short; ESC under the picture's spinner skips just that picture.
-* **Skills:** with *Botchat skills enabled*, the `automatic` prompt writer may load a skill first, so "use the pony-prompts skill for pictures" holds from the first picture. With it off, *Botchat limited skills* offers the writer the ticked skills alone.
 
 ### Advisors
 

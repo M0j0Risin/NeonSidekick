@@ -36,7 +36,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// A tab's badge in the strip (2026-10-07, the user's ask): how many of its rows differ from the default, in superscript
-    /// digits (<c>General³</c>), so it hugs the title without a cell of its own between; null for none changed. Pinned.
+    /// digits (<c>Client³</c>), so it hugs the title without a cell of its own between; null for none changed. Pinned.
     /// </summary>
     public static string? ChangedBadge(int changed)
     {

@@ -9,6 +9,12 @@ namespace NeonSidekick.Emojis;
 /// </summary>
 public static class AvatarRules
 {
+    /// <summary>
+    /// The avatar a profile wears until one is picked (later on 2026-10-10, the user's call: none until then), and the one a profile
+    /// <c>/profile add</c> makes starts with. 🚫 on the picker, <c>/avatar clear</c>, still clears it: an empty value saved is none.
+    /// </summary>
+    public const string DefaultAvatar = "🤖";
+
     /// <summary>Whether <paramref name="text"/> (already trimmed) is one emoji as above.</summary>
     public static bool IsEmoji(string? text)
     {
