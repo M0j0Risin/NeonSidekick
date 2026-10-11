@@ -11,7 +11,7 @@ A fresh profile offers the model no tools and looks for no server: *File tools*,
 are off, *Shell command policy* is `off` and *LLM server scan mode* is `disabled`. The examples below assume a profile set up in
 the TUI beforehand (`/tools`, `/settings`) or its `profile.json` edited: a server saved or given with `--url`, and the
 tool groups a job needs switched on. `NEONSIDEKICK_COMMAND_POLICY` or `--yolo` sets the shell policy for one run.
-The SQL, Oracle, MySQL, PostgreSQL, SQLite, UNC (Windows only) and ComfyUI tools also offer nothing until entries are ticked
+The SQL, Oracle, MySQL, PostgreSQL, SQLite, UNC and ComfyUI tools also offer nothing until entries are ticked
 in their *… offered* lists (the `/tools` tabs, or an add wizard's offer row; in `profile.json`, `SqlConnectionsOffered`,
 `OracleConnectionsOffered`, `MySqlConnectionsOffered`, `PostgresConnectionsOffered`, `SqliteDatabasesOffered`, `UncSharesOffered`,
 `ComfyWorkflowsOffered`); headless has no way to tick them. SQLite files in the working directory need no ticking.

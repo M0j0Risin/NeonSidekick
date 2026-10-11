@@ -5101,12 +5101,12 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>
-    /// On a Mac the groups that need Windows say so on <c>/tools</c> (2026-10-06, the tidy-up before the first Mac release): UNC with
-    /// a share named and offered, switched on, heading <c>(off: it needs Windows)</c>; printing, which a Mac does since 2026-10-08
-    /// (CUPS), and Docker, over the engine's socket since 2026-10-11, switched on too and offered, their headings with no such reason.
+    /// On a Mac the groups that needed Windows (2026-10-06, the tidy-up before the first Mac release, headed <c>(off: it needs
+    /// Windows)</c>) are offered now: printing since 2026-10-08 (CUPS), Docker over the engine's socket and UNC over its mounts since
+    /// 2026-10-11 — each switched on, a share named and offered, no heading saying it needs Windows.
     /// </summary>
     [UnixFact]
-    public async Task Tools_OnMacOS_TheWindowsOnlyGroups_SayTheyNeedWindows()
+    public async Task Tools_OnMacOS_TheOnceWindowsOnlyGroups_AreOffered()
     {
         if (!OperatingSystem.IsMacOS())
         {
@@ -5121,7 +5121,8 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string reason = "(off: " + ToolsText.NeedsWindowsReason + ")\n";
-        Assert.Matches(@"·   UNC \(\d+\) " + System.Text.RegularExpressions.Regex.Escape(reason), output);
+        Assert.DoesNotMatch(@"·   UNC \(\d+\) " + System.Text.RegularExpressions.Regex.Escape(reason), output);   // a Mac mounts shares since 2026-10-11
+        Assert.Matches(@"UNC \(\d+\)", output);
         Assert.DoesNotMatch(@"·   Docker \(\d+\) " + System.Text.RegularExpressions.Regex.Escape(reason), output);   // a Mac reaches its engine's socket since 2026-10-11
         Assert.Matches(@"Docker \(6\)", output);
         Assert.DoesNotMatch(@"·   Print \(\d+\) " + System.Text.RegularExpressions.Regex.Escape(reason), output);

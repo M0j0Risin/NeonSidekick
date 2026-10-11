@@ -79,13 +79,17 @@ public sealed class UncShareConfig
     /// <summary>The Credential Manager entry this share's password is read from under <c>credman</c>.</summary>
     public string CredentialTarget(string name) => string.IsNullOrWhiteSpace(Credential) ? CredentialPrefix + name : Credential.Trim();
 
-    /// <summary>The share's root, full, <c>\</c>-spelled, without a trailing separator. Call only on an entry without a <see cref="Problem"/>.</summary>
+    /// <summary>
+    /// The share's root, full, in the platform's spelling (<see cref="UncPath"/>: <c>\\server\share\x</c> or <c>D:\x</c> on Windows,
+    /// <c>smb://server/share/x</c> or <c>/x</c> on a Mac), without a trailing separator. On a Mac a network root is a name, not a path
+    /// the files are under (<see cref="MacShareMounts"/>). Call only on an entry without a <see cref="Problem"/>.
+    /// </summary>
     [JsonIgnore]
     public string Root => NormalizeRoot(Path!);
 
-    /// <summary>Whether <see cref="Root"/> is a network path (<c>\\server\share…</c>) rather than a local folder.</summary>
+    /// <summary>Whether <see cref="Root"/> is a share on the network (<c>\\server\share…</c>, a Mac's <c>smb://…</c>) rather than a local folder.</summary>
     [JsonIgnore]
-    public bool IsUnc => Root.StartsWith(@"\\", StringComparison.Ordinal);
+    public bool IsUnc => UncPath.IsNetwork(Root, OperatingSystem.IsWindows());
 
     /// <summary>
     /// The reason this entry cannot be used, or null: the path (<see cref="PathProblem"/>), an auth, access or store word out of
@@ -126,9 +130,9 @@ public sealed class UncShareConfig
                     return UncText.RunAsNoUser;
                 }
 
-                if (WindowsCredentials.SplitAccount(User) is null)
+                if (RunAsAccountProblem(User, OperatingSystem.IsWindows()) is { } account)
                 {
-                    return SqlText.RunAsNeedsDomain(User.Trim());
+                    return account;
                 }
             }
             else if (InCredentialManager)
@@ -150,12 +154,17 @@ public sealed class UncShareConfig
     {
         get
         {
-            if (Problem is not null || IsUnc)
+            if (Problem is not null)
             {
                 return null;
             }
 
-            if (IsMappedDrive(Root))
+            if (IsUnc)
+            {
+                return IsRunAs && !OperatingSystem.IsWindows() ? UncText.RunAsMountedWarning(User!.Trim()) : null;
+            }
+
+            if (OperatingSystem.IsWindows() && IsMappedDrive(Root))
             {
                 return UncText.MappedDriveWarning(Root[..2]);
             }
@@ -165,22 +174,34 @@ public sealed class UncShareConfig
     }
 
     /// <summary>
-    /// Why <paramref name="path"/> cannot be a share's root, or null. It must be absolute: <c>\\server\share</c> (a folder under it
-    /// too) or a fully qualified local folder <c>X:\folder</c> — never a device path (<c>\\?\</c>, <c>\\.\</c>), a drive-relative
-    /// <c>C:folder</c>, a rooted <c>\folder</c>, a whole drive (<c>D:\</c>: a share is a folder), or a stream (<c>:</c> past the
-    /// drive). Pure: nothing is touched.
+    /// Why <paramref name="path"/> cannot be a share's root on this machine, or null (<see cref="PathProblem(string?, bool)"/>).
     /// </summary>
-    public static string? PathProblem(string? path)
+    public static string? PathProblem(string? path) => PathProblem(path, OperatingSystem.IsWindows());
+
+    /// <summary>
+    /// Why <paramref name="path"/> cannot be a share's root, or null. It must be absolute. On Windows: <c>\\server\share</c> (a folder
+    /// under it too; a Mac's <c>smb://</c> reads as it) or a fully qualified local folder <c>X:\folder</c> — never a device path
+    /// (<c>\\?\</c>, <c>\\.\</c>), a drive-relative <c>C:folder</c>, a rooted <c>\folder</c>, a whole drive (<c>D:\</c>: a share is a
+    /// folder), or a stream (<c>:</c> past the drive). On a Mac (2026-10-11): <c>smb://server/share</c> (or <c>\\…</c>, <c>//…</c>) or
+    /// an absolute <c>/folder</c> — never a device path, a drive path (a Windows entry in a shared file: skipped, said why), <c>/</c>
+    /// itself, or a <c>..</c> above the share. Pure: nothing is touched.
+    /// </summary>
+    public static string? PathProblem(string? path, bool windows)
     {
-        string text = (path ?? "").Trim().Replace('/', '\\');
+        string text = UncPath.Spell(path, windows);
         if (text.Length == 0)
         {
             return UncText.NoPath;
         }
 
-        if (text.StartsWith(@"\\?\", StringComparison.Ordinal) || text.StartsWith(@"\\.\", StringComparison.Ordinal))
+        if (UncPath.IsDevicePath(path ?? ""))
         {
-            return UncText.DevicePath(text);
+            return windows ? UncText.DevicePath(text) : UncText.DevicePathHere((path ?? "").Trim());
+        }
+
+        if (!windows)
+        {
+            return MacPathProblem(text);
         }
 
         if (text.StartsWith(@"\\", StringComparison.Ordinal))
@@ -216,7 +237,7 @@ public sealed class UncShareConfig
 
         try
         {
-            NormalizeRoot(text);
+            UncPath.Normalize(text, windows: true);
         }
         catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
         {
@@ -226,9 +247,67 @@ public sealed class UncShareConfig
         return null;
     }
 
-    /// <summary><paramref name="path"/> as a root: <c>/</c> as <c>\</c>, full (<c>..</c> folded), no trailing separator.</summary>
-    public static string NormalizeRoot(string path) =>
-        System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(path.Trim().Replace('/', '\\')));
+    private static string? MacPathProblem(string text)
+    {
+        if (UncPath.IsDrivePath(text))
+        {
+            return UncText.DriveNotHere(text);
+        }
+
+        if (UncPath.IsNetwork(text, windows: false))
+        {
+            try
+            {
+                return UncPath.Split(text) is null ? UncText.NoShareNameHere(text) : null;
+            }
+            catch (ArgumentException)
+            {
+                return UncText.BadPath(text);
+            }
+        }
+
+        if (!text.StartsWith('/'))
+        {
+            return UncText.NotAbsoluteHere(text);
+        }
+
+        try
+        {
+            return UncPath.Normalize(text, windows: false) == "/" ? UncText.WholeDisk : null;
+        }
+        catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
+        {
+            return UncText.BadPath(text);
+        }
+    }
+
+    /// <summary>
+    /// Why <paramref name="user"/> cannot be a <c>runas</c> account, or null. Windows (and a file shared with it) wants
+    /// <c>DOMAIN\name</c> or <c>name@domain</c>, <see cref="WindowsCredentials.SplitAccount"/>'s rule. A Mac mounts the share as the
+    /// account (2026-10-11), so a server's own local account (<c>name</c>) is one too.
+    /// </summary>
+    public static string? RunAsAccountProblem(string? user, bool windows)
+    {
+        string trimmed = (user ?? "").Trim();
+        if (trimmed.Length == 0)
+        {
+            return UncText.RunAsNoUser;
+        }
+
+        if (windows)
+        {
+            return WindowsCredentials.SplitAccount(trimmed) is null ? SqlText.RunAsNeedsDomain(trimmed) : null;
+        }
+
+        return trimmed.Any(char.IsWhiteSpace) || trimmed.Contains(';', StringComparison.Ordinal) ? UncText.BadAccountHere(trimmed) : null;
+    }
+
+    /// <summary><paramref name="path"/> as a root in this machine's spelling: full, folded, no trailing separator (<see cref="UncPath.Normalize"/>).</summary>
+    public static string NormalizeRoot(string path)
+    {
+        bool windows = OperatingSystem.IsWindows();
+        return UncPath.Normalize(UncPath.Spell(path, windows), windows);
+    }
 
     private static bool IsMappedDrive(string root)
     {

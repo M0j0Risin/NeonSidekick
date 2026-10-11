@@ -112,17 +112,20 @@ public sealed class UncToolsTests : IDisposable
         Assert.False(new AppSettingsData().UncWrites);
     }
 
-    /// <summary>No UNC on a Mac (2026-10-06, the tidy-up before the first Mac release): the switch on and a share named, the group is still not offered, and <c>/tools</c> says why.</summary>
+    /// <summary>
+    /// UNC on a Mac (2026-10-11; no UNC there from 2026-10-06 until then): the switch on and a share named, the group is offered
+    /// as on Windows, and <c>/tools</c> no longer says it needs Windows.
+    /// </summary>
     [UnixFact]
-    public void OnMacOS_TheGroupIsNeverOffered()
+    public void OnMacOS_TheGroupIsOffered_AsOnWindows()
     {
         if (!OperatingSystem.IsMacOS())
         {
             return;
         }
 
-        Assert.False(ChatScreen.UncOffered(_settings, new UncAccess(() => _catalog, _time)));
-        Assert.Equal("it needs Windows", ToolsText.NeedsWindowsReason);
+        Assert.True(ChatScreen.UncOffered(_settings, new UncAccess(() => _catalog, _time)));
+        Assert.False(ChatScreen.UncOffered(new AppSettingsData(), new UncAccess(() => _catalog, _time)));
         Assert.Contains(UncDeleteTool.ToolName, new AppSettingsData().ToolsDisabled);   // opt-in even under UNC writes
     }
 

@@ -161,8 +161,8 @@ public sealed class OpenTool : FileTool
     /// <summary>Whether a call without a share means one: a full path outside the working directory (and the images folder) while a share is offered.</summary>
     private bool OnAShare(string path)
     {
-        string spelled = path.Trim().Replace('/', '\\');
-        return UncCatalog.IsAbsolute(spelled) && SharesOffered && FilesFor(spelled).Resolve(spelled, forWrite: false, out _) != FileOutcome.Ok;
+        string spelled = UncPath.Spell(path, OperatingSystem.IsWindows());
+        return UncCatalog.IsAbsolute(spelled) && SharesOffered && (UncPath.IsNetwork(spelled, OperatingSystem.IsWindows()) || FilesFor(spelled).Resolve(spelled, forWrite: false, out _) != FileOutcome.Ok);
     }
 
     /// <summary>The open on the share the call means, or the refusal: no share offered, the share unknown, a network <c>runas</c> share.</summary>

@@ -157,6 +157,15 @@ if (profile is not null && !Profiles.Exists(home, profile))
 
 using var settings = new AppSettings(home, profile);
 
+// A Mac's UNC shares (2026-10-11): one set of mounts for the run, every UncAccess's, unmounted at every exit below and in
+// OnClosing; what an app that is gone left mounted is swept off the start's path.
+if (OperatingSystem.IsMacOS())
+{
+    var mounts = new NeonSidekick.Unc.ShareMounts(new NeonSidekick.Unc.MacMountSystem(), home, NeonSidekick.Unc.MacMountSystem.UserId);
+    NeonSidekick.Unc.UncAccess.Mounts = mounts;
+    _ = Task.Run(mounts.Sweep);
+}
+
 // A crash lands in crash.log beside the profiles, stack and all: the terminal window closes with
 // the process, so the runtime's stderr print is never read, and --log carries no stack. The
 // domain handler sees a throw on any thread (an audio pump, a pool continuation); the catch
@@ -242,6 +251,7 @@ var app = new SidekickApp(console, settings, environment, geometry: geometry, in
 void OnClosing(System.Runtime.InteropServices.PosixSignalContext _)
 {
     app.ConsoleClosing();
+    NeonSidekick.Unc.UncAccess.Mounts?.UnmountAll();
     // The debounced save the normal exit flushes below, as the quarter-second rule asks. A failure must not throw here.
     try
     {
@@ -427,6 +437,9 @@ if (OperatingSystem.IsWindows())
 {
     NeonSidekick.Viewer.VideoWindow.Close();
 }
+
+// A Mac's share mounts (2026-10-11) go with the run: none is left in /Volumes.
+NeonSidekick.Unc.UncAccess.Mounts?.UnmountAll();
 
 // A change made in the last quarter-second before quitting must not be lost to the debounce.
 await settings.FlushAsync().ConfigureAwait(false);

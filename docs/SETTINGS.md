@@ -801,7 +801,7 @@ The pane heads its runs **Access**, **Shares** and **Files**.
 
 | Setting | What it does | Default |
 |---|---|---|
-| UNC tools | Offers `unc_shares`, `unc_search`, `unc_info`, `unc_read`, and `unc_fetch` while the File tools are on. See [UNC shares](TOOLS.md#unc-shares-and-outside-folders). Never on a Mac (`/tools`: *off: it needs Windows*). | off |
+| UNC tools | Offers `unc_shares`, `unc_search`, `unc_info`, `unc_read`, and `unc_fetch` while the File tools are on. See [UNC shares](TOOLS.md#unc-shares-and-outside-folders). On a Mac the app mounts an `smb://` share itself, until it exits ([UNC shares on a Mac](TOOLS.md#unc-shares-on-a-mac)). | off |
 | UNC writes | The master key for changes. On, a share with `access: readwrite` also gets `unc_write`, `unc_patch`, `unc_create_directory`, `unc_move`, `unc_copy`, `unc_delete` (off by default in Offered) and `unc_put`. Changes are permanent. | off |
 | UNC shares offered | As *SQL connections offered*. | none |
 | UNC set password | As *SQL set password*, for runas shares. | — |

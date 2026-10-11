@@ -202,7 +202,7 @@ public sealed class UncAccessTests : IDisposable
     public void TheAuditLine_AndWhoAShareIsReachedAs_ArePinned()
     {
         Assert.Equal(Nobody, UncAccess.Account(RunAs("fin", _root)));
-        Assert.Equal(Environment.UserDomainName + "\\" + Environment.UserName, UncAccess.Account(Windows("eng", _root)));
+        Assert.Equal(OperatingSystem.IsWindows() ? Environment.UserDomainName + "\\" + Environment.UserName : Environment.UserName, UncAccess.Account(Windows("eng", _root)));   // a Mac's account is the user's name (2026-10-11)
         Assert.Equal(@"fin (CORP\svc): wrote reports\q3.md", UncText.AuditLogLine("fin", @"CORP\svc", "wrote", @"reports\q3.md"));
         Assert.Equal(TimeSpan.FromSeconds(10), UncAccess.ReachTimeout);
         Assert.Equal("no answer in 10 s", UncText.TimedOut(UncAccess.ReachTimeout));

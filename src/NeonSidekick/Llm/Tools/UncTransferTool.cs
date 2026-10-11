@@ -60,8 +60,7 @@ public abstract class UncTransferTool : UncTool
 
         return await WriteAsync(ReadShare(arguments), from, _move ? "moved" : "copied", (files, relative, share) =>
         {
-            string spelled = to.Replace('/', '\\');
-            if (UncCatalog.IsAbsolute(spelled) && !WorkingDirectory.IsInside(share.Config.Root, UncShareConfig.NormalizeRoot(spelled)))
+            if (UncAccess.ForFiles(share, to) is not { } spelled)
             {
                 return (UncText.CrossShare(to), false);
             }

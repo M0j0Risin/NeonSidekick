@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.Principal;
 using NeonSidekick.Files;
@@ -64,6 +65,35 @@ public static partial class SmokeChecks
         finally
         {
             Files.WorkingDirectory.DeleteDirectoryQuietly(folder);
+        }
+    }
+
+    /// <summary>
+    /// <c>unc:netfs</c> (2026-10-11, UNC shares on a Mac): NetFS, <c>getfsstat</c>, <c>unmount</c> and <c>geteuid</c> bound on the
+    /// published binary, the mount's URLs built through CoreFoundation, the mounted file systems listed (the root's among them)
+    /// and an unmount of a path that is no mount answered — nothing is mounted, nothing asked of a server. No library ships: all
+    /// of it is the system's.
+    /// </summary>
+    [SupportedOSPlatform("macos")]
+    public static SmokeCheck ProbeUncNetFs()
+    {
+        const string name = "unc:netfs";
+        try
+        {
+            if (Unc.NetFSNative.Probe() is { } failed)
+            {
+                return new SmokeCheck(name, false, failed);
+            }
+
+            var mounts = Unc.NetFSNative.Mounts();
+            uint uid = Unc.MacMountSystem.UserId;
+            return mounts.Any(m => m.On == "/")
+                ? new SmokeCheck(name, true, $"bound; {mounts.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)} file systems mounted, {mounts.Count(m => m.Type == Unc.MacMountRules.SmbType).ToString(System.Globalization.CultureInfo.InvariantCulture)} SMB; uid {uid.ToString(System.Globalization.CultureInfo.InvariantCulture)}")
+                : new SmokeCheck(name, false, "getfsstat listed no root file system");
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or MarshalDirectiveException or InvalidOperationException)
+        {
+            return new SmokeCheck(name, false, ex.GetType().Name + ": " + ex.Message);
         }
     }
 }

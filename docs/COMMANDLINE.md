@@ -22,7 +22,7 @@ Options that set something apply to this launch only. Both `--option value` and 
 | `--mysql-check <connection>` | The same for a connection of `mysql.json`. |
 | `--sqlite-check <database>` | The same for a database of `sqlite.json`, or a SQLite file in the working directory by its path. |
 | `--postgres-check <connection>` | The same for a connection of `postgres.json`. |
-| `--unc-check <share>` | The same for a share of `unc.json`. Windows only. |
+| `--unc-check <share>` | The same for a share of `unc.json`. On a Mac it mounts a network share as the app does, and unmounts it as it exits. |
 | `--docker-check` | The same for the Docker engine: Docker Desktop's pipe on Windows, the engine's socket on a Mac. |
 | `--camera-check` | Opens the camera until the picture settles, reports brightness and noise, and encodes a test photo (nothing saved; the light comes on briefly), then exits. On a Mac it needs macOS 14 and the terminal app's Camera permission. |
 | `--version` / `--help` (`-h`) | Prints the version or the help text. |

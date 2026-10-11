@@ -10,8 +10,9 @@ namespace NeonSidekick.App;
 /// <summary>
 /// <c>--unc-check &lt;share&gt;</c> (2026-09-30, the UNC tools): their proof on the published binary against a real share of the
 /// loaded profile's <c>unc.json</c>, nothing written: the share found; its root reached as its account (the preflight's sentence
-/// when it is not); under <c>runas</c> the netonly token on every worker of a parallel loop; a listing and a content search with
-/// the share's budgets. Exit 0 only when every line passes. Not part of the build gate: it needs a share.
+/// when it is not); under <c>runas</c> the netonly token on every worker of a parallel loop — on a Mac (2026-10-11) where the share
+/// is mounted and as whom instead; a listing and a content search with the share's budgets. Exit 0 only when every line passes.
+/// Not part of the build gate: it needs a share. A Mac's mount is the run's, so it is unmounted as the check exits.
 /// </summary>
 internal static class UncCheck
 {
@@ -42,6 +43,30 @@ internal static class UncCheck
 
         checks.Add(new SmokeCheck("unc:reach", reach.Value!.Outcome == Files.FileOutcome.Ok, $"{reach.Value.Entries.Count.ToString(CultureInfo.InvariantCulture)} entries at the root{(reach.Value.Truncated ? " (more)" : "")} {reach.Value.Detail}".TrimEnd()));
 
+        if (!OperatingSystem.IsWindows())
+        {
+            // A Mac (2026-10-11): no token to flow; the line says where the share is mounted and as whom, or that a folder is read as you.
+            checks.Add(!share.Config.IsUnc
+                ? new SmokeCheck("unc:mount", true, "a local folder: read as you, nothing mounted")
+                : access.MountsInUse?.Describe(share) is { } mounted
+                    ? new SmokeCheck("unc:mount", true, mounted)
+                    : new SmokeCheck("unc:mount", false, "the share answered, but no mount of it is known"));
+        }
+        else
+        {
+            await Impersonation(access, share, checks, cancellationToken).ConfigureAwait(false);
+        }
+
+        var search = await access.RunAsync(share, write: false, files => files.Search("e", "", null, false, cancellationToken, limit: 5, maxDepth: 2), cancellationToken).ConfigureAwait(false);
+        checks.Add(search.Error is { } searchError
+            ? new SmokeCheck("unc:search", false, searchError)
+            : new SmokeCheck("unc:search", search.Value!.Outcome == Files.FileOutcome.Ok, $"{search.Value.FilesSearched.ToString(CultureInfo.InvariantCulture)} files read, {search.Value.FilesMatched.ToString(CultureInfo.InvariantCulture)} matched, two levels deep{(search.Value.Budgeted ? ", stopped at the budget" : "")} {search.Value.Detail}".TrimEnd()));
+        return Report(console, checks);
+    }
+
+    /// <summary>Windows' <c>unc:impersonation</c> line: under <c>runas</c> the netonly token on every worker of a parallel loop.</summary>
+    private static async Task Impersonation(UncAccess access, UncNamedShare share, List<SmokeCheck> checks, CancellationToken cancellationToken)
+    {
         var flow = await access.RunAsync(share, write: false, _ =>
         {
             var seen = new ConcurrentBag<(int Thread, bool Impersonating)>();
@@ -65,12 +90,6 @@ internal static class UncCheck
                 ? new SmokeCheck("unc:impersonation", all, all ? $"netonly token on {threads.ToString(CultureInfo.InvariantCulture)} worker threads" : "a parallel worker ran without the netonly token")
                 : new SmokeCheck("unc:impersonation", true, "windows: as you, no token"));
         }
-
-        var search = await access.RunAsync(share, write: false, files => files.Search("e", "", null, false, cancellationToken, limit: 5, maxDepth: 2), cancellationToken).ConfigureAwait(false);
-        checks.Add(search.Error is { } searchError
-            ? new SmokeCheck("unc:search", false, searchError)
-            : new SmokeCheck("unc:search", search.Value!.Outcome == Files.FileOutcome.Ok, $"{search.Value.FilesSearched.ToString(CultureInfo.InvariantCulture)} files read, {search.Value.FilesMatched.ToString(CultureInfo.InvariantCulture)} matched, two levels deep{(search.Value.Budgeted ? ", stopped at the budget" : "")} {search.Value.Detail}".TrimEnd()));
-        return Report(console, checks);
     }
 
     private static int Report(IAnsiConsole console, IReadOnlyList<SmokeCheck> checks)

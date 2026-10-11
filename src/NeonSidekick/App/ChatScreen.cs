@@ -5013,7 +5013,7 @@ internal sealed partial class ChatScreen
             SettingsField.OracleTools => !effective.OracleTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoneOfferedReason("connection", "oracle.json"),
             SettingsField.MySqlTools => !effective.MySqlTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoneOfferedReason("connection", "mysql.json"),
             SettingsField.PostgresTools => !effective.PostgresTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoneOfferedReason("connection", "postgres.json"),
-            SettingsField.UncTools => !effective.UncTools ? ToolsText.SwitchOffReason(field) : OperatingSystem.IsMacOS() ? ToolsText.NeedsWindowsReason : ToolsText.NoneOfferedReason("share", "unc.json"),
+            SettingsField.UncTools => !effective.UncTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoneOfferedReason("share", "unc.json"),   // a Mac mounts shares since 2026-10-11
             // The groups that need Windows say so on a Mac (2026-10-06, the macOS build), the switch first as everywhere; on Windows null as before.
             // Docker reaches a Mac's engine over its socket since 2026-10-11, so only a system with no transport would say it.
             SettingsField.DockerTools => Docker.DockerSocket.Here != Docker.DockerTransport.None ? null : !effective.DockerTools ? ToolsText.SwitchOffReason(field) : ToolsText.NeedsWindowsReason,

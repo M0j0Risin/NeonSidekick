@@ -24,16 +24,23 @@ internal sealed partial class SettingsMenu
 
     public const string UncWizardFileQuestion = "Which unc.json: this profile's or the global one?";
     public const string UncWizardNameQuestion = "Its name: what the model passes as \"share\" and *name picks on the input line.";
-    public const string UncWizardPathQuestion = "The path: \\\\server\\share, a folder under it, or a local folder such as D:\\Data.";
+    /// <summary>The path's question; a Mac's (2026-10-11) names its own forms. Pinned.</summary>
+    public static string UncWizardPathQuestion => OperatingSystem.IsWindows()
+        ? "The path: \\\\server\\share, a folder under it, or a local folder such as D:\\Data."
+        : "The path: smb://server/share, a folder under it, or a local folder such as /Users/Shared/Data.";
     public const string UncWizardAuthQuestion = "Who the share is reached as.";
-    public const string UncWizardUserQuestion = "The Windows account to reach it as: DOMAIN\\name or name@domain.";
+    /// <summary>The account's question; a Mac (2026-10-11) mounts the share as the account, so a server's own account is one too. Pinned.</summary>
+    public static string UncWizardUserQuestion => OperatingSystem.IsWindows()
+        ? "The Windows account to reach it as: DOMAIN\\name or name@domain."
+        : "The account to mount it as: name@REALM, DOMAIN\\name, or the server's own account name.";
     public const string UncWizardAccessQuestion = "What the model may do there.";
     public const string UncWizardDescriptionQuestion = "What the share holds, in your words (optional): the model reads it to pick a share.";
     public const string UncWizardSummaryCaption = "Check the share: Test lists its root without saving; Enter on a row below changes it.";
 
-    /// <summary>The sign-in picks, <c>windows</c> then <c>runas</c>. Pinned.</summary>
-    public static readonly IReadOnlyList<string> UncWizardAuthRows =
-        ["windows  as you (no password)", "runas    as another Windows account (runas /netonly)"];
+    /// <summary>The sign-in picks, <c>windows</c> then <c>runas</c>; a Mac's (2026-10-11) say what each mounts as. Pinned.</summary>
+    public static IReadOnlyList<string> UncWizardAuthRows => OperatingSystem.IsWindows()
+        ? ["windows  as you (no password)", "runas    as another Windows account (runas /netonly)"]
+        : ["windows  as you (your Kerberos ticket, or a password Finder saved)", "runas    as another account (mounted as it until the app exits)"];
 
     /// <summary>The store picks, <c>file</c> then <c>credman</c>. Pinned.</summary>
     public static readonly IReadOnlyList<string> UncWizardStoreRows =
@@ -378,9 +385,9 @@ internal sealed partial class SettingsMenu
                         return SqlWizardUserRequired;
                     }
 
-                    if (WindowsCredentials.SplitAccount(user) is null)
+                    if (UncShareConfig.RunAsAccountProblem(user, OperatingSystem.IsWindows()) is { } problem)
                     {
-                        return SqlText.RunAsNeedsDomain(user);
+                        return problem;
                     }
 
                     c.User = user;

@@ -49,7 +49,7 @@ public static class NativeRedirect
         Map(Llm.Tools.MySqlQueryTool.ToolName, "mysql", "mariadb");
         Map(Llm.Tools.SqliteQueryTool.ToolName, "sqlite3");   // 2026-10-04
         Map(Llm.Tools.PostgresQueryTool.ToolName, "psql");   // 2026-10-04   // 2026-09-30; SQLcl's bare "sql" is too common a word to take
-        Map(Llm.Tools.UncSharesTool.ToolName, "net use", "net share", "net view", "get-smbshare", "get-smbmapping");   // 2026-10-03: "my UNC shares" went to net use
+        Map(Llm.Tools.UncSharesTool.ToolName, "net use", "net share", "net view", "get-smbshare", "get-smbmapping", "mount_smbfs", "smbutil");   // 2026-10-03: "my UNC shares" went to net use; a Mac's two since 2026-10-11
         return table;
     }
 

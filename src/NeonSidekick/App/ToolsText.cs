@@ -405,12 +405,6 @@ public static class ToolsText
             return "(off: " + reason + ")";
         }
 
-        if (OperatingSystem.IsMacOS() && group.Switch is SettingsField.UncTools)   // Print left the list on 2026-10-08: a Mac prints; Docker on 2026-10-11: a Mac reaches its socket
-        {
-            // A heading drawn with no screen's reason (/sys, the botchat checklist) on a Mac (2026-10-06): the group needs Windows, whatever else holds.
-            return "(off: " + NeedsWindowsReason + ")";
-        }
-
         if (group.Switch == SettingsField.ObsidianTools)
         {
             // Two things keep the vault group off (2026-09-22): the switch, or no vault set — the switch alone would mislead.

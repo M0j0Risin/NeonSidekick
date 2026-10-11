@@ -21,6 +21,21 @@ public static class UncText
     public static string NotAbsolute(string path) => $"\"path\" is '{path}'; it must be a full path, \\\\server\\share or X:\\folder";
     public static string WholeDrive(string drive) => $"\"path\" is the whole of {drive}\\; a share is a folder — give one on it";
     public static string BadPath(string path) => $"\"path\" is '{path}', which is not a usable folder path";
+    /// <summary>A Mac's path refusals (2026-10-11, <see cref="UncPath"/>): no drives, no UNC paths, a share as <c>smb://</c>. Pinned.</summary>
+    public static string DevicePathHere(string path) => $"\"path\" is '{path}', a Windows device path; give the share as smb://server/share or a folder as /folder";
+    public static string DriveNotHere(string path) => $"\"path\" is '{path}', a drive path, which only Windows has; on a Mac give the share as smb://server/share or the folder as /folder";
+    public static string NoShareNameHere(string path) => $"\"path\" is '{path}', a server without a share; give it as smb://server/share";
+    public static string NotAbsoluteHere(string path) => $"\"path\" is '{path}'; it must be a full path, smb://server/share or /folder";
+    public const string WholeDisk = "\"path\" is /, the whole disk; a share is a folder — give one on it";
+    public static string BadAccountHere(string user) => $"\"user\" is '{user}'; give the account as name, name@REALM or DOMAIN\\name, without spaces or ';'";
+
+    /// <summary>
+    /// A Mac's runas share on the network (2026-10-11): it is mounted as that account for the rest of the run, and a mount is the
+    /// whole machine's, not the app's. Pinned.
+    /// </summary>
+    public static string RunAsMountedWarning(string user) =>
+        $"a Mac mounts the share as {user} until the app exits; meanwhile your other programs can reach it as {user} too";
+
     public static string BadAuth(string word) => $"\"auth\" is '{word}'; it must be windows or runas";
     public static string BadAccess(string word) => $"\"access\" is '{word}'; it must be read or readwrite";
     public const string RunAsNoUser = "runas needs the Windows account in \"user\" (DOMAIN\\name or name@domain)";
@@ -78,6 +93,28 @@ public static class UncText
     public static string NoLogonServer(string name) => $"Error: share '{name}': no domain controller answered to check the account";
     public static string AccountRefused(string name, string account, string detail) => $"Error: share '{name}' refused the sign-in as {account}: {detail}";
     public static string ReachFailed(string name, string root, string detail) => $"Error: share '{name}' ({root}): {detail}";
+
+    // ─── a Mac's mounts (2026-10-11, ShareMounts) ───────────────────────────────
+
+    /// <summary>A network share where nothing can mount it (off Windows and off a Mac). Pinned.</summary>
+    public static string NoMountsHere(string name) => $"Error: share '{name}' is on the network, which this build cannot mount; give a local folder instead";
+    /// <summary>A mount NetFS made, or handed back, that is not signed in as the share's account (a Mac's runas). Pinned.</summary>
+    public static string MountedAsOther(string name, string account) =>
+        $"Error: share '{name}' could not be mounted as {account}: the Mac already has it mounted as another account; eject that mount (Finder) and try again";
+    public static string MountStatus(int status) => status == int.MinValue ? "the mount failed (see the log)" : $"the mount failed ({status.ToString(CultureInfo.InvariantCulture)})";
+    /// <summary><c>--unc-check</c>'s line for a mounted share: where, from whom, and whether the app made it. Pinned.</summary>
+    public static string MountDescription(string point, string from, bool ours, bool readOnly) =>
+        $"mounted at {point} from {from}{(readOnly ? ", read-only" : "")}{(ours ? "" : " (the Mac's own mount, left as it is at exit)")}";
+    public static string MountLogLine(string name, string detail) => $"mounting share '{name}' failed: {detail}";
+    public static string MountedAsOtherLogLine(string name, string account, string from) => $"share '{name}' mounted from {from}, not as {account}; not used";
+    public static string MountedLogLine(string name, string point, string from, bool ours) => $"share '{name}' {(ours ? "mounted" : "found mounted")} at {point} from {from}";
+    public static string UnmountedLogLine(string point) => $"unmounted {point}";
+    public static string UnmountFailedLogLine(string point, int errno) => $"could not unmount {point} (errno {errno.ToString(CultureInfo.InvariantCulture)}); eject it in Finder";
+    public static string UnmountFailedLogLine(string point, string detail) => $"could not unmount {point}: {detail}; eject it in Finder";
+    public static string LeftMountedLogLine(string point, int owner, int errno) =>
+        errno == 0
+            ? $"unmounted {point}, left mounted by an app that is gone (pid {owner.ToString(CultureInfo.InvariantCulture)})"
+            : $"could not unmount {point}, left mounted by an app that is gone (pid {owner.ToString(CultureInfo.InvariantCulture)}): errno {errno.ToString(CultureInfo.InvariantCulture)}";
 
     // ─── results ────────────────────────────────────────────────────────────────
 

@@ -13,7 +13,9 @@ namespace NeonSidekick.Tests;
 /// Resolves once per assembly whether a real share is named (2026-09-30): <c>NEONSIDEKICK_TEST_UNC_SHARE</c> holds a
 /// <c>\\server\share[\folder]</c> path the user running the tests can read (on a workstation <c>\\localhost\C$\Windows</c> does);
 /// <c>NEONSIDEKICK_TEST_UNC_USER</c> and <c>NEONSIDEKICK_TEST_UNC_PASSWORD</c>, when both are set, are a second account that can read
-/// it too, for the runas path. Skipped without; never a CI safety net. Nothing is ever written to the share.
+/// it too, for the runas path. On a Mac (2026-10-11) <c>smb://server/share</c> too (<c>smb://localhost/&lt;your Public share&gt;</c>
+/// with File Sharing on), mounted for real under <c>/Volumes</c> and unmounted after each test. Skipped without; never a CI safety
+/// net. Nothing is ever written to the share.
 /// </summary>
 internal static class LiveUnc
 {
@@ -25,10 +27,14 @@ internal static class LiveUnc
     public static readonly string? User = Environment.GetEnvironmentVariable(UserVariable) is { Length: > 0 } user ? user : null;
     public static readonly string? Password = Environment.GetEnvironmentVariable(PasswordVariable) is { Length: > 0 } password ? password : null;
 
-    public static string Unavailable => $"{ShareVariable} is not set to a \\\\server\\share path.";
+    public static string Unavailable => $"{ShareVariable} is not set to a \\\\server\\share path (on a Mac, smb://server/share).";
+
+    /// <summary>The server the share is on.</summary>
+    public static string Server => UncPath.Split(UncPath.Spell(Share, windows: false))!.Value.Server;
 
     private static string? Usable(string? path) =>
-        !string.IsNullOrWhiteSpace(path) && path.Trim().StartsWith(@"\\", StringComparison.Ordinal) && UncShareConfig.PathProblem(path) is null ? path.Trim() : null;
+        !string.IsNullOrWhiteSpace(path) && UncShareConfig.PathProblem(path) is null
+            && UncPath.IsNetwork(UncPath.Spell(path, OperatingSystem.IsWindows()), OperatingSystem.IsWindows()) ? path.Trim() : null;
 }
 
 /// <summary>Skips unless <see cref="LiveUnc.Share"/> names a share.</summary>
@@ -44,10 +50,27 @@ public sealed class LiveUncFactAttribute : FactAttribute
 }
 
 /// <summary>The UNC tools against a real share (2026-09-30): reached as the user, read and searched over SMB, a bogus runas account refused at the network sign-in, the second account's runas when one is given.</summary>
-public sealed class LiveUncTests
+public sealed class LiveUncTests : IDisposable
 {
     private readonly AppSettingsData _settings = new() { UncTools = true };
     private readonly ManualTimeProvider _time = new();
+    private readonly string _home = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
+
+    /// <summary>On a Mac the run's mounts are real (NetFS), their records in a temp home, all unmounted as the test ends.</summary>
+    public LiveUncTests()
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            UncAccess.Mounts = new ShareMounts(new MacMountSystem(), _home, MacMountSystem.UserId);
+        }
+    }
+
+    public void Dispose()
+    {
+        UncAccess.Mounts?.UnmountAll();
+        UncAccess.Mounts = null;
+        try { Directory.Delete(_home, recursive: true); } catch { /* best effort */ }
+    }
 
     private static UncNamedShare Windows() => new("live", new UncShareConfig { Path = LiveUnc.Share }, "test");
 
@@ -81,7 +104,7 @@ public sealed class LiveUncTests
     [LiveUncFact]
     public async Task ABogusRunAsAccount_IsRefusedAtTheNetworkSignIn_NotAtTheLogon()
     {
-        string server = LiveUnc.Share![2..].Split('\\')[0];
+        string server = LiveUnc.Server;
         if (server is "localhost" or "127.0.0.1" or "::1" || string.Equals(server, Environment.MachineName, StringComparison.OrdinalIgnoreCase))
         {
             return;

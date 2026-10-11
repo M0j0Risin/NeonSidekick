@@ -40,6 +40,8 @@ public sealed class NativeRedirectTests
     [InlineData("net view \\\\nas", "net view", "unc_shares")]
     [InlineData("Get-SmbShare", "get-smbshare", "unc_shares")]
     [InlineData("Get-SmbMapping", "get-smbmapping", "unc_shares")]
+    [InlineData("mount_smbfs //me@fs01/eng /Volumes/eng", "mount_smbfs", "unc_shares")]   // 2026-10-11: a Mac's
+    [InlineData("smbutil view //fs01", "smbutil", "unc_shares")]
     public void AMappedLine_NamesItsTool(string command, string prefix, string tool)
     {
         Assert.Equal((prefix, tool), NativeRedirect.For(command, Everything));

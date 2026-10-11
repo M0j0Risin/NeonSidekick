@@ -44,13 +44,14 @@ public sealed record UncCatalog(IReadOnlyList<UncNamedShare> Shares, IReadOnlyLi
     /// <summary>
     /// The share a full path lies in (2026-09-30: the model may pass <c>\\fs01\eng\specs\a.md</c> rather than a share's name and a
     /// relative path): the one whose root is the longest prefix of <paramref name="fullPath"/> by spelling, case-insensitive, a
-    /// separator after it (<c>\\fs01\eng2</c> is not under <c>\\fs01\eng</c>); <c>/</c> reads as <c>\</c>. Null for a path that is
-    /// not absolute or lies under none. Pure.
+    /// separator after it (<c>\\fs01\eng2</c> is not under <c>\\fs01\eng</c>); spelled as <see cref="UncPath.Spell"/> does (on a Mac
+    /// <c>\\fs01\eng\a.md</c> is <c>smb://fs01/eng/a.md</c>). Null for a path that is not absolute or lies under none. Pure.
     /// </summary>
     public UncNamedShare? Locate(string? fullPath)
     {
-        string text = (fullPath ?? "").Trim().Replace('/', '\\');
-        if (!IsAbsolute(text))
+        bool windows = OperatingSystem.IsWindows();
+        string text = UncPath.Spell(fullPath, windows);
+        if (!UncPath.IsAbsolute(text, windows))
         {
             return null;
         }
@@ -58,7 +59,7 @@ public sealed record UncCatalog(IReadOnlyList<UncNamedShare> Shares, IReadOnlyLi
         string candidate;
         try
         {
-            candidate = UncShareConfig.NormalizeRoot(text);
+            candidate = UncPath.Normalize(text, windows);
         }
         catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
         {
@@ -71,10 +72,8 @@ public sealed record UncCatalog(IReadOnlyList<UncNamedShare> Shares, IReadOnlyLi
             .FirstOrDefault();
     }
 
-    /// <summary>Whether <paramref name="text"/> (already <c>\</c>-spelled) is a full path a share could hold: <c>\\…</c> or <c>X:\…</c>.</summary>
-    public static bool IsAbsolute(string text) =>
-        text.StartsWith(@"\\", StringComparison.Ordinal)
-        || (text.Length >= 3 && char.IsAsciiLetter(text[0]) && text[1] == ':' && text[2] == '\\');
+    /// <summary>Whether <paramref name="text"/> (already spelled, <see cref="UncPath.Spell"/>) is a full path a share could hold (<see cref="UncPath.IsAbsolute"/>).</summary>
+    public static bool IsAbsolute(string text) => UncPath.IsAbsolute(text, OperatingSystem.IsWindows());
 }
 
 /// <summary>
@@ -106,15 +105,35 @@ public sealed class UncConfigFile
 
     /// <summary>
     /// <see cref="EmptyText"/> on macOS (2026-10-06, the tidy-up before the first Mac release: a Mac user never reads Windows
-    /// wording): <see cref="WindowsEmptyText"/> with the Keychain where Credential Manager stood, <c>security add-generic-password</c>
-    /// for <c>cmdkey</c> (<see cref="Sql.SqlText.CredentialCommand"/>) and <c>keychain:</c> for <c>dpapi:</c>, the prefix
-    /// <see cref="Sql.MacKeychain"/> writes. Built on each read, so no static-field order can catch it unset. Pinned on a Mac.
+    /// wording; written out on its own 2026-10-11, when a Mac began reaching shares): a share as <c>smb://</c>, which the app mounts,
+    /// a runas account that is mounted as (<c>name@REALM</c>, or a server's own local account), the Keychain where Credential
+    /// Manager stood (<see cref="Sql.SqlText.CredentialCommand"/>) and <c>keychain:</c> for <c>dpapi:</c>, the prefix
+    /// <see cref="Sql.MacKeychain"/> writes, and a <c>/folder</c>. Built on each read, so no static-field order can catch it unset.
+    /// Pinned on a Mac.
     /// </summary>
-    private static string MacEmptyText => WindowsEmptyText
-        .Replace("(\"dpapi:…\")", "(\"" + Sql.WindowsCredentials.KeychainPrefix + "…\")", StringComparison.Ordinal)
-        .Replace("Windows Credential Manager", Sql.SqlText.CredentialStore, StringComparison.Ordinal)
-        .Replace("cmdkey /generic:NeonSidekick/unc/finance /user:CORP\\svc_reader /pass", Sql.SqlText.CredentialCommand("NeonSidekick/unc/finance", "CORP\\svc_reader"), StringComparison.Ordinal)
-        .Replace("Credential Manager entry", "Keychain entry", StringComparison.Ordinal);
+    private static string MacEmptyText =>
+        "{\n" +
+        "  // One entry per share. Its name is what the model passes as \"share\", and what *name picks on the input line.\n" +
+        "  // \"path\" is required: smb://server/share, a folder under it, or a local folder. The app mounts an smb:// share itself\n" +
+        "  // (under the home's mounts folder, until it exits); \\\\server\\share from a Windows file reads as smb://server/share.\n" +
+        "  // Remove the leading // from an example to use it, and put it inside \"shares\" below.\n" +
+        "  //\n" +
+        "  // A share you can open yourself (your Kerberos ticket, or a password Finder saved), read only (the default):\n" +
+        "  // \"eng\": { \"path\": \"smb://fs01/eng\", \"description\": \"engineering specs and drawings\" },\n" +
+        "  //\n" +
+        "  // As another account, mounted as it, the password in " + Sql.SqlText.CredentialStore + " as NeonSidekick/unc/<name> —\n" +
+        "  // set it with UNC set password on the UNC tab of /tools, or: " + Sql.SqlText.CredentialCommand("NeonSidekick/unc/finance", "svc_reader@CORP.LOCAL") + "\n" +
+        "  // \"finance\": { \"path\": \"smb://fs02.corp.local/finance/reports\", \"auth\": \"runas\", \"user\": \"svc_reader@CORP.LOCAL\",\n" +
+        "  //   \"passwordStore\": \"credman\" },\n" +
+        "  //\n" +
+        "  // A local folder outside the working directory that the model may also change (UNC writes must be on too):\n" +
+        "  // \"data\": { \"path\": \"/Users/Shared/Data\", \"access\": \"readwrite\" },\n" +
+        "  //\n" +
+        "  // auth: windows (as you, the default) or runas; access: read (the default; mounted read-only) or readwrite — changes\n" +
+        "  // and deletes on a share are permanent, nothing is kept; a runas password typed here in plain text is encrypted\n" +
+        "  // (\"" + Sql.WindowsCredentials.KeychainPrefix + "…\") at the next read.\n" +
+        "  \"shares\": {}\n" +
+        "}\n";
 
     /// <summary>What a fresh file holds on Windows (and off macOS): <see cref="EmptyText"/>'s text before the macOS build. Pinned.</summary>
     public const string WindowsEmptyText =
@@ -205,12 +224,13 @@ public sealed class UncConfigFile
 
     /// <summary>
     /// The safety net under the UNC tab's masked prompt, <see cref="SqlConfigFile"/>'s: a plain-text <c>password</c> under the
-    /// <c>file</c> store is DPAPI-encrypted and written back over that one value at the first read that sees it, the file's
+    /// <c>file</c> store is encrypted (DPAPI on Windows; on a Mac, since 2026-10-11 when a Mac began signing in as runas, the
+    /// Keychain's key, <c>keychain:</c>) and written back over that one value at the first read that sees it, the file's
     /// comments and layout kept. A file that cannot be written keeps working with the plain value, and says so in the log.
     /// </summary>
     private static void EncryptInPlace(string path, string name, UncShareConfig config)
     {
-        if (!config.IsRunAs || config.InCredentialManager || string.IsNullOrEmpty(config.Password) || WindowsCredentials.IsProtected(config.Password) || !OperatingSystem.IsWindows())
+        if (!config.IsRunAs || config.InCredentialManager || string.IsNullOrEmpty(config.Password) || WindowsCredentials.IsProtected(config.Password))
         {
             return;
         }

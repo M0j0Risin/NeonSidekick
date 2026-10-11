@@ -46,36 +46,49 @@ public sealed class UncAccess
 
     private readonly Func<UncCatalog> _catalog;
     private readonly TimeProvider _time;
+    private readonly IShareMounts? _mounts;
+
+    /// <summary>
+    /// The run's mounts on a Mac (2026-10-11): <c>Program</c> sets them once (a <see cref="ShareMounts"/> over NetFS), the way
+    /// <c>DockerSocket.MachineEnvironment</c> is set, so every <see cref="UncAccess"/> — the screen's, <c>--unc-check</c>'s, the
+    /// wizard's test — shares one set of mounts and one exit. Null on Windows and in tests that pass their own.
+    /// </summary>
+    public static IShareMounts? Mounts { get; set; }
 
     /// <param name="catalog">The offered shares, read afresh at each call (<see cref="UncConfigFile.LoadCatalog"/> narrowed by <c>UNC shares offered</c>).</param>
     /// <param name="time">The clock behind the dates the tools show.</param>
-    public UncAccess(Func<UncCatalog> catalog, TimeProvider time)
+    /// <param name="mounts">What mounts a network share off Windows; <see cref="Mounts"/> when null.</param>
+    public UncAccess(Func<UncCatalog> catalog, TimeProvider time, IShareMounts? mounts = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _time = time ?? throw new ArgumentNullException(nameof(time));
+        _mounts = mounts ?? Mounts;
     }
+
+    /// <summary>The mounts this access reaches a Mac's network shares through, or null.</summary>
+    public IShareMounts? MountsInUse => _mounts;
 
     /// <summary>The shares a call can name, read now.</summary>
     public UncCatalog Catalog() => _catalog();
 
     /// <summary>
     /// Whether the UNC group is offered (2026-09-30; here since 2026-10-01, when <c>open</c> asked it too): the setting
-    /// <c>UNC tools</c> on and at least one share offered. Never on macOS (2026-10-06, the tidy-up before the first Mac release): the
-    /// catalog reads only <c>\\server\share</c> and <c>X:\</c> paths and a runas share needs Windows' <c>LogonUser</c>, so the group
-    /// would be a Windows-only tool on a Mac; <c>/tools</c> names the reason (<see cref="App.ToolsText.NeedsWindowsReason"/>).
+    /// <c>UNC tools</c> on and at least one share offered. A Mac was left out from 2026-10-06 to 2026-10-11, when it began
+    /// reading <c>smb://</c> and <c>/folder</c> shares (<see cref="UncPath"/>) and mounting the network ones (<see cref="IShareMounts"/>).
     /// </summary>
     public bool IsOffered(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return effective.UncTools && !OperatingSystem.IsMacOS() && Catalog().Shares.Count > 0;
+        return effective.UncTools && Catalog().Shares.Count > 0;
     }
 
     /// <summary>
     /// The share and the path within it a call means: <paramref name="share"/> by name (case-insensitive); or, with none named and
     /// <paramref name="path"/> a full path, the share it lies in (<see cref="UncCatalog.Locate"/>); else the only share
-    /// when just one is offered (2026-10-09: <c>UNC default share</c> gone; several and none named is refused). A full path under a named share must lie in it. A stream name (<c>:</c> past a drive) is refused. The path
-    /// comes back as the call gave it (relative, or full under the share — <see cref="WorkingDirectory.Resolve(string, bool, out string)"/>
-    /// takes either). Null with the sentence on a refusal.
+    /// when just one is offered (2026-10-09: <c>UNC default share</c> gone; several and none named is refused). A full path under a named share must lie in it. On Windows a stream name (<c>:</c> past a drive) is refused. The path
+    /// comes back as <see cref="WorkingDirectory.Resolve(string, bool, out string)"/> takes it over the share's files (<see cref="ForFiles"/>):
+    /// relative, or full under the share — on a Mac a full path under a network share comes back relative to it, the files being
+    /// under its mount point. Null with the sentence on a refusal.
     /// </summary>
     public UncNamedShare? Resolve(string? share, string? path, out string relative, out string? error)
     {
@@ -88,55 +101,98 @@ public sealed class UncAccess
             return null;
         }
 
-        string spelled = relative.Replace('/', '\\');
-        bool absolute = UncCatalog.IsAbsolute(spelled);
-        if ((absolute ? spelled[2..] : spelled).Contains(':', StringComparison.Ordinal))
+        bool windows = OperatingSystem.IsWindows();
+        string spelled = UncPath.Spell(relative, windows);
+        bool absolute = UncPath.IsAbsolute(spelled, windows);
+        if (windows && (absolute ? spelled[2..] : spelled).Contains(':', StringComparison.Ordinal))
         {
             error = UncText.StreamPath(relative);
             return null;
         }
 
-        if (absolute)
-        {
-            relative = spelled;
-        }
-
+        UncNamedShare? found;
         if (!string.IsNullOrWhiteSpace(share))
         {
-            var named = catalog.Find(share);
-            if (named is null)
+            found = catalog.Find(share);
+            if (found is null)
             {
                 error = UncText.UnknownShare(share.Trim(), Names(catalog));
                 return null;
             }
-
-            if (absolute && !WorkingDirectory.IsInside(named.Config.Root, SafeFull(spelled)))
+        }
+        else if (absolute)
+        {
+            found = catalog.Locate(spelled);
+            if (found is null)
             {
-                error = UncText.NotInShare(relative, named);
+                error = UncText.NotUnderAnyShare(relative, Names(catalog));
+                return null;
+            }
+        }
+        else
+        {
+            found = catalog.Find(null);
+            if (found is null)
+            {
+                error = UncText.ShareNeeded(Names(catalog));
+                return null;
+            }
+        }
+
+        if (ForFiles(found, relative) is not { } within)
+        {
+            error = UncText.NotInShare(relative, found);
+            return null;
+        }
+
+        relative = within;
+        return found;
+    }
+
+    /// <summary>
+    /// <paramref name="path"/> as the share's <see cref="WorkingDirectory"/> takes it, or null for a full path outside the share. A
+    /// relative path is kept as given; a full one is spelled for the platform (<see cref="UncPath.Spell"/>) and must lie under the
+    /// share's root. On a Mac a full path under a network share (<c>smb://fs01/eng/specs/a.md</c>, <c>\\fs01\eng\specs\a.md</c>)
+    /// becomes the path under it (<c>specs/a.md</c>; <c>.</c> for the root), since the files are under the share's mount point, never
+    /// under its <c>smb://</c> name. Pure.
+    /// </summary>
+    public static string? ForFiles(UncNamedShare share, string path)
+    {
+        ArgumentNullException.ThrowIfNull(share);
+        bool windows = OperatingSystem.IsWindows();
+        string spelled = UncPath.Spell(path, windows);
+        if (!UncPath.IsAbsolute(spelled, windows))
+        {
+            return (path ?? "").Trim();
+        }
+
+        string root = share.Config.Root;
+        string full;
+        try
+        {
+            full = UncPath.Normalize(spelled, windows);
+        }
+        catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
+        {
+            if (!windows)
+            {
                 return null;
             }
 
-            return named;
+            full = spelled;
         }
 
-        if (absolute)
+        if (!WorkingDirectory.IsInside(root, full))
         {
-            var located = catalog.Locate(spelled);
-            if (located is null)
-            {
-                error = UncText.NotUnderAnyShare(relative, Names(catalog));
-            }
-
-            return located;
+            return null;
         }
 
-        var only = catalog.Find(null);
-        if (only is null)
+        if (windows || !share.Config.IsUnc)
         {
-            error = UncText.ShareNeeded(Names(catalog));
+            return spelled;
         }
 
-        return only;
+        return full.Length == root.Length ? "." : full[(root.Length + 1)..];
     }
 
     /// <summary>
@@ -160,7 +216,7 @@ public sealed class UncAccess
     public static string Account(UncNamedShare share)
     {
         ArgumentNullException.ThrowIfNull(share);
-        return share.Config.IsRunAs ? share.Config.User!.Trim() : Environment.UserDomainName + "\\" + Environment.UserName;
+        return share.Config.IsRunAs ? share.Config.User!.Trim() : OperatingSystem.IsWindows() ? Environment.UserDomainName + "\\" + Environment.UserName : Environment.UserName;
     }
 
     /// <summary>
@@ -169,20 +225,47 @@ public sealed class UncAccess
     /// (<paramref name="write"/> false) is abandoned when <paramref name="cancellationToken"/> fires (it throws); a write is waited
     /// out. A refusal before the work — no password, no token, an unreachable or refusing root — is the result's sentence.
     /// <paramref name="signIn"/> false (2026-10-01, <c>open</c>) runs it as the user even on a <c>runas</c> share: no token taken.
+    /// On a Mac (2026-10-11) a network share is mounted first (<see cref="IShareMounts"/>, on the same pool thread, under the
+    /// <c>runas</c> account with its password) and the work runs over the mount; a local folder is read as the user, as Windows reads one.
     /// </summary>
     public async Task<UncResult<T>> RunAsync<T>(UncNamedShare share, bool write, Func<WorkingDirectory, T> act, CancellationToken cancellationToken, bool signIn = true)
     {
         ArgumentNullException.ThrowIfNull(share);
         ArgumentNullException.ThrowIfNull(act);
-        var files = Files(share);
+        Task<UncResult<T>> work;
+        if (!OperatingSystem.IsWindows())
+        {
+            if (!share.Config.IsUnc)
+            {
+                work = Task.Run(() => Execute(null, share, Files(share), act), CancellationToken.None);
+            }
+            else if (_mounts is not { } mounts)
+            {
+                return UncResult<T>.Failed(UncText.NoMountsHere(share.Name));
+            }
+            else
+            {
+                string? password = null;
+                if (share.Config.IsRunAs)
+                {
+                    var secret = UncSecrets.Resolve(share);
+                    if (secret.Error is { } missing)
+                    {
+                        return UncResult<T>.Failed(UncText.CannotSignIn(share.Name, missing));
+                    }
+
+                    password = secret.Value;
+                }
+
+                work = Task.Run(() => Mounted(mounts, share, password, act), CancellationToken.None);
+            }
+
+            return write ? await work.ConfigureAwait(false) : await work.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         SafeAccessTokenHandle? token = null;
         if (share.Config.IsRunAs && signIn)
         {
-            if (!OperatingSystem.IsWindows())
-            {
-                return UncResult<T>.Failed(UncText.CannotSignIn(share.Name, WindowsCredentials.NotWindows));
-            }
-
             var secret = UncSecrets.Resolve(share);
             if (secret.Error is { } missing)
             {
@@ -198,7 +281,8 @@ public sealed class UncAccess
             DiagnosticLog.Debug(UncConfigFile.Category, SqlText.RunAsLogLine(share.Name, share.Config.User!.Trim()));
         }
 
-        var work = Task.Run(() => Execute(token, share, files, act), CancellationToken.None);
+        var files = Files(share);
+        work = Task.Run(() => Execute(token, share, files, act), CancellationToken.None);
         return write ? await work.ConfigureAwait(false) : await work.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -206,8 +290,21 @@ public sealed class UncAccess
     public WorkingDirectory Files(UncNamedShare share)
     {
         ArgumentNullException.ThrowIfNull(share);
-        string root = share.Config.Root;
-        return new WorkingDirectory(() => root, _time, WorkingDirectoryOptions.Share);
+        return Files(share.Config.Root);
+    }
+
+    private WorkingDirectory Files(string root) => new(() => root, _time, WorkingDirectoryOptions.Share);
+
+    /// <summary>The pool thread's part on a Mac's network share: the mount (made now, or the run's), then the preflight and the work under it.</summary>
+    private UncResult<T> Mounted<T>(IShareMounts mounts, UncNamedShare share, string? password, Func<WorkingDirectory, T> act)
+    {
+        var root = mounts.Root(share, password);
+        if (root.Error is { } refused)
+        {
+            return UncResult<T>.Failed(refused);
+        }
+
+        return Preflight(share, root.Value!) is { } reason ? UncResult<T>.Failed(reason) : UncResult<T>.Ok(act(Files(root.Value!)));
     }
 
     /// <summary>The pool thread's part: the token (when there is one) impersonated around the preflight and the work, and disposed after.</summary>
@@ -234,10 +331,16 @@ public sealed class UncAccess
     /// task of its own, which the execution context keeps impersonated) and waited for <see cref="ReachTimeout"/> at most. Not a
     /// folder, missing, unreachable, refused — each named from the Win32 code.
     /// </summary>
-    internal static string? Preflight(UncNamedShare share)
+    internal static string? Preflight(UncNamedShare share) => Preflight(share, share.Config.Root);
+
+    /// <summary>
+    /// <see cref="Preflight(UncNamedShare)"/> on the folder <paramref name="folder"/> the share's files are under (a Mac's mount
+    /// point and the folder under it), the sentences naming the share's own root.
+    /// </summary>
+    internal static string? Preflight(UncNamedShare share, string folder)
     {
         string root = share.Config.Root;
-        var probe = Task.Run(() => File.GetAttributes(root));
+        var probe = Task.Run(() => File.GetAttributes(folder));
         try
         {
             if (!probe.Wait(ReachTimeout))
@@ -279,18 +382,6 @@ public sealed class UncAccess
             1385 or 1327 or 1330 or 1331 or 1909 or 1907 => UncText.AccountRefused(share.Name, Account(share), LogText.Excerpt(ex.Message)),
             _ => UncText.ReachFailed(share.Name, root, LogText.Excerpt(ex.Message)),
         };
-    }
-
-    private static string SafeFull(string path)
-    {
-        try
-        {
-            return UncShareConfig.NormalizeRoot(path);
-        }
-        catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
-        {
-            return path;
-        }
     }
 
     private static string Names(UncCatalog catalog) => string.Join(", ", catalog.Shares.Select(s => s.Name));

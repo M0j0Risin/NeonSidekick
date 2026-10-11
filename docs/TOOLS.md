@@ -563,8 +563,6 @@ With *PostgreSQL mode* set to `read-write`, the model gets `postgres_execute` be
 
 ## UNC shares and outside folders
 
-**Windows only:** on a Mac the UNC group is never offered, and `/tools` shows it as *off: it needs Windows*.
-
 The UNC tools reach named network shares (`\\server\share`, or a folder under one) and local folders outside the working directory (`D:\Data`), without mapped drives, as you (`windows`) or as another Windows account (`runas`, like `runas /netonly`). Shares are read-only unless two keys say otherwise. They live in `unc.json` (home and profile files, as for SQL).
 
 ### Share settings
@@ -621,7 +619,18 @@ The UNC tools reach named network shares (`\\server\share`, or a folder under on
 
 `share` may be left out when `path` is a full path under a share, or when there is only one share; with several, a call that names none is refused. `unc_write` through `unc_put` appear only under both keys.
 
-`--unc-check <share>` proves the tools against a real share on the published exe (its reach, the runas token, a listing and a search).
+`--unc-check <share>` proves the tools against a real share on the published exe (its reach, the runas token or, on a Mac, the mount, a listing and a search).
+
+### UNC shares on a Mac
+
+The same tools and settings, with the differences a Mac brings:
+
+* **Paths.** A network share is `smb://server/share` (or a folder under it). A Windows file's `\\server\share` and `//server/share` read as that, so one `unc.json` serves both. A local folder is a full path (`/Users/Shared/Data`, or a volume you mounted yourself, `/Volumes/x`). A drive path (`D:\Data`) is skipped there, with the reason in `unc_shares`.
+* **The mount.** macOS can't reach a share by its path, and it has no per-call sign-in like Windows' runas token. So the app mounts an `smb://` share on first use, in-process through NetFS, with no `mount_smbfs`. The mount goes under `/Volumes`, the only place macOS allows a mount that never pops up a password dialog. It is hidden from Finder, and mounted **read-only** for an `access: read` share, so the kernel refuses writes too.
+* **One per share and account.** Each mount is a session of its own, kept for the run. If you already mounted the share in Finder, the app's mount sits beside yours (`/Volumes/eng-1`), and yours is left as it is. The app's mounts are unmounted when it exits (`/exit`, closing the window, or a `kill`), forced if a program is still inside one. If the app crashes, they are unmounted at the next start.
+* **While a share is mounted, it is the machine's, not the app's.** Anything you run can read it as the mounted account, a runas share's account included, until the app exits. Unlike on Windows, nothing at the system level keeps the model's shell off it. Only the shell police does that (*Shell police*, on by default), and it reads the paths written in a command or script: it refuses `/Volumes/…` like any path outside the working directory, but not a path a script works out at run time. `mount_smbfs` and `smbutil` are pointed at `unc_shares`.
+* **As you** means your Kerberos ticket (from Ticket Viewer, `kinit`, or a domain-bound Mac) or a password Finder saved in the Keychain. **runas** mounts as the account (`name@REALM`, or the server's own account name) with its password from the Keychain or `unc.json`. If the mount comes back signed in as anyone else, it is refused and let go.
+* A share that doesn't answer is given up after 10 seconds, the same as on Windows. A mount that lands later is still unmounted at exit.
 
 ## Docker
 
