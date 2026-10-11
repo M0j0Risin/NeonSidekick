@@ -72,6 +72,15 @@ public static class ShoppingCommandRunner
                 return ShoppingCheckTool.Apply(list, [line.Text], item => list.Check(item, on) ? ShoppingText.Checked(item, on) : null).Split('\n');
             }
 
+            case ShoppingVerb.Rename:
+            {
+                // One line, or several of one product written alike (the first stands for them); several products refused.
+                var found = list.Find(line.Text);
+                return [found.Count == 0 ? ShoppingText.NotOnList(line.Text)
+                    : found.Select(i => ShoppingPlacer.Key(i.Name)).Distinct(StringComparer.Ordinal).Count() > 1 ? ShoppingText.Ambiguous(line.Text, found)
+                    : list.RenameItem(found[0], line.To)];
+            }
+
             case ShoppingVerb.Remove:
                 return ShoppingCheckTool.Apply(list, [line.Text], item => list.Remove(item) ? ShoppingText.Removed(item) : null).Split('\n');
 

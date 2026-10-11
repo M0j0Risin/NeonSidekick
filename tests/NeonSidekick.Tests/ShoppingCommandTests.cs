@@ -96,7 +96,7 @@ public sealed class ShoppingCommandTests : IDisposable
     [Fact]
     public void Complete_TheVerbs_ThenTheStoresAndTheLines()
     {
-        Assert.Equal(["add", "check", "uncheck", "remove", "list", "clear", "store", "export", "print", "reindex"], ShoppingCommand.Words.Select(w => w.Word));
+        Assert.Equal(["add", "check", "uncheck", "remove", "rename", "list", "clear", "store", "export", "print", "reindex"], ShoppingCommand.Words.Select(w => w.Word));
         Assert.Equal(["clear"], ShoppingCommand.Complete("cl", [], []).Select(c => c.Text));
         Assert.Equal(["store add ", "store rename ", "store remove ", "store Costco", "store H-E-B"], ShoppingCommand.Complete("store ", ["Costco", "H-E-B"], []).Select(c => c.Text));
         Assert.Equal(["check Soy milk"], ShoppingCommand.Complete("check so", [], ["Soy milk", "Bread"]).Select(c => c.Text));
@@ -180,11 +180,59 @@ public sealed class ShoppingCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Rename_KeepsTheQuantityAndTick_AndANameAlreadyThere_Merges()
+    {
+        await Run("add 2 Soda, Milk, Eggs");
+        await Run("check soda");
+        Assert.Equal(new ShoppingCommandLine(ShoppingVerb.Rename, "soda", To: "Dr Pepper"), ShoppingCommand.Parse("rename soda to Dr Pepper"));
+        Assert.Equal(ShoppingVerb.Unknown, ShoppingCommand.Parse("rename soda").Verb);
+
+        Assert.Equal([ShoppingText.Renamed("item", "Soda", "Dr Pepper")], await Run("rename soda to Dr Pepper"));
+        Assert.Equal([("Dr Pepper", 2, true), ("Milk", 1, false), ("Eggs", 1, false)], _list.Store.Items().Select(i => (i.Name, i.Quantity, i.Checked)));
+
+        // Onto a name already on the list (folded alike): one line, the quantities added, the other's name kept.
+        Assert.Equal(["\"Milk\" is on the list already; merged \"Eggs\" into it: now Milk ×2."], await Run("rename 3 to milks"));
+        Assert.Equal([("Dr Pepper", 2), ("Milk", 2)], _list.Store.Items().Select(i => (i.Name, i.Quantity)));
+        Assert.Equal([ShoppingText.NotOnList("butter")], await Run("rename butter to ghee"));
+    }
+
+    [Fact]
+    public async Task ThePane_RenamesTheHighlightedLine_OnTheInputRow()
+    {
+        await Run("add Soda, Bread");
+        var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100), _time) { Hint = () => "idle" };
+        var input = new ScriptedInput();
+        var keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
+        var menu = new ShoppingMenu(_list, new MenuPane(pane, keys), input: new InputLine(pane, keys));
+        pane.Show();
+        input.Push(Keys.Char('n'));                              // the first line (no store: in the order added): Soda
+        foreach (char _ in "Soda")
+        {
+            input.Push(Keys.Backspace);
+        }
+
+        foreach (char c in "Sourdough")
+        {
+            input.Push(Keys.Char(c));
+        }
+
+        input.Push(Keys.Enter);
+        input.Push(Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["Sourdough", "Bread"], _list.Store.Items().Select(i => i.Name));
+        pane.Dispose();
+    }
+
+    [Fact]
     public async Task ThePane_TickAll_TicksEveryLine_ThenUnticksThemAll_AndTheButtonsHaveGlyphs()
     {
-        Assert.Equal(["⊕ +1", "⊖ -1", "✖  remove", "☑  tick all", "⊠ clear ticked", "⇄ store"], ShoppingMenu.ButtonsFor(anyOpen: true).Select(b => b.Title));
-        Assert.Equal(['+', '-', 'r', 'a', 'c', 's'], ShoppingMenu.ButtonsFor(anyOpen: true).Select(b => b.Key!.Value));
-        Assert.Equal("☐  untick all", ShoppingMenu.ButtonsFor(anyOpen: false)[3].Title);
+        // The bar drawn (later on 2026-10-11, the user's pick: the title row ran out of room): + and - keys alone, hidden and last.
+        var buttons = ShoppingMenu.ButtonsFor(anyOpen: true);
+        Assert.Equal(["✎ rename", "✖  remove", "☑  all", "⊠ clear", "⇄ store"], buttons.Where(b => !b.Hidden).Select(b => b.Title));
+        Assert.Equal(['n', 'r', 'a', 'c', 's', '+', '-'], buttons.Select(b => b.Key!.Value));
+        Assert.Equal([false, false, false, false, false, true, true], buttons.Select(b => b.Hidden));
+        Assert.Equal("☐  none", ShoppingMenu.ButtonsFor(anyOpen: false)[2].Title);
 
         await Run("add Bread, Eggs, Milk");
         await Run("check eggs");
@@ -247,6 +295,7 @@ public sealed class ShoppingCommandTests : IDisposable
         Assert.Equal(Spectre.Console.Markup.Escape("[ ] Milk ×2"), rows[1]);
         Assert.Equal(Theme.DimMarkup("[x] Bread"), rows[3]);
         Assert.Equal("1 item to get, 1 ticked", ShoppingText.PaneCaption(1, 1));
-        Assert.Equal("🛒 Shopping list — Costco", ShoppingText.PaneLabel(new ShopStore(1, "Costco", "costco", "")));
+        Assert.Equal("🛒 Costco", ShoppingText.PaneLabel(new ShopStore(1, "Costco", "costco", "")));   // the store alone (later on 2026-10-11)
+        Assert.Equal("🛒 Shopping list", ShoppingText.PaneLabel(null));
     }
 }

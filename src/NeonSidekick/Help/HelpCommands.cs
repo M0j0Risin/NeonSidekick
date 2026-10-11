@@ -320,9 +320,10 @@ public static class HelpCommands
         ]),
         new("/shopping",
         [
-            new("/shopping", "Open the shopping list on the pane, walked through the active store: each aisle a heading over its items, the ticked ones last. Enter or Space ticks an item; `+` and `-` change its quantity, `r` removes it, `a` ticks every item (or unticks every one once all are), `c` clears the ticked ones and `s` opens the stores' manager (add, rename, remove, reindex). The toolbar's 🛒 opens it too. Without the pane, the list is printed."),
+            new("/shopping", "Open the shopping list on the pane, walked through the active store: each aisle a heading over its items, the ticked ones last. Enter or Space ticks an item; `+` and `-` change its quantity, `n` renames it, `r` removes it, `a` ticks every item (or unticks every one once all are), `c` clears the ticked ones and `s` opens the stores' manager (add, rename, remove, reindex). The toolbar's 🛒 opens it too. Without the pane, the list is printed."),
             new("/shopping add <items>", "Put items on the list, separated by commas; a quantity may lead or follow one (`2 milk`, `eggs x3`). An item already there gets the quantity added."),
             new("/shopping check|uncheck|remove <item>", "Tick an item as bought, untick it, or take it off the list, by its name or its number in the order added."),
+            new("/shopping rename <item> to <new-name>", "Rename an item, by its name or its number in the order added; its quantity and tick are kept, and it moves to wherever the store places the new name. A name already on the list merges the two, their quantities added."),
             new("/shopping list [<store>]", "Print the list walked through the active store, or the one named."),
             new("/shopping clear [all]", "Remove the ticked items; `all` empties the whole list, after a yes."),
             new("/shopping store [<name>]", "List the stores and the active one's layout; with a name, shop there: the list walks through it."),

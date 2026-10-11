@@ -23,6 +23,9 @@ public enum ShoppingVerb
     /// <summary><c>remove &lt;item&gt;</c>.</summary>
     Remove,
 
+    /// <summary><c>rename &lt;item&gt; to &lt;new-name&gt;</c> (2026-10-11): the item and the new name in <see cref="ShoppingCommandLine.To"/>.</summary>
+    Rename,
+
     /// <summary><c>clear</c>: the ticked lines.</summary>
     Clear,
 
@@ -76,6 +79,7 @@ public static class ShoppingCommand
         ("check", "tick an item as bought: /shopping check <item|n>"),
         ("uncheck", "untick an item: /shopping uncheck <item|n>"),
         ("remove", "take an item off the list: /shopping remove <item|n>"),
+        ("rename", "rename an item: /shopping rename <item|n> to <new-name>"),
         ("list", "print the list walked through the store: /shopping list [<store>]"),
         ("clear", "remove the ticked items; /shopping clear all empties the list, after a yes"),
         ("store", "the stores; /shopping store <name> shops there, store add|remove <name>, store rename <name> to <new>"),
@@ -102,6 +106,8 @@ public static class ShoppingCommand
             "check" or "tick" when rest.Length > 0 => new(ShoppingVerb.Check, rest),
             "uncheck" or "untick" when rest.Length > 0 => new(ShoppingVerb.Uncheck, rest),
             "remove" when rest.Length > 0 => new(ShoppingVerb.Remove, rest),
+            "rename" when rest.LastIndexOf(" to ", StringComparison.OrdinalIgnoreCase) is > 0 and var to && rest[(to + 4)..].Trim().Length > 0
+                => new(ShoppingVerb.Rename, rest[..to].Trim(), To: rest[(to + 4)..].Trim()),
             "clear" when rest.Length == 0 => new(ShoppingVerb.Clear),
             "clear" when rest.Equals("all", StringComparison.OrdinalIgnoreCase) => new(ShoppingVerb.ClearAll),
             "stores" when rest.Length == 0 => new(ShoppingVerb.Stores),
@@ -178,7 +184,7 @@ public static class ShoppingCommand
             "store" => MentionCompleter.Matches(
                 [new(head + "add ", "a new store: /shopping store add <name>"), new(head + "rename ", "/shopping store rename <name> to <new-name>"), new(head + "remove ", "a store and its layout gone, after a yes"), .. stores.Select(s => new CompletionItem(head + s, "shop at " + s))],
                 argText),
-            "check" or "tick" or "uncheck" or "untick" or "remove" => MentionCompleter.Matches(items.Select(i => new CompletionItem(head + i, "")).ToList(), argText),
+            "check" or "tick" or "uncheck" or "untick" or "remove" or "rename" => MentionCompleter.Matches(items.Select(i => new CompletionItem(head + i, "")).ToList(), argText),
             "list" => MentionCompleter.Matches(stores.Select(s => new CompletionItem(head + s, "the list walked through " + s)).ToList(), argText),
             "reindex" => MentionCompleter.Matches(stores.Select(s => new CompletionItem(head + s, "read " + s + "'s documents again")).ToList(), argText),
             "export" or "print" => MentionCompleter.Matches([new(head + VerboseWord, "the roomy form: a heading per aisle, a box per item"), .. stores.Select(s => new CompletionItem(head + s, "the list walked through " + s))], argText),

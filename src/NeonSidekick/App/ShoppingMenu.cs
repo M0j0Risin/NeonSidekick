@@ -15,37 +15,43 @@ namespace NeonSidekick.App;
 internal sealed class ShoppingMenu
 {
     /// <summary>
-    /// The page's buttons, in the order drawn, each with its glyph (2026-10-11, the user's ask). The fourth is tick all while a line is
-    /// left to tick (<paramref name="anyOpen"/>), untick all once every line is ticked: one key, <c>a</c>, either way. Pinned.
+    /// The page's buttons, in the order drawn, each with its glyph (2026-10-11, the user's asks): rename, remove, tick all (untick all,
+    /// <c>☐  none</c>, once every line is ticked, <paramref name="anyOpen"/> false: one key, <c>a</c>, either way), clear, the stores.
+    /// + and - change the quantity with no button drawn (<see cref="MenuButton.Hidden"/>, last: the title row ran out of room). Pinned.
     /// </summary>
     public static IReadOnlyList<MenuButton> ButtonsFor(bool anyOpen) =>
     [
-        new(ShoppingText.MoreButton, ShoppingText.MoreKey),
-        new(ShoppingText.LessButton, ShoppingText.LessKey),
+        new(ShoppingText.RenameButton, ShoppingText.RenameKey),
         new(ShoppingText.RemoveButton, ShoppingText.RemoveKey),
         new(anyOpen ? ShoppingText.TickAllButton : ShoppingText.UntickAllButton, ShoppingText.TickAllKey),
         new(ShoppingText.ClearButton, ShoppingText.ClearKey),
         new(ShoppingText.StoreButton, ShoppingText.StoreKey),
+        new(ShoppingText.MoreButton, ShoppingText.MoreKey) { Hidden = true },
+        new(ShoppingText.LessButton, ShoppingText.LessKey) { Hidden = true },
     ];
 
-    private const int More = 0;
-    private const int Less = 1;
-    private const int Remove = 2;
-    private const int TickAll = 3;
-    private const int ClearTicked = 4;
-    private const int Store = 5;
+    private const int Rename = 0;
+    private const int Remove = 1;
+    private const int TickAll = 2;
+    private const int ClearTicked = 3;
+    private const int Store = 4;
+    private const int More = 5;
+    private const int Less = 6;
 
     private readonly ShoppingList _list;
     private readonly MenuPane _pane;
     private readonly Func<CancellationToken, Task<bool>>? _manageStores;
     private readonly bool _closeWhenDone;
+    private readonly InputLine? _input;
 
     /// <param name="list">The list's operations over the loaded profile's store.</param>
     /// <param name="pane">The menu host in the bottom pane.</param>
     /// <param name="manageStores">The stores' manager the store button opens (2026-10-11, <see cref="SettingsMenu.ManageShoppingStoresAsync"/>); null: a plain picker of the stores.</param>
     /// <param name="closeWhenDone">Whether ESC closes the pane (the <c>/shopping</c> pane's own); false under a host that drew it, the <c>Shopping list</c> row of <c>/tools</c> (2026-10-11), whose page comes back.</param>
-    public ShoppingMenu(ShoppingList list, MenuPane pane, Func<CancellationToken, Task<bool>>? manageStores = null, bool closeWhenDone = true)
+    /// <param name="input">The input row a rename is typed on (2026-10-11); null: rename says so.</param>
+    public ShoppingMenu(ShoppingList list, MenuPane pane, Func<CancellationToken, Task<bool>>? manageStores = null, bool closeWhenDone = true, InputLine? input = null)
     {
+        _input = input;
         _manageStores = manageStores;
         _closeWhenDone = closeWhenDone;
         _list = list ?? throw new ArgumentNullException(nameof(list));
@@ -153,6 +159,21 @@ internal sealed class ShoppingMenu
                     case More or Less when item is not null:
                         int quantity = Math.Max(1, item.Quantity + (pick.Button == More ? 1 : -1));
                         Say(_list.SetQuantity(item, quantity) ? ShoppingText.Line(item with { Quantity = quantity }) : "Error: " + ShoppingText.WriteFailed);
+                        break;
+                    case Rename when item is not null:
+                        if (_input is null)
+                        {
+                            _pane.Error(ShoppingText.RenameNeedsInput);
+                            break;
+                        }
+
+                        // The name typed on the input row under the list, the line's own to start from; ESC or a blank line keeps it.
+                        var typed = await _pane.EditAsync(page with { Hint = SettingsMenu.EditKeys }, pick.Row, _input, item.Name, allowEmpty: false, cancellationToken).ConfigureAwait(false);
+                        if (typed is InputResult.Submitted { Text: var text } && text.Trim().Length > 0 && text.Trim() != item.Name)
+                        {
+                            Say(_list.RenameItem(item, text));
+                        }
+
                         break;
                     case Remove when item is not null:
                         Say(_list.Remove(item) ? ShoppingText.Removed(item) : "Error: " + ShoppingText.WriteFailed);

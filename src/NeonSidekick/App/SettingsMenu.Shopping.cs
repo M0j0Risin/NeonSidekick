@@ -149,7 +149,7 @@ internal sealed partial class SettingsMenu
             return;
         }
 
-        await new ShoppingMenu(list, _pane, ManageShoppingStoresAsync, closeWhenDone: false).ShowAsync(cancellationToken).ConfigureAwait(false);
+        await new ShoppingMenu(list, _pane, ManageShoppingStoresAsync, closeWhenDone: false, input: _input).ShowAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>The band under a store's row: <see cref="ShoppingText.StoreFooter"/> over its layout's counts and its documents.</summary>

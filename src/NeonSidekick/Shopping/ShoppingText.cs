@@ -389,7 +389,7 @@ public static class ShoppingText
 
     /// <summary><c>/shopping</c> given a line no form takes. Pinned.</summary>
     public const string CommandUsage =
-        "/shopping takes add <items>, check|uncheck|remove <item>, list [<store>], clear [all], store [<name>|add <name>|rename <name> to <new>|remove <name>], export|print [<store>] [verbose] or reindex [<store>]; alone, the list's pane.";
+        "/shopping takes add <items>, check|uncheck|remove <item>, rename <item> to <new-name>, list [<store>], clear [all], store [<name>|add <name>|rename <name> to <new>|remove <name>], export|print [<store>] [verbose] or reindex [<store>]; alone, the list's pane.";
 
     /// <summary>
     /// The file <c>/shopping export</c> writes in the working directory (2026-10-11, the user's ask: one per export, stamped, so an
@@ -459,6 +459,13 @@ public static class ShoppingText
 
     public static string StoreRemoved(ShopStore store) => "Removed the store \"" + store.Name + "\".";
 
+    public static string AuditItemRenamed(ShopItem item, string name) => "Renamed on the shopping list: " + Line(item) + " to " + name;
+
+    public static string AuditItemMerged(ShopItem item, ShopItem into) => "Merged on the shopping list: " + Line(item) + " into " + Line(into);
+
+    /// <summary>A rename onto a name another line has: the two made one. Pinned.</summary>
+    public static string ItemMerged(ShopItem item, ShopItem into) => "\"" + into.Name + "\" is on the list already; merged \"" + item.Name + "\" into it: now " + Line(into) + ".";
+
     public static string AuditStoreRemoved(ShopStore store) => "Removed the store \"" + store.Name + "\"";
 
     /// <summary>After a rename that moved the store's folder (2026-10-11). Pinned.</summary>
@@ -471,11 +478,11 @@ public static class ShoppingText
 
     // ---- the pane (/shopping) ----
 
-    /// <summary>The pane's title: the toolbar's cart and the store the list walks through. Pinned.</summary>
-    public static string PaneLabel(ShopStore? store) => "🛒 " + Title(store);
+    /// <summary>The pane's title: the toolbar's cart and the store the list walks through, or <c>Shopping list</c> with none (the store alone since later on 2026-10-11, for the buttons' room). Pinned.</summary>
+    public static string PaneLabel(ShopStore? store) => "🛒 " + (store?.Name ?? "Shopping list");
 
     /// <summary>The pane's hint row. Pinned.</summary>
-    public const string PaneKeys = "Enter / Space = tick or untick · + / - = quantity · r = remove · a = tick all · c = clear ticked · s = store · Esc = close";
+    public const string PaneKeys = "Enter / Space = tick or untick · + / - = quantity · n = rename · r = remove · a = tick all · c = clear ticked · s = stores · Esc = close";
 
     /// <summary>
     /// The pane's buttons' titles and keys, each with a glyph in the other panes' style (2026-10-11, the user's ask: <c>⊠ clear all</c>,
@@ -485,12 +492,14 @@ public static class ShoppingText
     public const char MoreKey = '+';
     public const string LessButton = "⊖ -1";
     public const char LessKey = '-';
+    public const string RenameButton = "✎ rename";
+    public const char RenameKey = 'n';
     public const string RemoveButton = "✖  remove";
     public const char RemoveKey = 'r';
-    public const string TickAllButton = "☑  tick all";
-    public const string UntickAllButton = "☐  untick all";
+    public const string TickAllButton = "☑  all";
+    public const string UntickAllButton = "☐  none";
     public const char TickAllKey = 'a';
-    public const string ClearButton = "⊠ clear ticked";
+    public const string ClearButton = "⊠ clear";
     public const char ClearKey = 'c';
     public const string StoreButton = "⇄ store";
     public const char StoreKey = 's';
@@ -500,6 +509,9 @@ public static class ShoppingText
         count == 0 ? (on ? "Nothing left to tick." : "Nothing is ticked.") : (on ? "Ticked " : "Unticked ") + (count == 1 ? "the one line." : "all " + Count(count, "line") + ".");
 
     public static string AuditCheckedAll(int count, bool on) => (on ? "Ticked every line of the shopping list: " : "Unticked every line of the shopping list: ") + Count(count, "line");
+
+    /// <summary>The pane's rename with no input row to type on (a host that gave none). Pinned.</summary>
+    public const string RenameNeedsInput = "Rename needs the input row: /shopping rename <item> to <new-name>.";
 
     /// <summary>The pane's empty list. Pinned.</summary>
     public const string EmptyList = "The shopping list is empty: /shopping add <items>, or ask the model.";

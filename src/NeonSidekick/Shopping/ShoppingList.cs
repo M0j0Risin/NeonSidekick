@@ -161,6 +161,45 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
         return changed;
     }
 
+    /// <summary>
+    /// <paramref name="item"/> renamed (2026-10-11, the user's ask: a line fixed without the model): its quantity, note and tick kept; its
+    /// place follows the new name, since a line is placed when it is shown. A name another line already has (folded alike,
+    /// <see cref="ShoppingPlacer.Key"/>) merges the two, that line keeping its name and taking the quantities added, so a product is
+    /// one line. The answer as a sentence; <c>Error: </c> leads a refusal.
+    /// </summary>
+    public string RenameItem(ShopItem item, string name)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "Error: " + ShoppingText.NoItems;
+        }
+
+        var store = _store();
+        string trimmed = name.Trim();
+        string key = ShoppingPlacer.Key(trimmed);
+        if (store.Items().FirstOrDefault(i => i.Id != item.Id && ShoppingPlacer.Key(i.Name) == key) is { } other)
+        {
+            int total = other.Quantity + item.Quantity;
+            if (!store.SetQuantity(other.Id, total) || !store.RemoveItem(item.Id))
+            {
+                return "Error: " + ShoppingText.WriteFailed;
+            }
+
+            var merged = other with { Quantity = total };
+            Audit(ShoppingText.AuditItemMerged(item, merged));
+            return ShoppingText.ItemMerged(item, merged);
+        }
+
+        if (!store.RenameItem(item.Id, trimmed))
+        {
+            return "Error: " + ShoppingText.WriteFailed;
+        }
+
+        Audit(ShoppingText.AuditItemRenamed(item, trimmed));
+        return ShoppingText.Renamed("item", item.Name, trimmed);
+    }
+
     /// <summary>Sets <paramref name="item"/>'s quantity. False when the write failed.</summary>
     public bool SetQuantity(ShopItem item, int quantity)
     {

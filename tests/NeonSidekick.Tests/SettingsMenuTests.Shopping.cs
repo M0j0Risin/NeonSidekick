@@ -66,7 +66,7 @@ public partial class SettingsMenuTests
 
         Assert.Equal([("Bread", true), ("Milk", false)], list.Store.Items().Select(i => (i.Name, i.Checked)));
         Assert.True(pane.OverlayOpen);   // the row's page comes back over it; /shopping's own pane closes
-        Assert.Contains(ShoppingText.TickAllButton, Output);
+        Assert.Contains(ShoppingText.RenameButton, Output);
         pane.Dispose();
     }
 

@@ -157,6 +157,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/shopping` | The shopping list on the pane, walked through the active store (see [Tools](TOOLS.md#shopping-list)): each aisle a heading over its items, the ticked ones last. Without the pane (and headless) the list is printed. |
 | `/shopping add <items>` | Puts items on the list, separated by commas (`/shopping add milk, 2 eggs, bread x2`); an item already there gets the quantity added. |
 | `/shopping check\|uncheck\|remove <item>` | Ticks an item as bought, unticks it, or takes it off, by its name or its number in the order added. |
+| `/shopping rename <item> to <new-name>` | Renames an item, by its name or its number in the order added; its quantity and tick are kept, and it moves to wherever the store places the new name. A name already on the list merges the two, their quantities added. The pane's `n` does the same on the highlighted item. |
 | `/shopping list [<store>]` | Prints the list walked through the active store, or the one named. |
 | `/shopping clear [all]` | Removes the ticked items; `all` empties the whole list, after a yes (headless: straight away). |
 | `/shopping store [<name>]` | Lists the stores and the active one's layout; with a name, makes it the store the list walks through. |
@@ -621,7 +622,7 @@ Every list pane works the same way: ↑/↓ move, Enter picks the highlighted ro
 | `/skills` › a skill | Enter on a row: move, rename, edit, revert, `lock`/`unlock`, `disable`/`enable`, delete (asks); a locked skill refuses rename, move and delete; a disabled one is never offered to the model |
 | `/skills` › a skill › `revert` | Enter puts the version back · `d` removes it (asks) · `c` clear all (asks) |
 | `/docker` | Enter opens · `r` refresh · type to filter |
-| `/shopping` | Enter / Space tick or untick · `+` / `-` quantity · `r` remove · `a` tick all (untick all once every item is) · `c` clear ticked · `s` the stores' manager |
+| `/shopping` | Enter / Space tick or untick · `+` / `-` quantity (keys only, no button) · `n` rename (typed under the list) · `r` remove · `a` tick all (untick all once every item is) · `c` clear ticked · `s` the stores' manager |
 | *Shopping stores* (`/shopping`'s `s`) | Enter on a store shops there (the first row adds one) · `n` rename · `r` remove (asks) · `f` open its reference folder · `i` reindex |
 | `/youtube list` | Enter plays · `d` remove selected (asks) · `c` clear all (asks) · type to filter |
 | `/youtube <words>`, `/youtube playlist` | Enter plays (a playlist from the entry, a channel's uploads) · `s` save the highlighted video |
