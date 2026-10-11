@@ -38,28 +38,7 @@ public static partial class SmokeChecks
         var server = ServeDockerAsync(pipe, SmokeDockerAnswer, connections: 4, stop.Token);
         using var client = new DockerClient(pipe);
         using var session = new DockerSession(() => new Settings.AppSettingsData { DockerEnginePipe = pipe });
-        var (containers, error) = await session.ContainersAsync(stop.Token).ConfigureAwait(false);
-        if (containers is null)
-        {
-            return new SmokeCheck(name, false, "the container list failed: " + error);
-        }
-
-        // A second client of its own for the log, so the session's is not the only one tried.
-        var logs = await client.LogsAsync("smoke_web", 10, null, timestamps: false, DockerLogStreams.Both, TimeSpan.FromSeconds(10), stop.Token).ConfigureAwait(false);
-        await server.ConfigureAwait(false);
-        if (logs.Error is not null)
-        {
-            return new SmokeCheck(name, false, "the log failed: " + logs.Error);
-        }
-
-        bool listed = containers is [{ Name: "smoke_web", Health: "healthy" }];
-        bool demuxed = logs.Lines is ["hello", "warn"];
-        bool redacted = DockerRedaction.Env("SMOKE_PASSWORD=hunter2") == "SMOKE_PASSWORD=" + DockerText.Redacted
-            && DockerRedaction.Args(["--password", "hunter2"]) is [_, DockerText.Redacted];
-        bool agreed = client.Prefix == "/v1.47";
-        return listed && demuxed && redacted && agreed
-            ? new SmokeCheck(name, true, "pipe round trip: API agreed at 1.47, 1 container read, 2 log frames demultiplexed, an env value and a password flag redacted")
-            : new SmokeCheck(name, false, $"listed {listed}, demultiplexed {demuxed} ({string.Join(" | ", logs.Lines)}), redacted {redacted}, agreed {agreed} ({client.Prefix})");
+        return await DockerRoundTripAsync(name, "pipe", client, session, server, stop, transportHeld: true).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -102,28 +81,58 @@ public static partial class SmokeChecks
         var server = ServeDockerSocketAsync(listener, SmokeDockerAnswer, connections: 4, stop.Token);
         using var client = new DockerClient(path);
         using var session = new DockerSession(() => new Settings.AppSettingsData { DockerEnginePipe = DockerSocket.UnixScheme + path });
-        var (containers, error) = await session.ContainersAsync(stop.Token).ConfigureAwait(false);
-        if (containers is null)
-        {
-            return new SmokeCheck(name, false, "the container list failed: " + error);
-        }
-
-        var logs = await client.LogsAsync("smoke_web", 10, null, timestamps: false, DockerLogStreams.Both, TimeSpan.FromSeconds(10), stop.Token).ConfigureAwait(false);
-        await server.ConfigureAwait(false);
-        if (logs.Error is not null)
-        {
-            return new SmokeCheck(name, false, "the log failed: " + logs.Error);
-        }
-
-        bool listed = containers is [{ Name: "smoke_web", Health: "healthy" }];
-        bool demuxed = logs.Lines is ["hello", "warn"];
-        bool redacted = DockerRedaction.Env("SMOKE_PASSWORD=hunter2") == "SMOKE_PASSWORD=" + DockerText.Redacted
-            && DockerRedaction.Args(["--password", "hunter2"]) is [_, DockerText.Redacted];
-        bool agreed = client.Prefix == "/v1.47";
         bool socket = client.Transport == DockerTransport.Socket && session.Client().Pipe == path;
-        return listed && demuxed && redacted && agreed && socket
-            ? new SmokeCheck(name, true, "socket round trip: API agreed at 1.47, 1 container read, 2 log frames demultiplexed, an env value and a password flag redacted")
-            : new SmokeCheck(name, false, $"listed {listed}, demultiplexed {demuxed} ({string.Join(" | ", logs.Lines)}), redacted {redacted}, agreed {agreed} ({client.Prefix}), socket {socket}");
+        return await DockerRoundTripAsync(name, "socket", client, session, server, stop, socket).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The two probes' shared body (code review of 9c145d1, 2026-10-11, one copy where two would drift): the session's client
+    /// agrees the version and lists, a second client of its own reads the log (so the session's is not the only one tried), then
+    /// the reads, the redaction and the agreed version are checked, with <paramref name="transportHeld"/> (the probe's own
+    /// transport check) beside them. Whatever the outcome <paramref name="server"/> is stopped and awaited before the caller's
+    /// listener goes: a failed list or log left it waiting on an accept, its fault never observed.
+    /// </summary>
+    private static async Task<SmokeCheck> DockerRoundTripAsync(string name, string transport, DockerClient client, DockerSession session, Task server, CancellationTokenSource stop, bool transportHeld)
+    {
+        try
+        {
+            var (containers, error) = await session.ContainersAsync(stop.Token).ConfigureAwait(false);
+            if (containers is null)
+            {
+                return new SmokeCheck(name, false, "the container list failed: " + error);
+            }
+
+            var logs = await client.LogsAsync("smoke_web", 10, null, timestamps: false, DockerLogStreams.Both, TimeSpan.FromSeconds(10), stop.Token).ConfigureAwait(false);
+            if (logs.Error is not null)
+            {
+                return new SmokeCheck(name, false, "the log failed: " + logs.Error);
+            }
+
+            await server.ConfigureAwait(false);
+            bool listed = containers is [{ Name: "smoke_web", Health: "healthy" }];
+            bool demuxed = logs.Lines is ["hello", "warn"];
+            bool redacted = DockerRedaction.Env("SMOKE_PASSWORD=hunter2") == "SMOKE_PASSWORD=" + DockerText.Redacted
+                && DockerRedaction.Args(["--password", "hunter2"]) is [_, DockerText.Redacted];
+            bool agreed = client.Prefix == "/v1.47";
+            return listed && demuxed && redacted && agreed && transportHeld
+                ? new SmokeCheck(name, true, transport + " round trip: API agreed at 1.47, 1 container read, 2 log frames demultiplexed, an env value and a password flag redacted")
+                : new SmokeCheck(name, false, $"listed {listed}, demultiplexed {demuxed} ({string.Join(" | ", logs.Lines)}), redacted {redacted}, agreed {agreed} ({client.Prefix}), {transport} {transportHeld}");
+        }
+        finally
+        {
+            if (!server.IsCompletedSuccessfully)
+            {
+                await stop.CancelAsync().ConfigureAwait(false);
+                try
+                {
+                    await server.ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    // Observed only: the verdict is already made (or the exception on its way out of the try).
+                }
+            }
+        }
     }
 
     /// <summary>The canned engine the smoke probe talks to: <c>/version</c>, one container, a two-frame log.</summary>

@@ -919,6 +919,33 @@ public sealed class DockerTests : IDisposable
         Assert.Equal(DockerText.NotHere, logs.Error);
     }
 
+    /// <summary>
+    /// A <c>DOCKER_HOST</c> naming a remote engine is the connect's refusal on a Mac, not a local engine reached instead, and the
+    /// failure's <see cref="DockerClient.Display"/> reuses the connect's look rather than reading the files again (code review of 9c145d1).
+    /// </summary>
+    [MacFact]
+    public async Task OnAMac_ARemoteDockerHost_IsRefused_AndTheDisplayReusesTheLook()
+    {
+        int reads = 0;
+        string? Environment(string name)
+        {
+            if (name != DockerSocket.HostVariable)
+            {
+                return null;
+            }
+
+            reads++;
+            return "ssh://neon@builder";
+        }
+
+        using var client = new DockerClient("", environment: Environment);
+        Assert.Equal(DockerText.HostNotLocal("ssh://neon@builder"), (await client.PingAsync(TimeSpan.FromSeconds(5), CancellationToken.None)).Error);
+        int looked = reads;
+        Assert.Equal(DockerClient.NoSocketWord, client.Display);
+        Assert.Equal(DockerClient.NoSocketWord, client.Display);
+        Assert.Equal(looked, reads);
+    }
+
     [MacFact]
     public void TheSmokeProbe_RoundTripsOverARealUnixSocket()
     {

@@ -99,7 +99,7 @@ Every variable starts with `NEONSIDEKICK_`. Each overrides a setting for one lau
 | `NEONSIDEKICK_HA_URL` | Home Assistant URL | The server's URL (`http://localhost:8123`). |
 | `NEONSIDEKICK_HA_TOKEN` | Home Assistant API key | A long-lived token as issued. Never logged. |
 | `NEONSIDEKICK_YOUTUBE_API_KEY` | YouTube API key | A YouTube Data API v3 key as issued. Never logged. |
-| `NEONSIDEKICK_DOCKER_PIPE` | Docker engine pipe | A bare name, `\\.\pipe\name` or `npipe:////./pipe/name` (what `DOCKER_HOST` holds). On a Mac (*Docker engine socket*) a socket's path or `unix:///path`; there the app also reads `DOCKER_HOST` itself (a `unix://` one) when neither this nor the setting names a socket, and `DOCKER_CONTEXT`/`DOCKER_CONFIG` for the CLI's current context ([the order](TOOLS.md#docker-on-a-mac)). |
+| `NEONSIDEKICK_DOCKER_PIPE` | Docker engine pipe | A bare name, `\\.\pipe\name` or `npipe:////./pipe/name` (what `DOCKER_HOST` holds). On a Mac (*Docker engine socket*) a socket's path or `unix:///path`; there the app also reads `DOCKER_HOST` itself when neither this nor the setting names a socket (a `tcp://` or `ssh://` one is refused), and `DOCKER_CONTEXT`/`DOCKER_CONFIG` for the CLI's current context ([the order](TOOLS.md#docker-on-a-mac)). |
 
 ## Set by the app
 

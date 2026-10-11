@@ -38,12 +38,14 @@ public sealed class DockerSession : IDisposable
     private readonly TimeProvider _time;
     private readonly object _gate = new();
     private DockerClient? _client;
-    private string? _clientFor;
     private IReadOnlyList<DockerContainer>? _last;
     private DateTimeOffset _lastTaken;
 
     /// <param name="effective">The settings, read at every call.</param>
-    /// <param name="clientFactory">Makes the client for a pipe; null = <see cref="DockerClient"/> over the pipe itself. Tests pass one over a stub handler.</param>
+    /// <param name="clientFactory">
+    /// Makes the client for the setting's value as it stands (<c>DockerEnginePipe</c>, read by the client in its transport's way);
+    /// null = <see cref="DockerClient"/> over the pipe or socket itself. Tests pass one over a stub handler.
+    /// </param>
     /// <param name="time">The clock (the log's <c>since</c>, an image's age, the list's age); null = the system's.</param>
     /// <param name="environment">
     /// The variables (<see cref="EnvironmentOverrides.System"/>) the default client's socket look reads on a Mac (<c>DOCKER_HOST</c>,
@@ -52,7 +54,7 @@ public sealed class DockerSession : IDisposable
     public DockerSession(Func<AppSettingsData> effective, Func<string, DockerClient>? clientFactory = null, TimeProvider? time = null, Func<string, string?>? environment = null)
     {
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
-        _clientFactory = clientFactory ?? (pipe => new DockerClient(pipe, environment: environment));
+        _clientFactory = clientFactory ?? (setting => new DockerClient(setting, environment: environment));
         _time = time ?? TimeProvider.System;
     }
 
@@ -69,22 +71,23 @@ public sealed class DockerSession : IDisposable
     public static string PipeOf(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return DockerSocket.Here == DockerTransport.Socket ? DockerSocket.Normalize(effective.DockerEnginePipe) : DockerPipe.Normalize(effective.DockerEnginePipe);
+        return DockerClient.AddressOf(effective.DockerEnginePipe, DockerSocket.Here);
     }
 
-    /// <summary>The client for the pipe in force, made again when the setting changed.</summary>
+    /// <summary>
+    /// The client for the address in force, made again when the setting changed: the setting read in the client's own transport's
+    /// way (<see cref="DockerClient.AddressOf"/>) against the address it holds, so a stub speaking the pipe's words on a Mac is
+    /// compared as a pipe (code review of 9c145d1, 2026-10-11: no separate key kept).
+    /// </summary>
     public DockerClient Client()
     {
-        string pipe = PipeOf(_effective());
+        string setting = _effective().DockerEnginePipe;
         lock (_gate)
         {
-            // Keyed by the address it was made for (2026-10-11), not the client's own reading of it: a factory's client may read
-            // it in the other transport's way (a test's pipe-worded stub on a Mac), and was then made again at every call.
-            if (_client is null || !string.Equals(_clientFor, pipe, StringComparison.OrdinalIgnoreCase))
+            if (_client is null || !string.Equals(_client.Pipe, DockerClient.AddressOf(setting, _client.Transport), StringComparison.OrdinalIgnoreCase))
             {
                 _client?.Dispose();
-                _client = _clientFactory(pipe);
-                _clientFor = pipe;
+                _client = _clientFactory(setting);
                 _last = null;
             }
 

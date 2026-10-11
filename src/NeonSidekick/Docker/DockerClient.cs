@@ -55,6 +55,7 @@ public sealed class DockerClient : IDisposable
     private readonly Func<string, string?> _environment;
     private string? _prefix;
     private string? _socket;
+    private DockerSocketLookup? _looked;
 
     /// <param name="pipe">
     /// The engine's address: on Windows the pipe, any form <see cref="DockerPipe.Normalize"/> reads; on a Mac (2026-10-11) the
@@ -62,11 +63,15 @@ public sealed class DockerClient : IDisposable
     /// </param>
     /// <param name="httpClient">Optional transport, the caller's to dispose. Null creates and owns one over the pipe or socket.</param>
     /// <param name="environment">The variables a Mac's socket look reads (<c>DOCKER_HOST</c>, the CLI's context); null sees none.</param>
-    /// <param name="transport">The transport whose words the sentences use; null = this system's (<see cref="DockerSocket.Here"/>). Tests pass either.</param>
+    /// <param name="transport">
+    /// The transport whose words the sentences use; null = this system's (<see cref="DockerSocket.Here"/>). The one seam a stub
+    /// client's wording is chosen by (tests pass <see cref="DockerTransport.Pipe"/> so the pipe's sentences hold on a Mac too);
+    /// <see cref="DockerSession"/> reads the client's own back rather than keeping a key of its own.
+    /// </param>
     public DockerClient(string pipe, HttpClient? httpClient = null, Func<string, string?>? environment = null, DockerTransport? transport = null)
     {
         Transport = transport ?? DockerSocket.Here;
-        Pipe = Transport == DockerTransport.Socket ? DockerSocket.Normalize(pipe) : DockerPipe.Normalize(pipe);
+        Pipe = AddressOf(pipe, Transport);
         _environment = environment ?? (_ => null);
         if (httpClient is not null)
         {
@@ -96,20 +101,44 @@ public sealed class DockerClient : IDisposable
     /// <summary>The pipe's bare name; on a Mac the socket's path as set, <c>""</c> for "find it".</summary>
     public string Pipe { get; }
 
+    /// <summary>
+    /// The engine's address <paramref name="setting"/> (any form of <c>DockerEnginePipe</c>) means over <paramref name="transport"/>:
+    /// the pipe's bare name, or the socket's path (<c>""</c>: find it). The one reading of the setting, the constructor's and
+    /// <see cref="DockerSession"/>'s alike (code review of 9c145d1, 2026-10-11). Pure.
+    /// </summary>
+    public static string AddressOf(string? setting, DockerTransport transport) =>
+        transport == DockerTransport.Socket ? DockerSocket.Normalize(setting) : DockerPipe.Normalize(setting);
+
     /// <summary>The transport: the pipe, a Mac's socket, or none.</summary>
     public DockerTransport Transport { get; }
 
     /// <summary>
-    /// The engine's address for the sentences: the pipe as Windows writes it; on a Mac the socket last connected to (or looked
-    /// up now), <c>~</c> for the home, or <c>no socket found</c>.
+    /// The engine's address for the sentences: the pipe as Windows writes it; on a Mac the socket last connected to, else what the
+    /// connect's last look found (one look made now when there was none: code review of 9c145d1, so a failure's sentences do not
+    /// each redo the connect's file reads), <c>~</c> for the home, or <c>no socket found</c>.
     /// </summary>
     public string Display => Transport == DockerTransport.Socket ? SocketDisplay() : DockerPipe.Display(Pipe);
 
     /// <summary>What <see cref="Display"/> says on a Mac when no socket is found anywhere.</summary>
     public const string NoSocketWord = "no socket found";
 
-    private string SocketDisplay() =>
-        (Volatile.Read(ref _socket) ?? Locate().Socket?.Path) is { } path ? DockerSocket.Display(path, DockerSocket.Home) : NoSocketWord;
+    private string SocketDisplay()
+    {
+        string? path = Volatile.Read(ref _socket);
+        if (path is null)
+        {
+            var looked = Volatile.Read(ref _looked);
+            if (looked is null)
+            {
+                looked = Locate();
+                Volatile.Write(ref _looked, looked);
+            }
+
+            path = looked.Socket?.Path;
+        }
+
+        return path is not null ? DockerSocket.Display(path, DockerSocket.Home) : NoSocketWord;
+    }
 
     /// <summary>The look on a Mac, against this machine.</summary>
     private DockerSocketLookup Locate() => DockerSocket.Locate(Pipe, _environment);
@@ -117,14 +146,16 @@ public sealed class DockerClient : IDisposable
     /// <summary>
     /// The socket a new connection opens (2026-10-11): looked up at every connect, not once, so a Desktop restart or a switch to
     /// OrbStack is picked up without restarting the app (connections pool for 30 s, so it is a few <c>stat</c>s now and then).
-    /// None found is a <see cref="DockerTransportException"/> naming every place looked at.
+    /// None found is a <see cref="DockerTransportException"/> naming every place looked at; a <c>DOCKER_HOST</c> or context naming
+    /// no local socket, one with its refusal. The look is kept for <see cref="Display"/>.
     /// </summary>
     private string LocateSocket()
     {
         var lookup = Locate();
+        Volatile.Write(ref _looked, lookup);
         if (lookup.Socket is not { } found)
         {
-            throw new DockerTransportException(DockerText.NoSocket(lookup.Looked));
+            throw new DockerTransportException(lookup.Refusal ?? DockerText.NoSocket(lookup.Looked));
         }
 
         if (!string.Equals(Volatile.Read(ref _socket), found.Path, StringComparison.Ordinal))

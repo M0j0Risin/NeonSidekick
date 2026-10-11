@@ -5746,7 +5746,14 @@ internal sealed partial class SettingsMenu
 
             case SettingsField.DockerEnginePipe:
                 // Kept as the bare name whatever form was typed (2026-10-02); blank is the default pipe. On a Mac (2026-10-11) the
-                // socket's path (unix:// taken off, ~ kept); blank or a pipe name is "find it", saved blank.
+                // socket's path (unix:// taken off, ~ kept), blank to find it; anything else typed there (a relative path, tcp://, a
+                // pipe name) is refused, not saved as "find it" unsaid (code review of 9c145d1).
+                if (OperatingSystem.IsMacOS() && !string.IsNullOrWhiteSpace(text) && Docker.DockerSocket.Normalize(text).Length == 0)
+                {
+                    Sink.Error($"{FieldName(field)} {DockerEngineSocketError}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
+                    return false;
+                }
+
                 Apply(field, d => d.DockerEnginePipe = OperatingSystem.IsMacOS() ? Docker.DockerSocket.Normalize(text) : Docker.DockerPipe.Normalize(text));
                 return true;
 

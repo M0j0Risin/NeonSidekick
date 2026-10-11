@@ -106,6 +106,29 @@ public partial class ToolsMenuTests
         pane.Dispose();
     }
 
+    /// <summary>
+    /// A Mac's Docker engine socket row (code review of 9c145d1, 2026-10-11): a typed value naming no socket (a remote engine, a
+    /// relative path) is refused, never saved blank as "find it" unsaid; a <c>unix://</c> path saves as its path.
+    /// </summary>
+    [MacFact]
+    public async Task OnAMac_TheDockerSocketRow_RefusesWhatNamesNoSocket()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push([.. ToTab(ToolsText.DockerTabTitle), Keys.Down, Keys.Down, Keys.Enter, Keys.Ctrl(ConsoleKey.A), Keys.Backspace]);
+        _console.Input.PushText("tcp://127.0.0.1:2375");
+        Push(Keys.Enter);                                     // refused
+        Push(Keys.Enter, Keys.Ctrl(ConsoleKey.A), Keys.Backspace);
+        _console.Input.PushText("unix://~/.orbstack/run/docker.sock");
+        Push(Keys.Enter);
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains("Docker engine socket " + SettingsMenu.DockerEngineSocketError + "; keeping auto: ", Output);
+        Assert.Equal("~/.orbstack/run/docker.sock", _settings.Current.DockerEnginePipe);
+        pane.Dispose();
+    }
+
     [Fact]
     public void TheFilterDefaults_AreCopied_AndReadAsTheSearchsOwn()
     {

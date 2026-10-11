@@ -43,8 +43,20 @@ public static class DockerText
     /// <summary>A path longer than a Unix socket takes (104 characters on macOS, measured: .NET refuses it before connecting).</summary>
     public static string SocketPathTooLong(string socket) => $"Error: {socket} is too long for a Unix socket (104 characters at most); set Docker engine socket to a shorter path or a link to it";
 
-    /// <summary>The one warning for a <c>DOCKER_HOST</c> the app cannot use (2026-10-11): only a Unix socket is reached.</summary>
-    public static string HostIgnored(string host) => $"{DockerSocket.HostVariable}={host} is not a unix:// socket; the Docker tools reach only a local engine's socket, so it is ignored and the socket is looked for as if it were unset.";
+    /// <summary>
+    /// A <c>DOCKER_HOST</c> the app cannot use (code review of 9c145d1, 2026-10-11): a <c>tcp://</c> or <c>ssh://</c> engine, or a
+    /// <c>unix://</c> with no full path. Refused rather than passed over: <c>docker</c> would drive that engine, so the tools reaching
+    /// a local one instead would act where the user does not look. Pinned.
+    /// </summary>
+    public static string HostNotLocal(string host) =>
+        $"Error: {DockerSocket.HostVariable} is {host}, not a local engine's socket (unix:///full/path), the only kind the Docker tools reach; unset {DockerSocket.HostVariable}, or set Docker engine socket on the Docker tab of /tools";
+
+    /// <summary>
+    /// The CLI's current context names no local socket (code review of 9c145d1): another scheme, or no endpoint the app can read
+    /// (<paramref name="host"/> null). Refused for <see cref="HostNotLocal"/>'s reason. Pinned.
+    /// </summary>
+    public static string ContextNotLocal(string context, string? host) =>
+        $"Error: the Docker context {context} {(host is null ? "has no endpoint the app can read" : "names " + host + ", not a local engine's socket")}, and the Docker tools reach only a local socket; switch with docker context use, or set Docker engine socket on the Docker tab of /tools";
 
     /// <summary>Any other transport failure, as it came.</summary>
     public static string Unreachable(string pipe, string detail) => $"Error: cannot reach the Docker engine on {pipe}: {detail.Trim()}";

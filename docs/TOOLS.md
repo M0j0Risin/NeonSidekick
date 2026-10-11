@@ -663,11 +663,13 @@ Containers serving an OpenAI-compatible API (vLLM, SGLang…) can be `/server` c
 
 The same tools, `/docker` and its pane, over the engine's Unix socket: Docker Desktop's, OrbStack's, Colima's or Rancher Desktop's. *Docker engine socket* (the setting Windows calls *Docker engine pipe*) names one by its path (`/var/run/docker.sock`, `~/.orbstack/run/docker.sock`) or as `unix:///path`. Empty, or Windows' pipe name, finds it the way the `docker` command does, in this order:
 
-1. `DOCKER_HOST`, when it is `unix://…`. A `tcp://` or `ssh://` value isn't a local socket: it gets one warning in the log and the look goes on.
+1. `DOCKER_HOST`, when it is set.
 2. The Docker CLI's current context: `DOCKER_CONTEXT`, else `currentContext` in `~/.docker/config.json` (`DOCKER_CONFIG` moves the folder), then that context's endpoint. Docker Desktop, OrbStack and Colima each switch the context to theirs when they start, so this finds the engine in use. Nothing else is read from `config.json`.
-3. The usual places: `~/.docker/run/docker.sock` (Docker Desktop), `/var/run/docker.sock` (Desktop's *Allow the default Docker socket*, or another engine), `~/.orbstack/run/docker.sock`, `~/.colima/default/docker.sock` and `~/.rd/docker.sock`.
+3. With neither (or the CLI's own `default` context), the usual places: `~/.docker/run/docker.sock` (Docker Desktop), `/var/run/docker.sock` (Desktop's *Allow the default Docker socket*, or another engine), `~/.orbstack/run/docker.sock`, `~/.colima/default/docker.sock` and `~/.rd/docker.sock`.
 
-The look runs again for each new connection, so quitting Docker Desktop and starting OrbStack needs no restart, and the row shows what it found (`auto: ~/.docker/run/docker.sock`). A link counts only when its target is there. When nothing answers the tools say so: *the Docker engine is not running (nothing answers on ~/.docker/run/docker.sock)*, *no Docker engine socket found (looked at …)*, or, for a socket whose permissions refuse you, *macOS refused access to …*.
+As with `docker`, a `DOCKER_HOST` or context is used whether its socket is there or not, so the tools never act on another engine than the one `docker ps` shows. One naming a `tcp://` or `ssh://` engine is refused (the tools reach only a local socket): unset `DOCKER_HOST`, switch with `docker context use`, or name a socket in *Docker engine socket*.
+
+The look runs again for each new connection, so quitting Docker Desktop and starting OrbStack (which switches the context) needs no restart, and the row shows what it found (`auto: ~/.docker/run/docker.sock`). A link counts only when its target is there. When nothing answers the tools say so: *the Docker engine is not running (nothing answers on ~/.docker/run/docker.sock)*, *no Docker engine socket found (looked at …)*, *DOCKER_HOST is tcp://…, not a local engine's socket*, or, for a socket whose permissions refuse you, *macOS refused access to …*.
 
 Docker Desktop runs the containers in a Linux VM, so `docker_stats`' CPU share is of the VM's processors and the memory limit is the VM's (8 GB of a 16 GB Mac by default, set in Docker Desktop's Resources), not the Mac's.
 

@@ -2,7 +2,6 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.Docker;
 
@@ -46,9 +45,11 @@ public sealed record DockerSocketFound(string Path, string Source);
 
 /// <summary>
 /// One look for the engine's socket: the socket (null when none was found), every place looked at (as written for a sentence,
-/// <c>~</c> for the home), and a <c>DOCKER_HOST</c> that was set but is not a Unix socket (for the one warning).
+/// <c>~</c> for the home), and, when <c>DOCKER_HOST</c> or the CLI's context names an engine the app cannot reach, the
+/// <see cref="Refusal"/> sentence and what named it (<see cref="Unusable"/>, for the settings row). Code review of 9c145d1,
+/// 2026-10-11: that refusal replaced a warning and a look that went on to whatever local socket was there.
 /// </summary>
-public sealed record DockerSocketLookup(DockerSocketFound? Socket, IReadOnlyList<string> Looked, string? IgnoredHost);
+public sealed record DockerSocketLookup(DockerSocketFound? Socket, IReadOnlyList<string> Looked, string? Refusal = null, string? Unusable = null);
 
 /// <summary>
 /// The Docker engine's Unix socket on a Mac (2026-10-11, the user's ask: the Docker tools on the Mac too). The Engine API above
@@ -58,11 +59,13 @@ public sealed record DockerSocketLookup(DockerSocketFound? Socket, IReadOnlyList
 ///
 /// <para>Where the socket is (<see cref="Resolve"/>), in the Docker CLI's own order, so the app reaches whatever engine
 /// <c>docker</c> would: the setting <c>Docker engine socket</c> (the same field as Windows' <c>Docker engine pipe</c>,
-/// <c>DockerEnginePipe</c>; a path or <c>unix://</c> URL, used alone); then <c>DOCKER_HOST</c> when it is <c>unix://</c> (a
-/// <c>tcp://</c> or <c>ssh://</c> one is not ours: one warning, then the look goes on); then the CLI's current context
+/// <c>DockerEnginePipe</c>; a path or <c>unix://</c> URL, used alone); then <c>DOCKER_HOST</c>; then the CLI's current context
 /// (<c>DOCKER_CONTEXT</c>, else <c>currentContext</c> in <c>~/.docker/config.json</c>, then that context's <c>meta.json</c> —
-/// how OrbStack and Colima are found when they are the active engine, without <c>DOCKER_HOST</c>); then the usual places,
-/// <see cref="UsualPlaces"/>. Measured on this Mac (Docker Desktop 4.42): the context <c>desktop-linux</c> names
+/// how OrbStack and Colima are found when they are the active engine, without <c>DOCKER_HOST</c>); then, with neither set (or the
+/// CLI's own <c>default</c> context), the usual places, <see cref="UsualPlaces"/>. As for <c>docker</c>, a <c>DOCKER_HOST</c> or
+/// context is used whether its socket is there or not, and one naming a <c>tcp://</c> or <c>ssh://</c> engine is a refusal (code
+/// review of 9c145d1, 2026-10-11: going on to a local socket had the tools drive another engine than the one <c>docker ps</c>
+/// shows — with Docker writes on, stop or prune there). Measured on this Mac (Docker Desktop 4.42): the context <c>desktop-linux</c> names
 /// <c>~/.docker/run/docker.sock</c>, and <c>/var/run/docker.sock</c> is a link to it (Desktop's "Allow the default Docker
 /// socket"). Windows never calls any of this: it never reads <c>DOCKER_HOST</c> or the CLI's files.</para>
 ///
@@ -144,9 +147,10 @@ public static class DockerSocket
     }
 
     /// <summary>
-    /// The engine's socket for <paramref name="setting"/>, in the order the class names. The setting and <c>DOCKER_HOST</c> are
-    /// used whether their socket is there or not (the user named it: the connect's error says it); a context's and the usual
-    /// places count only when there. Pure but for the three readers.
+    /// The engine's socket for <paramref name="setting"/>, in the order the class names. The setting, <c>DOCKER_HOST</c> and the
+    /// CLI's context are used whether their socket is there or not (the user named it: the connect's error says it), and a
+    /// <c>DOCKER_HOST</c> or context naming no local socket is a <see cref="DockerSocketLookup.Refusal"/>; the usual places count
+    /// only when there. Pure but for the three readers.
     /// </summary>
     /// <param name="setting">The <c>DockerEnginePipe</c> value, any form <see cref="Normalize"/> reads.</param>
     /// <param name="environment">The variables (<see cref="Settings.EnvironmentOverrides.System"/>); null or blank for unset.</param>
@@ -166,55 +170,51 @@ public static class DockerSocket
             return new DockerSocketLookup(new DockerSocketFound(path, FromSetting), [Display(path, home)], null);
         }
 
-        var looked = new List<string>();
-        string? ignored = null;
         if (Blank(environment(HostVariable)) is { } host)
         {
-            if (host.StartsWith(UnixScheme, StringComparison.OrdinalIgnoreCase) && Normalize(host) is { Length: > 0 } hostPath)
+            if (!host.StartsWith(UnixScheme, StringComparison.OrdinalIgnoreCase) || Normalize(host) is not { Length: > 0 } hostPath)
             {
-                string path = Expand(hostPath, home);
-                return new DockerSocketLookup(new DockerSocketFound(path, HostVariable), [Display(path, home)], null);
+                return new DockerSocketLookup(null, [], DockerText.HostNotLocal(host), HostVariable);
             }
 
-            ignored = host;
+            string path = Expand(hostPath, home);
+            return new DockerSocketLookup(new DockerSocketFound(path, HostVariable), [Display(path, home)]);
         }
 
         if (ContextSocket(environment, home, readFile) is { } context)
         {
-            string path = Expand(context.Path, home);
-            if (exists(path))
+            if (context.Path is null)
             {
-                return new DockerSocketLookup(new DockerSocketFound(path, FromContext(context.Name)), [Display(path, home)], ignored);
+                return new DockerSocketLookup(null, [], DockerText.ContextNotLocal(context.Name, context.Host), FromContext(context.Name));
             }
 
-            looked.Add(Display(path, home));
+            string path = Expand(context.Path, home);
+            return new DockerSocketLookup(new DockerSocketFound(path, FromContext(context.Name)), [Display(path, home)]);
         }
 
+        var looked = new List<string>();
         foreach (string place in UsualPlaces)
         {
             string path = Expand(place, home);
             string shown = Display(path, home);
-            if (!looked.Contains(shown, StringComparer.Ordinal))
-            {
-                looked.Add(shown);
-            }
-
+            looked.Add(shown);
             if (exists(path))
             {
-                return new DockerSocketLookup(new DockerSocketFound(path, FromUsualPlace), [shown], ignored);
+                return new DockerSocketLookup(new DockerSocketFound(path, FromUsualPlace), [shown]);
             }
         }
 
-        return new DockerSocketLookup(null, looked, ignored);
+        return new DockerSocketLookup(null, looked);
     }
 
     /// <summary>
-    /// The CLI's current context's socket: <c>DOCKER_CONTEXT</c>, else <c>currentContext</c> in <c>$DOCKER_CONFIG/config.json</c>
-    /// (<c>~/.docker</c> by default); then <c>contexts/meta/&lt;sha256 of the name&gt;/meta.json</c>'s <c>Endpoints.docker.Host</c>
-    /// when it is <c>unix://</c>. Null for <c>default</c> (the CLI's built-in context names no file), a file missing or unreadable,
-    /// or another scheme.
+    /// The CLI's current context: <c>DOCKER_CONTEXT</c>, else <c>currentContext</c> in <c>$DOCKER_CONFIG/config.json</c>
+    /// (<c>~/.docker</c> by default); then <c>contexts/meta/&lt;sha256 of the name&gt;/meta.json</c>'s <c>Endpoints.docker.Host</c>,
+    /// its <see cref="ContextEndpoint.Path"/> when that is a <c>unix://</c> path. Null when no context is in force: <c>default</c> (the
+    /// CLI's built-in context names no file), or none named. A named context with no such endpoint has a null path, and its
+    /// <see cref="ContextEndpoint.Host"/> when it has one (another scheme), so the look can refuse it as <c>docker</c> would fail.
     /// </summary>
-    private static (string Name, string Path)? ContextSocket(Func<string, string?> environment, string home, Func<string, string?> readFile)
+    private static ContextEndpoint? ContextSocket(Func<string, string?> environment, string home, Func<string, string?> readFile)
     {
         string folder = Blank(environment(ConfigVariable)) is { } config ? Expand(config, home) : Join(home, ".docker");
         string? name = Blank(environment(ContextVariable)) ?? JsonString(readFile(Join(folder, "config.json")), "currentContext");
@@ -227,7 +227,7 @@ public static class DockerSocket
         string? meta = readFile(Join(folder, "contexts/meta/" + hash + "/meta.json"));
         if (meta is null)
         {
-            return null;
+            return new ContextEndpoint(name, null, null);
         }
 
         try
@@ -237,18 +237,21 @@ public static class DockerSocket
                 && document.RootElement.TryGetProperty("Endpoints", out var endpoints) && endpoints.ValueKind == JsonValueKind.Object
                 && endpoints.TryGetProperty("docker", out var docker) && docker.ValueKind == JsonValueKind.Object
                 && docker.TryGetProperty("Host", out var host) && host.ValueKind == JsonValueKind.String
-                && host.GetString() is { } url && url.StartsWith(UnixScheme, StringComparison.OrdinalIgnoreCase)
-                && Normalize(url) is { Length: > 0 } path)
+                && Blank(host.GetString()) is { } url)
             {
-                return (name, path);
+                bool unix = url.StartsWith(UnixScheme, StringComparison.OrdinalIgnoreCase) && Normalize(url).Length > 0;
+                return new ContextEndpoint(name, unix ? Normalize(url) : null, url);
             }
         }
         catch (JsonException)
         {
         }
 
-        return null;
+        return new ContextEndpoint(name, null, null);
     }
+
+    /// <summary>A context in force: its name, its socket's path (null when it names none), and its endpoint as written (null when unreadable).</summary>
+    private sealed record ContextEndpoint(string Name, string? Path, string? Host);
 
     /// <summary>One string member of a JSON object's text, or null (no text, not JSON, no such string).</summary>
     private static string? JsonString(string? text, string member)
@@ -309,23 +312,9 @@ public static class DockerSocket
         }
     }
 
-    private static int s_warned;
-
-    /// <summary>
-    /// <see cref="Resolve"/> against this machine (the home, the real files), warning once per run of a <c>DOCKER_HOST</c> that is
-    /// not a Unix socket.
-    /// </summary>
-    public static DockerSocketLookup Locate(string? setting, Func<string, string?> environment)
-    {
-        string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var lookup = Resolve(setting, environment, home, Exists, ReadFile);
-        if (lookup.IgnoredHost is { } host && Interlocked.Exchange(ref s_warned, 1) == 0)
-        {
-            DiagnosticLog.Warn(DockerText.Category, DockerText.HostIgnored(host));
-        }
-
-        return lookup;
-    }
+    /// <summary><see cref="Resolve"/> against this machine: the home, the real files.</summary>
+    public static DockerSocketLookup Locate(string? setting, Func<string, string?> environment) =>
+        Resolve(setting, environment, Home, Exists, ReadFile);
 
     /// <summary>
     /// The process's variables for the places with no reader handed to them (the settings row's <c>auto: …</c>): set once by
@@ -334,7 +323,11 @@ public static class DockerSocket
     /// </summary>
     public static Func<string, string?> MachineEnvironment { get; set; } = _ => null;
 
-    /// <summary>The settings row's value on a Mac: the socket set (as written), or <c>auto: </c> and what the look finds now.</summary>
+    /// <summary>
+    /// The settings row's value on a Mac: the socket set (as written), or <c>auto: </c> and what the look finds — kept for
+    /// <see cref="RowAge"/> (code review of 9c145d1, 2026-10-11: the row is drawn at every repaint and key, and each look reads the
+    /// CLI's <c>config.json</c> and stats up to five places).
+    /// </summary>
     public static string RowValue(string? setting)
     {
         string chosen = Normalize(setting);
@@ -343,14 +336,33 @@ public static class DockerSocket
             return chosen;
         }
 
-        return Locate(setting, MachineEnvironment).Socket is { } found ? AutoWord + ": " + Display(found.Path, Home) : AutoWord + ": " + NoneFoundWord;
+        long now = Environment.TickCount64;
+        if (Volatile.Read(ref s_row) is { } kept && now - kept.At < (long)RowAge.TotalMilliseconds)
+        {
+            return kept.Value;
+        }
+
+        var lookup = Locate(setting, MachineEnvironment);
+        string value = AutoWord + ": " + (lookup.Socket is { } found ? Display(found.Path, Home) : lookup.Unusable is { } named ? NotLocalWord(named) : NoneFoundWord);
+        Volatile.Write(ref s_row, new RowLook(now, value));
+        return value;
     }
+
+    /// <summary>How long <see cref="RowValue"/> keeps a look: long enough for a burst of repaints, short enough to follow an engine switch.</summary>
+    public static readonly TimeSpan RowAge = TimeSpan.FromSeconds(2);
+
+    private sealed record RowLook(long At, string Value);
+
+    private static RowLook? s_row;
 
     /// <summary>The row's word for "find it".</summary>
     public const string AutoWord = "auto";
 
     /// <summary>The row's word when the look finds nothing.</summary>
     public const string NoneFoundWord = "none found";
+
+    /// <summary>The row's words when <c>DOCKER_HOST</c> or the context names an engine the app cannot reach.</summary>
+    public static string NotLocalWord(string named) => named + " is not a local socket";
 
     /// <summary>The home as <see cref="Display(string, string)"/> takes it, for the client's sentences.</summary>
     public static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);

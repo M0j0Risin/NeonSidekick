@@ -845,7 +845,7 @@ The pane heads its runs **Access** and **Engine**.
 | Docker tools | Offers `docker_containers`, `docker_logs`, `docker_inspect`, `docker_stats`, `docker_resources` and `docker_compose`, whether Docker Desktop runs or not. `/docker` works either way. See [Docker](TOOLS.md#docker); on a Mac over the engine's socket, [Docker on a Mac](TOOLS.md#docker-on-a-mac). | off |
 | Docker writes | The master key for the model's changes: `docker_lifecycle`, `docker_pull`, `docker_remove` and `docker_prune` (the last two off by default in Offered). Every call asks first; headless refuses them. | off |
 | Docker engine pipe | The engine's named pipe: a name (`docker_engine` is Docker Desktop's), `\\.\pipe\name` or `npipe:////./pipe/name`. Blank is the default. | `\\.\pipe\docker_engine` |
-| Docker engine socket | On a Mac the same setting is the engine's Unix socket: a path (`/var/run/docker.sock`, `~/.orbstack/run/docker.sock`) or `unix:///path`. Empty, or Windows' pipe name, finds it: `DOCKER_HOST` (`unix://` only), the Docker CLI's current context, then the usual places of Docker Desktop, OrbStack, Colima and Rancher Desktop ([the order](TOOLS.md#docker-on-a-mac)). The row shows what it found. | `auto: ~/.docker/run/docker.sock` |
+| Docker engine socket | On a Mac the same setting is the engine's Unix socket: a path (`/var/run/docker.sock`, `~/.orbstack/run/docker.sock`) or `unix:///path`. Empty, or Windows' pipe name, finds it: `DOCKER_HOST`, the Docker CLI's current context (a `tcp://` or `ssh://` one refused), then the usual places of Docker Desktop, OrbStack, Colima and Rancher Desktop ([the order](TOOLS.md#docker-on-a-mac)). The row shows what it found. | `auto: ~/.docker/run/docker.sock` |
 
 #### HomeAssistant
 

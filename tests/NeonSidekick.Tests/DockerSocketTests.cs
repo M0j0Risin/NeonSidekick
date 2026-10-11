@@ -67,7 +67,7 @@ public sealed class DockerSocketTests
         var lookup = Look("~/custom/engine.sock");
         Assert.Equal(new DockerSocketFound(Home + "/custom/engine.sock", DockerSocket.FromSetting), lookup.Socket);
         Assert.Equal(["~/custom/engine.sock"], lookup.Looked);
-        Assert.Null(lookup.IgnoredHost);
+        Assert.Null(lookup.Refusal);
     }
 
     [Fact]
@@ -82,18 +82,42 @@ public sealed class DockerSocketTests
         Assert.Equal(["~/.colima/default/docker.sock"], lookup.Looked);
     }
 
+    /// <summary>
+    /// A <c>DOCKER_HOST</c> naming no local socket is refused, never passed over for a local one (code review of 9c145d1): <c>docker</c>
+    /// drives that engine, so the tools reaching Desktop's instead would stop or prune where the user does not look.
+    /// </summary>
     [Theory]
     [InlineData("tcp://192.168.1.20:2375")]
     [InlineData("ssh://neon@builder")]
     [InlineData("npipe:////./pipe/docker_engine")]
-    public void DockerHost_NotAUnixSocket_IsIgnored_ForTheOneWarning_AndTheLookGoesOn(string host)
+    [InlineData("unix://")]
+    [InlineData("unix://run/docker.sock")]
+    public void DockerHost_NotALocalSocket_IsRefused_NeverPassedOverForALocalOne(string host)
     {
         _variables[DockerSocket.HostVariable] = host;
         _sockets.Add("/var/run/docker.sock");
+        _files[Home + "/.docker/config.json"] = """{"currentContext":"desktop-linux"}""";
+        Context("desktop-linux", "unix:///var/run/docker.sock");
         var lookup = Look();
-        Assert.Equal(new DockerSocketFound("/var/run/docker.sock", DockerSocket.FromUsualPlace), lookup.Socket);
-        Assert.Equal(host, lookup.IgnoredHost);
-        Assert.Contains(host, DockerText.HostIgnored(host));
+        Assert.Null(lookup.Socket);
+        Assert.Empty(lookup.Looked);
+        Assert.Equal(DockerText.HostNotLocal(host), lookup.Refusal);
+        Assert.Equal(DockerSocket.HostVariable, lookup.Unusable);
+    }
+
+    [Fact]
+    public void TheRefusals_ArePinned()
+    {
+        Assert.Equal(
+            "Error: DOCKER_HOST is ssh://neon@builder, not a local engine's socket (unix:///full/path), the only kind the Docker tools reach; unset DOCKER_HOST, or set Docker engine socket on the Docker tab of /tools",
+            DockerText.HostNotLocal("ssh://neon@builder"));
+        Assert.Equal(
+            "Error: the Docker context remote names tcp://10.0.0.5:2376, not a local engine's socket, and the Docker tools reach only a local socket; switch with docker context use, or set Docker engine socket on the Docker tab of /tools",
+            DockerText.ContextNotLocal("remote", "tcp://10.0.0.5:2376"));
+        Assert.Equal(
+            "Error: the Docker context broken has no endpoint the app can read, and the Docker tools reach only a local socket; switch with docker context use, or set Docker engine socket on the Docker tab of /tools",
+            DockerText.ContextNotLocal("broken", null));
+        Assert.Equal("DOCKER_HOST is not a local socket", DockerSocket.NotLocalWord(DockerSocket.HostVariable));
     }
 
     [Fact]
@@ -123,14 +147,16 @@ public sealed class DockerSocketTests
     }
 
     [Fact]
-    public void AContextWhoseSocketIsGone_IsLookedAt_ThenTheUsualPlaces()
+    public void AContextWhoseSocketIsGone_IsStillTheContextsSocket()
     {
-        // Docker Desktop quit: its context still names its socket, but OrbStack's is up.
+        // Docker Desktop quit: its context still names its socket, and OrbStack's is up. docker would fail on Desktop's socket, so the
+        // tools do too ("not running" naming it) rather than act on OrbStack's engine (code review of 9c145d1).
         _files[Home + "/.docker/config.json"] = """{"currentContext":"desktop-linux"}""";
         Context("desktop-linux", "unix:///Users/neon/.docker/run/docker.sock");
         _sockets.Add(Home + "/.orbstack/run/docker.sock");
         var lookup = Look();
-        Assert.Equal(new DockerSocketFound(Home + "/.orbstack/run/docker.sock", DockerSocket.FromUsualPlace), lookup.Socket);
+        Assert.Equal(new DockerSocketFound(Home + "/.docker/run/docker.sock", DockerSocket.FromContext("desktop-linux")), lookup.Socket);
+        Assert.Equal(["~/.docker/run/docker.sock"], lookup.Looked);
     }
 
     [Theory]
@@ -149,22 +175,29 @@ public sealed class DockerSocketTests
 
     [Theory]
     [InlineData("tcp://192.168.1.20:2376")]
+    [InlineData("ssh://neon@builder")]
     [InlineData("not a url")]
-    public void AContextOnAnotherScheme_IsSkipped(string host)
+    public void AContextOnAnotherScheme_IsRefused(string host)
     {
         _files[Home + "/.docker/config.json"] = """{"currentContext":"remote"}""";
         Context("remote", host);
         _sockets.Add("/var/run/docker.sock");
-        Assert.Equal(new DockerSocketFound("/var/run/docker.sock", DockerSocket.FromUsualPlace), Look().Socket);
+        var lookup = Look();
+        Assert.Null(lookup.Socket);
+        Assert.Equal(DockerText.ContextNotLocal("remote", host), lookup.Refusal);
+        Assert.Equal(DockerSocket.FromContext("remote"), lookup.Unusable);
     }
 
     [Fact]
-    public void AMetaFileThatIsNotJson_IsSkipped()
+    public void AContextWithNoReadableEndpoint_IsRefused()
     {
         _files[Home + "/.docker/config.json"] = """{"currentContext":"broken"}""";
         _files[Home + "/.docker/contexts/meta/" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("broken"))) + "/meta.json"] = "{";
         _sockets.Add(Home + "/.docker/run/docker.sock");
-        Assert.Equal(DockerSocket.FromUsualPlace, Look().Socket!.Source);
+        Assert.Equal(DockerText.ContextNotLocal("broken", null), Look().Refusal);
+
+        _variables[DockerSocket.ContextVariable] = "gone";   // a context named that has no meta.json at all: docker fails on it too
+        Assert.Equal(DockerText.ContextNotLocal("gone", null), Look().Refusal);
     }
 
     [Fact]
@@ -181,10 +214,9 @@ public sealed class DockerSocketTests
     }
 
     [Fact]
-    public void NothingFound_ListsEveryPlaceLookedAt_InOrder_OnceEach()
+    public void NothingFound_ListsEveryPlaceLookedAt_InOrder()
     {
-        _files[Home + "/.docker/config.json"] = """{"currentContext":"desktop-linux"}""";
-        Context("desktop-linux", "unix:///Users/neon/.docker/run/docker.sock");
+        _files[Home + "/.docker/config.json"] = """{"auths":{}}""";
         var lookup = Look();
         Assert.Null(lookup.Socket);
         Assert.Equal(["~/.docker/run/docker.sock", "/var/run/docker.sock", "~/.orbstack/run/docker.sock", "~/.colima/default/docker.sock", "~/.rd/docker.sock"], lookup.Looked);

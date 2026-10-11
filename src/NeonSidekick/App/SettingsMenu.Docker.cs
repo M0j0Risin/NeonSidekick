@@ -25,6 +25,12 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public const string DockerEngineSocketLabel = "Docker engine socket";
 
+    /// <summary>
+    /// The refusal of a typed <see cref="DockerEngineSocketLabel"/> that names no socket (code review of 9c145d1, 2026-10-11: it was
+    /// saved blank, "find it", without a word). Follows the row's name. Pinned.
+    /// </summary>
+    public const string DockerEngineSocketError = "must be a full path (/var/run/docker.sock, ~/.orbstack/run/docker.sock) or unix:///path, or empty to find it";
+
     /// <summary>The checklist's refusal where no engine door was handed in (a session without one). Pinned.</summary>
     public const string NoDockerEngineError = "There is no Docker engine to ask here.";
 
