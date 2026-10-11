@@ -55,7 +55,7 @@ neon-*.log
 # temp notes folder
 .notes/
 
-#agents
+# agents
 AGENTS.md
 .claude/
 CLAUDE.md
@@ -63,4 +63,7 @@ CLAUDE.md
 HERMES.md
 .hermes.md
 NEON.md
+.neon/
+
+# macOS Desktop Services Store
 .DS_Store
