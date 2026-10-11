@@ -108,7 +108,9 @@ public sealed class WebFetchTool : AIFunction
         var page = _web.Pages.TryGet(key);
         if (page is null)
         {
-            page = await _web.Fetcher.FetchAsync(parsed, WebAccess.Options(_effective()), cancellationToken).ConfigureAwait(false);
+            // A hit web_search listed goes as a click from its results page would (2026-10-11).
+            var options = WebAccess.Options(_effective()) with { Referer = _web.Referers.For(parsed) };
+            page = await _web.Fetcher.FetchAsync(parsed, options, cancellationToken).ConfigureAwait(false);
             _web.Pages.Put(key, page);
         }
 

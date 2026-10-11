@@ -13,22 +13,23 @@ public sealed class WebAccess
 {
     /// <param name="openUrl">What <c>open_url</c> hands a link to: the user's default browser (<see cref="Llm.PersonaFile.OpenInBrowser"/>) in the app, a recorder in tests.</param>
     /// <param name="cookies">The jar <paramref name="http"/> sends from, which the fetcher fills from the headless browser (2026-10-11); null keeps the browser's cookies out.</param>
-    public WebAccess(HttpClient http, IHeadlessBrowser browser, TimeProvider time, Func<string, CancellationToken, Task<System.Net.IPAddress[]>>? resolve = null, Action<string>? openUrl = null, System.Net.CookieContainer? cookies = null)
+    /// <param name="hostInterval">The fetcher's gap between two requests to one host (<see cref="WebFetcher.HostInterval"/>, 2026-10-11); none by default, the app's in <see cref="Create"/>.</param>
+    public WebAccess(HttpClient http, IHeadlessBrowser browser, TimeProvider time, Func<string, CancellationToken, Task<System.Net.IPAddress[]>>? resolve = null, Action<string>? openUrl = null, System.Net.CookieContainer? cookies = null, TimeSpan hostInterval = default)
     {
         OpenUrl = openUrl ?? Llm.PersonaFile.OpenInBrowser;
         Http = http ?? throw new ArgumentNullException(nameof(http));
         Browser = browser ?? throw new ArgumentNullException(nameof(browser));
         Time = time ?? throw new ArgumentNullException(nameof(time));
-        Fetcher = new WebFetcher(http, browser, resolve, cookies);
+        Fetcher = new WebFetcher(http, browser, resolve, cookies, time) { HostInterval = hostInterval };
         Pages = new PageCache(time);
         DuckDuckGo = new DuckDuckGoSearch(Fetcher, time);
     }
 
-    /// <summary>The app's own: the client over <see cref="LanPolicy"/> and the real browser, sharing one cookie jar.</summary>
+    /// <summary>The app's own: the client over <see cref="LanPolicy"/> and the real browser, sharing one cookie jar, a host's requests a second apart.</summary>
     public static WebAccess Create(Func<NetworkReach> reach, TimeProvider time)
     {
         var cookies = new System.Net.CookieContainer();
-        return new(WebHttp.Create(new LanPolicy(reach), cookies), new HeadlessBrowser(), time, cookies: cookies);
+        return new(WebHttp.Create(new LanPolicy(reach), cookies), new HeadlessBrowser(), time, cookies: cookies, hostInterval: WebFetcher.DefaultHostInterval);
     }
 
     public HttpClient Http { get; }
@@ -36,6 +37,9 @@ public sealed class WebAccess
     public TimeProvider Time { get; }
     public WebFetcher Fetcher { get; }
     public PageCache Pages { get; }
+
+    /// <summary>The hits <c>web_search</c> listed and the results page each was on, for <c>web_fetch</c>'s <c>Referer</c> (2026-10-11).</summary>
+    public ResultReferers Referers { get; } = new();
     public DuckDuckGoSearch DuckDuckGo { get; }
 
     /// <summary>Opens a URL on the user's screen; throws when the shell refuses.</summary>

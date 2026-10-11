@@ -137,6 +137,9 @@ public static class WebText
     /// <summary>What no headless browser adds to a blocked http result under the <c>default</c> mode. Pinned.</summary>
     public const string NoBrowserToTry = "; no headless browser was found to try instead";
 
+    /// <summary>What a rate limit's <c>Retry-After</c> adds to a refused fetch's detail (2026-10-11), so the model knows to wait rather than retry. Pinned.</summary>
+    public static string AskedToWait(TimeSpan wait) => $"; the site asks to wait {Llm.LlmTimeouts.Format(wait)} before trying again";
+
     /// <summary>The sentence for a non-<see cref="FetchOutcome.Ok"/> fetch.</summary>
     public static string Error(FetchOutcome outcome, string url, string detail)
     {

@@ -233,6 +233,37 @@ public sealed class WebToolsTests : IDisposable
         Assert.Equal("Error: DuckDuckGo refused the search (HTTP 429 Too Many Requests); try again in a minute", await _search.InvokeAsync(Args(("query", "x")), CancellationToken.None));
     }
 
+    [Fact]
+    public async Task Fetch_ADuckDuckGoHit_GoesAsAClickFromItsResultsPage_AndNothingElseDoes()
+    {
+        // 2026-10-11, the user's ask: a hit web_search listed is fetched with the results page's origin as Referer, cross-site.
+        const string Hit = "https://doc.rust-lang.org/book/ch17-05-traits-for-async.html";
+        var seen = new List<HttpRequestMessage>();
+        _http.Map("https://html.duckduckgo.com/html/", HttpStatusCode.OK, File.ReadAllText(DuckDuckGoSearchTests.FixturePath), "text/html");
+        _http.Map("http://localhost:8080/search", HttpStatusCode.OK, "{\"results\":[{\"url\":\"https://a.example/\",\"title\":\"A\",\"content\":\"one\"}]}");
+        foreach (var page in new[] { Hit, "https://example.com/", "https://a.example/" })
+        {
+            _http.Map(page, (r, _) => { seen.Add(r); return Task.FromResult(StubHttpMessageHandler.Json(HttpStatusCode.OK, Article, "text/html")); });
+        }
+
+        await _search.InvokeAsync(Args(("query", "rust async traits")), CancellationToken.None);
+        _settings.WebSearchMethod = "searxng";
+        _settings.WebSearxngUrl = "http://localhost:8080";
+        await _search.InvokeAsync(Args(("query", "x")), CancellationToken.None);
+        await _fetch.InvokeAsync(Args(("url", Hit)), CancellationToken.None);
+        await _fetch.InvokeAsync(Args(("url", "https://example.com/")), CancellationToken.None);
+        await _fetch.InvokeAsync(Args(("url", "https://a.example/")), CancellationToken.None);
+
+        Assert.Equal(3, seen.Count);
+        Assert.Equal(DuckDuckGoSearch.Origin.AbsoluteUri, seen[0].Headers.GetValues("Referer").Single());
+        Assert.Equal("cross-site", seen[0].Headers.GetValues("Sec-Fetch-Site").Single());
+        Assert.All(seen.Skip(1), r =>
+        {
+            Assert.False(r.Headers.Contains("Referer"));
+            Assert.Equal("none", r.Headers.GetValues("Sec-Fetch-Site").Single());
+        });
+    }
+
     // ── web_fetch ───────────────────────────────────────────────────────────
 
     [Fact]

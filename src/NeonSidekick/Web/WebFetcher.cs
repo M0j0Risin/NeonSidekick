@@ -19,7 +19,8 @@ public sealed record FetchOptions(FetchEngine Engine, string BrowserPath, Networ
 /// <see cref="Text"/> the body of a plain-text, JSON, XML or CSV answer; <see cref="Engine"/> which
 /// leg produced it (<see cref="WebText.HttpEngine"/> / <see cref="WebText.BrowserEngine"/>).
 /// </summary>
-public sealed record FetchResult(FetchOutcome Outcome, string Url, string FinalUrl, int Status, string MediaType, PageText? Page, string Text, string Engine, string Detail, bool Truncated)
+/// <remarks><see cref="RetryAfter"/> (2026-10-11): how long a 429 or 503 answer asked the client to wait (its <c>Retry-After</c>), null without one.</remarks>
+public sealed record FetchResult(FetchOutcome Outcome, string Url, string FinalUrl, int Status, string MediaType, PageText? Page, string Text, string Engine, string Detail, bool Truncated, TimeSpan? RetryAfter = null)
 {
     public bool Ok => Outcome == FetchOutcome.Ok;
 
@@ -116,6 +117,14 @@ public sealed record SavedBody(FetchOutcome Outcome, string Url, long Bytes, str
 /// the next fetch from that site. Cloudflare ties its clearance to the user agent as well as the address, so from then on the
 /// client claims for that host the browser that earned it (<see cref="ClaimFor"/>) rather than Chrome.
 /// </para>
+/// <para>
+/// Later that day, the same ask: a site that limits by rate is asked politely. A 429 or 503 with a <c>Retry-After</c> is a rate
+/// limit, not a bot check: a short wait (up to <see cref="MaxRetryWait"/>) is waited out and the page asked for once more, a
+/// longer one is reported with the wait the site named, and the headless browser is not sent in while the limit stands — the
+/// same address asking again within the second would only add to it. Requests to one host are spaced <see cref="HostInterval"/>
+/// apart (<see cref="DefaultHostInterval"/> in the app, none unless set), so a turn that reads several pages from one site does
+/// not arrive as a burst.
+/// </para>
 /// </summary>
 public sealed class WebFetcher
 {
@@ -142,6 +151,18 @@ public sealed class WebFetcher
 
     public const int MaxRedirects = 10;
 
+    /// <summary>The longest <c>Retry-After</c> a fetch waits out before asking once more; a longer one is reported, not waited.</summary>
+    public static readonly TimeSpan MaxRetryWait = TimeSpan.FromSeconds(10);
+
+    /// <summary>The gap between two requests to one host in the app (<see cref="WebAccess.Create"/>).</summary>
+    public static readonly TimeSpan DefaultHostInterval = TimeSpan.FromSeconds(1);
+
+    /// <summary>The gap between two requests to one host (the walk's first hop, a browser run); none unless set.</summary>
+    public TimeSpan HostInterval { get; init; }
+
+    /// <summary>How many hosts the pacing remembers before it drops those whose gap has passed.</summary>
+    private const int MaxPacedHosts = 256;
+
     /// <summary>Under this many characters of readable text, a page full of scripts is a shell the browser should render.</summary>
     public const int ShellTextChars = 200;
 
@@ -154,19 +175,37 @@ public sealed class WebFetcher
     private readonly IHeadlessBrowser _browser;
     private readonly Func<string, CancellationToken, Task<IPAddress[]>> _resolve;
     private readonly CookieContainer? _cookies;
+    private readonly TimeProvider _time;
 
     /// <summary>The hosts the browser handed cookies for, and the browser that earned them: what the client claims there.</summary>
     private readonly ConcurrentDictionary<string, BrowserIdentity> _earned = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>The earliest each host may be asked again (<see cref="PaceAsync"/>), under <see cref="_paceGate"/>.</summary>
+    private readonly Dictionary<string, DateTimeOffset> _nextSlot = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _paceGate = new();
+
     /// <param name="resolve">Name resolution for the LAN rule's pre-check; <c>Dns.GetHostAddressesAsync</c> in the app, a lookup in tests.</param>
     /// <param name="cookies">The jar <paramref name="http"/> sends from (<see cref="WebHttp.Create"/>), which the browser's cookies go into; null keeps them out.</param>
-    public WebFetcher(HttpClient http, IHeadlessBrowser browser, Func<string, CancellationToken, Task<IPAddress[]>>? resolve = null, CookieContainer? cookies = null)
+    /// <param name="time">The clock a <c>Retry-After</c> and the pacing wait on; the system's when null.</param>
+    public WebFetcher(HttpClient http, IHeadlessBrowser browser, Func<string, CancellationToken, Task<IPAddress[]>>? resolve = null, CookieContainer? cookies = null, TimeProvider? time = null)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
         _browser = browser ?? throw new ArgumentNullException(nameof(browser));
         _resolve = resolve ?? ((host, ct) => Dns.GetHostAddressesAsync(host, ct));
         _cookies = cookies;
+        _time = time ?? TimeProvider.System;
     }
+
+    /// <summary>
+    /// How long a <c>Retry-After</c> asks the client to wait at <paramref name="now"/>: its seconds, or the time to its date (none
+    /// when that has passed); null without the header. Pure; pinned.
+    /// </summary>
+    public static TimeSpan? RetryAfterOf(System.Net.Http.Headers.RetryConditionHeaderValue? header, DateTimeOffset now) => header switch
+    {
+        { Delta: { } delta } => delta < TimeSpan.Zero ? TimeSpan.Zero : delta,
+        { Date: { } date } => date > now ? date - now : TimeSpan.Zero,
+        _ => null,
+    };
 
     /// <summary>The <c>http</c> / <c>https</c> rule, applied to every URL and every redirect.</summary>
     public static bool IsHttp(Uri url)
@@ -277,15 +316,21 @@ public sealed class WebFetcher
         switch (options.Engine)
         {
             case FetchEngine.HttpClient:
-                return await HttpAsync(url, options, cancellationToken).ConfigureAwait(false);
+                return await PoliteHttpAsync(url, options, cancellationToken).ConfigureAwait(false);
             case FetchEngine.Chromium:
                 return await BrowserAsync(url, options, cancellationToken).ConfigureAwait(false);
         }
 
-        var first = await HttpAsync(url, options, cancellationToken).ConfigureAwait(false);
+        var first = await PoliteHttpAsync(url, options, cancellationToken).ConfigureAwait(false);
         bool shell = first.Ok && first.Page is not null && LooksLikeShell(first.Text, first.Page.Markdown);
         if (!(first.Outcome == FetchOutcome.Blocked || shell))
         {
+            return first;
+        }
+
+        if (first.RetryAfter is not null)
+        {
+            DiagnosticLog.Info(Category, $"{url}: a rate limit, not a bot check; the headless browser would only add to it.");
             return first;
         }
 
@@ -396,6 +441,7 @@ public sealed class WebFetcher
     /// </summary>
     private async Task<(Arrival? Arrived, FetchResult? Failed)> FollowAsync(Uri url, FetchOptions options, CancellationToken cancellationToken)
     {
+        await PaceAsync(url.Host, cancellationToken).ConfigureAwait(false);
         var current = url;
         var referer = options.Referer;
         var claimed = HttpIdentity(options);
@@ -479,6 +525,70 @@ public sealed class WebFetcher
         }
     }
 
+    /// <summary>
+    /// The HTTP leg with a rate limit heeded (2026-10-11): an answer that names a <c>Retry-After</c> of at most <see cref="MaxRetryWait"/>
+    /// is waited out on the clock and the page asked for once more; a longer one, or a second that names one again, is the answer,
+    /// its detail saying how long the site asks to wait (<see cref="WebText.AskedToWait"/>).
+    /// </summary>
+    private async Task<FetchResult> PoliteHttpAsync(Uri url, FetchOptions options, CancellationToken cancellationToken)
+    {
+        var first = await HttpAsync(url, options, cancellationToken).ConfigureAwait(false);
+        if (first.RetryAfter is not { } wait)
+        {
+            return first;
+        }
+
+        string status = first.Status.ToString(CultureInfo.InvariantCulture);
+        if (wait > MaxRetryWait)
+        {
+            DiagnosticLog.Info(Category, $"GET {url} → {status}, asked to wait {Llm.LlmTimeouts.Format(wait)}: longer than {Llm.LlmTimeouts.Format(MaxRetryWait)}, so not waited.");
+            return first with { Detail = first.Detail + WebText.AskedToWait(wait) };
+        }
+
+        DiagnosticLog.Info(Category, $"GET {url} → {status}, asked to wait {Llm.LlmTimeouts.Format(wait)}; waiting, then asking once more.");
+        if (wait > TimeSpan.Zero)
+        {
+            await Task.Delay(wait, _time, cancellationToken).ConfigureAwait(false);
+        }
+
+        var second = await HttpAsync(url, options, cancellationToken).ConfigureAwait(false);
+        return second.RetryAfter is { } again ? second with { Detail = second.Detail + WebText.AskedToWait(again) } : second;
+    }
+
+    /// <summary>
+    /// Waits for <paramref name="host"/>'s turn: <see cref="HostInterval"/> after the last request to it began (the walk's first hop
+    /// or a browser run), reserved under the lock so two fetches at once queue rather than both going. Nothing when no interval is set.
+    /// </summary>
+    private async Task PaceAsync(string host, CancellationToken cancellationToken)
+    {
+        if (HostInterval <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        TimeSpan wait;
+        lock (_paceGate)
+        {
+            var now = _time.GetUtcNow();
+            var slot = _nextSlot.TryGetValue(host, out var next) && next > now ? next : now;
+            wait = slot - now;
+            _nextSlot[host] = slot + HostInterval;
+            if (_nextSlot.Count > MaxPacedHosts)
+            {
+                foreach (var gone in _nextSlot.Where(e => e.Value <= now).Select(e => e.Key).ToList())
+                {
+                    _nextSlot.Remove(gone);
+                }
+            }
+        }
+
+        if (wait > TimeSpan.Zero)
+        {
+            DiagnosticLog.Debug(Category, $"{host}: asked {Llm.LlmTimeouts.Format(HostInterval - wait)} ago; waiting {Llm.LlmTimeouts.Format(wait)}.");
+            await Task.Delay(wait, _time, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     private async Task<FetchResult> HttpAsync(Uri url, FetchOptions options, CancellationToken cancellationToken)
     {
         var current = url;
@@ -512,7 +622,11 @@ public sealed class WebFetcher
             {
                 string detail = $"HTTP {status.ToString(CultureInfo.InvariantCulture)} {response.ReasonPhrase}".TrimEnd();
                 var outcome = IsBlockedStatus(status) ? FetchOutcome.Blocked : FetchOutcome.Failed;
-                return new FetchResult(outcome, url.AbsoluteUri, current.AbsoluteUri, status, mediaType, page, text, WebText.HttpEngine, detail, truncated);
+
+                // A rate limit names its wait; a bot check that does (a 503 challenge page) is still a bot check, the browser's to try.
+                bool challenge = page is not null && LooksLikeChallenge(text, page.Markdown);
+                var retryAfter = status is 429 or 503 && !challenge ? RetryAfterOf(response.Headers.RetryAfter, _time.GetUtcNow()) : null;
+                return new FetchResult(outcome, url.AbsoluteUri, current.AbsoluteUri, status, mediaType, page, text, WebText.HttpEngine, detail, truncated, retryAfter);
             }
 
             if (page is not null && LooksLikeChallenge(text, page.Markdown))
@@ -766,6 +880,7 @@ public sealed class WebFetcher
             return FetchResult.Fail(FetchOutcome.NoBrowser, url.AbsoluteUri, "", engine: WebText.BrowserEngine);
         }
 
+        await PaceAsync(url.Host, cancellationToken).ConfigureAwait(false);
         var watch = Stopwatch.StartNew();
         var dump = await _browser.DumpDomAsync(executable, url, cancellationToken).ConfigureAwait(false);
         if (dump.Html is null)

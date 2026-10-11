@@ -404,6 +404,138 @@ public class WebFetcherTests
         Assert.Equal(4, requests.Count);
     }
 
+    // ── Rate limits and pacing (2026-10-11) ─────────────────────────────────
+
+    private readonly ManualTimeProvider _time = new();
+
+    private WebFetcher Timed(TimeSpan hostInterval = default) =>
+        new(new HttpClient(_http), _browser, (host, _) => Task.FromResult(_dns[host]), time: _time) { HostInterval = hostInterval };
+
+    private static HttpResponseMessage RateLimited(HttpStatusCode status, TimeSpan wait, string body = "<p>slow down</p>")
+    {
+        var response = Html(status, body);
+        response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(wait);
+        return response;
+    }
+
+    /// <summary>Waits until the fetch under test sits on a timer of <see cref="_time"/>, so an advance reaches it.</summary>
+    private async Task OnATimerAsync()
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (_time.TimerCount == 0)
+        {
+            Assert.True(DateTime.UtcNow < deadline, "the fetch never waited on the clock");
+            await Task.Delay(5);
+        }
+    }
+
+    [Fact]
+    public void RetryAfterOf_ReadsSecondsOrADate()
+    {
+        var now = ManualTimeProvider.DefaultUtcNow;
+        Assert.Equal(TimeSpan.FromSeconds(30), WebFetcher.RetryAfterOf(new(TimeSpan.FromSeconds(30)), now));
+        Assert.Equal(TimeSpan.FromMinutes(2), WebFetcher.RetryAfterOf(new(now.AddMinutes(2)), now));
+        Assert.Equal(TimeSpan.Zero, WebFetcher.RetryAfterOf(new(now.AddMinutes(-2)), now));
+        Assert.Null(WebFetcher.RetryAfterOf(null, now));
+    }
+
+    [Fact]
+    public async Task AShortRetryAfter_IsWaitedOut_AndThePageAskedForOnceMore()
+    {
+        int asked = 0;
+        _http.Map("https://example.com/", (_, _) => Task.FromResult(++asked == 1 ? RateLimited(HttpStatusCode.TooManyRequests, TimeSpan.FromSeconds(3)) : Html(HttpStatusCode.OK, Article)));
+
+        var fetch = Timed().FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
+        await OnATimerAsync();
+        Assert.False(fetch.IsCompleted);
+        Assert.Equal(1, asked);
+        _time.Advance(TimeSpan.FromSeconds(3));
+        var page = await fetch;
+
+        Assert.True(page.Ok);
+        Assert.Equal(WebText.HttpEngine, page.Engine);
+        Assert.Equal(2, asked);
+        Assert.Empty(_browser.Runs);
+    }
+
+    [Fact]
+    public async Task ALongRetryAfter_IsReported_NotWaited_AndTheBrowserIsNotSentIn()
+    {
+        _http.Map("https://example.com/", (_, _) => Task.FromResult(RateLimited(HttpStatusCode.TooManyRequests, TimeSpan.FromMinutes(2))));
+        _browser.Html = Article;
+
+        var page = await Timed().FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
+
+        Assert.Equal(FetchOutcome.Blocked, page.Outcome);
+        Assert.Equal(WebText.Blocked("https://example.com/", "HTTP 429 Too Many Requests" + WebText.AskedToWait(TimeSpan.FromMinutes(2))), page.Error);
+        Assert.Single(_http.Requests);
+        Assert.Empty(_browser.Runs);
+    }
+
+    [Fact]
+    public async Task ARateLimitThatHolds_AfterTheWait_IsTheAnswer_WithNoBrowser()
+    {
+        _http.Map("https://example.com/", (_, _) => Task.FromResult(RateLimited(HttpStatusCode.ServiceUnavailable, TimeSpan.FromSeconds(1))));
+        _browser.Html = Article;
+
+        var fetch = Timed().FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
+        await OnATimerAsync();
+        _time.Advance(TimeSpan.FromSeconds(1));
+        var page = await fetch;
+
+        Assert.Equal(FetchOutcome.Blocked, page.Outcome);
+        Assert.EndsWith(WebText.AskedToWait(TimeSpan.FromSeconds(1)) + ")", page.Error);
+        Assert.Equal(2, _http.Requests.Count);
+        Assert.Empty(_browser.Runs);
+    }
+
+    [Fact]
+    public async Task AChallengePage_ThatNamesAWait_IsStillABotCheck_ForTheBrowser()
+    {
+        _http.Map("https://example.com/", (_, _) => Task.FromResult(RateLimited(HttpStatusCode.ServiceUnavailable, TimeSpan.FromSeconds(5), Cloudflare)));
+        _browser.Html = Article;
+
+        var page = await Timed().FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
+
+        Assert.True(page.Ok);
+        Assert.Equal(WebText.BrowserEngine, page.Engine);
+        Assert.Single(_http.Requests);
+    }
+
+    [Fact]
+    public async Task Pacing_SpacesOneHostsRequests_AndLeavesOtherHostsAlone()
+    {
+        _http.Map("https://example.com/", HttpStatusCode.OK, Article, "text/html");
+        _http.Map("https://www.iana.org/", HttpStatusCode.OK, Article, "text/html");
+        var fetcher = Timed(TimeSpan.FromSeconds(1));
+
+        Assert.True((await fetcher.FetchAsync(new Uri("https://example.com/a"), Options(), CancellationToken.None)).Ok);
+        var again = fetcher.FetchAsync(new Uri("https://example.com/b"), Options(), CancellationToken.None);
+        Assert.True((await fetcher.FetchAsync(new Uri("https://www.iana.org/"), Options(), CancellationToken.None)).Ok);
+        await OnATimerAsync();
+
+        Assert.False(again.IsCompleted);
+        Assert.Equal(2, _http.Requests.Count);
+        _time.Advance(TimeSpan.FromSeconds(1));
+        Assert.True((await again).Ok);
+        Assert.Equal("https://example.com/b", _http.Requests[^1].Uri.AbsoluteUri);
+    }
+
+    [Fact]
+    public async Task Pacing_HoldsTheBrowser_AfterTheRequestItFollows()
+    {
+        _http.Map("https://example.com/", HttpStatusCode.Forbidden, "<p>denied</p>", "text/html");
+        _browser.Html = Article;
+
+        var fetch = Timed(TimeSpan.FromSeconds(1)).FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
+        await OnATimerAsync();
+
+        Assert.Empty(_browser.Runs);
+        _time.Advance(TimeSpan.FromSeconds(1));
+        Assert.True((await fetch).Ok);
+        Assert.Single(_browser.Runs);
+    }
+
     [Fact]
     public async Task Headers_GoInChromesOrder_WithAnAcceptGivenInItsPlace()
     {

@@ -75,6 +75,11 @@ public sealed class WebSearchTool : AIFunction
 
         var engine = _web.Engine(effective);
         var outcome = await engine.SearchAsync(query.Trim(), count, WebAccess.Options(effective), cancellationToken).ConfigureAwait(false);
+        if (outcome.Ok && engine.ResultReferer is { } referer)
+        {
+            _web.Referers.Remember(outcome.Results, referer);
+        }
+
         return outcome.Ok ? WebText.Results(query.Trim(), outcome.Results, engine.Name) : outcome.Error;
     }
 

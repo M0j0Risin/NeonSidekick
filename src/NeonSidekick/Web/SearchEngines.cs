@@ -22,6 +22,12 @@ public interface ISearchEngine
     /// <summary>The name on the result header (<see cref="WebText.DuckDuckGoName"/> / <see cref="WebText.SearxngName"/>).</summary>
     string Name { get; }
 
+    /// <summary>
+    /// What a browser sends as <c>Referer</c> when its user clicks one of the engine's hits (2026-10-11, <see cref="ResultReferers"/>);
+    /// null when it sends none.
+    /// </summary>
+    Uri? ResultReferer { get; }
+
     /// <summary>At most <paramref name="max"/> hits for <paramref name="query"/>; <paramref name="options"/> is how the engine's own page is fetched.</summary>
     Task<SearchOutcome> SearchAsync(string query, int max, FetchOptions options, CancellationToken cancellationToken);
 }
@@ -53,6 +59,11 @@ public sealed class DuckDuckGoSearch : ISearchEngine
     }
 
     public string Name => WebText.DuckDuckGoName;
+
+    /// <summary>The results page's origin: its links leave with that alone (referrer policy <c>origin</c>).</summary>
+    public static readonly Uri Origin = new("https://html.duckduckgo.com/");
+
+    public Uri? ResultReferer => Origin;
 
     /// <summary>The results page for <paramref name="query"/>. Pinned.</summary>
     public static Uri QueryUrl(string query)
@@ -242,6 +253,9 @@ public sealed class SearxngSearch : ISearchEngine
     }
 
     public string Name => WebText.SearxngName;
+
+    /// <summary>None: SearXNG's pages send no referer (policy <c>no-referrer</c>), and the instance's address — often a LAN name — is no other site's business.</summary>
+    public Uri? ResultReferer => null;
 
     /// <summary>The instance's search URL for <paramref name="query"/>: the base with <c>/search</c> and the JSON format. Pinned.</summary>
     public static Uri QueryUrl(Uri baseUrl, string query)
