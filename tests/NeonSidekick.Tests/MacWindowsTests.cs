@@ -145,7 +145,7 @@ public sealed class MacWindowsTests
     [Fact]
     public void TheLineWindowsMacWords_AreTheirOwn()
     {
-        Assert.Equal("The log window needs the Mac's desktop (there is no window server here, over SSH, say); start the app with --log <path> and use /log --file to read the log in your editor.", LogViewText.UnavailableMac);
+        Assert.Equal("The log window needs the Mac's desktop (there is no window server here, over SSH, say); start the app with --log <path> and use /log file to read the log in your editor.", LogViewText.UnavailableMac);
         Assert.Equal("The process window needs the Mac's desktop (there is no window server here, over SSH, say); the model's process tool can still read a process's output.", ProcessWindowText.UnavailableMac);
         Assert.Equal(OperatingSystem.IsMacOS() ? LogViewText.UnavailableMac : LogViewText.Unavailable, LogViewText.UnavailableHere);
         Assert.Equal(OperatingSystem.IsMacOS() ? ProcessWindowText.UnavailableMac : ProcessWindowText.Unavailable, ProcessWindowText.UnavailableHere);

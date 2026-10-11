@@ -431,10 +431,11 @@ public class SlashCommandsTests
     public void Log_IsACommand_InAnyRun_AndTakesTheFileSwitch()
     {
         // /log (2026-09-22, the user's ask): only with --log until 2026-10-02, when the bare word took to the log window and
-        // the file moved to /log --file; a command in every run since, its argument the handler's to judge.
+        // the file moved to /log file; a command in every run since, its argument the handler's to judge.
         Assert.Equal((SlashCommand.Log, ""), SlashCommands.Parse("/log"));
         Assert.Equal((SlashCommand.Log, ""), SlashCommands.Parse("  /LOG  "));
-        Assert.Equal((SlashCommand.Log, "--file"), SlashCommands.Parse("/log --file"));
+        Assert.Equal((SlashCommand.Log, "file"), SlashCommands.Parse("/log file"));
+        Assert.Equal((SlashCommand.Log, "path"), SlashCommands.Parse("/log path"));
         Assert.Equal((SlashCommand.Log, "now"), SlashCommands.Parse("/log now"));
         Assert.True(SlashCommands.TakesArgument(SlashCommand.Log));
     }
@@ -465,7 +466,7 @@ public class SlashCommandsTests
         Assert.Equal("/loop", entries[log + 1].Command);
         Assert.Contains("/log", SlashCommands.Words);
         Assert.Contains(Row(entries[log - 1]) + Row(entries[log]) + Row(entries[log + 1]), SlashCommands.HelpText);
-        Assert.Contains(Row("/log", entries[log].Summary, "/log", "/log --file"), SlashCommands.HelpText);   // both forms, stacked
+        Assert.Contains(Row("/log", entries[log].Summary, "/log", "/log file", "/log path"), SlashCommands.HelpText);   // all three forms, stacked
         Assert.Contains(new NeonSidekick.UI.CompletionItem("/log", entries[log].Summary), SlashCommands.Completions);
         Assert.Contains(SlashCommands.CompletionsWithoutExit, i => i.Text == "/log");
         Assert.False(SlashCommands.IsBasic(entries[log]));

@@ -93,7 +93,8 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/learn [<note>]` | Writes or improves a skill in the background from the last turn. |
 | `/learn sessions [<n>\|<search>]` | The same from stored sessions: the newest 5, the newest n (up to 20), or those a search finds. |
 | `/log` | Opens the [log window](#log-window). Works without `--log`. |
-| `/log --file` | Opens the `--log` file in your editor (only when started with `--log <path>`; the argument list offers `--file` only then). |
+| `/log file` | Opens the `--log` file in your editor (only when started with `--log <path>`; the argument list offers `file` only then). |
+| `/log path` | Copies the `--log` file's path to the clipboard (only when started with `--log <path>`; offered on the argument list beside `file`). |
 | `/loop <count>\|infinite [<delay>] <message>` | Sends the message that many times, or until ESC or Ctrl+C, waiting for each reply. See Loops. |
 | `/loop <count>\|infinite [<delay>] /imagine\|/read <arguments>` | Runs `/imagine` or `/read` itself each pass. |
 | `/plan <requirement>` | Researches with read-only tools and presents a plan before anything changes. See Plan mode. |
@@ -410,7 +411,7 @@ Like the viewer, it follows the theme, reopens where it was closed, and closes w
 | Tab | Bring the terminal to the front |
 | Any other Ctrl or Alt chord | Runs in the chat as if pressed there (Ctrl+Alt+G closes this window); the keyboard stays in the window |
 
-Like the viewer, it follows the theme, reopens where it was closed, and closes with the app. A second `/log` brings it forward; `/log --file` opens the `--log` file instead.
+Like the viewer, it follows the theme, reopens where it was closed, and closes with the app. A second `/log` brings it forward; `/log file` opens the `--log` file instead, and `/log path` copies its path.
 
 **On a Mac** the text is the system's own text view in its monospaced font: scrolling, selection and copying are the Mac's, with ⌘A to select all and ⌘C to copy (Ctrl+A and Ctrl+C are not the window's there). ⌘↑ goes to the top and ⌘↓ to the bottom beside Ctrl+Home and Ctrl+End or Ctrl+E, ⌃⌘F is full screen (F11 is macOS's Show Desktop), and ⌘W or Esc closes it. A double-click selects a word rather than going full screen. Tab brings the terminal forward and a Ctrl or Option chord runs in the chat (Ctrl+Option+G closes the window); since ⌘C copies here, Ctrl+C goes to the chat too, where it cancels a reply.
 

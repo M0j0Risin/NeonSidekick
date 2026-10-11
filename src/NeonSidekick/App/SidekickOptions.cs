@@ -449,7 +449,7 @@ public sealed record SidekickOptions(
     /// Braces because a mid-word <c>{…}</c> passes through cmd and PowerShell as typed, where <c>&lt;ts&gt;</c> is
     /// redirection in both and <c>$ts</c>/<c>%ts%</c> are the shells' own variables. Seconds only: two runs started in the
     /// same second share the file, appended as any <c>--log</c> file is. <see cref="Parse"/> keeps the path as typed;
-    /// <c>Program</c> calls this once before the sink opens, so the startup line, <c>/log --file</c> and the
+    /// <c>Program</c> calls this once before the sink opens, so the startup line, <c>/log file</c> and the
     /// cannot-open message all name the file actually written. <c>this</c> when there is nothing to replace.
     /// </summary>
     public SidekickOptions WithLogStamp(DateTime localNow)

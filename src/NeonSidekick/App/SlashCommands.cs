@@ -186,8 +186,8 @@ public enum SlashCommand
     /// <summary>
     /// <c>/log</c> (2026-09-22, the user's ask): the <c>--log</c> file opened in the editor Windows associates with it, and only
     /// a command under <c>--log</c>. Since 2026-10-02 (the user's ask) a command in every run: the bare word opens the log window
-    /// (<see cref="Viewer.LogWindow"/>, over the run's lines in memory), and <c>/log --file</c> the <c>--log</c> file in the
-    /// editor as before.
+    /// (<see cref="Viewer.LogWindow"/>, over the run's lines in memory), and <c>/log file</c> the <c>--log</c> file in the
+    /// editor as before. <c>/log path</c> (2026-10-11, the user's ask) copies that file's path.
     /// </summary>
     Log,
 

@@ -86,7 +86,7 @@ public partial class ChatScreenTests : IDisposable
     private readonly FakePerfSource _perfSource = new();   // the performance bar (2026-09-29): what the fake machine reads
     private ChatScreen? _running;   // the screen RunAsync built, for a step that plays the viewer (2026-09-28)
     private Action<string, string>? _openImage;   // a double-clicked picture (later on 2026-09-24): null = the plain opener, _openedFiles   // /imagine and the image tools (2026-09-24): a client over a stub server
-    private string? _logFile;   // /log --file (2026-09-22): the --log file the screen is handed; null = started without --log
+    private string? _logFile;   // /log file (2026-09-22): the --log file the screen is handed; null = started without --log
     private Action? _openLogWindow;   // /log (2026-10-02): the log window's opener; null = no window here
     private Action<ProcessSession, Action<ProcessSession>>? _openProcessWindow;   // /process <id> (2026-10-05): the process window's opener; null = no window here
     private Func<bool>? _closeLogWindow;   // Ctrl+Alt+G's second press (later on 2026-10-02): true when a window was open
@@ -11319,7 +11319,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(NeonSidekick.Docker.DockerText.Glyph, ChatScreen.DockerToolGlyph);
         Assert.All(ToolsText.SwitchWords, word => Assert.Equal(ToolsText.SwitchLine(word), ChatScreen.ToolbarWord(ToolbarItems.Glyph(word))));
         Assert.True(ChatScreen.TogglesWindow("/log") && ChatScreen.TogglesWindow("/comfy view") && ChatScreen.TogglesWindow("/comfy thumbs"));
-        Assert.False(ChatScreen.TogglesWindow("/tools web") || ChatScreen.TogglesWindow("/log --file") || ChatScreen.TogglesWindow(null));
+        Assert.False(ChatScreen.TogglesWindow("/tools web") || ChatScreen.TogglesWindow("/log file") || ChatScreen.TogglesWindow(null));
         Assert.Null(ChatScreen.ToolbarWord("📂"));
         Assert.Null(ChatScreen.ToolbarWord(ChatScreen.TtsGlyph));
         Assert.Null(ChatScreen.ToolbarWord(""));
@@ -15293,26 +15293,28 @@ public partial class ChatScreenTests : IDisposable
         _openLogWindow = () => windows++;
         _logFile = Path.Combine(_dir, "neon.log");
         File.WriteAllText(_logFile, "--- log opened ---\n");
-        PushLine("/log --file");
+        PushLine("/log file");
         PushLine("/log now");
+        PushLine("/log --file");   // the switch's spelling until 2026-10-11, not kept
         PushLine("/exit");
 
         string output = await RunAsync();
 
         Assert.Equal([_logFile], _openedFiles);
-        Assert.Equal(0, windows);   // --file is the editor's, never the window's
+        Assert.Contains("  ✗ " + LogViewText.UsageError("--file"), output);
+        Assert.Equal(0, windows);   // file is the editor's, never the window's
         Assert.Contains("  · " + LogViewText.FileOpenedNotice(_logFile), output);
         Assert.Contains("  ✗ " + LogViewText.UsageError("now"), output);
 
         _openFile = _ => throw new System.ComponentModel.Win32Exception("no editor");
-        PushLine("/log --FILE");
+        PushLine("/log FILE");
         PushLine("/exit");
         output = await RunAsync();
         Assert.Contains("  ✗ " + LogViewText.FileOpenFailedError("no editor"), output);
 
         File.Delete(_logFile);
         _openFile = null;
-        PushLine("/log --file");
+        PushLine("/log file");
         PushLine("/exit");
         output = await RunAsync();
         Assert.Contains("  ✗ " + LogViewText.FileMissingError(_logFile), output);
@@ -15322,7 +15324,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task LogFile_WithoutTheFlag_SaysTheFlagIsNeeded()
     {
-        PushLine("/log --file");
+        PushLine("/log file");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -15332,10 +15334,44 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
+    public async Task LogPath_UnderTheFlag_CopiesThePath_AndAFailedCopyOrNoFlagIsTheError()
+    {
+        int windows = 0;
+        _openLogWindow = () => windows++;
+        _logFile = Path.Combine(_dir, "neon.log");   // never written: a missing file's path is still copied
+        PushLine("/log path");
+        PushLine("/log PATH");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal([_logFile, _logFile], _copied);
+        Assert.Equal(0, windows);
+        Assert.Empty(_openedFiles);
+        Assert.Contains("  · " + LogViewText.PathCopiedNotice(_logFile), output);
+
+        _copyFails = true;
+        PushLine("/log path");
+        PushLine("/exit");
+        output = await RunAsync();
+        Assert.Contains("  ✗ " + ChatScreen.CopyFailedError, output);
+        Assert.Equal(2, _copied.Count);
+
+        _copyFails = false;
+        _logFile = null;
+        PushLine("/log path");
+        PushLine("/exit");
+        output = await RunAsync();
+        Assert.Contains("  ✗ " + LogViewText.PathNeedsFlag, output);
+        Assert.Equal(2, _copied.Count);
+    }
+
+    [Fact]
     public void Log_IsQuickUnderAReply_WithOrWithoutTheSwitch()
     {
         Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Log, hasArgs: false));
-        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Log, LogViewText.FileSwitch));
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Log, LogViewText.FileWord));
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Log, LogViewText.PathWord));
         Assert.DoesNotContain(ChatScreen.CommandItems(hideQueue: true), i => i.Text == "/queue");
         Assert.Contains(ChatScreen.CommandItems(hideQueue: true), i => i.Text == "/log");
     }
@@ -15348,8 +15384,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(CommandsTabLines(advanced: false), l => l.StartsWith("/log", StringComparison.Ordinal));
         int log = Array.FindIndex(lines, l => l.StartsWith(HelpRow("/log", LogSummary), StringComparison.Ordinal));
         Assert.StartsWith(HelpRows(Entry("/learn"))[^1].TrimStart(), lines[log - 1].TrimStart());   // A to Z since 2026-09-27 (directly above /help until then): /learn's last form
-        Assert.StartsWith(HelpRows(Entry("/log"))[1], lines[log + 1]);   // its own --file form under it
-        Assert.StartsWith(HelpRow("/loop", Entry("/loop").Summary), lines[log + 2]);
+        Assert.StartsWith(HelpRows(Entry("/log"))[1], lines[log + 1]);   // its own file and path forms under it
+        Assert.StartsWith(HelpRows(Entry("/log"))[2], lines[log + 2]);
+        Assert.StartsWith(HelpRow("/loop", Entry("/loop").Summary), lines[log + 3]);
     }
 
     // ── /read (2026-09-17) ─────────────────────────────────────────────────

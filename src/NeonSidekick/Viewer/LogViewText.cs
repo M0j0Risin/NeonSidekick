@@ -2,7 +2,7 @@ namespace NeonSidekick.Viewer;
 
 /// <summary>
 /// The log window's words and <c>/log</c>'s (2026-10-02, the user's ask: <c>/log</c> opens a window that follows the log,
-/// <c>/log --file</c> the <c>--log</c> file in the editor as <c>/log</c> did since 2026-09-22): the window's title, the line
+/// <c>/log file</c> the <c>--log</c> file in the editor as <c>/log</c> did since 2026-09-22): the window's title, the line
 /// it shows with nothing logged, and the command's notices and errors (in <c>ChatScreen</c> until then). Pinned.
 /// </summary>
 public static class LogViewText
@@ -19,23 +19,26 @@ public static class LogViewText
     /// <summary>The line the window shows before anything is logged. Pinned.</summary>
     public const string Empty = "Nothing logged yet.";
 
-    /// <summary><c>/log</c>'s switch for the <c>--log</c> file in the editor (2026-10-02, the user's word). Pinned.</summary>
-    public const string FileSwitch = "--file";
+    /// <summary>
+    /// <c>/log</c>'s word for the <c>--log</c> file in the editor (2026-10-02, the user's word; <c>--file</c> until 2026-10-11,
+    /// when <see cref="PathWord"/> came and the user made both plain words, the old spelling dropped). Pinned.
+    /// </summary>
+    public const string FileWord = "file";
 
-    /// <summary>The note beside <see cref="FileSwitch"/> on <c>/log</c>'s argument list, offered only under <c>--log</c> (2026-10-04). Pinned.</summary>
-    public const string FileSwitchNote = "open the --log file in your editor";
+    /// <summary>The note beside <see cref="FileWord"/> on <c>/log</c>'s argument list, offered only under <c>--log</c> (2026-10-04). Pinned.</summary>
+    public const string FileWordNote = "open the --log file in your editor";
 
     /// <summary><c>/log</c>'s notice once the window is open (or brought forward). Pinned.</summary>
-    public static string WindowOpenedNotice => $"({App.NoticeGlyphs.Log}opened the log window; /log {FileSwitch} opens the --log file in your editor)";
+    public static string WindowOpenedNotice => $"({App.NoticeGlyphs.Log}opened the log window; /log {FileWord} opens the --log file in your editor)";
 
     /// <summary>Ctrl+Alt+G's notice when it closes the open window (later on 2026-10-02, the user's ask: the chord toggles). Pinned.</summary>
     public static string WindowClosedNotice => $"({App.NoticeGlyphs.Log}closed the log window)";
 
     /// <summary><c>/log</c> where no window can be made (not Windows, or no log kept in this run). Pinned.</summary>
-    public const string Unavailable = "The log window needs Windows; start the app with --log <path> and use /log --file to read the log in your editor.";
+    public const string Unavailable = "The log window needs Windows; start the app with --log <path> and use /log file to read the log in your editor.";
 
     /// <summary>The same error on a Mac (2026-10-07): the window works there, but only with a window server. Pinned.</summary>
-    public const string UnavailableMac = "The log window needs the Mac's desktop (there is no window server here, over SSH, say); start the app with --log <path> and use /log --file to read the log in your editor.";
+    public const string UnavailableMac = "The log window needs the Mac's desktop (there is no window server here, over SSH, say); start the app with --log <path> and use /log file to read the log in your editor.";
 
     /// <summary>The error for this system: <see cref="UnavailableMac"/> on a Mac, <see cref="Unavailable"/> elsewhere.</summary>
     public static string UnavailableHere => OperatingSystem.IsMacOS() ? UnavailableMac : Unavailable;
@@ -43,18 +46,30 @@ public static class LogViewText
     /// <summary><c>/log</c> when the window could not be made. Pinned.</summary>
     public static string WindowFailedError(string detail) => $"Could not open the log window: {detail}";
 
-    /// <summary><c>/log --file</c> without <c>--log</c>: there is no file to open. Pinned.</summary>
-    public const string FileNeedsFlag = "/log --file needs the app started with --log <path>; /log opens the log window in any run.";
+    /// <summary><c>/log file</c> without <c>--log</c>: there is no file to open. Pinned.</summary>
+    public const string FileNeedsFlag = "/log file needs the app started with --log <path>; /log opens the log window in any run.";
+
+    /// <summary><c>/log</c>'s word for the <c>--log</c> file's path on the clipboard (2026-10-11, the user's word). Pinned.</summary>
+    public const string PathWord = "path";
+
+    /// <summary>The note beside <see cref="PathWord"/> on <c>/log</c>'s argument list, offered only under <c>--log</c> as <see cref="FileWord"/> is. Pinned.</summary>
+    public const string PathWordNote = "copy the --log file's path to the clipboard";
+
+    /// <summary><c>/log path</c> without <c>--log</c>: there is no path to copy. Pinned.</summary>
+    public const string PathNeedsFlag = "/log path needs the app started with --log <path>; /log opens the log window in any run.";
+
+    /// <summary><c>/log path</c>'s notice once the path is on the clipboard (2026-10-11). Pinned.</summary>
+    public static string PathCopiedNotice(string path) => $"({App.NoticeGlyphs.Log}copied the log's path {path} to the clipboard)";
 
     /// <summary><c>/log</c> given something it does not take. Pinned.</summary>
-    public static string UsageError(string args) => $"/log takes nothing or {FileSwitch}, not '{args}'.";
+    public static string UsageError(string args) => $"/log takes nothing, {FileWord} or {PathWord}, not '{args}'.";
 
-    /// <summary><c>/log --file</c>'s notice once the <c>--log</c> file is handed to the editor (2026-09-22). Pinned.</summary>
+    /// <summary><c>/log file</c>'s notice once the <c>--log</c> file is handed to the editor (2026-09-22). Pinned.</summary>
     public static string FileOpenedNotice(string path) => $"({App.NoticeGlyphs.Log}opened the log {path} in your editor)";
 
-    /// <summary><c>/log --file</c> when the <c>--log</c> file is not there — it could not be opened at startup, or was deleted since. Pinned.</summary>
+    /// <summary><c>/log file</c> when the <c>--log</c> file is not there — it could not be opened at startup, or was deleted since. Pinned.</summary>
     public static string FileMissingError(string path) => $"The log file {path} does not exist; --log could not open it.";
 
-    /// <summary><c>/log --file</c> when the editor launch fails. Pinned.</summary>
+    /// <summary><c>/log file</c> when the editor launch fails. Pinned.</summary>
     public static string FileOpenFailedError(string detail) => $"Could not open the log file: {detail}";
 }

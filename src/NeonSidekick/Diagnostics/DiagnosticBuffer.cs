@@ -12,7 +12,7 @@ public readonly record struct LogLine(long Seq, DiagnosticLevel Level, string Te
 /// <c>--log</c> file's form. <c>Program</c> attaches one before anything is logged, so the window opens on the run from
 /// its first line. Lines arrive on whichever thread logged them, so <see cref="Add"/> is short and serialised by one lock,
 /// and <see cref="Appended"/> is raised outside it; a reader (the log window) asks for what it lacks with
-/// <see cref="CopySince"/>. Nothing here touches the file: <c>/log --file</c> is <see cref="DiagnosticFileSink"/>'s.
+/// <see cref="CopySince"/>. Nothing here touches the file: <c>/log file</c> is <see cref="DiagnosticFileSink"/>'s.
 /// </summary>
 public sealed class DiagnosticBuffer : IDisposable
 {

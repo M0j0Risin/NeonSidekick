@@ -228,7 +228,9 @@ public partial class ChatScreenTests
         Assert.Empty(ChatScreen.ArgumentItems("/model", "gemma x", models));
 
         Assert.Empty(ChatScreen.ArgumentItems("/log", "", Sources()));
-        Assert.Equal([new CompletionItem("--file", Viewer.LogViewText.FileSwitchNote)], ChatScreen.ArgumentItems("/log", "-", Sources() with { LogFile = true }));
+        Assert.Equal([new CompletionItem("file", Viewer.LogViewText.FileWordNote)], ChatScreen.ArgumentItems("/log", "f", Sources() with { LogFile = true }));
+        Assert.Equal([new CompletionItem("path", Viewer.LogViewText.PathWordNote)], ChatScreen.ArgumentItems("/log", "p", Sources() with { LogFile = true }));
+        Assert.Equal(["file", "path"], ChatScreen.ArgumentItems("/log", "", Sources() with { LogFile = true }).Select(i => i.Text));
 
         Assert.Equal([new CompletionItem("new", Claude.ClaudeText.NewNote)], ChatScreen.ArgumentItems("/claude", "n", Sources()));
         Assert.Empty(ChatScreen.ArgumentItems("/claude", "now tell me", Sources()));

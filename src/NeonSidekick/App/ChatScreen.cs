@@ -572,7 +572,7 @@ internal sealed partial class ChatScreen
     /// <summary>Opens a new terminal window in a folder (<c>/terminal</c>, 2026-10-03): <see cref="PersonaFile.OpenTerminal"/> in the app on Windows and, since 2026-10-07, on a Mac; null = <c>/terminal</c> answers <see cref="TerminalUnavailableError"/>.</summary>
     private readonly Action<string>? _openTerminal;
 
-    /// <summary>The <c>--log</c> file, full path (2026-09-22): <c>/log --file</c> opens it (the bare <c>/log</c> until 2026-10-02, and only a command while it was set). Null = started without <c>--log</c>.</summary>
+    /// <summary>The <c>--log</c> file, full path (2026-09-22): <c>/log file</c> opens it (the bare <c>/log</c> until 2026-10-02, and only a command while it was set). Null = started without <c>--log</c>.</summary>
     private readonly string? _logFile;
 
     /// <summary>The log window opened, or the open one brought forward (2026-10-02, <c>/log</c>; <c>Viewer.LogWindow.Show</c> over the run's buffer). Null = no window here: <c>/log</c> says so.</summary>
@@ -4274,7 +4274,7 @@ internal sealed partial class ChatScreen
     /// nothing cached; the picker lists them) get nothing — and so do <c>/read</c> and <c>/view</c>
     /// here: their argument is a path list, <see cref="ArgumentPaths"/>. Since 2026-10-04 (the user's report and audit) also
     /// <c>/screen</c>'s words, monitors and windows, <c>/server</c>'s words (<see cref="ServerItems"/>), <c>/model</c>'s installed
-    /// embedded models while the embedded server is in use (read from disk, no probe), <c>/log --file</c> under <c>--log</c> and
+    /// embedded models while the embedded server is in use (read from disk, no probe), <c>/log file</c> under <c>--log</c> and
     /// <c>/claude new</c>; since 2026-10-10 <c>/advisor</c>'s advisors by profile name, the first word only. Pure.
     /// </summary>
     public static IReadOnlyList<CompletionItem> ArgumentItems(string command, string argText, ArgumentSources sources)
@@ -4631,8 +4631,10 @@ internal sealed partial class ChatScreen
                 return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(sources.Models?.Invoke() ?? [], argText);
 
             case SlashCommand.Log:
-                // --file, only when there is a --log file to open (2026-10-04).
-                return sources.LogFile ? MentionCompleter.Matches([new(LogViewText.FileSwitch, LogViewText.FileSwitchNote)], argText) : [];
+                // file and path (plain words since 2026-10-11, --file before), only when there is a --log file to open (2026-10-04).
+                return sources.LogFile
+                    ? MentionCompleter.Matches([new(LogViewText.FileWord, LogViewText.FileWordNote), new(LogViewText.PathWord, LogViewText.PathWordNote)], argText)
+                    : [];
 
             case SlashCommand.Process:
                 // The background processes' ids, newest first, with their state and command (2026-10-05); one id, so a space closes the list.
@@ -5167,10 +5169,11 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// <c>/log</c> (2026-10-02, the user's ask): the log window — the run's diagnostic lines in memory, following the newest
     /// (<see cref="Viewer.LogWindow"/>) — opened, or brought forward when it is open; in any run, <c>--log</c> or not.
-    /// <c>/log --file</c> is what <c>/log</c> was from 2026-09-22: the <c>--log</c> file in the editor Windows associates with
+    /// <c>/log file</c> is what <c>/log</c> was from 2026-09-22: the <c>--log</c> file in the editor Windows associates with
     /// it, through the same opener as <c>/sys persona</c> — no wait, the file keeps growing while it is read (the sink shares it
     /// for reading and flushes per line) — and without <c>--log</c> there is no file to open. Quick under a reply, as
-    /// <c>/explore</c> is: the window has its own thread.
+    /// <c>/explore</c> is: the window has its own thread. <c>/log path</c> (2026-10-11, the user's ask) puts the
+    /// <c>--log</c> file's path on the clipboard with <c>/copy</c>'s writer, missing file or not: a path is harmless to copy.
     /// </summary>
     private void HandleLog(string args)
     {
@@ -5181,7 +5184,13 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        if (!string.Equals(word, LogViewText.FileSwitch, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(word, LogViewText.PathWord, StringComparison.OrdinalIgnoreCase))
+        {
+            CopyLogPath();
+            return;
+        }
+
+        if (!string.Equals(word, LogViewText.FileWord, StringComparison.OrdinalIgnoreCase))
         {
             _transcript.Error(LogViewText.UsageError(word));
             return;
@@ -5207,6 +5216,25 @@ internal sealed partial class ChatScreen
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             _transcript.Error(LogViewText.FileOpenFailedError(ex.Message));
+        }
+    }
+
+    private void CopyLogPath()
+    {
+        if (_logFile is not { } path)
+        {
+            _transcript.Error(LogViewText.PathNeedsFlag);
+            return;
+        }
+
+        if (_copy(path))
+        {
+            _pane.Flash(InputLine.CopiedFlash(path.Length));
+            _transcript.Notice(LogViewText.PathCopiedNotice(path));
+        }
+        else
+        {
+            _transcript.Error(CopyFailedError);
         }
     }
 
