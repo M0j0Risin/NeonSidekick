@@ -9637,7 +9637,7 @@ public partial class ChatScreenTests : IDisposable
             Key(Keys.Escape),                                                    // closed, unchanged: the draft back
             input => input.Push(Keys.Char('!'), Keys.Enter),
             Line("/settings"),
-            input => input.Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Escape),   // Chat's fourth row since New profile mode went (later on 2026-10-10; General's fifth until then), Memory mode (since 2026-10-01; Avatar above it since 2026-10-10): its page on read-write, disabled picked; the pane closed: the disk on its slab
+            input => input.Push(Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Escape),   // Chat's third row since 2026-10-11 (the Avatar under it; fourth since New profile mode went later on 2026-10-10, General's fifth until then), Memory mode (since 2026-10-01; Avatar above it from 2026-10-10): its page on read-write, disabled picked; the pane closed: the disk on its slab
             input => { input.PushClick(33, 103); input.PushClick(33, 103); },    // 🔒 still at 33: the list
             Key(Keys.Escape),
             Line("/tools"),
@@ -10278,8 +10278,7 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null);
         PushLine("/settings");
         _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);          // Memory mode (Chat, fourth row: Avatar under Profile since 2026-10-10, New profile mode under it until later that day, Memory under Working directory since 2026-10-01)
+        _console.Input.PushKey(Keys.Down);          // Memory mode (Chat, third row since 2026-10-11, the Avatar under it; fourth from 2026-10-10, Avatar under Profile; New profile mode under it until later that day, Memory under Working directory since 2026-10-01)
         _console.Input.PushKey(Keys.Enter);         // its on/off page (2026-09-17)
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Enter);         // read-only (Memory mode's second, 2026-10-04)
@@ -10621,8 +10620,7 @@ public partial class ChatScreenTests : IDisposable
         _holdWheel = wheel.Add;
         PushLine("/settings");
         _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);          // Memory mode (Chat, fourth row: Avatar under Profile since 2026-10-10, New profile mode under it until later that day, Memory under Working directory since 2026-10-01)
+        _console.Input.PushKey(Keys.Down);          // Memory mode (Chat, third row since 2026-10-11, the Avatar under it; fourth from 2026-10-10, Avatar under Profile; New profile mode under it until later that day, Memory under Working directory since 2026-10-01)
         _console.Input.PushKey(Keys.Enter);         // its on/off page
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Enter);         // read-only: the list again

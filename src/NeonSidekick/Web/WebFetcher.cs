@@ -385,6 +385,7 @@ public sealed class WebFetcher
     {
         var current = url;
         var referer = options.Referer;
+        var identity = HttpIdentity(options);
         for (int hop = 0; hop <= MaxRedirects; hop++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -394,7 +395,7 @@ public sealed class WebFetcher
             {
                 budget.CancelAfter(FetchTimeout);
                 using var request = new HttpRequestMessage(HttpMethod.Get, current);
-                BrowserHeaders.Apply(request, referer);
+                BrowserHeaders.Apply(request, identity, referer);
                 if (options.Accept is { } accept)
                 {
                     request.Headers.Remove("Accept");
@@ -705,6 +706,13 @@ public sealed class WebFetcher
         int cut = name.LastIndexOfAny(['/', '\\']);
         return cut >= 0 ? name[(cut + 1)..] : name;
     }
+
+    /// <summary>
+    /// The browser the HTTP client claims (2026-10-11): Chrome at the major version of the browser the headless leg would run —
+    /// Edge and Brave share Chromium's numbering — else <see cref="BrowserIdentity.Fallback"/>. Chrome, whichever is installed:
+    /// the commonest brand, and the HTTP leg's TLS fingerprint is no browser's anyway.
+    /// </summary>
+    private BrowserIdentity HttpIdentity(FetchOptions options) => _browser.Identify(options.BrowserPath) with { Brand = BrowserBrand.Chrome };
 
     private async Task<FetchResult> BrowserAsync(Uri url, FetchOptions options, CancellationToken cancellationToken, string? executable = null)
     {

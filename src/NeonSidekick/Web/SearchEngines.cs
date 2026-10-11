@@ -308,7 +308,7 @@ public sealed class SearxngSearch : ISearchEngine
             budget.CancelAfter(Timeout);
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.TryAddWithoutValidation("Accept", "application/json");
-            request.Headers.TryAddWithoutValidation("User-Agent", BrowserHeaders.UserAgent);
+            request.Headers.TryAddWithoutValidation("User-Agent", BrowserIdentity.Fallback.UserAgent);
             request.Options.Set(LanPolicy.ExemptKey, true);
             using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, budget.Token).ConfigureAwait(false);
             if (response.StatusCode == HttpStatusCode.Forbidden)

@@ -101,7 +101,7 @@ public class DuckDuckGoSearchTests
         Assert.Equal("https://html.duckduckgo.com/html/?q=rust%20async%20traits&kl=us-en", seen!.RequestUri!.AbsoluteUri);
         Assert.Equal("https://html.duckduckgo.com/html/", seen.Headers.GetValues("Referer").Single());
         Assert.Equal("same-origin", seen.Headers.GetValues("Sec-Fetch-Site").Single());
-        Assert.Equal(BrowserHeaders.UserAgent, seen.Headers.UserAgent.ToString());
+        Assert.Equal(BrowserIdentity.Fallback.UserAgent, seen.Headers.UserAgent.ToString());
     }
 
     [Fact]

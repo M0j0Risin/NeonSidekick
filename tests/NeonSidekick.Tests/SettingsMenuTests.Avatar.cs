@@ -6,15 +6,15 @@ using NeonSidekick.UI;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// General's Avatar row and its picker (2026-10-10, the user's ask): the row under Profile, the grid's search, a skin tone, the
+/// General's Avatar row and its picker (2026-10-10, the user's ask): the row under Profile (under Memory mode since 2026-10-11, the user's order), the grid's search, a skin tone, the
 /// actions, the other profiles' marks, ESC, and the row with no pane.
 /// </summary>
 public partial class SettingsMenuTests
 {
     [Fact]
-    public void TheAvatarRow_IsUnderProfile_OnChat_ItsValueTheEmojiAndItsName_TheRobotByDefault()
+    public void TheAvatarRow_IsUnderMemoryMode_OnChat_ItsValueTheEmojiAndItsName_TheRobotByDefault()
     {
-        Assert.Equal(SettingsField.Avatar, SettingsMenu.TabFields[(int)SettingsTab.Chat][1]);
+        Assert.Equal(SettingsField.Avatar, SettingsMenu.TabFields[(int)SettingsTab.Chat][3]);   // Profile, Working directory, Memory mode, Avatar (the user's order, 2026-10-11)
         Assert.Equal("Avatar", SettingsMenu.FieldName(SettingsField.Avatar));
         Assert.False(SettingsMenu.IsToggle(SettingsField.Avatar));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.Avatar));
@@ -31,7 +31,7 @@ public partial class SettingsMenuTests
     {
         _console.Profile.Width = 120;
         var (menu, pane) = PaneMenu();
-        Push(Keys.Down, Keys.Enter);          // Avatar, under Profile: the picker
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Avatar, under Memory mode (2026-10-11): the picker
         _console.Input.PushText("fox");       // a search: the results, 🦊 first, under the cursor
         Push(Keys.Enter, Keys.Escape);
 
@@ -50,7 +50,7 @@ public partial class SettingsMenuTests
     {
         _console.Profile.Width = 120;
         var (menu, pane) = PaneMenu();
-        Push(Keys.Down, Keys.Enter);
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
         _console.Input.PushText("thumbs up");
         Push(Keys.Enter);                     // 👍: its six tones, the cursor on none
         Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Escape);   // medium
@@ -69,7 +69,7 @@ public partial class SettingsMenuTests
         _console.Profile.Width = 120;
         _settings.Update(d => d.Avatar = "🦊");
         var (menu, pane) = PaneMenu();
-        Push(Keys.Down, Keys.Enter);          // the picker opens on Animals, the cursor on 🦊
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the picker opens on Animals, the cursor on 🦊
         Push(Keys.Home, Keys.Right, Keys.Enter, Keys.Escape);   // 🎲, then 🚫
 
         await menu.ShowAsync(CancellationToken.None);
@@ -85,7 +85,7 @@ public partial class SettingsMenuTests
     {
         _console.Profile.Width = 120;
         var (menu, pane) = PaneMenu();
-        Push(Keys.Down, Keys.Enter);
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
         _console.Input.PushText("animal");     // no animal takes a skin tone, so Enter takes the one landed on
         Push(Keys.Home, Keys.Enter);          // 🎲: the cursor onto a result
         Push(Keys.Enter, Keys.Escape);
@@ -105,7 +105,7 @@ public partial class SettingsMenuTests
         _console.Profile.Width = 160;
         Profiles.Create(_dir, "ada", new AppSettingsData { Avatar = "🐙" });
         var (menu, pane) = PaneMenu();
-        Push(Keys.Down, Keys.Enter);
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
         _console.Input.PushText("octopus");
         Push(Keys.Escape, Keys.Escape, Keys.Escape);   // the search cleared, the picker closed, the menu closed
 
@@ -124,7 +124,7 @@ public partial class SettingsMenuTests
         Profiles.Create(_dir, "ada", new AppSettingsData { Avatar = "🐙" });
         EmojiPrefs.Load(_dir).Picked("🦊");
         var (menu, pane) = PaneMenu();
-        Push(Keys.Down, Keys.Enter);
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
         Push(Keys.ShiftTab);                  // no For you for "neon" (a word every profile has): Smileys first, Recent before it
         Push(Keys.Escape, Keys.Escape);
 

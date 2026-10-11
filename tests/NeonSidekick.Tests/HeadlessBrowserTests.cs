@@ -64,12 +64,15 @@ public class HeadlessBrowserTests
         Assert.Equal(
             new[]
             {
-                "--headless=new", "--dump-dom", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-extensions",
-                "--disable-background-networking", "--mute-audio", "--blink-settings=imagesEnabled=false", "--virtual-time-budget=5000",
+                "--headless=new", "--remote-debugging-port=0", "--disable-blink-features=AutomationControlled", "--no-first-run",
+                "--no-default-browser-check", "--disable-extensions", "--disable-background-networking", "--mute-audio",
+                "--blink-settings=imagesEnabled=false", "--window-size=1920,1080", "--screen-info={1920x1080}",
+                "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0",
                 @"--user-data-dir=C:\Temp\NeonSidekick\browser", "https://example.com/a?b=c",
             },
-            HeadlessBrowser.Arguments(new Uri("https://example.com/a?b=c"), @"C:\Temp\NeonSidekick\browser"));
+            HeadlessBrowser.Arguments(new Uri("https://example.com/a?b=c"), @"C:\Temp\NeonSidekick\browser", new BrowserIdentity(BrowserBrand.Edge, 155, BrowserPlatform.Windows)));
         Assert.Equal(TimeSpan.FromSeconds(30), HeadlessBrowser.Timeout);
+        Assert.Equal(TimeSpan.FromSeconds(3), HeadlessBrowser.CloseGrace);
     }
 
     [Fact]
@@ -77,15 +80,6 @@ public class HeadlessBrowserTests
     {
         Assert.Equal("[1234:5678:0915/120000.123:ERROR:x.cc(1)] boom", HeadlessBrowser.LastLine("first\r\n\r\n[1234:5678:0915/120000.123:ERROR:x.cc(1)] boom\r\n\r\n"));
         Assert.Equal("", HeadlessBrowser.LastLine("\n\n"));
-    }
-
-    [Fact]
-    public void WholeDom_OnlyOnceTheClosingHtmlTagIsOut()
-    {
-        Assert.Null(HeadlessBrowser.WholeDom(""));
-        Assert.Null(HeadlessBrowser.WholeDom("<html><head></head><body><h1>hi"));
-        Assert.Equal(38, HeadlessBrowser.WholeDom("<html><body><h1>hi</h1>\n</body></HTML>"));
-        Assert.Equal(40, HeadlessBrowser.WholeDom("<html><body><h1>hi</h1>\n</body></html>\r\n"));
     }
 
     [Fact]

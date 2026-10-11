@@ -1389,7 +1389,8 @@ internal sealed partial class SettingsMenu
     /// <c>/skills</c>' Options tab since later that day, <see cref="SkillsTabFields"/>).
     /// Chat (General until 2026-10-10) is spelled out in five runs (2026-10-01, the user's call: 24 rows grown by "under X" and "last" had scattered their
     /// kin — the working directory at the top and its header switch far below, the theme apart from the themed viewer): who and where
-    /// (the profile, what a new one copies, where its files live, the memory it carries), the input line (the message queue's switch and
+    /// (the profile, what a new one copies, where its files live, the memory it carries; since 2026-10-11 the avatar under them, the user's
+    /// order: profile, working directory, memory mode, avatar), the input line (the message queue's switch and
     /// its cancel mode, the message history, the typo intercept, the hidden <c>/exit</c>), the transcript (its Markdown, the paste preview,
     /// the thumbnails' switch and size, what <c>/copy</c> takes), the screen (the theme, then top to bottom: the welcome splash, the header
     /// and the working directory in it, the toolbar, the performance bar, the menus' max height), and the outside apps last (the draft
@@ -1415,7 +1416,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
-        [SettingsField.Profile, SettingsField.Avatar, SettingsField.WorkingDirectory, SettingsField.MemoryMode,
+        [SettingsField.Profile, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.Avatar,
          SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker,
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle,
          SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight,

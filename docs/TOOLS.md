@@ -915,6 +915,8 @@ cat job.txt | ./NeonSidekick --headless --profile work   # macOS
 | `open_url` | `url?, urls?` | Opens a link, or up to five, in your browser. |
 | `download_file` | `url, path?, overwrite?` | Downloads a file into the working directory, up to *Web download max (MB)*, streamed to disk. Needs *File tools* too. |
 
+`web_fetch` asks as Chrome, at the version of the Edge, Chrome or Brave you have installed. When a site refuses it, shows a bot check, or sends a page that only fills in by script, it tries again in that browser, run headless (*Web browser mode*). The browser says it is the installed browser, not a headless one. The page runs in real time until it holds still, so a bot check that clears by itself (Cloudflare's "Just a moment") can finish. A bot check is waited on for up to 15 seconds; one that wants a click is reported as blocked. The browser keeps its cookies between fetches in a profile folder of its own under your temp folder.
+
 ## Memory, Skills & Sessions
 
 ### Memory

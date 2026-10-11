@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.Web;
@@ -17,6 +18,12 @@ public interface IHeadlessBrowser
     /// <summary>The executable to run: <paramref name="configuredPath"/> when it is a file, else the first of the known browsers installed; null for none.</summary>
     string? Locate(string configuredPath);
 
+    /// <summary>
+    /// The browser <see cref="Locate"/> finds for <paramref name="configuredPath"/>, as the web requests claim it (2026-10-11):
+    /// its brand and version, <see cref="BrowserIdentity.Fallback"/> with none.
+    /// </summary>
+    BrowserIdentity Identify(string configuredPath);
+
     /// <summary>The DOM of <paramref name="url"/> after the page ran its scripts, through <paramref name="executable"/>.</summary>
     Task<BrowserDump> DumpDomAsync(string executable, Uri url, CancellationToken cancellationToken);
 
@@ -26,14 +33,23 @@ public interface IHeadlessBrowser
 
 /// <summary>
 /// A real browser for the pages the HTTP client cannot read — a script shell that renders
-/// client-side, a gate that reads the TLS fingerprint — run as Chromium's <c>--headless=new
-/// --dump-dom</c>: Edge (always on Windows 11), Chrome or Brave, found in their standard install
-/// folders or named by the setting <c>Web browser path</c>. The rendered DOM comes back on stdout;
-/// nothing else of the browser is used. <b>The second <c>Process.Start</c> site in the app</b> (the
+/// client-side, a gate that reads the TLS fingerprint — run as Chromium's <c>--headless=new</c>:
+/// Edge (always on Windows 11), Chrome or Brave, found in their standard install
+/// folders or named by the setting <c>Web browser path</c>. <b>The second <c>Process.Start</c> site in the app</b> (the
 /// editor opener is the first): no shell, no window, a throwaway profile folder under the temp
 /// directory — without one a running Edge takes the URL over and this process exits with nothing —
-/// one run at a time, killed with its tree at <see cref="Timeout"/> — or once its output is whole, since Chrome on macOS
-/// never exits after it (<see cref="WaitForExitOrWholeAsync"/>).
+/// one run at a time, killed with its tree at <see cref="Timeout"/>.
+/// <para>
+/// Since 2026-10-11 (the user's ask: get past more bot checks) a page is read over the DevTools protocol (<see cref="DevToolsClient"/>)
+/// rather than <c>--dump-dom</c>, which dumps at the load event or after fast-forwarded virtual time: the page runs in real time and is
+/// looked at every half second until it settles (<see cref="DomSettle"/>), so a check that counts real seconds and reloads into the page
+/// gets to. Then <c>Browser.close</c> shuts the browser down cleanly within <see cref="CloseGrace"/> — Chromium writes cookies to its
+/// profile in batches, and a killed browser loses a clearance cookie it just earned, which the profile folder keeps for the next run.
+/// The browser also stopped saying it is headless: <c>--user-agent</c> is the installed browser's own (<see cref="BrowserIdentity"/>; it
+/// said <c>HeadlessChrome</c>, and its client hints follow the flag), <c>--disable-gpu</c> went (WebGL named a software renderer), and
+/// the window and screen are a desktop's 1920×1080 (they were 756×488 inside an 800×600 screen). <c>navigator.webdriver</c>, false
+/// under <c>--dump-dom</c>, turned true with the DevTools port; <c>--disable-blink-features=AutomationControlled</c> puts it back.
+/// </para>
 /// <para>
 /// Since 2026-10-03 it also prints pages to PDF (<c>convert_to_pdf</c>, <c>/pdf</c>): Chromium's <c>--print-to-pdf</c> on a page
 /// the app wrote to the temp folder or on a web page, with images on and the browser's own header and footer off, within
@@ -50,8 +66,17 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     /// <summary>How long one print to PDF may take: a long document lays out for a while.</summary>
     public static readonly TimeSpan PdfTimeout = TimeSpan.FromSeconds(60);
 
-    /// <summary>Virtual time the page's scripts get to settle before the DOM is dumped.</summary>
+    /// <summary>Virtual time a web page's scripts get to settle before it is printed to PDF (a page read for its DOM runs in real time, <see cref="DomSettle"/>).</summary>
     public const int VirtualTimeBudgetMs = 5000;
+
+    /// <summary>How long the browser gets to shut down after <c>Browser.close</c> (writing its cookies) before it is killed.</summary>
+    public static readonly TimeSpan CloseGrace = TimeSpan.FromSeconds(3);
+
+    /// <summary>The window and screen a page sees: a desktop's.</summary>
+    public const string WindowSize = "1920,1080";
+
+    /// <summary>What a page is asked for at each look: its ready state and its DOM.</summary>
+    public const string PageExpression = "({ s: document.readyState, h: document.documentElement ? document.documentElement.outerHTML : '' })";
 
     /// <summary>How long the output must stay whole and unchanged before a browser that has not exited is stopped (<see cref="WaitForExitOrWholeAsync"/>).</summary>
     public static readonly TimeSpan WholeGrace = TimeSpan.FromSeconds(1.5);
@@ -147,10 +172,11 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
 
     public string? Locate(string configuredPath) => Locate(configuredPath, Candidates(), File.Exists);
 
+    public BrowserIdentity Identify(string configuredPath) => Locate(configuredPath) is { } executable ? BrowserIdentity.For(executable) : BrowserIdentity.Fallback;
+
     /// <summary>The flags every run shares, after <c>--headless=new</c> and the run's own verb.</summary>
     private static readonly string[] CommonFlags =
     [
-        "--disable-gpu",
         "--no-first-run",
         "--no-default-browser-check",
         "--disable-extensions",
@@ -158,18 +184,22 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         "--mute-audio",
     ];
 
-    /// <summary>The command line after the executable. Pinned.</summary>
-    public static IReadOnlyList<string> Arguments(Uri url, string userDataDirectory)
+    /// <summary>The command line after the executable for a page read over DevTools as <paramref name="identity"/>. Pinned.</summary>
+    public static IReadOnlyList<string> Arguments(Uri url, string userDataDirectory, BrowserIdentity identity)
     {
         ArgumentNullException.ThrowIfNull(url);
         ArgumentNullException.ThrowIfNull(userDataDirectory);
+        ArgumentNullException.ThrowIfNull(identity);
         return
         [
             "--headless=new",
-            "--dump-dom",
+            "--remote-debugging-port=0",
+            "--disable-blink-features=AutomationControlled",
             .. CommonFlags,
             "--blink-settings=imagesEnabled=false",
-            "--virtual-time-budget=" + VirtualTimeBudgetMs.ToString(CultureInfo.InvariantCulture),
+            "--window-size=" + WindowSize,
+            "--screen-info={" + WindowSize.Replace(',', 'x') + "}",
+            "--user-agent=" + identity.UserAgent,
             "--user-data-dir=" + userDataDirectory,
             url.AbsoluteUri,
         ];
@@ -178,20 +208,23 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     /// <summary>
     /// The print-to-PDF command line after the executable (2026-10-03). Pinned. Images stay on — they are half of what a PDF
     /// shows — and the browser's own header and footer (the date, the file's URL) are left off. A web page gets the virtual time
-    /// budget to settle its scripts; a page the app wrote has none to settle.
+    /// budget to settle its scripts and, since 2026-10-11, the installed browser's user agent (<paramref name="identity"/>) in place
+    /// of <c>HeadlessChrome</c>; a page the app wrote has neither to need. No GPU: a print lays out the same without one.
     /// </summary>
-    public static IReadOnlyList<string> PdfArguments(Uri page, string outputPath, string userDataDirectory, bool isWeb)
+    public static IReadOnlyList<string> PdfArguments(Uri page, string outputPath, string userDataDirectory, bool isWeb, BrowserIdentity identity)
     {
         ArgumentNullException.ThrowIfNull(page);
         ArgumentNullException.ThrowIfNull(outputPath);
         ArgumentNullException.ThrowIfNull(userDataDirectory);
-        var list = new List<string>(12) { "--headless=new" };
+        ArgumentNullException.ThrowIfNull(identity);
+        var list = new List<string>(14) { "--headless=new", "--disable-gpu" };
         list.AddRange(CommonFlags);
         list.Add("--no-pdf-header-footer");
         list.Add("--print-to-pdf=" + outputPath);
         if (isWeb)
         {
             list.Add("--virtual-time-budget=" + VirtualTimeBudgetMs.ToString(CultureInfo.InvariantCulture));
+            list.Add("--user-agent=" + identity.UserAgent);
         }
 
         list.Add("--user-data-dir=" + userDataDirectory);
@@ -206,24 +239,27 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         await _oneAtATime.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var run = await RunProcessAsync(executable, url, userData => Arguments(url, userData), Timeout, WholeDom, cancellationToken).ConfigureAwait(false);
+            var identity = BrowserIdentity.For(executable);
+            var read = new PageRead();
+            var run = await RunProcessAsync(executable, url, userData => Arguments(url, userData, identity), Timeout, (process, userData, token) => WatchPageAsync(process, userData, url, read, token), cancellationToken).ConfigureAwait(false);
             if (run.StartError is not null)
             {
                 return new BrowserDump(null, run.StartError);
             }
 
-            DiagnosticLog.Debug(Category, $"{run.Summary}, {run.Stdout.Length.ToString(CultureInfo.InvariantCulture)} chars" + run.StderrTail);
+            string how = run.TimedOut ? $"timed out with {(read.Html is null ? "no page" : "the page as it was")}" : read.Settled ? "settled" : "stopped";
+            DiagnosticLog.Debug(Category, $"{run.Summary}, {how} after {read.Looks.ToString(CultureInfo.InvariantCulture)} looks, {(read.Html?.Length ?? 0).ToString(CultureInfo.InvariantCulture)} chars{(read.ChallengeSeen ? (read.Gated ? ", still a bot check" : ", a bot check cleared") : "")}" + (read.Failure is null ? "" : $"; {read.Failure}") + run.StderrTail);
+            if (read.Html is not null)
+            {
+                return new BrowserDump(read.Html, "");
+            }
+
             if (run.TimedOut)
             {
                 return new BrowserDump(null, $"no page within {Llm.LlmTimeouts.Format(Timeout)}");
             }
 
-            if (string.IsNullOrWhiteSpace(run.Stdout))
-            {
-                return new BrowserDump(null, run.Failure("it printed nothing"));
-            }
-
-            return new BrowserDump(run.Stdout, "");
+            return new BrowserDump(null, run.Failure(read.Failure ?? "it showed no page"));
         }
         finally
         {
@@ -240,7 +276,8 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         try
         {
             bool isWeb = page.Scheme is "http" or "https";
-            var run = await RunProcessAsync(executable, page, userData => PdfArguments(page, outputPath, userData, isWeb), PdfTimeout, _ => WholePdf(outputPath), cancellationToken).ConfigureAwait(false);
+            var identity = BrowserIdentity.For(executable);
+            var run = await RunProcessAsync(executable, page, userData => PdfArguments(page, outputPath, userData, isWeb, identity), PdfTimeout, (process, _, token) => WaitForExitOrWholeAsync(process, () => WholePdf(outputPath), token), cancellationToken).ConfigureAwait(false);
             if (run.StartError is not null)
             {
                 return new BrowserPdf(false, run.StartError);
@@ -265,6 +302,138 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         }
     }
 
+    /// <summary>What <see cref="WatchPageAsync"/> saw, kept as it goes so a run that times out still has its last look.</summary>
+    private sealed class PageRead
+    {
+        public string? Html;
+        public bool Settled;
+        public bool Gated;
+        public bool ChallengeSeen;
+        public int Looks;
+        public string? Failure;
+    }
+
+    /// <summary>
+    /// Watches the page over DevTools until <see cref="DomSettle"/> says it is ready, then closes the browser: true when it must
+    /// still be killed (it did not exit within <see cref="CloseGrace"/>), false when it exited. Every look's DOM lands in
+    /// <paramref name="read"/>; a DevTools failure is noted there and ends the watch (the caller kills the browser).
+    /// </summary>
+    private static async Task<bool> WatchPageAsync(Process process, string userData, Uri url, PageRead read, CancellationToken cancellationToken)
+    {
+        await using var client = new DevToolsClient();
+        try
+        {
+            var endpoint = await DevToolsClient.WaitForEndpointAsync(userData, () => process.HasExited, cancellationToken).ConfigureAwait(false);
+            await client.ConnectAsync(endpoint, cancellationToken).ConfigureAwait(false);
+            var settle = new DomSettle();
+            var watch = Stopwatch.StartNew();
+            string? session = null;
+            bool thin = false;
+            while (true)
+            {
+                session ??= await AttachAsync(client, cancellationToken).ConfigureAwait(false);
+                if (session is not null && await LookAsync(client, session, cancellationToken).ConfigureAwait(false) is { } look)
+                {
+                    read.Looks++;
+                    bool changed = !string.Equals(look.Html, read.Html, StringComparison.Ordinal);
+                    if (changed)
+                    {
+                        read.Html = look.Html;
+                        var page = HtmlToMarkdown.Convert(look.Html, url);
+                        read.Gated = WebFetcher.LooksLikeChallenge(look.Html, page.Markdown);
+                        read.ChallengeSeen |= read.Gated;
+                        thin = DomSettle.LooksThin(look.Html, page.Markdown);
+                    }
+
+                    if (settle.Observe(watch.Elapsed, look.State is "interactive" or "complete", changed, read.Gated, thin))
+                    {
+                        read.Settled = true;
+                        break;
+                    }
+                }
+
+                await Task.Delay(DomSettle.PollInterval, cancellationToken).ConfigureAwait(false);
+            }
+
+            await client.NotifyAsync("Browser.close", cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is DevToolsException or System.Net.WebSockets.WebSocketException or IOException or JsonException or InvalidOperationException)
+        {
+            read.Failure = ex.Message;
+            return true;
+        }
+
+        using var grace = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        grace.CancelAfter(CloseGrace);
+        try
+        {
+            await process.WaitForExitAsync(grace.Token).ConfigureAwait(false);
+            return false;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>A session on the run's page, attached flat so commands carry its id; null while the browser has no page yet.</summary>
+    private static async Task<string?> AttachAsync(DevToolsClient client, CancellationToken cancellationToken)
+    {
+        var targets = await client.SendAsync("Target.getTargets", null, null, cancellationToken).ConfigureAwait(false);
+        string? targetId = null;
+        if (targets.ValueKind == JsonValueKind.Object && targets.TryGetProperty("targetInfos", out var infos) && infos.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var info in infos.EnumerateArray())
+            {
+                if (info.TryGetProperty("type", out var type) && type.ValueEquals("page") && info.TryGetProperty("targetId", out var id) && id.ValueKind == JsonValueKind.String)
+                {
+                    targetId = id.GetString();
+                    break;
+                }
+            }
+        }
+
+        if (targetId is null)
+        {
+            return null;
+        }
+
+        var attached = await client.SendAsync("Target.attachToTarget", w =>
+        {
+            w.WriteString("targetId", targetId);
+            w.WriteBoolean("flatten", true);
+        }, null, cancellationToken).ConfigureAwait(false);
+        return attached.ValueKind == JsonValueKind.Object && attached.TryGetProperty("sessionId", out var session) && session.ValueKind == JsonValueKind.String ? session.GetString() : null;
+    }
+
+    /// <summary>One look at the page (<see cref="PageExpression"/>); null while it has no document to ask, mid-navigation.</summary>
+    private static async Task<(string State, string Html)?> LookAsync(DevToolsClient client, string session, CancellationToken cancellationToken)
+    {
+        JsonElement answer;
+        try
+        {
+            answer = await client.SendAsync("Runtime.evaluate", w =>
+            {
+                w.WriteString("expression", PageExpression);
+                w.WriteBoolean("returnByValue", true);
+            }, session, cancellationToken).ConfigureAwait(false);
+        }
+        catch (DevToolsException)
+        {
+            return null;   // "Execution context was destroyed": the page is navigating; the next look finds the new one.
+        }
+
+        if (answer.ValueKind != JsonValueKind.Object || answer.TryGetProperty("exceptionDetails", out _)
+            || !answer.TryGetProperty("result", out var result) || !result.TryGetProperty("value", out var value) || value.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        string state = value.TryGetProperty("s", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() ?? "" : "";
+        string html = value.TryGetProperty("h", out var h) && h.ValueKind == JsonValueKind.String ? h.GetString() ?? "" : "";
+        return html.Length == 0 ? null : (state, html);
+    }
+
     /// <summary>One finished browser run: what it printed, how it ended, or why it never started.</summary>
     private sealed record BrowserRun(string? StartError, int ExitCode, string Stdout, string Stderr, bool TimedOut, string Summary)
     {
@@ -280,15 +449,18 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     }
 
     /// <summary>
-    /// The one place the browser is started: the profile folder made, the process run with no window, stdout and stderr read,
-    /// killed with its tree when <paramref name="timeout"/> runs out. The caller holds <c>_oneAtATime</c>.
+    /// The one place the browser is started: the profile folder made (and a stale <see cref="DevToolsClient.ActivePortFile"/> gone,
+    /// so a watch never dials the last run's port), the process run with no window, stdout and stderr read, and
+    /// <paramref name="watch"/> run on it — true when the run is done and the browser must be stopped, false when it exited by
+    /// itself — killed with its tree then or when <paramref name="timeout"/> runs out. The caller holds <c>_oneAtATime</c>.
     /// </summary>
-    private static async Task<BrowserRun> RunProcessAsync(string executable, Uri page, Func<string, IReadOnlyList<string>> arguments, TimeSpan timeout, Func<string, long?> whole, CancellationToken cancellationToken)
+    private static async Task<BrowserRun> RunProcessAsync(string executable, Uri page, Func<string, IReadOnlyList<string>> arguments, TimeSpan timeout, Func<Process, string, CancellationToken, Task<bool>> watch, CancellationToken cancellationToken)
     {
         string userData = UserDataDirectory;
         try
         {
             Directory.CreateDirectory(userData);
+            File.Delete(Path.Combine(userData, DevToolsClient.ActivePortFile));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -309,7 +481,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             start.ArgumentList.Add(argument);
         }
 
-        var watch = Stopwatch.StartNew();
+        var clock = Stopwatch.StartNew();
         Process? process;
         try
         {
@@ -336,7 +508,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             bool stopped = false;
             try
             {
-                stopped = await WaitForExitOrWholeAsync(process, () => whole(Snapshot(stdoutText)), budget.Token).ConfigureAwait(false);
+                stopped = await watch(process, userData, budget.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -369,8 +541,8 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             await stdout.ConfigureAwait(false);
             string output = Snapshot(stdoutText);
             string errors = await stderr.ConfigureAwait(false);
-            string how = stopped ? "stopped once its output was whole" : process.HasExited ? $"exit {process.ExitCode.ToString(CultureInfo.InvariantCulture)}" : "still running";
-            string summary = $"{Path.GetFileName(executable)} {page}: {how} after {watch.Elapsed.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)} s";
+            string how = stopped ? "stopped" : process.HasExited ? $"exit {process.ExitCode.ToString(CultureInfo.InvariantCulture)}" : "still running";
+            string summary = $"{Path.GetFileName(executable)} {page}: {how} after {clock.Elapsed.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)} s";
             return new BrowserRun(null, stopped || !process.HasExited ? 0 : process.ExitCode, output, errors, timedOut, summary);
         }
     }
@@ -431,13 +603,6 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         {
             return text.ToString();
         }
-    }
-
-    /// <summary>The DOM dump is whole once stdout ends with the closing <c>&lt;/html&gt;</c>: its length, else null. Pure; pinned.</summary>
-    public static long? WholeDom(string stdout)
-    {
-        ArgumentNullException.ThrowIfNull(stdout);
-        return stdout.AsSpan().TrimEnd().EndsWith("</html>", StringComparison.OrdinalIgnoreCase) ? stdout.Length : null;
     }
 
     /// <summary>The PDF is whole once the file starts <c>%PDF</c> and ends <c>%%EOF</c>: its length, else null.</summary>

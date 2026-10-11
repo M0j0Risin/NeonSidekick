@@ -578,6 +578,8 @@ public sealed class PdfTests : IDisposable
 
     // ── the browser's command line ──────────────────────────────────────────
 
+    private static readonly BrowserIdentity Chrome154 = new(BrowserBrand.Chrome, 154, BrowserPlatform.Windows);
+
     [Fact]
     public void BrowserPdfArguments_Pinned()
     {
@@ -587,9 +589,11 @@ public sealed class PdfTests : IDisposable
                 "--disable-background-networking", "--mute-audio", "--no-pdf-header-footer", @"--print-to-pdf=C:\T\a b.pdf",
                 @"--user-data-dir=C:\T\browser", "file:///C:/T/a%20b.html",
             ],
-            HeadlessBrowser.PdfArguments(new Uri(@"C:\T\a b.html"), @"C:\T\a b.pdf", @"C:\T\browser", isWeb: false));
-        Assert.Contains("--virtual-time-budget=5000", HeadlessBrowser.PdfArguments(new Uri("https://example.com/"), "o.pdf", "d", isWeb: true));
-        Assert.DoesNotContain(HeadlessBrowser.PdfArguments(new Uri("https://example.com/"), "o.pdf", "d", isWeb: true), a => a.StartsWith("--blink-settings", StringComparison.Ordinal));
+            HeadlessBrowser.PdfArguments(new Uri(@"C:\T\a b.html"), @"C:\T\a b.pdf", @"C:\T\browser", isWeb: false, Chrome154));
+        var web = HeadlessBrowser.PdfArguments(new Uri("https://example.com/"), "o.pdf", "d", isWeb: true, Chrome154);
+        Assert.Contains("--virtual-time-budget=5000", web);
+        Assert.Contains("--user-agent=" + Chrome154.UserAgent, web);   // a web page is fetched as the installed browser, not HeadlessChrome (2026-10-11)
+        Assert.DoesNotContain(web, a => a.StartsWith("--blink-settings", StringComparison.Ordinal));
         Assert.Equal(TimeSpan.FromSeconds(60), HeadlessBrowser.PdfTimeout);
     }
 

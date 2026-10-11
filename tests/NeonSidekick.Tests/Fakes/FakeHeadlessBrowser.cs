@@ -18,6 +18,9 @@ public sealed class FakeHeadlessBrowser : IHeadlessBrowser
 
     public string? Html { get; set; }
 
+    /// <summary>What <see cref="Identify"/> answers (2026-10-11): never the machine's own browser, so a header pin holds anywhere.</summary>
+    public BrowserIdentity Identity { get; set; } = BrowserIdentity.Fallback;
+
     public string Failure { get; set; } = "it printed nothing";
 
     public List<Uri> Runs { get; } = new();
@@ -38,6 +41,8 @@ public sealed class FakeHeadlessBrowser : IHeadlessBrowser
         LocateCalls.Add(configuredPath);
         return configuredPath.Length > 0 ? configuredPath : Executable;
     }
+
+    public BrowserIdentity Identify(string configuredPath) => Identity;
 
     public Task<BrowserDump> DumpDomAsync(string executable, Uri url, CancellationToken cancellationToken)
     {

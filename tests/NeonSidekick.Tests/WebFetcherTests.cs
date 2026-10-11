@@ -60,10 +60,12 @@ public class WebFetcherTests
         Assert.Equal("Example Domain", page.Page!.Title);
         Assert.Equal("# Example Domain\n\nThis domain is for use in illustrative examples in documents.\n\n[More information...](https://www.iana.org/domains/example)", page.Page.Markdown);
         Assert.NotNull(seen);
-        Assert.Equal(BrowserHeaders.UserAgent, seen!.Headers.UserAgent.ToString());
+        Assert.Equal(BrowserIdentity.Fallback.UserAgent, seen!.Headers.UserAgent.ToString());
         Assert.Equal("none", seen.Headers.GetValues("Sec-Fetch-Site").Single());
         Assert.Equal("navigate", seen.Headers.GetValues("Sec-Fetch-Mode").Single());
         Assert.Equal("en-US,en;q=0.9", seen.Headers.AcceptLanguage.ToString());
+        Assert.Equal(BrowserIdentity.Fallback.SecChUa, seen.Headers.GetValues("Sec-CH-UA").Single());
+        Assert.Equal("u=0, i", seen.Headers.GetValues("Priority").Single());
         Assert.False(seen.Headers.Contains("Referer"));
         Assert.Empty(_browser.Runs);
     }

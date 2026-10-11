@@ -1136,7 +1136,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(21, SettingsMenu.ToolsTabFields.Count);   // ClaudeCode gone later on 2026-10-10; Image 2026-10-10; YouTube 2026-10-05; Screen, SQLite and Postgres 2026-10-04; Camera and Docker 2026-10-02; UNC later still on 2026-09-30; MySQL and Oracle since 2026-09-30; Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
         Assert.Equal(2, SettingsMenu.SkillsTabFields.Count);   // Options and Reflection, since later on 2026-09-19 (one list of 11, then 14, before)
         Assert.Equal(16, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 15 until Reflection downloaded skills (then Reflection installed skills) came on 2026-10-02; 14 until Project file came off the Project tab on 2026-10-01; 13 until Reflection edit supporting files came on 2026-09-27; 12 until Reflection yields to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
-        Assert.Equal(new[] { SettingsField.Profile, SettingsField.Avatar, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle, SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight, SettingsField.DraftEditor, SettingsField.ImageEditor }, SettingsMenu.TabFields[(int)SettingsTab.Chat]);   // Themed external windows under Themed background (the last row before), later on 2026-10-03; Themed background under Theme, 2026-10-03; five runs since 2026-10-01 (the user's call): who and where, the input line, the transcript, the screen, the outside apps; before that: Menus max height under Theme, 2026-10-01; Image editor under Draft editor, later on 2026-09-24; Keep message history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27; Show performance bar under Show toolbar, 2026-09-29
+        Assert.Equal(new[] { SettingsField.Profile, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.Avatar, SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle, SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight, SettingsField.DraftEditor, SettingsField.ImageEditor }, SettingsMenu.TabFields[(int)SettingsTab.Chat]);   // Themed external windows under Themed background (the last row before), later on 2026-10-03; Themed background under Theme, 2026-10-03; five runs since 2026-10-01 (the user's call): who and where, the input line, the transcript, the screen, the outside apps; before that: Menus max height under Theme, 2026-10-01; Image editor under Draft editor, later on 2026-09-24; Keep message history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27; Show performance bar under Show toolbar, 2026-09-29
         // Show performance bar (2026-09-29): a picker of five looks, off by default, no reconnect; the four in led by default since 2026-10-02 (the user's ask).
         Assert.False(SettingsMenu.IsToggle(SettingsField.ShowPerformanceBar));
         Assert.Equal("Show performance bar", SettingsMenu.FieldName(SettingsField.ShowPerformanceBar));
@@ -3200,7 +3200,7 @@ public partial class SettingsMenuTests : IDisposable
             opened++;
             return Task.FromResult<string?>(picked);
         });
-        Push(Keys.Down, Keys.Down, Keys.Enter, Keys.Escape);   // Profile, Avatar (2026-10-10), then the working directory row (New profile mode before it until later that day)
+        Push(Keys.Down, Keys.Enter, Keys.Escape);   // the working directory row, right under Profile (Avatar between them from 2026-10-10 until 2026-10-11; New profile mode before it until later on 2026-10-10)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -3232,7 +3232,7 @@ public partial class SettingsMenuTests : IDisposable
         _console.Profile.Width = 240;
         _settings.Update(d => d.WorkingDirectory = _dir);
         var (menu, _) = PaneMenu(_ => Task.FromResult<string?>(""));   // what the screen returns for the profile's files folder
-        Push(Keys.Down, Keys.Down, Keys.Enter, Keys.Escape);
+        Push(Keys.Down, Keys.Enter, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -3289,7 +3289,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\neon\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Avatar                       🤖 robot\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Emoji picker                 off\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 11 of 37\n  Show performance bar         CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
+        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Avatar                       🤖 robot\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Emoji picker                 off\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 11 of 37\n  Show performance bar         CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
         Assert.DoesNotContain("File /tree max length", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -3313,7 +3313,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"/profiles/default/files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  Avatar                       🤖 robot\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Emoji picker                 off\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 11 of 37\n  Show performance bar         CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
+        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Avatar                       🤖 robot\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Emoji picker                 off\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 11 of 37\n  Show performance bar         CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
         Assert.DoesNotContain("File /tree max length", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -3373,8 +3373,8 @@ public partial class SettingsMenuTests : IDisposable
     {
         _console.Profile.Width = 240;
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
-        input.PushClick(4, 107);                 // Memory mode (a double-click; right under Working directory since 2026-10-01, the queue's two rows above it from 2026-09-18; the section heading over Profile since 2026-10-04; Avatar under Profile since 2026-10-10; Client's second strip over it later that day)
-        input.PushClick(4, 107);
+        input.PushClick(4, 106);                 // Memory mode (a double-click; right under Working directory since 2026-10-01, the queue's two rows above it from 2026-09-18; the section heading over Profile since 2026-10-04; Avatar under Profile from 2026-10-10, under Memory mode since 2026-10-11; Client's second strip over it later on 2026-10-10)
+        input.PushClick(4, 106);
         input.PushClick(238, 100);               // the × on the mode page: back to the list
         input.PushClick(239, 100);               // the × on the list: closed
         input.Push(Keys.Escape);                 // never read
@@ -3396,8 +3396,8 @@ public partial class SettingsMenuTests : IDisposable
         _console.Profile.Width = 240;
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
         Assert.Equal("read-write", _settings.Current.MemoryMode);
-        input.PushClick(4, 107);                 // Memory mode: strip 100, Client's second strip 101 (later on 2026-10-10), spacer 102, the Who and where heading 103 (2026-10-04), Profile 104, Avatar 105 (2026-10-10), Working directory 106 (New profile mode before it until later that day) (under it since 2026-10-01, the queue's two rows before)
-        input.PushClick(4, 107);
+        input.PushClick(4, 106);                 // Memory mode: strip 100, Client's second strip 101 (later on 2026-10-10), spacer 102, the Who and where heading 103 (2026-10-04), Profile 104, Working directory 105 (Avatar between them from 2026-10-10, under Memory mode since 2026-10-11; New profile mode before it until later on 2026-10-10) (under it since 2026-10-01, the queue's two rows before)
+        input.PushClick(4, 106);
         input.PushClick(4, 103);                 // read-only: breadcrumb 100, spacer 101, read-write 102
         input.PushClick(6, 103);
         input.Push(Keys.Escape);
@@ -3419,8 +3419,8 @@ public partial class SettingsMenuTests : IDisposable
         _console.Profile.Width = 240;
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
         Assert.Equal("read-write", _settings.Current.MemoryMode);
-        input.PushClick(4, 107);                 // Memory mode (see the double-click test for the rows)
-        input.PushClick(4, 107);
+        input.PushClick(4, 106);                 // Memory mode (see the double-click test for the rows)
+        input.PushClick(4, 106);
         input.PushClick(4, 50);                  // the transcript under the mode page: a first
         input.Push(Keys.Down);                   // a key ends the pair: read-only under the cursor, nothing picked
         input.PushClick(4, 50);                  // a first again
@@ -3447,7 +3447,7 @@ public partial class SettingsMenuTests : IDisposable
     {
         var (menu, pane) = PaneMenu();
         Push(Keys.Enter);                       // Profile: refused
-        Push(Keys.Down, Keys.Down, Keys.Enter);   // Working directory: refused (past Avatar since 2026-10-10)
+        Push(Keys.Down, Keys.Enter);            // Working directory: refused (right under Profile since 2026-10-11; past Avatar from 2026-10-10)
         Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // Memory mode (right under Working directory since 2026-10-01): a Chat picker, its page opens, read-only picked, saved
         GoTo(SettingsTab.Common); Push(Keys.Enter);   // LLM URL, the Common tab's first row (2026-10-10; under the scan mode before): refused
         GoFrom(SettingsTab.Common, SettingsTab.Tts); Push(Keys.Enter);   // TTS output: refused (LLM second since 2026-10-04, the tabs between skipped)

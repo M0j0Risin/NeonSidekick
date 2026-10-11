@@ -72,4 +72,45 @@ public static partial class SmokeChecks
             Files.WorkingDirectory.DeleteQuietly(pdf);
         }
     }
+
+    /// <summary>
+    /// <c>web:devtools</c> (2026-10-11): where Edge, Chrome or Brave is installed, a real page read through
+    /// <see cref="HeadlessBrowser.DumpDomAsync"/> over the DevTools protocol — the WebSocket, the port file, the settle and the clean
+    /// close, none of which <c>dotnet test</c> runs — of a page this probe writes whose script rewrites it after 2 s of real time
+    /// (the old <c>--dump-dom</c> read it at load), saying what it claims to be: the installed browser's user agent, not
+    /// <c>HeadlessChrome</c>, and <c>navigator.webdriver</c> false. Without a browser it passes and says so. The page goes.
+    /// </summary>
+    public static SmokeCheck ProbeWebDevTools()
+    {
+        const string name = "web:devtools";
+        var browser = new HeadlessBrowser();
+        if (browser.Locate("") is not { } executable)
+        {
+            return new SmokeCheck(name, true, "skipped: no Edge, Chrome or Brave");
+        }
+
+        string html = Path.Combine(Path.GetTempPath(), "NeonSidekick.smoke." + Guid.NewGuid().ToString("N") + ".html");
+        try
+        {
+            File.WriteAllText(html, "<html><body><p id=\"s\">early</p><script>setTimeout(function () { document.getElementById('s').textContent = 'late ' + navigator.userAgent + ' webdriver=' + navigator.webdriver; }, 2000);</script></body></html>");
+            var dump = browser.DumpDomAsync(executable, new Uri(html), CancellationToken.None).GetAwaiter().GetResult();
+            string page = dump.Html ?? "";
+            string? wrong =
+                dump.Html is null ? dump.Detail
+                : !page.Contains("late ", StringComparison.Ordinal) ? "the page was read before its script ran"
+                : page.Contains("HeadlessChrome", StringComparison.Ordinal) ? "the browser still says HeadlessChrome"
+                : !page.Contains(BrowserIdentity.For(executable).UserAgent, StringComparison.Ordinal) ? "the browser did not take the user agent"
+                : !page.Contains("webdriver=false", StringComparison.Ordinal) ? "navigator.webdriver is not false"
+                : null;
+            return new SmokeCheck(name, wrong is null, wrong ?? $"{PdfText.BrowserName(executable)} ran a page in real time as {BrowserIdentity.For(executable).BrandName} {BrowserIdentity.For(executable).Major}");
+        }
+        catch (Exception ex)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            Files.WorkingDirectory.DeleteQuietly(html);
+        }
+    }
 }
