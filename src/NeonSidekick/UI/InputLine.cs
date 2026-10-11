@@ -389,8 +389,11 @@ public sealed partial class InputLine
     /// <summary>What a click on the picture strip's button does (2026-09-27, <see cref="ScreenPane.StripButton"/>): the screen's picture viewer; null = nothing.</summary>
     public Action? OpenViewer { get; set; }
 
-    /// <summary>What a click on the picture strip's close × does (2026-09-28, <see cref="ScreenPane.TryHitStripClose"/>): the screen puts the strip away until the next picture; null = nothing.</summary>
+    /// <summary>What a click on the picture strip's close × does (2026-09-28, <see cref="ScreenPane.TryHitStripClose"/>): the screen puts the strip away until the 🎞️ brings it back; null = nothing.</summary>
     public Action? CloseStrip { get; set; }
+
+    /// <summary>What a click on the picture strip's ‹ (−1) or › (+1) does (2026-10-10, <see cref="ScreenPane.TryHitStripArrow"/>): the screen steps the highlight as ← / → on an empty line do; null = nothing.</summary>
+    public Action<int>? StepStrip { get; set; }
 
     /// <summary>What one click on a toolbar glyph does (2026-10-04, the UI review): the screen flashes the glyph's note on the hint row; null = nothing. The second click of a pair still ends the read.</summary>
     public Action<ScreenPane.ToolbarHit>? ToolbarNote { get; set; }

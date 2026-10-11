@@ -168,10 +168,10 @@ public class PictureStripTests : IDisposable
 
     /// <summary>
     /// A late picture placed right of the newest keeps the highlight on its picture (code review, 2026-10-04: it was let go for
-    /// a tile drawn off-screen) and still opens a closed strip: the × is until the next generation, and it is one.
+    /// a tile drawn off-screen), and leaves a closed strip closed (2026-10-10: the × lasts until the 🎞️ opens it).
     /// </summary>
     [Fact]
-    public void Add_ALatePicture_KeepsTheHighlightOnItsPicture_AndOpensAClosedStrip()
+    public void Add_ALatePicture_KeepsTheHighlightOnItsPicture_AndLeavesAClosedStripClosed()
     {
         var strip = StripOf(3);   // newest first: 2, 1, 0
         strip.Step(+1);
@@ -194,8 +194,11 @@ public class PictureStripTests : IDisposable
 
         strip.Close();
         Put(strip, Tile(12, 12), -2);
-        Assert.False(strip.Closed);
+        Assert.True(strip.Closed);
+        Assert.Equal(6, strip.Count);   // gathered all the same
 
+        strip.Open();
+        Assert.True(strip.Step(+1));
         Put(strip, Tile(12, 12), 10);   // the newest lets go, as ever
         Assert.Equal(-1, strip.Selected);
     }
@@ -277,9 +280,12 @@ public class PictureStripTests : IDisposable
         Assert.True(strip.Version > version);
     }
 
-    /// <summary>The rule's × (2026-09-28): the strip put away with its highlight let go, until the next picture or a clear; nothing to close when empty.</summary>
+    /// <summary>
+    /// The rule's × (2026-09-28): the strip put away with its highlight let go, until the 🎞️ (<see cref="PictureStrip.Open"/>)
+    /// or a clear; nothing to close when empty. A new picture no longer opens it (2026-10-10, the user's ask): it is gathered unseen.
+    /// </summary>
     [Fact]
-    public void Close_PutsItAway_UntilTheNextPictureOrAClear()
+    public void Close_PutsItAway_UntilOpenOrAClear()
     {
         var empty = new PictureStrip();
         int version = empty.Version;
@@ -301,11 +307,34 @@ public class PictureStripTests : IDisposable
         Assert.Equal(version, strip.Version);
 
         Put(strip, Tile(12, 12), 9);
+        Assert.True(strip.Closed);
+        Assert.Equal(4, strip.Count);
+        strip.Open();
         Assert.False(strip.Closed);
+        Assert.True(strip.Step(+1));
+        Assert.Equal(9, strip.SelectedId);   // the picture made while closed is there, the newest
 
         strip.Close();
         strip.Clear();
         Assert.False(strip.Closed);
+    }
+
+    /// <summary>A new chat's first picture shows the strip (2026-10-10): a fresh strip is open, and so is one a clear emptied after its × put it away.</summary>
+    [Fact]
+    public void Add_TheFirstPictureOfAChat_ShowsTheStrip()
+    {
+        var strip = new PictureStrip();
+        Put(strip, Tile(12, 12), 0);
+        Assert.False(strip.Closed);
+
+        strip.Close();
+        Put(strip, Tile(12, 12), 1);
+        Assert.True(strip.Closed);
+
+        strip.Clear();
+        Put(strip, Tile(12, 12), 2);
+        Assert.False(strip.Closed);
+        Assert.Equal(1, strip.Count);
     }
 
     /// <summary>The upper rule's 🎞️ (2026-10-03): a closed strip shown again with its pictures, nothing highlighted; an open or empty strip unchanged.</summary>
@@ -394,6 +423,37 @@ public class PictureStripTests : IDisposable
         Assert.Equal(" " + Blocks(12) + " " + PictureStrip.LeftBar + Blocks(12) + PictureStrip.RightBar, lines[0]);
     }
 
+    /// <summary>Where the ‹ and › landed (2026-10-10, their clicks): none while every tile fits, ‹ in the lead cell, › after the last tile's bar cell.</summary>
+    [Fact]
+    public void Render_SaysWhereItsArrowsLanded()
+    {
+        var options = RenderOptions.Create(_console, _console.Profile.Capabilities);
+        StripOf(2).Render(options, 39, highlight: true, out var arrows);
+        Assert.Equal((-1, -1), arrows);
+
+        var strip = StripOf(3);
+        var lines = strip.Render(options, 39, highlight: true, out arrows).Lines;
+        Assert.Equal((-1, 28), arrows);
+        Assert.Equal(PictureStrip.MoreRight, lines[PictureStrip.Rows / 2][^1].Text);
+
+        for (int i = 0; i < 3; i++)
+        {
+            strip.Step(+1);
+        }
+
+        strip.Render(options, 39, highlight: true, out arrows);
+        Assert.Equal((0, -1), arrows);   // the oldest highlighted: the window at the end
+
+        strip = StripOf(4);
+        for (int i = 0; i < 3; i++)
+        {
+            strip.Step(+1);
+        }
+
+        strip.Render(options, 39, highlight: true, out arrows);
+        Assert.Equal((0, 28), arrows);   // tiles off both sides
+    }
+
     [Fact]
     public void Render_SitsAShortTileOnTheBottom()
     {
@@ -455,6 +515,41 @@ public class PictureStripTests : IDisposable
         Assert.False(pane.TryHitStripClose(35, 92));
         Assert.False(pane.TryHitStripClose(37, 93));
         Assert.False(pane.TryHitStripButton(2, 92));
+    }
+
+    /// <summary>A click on the strip's ‹ or › (2026-10-10, the user's ask): their column on any of the strip's rows, −1 and +1; a tile, the rules and an arrow not drawn miss.</summary>
+    [Fact]
+    public void Pane_HitsTheStripsArrows_OnEveryRowOfTheirColumn()
+    {
+        _cursorTop = 100;
+        var strip = StripOf(3, 12, 12);
+        using var pane = Pane(strip);
+        pane.Show();
+
+        // The strip on 93–98: › at column 28, no ‹ (the window starts at the newest).
+        for (int y = 93; y <= 98; y++)
+        {
+            Assert.True(pane.TryHitStripArrow(28, y, out int step));
+            Assert.Equal(1, step);
+        }
+
+        Assert.False(pane.TryHitStripArrow(28, 92, out _));   // the strip's own rule
+        Assert.False(pane.TryHitStripArrow(28, 99, out _));   // the upper rule
+        Assert.False(pane.TryHitStripArrow(27, 95, out _));   // the bar cell
+        Assert.False(pane.TryHitStripArrow(0, 95, out _));    // no ‹ drawn
+        Assert.False(pane.TryHitStripArrow(5, 95, out _));    // a tile
+
+        for (int i = 0; i < 3; i++)
+        {
+            strip.Step(+1);
+        }
+
+        pane.RedrawStrip();
+        Assert.True(pane.TryHitStripArrow(0, 95, out int left));
+        Assert.Equal(-1, left);
+
+        pane.ShowOverlay(new Markup("a"), "ESC closes");
+        Assert.False(pane.TryHitStripArrow(0, 95, out _));   // under an overlay there is no strip
     }
 
     /// <summary>

@@ -309,12 +309,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     // The picture strip (later still on 2026-09-24): the provider, the rows the last draw gave it (0 or
     // PictureStrip.Rows — Draw is the only writer), the strip's version and highlight as drawn (the tick's
-    // comparison), and where its tiles landed (TryHitStrip).
+    // comparison), and where its tiles landed (TryHitStrip); the columns of its ‹ and › (2026-10-10, -1 = not drawn), for
+    // TryHitStripArrow.
     private Func<PictureStrip?> _pictureStrip = static () => null;
     private int _stripRows;
     private int _drawnStripVersion;
     private bool _drawnStripHighlight;
     private List<PictureSpan> _stripSpans = [];
+    private (int Left, int Right) _stripArrows = (-1, -1);
 
     // The button on the strip's rule (2026-09-27, the picture viewer): its label's provider, and the columns the last
     // draw put the label at (-1 = none drawn), for TryHitStripButton; the close × at the rule's right (2026-09-28), for
@@ -897,7 +899,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>
     /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on the close × at the right of the
     /// drawn strip's rule (2026-09-28), or the cell either side — three cells, as <see cref="TryHitClose"/> gives an
-    /// overlay's. The screen puts the strip away until the next picture (<see cref="UI.PictureStrip.Close"/>). False as
+    /// overlay's. The screen puts the strip away until the 🎞️ brings it back (<see cref="UI.PictureStrip.Close"/>). False as
     /// <see cref="TryHitStripButton"/> is.
     /// </summary>
     public bool TryHitStripClose(int x, int y) => HitStripRule(x, y, close: true);
@@ -1104,6 +1106,39 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
 
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on the drawn strip's
+    /// <see cref="UI.PictureStrip.MoreLeft"/> or <see cref="UI.PictureStrip.MoreRight"/> (2026-10-10, the user's ask: the arrows
+    /// step through the pictures): <paramref name="step"/> −1 for ‹, +1 for ›, what ← / → on an empty line pass. The glyph is on
+    /// the middle row; its column on any of the strip's rows counts, so the one cell is a target as tall as the strip. False as
+    /// <see cref="TryHitStrip"/> is, and where no arrow is drawn.
+    /// </summary>
+    public bool TryHitStripArrow(int x, int y, out int step)
+    {
+        step = 0;
+        if (!Enabled)
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            if (!_drawn || _drawnOverlay || _stripRows == 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+            {
+                return false;
+            }
+
+            int rule = top - CursorDepth - 1;
+            if (y < rule - _stripRows + StripRuleRows || y >= rule)
+            {
+                return false;
+            }
+
+            step = x == _stripArrows.Left ? -1 : x == _stripArrows.Right ? 1 : 0;
+            return step != 0 && x >= 0;
         }
     }
 
@@ -3964,15 +3999,17 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         bool stripHighlight = _text.Length == 0;
         if (strip is not null)
         {
-            var (lines, spans) = strip.Render(RenderOptions.Create(_inner, _inner.Profile.Capabilities), w - 1, stripHighlight);
+            var (lines, spans) = strip.Render(RenderOptions.Create(_inner, _inner.Profile.Capabilities), w - 1, stripHighlight, out var arrows);
             stripLines = lines;
             _stripSpans = spans;
+            _stripArrows = arrows;
             _drawnStripVersion = strip.Version;
         }
         else
         {
             stripRows = 0;
             _stripSpans = [];
+            _stripArrows = (-1, -1);
             _stripButtonColumn = -1;
             _stripCloseColumn = -1;
         }

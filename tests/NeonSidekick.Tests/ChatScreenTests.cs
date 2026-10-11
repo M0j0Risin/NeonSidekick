@@ -16661,30 +16661,70 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>
     /// The close × at the right of the strip's rule (2026-09-28, the user's ask): one click puts the strip away — the arrows
-    /// and the Enter are the line's again, nothing opens — until the next picture, which brings it back with both.
+    /// and the Enter are the line's again, nothing opens — and since 2026-10-10 (the user's ask) the next picture leaves it
+    /// away, gathered unseen: only the upper rule's 🎞️ brings it back, with both pictures.
     /// </summary>
     [Fact]
-    public async Task PictureStrip_TheCloseX_OneClick_HidesItUntilTheNextPicture()
+    public async Task PictureStrip_TheCloseX_OneClick_HidesItThroughTheNextPicture()
     {
         ComfyServer();
         PaneOf40Rows();
         var opened = new List<(string Path, string Editor)>();
         _openImage = (path, editor) => opened.Add((path, editor));
         var rule = ScreenPane.StripRule(null, _console.Profile.Width);
+        var upper = ScreenPane.UpperRule("", folds: false, _console.Profile.Width, NeonSidekick.Viewer.ViewerText.StripButton);
         StepsWhenIdle(
             Line("/imagine a cat --seed 5"),
             input => input.PushClick(rule.CloseColumn, 99 - ScreenPane.StripPaneRows),
             Key(Keys.Right), Key(Keys.Enter),
             Line("/imagine a cat --seed 6"),
             Key(Keys.Right), Key(Keys.Right), Key(Keys.Enter),
+            input => input.PushClick(upper.ReopenColumn, 99),
+            Key(Keys.Right), Key(Keys.Right), Key(Keys.Enter),
             Line("/exit"));
 
         string output = await RunAsync();
 
-        // Closed, the first → and Enter opened nothing; back with the next picture, → → reached the older one.
+        // Closed, neither → nor Enter opened anything, the second picture's too; back with the 🎞️, → → reached the older one.
         Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(opened).Path);
         Assert.Contains(NeonSidekick.Comfy.ComfyText.StripSelectedHint(2, 2), output);
         Assert.True(_settings.Current.ComfyPictureStrip);   // the setting untouched
+    }
+
+    /// <summary>
+    /// The strip's ‹ and › take clicks (2026-10-10, the user's ask): each is ← / → on the empty line, one picture a click, the
+    /// highlight stepping, the window following and an open viewer with it. At 30 columns four 4-cell tiles fit, so five
+    /// pictures put a › after the fourth (column 24) and the fifth highlighted puts a ‹ in the lead cell.
+    /// </summary>
+    [Fact]
+    public async Task PictureStrip_ItsArrows_OneClick_StepThePictures()
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        _console.Profile.Width = 30;
+        var followed = new List<string>();
+        _followViewer = followed.Add;
+        int more = 1 + 3 * (4 + ImageStrip.Gap) + 4 + 1;
+        StepsWhenIdle(
+            Line("/imagine a cat --seed 1"),
+            Line("/imagine a cat --seed 2"),
+            Line("/imagine a cat --seed 3"),
+            Line("/imagine a cat --seed 4"),
+            Line("/imagine a cat --seed 5"),
+            input =>
+            {
+                for (int i = 0; i < 5; i++)
+                {
+                    input.PushClick(more, 95);
+                }
+
+                input.PushClick(0, 95);
+            },
+            Line("/exit"));
+
+        await RunAsync();
+
+        Assert.Equal(new[] { 5, 4, 3, 2, 1, 2 }.Select(seed => ComfyPicture($"pony-{seed}.png")), followed);
     }
 
     /// <summary>

@@ -86,6 +86,22 @@ public class QuestionMenuTests : IDisposable
         AssertPadded("\n" + Titled("Questions │ Colour · Q2 · Submit ") + "\n" + QuestionMenu.SubmitCaption + "\n \n  Q1 Colour — blue\n  Q2 — cheese, olives\n▸ Submit\n", Rule(60) + "\n" + QuestionMenu.SubmitKeys);
     }
 
+    /// <summary>A long question is drawn whole over its options (2026-10-10, the user's ask: past three rows it was cut by the ellipsis).</summary>
+    [Fact]
+    public async Task ALongQuestion_IsShownWhole()
+    {
+        var (menu, _) = Menu();
+        Push(Keys.Escape);
+        // Forty six-cell words: eight to a 60-cell row, five rows.
+        string text = string.Join(' ', Enumerable.Range(1, 40).Select(i => "word" + i.ToString("D2", System.Globalization.CultureInfo.InvariantCulture)));
+
+        Assert.Null(await menu.AskAsync([new AskQuestion(text, null, false, ["red", "blue"])], CancellationToken.None));
+
+        Assert.Contains("\nword01 word02 word03 word04 word05 word06 word07 word08\n", Output);
+        Assert.Contains("\nword33 word34 word35 word36 word37 word38 word39 word40\n \n▸ ( ) red\n  ( ) blue\n  ( ) Other…\n", Output);
+        Assert.DoesNotContain("word32…", Output);
+    }
+
     [Fact]
     public async Task Single_SpaceMarksWithoutAdvancing_AndATabRemembersItsRow()
     {

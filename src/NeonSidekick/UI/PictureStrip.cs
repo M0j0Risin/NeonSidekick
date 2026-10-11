@@ -78,9 +78,11 @@ public sealed class PictureStrip
     }
 
     /// <summary>
-    /// Whether the × on the strip's rule put it away (2026-09-28, the user's ask: "the X to close is just until the next
-    /// generation"): the screen shows no strip while it is, and the next <see cref="Add"/> — or a <see cref="Clear"/> — opens
-    /// it again; so does <see cref="Open"/>, the 🎞️ on the upper rule (2026-10-03). Not the <c>ComfyUI picture strip</c>
+    /// Whether the × on the strip's rule put it away (2026-09-28): the screen shows no strip while it is, and only
+    /// <see cref="Open"/>, the 🎞️ on the upper rule (2026-10-03), or a <see cref="Clear"/> (a new chat, whose first picture
+    /// shows it) brings it back. Until 2026-10-10 the next <see cref="Add"/> opened it too ("the X to close is just until the
+    /// next generation"); since then a closed strip stays closed through later pictures and goes on gathering them, so it is
+    /// current when opened (the user's ask: it popped up again at every generation). Not the <c>ComfyUI picture strip</c>
     /// setting, which hides it for good; the pictures are kept either way.
     /// </summary>
     public bool Closed
@@ -88,7 +90,7 @@ public sealed class PictureStrip
         get { lock (_gate) { return _closed; } }
     }
 
-    /// <summary>The strip put away until the next picture (<see cref="Closed"/>), the highlight let go. Nothing with no pictures or already closed.</summary>
+    /// <summary>The strip put away until the 🎞️ or a clear (<see cref="Closed"/>), the highlight let go. Nothing with no pictures or already closed.</summary>
     public void Close()
     {
         lock (_gate)
@@ -127,10 +129,10 @@ public sealed class PictureStrip
     /// goes by <paramref name="path"/> (2026-10-04, the user's report: with <c>Botchat image async</c> a bot's picture reached the
     /// strip only when the chat drew it, after pictures made later had landed left of it — the viewer orders by the files, so
     /// the strip now does too, <c>ViewerState.Reset</c>'s key). The usual newest picture lands at the left as ever; past
-    /// <see cref="MaxPictures"/> the oldest goes, the new one too if it is that. The newest picture lets the highlight go, takes
-    /// the window back to the start and opens a closed strip, as ever. A late one placed further right (code review, 2026-10-04:
-    /// it reset all three for a tile drawn off-screen) keeps the highlight on its picture and the window on its tiles, and still
-    /// opens a closed strip — the × is "just until the next generation", and it is one. A picture a full strip does not keep
+    /// <see cref="MaxPictures"/> the oldest goes, the new one too if it is that. The newest picture lets the highlight go and takes
+    /// the window back to the start, as ever. A late one placed further right (code review, 2026-10-04: it reset both for a tile
+    /// drawn off-screen) keeps the highlight on its picture and the window on its tiles. Neither opens a closed strip since
+    /// 2026-10-10 (<see cref="Closed"/>): it is gathered, and shown when the 🎞️ opens it. A picture a full strip does not keep
     /// changes nothing at all.
     ///
     /// <para>A picture whose file is not found (<paramref name="createdUtc"/> null: a resumed session's pictures after a <c>/cd</c>,
@@ -190,7 +192,6 @@ public sealed class PictureStrip
             }
         }
 
-        _closed = false;
         _version++;
     }
 
@@ -313,15 +314,20 @@ public sealed class PictureStrip
         return used <= cells;
     }
 
+    /// <summary>The strip at <paramref name="cells"/>, without where its arrows landed (<see cref="Render(RenderOptions, int, bool, out ValueTuple{int, int})"/>).</summary>
+    public (List<SegmentLine> Lines, List<PictureSpan> Spans) Render(RenderOptions options, int cells, bool highlight) =>
+        Render(options, cells, highlight, out _);
+
     /// <summary>
     /// The strip at <paramref name="cells"/>: exactly <see cref="Rows"/> lines — the window's tiles left to right, a
     /// shorter one sat on the strip's bottom, <see cref="ImageStrip.Gap"/> cells between — and where each tile landed
     /// (<see cref="PictureSpan"/>, the same on every line). With <paramref name="highlight"/> (the draft empty) the
     /// highlighted tile gets <see cref="LeftBar"/> and <see cref="RightBar"/> in the cells either side; the edge cells
-    /// say <see cref="MoreLeft"/> / <see cref="MoreRight"/> on the middle row when tiles are off that side. Remembers the
-    /// window for the next render.
+    /// say <see cref="MoreLeft"/> / <see cref="MoreRight"/> on the middle row when tiles are off that side, and
+    /// <paramref name="arrows"/> gives their columns (−1 for one not drawn): click targets since 2026-10-10 (the user's ask,
+    /// a click on one is ← / → on an empty line, <see cref="Step"/>). Remembers the window for the next render.
     /// </summary>
-    public (List<SegmentLine> Lines, List<PictureSpan> Spans) Render(RenderOptions options, int cells, bool highlight)
+    public (List<SegmentLine> Lines, List<PictureSpan> Spans) Render(RenderOptions options, int cells, bool highlight, out (int Left, int Right) arrows)
     {
         ArgumentNullException.ThrowIfNull(options);
         List<(ImageThumbnail Tile, int Id, DateTime CreatedUtc, string Path)> shown;
@@ -346,6 +352,9 @@ public sealed class PictureStrip
             spans.Add(new PictureSpan(col, shown[t].Tile.Width, shown[t].Id));
             col += shown[t].Tile.Width + ImageStrip.Gap;
         }
+
+        // ‹ in the lead cell; › after the last tile's bar cell.
+        arrows = (moreLeft ? 0 : -1, moreRight && spans.Count > 0 ? spans[^1].Col + spans[^1].Width + 1 : -1);
 
         var lines = new List<SegmentLine>(Rows);
         int middle = Rows / 2;

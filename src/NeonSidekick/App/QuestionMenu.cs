@@ -16,7 +16,9 @@ namespace NeonSidekick.App;
 /// for a typed answer — on a single it replaces the mark, on a multi it stands beside the checked
 /// ones. The Submit tab lists every question with its answer (Enter on one goes back to it) and the
 /// <see cref="SubmitRow"/>; Submit with a question unanswered says so on the status line and
-/// submits nothing. The pane's mechanics are <see cref="MenuPane"/>'s (<see cref="MenuPage.Caption"/>,
+/// submits nothing. The question is shown whole (2026-10-10, the user's ask: a long one was cut by the ellipsis), its
+/// caption growing past three rows as the pane's room allows (<see cref="MenuPage.CaptionGrows"/>).
+/// The pane's mechanics are <see cref="MenuPane"/>'s (<see cref="MenuPage.Caption"/>,
 /// <see cref="MenuPage.SpaceToggles"/>, <see cref="MenuPage.TabCursors"/>); this class keeps the
 /// answers and rebuilds the tabs' rows on every showing. Without the pane there is nothing to draw
 /// and <see cref="AskAsync"/> answers null (the tool is not offered then).
@@ -253,6 +255,6 @@ internal sealed class QuestionMenu
 
         summary.Add(SubmitRow);
         tabs.Add(new MenuTab(SubmitTitle, summary) { Caption = SubmitCaption, Hint = SubmitKeys });
-        return MenuPage.Tabbed(Title, tabs, tab, SingleKeys) with { SpaceToggles = true, TabCursors = cursors };
+        return MenuPage.Tabbed(Title, tabs, tab, SingleKeys) with { SpaceToggles = true, TabCursors = cursors, CaptionGrows = true };
     }
 }

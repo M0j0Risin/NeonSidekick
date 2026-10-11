@@ -116,9 +116,17 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     /// <summary>
     /// Plain text drawn under the title or the strip, above the status line (a question over its
     /// answers): escaped by the pane, word-wrapped to at most <see cref="MenuPane.CaptionMaxRows"/>
-    /// rows with the last cut by an ellipsis. Null for none (every page but the question pane).
+    /// rows with the last cut by an ellipsis, or the more <see cref="CaptionGrows"/> allows. Null for none (every page but the question pane).
     /// </summary>
     public string? Caption { get; init; }
+
+    /// <summary>
+    /// The <see cref="Caption"/> may take more than <see cref="MenuPane.CaptionMaxRows"/> rows (2026-10-10, the user's ask: a long
+    /// <c>ask_user</c> question was cut by the ellipsis and could not be read whole): as many as the menu's room leaves over the
+    /// strip, the status row, a footer and <see cref="MenuPane.CaptionKeepRows"/> list rows (<see cref="MenuPane.CaptionRoom"/>);
+    /// the list scrolls under it as ever. False (every page but the question pane): three rows.
+    /// </summary>
+    public bool CaptionGrows { get; init; }
 
     /// <summary>
     /// Space returns the cursor's row as a <see cref="MenuPick"/> with <see cref="MenuPick.Toggle"/>
@@ -435,6 +443,17 @@ public sealed class MenuPane : INoticeSink
 
     /// <summary>The most rows a page's <see cref="MenuPage.Caption"/> takes; the last is cut with an ellipsis. Pinned.</summary>
     public const int CaptionMaxRows = 3;
+
+    /// <summary>The list rows a <see cref="MenuPage.CaptionGrows"/> caption leaves under it (2026-10-10): three rows and the more row. Pinned.</summary>
+    public const int CaptionKeepRows = 4;
+
+    /// <summary>
+    /// The most rows a <see cref="MenuPage.CaptionGrows"/> caption takes (2026-10-10): the menu's <paramref name="contentRows"/> less the
+    /// strip's, the status's and the footer's rows and the list's, up to <see cref="CaptionKeepRows"/> of them; never fewer than
+    /// <see cref="CaptionMaxRows"/>. Pure.
+    /// </summary>
+    public static int CaptionRoom(int contentRows, int stripRows, int statusRows, int footerRows, int listRows) =>
+        Math.Max(CaptionMaxRows, contentRows - stripRows - statusRows - footerRows - Math.Min(Math.Max(0, listRows), CaptionKeepRows));
 
     /// <summary>The window height assumed when the console reports none (the mention list sizes by it too).</summary>
     public const int DefaultHeight = 24;
@@ -1185,9 +1204,10 @@ public sealed class MenuPane : INoticeSink
     /// The rows under the strip of <paramref name="page"/>'s tallest tab laid out for <paramref name="width"/> cells: its
     /// caption's rows (<see cref="CaptionRows"/>) and its list rows; 0 on a one-list page. What every tab of the page is
     /// padded to (2026-10-01, the user's ask), so the pane keeps its height as one tabs through it. A tab with sub-tabs
-    /// (2026-10-10) counts its second strip's rows and its tallest sub-tab's, so arriving on it moves nothing either. Pure.
+    /// (2026-10-10) counts its second strip's rows and its tallest sub-tab's, so arriving on it moves nothing either. The captions
+    /// are counted to <paramref name="captionMaxRows"/>, what <see cref="MenuPage.CaptionGrows"/> lets them take (later on 2026-10-10). Pure.
     /// </summary>
-    public static int TabBodyRows(MenuPage page, int width)
+    public static int TabBodyRows(MenuPage page, int width, int captionMaxRows = CaptionMaxRows)
     {
         ArgumentNullException.ThrowIfNull(page);
         if (page.Tabs is not { } tabs)
@@ -1211,7 +1231,7 @@ public sealed class MenuPane : INoticeSink
         return tallest;
 
         // A grid tab (2026-10-10) is as tall as its lines.
-        int Body(MenuTab tab) => (tab.Caption is { } text ? CaptionRows(text, width, CaptionMaxRows).Count : 0)
+        int Body(MenuTab tab) => (tab.Caption is { } text ? CaptionRows(text, width, captionMaxRows).Count : 0)
             + (page.Grid is { } grid ? MenuGrid.Lay(tab.Rows.Count, tab.Headings, r => tab.Rows[r].Length == 0, grid.Columns(width)).Count : tab.Rows.Count);
     }
 
@@ -1227,14 +1247,17 @@ public sealed class MenuPane : INoticeSink
         var page = _page!;
         _sideWidth = page.Side is not null && page.Rows.Count > 0 ? SideWidth(Width) : 0;
         _listWidth = _sideWidth > 0 ? Width - 1 - _sideWidth - SideGap : Width;
-        IReadOnlyList<string> caption = page.Caption is { } captionText ? CaptionRows(captionText, _listWidth, CaptionMaxRows) : [];
-        _captionRows = caption.Count;
         var top = TopRows(page, Width);
         _stripRows = top.Count;
         _subRows = SubStripRows(page, Width).Count;
-        int header = Header;
         int footer = page.Footer is null ? 0 : FooterRuleRows + FooterRows;
-        int capacity = _pane.MenuContentRows(Height, _inputRows) - header - footer;
+        int content = _pane.MenuContentRows(Height, _inputRows);
+        // A question's caption (2026-10-10, CaptionGrows) takes what the room leaves over a few list rows, not three.
+        int captionMax = page.CaptionGrows ? CaptionRoom(content, _stripRows, Math.Max(1, _status.Count), footer, page.Rows.Count) : CaptionMaxRows;
+        IReadOnlyList<string> caption = page.Caption is { } captionText ? CaptionRows(captionText, _listWidth, captionMax) : [];
+        _captionRows = caption.Count;
+        int header = Header;
+        int capacity = content - header - footer;
         bool more;
         if (page.Grid is { } grid)
         {
@@ -1268,7 +1291,7 @@ public sealed class MenuPane : INoticeSink
             more = _shown < page.Rows.Count;
         }
         // The second strip (2026-10-10) is drawn in the header but counts in the tab's body height: the padding is the less by it.
-        int pad = Math.Min(TabBodyRows(page, Width) - _subRows, _captionRows + Math.Max(0, capacity)) - (_captionRows + _shown + (more ? 1 : 0));
+        int pad = Math.Min(TabBodyRows(page, Width, captionMax) - _subRows, _captionRows + Math.Max(0, capacity)) - (_captionRows + _shown + (more ? 1 : 0));
         if (_sideWidth > 0)
         {
             // The side column's rows under the title, at least SideMinRows within the cap: a short list is padded to them.

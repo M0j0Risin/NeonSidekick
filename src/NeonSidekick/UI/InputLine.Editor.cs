@@ -1018,10 +1018,17 @@ public sealed partial class InputLine
             }
             else if (pane.TryHitStripClose(click.X, click.Y))
             {
-                // The strip's close × (2026-09-28): one click puts the strip away until the next picture.
+                // The strip's close × (2026-09-28): one click puts the strip away until the 🎞️ brings it back.
                 _anchor = -1;
                 hintClicks.Reset();
                 _line.CloseStrip?.Invoke();
+            }
+            else if (pane.TryHitStripArrow(click.X, click.Y, out int stripStep))
+            {
+                // The strip's ‹ / › (2026-10-10): one click steps the highlight, as ← / → on an empty line do.
+                _anchor = -1;
+                hintClicks.Reset();
+                _line.StepStrip?.Invoke(stripStep);
             }
             else if (pane.TryHitStripReopen(click.X, click.Y))
             {

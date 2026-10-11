@@ -1268,7 +1268,7 @@ internal sealed partial class ChatScreen
             MenuHeight = () => _effective().MenuMaxHeight,
             // The picture strip over the upper rule (later still on 2026-09-24): while ComfyUI picture strip is on;
             // read per draw and on the tick, so a flip shows at once. Not while its × has put it away (2026-09-28), until the
-            // next picture or the 🎞️ on the upper rule.
+            // 🎞️ on the upper rule or a new chat (later pictures no longer open it, 2026-10-10).
             PictureStrip = () => _effective().ComfyPictureStrip && !_pictureStrip.Closed ? _pictureStrip : null,
             // The picture viewer's button on the strip's rule (2026-09-27), while there is a viewer to open.
             StripButton = () => _openViewer is null ? null : ViewerText.StripButton,
@@ -1299,6 +1299,7 @@ internal sealed partial class ChatScreen
         _input.SelectPicture = SelectStripPicture;
         _input.OpenViewer = () => OpenViewer();
         _input.CloseStrip = ClosePictureStrip;
+        _input.StepStrip = step => StepPictureStrip(step);
         _input.ReopenStrip = ReopenPictureStrip;
         _input.ToolbarNote = tool => ShowToolbarNote(tool.Glyph);
         _input.PictureFile = DroppedPictureOf;
@@ -2580,9 +2581,17 @@ internal sealed partial class ChatScreen
 
             if (_pane.TryHitStripClose(click.X, click.Y))
             {
-                // The strip's close × (2026-09-28): one click puts the strip away until the next picture, under a reply as at idle.
+                // The strip's close × (2026-09-28): one click puts the strip away until the 🎞️ brings it back, under a reply as at idle.
                 _queuedClicks.Reset();
                 ClosePictureStrip();
+                return null;
+            }
+
+            if (_pane.TryHitStripArrow(click.X, click.Y, out int stripStep))
+            {
+                // The strip's ‹ / › (2026-10-10): one click steps the highlight, as ← / → do, under a reply as at idle.
+                _queuedClicks.Reset();
+                StepPictureStrip(stripStep);
                 return null;
             }
 
@@ -15172,8 +15181,9 @@ internal sealed partial class ChatScreen
         _pane.Enabled && _effective().ComfyPictureStrip && !_pictureStrip.Closed && _pictureStrip.Count > 0 && _pane.StripRows > 0;
 
     /// <summary>
-    /// A click on the × at the right of the strip's rule (2026-09-28, the user's ask): the strip put away until the next
-    /// picture or the 🎞️ the upper rule carries meanwhile (<see cref="PictureStrip.Close"/>) and the pane at once.
+    /// A click on the × at the right of the strip's rule (2026-09-28, the user's ask): the strip put away until the 🎞️ the
+    /// upper rule carries meanwhile or a new chat (<see cref="PictureStrip.Close"/>; later pictures are gathered into it
+    /// unseen since 2026-10-10) and the pane at once.
     /// <c>ComfyUI picture strip</c> is not touched — it is the way to keep the strip closed for good. Any thread.
     /// </summary>
     private void ClosePictureStrip()

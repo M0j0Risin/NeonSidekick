@@ -1708,6 +1708,53 @@ public class MenuPaneTests : IDisposable
         Assert.Equal(3, MenuPane.CaptionMaxRows);
     }
 
+    /// <summary>A growing caption's room (2026-10-10): the content less the strip, the status, a footer and up to four list rows; never under three.</summary>
+    [Fact]
+    public void CaptionRoom_LeavesTheListItsRows_AndNeverFallsUnderThree()
+    {
+        Assert.Equal(4, MenuPane.CaptionKeepRows);
+        Assert.Equal(16, MenuPane.CaptionRoom(20, 1, 1, 0, 2));    // a short list keeps only its own rows
+        Assert.Equal(14, MenuPane.CaptionRoom(20, 1, 1, 0, 10));   // a long one four, the rest scrolling
+        Assert.Equal(8, MenuPane.CaptionRoom(20, 1, 1, 6, 4));     // a footer's rows too
+        Assert.Equal(MenuPane.CaptionMaxRows, MenuPane.CaptionRoom(5, 1, 1, 0, 4));
+    }
+
+    /// <summary>
+    /// A long question on a <see cref="MenuPage.CaptionGrows"/> page (2026-10-10, the user's ask: it was cut by the ellipsis) is
+    /// drawn whole over its options; the same caption on any other page still stops at three rows.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Caption_Grows_OnlyWhereThePageSays(bool grows)
+    {
+        _console.Profile.Height = 24;
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Enter);
+        // Thirty six-cell words: five to a 40-cell row, six rows.
+        string question = string.Join(' ', Enumerable.Range(1, 30).Select(i => "word" + i.ToString("D2", System.Globalization.CultureInfo.InvariantCulture)));
+        var page = MenuPage.Tabbed("Questions", [new MenuTab("One", ["( ) red", "( ) blue"]) { Caption = question }, new MenuTab("Submit", ["Submit"])], 0, "h")
+            with { CaptionGrows = grows };
+
+        Assert.Equal(new MenuPick(0, 0), await menu.PickAsync(page, 0, CancellationToken.None));
+
+        if (grows)
+        {
+            Assert.Contains("\nword01 word02 word03 word04 word05\n", Output);
+            Assert.Contains("\nword26 word27 word28 word29 word30\n \n▸ ( ) red\n  ( ) blue\n", Output);
+            Assert.DoesNotContain("…", Output);
+        }
+        else
+        {
+            Assert.Matches(@"\nword11 word12 word13 word14 [^\n]*…\n \n▸ \( \) red\n", Output);
+            Assert.DoesNotContain("word30", Output);
+        }
+
+        menu.Close();
+    }
+
     [Fact]
     public void Markups_ArePinned()
     {
