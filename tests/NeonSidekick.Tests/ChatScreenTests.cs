@@ -78,7 +78,7 @@ public partial class ChatScreenTests : IDisposable
     private Func<Uri, string, NeonSidekick.HomeAssistant.HaClient>? _haClient;
 
     /// <summary>The Docker engine (2026-10-02): an unmapped stub unless a test maps one, so no test reaches the real pipe.</summary>
-    private Func<string, NeonSidekick.Docker.DockerClient> _dockerClient = pipe => new NeonSidekick.Docker.DockerClient(pipe, new HttpClient(new StubHttpMessageHandler()));
+    private Func<string, NeonSidekick.Docker.DockerClient> _dockerClient = pipe => new NeonSidekick.Docker.DockerClient(pipe, new HttpClient(new StubHttpMessageHandler()), transport: NeonSidekick.Docker.DockerTransport.Pipe);   // the stub speaks the pipe's words on every system (2026-10-11)
     private Action<string>? _openViewer;   // the picture viewer (2026-09-27): null = none, as off Windows
     private Action<string>? _viewPicture;   // a double-clicked picture in that viewer (later on 2026-09-27): null = none, the registered app
     private Action<string>? _followViewer;   // the strip's arrows moving an open viewer (2026-09-28): null = none
@@ -5102,8 +5102,8 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>
     /// On a Mac the groups that need Windows say so on <c>/tools</c> (2026-10-06, the tidy-up before the first Mac release): UNC with
-    /// a share named and offered and Docker, both switched on, each heading <c>(off: it needs Windows)</c>; printing, which a Mac does
-    /// since 2026-10-08 (CUPS), switched on too and offered, its heading with no such reason.
+    /// a share named and offered, switched on, heading <c>(off: it needs Windows)</c>; printing, which a Mac does since 2026-10-08
+    /// (CUPS), and Docker, over the engine's socket since 2026-10-11, switched on too and offered, their headings with no such reason.
     /// </summary>
     [UnixFact]
     public async Task Tools_OnMacOS_TheWindowsOnlyGroups_SayTheyNeedWindows()
@@ -5122,7 +5122,8 @@ public partial class ChatScreenTests : IDisposable
 
         string reason = "(off: " + ToolsText.NeedsWindowsReason + ")\n";
         Assert.Matches(@"·   UNC \(\d+\) " + System.Text.RegularExpressions.Regex.Escape(reason), output);
-        Assert.Matches(@"·   Docker \(\d+\) " + System.Text.RegularExpressions.Regex.Escape(reason), output);
+        Assert.DoesNotMatch(@"·   Docker \(\d+\) " + System.Text.RegularExpressions.Regex.Escape(reason), output);   // a Mac reaches its engine's socket since 2026-10-11
+        Assert.Matches(@"Docker \(6\)", output);
         Assert.DoesNotMatch(@"·   Print \(\d+\) " + System.Text.RegularExpressions.Regex.Escape(reason), output);
         Assert.Matches(@"Print \(2\)", output);
         Assert.Empty(_chat.Requests);
@@ -13619,7 +13620,7 @@ public partial class ChatScreenTests : IDisposable
             .Map(NeonSidekick.Docker.DockerClient.Host + "/version", System.Net.HttpStatusCode.OK, Fixture("version.json"))
             .Map(NeonSidekick.Docker.DockerClient.Host + "/v1.47/containers/json", System.Net.HttpStatusCode.OK, Fixture("containers.json"))
             .Map(NeonSidekick.Docker.DockerClient.Host + "/v1.47/containers/c9e0889008d03fe42ce2ba7be159d07f2392a1c5abe9322dd7acb9bce852b7f3/stop", System.Net.HttpStatusCode.NoContent, "");
-        _dockerClient = pipe => new NeonSidekick.Docker.DockerClient(pipe, new HttpClient(stub));
+        _dockerClient = pipe => new NeonSidekick.Docker.DockerClient(pipe, new HttpClient(stub), transport: NeonSidekick.Docker.DockerTransport.Pipe);
         return stub;
     }
 
@@ -13650,7 +13651,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary><c>/docker</c> typed and under a reply (2026-10-02, /ha's way): its lines land in the reply, which runs on.</summary>
-    [WindowsFact]
+    [Fact]   // every system since 2026-10-11, when /docker came to a Mac
     public async Task MidTurn_Docker_RunsAtOnce_ItsLinesInTheReply()
     {
         DockerEngine();

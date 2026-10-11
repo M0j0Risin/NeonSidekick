@@ -197,7 +197,7 @@ public sealed class EnvironmentOverrides
     /// <summary>The Home Assistant long-lived access token for this launch, plain (2026-09-28); never logged (<see cref="Describe"/> shows <see cref="SecretSet"/>).</summary>
     public string? HomeAssistantToken => Read(HomeAssistantTokenVariable);
 
-    /// <summary>The Docker engine's pipe for this launch, or null (2026-10-02, <c>Docker engine pipe</c>): any form <see cref="Docker.DockerPipe.Normalize"/> reads, so a CI box's <c>npipe:////./pipe/…</c> from <c>DOCKER_HOST</c> can be passed as it is.</summary>
+    /// <summary>The Docker engine's pipe for this launch, or null (2026-10-02, <c>Docker engine pipe</c>): any form <see cref="Docker.DockerPipe.Normalize"/> reads, so a CI box's <c>npipe:////./pipe/…</c> from <c>DOCKER_HOST</c> can be passed as it is. On a Mac (2026-10-11) a socket's path or <c>unix://</c> URL; <c>DOCKER_HOST</c> itself is read there too, through <see cref="System"/>, when this and the setting name none (<see cref="Docker.DockerSocket"/>).</summary>
     public string? DockerPipe => Read(DockerPipeVariable);
 
     /// <summary>

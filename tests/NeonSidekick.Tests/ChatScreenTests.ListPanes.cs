@@ -66,7 +66,7 @@ public partial class ChatScreenTests
         OnThePaneOnly(output, "• pony-txt2img");
     }
 
-    [WindowsFact]
+    [Fact]   // every system since 2026-10-11, when /docker came to a Mac
     public async Task DockerLogs_AreOnThePane_ButAFailureIsItsErrorLine()
     {
         var engine = DockerEngine();

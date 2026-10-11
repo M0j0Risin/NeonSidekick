@@ -34,7 +34,7 @@ public sealed class DockerServerTests : IDisposable
         _engine.Add("paused_c", "paused", "vllm/vllm-openai:latest", 8001);
         _engine.Add("mysql_dev", "running", "mysql:8.4", 3306);
         _stub.Map(Host, (request, _) => Task.FromResult(_engine.Answer(request)));
-        var docker = new DockerSession(() => _settings, pipe => new DockerClient(pipe, new HttpClient(_stub)), _time);
+        var docker = new DockerSession(() => _settings, pipe => new DockerClient(pipe, new HttpClient(_stub), transport: DockerTransport.Pipe), _time);
         _host = new DockerServerHost(docker, Probe, _time, (span, _) =>
         {
             _waits.Add(span);

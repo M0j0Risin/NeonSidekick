@@ -22,10 +22,11 @@ public sealed record DockerLogs(IReadOnlyList<string> Lines, bool Capped, string
 
 /// <summary>
 /// The Docker Engine API over the engine's named pipe (2026-10-02, the user's ask: control Docker Desktop from the app,
-/// <c>docker.exe</c> never started). <see cref="HomeAssistant.HaClient"/>'s shape: the transport is injectable (tests pass
+/// <c>docker.exe</c> never started), or on a Mac its Unix socket (2026-10-11, <see cref="DockerSocket"/>). <see cref="HomeAssistant.HaClient"/>'s shape: the transport is injectable (tests pass
 /// one over a stub handler; an owned one is disposed here), each call has its own linked-CTS ceiling, and nothing throws
 /// but the caller's own cancellation — a failure is a <see cref="DockerReply"/> with a <see cref="DockerText"/> sentence.
-/// The owned transport is a <see cref="SocketsHttpHandler"/> whose connect opens the pipe (<see cref="DockerPipe.ConnectAsync"/>),
+/// The owned transport is a <see cref="SocketsHttpHandler"/> whose connect opens the pipe (<see cref="DockerPipe.ConnectAsync"/>;
+/// the socket on a Mac, <see cref="DockerSocket.ConnectAsync"/>; anywhere else a refusal, the one gate every path passes),
 /// so the engine is reached as <c>http://docker/…</c> and nothing goes near the network or <see cref="Web.LanPolicy"/>.
 ///
 /// <para>The API version is agreed once: <c>GET /version</c> (unversioned) gives the engine's range, and every later path is
@@ -41,7 +42,7 @@ public sealed class DockerClient : IDisposable
     /// <summary>The oldest API version taken: one-shot stats, the multiplexed log content type and the volume prune's <c>all</c> filter are 1.41–1.42's.</summary>
     public const string MinimumApiVersion = "1.41";
 
-    /// <summary>The host every request names; the connect callback ignores it and opens the pipe.</summary>
+    /// <summary>The host every request names; the connect callback ignores it and opens the pipe (or the socket).</summary>
     public const string Host = "http://docker";
 
     /// <summary>The most bytes of a pull's progress read (its last lines say what it came to).</summary>
@@ -51,13 +52,22 @@ public sealed class DockerClient : IDisposable
 
     private readonly HttpClient _http;
     private readonly HttpClient? _owned;
+    private readonly Func<string, string?> _environment;
     private string? _prefix;
+    private string? _socket;
 
-    /// <param name="pipe">The engine's pipe, any form <see cref="DockerPipe.Normalize"/> reads.</param>
-    /// <param name="httpClient">Optional transport, the caller's to dispose. Null creates and owns one over the pipe.</param>
-    public DockerClient(string pipe, HttpClient? httpClient = null)
+    /// <param name="pipe">
+    /// The engine's address: on Windows the pipe, any form <see cref="DockerPipe.Normalize"/> reads; on a Mac (2026-10-11) the
+    /// socket, any form <see cref="DockerSocket.Normalize"/> reads (blank or a pipe name: find it).
+    /// </param>
+    /// <param name="httpClient">Optional transport, the caller's to dispose. Null creates and owns one over the pipe or socket.</param>
+    /// <param name="environment">The variables a Mac's socket look reads (<c>DOCKER_HOST</c>, the CLI's context); null sees none.</param>
+    /// <param name="transport">The transport whose words the sentences use; null = this system's (<see cref="DockerSocket.Here"/>). Tests pass either.</param>
+    public DockerClient(string pipe, HttpClient? httpClient = null, Func<string, string?>? environment = null, DockerTransport? transport = null)
     {
-        Pipe = DockerPipe.Normalize(pipe);
+        Transport = transport ?? DockerSocket.Here;
+        Pipe = Transport == DockerTransport.Socket ? DockerSocket.Normalize(pipe) : DockerPipe.Normalize(pipe);
+        _environment = environment ?? (_ => null);
         if (httpClient is not null)
         {
             _http = httpClient;
@@ -67,7 +77,12 @@ public sealed class DockerClient : IDisposable
             string name = Pipe;
             var handler = new SocketsHttpHandler
             {
-                ConnectCallback = (_, cancellationToken) => DockerPipe.ConnectAsync(name, cancellationToken),
+                ConnectCallback = Transport switch
+                {
+                    DockerTransport.Pipe => (_, cancellationToken) => DockerPipe.ConnectAsync(name, cancellationToken),
+                    DockerTransport.Socket => (_, cancellationToken) => DockerSocket.ConnectAsync(LocateSocket(), cancellationToken),
+                    _ => (_, _) => throw new DockerTransportException(DockerText.NotHere),
+                },
                 UseProxy = false,
                 AllowAutoRedirect = false,
                 PooledConnectionIdleTimeout = TimeSpan.FromSeconds(30),
@@ -78,11 +93,48 @@ public sealed class DockerClient : IDisposable
         }
     }
 
-    /// <summary>The pipe's bare name.</summary>
+    /// <summary>The pipe's bare name; on a Mac the socket's path as set, <c>""</c> for "find it".</summary>
     public string Pipe { get; }
 
-    /// <summary>The pipe as Windows writes it, for the sentences.</summary>
-    public string Display => DockerPipe.Display(Pipe);
+    /// <summary>The transport: the pipe, a Mac's socket, or none.</summary>
+    public DockerTransport Transport { get; }
+
+    /// <summary>
+    /// The engine's address for the sentences: the pipe as Windows writes it; on a Mac the socket last connected to (or looked
+    /// up now), <c>~</c> for the home, or <c>no socket found</c>.
+    /// </summary>
+    public string Display => Transport == DockerTransport.Socket ? SocketDisplay() : DockerPipe.Display(Pipe);
+
+    /// <summary>What <see cref="Display"/> says on a Mac when no socket is found anywhere.</summary>
+    public const string NoSocketWord = "no socket found";
+
+    private string SocketDisplay() =>
+        (Volatile.Read(ref _socket) ?? Locate().Socket?.Path) is { } path ? DockerSocket.Display(path, DockerSocket.Home) : NoSocketWord;
+
+    /// <summary>The look on a Mac, against this machine.</summary>
+    private DockerSocketLookup Locate() => DockerSocket.Locate(Pipe, _environment);
+
+    /// <summary>
+    /// The socket a new connection opens (2026-10-11): looked up at every connect, not once, so a Desktop restart or a switch to
+    /// OrbStack is picked up without restarting the app (connections pool for 30 s, so it is a few <c>stat</c>s now and then).
+    /// None found is a <see cref="DockerTransportException"/> naming every place looked at.
+    /// </summary>
+    private string LocateSocket()
+    {
+        var lookup = Locate();
+        if (lookup.Socket is not { } found)
+        {
+            throw new DockerTransportException(DockerText.NoSocket(lookup.Looked));
+        }
+
+        if (!string.Equals(Volatile.Read(ref _socket), found.Path, StringComparison.Ordinal))
+        {
+            DiagnosticLog.Debug(Category, $"The engine's socket is {DockerSocket.Display(found.Path, DockerSocket.Home)} ({found.Source}).");
+        }
+
+        Volatile.Write(ref _socket, found.Path);
+        return found.Path;
+    }
 
     /// <summary>The agreed path prefix (<c>/v1.47</c>) once a call has agreed it; null before.</summary>
     public string? Prefix => Volatile.Read(ref _prefix);
@@ -299,16 +351,37 @@ public sealed class DockerClient : IDisposable
     /// <summary>A non-2xx answer as a sentence: the engine's own message, a 404 named as such.</summary>
     private static string Refusal(int status, string path, string body) => DockerText.HttpError(status, path, DockerJson.ErrorMessage(body));
 
-    private static bool IsTransport(Exception ex) => ex is HttpRequestException or IOException or TimeoutException or UnauthorizedAccessException;
+    private static bool IsTransport(Exception ex) => ex is HttpRequestException or IOException or TimeoutException or UnauthorizedAccessException or System.Net.Sockets.SocketException;
 
     /// <summary>
     /// A transport failure as a sentence: no pipe (a connect that timed out, a file not found) is Docker Desktop not
-    /// running; a refused open is the account's rights; anything else is said as it came.
+    /// running; a refused open is the account's rights; anything else is said as it came. On a Mac (2026-10-11) the socket's
+    /// words: a sentence the connect already made (<see cref="DockerTransportException"/>: none found, too long), nothing there
+    /// (<c>AddressNotAvailable</c>, <c>ConnectionRefused</c>, a timeout) the engine not running, <c>AccessDenied</c> the file's rights.
     /// </summary>
     private string Explain(Exception ex)
     {
         for (Exception? e = ex; e is not null; e = e.InnerException)
         {
+            if (e is DockerTransportException made)
+            {
+                return made.Message;
+            }
+
+            if (Transport == DockerTransport.Socket)
+            {
+                switch (e)
+                {
+                    case TimeoutException:
+                    case System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.AddressNotAvailable or System.Net.Sockets.SocketError.ConnectionRefused }:
+                        return DockerText.EngineDownHere(Display);
+                    case System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.AccessDenied }:
+                        return DockerText.SocketDenied(Display);
+                }
+
+                continue;
+            }
+
             switch (e)
             {
                 case TimeoutException or FileNotFoundException:

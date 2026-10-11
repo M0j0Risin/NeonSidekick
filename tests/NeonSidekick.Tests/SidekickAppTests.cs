@@ -104,7 +104,7 @@ public partial class SidekickAppTests : IDisposable
             // /claude over a script (2026-09-27): no test starts the real CLI.
             claude: _claudeCli,
             // The Docker engine over the same stub (2026-10-02): no test reaches the real pipe; unmapped, the engine is unreachable.
-            dockerClient: pipe => new NeonSidekick.Docker.DockerClient(pipe, new HttpClient(_http)),
+            dockerClient: pipe => new NeonSidekick.Docker.DockerClient(pipe, new HttpClient(_http), transport: NeonSidekick.Docker.DockerTransport.Pipe),   // the pipe's words on every system (2026-10-11)
             // The camera (2026-10-02): none unless a test hands in the fake.
             camera: _camera,
             // The Docker servers' switcher (2026-10-02): the real host over the stub unless a test hands in the fake.
@@ -333,7 +333,7 @@ public partial class SidekickAppTests : IDisposable
     }
 
     /// <summary><c>/docker</c> headless (2026-10-02): ahead of the server check — the engine needs no LLM; the bare word lists, a failure is an <c>[error]</c> line.</summary>
-    [WindowsFact]
+    [Fact]   // every system since 2026-10-11, when /docker came to a Mac
     public async Task Headless_Docker_ListsTheContainers_AndSaysWhenTheEngineIsAway()
     {
         string away = await Headless("/docker\n");

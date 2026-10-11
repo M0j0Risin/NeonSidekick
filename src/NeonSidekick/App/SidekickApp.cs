@@ -485,7 +485,7 @@ public sealed class SidekickApp
         if (options.DockerCheck)
         {
             // The live proof on the published exe (2026-10-02): reads only, over the pipe the settings name.
-            using var dockerCheck = new Docker.DockerSession(() => EffectiveSettings, _dockerClient, _time);
+            using var dockerCheck = new Docker.DockerSession(() => EffectiveSettings, _dockerClient, _time, _environment.System);
             return await DockerCheck.RunAsync(_console, dockerCheck, cancellationToken).ConfigureAwait(false);
         }
 
@@ -752,7 +752,7 @@ public sealed class SidekickApp
         // The YouTube search (2026-10-05): no window headless, so youtube_search, and the saved videos (2026-10-07) to list and change.
         var youTubeTools = ChatScreen.YouTubeTools(new YouTube.YouTubeDataApi(_web.Http), player: null, () => EffectiveSettings, _time, HeadlessYouTubeLibrary);
         // The Docker tools (2026-10-02): no pane to ask on, so every change is refused; the reads and /docker work.
-        using var docker = new Docker.DockerSession(() => EffectiveSettings, _dockerClient, _time);
+        using var docker = new Docker.DockerSession(() => EffectiveSettings, _dockerClient, _time, _environment.System);
         // The camera (2026-10-02): /camera list only; a photo needs the screen's panes, so camera_capture is never offered here.
         using var camera = new Camera.CameraSession(_camera, () => Camera.CameraSettings.Options(EffectiveSettings), _time);
         var dockerTools = ChatScreen.DockerTools(docker, confirm: null);
@@ -1978,7 +1978,7 @@ public sealed class SidekickApp
     /// </summary>
     private Docker.IDockerServers BuildDockerServers() =>
         _dockerServers?.Invoke() ?? new Docker.DockerServerHost(
-            new Docker.DockerSession(() => EffectiveSettings, _dockerClient, _time),
+            new Docker.DockerSession(() => EffectiveSettings, _dockerClient, _time, _environment.System),
             (url, ct) => _probe.ProbeAsync(url, LlmEndpoint.KeyOf(EffectiveSettings), ct),
             _time);
 

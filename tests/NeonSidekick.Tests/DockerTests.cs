@@ -43,7 +43,9 @@ public sealed class DockerTests : IDisposable
 
     public DockerTests()
     {
-        _docker = new DockerSession(() => _settings, pipe => new DockerClient(pipe, new HttpClient(_stub)), _time);
+        // The pipe's words on every system (2026-10-11): these tests are the engine's logic over a stub, not a transport; a Mac's socket
+        // has its own tests below and in DockerSocketTests.
+        _docker = new DockerSession(() => _settings, pipe => new DockerClient(pipe, new HttpClient(_stub), transport: DockerTransport.Pipe), _time);
         // One route per exact path (the stub's prefixes would let /volumes answer /volumes/prune); an unknown path is a refused connection.
         _stub.Map(Host, (request, _) => Task.FromResult(Route(request)));
         On("/version", HttpStatusCode.OK, VersionJson);
@@ -175,20 +177,20 @@ public sealed class DockerTests : IDisposable
     public async Task DesktopNotRunning_ADeniedPipe_AndAnyOtherFailure_AreSentences_ACancelThrows()
     {
         var down = new StubHttpMessageHandler().Map(Host, (_, _) => throw new HttpRequestException("connect failed", new TimeoutException("The operation has timed out.")));
-        using (var client = new DockerClient("docker_engine", new HttpClient(down)))
+        using (var client = new DockerClient("docker_engine", new HttpClient(down), transport: DockerTransport.Pipe))
         {
             var reply = await client.PingAsync(TimeSpan.FromSeconds(5), CancellationToken.None);
             Assert.Equal(@"Error: Docker Desktop is not running (nothing answers on \\.\pipe\docker_engine); start Docker Desktop, or check Docker engine pipe on the Docker tab of /tools", reply.Error);
         }
 
         var denied = new StubHttpMessageHandler().Map(Host, (_, _) => throw new HttpRequestException("connect failed", new UnauthorizedAccessException("Access to the path is denied.")));
-        using (var client = new DockerClient("docker_engine", new HttpClient(denied)))
+        using (var client = new DockerClient("docker_engine", new HttpClient(denied), transport: DockerTransport.Pipe))
         {
             var reply = await client.GetAsync("/info", TimeSpan.FromSeconds(5), CancellationToken.None);
             Assert.Equal(@"Error: Windows refused access to \\.\pipe\docker_engine; the user may need to add the account to the docker-users group, then sign out and back in", reply.Error);
         }
 
-        using (var client = new DockerClient("docker_engine", new HttpClient(new StubHttpMessageHandler())))
+        using (var client = new DockerClient("docker_engine", new HttpClient(new StubHttpMessageHandler()), transport: DockerTransport.Pipe))
         {
             var reply = await client.PingAsync(TimeSpan.FromSeconds(5), CancellationToken.None);
             Assert.StartsWith(@"Error: cannot reach the Docker engine on \\.\pipe\docker_engine: No connection could be made", reply.Error);
@@ -498,7 +500,7 @@ public sealed class DockerTests : IDisposable
         Assert.Contains(DockerRemoveTool.ToolName, new AppSettingsData().ToolsDisabled);
         Assert.Contains(DockerPruneTool.ToolName, new AppSettingsData().ToolsDisabled);
         Assert.DoesNotContain(DockerLifecycleTool.ToolName, new AppSettingsData().ToolsDisabled);
-        Assert.True(ChatScreen.DockerOffered(new AppSettingsData { DockerTools = true }) == OperatingSystem.IsWindows());
+        Assert.True(ChatScreen.DockerOffered(new AppSettingsData { DockerTools = true }) == (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()));   // a Mac's socket since 2026-10-11
         Assert.False(ChatScreen.DockerOffered(new AppSettingsData()));
     }
 
@@ -690,7 +692,7 @@ public sealed class DockerTests : IDisposable
 
     // ── /docker ─────────────────────────────────────────────────────────────
 
-    [WindowsFact]
+    [Fact]   // every system since 2026-10-11 (Windows-only while /docker refused off Windows): the stub's pipe words, DockerTests' client
     public async Task TheCommand_ListsShowsStatusLogsStats_AndActsAsTheUser()
     {
         var ps = await DockerCommand.RunAsync(_docker, "", CancellationToken.None);
@@ -797,7 +799,7 @@ public sealed class DockerTests : IDisposable
         Assert.Equal(SettingsField.DockerTools, group.Switch);
     }
 
-    [WindowsFact]
+    [Fact]   // Windows-only until 2026-10-11, while the group was offered on Windows alone; a Mac's socket offers it too
     public void PrepareTurn_OffersTheGroup_TheChangesOnlyUnderWrites_AndPlanModeDropsThem()
     {
         var assistant = new Assistant(new FakeChatClient(), new ConversationHistory(""), new LlmTimeouts(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5)));
@@ -831,8 +833,14 @@ public sealed class DockerTests : IDisposable
         int tab = (ToolsText.MenuIndex(ToolsText.DockerTabTitle) + 1) - 1;
         Assert.Equal([SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe], SettingsMenu.ToolsTabFields[tab]);
         Assert.Equal((ToolsText.MenuIndex(ToolsText.OracleTabTitle) + 1) + 1, tab + 1);   // Integrations' first since 2026-10-10 (after ClaudeCode from 2026-10-03, the user's order; after UNC before)
-        Assert.Equal(["Docker tools", "Docker writes", "Docker engine pipe"], SettingsMenu.ToolsTabFields[tab].Select(SettingsMenu.FieldName));
-        Assert.Equal(@"\\.\pipe\docker_engine", SettingsMenu.FieldValue(SettingsField.DockerEnginePipe, fresh, _dir));
+        // A Mac's row is the socket's (2026-10-11): the same field, blank or the Windows default meaning "find it".
+        Assert.Equal(["Docker tools", "Docker writes", OperatingSystem.IsMacOS() ? "Docker engine socket" : "Docker engine pipe"], SettingsMenu.ToolsTabFields[tab].Select(SettingsMenu.FieldName));
+        Assert.Equal(OperatingSystem.IsMacOS() ? DockerSocket.RowValue("docker_engine") : @"\\.\pipe\docker_engine", SettingsMenu.FieldValue(SettingsField.DockerEnginePipe, fresh, _dir));
+        if (OperatingSystem.IsMacOS())
+        {
+            Assert.StartsWith("auto: ", SettingsMenu.FieldValue(SettingsField.DockerEnginePipe, fresh, _dir));
+            Assert.Equal("/tmp/d.sock", SettingsMenu.FieldValue(SettingsField.DockerEnginePipe, new AppSettingsData { DockerEnginePipe = "/tmp/d.sock" }, _dir));
+        }
         Assert.True(SettingsMenu.IsToggle(SettingsField.DockerWrites));
         Assert.False(SettingsMenu.IsToggle(SettingsField.DockerEnginePipe));
         var copy = AppSettings.Copy(new AppSettingsData { DockerTools = true, DockerWrites = true, DockerEnginePipe = "x" });   // the snapshot copy carries all three
@@ -873,5 +881,109 @@ public sealed class DockerTests : IDisposable
         Assert.Null(error);
         Assert.Equal(6, containers!.Count);
         Assert.Equal(pipe, session.Client().Pipe);
+    }
+
+    // ── a Mac's socket (2026-10-11) ─────────────────────────────────────────
+
+    [Fact]
+    public async Task TheSocket_Down_Denied_NotFound_AndAnyOtherFailure_AreSentences()
+    {
+        const string socket = "/tmp/ns-test-engine.sock";
+        async Task<string?> Say(Exception thrown)
+        {
+            var stub = new StubHttpMessageHandler().Map(Host, (_, _) => throw new HttpRequestException("connect failed", thrown));
+            using var client = new DockerClient("unix://" + socket, new HttpClient(stub), transport: DockerTransport.Socket);
+            Assert.Equal(socket, client.Pipe);
+            Assert.Equal(socket, client.Display);
+            return (await client.PingAsync(TimeSpan.FromSeconds(5), CancellationToken.None)).Error;
+        }
+
+        string down = "Error: the Docker engine is not running (nothing answers on /tmp/ns-test-engine.sock); start Docker Desktop, OrbStack or Colima, or check Docker engine socket on the Docker tab of /tools";
+        Assert.Equal(down, await Say(new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.AddressNotAvailable)));   // no file: measured on macOS 15
+        Assert.Equal(down, await Say(new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.ConnectionRefused)));    // a file left behind
+        Assert.Equal(down, await Say(new TimeoutException("No answer.")));
+        Assert.Equal("Error: macOS refused access to /tmp/ns-test-engine.sock; check the socket's owner and permissions (ls -l /tmp/ns-test-engine.sock)", await Say(new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.AccessDenied)));
+        Assert.Equal(
+            "Error: no Docker engine socket found (looked at ~/.docker/run/docker.sock, /var/run/docker.sock); start Docker Desktop, OrbStack or Colima, or set Docker engine socket on the Docker tab of /tools",
+            await Say(new DockerTransportException(DockerText.NoSocket(["~/.docker/run/docker.sock", "/var/run/docker.sock"]))));
+        Assert.StartsWith("Error: cannot reach the Docker engine on /tmp/ns-test-engine.sock: Socket operation on non-socket", await Say(new IOException("Socket operation on non-socket")));
+    }
+
+    [Fact]
+    public async Task NoTransportHere_IsTheOneGate_EveryCallSaysNotHere()
+    {
+        using var client = new DockerClient("docker_engine", transport: DockerTransport.None);
+        var reply = await client.PingAsync(TimeSpan.FromSeconds(5), CancellationToken.None);
+        Assert.Equal(DockerText.NotHere, reply.Error);
+        var logs = await client.LogsAsync("x", 1, null, timestamps: false, DockerLogStreams.Both, TimeSpan.FromSeconds(5), CancellationToken.None);
+        Assert.Equal(DockerText.NotHere, logs.Error);
+    }
+
+    [MacFact]
+    public void TheSmokeProbe_RoundTripsOverARealUnixSocket()
+    {
+        var check = SmokeChecks.ProbeDockerSocket();
+        Assert.True(check.Passed, check.Detail);
+        Assert.Equal("docker:unix-socket", check.Name);
+        Assert.StartsWith("socket round trip", check.Detail, StringComparison.Ordinal);
+    }
+
+    [MacFact]
+    public async Task TheSession_OverARealUnixSocket_IsTheClientsOwnTransport_AndItsFailuresAreSentences()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;   // [MacFact] skips it; the guard is for the platform analyzer (File.SetUnixFileMode)
+        }
+
+        var folder = Directory.CreateTempSubdirectory("nst-");
+        try
+        {
+            string path = Path.Join(folder.FullName, "e.sock");
+            using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            using (var listener = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.Unix, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Unspecified))
+            {
+                listener.Bind(new System.Net.Sockets.UnixDomainSocketEndPoint(path));
+                listener.Listen();
+                var server = SmokeChecks.ServeDockerSocketAsync(listener, p => p.StartsWith("/version", StringComparison.Ordinal)
+                    ? ("application/json", Encoding.UTF8.GetBytes(VersionJson))
+                    : ("application/json", Encoding.UTF8.GetBytes(ContainersJson)), connections: 2, stop.Token);
+                using var session = new DockerSession(() => new AppSettingsData { DockerEnginePipe = path });
+                var (containers, error) = await session.ContainersAsync(stop.Token);
+                await server;
+                Assert.Null(error);
+                Assert.Equal(6, containers!.Count);
+                Assert.Equal(path, session.Client().Pipe);
+                Assert.Equal(DockerTransport.Socket, session.Client().Transport);
+
+                // Listening but its mode 000: macOS refuses the connect (EACCES).
+                File.SetUnixFileMode(path, UnixFileMode.None);
+                using var refused = new DockerClient(path);
+                Assert.Equal(DockerText.SocketDenied(path), (await refused.PingAsync(TimeSpan.FromSeconds(5), CancellationToken.None)).Error);
+            }
+
+            // The listener gone, its file with it (.NET unlinks it): nothing answers.
+            using (var gone = new DockerClient(path))
+            {
+                Assert.Equal(DockerText.EngineDownHere(path), (await gone.PingAsync(TimeSpan.FromSeconds(5), CancellationToken.None)).Error);
+            }
+
+            // A folder is no socket: said as it came.
+            using (var folderClient = new DockerClient(folder.FullName))
+            {
+                Assert.StartsWith(DockerText.Unreachable(folder.FullName, ""), (await folderClient.PingAsync(TimeSpan.FromSeconds(5), CancellationToken.None)).Error, StringComparison.Ordinal);
+            }
+
+            // Longer than a Unix socket takes (104 characters): its own sentence, before any connect.
+            string tooLong = "/tmp/" + new string('a', 120) + ".sock";
+            using (var longClient = new DockerClient(tooLong))
+            {
+                Assert.Equal(DockerText.SocketPathTooLong(tooLong), (await longClient.PingAsync(TimeSpan.FromSeconds(5), CancellationToken.None)).Error);
+            }
+        }
+        finally
+        {
+            folder.Delete(recursive: true);
+        }
     }
 }

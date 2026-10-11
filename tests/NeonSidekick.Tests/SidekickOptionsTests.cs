@@ -339,6 +339,8 @@ public class SidekickOptionsTests
         Assert.Contains("--mysql-check <connection>   prove the MySQL tools against that connection of mysql.json (reads only), exit 0/1", SidekickOptions.Usage);
         Assert.Contains("--unc-check <share>          prove the UNC tools against that share of unc.json (reads only), exit 0/1", SidekickOptions.Usage);
         Assert.Contains("[--unc-check <share>]", SidekickOptions.Usage);
+        // --docker-check names the system's transport (2026-10-11): Docker Desktop's pipe on Windows, the engine's socket on a Mac.
+        Assert.Contains("--docker-check               " + (OperatingSystem.IsMacOS() ? SidekickOptions.DockerCheckSocketLine : "prove the Docker tools against Docker Desktop's engine pipe (reads only)") + ", exit 0/1", SidekickOptions.Usage);
         Assert.Contains("--url <url>", SidekickOptions.Usage);
         Assert.Contains("--model <id>", SidekickOptions.Usage);
         Assert.Contains("--cwd <path>   working directory for this launch (outranks the saved setting)", SidekickOptions.Usage);

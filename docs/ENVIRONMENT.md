@@ -99,7 +99,7 @@ Every variable starts with `NEONSIDEKICK_`. Each overrides a setting for one lau
 | `NEONSIDEKICK_HA_URL` | Home Assistant URL | The server's URL (`http://localhost:8123`). |
 | `NEONSIDEKICK_HA_TOKEN` | Home Assistant API key | A long-lived token as issued. Never logged. |
 | `NEONSIDEKICK_YOUTUBE_API_KEY` | YouTube API key | A YouTube Data API v3 key as issued. Never logged. |
-| `NEONSIDEKICK_DOCKER_PIPE` | Docker engine pipe | A bare name, `\\.\pipe\name` or `npipe:////./pipe/name` (what `DOCKER_HOST` holds). Windows only. |
+| `NEONSIDEKICK_DOCKER_PIPE` | Docker engine pipe | A bare name, `\\.\pipe\name` or `npipe:////./pipe/name` (what `DOCKER_HOST` holds). On a Mac (*Docker engine socket*) a socket's path or `unix:///path`; there the app also reads `DOCKER_HOST` itself (a `unix://` one) when neither this nor the setting names a socket, and `DOCKER_CONTEXT`/`DOCKER_CONFIG` for the CLI's current context ([the order](TOOLS.md#docker-on-a-mac)). |
 
 ## Set by the app
 
@@ -114,7 +114,7 @@ Only for running the tests from source; each live test is skipped unless its res
 * `NEONSIDEKICK_TEST_MYSQL_CONNECTION`: a MySqlConnector connection string (`Server=127.0.0.1;Port=3306;User ID=…;Password=…;Database=…`) to a database the user owns (`ns_*` fixtures; `mysql:8.4` and `mariadb:11` work).
 * `NEONSIDEKICK_TEST_POSTGRES_CONNECTION`: an Npgsql connection string (`Host=127.0.0.1;Port=5432;Username=…;Password=…;Database=…`) for the live PostgreSQL tests.
 * `NEONSIDEKICK_TEST_UNC_SHARE`: a readable `\\server\share` path (`\\localhost\C$\Windows`); with `NEONSIDEKICK_TEST_UNC_USER` and `NEONSIDEKICK_TEST_UNC_PASSWORD`, a second account for the runas path. Read only.
-* `NEONSIDEKICK_TEST_DOCKER_CONTAINER`: a running container to read (`mysql_dev`); `NEONSIDEKICK_TEST_DOCKER_PIPE` names another pipe. Read only.
+* `NEONSIDEKICK_TEST_DOCKER_CONTAINER`: a running container to read (`mysql_dev`); `NEONSIDEKICK_TEST_DOCKER_PIPE` names another pipe (on a Mac a socket's path; unset, the app's own look finds it). Read only.
 * `NEONSIDEKICK_TEST_CAMERA`: `1` or a camera's name (the light comes on); `NEONSIDEKICK_TEST_CAMERA_OUT`, a folder to keep the test photo in.
 * `NEONSIDEKICK_TEST_PRINTER`: a printer's CUPS queue name on a Mac (`Brother_HL_L2340D_series`). The jobs are held and cancelled, so nothing prints.
 * `NEONSIDEKICK_TEST_HA_URL` with `NEONSIDEKICK_TEST_HA_TOKEN`: a Home Assistant to read from.

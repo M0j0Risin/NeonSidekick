@@ -1160,7 +1160,7 @@ internal sealed partial class ChatScreen
         _ha = new HaSession(_effective, haClient, _time);
         _haTools = HomeAssistantTools(_ha, ConfirmHomeAsync);
         // The Docker tools and /docker (2026-10-02): the client made for the pipe in force; a model's change waits on the pane.
-        _docker = new DockerSession(_effective, dockerClient, _time);
+        _docker = new DockerSession(_effective, dockerClient, _time, environment);
         _dockerTools = DockerTools(_docker, ConfirmDockerAsync);
         // The camera (2026-10-02): one shared stream; photos into the Camera output folder; the model's tool asks on the pane.
         _camera = new CameraSession(camera, () => CameraSettings.Options(_effective()), _time);
@@ -5015,7 +5015,8 @@ internal sealed partial class ChatScreen
             SettingsField.PostgresTools => !effective.PostgresTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoneOfferedReason("connection", "postgres.json"),
             SettingsField.UncTools => !effective.UncTools ? ToolsText.SwitchOffReason(field) : OperatingSystem.IsMacOS() ? ToolsText.NeedsWindowsReason : ToolsText.NoneOfferedReason("share", "unc.json"),
             // The groups that need Windows say so on a Mac (2026-10-06, the macOS build), the switch first as everywhere; on Windows null as before.
-            SettingsField.DockerTools => !OperatingSystem.IsMacOS() ? null : !effective.DockerTools ? ToolsText.SwitchOffReason(field) : ToolsText.NeedsWindowsReason,
+            // Docker reaches a Mac's engine over its socket since 2026-10-11, so only a system with no transport would say it.
+            SettingsField.DockerTools => Docker.DockerSocket.Here != Docker.DockerTransport.None ? null : !effective.DockerTools ? ToolsText.SwitchOffReason(field) : ToolsText.NeedsWindowsReason,
             SettingsField.PrintTools => PrintText.Supported ? null : !effective.PrintTools ? ToolsText.SwitchOffReason(field) : ToolsText.NeedsWindowsReason,   // a Mac prints since 2026-10-08
             SettingsField.SqliteTools => !effective.SqliteTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoSqliteDatabaseReason,
             SettingsField.ComfyTools => !effective.ComfyTools ? ToolsText.SwitchOffReason(field) : Comfy.ComfyStudio.ServerOf(effective) is null ? ToolsText.NoComfyUrlReason : ToolsText.NoWorkflowReason,

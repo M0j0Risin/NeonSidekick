@@ -78,7 +78,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Databases:** SQL Server, Oracle, MySQL/MariaDB, PostgreSQL and SQLite over named connections. Read-only by default; writes are opt-in per connection and ask first. Passwords are stored encrypted.
 * **Files elsewhere (Windows):** `\\server\share` paths and folders outside the working directory, as you or another Windows account.
 * **Obsidian:** search, read, write and link notes in your vault; Obsidian needn't be running.
-* **Docker Desktop (Windows):** containers, logs, health and resource use; starting, stopping and cleaning up are opt-in and ask first. `/docker` does the same by hand.
+* **Docker:** Docker Desktop's containers (on a Mac also OrbStack's or Colima's): logs, health and resource use; starting, stopping and cleaning up are opt-in and ask first. `/docker` does the same by hand.
 * **Home Assistant:** lights, scenes, the TV, to-do lists and sensors ("dim the den to 30%"). `/ha` drives the house directly.
 * **ComfyUI:** pictures from your own workflows (text-to-image, image-to-image, face swaps), or `/imagine` with your own prompt.
 * **Picture viewer & editing:** a built-in picture viewer and thumbnail browser, and image editing (resize, crop, rotate, recolour, convert, strip metadata) by the model or a right-click.
@@ -98,7 +98,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Windows Terminal** is recommended (it comes with Windows 11); the app is designed for it. On a Mac, Terminal or iTerm2 (iTerm2 shows pictures in full colour).
 * **A language model** for it to talk to. The app can download one for you (see below), or use one you already run.
 
-**On a Mac?** It runs on Apple Silicon Macs (M1 and later) in Terminal or iTerm2. Everything above works except `\\server` shares, Docker and `/keycheck`. Screen capture, the camera and YouTube playback need macOS 14 or later, and macOS asks your terminal app for the Microphone, Camera or Screen Recording permission the first time. Download it as below, or [build it yourself](docs/BUILD.md#building-on-a-mac).
+**On a Mac?** It runs on Apple Silicon Macs (M1 and later) in Terminal or iTerm2. Everything above works except `\\server` shares, Docker servers and `/keycheck`. Screen capture, the camera and YouTube playback need macOS 14 or later, and macOS asks your terminal app for the Microphone, Camera or Screen Recording permission the first time. Download it as below, or [build it yourself](docs/BUILD.md#building-on-a-mac).
 
 Only for some features:
 * **Running a model inside the app:** an NVIDIA graphics card (driver 580 or newer) or any card that supports Vulkan. Without one it still works, but slowly. On a Mac it runs on the Apple Silicon GPU; a 16 GB Mac suits the smaller Gemma models.
@@ -216,6 +216,6 @@ A few settings can be overridden for one launch by a [command-line option](docs/
 
 **Why "Neon":** early on I was trying synthwave-style themes in Spectre.Console while testing the Vosk voice integration. I needed a short, punchy wake word, and "Neon" fit the look. The name stuck.
 
-**What's next:** stronger coding tools, Docker and shares on macOS, and Linux.
+**What's next:** stronger coding tools, shares on macOS, and Linux.
 
 **Licence:** GPLv3; see [LICENSE](LICENSE). Built on the libraries in [COMPONENTS.md](docs/COMPONENTS.md).

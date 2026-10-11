@@ -10,7 +10,9 @@ namespace NeonSidekick.Tests;
 /// Resolves once per assembly whether a real Docker engine and a running container to read are named (2026-10-02):
 /// <c>NEONSIDEKICK_TEST_DOCKER_CONTAINER</c> holds the name of a running container (on the user's machine <c>mysql_dev</c>
 /// does), and Docker Desktop's pipe must be there (<c>NEONSIDEKICK_TEST_DOCKER_PIPE</c>, else <c>docker_engine</c>) — looked
-/// for among the pipe names, never opened to find out. Skipped without; never a CI safety net. Nothing is ever changed.
+/// for among the pipe names, never opened to find out. On a Mac (2026-10-11) the engine's socket instead: the variable a socket path,
+/// blank to find it the app's way (<see cref="DockerSocket.Locate"/>, <c>DOCKER_HOST</c> and the CLI's context included), and it must
+/// be there. Skipped without; never a CI safety net. Nothing is ever changed.
 /// </summary>
 internal static class LiveDocker
 {
@@ -19,12 +21,18 @@ internal static class LiveDocker
 
     public static readonly string? Container = Environment.GetEnvironmentVariable(ContainerVariable) is { Length: > 0 } name ? name.Trim() : null;
 
-    public static readonly string Pipe = DockerPipe.Normalize(Environment.GetEnvironmentVariable(PipeVariable));
+    public static readonly string Pipe = OperatingSystem.IsMacOS()
+        ? DockerSocket.Normalize(Environment.GetEnvironmentVariable(PipeVariable))
+        : DockerPipe.Normalize(Environment.GetEnvironmentVariable(PipeVariable));
 
     public static readonly bool PipeExists = OperatingSystem.IsWindows() && Directory.GetFiles(@"\\.\pipe\").Any(p => string.Equals(Path.GetFileName(p), Pipe, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>A Mac's socket as the app would find it, when it is there; null otherwise.</summary>
+    public static readonly string? Socket = OperatingSystem.IsMacOS() && DockerSocket.Locate(Pipe, Environment.GetEnvironmentVariable).Socket is { } found && DockerSocket.Exists(found.Path) ? found.Path : null;
+
     public static string? Unavailable =>
         Container is null ? $"{ContainerVariable} is not set to a running container's name."
+        : OperatingSystem.IsMacOS() ? (Socket is null ? "No Docker engine socket found: Docker Desktop (or OrbStack, Colima) is not running." : null)
         : !PipeExists ? $"No pipe {DockerPipe.Display(Pipe)}: Docker Desktop is not running."
         : null;
 }
@@ -50,7 +58,7 @@ public sealed class LiveDockerTests : IDisposable
 
     public LiveDockerTests()
     {
-        _docker = new DockerSession(() => _settings);
+        _docker = new DockerSession(() => _settings, environment: Environment.GetEnvironmentVariable);
         _tools = ChatScreen.DockerTools(_docker, confirm: null);
     }
 

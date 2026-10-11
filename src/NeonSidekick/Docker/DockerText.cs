@@ -27,6 +27,25 @@ public static class DockerText
     /// <summary>Windows refused this account the pipe. Pinned.</summary>
     public static string PipeDenied(string pipe) => $"Error: Windows refused access to {pipe}; the user may need to add the account to the docker-users group, then sign out and back in";
 
+    /// <summary>
+    /// Nothing answers on the Mac's socket (2026-10-11): no file there (the engine quit) or one left behind. Names the socket the
+    /// look found, so a quit Desktop and a setting naming the wrong place read alike. Pinned.
+    /// </summary>
+    public static string EngineDownHere(string socket) => $"Error: the Docker engine is not running (nothing answers on {socket}); start Docker Desktop, OrbStack or Colima, or check Docker engine socket on the Docker tab of /tools";
+
+    /// <summary>No socket anywhere the look went (2026-10-11): the places, in order, as <see cref="DockerSocket.Resolve"/> looked. Pinned.</summary>
+    public static string NoSocket(IReadOnlyList<string> looked) =>
+        $"Error: no Docker engine socket found (looked at {string.Join(", ", looked)}); start Docker Desktop, OrbStack or Colima, or set Docker engine socket on the Docker tab of /tools";
+
+    /// <summary>macOS refused this account the socket (2026-10-11): the file's owner or mode. Pinned.</summary>
+    public static string SocketDenied(string socket) => $"Error: macOS refused access to {socket}; check the socket's owner and permissions (ls -l {socket})";
+
+    /// <summary>A path longer than a Unix socket takes (104 characters on macOS, measured: .NET refuses it before connecting).</summary>
+    public static string SocketPathTooLong(string socket) => $"Error: {socket} is too long for a Unix socket (104 characters at most); set Docker engine socket to a shorter path or a link to it";
+
+    /// <summary>The one warning for a <c>DOCKER_HOST</c> the app cannot use (2026-10-11): only a Unix socket is reached.</summary>
+    public static string HostIgnored(string host) => $"{DockerSocket.HostVariable}={host} is not a unix:// socket; the Docker tools reach only a local engine's socket, so it is ignored and the socket is looked for as if it were unset.";
+
     /// <summary>Any other transport failure, as it came.</summary>
     public static string Unreachable(string pipe, string detail) => $"Error: cannot reach the Docker engine on {pipe}: {detail.Trim()}";
 
@@ -46,8 +65,11 @@ public static class DockerText
     /// <summary>An answer that could not be read.</summary>
     public static string BadAnswer(string endpoint) => $"Error: the Docker engine's answer to {endpoint} could not be read";
 
-    /// <summary>The tools off Windows: the pipe is Docker Desktop's on Windows. Pinned.</summary>
-    public const string NotWindows = "Error: the Docker tools reach Docker Desktop through its Windows named pipe; this system has none";
+    /// <summary>
+    /// The tools where there is no transport (2026-10-11, was <c>NotWindows</c> until the Mac's socket came): neither Windows'
+    /// pipe nor a Mac's socket. Reaches no system the app is built for today.
+    /// </summary>
+    public const string NotHere = "Error: the Docker tools reach the engine through Docker Desktop's named pipe on Windows or a Unix socket on a Mac; this system has neither";
 
     /// <summary><c>Docker writes</c> is off. Pinned.</summary>
     public const string WritesOff = "Error: Docker writes is off, so the model may only look; the user can act with /docker, or turn on Docker writes on the Docker tab of /tools";

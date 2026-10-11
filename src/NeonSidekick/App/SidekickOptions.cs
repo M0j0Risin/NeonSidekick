@@ -81,7 +81,7 @@ public sealed record SidekickOptions(
     public bool CameraCheck { get; init; }
 
     /// <summary>
-    /// <c>--docker-check</c> (2026-10-02): run <see cref="App.DockerCheck"/> over the engine pipe the settings name and exit 0/1 —
+    /// <c>--docker-check</c> (2026-10-02): run <see cref="App.DockerCheck"/> over the engine pipe the settings name (a Mac's socket since 2026-10-11) and exit 0/1 —
     /// the Docker tools' proof on the published binary, reads only. Needs Docker Desktop running, so not in the build gate.
     /// </summary>
     public bool DockerCheck { get; init; }
@@ -113,8 +113,18 @@ public sealed record SidekickOptions(
     /// </summary>
     public string? OracleCheck { get; init; }
 
-    /// <summary>The help text. Pinned wording; tests assert on it.</summary>
-    public const string Usage =
+    /// <summary>
+    /// The help text. Pinned wording; tests assert on it. On a Mac (2026-10-11) <c>--docker-check</c>'s line names the engine's socket
+    /// instead of Docker Desktop's pipe; Windows' text stays as it was, byte for byte.
+    /// </summary>
+    public static string Usage => OperatingSystem.IsMacOS() ? UsageText.Replace(DockerCheckPipeLine, DockerCheckSocketLine, StringComparison.Ordinal) : UsageText;
+
+    private const string DockerCheckPipeLine = "prove the Docker tools against Docker Desktop's engine pipe (reads only)";
+
+    /// <summary><c>--docker-check</c>'s words on a Mac (2026-10-11). Pinned.</summary>
+    public const string DockerCheckSocketLine = "prove the Docker tools against the Docker engine's socket (reads only)";
+
+    private const string UsageText =
         "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--docker-check] [--camera-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +

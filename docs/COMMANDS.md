@@ -68,7 +68,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/screen list` | Lists the monitors and the windows in a pane, front to back, with the target that names each. |
 | `/screen view` | Opens the picture viewer on *Screen capture output folder*. |
 | `/screen thumbs` | Opens the thumbnail browser on *Screen capture output folder*. |
-| `/docker` | Docker Desktop's containers on a pane, with state, health and ports. Enter offers what fits: stop, restart or pause (asking first), start or unpause, the last 50 log lines, open a port in the browser, copy the id. Needs Windows (Docker Desktop's engine pipe). |
+| `/docker` | Docker Desktop's containers on a pane, with state, health and ports. Enter offers what fits: stop, restart or pause (asking first), start or unpause, the last 50 log lines, open a port in the browser, copy the id. Over Docker Desktop's engine pipe on Windows, the engine's socket on a Mac (Docker Desktop, OrbStack, Colima). |
 | `/docker ps [<filter>]` | Lists the containers, or those whose name or image holds the filter. |
 | `/docker status` | Docker Desktop's and the engine's versions, with the container counts. |
 | `/docker logs <container> [<lines>]` | A container's last lines in a pane (50 by default, up to 2000). |

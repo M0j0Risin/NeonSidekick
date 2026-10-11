@@ -38,9 +38,9 @@ public static class DockerCommand
     {
         ArgumentNullException.ThrowIfNull(docker);
         ArgumentNullException.ThrowIfNull(args);
-        if (!OperatingSystem.IsWindows())
+        if (DockerSocket.Here == DockerTransport.None)
         {
-            return DockerCommandResult.Error(DockerText.NotWindows);
+            return DockerCommandResult.Error(DockerText.NotHere);
         }
 
         string text = args.Trim();

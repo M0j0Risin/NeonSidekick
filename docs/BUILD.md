@@ -59,7 +59,7 @@ Besides `--smoke`, the published exe has checks for real hardware and servers: `
 
 ## Building on a Mac
 
-The Mac build is for Apple Silicon (`osx-arm64`). Each release since v0.5.0 has its package (`NeonSidekick-v<version>-osx-arm64.tar.gz`, built on GitHub's Mac runner), so building it yourself is only needed for a change of your own. It leaves out the features that have no macOS backend yet: Docker (the tools, `/docker` and Docker servers), UNC shares and `/keycheck`. Everything else works; see [The Mac build](#the-mac-build) for what differs.
+The Mac build is for Apple Silicon (`osx-arm64`). Each release since v0.5.0 has its package (`NeonSidekick-v<version>-osx-arm64.tar.gz`, built on GitHub's Mac runner), so building it yourself is only needed for a change of your own. It leaves out the features that have no macOS backend yet: Docker servers, UNC shares and `/keycheck`. Everything else works; see [The Mac build](#the-mac-build) for what differs.
 
 NativeAOT can't build a Mac binary from Windows, so build on the Mac itself. You need:
 
@@ -120,7 +120,9 @@ A downloaded build isn't notarized, so macOS quarantines it. Clear that once aft
 | `/terminal` | Works | A new Terminal window, or a new tab in iTerm2. |
 | `/shortcut` | Works | A `.command` file on the Desktop with the app's icon, opening in iTerm2 or Terminal as `/terminal` does. |
 | Printing | Works (CUPS) | Drawn into a PDF in Helvetica Neue and Menlo on the printer's paper; a PDF goes as it is; an Office file is refused. See [Printing](TOOLS.md#printing). |
-| Docker, UNC shares, `/keycheck` | Left out | `/tools` shows the groups as *off: it needs Windows*; the UNC and Docker tabs still show their rows. |
+| Docker tools and `/docker` | Works (Unix socket) | Docker Desktop, OrbStack, Colima or Rancher Desktop, found as the `docker` command finds them ([Docker on a Mac](TOOLS.md#docker-on-a-mac)). Stats are the Linux VM's. |
+| Docker servers | Left out | Docker Desktop on a Mac passes no GPU to containers; the embedded model on Metal is the Mac's local server. |
+| UNC shares, `/keycheck` | Left out | `/tools` shows UNC as *off: it needs Windows*; its tab still shows its rows. |
 | `convert_to_pdf` and `/pdf` | Works, browser only | Edge, Chrome, Brave or Chromium from `/Applications`; the `printer` engine (Microsoft Print to PDF) needs Windows. |
 
 ### What differs from Windows

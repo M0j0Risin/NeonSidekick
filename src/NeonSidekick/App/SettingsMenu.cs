@@ -728,7 +728,7 @@ public enum SettingsField
     /// <summary>A toggle: the master key of the model's Docker changes (<see cref="Settings.AppSettingsData.DockerWrites"/>); off, the model may only look. The Docker tab (2026-10-02).</summary>
     DockerWrites,
 
-    /// <summary>Typed: the Docker engine's named pipe, blank for <c>docker_engine</c> (<see cref="Settings.AppSettingsData.DockerEnginePipe"/>). The Docker tab's last row (2026-10-02); no reconnect (read at each call). Last in the enum until <see cref="DockerServers"/>.</summary>
+    /// <summary>Typed: the Docker engine's named pipe, blank for <c>docker_engine</c>; on a Mac (2026-10-11) its socket, <see cref="DockerEngineSocketLabel"/>, blank to find it (<see cref="Settings.AppSettingsData.DockerEnginePipe"/>). The Docker tab's last row (2026-10-02); no reconnect (read at each call). Last in the enum until <see cref="DockerServers"/>.</summary>
     DockerEnginePipe,
 
     /// <summary>A toggle: whether <c>/server</c> offers the chosen containers (<see cref="Settings.AppSettingsData.DockerServers"/>). The Docker tab of <c>/settings</c>' first row (2026-10-02, the user's ask); a reconnect.</summary>
@@ -2161,7 +2161,7 @@ internal sealed partial class SettingsMenu
         SettingsField.UncSharesGlobal => "UNC shares (global)",
         SettingsField.DockerTools => "Docker tools",
         SettingsField.DockerWrites => "Docker writes",
-        SettingsField.DockerEnginePipe => "Docker engine pipe",
+        SettingsField.DockerEnginePipe => OperatingSystem.IsMacOS() ? DockerEngineSocketLabel : "Docker engine pipe",   // a Mac's socket, 2026-10-11
         SettingsField.DockerServers => "Docker servers enabled",
         SettingsField.DockerServerContainers => "Docker server containers",
         SettingsField.DockerServerMatchWords => "Docker server match words",
@@ -2516,7 +2516,7 @@ internal sealed partial class SettingsMenu
             SettingsField.UncSharesGlobal => UncSharesLabel(Unc.UncConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
             SettingsField.DockerTools => OnOff(data.DockerTools),
             SettingsField.DockerWrites => OnOff(data.DockerWrites),
-            SettingsField.DockerEnginePipe => Docker.DockerPipe.Display(data.DockerEnginePipe),
+            SettingsField.DockerEnginePipe => OperatingSystem.IsMacOS() ? Docker.DockerSocket.RowValue(data.DockerEnginePipe) : Docker.DockerPipe.Display(data.DockerEnginePipe),
             SettingsField.DockerServers => OnOff(data.DockerServers),
             SettingsField.DockerServerContainers => DockerServerContainersValue(data.DockerServerContainers),
             SettingsField.DockerServerMatchWords => DockerServerWordsValue(data.DockerServerMatchWords),
@@ -5745,8 +5745,9 @@ internal sealed partial class SettingsMenu
                 return true;
 
             case SettingsField.DockerEnginePipe:
-                // Kept as the bare name whatever form was typed (2026-10-02); blank is the default pipe.
-                Apply(field, d => d.DockerEnginePipe = Docker.DockerPipe.Normalize(text));
+                // Kept as the bare name whatever form was typed (2026-10-02); blank is the default pipe. On a Mac (2026-10-11) the
+                // socket's path (unix:// taken off, ~ kept); blank or a pipe name is "find it", saved blank.
+                Apply(field, d => d.DockerEnginePipe = OperatingSystem.IsMacOS() ? Docker.DockerSocket.Normalize(text) : Docker.DockerPipe.Normalize(text));
                 return true;
 
             case SettingsField.DockerServerStopTimeoutSeconds:
@@ -7211,7 +7212,9 @@ internal sealed partial class SettingsMenu
         SettingsField.BotChatCamera => on ? "each bot sees a fresh picture from your camera (vision models)" : "the bots do not see your camera",
         SettingsField.BotChatRecentContext => on ? "the bots are told the last messages of this chat" : "the bots start fresh on the topic",
         SettingsField.DockerWrites => on ? "the model may start, stop, pull and prune, each change asking first" : "the model may only look at Docker",
-        SettingsField.DockerServers => on ? "/server offers the chosen containers, one running at a time" : "no Docker servers; one in use stops at the reconnect",
+        SettingsField.DockerServers => OperatingSystem.IsMacOS()   // a Mac says why, 2026-10-11 (Docker Desktop's VM has no GPU)
+            ? on ? "needs Windows: Docker Desktop on a Mac passes no GPU to containers" : "no Docker servers; they need Windows (no GPU in Docker on a Mac)"
+            : on ? "/server offers the chosen containers, one running at a time" : "no Docker servers; one in use stops at the reconnect",
         SettingsField.DockerServerStopOnExit => on ? "the app's exit stops the container it was using" : "the container keeps running after the app exits",
         SettingsField.ComfyTools => on ? "ComfyUI tools enabled" : "ComfyUI tools disabled",
         SettingsField.HomeAssistantTools => on ? "ha tools enabled" : "ha tools disabled",   // the user's wording, 2026-10-03

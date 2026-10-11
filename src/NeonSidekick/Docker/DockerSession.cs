@@ -38,16 +38,21 @@ public sealed class DockerSession : IDisposable
     private readonly TimeProvider _time;
     private readonly object _gate = new();
     private DockerClient? _client;
+    private string? _clientFor;
     private IReadOnlyList<DockerContainer>? _last;
     private DateTimeOffset _lastTaken;
 
     /// <param name="effective">The settings, read at every call.</param>
     /// <param name="clientFactory">Makes the client for a pipe; null = <see cref="DockerClient"/> over the pipe itself. Tests pass one over a stub handler.</param>
     /// <param name="time">The clock (the log's <c>since</c>, an image's age, the list's age); null = the system's.</param>
-    public DockerSession(Func<AppSettingsData> effective, Func<string, DockerClient>? clientFactory = null, TimeProvider? time = null)
+    /// <param name="environment">
+    /// The variables (<see cref="EnvironmentOverrides.System"/>) the default client's socket look reads on a Mac (<c>DOCKER_HOST</c>,
+    /// the CLI's context; 2026-10-11); null sees none. Windows never reads them.
+    /// </param>
+    public DockerSession(Func<AppSettingsData> effective, Func<string, DockerClient>? clientFactory = null, TimeProvider? time = null, Func<string, string?>? environment = null)
     {
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
-        _clientFactory = clientFactory ?? (pipe => new DockerClient(pipe));
+        _clientFactory = clientFactory ?? (pipe => new DockerClient(pipe, environment: environment));
         _time = time ?? TimeProvider.System;
     }
 
@@ -57,11 +62,14 @@ public sealed class DockerSession : IDisposable
     /// <summary>The clock.</summary>
     public TimeProvider Time => _time;
 
-    /// <summary>The pipe's bare name as the settings stand.</summary>
+    /// <summary>
+    /// The engine's address as the settings stand: the pipe's bare name on Windows; on a Mac (2026-10-11) the socket's path,
+    /// <c>""</c> for "find it" (<see cref="DockerSocket.Normalize"/>).
+    /// </summary>
     public static string PipeOf(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return DockerPipe.Normalize(effective.DockerEnginePipe);
+        return DockerSocket.Here == DockerTransport.Socket ? DockerSocket.Normalize(effective.DockerEnginePipe) : DockerPipe.Normalize(effective.DockerEnginePipe);
     }
 
     /// <summary>The client for the pipe in force, made again when the setting changed.</summary>
@@ -70,10 +78,13 @@ public sealed class DockerSession : IDisposable
         string pipe = PipeOf(_effective());
         lock (_gate)
         {
-            if (_client is null || !string.Equals(_client.Pipe, pipe, StringComparison.OrdinalIgnoreCase))
+            // Keyed by the address it was made for (2026-10-11), not the client's own reading of it: a factory's client may read
+            // it in the other transport's way (a test's pipe-worded stub on a Mac), and was then made again at every call.
+            if (_client is null || !string.Equals(_clientFor, pipe, StringComparison.OrdinalIgnoreCase))
             {
                 _client?.Dispose();
                 _client = _clientFactory(pipe);
+                _clientFor = pipe;
                 _last = null;
             }
 
@@ -203,7 +214,7 @@ public sealed class DockerSession : IDisposable
 
 /// <summary>
 /// When the Docker tools are offered and when a change may run (2026-10-02, the <see cref="Unc.UncAccess"/> shape): the
-/// group while <c>Docker tools</c> is on, on Windows — the engine being up is not asked, so the model can say Docker
+/// group while <c>Docker tools</c> is on, on Windows or (2026-10-11) a Mac — the engine being up is not asked, so the model can say Docker
 /// Desktop is down; a change only while <c>Docker writes</c> is on, checked again at every call, then the user's yes.
 /// </summary>
 public static class DockerPolicy
@@ -212,7 +223,7 @@ public static class DockerPolicy
     public static bool IsOffered(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return effective.DockerTools && OperatingSystem.IsWindows();
+        return effective.DockerTools && DockerSocket.Here != DockerTransport.None;
     }
 
     /// <summary>The refusal of a model's change: <see cref="DockerText.WritesOff"/> while <c>Docker writes</c> is off, else null.</summary>

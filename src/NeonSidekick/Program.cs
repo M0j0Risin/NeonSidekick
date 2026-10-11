@@ -83,6 +83,8 @@ var environment = new EnvironmentOverrides(Environment.GetEnvironmentVariable);
 NeonSidekick.UI.TextCells.NarrowSelectorSequences = NeonSidekick.UI.TextCells.ForTerminal(environment.TerminalProgram);
 // The app macOS asks about the microphone (2026-10-07, sound on a Mac): the terminal, named in the permission's sentences.
 NeonSidekick.Audio.MicrophoneText.Terminal = NeonSidekick.Audio.MicrophoneText.TerminalName(environment.TerminalProgram);
+// DOCKER_HOST and the CLI's context for the Docker engine socket row's "auto: …" on a Mac (2026-10-11); the clients get the reader through their session.
+NeonSidekick.Docker.DockerSocket.MachineEnvironment = environment.System;
 
 // stdout as a FrameWriter (2026-09-29, the user's report: the hint row, the toolbar and the performance bar flickered at
 // every turn's end): it flushes every write as the console's own writer did, and the pane holds each synchronized frame

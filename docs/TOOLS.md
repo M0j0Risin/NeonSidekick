@@ -625,9 +625,7 @@ The UNC tools reach named network shares (`\\server\share`, or a folder under on
 
 ## Docker
 
-**Windows only:** on a Mac the Docker group is never offered, and `/tools` shows it as *off: it needs Windows*.
-
-The Docker tools use the engine's own API on its named pipe (*Docker engine pipe*); the app never starts `docker.exe` or Docker Desktop, and says when Desktop isn't running. A container is named by its name, a unique part of one ("mysql" for `mysql_dev`), or an id prefix of four or more characters; an ambiguous name comes back as a question.
+The Docker tools use the engine's own API: on Windows over its named pipe (*Docker engine pipe*), on a Mac over its Unix socket (*Docker engine socket*, [below](#docker-on-a-mac)). The app never starts `docker`, `docker-compose` or Docker Desktop, and says when the engine isn't running. A container is named by its name, a unique part of one ("mysql" for `mysql_dev`), or an id prefix of four or more characters; an ambiguous name comes back as a question.
 
 * **Changes need two keys:** *Docker writes* offers the changing tools, and every call asks on the pane ("Stop container mysql_dev (mysql:8.4, Up 3 days)?"); a prune says first how much it frees. Headless refuses them; `/docker` still works.
 * **Removals are opt-in:** `docker_remove` and `docker_prune` start off even under *Docker writes*.
@@ -650,7 +648,7 @@ The Docker tools use the engine's own API on its named pipe (*Docker engine pipe
 
 ### Docker servers
 
-Containers serving an OpenAI-compatible API (vLLM, SGLang…) can be `/server` choices, one running at a time so two models never fight over the GPU. Tick them in *Docker server containers* on `/settings` › Servers › Docker and turn on *Docker servers enabled*. The checklist lists only the LLM servers: a container whose image or command holds one of *Docker server match words* (vLLM, SGLang, llama.cpp, Ollama and the other known engines to start with; an empty list lists every container), or one with the label `neonsidekick.llm=true`. This needs neither the Docker tools nor *Docker writes*, and touches only the ticked containers. **Windows only**, like the Docker tools: on a Mac `/server` lists no Docker rows. Working `docker run` commands: [vLLM](DOCKER_WINDOWS_VLLM.md) and [SGLang](DOCKER_WINDOWS_SGLANG.md).
+Containers serving an OpenAI-compatible API (vLLM, SGLang…) can be `/server` choices, one running at a time so two models never fight over the GPU. Tick them in *Docker server containers* on `/settings` › Servers › Docker and turn on *Docker servers enabled*. The checklist lists only the LLM servers: a container whose image or command holds one of *Docker server match words* (vLLM, SGLang, llama.cpp, Ollama and the other known engines to start with; an empty list lists every container), or one with the label `neonsidekick.llm=true`. This needs neither the Docker tools nor *Docker writes*, and touches only the ticked containers. **Windows only**: on a Mac `/server` lists no Docker rows, since Docker Desktop there passes no GPU to containers ([Docker on a Mac](#docker-on-a-mac)). Working `docker run` commands: [vLLM](DOCKER_WINDOWS_VLLM.md) and [SGLang](DOCKER_WINDOWS_SGLANG.md).
 
 * **Rows:** `/server` lists one **Docker** row per chosen container with its state, image and ports (`running · vllm/vllm-openai:latest · :8000`). `/server docker` lists them alone; `docker:<container>` (also for `--url` and `NEONSIDEKICK_LLM_URL`) picks one.
 * **Switching:** picking one stops every other chosen container still running (waiting up to *Docker server stop timeout* plus 15 s each), waits *Docker server post-stop delay*, then starts or unpauses it. If a stop fails, nothing starts. The spinner shows each step; Ctrl+C or a double-click on it cancels.
@@ -660,6 +658,20 @@ Containers serving an OpenAI-compatible API (vLLM, SGLang…) can be `/server` c
 * **Bots and advisors:** a `/botchat` bot or an advisor pointing at a container shares it if it's the one running, even after you moved to a server that left it running, and never starts or stops one.
 
 `--docker-check` proves the tools against the real engine on the published exe (the API version, the containers, a redacted inspect, a log and a stats sample).
+
+### Docker on a Mac
+
+The same tools, `/docker` and its pane, over the engine's Unix socket: Docker Desktop's, OrbStack's, Colima's or Rancher Desktop's. *Docker engine socket* (the setting Windows calls *Docker engine pipe*) names one by its path (`/var/run/docker.sock`, `~/.orbstack/run/docker.sock`) or as `unix:///path`. Empty, or Windows' pipe name, finds it the way the `docker` command does, in this order:
+
+1. `DOCKER_HOST`, when it is `unix://…`. A `tcp://` or `ssh://` value isn't a local socket: it gets one warning in the log and the look goes on.
+2. The Docker CLI's current context: `DOCKER_CONTEXT`, else `currentContext` in `~/.docker/config.json` (`DOCKER_CONFIG` moves the folder), then that context's endpoint. Docker Desktop, OrbStack and Colima each switch the context to theirs when they start, so this finds the engine in use. Nothing else is read from `config.json`.
+3. The usual places: `~/.docker/run/docker.sock` (Docker Desktop), `/var/run/docker.sock` (Desktop's *Allow the default Docker socket*, or another engine), `~/.orbstack/run/docker.sock`, `~/.colima/default/docker.sock` and `~/.rd/docker.sock`.
+
+The look runs again for each new connection, so quitting Docker Desktop and starting OrbStack needs no restart, and the row shows what it found (`auto: ~/.docker/run/docker.sock`). A link counts only when its target is there. When nothing answers the tools say so: *the Docker engine is not running (nothing answers on ~/.docker/run/docker.sock)*, *no Docker engine socket found (looked at …)*, or, for a socket whose permissions refuse you, *macOS refused access to …*.
+
+Docker Desktop runs the containers in a Linux VM, so `docker_stats`' CPU share is of the VM's processors and the memory limit is the VM's (8 GB of a 16 GB Mac by default, set in Docker Desktop's Resources), not the Mac's.
+
+**Docker servers stay Windows only.** Docker Desktop on a Mac passes no GPU to containers: its engine lists only the `runc` runtimes, and a container asking for an NVIDIA device fails to start (*could not select device driver "nvidia" with capabilities: [[gpu]]*). The vLLM and SGLang images are CUDA builds, their arm64 ones too, so on a Mac `/server` lists no Docker rows and `/settings` › Servers › Docker says why. A Mac's local server is the [embedded model](SETTINGS.md#embedded) on Metal.
 
 ## Home Assistant
 

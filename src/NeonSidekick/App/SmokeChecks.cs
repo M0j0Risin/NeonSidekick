@@ -179,6 +179,7 @@ public static partial class SmokeChecks
         results.Add(ProbeMySql());
         results.Add(OperatingSystem.IsWindows() ? ProbeUnc() : new SmokeCheck("unc:impersonation", true, "skipped: not Windows"));
         results.Add(OperatingSystem.IsWindows() ? ProbeDocker() : new SmokeCheck("docker:pipe-transport", true, "skipped: not Windows"));
+        results.Add(ProbeDockerSocket());
         results.Add(ProbeCulture());
         results.Add(ProbeKokoroVoices(nativeDirectory));
         results.Add(ProbeKokoroPhonemizer());

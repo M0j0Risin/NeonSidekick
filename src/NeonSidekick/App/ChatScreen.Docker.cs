@@ -71,7 +71,7 @@ internal sealed partial class ChatScreen
         return effective.DockerWrites ? tools : tools.Where(t => !DockerWriteToolNames.Contains(t.Name)).ToList();
     }
 
-    /// <summary>Whether the Docker group is offered (2026-10-02): the setting <c>Docker tools</c> on, on Windows (<see cref="DockerPolicy.IsOffered"/>).</summary>
+    /// <summary>Whether the Docker group is offered (2026-10-02): the setting <c>Docker tools</c> on, on Windows or (2026-10-11) a Mac (<see cref="DockerPolicy.IsOffered"/>).</summary>
     public static bool DockerOffered(AppSettingsData effective) => DockerPolicy.IsOffered(effective);
 
     /// <summary>
@@ -190,7 +190,7 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         if (_session.DockerServers is null || !OperatingSystem.IsWindows())
         {
-            _transcript.Error(DockerServerText.Unavailable);
+            _transcript.Error(DockerServerText.UnavailableHere);
             return;
         }
 
@@ -226,7 +226,7 @@ internal sealed partial class ChatScreen
     {
         if (_session.DockerServers is not { } servers || !OperatingSystem.IsWindows())
         {
-            _transcript.Error(DockerServerText.Unavailable);
+            _transcript.Error(DockerServerText.UnavailableHere);
             return;
         }
 

@@ -92,6 +92,16 @@ public static class DockerServerText
 
     public const string Unavailable = "Docker servers need Windows (Docker Desktop's engine pipe).";
 
+    /// <summary>
+    /// Docker servers on a Mac (2026-10-11, the user's call after measuring): the Docker tools reach a Mac's engine, but Docker Desktop
+    /// runs containers in a Linux VM with no GPU passed through (its <c>/info</c> lists only the runc runtimes, no devices), and the
+    /// vLLM and SGLang images are CUDA builds, arm64's too. The embedded model is a Mac's local server, on Metal. Pinned.
+    /// </summary>
+    public const string UnavailableOnMac = "Docker servers need Windows: Docker Desktop on a Mac passes no GPU to containers, so vLLM and SGLang cannot run there; the embedded model runs on Metal instead.";
+
+    /// <summary>The refusal of a Docker server on this system: <see cref="UnavailableOnMac"/> on a Mac, else <see cref="Unavailable"/>.</summary>
+    public static string UnavailableHere => OperatingSystem.IsMacOS() ? UnavailableOnMac : Unavailable;
+
     /// <summary>A <c>/botchat</c> bot whose profile names another container than the one running: one at a time, so it sits out.</summary>
     public static string BotOtherContainer(string wanted, string running) =>
         $"its server is the Docker container {wanted}, but {running} is the one running (one at a time)";

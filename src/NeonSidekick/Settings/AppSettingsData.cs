@@ -2063,7 +2063,9 @@ public sealed class AppSettingsData
     /// <summary>
     /// The Docker engine's named pipe (2026-10-02): <c>docker_engine</c> (Docker Desktop's, the default), any other name bare,
     /// as <c>\\.\pipe\name</c> or as the CLI's <c>npipe:////./pipe/name</c> (<see cref="Docker.DockerPipe.Normalize"/>); blank is
-    /// the default. Variable: <c>NEONSIDEKICK_DOCKER_PIPE</c>.
+    /// the default. Variable: <c>NEONSIDEKICK_DOCKER_PIPE</c>. On a Mac (2026-10-11, row <c>Docker engine socket</c>) the same field
+    /// holds the engine's Unix socket: a path or <c>unix:///path</c> (<see cref="Docker.DockerSocket.Normalize"/>); blank or any pipe
+    /// form, the default included, means find it (<see cref="Docker.DockerSocket.Resolve"/>), so no migration was needed.
     /// </summary>
     public string DockerEnginePipe { get; set; } = Docker.DockerPipe.DefaultName;
 

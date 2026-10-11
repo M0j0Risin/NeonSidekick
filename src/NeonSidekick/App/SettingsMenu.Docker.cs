@@ -19,6 +19,12 @@ internal sealed partial class SettingsMenu
     /// <summary>The Docker tab's strip title (2026-10-02, after Embedded, the user's place). Pinned.</summary>
     public const string DockerTabTitle = "Docker";
 
+    /// <summary>
+    /// The <c>DockerEnginePipe</c> row's label on a Mac (2026-10-11): the same field holds the engine's Unix socket there, blank
+    /// (or Windows' pipe name) to find it. On the <c>/tools</c> Docker tab. Pinned.
+    /// </summary>
+    public const string DockerEngineSocketLabel = "Docker engine socket";
+
     /// <summary>The checklist's refusal where no engine door was handed in (a session without one). Pinned.</summary>
     public const string NoDockerEngineError = "There is no Docker engine to ask here.";
 

@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.IO.Pipes;
+using System.Net.Sockets;
 using System.Text;
 using NeonSidekick.Docker;
 
@@ -61,6 +62,70 @@ public static partial class SmokeChecks
             : new SmokeCheck(name, false, $"listed {listed}, demultiplexed {demuxed} ({string.Join(" | ", logs.Lines)}), redacted {redacted}, agreed {agreed} ({client.Prefix})");
     }
 
+    /// <summary>
+    /// <c>docker:unix-socket</c> (2026-10-11, the Docker tools on a Mac): <see cref="ProbeDocker"/>'s twin over a Unix socket, with no
+    /// Docker installed. An in-process listener on a socket in a temp folder (<see cref="ServeDockerSocketAsync"/>, the same canned
+    /// engine) and the real <see cref="DockerClient"/> — its connect opening <see cref="DockerSocket.ConnectAsync"/> to the path the
+    /// setting names, the look's first step — must agree the version, read the container, demultiplex the log and redact. Proves the
+    /// trimmed socket classes and the connect callback on the published binary. "skipped: not macOS" elsewhere.
+    /// </summary>
+    public static SmokeCheck ProbeDockerSocket()
+    {
+        const string name = "docker:unix-socket";
+        if (!OperatingSystem.IsMacOS())
+        {
+            return new SmokeCheck(name, true, "skipped: not macOS");
+        }
+
+        // A short folder: a Unix socket's path is 104 characters at most on macOS, and the temp folder is already about 50.
+        var folder = Directory.CreateTempSubdirectory("nsd-");
+        try
+        {
+            return ProbeDockerSocketAsync(name, Path.Join(folder.FullName, "engine.sock")).GetAwaiter().GetResult();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return new SmokeCheck(name, false, ex.GetType().Name + ": " + ex.Message);
+        }
+        finally
+        {
+            Files.WorkingDirectory.DeleteDirectoryQuietly(folder.FullName);
+        }
+    }
+
+    private static async Task<SmokeCheck> ProbeDockerSocketAsync(string name, string path)
+    {
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        listener.Bind(new UnixDomainSocketEndPoint(path));
+        listener.Listen();
+        var server = ServeDockerSocketAsync(listener, SmokeDockerAnswer, connections: 4, stop.Token);
+        using var client = new DockerClient(path);
+        using var session = new DockerSession(() => new Settings.AppSettingsData { DockerEnginePipe = DockerSocket.UnixScheme + path });
+        var (containers, error) = await session.ContainersAsync(stop.Token).ConfigureAwait(false);
+        if (containers is null)
+        {
+            return new SmokeCheck(name, false, "the container list failed: " + error);
+        }
+
+        var logs = await client.LogsAsync("smoke_web", 10, null, timestamps: false, DockerLogStreams.Both, TimeSpan.FromSeconds(10), stop.Token).ConfigureAwait(false);
+        await server.ConfigureAwait(false);
+        if (logs.Error is not null)
+        {
+            return new SmokeCheck(name, false, "the log failed: " + logs.Error);
+        }
+
+        bool listed = containers is [{ Name: "smoke_web", Health: "healthy" }];
+        bool demuxed = logs.Lines is ["hello", "warn"];
+        bool redacted = DockerRedaction.Env("SMOKE_PASSWORD=hunter2") == "SMOKE_PASSWORD=" + DockerText.Redacted
+            && DockerRedaction.Args(["--password", "hunter2"]) is [_, DockerText.Redacted];
+        bool agreed = client.Prefix == "/v1.47";
+        bool socket = client.Transport == DockerTransport.Socket && session.Client().Pipe == path;
+        return listed && demuxed && redacted && agreed && socket
+            ? new SmokeCheck(name, true, "socket round trip: API agreed at 1.47, 1 container read, 2 log frames demultiplexed, an env value and a password flag redacted")
+            : new SmokeCheck(name, false, $"listed {listed}, demultiplexed {demuxed} ({string.Join(" | ", logs.Lines)}), redacted {redacted}, agreed {agreed} ({client.Prefix}), socket {socket}");
+    }
+
     /// <summary>The canned engine the smoke probe talks to: <c>/version</c>, one container, a two-frame log.</summary>
     private static (string ContentType, byte[] Body) SmokeDockerAnswer(string path)
     {
@@ -99,19 +164,40 @@ public static partial class SmokeChecks
         {
             await using var server = new NamedPipeServerStream(pipe, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
             await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-            string head = await ReadRequestHeadAsync(server, cancellationToken).ConfigureAwait(false);
-            string path = head.Split('\n')[0].Split(' ') is [_, var target, ..] ? target : "/";
-            var (contentType, body) = answer(path);
-            string header = "HTTP/1.1 200 OK\r\nContent-Type: " + contentType + "\r\nContent-Length: " + body.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\r\nApi-Version: 1.55\r\nConnection: close\r\n\r\n";
-            await server.WriteAsync(Encoding.ASCII.GetBytes(header), cancellationToken).ConfigureAwait(false);
-            await server.WriteAsync(body, cancellationToken).ConfigureAwait(false);
-            await server.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await AnswerOneAsync(server, answer, cancellationToken).ConfigureAwait(false);
             if (OperatingSystem.IsWindows())
             {
                 // The answer read before the instance goes: a closed pipe can drop what the client has not taken.
                 server.WaitForPipeDrain();
             }
         }
+    }
+
+    /// <summary>
+    /// <see cref="ServeDockerAsync"/> over a Unix socket (2026-10-11, the Mac's twin): <paramref name="connections"/> connections
+    /// accepted on <paramref name="listener"/> (bound and listening, the caller's), one request each.
+    /// </summary>
+    internal static async Task ServeDockerSocketAsync(Socket listener, Func<string, (string ContentType, byte[] Body)> answer, int connections, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(listener);
+        for (int i = 0; i < connections; i++)
+        {
+            var accepted = await listener.AcceptAsync(cancellationToken).ConfigureAwait(false);
+            await using var stream = new NetworkStream(accepted, ownsSocket: true);
+            await AnswerOneAsync(stream, answer, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>One request read off <paramref name="stream"/> and its canned answer written, <c>Connection: close</c>.</summary>
+    private static async Task AnswerOneAsync(Stream stream, Func<string, (string ContentType, byte[] Body)> answer, CancellationToken cancellationToken)
+    {
+        string head = await ReadRequestHeadAsync(stream, cancellationToken).ConfigureAwait(false);
+        string path = head.Split('\n')[0].Split(' ') is [_, var target, ..] ? target : "/";
+        var (contentType, body) = answer(path);
+        string header = "HTTP/1.1 200 OK\r\nContent-Type: " + contentType + "\r\nContent-Length: " + body.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\r\nApi-Version: 1.55\r\nConnection: close\r\n\r\n";
+        await stream.WriteAsync(Encoding.ASCII.GetBytes(header), cancellationToken).ConfigureAwait(false);
+        await stream.WriteAsync(body, cancellationToken).ConfigureAwait(false);
+        await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<string> ReadRequestHeadAsync(Stream stream, CancellationToken cancellationToken)
