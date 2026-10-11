@@ -103,13 +103,17 @@ public static class SqlText
     public static string ConfigProblemLogLine(string path, string detail) => $"{path} could not be read, so its connections are skipped: {detail}";
 
     /// <summary>One connection as <c>sql_connections</c> lists it: the name, where, how it signs in, the description — never the password.</summary>
-    /// <remarks>A <c>readwrite</c> one says so (2026-10-05), and whether <paramref name="writes"/> (<c>SQL mode</c> read-write) lets it change.</remarks>
+    /// <remarks>
+    /// A <c>readwrite</c> one says so (2026-10-05), and whether <paramref name="writes"/> (<c>SQL mode</c> read-write) lets it change.
+    /// A <c>runas</c> one on a Mac is a Kerberos sign-in (code review of 522af7e, 2026-10-11, <see cref="KerberosSignIn"/>), and says so.
+    /// </remarks>
     public static string ConnectionLine(SqlNamedConnection connection, bool writes = false)
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
         string database = config.Database?.Trim() ?? "";
-        string login = config.IsWindows ? "windows sign-in" : config.IsRunAs ? $"windows sign-in as {config.User?.Trim()} (runas)" : $"sql login {config.User?.Trim()}";
+        string runAs = KerberosSignIn.Offered ? "kerberos sign-in as" : "windows sign-in as";
+        string login = config.IsWindows ? "windows sign-in" : config.IsRunAs ? $"{runAs} {config.User?.Trim()} (runas)" : $"sql login {config.User?.Trim()}";
         string line = $"- {connection.Name}: {config.Server?.Trim()} / {database}, {login}{ServerWriteText.AccessNote(SqlStatementKinds.Family, config.IsReadWrite, writes)}";
         return string.IsNullOrWhiteSpace(config.Description) ? line : line + " — " + config.Description.Trim();
     }

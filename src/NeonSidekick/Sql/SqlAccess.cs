@@ -409,6 +409,8 @@ public sealed class SqlAccess
     /// — not SqlClient's "target principal name is incorrect", which reads as a trust or SPN problem; the status alone does not
     /// tell a wrong password from an account the server refuses (one that got its service ticket still failed), so the sentence
     /// claims neither. Any other failure (the server's own login refusal) goes to the caller's catch as every connect's does.
+    /// The <c>using</c> lets go of a handshake the open left half-finished; the connection keeps the provider for the batch, and a
+    /// reconnect in it (<c>ConnectRetryCount</c>) signs in afresh through it (code review of 522af7e, <see cref="KerberosSignIn"/>).
     /// </summary>
     private static async Task<SqlRun?> OpenKerberosAsync(SqlConnection connection, SqlNamedConnection target, string password, CancellationToken cancellationToken)
     {

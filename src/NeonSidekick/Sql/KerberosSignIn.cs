@@ -24,7 +24,14 @@ namespace NeonSidekick.Sql;
 /// </list>
 /// When the sign-in fails here SqlClient says only "The target principal name is incorrect. Cannot generate SSPI context.", which
 /// BUILD.md reads as a trust or SPN problem; <see cref="Failure"/> keeps .NET's status so <see cref="SqlAccess"/> can say whose
-/// sign-in failed instead. One instance per connection open, disposed after it.
+/// sign-in failed instead.
+///
+/// <para>One instance per connection, which SqlClient may call for more than one handshake (code review of 522af7e, 2026-10-11): one
+/// SPN after another when the first fails, a read-only intent's routing to an Availability Group secondary, the reconnect behind
+/// <c>ConnectRetryCount</c> mid-batch. So each handshake gets a context of its own (<see cref="GenerateContext"/> starts afresh on an
+/// empty incoming blob or another target, as SqlClient's own provider does after a failure), a failed one let go at once.
+/// <see cref="Dispose"/> lets go of the one held; the object stays usable, since <see cref="SqlAccess"/> disposes it when the open
+/// returns while the connection, still pointing at it, runs the batch.</para>
 /// </summary>
 public sealed class KerberosSignIn : SspiContextProvider, IDisposable
 {
@@ -33,6 +40,7 @@ public sealed class KerberosSignIn : SspiContextProvider, IDisposable
 
     private readonly NetworkCredential _credential;
     private NegotiateAuthentication? _auth;
+    private string? _target;
 
     public KerberosSignIn(string principal, string password)
     {
@@ -67,16 +75,24 @@ public sealed class KerberosSignIn : SspiContextProvider, IDisposable
     {
         ArgumentNullException.ThrowIfNull(outgoingBlobWriter);
         ArgumentNullException.ThrowIfNull(authParams);
-        _auth ??= new NegotiateAuthentication(new NegotiateAuthenticationClientOptions
+        // A handshake's first step has nothing incoming: a new SPN, a routed or a reconnecting login. Each starts its own context.
+        if (_auth is null || incomingBlob.IsEmpty || !string.Equals(_target, authParams.Resource, StringComparison.Ordinal))
         {
-            Package = Package,
-            Credential = _credential,
-            TargetName = authParams.Resource,
-        });
+            Release();
+            _target = authParams.Resource;
+            _auth = new NegotiateAuthentication(new NegotiateAuthenticationClientOptions
+            {
+                Package = Package,
+                Credential = _credential,
+                TargetName = authParams.Resource,
+            });
+        }
+
         byte[]? blob = _auth.GetOutgoingBlob(incomingBlob, out var status);
         if (status is not (NegotiateAuthenticationStatusCode.Completed or NegotiateAuthenticationStatusCode.ContinueNeeded))
         {
             Failure = status;
+            Release();
             return false;
         }
 
@@ -85,8 +101,23 @@ public sealed class KerberosSignIn : SspiContextProvider, IDisposable
             outgoingBlobWriter.Write(blob);
         }
 
+        if (status == NegotiateAuthenticationStatusCode.Completed)
+        {
+            // Signed in: an earlier SPN's failure is no longer the story. The context is kept (a late server token still reaches it, as
+            // in the spike's sign-ins) until Dispose or the next handshake's first step.
+            Failure = null;
+        }
+
         return true;
     }
 
-    public void Dispose() => _auth?.Dispose();
+    private void Release()
+    {
+        _auth?.Dispose();
+        _auth = null;
+        _target = null;
+    }
+
+    /// <summary>Lets go of a handshake left half-finished; the provider stays usable for a later one (see the class's remarks).</summary>
+    public void Dispose() => Release();
 }

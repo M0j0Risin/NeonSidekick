@@ -44,6 +44,10 @@ public sealed class KerberosSignInTests
 
         // The file's rule stays Windows' everywhere, so a sql.json shared with a Windows PC loads whole; the connect refuses it here.
         Assert.Null(new SqlConnectionConfig { Server = "x", Database = "db", Auth = "runas", User = @"CONTOSO\svc" }.Problem);
+
+        // What it refuses it says in a Mac's words, never Windows' DOMAIN\name hint (code review of 522af7e).
+        Assert.Equal(SqlText.RunAsNeedsRealm("svc"), new SqlConnectionConfig { Server = "x", Database = "db", Auth = "runas", User = "svc" }.Problem);
+        Assert.Equal(SqlText.RunAsNeedsRealm(""), new SqlConnectionConfig { Server = "x", Database = "db", Auth = "runas" }.Problem);
     }
 
     [WindowsFact]

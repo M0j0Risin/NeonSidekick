@@ -154,8 +154,10 @@ public sealed class SqlConfigFileTests : IDisposable
     {
         Assert.Null(new SqlConnectionConfig { Server = "x", Database = "db", Auth = "runas", User = @"CONTOSO\svc" }.Problem);
         Assert.Null(new SqlConnectionConfig { Server = "x", Database = "db", Auth = "RunAs", User = "svc@contoso.com", PasswordStore = "credman" }.Problem);
-        Assert.Equal(SqlText.RunAsNeedsDomain("svc"), new SqlConnectionConfig { Server = "x", Database = "db", Auth = "runas", User = "svc" }.Problem);
-        Assert.Equal(SqlText.RunAsNeedsDomain(""), new SqlConnectionConfig { Server = "x", Database = "db", Auth = "runas" }.Problem);
+        // In the machine's words (code review of 522af7e): a Mac asks for the name@REALM it signs in with.
+        Func<string, string> runAsNeeds = OperatingSystem.IsMacOS() ? SqlText.RunAsNeedsRealm : SqlText.RunAsNeedsDomain;
+        Assert.Equal(runAsNeeds("svc"), new SqlConnectionConfig { Server = "x", Database = "db", Auth = "runas", User = "svc" }.Problem);
+        Assert.Equal(runAsNeeds(""), new SqlConnectionConfig { Server = "x", Database = "db", Auth = "runas" }.Problem);
         Assert.Equal(SqlText.BadPasswordStore("vault"), new SqlConnectionConfig { Server = "x", Database = "db", User = "u", PasswordStore = "vault" }.Problem);
         Assert.Equal(SqlText.CredmanWithWindows, new SqlConnectionConfig { Server = "x", Database = "db", Auth = "windows", PasswordStore = "credman" }.Problem);
         Assert.Equal(SqlText.BadAuth("entra"), new SqlConnectionConfig { Server = "x", Database = "db", Auth = "entra", User = "u" }.Problem);

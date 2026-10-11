@@ -151,7 +151,7 @@ public sealed class SqlToolsTests
     /// <summary>
     /// A Mac's runas (2026-10-11, <see cref="KerberosSignIn"/>): a missing password names the fix as on Windows; a <c>DOMAIN\name</c>
     /// loads but is refused at the connect with the form a Mac needs, before any Kerberos; a <c>name@REALM</c> goes on to the open
-    /// (a closed port fails it before the sign-in, so no KDC is asked); the listing reads as Windows'.
+    /// (a closed port fails it before the sign-in, so no KDC is asked); the listing says it is a Kerberos sign-in.
     /// </summary>
     [MacFact]
     public async Task OnAMac_ARunAsConnection_NeedsNameAtRealm_AndAMissingPassword_NamesTheFix()
@@ -165,7 +165,7 @@ public sealed class SqlToolsTests
 
             WindowsCredentials.WriteGeneric(target, runas.User!, "x");
             Assert.Equal(SqlText.ConnectFailed("prod", SqlText.RunAsNeedsRealm(@"NEONSIDEKICK-TEST\nobody")), await Invoke<SqlQueryTool>(("sql", "SELECT SUSER_SNAME()")));
-            Assert.Contains("- prod: tcp:127.0.0.1,1 / Reports, windows sign-in as NEONSIDEKICK-TEST\\nobody (runas)", await Invoke<SqlConnectionsTool>());
+            Assert.Contains("- prod: tcp:127.0.0.1,1 / Reports, kerberos sign-in as NEONSIDEKICK-TEST\\nobody (runas)", await Invoke<SqlConnectionsTool>());
 
             runas.User = "nobody@neonsidekick.test";
             string failed = await Invoke<SqlQueryTool>(("sql", "SELECT SUSER_SNAME()"));

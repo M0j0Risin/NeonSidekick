@@ -114,6 +114,14 @@ public sealed class SqlConnectionConfig
         return WindowsCredentials.SplitAccount(text) is null ? SqlText.RunAsNeedsDomain(text) : null;
     }
 
+    /// <summary>
+    /// The file's refusal of a <c>runas</c> account Windows' rule refuses, in this machine's words (code review of 522af7e,
+    /// 2026-10-11): on a Mac the form it signs in with, <c>name@REALM</c>, never Windows' <c>DOMAIN\name</c> hint, which the connect
+    /// there would refuse in turn.
+    /// </summary>
+    private static string RunAsNeeds(string account) =>
+        KerberosSignIn.Offered ? SqlText.RunAsNeedsRealm(account) : SqlText.RunAsNeedsDomain(account);
+
     /// <summary>Whether the entry needs a password: a SQL login or a <c>runas</c> account.</summary>
     [JsonIgnore]
     public bool NeedsPassword => !IsWindows;
@@ -156,12 +164,12 @@ public sealed class SqlConnectionConfig
 
             if (NeedsPassword && string.IsNullOrWhiteSpace(User))
             {
-                return IsRunAs ? SqlText.RunAsNeedsDomain("") : SqlText.NoUser;
+                return IsRunAs ? RunAsNeeds("") : SqlText.NoUser;
             }
 
             if (IsRunAs && WindowsCredentials.SplitAccount(User) is null)
             {
-                return SqlText.RunAsNeedsDomain(User!.Trim());
+                return RunAsNeeds(User!.Trim());
             }
 
             string store = PasswordStore?.Trim() ?? "";
