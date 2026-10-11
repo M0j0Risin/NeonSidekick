@@ -34,8 +34,8 @@ public sealed class UncMacTests : IDisposable
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
     }
 
-    private ShareMounts Mounts(TimeSpan? wait = null) =>
-        new(_system, _home, Uid, pid => _alive.TryGetValue(pid, out long ticks) ? ticks : null, wait ?? TimeSpan.FromSeconds(10));
+    private ShareMounts Mounts(TimeSpan? wait = null, TimeSpan? exitWait = null) =>
+        new(_system, _home, Uid, pid => _alive.TryGetValue(pid, out long ticks) ? ticks : null, wait ?? TimeSpan.FromSeconds(10), exitWait);
 
     private static UncNamedShare Share(string name, string path, string? access = null) => new(name, new UncShareConfig { Path = path, Access = access }, "test");
 
@@ -109,7 +109,28 @@ public sealed class UncMacTests : IDisposable
         Assert.Null(UncShareConfig.RunAsAccountProblem("svc@CORP.LOCAL", windows: false));
         Assert.Null(UncShareConfig.RunAsAccountProblem(@"CORP\svc", windows: false));
         Assert.Equal(UncText.BadAccountHere("s vc"), UncShareConfig.RunAsAccountProblem("s vc", windows: false));
-        Assert.Equal(UncText.RunAsNoUser, UncShareConfig.RunAsAccountProblem(" ", windows: false));
+        Assert.Equal(UncText.RunAsNoUserHere, UncShareConfig.RunAsAccountProblem(" ", windows: false));
+        Assert.Equal(UncText.RunAsNoUser, UncShareConfig.RunAsAccountProblem(" ", windows: true));
+    }
+
+    /// <summary>Finder's Connect to Server hands out <c>My%20Share</c> (2026-10-11, code review): decoded once, segment by segment, before the fold.</summary>
+    [Fact]
+    public void APercentEncodedPath_IsDecodedOnce_AndNoSpellingClimbsOutOfTheShare()
+    {
+        Assert.Equal(("fs01", "My Share", "Q3 Docs/a b"), UncPath.Split("smb://fs01/My%20Share/Q3%20Docs/a%20b"));
+        Assert.Equal(("fs01:445", "eng", ""), UncPath.Split("smb://fs01:445/eng"));
+        Assert.Throws<ArgumentException>(() => UncPath.Split("smb://fs01/eng/%2E%2E"));
+        Assert.Equal(("fs01", "eng", "b"), UncPath.Split("smb://fs01/eng/a/%2e%2e/b"));
+        Assert.Null(UncPath.Split("smb://fs01/eng/a%2Fb"));
+        Assert.Null(UncPath.Split("smb://fs01/a%2F..%2Fother"));
+        Assert.Null(UncPath.Split("smb://fs01/%2E%2E"));
+
+        // A root keeps a % as %25, so splitting it again names the same share.
+        Assert.Equal("smb://fs01/My Share/Q3 Docs", UncPath.Normalize("smb://fs01/My%20Share/Q3%20Docs", windows: false));
+        Assert.Equal("smb://fs01/100%25/a%2541", UncPath.Normalize("smb://fs01/100%25/a%2541", windows: false));
+        Assert.Equal(("fs01", "100%", "a%41"), UncPath.Split(UncPath.Normalize("smb://fs01/100%25/a%2541", windows: false)));
+
+        Assert.Equal(@"\\fs01\My Share\Q3 Docs", UncPath.Spell("smb://fs01/My%20Share/Q3%20Docs", windows: true));
     }
 
     // ── the mounts' rules ──
@@ -208,7 +229,7 @@ public sealed class UncMacTests : IDisposable
     public void ARunAsShare_MountsAsItsAccount_InASessionOfItsOwn_AndAReadWriteShareIsAMountOfItsOwn()
     {
         var mounts = Mounts();
-        Assert.Null(mounts.Root(Share("eng", "smb://fs01/eng"), null).Error);
+        Assert.Null(mounts.Root(Share("eng", "smb://fs01/eng"), password: null).Error);
         var fin = mounts.Root(RunAs("fin", "smb://fs01/eng", "svc@CORP.LOCAL", "readwrite"), "s3cret");
 
         Assert.Null(fin.Error);
@@ -236,7 +257,7 @@ public sealed class UncMacTests : IDisposable
         var finder = _system.Existing("eng", "//jdoe@fs01/eng");
         var mounts = Mounts();
 
-        var eng = mounts.Root(Share("eng", "smb://fs01/eng"), null);
+        var eng = mounts.Root(Share("eng", "smb://fs01/eng"), password: null);
         mounts.UnmountAll();
 
         Assert.Equal(Path.Combine(_system.Volumes, "eng-1"), eng.Value);
@@ -248,11 +269,11 @@ public sealed class UncMacTests : IDisposable
     [Fact]
     public void AnEexist_FindsTheMountThere_UsedAsYouOnly_AndLeftAtExit()
     {
-        var finder = _system.Existing("eng", "//jdoe@fs01/eng");
+        var finder = _system.Existing("eng", "//jdoe@fs01/eng", readOnly: true);
         _system.ExistsAnyway = true;
         var mounts = Mounts();
 
-        var eng = mounts.Root(Share("eng", "smb://fs01/eng"), null);
+        var eng = mounts.Root(Share("eng", "smb://fs01/eng"), password: null);
         var fin = mounts.Root(RunAs("fin", "smb://fs01/eng", "svc"), "s3cret");
         mounts.UnmountAll();
 
@@ -263,13 +284,112 @@ public sealed class UncMacTests : IDisposable
         Assert.False(Directory.Exists(RecordsFolder) && Directory.GetFiles(RecordsFolder).Length > 0);
     }
 
+    /// <summary>An EEXIST mount is taken only with the share's read-only flag, and never one of the run's own under another account (2026-10-11, code review).</summary>
+    [Fact]
+    public void AnEexist_NeverTakesAMountOfTheOtherFlag_NorTheRunsOwnRunAsMount()
+    {
+        _system.Existing("eng", "//jdoe@fs01/eng");   // Finder's, writable
+        _system.ExistsAnyway = true;
+        var mounts = Mounts();
+
+        var read = mounts.Root(Share("eng", "smb://fs01/eng"), password: null);
+
+        Assert.Equal(UncText.ReachFailed("eng", "smb://fs01/eng", UncText.MountStatus(17)), read.Error);
+
+        // The run's own runas mount of the share (made before EEXIST began), then an as-you share of the same flag: not taken.
+        var other = new FakeMountSystem(Path.Combine(_dir, "Volumes2"), Uid);
+        var mounts2 = new ShareMounts(other, Path.Combine(_dir, "home2"), Uid, pid => _alive.TryGetValue(pid, out long ticks) ? ticks : null, TimeSpan.FromSeconds(10));
+        Assert.Null(mounts2.Root(RunAs("fin", "smb://fs01/eng", "svc"), "s3cret").Error);
+        other.ExistsAnyway = true;
+        var asYou = mounts2.Root(Share("eng", "smb://fs01/eng"), password: null);
+        Assert.Equal(UncText.ReachFailed("eng", "smb://fs01/eng", UncText.MountStatus(17)), asYou.Error);
+    }
+
+    /// <summary>A mount NetFS reports made that statfs cannot find at its point is unmounted again and refused, never left unrecorded (2026-10-11, code review).</summary>
+    [Fact]
+    public void AMountThatCannotBeFoundAtItsPoint_IsUnmountedAgain_AndRefused()
+    {
+        var mounts = Mounts();
+        _system.Unreadable = true;
+
+        var eng = mounts.Root(Share("eng", "smb://fs01/eng"), password: null);
+
+        Assert.Equal(UncText.ReachFailed("eng", "smb://fs01/eng", UncText.MountStatus(int.MinValue)), eng.Error);
+        Assert.Equal([(Path.Combine(_system.Volumes, "eng"), false)], _system.Unmounts);
+        Assert.False(Directory.Exists(RecordsFolder) && Directory.GetFiles(RecordsFolder).Length > 0);
+    }
+
+    /// <summary>Finder's <c>My%20Share</c> is mounted as <c>My%20Share</c>, never <c>My%2520Share</c>, and its folder found under the mount (2026-10-11, code review).</summary>
+    [Fact]
+    public void APercentEncodedShare_IsMountedByItsName_AndItsFolderIsUnderTheMount()
+    {
+        var mounts = Mounts();
+
+        var docs = mounts.Root(Share("docs", "smb://fs01/My%20Share/Q3%20Docs"), password: null);
+
+        Assert.Equal("smb://fs01/My%20Share", Assert.Single(_system.Mounts).Url);
+        Assert.Equal(Path.Combine(_system.Volumes, "My Share", "Q3 Docs"), docs.Value);
+    }
+
+    /// <summary>The runas password is asked only for a mount to be made (2026-10-11, code review), and its refusal is the call's.</summary>
+    [Fact]
+    public void ThePassword_IsAskedOnlyToMount_AndItsRefusalIsTheCalls()
+    {
+        var mounts = Mounts();
+        var fin = RunAs("fin", "smb://fs01/fin", "svc");
+        int asked = 0;
+
+        Assert.Equal("no password", mounts.Root(fin, () => { asked++; return UncResult<string?>.Failed("no password"); }).Error);
+        Assert.Empty(_system.Mounts);
+        Assert.Null(mounts.Root(fin, () => { asked++; return UncResult<string?>.Ok("s3cret"); }).Error);
+        Assert.Null(mounts.Root(fin, () => { asked++; return UncResult<string?>.Failed("gone from the Keychain"); }).Error);
+
+        Assert.Equal(2, asked);
+        Assert.Equal("s3cret", Assert.Single(_system.Mounts).Password);
+    }
+
+    /// <summary>
+    /// After the exit's unmount nothing is mounted, and a mount still under way that lands later is unmounted as it lands, never
+    /// kept or recorded (2026-10-11, code review).
+    /// </summary>
+    [Fact]
+    public void AfterTheExit_NoMountIsBegun_AndOneLandingLateIsUnmounted()
+    {
+        var mounts = Mounts(TimeSpan.FromMilliseconds(50), exitWait: TimeSpan.FromMilliseconds(50));
+        using var gate = new ManualResetEventSlim(false);
+        _system.Gate = gate;
+        var eng = Share("eng", "smb://fs01/eng");
+        Assert.NotNull(mounts.Root(eng, password: null).Error);   // given up: still under way
+
+        mounts.UnmountAll();
+        gate.Set();
+        SpinWait.SpinUntil(() => _system.Unmounts.Count == 1, TimeSpan.FromSeconds(10));
+
+        Assert.Equal([(Path.Combine(_system.Volumes, "eng"), false)], _system.Unmounts);
+        Assert.Empty(_system.SmbMounts());
+        Assert.False(Directory.Exists(RecordsFolder) && Directory.GetFiles(RecordsFolder).Length > 0);
+        Assert.Equal(UncText.MountsClosed("fin"), mounts.Root(Share("fin", "smb://fs01/fin"), password: null).Error);
+        Assert.Single(_system.Mounts);
+    }
+
+    [Fact]
+    public void ARecord_IsWrittenWhole_NothingHalfDoneLeftBeside()
+    {
+        var mounts = Mounts();
+        Assert.Null(mounts.Root(Share("eng", "smb://fs01/eng"), password: null).Error);
+
+        string record = Assert.Single(Directory.GetFiles(RecordsFolder));
+        Assert.EndsWith(".txt", record, StringComparison.Ordinal);
+        Assert.NotNull(MacMountRules.Parse(File.ReadAllText(record)));
+    }
+
     [Fact]
     public void AReadAndAReadWriteShare_AsYou_EachGetTheirOwnMount()
     {
         var mounts = Mounts();
 
-        var read = mounts.Root(Share("eng", "smb://fs01/eng"), null);
-        var write = mounts.Root(Share("engw", "smb://fs01/eng", "readwrite"), null);
+        var read = mounts.Root(Share("eng", "smb://fs01/eng"), password: null);
+        var write = mounts.Root(Share("engw", "smb://fs01/eng", "readwrite"), password: null);
 
         Assert.Equal(Path.Combine(_system.Volumes, "eng"), read.Value);
         Assert.Equal(Path.Combine(_system.Volumes, "eng-1"), write.Value);
@@ -285,6 +405,8 @@ public sealed class UncMacTests : IDisposable
         Assert.Equal(mine, MacMountRules.Find([guest, mine], "fs01", "Name’s Folder"));
         Assert.Equal(guest, MacMountRules.Find([guest, mine], "fs01", "eng"));
         Assert.Null(MacMountRules.Find([guest, mine], "fs01", "en"));
+        Assert.Null(MacMountRules.Find([guest, mine], "fs01", "eng", readOnly: true));
+        Assert.Equal(guest, MacMountRules.Find([guest, mine], "fs01", "eng", readOnly: false));
     }
 
     [Fact]
@@ -293,12 +415,12 @@ public sealed class UncMacTests : IDisposable
         var mounts = Mounts();
         _system.Status = 65;
         var eng = Share("eng", "smb://fs01/eng");
-        Assert.Equal(UncText.Unreachable("eng", eng.Config.Root, "no route to the server"), mounts.Root(eng, null).Error);
+        Assert.Equal(UncText.Unreachable("eng", eng.Config.Root, "no route to the server"), mounts.Root(eng, password: null).Error);
 
         _system.Status = 0;
-        string point = mounts.Root(Share("eng", "smb://fs01/eng"), null).Value!;
+        string point = mounts.Root(Share("eng", "smb://fs01/eng"), password: null).Value!;
         _system.Eject(point);
-        Assert.Null(mounts.Root(Share("eng", "smb://fs01/eng"), null).Error);
+        Assert.Null(mounts.Root(Share("eng", "smb://fs01/eng"), password: null).Error);
 
         Assert.Equal(3, _system.Mounts.Count);
         Assert.Single(Directory.GetFiles(RecordsFolder));   // the ejected mount's record went with it
@@ -312,7 +434,7 @@ public sealed class UncMacTests : IDisposable
         _system.Gate = gate;
 
         var eng = Share("eng", "smb://fs01/eng");
-        var slow = mounts.Root(eng, null);
+        var slow = mounts.Root(eng, password: null);
         Assert.Equal(UncText.Unreachable("eng", eng.Config.Root, UncText.TimedOut(TimeSpan.FromMilliseconds(50))), slow.Error);
 
         gate.Set();
@@ -328,7 +450,7 @@ public sealed class UncMacTests : IDisposable
     public void AtExit_ABusyMountIsForced()
     {
         var mounts = Mounts();
-        string point = mounts.Root(Share("eng", "smb://fs01/eng"), null).Value!;
+        string point = mounts.Root(Share("eng", "smb://fs01/eng"), password: null).Value!;
         _system.UnmountErrno = 16;
 
         mounts.UnmountAll();
@@ -366,7 +488,7 @@ public sealed class UncMacTests : IDisposable
     {
         var mounts = Mounts();
         string specs = Path.Combine(_system.Volumes, "eng", "specs");
-        _system.Existing("eng", "//me@fs01/eng");
+        _system.Existing("eng", "//me@fs01/eng", readOnly: true);
         _system.ExistsAnyway = true;   // the files are in the mount made here
         Directory.CreateDirectory(specs);
         File.WriteAllText(Path.Combine(specs, "a.txt"), "alpha needle");
@@ -445,5 +567,20 @@ public sealed class UncMacTests : IDisposable
         Assert.Equal("smb://fs02/fin", loaded.Shares[1].Config.Root);
         var problem = Assert.Single(loaded.Problems);
         Assert.Contains(UncText.DriveNotHere(@"D:\Data"), problem.Reason);
+    }
+
+    /// <summary>
+    /// The native read on a real Mac (2026-10-11, code review): <c>f_flags</c> at 64 reads the sealed system volume <c>/</c> as
+    /// read-only and the data volume as writable, and a mount point is found whatever its Unicode form.
+    /// </summary>
+    [MacFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    public void OnAMac_TheKernelsMounts_CarryTheReadOnlyFlag_AndAPointIsFoundInEitherForm()
+    {
+        var mounts = NetFSNative.Mounts();
+
+        Assert.True(Assert.Single(mounts, m => m.On == "/").ReadOnly);
+        Assert.False(Assert.Single(mounts, m => m.On == "/System/Volumes/Data").ReadOnly);
+        Assert.NotNull(new MacMountSystem().Info("/System/Volumes/Data".Normalize(System.Text.NormalizationForm.FormD)));
     }
 }

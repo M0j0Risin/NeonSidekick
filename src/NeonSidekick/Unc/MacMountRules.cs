@@ -2,8 +2,8 @@ using System.Globalization;
 
 namespace NeonSidekick.Unc;
 
-/// <summary>One mounted file system as <c>statfs</c> reports it: its id, who mounted it, its type, where from and where on.</summary>
-public sealed record MountInfo(long Fsid, uint Owner, string Type, string From, string On);
+/// <summary>One mounted file system as <c>statfs</c> reports it: its id, who mounted it, its type, where from and where on, and whether it is read-only (<c>MNT_RDONLY</c>).</summary>
+public sealed record MountInfo(long Fsid, uint Owner, string Type, string From, string On, bool ReadOnly = false);
 
 /// <summary>One mount the app made, as its record keeps it: the app that made it (pid and start), where, which file system, from where.</summary>
 public sealed record MountRecord(int OwnerPid, long OwnerStartTicks, string MountPoint, long Fsid, string From);
@@ -76,14 +76,17 @@ public static class MacMountRules
 
     /// <summary>
     /// The mount of <paramref name="server"/>'s <paramref name="share"/> among <paramref name="mounts"/> (its <c>f_mntfromname</c>,
-    /// <c>//user@server/share</c> with the share percent-encoded, compared without case), or null: what EEXIST meant.
+    /// <c>//user@server/share</c> with the share percent-encoded, compared without case), or null: what EEXIST meant. With
+    /// <paramref name="readOnly"/> given, only a mount whose read-only flag is that (2026-10-11, code review: an <c>access: read</c>
+    /// share never runs on a writable mount, nor a <c>readwrite</c> one on a read-only mount).
     /// </summary>
-    public static MountInfo? Find(IEnumerable<MountInfo> mounts, string server, string share)
+    public static MountInfo? Find(IEnumerable<MountInfo> mounts, string server, string share, bool? readOnly = null)
     {
         ArgumentNullException.ThrowIfNull(mounts);
         string encoded = server + "/" + Uri.EscapeDataString(share);
-        return mounts.FirstOrDefault(m => m.From.EndsWith("@" + encoded, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(m.From, "//" + encoded, StringComparison.OrdinalIgnoreCase));
+        return mounts.FirstOrDefault(m => (readOnly is not { } ro || m.ReadOnly == ro)
+            && (m.From.EndsWith("@" + encoded, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(m.From, "//" + encoded, StringComparison.OrdinalIgnoreCase)));
     }
 
     /// <summary>A record's file name: the file system's id, so a mount has one record however often it is seen.</summary>
@@ -157,22 +160,22 @@ public static class MacMountRules
             13 or 1 => UncText.AccessDenied(share.Name, root, account),
             51 or 60 or 61 or 64 or 65 => UncText.Unreachable(share.Name, root, ErrnoName(status)),
             80 or 81 or -5997 => UncText.BadAccount(share.Name, account),
-            -5045 => UncText.AccountRefused(share.Name, account, "the password must be changed first"),
-            -5046 => UncText.AccountRefused(share.Name, account, "the password policy refused it"),
-            -5999 => UncText.AccountRefused(share.Name, account, "the account is restricted"),
-            -5996 => UncText.ReachFailed(share.Name, root, "the server speaks no SMB version this Mac does"),
-            -6004 => UncText.ReachFailed(share.Name, root, "the server takes no guest"),
+            -5045 => UncText.AccountRefused(share.Name, account, UncText.MustChangePassword),
+            -5046 => UncText.AccountRefused(share.Name, account, UncText.PasswordPolicy),
+            -5999 => UncText.AccountRefused(share.Name, account, UncText.AccountRestricted),
+            -5996 => UncText.ReachFailed(share.Name, root, UncText.NoSmbVersion),
+            -6004 => UncText.ReachFailed(share.Name, root, UncText.NoGuest),
             _ => UncText.ReachFailed(share.Name, root, UncText.MountStatus(status)),
         };
     }
 
     private static string ErrnoName(int errno) => errno switch
     {
-        51 => "the network is unreachable",
-        60 => "the connection timed out",
-        61 => "the server refused the connection",
-        64 => "the server is down",
-        65 => "no route to the server",
+        51 => UncText.NetworkUnreachable,
+        60 => UncText.ConnectionTimedOut,
+        61 => UncText.ConnectionRefused,
+        64 => UncText.HostDown,
+        65 => UncText.NoRoute,
         _ => UncText.MountStatus(errno),
     };
 }

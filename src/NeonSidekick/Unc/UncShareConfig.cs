@@ -127,7 +127,7 @@ public sealed class UncShareConfig
             {
                 if (string.IsNullOrWhiteSpace(User))
                 {
-                    return UncText.RunAsNoUser;
+                    return UncText.RunAsNoUserFor(OperatingSystem.IsWindows());
                 }
 
                 if (RunAsAccountProblem(User, OperatingSystem.IsWindows()) is { } account)
@@ -291,7 +291,7 @@ public sealed class UncShareConfig
         string trimmed = (user ?? "").Trim();
         if (trimmed.Length == 0)
         {
-            return UncText.RunAsNoUser;
+            return UncText.RunAsNoUserFor(windows);
         }
 
         if (windows)

@@ -438,7 +438,7 @@ if (OperatingSystem.IsWindows())
     NeonSidekick.Viewer.VideoWindow.Close();
 }
 
-// A Mac's share mounts (2026-10-11) go with the run: none is left in /Volumes.
+// A Mac's share mounts (2026-10-11) go with the run: none is left in /Volumes (one NetFS is still making as the process ends aside).
 NeonSidekick.Unc.UncAccess.Mounts?.UnmountAll();
 
 // A change made in the last quarter-second before quitting must not be lost to the debounce.

@@ -39,6 +39,10 @@ public static class UncText
     public static string BadAuth(string word) => $"\"auth\" is '{word}'; it must be windows or runas";
     public static string BadAccess(string word) => $"\"access\" is '{word}'; it must be read or readwrite";
     public const string RunAsNoUser = "runas needs the Windows account in \"user\" (DOMAIN\\name or name@domain)";
+    /// <summary>A Mac's (2026-10-11, code review): the share is mounted as the account, a server's own local name too. Pinned.</summary>
+    public const string RunAsNoUserHere = "runas needs the account in \"user\" (name, name@REALM or DOMAIN\\name)";
+    /// <summary><see cref="RunAsNoUser"/> or a Mac's <see cref="RunAsNoUserHere"/>, by <paramref name="windows"/>.</summary>
+    public static string RunAsNoUserFor(bool windows) => windows ? RunAsNoUser : RunAsNoUserHere;
     public const string CredmanWithWindows = "\"passwordStore\": \"credman\" needs a password to keep; windows sign-in has none (use runas to sign in as another account)";
     public static string UnreadableFile(string detail) => $"the file cannot be read ({detail}); a backslash in JSON is written \\\\ (or use /)";
     public static string ProfilesUnlistedLogLine(string root, string detail) => $"could not list the profiles in {root}, so only the home's unc.json was checked for plain passwords: {detail}";
@@ -102,11 +106,26 @@ public static class UncText
     public static string MountedAsOther(string name, string account) =>
         $"Error: share '{name}' could not be mounted as {account}: the Mac already has it mounted as another account; eject that mount (Finder) and try again";
     public static string MountStatus(int status) => status == int.MinValue ? "the mount failed (see the log)" : $"the mount failed ({status.ToString(CultureInfo.InvariantCulture)})";
+    /// <summary>A share asked for once the app's exit has unmounted the run's mounts (2026-10-11, code review). Pinned.</summary>
+    public static string MountsClosed(string name) => $"Error: share '{name}' is not mounted: the app is exiting";
+
+    /// <summary>The reasons a mount was refused, from NetFS's status (<c>MacMountRules.Refusal</c>; here since the code review of 2026-10-11). Pinned.</summary>
+    public const string MustChangePassword = "the password must be changed first";
+    public const string PasswordPolicy = "the password policy refused it";
+    public const string AccountRestricted = "the account is restricted";
+    public const string NoSmbVersion = "the server speaks no SMB version this Mac does";
+    public const string NoGuest = "the server takes no guest";
+    public const string NetworkUnreachable = "the network is unreachable";
+    public const string ConnectionTimedOut = "the connection timed out";
+    public const string ConnectionRefused = "the server refused the connection";
+    public const string HostDown = "the server is down";
+    public const string NoRoute = "no route to the server";
     /// <summary><c>--unc-check</c>'s line for a mounted share: where, from whom, and whether the app made it. Pinned.</summary>
     public static string MountDescription(string point, string from, bool ours, bool readOnly) =>
         $"mounted at {point} from {from}{(readOnly ? ", read-only" : "")}{(ours ? "" : " (the Mac's own mount, left as it is at exit)")}";
     public static string MountLogLine(string name, string detail) => $"mounting share '{name}' failed: {detail}";
     public static string MountedAsOtherLogLine(string name, string account, string from) => $"share '{name}' mounted from {from}, not as {account}; not used";
+    public static string MountUnreadableLogLine(string name, string point) => $"share '{name}' mounted at {point}, but no mount is found there; let go";
     public static string MountedLogLine(string name, string point, string from, bool ours) => $"share '{name}' {(ours ? "mounted" : "found mounted")} at {point} from {from}";
     public static string UnmountedLogLine(string point) => $"unmounted {point}";
     public static string UnmountFailedLogLine(string point, int errno) => $"could not unmount {point} (errno {errno.ToString(CultureInfo.InvariantCulture)}); eject it in Finder";

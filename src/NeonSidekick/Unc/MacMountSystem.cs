@@ -23,7 +23,15 @@ internal sealed class MacMountSystem : IMountSystem
         NetFSNative.Mount(url, user, password, readOnly, newSession, out mountPoint);
 
     /// <inheritdoc />
-    public MountInfo? Info(string path) => NetFSNative.Mounts().FirstOrDefault(m => string.Equals(m.On, path, StringComparison.Ordinal));
+    /// <remarks>
+    /// Compared in one Unicode form (2026-10-11, code review): NetFS's point is a CFString, the kernel's name bytes, and a share
+    /// named "Café" may come back composed from one and decomposed from the other.
+    /// </remarks>
+    public MountInfo? Info(string path)
+    {
+        string wanted = path.Normalize(NormalizationForm.FormC);
+        return NetFSNative.Mounts().FirstOrDefault(m => string.Equals(m.On.Normalize(NormalizationForm.FormC), wanted, StringComparison.Ordinal));
+    }
 
     /// <inheritdoc />
     public IReadOnlyList<MountInfo> SmbMounts() => [.. NetFSNative.Mounts().Where(m => m.Type == MacMountRules.SmbType)];
@@ -35,7 +43,8 @@ internal sealed class MacMountSystem : IMountSystem
 /// <summary>
 /// NetFS, libc's mount calls and the CoreFoundation they need (2026-10-11, <see cref="MacMountSystem"/>). Pointers and integers
 /// only; <c>struct statfs</c> is read by offset from a byte buffer (64-bit inode layout, 2168 bytes, offsets measured with the
-/// SDK's own header that day). CoreFoundation objects are <see cref="ImageIONative"/>'s. The smoke's <c>unc:netfs</c> binds all of it
+/// SDK's own header that day; <c>f_flags</c> at 64 measured the same way at the code review). CoreFoundation objects are
+/// <see cref="ImageIONative"/>'s. The smoke's <c>unc:netfs</c> binds all of it
 /// on the published binary without mounting anything.
 /// </summary>
 [SupportedOSPlatform("macos")]
@@ -48,6 +57,7 @@ internal static unsafe partial class NetFSNative
     private const int StatfsSize = 2168;
     private const int FsidOffset = 48;
     private const int OwnerOffset = 56;
+    private const int FlagsOffset = 64;
     private const int TypeNameOffset = 72;
     private const int OnOffset = 88;
     private const int FromOffset = 1112;
@@ -153,7 +163,8 @@ internal static unsafe partial class NetFSNative
                 byte* entry = p + (i * StatfsSize);
                 long fsid = ((long)*(int*)(entry + FsidOffset + 4) << 32) | (uint)*(int*)(entry + FsidOffset);
                 uint owner = *(uint*)(entry + OwnerOffset);
-                mounts.Add(new MountInfo(fsid, owner, CString(entry + TypeNameOffset, 16), CString(entry + FromOffset, NameLength), CString(entry + OnOffset, NameLength)));
+                bool readOnly = (*(uint*)(entry + FlagsOffset) & ReadOnly) != 0;
+                mounts.Add(new MountInfo(fsid, owner, CString(entry + TypeNameOffset, 16), CString(entry + FromOffset, NameLength), CString(entry + OnOffset, NameLength), readOnly));
             }
 
             return mounts;

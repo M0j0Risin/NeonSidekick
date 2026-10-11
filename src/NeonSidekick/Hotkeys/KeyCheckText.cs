@@ -24,6 +24,9 @@ public static class KeyCheckText
     public const string TerminalWord = "held by the terminal";
     public const string NotCheckedWord = "not checked";
 
+    /// <summary>A Mac's chord the app could not check: its main thread did not answer (2026-10-11, code review). Pinned.</summary>
+    public const string BusyWord = "not checked (the app was busy)";
+
     public static string UnknownWord(int error) => "unknown (error " + error.ToString(CultureInfo.InvariantCulture) + ")";
 
     /// <summary>A row's status as the pane and the lines write it.</summary>
@@ -37,7 +40,7 @@ public static class KeyCheckText
             HotkeyCause.Terminal => TerminalWord,
             _ => HeldWord,
         },
-        _ => result.Cause == HotkeyCause.NoKeyCode ? NotCheckedWord : UnknownWord(result.Error),
+        _ => result.Cause == HotkeyCause.NoKeyCode ? NotCheckedWord : result.Error == MacHotkeyRules.MainThreadBusy ? BusyWord : UnknownWord(result.Error),
     };
 
     /// <summary>The first line: how many of the chords another program holds.</summary>

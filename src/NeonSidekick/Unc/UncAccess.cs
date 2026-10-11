@@ -192,7 +192,8 @@ public sealed class UncAccess
             return spelled;
         }
 
-        return full.Length == root.Length ? "." : full[(root.Length + 1)..];
+        // The tail as the mount names it: Normalize keeps a % as %25, every other character decoded.
+        return full.Length == root.Length ? "." : Uri.UnescapeDataString(full[(root.Length + 1)..]);
     }
 
     /// <summary>
@@ -245,19 +246,7 @@ public sealed class UncAccess
             }
             else
             {
-                string? password = null;
-                if (share.Config.IsRunAs)
-                {
-                    var secret = UncSecrets.Resolve(share);
-                    if (secret.Error is { } missing)
-                    {
-                        return UncResult<T>.Failed(UncText.CannotSignIn(share.Name, missing));
-                    }
-
-                    password = secret.Value;
-                }
-
-                work = Task.Run(() => Mounted(mounts, share, password, act), CancellationToken.None);
+                work = Task.Run(() => Mounted(mounts, share, act), CancellationToken.None);
             }
 
             return write ? await work.ConfigureAwait(false) : await work.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -295,16 +284,31 @@ public sealed class UncAccess
 
     private WorkingDirectory Files(string root) => new(() => root, _time, WorkingDirectoryOptions.Share);
 
-    /// <summary>The pool thread's part on a Mac's network share: the mount (made now, or the run's), then the preflight and the work under it.</summary>
-    private UncResult<T> Mounted<T>(IShareMounts mounts, UncNamedShare share, string? password, Func<WorkingDirectory, T> act)
+    /// <summary>
+    /// The pool thread's part on a Mac's network share: the mount (made now, or the run's), then the preflight and the work under it.
+    /// The <c>runas</c> password is resolved only when a mount is to be made (2026-10-11, code review).
+    /// </summary>
+    private UncResult<T> Mounted<T>(IShareMounts mounts, UncNamedShare share, Func<WorkingDirectory, T> act)
     {
-        var root = mounts.Root(share, password);
+        var root = mounts.Root(share, () => SignIn(share));
         if (root.Error is { } refused)
         {
             return UncResult<T>.Failed(refused);
         }
 
         return Preflight(share, root.Value!) is { } reason ? UncResult<T>.Failed(reason) : UncResult<T>.Ok(act(Files(root.Value!)));
+    }
+
+    /// <summary>A Mac's mount's password: none as you, the stored one under <c>runas</c>, or the refusal.</summary>
+    private static UncResult<string?> SignIn(UncNamedShare share)
+    {
+        if (!share.Config.IsRunAs)
+        {
+            return UncResult<string?>.Ok(null);
+        }
+
+        var secret = UncSecrets.Resolve(share);
+        return secret.Error is { } missing ? UncResult<string?>.Failed(UncText.CannotSignIn(share.Name, missing)) : UncResult<string?>.Ok(secret.Value);
     }
 
     /// <summary>The pool thread's part: the token (when there is one) impersonated around the preflight and the work, and disposed after.</summary>

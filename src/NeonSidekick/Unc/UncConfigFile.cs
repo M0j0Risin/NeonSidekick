@@ -115,7 +115,7 @@ public sealed class UncConfigFile
         "{\n" +
         "  // One entry per share. Its name is what the model passes as \"share\", and what *name picks on the input line.\n" +
         "  // \"path\" is required: smb://server/share, a folder under it, or a local folder. The app mounts an smb:// share itself\n" +
-        "  // (under the home's mounts folder, until it exits); \\\\server\\share from a Windows file reads as smb://server/share.\n" +
+        "  // (under /Volumes, hidden from Finder, until it exits); \\\\server\\share from a Windows file reads as smb://server/share.\n" +
         "  // Remove the leading // from an example to use it, and put it inside \"shares\" below.\n" +
         "  //\n" +
         "  // A share you can open yourself (your Kerberos ticket, or a password Finder saved), read only (the default):\n" +

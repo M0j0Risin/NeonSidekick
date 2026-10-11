@@ -41,17 +41,20 @@ public sealed class FakeMountSystem : IMountSystem
     /// <summary>Answers EEXIST for a share already mounted even under a new session (the fallback's case).</summary>
     public bool ExistsAnyway { get; set; }
 
+    /// <summary>Makes the mount and hands back its point, but <see cref="Info"/> never finds it there (a point spelled unlike the kernel's).</summary>
+    public bool Unreadable { get; set; }
+
     /// <summary>The errno the next plain unmounts answer (16: busy), forced ones always succeeding.</summary>
     public int UnmountErrno { get; set; }
 
     /// <summary>Puts a mount there as if Finder had made it: the folder, its file system, owned by <paramref name="owner"/>.</summary>
-    public MountInfo Existing(string name, string from, uint? owner = null)
+    public MountInfo Existing(string name, string from, uint? owner = null, bool readOnly = false)
     {
         lock (_mounted)
         {
             string point = Path.Combine(Volumes, name);
             Directory.CreateDirectory(point);
-            var info = new MountInfo(_nextFsid++, owner ?? Uid, MacMountRules.SmbType, from, point);
+            var info = new MountInfo(_nextFsid++, owner ?? Uid, MacMountRules.SmbType, from, point, readOnly);
             _mounted[point] = info;
             return info;
         }
@@ -94,7 +97,11 @@ public sealed class FakeMountSystem : IMountSystem
             }
 
             Directory.CreateDirectory(point);
-            _mounted[point] = new MountInfo(_nextFsid++, Uid, MacMountRules.SmbType, from, point);
+            if (!Unreadable)
+            {
+                _mounted[point] = new MountInfo(_nextFsid++, Uid, MacMountRules.SmbType, from, point, readOnly);
+            }
+
             mountPoint = point;
             return 0;
         }

@@ -166,6 +166,7 @@ public class KeyCheckTests
         Assert.Equal("macOS shortcut", KeyCheckText.Status(new HotkeyProbeResult(HotkeyStatus.Held, 0, HotkeyCause.System)));
         Assert.Equal("held by an app", KeyCheckText.Status(new HotkeyProbeResult(HotkeyStatus.Held, 0, HotkeyCause.OtherApp)));
         Assert.Equal("held by the terminal", KeyCheckText.Status(new HotkeyProbeResult(HotkeyStatus.Held, 0, HotkeyCause.Terminal)));
+        Assert.Equal("not checked (the app was busy)", KeyCheckText.Status(new HotkeyProbeResult(HotkeyStatus.Unknown, MacHotkeyRules.MainThreadBusy)));
         Assert.Equal("not checked", KeyCheckText.Status(new HotkeyProbeResult(HotkeyStatus.Unknown, 0, HotkeyCause.NoKeyCode)));
         Assert.Equal("Terminal's default profile, Pro: Use Option as Meta key is on, so the Option chords arrive.", KeyCheckText.TerminalAppOption("Pro", true));
         Assert.Equal("iTerm2, profile Default: the left Option key sends Esc+, so the Option chords arrive with it (not with the right one).", KeyCheckText.ItermOption("Default", true, false));

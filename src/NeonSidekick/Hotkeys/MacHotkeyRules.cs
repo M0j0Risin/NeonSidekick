@@ -43,6 +43,9 @@ public static class MacHotkeyRules
     public const int NoErr = 0;
     public const int HotKeyExists = -9878;
 
+    /// <summary>The app's own status, never Carbon's: the main thread did not run the register in time (<see cref="MacHotkeyProbe"/>).</summary>
+    public const int MainThreadBusy = int.MinValue;
+
     /// <summary>The <c>TERM_PROGRAM</c> values of the two terminals whose Option setting the app reads.</summary>
     public const string TerminalApp = "Apple_Terminal";
     public const string Iterm = "iTerm.app";

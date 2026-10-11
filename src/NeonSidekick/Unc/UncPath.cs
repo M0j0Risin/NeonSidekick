@@ -20,7 +20,8 @@ public static class UncPath
     public const string SmbScheme = "smb://";
 
     /// <summary>
-    /// <paramref name="text"/> in the platform's spelling: on Windows <c>/</c> as <c>\</c> and <c>smb://</c> as <c>\\</c>; on a Mac a
+    /// <paramref name="text"/> in the platform's spelling: on Windows <c>/</c> as <c>\</c> and <c>smb://</c> as <c>\\</c> (the rest
+    /// percent-decoded); on a Mac a
     /// network form (<c>smb://</c>, <c>\\</c>, <c>//</c>) as <c>smb://server/share/…</c> with <c>/</c> separators, anything else as given.
     /// Trimmed; nothing folded.
     /// </summary>
@@ -30,7 +31,8 @@ public static class UncPath
         if (windows)
         {
             string slashed = trimmed.Replace('/', '\\');
-            return slashed.StartsWith(@"smb:\\", StringComparison.OrdinalIgnoreCase) ? @"\\" + slashed[@"smb:\\".Length..] : slashed;
+            // A Mac's smb:// is a URL: percent-decoded as a Mac's Split decodes it (2026-10-11, code review; Finder's My%20Share).
+            return slashed.StartsWith(@"smb:\\", StringComparison.OrdinalIgnoreCase) ? @"\\" + Uri.UnescapeDataString(slashed[@"smb:\\".Length..]) : slashed;
         }
 
         string? rest = trimmed.StartsWith(SmbScheme, StringComparison.OrdinalIgnoreCase) ? trimmed[SmbScheme.Length..]
@@ -62,23 +64,30 @@ public static class UncPath
 
     /// <summary>
     /// <paramref name="spelled"/> as a root: full, <c>..</c> and <c>.</c> folded, no trailing separator. A Mac's network form folds
-    /// its own segments (a <c>..</c> above the share throws <see cref="ArgumentException"/>) and keeps server and share as written;
-    /// everything else is <see cref="Path.GetFullPath(string)"/>'s.
+    /// its own segments (a <c>..</c> above the share throws <see cref="ArgumentException"/>), keeps the server as written and the
+    /// share and folders as <see cref="Split"/> decodes them, a <c>%</c> as <c>%25</c>; everything else is <see cref="Path.GetFullPath(string)"/>'s.
     /// </summary>
     public static string Normalize(string spelled, bool windows)
     {
         if (!windows && IsNetwork(spelled, windows: false))
         {
             var (server, share, rest) = Split(spelled) ?? throw new ArgumentException("no share in the path", nameof(spelled));
-            return SmbScheme + server + "/" + share + (rest.Length == 0 ? "" : "/" + rest);
+            // Decoded, but a % kept as %25, so a root split again reads the same names (a share named "100%" or "a%41").
+            return SmbScheme + server + "/" + Percent(share) + (rest.Length == 0 ? "" : "/" + Percent(rest));
         }
 
         return Path.TrimEndingDirectorySeparator(Path.GetFullPath(spelled));
+
+        static string Percent(string text) => text.Replace("%", "%25", StringComparison.Ordinal);
     }
 
     /// <summary>
     /// A Mac's network form cut into server, share and the folder under it (<c>/</c>-joined, <c>.</c> and <c>..</c> folded); null
     /// without a server and a share, and an <see cref="ArgumentException"/> for a <c>..</c> that climbs above the share.
+    /// The share and the folders are percent-decoded first (2026-10-11, code review: Finder's Connect to Server hands out
+    /// <c>smb://fs01/My%20Share</c>, which was mounted as <c>My%2520Share</c> and refused), each segment on its own and before the
+    /// fold, so a <c>%2E%2E</c> is a <c>..</c> like any other and a segment that decodes to a <c>/</c> or to nothing is no path
+    /// (null): no spelling climbs out of the mount. The server stays as written (a port's <c>:</c> is the URL's own).
     /// </summary>
     public static (string Server, string Share, string Folder)? Split(string spelled)
     {
@@ -87,8 +96,15 @@ public static class UncPath
             return null;
         }
 
-        string[] parts = spelled[SmbScheme.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length < 2 || parts[0] is "." or ".." || parts[1] is "." or "..")
+        string[] raw = spelled[SmbScheme.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (raw.Length < 2)
+        {
+            return null;
+        }
+
+        string[] parts = [raw[0], .. raw.Skip(1).Select(Uri.UnescapeDataString)];
+        if (parts.Skip(1).Any(p => p.Length == 0 || p.Contains('/', StringComparison.Ordinal))
+            || parts[0] is "." or ".." || parts[1] is "." or "..")
         {
             return null;
         }
