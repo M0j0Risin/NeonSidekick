@@ -2332,16 +2332,16 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("  · Web browser path: (auto: msedge.exe)", Output);
     }
 
-    /// <summary>The Unix twin of <see cref="WebBrowserPath_IsRow43_Typed_AMissingFileIsRefused_AndEmptyMeansAuto"/> (2026-10-06, the macOS build): a Unix executable, and the auto label of the fixture's Windows path read as one name.</summary>
+    /// <summary>The Unix twin of <see cref="WebBrowserPath_IsRow42_Typed_AMissingFileIsRefused_AndEmptyMeansAuto"/> (2026-10-06, the macOS build): a Unix executable, and the auto label of the fixture's Windows path read as one name.</summary>
     [UnixFact]
-    public async Task WebBrowserPath_IsRow43_Typed_AMissingFileIsRefused_AndEmptyMeansAuto_Unix()
+    public async Task WebBrowserPath_IsRow42_Typed_AMissingFileIsRefused_AndEmptyMeansAuto_Unix()
     {
         _console.Profile.Width = 240;
         string exe = Path.Combine(_dir, "chrome");
         string auto = SettingsMenu.AutoBrowserLabel(FakeBrowserPath);   // the fixture's locator; a Windows path reads as one name off Windows
         Directory.CreateDirectory(_dir);
         File.WriteAllText(exe, "");
-        Down(42);
+        Down(41);
         Push(Keys.Enter);                           // Browser path: empty
         _console.Input.PushText(Path.Combine(_dir, "nope"));
         Push(Keys.Enter);                           // refused, the row stays open
@@ -3312,8 +3312,8 @@ public partial class SettingsMenuTests : IDisposable
         // Chat (General until later on 2026-10-10, under Client's second strip since): its rows in their own order (five runs since 2026-10-01, the user's call: who and where, the input line, the transcript, the screen, the outside apps; Keep message history under Command typo intercept, 2026-09-25; Mouse in menus gone, 2026-09-21; Draft editor last, 2026-09-19; Show toolbar after Show working directory, 2026-09-21) (the six web rows moved to the Web tab and the two /tree rows to Files, 2026-09-15; Transcript markdown and Paste preview lines, 2026-09-16; the @-mention folder mode to Files, 2026-09-17; the two line switches, Welcome splash, then Show working directory last, and the queue's two rows under Working directory, 2026-09-18), padded to the tab's own column (25), nothing of the other tabs.
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
-        Assert.EndsWith(@"/profiles/default/files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Avatar                       🤖 robot\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Emoji picker                 off\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 11 of 37\n  Show performance bar         CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
+        Assert.EndsWith(@"/profiles/neon/files)", cwd);
+        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Avatar                       🤖 robot\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Emoji picker                 off\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 11 of 37\n  Show performance bar         CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
         Assert.DoesNotContain("File /tree max length", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
