@@ -20,7 +20,7 @@ namespace NeonSidekick.Llm.Tools;
 /// second image"): <c>image2</c> and <c>image3</c> for a workflow taking more than one picture, and <c>prompt</c> no
 /// longer required, since such a workflow may have none.
 /// </summary>
-public sealed class GenerateImageTool : AIFunction
+public sealed class GenerateImageTool : AIFunction, IWrittenCallAliases
 {
     public const string ToolName = "generate_image";
 
@@ -104,6 +104,15 @@ public sealed class GenerateImageTool : AIFunction
             return workflows.Count == 0 ? ComfyText.DescribeEmpty : ComfyText.Describe(workflows, _studio.ReinforceNegatives);
         }
     }
+
+    /// <summary>
+    /// The workflows' names (2026-10-11, the user's <c>/botchat</c> log: a bot wrote <c>juggernautxl_ragnarok_img2img image="…"
+    /// prompt="…"</c>, the workflow where the tool's name goes): a call written under one is this tool's, with that workflow.
+    /// </summary>
+    public IReadOnlyList<string> WrittenAliases =>
+        (_narrow is null ? _studio.OfferedWorkflows() : _narrow(_studio.Catalog.Workflows)).Select(w => w.Name).ToList();
+
+    public string AliasArgument => WorkflowArgument;
 
     /// <summary>The cap in force: <c>ComfyUI max pictures per call</c>, clamped.</summary>
     public int MaxCount => _studio.MaxCount;

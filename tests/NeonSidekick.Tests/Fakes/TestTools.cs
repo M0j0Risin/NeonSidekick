@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Files;
+using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
 
 namespace NeonSidekick.Tests.Fakes;
@@ -54,6 +55,34 @@ public sealed class EchoTool : AIFunction
         string text = ToolSchema.ReadString(arguments, "text");
         Received.Add(text);
         return new ValueTask<object?>("echo: " + text);
+    }
+}
+
+/// <summary>
+/// A <c>generate_image</c>-shaped tool with written-call aliases (2026-10-11, <see cref="IWrittenCallAliases"/>): each workflow name
+/// a call may be written under; records the workflow and prompt of every call.
+/// </summary>
+public sealed class AliasedDrawTool(params string[] workflows) : AIFunction, IWrittenCallAliases
+{
+    private static readonly JsonElement Schema = ToolSchema.Parse(
+        """{"type":"object","properties":{"prompt":{"type":"string"},"workflow":{"type":"string"},"image":{"type":"string"}}}""");
+
+    public List<(string Workflow, string Prompt, string Image)> Received { get; } = new();
+
+    public override string Name => "draw";
+
+    public override string Description => "Draws a picture.";
+
+    public override JsonElement JsonSchema => Schema;
+
+    public string AliasArgument => "workflow";
+
+    public IReadOnlyList<string> WrittenAliases => workflows;
+
+    protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    {
+        Received.Add((ToolSchema.ReadString(arguments, "workflow"), ToolSchema.ReadString(arguments, "prompt"), ToolSchema.ReadString(arguments, "image")));
+        return new ValueTask<object?>("drawn");
     }
 }
 

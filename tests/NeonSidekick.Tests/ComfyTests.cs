@@ -440,6 +440,9 @@ public sealed class ComfyTests : IDisposable
 
         Assert.Contains("\n- pony-txt2img ", tool.Description);
         Assert.DoesNotContain("\n- restyle ", tool.Description);
+        // A call written under a workflow's name (2026-10-11): its own workflows alone are aliases.
+        Assert.Equal(["pony-txt2img"], tool.WrittenAliases);
+        Assert.Equal(GenerateImageTool.WorkflowArgument, tool.AliasArgument);
         var result = await tool.InvokeAsync(Args(("prompt", "watercolor"), ("workflow", "restyle")));
 
         Assert.StartsWith("Error", Assert.IsType<string>(result));

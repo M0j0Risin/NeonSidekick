@@ -1330,8 +1330,9 @@ public sealed class Assistant
             var tagThinking = new StringBuilder();
             // After the think filter: a call written as text, caught when the turn asks for it and offers tools, and one to a tool
             // in WrittenCallsTakenOut (2026-09-30), taken out whatever the turn offers.
-            var catching = TextToolCalls && _tools.Count > 0 ? WrittenCallNames(TextToolCallNames is { } caught ? _tools.Where(t => caught.Contains(t.Name)) : _tools) : [];
-            var written = catching.Count > 0 || WrittenCallsTakenOut.Count > 0 ? WrittenCallFilter([.. catching, .. WrittenCallsTakenOut]) : null;
+            List<AIFunction> catchingTools = TextToolCalls && _tools.Count > 0 ? [.. TextToolCallNames is { } caught ? _tools.Where(t => caught.Contains(t.Name)) : _tools] : [];
+            var catching = WrittenCallNames(catchingTools);
+            var written = catching.Count > 0 || WrittenCallsTakenOut.Count > 0 ? WrittenCallFilter([.. catching, .. WrittenCallsTakenOut], WrittenAliases(catchingTools)) : null;
             Exception? failure = null;
             bool cancelled = false;
 
@@ -2086,7 +2087,14 @@ public sealed class Assistant
     /// The filter for calls to <paramref name="tools"/> written out as text, each with its parameter names for the line form
     /// (2026-09-30, code review: built here once, for the turn and <see cref="RequestAsync"/> alike).
     /// </summary>
-    internal static TextToolCallFilter WrittenCallFilter(IEnumerable<(string Name, IReadOnlyList<string> Parameters)> tools) => new(tools);
+    internal static TextToolCallFilter WrittenCallFilter(IEnumerable<(string Name, IReadOnlyList<string> Parameters)> tools, IEnumerable<(string Alias, string Tool, string Argument)>? aliases = null) => new(tools, aliases);
+
+    /// <summary>
+    /// The other names <paramref name="tools"/>' calls may be written under (2026-10-11, <see cref="IWrittenCallAliases"/>: a
+    /// <c>/botchat</c> bot wrote a ComfyUI workflow's name where <c>generate_image</c> goes), read now, so the list is the one in force.
+    /// </summary>
+    internal static IReadOnlyList<(string Alias, string Tool, string Argument)> WrittenAliases(IEnumerable<AIFunction> tools) =>
+        tools.OfType<IWrittenCallAliases>().SelectMany(t => t.WrittenAliases.Select(alias => (alias, ((AIFunction)t).Name, t.AliasArgument))).ToList();
 
     /// <summary>
     /// The end of a response's text through <paramref name="written"/>: <paramref name="rest"/> pushed, the filter flushed, and a

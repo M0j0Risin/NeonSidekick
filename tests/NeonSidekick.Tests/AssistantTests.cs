@@ -757,6 +757,26 @@ public class AssistantTests
         Assert.Equal("Sure.\nDone.It echoed.", string.Concat(Deltas(events)));
     }
 
+    /// <summary>
+    /// Aliases (2026-10-11, the user's /botchat log: <c>juggernautxl_ragnarok_img2img image="C:\…" prompt="…"</c>, the workflow's name
+    /// where the tool's goes): a call written under a tool's alias runs as that tool's, the alias its workflow, and is never shown.
+    /// </summary>
+    [Fact]
+    public async Task TextToolCalls_On_ACallWrittenUnderAnAlias_RunsAsTheToolsCall_WithTheAliasAsItsWorkflow()
+    {
+        var draw = new AliasedDrawTool("juggernautxl_ragnarok_img2img", "pony_txt2img");
+        var (client, _, assistant) = Build(new AIFunction[] { draw });
+        assistant.TextToolCalls = true;
+        client.EnqueueText("Let me push it further.\n\njuggernautxl_ragnarok_img2img image=\"C:\\Users\\cnels\\.neonsidekick\\a.png\"  prompt=\"Sophia, cosmic\"\n")
+            .EnqueueText("Here she is.");
+
+        var events = await Run(assistant, "a");
+
+        Assert.Equal([("juggernautxl_ragnarok_img2img", "Sophia, cosmic", @"C:\Users\cnels\.neonsidekick\a.png")], draw.Received);
+        Assert.Equal("draw", Assert.Single(events.OfType<TurnEvent.ToolCall>()).Name);
+        Assert.DoesNotContain("juggernautxl", string.Concat(Deltas(events)), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task TextToolCalls_Off_TheTextPassesAsWritten()
     {

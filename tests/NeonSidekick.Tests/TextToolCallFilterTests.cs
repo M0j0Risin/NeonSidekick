@@ -483,6 +483,82 @@ public class TextToolCallFilterTests
         Assert.Equal([(Tool, "prompt: \"a dog\"")], filter.Calls);
     }
 
+    // ── Aliases (later on 2026-10-11, the user's report: a workflow's name where generate_image goes) ──
+
+    private const string Workflow = "juggernautxl_ragnarok_img2img";
+
+    private static readonly string[] DrawParameters = ["prompt", "negative", "workflow", "image", "seed"];
+
+    private const string UsersAliasLine = Workflow + " image=\"" + UsersPath + "\"  prompt=\"Gnostic Sophia, cosmic revelation moment, glowing hands reaching out from the celestial throne, hyper-detailed photograph\" negative=\"static, seated, distant, muted\"";
+
+    private static (string Text, TextToolCallFilter Filter) RunAliased(params string[] deltas)
+    {
+        var filter = new TextToolCallFilter([(Tool, (IReadOnlyList<string>)DrawParameters)], [(Workflow, Tool, "workflow"), ("pony_txt2img", Tool, "workflow")]);
+        var text = new StringBuilder();
+        foreach (string delta in deltas)
+        {
+            text.Append(filter.Push(delta));
+        }
+
+        text.Append(filter.Flush());
+        return (text.ToString(), filter);
+    }
+
+    [Fact]
+    public void AnAlias_TheUsersLine_IsTheToolsCall_WithTheAliasAsItsWorkflow_WholeOrSplitAnywhere()
+    {
+        const string reply = "Since you're so into the intensity, let's give it a narrative quality.\n\n" + UsersAliasLine;
+        var (whole, filter) = RunAliased(reply);
+        Assert.Equal("Since you're so into the intensity, let's give it a narrative quality.\n\n", whole);
+        Assert.Equal(Tool, Assert.Single(filter.Calls).Name);
+        Assert.Equal(Workflow, Argument(filter, "workflow").GetString());
+        Assert.Equal(UsersPath, Argument(filter, "image").GetString());
+        Assert.Equal("Gnostic Sophia, cosmic revelation moment, glowing hands reaching out from the celestial throne, hyper-detailed photograph", Argument(filter, "prompt").GetString());
+        Assert.Equal("static, seated, distant, muted", Argument(filter, "negative").GetString());
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            var (text, split) = RunAliased(reply[..i], reply[i..]);
+            Assert.Equal(whole, text);
+            Assert.Equal(filter.Calls, split.Calls);
+        }
+    }
+
+    [Theory]
+    [InlineData("Look! pony_txt2img(prompt=\"a dog\", seed=7) Nice.", "pony_txt2img")]
+    [InlineData("Look! pony_txt2img{prompt: \"a dog\", seed: 7} Nice.", "pony_txt2img")]
+    [InlineData("Look! pony_txt2img(prompt=\"a dog\", seed=7, workflow=\"" + Workflow + "\") Nice.", Workflow)]   // its own workflow wins
+    public void AnAlias_TheParenthesisedAndBraceForms_TooUnderAnAlias(string reply, string workflow)
+    {
+        var (text, filter) = RunAliased(reply);
+        Assert.Equal("Look! Nice.", text);
+        Assert.Equal(Tool, Assert.Single(filter.Calls).Name);
+        Assert.Equal(workflow, Argument(filter, "workflow").GetString());
+        Assert.Equal("a dog", Argument(filter, "prompt").GetString());
+        Assert.Equal(7, Argument(filter, "seed").GetInt32());
+    }
+
+    [Theory]
+    [InlineData(Workflow + " is my favourite workflow.")]          // the name, then no parameter
+    [InlineData("I'd use " + Workflow + " image=\"a.png\" here.")]   // mid-line
+    [InlineData("my flow(prompt=\"x\") stays")]                      // an alias with a space is left out
+    [InlineData("other(prompt=\"x\") stays")]                        // an alias for a tool not offered is left out
+    public void AnAlias_AnythingElse_PassesThrough(string reply)
+    {
+        var filter = new TextToolCallFilter([(Tool, (IReadOnlyList<string>)DrawParameters)], [(Workflow, Tool, "workflow"), ("my flow", Tool, "workflow"), ("other", "draw_picture", "workflow")]);
+        string text = filter.Push(reply) + filter.Flush();
+        Assert.Equal(reply, text);
+        Assert.Empty(filter.Calls);
+    }
+
+    [Fact]
+    public void WithArgument_AddsTheKeyFirst_KeepsTheCallsOwn_AndLeavesWhatDoesNotParse()
+    {
+        Assert.Equal("{\"workflow\":\"w\",\"prompt\":\"a\",\"seed\":7,\"cfg\":4.5,\"fast\":true}", TextToolCallFilter.WithArgument("prompt=\"a\", seed=7, cfg=4.5, fast=true", "workflow", "w"));
+        Assert.Equal("{\"workflow\":\"mine\",\"n\":[1,2]}", TextToolCallFilter.WithArgument("{\"workflow\":\"mine\",\"n\":[1,2]}", "workflow", "w"));
+        Assert.Equal("\"a dog\"", TextToolCallFilter.WithArgument("\"a dog\"", "workflow", "w"));
+    }
+
     [Theory]
     [InlineData("my_generate_image{prompt: \"x\"} stays")]
     [InlineData("a set like {generate_image} stays")]

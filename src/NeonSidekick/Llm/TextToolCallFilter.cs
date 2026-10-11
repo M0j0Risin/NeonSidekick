@@ -53,6 +53,10 @@ namespace NeonSidekick.Llm;
 /// which the server cannot turn into a call. A <c>{</c> after the name opens a call as <c>(</c> does, and its matching <c>}</c> closes
 /// it; the text between is the arguments, as the parenthesised form's are. Uncaught, the text was passed on to the other bot as the
 /// speaker's line and both bots copied it every turn after.</para>
+///
+/// <para>Aliases (later on 2026-10-11, the user's report: <c>juggernautxl_ragnarok_img2img image="C:\…" prompt="…" negative="…"</c>,
+/// a workflow's name where <c>generate_image</c> goes): a tool that is <see cref="IWrittenCallAliases"/> gives other names its call
+/// is caught under, in every form, as that tool's call with the alias as its argument (<see cref="Catch"/>).</para>
 /// </summary>
 public sealed class TextToolCallFilter
 {
@@ -114,14 +118,91 @@ public sealed class TextToolCallFilter
     }
 
     /// <param name="tools">The tools the turn offers with their parameter names: the parenthesised form for every name, and the line form for a tool with parameters.</param>
-    public TextToolCallFilter(IEnumerable<(string Name, IReadOnlyList<string> Parameters)> tools)
-        : this((tools ?? throw new ArgumentNullException(nameof(tools))).Select(t => t.Name).ToList())
+    /// <param name="aliases">
+    /// Other names a tool's call may be written under (2026-10-11, <see cref="IWrittenCallAliases"/>): each caught in every form as
+    /// <c>Tool</c>'s call, its <c>Argument</c> set to the alias unless the call names one itself, the line form read with the tool's
+    /// parameters. One that is a tool's own name, has a space in it, or names a tool not in <paramref name="tools"/> is left out.
+    /// </param>
+    public TextToolCallFilter(IEnumerable<(string Name, IReadOnlyList<string> Parameters)> tools, IEnumerable<(string Alias, string Tool, string Argument)>? aliases = null)
     {
-        _lineTools = tools
-            .Where(t => !string.IsNullOrEmpty(t.Name) && t.Parameters.Count > 0)
-            .DistinctBy(t => t.Name, StringComparer.Ordinal)
+        ArgumentNullException.ThrowIfNull(tools);
+        var named = tools.Where(t => !string.IsNullOrEmpty(t.Name)).DistinctBy(t => t.Name, StringComparer.Ordinal).ToList();
+        foreach (var (alias, tool, argument) in aliases ?? [])
+        {
+            if (alias.Length > 0 && !alias.Any(char.IsWhiteSpace) && argument.Length > 0 && !_aliases.ContainsKey(alias)
+                && !named.Any(t => t.Name == alias) && named.FirstOrDefault(t => t.Name == tool) is { Name: not null } target)
+            {
+                _aliases[alias] = (tool, argument);
+                _aliasTools.Add((alias, target.Parameters));
+            }
+        }
+
+        _names = [.. named.Select(t => t.Name), .. _aliasTools.Select(t => t.Name)];
+        _lineTools = named.Concat(_aliasTools)
+            .Where(t => t.Parameters.Count > 0)
             .Select(t => (t.Name, t.Parameters.Where(p => p.Length > 0).OrderByDescending(p => p.Length).ToArray()))
             .ToArray();
+    }
+
+    // The aliases: each one's tool and the argument it fills in, and its name with the tool's parameters for the line form.
+    private readonly Dictionary<string, (string Tool, string Argument)> _aliases = new(StringComparer.Ordinal);
+    private readonly List<(string Name, IReadOnlyList<string> Parameters)> _aliasTools = [];
+
+    /// <summary>
+    /// A call caught: under its own name as it was written, or under an alias as the alias's tool, its arguments a JSON object with
+    /// the alias's argument added (<see cref="WithArgument"/>).
+    /// </summary>
+    private void Catch(string name, string arguments) =>
+        _calls.Add(_aliases.TryGetValue(name, out var alias) ? (alias.Tool, WithArgument(arguments, alias.Argument, name)) : (name, arguments));
+
+    /// <summary>
+    /// <paramref name="arguments"/> (any form <see cref="ParseArguments"/> reads) as a JSON object's text with <paramref name="key"/>
+    /// set to <paramref name="value"/> first, unless they set it themselves; as they were when they do not parse, so the tool's
+    /// answer is the parse error a call under its own name gets. Pure.
+    /// </summary>
+    internal static string WithArgument(string arguments, string key, string value)
+    {
+        if (ParseArguments(arguments) is not { } parsed)
+        {
+            return arguments;
+        }
+
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            if (!parsed.ContainsKey(key))
+            {
+                writer.WriteString(key, value);
+            }
+
+            foreach (var (name, item) in parsed)
+            {
+                switch (item)
+                {
+                    case string text:
+                        writer.WriteString(name, text);
+                        break;
+                    case long whole:
+                        writer.WriteNumber(name, whole);
+                        break;
+                    case double number:
+                        writer.WriteNumber(name, number);
+                        break;
+                    case bool flag:
+                        writer.WriteBoolean(name, flag);
+                        break;
+                    case JsonElement element:
+                        writer.WritePropertyName(name);
+                        element.WriteTo(writer);
+                        break;
+                }
+            }
+
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(stream.ToArray());
     }
 
     /// <summary>The calls caught so far, in order: the tool's name and the text between its parentheses (or braces).</summary>
@@ -423,7 +504,7 @@ public sealed class TextToolCallFilter
             return false;
         }
 
-        _calls.Add(call);
+        Catch(call.Name, call.Arguments);
         _last = ' ';
         return true;
     }
@@ -605,7 +686,7 @@ public sealed class TextToolCallFilter
             {
                 if (_depth == 0 && c == (_opener == '{' ? '}' : ')'))
                 {
-                    _calls.Add((_callName!, _arguments.ToString()));
+                    Catch(_callName!, _arguments.ToString());
                     _callName = null;
                     _arguments.Clear();
                     _skipTick = _backticked;
@@ -674,7 +755,7 @@ public sealed class TextToolCallFilter
     {
         if (body is not null && TaggedCall(body) is { } call)
         {
-            _calls.Add(call);
+            Catch(call.Name, call.Arguments);
         }
         else
         {
