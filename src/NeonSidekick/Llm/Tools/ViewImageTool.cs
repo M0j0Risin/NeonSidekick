@@ -62,12 +62,13 @@ public sealed class ViewImageTool : FileTool
 
     /// <summary>
     /// The description under the given cap; <paramref name="imagesRoot"/> (2026-10-09, the user's call) names the profile's images
-    /// folder, where the saved pictures are, and that <c>search_files</c> lists it. Pinned.
+    /// folder, where the saved pictures are, and that <c>search_files</c> lists it; that nothing opens on the user's screen
+    /// (2026-10-11: asked to view a picture in the built-in viewer, the model called this; <c>open</c> does that). Pinned.
     /// </summary>
     public static string Describe(int limit, string? imagesRoot = null) =>
         "Shows you image files (png, jpg, gif, webp, bmp) under the working directory (the user's cwd / current directory), or by the full path a camera, screen, generate_image or pasted picture was saved under" +
         (imagesRoot is null ? "" : " (in the user's images folder, " + imagesRoot + "; search_files lists it by that full path)") + ": one as path, or up to " + N(limit) + " per call as paths " +
-        "(more than " + N(limit) + " shows the first " + N(limit) + " and names the rest for the next call; a batch per call, not a call per picture). They are attached to the message after the result, so you can describe or analyse them; read_file cannot read images.";
+        "(more than " + N(limit) + " shows the first " + N(limit) + " and names the rest for the next call; a batch per call, not a call per picture). They are attached to the message after the result, so you can describe or analyse them; nothing opens on the user's screen. read_file cannot read images.";
 
     public override JsonElement JsonSchema
     {

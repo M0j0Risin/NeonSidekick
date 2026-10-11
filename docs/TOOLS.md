@@ -87,7 +87,7 @@ Every path is relative to the working directory; nothing outside it can be reach
 | `delete` | `path` | Deletes a file or folder for good. `.git`, anything in it and a folder holding one are refused. |
 | `zip` | `path, to?, overwrite?` | Packs a file or folder into a `.zip`, beside it by default. A folder's entries are written sorted by path, so the same folder makes the same zip on Windows and a Mac. |
 | `unzip` | `path, to?, overwrite?` | Extracts a `.zip` into a folder, all or nothing. |
-| `open` | `path?, share?` | Opens a file in your own editor or viewer, or a folder in Explorer (Finder on a Mac; the working directory by default). `share` (or a full `\\server\share` path) opens one on a UNC share; a network runas share is refused. |
+| `open` | `path?, share?` | Opens a file in your own editor or viewer, or a folder in Explorer (Finder on a Mac; the working directory by default). A picture opens where a double-click on one would (*Image viewer*): the built-in viewer by default, without taking the keyboard from the chat. `share` (or a full `\\server\share` path) opens one on a UNC share; a network runas share is refused. |
 | `convert_to_pdf` | `path? \| url? \| markdown?, title?, to?, overwrite?, landscape?, paper?` | Makes a PDF in the working directory from a file, a web page (needs *Web tools* too) or Markdown it writes (see Making PDFs). Not in plan mode. |
 
 ### GitLib
@@ -815,7 +815,7 @@ Then "put my face from [Image #2] on the person in [Image #1]" works in chat, or
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `view_image` | `path?, paths?` | Attaches images to the next message, up to *File view image max (per call)*. On a Mac it also takes HEIC/HEIF, TIFF and AVIF, sent to the model as JPEG (TIFF as PNG). |
+| `view_image` | `path?, paths?` | Attaches images to the next message, up to *File view image max (per call)*, so the model can see them; nothing opens on your screen (`open` does that). On a Mac it also takes HEIC/HEIF, TIFF and AVIF, sent to the model as JPEG (TIFF as PNG). |
 | `image_info` | `path?, paths?` | A picture's format, upright size, file size, frames, transparency, EXIF orientation and the metadata it carries (EXIF, GPS, XMP, data after the picture…), read from its header (nothing goes to the model), then the formats `image_edit` can write here and its defaults. |
 | `image_edit` | `path, to?, overwrite?, format?, quality?, max_kb?, width?, height?, scale?, fit?, anchor?, interpolation?, crop_x/y/width/height?, rotate?, flip?, filter?, brightness?, contrast?, saturation?, hue?, tint?, tint_amount?, blur?, sharpen?, pad?, background?, metadata?, dpi?, chroma?, colors?, dither?, interlace?, view?` | Resizes, crops, turns, recolours and converts a picture in one pass and writes a new file (see Editing pictures); `metadata: none` alone strips a JPEG, PNG, WebP or GIF losslessly. `view` attaches the result. Not in plan mode. |
 

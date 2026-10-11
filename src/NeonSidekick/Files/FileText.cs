@@ -846,7 +846,16 @@ public static class FileText
     /// <summary>Where <c>open</c> showed a folder: Explorer, or Finder on macOS (2026-10-06, the macOS build). Pinned.</summary>
     public static string FolderBrowser => OperatingSystem.IsMacOS() ? " in Finder" : " in Explorer";
 
-    public static string Opened(OpenResult result)
+    /// <summary>Where <c>open</c> showed a picture the built-in viewer took (2026-10-11, the <c>Image viewer</c> setting empty). Pinned.</summary>
+    public const string InPictureViewer = " in the picture viewer";
+
+    /// <summary>Where <c>open</c> showed a picture the <c>Image viewer</c> setting sent elsewhere (2026-10-11): <c>system</c>, a command, or no viewer here. Pinned.</summary>
+    public const string InImageApp = " in the user's image app";
+
+    public static string Opened(OpenResult result) => Opened(result, null);
+
+    /// <summary><see cref="Opened(OpenResult)"/> with the place a file went (2026-10-11, a picture: <see cref="InPictureViewer"/> or <see cref="InImageApp"/>); null = the user's editor.</summary>
+    public static string Opened(OpenResult result, string? where)
     {
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome != FileOutcome.Ok)
@@ -854,7 +863,7 @@ public static class FileText
             return Error(result.Outcome, result.Relative, "open", result.Detail);
         }
 
-        return "opened " + Name(result.Relative) + (result.IsDirectory ? FolderBrowser : " in the user's editor");
+        return "opened " + Name(result.Relative) + (result.IsDirectory ? FolderBrowser : where ?? " in the user's editor");
     }
 
     // ---- formats ----

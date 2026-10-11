@@ -600,6 +600,29 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal(new[] { Path.Combine(_root, "docs", "a.txt"), Path.Combine(_root, "docs"), _root }, _opened);
     }
 
+    /// <summary>
+    /// <c>open</c> with a picture opener (2026-10-11): a picture by extension goes to it and the result names the place it
+    /// returned; a text file and a folder named like a picture go to the opener as before. Its description says so only then.
+    /// </summary>
+    [Fact]
+    public async Task Open_APicture_GoesToThePictureOpener_OtherFilesAndFolders_ToTheOpener()
+    {
+        Put("cat.PNG", "not really a png");
+        Put("notes.txt", "hi");
+        Directory.CreateDirectory(Path.Combine(_root, "album.jpg"));
+        var pictures = new List<string>();
+        var open = new OpenTool(_files, _opened.Add, openPicture: path => { pictures.Add(path); return FileText.InPictureViewer; });
+
+        Assert.Equal("opened cat.PNG" + FileText.InPictureViewer, await Invoke(open, ("path", "cat.PNG")));
+        Assert.Equal("opened notes.txt in the user's editor", await Invoke(open, ("path", "notes.txt")));
+        Assert.StartsWith("opened album.jpg", await Invoke(open, ("path", "album.jpg")));
+        Assert.Equal(new[] { Path.Combine(_root, "cat.PNG") }, pictures);
+        Assert.Equal(new[] { Path.Combine(_root, "notes.txt"), Path.Combine(_root, "album.jpg") }, _opened);
+
+        Assert.EndsWith(OpenTool.PictureDescription, open.Description, StringComparison.Ordinal);
+        Assert.DoesNotContain(OpenTool.PictureDescription, Tool<OpenTool>().Description, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Search_HonoursTheTurnsToken()
     {
@@ -765,7 +788,7 @@ public sealed class FileToolsTests : IDisposable
 
         Assert.Equal(
             "Shows you image files (png, jpg, gif, webp, bmp) under the working directory (the user's cwd / current directory), or by the full path a camera, screen, generate_image or pasted picture was saved under: one as path, or up to 10 per call as paths " +
-            "(more than 10 shows the first 10 and names the rest for the next call; a batch per call, not a call per picture). They are attached to the message after the result, so you can describe or analyse them; read_file cannot read images.",
+            "(more than 10 shows the first 10 and names the rest for the next call; a batch per call, not a call per picture). They are attached to the message after the result, so you can describe or analyse them; nothing opens on the user's screen. read_file cannot read images.",
             view.Description);
         Assert.Equal(ViewImageTool.Describe(10), view.Description);
         Assert.Contains("(at most 10)", view.JsonSchema.GetProperty("properties").GetProperty("paths").GetProperty("description").GetString());

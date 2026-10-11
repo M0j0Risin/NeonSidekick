@@ -1123,7 +1123,7 @@ internal sealed partial class ChatScreen
         // The print tools and /print (2026-09-28): the spooler the composition root hands in (none in tests); a model's print waits on the pane under ask.
         _print = new PrintService(printSpooler ?? NullPrintSpooler.Instance, _files, _effective, _time);
         _pdf = new PdfConverter(_web.Browser, _web.Fetcher, _print, _files, _effective, _time);
-        _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf, _images);
+        _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf, _images, OpenPictureForModel);
         _imageTools = ImageTools(_files, _effective, _images);
         _timers = new TimerBoard(time, SignalAlert);
         _jobs = new BackgroundJobs(SignalAlert, time);
@@ -5298,7 +5298,8 @@ internal sealed partial class ChatScreen
     /// became a group of their own (<see cref="ImageTools"/>, the user's ask): thirteen since.
     /// </summary>
     /// <param name="images">The profile's images folder (2026-10-09): the picture tools read (and <c>image_edit</c> writes) a full path there, and <c>search_files</c> and <c>file_info</c> read one (later that day, the user's call: the model could not list it to find the newest pictures); null = the working directory alone.</param>
-    public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null, PdfConverter? pdf = null, WorkingDirectory? images = null)
+    /// <param name="openPicture"><c>open</c>'s picture, opened where a double-click would (2026-10-11, <see cref="OpenTool"/>); null = the <paramref name="openFile"/> like any file (headless).</param>
+    public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null, PdfConverter? pdf = null, WorkingDirectory? images = null, Func<string, string>? openPicture = null)
     {
         var tools = new List<AIFunction>(14)
         {
@@ -5314,7 +5315,7 @@ internal sealed partial class ChatScreen
             new DeleteTool(files),
             new ZipTool(files),
             new UnzipTool(files),
-            new OpenTool(files, openFile, unc, effective),
+            new OpenTool(files, openFile, unc, effective, openPicture),
         };
 
         if (pdf is not null)
@@ -15780,6 +15781,42 @@ internal sealed partial class ChatScreen
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
             _flow.Error(PictureOpenFailedError(source.Name, ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// The <c>open</c> tool's picture (2026-10-11, the user's ask: told to view a picture "in the built-in viewer", the model had
+    /// <c>view_image</c>, which shows it to the model, and <c>open</c>, which handed it to the registered app): opened where a
+    /// double-click opens one (<see cref="PictureOpenerFor"/>, the <c>Image viewer</c> setting read now), the built-in viewer
+    /// quietly (<see cref="Viewer.PictureWindow.ShowQuietly"/>, the user's call: the keyboard stays in the chat, where they may be
+    /// typing). A viewer that will not start falls back to the registered app, logged, as a double-click's does. Returns where it
+    /// went (<see cref="FileText.InPictureViewer"/>, <see cref="FileText.InImageApp"/>); a launch that fails throws, and
+    /// <see cref="WorkingDirectory.Open"/> words it. Any thread.
+    /// </summary>
+    private string OpenPictureForModel(string path)
+    {
+        string editor = _effective().ImageEditor;
+        switch (PictureOpenerFor(editor, _showInViewer is not null))
+        {
+            case PictureOpener.Viewer:
+                try
+                {
+                    _showInViewer!(path);
+                    return FileText.InPictureViewer;
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or PlatformNotSupportedException or ArgumentException)
+                {
+                    DiagnosticLog.Warn("Viewer", $"The picture viewer would not open {path} ({ex.Message}); opening it in the registered app instead.");
+                    _openImage(path, "");
+                    return FileText.InImageApp;
+                }
+
+            case PictureOpener.Command:
+                _openImage(path, editor);
+                return FileText.InImageApp;
+            default:
+                _openImage(path, "");
+                return FileText.InImageApp;
         }
     }
 

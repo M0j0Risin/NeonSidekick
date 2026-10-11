@@ -19,6 +19,12 @@ namespace NeonSidekick.Llm.Tools;
 /// the shell starts runs with the user's own token, so Explorer or the editor would knock with the wrong account — the model
 /// is pointed to <c>unc_fetch</c> and then <c>open</c> on the copy. A local folder under <c>runas</c> is the user's own
 /// anyway, so it opens. Without a share and with a relative path, nothing changed: the working directory.</para>
+///
+/// <para><b>A picture</b> (2026-10-11, the user's ask: asked to view a picture "in the built-in viewer", the model had only
+/// <c>view_image</c>, which shows it to the model, and <c>open</c>, which handed it to the registered app): with an
+/// <c>openPicture</c> given, a file <see cref="ImageFile.IsImagePath"/> calls a picture goes there instead of the opener — the screen opens it
+/// where a double-click would (the <c>Image viewer</c> setting; the built-in viewer quietly when it is empty) and says where, for
+/// the result. Other files and folders are as before; headless gives none.</para>
 /// </summary>
 public sealed class OpenTool : FileTool
 {
@@ -56,27 +62,35 @@ public sealed class OpenTool : FileTool
         "Opens a file in the user's own editor or viewer, or a folder in Finder, on their screen; no path opens the working directory (the user's cwd / current directory) itself. " +
         "Use it when they ask to open, show or see something rather than to have it read out.";
 
+    /// <summary>The sentence a picture opener adds (2026-10-11): where a picture opens, and that <c>open</c>, not <c>view_image</c>, shows the user one. Pinned.</summary>
+    public const string PictureDescription =
+        " A picture opens in the app's own picture viewer (or the image viewer the user chose): use open, not view_image, when they ask to see, show or view a picture themselves.";
+
     private const string ShareDescription =
         " With share, or a full \\\\server\\share path, it opens the file or folder on that UNC share instead; a share signed in as another account cannot be opened this way (unc_fetch the file, then open the copy).";
 
     private readonly Action<string> _opener;
     private readonly UncAccess? _unc;
     private readonly Func<AppSettingsData>? _effective;
+    private readonly Func<string, string>? _openPicture;
 
     /// <param name="files">The working directory.</param>
     /// <param name="opener">The shell's "open with".</param>
     /// <param name="unc">The UNC shares' door (2026-10-01); null = the working directory alone.</param>
     /// <param name="effective">The settings in force, read at each call for <c>UNC tools</c> and the offered shares; needed with <paramref name="unc"/>.</param>
-    public OpenTool(WorkingDirectory files, Action<string> opener, UncAccess? unc = null, Func<AppSettingsData>? effective = null) : base(files)
+    /// <param name="openPicture">Opens a picture's full path where a double-click would (2026-10-11) and returns where it went
+    /// (<see cref="FileText.InPictureViewer"/>, <see cref="FileText.InImageApp"/>); null = pictures go to <paramref name="opener"/> like any file.</param>
+    public OpenTool(WorkingDirectory files, Action<string> opener, UncAccess? unc = null, Func<AppSettingsData>? effective = null, Func<string, string>? openPicture = null) : base(files)
     {
         _opener = opener ?? throw new ArgumentNullException(nameof(opener));
         _unc = unc;
         _effective = effective;
+        _openPicture = openPicture;
     }
 
     public override string Name => ToolName;
 
-    public override string Description => SharesOffered ? Base + ShareDescription : Base;
+    public override string Description => (_openPicture is null ? Base : Base + PictureDescription) + (SharesOffered ? ShareDescription : "");
 
     private static string Base => OperatingSystem.IsMacOS() ? MacBaseDescription : BaseDescription;
 
@@ -85,7 +99,24 @@ public sealed class OpenTool : FileTool
     /// <summary>Whether a UNC share can be named now: the door given, <c>UNC tools</c> on, a share offered.</summary>
     private bool SharesOffered => _unc is not null && _effective is not null && _unc.IsOffered(_effective());
 
-    public string Describe(string path) => FileText.Opened(Files.Open(path, _opener));
+    public string Describe(string path) => OpenIn(Files, path);
+
+    /// <summary><paramref name="path"/> opened in <paramref name="files"/> (the working directory or a share's), a picture through <see cref="_openPicture"/>, and the result's line.</summary>
+    private string OpenIn(WorkingDirectory files, string path)
+    {
+        string? where = null;
+        var result = files.Open(path, full =>
+        {
+            if (_openPicture is not null && ImageFile.IsImagePath(full) && File.Exists(full))
+            {
+                where = _openPicture(full);
+                return;
+            }
+
+            _opener(full);
+        });
+        return FileText.Opened(result, where);
+    }
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
@@ -127,7 +158,7 @@ public sealed class OpenTool : FileTool
         }
 
         // As the user (signIn false): a local runas folder needs no token, and the opened program runs as the user anyway.
-        var result = await _unc.RunAsync(target, write: false, files => UncText.Scoped(FileText.Opened(files.Open(relative, _opener)), target), cancellationToken, signIn: false).ConfigureAwait(false);
+        var result = await _unc.RunAsync(target, write: false, files => UncText.Scoped(OpenIn(files, relative), target), cancellationToken, signIn: false).ConfigureAwait(false);
         return result.Error ?? result.Value!;
     }
 }

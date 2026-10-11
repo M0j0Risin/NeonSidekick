@@ -24149,6 +24149,66 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>
+    /// The model's <c>open</c> on a picture goes where a double-click would (2026-10-11, the user's ask: told to view a picture
+    /// "in the built-in viewer", the model could only hand it to the registered app): the <c>Image viewer</c> setting empty is the
+    /// built-in viewer, shown quietly (<c>showInViewer</c>, never the keyboard-taking <c>viewPicture</c>); <c>system</c> and a
+    /// command go to the image opener as a double-click's do; a viewer that will not start falls back to the registered app.
+    /// The result says where. A text file still goes to the editor.
+    /// </summary>
+    [Theory]
+    [InlineData("", false, true, "")]
+    [InlineData("system", false, false, "")]
+    [InlineData("mspaint", false, false, "mspaint")]
+    [InlineData("", true, false, "")]
+    public async Task Turn_ModelOpensAPicture_FollowsTheImageViewerSetting_TheBuiltInViewerQuietly(string setting, bool viewerFails, bool expectViewer, string expectEditor)
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ImageEditor = setting; });
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        string picture = Path.Combine(files, "cat.bmp");
+        File.WriteAllBytes(picture, SmokeChecks.SolidBmp(4, 4));
+        File.WriteAllText(Path.Combine(files, "notes.txt"), "hi");
+        var shown = new List<string>();
+        var viewed = new List<string>();
+        var opened = new List<(string Path, string Editor)>();
+        _showInViewer = path =>
+        {
+            shown.Add(path);
+            if (viewerFails)
+            {
+                throw new InvalidOperationException("no window");
+            }
+        };
+        _viewPicture = viewed.Add;
+        _openImage = (path, editor) => opened.Add((path, editor));
+        _chat.Enqueue(FakeChatClient.Call("c1", OpenTool.ToolName, new Dictionary<string, object?> { ["path"] = "cat.bmp" }));
+        _chat.Enqueue(FakeChatClient.Call("c2", OpenTool.ToolName, new Dictionary<string, object?> { ["path"] = "notes.txt" }));
+        _chat.EnqueueText("Opened them.");
+        PushLine("show me the cat and my notes");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        string Result(int request) => (string)Assert.Single(_chat.Requests[request][^1].Contents.OfType<FunctionResultContent>()).Result!;
+        Assert.Empty(viewed);   // never the viewer that takes the keyboard
+        if (expectViewer)
+        {
+            Assert.Equal(new[] { picture }, shown);
+            Assert.Empty(opened);
+            Assert.Equal("opened cat.bmp" + FileText.InPictureViewer, Result(1));
+        }
+        else
+        {
+            Assert.Equal(new[] { (picture, expectEditor) }, opened);
+            Assert.Equal(viewerFails, shown.Count > 0);
+            Assert.Equal("opened cat.bmp" + FileText.InImageApp, Result(1));
+        }
+
+        Assert.Equal("opened notes.txt in the user's editor", Result(2));
+        Assert.Equal(new[] { Path.Combine(files, "notes.txt") }, _openedFiles);
+    }
+
+    /// <summary>
     /// A <c>/loop</c> wait keeps the mouse (2026-09-24, the user's ask: the pictures froze while a loop
     /// waited): a picture double-clicked in the wait opens, and ESC after it still ends the loop.
     /// </summary>
