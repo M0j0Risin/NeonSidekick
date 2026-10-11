@@ -3,6 +3,7 @@ using Microsoft.Extensions.AI;
 using NeonSidekick.App;
 using NeonSidekick.Comfy;
 using NeonSidekick.Files;
+using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
@@ -183,6 +184,7 @@ public partial class ChatScreenTests
         Assert.All(_chat.Requests.SelectMany(r => r), m => Assert.Equal(0, ImagesIn(m)));
         var result = Assert.Single(_chat.Requests[1].SelectMany(m => m.Contents).OfType<FunctionResultContent>());
         Assert.Contains("generated 1 picture with pony (seed 7", result.Result?.ToString(), StringComparison.Ordinal);
+        Assert.EndsWith("\n" + Assistant.PicturesUnseenNote, result.Result?.ToString(), StringComparison.Ordinal);
         Assert.Contains(new string('▀', 32), output);
     }
 

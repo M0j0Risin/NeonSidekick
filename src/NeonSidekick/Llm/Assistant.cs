@@ -776,6 +776,13 @@ public sealed class Assistant
     public IReadOnlySet<string> ToolPicturesUnseen { get; set; } = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
+    /// What a <see cref="ToolPicturesUnseen"/> tool's result tells the model after its own text (later on 2026-10-10, when
+    /// <c>view_image</c> and <c>camera_capture</c> joined: a bot told only "loaded" would describe a picture it never saw). The
+    /// transcript's line is the tool's text alone. Pinned: it is prompt text.
+    /// </summary>
+    public const string PicturesUnseenNote = "(The picture went to the user alone: you cannot see pictures here, so speak of it only from what you asked for and what this result says.)";
+
+    /// <summary>
     /// Whether the last round trip <see cref="MaxToolIterations"/> allows is asked without the tools, so the model must answer in
     /// words (2026-09-30, the user's report: a <c>/botchat</c> bot a few turns in spent all three of its round trips on
     /// <c>generate_image</c> and the chat showed "Stopped after 3 tool iterations without a final answer" in place of its line).
@@ -1607,9 +1614,10 @@ public sealed class Assistant
                 yield return new TurnEvent.ToolCall(call.Name, call.CallId, argumentsJson);
 
                 var (result, pictures, diff, shown) = await InvokeToolWithDiffAsync(_tools, call, cancellationToken).ConfigureAwait(false);
-                results.Add(ResultContent(call, result));
-                // A tool whose pictures are the user's alone (ToolPicturesUnseen) still hands them to the screen below.
+                // A tool whose pictures are the user's alone (ToolPicturesUnseen) still hands them to the screen below; the model's
+                // copy of the result says so, so it never describes a picture it was not shown.
                 bool seen = !ToolPicturesUnseen.Contains(call.Name);
+                results.Add(ResultContent(call, seen || pictures.Count == 0 ? result : result + "\n" + PicturesUnseenNote));
                 if (seen)
                 {
                     fetched.AddRange(pictures);

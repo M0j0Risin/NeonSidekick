@@ -322,14 +322,18 @@ public static partial class BotChat
 
     /// <summary>
     /// The tools whose pictures a bot's model is not shown (2026-10-10, <see cref="Assistant.ToolPicturesUnseen"/>): with
-    /// <c>Botchat vision enabled</c> off, <c>generate_image</c>, so the bot that drew a picture sees text alone as the others do;
-    /// none with it on. Only botchat's own picture tool: the main chat's tools a bot is offered keep theirs. Pure.
+    /// <c>Botchat vision enabled</c> off, <c>generate_image</c>, so the bot that drew a picture sees text alone as the others do,
+    /// and — later that day, the user's ask — <c>view_image</c> and <c>camera_capture</c>, which a bot gets from the main chat's
+    /// tools; none with it on. Pure.
     /// </summary>
     public static IReadOnlySet<string> UnseenToolPictures(bool vision) =>
-        vision ? NoneUnseen : DrawnUnseen;
+        vision ? NoneUnseen : PicturesUnseen;
 
     private static readonly IReadOnlySet<string> NoneUnseen = new HashSet<string>(StringComparer.Ordinal);
-    private static readonly IReadOnlySet<string> DrawnUnseen = new HashSet<string>(StringComparer.Ordinal) { GenerateImageTool.ToolName };
+    private static readonly IReadOnlySet<string> PicturesUnseen = new HashSet<string>(StringComparer.Ordinal)
+    {
+        GenerateImageTool.ToolName, ViewImageTool.ToolName, CameraCaptureTool.ToolName,
+    };
 
     /// <summary>
     /// The group-chat rules after the persona (2026-09-24): who else is in the room, speak only as yourself,

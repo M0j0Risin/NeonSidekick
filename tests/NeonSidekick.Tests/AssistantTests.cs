@@ -854,6 +854,34 @@ public class AssistantTests
         Assert.Equal("a square", history.Messages[^1].Text);
     }
 
+    /// <summary>
+    /// A tool named in ToolPicturesUnseen (2026-10-10, botchat with vision off): the screen still gets its picture on the event, the
+    /// model gets the text and the note, and no carrier follows; another tool in the same iteration keeps its carrier.
+    /// </summary>
+    [Fact]
+    public async Task PictureTool_Unseen_ThePictureIsTheScreensAlone_AndTheModelIsToldSo()
+    {
+        var hidden = new ImageAttachment("pic.png", [1, 2, 3], ImageFile.Png, 4, 4);
+        var shown = new ImageAttachment("b.png", [4], ImageFile.Png, 1, 1);
+        var (client, _, assistant) = Build(new AIFunction[] { new PictureTool(hidden), new PictureTool(shown, "picture2") });
+        assistant.ToolPicturesUnseen = new HashSet<string>(StringComparer.Ordinal) { "picture" };
+        client.Enqueue(FakeChatClient.Call("c1", "picture", new Dictionary<string, object?>()), FakeChatClient.Call("c2", "picture2", new Dictionary<string, object?>()));
+        client.EnqueueText("done");
+
+        var events = await Run(assistant, "look");
+
+        var results = events.OfType<TurnEvent.ToolResult>().ToList();
+        Assert.Equal("saw pic.png", results[0].Text);   // the transcript's line: the tool's text alone
+        Assert.Same(hidden, Assert.Single(results[0].Images!));
+        var second = client.Requests[1];
+        var answers = second[3].Contents.OfType<FunctionResultContent>().ToList();
+        Assert.Equal("saw pic.png\n" + Assistant.PicturesUnseenNote, answers[0].Result);
+        Assert.Equal("saw b.png", answers[1].Result);
+        var carrier = second[4];
+        Assert.True(ConversationHistory.IsImageCarrier(carrier));
+        Assert.Equal(new byte[] { 4 }, Assert.Single(carrier.Contents.OfType<DataContent>()).Data.ToArray());
+    }
+
     [Fact]
     public async Task TwoPictureCalls_InOneIteration_ShareOneCarrier()
     {

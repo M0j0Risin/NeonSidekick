@@ -142,6 +142,36 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
+    /// view_image with Botchat vision enabled off (later on 2026-10-10, the user's ask): the bot's model gets the result's text and
+    /// the note, never the picture; the transcript still draws the thumbnail. On, the carrier follows the result as in the main chat.
+    /// </summary>
+    [WindowsTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BotChat_ViewImage_VisionOff_ThePictureIsTheUsersAlone(bool vision)
+    {
+        BotChatFixture();
+        _settings.Update(d => { d.ImageTools = true; d.BotChatLimitedTools = [ViewImageTool.ToolName]; d.BotChatVision = vision; });
+        string folder = Path.Combine(_settings.ProfileDirectory, Files.WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(folder);
+        File.WriteAllBytes(Path.Combine(folder, "square.bmp"), SmokeChecks.SolidBmp(4, 4));
+        _chat.Enqueue(FakeChatClient.Call("v1", ViewImageTool.ToolName, new Dictionary<string, object?> { ["path"] = "square.bmp" }));
+        _chat.EnqueueText("A square.");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Contains("\n  ▀▀▀▀\n  ▀▀▀▀\n", output);
+        var result = Assert.Single(_chat.Requests[1].SelectMany(m => m.Contents).OfType<FunctionResultContent>());
+        Assert.Equal(!vision, (result.Result?.ToString() ?? "").EndsWith("\n" + Assistant.PicturesUnseenNote, StringComparison.Ordinal));
+        Assert.Equal(vision ? 1 : 0, _chat.Requests[1].SelectMany(m => m.Contents).OfType<DataContent>().Count());
+    }
+
+    /// <summary>
     /// Memory on, shared-parent (the defaults), and the parent's Memory off (Botchat memory enabled alone decides): every bot's
     /// prompt lists the starting profile's memories with the save sentences and the memory rule, it is offered save_memory and
     /// recall_memory, and a bot's save lands in the starting profile's memory.json and in the next bot's prompt.
