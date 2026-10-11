@@ -148,6 +148,36 @@ public sealed class SqlToolsTests
         Assert.Equal(SqlText.ConnectFailed("bare", SqlText.NoPassword("bare")), await Invoke<SqlQueryTool>(("sql", "SELECT 1")));
     }
 
+    /// <summary>
+    /// A Mac's runas (2026-10-11, <see cref="KerberosSignIn"/>): a missing password names the fix as on Windows; a <c>DOMAIN\name</c>
+    /// loads but is refused at the connect with the form a Mac needs, before any Kerberos; a <c>name@REALM</c> goes on to the open
+    /// (a closed port fails it before the sign-in, so no KDC is asked); the listing reads as Windows'.
+    /// </summary>
+    [MacFact]
+    public async Task OnAMac_ARunAsConnection_NeedsNameAtRealm_AndAMissingPassword_NamesTheFix()
+    {
+        string target = "NeonSidekick.Tests/" + Guid.NewGuid().ToString("N");
+        var runas = new SqlConnectionConfig { Server = "tcp:127.0.0.1,1", Database = "Reports", Auth = "runas", User = @"NEONSIDEKICK-TEST\nobody", PasswordStore = "credman", Credential = target, ConnectTimeoutSeconds = 1, Encrypt = "optional" };
+        _catalog = new SqlCatalog([new SqlNamedConnection("prod", runas, "test")], []);
+        try
+        {
+            Assert.Equal(SqlText.ConnectFailed("prod", SqlText.NoCredential(target)), await Invoke<SqlQueryTool>(("sql", "SELECT SUSER_SNAME()")));
+
+            WindowsCredentials.WriteGeneric(target, runas.User!, "x");
+            Assert.Equal(SqlText.ConnectFailed("prod", SqlText.RunAsNeedsRealm(@"NEONSIDEKICK-TEST\nobody")), await Invoke<SqlQueryTool>(("sql", "SELECT SUSER_SNAME()")));
+            Assert.Contains("- prod: tcp:127.0.0.1,1 / Reports, windows sign-in as NEONSIDEKICK-TEST\\nobody (runas)", await Invoke<SqlConnectionsTool>());
+
+            runas.User = "nobody@neonsidekick.test";
+            string failed = await Invoke<SqlQueryTool>(("sql", "SELECT SUSER_SNAME()"));
+            Assert.StartsWith("Error: could not connect to prod: ", failed);
+            Assert.DoesNotContain("Kerberos", failed);
+        }
+        finally
+        {
+            WindowsCredentials.DeleteGeneric(target);
+        }
+    }
+
     [Fact]
     public async Task TheQueryTool_RefusesWhatTheGateRefuses_AndBadArguments_BeforeAnyConnect()
     {

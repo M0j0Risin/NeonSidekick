@@ -36,7 +36,10 @@ internal sealed partial class SettingsMenu
     public const string SqlWizardDatabaseQuestion = "The database: the one this connection reaches (the tools never leave it; another database is another connection).";
     public const string SqlWizardAuthQuestion = "How it signs in.";
     public const string SqlWizardSqlUserQuestion = "The SQL login's name.";
-    public const string SqlWizardRunAsUserQuestion = "The Windows account to sign in as: DOMAIN\\name or name@domain.";
+    /// <summary>The <c>runas</c> account's question: on a Mac (2026-10-11) a Kerberos <c>name@REALM</c>, which is all it can sign in as. Pinned.</summary>
+    public static string SqlWizardRunAsUserQuestion => OperatingSystem.IsMacOS()
+        ? "The account to sign in as through Kerberos: name@REALM (e.g. svc-reader@AD.EXAMPLE.EDU)."
+        : "The Windows account to sign in as: DOMAIN\\name or name@domain.";
     public const string SqlWizardStoreQuestion = "Where the password is kept.";
     public const string SqlWizardPasswordQuestion = "The password (masked; never shown, logged or sent to the model).";
     public const string SqlWizardEncryptQuestion = "Encryption of the connection.";
@@ -48,17 +51,15 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The sign-in picks, <see cref="SqlConnectionConfig.SqlAuth"/> / <c>windows</c> / <c>runas</c> in that order (<see cref="SqlWizardAuthWords"/>).
-    /// On macOS (2026-10-06) <c>sql</c> and <c>windows</c> alone: Windows sign-in works there through Kerberos (proven by the user —
-    /// never drop it), while <c>runas</c> needs Windows' <c>LogonUser</c>. Pinned.
+    /// On macOS <c>windows</c> works through Kerberos (2026-10-06, proven by the user — never drop it), and since 2026-10-11 so does
+    /// <c>runas</c>: the app gets the other account's ticket with its stored password (<see cref="Sql.KerberosSignIn"/>). Pinned.
     /// </summary>
     public static readonly IReadOnlyList<string> SqlWizardAuthRows = OperatingSystem.IsMacOS()
-        ? ["sql      a SQL login (user and password)", "windows  Windows sign-in as you through Kerberos (your ticket, no password)"]
+        ? ["sql      a SQL login (user and password)", "windows  Windows sign-in as you through Kerberos (your ticket, no password)", "runas    Kerberos sign-in as another account (name@REALM and its password)"]
         : ["sql      a SQL login (user and password)", "windows  Windows sign-in as you (no password)", "runas    Windows sign-in as another account (runas /netonly)"];
 
     /// <summary>The words <see cref="SqlWizardAuthRows"/> pick, row for row.</summary>
-    public static readonly IReadOnlyList<string> SqlWizardAuthWords = OperatingSystem.IsMacOS()
-        ? [SqlConnectionConfig.SqlAuth, SqlConnectionConfig.WindowsAuth]
-        : [SqlConnectionConfig.SqlAuth, SqlConnectionConfig.WindowsAuth, SqlConnectionConfig.RunAsAuth];
+    public static readonly IReadOnlyList<string> SqlWizardAuthWords = [SqlConnectionConfig.SqlAuth, SqlConnectionConfig.WindowsAuth, SqlConnectionConfig.RunAsAuth];
 
     /// <summary>The store picks, <c>file</c> then <c>credman</c>. Pinned.</summary>
     public static readonly IReadOnlyList<string> SqlWizardStoreRows =
@@ -449,9 +450,9 @@ internal sealed partial class SettingsMenu
                         return SqlWizardUserRequired;
                     }
 
-                    if (c.IsRunAs && WindowsCredentials.SplitAccount(user) is null)
+                    if (c.IsRunAs && SqlConnectionConfig.RunAsAccountProblem(user) is { } refused)
                     {
-                        return SqlText.RunAsNeedsDomain(user);
+                        return refused;
                     }
 
                     c.User = user;

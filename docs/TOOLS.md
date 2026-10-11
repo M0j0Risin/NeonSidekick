@@ -137,7 +137,7 @@ Read-only queries against SQL Server over named connections, with no ODBC driver
 
 * **`server`**: `host`, `host,port` or `host\instance`.
 * **`database`** (required): the one database the connection reaches. See [The connection's database](#the-connections-database).
-* **`auth`**: `sql` (a SQL login: `user` and `password`), `windows` (your account; on a Mac, your Kerberos ticket from `kinit`), or `runas` (another Windows account, `DOMAIN\name` or `name@domain`, plus `password`; like `runas /netonly`, it signs in to the server only as that account). `runas` needs Windows; a Mac's wizard and `sql.json` template leave it out.
+* **`auth`**: `sql` (a SQL login: `user` and `password`), `windows` (your account; on a Mac, your Kerberos ticket from `kinit`), or `runas` (another Windows account, `DOMAIN\name` or `name@domain`, plus `password`; like `runas /netonly`, it signs in to the server only as that account). On a Mac `runas` signs in through Kerberos with the stored password, so the account must be `name@REALM` (`svc-reader@AD.EXAMPLE.EDU`); the app gets that account's ticket at each connect, no `kinit` needed, and macOS keeps it in a credential cache of its own beside yours (`klist -l` lists it; your default stays as it was). See [BUILD.md](BUILD.md#another-account-runas).
 * **`encrypt`**: `strict`, `mandatory` (default) or `optional`. **`trustServerCertificate`**: `true` accepts a self-signed certificate.
 * **`connectTimeoutSeconds`**: 1–120 (default 15).
 * **`access`**: `read` (default) or `readwrite`. Changes through `sql_execute` need `readwrite` **and** *SQL mode* `read-write`, both checked at every call.

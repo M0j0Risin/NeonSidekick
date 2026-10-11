@@ -12,7 +12,8 @@ namespace NeonSidekick.Sql;
 /// <see cref="Description"/> the model sees in <c>sql_connections</c> and the rules. Later that day (the user's ask:
 /// integrated auth "as another user", their PROD launcher's <c>runas /savecred</c>) <see cref="Auth"/> gained
 /// <c>runas</c> — Windows sign-in as <see cref="User"/> (<c>DOMAIN\name</c>), the <c>runas /netonly</c> way, for this
-/// connection alone (<see cref="WindowsCredentials.LogonNetOnly"/>) — and every password became a stored secret:
+/// connection alone (<see cref="WindowsCredentials.LogonNetOnly"/>; on a Mac since 2026-10-11 a Kerberos sign-in as
+/// <c>name@REALM</c> with the stored password, <see cref="KerberosSignIn"/>) — and every password became a stored secret:
 /// <see cref="PasswordStore"/> <c>file</c> keeps it DPAPI-encrypted in <see cref="Password"/> (a plain value typed
 /// there is encrypted in place at the next read, <see cref="SqlConfigFile"/>), <c>credman</c> reads it from the
 /// Windows Credential Manager entry <see cref="CredentialTarget"/> (plain text until then, the user's call of the
@@ -95,6 +96,23 @@ public sealed class SqlConnectionConfig
     /// <summary>Whether the entry signs in as another Windows account (<c>runas</c>).</summary>
     [JsonIgnore]
     public bool IsRunAs => string.Equals(Auth?.Trim(), RunAsAuth, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Why <paramref name="account"/> cannot be a <c>runas</c> account on this machine, or null: Windows takes <c>DOMAIN\name</c> or
+    /// <c>name@domain</c>, a Mac (2026-10-11, <see cref="KerberosSignIn"/>) only <c>name@REALM</c>. The wizard asks this; the file's
+    /// <see cref="Problem"/> keeps Windows' rule on every system, so a <c>sql.json</c> shared with a Windows PC loads whole on a Mac and
+    /// <see cref="SqlAccess"/> refuses a <c>DOMAIN\name</c> there at the connect.
+    /// </summary>
+    public static string? RunAsAccountProblem(string? account)
+    {
+        string text = account?.Trim() ?? "";
+        if (KerberosSignIn.Offered)
+        {
+            return KerberosSignIn.Principal(text) is null ? SqlText.RunAsNeedsRealm(text) : null;
+        }
+
+        return WindowsCredentials.SplitAccount(text) is null ? SqlText.RunAsNeedsDomain(text) : null;
+    }
 
     /// <summary>Whether the entry needs a password: a SQL login or a <c>runas</c> account.</summary>
     [JsonIgnore]

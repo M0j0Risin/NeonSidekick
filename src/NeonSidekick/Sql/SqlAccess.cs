@@ -191,7 +191,7 @@ public sealed class SqlAccess
         {
             if (target.Config.IsRunAs)
             {
-                if (!OperatingSystem.IsWindows())
+                if (!OperatingSystem.IsWindows() && !KerberosSignIn.Offered)
                 {
                     return SqlRun.Refused(SqlOutcome.ConnectFailed, WindowsCredentials.NotWindows, target.Name);
                 }
@@ -317,7 +317,7 @@ public sealed class SqlAccess
         {
             if (target.Config.IsRunAs)
             {
-                if (!OperatingSystem.IsWindows())
+                if (!OperatingSystem.IsWindows() && !KerberosSignIn.Offered)
                 {
                     return SqlRun.Refused(SqlOutcome.ConnectFailed, WindowsCredentials.NotWindows, target.Name);
                 }
@@ -391,15 +391,61 @@ public sealed class SqlAccess
     }
 
     /// <summary>
-    /// Opens <paramref name="connection"/> signed in as the <c>runas</c> account (later on 2026-09-23): a
+    /// Opens <paramref name="connection"/> signed in as the <c>runas</c> account: Windows' netonly token
+    /// (<see cref="OpenNetOnlyAsync"/>), or on a Mac (2026-10-11) the account's own Kerberos sign-in (<see cref="OpenKerberosAsync"/>).
+    /// Null when open; else the refusal.
+    /// </summary>
+    private static Task<SqlRun?> OpenAsAsync(SqlConnection connection, SqlNamedConnection target, string password, CancellationToken cancellationToken) =>
+        OperatingSystem.IsWindows()
+            ? OpenNetOnlyAsync(connection, target, password, cancellationToken)
+            : OpenKerberosAsync(connection, target, password, cancellationToken);
+
+    /// <summary>
+    /// <see cref="OpenAsAsync"/> on a Mac (2026-10-11): the account as <c>name@REALM</c> (<see cref="KerberosSignIn.Principal"/>; a
+    /// <c>DOMAIN\name</c> that Windows takes is refused here with the form to use, at the connect rather than the file's load, so a
+    /// <c>sql.json</c> shared with a Windows PC keeps its entry), a <see cref="KerberosSignIn"/> as the connection's SSPI provider, and
+    /// the open. Like the Windows path, ESC waits the open out (the connect timeout bounds it): cancelling it mid-handshake would
+    /// dispose the provider under SqlClient still calling it. A failed Kerberos step is said as itself, the status as .NET names it
+    /// — not SqlClient's "target principal name is incorrect", which reads as a trust or SPN problem; the status alone does not
+    /// tell a wrong password from an account the server refuses (one that got its service ticket still failed), so the sentence
+    /// claims neither. Any other failure (the server's own login refusal) goes to the caller's catch as every connect's does.
+    /// </summary>
+    private static async Task<SqlRun?> OpenKerberosAsync(SqlConnection connection, SqlNamedConnection target, string password, CancellationToken cancellationToken)
+    {
+        string account = target.Config.User?.Trim() ?? "";
+        if (KerberosSignIn.Principal(account) is not { } principal)
+        {
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, SqlText.RunAsNeedsRealm(account), target.Name);
+        }
+
+        using var signIn = new KerberosSignIn(principal, password);
+        connection.SspiContextProvider = signIn;
+        DiagnosticLog.Info(SqlConfigFile.Category, SqlText.RunAsLogLine(target.Name, principal));
+        try
+        {
+            await connection.OpenAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (SqlException ex) when (signIn.Failure is { } status)
+        {
+            DiagnosticLog.Warn(SqlConfigFile.Category, SqlText.KerberosFailedLogLine(target.Name, principal, status.ToString(), LogText.Excerpt(ex.Message)));
+            cancellationToken.ThrowIfCancellationRequested();
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, SqlText.KerberosFailed(principal, status.ToString()), target.Name);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return null;
+    }
+
+    /// <summary>
+    /// <see cref="OpenAsAsync"/> on Windows (later on 2026-09-23): a
     /// <c>NEW_CREDENTIALS</c> token (<see cref="WindowsCredentials.LogonNetOnly"/>), and the <b>synchronous</b> open run
     /// impersonated on a worker thread — the sign-in's SSPI handshake takes the calling thread's token, and a sync open
     /// keeps the whole handshake on the one thread that holds it (the async open's continuations may land on others).
     /// The connect timeout bounds it, and ESC waits it out: abandoning the open would dispose the token and the connection under the thread still using them. Only the sign-in is impersonated: once open, the
-    /// batch runs as every other. Null when open; else the refusal.
+    /// batch runs as every other.
     /// </summary>
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    private static async Task<SqlRun?> OpenAsAsync(SqlConnection connection, SqlNamedConnection target, string password, CancellationToken cancellationToken)
+    private static async Task<SqlRun?> OpenNetOnlyAsync(SqlConnection connection, SqlNamedConnection target, string password, CancellationToken cancellationToken)
     {
         using var token = WindowsCredentials.LogonNetOnly(target.Config.User!, password, out string? error);
         if (token is null)

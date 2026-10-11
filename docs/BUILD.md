@@ -108,7 +108,7 @@ A downloaded build isn't notarized, so macOS quarantines it. Clear that once aft
 | Area | On a Mac | Notes |
 |---|---|---|
 | Chat, tools, MCP, git, sessions, skills, headless | Works | The shell is zsh; `bash` and `pwsh` can be picked. |
-| SQL Server, Oracle, MySQL, PostgreSQL and SQLite tools | Works | SQL Server's Windows sign-in is Kerberos only ([below](#sql-server-with-windows-authentication-kerberos)); `runas` needs Windows; a named-pipe (`np:`) server is a connect error. |
+| SQL Server, Oracle, MySQL, PostgreSQL and SQLite tools | Works | SQL Server's Windows sign-in is Kerberos only ([below](#sql-server-with-windows-authentication-kerberos)); `runas` is a Kerberos sign-in as `name@REALM` with its stored password ([below](#another-account-runas)); a named-pipe (`np:`) server is a connect error. |
 | Embedded LLM | Works (Metal) | llama.cpp's macOS build (12 MB); the GPU may use about two thirds of the Mac's memory (10.7 GB of 16 GB). The NVFP4 builds (NVIDIA only) are left out. |
 | Pictures: dropped in, pasted, `image_info`, `image_edit` | Works (ImageIO) | Reads HEIC/HEIF, TIFF and AVIF too; writes PNG, JPEG, GIF, BMP, TIFF and HEIF (no JPEG XL); refuses `chroma`, `colors` and `dither`. |
 | Picture viewer, thumbnail browser, picture menu, log and process windows | Works (AppKit) | Need the desktop: over SSH a double-clicked picture opens in Preview. |
@@ -182,6 +182,15 @@ If it fails:
 * **`The target principal name is incorrect. Cannot generate SSPI context.`:** no ticket could be had for the server's name. Either the server is in a domain your ticket's doesn't trust ([A server in another domain](#a-server-in-another-domain)), or its Kerberos name (SPN) isn't registered for that host and port, which the server's admin fixes. `kgetcred` above tells the two apart.
 
 When writing it down for others, "Windows Authentication (Kerberos)" says both what the server sees (a Windows login) and what the Mac needs (a Kerberos ticket). On the server, `sys.dm_exec_connections.auth_scheme` shows `KERBEROS` for such a connection (`NTLM` for a Windows client that fell back).
+
+#### Another account (runas)
+
+A connection with `"auth": "runas"` signs in as another account instead of yours, with that account's password kept by the app: in the macOS Keychain (`"passwordStore": "credman"`, set with *SQL set password* or `security add-generic-password -s NeonSidekick/sql/<connection> -a <account> -w`) or encrypted in `sql.json`. On Windows that's a `runas /netonly` sign-in; on a Mac the app gets the account's Kerberos ticket itself at each connect, so no `kinit` is needed and an expired ticket is never the problem.
+
+* **The account is `name@REALM`**, e.g. `svc-reader@AD.EXAMPLE.EDU`. A `DOMAIN\name` that works on Windows is refused on a Mac with the form to use: a short domain name doesn't say which realm to ask. The app puts the realm in capitals.
+* **It is Kerberos only.** It never falls back to NTLM, and everything above about realms, domain trust and the server's name holds for it too.
+* **macOS keeps the ticket.** Each sign-in leaves that account's ticket, and the server's, in a credential cache of its own beside yours: `klist -l` lists it until it expires (`kdestroy -p <account>` removes it). Unlike `kinit`, it doesn't make that account the default; your own ticket and your `"auth": "windows"` connections are left as they were. When the `runas` account *is* your own, each connect renews your ticket.
+* **If it fails,** the app says `the Kerberos sign-in as <account> failed (<status>)` with .NET's status name; the status alone doesn't tell a wrong password from an account the server won't take, so check both. A refusal from the server itself (`Login failed for user …`) reads as for any connection.
 
 ### Known issues
 

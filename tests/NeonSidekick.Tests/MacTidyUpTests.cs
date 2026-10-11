@@ -83,9 +83,12 @@ public sealed class MacTidyUpTests : IDisposable
         Assert.Contains("cmdkey /generic:NeonSidekick/postgres/billing /user:billing_ro /pass", PostgresConfigFile.EmptyText);
     }
 
-    /// <summary>The Mac's <c>sql.json</c> keeps Windows sign-in — Kerberos works there (the user's proof) — and leaves runas out; each example usable once uncommented.</summary>
+    /// <summary>
+    /// The Mac's <c>sql.json</c> keeps Windows sign-in — Kerberos works there (the user's proof) — and since 2026-10-11 has a runas of its
+    /// own (<c>name@REALM</c>, the password in the Keychain) where Windows' two were; each example usable once uncommented.
+    /// </summary>
     [UnixFact]
-    public void OnMacOS_TheSqlTemplate_KeepsWindowsSignIn_DropsRunAs_AndEachExampleLoads()
+    public void OnMacOS_TheSqlTemplate_KeepsWindowsSignIn_AndAKerberosRunAs_AndEachExampleLoads()
     {
         if (!OperatingSystem.IsMacOS())
         {
@@ -105,12 +108,15 @@ public sealed class MacTidyUpTests : IDisposable
         var loaded = SqlConfigFile.Load(path);
 
         Assert.Empty(loaded.Problems);
-        Assert.Equal(["adventureworks", "reports-me", "reports-reader"], loaded.Connections.Select(c => c.Name));
-        Assert.Equal(["sql", "windows", "sql"], loaded.Connections.Select(c => c.Config.Auth));
+        Assert.Equal(["adventureworks", "reports-me", "reports-reader", "reports-admin"], loaded.Connections.Select(c => c.Name));
+        Assert.Equal(["sql", "windows", "sql", "runas"], loaded.Connections.Select(c => c.Config.Auth));
         Assert.True(loaded.Connections[2].Config.InCredentialManager);
+        Assert.True(loaded.Connections[3].Config.InCredentialManager);
+        Assert.Null(SqlConnectionConfig.RunAsAccountProblem(loaded.Connections[3].Config.User));
         Assert.Contains("Kerberos", SqlConfigFile.EmptyText);
-        Assert.DoesNotContain("\"auth\": \"runas\"", SqlConfigFile.EmptyText);
+        Assert.DoesNotContain("CONTOSO", SqlConfigFile.EmptyText);
         Assert.Contains("security add-generic-password -s NeonSidekick/sql/reports-reader -a reader -w", SqlConfigFile.EmptyText);
+        Assert.Contains("security add-generic-password -s NeonSidekick/sql/reports-admin -a svc-reader@AD.EXAMPLE.EDU -w", SqlConfigFile.EmptyText);
     }
 
     /// <summary>Windows sign-in is integrated security on every system: Kerberos carries it on a Mac (2026-10-06), so nothing may gate it to Windows.</summary>
@@ -128,15 +134,15 @@ public sealed class MacTidyUpTests : IDisposable
     // ── the wizards and the password stores ──
 
     [UnixFact]
-    public void OnMacOS_TheWizards_OfferWindowsSignIn_ButNoRunAs_AndNameTheKeychain()
+    public void OnMacOS_TheWizards_OfferWindowsSignIn_AndAKerberosRunAs_AndNameTheKeychain()
     {
         if (!OperatingSystem.IsMacOS())
         {
             return;
         }
 
-        Assert.Equal([SqlConnectionConfig.SqlAuth, SqlConnectionConfig.WindowsAuth], SettingsMenu.SqlWizardAuthWords);
-        Assert.Equal(["sql      a SQL login (user and password)", "windows  Windows sign-in as you through Kerberos (your ticket, no password)"], SettingsMenu.SqlWizardAuthRows);
+        Assert.Equal([SqlConnectionConfig.SqlAuth, SqlConnectionConfig.WindowsAuth, SqlConnectionConfig.RunAsAuth], SettingsMenu.SqlWizardAuthWords);
+        Assert.Equal(["sql      a SQL login (user and password)", "windows  Windows sign-in as you through Kerberos (your ticket, no password)", "runas    Kerberos sign-in as another account (name@REALM and its password)"], SettingsMenu.SqlWizardAuthRows);
         Assert.Equal(["file     encrypted (Keychain key) in sql.json", "credman  the macOS Keychain"], SettingsMenu.SqlWizardStoreRows);
         Assert.Equal(["file     encrypted (Keychain key) in postgres.json", "credman  the macOS Keychain"], SettingsMenu.PostgresWizardStoreRows);
         Assert.Equal("Saved the password of 'pg' to the macOS Keychain as NeonSidekick/postgres/pg.", SqlText.PasswordSavedToCredman("pg", "NeonSidekick/postgres/pg"));

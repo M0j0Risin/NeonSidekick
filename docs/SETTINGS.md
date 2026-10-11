@@ -911,7 +911,7 @@ The pane heads its runs **Access**, **Connections**, **Queries** and **Files**.
 | SQL mode | `read-only`: the tools only read. `read-write`: `sql_execute` is offered too, on connections whose entry says `"access": "readwrite"`, each change allowed by you. See [SQL › Changes](TOOLS.md#changes). | read-only |
 | SQL statements allowed | Under `read-write`: the kinds of statement `sql_execute` may run (a checklist; `a` / `n` / `d` pick all, none or the default). See [SQL › Changes](TOOLS.md#changes). | changing data, creating, reading |
 | SQL connections offered | A checklist of the connections in both `sql.json` files; nothing is offered until ticked (here or in the wizard). `a` / `n` tick all or none. A hidden connection is invisible to every tool, the rules and the `%`-mention. A ticked name no longer in the files is dropped when the checklist opens, and the status line names it; not while a file can't be read, nor a name an entry with a problem still holds. | none |
-| SQL set password | Pick a `sql` or `runas` connection (`runas` is Windows only) and type its password, masked; it goes to that connection's store. | — |
+| SQL set password | Pick a `sql` or `runas` connection and type its password, masked; it goes to that connection's store. | — |
 | SQL add/edit connection | A wizard for a new connection, or to edit a saved one, which can **test** it (`SELECT @@VERSION`, and the other databases the login could open) before saving. The database is required. See [Managing connections](TOOLS.md#managing-connections). | — |
 | SQL %-mention enabled | `%` and part of a name lists the connections; a pick writes `%name`. | on |
 | SQL max rows | Rows `sql_query` returns unless the call says otherwise (1–100000). | 100 |

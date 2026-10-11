@@ -78,9 +78,10 @@ public sealed class SqlConfigFile
     /// <summary>
     /// <see cref="EmptyText"/> on macOS (2026-10-06, the tidy-up before the first Mac release: a Mac user never reads Windows
     /// wording): the SQL login and Windows sign-in examples kept — <c>auth: windows</c> works on a Mac through Kerberos (proven
-    /// by the user, so it must never be dropped there) — and the two <c>runas</c> examples gone, since a <c>LogonUser</c> token
-    /// needs Windows (<see cref="SqlAccess"/> refuses one off it). The <c>credman</c> example is a SQL login's, in the Keychain
-    /// with <see cref="SqlText.CredentialCommand"/>'s <c>security</c> line, and a typed password becomes <c>keychain:…</c>.
+    /// by the user, so it must never be dropped there) — and Windows' two <c>runas</c> examples gone. The <c>credman</c> example is a
+    /// SQL login's, in the Keychain with <see cref="SqlText.CredentialCommand"/>'s <c>security</c> line, and a typed password becomes
+    /// <c>keychain:…</c>. Since 2026-10-11 one <c>runas</c> example is back, a Mac's own: <c>name@REALM</c>, its password in the
+    /// Keychain, the ticket it leaves in the user's credential cache said (<see cref="KerberosSignIn"/>).
     /// Built on each read, so no static-field order can catch it unset. Pinned on a Mac.
     /// </summary>
     private static string MacEmptyText =>
@@ -112,7 +113,16 @@ public sealed class SqlConfigFile
         "  //   \"auth\": \"sql\", \"user\": \"reader\", \"passwordStore\": \"credman\"\n" +
         "  // },\n" +
         "  //\n" +
-        "  // \"credential\" names another Keychain entry; runas (signing in as another Windows account) needs Windows.\n" +
+        "  // Kerberos sign-in as another account (auth runas, the account as name@REALM): the app gets that account's ticket\n" +
+        "  // with its password at each connect, and macOS keeps it in a credential cache of its own beside yours (klist -l).\n" +
+        "  // The password in " + SqlText.CredentialStore + " as NeonSidekick/sql/<name> (SQL set password, as above), or:\n" +
+        "  // " + SqlText.CredentialCommand("NeonSidekick/sql/reports-admin", "svc-reader@AD.EXAMPLE.EDU") + "\n" +
+        "  // \"reports-admin\": {\n" +
+        "  //   \"server\": \"sqlhost01.example.com,1453\", \"database\": \"Reports\",\n" +
+        "  //   \"auth\": \"runas\", \"user\": \"svc-reader@AD.EXAMPLE.EDU\", \"passwordStore\": \"credman\"\n" +
+        "  // },\n" +
+        "  //\n" +
+        "  // \"credential\" names another Keychain entry.\n" +
         "  // encrypt: strict, mandatory (the default) or optional; trustServerCertificate only for a self-signed certificate;\n" +
         "  // connectTimeoutSeconds: 1 to 120 (15 by default). access: read (the default) or readwrite — sql_execute may change a\n" +
         "  // readwrite connection's database while SQL mode is read-write, each change allowed by you. A read-only login is the\n" +

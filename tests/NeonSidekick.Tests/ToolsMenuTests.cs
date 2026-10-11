@@ -1176,7 +1176,7 @@ public partial class ToolsMenuTests : IDisposable
     /// A name the file has is refused, a runas account without a domain too; a failed test says the server's words and still
     /// leaves the choice; Cancel writes nothing (a Credential Manager draft never reaches the store).
     /// </summary>
-    [WindowsFact]   // runas is Windows' alone: a Mac's wizard never offers it (2026-10-06)
+    [WindowsFact]   // Windows' account forms; a Mac's runas takes name@REALM alone: the _Mac twin (2026-10-11)
     public async Task OnThePane_TheSqlWizard_RefusesATakenName_AndARunAsWithoutDomain_AndCancelWritesNothing()
     {
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
@@ -1207,6 +1207,54 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.Contains("'AW' is already in ", Output);
         Assert.Contains(NeonSidekick.Sql.SqlText.RunAsNeedsDomain("svc"), Output);
+        Assert.Contains("Error: could not connect to rep: Login failed for user.", Output);
+        Assert.Contains(SettingsMenu.SqlWizardCancelledNotice, Output);
+        Assert.Equal(Before, File.ReadAllText(path));
+    }
+
+    /// <summary>
+    /// The Mac's runas (2026-10-11, <see cref="NeonSidekick.Sql.KerberosSignIn"/>): the wizard offers it, asks for <c>name@REALM</c>, and
+    /// refuses a bare name and a <c>DOMAIN\name</c> (which Windows takes) with the form to use; a failed test still leaves the choice,
+    /// and Cancel writes nothing (a Keychain draft never reaches the store).
+    /// </summary>
+    [MacFact]
+    public async Task OnThePane_TheSqlWizard_RefusesATakenName_AndARunAsWithoutDomain_AndCancelWritesNothing_Mac()
+    {
+        string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
+        Directory.CreateDirectory(_settings.ProfileDirectory);
+        const string Before = """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows" } } }""";
+        File.WriteAllText(path, Before);
+        NeonSidekick.Sql.SqlConnectionConfig? tested = null;
+        var (menu, _, _) = PaneMenu(testSql: (c, _) =>
+        {
+            tested = c.Config;
+            return Task.FromResult(NeonSidekick.Sql.SqlRun.Refused(NeonSidekick.Sql.SqlOutcome.ConnectFailed, "Login failed for user.", c.Name));
+        });
+        OpenSqlWizard();
+        Push(Keys.Enter);                         // + New connection: "aw" is saved, so the first page lists it
+        Push(Keys.Enter);
+        Type("rep");
+        Type("sqlhost01");
+        Type("Reports");
+        Push(Keys.Down, Keys.Down, Keys.Enter);   // runas
+        Type("svc");                              // no realm
+        Push(Keys.Backspace, Keys.Backspace, Keys.Backspace);
+        Type(@"CONTOSO\svc");                     // Windows' form, no realm
+        Push(Enumerable.Repeat(Keys.Backspace, @"CONTOSO\svc".Length).ToArray());
+        Type("svc@ad.example.edu");
+        Push(Keys.Down, Keys.Enter);              // credman: the Keychain
+        Type("pw");
+        Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);   // mandatory, no, the default timeout, read, no description
+        Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows): refused
+        Push(Keys.Down, Keys.Enter);              // Cancel
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SettingsMenu.SqlWizardRunAsUserQuestion, Output);
+        Assert.Contains(NeonSidekick.Sql.SqlText.RunAsNeedsRealm("svc"), Output);
+        Assert.Contains(NeonSidekick.Sql.SqlText.RunAsNeedsRealm(@"CONTOSO\svc"), Output);
+        Assert.Equal(("runas", "svc@ad.example.edu"), (tested?.Auth, tested?.User));
         Assert.Contains("Error: could not connect to rep: Login failed for user.", Output);
         Assert.Contains(SettingsMenu.SqlWizardCancelledNotice, Output);
         Assert.Equal(Before, File.ReadAllText(path));

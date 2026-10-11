@@ -32,6 +32,21 @@ public static class SqlText
     public const string CredmanWithWindows = "\"passwordStore\": \"credman\" needs a password to keep; windows sign-in has none (use runas to sign in as another account)";
     public static string RunAsNeedsDomain(string account) => $"runas needs the Windows account as DOMAIN\\name or name@domain in \"user\" (got '{account}')";
 
+    /// <summary>
+    /// A <c>runas</c> account a Mac cannot sign in as (2026-10-11): it signs in through Kerberos there, so the account must be
+    /// <c>name@REALM</c> — a <c>DOMAIN\name</c> names no realm a KDC can be found for. Pinned.
+    /// </summary>
+    public static string RunAsNeedsRealm(string account) => $"on a Mac, runas signs in through Kerberos and needs the account as name@REALM in \"user\", e.g. svc-reader@AD.EXAMPLE.EDU (got '{account}')";
+
+    /// <summary>
+    /// A Mac's <c>runas</c> sign-in that failed on the Mac's side (2026-10-11, <see cref="KerberosSignIn"/>): the status as .NET names it,
+    /// and what to check, claiming no cause (the status alone tells none). Pinned.
+    /// </summary>
+    public static string KerberosFailed(string principal, string status) =>
+        $"the Kerberos sign-in as {principal} failed ({status}); check its stored password, that the realm is right, and that the account may sign in to this server";
+
+    public static string KerberosFailedLogLine(string name, string principal, string status, string detail) => $"{name}: the Kerberos sign-in as {principal} failed ({status}): {detail}";
+
     // ─── passwords (later on 2026-09-23) ───────────────────────────────────────
 
     public const string NotProtected = "the value is not one the app encrypted (dpapi:…)";
