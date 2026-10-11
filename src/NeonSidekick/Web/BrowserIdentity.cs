@@ -28,7 +28,8 @@ public enum BrowserPlatform
 /// Until then the headers were pinned to Chrome 140 with a brand list Chromium never sends for 140, while the installed Edge was
 /// 155 — a browser fourteen releases old is a cheap bot signal — and the headless browser said <c>HeadlessChrome</c> in its own
 /// user agent. The version is read from the browser <see cref="HeadlessBrowser.Locate(string)"/> finds (<see cref="ReadVersion"/>,
-/// once per path), so it stays current with the machine; without one it is <see cref="FallbackMajor"/>.
+/// again whenever the file it comes from changes, <see cref="For(string)"/>), so it stays current with the machine; without one it is
+/// <see cref="FallbackMajor"/>.
 /// </summary>
 public sealed partial record BrowserIdentity(BrowserBrand Brand, int Major, BrowserPlatform Platform)
 {
@@ -141,33 +142,73 @@ public sealed partial record BrowserIdentity(BrowserBrand Brand, int Major, Brow
         return new BrowserIdentity(BrandOf(executable), MajorOf(version(executable)) ?? FallbackMajor, platform);
     }
 
-    private static readonly ConcurrentDictionary<string, BrowserIdentity> s_read = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, (DateTime Stamp, BrowserIdentity Identity)> s_read = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The identity of an installed browser, its version read from the file once per path for the run (an update lands at the next start).</summary>
-    public static BrowserIdentity For(string executable)
+    /// <summary>
+    /// The identity of an installed browser: its version read once per path and again when the file it comes from (<see cref="VersionSource"/>)
+    /// has a new write time — 2026-10-11, the user's ask: until then a browser that updated while the app ran was claimed at its old version
+    /// to the next start, while its own client hints said the new one. On Windows the stamp is the executable's, which is also the one a run
+    /// starts: Chrome and Edge stage an update as <c>new_chrome.exe</c>/<c>new_msedge.exe</c> and rename it over the executable when they
+    /// restart, so the claim moves with the browser that actually runs.
+    /// </summary>
+    public static BrowserIdentity For(string executable) => For(executable, VersionStamp, ReadVersion, CurrentPlatform);
+
+    /// <summary><see cref="For(string)"/> with the stamp and the version read by the caller (tests). Shares the run's cache, keyed by path.</summary>
+    internal static BrowserIdentity For(string executable, Func<string, DateTime> stamp, Func<string, string?> version, BrowserPlatform platform)
     {
         ArgumentNullException.ThrowIfNull(executable);
-        return s_read.GetOrAdd(executable, path => Of(path, ReadVersion, CurrentPlatform));
+        ArgumentNullException.ThrowIfNull(stamp);
+        ArgumentNullException.ThrowIfNull(version);
+        DateTime now = stamp(executable);
+        if (s_read.TryGetValue(executable, out var held) && held.Stamp == now)
+        {
+            return held.Identity;
+        }
+
+        var identity = Of(executable, version, platform);
+        s_read[executable] = (now, identity);
+        return identity;
+    }
+
+    /// <summary>The file a browser's version is read from: the executable on Windows, the bundle's <c>Contents/Info.plist</c> on macOS (beside <c>Contents/MacOS</c>), null elsewhere.</summary>
+    public static string? VersionSource(string executable)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        if (OperatingSystem.IsWindows())
+        {
+            return executable;
+        }
+
+        return OperatingSystem.IsMacOS() && Path.GetDirectoryName(Path.GetDirectoryName(executable)) is { } contents ? Path.Combine(contents, "Info.plist") : null;
+    }
+
+    /// <summary>The write time of <see cref="VersionSource"/> (UTC), <see cref="DateTime.MinValue"/> without one or when it cannot be read.</summary>
+    public static DateTime VersionStamp(string executable)
+    {
+        try
+        {
+            return VersionSource(executable) is { } source && File.Exists(source) ? File.GetLastWriteTimeUtc(source) : DateTime.MinValue;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return DateTime.MinValue;
+        }
     }
 
     /// <summary>
     /// An installed browser's version: on Windows the executable's product version (<c>155.0.4283.45</c>), on macOS the bundle's
-    /// <c>CFBundleShortVersionString</c> from <c>Contents/Info.plist</c> beside <c>Contents/MacOS</c>; null where neither reads.
+    /// <c>CFBundleShortVersionString</c> from <see cref="VersionSource"/>; null where neither reads.
     /// </summary>
     public static string? ReadVersion(string executable)
     {
         try
         {
-            if (OperatingSystem.IsWindows())
+            if (VersionSource(executable) is not { } source || !File.Exists(source))
             {
-                return File.Exists(executable) ? FileVersionInfo.GetVersionInfo(executable).ProductVersion : null;
+                return null;
             }
 
-            if (OperatingSystem.IsMacOS() && Path.GetDirectoryName(Path.GetDirectoryName(executable)) is { } contents)
-            {
-                string plist = Path.Combine(contents, "Info.plist");
-                return File.Exists(plist) ? BundleVersion(File.ReadAllText(plist)) : null;
-            }
+            return OperatingSystem.IsWindows() ? FileVersionInfo.GetVersionInfo(source).ProductVersion : BundleVersion(File.ReadAllText(source));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {

@@ -59,7 +59,31 @@ public class BrowserIdentityTests
 
         var identity = BrowserIdentity.For(executable);
         Assert.Equal(BrowserIdentity.MajorOf(BrowserIdentity.ReadVersion(executable)) ?? BrowserIdentity.FallbackMajor, identity.Major);
-        Assert.Same(identity, BrowserIdentity.For(executable));   // read once per path
+        Assert.Same(identity, BrowserIdentity.For(executable));   // read once while the file is unchanged
+        Assert.NotEqual(DateTime.MinValue, BrowserIdentity.VersionStamp(executable));
+    }
+
+    [Fact]
+    public void For_ReadsTheVersionAgain_WhenTheFileItComesFromChanges()
+    {
+        // A browser that updates while the app runs is claimed at its new version (2026-10-11), not the one read at the first fetch.
+        string path = Path.Combine(Path.GetTempPath(), "neon-identity-" + Guid.NewGuid().ToString("N"), "chrome.exe");
+        var stamp = new DateTime(2026, 10, 11, 9, 0, 0, DateTimeKind.Utc);
+        string version = "154.0.8037.98";
+        int reads = 0;
+        BrowserIdentity Ask() => BrowserIdentity.For(path, _ => stamp, _ => { reads++; return version; }, BrowserPlatform.Windows);
+
+        Assert.Equal(154, Ask().Major);
+        Assert.Equal(154, Ask().Major);
+        Assert.Equal(1, reads);                       // unchanged: the held answer
+
+        version = "155.0.8100.12";
+        Assert.Equal(154, Ask().Major);               // a version alone never shows without a new write time
+        stamp = stamp.AddMinutes(5);                  // the update renamed over the executable
+        Assert.Equal(155, Ask().Major);
+        Assert.Equal(2, reads);
+        Assert.Equal(155, Ask().Major);
+        Assert.Equal(2, reads);
     }
 
     private static readonly TimeSpan S = TimeSpan.FromSeconds(1);
