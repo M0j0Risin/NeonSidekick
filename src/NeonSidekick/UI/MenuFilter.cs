@@ -43,7 +43,9 @@ public static class MenuFilter
         ArgumentNullException.ThrowIfNull(filter);
         if (key.Key == ConsoleKey.Backspace)
         {
-            return filter.Length > 0 ? filter[..^1] : null;
+            // The last text element whole (2026-10-10, the avatar picker: an emoji typed in, a surrogate pair or a ZWJ sequence, went
+            // a UTF-16 unit at a time and left a broken half).
+            return filter.Length > 0 ? filter[..^LastElementLength(filter)] : null;
         }
 
         char c = key.KeyChar;
@@ -53,6 +55,38 @@ public static class MenuFilter
         }
 
         return filter + c;
+    }
+
+    /// <summary>
+    /// The filter after <paramref name="text"/> is pasted onto it (2026-10-10, the avatar picker: an emoji from Windows' emoji panel or the
+    /// clipboard): line breaks read as spaces, the blanks leading an empty filter dropped, cut to <see cref="MaxLength"/> between text
+    /// elements; null when nothing of it is left or the filter is full. Pure.
+    /// </summary>
+    public static string? Pasted(string filter, string text)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        ArgumentNullException.ThrowIfNull(text);
+        string flat = text.ReplaceLineEndings(" ");
+        string joined = filter.Length == 0 ? flat.TrimStart() : filter + flat;
+        while (joined.Length > MaxLength)
+        {
+            joined = joined[..^LastElementLength(joined)];
+        }
+
+        return joined.Length > filter.Length ? joined : null;
+    }
+
+    // The UTF-16 length of the last text element (a grapheme cluster) of a non-empty text.
+    private static int LastElementLength(string text)
+    {
+        var elements = System.Globalization.StringInfo.GetTextElementEnumerator(text);
+        int last = 0;
+        while (elements.MoveNext())
+        {
+            last = elements.ElementIndex;
+        }
+
+        return text.Length - last;
     }
 
     /// <summary>The tab's caption while a filter is typed: the text and how many of the rows it keeps (<c>Filter: haiku · 3 of 128</c>). Pinned.</summary>

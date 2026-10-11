@@ -35,6 +35,10 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | Command | What it does |
 |---|---|
 | `/about` | Shows the version, the GitHub repository, runtime, folders, components, the embedded models (each Hugging Face repository with its link, the Models tab) and licence. |
+| `/avatar` | Opens the emoji picker for the profile's *Avatar* (see [The avatar picker](SETTINGS.md#the-avatar-picker)). |
+| `/avatar <emoji>` | Sets the avatar to that emoji at once (typed, or pasted from Win+.). |
+| `/avatar <words>` | Opens the picker searching for the words; headless, sets the best match. |
+| `/avatar clear` | No avatar: replies open with ● again and the window title shows the name alone. |
 | `/advisor` | Lists the advisors: the *Advisor list*'s profiles, their roles, and the kind of server and the model each one's profile is on. See [Advisor](#advisor). |
 | `/advisor <name> <question>` | Asks one advisor, named by its profile or a word of its role, on its own profile's server; the answer joins the conversation. |
 | `/claude <message>` | Sends the message to Claude Code and streams its reply into the transcript. See Claude Code from the chat. |
@@ -119,7 +123,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/profile [<name>]` | Switches profiles: a picker alone (a typed letter jumps to the next profile starting with it), or straight to the one named. See Profiles. |
 | `/profile add\|delete <name>` | Creates or deletes a profile. |
 | `/profile rename <name> <new-name>` | Renames a profile. |
-| `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its URLs, paths and keys unless `--all`. |
+| `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its avatar, URLs, paths and keys unless `--all`. |
 | `/profile push\|pull <name>` | Copies its settings to (`push`) or from (`pull`) another. Every setting but the working directory; a pull clears the conversation. |
 | `/profile push\|pull keys <name>` | Copies the *LLM API key*, *Anthropic API key*, *OpenAI API key*, *Home Assistant API key* and *YouTube API key* to or from another profile after a confirmation, mirrored: a key unset in the source clears the target's. Keys set only by environment variable aren't copied. |
 | `/profile push\|pull servers <name>` | Copies the server settings to or from another profile after a confirmation, replacing the target's: scan mode, LLM URL and model, LLM reasoning and its estimate, LLM sampling (every model's overrides) and sampling from Hugging Face, and the embedded, Docker, Anthropic API (with its max tokens and prompt caching), OpenAI API (with its max tokens, organization and project) and Claude Code server settings, and `/claude`'s executable, permissions, model and effort. Saved values only, not a `--url` or variable. |

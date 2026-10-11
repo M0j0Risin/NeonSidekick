@@ -163,7 +163,7 @@ internal sealed partial class ChatScreen
     private void WriteMarkdownReply(string markdown)
     {
         var effective = _effective();
-        _transcript.BeginAssistant(StyledReply(effective.TranscriptMarkdown, _pane.Enabled));
+        _transcript.BeginAssistant(StyledReply(effective.TranscriptMarkdown, _pane.Enabled), UI.TranscriptRenderer.GlyphFor(effective.Avatar));
         _transcript.AppendDelta(markdown);
         _transcript.EndAssistant();
     }

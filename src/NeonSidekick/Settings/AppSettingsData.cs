@@ -37,6 +37,15 @@ public sealed class AppSettingsData
     // ─── General ────────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// The profile's avatar (2026-10-10, the user's ask): one emoji, picked on <c>/settings</c> › General's grid picker or with
+    /// <c>/avatar</c>. It opens each reply in place of <c>●</c>, stands on the profile's speaker line in <c>/botchat</c> in place of
+    /// <c>◆</c>, and goes before the profile's name in the window title. Empty (the default) for none; anything that is not one
+    /// two-cell emoji (<see cref="Emojis.AvatarRules"/>) reads as none. Kept by <c>/profile reset</c>, blanked in a profile
+    /// <c>/profile add</c> makes, never carried by <c>/profile push|pull</c>. No variable.
+    /// </summary>
+    public string Avatar { get; set; } = "";
+
+    /// <summary>
     /// Whether a sent line that is exactly a command's name without its slash (<c>clear</c>) is
     /// held on the pane with <c>/clear</c> offered first: Enter puts the command on the line, ESC
     /// sends the text as typed (2026-09-18). Pane only, read at each Enter. No variable.

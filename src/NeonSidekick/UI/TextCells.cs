@@ -11,7 +11,9 @@ namespace NeonSidekick.UI;
 /// Terminal (1.22+, grapheme clusters) draws <c>✂️</c> or <c>⚙️</c> two cells wide where the bare
 /// character is one (2026-09-19, the scissors of the prune lines). A zero-width joiner (U+200D) and the element right after
 /// it count nothing (later on 2026-09-29, the uncensored column's broken chain <c>⛓️‍💥</c>): Windows Terminal draws a ZWJ
-/// sequence as one glyph, as wide as its first part. Combining marks are otherwise out of scope.
+/// sequence as one glyph, as wide as its first part. A skin-tone modifier, a tag character, a keycap's U+20E3 and a flag's second
+/// regional indicator draw inside the glyph before them too (2026-10-10, the avatar picker: <c>👍🏽</c> measured four), a skin tone
+/// on a one-cell base (<c>☝🏽</c>) widening it to two as a U+FE0F does. Combining marks are otherwise out of scope.
 /// </summary>
 public static class TextCells
 {
@@ -73,7 +75,7 @@ public static class TextCells
     public static int Width(char c)
     {
         int code = c;
-        if (code is 0xFE0E or 0xFE0F or 0x200D)   // variation selectors: zero, they pick the presentation of the character before; the ZWJ joins
+        if (code is 0xFE0E or 0xFE0F or 0x200D or 0x20E3)   // variation selectors: zero, they pick the presentation of the character before; the ZWJ joins; the keycap encloses
         {
             return 0;
         }
@@ -149,10 +151,16 @@ public static class TextCells
         while (i < text.Length)
         {
             char c = text[i];
-            if (c is '\uFE0E' or '\uFE0F')
+            if (c is '\uFE0E' or '\uFE0F' or '\u20E3')
             {
                 cells += ElementWidth(text, i, out int selector);
                 i += selector;
+            }
+            else if (char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]) && ModifiesBefore(text, i))
+            {
+                // A skin tone, a tag or a flag's second indicator (2026-10-10): part of the glyph (ElementWidth says how wide).
+                cells += ElementWidth(text, i, out int modifier);
+                i += modifier;
             }
             else if (c == '\u200D' && i + 1 < text.Length)
             {
@@ -204,7 +212,20 @@ public static class TextCells
         if (char.IsHighSurrogate(text[index]) && index + 1 < text.Length && char.IsLowSurrogate(text[index + 1]))
         {
             length = 2;
-            return joined ? 0 : narrow && index + 2 < text.Length && text[index + 2] == '\uFE0F' ? 1 : 2;
+            if (joined)
+            {
+                return 0;
+            }
+
+            if (ModifiesBefore(text, index))
+            {
+                // A skin tone after a one-cell BMP base (☝ ✌ ✍ ⛹) makes an emoji of it, two cells as a U+FE0F would: one here.
+                char before = text[index - 1];
+                bool tone = text[index] == '\uD83C' && text[index + 1] is >= '\uDFFB' and <= '\uDFFF';
+                return tone && !narrow && !char.IsSurrogate(before) && before is not ('︎' or '️') && Width(before) == 1 ? 1 : 0;
+            }
+
+            return narrow && index + 2 < text.Length && text[index + 2] == '\uFE0F' ? 1 : 2;
         }
 
         if (joined)
@@ -217,11 +238,50 @@ public static class TextCells
         if (text[index] == '\uFE0F' && index > 0)
         {
             char before = text[index - 1];
-            return !narrow && !char.IsLowSurrogate(before) && before is not ('\uFE0E' or '\uFE0F') && Width(before) == 1 ? 1 : 0;
+            // Not after a joined element (2026-10-10, \uD83D\uDE42\u200D\u2194\uFE0F's arrow): that one is drawn inside the glyph before the joiner.
+            bool afterJoined = index >= 2 && text[index - 2] == '\u200D';
+            return !narrow && !afterJoined && !char.IsLowSurrogate(before) && before is not ('\uFE0E' or '\uFE0F') && Width(before) == 1 ? 1 : 0;
         }
 
         return Width(text[index]);
     }
+
+    /// <summary>
+    /// Whether the astral element at <paramref name="index"/> draws inside the glyph before it (2026-10-10, the avatar picker's
+    /// emoji): a skin-tone modifier (U+1F3FB–U+1F3FF) after anything, a tag character (U+E0020–U+E007F, the subdivision flags'
+    /// spelling), or the second regional indicator of a pair (a flag is two of them, drawn as one two-cell glyph). Each counted
+    /// two cells until then, so <c>👍🏽</c> measured four.
+    /// </summary>
+    private static bool ModifiesBefore(string text, int index)
+    {
+        if (index == 0)
+        {
+            return false;
+        }
+
+        int code = char.ConvertToUtf32(text[index], text[index + 1]);
+        if (code is >= 0x1F3FB and <= 0x1F3FF or >= 0xE0020 and <= 0xE007F)
+        {
+            return true;
+        }
+
+        if (!IsRegionalIndicator(code))
+        {
+            return false;
+        }
+
+        // The indicators right before this one: an odd count makes this the pair's second.
+        int run = 0;
+        for (int i = index; i >= 2 && char.IsLowSurrogate(text[i - 1]) && char.IsHighSurrogate(text[i - 2])
+            && IsRegionalIndicator(char.ConvertToUtf32(text[i - 2], text[i - 1])); i -= 2)
+        {
+            run++;
+        }
+
+        return run % 2 == 1;
+    }
+
+    private static bool IsRegionalIndicator(int code) => code is >= 0x1F1E6 and <= 0x1F1FF;
 
     /// <summary>Length in UTF-16 units of the element that ends just before <paramref name="index"/>.</summary>
     public static int ElementLengthBefore(string text, int index)

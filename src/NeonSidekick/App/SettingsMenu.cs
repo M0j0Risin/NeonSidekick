@@ -1,4 +1,5 @@
 using System.Globalization;
+using NeonSidekick.Emojis;
 using NeonSidekick.Files;
 using NeonSidekick.Llm;
 using NeonSidekick.Settings;
@@ -1002,8 +1003,11 @@ public enum SettingsField
     /// <summary>A toggle: whether each advisor call asks first (<see cref="Settings.AppSettingsData.AdvisorConfirm"/>). The Advisors tab's last row (2026-10-10). Last in the enum until <see cref="DockerServerMatchWords"/>.</summary>
     AdvisorConfirm,
 
-    /// <summary>A list the user types into: the words that make a container an LLM server in <see cref="DockerServerContainers"/>' checklist (<see cref="Settings.AppSettingsData.DockerServerMatchWords"/>), its top row adding one, Enter on one removing it, a button restoring the defaults. The Docker tab, under the containers (2026-10-10, the user's ask); no reconnect. Last in the enum, as every newcomer.</summary>
+    /// <summary>A list the user types into: the words that make a container an LLM server in <see cref="DockerServerContainers"/>' checklist (<see cref="Settings.AppSettingsData.DockerServerMatchWords"/>), its top row adding one, Enter on one removing it, a button restoring the defaults. The Docker tab, under the containers (2026-10-10, the user's ask); no reconnect. Last in the enum until <see cref="Avatar"/>.</summary>
     DockerServerMatchWords,
+
+    /// <summary>A grid picker over the emoji catalog: the profile's avatar (<see cref="Settings.AppSettingsData.Avatar"/>), opening its replies, its /botchat speaker line and the window title (2026-10-10, the user's ask). The General tab, right under Profile; no reconnect. Last in the enum, as every newcomer.</summary>
+    Avatar,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1130,6 +1134,9 @@ internal sealed partial class SettingsMenu
     /// <summary>The hint row of <c>/settings</c>' own tabs (2026-10-04): <see cref="TabKeys"/> and the search a typed letter starts. Pinned.</summary>
     public const string SettingsTabKeys = "Enter = edit · Space = flip · type = search · ←/→ tabs · ESC = close";
     public const string EditKeys = "Enter = save · ESC = back";
+
+    /// <summary>The Avatar row's value while the profile has none (2026-10-10). Pinned.</summary>
+    public const string NoAvatarLabel = "(none)";
     public const string PickKeys = "Enter = choose · ESC = back";
 
     /// <summary>The hint of a picker with a <c>(none)</c> row (<c>TTS voice 2</c>): Backspace moves the cursor to it.</summary>
@@ -1386,7 +1393,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
-        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.MemoryMode,
+        [SettingsField.Profile, SettingsField.Avatar, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.MemoryMode,
          SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete,
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle,
          SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight,
@@ -1894,6 +1901,7 @@ internal sealed partial class SettingsMenu
     public static string FieldName(SettingsField field) => field switch
     {
         SettingsField.Profile => "Profile",
+        SettingsField.Avatar => "Avatar",
         SettingsField.LlmUrl => "LLM URL",
         SettingsField.LlmModel => "LLM model",
         SettingsField.LlmApiKey => "LLM API key",
@@ -2555,6 +2563,7 @@ internal sealed partial class SettingsMenu
             SettingsField.Theme => data.Theme,
             SettingsField.QueueMode => data.QueueMode,
             SettingsField.QueueCancelMode => data.QueueCancelMode,
+            SettingsField.Avatar => AvatarRules.Normalize(data.Avatar) is { Length: > 0 } avatar ? EmojiText.Value(avatar, EmojiCatalog.Shipped) : NoAvatarLabel,
             _ => "",
         };
     }
@@ -4446,6 +4455,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.EmbeddedModels)
         {
             return await PickEmbeddedModelAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.Avatar)
+        {
+            return await PickAvatarAsync("", own: false, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.EmbeddedBackend)

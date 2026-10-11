@@ -50,6 +50,14 @@ namespace NeonSidekick.UI;
 public sealed class TranscriptRenderer : INoticeSink
 {
     public const string AssistantGlyph = "● ";
+
+    /// <summary>
+    /// The glyph a profile's reply opens with (2026-10-10, the user's ask): its avatar and a space when it has one
+    /// (<see cref="Emojis.AvatarRules"/>; three cells, the reply's lines under it indented to match), else <see cref="AssistantGlyph"/>.
+    /// A <c>/botchat</c> bot and <c>/claude</c> keep <see cref="AssistantGlyph"/>: their speaker line says whose the reply is. Pure.
+    /// </summary>
+    public static string GlyphFor(string? avatar) =>
+        Emojis.AvatarRules.Normalize(avatar) is { Length: > 0 } face ? face + " " : AssistantGlyph;
     public const string NoticeGlyph = "  · ";
     public const string WarningGlyph = "  ! ";
     public const string ErrorGlyph = "  ✗ ";
@@ -141,6 +149,9 @@ public sealed class TranscriptRenderer : INoticeSink
     private TimeSpan _thinkingElapsed;
     private bool _glyphAfterThinking;
 
+    // The open reply's glyph (2026-10-10): the profile's avatar or the dot, as BeginAssistant was given it.
+    private string _openGlyph = AssistantGlyph;
+
     // The reply's glyph not drawn yet (2026-10-04, the UI review: it landed on the first tool line): a tool line, a notice or a
     // break that comes while only the glyph stood takes it out of the slot, and the reply's first text puts it back.
     private bool _glyphPending;
@@ -162,9 +173,13 @@ public sealed class TranscriptRenderer : INoticeSink
     /// <summary>The glyph ahead of a <c>/botchat</c> speaker's name (2026-09-24). Pinned.</summary>
     public const string SpeakerGlyph = "◆ ";
 
-    /// <summary>A <c>/botchat</c> speaker's name line: the glyph and the name in bold, in its colour. The name is escaped.</summary>
-    public static string SpeakerMarkup(string name, Color color) =>
-        string.Concat("[", Theme.ToHex(color), " bold]", Markup.Escape(SpeakerGlyph + name), "[/]");
+    /// <summary>
+    /// A <c>/botchat</c> speaker's name line: the glyph and the name in bold, in its colour; the profile's <paramref name="avatar"/> and a
+    /// space in place of <see cref="SpeakerGlyph"/> when it has one (2026-10-10, the user's call: the line names the bot, the reply under
+    /// it keeps <see cref="AssistantGlyph"/>). Escaped.
+    /// </summary>
+    public static string SpeakerMarkup(string name, Color color, string? avatar = null) =>
+        string.Concat("[", Theme.ToHex(color), " bold]", Markup.Escape((Emojis.AvatarRules.Normalize(avatar) is { Length: > 0 } face ? face + " " : SpeakerGlyph) + name), "[/]");
 
     public static string NoticeMarkup(string text) => Theme.StyleMarkup(Theme.SystemText, NoticeGlyph + text);
 
@@ -259,12 +274,12 @@ public sealed class TranscriptRenderer : INoticeSink
     /// Who speaks next in a <c>/botchat</c> (2026-09-24): the name on a line of its own above the reply, which
     /// opens with its glyph as any reply does — the reply's own rendering is untouched.
     /// </summary>
-    public void Speaker(string name, Color color)
+    public void Speaker(string name, Color color, string? avatar = null)
     {
         ArgumentNullException.ThrowIfNull(name);
         EndRun();
         BreakIfMidText();
-        _console.MarkupLine(SpeakerMarkup(name, color));
+        _console.MarkupLine(SpeakerMarkup(name, color, avatar));
         _state = LineState.AtLineStart;
     }
 
@@ -536,9 +551,10 @@ public sealed class TranscriptRenderer : INoticeSink
     /// <summary>
     /// Opens a reply: the glyph, then nothing until the first token. <paramref name="markdown"/>
     /// styles the reply through the pane's live slot (see the class summary); without the pane it
-    /// is the plain path whatever the flag says.
+    /// is the plain path whatever the flag says. <paramref name="glyph"/> (2026-10-10) is the reply's glyph, <see cref="GlyphFor"/>'s;
+    /// null for <see cref="AssistantGlyph"/>.
     /// </summary>
-    public void BeginAssistant(bool markdown = false)
+    public void BeginAssistant(bool markdown = false, string? glyph = null)
     {
         if (_assistantOpen)
         {
@@ -548,17 +564,18 @@ public sealed class TranscriptRenderer : INoticeSink
         // The opening calls' lines come before the glyph: a run of their own, the reply's calls another.
         EndRun();
         BreakIfMidText();
+        _openGlyph = string.IsNullOrEmpty(glyph) ? AssistantGlyph : glyph;
         _slot = markdown && _pane is { Enabled: true };
         if (_slot)
         {
             _reply.Clear();
             _glyph = true;
             _codeKeep = CodeCollapseCount();
-            _pane!.SetLive(new ReplyBlock("", glyph: true, codeKeep: _codeKeep));
+            _pane!.SetLive(new ReplyBlock("", glyph: true, codeKeep: _codeKeep, glyphText: _openGlyph));
         }
         else
         {
-            _console.Write(new RawText(AssistantGlyph, Theme.Accent));
+            _console.Write(new RawText(_openGlyph, Theme.Accent));
         }
 
         _state = LineState.GlyphOnly;
@@ -622,7 +639,7 @@ public sealed class TranscriptRenderer : INoticeSink
             }
 
             _reply.Append(text);
-            _pane!.SetLive(new ReplyBlock(_reply.ToString(), _glyph, codeKeep: _codeKeep));
+            _pane!.SetLive(new ReplyBlock(_reply.ToString(), _glyph, codeKeep: _codeKeep, glyphText: _openGlyph));
             _state = LineState.MidText;
             return;
         }
@@ -668,7 +685,7 @@ public sealed class TranscriptRenderer : INoticeSink
                 if (_state == LineState.GlyphOnly)
                 {
                     DropSlot();
-                    _console.Write(new RawText(AssistantGlyph, Theme.Accent));
+                    _console.Write(new RawText(_openGlyph, Theme.Accent));
                     _console.Markup(Theme.DimMarkup(NoReplyText));
                     _console.WriteLine();
                 }
@@ -773,7 +790,7 @@ public sealed class TranscriptRenderer : INoticeSink
             {
                 _reply.Clear();
                 _glyph = true;
-                _pane.SetLive(new ReplyBlock("", glyph: true, codeKeep: _codeKeep));
+                _pane.SetLive(new ReplyBlock("", glyph: true, codeKeep: _codeKeep, glyphText: _openGlyph));
                 _state = LineState.GlyphOnly;
             }
             else
@@ -976,7 +993,7 @@ public sealed class TranscriptRenderer : INoticeSink
                     }
                     else
                     {
-                        _pane.BeginToolGroup(keep, new RawText(AssistantGlyph, Theme.Accent), absorbOpenLine: plain);
+                        _pane.BeginToolGroup(keep, new RawText(_openGlyph, Theme.Accent), absorbOpenLine: plain);
                     }
                 }
                 else

@@ -208,13 +208,15 @@ internal sealed partial class ChatScreen
 
         if (replyText.Length > 0)
         {
-            if (ClaudeText.IsClaudeLine(userText))
+            bool claude = ClaudeText.IsClaudeLine(userText);
+            if (claude)
             {
                 // A /claude exchange (2026-09-27): its reply under Claude's name, as it was shown.
                 _transcript.Speaker(ClaudeText.SpeakerName, ClaudeColor);
             }
 
-            _transcript.BeginAssistant(styled);
+            // The profile's avatar (2026-10-10): a session is its profile's, so its replies wear today's face; Claude's keep the dot.
+            _transcript.BeginAssistant(styled, claude ? null : UI.TranscriptRenderer.GlyphFor(_effective().Avatar));
             _transcript.AppendDelta(replyText);
             _transcript.EndAssistant();
         }

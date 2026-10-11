@@ -62,6 +62,9 @@ public sealed record MenuTab(string Title, IReadOnlyList<string> Rows)
     /// </summary>
     public Func<int, MenuFooter?>? Footer { get; init; }
 
+    /// <summary>The tab's <see cref="MenuPage.Marks"/>; null for none.</summary>
+    public IReadOnlyDictionary<int, Style>? Marks { get; init; }
+
     /// <summary>The tab whose rows show: the sub-tab on show, or this one when it holds none (2026-10-10).</summary>
     public MenuTab Shown => SubTabs is { Count: > 0 } subs ? subs[Math.Clamp(Sub, 0, subs.Count - 1)] : this;
 }
@@ -195,6 +198,19 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public string? Filter { get; init; }
 
     /// <summary>
+    /// The rows are cells of a grid (2026-10-10, the avatar picker's emoji, <see cref="MenuGrid"/>): laid out left to right in lines of
+    /// the width, a heading or a gap a line of its own; ←/→ and ↑/↓ move in two dimensions, so on a tabbed grid page only Tab and
+    /// Shift+Tab step tabs; the cursor's cell alone is highlighted, a click lands on a cell. Null for a list (every other page).
+    /// </summary>
+    public MenuGrid? Grid { get; init; }
+
+    /// <summary>
+    /// Rows drawn on a slab of their own style when the cursor is elsewhere (2026-10-10, the avatar picker: the profile's avatar and
+    /// the ones other profiles use); a grid page's only (a list row has room for words). Taken from the tab on a tabbed page. Null for none.
+    /// </summary>
+    public IReadOnlyDictionary<int, Style>? Marks { get; init; }
+
+    /// <summary>
     /// A page over <paramref name="tabs"/> showing <paramref name="tab"/>: the strip labelled
     /// <paramref name="title"/>, that tab's rows, its caption, and its hint when it has one else
     /// <paramref name="hint"/> (kept as <see cref="BaseHint"/> for the tabs without); a tab with sub-tabs gives its shown one's
@@ -210,7 +226,7 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
 
         tab = Math.Clamp(tab, 0, tabs.Count - 1);
         var shown = tabs[tab].Shown;
-        return new MenuPage(title, shown.Rows, shown.Hint ?? hint) { Tabs = tabs, Tab = tab, Caption = shown.Caption, BaseHint = hint, Headings = shown.Headings, Filter = shown.Filter };
+        return new MenuPage(title, shown.Rows, shown.Hint ?? hint) { Tabs = tabs, Tab = tab, Caption = shown.Caption, BaseHint = hint, Headings = shown.Headings, Filter = shown.Filter, Marks = shown.Marks };
     }
 
     /// <summary>Whether the cursor may rest on <paramref name="row"/>: any row of a page without <see cref="Headings"/>; on one with them, a row neither a heading nor empty. Pure.</summary>
@@ -455,6 +471,10 @@ public sealed class MenuPane : INoticeSink
     private int _listWidth;
     private bool _open;
 
+    // A grid page's lines as last drawn (2026-10-10, MenuGrid): the viewport (_first, _shown) counts these, not rows, and the
+    // arrows and clicks find cells by them.
+    private IReadOnlyList<MenuGridLine> _lines = [];
+
     /// <param name="mouse">Takes (true) or hands back (false) the console's mouse; null when the screen has none to take.</param>
     public MenuPane(ScreenPane pane, KeySource keys, Action<bool>? mouse = null)
     {
@@ -508,6 +528,22 @@ public sealed class MenuPane : INoticeSink
         ConsoleKey.DownArrow => 1,
         ConsoleKey.UpArrow => -1,
         _ => 0,
+    };
+
+    /// <summary>
+    /// Where a key takes a grid page's cursor from <paramref name="from"/> (2026-10-10, <see cref="MenuGrid"/>): ←/→ the cell before or
+    /// after, on across lines and wrapping; ↑/↓ the same column a cell line up or down, wrapping; the page keys a view's lines,
+    /// stopping at the ends. Null for any other key (Home, End and the rest are the list's).
+    /// </summary>
+    private int? GridStep(MenuPage page, int from, ConsoleKeyInfo key) => key.Key switch
+    {
+        ConsoleKey.LeftArrow => page.StopFrom(from - 1, -1, wrap: true),
+        ConsoleKey.RightArrow => page.StopFrom(from + 1, +1, wrap: true),
+        ConsoleKey.UpArrow => MenuGrid.Vertical(_lines, from, -1, wrap: true),
+        ConsoleKey.DownArrow => MenuGrid.Vertical(_lines, from, +1, wrap: true),
+        ConsoleKey.PageUp => MenuGrid.Vertical(_lines, from, -1, wrap: false, Math.Max(1, _shown - 1)),
+        ConsoleKey.PageDown => MenuGrid.Vertical(_lines, from, +1, wrap: false, Math.Max(1, _shown - 1)),
+        _ => null,
     };
 
     /// <summary>A status line: the transcript's glyph and colour for the kind. Escaped.</summary>
@@ -720,6 +756,25 @@ public sealed class MenuPane : INoticeSink
                         // The side column (2026-10-02): it shows, it picks nothing.
                         _clicks.Reset();
                     }
+                    else if (page.Grid is { } grid)
+                    {
+                        // A grid (2026-10-10): the line under the click, the cell under its column; a heading, a gap or past
+                        // the line's end is a miss.
+                        if (at - Header is int g && g >= 0 && g < _shown && _first + g < _lines.Count
+                            && grid.CellAt(_lines[_first + g], click.X) is int cell && page.IsStop(cell))
+                        {
+                            MoveTo(cell);
+                            if (_clicks.Second(cell))
+                            {
+                                _status.Clear();
+                                return new MenuPick(page.Tab, _cursor, Sub: page.Sub);
+                            }
+                        }
+                        else
+                        {
+                            _clicks.Reset();
+                        }
+                    }
                     else if (at - Header is int i && i >= 0 && i < _shown && page.IsStop(_first + i))
                     {
                         // A heading or a gap (2026-10-03) is no row to land on: the else below, as a miss.
@@ -737,6 +792,14 @@ public sealed class MenuPane : INoticeSink
                     }
 
                     continue;
+                }
+
+                if (input is InputEvent.Paste paste && page.Filter is { } pasteFilter && MenuFilter.Pasted(pasteFilter, paste.Text) is { } pasted)
+                {
+                    // Into the filter (2026-10-10, the avatar picker: an emoji from Windows' emoji panel or the clipboard is a search).
+                    _clicks.Reset();
+                    _status.Clear();
+                    return new MenuPick(page.Tab, _cursor, Filter: pasted, Sub: page.Sub);
                 }
 
                 if (input is InputEvent.Drag or InputEvent.Release or InputEvent.Paste)
@@ -762,7 +825,12 @@ public sealed class MenuPane : INoticeSink
 
                     // On the pane (or where the console cannot say): the arrow key's move — a row per
                     // notch, away from the user is up — that never wraps: the list's end is where the wheel stops.
-                    if (count > 0)
+                    if (count > 0 && page.Grid is not null)
+                    {
+                        // A grid (2026-10-10): a line a notch.
+                        MoveTo(MenuGrid.Vertical(_lines, _cursor, -Math.Sign(wheel.Notches), wrap: false, Math.Abs(wheel.Notches)));
+                    }
+                    else if (count > 0)
                     {
                         MoveTo(page.StopFrom(Math.Clamp(_cursor - wheel.Notches, 0, count - 1), -Math.Sign(wheel.Notches)));
                     }
@@ -806,7 +874,7 @@ public sealed class MenuPane : INoticeSink
                     return new MenuPick(page.Tab, _cursor, Toggle: true, Sub: page.Sub);
                 }
 
-                if (page.Tabs is { } tabs && (tabs.Count > 1 || page.Sub >= 0) && InfoPane.TabStep(k) is int step)
+                if (page.Tabs is { } tabs && (tabs.Count > 1 || page.Sub >= 0) && (page.Grid is null || k.Key == ConsoleKey.Tab) && InfoPane.TabStep(k) is int step)
                 {
                     // The arrows walk every sub-tab, Tab and Shift+Tab whole tabs (2026-10-10); the same on a strip without sub-tabs.
                     var (tab, sub) = StepLeaf(tabs, page.Tab, step, whole: k.Key == ConsoleKey.Tab);
@@ -847,6 +915,19 @@ public sealed class MenuPane : INoticeSink
                     && TypeAhead.Next(Math.Min(count, names.Count), i => page.IsStop(i) ? names[i] : "", _cursor, k.KeyChar) is int jump && jump >= 0)
                 {
                     next = jump;
+                }
+
+                if (page.Grid is not null && count > 0 && GridStep(page, _cursor, k) is int gridNext)
+                {
+                    // A grid (2026-10-10): a held arrow's queued presses walked as the list's are, drawn once.
+                    next = gridNext;
+                    while (_keys.TakeQueued(e => e is InputEvent.Key { Info: var q } && q.Modifiers == 0 && q.Key is ConsoleKey.LeftArrow or ConsoleKey.RightArrow or ConsoleKey.UpArrow or ConsoleKey.DownArrow) is InputEvent.Key { Info: var more })
+                    {
+                        next = GridStep(page, next, more) ?? next;
+                    }
+
+                    MoveTo(next);
+                    continue;
                 }
 
                 switch (k.Key)
@@ -957,7 +1038,7 @@ public sealed class MenuPane : INoticeSink
 
         // A `with`, never Tabbed() again: the hotkeys, the toggle and the cursors would go with a rebuild.
         var shown = tabs[tab].Shown;
-        _page = page with { Tabs = tabs, Rows = shown.Rows, Tab = tab, Caption = shown.Caption, Hint = shown.Hint ?? page.BaseHint ?? page.Hint, Headings = shown.Headings, Filter = shown.Filter };
+        _page = page with { Tabs = tabs, Rows = shown.Rows, Tab = tab, Caption = shown.Caption, Hint = shown.Hint ?? page.BaseHint ?? page.Hint, Headings = shown.Headings, Filter = shown.Filter, Marks = shown.Marks };
         int count = _page.Rows.Count;
         _cursor = _page.StopFrom(page.TabCursors is { } cursors && tab < cursors.Count && count > 0 ? cursors[tab] : 0, +1);
         _first = 0;
@@ -1129,7 +1210,9 @@ public sealed class MenuPane : INoticeSink
 
         return tallest;
 
-        int Body(MenuTab tab) => (tab.Caption is { } text ? CaptionRows(text, width, CaptionMaxRows).Count : 0) + tab.Rows.Count;
+        // A grid tab (2026-10-10) is as tall as its lines.
+        int Body(MenuTab tab) => (tab.Caption is { } text ? CaptionRows(text, width, CaptionMaxRows).Count : 0)
+            + (page.Grid is { } grid ? MenuGrid.Lay(tab.Rows.Count, tab.Headings, r => tab.Rows[r].Length == 0, grid.Columns(width)).Count : tab.Rows.Count);
     }
 
     /// <summary>
@@ -1152,14 +1235,38 @@ public sealed class MenuPane : INoticeSink
         int header = Header;
         int footer = page.Footer is null ? 0 : FooterRuleRows + FooterRows;
         int capacity = _pane.MenuContentRows(Height, _inputRows) - header - footer;
-        if (page.LeadRow(_cursor) is int lead && lead < _first && _cursor - lead < capacity - 1)
+        bool more;
+        if (page.Grid is { } grid)
         {
-            // The cursor at the top of a section (2026-10-03): its heading and gap come into view with it.
-            _first = lead;
-        }
+            // A grid (2026-10-10): the viewport counts lines; the cursor's line at the top of a section brings its heading too.
+            _lines = MenuGrid.Lay(page.Rows.Count, page.Headings, r => page.Rows[r].Length == 0, grid.Columns(_listWidth));
+            int line = MenuGrid.LineOf(_lines, _cursor);
+            int leadLine = line;
+            while (leadLine > 0 && !_lines[leadLine - 1].IsCells)
+            {
+                leadLine--;
+            }
 
-        (_first, _shown) = Viewport(page.Rows.Count, _cursor, capacity, _first);
-        bool more = _shown < page.Rows.Count;
+            if (leadLine < _first && line - leadLine < capacity - 1)
+            {
+                _first = leadLine;
+            }
+
+            (_first, _shown) = Viewport(_lines.Count, line, capacity, _first);
+            more = _shown < _lines.Count;
+        }
+        else
+        {
+            _lines = [];
+            if (page.LeadRow(_cursor) is int lead && lead < _first && _cursor - lead < capacity - 1)
+            {
+                // The cursor at the top of a section (2026-10-03): its heading and gap come into view with it.
+                _first = lead;
+            }
+
+            (_first, _shown) = Viewport(page.Rows.Count, _cursor, capacity, _first);
+            more = _shown < page.Rows.Count;
+        }
         // The second strip (2026-10-10) is drawn in the header but counts in the tab's body height: the padding is the less by it.
         int pad = Math.Min(TabBodyRows(page, Width) - _subRows, _captionRows + Math.Max(0, capacity)) - (_captionRows + _shown + (more ? 1 : 0));
         if (_sideWidth > 0)
@@ -1197,6 +1304,16 @@ public sealed class MenuPane : INoticeSink
         for (int i = 0; i < _shown; i++)
         {
             int r = _first + i;
+            if (page.Grid is { } cells)
+            {
+                // A grid's line (2026-10-10): a heading's rule, a gap, or a run of cells, the cursor's highlighted.
+                var line = _lines[r];
+                lines.Add(line.Heading >= 0 ? new SectionRule(page.Rows[line.Heading])
+                    : line.Gap ? new Text(" ")
+                    : new FittedMarkup(cells.LineMarkup(line, page.Rows, _cursor, page.Marks)));
+                continue;
+            }
+
             // One line per row whatever its length (FittedMarkup, 2026-09-18): the viewport's count holds. A heading
             // (2026-10-03) is a rule to the list's edge with no pointer: the cursor never rests there.
             lines.Add(page.Headings is { } headings && headings.Contains(r)
@@ -1204,7 +1321,13 @@ public sealed class MenuPane : INoticeSink
                 : new FittedMarkup(RowMarkup(page.Rows[r], r == _cursor)));
         }
 
-        if (more)
+        if (more && page.Grid is not null)
+        {
+            // Counted in cells, the grid's rows (2026-10-10).
+            var (before, inView, total) = MenuGrid.CellSpan(_lines, _first, _shown);
+            lines.Add(new Markup(Theme.DimMarkup(NoPointer + MoreHint(before, inView, total))));
+        }
+        else if (more)
         {
             lines.Add(new Markup(Theme.DimMarkup(NoPointer + MoreHint(_first, _shown, page.Rows.Count))));
         }

@@ -308,6 +308,12 @@ public enum SlashCommand
     /// </summary>
     Test,
 
+    /// <summary>
+    /// <c>/avatar [&lt;emoji&gt;|&lt;words&gt;|clear]</c> (2026-10-10, the user's pick): the profile's avatar — bare, the emoji picker
+    /// (<c>/settings</c> › General › Avatar's); an emoji sets it, <c>clear</c> clears it, words open the picker searching for them.
+    /// </summary>
+    Avatar,
+
     /// <summary><c>/exit</c>: leave the app (<c>/quit</c> until 2026-09-17, the user's call; the old word is unknown now, as the aliases are).</summary>
     Exit,
     /// <summary>A command we know, given an argument it does not take (<c>/about me</c>): <c>Args</c> carries it. Since 2026-09-17 its own case, so the error names the command rather than calling it unknown.</summary>
@@ -345,6 +351,7 @@ public static class SlashCommands
         new HelpEntry[]
         {
             new("/about", "show info about the app and profile"),
+            new("/avatar", "pick the profile's emoji avatar"),
             new(Advisors.AdvisorText.Word, Advisors.AdvisorText.HelpSummary),
             new("/botchat", "let the profiles talk to each other"),
             new("/browse", "browse the working directory's files"),
@@ -505,7 +512,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/youtube", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/youtube", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -555,6 +562,7 @@ public static class SlashCommands
             "/splash" => SlashCommand.Splash,
             "/rewind" => SlashCommand.Rewind,
             "/theme" => SlashCommand.Theme,
+            "/avatar" => SlashCommand.Avatar,
             "/compact" => SlashCommand.Compact,
             "/server" => SlashCommand.Server,
             "/model" => SlashCommand.Model,
@@ -636,7 +644,7 @@ public static class SlashCommands
     /// <see cref="SlashCommand.Unknown"/> and <see cref="SlashCommand.Overloaded"/> take nothing.
     /// </summary>
     public static bool TakesArgument(SlashCommand command) => command is
-        SlashCommand.Compact or SlashCommand.Server or SlashCommand.Model or SlashCommand.Reasoning or SlashCommand.Sampling or SlashCommand.Theme
+        SlashCommand.Compact or SlashCommand.Server or SlashCommand.Model or SlashCommand.Reasoning or SlashCommand.Sampling or SlashCommand.Theme or SlashCommand.Avatar
         or SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Read or SlashCommand.View or SlashCommand.Imagine or SlashCommand.Comfy or SlashCommand.Echo
         or SlashCommand.Learn
         or SlashCommand.Sys

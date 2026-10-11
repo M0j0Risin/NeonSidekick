@@ -6,6 +6,7 @@ using NeonSidekick.Camera;
 using NeonSidekick.Claude;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Docker;
+using NeonSidekick.Emojis;
 using NeonSidekick.Files;
 using NeonSidekick.Git;
 using NeonSidekick.HomeAssistant;
@@ -541,12 +542,14 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The terminal window's title for the loaded profile: the name itself, cut to <see cref="WindowTitleCells"/> with an
     /// ellipsis (<see cref="ScreenPane.Fit"/>) when longer. Pinned. The default profile had its own title, <c>Neon</c>, until
-    /// 2026-10-09, when it became <see cref="Profiles.DefaultName"/> (<c>neon</c>) and took the same path as the rest.
+    /// 2026-10-09, when it became <see cref="Profiles.DefaultName"/> (<c>neon</c>) and took the same path as the rest. The profile's
+    /// <paramref name="avatar"/> and a space go before the name when it has one (2026-10-10, the user's ask: <c>🦊 neon</c>), within the cut.
     /// </summary>
-    public static string WindowTitle(string profileName)
+    public static string WindowTitle(string profileName, string? avatar = null)
     {
         ArgumentNullException.ThrowIfNull(profileName);
-        return ScreenPane.Fit(profileName, WindowTitleCells);
+        string face = Emojis.AvatarRules.Normalize(avatar);
+        return ScreenPane.Fit(face.Length > 0 ? face + " " + profileName : profileName, WindowTitleCells);
     }
 
     /// <summary>The pause between silencing the speaker and opening the microphone: its last buffer and the room's reverb.</summary>
@@ -4293,6 +4296,10 @@ internal sealed partial class ChatScreen
                 // The workflow names (later on 2026-09-24, the user's ask): only while the first word is typed; the prompt after it is free text.
                 return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(sources.Workflows?.Invoke() ?? [], argText);
 
+            case SlashCommand.Avatar:
+                // The one word (2026-10-10); an emoji or a search is typed, nothing to complete.
+                return MentionCompleter.Matches([new(AvatarCommand.ClearWord, AvatarCommand.ClearNote)], argText);
+
             case SlashCommand.Settings:
                 // The changed settings (2026-10-04); any other words are a search, nothing to complete.
                 return MentionCompleter.Matches([new(SettingsMenu.ChangedWord, SettingsChangedNote)], argText);
@@ -5099,7 +5106,14 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>The terminal's tab names the loaded profile (<see cref="WindowTitle"/>); at launch and after every switch, like <see cref="BindProfile"/>.</summary>
-    private void ApplyWindowTitle() => _setTitle?.Invoke(WindowTitle(_settings.ProfileName));
+    private void ApplyWindowTitle()
+    {
+        _windowTitle = WindowTitle(_settings.ProfileName, _effective().Avatar);
+        _setTitle?.Invoke(_windowTitle);
+    }
+
+    // The title last set (2026-10-10): a settings change sets it again only when the avatar changed it.
+    private string? _windowTitle;
 
     public static string UnknownCommandError(string token) => $"Unknown command {token}. /help lists them.";
 
@@ -8241,7 +8255,7 @@ internal sealed partial class ChatScreen
         var speaker = effective.TtsOutput && _speech.IsReady ? _speech.BeginTurn(cancellationToken) : null;
         if (print)
         {
-            _transcript.BeginAssistant(StyledReply(effective.TranscriptMarkdown, _pane.Enabled));
+            _transcript.BeginAssistant(StyledReply(effective.TranscriptMarkdown, _pane.Enabled), TranscriptRenderer.GlyphFor(effective.Avatar));
             _transcript.AppendDelta(reading.Text[reading.Sentences[from - 1].Offset..]);
             _transcript.EndAssistant();
             if (reading.Cut)
@@ -8460,7 +8474,7 @@ internal sealed partial class ChatScreen
         if (echo.Count == 0)
         {
             var effective = _effective();
-            _transcript.BeginAssistant(StyledReply(effective.TranscriptMarkdown, _pane.Enabled));
+            _transcript.BeginAssistant(StyledReply(effective.TranscriptMarkdown, _pane.Enabled), TranscriptRenderer.GlyphFor(effective.Avatar));
             _transcript.AppendDelta(args);
             _transcript.EndAssistant();
             return;
@@ -9172,18 +9186,18 @@ internal sealed partial class ChatScreen
     /// </summary>
     /// <remarks>2026-09-27: a plain reset says what it keeps (<see cref="Profiles.ResetKeptSettings"/>); <c>--all</c> asks the old line.</remarks>
     public static string ResetProfilePrompt(string name, bool all = false) =>
-        $"{NoticeGlyphs.Profile}Reset profile \"{name}\" to the default settings{(all ? "" : " (keeping its URLs, paths and keys)")}?";
+        $"{NoticeGlyphs.Profile}Reset profile \"{name}\" to the default settings{(all ? "" : " (keeping its avatar, URLs, paths and keys)")}?";
 
     /// <summary>
     /// The notice after a reset, the user's wording (2026-09-20): <c>; conversation cleared</c> when it
     /// was the loaded profile (the reset is a switch in all but the name). Pinned.
     /// </summary>
     public static string ProfileResetNotice(string name, bool loaded, bool all = false) =>
-        $"({NoticeGlyphs.Profile}reset profile \"{name}\" to the defaults{(all ? "" : "; URLs, paths and keys kept")}{(loaded ? "; conversation cleared" : "")})";
+        $"({NoticeGlyphs.Profile}reset profile \"{name}\" to the defaults{(all ? "" : "; avatar, URLs, paths and keys kept")}{(loaded ? "; conversation cleared" : "")})";
 
     /// <summary><c>/profile reset --all</c> (2026-09-27): the flag, and its note on the argument list. Pinned.</summary>
     public const string ResetAllFlag = "--all";
-    public const string ResetAllNote = "reset the URLs, paths and keys too";
+    public const string ResetAllNote = "reset the avatar, URLs, paths and keys too";
 
     public static string ProfileResetFailedError(string detail) => $"Could not reset the profile: {detail}";
 
@@ -11503,6 +11517,12 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task ApplySettingsChangesAsync(SettingsChanges changes, CancellationToken cancellationToken)
     {
+        if (_windowTitle is not null && WindowTitle(_settings.ProfileName, _effective().Avatar) != _windowTitle)
+        {
+            // The avatar changed (2026-10-10): the title wears the new one at once.
+            ApplyWindowTitle();
+        }
+
         if (changes.HasFlag(SettingsChanges.Llm))
         {
             if (!_effective().EmbeddedLlmServer)
@@ -11654,6 +11674,24 @@ internal sealed partial class ChatScreen
                 }
 
                 return false;
+
+            case SlashCommand.Avatar:
+            {
+                // The profile's avatar (2026-10-10): set or cleared at once, else the picker, searching for any words given.
+                var (verb, avatarText) = AvatarCommand.Parse(args);
+                bool changed = verb switch
+                {
+                    AvatarVerb.Clear => _menu.SetAvatar(""),
+                    AvatarVerb.Set => _menu.SetAvatar(avatarText),
+                    _ => await _menu.PickAvatarAsync(verb == AvatarVerb.Search ? avatarText : "", own: true, cancellationToken).ConfigureAwait(false),
+                };
+                if (changed)
+                {
+                    ApplyWindowTitle();
+                }
+
+                return false;
+            }
 
             case SlashCommand.Compact:
                 await CompactAsync(args.Length > 0 ? args : null, autoPercent: null, cancellationToken).ConfigureAwait(false);
@@ -12250,6 +12288,7 @@ internal sealed partial class ChatScreen
                     // exists on disk (every one is written synchronously, so the disk is current).
                     var seed = AppSettings.Copy(_settings.Current);
                     seed.WorkingDirectory = "";
+                    seed.Avatar = "";   // 2026-10-10: a face is the profile's own, as its sandbox; two profiles never share one by accident
                     Profiles.Create(home, action.Name, seed);
                     IReadOnlyList<string> copied = Profiles.CopySidekickFiles(
                         _settings.ProfileDirectory, home, action.Name, NewProfileMode.FilesFor(NewProfileMode.Resolve(_effective())));
@@ -13405,7 +13444,7 @@ internal sealed partial class ChatScreen
             if (Profiles.NameEquals(name, starter))
             {
                 // The starter is the loaded profile: its files as bound, its voice as the session holds it.
-                cast.Add(new BotParticipant(name, _persona.Read(), _vocalia.Read(), _speech.VoiceSpec, _speech.Speed, cast.Count, BotChat.GenderOf(effective.TtsVoice)));
+                cast.Add(new BotParticipant(name, _persona.Read(), _vocalia.Read(), _speech.VoiceSpec, _speech.Speed, cast.Count, BotChat.GenderOf(effective.TtsVoice), Avatar: effective.Avatar));
                 continue;
             }
 
@@ -13424,7 +13463,7 @@ internal sealed partial class ChatScreen
             // The persona, the spoken-reply directive and the voice are read; the LLM settings ride along in the profile,
             // read only under Botchat LLM mode multi (later on 2026-09-25, LinkBotsAsync).
             string voice = VoiceMix.Spec(data.TtsVoice, data.TtsVoice2, data.TtsVoiceMix);
-            cast.Add(new BotParticipant(name, new PersonaFile(directory).Read(), new VocaliaFile(directory).Read(), voice, data.TtsSpeed, cast.Count, BotChat.GenderOf(data.TtsVoice), data));
+            cast.Add(new BotParticipant(name, new PersonaFile(directory).Read(), new VocaliaFile(directory).Read(), voice, data.TtsSpeed, cast.Count, BotChat.GenderOf(data.TtsVoice), data, data.Avatar));
         }
 
         return cast;
@@ -14626,6 +14665,8 @@ internal sealed partial class ChatScreen
             ladder is not null ? e => SpendScroll(e) || BotTalkKey(e) : SpendScroll, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
         bool markdown = MarkdownTurn(effective.TranscriptMarkdown, _pane.Enabled, speaker is not null);
         bool styled = StyledReply(effective.TranscriptMarkdown, _pane.Enabled);
+        // The reply's glyph (2026-10-10): the profile's avatar, or the dot for a /botchat bot, whose speaker line says who it is.
+        string glyph = bot is null ? TranscriptRenderer.GlyphFor(effective.Avatar) : TranscriptRenderer.AssistantGlyph;
         // The shells found are probed afresh per turn (2026-09-21): an install during the session shows without a restart, and the schema and the run agree.
         // The picture budget (2026-10-03), a bot's turn too: read at each turn, so an edit lands at the next request.
         assistant.PictureBudget = new PictureBudget(effective.LlmPictureKeep, effective.LlmPictureMegabytes);
@@ -14696,7 +14737,7 @@ internal sealed partial class ChatScreen
         }
         else
         {
-            _transcript.Speaker(bot.Name, SpeakerColor(bot.ColorIndex));
+            _transcript.Speaker(bot.Name, SpeakerColor(bot.ColorIndex), bot.Avatar);
             // A held /botchat reply's picture (Botchat image async off, later on 2026-09-25): under the name, above the words.
             if (picture is not null)
             {
@@ -14776,7 +14817,7 @@ internal sealed partial class ChatScreen
                 : await FirstWaitAsync().ConfigureAwait(false);
             returned = true;
             RenderOpening();
-            _transcript.BeginAssistant(styled);
+            _transcript.BeginAssistant(styled, glyph);
             while (more)
             {
                 // The stage ahead of the event's own lines (the 🛠️ line under a tool's name, not a
@@ -14803,14 +14844,14 @@ internal sealed partial class ChatScreen
         catch (OperationCanceledException) when (turnCts.IsCancellationRequested)
         {
             RenderOpening();
-            _transcript.BeginAssistant(styled);
+            _transcript.BeginAssistant(styled, glyph);
             cancelled = true;
         }
         catch (Exception ex)
         {
             // Assistant turns server failures into Notice events; anything reaching here is ours.
             RenderOpening();
-            _transcript.BeginAssistant(styled);
+            _transcript.BeginAssistant(styled, glyph);
             _transcript.Error(TurnFailedPrefix + Assistant.Explain(ex));
             failed = true;
         }

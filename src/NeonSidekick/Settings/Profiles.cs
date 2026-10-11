@@ -373,7 +373,7 @@ public static class Profiles
     /// <summary>
     /// Copies one profile's settings over another's (2026-09-28, <c>/profile push</c> and <c>/profile pull</c>, the
     /// user's ask): <paramref name="from"/>'s <c>profile.json</c> written as <paramref name="to"/>'s, every setting but
-    /// <see cref="AppSettingsData.WorkingDirectory"/>, which the target keeps (the user's call: a sandbox is the
+    /// <see cref="AppSettingsData.WorkingDirectory"/> and <see cref="AppSettingsData.Avatar"/> (2026-10-10), which the target keeps (the user's call: a sandbox is the
     /// sidekick's own, as <c>/profile add</c> already says by clearing it). The settings alone — the memories, the prompt
     /// files and <c>mcp.json</c> stay as they are, <c>/memory copy</c> and the prompt files' <c>copy</c> being the way to
     /// move those. The keys go as stored, protected or not (<see cref="KeepOnReset"/>'s reasoning). A missing source is the
@@ -399,9 +399,12 @@ public static class Profiles
         var data = ReadProfileFile(ProfileFile(home, from));
         string path = ProfileFile(home, to);
         string keptDirectory = "";
+        string keptAvatar = "";
         try
         {
-            keptDirectory = ReadProfileFile(path).WorkingDirectory;
+            var target = ReadProfileFile(path);
+            keptDirectory = target.WorkingDirectory;
+            keptAvatar = target.Avatar;   // 2026-10-10: the target's own face, never the source's
         }
         catch (JsonException ex)
         {
@@ -409,6 +412,7 @@ public static class Profiles
         }
 
         data.WorkingDirectory = keptDirectory;
+        data.Avatar = keptAvatar;
         System.IO.Directory.CreateDirectory(Directory(home, to));
         WriteProfileFile(path, data);
         DiagnosticLog.Info(Category, $"Copied profile \"{from}\"'s settings to \"{to}\".");
@@ -438,6 +442,7 @@ public static class Profiles
         nameof(AppSettingsData.HomeAssistantUrl),
         nameof(AppSettingsData.HomeAssistantToken),
         nameof(AppSettingsData.YouTubeApiKey),
+        nameof(AppSettingsData.Avatar),
     };
 
     /// <summary>Copies <see cref="ResetKeptSettings"/> from <paramref name="from"/> onto <paramref name="to"/>, one by one (no reflection under AOT). The keys go as stored, protected or not.</summary>
@@ -458,6 +463,7 @@ public static class Profiles
         to.HomeAssistantUrl = from.HomeAssistantUrl;
         to.HomeAssistantToken = from.HomeAssistantToken;
         to.YouTubeApiKey = from.YouTubeApiKey;   // 2026-10-05, the user's ask: a plain reset keeps it, as the other keys
+        to.Avatar = from.Avatar;                 // 2026-10-10: the profile's face, as its name, not a taste a reset puts back
     }
 
     /// <summary>

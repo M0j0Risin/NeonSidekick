@@ -27,6 +27,7 @@ public class AppSettingsTests : IDisposable
     private static AppSettingsData FullyNonDefault() => new()
     {
         SchemaVersion = 7,
+        Avatar = "🦊",
         EmbeddedBackend = "vulkan",
         EmbeddedContextSize = 8192,
         EmbeddedGpuLayers = "20",
@@ -187,6 +188,7 @@ public class AppSettingsTests : IDisposable
     private static void AssertSame(AppSettingsData expected, AppSettingsData actual)
     {
         Assert.Equal(expected.SchemaVersion, actual.SchemaVersion);
+        Assert.Equal(expected.Avatar, actual.Avatar);
         Assert.Equal(expected.CommandTypoIntercept, actual.CommandTypoIntercept);
         Assert.Equal(expected.KeepMessageHistory, actual.KeepMessageHistory);
         Assert.Equal(expected.CopyUserPrompt, actual.CopyUserPrompt);
@@ -339,6 +341,7 @@ public class AppSettingsTests : IDisposable
         settings.Update(d =>
         {
             d.SchemaVersion = full.SchemaVersion;
+            d.Avatar = full.Avatar;
             d.EmbeddedBackend = full.EmbeddedBackend;
             d.EmbeddedContextSize = full.EmbeddedContextSize;
             d.EmbeddedGpuLayers = full.EmbeddedGpuLayers;
@@ -485,6 +488,7 @@ public class AppSettingsTests : IDisposable
             settings.Update(d =>
             {
                 d.SchemaVersion = full.SchemaVersion;
+                d.Avatar = full.Avatar;
                 d.EmbeddedBackend = full.EmbeddedBackend;
                 d.EmbeddedContextSize = full.EmbeddedContextSize;
                 d.EmbeddedGpuLayers = full.EmbeddedGpuLayers;

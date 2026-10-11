@@ -23,6 +23,7 @@ What Neon Sidekick is built on. Back to the [README](../README.md).
 * `LibGit2Sharp`
 * `Microsoft.Web.WebView2` (Windows)
 * `llama.cpp` (`llama-server`, downloaded on first use of the embedded LLM)
+* Unicode's `emoji-test.txt` and CLDR's English annotations (the avatar picker's emoji, names and keywords; CLDR's `windowsZones.xml` maps the clock tools' time zones), under the [Unicode License v3](https://www.unicode.org/license.txt)
 
 ## System libraries
 

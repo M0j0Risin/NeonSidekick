@@ -24,10 +24,12 @@ public sealed class ReplyBlock : IRenderable
     private MarkdownView? _view;
     private IRenderable? _content;
 
-    public ReplyBlock(string text, bool glyph, IMarkdownParser? parser = null, int codeKeep = 0)
+    public ReplyBlock(string text, bool glyph, IMarkdownParser? parser = null, int codeKeep = 0, string? glyphText = null)
     {
         Text = text ?? throw new ArgumentNullException(nameof(text));
         Glyph = glyph;
+        GlyphText = string.IsNullOrEmpty(glyphText) ? TranscriptRenderer.AssistantGlyph : glyphText;
+        Indent = new string(' ', TextCells.Width(GlyphText));
         CodeKeep = Math.Max(0, codeKeep);
         _parser = parser ?? MarkdownView.DefaultParser;
     }
@@ -37,6 +39,8 @@ public sealed class ReplyBlock : IRenderable
     {
         Text = whole.Text;
         Glyph = whole.Glyph;
+        GlyphText = whole.GlyphText;
+        Indent = whole.Indent;
         CodeKeep = whole.CodeKeep;
         _parser = whole._parser;
         _document = document;
@@ -122,6 +126,15 @@ public sealed class ReplyBlock : IRenderable
 
     public bool Glyph { get; }
 
+    /// <summary>
+    /// What <see cref="Glyph"/> draws (2026-10-10): <see cref="TranscriptRenderer.AssistantGlyph"/>, or the profile's avatar and a
+    /// space (<see cref="TranscriptRenderer.GlyphFor"/>), three cells, which <see cref="Indent"/> follows.
+    /// </summary>
+    public string GlyphText { get; }
+
+    /// <summary>The blanks under the glyph and ahead of a stretch after a tool line: as wide as <see cref="GlyphText"/>, so the reply keeps one left edge.</summary>
+    public string Indent { get; }
+
     /// <summary>How many source lines a top-level code block may have before it folds in the transcript; 0 = never.</summary>
     public int CodeKeep { get; }
 
@@ -140,7 +153,7 @@ public sealed class ReplyBlock : IRenderable
     }
 
     // The glyph's two cells or, without it, the same two of indent (2026-10-04, the UI review: one left edge for the whole reply).
-    private int ViewWidth(int maxWidth) => Math.Max(1, maxWidth - TextCells.Width(TranscriptRenderer.AssistantGlyph));
+    private int ViewWidth(int maxWidth) => Math.Max(1, maxWidth - TextCells.Width(GlyphText));
 
     private IRenderable Content => _content ??= Build();
 
@@ -149,6 +162,6 @@ public sealed class ReplyBlock : IRenderable
         _view = new MarkdownView(Document);
         // A stretch after a tool line keeps the reply's left edge (2026-10-04, the UI review: it went flush-left, its bullets and code
         // labels at column 0): the indent the glyph's line has, under no glyph.
-        return Glyph || Text.Length > 0 ? new HangingIndent(Glyph ? TranscriptRenderer.AssistantGlyph : ContinuationIndent, ContinuationIndent, Theme.Accent, _view) : _view;
+        return Glyph || Text.Length > 0 ? new HangingIndent(Glyph ? GlyphText : Indent, Indent, Theme.Accent, _view) : _view;
     }
 }

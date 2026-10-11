@@ -718,6 +718,7 @@ public sealed class AppSettings : IDisposable
         CommandTypoIntercept = source.CommandTypoIntercept,
         KeepMessageHistory = source.KeepMessageHistory,
         CopyUserPrompt = source.CopyUserPrompt,
+        Avatar = source.Avatar,
         UserLineStyle = source.UserLineStyle,
         DraftEditor = source.DraftEditor,
         ImageEditor = source.ImageEditor,

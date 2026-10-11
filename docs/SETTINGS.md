@@ -157,6 +157,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Setting | What it does | Default |
 |---|---|---|
 | Profile | Switches profile (each has its own settings, persona, memory, skills and sessions); a typed letter jumps to the next profile starting with it. | `neon` |
+| Avatar | The profile's emoji: it opens each of the profile's replies in place of ●, marks its `/botchat` speaker line in place of ◆, and goes before its name in the window title. Enter opens a grid picker (see [The avatar picker](#the-avatar-picker)); `/avatar` opens it too. `/profile reset` keeps it; a profile `/profile add` makes starts with none; `/profile push`/`pull` never carry it. | none |
 | New profile mode | What `/profile add` copies: `basic` the settings and memories; `advanced` also the persona, operating-rules and voice-directive files. | `basic` |
 | Working directory (cwd) | The folder the file and GitLib tools work in; empty is the profile's `files\` folder. The row opens the `/cwd browse` folder picker; `/cwd <path>` sets one by hand. | profile's `files\` |
 | Memory mode | `read-write` offers `save_memory` / `recall_memory` and opens every conversation with what is remembered; `read-only` offers `recall_memory` alone, so the model reads but never saves (your `/remember` still does); `disabled` turns memory off and refuses `/remember`. | read-write |
@@ -182,6 +183,16 @@ Settings that an environment variable or flag can override for one launch are li
 | Menus max height | How much of the window a menu or info pane may take: `half-screen`, `three-quarters` or `full-screen` (all but one row). Longer lists scroll; every tab keeps the tallest tab's height. | `full-screen` |
 | Draft editor | The program `/draft` opens with (`code --wait`, `notepad`…); it must wait for the file to close. Empty uses the app the system opens `.txt` files with (TextEdit on a Mac unless you chose another). | (default .txt editor) |
 | Image viewer | Where a double-clicked picture opens: empty for the built-in viewer, `system` for Windows' app for the file type, or a command the path is appended to (`mspaint`, `"C:\Program Files\GIMP 3\bin\gimp-3.exe"`). On a Mac `system` is the app macOS opens the file with (Preview unless you chose another), and empty falls back to it with no desktop to draw on (over SSH). | (built-in viewer) |
+
+#### The avatar picker
+
+* Enter on *Avatar* (or `/avatar`) opens a grid of every emoji Windows Terminal draws: 1,637 from Unicode's Emoji 15.1, without the country and regional flags (Windows has no flag pictures and draws the two letters) or anything newer.
+* The tabs: **⭐ For you** (emoji whose names and keywords match the words of the profile's name and the opening of its `persona.md`; shown when any do), **🕘 Recent** (*In use*, the avatars of this and the other profiles, then the ones you picked last, shared by every profile), then one per Unicode group (Smileys, People, Animals, Food, Travel, Activities, Objects, Symbols, Flags), each in its subgroups' sections. Tab and Shift+Tab step the tabs; the arrows move in the grid; a click moves to a cell and a double-click takes it.
+* Type to search every emoji by name and keyword at once (`fox`, `red heart`, `chef`): every word must match, a whole name first. An emoji typed or pasted (Win+. opens Windows' emoji panel) is a search for itself, one outside the catalog too. Backspace erases, ESC clears the search, the next ESC backs out.
+* Every tab starts with 🎲, which puts the cursor on an emoji at random from the tab or the search (Enter takes it, 🎲 again rerolls), and 🚫, which clears the avatar.
+* Enter on a hand or a person opens its six skin tones, the cursor on the tone last chosen; the grid shows them in that tone from then on.
+* The profile's avatar sits on a highlighted slab, another profile's on a darker one, so bots in `/botchat` stay easy to tell apart. The band under the grid names the emoji, its keywords, code points and emoji version, who wears it, and how the title and a reply will read.
+* The recent picks and the last tone live in `emoji.json` in the home folder.
 
 #### Welcome splash
 

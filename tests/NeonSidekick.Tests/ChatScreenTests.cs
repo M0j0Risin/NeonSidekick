@@ -6938,10 +6938,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("🪪 Delete profile \"x\" and everything in it (settings, memories, persona, operating rules, voice directive, MCP servers, sessions)?", ChatScreen.DeleteProfilePrompt("x"));
         // 2026-09-20, the user's wording: a reset takes the settings alone back, the notice names nothing else.
         // 2026-09-27: a plain reset keeps the URLs, paths and keys and says so; --all is the old wording.
-        Assert.Equal("🪪 Reset profile \"x\" to the default settings (keeping its URLs, paths and keys)?", ChatScreen.ResetProfilePrompt("x"));
+        Assert.Equal("🪪 Reset profile \"x\" to the default settings (keeping its avatar, URLs, paths and keys)?", ChatScreen.ResetProfilePrompt("x"));   // the avatar 2026-10-10
         Assert.Equal("🪪 Reset profile \"x\" to the default settings?", ChatScreen.ResetProfilePrompt("x", all: true));
-        Assert.Equal("(🪪 reset profile \"x\" to the defaults; URLs, paths and keys kept; conversation cleared)", ChatScreen.ProfileResetNotice("x", loaded: true));
-        Assert.Equal("(🪪 reset profile \"x\" to the defaults; URLs, paths and keys kept)", ChatScreen.ProfileResetNotice("x", loaded: false));
+        Assert.Equal("(🪪 reset profile \"x\" to the defaults; avatar, URLs, paths and keys kept; conversation cleared)", ChatScreen.ProfileResetNotice("x", loaded: true));
+        Assert.Equal("(🪪 reset profile \"x\" to the defaults; avatar, URLs, paths and keys kept)", ChatScreen.ProfileResetNotice("x", loaded: false));
         Assert.Equal("(🪪 reset profile \"x\" to the defaults; conversation cleared)", ChatScreen.ProfileResetNotice("x", loaded: true, all: true));
         Assert.Equal("(🪪 reset profile \"x\" to the defaults)", ChatScreen.ProfileResetNotice("x", loaded: false, all: true));
         Assert.Equal("--all", ChatScreen.ResetAllFlag);
@@ -9669,7 +9669,7 @@ public partial class ChatScreenTests : IDisposable
             Key(Keys.Escape),                                                    // closed, unchanged: the draft back
             input => input.Push(Keys.Char('!'), Keys.Enter),
             Line("/settings"),
-            input => input.Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Escape),   // General's fourth row, Memory mode (since 2026-10-01): its page on read-write, disabled picked; the pane closed: the disk on its slab
+            input => input.Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Escape),   // General's fifth row, Memory mode (since 2026-10-01; Avatar above it since 2026-10-10): its page on read-write, disabled picked; the pane closed: the disk on its slab
             input => { input.PushClick(33, 103); input.PushClick(33, 103); },    // 🔒 still at 33: the list
             Key(Keys.Escape),
             Line("/tools"),
@@ -10311,7 +10311,8 @@ public partial class ChatScreenTests : IDisposable
         PushLine("/settings");
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);          // Memory mode (General, fourth row: New profile mode sits under Profile, Memory under Working directory since 2026-10-01)
+        _console.Input.PushKey(Keys.Down);
+        _console.Input.PushKey(Keys.Down);          // Memory mode (General, fifth row: Avatar under Profile since 2026-10-10, New profile mode under it, Memory under Working directory since 2026-10-01)
         _console.Input.PushKey(Keys.Enter);         // its on/off page (2026-09-17)
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Enter);         // read-only (Memory mode's second, 2026-10-04)
@@ -10654,7 +10655,8 @@ public partial class ChatScreenTests : IDisposable
         PushLine("/settings");
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);          // Memory mode (General, fourth row: New profile mode sits under Profile, Memory under Working directory since 2026-10-01)
+        _console.Input.PushKey(Keys.Down);
+        _console.Input.PushKey(Keys.Down);          // Memory mode (General, fifth row: Avatar under Profile since 2026-10-10, New profile mode under it, Memory under Working directory since 2026-10-01)
         _console.Input.PushKey(Keys.Enter);         // its on/off page
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Enter);         // read-only: the list again

@@ -32,6 +32,13 @@ public static class HelpCommands
             new("/advisor", "List the advisors: the profiles of *Advisor list*, their roles, and the kind of server and the model each is on, a missing one marked."),
             new("/advisor <name> <question>", "Ask one advisor (named by its profile, or a word of its role) on its own profile's server and model; it may use this chat's read-only tools. The answer joins the conversation, so the model can build on it. Works whether or not *Advisors enabled* is on. See Advisors."),
         ]),
+        new("/avatar",
+        [
+            new("/avatar", "Open the emoji picker for the profile's *Avatar*: a grid of every emoji Windows Terminal draws, in tabs (For you, from the profile's name and persona; Recent; then each Unicode group). Type to search names and keywords, Enter on a hand or a person for its skin tones, 🎲 for one at random."),
+            new("/avatar <emoji>", "Set the avatar to that emoji at once (one emoji, typed or pasted)."),
+            new("/avatar <words>", "Open the picker searching for the words (headless: set the best match)."),
+            new("/avatar clear", "No avatar: replies open with ● again and the window title shows the name alone."),
+        ]),
         new("/botchat",
         [
             new("/botchat [<profile> ...] [--] [<topic>]", "Let profiles talk to each other, each in its own persona, until you stop them. Leading words that name profiles are the cast (every profile when none is named; the loaded one always speaks first); the first other word starts the topic, and `--` makes everything after it the topic. See Bot conversations."),

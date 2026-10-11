@@ -314,6 +314,7 @@ public class ProfilesTests : IDisposable
             HomeAssistantToken = "dpapi:ha",
             YouTubeApiKey = "dpapi:yt",
             LlmApiKey = "dpapi:llm",
+            Avatar = "🦊",
             TtsOutput = !new AppSettingsData().TtsOutput,
             WorkingDirectory = @"C:\elsewhere",
         };
@@ -333,7 +334,8 @@ public class ProfilesTests : IDisposable
         Assert.Equal("dpapi:ha", kept.HomeAssistantToken);   // the Home Assistant pair (2026-09-28)
         Assert.Equal("dpapi:oa", kept.OpenAIApiKey);   // the OpenAI API key (2026-10-03)
         Assert.Equal("dpapi:yt", kept.YouTubeApiKey);   // the YouTube API key (2026-10-05, the user's ask)
-        Assert.Equal(15, Profiles.ResetKeptSettings.Length);
+        Assert.Equal("🦊", kept.Avatar);   // the profile's face (2026-10-10)
+        Assert.Equal(16, Profiles.ResetKeptSettings.Length);
 
         Profiles.Create(_dir, "home", mine);
         Profiles.Reset(_dir, "home", all: true);
@@ -374,8 +376,8 @@ public class ProfilesTests : IDisposable
     [Fact]
     public void CopySettings_CopiesEverySetting_ButTheTargetsWorkingDirectory_AndNoSidekickFile()
     {
-        Profiles.Create(_dir, "home", new AppSettingsData { LlmModel = "home-model", LlmApiKey = "dpapi:AQA", SessionNamingMode = "first-line", WorkingDirectory = @"C:\home-sandbox" });
-        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", WorkingDirectory = @"C:\work-sandbox" });
+        Profiles.Create(_dir, "home", new AppSettingsData { LlmModel = "home-model", LlmApiKey = "dpapi:AQA", SessionNamingMode = "first-line", WorkingDirectory = @"C:\home-sandbox", Avatar = "🦊" });
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", WorkingDirectory = @"C:\work-sandbox", Avatar = "🐙" });
         File.WriteAllText(Path.Combine(Profiles.Directory(_dir, "home"), PersonaFile.FileName), "You are Rex.");
 
         Profiles.CopySettings(_dir, "home", "work");
@@ -385,6 +387,7 @@ public class ProfilesTests : IDisposable
         Assert.Equal("dpapi:AQA", work.LlmApiKey);   // as stored
         Assert.Equal("first-line", work.SessionNamingMode);
         Assert.Equal(@"C:\work-sandbox", work.WorkingDirectory);
+        Assert.Equal("🐙", work.Avatar);   // the target's own face (2026-10-10)
         Assert.Equal(new[] { Profiles.FileName }, Directory.GetFiles(Profiles.Directory(_dir, "work")).Select(Path.GetFileName));
         Assert.Equal("home-model", Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "home")).LlmModel);   // the source untouched
     }

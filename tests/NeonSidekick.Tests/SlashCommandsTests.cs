@@ -354,7 +354,7 @@ public class SlashCommandsTests
     {
         SlashCommand[] withArgument =
         [
-            SlashCommand.Compact, SlashCommand.Server, SlashCommand.Model, SlashCommand.Reasoning, SlashCommand.Sampling, SlashCommand.Theme,   // /theme [name] 2026-09-23; /sampling [field value] 2026-09-28
+            SlashCommand.Compact, SlashCommand.Server, SlashCommand.Model, SlashCommand.Reasoning, SlashCommand.Sampling, SlashCommand.Theme, SlashCommand.Avatar,   // /avatar [emoji|words|clear] 2026-10-10; /theme [name] 2026-09-23; /sampling [field value] 2026-09-28
             SlashCommand.Tts, SlashCommand.Voice, SlashCommand.Read, SlashCommand.View, SlashCommand.Imagine, SlashCommand.Comfy, SlashCommand.Echo,   // /imagine 2026-09-24
             SlashCommand.Learn,
             SlashCommand.Sys,   // /sys persona|operata|vocalia 2026-10-09: /persona, /operata and /vocalia (here since 2026-09-16) folded in
@@ -556,7 +556,7 @@ public class SlashCommandsTests
         Assert.DoesNotContain("Ctrl+Q", SlashCommands.HelpText);
         Assert.DoesNotContain("(also", SlashCommands.HelpText);
         string Summary(string command) => SlashCommands.HelpEntries.Single(e => e.Command == command).Summary;
-        Assert.StartsWith("Commands:\n" + Row("/about", Summary("/about")) + Row(SlashCommands.HelpEntries.Single(e => e.Command == "/advisor")) + Row(SlashCommands.HelpEntries.Single(e => e.Command == "/botchat")), SlashCommands.HelpText);   // A to Z since 2026-09-27 (the user's call); /settings led the grouped list until then
+        Assert.StartsWith("Commands:\n" + Row("/about", Summary("/about")) + Row(SlashCommands.HelpEntries.Single(e => e.Command == "/advisor")) + Row(SlashCommands.HelpEntries.Single(e => e.Command == "/avatar")) + Row(SlashCommands.HelpEntries.Single(e => e.Command == "/botchat")), SlashCommands.HelpText);   // A to Z since 2026-09-27 (the user's call); /settings led the grouped list until then
         Assert.Contains(Row("/settings, //", Summary("/settings"), "/settings", "/settings <words>", "/settings changed"), SlashCommands.HelpText);
         Assert.Contains(
             Row("/profile", Summary("/profile"), "/profile [<name>]", "/profile add|delete <name>", "/profile rename <name> <new-name>", "/profile reset [<name>] [--all]", "/profile push|pull <name>",
@@ -599,10 +599,10 @@ public class SlashCommandsTests
     {
         // One list, A to Z by the command (ordinal), no groups (2026-09-27, the user's call: the Commands tab had grown
         // cramped; nine hand-ordered groups until then — their history is in git).
-        Assert.Equal(70, SlashCommands.HelpEntries.Count);   // /advisor 2026-10-10   // /wake and /interrupt gone 2026-10-09 (into /stt)   // /open and /browse 2026-10-09   // /persona, /operata and /vocalia gone 2026-10-09 (into /sys)     // /cmdlist and /police gone 2026-10-09 (into /tools shell)   // /cmd 2026-10-09   // /cmdcopy, /keycopy and /srvcopy gone 2026-10-09 (into /profile push|pull)   // /shortcut later still on 2026-10-07   // /find later on 2026-10-07   // /srvcopy 2026-10-07   // /youtube later still on 2026-10-05   // /rename later on 2026-10-05   // /process 2026-10-05   // /thumbs later still on 2026-10-04, folded into /view --thumbs after it   // /keycheck later on 2026-10-04   // /screen 2026-10-04   // /terminal later on 2026-10-03   // /pdf 2026-10-03   // /log in every run later on 2026-10-02   // /camera and /docker 2026-10-02   // /header later still on 2026-10-01   // /emptytrash went 2026-10-01   // /toolbar later on 2026-09-30   // /rewind 2026-09-30   // /keycopy, then /sampling, then /test, then /ha, then /print, since 2026-09-28; /perfbar later on 2026-09-29
+        Assert.Equal(71, SlashCommands.HelpEntries.Count);   // /avatar later on 2026-10-10   // /advisor 2026-10-10   // /wake and /interrupt gone 2026-10-09 (into /stt)   // /open and /browse 2026-10-09   // /persona, /operata and /vocalia gone 2026-10-09 (into /sys)     // /cmdlist and /police gone 2026-10-09 (into /tools shell)   // /cmd 2026-10-09   // /cmdcopy, /keycopy and /srvcopy gone 2026-10-09 (into /profile push|pull)   // /shortcut later still on 2026-10-07   // /find later on 2026-10-07   // /srvcopy 2026-10-07   // /youtube later still on 2026-10-05   // /rename later on 2026-10-05   // /process 2026-10-05   // /thumbs later still on 2026-10-04, folded into /view --thumbs after it   // /keycheck later on 2026-10-04   // /screen 2026-10-04   // /terminal later on 2026-10-03   // /pdf 2026-10-03   // /log in every run later on 2026-10-02   // /camera and /docker 2026-10-02   // /header later still on 2026-10-01   // /emptytrash went 2026-10-01   // /toolbar later on 2026-09-30   // /rewind 2026-09-30   // /keycopy, then /sampling, then /test, then /ha, then /print, since 2026-09-28; /perfbar later on 2026-09-29
         Assert.Equal(
         [
-            "/about", "/advisor", "/botchat", "/browse", "/camera", "/claude", "/clear", "/cmd", "/collapse", "/comfy", "/compact", "/copy", "/cwd",
+            "/about", "/advisor", "/avatar", "/botchat", "/browse", "/camera", "/claude", "/clear", "/cmd", "/collapse", "/comfy", "/compact", "/copy", "/cwd",
             "/docker", "/draft", "/echo", "/exit", "/expand", "/explore", "/find", "/gituser", "/ha", "/header", "/help", "/imagine", "/keycheck", "/learn", "/log",
             "/loop", "/mcp", "/memory", "/model", "/msgclear", "/new", "/open", "/pdf", "/perfbar", "/plan", "/print", "/process", "/profile", "/queue", "/read", "/reasoning",
             "/remember", "/rename", "/rewind", "/sampling", "/screen", "/server", "/sessions", "/settings", "/shortcut", "/skills", "/splash", "/stt", "/sys", "/terminal", "/test", "/theme", "/timer", "/toolbar", "/tools",

@@ -255,6 +255,9 @@
     <!-- The video window's page (2026-10-05): the IFrame Player API host Viewer/VideoPage writes into <home>\webview2\site and
          WebView2 serves from https://player.neonsidekick.example/ (a page with an origin, so YouTube's embeds get a Referer). -->
     <EmbeddedResource Include="..\..\assets\youtube\player.html" LogicalName="youtube/player.html" Visible="false" />
+    <!-- The emoji catalog (2026-10-10, the avatar picker): assets\emoji\emoji.tsv, written by tools\EmojiGen.cs from Unicode's
+         emoji-test.txt and CLDR's annotations (Unicode License v3), read once by Emojis/EmojiCatalog. Rerun the tool; never edit. -->
+    <EmbeddedResource Include="..\..\assets\emoji\emoji.tsv" LogicalName="emoji/emoji.tsv" Visible="false" />
   </ItemGroup>
 
   <!--

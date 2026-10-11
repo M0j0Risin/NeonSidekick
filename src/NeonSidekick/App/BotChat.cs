@@ -1343,7 +1343,8 @@ public sealed record BotChatState(string Starter, IReadOnlyList<string> Cast, st
 /// its <see cref="BotGender"/> from its first voice (<see cref="BotChat.GenderOf"/>, 2026-09-25), and — for every bot but the
 /// starter — its saved <paramref name="Profile"/>, whose LLM settings <c>Botchat LLM mode</c> <c>multi</c> reads (later on 2026-09-25).
 /// </summary>
-public sealed record BotParticipant(string Name, string? Persona, string? VoiceDirective, string Voice, double Speed, int ColorIndex, BotGender Gender = BotGender.Female, NeonSidekick.Settings.AppSettingsData? Profile = null);
+/// <remarks><paramref name="Avatar"/> (2026-10-10): the profile's avatar, its speaker line's glyph; empty for none.</remarks>
+public sealed record BotParticipant(string Name, string? Persona, string? VoiceDirective, string Voice, double Speed, int ColorIndex, BotGender Gender = BotGender.Female, NeonSidekick.Settings.AppSettingsData? Profile = null, string Avatar = "");
 
 /// <summary>A bot's gender, for the pronouns the others use (2026-09-25): from its first voice, female unless the voice says male.</summary>
 public enum BotGender

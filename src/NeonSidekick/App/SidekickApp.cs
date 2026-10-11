@@ -1085,6 +1085,13 @@ public sealed class SidekickApp
                     continue;
                 }
 
+                // /avatar (2026-10-10): ahead of the server check too — the profile's face needs no LLM; no picker here.
+                if (SlashCommands.Parse(text) is (SlashCommand.Avatar, var avatarArgs))
+                {
+                    await HeadlessLineAsync(HeadlessAvatar(avatarArgs)).ConfigureAwait(false);
+                    continue;
+                }
+
                 // /docker (2026-10-02): ahead of the server check too — the engine needs no LLM; the bare word lists.
                 if (SlashCommands.Parse(text) is (SlashCommand.Docker, var dockerArgs))
                 {
@@ -2085,6 +2092,41 @@ public sealed class SidekickApp
     /// Headless <c>/youtube search</c> (its switches checked over the saved choices, 2026-10-08) and <c>/youtube playlist &lt;id|link&gt;</c>
     /// (2026-10-08): the answer's text, a refusal led by <c>Error: </c>.
     /// </summary>
+    /// <summary>
+    /// <c>/avatar</c> headless (2026-10-10): bare, the avatar said; <c>clear</c> clears it; an emoji sets it; words set the best of a
+    /// search, as there is no picker to show its results. The line to print, <c>[error] </c> leading a refusal.
+    /// </summary>
+    private string HeadlessAvatar(string args)
+    {
+        var catalog = Emojis.EmojiCatalog.Shipped;
+        string current = Emojis.AvatarRules.Normalize(_settings.Current.Avatar);
+        var (verb, text) = Emojis.AvatarCommand.Parse(args);
+        string? chosen = verb switch
+        {
+            Emojis.AvatarVerb.Clear => "",
+            Emojis.AvatarVerb.Set => text,
+            Emojis.AvatarVerb.Search => Emojis.EmojiSearch.Rank(text, catalog.Entries).FirstOrDefault()?.Emoji,
+            _ => current,
+        };
+        if (chosen is null)
+        {
+            return "[error] " + Emojis.EmojiText.NoEmojiFor(text);
+        }
+
+        if (verb == Emojis.AvatarVerb.Show || chosen == current)
+        {
+            return chosen.Length == 0 && verb == Emojis.AvatarVerb.Clear ? Emojis.EmojiText.AlreadyNone : Emojis.EmojiText.Current(current, catalog);
+        }
+
+        _settings.Update(d => d.Avatar = chosen);
+        if (chosen.Length > 0)
+        {
+            Emojis.EmojiPrefs.Load(_settings.StorageDirectory).Picked(chosen);
+        }
+
+        return chosen.Length == 0 ? Emojis.EmojiText.Cleared : Emojis.EmojiText.Current(chosen, catalog);
+    }
+
     private async Task<string> HeadlessYouTubeAsync(YouTube.YouTubeCommandLine line, string key, CancellationToken cancellationToken)
     {
         var api = new YouTube.YouTubeDataApi(_web.Http);
