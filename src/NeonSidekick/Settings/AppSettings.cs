@@ -955,6 +955,7 @@ public sealed class AppSettings : IDisposable
         BotChatMemoryMode = source.BotChatMemoryMode,
         BotChatVision = source.BotChatVision,
         BotChatCamera = source.BotChatCamera,
+        BotChatRecentContext = source.BotChatRecentContext,
         ClaudeCodeExecutable = source.ClaudeCodeExecutable,
         ClaudeCodePermissions = source.ClaudeCodePermissions,
         ClaudeCodeModel = source.ClaudeCodeModel,

@@ -53,4 +53,26 @@ public partial class ChatScreenTests
         Assert.Contains("The Claude Code server is not offered", output);
         Assert.Equal(url, _settings.Current.LlmUrl);
     }
+
+    /// <summary>
+    /// <c>/botchat</c> on the Claude Code server (2026-10-10, the advisors' lesson: a text-only advisor there says why): every bot's request is a
+    /// <c>claude -p</c> of its own with no tools, and the chat says so once, before the first reply.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_OnTheClaudeCodeServer_SaysTheBotsAreTextOnly()
+    {
+        BotChatFixture();
+        UseClaudeCli();
+        _settings.Update(d => { d.LlmUrl = ClaudeCliEndpoint.BaseUrl.AbsoluteUri.TrimEnd('/'); d.LlmModel = ClaudeCliEndpoint.DefaultModel; });
+        _chat.EnqueueText("Hello from Neon.");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(2);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + BotChat.ClaudeCodeTextOnlyNotice(["neon", "ada"]) + "\n", output);
+        Assert.True(output.IndexOf(BotChat.ClaudeCodeTextOnlyNotice(["neon", "ada"]), StringComparison.Ordinal) < output.IndexOf("Hello from Neon.", StringComparison.Ordinal));
+    }
 }

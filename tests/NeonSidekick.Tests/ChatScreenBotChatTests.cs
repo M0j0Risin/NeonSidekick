@@ -128,6 +128,72 @@ public partial class ChatScreenTests
         Assert.Contains("ada: Two.", record.HistoryJson, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The bots' tokens (2026-10-10, found comparing botchat with the advisors: counted nowhere, the rows 0 and 0): each reply's requests
+    /// in the tally's own bucket, never this conversation's, and on its session row.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_TheBotsTokens_AreTheirOwnBucket_AndOnTheSessionRows()
+    {
+        BotChatFixture();
+        _settings.Update(d => d.SessionLogging = true);
+        _chat.Enqueue(FakeChatClient.Text("One."), FakeChatClient.Usage(100, 10));
+        _chat.Enqueue(FakeChatClient.Text("Two."), FakeChatClient.Usage(200, 20));
+        _chat.EnqueueText("never");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal(2, _session.Usage.BotRequests);
+        Assert.Equal(300, _session.Usage.Bots.Input);
+        Assert.True(_session.Usage.Session.IsEmpty);
+        using var store = OpenSessions();
+        var record = store.Load(Assert.Single(store.List(10)).Id)!;
+        Assert.Equal(new long[] { 100, 200 }, record.Turns.Take(2).Select(t => t.InputTokens));
+        Assert.Equal(new long[] { 10, 20 }, record.Turns.Take(2).Select(t => t.OutputTokens));
+    }
+
+    /// <summary>
+    /// Botchat recent context (2026-10-10, the advisors' lesson: /advisor's advisor knew nothing of the conversation until it was sent the
+    /// recent messages): on, every bot's system prompt carries the main chat's last messages as the chat began; off (the default), none.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BotChat_RecentContext_TellsEveryBotTheMainChatsLastMessages(bool on)
+    {
+        BotChatFixture();
+        _settings.Update(d => d.BotChatRecentContext = on);
+        _chat.EnqueueText("Pineapple belongs on pizza.");
+        _chat.EnqueueText("Hello from Neon.");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("is pineapple ok on pizza?");
+        PushLine("/botchat what do you make of that?");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        // The main chat's history is the botchat's to read, never to change: what it held as the chat began, it holds now.
+        var recent = Advisors.AdvisorRecent.Lines(_session.History.Messages);
+        Assert.Equal("assistant: Pineapple belongs on pizza.", recent[^1]);
+        Assert.Contains(recent, line => line.StartsWith("user: ", StringComparison.Ordinal) && line.Contains("is pineapple ok on pizza?", StringComparison.Ordinal));
+        string section = BotChat.RecentSection(recent);
+        foreach (var request in _chat.Requests.Skip(1))
+        {
+            if (on)
+            {
+                Assert.EndsWith(section, SystemText(request), StringComparison.Ordinal);
+            }
+            else
+            {
+                Assert.DoesNotContain("Before this chat began", SystemText(request), StringComparison.Ordinal);
+            }
+        }
+    }
+
     [Fact]
     public async Task BotChat_NamedProfiles_OnlyThoseJoin_AndACorruptOneSitsItOut()
     {
@@ -599,7 +665,7 @@ public partial class ChatScreenTests
     public async Task BotChat_Multi_EachBotOnItsOwnProfilesLlm()
     {
         BotChatFixture();
-        _settings.Update(d => d.BotChatLlmMode = "multi");
+        _settings.Update(d => { d.BotChatLlmMode = "multi"; d.SessionLogging = true; });
         Profiles.WriteProfileFile(Profiles.ProfileFile(_dir, "ada"), new AppSettingsData { LlmUrl = "http://ada-only-server:9999", LlmModel = "ada-only-model", LlmReasoning = "high", TtsVoice = "bm_george" });
         _http.Map("http://ada-only-server:9999/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("ada-only-model", "other"));
         _chat.EnqueueText("Hello from Neon.");
@@ -619,6 +685,9 @@ public partial class ChatScreenTests
         Assert.Contains(AdaMarker, SystemText(_chat.Requests[1]));
         Assert.Equal(ReasoningEffort.High, _chat.Options[1]?.Reasoning?.Effort);
         Assert.NotEqual(ReasoningEffort.High, _chat.Options[0]?.Reasoning?.Effort);
+        // The session's row names both models, the starter's first (2026-10-10; the starter's alone until then).
+        using var store = OpenSessions();
+        Assert.Equal(_endpoints[0].ModelId + ", ada-only-model", Assert.Single(store.List(10)).Model);
     }
 
     /// <summary>Multi, a blank URL (the user's call): the bot borrows the starter's server with its own model, and nothing is scanned.</summary>
@@ -659,6 +728,59 @@ public partial class ChatScreenTests
         Assert.Contains("(botchat: ada sits this one out: ", output);
         Assert.Contains(BotChat.TooFewError, output);
         Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>
+    /// Multi, a bot whose own server fails its reply (2026-10-10, the advisors' lesson: a failed advisor drops out and the panel goes on):
+    /// it sits the rest out — never asked again, never named to the others — and the chat goes on with the two left.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_Multi_ABotWhoseServerFails_SitsTheRestOut_AndTheChatGoesOn()
+    {
+        BotChatFixture();
+        _settings.Update(d => d.BotChatLlmMode = "multi");
+        Profiles.WriteProfileFile(Profiles.ProfileFile(_dir, "ada"), new AppSettingsData { LlmUrl = "", LlmModel = "ada-model", TtsVoice = "bm_george", Avatar = "" });
+        Profiles.Create(_dir, "max", new AppSettingsData { LlmUrl = "", Avatar = "" });
+        _chat.EnqueueText("Ada, your turn.");   // neon names ada, so she answers next
+        _chat.EnqueueText("never shown");       // ada's: her server fails before it
+        _chat.EnqueueText("Carrying on.");
+        _chat.EnqueueText("Still ", "here.");
+        _chat.BeforeUpdateOf = (request, _, _) =>
+            SystemText(_chat.Requests[request]).Contains(AdaMarker, StringComparison.Ordinal) ? throw new HttpRequestException("ada's server is down") : Task.CompletedTask;
+        EscDuringRequest(4);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Contains(AdaMarker, SystemText(_chat.Requests[1]));
+        Assert.Contains("  · " + BotChat.FailedNotice("ada") + "\n", output);
+        foreach (var request in _chat.Requests.Skip(2))
+        {
+            Assert.DoesNotContain(AdaMarker, SystemText(request));
+            Assert.Matches("in a group chat with (neon|max) and the user", SystemText(request));
+        }
+
+        Assert.DoesNotContain(BotChat.TooFewLeftError, output);
+    }
+
+    /// <summary>Single, a failed reply still ends the chat (2026-10-10): every bot is on the one server, so the next would fail too.</summary>
+    [Fact]
+    public async Task BotChat_Single_AFailedReply_EndsTheChat()
+    {
+        BotChatFixture();
+        _chat.EnqueueText("Hello from Neon.");
+        _chat.EnqueueText("never shown");
+        _chat.BeforeUpdateOf = (request, _, _) => request == 1 ? throw new HttpRequestException("the server is down") : Task.CompletedTask;
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.DoesNotContain(BotChat.FailedNotice("ada"), output);
+        Assert.Contains(BotChat.StoppedNotice(1), output);
     }
 
     /// <summary>Single (the default): ada's own LLM settings are never read, as before the setting.</summary>

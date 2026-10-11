@@ -386,4 +386,26 @@ public class UsageTextTests
         tally.Add(Usage(1_300, 20, 1, 0.5, 1));
         Assert.Equal("1.3k / 4.1k · 32% · 20 tok/s", UsageText.HintPart(tally, Window));
     }
+
+    /// <summary>The bots' and the advisors' rows (2026-10-10): under the launch section, and with nothing of this chat's counted, under the empty note.</summary>
+    [Fact]
+    public void StatisticsTab_AndLines_ShowTheBotsAndTheAdvisors_OnceEachCounted()
+    {
+        var tally = new TokenTally();
+        tally.AddBots(Usage(1000, 50, 1, 0.5, 1), 3);
+        tally.AddAdvisors(Usage(300, 40, 1, 0.5, 1), 1);
+
+        Assert.Equal("3 requests · 1,000 in · 50 out", UsageText.ApartValue(3, tally.Bots));
+        Assert.Equal([UsageText.NothingCounted, "botchat: 3 requests · 1,000 in · 50 out", "advisors: 1 request · 300 in · 40 out"], UsageText.Lines(tally, null));
+
+        using var console = new TestConsole();
+        console.Profile.Width = 80;
+        console.Write(UsageText.StatisticsTab(tally, null));
+        string[] lines = Lines(console);
+        Assert.Contains("  " + UsageText.BotsLabel + "   3 requests · 1,000 in · 50 out", lines);
+        Assert.Contains("  " + UsageText.AdvisorsLabel + "  1 request · 300 in · 40 out", lines);
+
+        tally.Add(Usage(100, 20, 1, 0.5, 1));
+        Assert.Contains("advisors: 1 request · 300 in · 40 out", UsageText.Lines(tally, null));
+    }
 }

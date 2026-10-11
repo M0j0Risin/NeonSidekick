@@ -26,6 +26,10 @@ public sealed class TokenTally
     private TokenUsage _claude;
     private int _claudeRuns;
     private decimal _claudeCost;
+    private TokenUsage _bots;
+    private int _botRequests;
+    private TokenUsage _advisors;
+    private int _advisorRequests;
     private int _unreportedReplies;
     private bool _hintHidden;
 
@@ -198,6 +202,46 @@ public sealed class TokenTally
 
     /// <summary>What the <c>/claude</c> runs cost since launch, in US dollars, as the CLI reported it.</summary>
     public decimal ClaudeCostUsd { get { lock (_gate) { return _claudeCost; } } }
+
+    /// <summary>
+    /// A <c>/botchat</c> reply ran (2026-10-10, found comparing botchat with the advisors: neither was counted anywhere): its requests
+    /// into their own bucket, since launch, and nowhere else, as <see cref="AddClaude"/>'s — a bot may talk through another
+    /// profile's server and model, and its view is not this conversation, so summed in they would mislead the context figures and
+    /// the auto-compact. Safe from any thread.
+    /// </summary>
+    public void AddBots(TokenUsage usage, int requests)
+    {
+        lock (_gate)
+        {
+            _bots += usage;
+            _botRequests += requests;
+        }
+    }
+
+    /// <summary>What the <c>/botchat</c> bots used since launch; zero until a bot's request reported.</summary>
+    public TokenUsage Bots { get { lock (_gate) { return _bots; } } }
+
+    /// <summary>The <c>/botchat</c> requests since launch that reported usage.</summary>
+    public int BotRequests { get { lock (_gate) { return _botRequests; } } }
+
+    /// <summary>
+    /// An advisor answered (2026-10-10, <c>neon_advisor</c> and <c>/advisor</c>): <see cref="AddBots"/>'s shape, for the same reasons —
+    /// each advisor talks through its own profile's server and model. Safe from any thread: an advisor runs under a turn's tool call.
+    /// </summary>
+    public void AddAdvisors(TokenUsage usage, int requests)
+    {
+        lock (_gate)
+        {
+            _advisors += usage;
+            _advisorRequests += requests;
+        }
+    }
+
+    /// <summary>What the advisors used since launch; zero until an advisor's request reported.</summary>
+    public TokenUsage Advisors { get { lock (_gate) { return _advisors; } } }
+
+    /// <summary>The advisors' requests since launch that reported usage.</summary>
+    public int AdvisorRequests { get { lock (_gate) { return _advisorRequests; } } }
 
     /// <summary>The conversation was cleared: its scope and the context in use start over; the session's and the last reply's stay.</summary>
     public void ResetConversation()

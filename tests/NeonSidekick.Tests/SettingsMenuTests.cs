@@ -940,6 +940,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.AdvisorMaxToolIterations, SettingsField.AdvisorThreadPairs, SettingsField.AdvisorEmbedded, SettingsField.AdvisorConfirm,
                 SettingsField.DockerServerMatchWords,   // later on 2026-10-10, the Docker tab under the containers: which are LLM servers
                 SettingsField.Avatar,   // later still on 2026-10-10, General under Profile: the profile's emoji
+                SettingsField.BotChatRecentContext,   // later still on 2026-10-10, the Botchat tab's last row: the main chat's last messages
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -5248,7 +5249,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(["Connection", "Thinking", "Sampling"], SettingsMenu.TabSections[SettingsTab.Http].Select(s => s.Title));   // 2026-10-10
         Assert.Equal(SettingsField.LlmUrl, SettingsMenu.TabSections[SettingsTab.Common][0].First);   // Connection over the URL (over the scan mode until 2026-10-10)
         Assert.Equal(SettingsField.LlmScanMode, SettingsMenu.TabSections[SettingsTab.Http][0].First);
-        Assert.Equal(["Models", "Pictures", "Pace", "Tools and skills", "Memory", "Seeing"], SettingsMenu.TabSections[SettingsTab.BotChat].Select(s => s.Title));
+        Assert.Equal(["Models", "Pictures", "Pace", "Tools and skills", "Memory", "Seeing", "Context"], SettingsMenu.TabSections[SettingsTab.BotChat].Select(s => s.Title));
         // Every other tab's, later on 2026-10-10 (the user's ask: the same look everywhere, and the Anthropic tab saying whose row is whose).
         Assert.Equal(["Server and models", "GPU and memory", "Vision and drafting"], SettingsMenu.TabSections[SettingsTab.Embedded].Select(s => s.Title));
         Assert.Equal(["Containers", "Starting and stopping"], SettingsMenu.TabSections[SettingsTab.Docker].Select(s => s.Title));

@@ -252,6 +252,7 @@ The pane heads its runs **Models**, **Pictures**, **Pace**, **Tools and skills**
 | Botchat memory mode | Whose memories: `shared-parent` (every bot uses the starting profile's) or `independent` (each bot its own profile's). | `shared-parent` |
 | Botchat vision enabled | Shows each bot, on its turn, the newest 4 pictures since it last spoke (not its own), captioned with whose they are. Needs models that read images. Not kept for `--resume` or the session. | off |
 | Botchat camera | The bots see you: each turn gets a fresh camera picture, captioned as a photo of you. Kept in memory only. Needs models that read images; a failing camera is one warning. Read when a chat starts. | off |
+| Botchat recent context | Tells every bot the last 10 messages of this chat as they stood when `/botchat` began (tool results cut to 500 characters, no pictures), so the topic can point at what you were just discussing. Read when a chat starts. | off |
 
 ##### Botchat pictures
 

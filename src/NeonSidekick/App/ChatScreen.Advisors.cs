@@ -29,10 +29,11 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The advisors' group (2026-10-10): <see cref="NeonAdvisorTool"/> over the host, the settings, the loaded profile's name, the threads,
-    /// the tools a turn would offer now with their rules, the conversation, the confirm seam and the view. Shared with headless.
+    /// the tools a turn would offer now with their rules, the conversation, the confirm seam, the view and the tally's advisors bucket
+    /// (<see cref="TokenTally.AddAdvisors"/>, later on 2026-10-10). Shared with headless.
     /// </summary>
-    public static NeonAdvisorTool AdvisorTool(IAdvisorHost host, Func<AppSettingsData> effective, Func<string> master, AdvisorThreads threads, Func<(IReadOnlyList<AIFunction> Tools, string Rules)> offered, Func<IReadOnlyList<ChatMessage>> history, Func<AdvisorEntry, string, CancellationToken, Task<bool?>>? confirm, IAdvisorView? view) =>
-        new(host, effective, master, threads, offered, history, confirm, view);
+    public static NeonAdvisorTool AdvisorTool(IAdvisorHost host, Func<AppSettingsData> effective, Func<string> master, AdvisorThreads threads, Func<(IReadOnlyList<AIFunction> Tools, string Rules)> offered, Func<IReadOnlyList<ChatMessage>> history, Func<AdvisorEntry, string, CancellationToken, Task<bool?>>? confirm, IAdvisorView? view, Action<TokenUsage, int>? spent) =>
+        new(host, effective, master, threads, offered, history, confirm, view, spent);
 
     /// <summary>Whether a turn offers <c>neon_advisor</c>: <c>Advisors enabled</c> on and an advisor listed (2026-10-10). Pure.</summary>
     public static bool AdvisorsOffered(AppSettingsData effective)

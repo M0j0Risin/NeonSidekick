@@ -90,6 +90,7 @@ internal sealed partial class SettingsMenu
                 (SettingsField.BotChatTools, "Tools and skills"),
                 (SettingsField.BotChatMemory, "Memory"),
                 (SettingsField.BotChatVision, "Seeing"),
+                (SettingsField.BotChatRecentContext, "Context"),
             ],
             [SettingsTab.Advisors] =
             [

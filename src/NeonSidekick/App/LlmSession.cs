@@ -769,7 +769,7 @@ internal sealed class LlmSession : IDisposable
     /// A second assistant over this session's one client (<c>/botchat</c>, 2026-09-24, the user's call:
     /// every bot on the starting profile's server and model — <c>Botchat LLM mode</c> <c>single</c> since 2026-09-25):
     /// <paramref name="history"/> its own, the timeouts and the reasoning effort the main assistant's as they stand, no
-    /// tools. Null while nothing is connected. The client stays this session's; nothing here is disposed with the assistant.
+    /// tools yet (the caller sets a bot's, <see cref="BotChat.TurnTools"/>). Null while nothing is connected. The client stays this session's; nothing here is disposed with the assistant.
     /// </summary>
     public Assistant? CreateAssistant(ConversationHistory history)
     {
@@ -779,7 +779,7 @@ internal sealed class LlmSession : IDisposable
             : null;
     }
 
-    /// <summary>An assistant over a bot's own <paramref name="link"/> (<see cref="LinkAsync"/>): its client, timeouts, reasoning effort and sampling, no tools.</summary>
+    /// <summary>An assistant over a bot's own <paramref name="link"/> (<see cref="LinkAsync"/>): its client, timeouts, reasoning effort and sampling, no tools yet (the caller sets a bot's).</summary>
     public Assistant CreateAssistant(ConversationHistory history, BotLink link)
     {
         ArgumentNullException.ThrowIfNull(history);

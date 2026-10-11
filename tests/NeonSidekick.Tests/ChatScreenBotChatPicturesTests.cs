@@ -445,6 +445,94 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
     }
 
+    /// <summary>
+    /// Under the unseen reply's spinner the toolbar's 📈 toggles the performance bar while the bot still writes (2026-10-10, the lesson of
+    /// <c>/advisor</c>'s fix: the spinner alone was awaited, so a quick act waited for the reply's end).
+    /// </summary>
+    [Fact]
+    public async Task BotChat_Sync_UnderTheUnseenReply_TheToolbarsRisingChart_TogglesTheBar_BeforeTheReply()
+    {
+        BotPicturesFixture();
+        _settings.Update(d => d.ToolbarItems = ["profile", "perf"]);
+        LoadOnThePane();
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        var input = WhenIdle(
+            i => PushLine(i, "/botchat"),
+            i => PushLine(i, "/exit"));
+        bool toggledUnderTheReply = false;
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (_chat.Requests.Count == 1 && i == 0)
+            {
+                input.PushClick(3, 103);   // 📈 on the toolbar: /perfbar, a quick act run while neon's reply is held
+                input.PushClick(3, 103);
+                await UntilAsync(() => Output.Contains(Perf.PerfText.BarNotice("led"), StringComparison.Ordinal), ct);
+                toggledUnderTheReply = true;
+            }
+            else if (_chat.Requests.Count == 3 && i == 1)
+            {
+                input.Push(Keys.Escape);
+                input.Push(Keys.Escape);
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(5, CancellationToken.None);
+                }
+            }
+        };
+
+        string output = await RunAsync(input);
+
+        Assert.True(toggledUnderTheReply);
+        Assert.Contains("● " + DogReply, output);
+    }
+
+    /// <summary>
+    /// The push-to-talk key under the unseen reply's spinner cuts the bot short, listens, and the next bot answers the user (2026-10-10:
+    /// the key was heard under a streamed reply alone, and under the spinner did nothing).
+    /// </summary>
+    [Fact]
+    public async Task BotChat_Sync_PushToTalkUnderTheUnseenReply_CutsTheBotShort_Listens_AndTheNextBotAnswersTheUser()
+    {
+        var stub = BotPicturesFixture();
+        VoiceOn();
+        SpeakTwoBuffers();
+        _chat.EnqueueText("I once saw ", "a dog surf.");
+        _chat.EnqueueText("Hello ", "from Ada.");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (_chat.Requests.Count is 1 or 2 && i == 1)
+            {
+                if (_chat.Requests.Count == 1)
+                {
+                    _console.Input.PushKey(Keys.F4);
+                    // A bounded wait: a key unheard under the spinner (the bug) fails the reply, not the run.
+                    await UntilAsync(() => ct.IsCancellationRequested, CancellationToken.None);
+                    return;
+                }
+
+                _console.Input.PushKey(Keys.Escape);
+                _console.Input.PushKey(Keys.Escape);
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(5, CancellationToken.None);
+                }
+            }
+        };
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Contains("  · " + BotChat.CutShortNotice("neon") + "\n", output);
+        Assert.DoesNotContain("● I once saw", output);
+        Assert.Contains(BotChat.UserName + ": hello", _chat.Requests[1][^1].Text);
+        Assert.Equal(new[] { "start", "stop" }, _capture.Log);   // one listen
+        Assert.DoesNotContain(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
+    }
+
     /// <summary>An image → image workflow beside the fixture's pony (2026-09-27): a prompt and one picture in.</summary>
     private void Img2ImgWorkflow(StubHttpMessageHandler stub, string name = "hatter")
     {

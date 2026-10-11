@@ -1189,7 +1189,7 @@ internal sealed partial class ChatScreen
         _claude = claude ?? new ClaudeProcess(environment ?? (_ => null));
         // neon_advisor (2026-10-10): the other profiles as advisors, each linked as a botchat bot is, over this chat's read-only tools.
         _advisorHost = new AdvisorHost(_session, () => _settings.StorageDirectory, _effective);
-        _neonAdvisor = AdvisorTool(_advisorHost, _effective, () => _settings.ProfileName, _advisorThreads, AdvisorOffered, () => _session.History.Messages, ConfirmNeonAdvisorAsync, new NeonAdvisorView(this));
+        _neonAdvisor = AdvisorTool(_advisorHost, _effective, () => _settings.ProfileName, _advisorThreads, AdvisorOffered, () => _session.History.Messages, ConfirmNeonAdvisorAsync, new NeonAdvisorView(this), _session.Usage.AddAdvisors);
         _neonAdvisorTools = [_neonAdvisor];
         _runner = new ShellRunner(time);
         // The background processes (phase B): the board signals the idle read like the timers, and is killed off with the screen.
@@ -12924,6 +12924,15 @@ internal sealed partial class ChatScreen
     /// <summary>A <c>/botchat</c> turn is running (2026-09-24): its usage events stay out of the main conversation's tally. Set and cleared on the turn task.</summary>
     private bool _botTurnRunning;
 
+    /// <summary>
+    /// The last <c>/botchat</c> reply's calls and tokens (2026-10-10, found comparing botchat with the advisors: the chat's session rows
+    /// said 0 calls and 0 tokens whatever ran), for its row; set at the end of a bot's <see cref="RunTurnAsync"/>, read by the chat's loop.
+    /// </summary>
+    private (TurnTrace Trace, TokenUsage Usage) _lastBotTurn = (new TurnTrace(), TokenUsage.Zero);
+
+    /// <summary>The running bot reply's tokens, summed per request (<see cref="_lastBotTurn"/>'s).</summary>
+    private TokenUsage _botTurnUsage;
+
     /// <summary><c>/botchat</c> is running (2026-09-24): a line typed under a reply is queued whatever <c>Queue mode</c> says (<c>QueueLine</c>). Read on the watcher task.</summary>
     private volatile bool _botChatRunning;
 
@@ -12963,7 +12972,8 @@ internal sealed partial class ChatScreen
     /// the user's call, every bot on the starting profile's server and model) — or, with <c>Botchat LLM mode</c> <c>multi</c>
     /// (later on 2026-09-25, the user's ask), each bot but the starter over its own profile's (<see cref="LinkBotsAsync"/>),
     /// a bot whose server does not answer sitting the chat out — strictly one after another,
-    /// with a system prompt built afresh from the speaker's own <c>persona.md</c> and no tools; its reply
+    /// with a system prompt built afresh from the speaker's own <c>persona.md</c> and the Botchat tab's tools (none by default;
+    /// <see cref="BotChat.TurnTools"/> since 2026-10-04); its reply
     /// speaks in the speaker's own voice. A message typed meanwhile is queued (<see cref="_botChatRunning"/>)
     /// and joins the chat before the next reply as the user's line — at once when it is sent while the last
     /// reply is still being heard (<see cref="WaitForBotSpeechAsync"/>). With speech on, the next speaker waits for
@@ -13093,8 +13103,18 @@ internal sealed partial class ChatScreen
         string opening = saved is not null ? BotChat.ResumeNotice(castNames, topic, saved.Replies) : BotChat.StartNotice(castNames, topic);
         _transcript.Notice(opening);
         DiagnosticLog.Info(AppCategory, opening);
+        // The bots on the Claude Code server (2026-10-10, the advisors' lesson: a text-only advisor there says why): every bot's request is
+        // a claude -p of its own, with no tools, so the Botchat tab's tools and memory reach none of them. Said once, before the first reply.
+        var oneShots = cast.Where((_, i) => ClaudeCliEndpoint.IsClaudeCli((links.Count > 0 ? links[i]?.Endpoint : null)?.BaseUrl ?? _session.Endpoint?.BaseUrl)).Select(bot => bot.Name).ToList();
+        if (oneShots.Count > 0)
+        {
+            _transcript.Notice(BotChat.ClaudeCodeTextOnlyNotice(oneShots));
+        }
         // A resumed chat (2026-09-25) carries on its own session row; a new one begins when there is none and logging is on.
-        long? sessionId = saved?.SessionId ?? (effective.SessionLogging ? _sessions.Begin(BotChat.SessionTitle(castNames), _session.Endpoint?.ModelId ?? "") : null);
+        // Its model every model the cast speaks through (2026-10-10; the starter's alone until then, multi or not).
+        long? sessionId = saved?.SessionId ?? (effective.SessionLogging
+            ? _sessions.Begin(BotChat.SessionTitle(castNames), BotChat.SessionModel(links.Count > 0 ? links.Select(link => link?.Endpoint.ModelId ?? _session.Endpoint?.ModelId) : [_session.Endpoint?.ModelId]))
+            : null);
         var lines = saved is not null ? saved.Lines.ToList() : new List<BotChatLine>();
         int? last = null;
         if (saved?.LastSpeaker is { } lastName)
@@ -13130,6 +13150,12 @@ internal sealed partial class ChatScreen
         var picturesSeen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         // The bots see the user (2026-10-02, Botchat camera): the camera held for the chat, a fresh picture per turn.
         CameraLease? botCamera = effective.BotChatCamera ? AcquireBotCamera() : null;
+        // The bots whose own server failed them (2026-10-10, the advisors' lesson: a failed advisor drops its link and the panel goes on),
+        // by cast index: never picked again, nor named to the others; their links go with the rest at the chat's end.
+        var away = new HashSet<int>();
+        // What the user and this profile were just talking about (2026-10-10, Botchat recent context; the advisors' lesson: /advisor's
+        // advisor knew nothing of the conversation until it was sent the recent messages): read once, as the chat begins.
+        var recent = effective.BotChatRecentContext ? NeonSidekick.Advisors.AdvisorRecent.Lines(_session.History.Messages) : null;
         try
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -13147,16 +13173,16 @@ internal sealed partial class ChatScreen
                 ArmBotWake(_effective());
 
                 // A bot the last line names answers next (2026-09-25); anyone but the last speaker otherwise.
-                int next = last is null ? 0 : BotChat.NextSpeaker(cast.Count, last, _random, BotChat.Addressed(lines, castNames));
+                int next = last is null ? 0 : BotChat.NextSpeaker(cast.Count, last, _random, BotChat.Addressed(lines, castNames), away);
                 var bot = cast[next];
-                var others = castNames.Where(name => !Profiles.NameEquals(name, bot.Name)).ToList();
+                var others = castNames.Where((name, i) => !away.Contains(i) && !Profiles.NameEquals(name, bot.Name)).ToList();
                 // Read per turn: a /tts or Transcript markdown switch mid-chat holds from the next reply.
                 effective = _effective();
                 bool speaking = effective.TtsOutput && _speech.IsReady;
                 bool markdown = MarkdownTurn(effective.TranscriptMarkdown, _pane.Enabled, speaking);
                 var (prior, turnText) = BotChat.BuildView(bot.Name, lines, others, topic);
                 // The others' pronouns from their first voices (2026-09-25); never the speaker's own.
-                string pronouns = BotChat.PronounsLine(cast.Where(b => b != bot).Select(b => (b.Name, b.Gender)).ToList());
+                string pronouns = BotChat.PronounsLine(cast.Where((b, i) => b != bot && !away.Contains(i)).Select(b => (b.Name, b.Gender)).ToList());
                 // Pictures (2026-09-25): read per reply, so a switch mid-chat holds from the next one.
                 var imageMode = BotChatImageMode.Resolve(effective);
                 // Pictures while a workflow is chosen (later on 2026-10-04: Botchat ComfyUI enabled or a limited one, Botchat images
@@ -13202,7 +13228,7 @@ internal sealed partial class ChatScreen
                 }
 
                 bool memorySave = memory?.Tools.Any(t => t is SaveMemoryTool) == true;
-                var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns, images: imageTool is not null, skills: skills, camera: cameraPicture is not null, tools: general?.Rules, memories: memory?.Store.Snapshot(), memorySave: memorySave));
+                var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns, images: imageTool is not null, skills: skills, camera: cameraPicture is not null, tools: general?.Rules, memories: memory?.Store.Snapshot(), memorySave: memorySave, recent: recent));
                 history.Replace(prior);
                 if ((links.Count > 0 && links[next] is { } own ? _session.CreateAssistant(history, own) : _session.CreateAssistant(history)) is not { } assistant)
                 {
@@ -13249,8 +13275,13 @@ internal sealed partial class ChatScreen
                 ComfyGeneration? picture = null;
                 if (held)
                 {
-                    var (collected, thinkingCancelled) = await UnderWatchAsync(BotChat.ThinkingSpinner(bot.Name), token => CollectBotTurnAsync(assistant, sentText, seenImages, token), cancellationToken,
+                    // The unseen reply is the bot's turn as a streamed one is (2026-10-10): the push-to-talk key, now heard under its
+                    // spinner, cuts it short through this token and the chat listens next (RequestBotTalk).
+                    using var heldCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    using var heldTurn = EnterBotTurn(ladder, turnId, heldCts);
+                    var (collected, thinkingCancelled) = await UnderWatchAsync(BotChat.ThinkingSpinner(bot.Name), token => CollectBotTurnAsync(assistant, sentText, seenImages, token), heldCts.Token,
                         softCancel: () => ladder.Press(turnId, shown: false, voiceAudible: false, responding: true) == BotPress.StopVoice).ConfigureAwait(false);
+                    heldTurn.Dispose();
                     if (thinkingCancelled || collected is null)
                     {
                         // ESC over the unseen reply is the ladder's, as over a streaming one (2026-09-25): this bot cut
@@ -13293,7 +13324,10 @@ internal sealed partial class ChatScreen
                 // Cut short by the ladder (2026-09-25): the chat goes on. Any other cancel — the press that ends the chat, a
                 // command that cancels (/exit, /clear), the wake phrase — or a failure stops it, as before.
                 bool skipped = ladder.Skipped(turnId) && !ladder.EndRequested;
-                bool stopped = ladder.EndRequested || _lastTurnFailed || outcome is TurnOutcome.Exit or TurnOutcome.Interrupted || (_lastTurnCancelled && !skipped);
+                // A failure on a bot's own server (multi, 2026-10-10) is that bot's alone: it sits the rest out, and the chat goes on while
+                // two are left. One on the starter's server — every bot's under single — still ends the chat: the next bot would fail too.
+                bool sitsOut = _lastTurnFailed && links.Count > 0 && links[next] is not null;
+                bool stopped = ladder.EndRequested || (_lastTurnFailed && !sitsOut) || outcome is TurnOutcome.Exit or TurnOutcome.Interrupted || (_lastTurnCancelled && !skipped);
                 if (outcome != TurnOutcome.Withdrawn || skipped)
                 {
                     // Even an empty reply passes the turn on: the same bot is never asked twice running.
@@ -13306,7 +13340,9 @@ internal sealed partial class ChatScreen
                     replies++;
                     if (sessionId is { } id)
                     {
-                        _sessions.AppendTurn(id, turnText, BotChat.Signed(lines[^1]), 0, [], [], _lastTurnFailed ? 1 : 0, 0, 0, _lastTurnCancelled);
+                        // Its calls and tokens (2026-10-10; 0 and 0 until then, from the days a bot had no tools).
+                        var (botTrace, botUsage) = _lastBotTurn;
+                        _sessions.AppendTurn(id, turnText, BotChat.Signed(lines[^1]), botTrace.ToolCalls, botTrace.ToolNames, botTrace.LoadedSkills, Math.Max(botTrace.Errors, _lastTurnFailed ? 1 : 0), botUsage.Input, botUsage.Output, _lastTurnCancelled);
                         _sessions.SaveHistory(id, SessionHistory.ToJson(BotChat.StoredHistory(starter, lines, castNames, topic)));
                     }
                 }
@@ -13314,6 +13350,21 @@ internal sealed partial class ChatScreen
                 if (stopped || cancellationToken.IsCancellationRequested)
                 {
                     break;
+                }
+
+                if (sitsOut)
+                {
+                    away.Add(next);
+                    _transcript.Notice(BotChat.FailedNotice(bot.Name));
+                    _botChatCast = castNames.Where((_, i) => !away.Contains(i)).ToList();
+                    if (cast.Count - away.Count < 2)
+                    {
+                        _transcript.Error(BotChat.TooFewLeftError);
+                        break;
+                    }
+
+                    // Its reply failed: no picture, and nothing of it left to hear.
+                    continue;
                 }
 
                 if (skipped)
@@ -13565,6 +13616,10 @@ internal sealed partial class ChatScreen
             // offered workflows, sat beside the bot's own under the same name, and the bots drew with the wrong ones): the
             // Botchat ComfyUI rows alone say (BotImageTool).
             ComfyEnabled = false,
+            // Never the advisors (2026-10-10, found comparing botchat with them): neon_advisor frames the loaded profile as the one
+            // asking, reads the main chat's history for its recent lines, keeps its calls-per-turn count across the turns of the
+            // main chat alone, and files its threads in the main session; a bot's question fits none of that.
+            NeonAdvisorEnabled = false,
             Plan = null,
             PlanReadOnly = _plan.Turn(_presentPlan) is not null,
             OnlyTools = effective.BotChatTools ? null : limited,
@@ -13748,7 +13803,7 @@ internal sealed partial class ChatScreen
         {
             try
             {
-                return await WriteBotPicturePromptAsync(assistant, request, skillTool, loaded, token).ConfigureAwait(false);
+                return await WriteBotPicturePromptAsync(assistant, request, skillTool, loaded, BotWriterSpent, token).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -13819,13 +13874,14 @@ internal sealed partial class ChatScreen
     /// <para>A round whose calls all repeat ones already answered (2026-09-30, code review: a writer that wrote the same load
     /// every round took four requests, the skill sent each time) ends the tool rounds: the last round follows at once.</para>
     /// </summary>
-    private static async Task<string> WriteBotPicturePromptAsync(Assistant assistant, List<ChatMessage> request, AIFunction? skillTool, List<string> loaded, CancellationToken cancellationToken)
+    private static async Task<string> WriteBotPicturePromptAsync(Assistant assistant, List<ChatMessage> request, AIFunction? skillTool, List<string> loaded, Action<TokenUsage?> spent, CancellationToken cancellationToken)
     {
         IReadOnlyList<AIFunction> tools = skillTool is null ? [] : [skillTool];
         var answered = new HashSet<string>(StringComparer.Ordinal);
         for (int iteration = 1; tools.Count > 0 && iteration <= BotPromptSkillIterations; iteration++)
         {
             var response = await assistant.RequestAsync(request, tools, ReasoningEffort.None, cancellationToken, textToolCalls: WriterWrittenCalls).ConfigureAwait(false);
+            spent(response.Usage);
             if (CalledPrompt(response) is { } called)
             {
                 return called;
@@ -13861,7 +13917,17 @@ internal sealed partial class ChatScreen
         }
 
         var last = await assistant.RequestAsync(request, [], ReasoningEffort.None, cancellationToken, textToolCalls: WriterWrittenCalls).ConfigureAwait(false);
+        spent(last.Usage);
         return CalledPrompt(last) ?? last.AfterWritten ?? last.Text;
+    }
+
+    /// <summary>A picture writer's request (2026-10-10): the bots' bucket on <c>/usage</c>, as their replies' are; a request with no report counts nothing.</summary>
+    private void BotWriterSpent(TokenUsage? usage)
+    {
+        if (usage is { } reported)
+        {
+            _session.Usage.AddBots(reported, 1);
+        }
     }
 
     /// <summary>
@@ -13944,6 +14010,11 @@ internal sealed partial class ChatScreen
     /// <paramref name="cancellationToken"/> ended; the result is then default. The row is the live editor, and a line sent
     /// there goes through the mid-turn policy as under a reply: an interjection queued for the chat, a pane here, an act
     /// at the wait's end (<see cref="EndTurnAsync"/>).
+    ///
+    /// <para>The acts posted run as they come (2026-10-10, the lesson of <c>/advisor</c>'s fix the same day: the spinner alone was
+    /// awaited, so a chord or a toolbar glyph under a held bot reply, a bot's picture, <c>/imagine</c>, <c>/print</c> or the
+    /// YouTube wait did nothing until it ended), as <see cref="LoadUnderWatchAsync"/> runs them; and under a <c>/botchat</c> the
+    /// push-to-talk key is the chat's here as under its reply (<see cref="BotTalkKey"/>, false outside a chat).</para>
     /// </summary>
     private async Task<(T? Result, bool Cancelled)> UnderWatchAsync<T>(string label, Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken, Func<bool>? softCancel = null)
     {
@@ -13952,10 +14023,12 @@ internal sealed partial class ChatScreen
         using var killScope = BeginKillScope(cts);
         // A line typed under the spinner is the chat's, as under a reply (2026-09-25): an interjection queued, a command run
         // by the mid-turn policy — its pane here, its act at the wait's end.
-        var watcher = StartReplyWatch(cts, stop.Token, cancellationToken, softCancel);
+        var watcher = StartReplyWatch(cts, stop.Token, cancellationToken, softCancel, spend: BotTalkKey);
         try
         {
-            var result = await _transcript.WithSpinnerAsync(label, () => work(cts.Token)).ConfigureAwait(false);
+            var working = _transcript.WithSpinnerAsync(label, () => work(cts.Token));
+            await RunActsUntilAsync(working).ConfigureAwait(false);
+            var result = await working.ConfigureAwait(false);
             return cts.IsCancellationRequested ? (default, true) : (result, false);
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
@@ -14688,7 +14761,7 @@ internal sealed partial class ChatScreen
         // The picture budget (2026-10-03), a bot's turn too: read at each turn, so an edit lands at the next request.
         assistant.PictureBudget = new PictureBudget(effective.LlmPictureKeep, effective.LlmPictureMegabytes);
 
-        // A /botchat turn's prompt and (empty) tool list are its own, set by HandleBotChatAsync.
+        // A /botchat turn's prompt and tool list are its own, set by HandleBotChatAsync (BotChat.TurnTools).
         if (bot is null)
         {
             _interpreters.Refresh();
@@ -14745,6 +14818,7 @@ internal sealed partial class ChatScreen
 
         // A /botchat turn's tokens stay out of the main conversation's usage (its auto-compact reads the last request).
         _botTurnRunning = bot is not null;
+        _botTurnUsage = TokenUsage.Zero;
         _botSpeaker = bot?.Name;
         if (bot is null)
         {
@@ -14946,6 +15020,11 @@ internal sealed partial class ChatScreen
             DrainLearn();
             // A reply that ran to its end with no usage report is counted as unreported; a cut or
             // failed one is not (its report never had the chance to arrive).
+            if (bot is not null)
+            {
+                _lastBotTurn = (trace, _botTurnUsage);
+            }
+
             _botTurnRunning = false;
             _botSpeaker = null;
             if (!cancelled && !failed && !sawError && bot is null)
@@ -15669,6 +15748,11 @@ internal sealed partial class ChatScreen
                 break;
             case TurnEvent.Usage usage when !_botTurnRunning:
                 _session.Usage.Add(usage.Tokens);
+                break;
+            case TurnEvent.Usage usage:
+                // A bot's request (2026-10-10): its own bucket on /usage, apart from this chat's figures, and its session row's.
+                _session.Usage.AddBots(usage.Tokens, 1);
+                _botTurnUsage += usage.Tokens;
                 break;
             case TurnEvent.Compacted compacted when !_botTurnRunning:
                 MidTurnCompacted(compacted);

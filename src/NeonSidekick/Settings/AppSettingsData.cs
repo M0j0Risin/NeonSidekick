@@ -1052,6 +1052,16 @@ public sealed class AppSettingsData
     /// </summary>
     public bool BotChatCamera { get; set; }
 
+    /// <summary>
+    /// Whether the <c>/botchat</c> bots are told what the user and this profile's assistant were just talking about (2026-10-10, the
+    /// advisors' lesson the same day: <c>/advisor</c> under <c>brief</c> sent its advisor nothing of the conversation, so it always sends
+    /// the recent messages now): on, every bot's system prompt carries the main chat's last messages as they stood when the chat began
+    /// (<see cref="NeonSidekick.Advisors.AdvisorRecent.Lines"/>, <see cref="App.BotChat.RecentSection"/>), so a topic like "what do you make of
+    /// this?" has something to point at. Off (the default, the user's pick), a chat is a fresh scene on its topic. Read when a chat
+    /// starts (and at <c>--resume</c>). The Botchat tab, its last row. No variable.
+    /// </summary>
+    public bool BotChatRecentContext { get; set; }
+
     // ─── Skills─────────────────────────────────────────────────────────────────
 
     /// <summary>

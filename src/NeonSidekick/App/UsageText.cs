@@ -132,7 +132,8 @@ public static class UsageText
     public static IRenderable StatisticsTab(TokenTally tally, ContextLength? window)
     {
         ArgumentNullException.ThrowIfNull(tally);
-        if (tally.Session.IsEmpty && window is null && tally.ClaudeRuns == 0)
+        var apart = ApartRows(tally);
+        if (tally.Session.IsEmpty && window is null && apart.Count == 0)
         {
             return new Text(NothingCounted, Theme.DimText);
         }
@@ -143,16 +144,13 @@ public static class UsageText
             // The Context section first: the window is known before anything was counted, and its note is the source — where the figure came from.
             (ContextHeading, window?.Source ?? WindowUnknown, ContextRows(tally, window)),
         };
-        var extra = new List<(string, string)>(2);
+        var extra = new List<(string, string)>(4);
         if (tally.LearningRequests > 0 && !tally.Session.IsEmpty)
         {
             extra.Add((LearningLabel, LearningValue(tally)));
         }
 
-        if (tally.ClaudeRuns > 0)
-        {
-            extra.Add((ClaudeLabel, ClaudeValue(tally)));
-        }
+        extra.AddRange(apart);
 
         if (!tally.Session.IsEmpty)
         {
@@ -179,7 +177,7 @@ public static class UsageText
 
         if (tally.Session.IsEmpty)
         {
-            // Nothing counted yet: said under the Context section, the /claude runs (if any) under it.
+            // Nothing counted yet: said under the Context section, the /claude runs, the bots and the advisors (if any) under it.
             parts.Add(new Text(" "));
             parts.Add(new Indented(new Text(NothingCounted, Theme.DimText), SystemPromptSummary.BodyIndent));
             if (extra.Count > 0)
@@ -230,6 +228,41 @@ public static class UsageText
         var usage = tally.Claude;
         return Plural(tally.ClaudeRuns, "run", "runs") + Sep + N0(usage.Input) + " in" + Sep + N0(usage.Output) + " out" + Sep + global::NeonSidekick.Claude.ClaudeText.Dollars(tally.ClaudeCostUsd);
     }
+
+    /// <summary>
+    /// The rows of what ran apart from this chat's figures, each shown once it counted something: the <c>/claude</c> runs, the
+    /// <c>/botchat</c> bots and the advisors (the last two 2026-10-10). Pure.
+    /// </summary>
+    private static List<(string Label, string Value)> ApartRows(TokenTally tally)
+    {
+        var rows = new List<(string, string)>(3);
+        if (tally.ClaudeRuns > 0)
+        {
+            rows.Add((ClaudeLabel, ClaudeValue(tally)));
+        }
+
+        if (tally.BotRequests > 0)
+        {
+            rows.Add((BotsLabel, ApartValue(tally.BotRequests, tally.Bots)));
+        }
+
+        if (tally.AdvisorRequests > 0)
+        {
+            rows.Add((AdvisorsLabel, ApartValue(tally.AdvisorRequests, tally.Advisors)));
+        }
+
+        return rows;
+    }
+
+    /// <summary>The row that says what the <c>/botchat</c> bots used since launch (2026-10-10). Pinned.</summary>
+    public const string BotsLabel = "Botchat";
+
+    /// <summary>The row that says what the advisors used since launch (2026-10-10). Pinned.</summary>
+    public const string AdvisorsLabel = "Advisors";
+
+    /// <summary><c>3 requests · 12,506 in · 250 out</c>: requests on servers of their own, so in and out apart and no cost (2026-10-10). Pinned.</summary>
+    public static string ApartValue(int requests, TokenUsage usage) =>
+        Plural(requests, "request", "requests") + Sep + N0(usage.Input) + " in" + Sep + N0(usage.Output) + " out";
 
     /// <summary>The row under the launch section that says what the skill-learning reflections cost, shown only once one ran. Pinned.</summary>
     public const string LearningLabel = "Skill learning";
@@ -342,11 +375,7 @@ public static class UsageText
         if (tally.Session.IsEmpty)
         {
             var nothing = window is null ? new List<string> { NothingCounted } : [ContextLine(tally, window), NothingCounted];
-            if (tally.ClaudeRuns > 0)
-            {
-                nothing.Add("claude: " + ClaudeValue(tally));
-            }
-
+            nothing.AddRange(ApartLines(tally));
             return nothing;
         }
 
@@ -367,13 +396,12 @@ public static class UsageText
             lines.Add("skill learning: " + LearningValue(tally));
         }
 
-        if (tally.ClaudeRuns > 0)
-        {
-            lines.Add("claude: " + ClaudeValue(tally));
-        }
-
+        lines.AddRange(ApartLines(tally));
         return lines;
     }
+
+    /// <summary>The plain lines of <see cref="ApartRows"/>: <c>claude: …</c>, <c>botchat: …</c>, <c>advisors: …</c>.</summary>
+    private static IEnumerable<string> ApartLines(TokenTally tally) => ApartRows(tally).Select(row => row.Label.ToLowerInvariant() + ": " + row.Value);
 
     private static string Unreported(int count) => Plural(count, "reply", "replies") + " reported no usage";
 

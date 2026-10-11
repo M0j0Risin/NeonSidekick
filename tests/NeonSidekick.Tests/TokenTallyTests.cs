@@ -237,4 +237,27 @@ public class TokenTallyTests
         tally.BeginTurn();
         Assert.Equal(30, tally.LastKnownSpeed);
     }
+
+    /// <summary>
+    /// The bots and the advisors (2026-10-10): each its own bucket, since launch, and nowhere else — another profile's server and
+    /// model, another view than this conversation — so the context figures, the hint row and the auto-compact stay this chat's.
+    /// </summary>
+    [Fact]
+    public void BotsAndAdvisors_AreBucketsOfTheirOwn_NeverTheConversations()
+    {
+        var tally = new TokenTally();
+
+        tally.AddBots(One(1000, 50), 1);
+        tally.AddBots(One(2000, 25), 2);
+        tally.AddAdvisors(One(300, 40), 2);
+
+        Assert.Equal(3, tally.BotRequests);
+        Assert.Equal(3000, tally.Bots.Input);
+        Assert.Equal(75, tally.Bots.Output);
+        Assert.Equal(2, tally.AdvisorRequests);
+        Assert.Equal(340, tally.Advisors.Total);
+        Assert.True(tally.Conversation.IsEmpty);
+        Assert.True(tally.Session.IsEmpty);
+        Assert.True(tally.LastRequest.IsEmpty);
+    }
 }

@@ -61,6 +61,7 @@ public sealed class NeonAdvisorTool : AIFunction
     private readonly Func<IReadOnlyList<ChatMessage>> _history;
     private readonly Func<AdvisorEntry, string, CancellationToken, Task<bool?>>? _confirm;
     private readonly IAdvisorView? _view;
+    private readonly Action<TokenUsage, int>? _spent;
     private int _calls;
 
     /// <param name="host">The advisors' profiles and links.</param>
@@ -71,7 +72,11 @@ public sealed class NeonAdvisorTool : AIFunction
     /// <param name="history">The conversation, for <c>Advisor context: recent</c>.</param>
     /// <param name="confirm">Asks the user: true for yes, false for no, null when nothing could ask; the seam itself null where nothing ever can (headless).</param>
     /// <param name="view">Shows the call as it runs; null shows nothing.</param>
-    public NeonAdvisorTool(IAdvisorHost host, Func<AppSettingsData> effective, Func<string> master, AdvisorThreads threads, Func<(IReadOnlyList<AIFunction> Tools, string Rules)> offered, Func<IReadOnlyList<ChatMessage>> history, Func<AdvisorEntry, string, CancellationToken, Task<bool?>>? confirm = null, IAdvisorView? view = null)
+    /// <param name="spent">
+    /// Told what each answer's requests used, the requests that reported and their tokens summed (2026-10-10, found comparing botchat with
+    /// the advisors: neither was counted on <c>/usage</c>); a failed or cancelled answer's too, those requests having been made. Null counts nothing.
+    /// </param>
+    public NeonAdvisorTool(IAdvisorHost host, Func<AppSettingsData> effective, Func<string> master, AdvisorThreads threads, Func<(IReadOnlyList<AIFunction> Tools, string Rules)> offered, Func<IReadOnlyList<ChatMessage>> history, Func<AdvisorEntry, string, CancellationToken, Task<bool?>>? confirm = null, IAdvisorView? view = null, Action<TokenUsage, int>? spent = null)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
@@ -81,6 +86,7 @@ public sealed class NeonAdvisorTool : AIFunction
         _history = history ?? throw new ArgumentNullException(nameof(history));
         _confirm = confirm;
         _view = view;
+        _spent = spent;
     }
 
     public override string Name => ToolName;
@@ -207,6 +213,7 @@ public sealed class NeonAdvisorTool : AIFunction
 
         var answer = new StringBuilder();
         var usage = TokenUsage.Zero;
+        int requests = 0;
         string? failure = null;
         int calls = 0;
         try
@@ -224,6 +231,7 @@ public sealed class NeonAdvisorTool : AIFunction
                         break;
                     case TurnEvent.Usage used:
                         usage += used.Tokens;   // one per request: summed
+                        requests++;
                         break;
                     case TurnEvent.Notice { IsError: true } notice:
                         failure = notice.Text;
@@ -234,6 +242,13 @@ public sealed class NeonAdvisorTool : AIFunction
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             failure = Assistant.Explain(ex);
+        }
+        finally
+        {
+            if (requests > 0)
+            {
+                _spent?.Invoke(usage, requests);
+            }
         }
 
         string text = answer.ToString().Trim();

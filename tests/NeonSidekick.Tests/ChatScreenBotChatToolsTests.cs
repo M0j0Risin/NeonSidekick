@@ -91,6 +91,32 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(SetSplashImageTool.ToolName, bot);
     }
 
+    /// <summary>
+    /// The advisors are never the bots' (2026-10-10): with the main chat offering <c>neon_advisor</c>, ticked in the limited tools or with
+    /// the tools on, a bot is offered neither the tool nor its rule.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BotChat_TheAdvisors_AreNeverTheBots(bool toolsEnabled)
+    {
+        BotChatFixture();
+        AdvisorProfiles();
+        _settings.Update(d => { d.BotChatTools = toolsEnabled; d.BotChatLimitedTools = [GetCurrentTimeTool.ToolName, NeonAdvisorTool.ToolName]; });
+        _chat.EnqueueText("Hello from Neon.");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(2);
+        PushLine("/botchat ada");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        string[] bot = ToolNames(_chat.Options[0]);
+        Assert.Contains(GetCurrentTimeTool.ToolName, bot);
+        Assert.DoesNotContain(NeonAdvisorTool.ToolName, bot);
+        Assert.DoesNotContain(Assistant.NeonAdvisorRule, SystemText(_chat.Requests[0]));
+    }
+
     /// <summary>With the main chat's tools a bot's turn has the main chat's round trips, not the botchat's few.</summary>
     [Fact]
     public async Task BotChat_ToolsEnabled_ABotMayTakeMoreThanThreeRoundTrips()

@@ -1003,8 +1003,11 @@ public enum SettingsField
     /// <summary>A list the user types into: the words that make a container an LLM server in <see cref="DockerServerContainers"/>' checklist (<see cref="Settings.AppSettingsData.DockerServerMatchWords"/>), its top row adding one, Enter on one removing it, a button restoring the defaults. The Docker tab, under the containers (2026-10-10, the user's ask); no reconnect. Last in the enum until <see cref="Avatar"/>.</summary>
     DockerServerMatchWords,
 
-    /// <summary>A grid picker over the emoji catalog: the profile's avatar (<see cref="Settings.AppSettingsData.Avatar"/>), opening its replies, its /botchat speaker line and the window title (2026-10-10, the user's ask). The Chat tab, right under Profile; no reconnect. Last in the enum, as every newcomer.</summary>
+    /// <summary>A grid picker over the emoji catalog: the profile's avatar (<see cref="Settings.AppSettingsData.Avatar"/>), opening its replies, its /botchat speaker line and the window title (2026-10-10, the user's ask). The Chat tab, right under Profile; no reconnect. Last in the enum until <see cref="BotChatRecentContext"/>.</summary>
     Avatar,
+
+    /// <summary>A toggle: whether the <c>/botchat</c> bots are told the main chat's last messages (<see cref="Settings.AppSettingsData.BotChatRecentContext"/>). The Botchat tab's last row (2026-10-10, the advisors' lesson); no reconnect (read when a chat starts). Last in the enum, as every newcomer.</summary>
+    BotChatRecentContext,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1417,7 +1420,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays,
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
          SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
-        [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera],
+        [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
         [SettingsField.LlmUrl, SettingsField.LlmModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
@@ -1915,7 +1918,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention or SettingsField.MySqlTools or SettingsField.MySqlPercentMention
             or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncStarMention
             or SettingsField.DockerTools or SettingsField.DockerWrites or SettingsField.DockerServers or SettingsField.DockerServerStopOnExit
-            or SettingsField.CameraTools or SettingsField.CameraKeepInSessions or SettingsField.CameraWatchUnprompted or SettingsField.BotChatCamera
+            or SettingsField.CameraTools or SettingsField.CameraKeepInSessions or SettingsField.CameraWatchUnprompted or SettingsField.BotChatCamera or SettingsField.BotChatRecentContext
             or SettingsField.ScreenTools or SettingsField.ScreenPreview or SettingsField.ScreenKeepInSessions or SettingsField.ImageTools
             or SettingsField.SqliteTools or SettingsField.SqliteSandboxFiles or SettingsField.SqlitePercentMention
             or SettingsField.PostgresTools or SettingsField.PostgresPercentMention
@@ -1956,6 +1959,7 @@ internal sealed partial class SettingsMenu
         SettingsField.CameraWatchUnprompted => "Camera watch speaks up",
         SettingsField.CameraWatchMinGapSeconds => "Camera watch min gap (s)",
         SettingsField.BotChatCamera => "Botchat camera",
+        SettingsField.BotChatRecentContext => "Botchat recent context",
         SettingsField.SttWake => "STT wake",
         SettingsField.SttWakePhrase => "STT wake phrase",
         SettingsField.SttPushToTalkKey => "STT push-to-talk key",
@@ -2299,6 +2303,7 @@ internal sealed partial class SettingsMenu
             SettingsField.CameraWatchUnprompted => OnOff(data.CameraWatchUnprompted),
             SettingsField.CameraWatchMinGapSeconds => Seconds(data.CameraWatchMinGapSeconds),
             SettingsField.BotChatCamera => OnOff(data.BotChatCamera),
+            SettingsField.BotChatRecentContext => OnOff(data.BotChatRecentContext),
             SettingsField.SttWake => OnOff(data.SttWake),
             SettingsField.SttWakePhrase => data.SttWakePhrase,
             SettingsField.SttPushToTalkKey => data.SttPushToTalkKey,
@@ -6974,6 +6979,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ScreenKeepInSessions => data.ScreenKeepInSessions,
             SettingsField.CameraWatchUnprompted => data.CameraWatchUnprompted,
             SettingsField.BotChatCamera => data.BotChatCamera,
+            SettingsField.BotChatRecentContext => data.BotChatRecentContext,
             SettingsField.DockerServers => data.DockerServers,
             SettingsField.DockerServerStopOnExit => data.DockerServerStopOnExit,
             SettingsField.ComfyTools => data.ComfyTools,
@@ -7079,6 +7085,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ScreenKeepInSessions: data.ScreenKeepInSessions = on; break;
             case SettingsField.CameraWatchUnprompted: data.CameraWatchUnprompted = on; break;
             case SettingsField.BotChatCamera: data.BotChatCamera = on; break;
+            case SettingsField.BotChatRecentContext: data.BotChatRecentContext = on; break;
             case SettingsField.DockerWrites: data.DockerWrites = on; break;
             case SettingsField.DockerServers: data.DockerServers = on; break;
             case SettingsField.DockerServerStopOnExit: data.DockerServerStopOnExit = on; break;
@@ -7194,6 +7201,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ScreenKeepInSessions => on ? "stored sessions keep the screenshots" : "stored sessions name the screenshots; files stay in the output folder",
         SettingsField.CameraWatchUnprompted => on ? "watch mode shows the model a change by itself, now and then" : "watch mode's changes ride your next message",
         SettingsField.BotChatCamera => on ? "each bot sees a fresh picture from your camera (vision models)" : "the bots do not see your camera",
+        SettingsField.BotChatRecentContext => on ? "the bots are told the last messages of this chat" : "the bots start fresh on the topic",
         SettingsField.DockerWrites => on ? "the model may start, stop, pull and prune, each change asking first" : "the model may only look at Docker",
         SettingsField.DockerServers => on ? "/server offers the chosen containers, one running at a time" : "no Docker servers; one in use stops at the reconnect",
         SettingsField.DockerServerStopOnExit => on ? "the app's exit stops the container it was using" : "the container keeps running after the app exits",

@@ -413,4 +413,41 @@ public class BotChatTests
         Assert.Equal(2, TextCells.Width("✨"));
         Assert.Equal(7, TextCells.Width(BotChat.PromptSpinner("Nova")));
     }
+
+    /// <summary>The session's model (2026-10-10): every model once, in cast order, blanks dropped.</summary>
+    [Fact]
+    public void SessionModel_NamesEveryModelOnce_InCastOrder()
+    {
+        Assert.Equal("gemma, qwen3", BotChat.SessionModel(["gemma", null, " qwen3 ", "Gemma", ""]));
+        Assert.Equal("", BotChat.SessionModel([null]));
+    }
+
+    /// <summary>A bot away (2026-10-10, its server failed it) is never picked, named or not; with none away the draws are as before.</summary>
+    [Fact]
+    public void NextSpeaker_NeverPicksABotAway()
+    {
+        var random = new Random(7);
+        for (int i = 0; i < 50; i++)
+        {
+            Assert.Equal(2, BotChat.NextSpeaker(3, 0, random, [1], new HashSet<int> { 1 }));
+            Assert.NotEqual(1, BotChat.NextSpeaker(3, null, random, null, new HashSet<int> { 1 }));
+        }
+
+        var before = new Random(11);
+        var after = new Random(11);
+        for (int i = 0; i < 50; i++)
+        {
+            int? last = i % 4;
+            Assert.Equal(BotChat.NextSpeaker(4, last, before), BotChat.NextSpeaker(4, last, after, null, new HashSet<int>()));
+        }
+
+        Assert.Throws<ArgumentException>(() => BotChat.NextSpeaker(2, 0, random, null, new HashSet<int> { 1 }));
+    }
+
+    [Fact]
+    public void ClaudeCodeTextOnlyNotice_NamesTheBots()
+    {
+        Assert.Equal("(botchat: ada answers through Claude Code one request at a time: text only, no tools)", BotChat.ClaudeCodeTextOnlyNotice(["ada"]));
+        Assert.Equal("(botchat: neon and ada answer through Claude Code one request at a time: text only, no tools)", BotChat.ClaudeCodeTextOnlyNotice(["neon", "ada"]));
+    }
 }

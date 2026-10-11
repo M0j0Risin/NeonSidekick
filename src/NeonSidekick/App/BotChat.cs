@@ -108,23 +108,20 @@ public static partial class BotChat
     /// With <paramref name="mentioned"/> (2026-09-25, <see cref="Addressed"/>) holding anyone but the last
     /// speaker, the pick is one of those instead; a mention of the last speaker alone changes nothing.
     /// </summary>
-    public static int NextSpeaker(int count, int? last, Random random, IReadOnlyCollection<int>? mentioned = null)
+    public static int NextSpeaker(int count, int? last, Random random, IReadOnlyCollection<int>? mentioned = null, IReadOnlySet<int>? away = null)
     {
         ArgumentNullException.ThrowIfNull(random);
         ArgumentOutOfRangeException.ThrowIfLessThan(count, 2);
-        var named = mentioned?.Where(i => i >= 0 && i < count && i != last).Distinct().Order().ToList();
-        if (named is { Count: > 0 })
+        // The bots still in (2026-10-10, <paramref name="away"/>: a bot whose own server failed it sits the rest out), less the last
+        // speaker; with none away the same draws as before, so a seeded chat picks as it did.
+        var open = Enumerable.Range(0, count).Where(i => i != last && away?.Contains(i) != true).ToList();
+        if (open.Count == 0)
         {
-            return named[random.Next(named.Count)];
+            throw new ArgumentException("No bot is left to speak.", nameof(away));
         }
 
-        if (last is not { } previous)
-        {
-            return random.Next(count);
-        }
-
-        int pick = random.Next(count - 1);
-        return pick >= previous ? pick + 1 : pick;
+        var named = mentioned?.Where(open.Contains).Distinct().Order().ToList();
+        return named is { Count: > 0 } ? named[random.Next(named.Count)] : open[random.Next(open.Count)];
     }
 
     /// <summary>
@@ -250,10 +247,24 @@ public static partial class BotChat
     /// load-only skills block (<see cref="Skills.SkillsPrompt.LoadOnlySection"/>) goes before the rules. With none of them the
     /// prompt is as before, byte for byte. The preloaded skills' block of 2026-09-27 went on 2026-10-04 (the user's call). Pure.
     /// </summary>
-    public static string SystemPrompt(string? persona, string speaker, IReadOnlyList<string> others, string topic, bool speechOutput, string? voiceDirective, bool markdown, string? pronouns = null, bool images = false, IReadOnlyList<Skills.Skill>? skills = null, bool camera = false, TurnRules? tools = null, IReadOnlyList<string>? memories = null, bool memorySave = true) =>
+    public static string SystemPrompt(string? persona, string speaker, IReadOnlyList<string> others, string topic, bool speechOutput, string? voiceDirective, bool markdown, string? pronouns = null, bool images = false, IReadOnlyList<Skills.Skill>? skills = null, bool camera = false, TurnRules? tools = null, IReadOnlyList<string>? memories = null, bool memorySave = true, IReadOnlyList<string>? recent = null) =>
         Assistant.BotSystemPrompt(speechOutput, persona, voiceDirective, markdown, tools, memories, memorySave)
         + (skills is { Count: > 0 } ? "\n\n" + Skills.SkillsPrompt.LoadOnlySection(skills) : "")
-        + "\n\n" + Rules(speaker, others, topic, pronouns, images, camera, memory: memories is not null);
+        + "\n\n" + Rules(speaker, others, topic, pronouns, images, camera, memory: memories is not null)
+        + (recent is { Count: > 0 } ? "\n\n" + RecentSection(recent) : "");
+
+    /// <summary>
+    /// The main chat's last messages in a bot's system prompt (2026-10-10, <c>Botchat recent context</c>): what the user and their assistant
+    /// were talking about when the chat began, <see cref="Advisors.AdvisorRecent.Lines"/>' <c>role: text</c> lines, after the rules. Pinned.
+    /// </summary>
+    public static string RecentSection(IReadOnlyList<string> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        return "Before this chat began, the user was talking with their assistant. The last "
+            + lines.Count.ToString(CultureInfo.InvariantCulture)
+            + " messages, for anything the user or the topic refers to:\n"
+            + string.Join("\n", lines);
+    }
 
     // ── A bot's tools (2026-10-04) ──────────────────────────────────────────
 
@@ -1114,6 +1125,19 @@ public static partial class BotChat
     /// <summary>The line when the chat ends: how many replies it ran to.</summary>
     public static string StoppedNotice(int replies) => $"(botchat stopped after {UsageText.Plural(replies, "reply", "replies")})";
 
+    /// <summary>
+    /// The bots on the Claude Code server (2026-10-10): each request a <c>claude -p</c> of its own, so text only — no tools, no memory
+    /// tools, no <c>generate_image</c> — whatever the Botchat tab offers. Pinned.
+    /// </summary>
+    public static string ClaudeCodeTextOnlyNotice(IReadOnlyList<string> names) =>
+        $"(botchat: {JoinNames(names)} {(names.Count == 1 ? "answers" : "answer")} through Claude Code one request at a time: text only, no tools)";
+
+    /// <summary>A bot whose own server failed its reply (2026-10-10) sits the rest of the chat out; the error line above says why. Pinned.</summary>
+    public static string FailedNotice(string name) => $"(botchat: {name} sits the rest out: its server failed)";
+
+    /// <summary>The bots that failed left fewer than two to talk (2026-10-10). Pinned.</summary>
+    public const string TooFewLeftError = "/botchat stopped: fewer than two bots are left to talk.";
+
     /// <summary>A profile whose <c>profile.json</c> could not be read sits the chat out.</summary>
     public static string SkippedNotice(string name, string reason) => $"(botchat: {name} sits this one out: {reason})";
 
@@ -1203,6 +1227,13 @@ public static partial class BotChat
 
     /// <summary>The session's title (2026-09-24): <c>Botchat: neon, ada and max</c>.</summary>
     public static string SessionTitle(IReadOnlyList<string> names) => "Botchat: " + JoinNames(names);
+
+    /// <summary>
+    /// The session's model (2026-10-10, found comparing botchat with the advisors: under <c>Botchat LLM mode</c> <c>multi</c> the row
+    /// named the starter's model alone): every model the cast speaks through, once each in cast order, <c>gemma-4-e4b, qwen3</c>.
+    /// </summary>
+    public static string SessionModel(IEnumerable<string?> models) =>
+        string.Join(", ", models.Where(m => !string.IsNullOrWhiteSpace(m)).Select(m => m!.Trim()).Distinct(StringComparer.OrdinalIgnoreCase));
 
     /// <summary>The <c>--log</c> line per turn.</summary>
     public static string TurnLogLine(int n, string speaker) => string.Create(CultureInfo.InvariantCulture, $"Botchat turn {n}: {speaker}");

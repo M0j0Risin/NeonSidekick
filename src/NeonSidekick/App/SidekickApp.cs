@@ -785,7 +785,7 @@ public sealed class SidekickApp
         var advisorThreads = new Advisors.AdvisorThreads();
         using var advisorHost = new AdvisorHost(session, () => _settings.StorageDirectory, () => EffectiveSettings);
         TurnToolInputs? lastInputs = null;
-        var neonAdvisor = ChatScreen.AdvisorTool(advisorHost, () => EffectiveSettings, () => _settings.ProfileName, advisorThreads, () => lastInputs is null ? ([], "") : ChatScreen.AdvisorTurnTools(lastInputs, markdown: false), () => session.History.Messages, null, new HeadlessNeonAdvisorView(this));
+        var neonAdvisor = ChatScreen.AdvisorTool(advisorHost, () => EffectiveSettings, () => _settings.ProfileName, advisorThreads, () => lastInputs is null ? ([], "") : ChatScreen.AdvisorTurnTools(lastInputs, markdown: false), () => session.History.Messages, null, new HeadlessNeonAdvisorView(this), session.Usage.AddAdvisors);
         var neonAdvisorTools = new List<Microsoft.Extensions.AI.AIFunction> { neonAdvisor };
         var sessionTools = ChatScreen.SessionTools(sessions, () => EffectiveSettings, () => sessionId, _time);
         // Plan mode (2026-09-26): no pane to approve on, so a presented plan is saved and the user approves it with

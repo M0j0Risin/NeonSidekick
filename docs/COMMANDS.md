@@ -177,7 +177,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/tools shell police` | Opens the on/off page for *Shell police*; its strings button (`s`) opens *Shell police forbidden strings*. The toolbar's officer and Ctrl+Alt+O run it. |
 | `/tree [<path>]` | Shows a tree of the working directory in a pane (hidden entries only under *File browser/tree mode* `show-hidden`; `.git` only when named). |
 | `/tts [on\|off]` | Toggles speech output. |
-| `/usage` | Token usage and performance; `~` marks an estimated reasoning count. |
+| `/usage` | Token usage and performance; `~` marks an estimated reasoning count. The `/claude` runs, the `/botchat` bots and the advisors each get a row of their own, kept apart from this chat's figures. |
 | `/vault [<path>]` | Shows a tree of the *Obsidian vault* (or a folder in it) in a pane, like `/tree`. |
 | `/view <image>\|<folder>` | Opens an image (or a folder's newest picture) in the picture viewer. |
 | `/view <image> --chat` | Draws it in the transcript instead. |
@@ -233,16 +233,18 @@ Type `/` to list every command with a summary; after a command and a space, its 
 `/botchat [<profile> ...] [--] [<topic>]` lets profiles talk to each other until you stop them.
 
 * **Cast:** the profiles you name, or all of them. The current profile always joins and speaks first.
-* **Topic:** the first word that isn't a profile starts it (`/botchat ada max the best pizza`); after `--`, the rest is always the topic (`/botchat ada -- max speed of light`). Without one, the bots pick.
-* **Turns:** each reply is in the speaker's persona and, with speech on, its own voice. A bot named in the last line speaks next; otherwise a random one, never the last speaker. Bots use this profile's LLM, or their own under *Botchat LLM mode* `multi`.
-* **Tools:** pictures (see [Botchat pictures](SETTINGS.md#botchat-pictures)); the main chat's tools under *Botchat tools enabled*, or the *Botchat limited tools* alone; `load_skill` under *Botchat skills enabled* or *Botchat limited skills*; and memory under *Botchat memory enabled* (on by default; *Botchat memory mode* says whose). A tool's pane (an approval, a question) shows mid-chat as in a normal one.
+* **Topic:** the first word that isn't a profile starts it (`/botchat ada max the best pizza`); after `--`, the rest is always the topic (`/botchat ada -- max speed of light`). Without one, the bots pick. With *Botchat recent context* on, every bot is also told this chat's last 10 messages, so the topic can point at them (`/botchat what do you make of that?`).
+* **Turns:** each reply is in the speaker's persona and, with speech on, its own voice. A bot named in the last line speaks next; otherwise a random one, never the last speaker. Bots use this profile's LLM, or their own under *Botchat LLM mode* `multi`. Under `multi`, a bot whose own server fails sits the rest of the chat out and the others carry on; a failure on this profile's server still ends the chat.
+* **Tools:** pictures (see [Botchat pictures](SETTINGS.md#botchat-pictures)); the main chat's tools under *Botchat tools enabled*, or the *Botchat limited tools* alone; `load_skill` under *Botchat skills enabled* or *Botchat limited skills*; and memory under *Botchat memory enabled* (on by default; *Botchat memory mode* says whose). A tool's pane (an approval, a question) shows mid-chat as in a normal one. The advisors are never offered to the bots. Bots on the Claude Code server answer one `claude -p` at a time with no tools at all, and the chat says so as it starts.
 * **Joining in:** a line you type joins before the next reply.
-* **Talking:** with *STT input* on, push-to-talk stops the speaking bot, cuts the replying one short, and listens; what you say follows *STT destination*. With *TTS output* off, the wake phrase (*STT wake*) does the same. The wake phrase during speech (*STT interrupt*) ends the chat.
+* **Keys and clicks** work throughout, as under a normal reply, including under the spinners while a bot's reply is held for its picture or a picture is made.
+* **Talking:** with *STT input* on, push-to-talk stops the speaking bot, cuts the replying one short (a reply held for its picture too), and listens; what you say follows *STT destination*. With *TTS output* off, the wake phrase (*STT wake*) does the same. The wake phrase during speech (*STT interrupt*) ends the chat.
 * **ESC** steps: stop the voice, then cut the replying bot short (the next one answers), then, before the next bot has said anything, end the chat. `/exit`, `/clear` and `/new` end the chat, then run.
 * **Resume:** `/botchat --resume [<line>]` continues this run's last chat; a line after it joins as yours.
 * **Embedded bots:** see *Botchat multi-embedded*. `/botchat --kill` stops leftover extra servers (never this profile's own).
 * **Pronouns** come from each profile's first TTS voice (`am_`, `bm_`… male, anything else female).
-* **Saved** as a session of its own under *Session logging*; the current conversation is left alone.
+* **Saved** as a session of its own under *Session logging*, each reply with its tool calls and tokens, the session naming every model the bots spoke through; the current conversation is left alone.
+* **Usage:** the bots' tokens are a *Botchat* row of their own on `/usage`, apart from this chat's figures.
 
 ### Claude Code from the chat
 

@@ -165,6 +165,24 @@ public partial class NeonAdvisorToolTests
         Assert.Null(client.Options[2]?.Tools);   // 0: text only
     }
 
+    /// <summary>What an answer used goes to the tally's seam (2026-10-10): its reported requests and their tokens summed, once per answer.</summary>
+    [Fact]
+    public async Task AnAnswersRequests_AreToldToTheTally()
+    {
+        var spent = new List<(TokenUsage Usage, int Requests)>();
+        var client = _host.Add("dba");
+        client.Enqueue(FakeChatClient.Call("c1", "read_file"), FakeChatClient.Usage(100, 10));
+        client.Enqueue(FakeChatClient.Text("Add the index."), FakeChatClient.Usage(150, 5));
+        var tool = new NeonAdvisorTool(_host, () => _settings, () => "neon", _threads, () => (_offered, "RULES"), () => _history, null, _view, (usage, requests) => spent.Add((usage, requests)));
+
+        await Ask(tool, "dba", "q");
+
+        var (usage, requests) = Assert.Single(spent);
+        Assert.Equal(2, requests);
+        Assert.Equal(250, usage.Input);
+        Assert.Equal(15, usage.Output);
+    }
+
     [Fact]
     public async Task TheCap_CountsEveryAdvisor_AndStartsOverWithTheTurn()
     {
