@@ -79,6 +79,43 @@ internal sealed partial class ChatScreen
         return yes ?? false;
     }
 
+    /// <summary>
+    /// <c>/shopping</c> (2026-10-11): the bare word opens the list's pane (<see cref="ShoppingMenu"/>) where menus open; every verb is
+    /// <see cref="ShoppingCommandRunner"/>'s, its lines through <paramref name="sink"/> (a line led by <c>Error: </c> as an error). The
+    /// user's own hand: neither <c>Shopping tools</c> nor plan mode judges it. The whole list's clear and a store's removal ask first;
+    /// <c>print</c> goes through <c>/print</c>'s service under the spinner.
+    /// </summary>
+    private async Task HandleShoppingAsync(string args, INoticeSink sink, bool spinner, CancellationToken cancellationToken)
+    {
+        var line = ShoppingCommand.Parse(args);
+        if (line.Verb == ShoppingVerb.Pane && line.Error is null && _pane.Enabled && _shopping.Store.Available)
+        {
+            await new ShoppingMenu(_shopping, _menuPane).ShowAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        Func<string, string, CancellationToken, Task<string>>? print = Printing.PrintText.Supported
+            ? (markdown, title, token) =>
+            {
+                var run = () => _print.RunAsync(new Printing.PrintRequest(null, Markdown: markdown, Title: title), token);
+                return spinner ? _transcript.WithSpinnerAsync(Printing.PrintText.Working, run) : run();
+            }
+            : null;
+        foreach (string result in await ShoppingCommandRunner.RunAsync(_shopping, line, _files, ConfirmAsync, print, cancellationToken).ConfigureAwait(false))
+        {
+            Show(result, sink);
+        }
+    }
+
+    /// <summary><c>/shopping</c>'s argument list (2026-10-11): <see cref="ShoppingCommand.Complete"/> over the stores and the list's lines as they are.</summary>
+    private IReadOnlyList<CompletionItem> ShoppingChoices(string argText)
+    {
+        var store = _shopping.Store;
+        return store.Available
+            ? ShoppingCommand.Complete(argText, store.Stores().Select(s => s.Name).ToList(), store.Items().Select(i => i.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList())
+            : ShoppingCommand.Complete(argText, [], []);
+    }
+
     /// <summary>Whether the shopping group is offered: <c>Shopping tools</c> on.</summary>
     public static bool ShoppingOffered(AppSettingsData effective)
     {

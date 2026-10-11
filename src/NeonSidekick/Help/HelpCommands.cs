@@ -318,6 +318,18 @@ public static class HelpCommands
             new("/settings <words>", "Search every setting (/settings, /tools, /skills, /mcp) by its name, tab or description; Enter edits the row found."),
             new("/settings changed", "The settings that are not their defaults, with each default; Enter edits, `r` puts the row back to its default."),
         ]),
+        new("/shopping",
+        [
+            new("/shopping", "Open the shopping list on the pane, walked through the active store: each aisle a heading over its items, the ticked ones last. Enter or Space ticks an item; `+` and `-` change its quantity, `r` removes it, `c` clears the ticked ones and `s` picks the store. Without the pane, the list is printed."),
+            new("/shopping add <items>", "Put items on the list, separated by commas; a quantity may lead or follow one (`2 milk`, `eggs x3`). An item already there gets the quantity added."),
+            new("/shopping check|uncheck|remove <item>", "Tick an item as bought, untick it, or take it off the list, by its name or its number in the order added."),
+            new("/shopping list [<store>]", "Print the list walked through the active store, or the one named."),
+            new("/shopping clear [all]", "Remove the ticked items; `all` empties the whole list, after a yes."),
+            new("/shopping store [<name>]", "List the stores and the active one's layout; with a name, shop there: the list walks through it."),
+            new("/shopping store add|remove <name>", "Add a store (its reference folder is made), or remove one with its layout, after a yes."),
+            new("/shopping export", "Write the items left to buy to `shopping-list.md` in the working directory, as a Markdown checklist grouped by aisle; the file is overwritten each time."),
+            new("/shopping print", "Print the items left to buy, grouped by aisle, through `/print`'s printer settings."),
+        ]),
         new("/shortcut",
         [
             new("/shortcut [<profile>] [--log]", "Put a shortcut on the desktop that starts NeonSidekick in the exe's folder on the loaded profile, or the one named (as `--profile <name>`). With `--log` it also writes a log, `logs\\neon-<profile>-{ts}.log` beside the exe, the time it starts in the name. It is called `NeonSidekick (<profile>)`, with or without the log; one already there is replaced. On a Mac it is a `.command` file instead. The first start offers it once (No, Yes, or Yes with a log), recorded as `ShortcutOffered` in `settings.json`."),

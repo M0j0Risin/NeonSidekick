@@ -276,6 +276,93 @@ public static class ShoppingText
         return sb.ToString();
     }
 
+    // ---- /shopping ----
+
+    /// <summary><c>/shopping</c>'s row on <c>/help</c>. Pinned.</summary>
+    public const string HelpSummary = "show and edit the shopping list";
+
+    /// <summary><c>/shopping</c> given a line no form takes. Pinned.</summary>
+    public const string CommandUsage =
+        "/shopping takes add <items>, check|uncheck|remove <item>, list [<store>], clear [all], store [<name>|add <name>|remove <name>], export or print; alone, the list's pane.";
+
+    /// <summary>The file <c>/shopping export</c> writes in the working directory, overwritten each time. Pinned.</summary>
+    public const string ExportFileName = "shopping-list.md";
+
+    /// <summary>The title a printed or exported list carries.</summary>
+    public static string Title(ShopStore? store) => "Shopping list" + (store is null ? "" : " — " + store.Name);
+
+    /// <summary>
+    /// The list as Markdown (<c>/shopping export</c> and <c>print</c>): the title, then each group as a heading over its lines as
+    /// unticked boxes, in the store's walk; the ticked lines are left out (bought). A guess keeps its mark.
+    /// </summary>
+    public static string Markdown(ShopView view)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        var sb = new StringBuilder("# ").Append(Title(view.Store)).Append('\n');
+        foreach (var group in view.Groups)
+        {
+            sb.Append("\n## ").Append(Heading(group)).Append("\n\n");
+            foreach (var placed in group.Items)
+            {
+                sb.Append("- [ ] ").Append(Line(placed.Item)).Append(placed.Place.IsGuess ? " " + GuessMark : "").Append('\n');
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>What <c>/shopping export</c> did. Pinned.</summary>
+    public static string Exported(string path, int count) => "Wrote " + Count(count, "item") + " to " + path + ".";
+
+    /// <summary><c>/shopping export</c> or <c>print</c> with nothing left to buy. Pinned.</summary>
+    public const string NothingToBuy = "Nothing on the list to buy.";
+
+    /// <summary><c>/shopping print</c> where nothing prints. Pinned.</summary>
+    public const string NoPrinting = "Printing needs Windows or a Mac.";
+
+    /// <summary>The yes/no before <c>/shopping store remove</c>. Pinned.</summary>
+    public static string RemoveStorePrompt(ShopStore store, int facts) =>
+        "Remove the store \"" + store.Name + "\" with its layout (" + Count(facts, "placement fact") + ")? Its reference folder stays.";
+
+    public static string StoreRemoved(ShopStore store) => "Removed the store \"" + store.Name + "\".";
+
+    public static string AuditStoreRemoved(ShopStore store) => "Removed the store \"" + store.Name + "\"";
+
+    // ---- the pane (/shopping) ----
+
+    /// <summary>The pane's title: the toolbar's cart and the store the list walks through. Pinned.</summary>
+    public static string PaneLabel(ShopStore? store) => "🛒 " + Title(store);
+
+    /// <summary>The pane's hint row. Pinned.</summary>
+    public const string PaneKeys = "Enter / Space = tick or untick · + / - = quantity · r = remove · c = clear ticked · s = store · Esc = close";
+
+    /// <summary>The pane's buttons' titles and keys. Pinned.</summary>
+    public const string MoreButton = "+1";
+    public const char MoreKey = '+';
+    public const string LessButton = "-1";
+    public const char LessKey = '-';
+    public const string RemoveButton = "remove";
+    public const char RemoveKey = 'r';
+    public const string ClearButton = "clear ticked";
+    public const char ClearKey = 'c';
+    public const string StoreButton = "store";
+    public const char StoreKey = 's';
+
+    /// <summary>The pane's empty list. Pinned.</summary>
+    public const string EmptyList = "The shopping list is empty: /shopping add <items>, or ask the model.";
+
+    /// <summary>The pane's row for a line: its box, its text, a guess marked.</summary>
+    public static string PaneRow(ShopItem item, bool guess) => (item.Checked ? "[x] " : "[ ] ") + Line(item) + (guess ? " " + GuessMark : "");
+
+    /// <summary>The pane's caption: the counts. Pinned.</summary>
+    public static string PaneCaption(int open, int ticked) => Count(open, "item") + " to get" + (ticked > 0 ? ", " + ticked.ToString(CultureInfo.InvariantCulture) + " ticked" : "");
+
+    /// <summary>The store picker's title. Pinned.</summary>
+    public const string StorePickTitle = "Shop at";
+
+    /// <summary>The store picker with no store. Pinned.</summary>
+    public const string NoStoresYet = "No store is set up yet: /shopping store add <name>, or ask the model.";
+
     // ---- shopping_layout's answers ----
 
     public static string Renamed(string what, string from, string to) => "Renamed the " + what + " \"" + from.Trim() + "\" to \"" + to.Trim() + "\".";

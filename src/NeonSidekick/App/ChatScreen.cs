@@ -4099,7 +4099,7 @@ internal sealed partial class ChatScreen
     public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false, Func<IReadOnlyList<CompletionItem>>? Plans = null, Func<string, IReadOnlyList<CompletionItem>>? Home = null, Func<string, MentionResult>? AnyFiles = null, Func<string, IReadOnlyList<CompletionItem>>? Print = null, Func<IReadOnlyList<CompletionItem>>? Themes = null, Func<string, IReadOnlyList<CompletionItem>>? Docker = null,
         Func<string, IReadOnlyList<CompletionItem>>? Screen = null, Func<string, IReadOnlyList<CompletionItem>>? Server = null,
         Func<IReadOnlyList<CompletionItem>>? Models = null, bool LogFile = false, Func<IReadOnlyList<CompletionItem>>? Processes = null,
-        Func<string, MentionResult>? MachineFolders = null, Func<IReadOnlyList<CompletionItem>>? Advisors = null);
+        Func<string, MentionResult>? MachineFolders = null, Func<IReadOnlyList<CompletionItem>>? Advisors = null, Func<string, IReadOnlyList<CompletionItem>>? Shopping = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -4628,6 +4628,10 @@ internal sealed partial class ChatScreen
                 // The verbs (2026-10-05); past the first word, a search's words or a video, free text.
                 return YouTube.YouTubeCommand.Complete(argText);
 
+            case SlashCommand.Shopping:
+                // The verbs (2026-10-11), then the stores' names and the list's lines.
+                return sources.Shopping?.Invoke(argText) ?? Shopping.ShoppingCommand.Complete(argText, [], []);
+
             case SlashCommand.Screen:
                 // The words, then the monitors after monitor: and the windows after window: (2026-10-04, the user's report).
                 return sources.Screen?.Invoke(argText) ?? NeonSidekick.Screen.ScreenTarget.Complete(argText, [], null, [], null);
@@ -4928,7 +4932,8 @@ internal sealed partial class ChatScreen
             _logFile is not null,
             ProcessChoices,
             prefix => FolderCompleter.Complete(prefix, FileBrowserMode.Resolve(_effective())),
-            AdvisorChoices);
+            AdvisorChoices,
+            ShoppingChoices);
         return ArgumentPaths(command, argText, sources) is { } paths
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));
@@ -12094,6 +12099,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.YouTube:
                 await HandleYouTubeAsync(args, _transcript, spinner: true, cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.Shopping:
+                await HandleShoppingAsync(args, _transcript, spinner: true, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Print:

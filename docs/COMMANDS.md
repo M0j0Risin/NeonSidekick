@@ -154,6 +154,15 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/settings`, `//` | Edits and saves the settings. A letter typed on a tab searches every setting. |
 | `/settings <words>` | Searches every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by its name, tab or description; Enter edits the row found. |
 | `/settings changed` | Lists the settings that are not their defaults, with each default; Enter edits, `r` puts the row back to its default. A changed value reads in the accent colour on every settings tab. |
+| `/shopping` | The shopping list on the pane, walked through the active store (see [Tools](TOOLS.md#shopping-list)): each aisle a heading over its items, the ticked ones last. Without the pane (and headless) the list is printed. |
+| `/shopping add <items>` | Puts items on the list, separated by commas (`/shopping add milk, 2 eggs, bread x2`); an item already there gets the quantity added. |
+| `/shopping check\|uncheck\|remove <item>` | Ticks an item as bought, unticks it, or takes it off, by its name or its number in the order added. |
+| `/shopping list [<store>]` | Prints the list walked through the active store, or the one named. |
+| `/shopping clear [all]` | Removes the ticked items; `all` empties the whole list, after a yes (headless: straight away). |
+| `/shopping store [<name>]` | Lists the stores and the active one's layout; with a name, makes it the store the list walks through. |
+| `/shopping store add\|remove <name>` | Adds a store (its folder under `db\shopping\reference` is made), or removes one with its layout, after a yes (headless: straight away); its reference folder stays. |
+| `/shopping export` | Writes the items left to buy to `shopping-list.md` in the working directory, a Markdown checklist grouped by aisle, overwritten each time. |
+| `/shopping print` | Prints the items left to buy, grouped by aisle, with `/print`'s printer and font settings. |
 | `/shortcut [<profile>] [--log]` | Puts a shortcut on the desktop that starts NeonSidekick on the loaded profile, or the one named; `--log` adds a log beside the exe. On a Mac it is a `.command` file. See [Desktop shortcuts](#desktop-shortcuts). |
 | `/skills` | Lists the skills and edits the skill, reflection and project-file settings. On the Offered tab each skill shows its version after the scope (`v1` as written, one more for each older text kept in `skills.db`; blank for an external skill; `🔒 v1` for a [locked](SETTINGS.md#locking-a-skill) one, `⛔ v1` and a dim row for a [disabled](SETTINGS.md#disabling-a-skill) one). Its second strip picks the scope shown: *all*, *profile* or *global* (*external* too while an external skill is listed), each with its count; ←/→ walk them on the way to the next tab, Tab skips past them. Typing narrows the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) from the web after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. Refused during a reply. See [Installing skills](SETTINGS.md#installing-skills). |
@@ -610,6 +619,7 @@ Every list pane works the same way: ↑/↓ move, Enter picks the highlighted ro
 | `/skills` › a skill | Enter on a row: move, rename, edit, revert, `lock`/`unlock`, `disable`/`enable`, delete (asks); a locked skill refuses rename, move and delete; a disabled one is never offered to the model |
 | `/skills` › a skill › `revert` | Enter puts the version back · `d` removes it (asks) · `c` clear all (asks) |
 | `/docker` | Enter opens · `r` refresh · type to filter |
+| `/shopping` | Enter / Space tick or untick · `+` / `-` quantity · `r` remove · `c` clear ticked · `s` pick the store |
 | `/youtube list` | Enter plays · `d` remove selected (asks) · `c` clear all (asks) · type to filter |
 | `/youtube <words>`, `/youtube playlist` | Enter plays (a playlist from the entry, a channel's uploads) · `s` save the highlighted video |
 | `/tools shell` (*Shell command policy*) | `c` the allowed commands · `p` the police |

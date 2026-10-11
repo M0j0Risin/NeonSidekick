@@ -1089,6 +1089,19 @@ public sealed class SidekickApp
                     continue;
                 }
 
+                // /shopping (2026-10-11): ahead of the server check too — the list needs no LLM. No pane: the bare word prints the list,
+                // and a typed clear all or store remove is the act (headless /youtube list --clear's rule); print through /print's service.
+                if (SlashCommands.Parse(text) is (SlashCommand.Shopping, var shoppingArgs))
+                {
+                    Func<string, string, CancellationToken, Task<string>>? shoppingPrint = Printing.PrintText.Supported ? (markdown, title, token) => print.RunAsync(new Printing.PrintRequest(null, Markdown: markdown, Title: title), token) : null;
+                    foreach (string shoppingRow in await Shopping.ShoppingCommandRunner.RunAsync(shopping, Shopping.ShoppingCommand.Parse(shoppingArgs), files, confirm: null, shoppingPrint, cancellationToken).ConfigureAwait(false))
+                    {
+                        await HeadlessLineAsync(shoppingRow.StartsWith("Error: ", StringComparison.Ordinal) ? "[error] " + shoppingRow["Error: ".Length..] : shoppingRow).ConfigureAwait(false);
+                    }
+
+                    continue;
+                }
+
                 // /avatar (2026-10-10): ahead of the server check too — the profile's face needs no LLM; no picker here.
                 if (SlashCommands.Parse(text) is (SlashCommand.Avatar, var avatarArgs))
                 {
