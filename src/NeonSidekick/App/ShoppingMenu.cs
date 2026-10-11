@@ -8,18 +8,22 @@ namespace NeonSidekick.App;
 /// <c>/shopping</c>'s pane (2026-10-11, the user's ask: a checklist to shop from): the list walked through the active store on a
 /// <see cref="MenuPane"/> page — each aisle or zone a heading (<see cref="SectionRule"/>) over its lines in the store's order, the
 /// unplaced after, the ticked last and dim. Enter or Space ticks or unticks the highlighted line; the buttons (a click or their key)
-/// add or take one off its quantity, remove it, clear the ticked lines and pick the store the list walks through. Nothing asks: a line
+/// add or take one off its quantity, remove it, tick (or untick) every line, clear the ticked lines and pick the store the list walks through. Nothing asks: a line
 /// removed is added again, a bought one is ticked. The list is read again after every act (the model may change it meanwhile), the
 /// cursor kept on the same line. The <see cref="YouTubeSavedMenu"/> shape; without the pane the screen prints the list instead.
 /// </summary>
 internal sealed class ShoppingMenu
 {
-    /// <summary>The page's buttons, in the order drawn. Pinned.</summary>
-    public static readonly IReadOnlyList<MenuButton> Buttons =
+    /// <summary>
+    /// The page's buttons, in the order drawn, each with its glyph (2026-10-11, the user's ask). The fourth is tick all while a line is
+    /// left to tick (<paramref name="anyOpen"/>), untick all once every line is ticked: one key, <c>a</c>, either way. Pinned.
+    /// </summary>
+    public static IReadOnlyList<MenuButton> ButtonsFor(bool anyOpen) =>
     [
         new(ShoppingText.MoreButton, ShoppingText.MoreKey),
         new(ShoppingText.LessButton, ShoppingText.LessKey),
         new(ShoppingText.RemoveButton, ShoppingText.RemoveKey),
+        new(anyOpen ? ShoppingText.TickAllButton : ShoppingText.UntickAllButton, ShoppingText.TickAllKey),
         new(ShoppingText.ClearButton, ShoppingText.ClearKey),
         new(ShoppingText.StoreButton, ShoppingText.StoreKey),
     ];
@@ -27,8 +31,9 @@ internal sealed class ShoppingMenu
     private const int More = 0;
     private const int Less = 1;
     private const int Remove = 2;
-    private const int ClearTicked = 3;
-    private const int Store = 4;
+    private const int TickAll = 3;
+    private const int ClearTicked = 4;
+    private const int Store = 5;
 
     private readonly ShoppingList _list;
     private readonly MenuPane _pane;
@@ -97,7 +102,7 @@ internal sealed class ShoppingMenu
                 cursor = cursor >= 0 ? cursor : items.FindIndex(i => i is not null);
                 var page = new MenuPage(ShoppingText.PaneLabel(shop), rows, ShoppingText.PaneKeys)
                 {
-                    Buttons = Buttons,
+                    Buttons = ButtonsFor(view.Groups.Count > 0),
                     Headings = headings,
                     SpaceToggles = true,
                     Caption = ShoppingText.PaneCaption(view.Groups.Sum(g => g.Items.Count), view.Ticked.Count),
@@ -111,6 +116,14 @@ internal sealed class ShoppingMenu
                 on = item?.Id ?? on;
                 switch (pick.Button)
                 {
+                    case TickAll:
+                    {
+                        // Tick all while a line is left open, untick all once none is (the button's title said which).
+                        bool tick = view.Groups.Count > 0;
+                        Say(_list.CheckAll(tick) is { } changed ? ShoppingText.CheckedAll(changed, tick) : "Error: " + ShoppingText.WriteFailed);
+                        break;
+                    }
+
                     case ClearTicked:
                         Say(_list.Clear(all: false) is { } cleared ? ShoppingText.Cleared(cleared, all: false) : "Error: " + ShoppingText.WriteFailed);
                         break;

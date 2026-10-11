@@ -61,11 +61,18 @@ public sealed class ShoppingCommandTests : IDisposable
         Assert.Equal(new ShoppingCommandLine(verb, text), ShoppingCommand.Parse(args));
 
     [Theory]
+    [InlineData("print verbose", ShoppingVerb.Print, "", true)]
+    [InlineData("print H-E-B #372", ShoppingVerb.Print, "H-E-B #372", false)]
+    [InlineData("export H-E-B #372 VERBOSE", ShoppingVerb.Export, "H-E-B #372", true)]
+    [InlineData("export Costco", ShoppingVerb.Export, "Costco", false)]
+    public void PrintAndExport_TakeAStoreAndVerbose(string args, ShoppingVerb verb, string store, bool verbose) =>
+        Assert.Equal(new ShoppingCommandLine(verb, store, Verbose: verbose), ShoppingCommand.Parse(args));
+
+    [Theory]
     [InlineData("add")]
     [InlineData("check")]
     [InlineData("clear some")]
     [InlineData("store add")]
-    [InlineData("export now")]
     [InlineData("milk")]
     public void Parse_AnythingElse_IsTheUsage(string args) =>
         Assert.Equal(new ShoppingCommandLine(ShoppingVerb.Unknown, Error: ShoppingText.CommandUsage), ShoppingCommand.Parse(args));
@@ -128,13 +135,54 @@ public sealed class ShoppingCommandTests : IDisposable
 
         string path = Path.Combine(_files.Root, ShoppingText.ExportFileName);
         Assert.Equal([ShoppingText.Exported(path, 2)], await Run("export"));
-        const string Expected = "# Shopping list — H-E-B\n\n## Dairy\n\n- [ ] Soy milk (guess)\n\n## Unplaced\n\n- [ ] Bread\n";
-        Assert.Equal(Expected, File.ReadAllText(path));
+        // Compact by default (2026-10-11): a line per group, a hard break ending each; verbose is the roomy form it was.
+        const string Compact = "**Shopping list — H-E-B** · 2 items\\\n**Dairy:** Soy milk (guess)\\\n**Unplaced:** Bread\n";
+        const string Verbose = "# Shopping list — H-E-B\n\n## Dairy\n\n- [ ] Soy milk (guess)\n\n## Unplaced\n\n- [ ] Bread\n";
+        Assert.Equal(Compact, File.ReadAllText(path));
+        Assert.Equal([ShoppingText.Exported(path, 2)], await Run("export verbose"));
+        Assert.Equal(Verbose, File.ReadAllText(path));
 
         (string Markdown, string Title)? printed = null;
-        Assert.Equal(["Printed 1 page."], await Run("print", print: (md, title, _) => { printed = (md, title); return Task.FromResult("Printed 1 page."); }));
-        Assert.Equal((Expected, "Shopping list — H-E-B"), printed);
+        Task<string> Printer(string md, string title, CancellationToken _) { printed = (md, title); return Task.FromResult("Printed 1 page."); }
+        Assert.Equal(["Printed 1 page."], await Run("print", print: Printer));
+        Assert.Equal((Compact, "Shopping list — H-E-B"), printed);
+        Assert.Equal(["Printed 1 page."], await Run("print h-e-b verbose", print: Printer));
+        Assert.Equal((Verbose, "Shopping list — H-E-B"), printed);
         Assert.Equal(["Error: " + ShoppingText.NoPrinting], await Run("print"));
+
+        // Another store, named: its own walk (nothing placed there yet), the active store unchanged.
+        await Run("store add Costco");
+        Assert.Equal(["Printed 1 page."], await Run("print Costco", print: Printer));
+        Assert.Equal(("**Shopping list — Costco** · 2 items\\\n**Unplaced:** Bread · Soy milk\n", "Shopping list — Costco"), printed);
+        Assert.Equal("H-E-B", _list.StoreFor(null, out _)!.Name);
+        Assert.Equal([ShoppingText.NoSuchStore("Kroger", _list.Store.Stores())], await Run("export Kroger"));
+    }
+
+    [Fact]
+    public async Task ThePane_TickAll_TicksEveryLine_ThenUnticksThemAll_AndTheButtonsHaveGlyphs()
+    {
+        Assert.Equal(["⊕ +1", "⊖ -1", "✖  remove", "☑  tick all", "⊠ clear ticked", "⇄ store"], ShoppingMenu.ButtonsFor(anyOpen: true).Select(b => b.Title));
+        Assert.Equal(['+', '-', 'r', 'a', 'c', 's'], ShoppingMenu.ButtonsFor(anyOpen: true).Select(b => b.Key!.Value));
+        Assert.Equal("☐  untick all", ShoppingMenu.ButtonsFor(anyOpen: false)[3].Title);
+
+        await Run("add Bread, Eggs, Milk");
+        await Run("check eggs");
+        var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100), _time) { Hint = () => "idle" };
+        var input = new ScriptedInput();
+        var menu = new ShoppingMenu(_list, new MenuPane(pane, new KeySource(input, TimeSpan.FromMilliseconds(1))));
+        pane.Show();
+        input.Push(Keys.Char('a'));   // tick all: Bread and Milk
+        input.Push(Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        Assert.All(_list.Store.Items(), i => Assert.True(i.Checked));
+
+        input.Push(Keys.Char('a'));   // every line ticked: untick all
+        input.Push(Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        Assert.All(_list.Store.Items(), i => Assert.False(i.Checked));
+        Assert.Equal("Ticked all 2 lines.", ShoppingText.CheckedAll(2, on: true));
+        Assert.Equal("Unticked the one line.", ShoppingText.CheckedAll(1, on: false));
+        pane.Dispose();
     }
 
     [Fact]

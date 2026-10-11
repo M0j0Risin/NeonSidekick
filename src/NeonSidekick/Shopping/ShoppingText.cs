@@ -389,7 +389,7 @@ public static class ShoppingText
 
     /// <summary><c>/shopping</c> given a line no form takes. Pinned.</summary>
     public const string CommandUsage =
-        "/shopping takes add <items>, check|uncheck|remove <item>, list [<store>], clear [all], store [<name>|add <name>|remove <name>], export, print or reindex [<store>]; alone, the list's pane.";
+        "/shopping takes add <items>, check|uncheck|remove <item>, list [<store>], clear [all], store [<name>|add <name>|remove <name>], export|print [<store>] [verbose] or reindex [<store>]; alone, the list's pane.";
 
     /// <summary>The file <c>/shopping export</c> writes in the working directory, overwritten each time. Pinned.</summary>
     public const string ExportFileName = "shopping-list.md";
@@ -398,12 +398,23 @@ public static class ShoppingText
     public static string Title(ShopStore? store) => "Shopping list" + (store is null ? "" : " — " + store.Name);
 
     /// <summary>
-    /// The list as Markdown (<c>/shopping export</c> and <c>print</c>): the title, then each group as a heading over its lines as
-    /// unticked boxes, in the store's walk; the ticked lines are left out (bought). A guess keeps its mark.
+    /// The list as Markdown (<c>/shopping export</c> and <c>print</c>), the ticked lines left out (bought), a guess keeping its mark.
+    /// Compact by default (2026-10-11, the user's ask: a list that prints small): one paragraph, a hard line break ending each line, so
+    /// it prints as tight lines at the body size — the title and the count, then a line per group in the store's walk, its label in
+    /// bold (<see cref="CompactLabel"/>) and its items run together. <paramref name="verbose"/> is the roomy form it was until then:
+    /// the title, each group a heading over its lines as unticked boxes.
     /// </summary>
-    public static string Markdown(ShopView view)
+    public static string Markdown(ShopView view, bool verbose = false)
     {
         ArgumentNullException.ThrowIfNull(view);
+        if (!verbose)
+        {
+            int count = view.Groups.Sum(g => g.Items.Count);
+            var lines = new List<string> { "**" + Title(view.Store) + "** · " + Count(count, "item") };
+            lines.AddRange(view.Groups.Select(g => "**" + CompactLabel(g) + ":** " + string.Join(" · ", g.Items.Select(p => Line(p.Item) + (p.Place.IsGuess ? " " + GuessMark : "")))));
+            return string.Join("\\\n", lines) + "\n";
+        }
+
         var sb = new StringBuilder("# ").Append(Title(view.Store)).Append('\n');
         foreach (var group in view.Groups)
         {
@@ -415,6 +426,13 @@ public static class ShoppingText
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>A group's label on a compact list: the location alone (its section left off, for width), the section alone, or <see cref="UnplacedHeading"/>.</summary>
+    public static string CompactLabel(ShopGroup group)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+        return group.Location?.Label ?? group.Section?.Name ?? UnplacedHeading;
     }
 
     /// <summary>What <c>/shopping export</c> did. Pinned.</summary>
@@ -440,19 +458,31 @@ public static class ShoppingText
     public static string PaneLabel(ShopStore? store) => "🛒 " + Title(store);
 
     /// <summary>The pane's hint row. Pinned.</summary>
-    public const string PaneKeys = "Enter / Space = tick or untick · + / - = quantity · r = remove · c = clear ticked · s = store · Esc = close";
+    public const string PaneKeys = "Enter / Space = tick or untick · + / - = quantity · r = remove · a = tick all · c = clear ticked · s = store · Esc = close";
 
-    /// <summary>The pane's buttons' titles and keys. Pinned.</summary>
-    public const string MoreButton = "+1";
+    /// <summary>
+    /// The pane's buttons' titles and keys, each with a glyph in the other panes' style (2026-10-11, the user's ask: <c>⊠ clear all</c>,
+    /// <c>✖  kill</c>, <c>☑  offered</c>; the wide-or-narrow ✖, ☑ and ☐ two spaces before their word, as there). Pinned.
+    /// </summary>
+    public const string MoreButton = "⊕ +1";
     public const char MoreKey = '+';
-    public const string LessButton = "-1";
+    public const string LessButton = "⊖ -1";
     public const char LessKey = '-';
-    public const string RemoveButton = "remove";
+    public const string RemoveButton = "✖  remove";
     public const char RemoveKey = 'r';
-    public const string ClearButton = "clear ticked";
+    public const string TickAllButton = "☑  tick all";
+    public const string UntickAllButton = "☐  untick all";
+    public const char TickAllKey = 'a';
+    public const string ClearButton = "⊠ clear ticked";
     public const char ClearKey = 'c';
-    public const string StoreButton = "store";
+    public const string StoreButton = "⇄ store";
     public const char StoreKey = 's';
+
+    /// <summary>What the pane's tick all (or untick all) did. Pinned.</summary>
+    public static string CheckedAll(int count, bool on) =>
+        count == 0 ? (on ? "Nothing left to tick." : "Nothing is ticked.") : (on ? "Ticked " : "Unticked ") + (count == 1 ? "the one line." : "all " + Count(count, "line") + ".");
+
+    public static string AuditCheckedAll(int count, bool on) => (on ? "Ticked every line of the shopping list: " : "Unticked every line of the shopping list: ") + Count(count, "line");
 
     /// <summary>The pane's empty list. Pinned.</summary>
     public const string EmptyList = "The shopping list is empty: /shopping add <items>, or ask the model.";

@@ -39,10 +39,10 @@ public enum ShoppingVerb
     /// <summary><c>store remove &lt;name&gt;</c>: a store and its layout gone, after a yes (the model cannot).</summary>
     RemoveStore,
 
-    /// <summary><c>export</c>: the list as Markdown in the working directory's <see cref="ShoppingText.ExportFileName"/>.</summary>
+    /// <summary><c>export [&lt;store&gt;] [verbose]</c>: the list as Markdown in the working directory's <see cref="ShoppingText.ExportFileName"/>, compact unless verbose.</summary>
     Export,
 
-    /// <summary><c>print</c>: the list printed, through <c>/print</c>'s service.</summary>
+    /// <summary><c>print [&lt;store&gt;] [verbose]</c>: the list printed, through <c>/print</c>'s service, compact unless verbose.</summary>
     Print,
 
     /// <summary><c>reindex [&lt;store&gt;]</c>: the store's reference documents read again, every file (2026-10-11, phase 3).</summary>
@@ -52,8 +52,11 @@ public enum ShoppingVerb
     Unknown,
 }
 
-/// <summary>A <c>/shopping</c> line read: the verb, its text (the items, the item, the store's name), and the error for a line that is no command.</summary>
-public sealed record ShoppingCommandLine(ShoppingVerb Verb, string Text = "", string? Error = null);
+/// <summary>
+/// A <c>/shopping</c> line read: the verb, its text (the items, the item, the store's name), the error for a line that is no command,
+/// and <see cref="Verbose"/> for an <c>export</c> or <c>print</c> asked for in the roomy form (2026-10-11).
+/// </summary>
+public sealed record ShoppingCommandLine(ShoppingVerb Verb, string Text = "", string? Error = null, bool Verbose = false);
 
 /// <summary>
 /// <c>/shopping</c>'s words (2026-10-11, the user's ask), pure: <see cref="Parse"/> the line, <see cref="Complete"/> for the input line's
@@ -73,8 +76,8 @@ public static class ShoppingCommand
         ("list", "print the list walked through the store: /shopping list [<store>]"),
         ("clear", "remove the ticked items; /shopping clear all empties the list, after a yes"),
         ("store", "the stores; /shopping store <name> shops there, store add|remove <name>"),
-        ("export", "write the list to " + ShoppingText.ExportFileName + " in the working directory"),
-        ("print", "print the list"),
+        ("export", "write the list to " + ShoppingText.ExportFileName + ": /shopping export [<store>] [verbose]"),
+        ("print", "print the list, compact: /shopping print [<store>] [verbose]"),
         ("reindex", "read the store's reference documents again: /shopping reindex [<store>]"),
     ];
 
@@ -100,11 +103,23 @@ public static class ShoppingCommand
             "clear" when rest.Equals("all", StringComparison.OrdinalIgnoreCase) => new(ShoppingVerb.ClearAll),
             "stores" when rest.Length == 0 => new(ShoppingVerb.Stores),
             "store" => Store(rest),
-            "export" when rest.Length == 0 => new(ShoppingVerb.Export),
-            "print" when rest.Length == 0 => new(ShoppingVerb.Print),
+            "export" => Output(ShoppingVerb.Export, rest),
+            "print" => Output(ShoppingVerb.Print, rest),
             "reindex" => new(ShoppingVerb.Reindex, rest),
             _ => Usage(),
         };
+    }
+
+    /// <summary>The word after an <c>export</c> or <c>print</c> (and a store's name) that asks for the roomy form. Pinned.</summary>
+    public const string VerboseWord = "verbose";
+
+    /// <summary><c>export</c> or <c>print</c>'s rest (2026-10-11): a last word <see cref="VerboseWord"/> (any case) is the roomy form, what is left the store's name (blank: the active store).</summary>
+    private static ShoppingCommandLine Output(ShoppingVerb verb, string rest)
+    {
+        int space = rest.LastIndexOf(' ');
+        string last = space < 0 ? rest : rest[(space + 1)..];
+        bool verbose = last.Equals(VerboseWord, StringComparison.OrdinalIgnoreCase);
+        return new(verb, verbose ? (space < 0 ? "" : rest[..space].Trim()) : rest, Verbose: verbose);
     }
 
     private static ShoppingCommandLine Store(string rest)
@@ -161,6 +176,7 @@ public static class ShoppingCommand
             "check" or "tick" or "uncheck" or "untick" or "remove" => MentionCompleter.Matches(items.Select(i => new CompletionItem(head + i, "")).ToList(), argText),
             "list" => MentionCompleter.Matches(stores.Select(s => new CompletionItem(head + s, "the list walked through " + s)).ToList(), argText),
             "reindex" => MentionCompleter.Matches(stores.Select(s => new CompletionItem(head + s, "read " + s + "'s documents again")).ToList(), argText),
+            "export" or "print" => MentionCompleter.Matches([new(head + VerboseWord, "the roomy form: a heading per aisle, a box per item"), .. stores.Select(s => new CompletionItem(head + s, "the list walked through " + s))], argText),
             _ => [],
         };
     }

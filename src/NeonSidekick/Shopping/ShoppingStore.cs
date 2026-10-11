@@ -358,6 +358,16 @@ public sealed class ShoppingStore : IDisposable
                 c.Parameters.AddWithValue("$at", Now());
             }, "tick a line") is > 0;
 
+    /// <summary>Ticks (or unticks) every line not already so (2026-10-11, the pane's tick all): how many changed, null when the write failed.</summary>
+    public int? SetAllChecked(bool on) =>
+        Execute("UPDATE items SET checked = $c, checked_at = $when, updated_at = $at WHERE checked <> $c",
+            c =>
+            {
+                c.Parameters.AddWithValue("$c", on ? 1 : 0);
+                c.Parameters.AddWithValue("$when", on ? Now() : DBNull.Value);
+                c.Parameters.AddWithValue("$at", Now());
+            }, "tick every line");
+
     /// <summary>Renames a line. False when nothing changed.</summary>
     public bool RenameItem(long itemId, string name) =>
         Execute("UPDATE items SET name = $n, updated_at = $at WHERE id = $id",

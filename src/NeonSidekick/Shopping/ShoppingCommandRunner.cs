@@ -140,14 +140,21 @@ public static class ShoppingCommandRunner
 
             case ShoppingVerb.Export:
             {
-                var view = list.View(list.StoreFor(null, out _));
+                // The store named, else the active one (2026-10-11); compact unless verbose.
+                var shop = list.StoreFor(line.Text, out string? missing);
+                if (missing is not null)
+                {
+                    return [missing];
+                }
+
+                var view = list.View(shop);
                 int open = view.Groups.Sum(g => g.Items.Count);
                 if (open == 0)
                 {
                     return [ShoppingText.NothingToBuy];
                 }
 
-                var written = files.WriteText(ShoppingText.ExportFileName, ShoppingText.Markdown(view), overwrite: true);
+                var written = files.WriteText(ShoppingText.ExportFileName, ShoppingText.Markdown(view, line.Verbose), overwrite: true);
                 return [written.Outcome == FileOutcome.Ok
                     ? ShoppingText.Exported(Path.Combine(files.Root, written.Relative), open)
                     : FileText.Error(written.Outcome, ShoppingText.ExportFileName, "write", written.Detail)];
@@ -155,7 +162,13 @@ public static class ShoppingCommandRunner
 
             case ShoppingVerb.Print:
             {
-                var view = list.View(list.StoreFor(null, out _));
+                var shop = list.StoreFor(line.Text, out string? missing);
+                if (missing is not null)
+                {
+                    return [missing];
+                }
+
+                var view = list.View(shop);
                 if (view.Groups.Sum(g => g.Items.Count) == 0)
                 {
                     return [ShoppingText.NothingToBuy];
@@ -166,7 +179,7 @@ public static class ShoppingCommandRunner
                     return ["Error: " + ShoppingText.NoPrinting];
                 }
 
-                return (await print(ShoppingText.Markdown(view), ShoppingText.Title(view.Store), cancellationToken).ConfigureAwait(false)).Split('\n');
+                return (await print(ShoppingText.Markdown(view, line.Verbose), ShoppingText.Title(view.Store), cancellationToken).ConfigureAwait(false)).Split('\n');
             }
 
             case ShoppingVerb.Reindex:

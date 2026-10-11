@@ -149,6 +149,18 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
         return true;
     }
 
+    /// <summary>Ticks (or unticks) every line (2026-10-11, the pane's tick all): how many changed, null when the write failed.</summary>
+    public int? CheckAll(bool on)
+    {
+        int? changed = _store().SetAllChecked(on);
+        if (changed is > 0)
+        {
+            Audit(ShoppingText.AuditCheckedAll(changed.Value, on));
+        }
+
+        return changed;
+    }
+
     /// <summary>Sets <paramref name="item"/>'s quantity. False when the write failed.</summary>
     public bool SetQuantity(ShopItem item, int quantity)
     {
