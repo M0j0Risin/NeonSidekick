@@ -755,7 +755,7 @@ The pane heads its run **The list**.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Shopping tools | Offers the shopping list's tools: `shopping_list`, `shopping_add`, `shopping_check`, `shopping_remove`, `shopping_clear`, `shopping_locate`, `shopping_place`, `shopping_stores` and `shopping_layout` (see [Tools](TOOLS.md#shopping-list)). The list and its stores live in the profile's `db\shopping\shopping.db`. `/tools shopping` and the toolbar's 🛒 open its on/off page. | off |
+| Shopping tools | Offers the shopping list's tools: `shopping_list`, `shopping_add`, `shopping_check`, `shopping_remove`, `shopping_clear`, `shopping_locate`, `shopping_place`, `shopping_stores`, `shopping_layout` and `shopping_reference` (see [Tools](TOOLS.md#shopping-list)). The list and its stores live in the profile's `db\shopping\shopping.db`. `/tools shopping` and the toolbar's 🛒 open its on/off page. | off |
 
 #### Options
 

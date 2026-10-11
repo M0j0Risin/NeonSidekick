@@ -19,7 +19,8 @@ public static class ShoppingCommandRunner
         WorkingDirectory files,
         Func<string, CancellationToken, Task<bool>>? confirm,
         Func<string, string, CancellationToken, Task<string>>? print,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ShoppingReference? reference = null)
     {
         ArgumentNullException.ThrowIfNull(list);
         ArgumentNullException.ThrowIfNull(line);
@@ -128,6 +129,12 @@ public static class ShoppingCommandRunner
                 }
 
                 DiagnosticLog.Info(ShoppingStore.Category, ShoppingText.AuditStoreRemoved(gone));
+                if (reference is not null)
+                {
+                    // Its pages' pictures are the index's, gone with it; the documents themselves stay.
+                    WorkingDirectory.DeleteDirectoryQuietly(reference.CacheFolder(gone));
+                }
+
                 return [ShoppingText.StoreRemoved(gone)];
             }
 
@@ -160,6 +167,27 @@ public static class ShoppingCommandRunner
                 }
 
                 return (await print(ShoppingText.Markdown(view), ShoppingText.Title(view.Store), cancellationToken).ConfigureAwait(false)).Split('\n');
+            }
+
+            case ShoppingVerb.Reindex:
+            {
+                var shop = list.StoreFor(line.Text, out string? missing);
+                if (missing is not null)
+                {
+                    return [missing];
+                }
+
+                if (shop is null)
+                {
+                    return [ShoppingText.NoStore];
+                }
+
+                if (reference is null)
+                {
+                    return ["Error: " + ShoppingText.NoBrowserForPdf];
+                }
+
+                return ShoppingText.ReferenceRead(shop, await reference.RefreshAsync(shop, force: true, cancellationToken).ConfigureAwait(false)).Split('\n');
             }
 
             default:

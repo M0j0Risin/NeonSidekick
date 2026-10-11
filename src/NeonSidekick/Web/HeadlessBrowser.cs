@@ -42,6 +42,9 @@ public interface IHeadlessBrowser
 
     /// <summary><paramref name="page"/> printed to a PDF at <paramref name="outputPath"/> through <paramref name="executable"/> (2026-10-03).</summary>
     Task<BrowserPdf> PrintToPdfAsync(string executable, Uri page, string outputPath, CancellationToken cancellationToken);
+
+    /// <summary><paramref name="pdf"/>'s pages read through <paramref name="executable"/> (2026-10-11): each page's text and picture, by pdf.js in the page (<see cref="BrowserPdfReader"/>).</summary>
+    Task<PdfRead> ReadPdfAsync(string executable, byte[] pdf, PdfReadOptions options, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -525,6 +528,176 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         {
             _oneAtATime.Release();
         }
+    }
+
+    /// <summary>The longest a PDF read may take (2026-10-11): the browser's start, pdf.js's import and every page drawn.</summary>
+    public static readonly TimeSpan PdfReadTimeout = TimeSpan.FromSeconds(120);
+
+    /// <summary>
+    /// The PDF-reading command line after the executable (2026-10-11): headless on a blank page, DevTools on, no GPU (a canvas draws
+    /// the same without one). Pinned.
+    /// </summary>
+    public static IReadOnlyList<string> PdfReadArguments(string userDataDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(userDataDirectory);
+        return
+        [
+            "--headless=new",
+            "--remote-debugging-port=0",
+            "--disable-gpu",
+            .. CommonFlags,
+            "--window-size=" + WindowSize,
+            "--user-data-dir=" + userDataDirectory,
+            "about:blank",
+        ];
+    }
+
+    public async Task<PdfRead> ReadPdfAsync(string executable, byte[] pdf, PdfReadOptions options, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        ArgumentNullException.ThrowIfNull(pdf);
+        ArgumentNullException.ThrowIfNull(options);
+        if (pdf.Length > BrowserPdfReader.MaxBytes)
+        {
+            return new PdfRead(false, $"the PDF is over {BrowserPdfReader.MaxBytes / (1024 * 1024)} MB", 0, []);
+        }
+
+        if (BrowserPdfReader.ModuleBase64(BrowserPdfReader.LibraryResource) is not { } library || BrowserPdfReader.ModuleBase64(BrowserPdfReader.WorkerResource) is not { } worker)
+        {
+            return new PdfRead(false, "this build carries no pdf.js", 0, []);
+        }
+
+        await _oneAtATime.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var read = new PdfReadState();
+            var blank = new Uri("about:blank");
+            string data = Convert.ToBase64String(pdf);
+            var run = await RunProcessAsync(executable, blank, _userData, PdfReadArguments, PdfReadTimeout, (process, userData, token) => WatchPdfAsync(process, userData, library, worker, data, options, read, token), cancellationToken).ConfigureAwait(false);
+            if (run.StartError is not null)
+            {
+                return new PdfRead(false, run.StartError, 0, []);
+            }
+
+            DiagnosticLog.Debug(Category, $"{run.Summary}, a PDF of {read.PageCount.ToString(CultureInfo.InvariantCulture)} pages read to page {read.Pages.Count.ToString(CultureInfo.InvariantCulture)}" + (read.Failure is null ? "" : $"; {read.Failure}") + run.StderrTail);
+            string detail = read.Failure ?? (run.TimedOut ? $"stopped after {Llm.LlmTimeouts.Format(PdfReadTimeout)}" : read.Pages.Count < read.PageCount ? $"read the first {read.Pages.Count.ToString(CultureInfo.InvariantCulture)} of {read.PageCount.ToString(CultureInfo.InvariantCulture)} pages" : "");
+            if (read.Pages.Count == 0 && read.Failure is null && !run.TimedOut)
+            {
+                detail = await run.FailureAsync("it read no page", cancellationToken).ConfigureAwait(false);
+            }
+
+            return new PdfRead(read.Pages.Count > 0, detail, read.PageCount, read.Pages) { InJob = run.InJob };
+        }
+        finally
+        {
+            _oneAtATime.Release();
+        }
+    }
+
+    /// <summary>What <see cref="WatchPdfAsync"/> read, kept as it goes so a run that times out keeps the pages it got.</summary>
+    private sealed class PdfReadState
+    {
+        public int PageCount;
+        public readonly List<PdfPageRead> Pages = [];
+        public string? Failure;
+    }
+
+    /// <summary>
+    /// Reads the PDF over DevTools (2026-10-11, <see cref="BrowserPdfReader"/>): pdf.js imported, the file opened, each page's text and picture
+    /// asked for in turn into <paramref name="read"/>, then the browser closed — true when it must still be killed, false when it
+    /// exited, <see cref="WatchPageAsync"/>'s contract. A DevTools failure or a script's throw is noted and ends the read.
+    /// </summary>
+    private static async Task<bool> WatchPdfAsync(Process process, string userData, string library, string worker, string pdf, PdfReadOptions options, PdfReadState read, CancellationToken cancellationToken)
+    {
+        await using var client = new DevToolsClient();
+        try
+        {
+            var endpoint = await DevToolsClient.WaitForEndpointAsync(userData, () => process.HasExited, cancellationToken).ConfigureAwait(false);
+            await client.ConnectAsync(endpoint, cancellationToken).ConfigureAwait(false);
+            string? session;
+            while ((session = await AttachAsync(client, cancellationToken).ConfigureAwait(false)) is null)
+            {
+                await Task.Delay(DomSettle.PollInterval, cancellationToken).ConfigureAwait(false);
+            }
+
+            var (_, loadError) = await EvaluateAwaitAsync(client, session, BrowserPdfReader.LoadExpression(library, worker), cancellationToken).ConfigureAwait(false);
+            if (loadError is not null)
+            {
+                read.Failure = "pdf.js did not load: " + loadError;
+            }
+            else
+            {
+                var (opened, openError) = await EvaluateAwaitAsync(client, session, BrowserPdfReader.OpenExpression(pdf), cancellationToken).ConfigureAwait(false);
+                if (opened is not { } doc || !doc.TryGetProperty("n", out var n) || !n.TryGetInt32(out int pages))
+                {
+                    read.Failure = "not a PDF pdf.js can open: " + (openError ?? "no page count");
+                }
+                else
+                {
+                    read.PageCount = pages;
+                    for (int number = 1; number <= Math.Min(pages, options.MaxPages); number++)
+                    {
+                        var (value, pageError) = await EvaluateAwaitAsync(client, session, BrowserPdfReader.PageExpression(number, options.MaxSide, options.Pictures), cancellationToken).ConfigureAwait(false);
+                        if (value is not { } answer || BrowserPdfReader.ReadPage(number, answer) is not { } page)
+                        {
+                            read.Failure = $"page {number.ToString(CultureInfo.InvariantCulture)} could not be read: " + (pageError ?? "no answer");
+                            break;
+                        }
+
+                        read.Pages.Add(page);
+                    }
+                }
+            }
+
+            await client.NotifyAsync("Browser.close", cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is DevToolsException or System.Net.WebSockets.WebSocketException or IOException or JsonException or InvalidOperationException)
+        {
+            read.Failure = ex.Message;
+            return true;
+        }
+
+        using var grace = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        grace.CancelAfter(CloseGrace);
+        try
+        {
+            await process.WaitForExitAsync(grace.Token).ConfigureAwait(false);
+            return false;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="expression"/> run in the page and its promise awaited (2026-10-11, the PDF read): its value as an object, or the
+    /// exception's first line; a DevTools refusal throws to the caller.
+    /// </summary>
+    private static async Task<(JsonElement? Value, string? Error)> EvaluateAwaitAsync(DevToolsClient client, string session, string expression, CancellationToken cancellationToken)
+    {
+        var answer = await client.SendAsync("Runtime.evaluate", w =>
+        {
+            w.WriteString("expression", expression);
+            w.WriteBoolean("returnByValue", true);
+            w.WriteBoolean("awaitPromise", true);
+        }, session, cancellationToken).ConfigureAwait(false);
+        if (answer.ValueKind != JsonValueKind.Object)
+        {
+            return (null, "no answer");
+        }
+
+        if (answer.TryGetProperty("exceptionDetails", out var details))
+        {
+            string text = details.TryGetProperty("exception", out var ex) && ex.TryGetProperty("description", out var d) && d.ValueKind == JsonValueKind.String
+                ? d.GetString() ?? ""
+                : details.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() ?? "" : "an exception";
+            return (null, text.Split('\n')[0].Trim());
+        }
+
+        return answer.TryGetProperty("result", out var result) && result.TryGetProperty("value", out var value) && value.ValueKind == JsonValueKind.Object
+            ? (value.Clone(), null)
+            : (null, "no object");
     }
 
     /// <summary>What <see cref="WatchPageAsync"/> saw, kept as it goes so a run that times out still has its last look.</summary>

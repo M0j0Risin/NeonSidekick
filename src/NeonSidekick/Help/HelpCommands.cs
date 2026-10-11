@@ -329,6 +329,7 @@ public static class HelpCommands
             new("/shopping store add|remove <name>", "Add a store (its reference folder is made), or remove one with its layout, after a yes."),
             new("/shopping export", "Write the items left to buy to `shopping-list.md` in the working directory, as a Markdown checklist grouped by aisle; the file is overwritten each time."),
             new("/shopping print", "Print the items left to buy, grouped by aisle, through `/print`'s printer settings."),
+            new("/shopping reindex [<store>]", "Read the active store's reference documents again, or the named one's: every PDF, text file and picture in its folder under `db\\shopping\\reference`. They are read on their own whenever a file changes; this reads them all."),
         ]),
         new("/shortcut",
         [

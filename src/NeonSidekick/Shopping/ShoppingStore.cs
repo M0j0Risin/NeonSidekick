@@ -27,6 +27,15 @@ public sealed record ShopPlacement(long Id, long StoreId, string Term, string Ki
 /// <summary>A line of the list (2026-10-11): store-independent, placed per store when it is shown (<see cref="ShoppingPlacer"/>).</summary>
 public sealed record ShopItem(long Id, string Name, int Quantity, string Note, bool Checked, DateTimeOffset Created);
 
+/// <summary>
+/// One reference document of a store as it was last read (2026-10-11): its path in the store's reference folder, the size and time it
+/// had then (a change reads it again), the pages read of how many, and what stopped the read short (empty when nothing did).
+/// </summary>
+public sealed record ShopRefDoc(long Id, long StoreId, string File, long Size, long Modified, int Pages, int PageCount, string Detail);
+
+/// <summary>A page of a reference document (2026-10-11): its number, its text, and the picture of it (a full path; null for none).</summary>
+public sealed record ShopRefPage(long Id, long DocId, string File, int Page, string Text, string? Image);
+
 /// <summary>The words of <c>placements.kind</c> (2026-10-11): what a term names. A brand outranks the rest (<see cref="ShoppingPlacer"/>).</summary>
 public static class ShoppingKinds
 {
@@ -362,6 +371,110 @@ public sealed class ShoppingStore : IDisposable
     public int? Clear(bool all) =>
         Execute(all ? "DELETE FROM items" : "DELETE FROM items WHERE checked <> 0", null, "clear the list");
 
+    // ---- reference documents (2026-10-11) ----
+
+    /// <summary>A store's reference documents as last read, by path.</summary>
+    public IReadOnlyList<ShopRefDoc> RefDocs(long storeId) =>
+        Query("SELECT id, store_id, file, size, modified, pages, page_count, detail FROM ref_docs WHERE store_id = $s ORDER BY file COLLATE NOCASE",
+            c => c.Parameters.AddWithValue("$s", storeId),
+            r => new ShopRefDoc(r.GetInt64(0), r.GetInt64(1), r.GetString(2), r.GetInt64(3), r.GetInt64(4), r.GetInt32(5), r.GetInt32(6), r.GetString(7)),
+            "read the reference documents");
+
+    /// <summary>
+    /// A reference document's read recorded: its row (made or replaced, any case of its path) and its pages, the old pages gone, in one
+    /// transaction. False when the write failed (nothing changed then).
+    /// </summary>
+    public bool SaveRefDoc(long storeId, string file, long size, long modified, int pageCount, string detail, IReadOnlyList<(int Page, string Text, string? Image)> pages)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(file);
+        ArgumentNullException.ThrowIfNull(pages);
+        lock (_gate)
+        {
+            if (Open() is not { } connection)
+            {
+                return false;
+            }
+
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                using (var drop = connection.CreateCommand())
+                {
+                    drop.Transaction = transaction;
+                    drop.CommandText = "DELETE FROM ref_docs WHERE store_id = $s AND file = $f COLLATE NOCASE";
+                    drop.Parameters.AddWithValue("$s", storeId);
+                    drop.Parameters.AddWithValue("$f", file);
+                    drop.ExecuteNonQuery();
+                }
+
+                long docId;
+                using (var doc = connection.CreateCommand())
+                {
+                    doc.Transaction = transaction;
+                    doc.CommandText = "INSERT INTO ref_docs(store_id, file, size, modified, pages, page_count, detail, indexed_at) VALUES ($s, $f, $size, $m, $p, $n, $d, $at); SELECT last_insert_rowid();";
+                    doc.Parameters.AddWithValue("$s", storeId);
+                    doc.Parameters.AddWithValue("$f", file);
+                    doc.Parameters.AddWithValue("$size", size);
+                    doc.Parameters.AddWithValue("$m", modified);
+                    doc.Parameters.AddWithValue("$p", pages.Count);
+                    doc.Parameters.AddWithValue("$n", pageCount);
+                    doc.Parameters.AddWithValue("$d", detail);
+                    doc.Parameters.AddWithValue("$at", Now());
+                    docId = (long)doc.ExecuteScalar()!;
+                }
+
+                foreach (var (page, text, image) in pages)
+                {
+                    using var row = connection.CreateCommand();
+                    row.Transaction = transaction;
+                    row.CommandText = "INSERT INTO ref_pages(doc_id, page, text, image) VALUES ($doc, $page, $text, $image)";
+                    row.Parameters.AddWithValue("$doc", docId);
+                    row.Parameters.AddWithValue("$page", page);
+                    row.Parameters.AddWithValue("$text", text);
+                    row.Parameters.AddWithValue("$image", (object?)image ?? DBNull.Value);
+                    row.ExecuteNonQuery();
+                }
+
+                transaction.Commit();
+                return true;
+            }
+            catch (SqliteException ex)
+            {
+                transaction.Rollback();
+                Fail("record a reference document", ex);
+                return false;
+            }
+        }
+    }
+
+    /// <summary>Forgets a reference document and its pages (the file is gone).</summary>
+    public bool RemoveRefDoc(long docId) =>
+        Execute("DELETE FROM ref_docs WHERE id = $id", c => c.Parameters.AddWithValue("$id", docId), "forget a reference document") is > 0;
+
+    /// <summary>The pages of a store's documents that <paramref name="ftsQuery"/> (an FTS5 query) matches, the best first, at most <paramref name="limit"/>.</summary>
+    public IReadOnlyList<ShopRefPage> SearchRef(long storeId, string ftsQuery, int limit)
+    {
+        ArgumentNullException.ThrowIfNull(ftsQuery);
+        if (ftsQuery.Length == 0)
+        {
+            return [];
+        }
+
+        return Query(
+            "SELECT p.id, p.doc_id, d.file, p.page, p.text, p.image FROM ref_fts JOIN ref_pages p ON p.id = ref_fts.rowid JOIN ref_docs d ON d.id = p.doc_id " +
+            "WHERE ref_fts MATCH $q AND d.store_id = $s ORDER BY bm25(ref_fts) LIMIT $n",
+            c => { c.Parameters.AddWithValue("$q", ftsQuery); c.Parameters.AddWithValue("$s", storeId); c.Parameters.AddWithValue("$n", limit); },
+            ReadRefPage, "search the reference documents");
+    }
+
+    /// <summary>A page of a store's document by its path (any case) and number; null for none.</summary>
+    public ShopRefPage? RefPage(long storeId, string file, int page) =>
+        Query("SELECT p.id, p.doc_id, d.file, p.page, p.text, p.image FROM ref_pages p JOIN ref_docs d ON d.id = p.doc_id WHERE d.store_id = $s AND d.file = $f COLLATE NOCASE AND p.page = $p",
+            c => { c.Parameters.AddWithValue("$s", storeId); c.Parameters.AddWithValue("$f", file); c.Parameters.AddWithValue("$p", page); },
+            ReadRefPage, "read a reference page").FirstOrDefault();
+
+    private static ShopRefPage ReadRefPage(SqliteDataReader r) => new(r.GetInt64(0), r.GetInt64(1), r.GetString(2), r.GetInt32(3), r.GetString(4), r.IsDBNull(5) ? null : r.GetString(5));
+
     // ---- plumbing ----
 
     private static ShopStore ReadStore(SqliteDataReader r) => new(r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetString(3));
@@ -570,5 +683,34 @@ public sealed class ShoppingStore : IDisposable
             checked_at TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS ref_docs(
+            id INTEGER PRIMARY KEY,
+            store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+            file TEXT NOT NULL COLLATE NOCASE,
+            size INTEGER NOT NULL,
+            modified INTEGER NOT NULL,
+            pages INTEGER NOT NULL,
+            page_count INTEGER NOT NULL,
+            detail TEXT NOT NULL DEFAULT '',
+            indexed_at TEXT NOT NULL,
+            UNIQUE(store_id, file));
+        CREATE TABLE IF NOT EXISTS ref_pages(
+            id INTEGER PRIMARY KEY,
+            doc_id INTEGER NOT NULL REFERENCES ref_docs(id) ON DELETE CASCADE,
+            page INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            image TEXT);
+        CREATE INDEX IF NOT EXISTS ref_pages_doc ON ref_pages(doc_id, page);
+        CREATE VIRTUAL TABLE IF NOT EXISTS ref_fts USING fts5(text, content='ref_pages', content_rowid='id', tokenize='unicode61');
+        CREATE TRIGGER IF NOT EXISTS ref_pages_ai AFTER INSERT ON ref_pages BEGIN
+            INSERT INTO ref_fts(rowid, text) VALUES (new.id, new.text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS ref_pages_ad AFTER DELETE ON ref_pages BEGIN
+            INSERT INTO ref_fts(ref_fts, rowid, text) VALUES ('delete', old.id, old.text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS ref_pages_au AFTER UPDATE ON ref_pages BEGIN
+            INSERT INTO ref_fts(ref_fts, rowid, text) VALUES ('delete', old.id, old.text);
+            INSERT INTO ref_fts(rowid, text) VALUES (new.id, new.text);
+        END;
         """;
 }

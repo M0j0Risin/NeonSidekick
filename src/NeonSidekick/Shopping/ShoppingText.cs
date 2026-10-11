@@ -215,7 +215,7 @@ public static class ShoppingText
     public static string Unplaced(ShopStore shop, string term) => "Forgot where \"" + term.Trim() + "\" is at " + shop.Name + ".";
 
     /// <summary>What <c>shopping_locate</c> found: where the list would put the term, the facts that share a word with it, and the store's reference files.</summary>
-    public static string Located(ShopLocated found, string referenceFolder)
+    public static string Located(ShopLocated found, string referenceFolder, IReadOnlyList<ShopRefHit>? hits = null, string? reading = null)
     {
         ArgumentNullException.ThrowIfNull(found);
         var sb = new StringBuilder();
@@ -240,11 +240,117 @@ public static class ShoppingText
             sb.Append("\nRelated facts: ").Append(string.Join("; ", found.Related.Select(r => r.Placement!.Kind + " \"" + r.Placement.Term + "\" → " + Where(r) + (r.IsGuess ? " " + GuessMark : ""))));
         }
 
-        sb.Append('\n').Append(found.ReferenceFiles.Count == 0
-            ? "No reference documents for this store (" + referenceFolder + " is empty)."
-            : "Reference documents in " + referenceFolder + ": " + string.Join(", ", found.ReferenceFiles) + ".");
+        if (hits is { Count: > 0 })
+        {
+            sb.Append('\n').Append(References(hits));
+        }
+        else
+        {
+            sb.Append('\n').Append(found.ReferenceFiles.Count == 0
+                ? "No reference documents for this store (" + referenceFolder + " is empty)."
+                : "Nothing in the reference documents (" + string.Join(", ", found.ReferenceFiles) + ") names it" + (reading is { } r ? r : "") + ".");
+        }
+
         return sb.ToString();
     }
+
+    /// <summary>The reference documents' lines that hold the words, a page a block, and how to see a page that has a picture.</summary>
+    public static string References(IReadOnlyList<ShopRefHit> hits)
+    {
+        ArgumentNullException.ThrowIfNull(hits);
+        var sb = new StringBuilder("From the store's reference documents:");
+        foreach (var hit in hits)
+        {
+            sb.Append('\n').Append(PageName(hit.File, hit.Page)).Append(':');
+            foreach (string line in hit.Lines)
+            {
+                sb.Append("\n  ").Append(line);
+            }
+        }
+
+        if (hits.Any(h => h.Image is not null))
+        {
+            sb.Append("\n").Append(PicturesHint);
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>A page named for the model: <c>guide.pdf p2</c>.</summary>
+    public static string PageName(string file, int page) => file + " p" + page.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>After hits with a picture: how to see the page (a floor map, a shelf plan). Pinned (prompt text).</summary>
+    public const string PicturesHint = "A page's picture (a floor map, a table) can be seen with shopping_reference (file, page, picture: true); a store guide's numbers are usually aisles.";
+
+    /// <summary>A PDF with no browser to read it. Pinned.</summary>
+    public const string NoBrowserForPdf = "no Chromium browser (Edge, Chrome or Brave) to read PDFs; see Web browser path";
+
+    /// <summary>What a read of a store's folder did, for the model and <c>/shopping reindex</c>.</summary>
+    public static string ReferenceRead(ShopStore store, ShopRefSummary summary)
+    {
+        ArgumentNullException.ThrowIfNull(summary);
+        var sb = new StringBuilder("Reference documents of ").Append(store.Name).Append(": ")
+            .Append(Count(summary.Read, "file")).Append(" read, ")
+            .Append(summary.Unchanged.ToString(CultureInfo.InvariantCulture)).Append(" unchanged");
+        if (summary.Removed > 0)
+        {
+            sb.Append(", ").Append(summary.Removed.ToString(CultureInfo.InvariantCulture)).Append(" gone");
+        }
+
+        sb.Append("; ").Append(Count(summary.Pages, "page")).Append(" held.");
+        foreach (string problem in summary.Problems)
+        {
+            sb.Append("\nNot read: ").Append(problem);
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>The documents a store holds, each with its pages and which have pictures.</summary>
+    public static string ReferenceDocs(ShopStore store, IReadOnlyList<ShopRefDoc> docs, string folder)
+    {
+        if (docs.Count == 0)
+        {
+            return "No reference documents for " + store.Name + " (" + folder + " is empty).";
+        }
+
+        var sb = new StringBuilder("Reference documents of ").Append(store.Name).Append(" (").Append(folder).Append("):");
+        foreach (var doc in docs)
+        {
+            sb.Append("\n- ").Append(doc.File).Append(": ").Append(Count(doc.Pages, "page"));
+            if (doc.PageCount > doc.Pages)
+            {
+                sb.Append(" of ").Append(doc.PageCount.ToString(CultureInfo.InvariantCulture));
+            }
+
+            if (doc.Detail.Length > 0)
+            {
+                sb.Append(" (").Append(doc.Detail).Append(')');
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>A page read whole for the model: its name, its text (cut at <paramref name="maxChars"/>), and whether its picture follows.</summary>
+    public static string ReferencePage(ShopRefPage page, bool picture, int maxChars)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        string text = page.Text.Length > maxChars ? page.Text[..maxChars] + "\n…" : page.Text;
+        return PageName(page.File, page.Page) + (picture ? " (its picture is in the next message)" : page.Image is null ? "" : " (it has a picture: picture: true to see it)") + ":\n" + (text.Length == 0 ? "(no text on this page)" : text);
+    }
+
+    public static string NothingInReference(ShopStore store, string query) => "Nothing in " + store.Name + "'s reference documents names \"" + query.Trim() + "\".";
+
+    public static string NoSuchPage(ShopStore store, string file, int page) =>
+        "Error: " + store.Name + "'s reference documents have no " + PageName(file, page) + "; shopping_reference with no arguments lists them.";
+
+    public static string NoPicture(string file, int page) => PageName(file, page) + " has no picture.";
+
+    public static string PictureUnreadable(string error) => "(its picture could not be loaded: " + error + ")";
+
+    public static string AuditReferenceRead(ShopStore store, int read, int removed, int pages, int problems) =>
+        "Reference documents of " + store.Name + ": " + Count(read, "file") + " read, " + removed.ToString(CultureInfo.InvariantCulture) + " gone, " + Count(pages, "page") + " held" + (problems > 0 ? ", " + Count(problems, "problem") : "");
 
     /// <summary>What <c>shopping_stores</c> lists: every store (the active one marked), and for one store its layout in walk order.</summary>
     public static string Stores(IReadOnlyList<ShopStore> stores, ShopStore? active)
@@ -283,7 +389,7 @@ public static class ShoppingText
 
     /// <summary><c>/shopping</c> given a line no form takes. Pinned.</summary>
     public const string CommandUsage =
-        "/shopping takes add <items>, check|uncheck|remove <item>, list [<store>], clear [all], store [<name>|add <name>|remove <name>], export or print; alone, the list's pane.";
+        "/shopping takes add <items>, check|uncheck|remove <item>, list [<store>], clear [all], store [<name>|add <name>|remove <name>], export, print or reindex [<store>]; alone, the list's pane.";
 
     /// <summary>The file <c>/shopping export</c> writes in the working directory, overwritten each time. Pinned.</summary>
     public const string ExportFileName = "shopping-list.md";

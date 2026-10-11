@@ -28,11 +28,15 @@ public abstract class ShoppingTool : AIFunction
         }
 
         // The store is SQLite under a lock: a call is quick, but it runs off the turn's thread like the session tool's reads.
-        return await Task.Run(() => RunAsync(arguments, cancellationToken).AsTask(), cancellationToken).ConfigureAwait(false);
+        return await Task.Run(() => RunWithPicturesAsync(arguments, cancellationToken).AsTask(), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>The call, once the file is open.</summary>
     protected abstract ValueTask<string> RunAsync(AIFunctionArguments arguments, CancellationToken cancellationToken);
+
+    /// <summary>The call's answer as the tool returns it: <see cref="RunAsync"/>'s text, or a <see cref="ToolImageResult"/> from a tool that hands the model a picture (<c>shopping_reference</c>, 2026-10-11).</summary>
+    protected virtual async ValueTask<object?> RunWithPicturesAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
+        await RunAsync(arguments, cancellationToken).ConfigureAwait(false);
 
     /// <summary>The store the <c>store</c> argument names, else the active one; null with <paramref name="error"/> set when there is none to use.</summary>
     protected ShopStore? StoreOf(AIFunctionArguments arguments, out string? error)

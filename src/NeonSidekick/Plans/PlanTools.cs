@@ -61,6 +61,8 @@ public static class PlanTools
         "youtube_search", "youtube_playlist", "youtube_status", "youtube_saved",
         // the shopping list (2026-10-11): the list, a product's place and the stores' layouts read the profile's shopping.db
         "shopping_list", "shopping_locate", "shopping_stores",
+        // the stores' reference documents (2026-10-11, phase 3): read, and read again when a file changed (the index is derived, the files untouched)
+        "shopping_reference",
     };
 
     /// <summary>The tools plan mode drops because they change something or start something: named, so the classification test can hold every tool to one list.</summary>

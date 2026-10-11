@@ -73,7 +73,7 @@ public sealed class ShoppingCommandTests : IDisposable
     [Fact]
     public void Complete_TheVerbs_ThenTheStoresAndTheLines()
     {
-        Assert.Equal(["add", "check", "uncheck", "remove", "list", "clear", "store", "export", "print"], ShoppingCommand.Words.Select(w => w.Word));
+        Assert.Equal(["add", "check", "uncheck", "remove", "list", "clear", "store", "export", "print", "reindex"], ShoppingCommand.Words.Select(w => w.Word));
         Assert.Equal(["clear"], ShoppingCommand.Complete("cl", [], []).Select(c => c.Text));
         Assert.Equal(["store add ", "store remove ", "store Costco", "store H-E-B"], ShoppingCommand.Complete("store ", ["Costco", "H-E-B"], []).Select(c => c.Text));
         Assert.Equal(["check Soy milk"], ShoppingCommand.Complete("check so", [], ["Soy milk", "Bread"]).Select(c => c.Text));

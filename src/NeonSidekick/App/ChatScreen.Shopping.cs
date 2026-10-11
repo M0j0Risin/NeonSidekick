@@ -17,6 +17,9 @@ internal sealed partial class ChatScreen
     /// <summary>The shopping tools, built once over <see cref="_shopping"/>; offered while <c>Shopping tools</c> is on.</summary>
     private readonly IReadOnlyList<AIFunction> _shoppingTools;
 
+    /// <summary>The stores' reference documents (2026-10-11, phase 3), read by the web tools' headless browser.</summary>
+    private readonly ShoppingReference _shoppingReference;
+
     /// <summary>The loaded profile's shopping store, opened again when the profile moves.</summary>
     private readonly ShoppingStoreHolder _shoppingStore;
 
@@ -25,18 +28,28 @@ internal sealed partial class ChatScreen
     /// their layouts. <paramref name="confirm"/> asks before <c>shopping_clear</c> empties the whole list; null where nothing can ask
     /// (headless), and the whole list is then refused. Shared with headless.
     /// </summary>
-    public static IReadOnlyList<AIFunction> ShoppingTools(ShoppingList list, Func<string, CancellationToken, Task<bool?>>? confirm) =>
-    [
-        new ShoppingListTool(list),
-        new ShoppingAddTool(list),
-        new ShoppingCheckTool(list),
-        new ShoppingRemoveTool(list),
-        new ShoppingClearTool(list, confirm),
-        new ShoppingLocateTool(list),
-        new ShoppingPlaceTool(list),
-        new ShoppingStoresTool(list),
-        new ShoppingLayoutTool(list),
-    ];
+    /// <param name="reference">The stores' reference documents (2026-10-11, phase 3): <c>shopping_locate</c> searches them and <c>shopping_reference</c> reads them; null leaves the second out.</param>
+    public static IReadOnlyList<AIFunction> ShoppingTools(ShoppingList list, Func<string, CancellationToken, Task<bool?>>? confirm, ShoppingReference? reference = null)
+    {
+        var tools = new List<AIFunction>
+        {
+            new ShoppingListTool(list),
+            new ShoppingAddTool(list),
+            new ShoppingCheckTool(list),
+            new ShoppingRemoveTool(list),
+            new ShoppingClearTool(list, confirm),
+            new ShoppingLocateTool(list, reference),
+            new ShoppingPlaceTool(list),
+            new ShoppingStoresTool(list),
+            new ShoppingLayoutTool(list),
+        };
+        if (reference is not null)
+        {
+            tools.Add(new ShoppingReferenceTool(list, reference));
+        }
+
+        return tools;
+    }
 
     /// <summary>Closes the shopping store at the screen's end.</summary>
     private void DisposeShopping() => _shoppingStore.Dispose();
@@ -101,7 +114,7 @@ internal sealed partial class ChatScreen
                 return spinner ? _transcript.WithSpinnerAsync(Printing.PrintText.Working, run) : run();
             }
             : null;
-        foreach (string result in await ShoppingCommandRunner.RunAsync(_shopping, line, _files, ConfirmAsync, print, cancellationToken).ConfigureAwait(false))
+        foreach (string result in await ShoppingCommandRunner.RunAsync(_shopping, line, _files, ConfirmAsync, print, cancellationToken, _shoppingReference).ConfigureAwait(false))
         {
             Show(result, sink);
         }

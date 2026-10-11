@@ -45,6 +45,9 @@ public enum ShoppingVerb
     /// <summary><c>print</c>: the list printed, through <c>/print</c>'s service.</summary>
     Print,
 
+    /// <summary><c>reindex [&lt;store&gt;]</c>: the store's reference documents read again, every file (2026-10-11, phase 3).</summary>
+    Reindex,
+
     /// <summary>A line no form takes (the error is the usage).</summary>
     Unknown,
 }
@@ -72,6 +75,7 @@ public static class ShoppingCommand
         ("store", "the stores; /shopping store <name> shops there, store add|remove <name>"),
         ("export", "write the list to " + ShoppingText.ExportFileName + " in the working directory"),
         ("print", "print the list"),
+        ("reindex", "read the store's reference documents again: /shopping reindex [<store>]"),
     ];
 
     public static ShoppingCommandLine Parse(string? args)
@@ -98,6 +102,7 @@ public static class ShoppingCommand
             "store" => Store(rest),
             "export" when rest.Length == 0 => new(ShoppingVerb.Export),
             "print" when rest.Length == 0 => new(ShoppingVerb.Print),
+            "reindex" => new(ShoppingVerb.Reindex, rest),
             _ => Usage(),
         };
     }
@@ -155,6 +160,7 @@ public static class ShoppingCommand
                 argText),
             "check" or "tick" or "uncheck" or "untick" or "remove" => MentionCompleter.Matches(items.Select(i => new CompletionItem(head + i, "")).ToList(), argText),
             "list" => MentionCompleter.Matches(stores.Select(s => new CompletionItem(head + s, "the list walked through " + s)).ToList(), argText),
+            "reindex" => MentionCompleter.Matches(stores.Select(s => new CompletionItem(head + s, "read " + s + "'s documents again")).ToList(), argText),
             _ => [],
         };
     }

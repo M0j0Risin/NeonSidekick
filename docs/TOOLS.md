@@ -878,7 +878,7 @@ Under *Shopping tools* (2026-10-11). One shopping list per profile and any numbe
 
 A store learns its layout as facts: a product, a brand or a category at an aisle or zone (`Aisle 7`, `Dairy`) or in a section (`Dairy & Eggs`). A line is placed by the best fact in its name: its whole name first, then a brand (so "Goya guava nectar" is where Goya is, not where nectar is), then the longest term, matched at word boundaries with plurals folded ("eggs" is "egg"); a term like `Jam/Jelly` stands for either word. A fact learnt later moves every line it covers. A fact the model guessed is marked `(guess)` wherever it places a line, until you confirm or correct it.
 
-Each store's reference documents (a store guide, a floor map) go in `db\shopping\reference\<store>`, the folder made with the store; `shopping_locate` and `shopping_stores` list them.
+Each store's reference documents (a store guide, a floor map) go in `db\shopping\reference\<store>`, the folder made with the store: PDFs, `.md` and `.txt` files, and pictures (`.png`, `.jpg`, `.gif`, `.webp`, `.bmp`). They are read into a search index the first time they are needed and again whenever a file is added, changed or removed (`/shopping reindex` reads them all). A PDF is read by the headless browser (*Web browser path*, or the Edge, Chrome or Brave found) with Mozilla's pdf.js, built into the app: each page's text, and a picture of each page kept in `db\shopping\cache\<store>`. A text file is one page of text, a picture one page to look at. `shopping_locate` shows the lines of the documents that name a product (a store guide's index is a line per product: `Bread ..... 2`), and `shopping_reference` reads a page, its picture too: a floor map is a picture, sent to the model as `view_image` sends one (a model that reads pictures; *Image tools* need not be on).
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -887,7 +887,8 @@ Each store's reference documents (a store guide, a floor map) go in `db\shopping
 | `shopping_check` | `items, checked?` | Ticks lines as bought (or unticks them), by name or by their number in the order added. |
 | `shopping_remove` | `items` | Takes lines off the list. |
 | `shopping_clear` | `all?` | Removes the ticked lines; `all` empties the whole list, only after your yes on the pane (refused headless). |
-| `shopping_locate` | `term, store?` | Where the list would put a product and by which fact, the related facts (a brand, a category) and the store's reference documents. Allowed in plan mode. |
+| `shopping_locate` | `term, store?` | Where the list would put a product and by which fact, the related facts (a brand, a category), and the lines of the store's reference documents that name it (read again first when a file changed). Allowed in plan mode. |
+| `shopping_reference` | `query?, file?, page?, picture?, reread?, store?` | The store's reference documents: searched for a product's words, one page read (its picture too with `picture`), listed with nothing asked, or all read again with `reread`. Allowed in plan mode. |
 | `shopping_place` | `term, kind?, location?, section?, source?, note?, forget?, store?` | Records where a product, brand or category is (a new aisle, zone or section is made), or forgets it; `source` is `user`, `reference` or `guess`. |
 | `shopping_stores` | `store?` | The stores, the active one marked, and one store's layout: its locations in walk order, its sections, how many facts it holds and its reference documents. Allowed in plan mode. |
 | `shopping_layout` | `action, name, to?, section?, walk?, notes?, store?` | Adds a store or makes it the active one, renames it; adds, renames or removes a section or a location; sets a location's place in the walk. |

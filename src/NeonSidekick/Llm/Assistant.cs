@@ -163,7 +163,7 @@ public sealed class Assistant
     public const string ShoppingRule =
         "The user's shopping list lives behind the shopping tools alone (" + NeonSidekick.Llm.Tools.ShoppingListTool.ToolName + " reads it, " + NeonSidekick.Llm.Tools.ShoppingAddTool.ToolName + ", " +
         NeonSidekick.Llm.Tools.ShoppingCheckTool.ToolName + " and " + NeonSidekick.Llm.Tools.ShoppingRemoveTool.ToolName + " change it): never keep it in a file, a note or a Home Assistant to-do list, and never search for it elsewhere. " +
-        "Where an item is at a store comes from " + NeonSidekick.Llm.Tools.ShoppingLocateTool.ToolName + ", then the store's reference documents; record what you learn, or what the user tells you, with " +
+        "Where an item is at a store comes from " + NeonSidekick.Llm.Tools.ShoppingLocateTool.ToolName + ", then the store's reference documents (" + NeonSidekick.Llm.Tools.ShoppingReferenceTool.ToolName + "); record what you learn, or what the user tells you, with " +
         NeonSidekick.Llm.Tools.ShoppingPlaceTool.ToolName + ", and when nothing says, place your best guess as a guess and tell the user it is one.";
 
     /// <summary>

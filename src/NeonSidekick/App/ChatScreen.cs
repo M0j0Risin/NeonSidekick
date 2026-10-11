@@ -1183,7 +1183,9 @@ internal sealed partial class ChatScreen
         // The shopping list (2026-10-11): the loaded profile's store, opened again after a profile switch; a whole-list clear asks on the pane.
         _shoppingStore = new Shopping.ShoppingStoreHolder(() => _settings.ProfileDirectory, _time);
         _shopping = new Shopping.ShoppingList(_shoppingStore.Current);
-        _shoppingTools = ShoppingTools(_shopping, ConfirmShoppingAsync);
+        // The stores' reference documents (phase 3): PDFs read by the web tools' own headless browser, Web browser path's or the one found.
+        _shoppingReference = new Shopping.ShoppingReference(_shopping, _web.Browser, () => _web.Browser.Locate(_effective().WebBrowserPath));
+        _shoppingTools = ShoppingTools(_shopping, ConfirmShoppingAsync, _shoppingReference);
         // The saved videos' places (2026-10-07): kept from the window's reports, whoever played the video; the resume lives on as
         // the window's listener, nothing here holds it.
         if (videoPlayer is not null)

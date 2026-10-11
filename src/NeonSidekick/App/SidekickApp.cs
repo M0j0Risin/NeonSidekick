@@ -754,7 +754,8 @@ public sealed class SidekickApp
         // The shopping list (2026-10-11): the loaded profile's store; no pane to ask on, so a whole-list clear is refused.
         using var shoppingStore = new Shopping.ShoppingStoreHolder(() => _settings.ProfileDirectory, _time);
         var shopping = new Shopping.ShoppingList(shoppingStore.Current);
-        var shoppingTools = ChatScreen.ShoppingTools(shopping, confirm: null);
+        var shoppingReference = new Shopping.ShoppingReference(shopping, _web.Browser, () => _web.Browser.Locate(EffectiveSettings.WebBrowserPath));
+        var shoppingTools = ChatScreen.ShoppingTools(shopping, confirm: null, shoppingReference);
         // The Docker tools (2026-10-02): no pane to ask on, so every change is refused; the reads and /docker work.
         using var docker = new Docker.DockerSession(() => EffectiveSettings, _dockerClient, _time);
         // The camera (2026-10-02): /camera list only; a photo needs the screen's panes, so camera_capture is never offered here.
@@ -1094,7 +1095,7 @@ public sealed class SidekickApp
                 if (SlashCommands.Parse(text) is (SlashCommand.Shopping, var shoppingArgs))
                 {
                     Func<string, string, CancellationToken, Task<string>>? shoppingPrint = Printing.PrintText.Supported ? (markdown, title, token) => print.RunAsync(new Printing.PrintRequest(null, Markdown: markdown, Title: title), token) : null;
-                    foreach (string shoppingRow in await Shopping.ShoppingCommandRunner.RunAsync(shopping, Shopping.ShoppingCommand.Parse(shoppingArgs), files, confirm: null, shoppingPrint, cancellationToken).ConfigureAwait(false))
+                    foreach (string shoppingRow in await Shopping.ShoppingCommandRunner.RunAsync(shopping, Shopping.ShoppingCommand.Parse(shoppingArgs), files, confirm: null, shoppingPrint, cancellationToken, shoppingReference).ConfigureAwait(false))
                     {
                         await HeadlessLineAsync(shoppingRow.StartsWith("Error: ", StringComparison.Ordinal) ? "[error] " + shoppingRow["Error: ".Length..] : shoppingRow).ConfigureAwait(false);
                     }

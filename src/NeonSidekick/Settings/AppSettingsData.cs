@@ -1609,7 +1609,8 @@ public sealed class AppSettingsData
     /// Whether a turn offers the model the shopping list's tools (2026-10-11, the user's ask: the list a feature of its own, in the
     /// profile's <c>db\shopping\shopping.db</c>, in place of a hand-built SQLite file driven through the SQLite tools and a skill):
     /// <c>shopping_list</c>, <c>shopping_add</c>, <c>shopping_check</c>, <c>shopping_remove</c>, <c>shopping_clear</c>, and the store's
-    /// facts, <c>shopping_locate</c>, <c>shopping_place</c>, <c>shopping_stores</c> and <c>shopping_layout</c>. The first row of
+    /// facts, <c>shopping_locate</c>, <c>shopping_place</c>, <c>shopping_stores</c> and <c>shopping_layout</c>, and (phase 3, the same day)
+    /// <c>shopping_reference</c> over each store's reference documents. The first row of
     /// <c>/tools</c> › Core › Shopping. Read at each turn, no reconnect. Off by default, as every tool group. No variable.
     /// </summary>
     public bool ShoppingTools { get; set; }
