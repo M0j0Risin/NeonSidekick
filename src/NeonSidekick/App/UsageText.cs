@@ -123,10 +123,11 @@ public static class UsageText
     }
 
     /// <summary>
-    /// The Statistics tab: a heading per scope over its rows. One grid for all three, so the value
-    /// column sits at the same place under every heading (a grid per section sized each label
-    /// column to its own widest label and the values jumped between sections). The heading in the
-    /// section style, the rows in the label style: two tiers, not one cyan column.
+    /// The Statistics tab: a heading per scope over its rows. The heading in the section style, the rows in the label style: two
+    /// tiers, not one cyan column. Since 2026-10-10 (the user's ask: the <c>/settings</c> look on every pane) each heading is a
+    /// <see cref="SectionRule"/> with its note (the source, <see cref="SummedNote"/>…) dim on the rule, the <c>/sys</c> tabs' shape,
+    /// and its rows <see cref="SystemPromptSummary.BodyIndent"/> cells in under it; one label width for every section
+    /// (<see cref="LabelWidth"/>), so the value column sits at the same place under every heading as the one grid kept it until then.
     /// </summary>
     public static IRenderable StatisticsTab(TokenTally tally, ContextLength? window)
     {
@@ -136,43 +137,77 @@ public static class UsageText
             return new Text(NothingCounted, Theme.DimText);
         }
 
-        var grid = ChatScreen.TwoColumns();
+        // The sections as they will stand, so the label column is sized once over all of them.
+        var sections = new List<(string Heading, string Note, IReadOnlyList<(string Label, string Value)> Rows)>
+        {
+            // The Context section first: the window is known before anything was counted, and its note is the source — where the figure came from.
+            (ContextHeading, window?.Source ?? WindowUnknown, ContextRows(tally, window)),
+        };
+        var extra = new List<(string, string)>(2);
+        if (tally.LearningRequests > 0 && !tally.Session.IsEmpty)
+        {
+            extra.Add((LearningLabel, LearningValue(tally)));
+        }
 
-        // The Context section first: the window is known before anything was counted, and its note
-        // is the source — where the figure came from — dim in the value column like the others.
-        grid.AddRow(new Text(ContextHeading, Theme.SectionHeading), new Text(window?.Source ?? WindowUnknown, Theme.DimText));
-        foreach (var (label, value) in ContextRows(tally, window))
+        if (tally.ClaudeRuns > 0)
+        {
+            extra.Add((ClaudeLabel, ClaudeValue(tally)));
+        }
+
+        if (!tally.Session.IsEmpty)
+        {
+            sections.Add((LastReplyHeading, tally.LastReply.IsEmpty ? NoReportNote : "", RowsOf(tally.LastReply, averaged: false)));
+            sections.Add((ConversationHeading, Join(SummedNote, tally.UnreportedReplies > 0 ? Unreported(tally.UnreportedReplies) : ""), RowsOf(tally.Conversation, averaged: true)));
+            sections.Add((SessionHeading, SummedNote, [.. RowsOf(tally.Session, averaged: true), .. extra]));
+        }
+
+        int width = LabelWidth(sections.SelectMany(s => s.Rows).Concat(extra));
+        var parts = new List<IRenderable>();
+        foreach (var (heading, note, rows) in sections)
+        {
+            if (parts.Count > 0)
+            {
+                parts.Add(new Text(" "));
+            }
+
+            parts.Add(new SectionRule(SectionRule.Markup(heading, note: note)));
+            if (rows.Count > 0)
+            {
+                parts.Add(Body(rows, width));
+            }
+        }
+
+        if (tally.Session.IsEmpty)
+        {
+            // Nothing counted yet: said under the Context section, the /claude runs (if any) under it.
+            parts.Add(new Text(" "));
+            parts.Add(new Indented(new Text(NothingCounted, Theme.DimText), SystemPromptSummary.BodyIndent));
+            if (extra.Count > 0)
+            {
+                parts.Add(Body(extra, width));
+            }
+        }
+
+        return new Rows(parts);
+
+        static IReadOnlyList<(string, string)> RowsOf(TokenUsage usage, bool averaged) => usage.IsEmpty ? [] : Rows(usage, averaged);
+    }
+
+    /// <summary>The label column's width on the Statistics tab: the widest label any section shows (2026-10-10). Pure.</summary>
+    public static int LabelWidth(IEnumerable<(string Label, string Value)> rows) => rows.Select(r => r.Label.Length).DefaultIfEmpty(0).Max();
+
+    /// <summary>A section's rows as two columns, the labels <paramref name="width"/> wide, indented under its rule.</summary>
+    private static IRenderable Body(IReadOnlyList<(string Label, string Value)> rows, int width)
+    {
+        var grid = new Grid()
+            .AddColumn(new GridColumn().NoWrap().Width(width).PadRight(SlashCommands.HelpColumnGap))
+            .AddColumn(new GridColumn().PadRight(0));
+        foreach (var (label, value) in rows)
         {
             grid.AddRow(new Text(label, Theme.AccentSecondary), new Text(value, Theme.Body));
         }
 
-        grid.AddRow(new Text(" "), new Text(""));
-        if (tally.Session.IsEmpty)
-        {
-            grid.AddRow(new Text(NothingCounted, Theme.DimText), new Text(""));
-            ClaudeRow(grid, tally);
-            return grid;
-        }
-
-        Section(grid, LastReplyHeading, tally.LastReply.IsEmpty ? NoReportNote : "", tally.LastReply, averaged: false);
-        Section(grid, ConversationHeading, Join(SummedNote, tally.UnreportedReplies > 0 ? Unreported(tally.UnreportedReplies) : ""), tally.Conversation, averaged: true);
-        Section(grid, SessionHeading, SummedNote, tally.Session, averaged: true);
-        if (tally.LearningRequests > 0)
-        {
-            grid.AddRow(new Text(LearningLabel, Theme.AccentSecondary), new Text(LearningValue(tally), Theme.Body));
-        }
-
-        ClaudeRow(grid, tally);
-        return grid;
-    }
-
-    /// <summary>The <c>/claude</c> row, once a run reported (2026-09-27): its own figures, never part of the local model's sections above.</summary>
-    private static void ClaudeRow(Grid grid, TokenTally tally)
-    {
-        if (tally.ClaudeRuns > 0)
-        {
-            grid.AddRow(new Text(ClaudeLabel, Theme.AccentSecondary), new Text(ClaudeValue(tally), Theme.Body));
-        }
+        return new Indented(grid, SystemPromptSummary.BodyIndent);
     }
 
     /// <summary>The row of the prompt tokens the cache served and took (2026-09-27, the Anthropic API), shown once a request reported either. Pinned.</summary>
@@ -216,22 +251,6 @@ public static class UsageText
     public const string SummedNote = "every request summed";
 
     private static string Join(params string[] notes) => string.Join("; ", notes.Where(n => n.Length > 0));
-
-    /// <summary>A heading row — the note, if any, dim in the value column so a long one never widens the label column — then the rows.</summary>
-    private static void Section(Grid grid, string heading, string note, TokenUsage usage, bool averaged)
-    {
-        grid.AddRow(new Text(heading, usage.IsEmpty ? Theme.DimText : Theme.SectionHeading), new Text(note, Theme.DimText));
-        if (!usage.IsEmpty)
-        {
-            foreach (var (label, value) in Rows(usage, averaged))
-            {
-                grid.AddRow(new Text(label, Theme.AccentSecondary), new Text(value, Theme.Body));
-            }
-        }
-
-        // A space, not an empty cell: the grid keeps a row only when something in it rendered.
-        grid.AddRow(new Text(" "), new Text(""));
-    }
 
     // ── Plain lines and the hint row ────────────────────────────────────────
 

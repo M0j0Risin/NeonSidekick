@@ -91,18 +91,23 @@ public class McpRowsTests : IAsyncDisposable
         await using var session = await ConnectedAsync(Two, "chrome");
         var rows = McpRows.ServerRows(Facts(session));
 
-        Assert.Equal(5, rows.Count);
-        Assert.Equal("docker      on   connected · 2 tools  stdio: docker mcp gateway run", Plain(rows[0].Markup));
-        Assert.Equal("chrome      on   failed: no such command: http://localhost:9/mcp  http: http://localhost:9/mcp", Plain(rows[1].Markup));
-        Assert.Equal(new McpRow.Server("docker"), rows[0].Row);
-        Assert.Equal(new McpRow.Server("chrome"), rows[1].Row);
-        Assert.Equal("edit profile mcp.json", Plain(rows[2].Markup));
-        Assert.Equal(new McpRow.EditProfile(), rows[2].Row);
-        Assert.Equal(new McpRow.EditGlobal(), rows[3].Row);
-        Assert.Equal("reload", Plain(rows[4].Markup));
-        Assert.Equal(new McpRow.Reload(), rows[4].Row);
-        Assert.Equal(0, McpRows.FirstServerRow(rows));
-        Assert.Contains(Theme.AccentSecondary.ToMarkup(), rows[0].Markup);
+        // Since 2026-10-10 (the user's ask) the servers and the files' rows each under a heading, a gap between.
+        Assert.Equal(8, rows.Count);
+        Assert.Equal("── " + McpText.ServersHeading + " · 2", Plain(rows[0].Markup));
+        Assert.Equal("docker      on   connected · 2 tools  stdio: docker mcp gateway run", Plain(rows[1].Markup));
+        Assert.Equal("chrome      on   failed: no such command: http://localhost:9/mcp  http: http://localhost:9/mcp", Plain(rows[2].Markup));
+        Assert.Equal(new McpRow.Server("docker"), rows[1].Row);
+        Assert.Equal(new McpRow.Server("chrome"), rows[2].Row);
+        Assert.Equal(("", false), (rows[3].Markup, rows[3].Heading));
+        Assert.Equal("── " + McpText.FilesHeading, Plain(rows[4].Markup));
+        Assert.Equal("edit profile mcp.json", Plain(rows[5].Markup));
+        Assert.Equal(new McpRow.EditProfile(), rows[5].Row);
+        Assert.Equal(new McpRow.EditGlobal(), rows[6].Row);
+        Assert.Equal("reload", Plain(rows[7].Markup));
+        Assert.Equal(new McpRow.Reload(), rows[7].Row);
+        Assert.Equal(new HashSet<int> { 0, 4 }, McpRows.HeadingRows(rows));
+        Assert.Equal(1, McpRows.FirstServerRow(rows));
+        Assert.Contains(Theme.AccentSecondary.ToMarkup(), rows[1].Markup);
     }
 
     [Fact]
@@ -117,20 +122,23 @@ public class McpRowsTests : IAsyncDisposable
         Assert.Equal(McpText.OffLine, Plain(rows[1].Markup));
         Assert.Null(rows[0].Row);
         Assert.Null(rows[1].Row);
-        Assert.Equal("docker      on   connected · 2 tools  stdio: docker", Plain(rows[2].Markup));
-        Assert.Equal("docker      on   shadowed by the profile's (global)", Plain(rows[3].Markup));
-        Assert.Equal("gw          off  off (global)  http: http://h/mcp", Plain(rows[4].Markup));
-        Assert.Equal(2, McpRows.FirstServerRow(rows));
+        Assert.Equal("── " + McpText.ServersHeading + " · 3", Plain(rows[2].Markup));   // the off lines over the first heading
+        Assert.Equal("docker      on   connected · 2 tools  stdio: docker", Plain(rows[3].Markup));
+        Assert.Equal("docker      on   shadowed by the profile's (global)", Plain(rows[4].Markup));
+        Assert.Equal("gw          off  off (global)  http: http://h/mcp", Plain(rows[5].Markup));
+        Assert.Equal(3, McpRows.FirstServerRow(rows));
         // The master switch off: the two edit rows stand, the reload row is left out (later on 2026-09-20).
-        Assert.Equal(new McpRow.EditProfile(), rows[5].Row);
-        Assert.Equal(new McpRow.EditGlobal(), rows[6].Row);
+        Assert.Equal("── " + McpText.FilesHeading, Plain(rows[7].Markup));
+        Assert.Equal(new McpRow.EditProfile(), rows[8].Row);
+        Assert.Equal(new McpRow.EditGlobal(), rows[9].Row);
         Assert.DoesNotContain(rows, r => r.Row is McpRow.Reload);
-        Assert.Equal("Skipped:", Plain(rows[7].Markup));
-        Assert.EndsWith(" › bad: names neither a command nor a url", Plain(rows[8].Markup));
-        Assert.Null(rows[8].Row);
-        Assert.Equal(9, rows.Count);
+        Assert.Equal("── " + McpText.ProblemsHeading + " · 1", Plain(rows[11].Markup));   // a heading with its count since 2026-10-10 ("Skipped:" until then)
+        Assert.EndsWith(" › bad: names neither a command nor a url", Plain(rows[12].Markup));
+        Assert.Null(rows[12].Row);
+        Assert.Equal(13, rows.Count);
+        Assert.Equal(new HashSet<int> { 2, 7, 11 }, McpRows.HeadingRows(rows));
         // Every row dim while the switches are off: the whole row in one dim span, no label colour.
-        Assert.DoesNotContain(Theme.AccentSecondary.ToMarkup(), rows[2].Markup);
+        Assert.DoesNotContain(Theme.AccentSecondary.ToMarkup(), rows[3].Markup);
 
         // LLM offer tools off alone: the reload row stays (the master switch is on).
         Assert.Contains(McpRows.ServerRows(Facts(session, toolsEnabled: false)), r => r.Row is McpRow.Reload);
@@ -143,8 +151,8 @@ public class McpRowsTests : IAsyncDisposable
         await session.ConnectAllAsync(_settings.Current, null, CancellationToken.None);
         var rows = McpRows.ServerRows(Facts(session));
 
-        Assert.Equal([McpText.NoServersLine, "edit profile mcp.json", "edit global mcp.json", "reload"], rows.Select(r => Plain(r.Markup)));
-        Assert.Equal(1, McpRows.FirstServerRow(rows));   // the first row that does something
+        Assert.Equal(["── " + McpText.ServersHeading + " · 0", McpText.NoServersLine, "", "── " + McpText.FilesHeading, "edit profile mcp.json", "edit global mcp.json", "reload"], rows.Select(r => Plain(r.Markup)));
+        Assert.Equal(4, McpRows.FirstServerRow(rows));   // the first row that does something
     }
 
     [Fact]

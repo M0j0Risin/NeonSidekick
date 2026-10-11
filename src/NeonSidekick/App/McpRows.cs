@@ -71,27 +71,31 @@ public static class McpRows
     /// dim while the master switch is off, one row per server (the name in the label colour, <c>on</c> / <c>off</c>,
     /// the status dim; a shadowed row dim whole), <see cref="McpText.NoServersLine"/> with none, then the two edit
     /// rows and — while the master switch is on — the reload row (off, nothing would start and a switch on re-reads
-    /// both files anyway; later on 2026-09-20, the user's ask), then <c>Skipped:</c> and the problems dim. The row's
-    /// meaning beside it, null on a line that does nothing.
+    /// both files anyway; later on 2026-09-20, the user's ask), then the problems dim. The row's meaning beside it, null
+    /// on a line that does nothing. Since 2026-10-10 (the user's ask: the <c>/settings</c> look) the three runs sit under
+    /// <see cref="SectionRule"/>s — <see cref="McpText.ServersHeading"/> with the server count, <see cref="McpText.FilesHeading"/>,
+    /// <see cref="McpText.ProblemsHeading"/> with the problem count — an empty row before every one but the first (the
+    /// <c>/tools</c> Offered shape), the problems no longer indented; <c>Heading</c> true beside a heading alone.
     /// </summary>
-    public static IReadOnlyList<(string Markup, McpRow? Row)> ServerRows(McpFacts facts)
+    public static IReadOnlyList<(string Markup, McpRow? Row, bool Heading)> ServerRows(McpFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);
-        var rows = new List<(string, McpRow?)>(facts.Servers.Count + 8);
+        var rows = new List<(string, McpRow?, bool)>(facts.Servers.Count + 12);
         if (!facts.ToolsEnabled)
         {
-            rows.Add((Theme.DimMarkup(ToolsText.OffLine), null));
+            rows.Add((Theme.DimMarkup(ToolsText.OffLine), null, false));
         }
 
         if (!facts.Enabled)
         {
-            rows.Add((Theme.DimMarkup(McpText.OffLine), null));
+            rows.Add((Theme.DimMarkup(McpText.OffLine), null, false));
         }
 
+        Heading(McpText.ServersHeading, facts.Servers.Count);
         int width = NameWidth(facts.Servers.Select(s => s.Name));
         if (facts.Servers.Count == 0)
         {
-            rows.Add((Theme.DimMarkup(McpText.NoServersLine), null));
+            rows.Add((Theme.DimMarkup(McpText.NoServersLine), null, false));
         }
 
         foreach (var server in facts.Servers)
@@ -101,26 +105,44 @@ public static class McpRows
             string row = live
                 ? Styled(Theme.AccentSecondary, server.Name.PadRight(width)) + Theme.ColorMarkup(Theme.Ink, state) + Theme.DimMarkup(StatusText(server))
                 : Theme.DimMarkup(server.Name.PadRight(width) + state + StatusText(server));
-            rows.Add((row, new McpRow.Server(server.Name)));
+            rows.Add((row, new McpRow.Server(server.Name), false));
         }
 
-        rows.Add((Theme.DimMarkup(McpText.EditProfileRow), new McpRow.EditProfile()));
-        rows.Add((Theme.DimMarkup(McpText.EditGlobalRow), new McpRow.EditGlobal()));
+        Heading(McpText.FilesHeading, null);
+        rows.Add((Theme.DimMarkup(McpText.EditProfileRow), new McpRow.EditProfile(), false));
+        rows.Add((Theme.DimMarkup(McpText.EditGlobalRow), new McpRow.EditGlobal(), false));
         if (facts.Enabled)
         {
-            rows.Add((Theme.DimMarkup(McpText.ReloadRow), new McpRow.Reload()));
+            rows.Add((Theme.DimMarkup(McpText.ReloadRow), new McpRow.Reload(), false));
         }
 
         if (facts.Problems.Count > 0)
         {
-            rows.Add((Styled(Theme.AccentSecondary, McpText.SkippedHeading), null));
+            Heading(McpText.ProblemsHeading, facts.Problems.Count);
             foreach (var problem in facts.Problems)
             {
-                rows.Add((Theme.DimMarkup("  " + McpText.ProblemLine(problem)), null));
+                rows.Add((Theme.DimMarkup(McpText.ProblemLine(problem)), null, false));
             }
         }
 
         return rows;
+
+        void Heading(string title, int? count)
+        {
+            if (rows.Any(r => r.Item3))
+            {
+                rows.Add(("", null, false));
+            }
+
+            rows.Add((SectionRule.Markup(title, count?.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, true));
+        }
+    }
+
+    /// <summary>The indices of the Servers tab's heading rows (2026-10-10): the pane's <see cref="MenuTab.Headings"/>.</summary>
+    public static IReadOnlySet<int> HeadingRows(IReadOnlyList<(string Markup, McpRow? Row, bool Heading)> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        return Enumerable.Range(0, rows.Count).Where(i => rows[i].Heading).ToHashSet();
     }
 
     /// <summary>
@@ -276,7 +298,7 @@ public static class McpRows
     }
 
     /// <summary>The first server row (the cursor's opening place); 0 when there is none.</summary>
-    public static int FirstServerRow(IReadOnlyList<(string Markup, McpRow? Row)> rows)
+    public static int FirstServerRow(IReadOnlyList<(string Markup, McpRow? Row, bool Heading)> rows)
     {
         ArgumentNullException.ThrowIfNull(rows);
         for (int i = 0; i < rows.Count; i++)

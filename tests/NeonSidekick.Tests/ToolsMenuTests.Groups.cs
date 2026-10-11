@@ -40,7 +40,7 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(LeafIndex(ToolsText.SqlTabTitle), LeafIndex(ToolsText.DatabaseTabTitle));
-        Assert.Contains(Strips(ToolsText.DatabaseTabTitle) + "▸ " + SettingsMenu.FieldName(SettingsField.SqlTools) + "  ", Output);
+        Assert.Contains(Strips(ToolsText.DatabaseTabTitle) + HeadingOver(ToolsText.SqlTabTitle, SettingsField.SqlTools) + "▸ " + SettingsMenu.FieldName(SettingsField.SqlTools) + "  ", Output);   // under its first heading (2026-10-10)
         Assert.DoesNotContain("\n" + Titled(Strip) + "\n \n▸ SQL  ", Output);   // no row per menu any more
         pane.Dispose();
     }
@@ -57,8 +57,8 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(LeafIndex(ToolsText.FileMenuTitle), LeafIndex(ToolsText.FilesTabTitle));
-        Assert.Contains(Strips(ToolsText.FilesTabTitle) + "▸ " + SettingsMenu.FieldName(SettingsField.FileTools) + "  ", Output);
-        Assert.Contains(Strips(ToolsText.IntegrationsTabTitle) + "▸ " + SettingsMenu.FieldName(TabFields(ToolsText.DockerTabTitle)[0]) + "  ", Output);
+        Assert.Contains(Strips(ToolsText.FilesTabTitle) + HeadingOver(ToolsText.FileMenuTitle, SettingsField.FileTools) + "▸ " + SettingsMenu.FieldName(SettingsField.FileTools) + "  ", Output);
+        Assert.Contains(Strips(ToolsText.IntegrationsTabTitle) + HeadingOver(ToolsText.DockerTabTitle, TabFields(ToolsText.DockerTabTitle)[0]) + "▸ " + SettingsMenu.FieldName(TabFields(ToolsText.DockerTabTitle)[0]) + "  ", Output);
         Assert.Equal(LeafIndex(ToolsText.HomeAssistantTabTitle) + 1, LeafIndex(ToolsText.ComfyTabTitle));   // ComfyUI and YouTube after Home, off Media
         pane.Dispose();
     }
@@ -72,7 +72,7 @@ public partial class ToolsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(Strips(ToolsText.MediaTabTitle) + "▸ " + SettingsMenu.FieldName(SettingsField.PrintTools) + "  ", Output);
+        Assert.Contains(Strips(ToolsText.MediaTabTitle) + HeadingOver(ToolsText.PrintTabTitle, SettingsField.PrintTools) + "▸ " + SettingsMenu.FieldName(SettingsField.PrintTools) + "  ", Output);
         pane.Dispose();
     }
 
@@ -87,8 +87,8 @@ public partial class ToolsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        string oracle = Strips(ToolsText.DatabaseTabTitle) + "▸ " + SettingsMenu.FieldName(SettingsField.OracleTools) + "  ";
-        string print = Strips(ToolsText.MediaTabTitle) + "▸ " + SettingsMenu.FieldName(SettingsField.PrintTools) + "  ";
+        string oracle = Strips(ToolsText.DatabaseTabTitle) + HeadingOver(ToolsText.OracleTabTitle, SettingsField.OracleTools) + "▸ " + SettingsMenu.FieldName(SettingsField.OracleTools) + "  ";
+        string print = Strips(ToolsText.MediaTabTitle) + HeadingOver(ToolsText.PrintTabTitle, SettingsField.PrintTools) + "▸ " + SettingsMenu.FieldName(SettingsField.PrintTools) + "  ";
         Assert.Contains(print, Output);
         Assert.True(Output.LastIndexOf(oracle, StringComparison.Ordinal) > Output.IndexOf(print, StringComparison.Ordinal));
         pane.Dispose();
@@ -100,14 +100,14 @@ public partial class ToolsMenuTests
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.SqliteTabTitle));      // Database, SQLite
         Push(Keys.Tab);                             // Media, on its first
-        Push(Keys.Tab);                             // Options: past Media's five
-        Push(Keys.ShiftTab, Keys.ShiftTab);         // Media, then Database on SQLite
+        Push(Keys.Tab);                             // Offered: past Media's three, the strip wrapped (Options, a tab of its own, until later on 2026-10-10)
+        Push(Keys.ShiftTab, Keys.ShiftTab);         // Media, then Databases on SQLite
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ " + SettingsMenu.FieldName(SettingsField.ToolsDollarMention) + "  ", Output);
-        string sqlite = Strips(ToolsText.DatabaseTabTitle) + "▸ " + SettingsMenu.FieldName(SettingsField.SqliteTools) + "  ";
+        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n", Output);
+        string sqlite = Strips(ToolsText.DatabaseTabTitle) + HeadingOver(ToolsText.SqliteTabTitle, SettingsField.SqliteTools) + "▸ " + SettingsMenu.FieldName(SettingsField.SqliteTools) + "  ";
         Assert.True(Output.LastIndexOf(sqlite, StringComparison.Ordinal) > Output.LastIndexOf(Strips(ToolsText.MediaTabTitle), StringComparison.Ordinal));
         pane.Dispose();
     }
@@ -125,7 +125,7 @@ public partial class ToolsMenuTests
 
         Assert.True(_settings.Current.MySqlTools);
         string name = SettingsMenu.FieldName(SettingsField.MySqlTools);
-        Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.DatabaseTabTitle) + "\n  · " + name + ": on\n▸ " + name + "  ", Output);   // the rebuilt page kept MySQL
+        Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.DatabaseTabTitle) + "\n  · " + name + ": on\n" + HeadingOver(ToolsText.MySqlTabTitle, SettingsField.MySqlTools) + "▸ " + name + "  ", Output);   // the rebuilt page kept MySQL
         pane.Dispose();
     }
 
@@ -142,7 +142,7 @@ public partial class ToolsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n" + SubStrip(ToolsText.DatabaseTabTitle) + "\n \n▸ " + SettingsMenu.FieldName(SettingsField.PostgresTools) + "  ", Output);
+        Assert.Contains("\n" + SubStrip(ToolsText.DatabaseTabTitle) + "\n \n" + HeadingOver(ToolsText.PostgresTabTitle, SettingsField.PostgresTools) + "▸ " + SettingsMenu.FieldName(SettingsField.PostgresTools) + "  ", Output);
         pane.Dispose();
     }
 
@@ -174,7 +174,8 @@ public partial class ToolsMenuTests
         _settings.Update(d => d.YouTubeAutoplay = true);
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.YouTubeTabTitle));
-        Push(Keys.Down, Keys.Down, Keys.Down, Space);   // YouTube autoplay off
+        Push(Enumerable.Repeat(Keys.Down, TabFields(ToolsText.YouTubeTabTitle).ToList().IndexOf(SettingsField.YouTubeAutoplay)).ToArray());   // YouTube autoplay (after the search rows since 2026-10-10)
+        Push(Space);                                    // off
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -198,10 +199,11 @@ public partial class ToolsMenuTests
         Assert.Equal(["SQL", "MySQL", "SQLite", "PostgreSQL", "Oracle"], page.Tabs![database].SubTabs!.Select(t => t.Title));
         Assert.Equal(["Print", "Camera", "Screen"], page.Tabs[media].SubTabs!.Select(t => t.Title));   // ComfyUI and YouTube on Integrations since 2026-10-10
         Assert.Equal(4, page.Sub);
-        Assert.Equal(TabFields(ToolsText.OracleTabTitle).Count, page.Rows.Count);
-        Assert.Equal(SettingsMenu.FieldFooter(SettingsField.OracleTools).Text, page.Tabs[database].Shown.Footer!(0)!.Text);
-        Assert.Null(page.Tabs[database].Shown.Footer!(TabFields(ToolsText.OracleTabTitle).Count));
-        Assert.Equal(SettingsMenu.FieldFooter(SettingsField.CameraShutter).Text, page.Tabs[media].SubTabs![1].Footer!(1)!.Text);
+        Assert.Equal(TabFields(ToolsText.OracleTabTitle).Count + SettingsMenu.ToolsMenuSections[ToolsText.MenuIndex(ToolsText.OracleTabTitle)].Count, page.Rows.Count);   // its headings too (2026-10-10)
+        Assert.Null(page.Tabs[database].Shown.Footer!(0));   // the first heading says nothing
+        Assert.Equal(SettingsMenu.FieldFooter(SettingsField.OracleTools).Text, page.Tabs[database].Shown.Footer!(1)!.Text);
+        Assert.Null(page.Tabs[database].Shown.Footer!(page.Rows.Count));
+        Assert.Equal(SettingsMenu.FieldFooter(SettingsField.CameraShutter).Text, page.Tabs[media].SubTabs![1].Footer!(2)!.Text);
         Assert.True(page.Tabs[media].SubTabs!.All(t => t.SpaceToggles));
         Assert.Equal(settings.GroupBadge(ToolsText.TabMenus[database - 1], saved), page.Tabs[database].Badge);
         Assert.NotNull(page.Tabs[database].Badge);
@@ -209,26 +211,27 @@ public partial class ToolsMenuTests
         pane.Dispose();
     }
 
-    /// <summary>The Tools pane keeps its height on a group: the second strip's row is taken out of the padding under the list.</summary>
+    /// <summary>
+    /// The Tools pane keeps its height on a group: the second strip's row is taken out of the padding under the list. Offered is the one
+    /// plain tab since later on 2026-10-10 (Ask under Standard), so the group's menu is held to its frame.
+    /// </summary>
     [Fact]
     public async Task OnThePane_AGroupsMenu_IsAsTallAsAPlainTab()
     {
         var (menu, pane, _) = PaneMenu();
-        Push(ToTab(ToolsText.AskTabTitle));
-        Push(Enumerable.Repeat(Keys.Right, LeafIndex(ToolsText.SqlTabTitle) - LeafIndex(ToolsText.AskTabTitle)).ToArray());
+        Push(ToTab(ToolsText.SqlTabTitle));
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        string askRow = "▸ " + SettingsMenu.FieldName(SettingsField.AskUser);
-        string sqlRow = "▸ " + SettingsMenu.FieldName(SettingsField.SqlTools);
-        Assert.Equal(FrameRows(Output, Titled(Strip), askRow), FrameRows(Output, Titled(Strip) + "\n" + SubStrip(ToolsText.DatabaseTabTitle), sqlRow));
+        string sqlRow = HeadingOver(ToolsText.SqlTabTitle, SettingsField.SqlTools) + "▸ " + SettingsMenu.FieldName(SettingsField.SqlTools);
+        Assert.Equal(FrameRows(Output, Titled(Strip), Heading("── Clock · 3")), FrameRows(Output, Titled(Strip) + "\n" + SubStrip(ToolsText.DatabaseTabTitle), sqlRow));
         pane.Dispose();
     }
 
     /// <summary>
-    /// The rows of the first frame drawn under <paramref name="strip"/> whose list starts with <paramref name="firstRow"/> (a tab without
-    /// headings, whose rules would read as the band's): from the strip down to the hint row, the band included.
+    /// The rows of the first frame drawn under <paramref name="strip"/> whose list starts with <paramref name="firstRow"/>: from the strip
+    /// down to the hint row, the band included. A rule is a row of nothing but the rule glyph (a heading has its title in it).
     /// </summary>
     private static int FrameRows(string output, string strip, string firstRow)
     {
@@ -239,7 +242,7 @@ public partial class ToolsMenuTests
         for (int i = 0; i < lines.Length; i++)
         {
             // The footer's rule, then the hint row's: the frame ends on the line after the second rule.
-            if (lines[i].StartsWith('─') && ++ruleCount == 2)
+            if (lines[i].Length > 0 && lines[i].All(c => c == '─') && ++ruleCount == 2)
             {
                 return i + 2;
             }

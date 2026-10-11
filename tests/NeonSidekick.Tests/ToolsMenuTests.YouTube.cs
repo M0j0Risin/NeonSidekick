@@ -19,13 +19,13 @@ public partial class ToolsMenuTests
 
         Assert.Equal(ToolsText.MenuIndex(ToolsText.ComfyTabTitle) + 2, tab);   // the user's place, later on 2026-10-05 (after Screen until then); last on Media since 2026-10-09
         Assert.Equal(ToolsText.IntegrationsTabTitle, ToolsText.TabTitles[TabIndex(ToolsText.YouTubeTabTitle)]);   // on Integrations since 2026-10-10 (Media from 2026-10-09)
-        Assert.Equal(["YouTube tools", "YouTube API key", "YouTube search max results", "YouTube autoplay", "YouTube while speaking", "YouTube search order", "YouTube safe search", "YouTube region", "YouTube language"], SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
+        Assert.Equal(["YouTube tools", "YouTube API key", "YouTube search max results", "YouTube search order", "YouTube safe search", "YouTube region", "YouTube language", "YouTube autoplay", "YouTube while speaking"], SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
         Assert.Equal([SettingsField.YouTubeTools, SettingsField.YouTubeAutoplay], SettingsMenu.ToolsTabFields[tab - 1].Where(SettingsMenu.IsToggle));
         Assert.DoesNotContain(SettingsMenu.ToolsTabFields[tab - 1], SettingsMenu.RefusedMidTurn);
         Assert.DoesNotContain(SettingsMenu.ToolsTabFields[tab - 1], SettingsMenu.IsLlmField);   // no reconnect: read at each turn and search
 
         var data = new AppSettingsData();
-        Assert.Equal(["off", "(none)", "8 results", "on", "pause", "relevance", "moderate", "(any region)", "(any language)"], SettingsMenu.ToolsTabFields[tab - 1].Select(f => SettingsMenu.FieldValue(f, data, _settings.ProfileDirectory)));
+        Assert.Equal(["off", "(none)", "8 results", "relevance", "moderate", "(any region)", "(any language)", "on", "pause"], SettingsMenu.ToolsTabFields[tab - 1].Select(f => SettingsMenu.FieldValue(f, data, _settings.ProfileDirectory)));
         Assert.Equal(["views", "strict", "GB", "pt-BR"], new[] { SettingsField.YouTubeSearchOrder, SettingsField.YouTubeSafeSearch, SettingsField.YouTubeRegion, SettingsField.YouTubeLanguage }
             .Select(f => SettingsMenu.FieldValue(f, new AppSettingsData { YouTubeSearchOrder = "Views", YouTubeSafeSearch = "strict", YouTubeRegion = "gb", YouTubeLanguage = "PT-BR" }, _settings.ProfileDirectory)));
         Assert.Equal("relevance", SettingsMenu.FieldValue(SettingsField.YouTubeSearchOrder, new AppSettingsData { YouTubeSearchOrder = "newest" }, _settings.ProfileDirectory));   // unreadable: YouTube's own
@@ -78,7 +78,7 @@ public partial class ToolsMenuTests
     public async Task OnThePane_TheYouTubeTab_TheFilterDefaults_PickAndType()
     {
         var (menu, pane, _) = PaneMenu();
-        OpenYouTubeRow(5);                                    // YouTube search order: relevance under the cursor
+        OpenYouTubeRow(3);                                    // YouTube search order: relevance under the cursor (under the search max since 2026-10-10, autoplay and voice after the filters)
         Push(Keys.Down, Keys.Enter);                          // date
         Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // YouTube safe search: moderate under the cursor, then strict
         Push(Keys.Down, Keys.Enter);                          // YouTube region

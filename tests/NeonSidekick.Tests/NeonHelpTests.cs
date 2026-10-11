@@ -66,9 +66,10 @@ public class NeonHelpTests
     public void Location_IsWorkedOutFromTheMenus()
     {
         Assert.Equal("/tools › Media › Camera › Camera watch interval (s)", HelpLocation.Of(SettingsField.CameraWatchSeconds).Path);   // a menu on Media since 2026-10-09
-        Assert.Equal("/tools › Database › PostgreSQL › PostgreSQL mode", HelpLocation.Of(SettingsField.PostgresMode).Path);
-        Assert.Equal("/tools › Shell › Shell police", HelpLocation.Of(SettingsField.ShellPolice).Path);   // a plain tab names no menu
-        Assert.Null(HelpLocation.Of(SettingsField.ShellPolice).Menu);
+        Assert.Equal("/tools › Databases › PostgreSQL › PostgreSQL mode", HelpLocation.Of(SettingsField.PostgresMode).Path);
+        Assert.Equal("/tools › Standard › Shell › Shell police", HelpLocation.Of(SettingsField.ShellPolice).Path);   // a menu on Standard since 2026-10-10 (a plain tab until then)
+        Assert.Equal("Shell", HelpLocation.Of(SettingsField.ShellPolice).Menu);
+        Assert.Equal("/tools › Standard › Options › Tool collapse count", HelpLocation.Of(SettingsField.ToolCollapseCount).Path);   // Options last on Standard
         Assert.Equal("/settings › Client › Chat › Profile", HelpLocation.Of(SettingsField.Profile).Path);   // General's until later on 2026-10-10
         Assert.Equal("/settings › Client › Botchat › Botchat camera", HelpLocation.Of(SettingsField.BotChatCamera).Path);
         Assert.Equal("/settings › Advisors › Advisor list", HelpLocation.Of(SettingsField.AdvisorList).Path);   // a plain tab names no menu
@@ -227,11 +228,11 @@ public class NeonHelpTests
     {
         string text = Invoke("/tools database");
 
-        Assert.StartsWith("Tab /tools › Database: " + HelpText.MenusTab(["SQL", "MySQL", "SQLite", "PostgreSQL", "Oracle"]) + "\n- SQL: SQL tools, SQL mode, ", text, StringComparison.Ordinal);
+        Assert.StartsWith("Tab /tools › Databases: " + HelpText.MenusTab(["SQL", "MySQL", "SQLite", "PostgreSQL", "Oracle"]) + "\n- SQL: SQL tools, SQL mode, ", text, StringComparison.Ordinal);
         Assert.Contains("\n- Oracle: Oracle tools, ", text);
         Assert.EndsWith("\nAsk for one menu (/tools sql) for its rows' defaults and what each does.", text, StringComparison.Ordinal);
         Assert.Equal("the menus Print, Camera (a second strip under the tab; ←/→ walk them)", HelpText.MenusTab(["Print", "Camera"]));
-        Assert.Equal([(ToolsText.FilesTabTitle, "File"), (ToolsText.FilesTabTitle, "Image"), (ToolsText.FilesTabTitle, "UNC")], HelpLocation.Menus("/tools").Take(3));   // the Files group first since 2026-10-10, Image after File later that day   // Database before Media since later on 2026-10-09
+        Assert.Equal([(ToolsText.StandardTabTitle, "Ask"), (ToolsText.StandardTabTitle, "Web"), (ToolsText.StandardTabTitle, "Shell"), (ToolsText.StandardTabTitle, "Options"), (ToolsText.FilesTabTitle, "File")], HelpLocation.Menus("/tools").Take(5));   // the Standard group first since later on 2026-10-10, then Files
         Assert.Equal([(SettingsMenu.ClientTabTitle, "Chat"), (SettingsMenu.ClientTabTitle, "Sessions"), (SettingsMenu.ClientTabTitle, "Botchat"), (SettingsMenu.ServersTabTitle, "Common")], HelpLocation.Menus("/settings").Take(4));   // the Servers and Voice groups since 2026-10-10; Common and Http (the LLM tab) later that day; the Client group first later still
     }
 

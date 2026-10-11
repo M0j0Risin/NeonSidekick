@@ -148,6 +148,11 @@ public static class McpText
     /// <summary>The heading over the problems (the skills' word).</summary>
     public const string SkippedHeading = "Skipped:";
 
+    /// <summary>The Servers tab's three headings (2026-10-10, the user's ask: the <c>/settings</c> look): the servers, the files' rows and what was skipped. Pinned.</summary>
+    public const string ServersHeading = "Servers";
+    public const string FilesHeading = "Files";
+    public const string ProblemsHeading = "Skipped";
+
     public const string EditProfileRow = "edit profile mcp.json";
     public const string EditGlobalRow = "edit global mcp.json";
     public const string ReloadRow = "reload";

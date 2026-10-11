@@ -181,7 +181,7 @@ internal static class NeonHelp
             : HelpText.Tab(pane, tab, rows, HelpLocation.Default, HelpSettings.Describe);
     }
 
-    /// <summary>A menu on a group tab (2026-10-09) answered as a tab is, under its place: <c>Tab /tools › Database › SQL:</c>.</summary>
+    /// <summary>A menu on a group tab (2026-10-09) answered as a tab is, under its place: <c>Tab /tools › Databases › SQL:</c>.</summary>
     private static string MenuAnswer(HelpPane pane, string tab, string menu) =>
         HelpText.Tab(pane, tab + HelpText.PathSeparator + menu, HelpLocation.InMenu(pane.Command, menu), HelpLocation.Default, HelpSettings.Describe);
 

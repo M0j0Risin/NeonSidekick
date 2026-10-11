@@ -2341,7 +2341,7 @@ public partial class ChatScreenTests : IDisposable
         WakeOn();
         FakeModelFiles.WriteVoskModelUnder(ModelsDir, "vosk-model-en-us-0.22-lgraph");
         PushLine("/settings");
-        for (int i = 0; i < 53; i++)
+        for (int i = 0; i < 52; i++)   // one fewer since New profile mode went (later on 2026-10-10)
         {
             _console.Input.PushKey(Keys.Down);
         }
@@ -4507,9 +4507,9 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains(McpText.Label + " │ Servers · Tools · Options ", output);
         Assert.Contains("\n▸ pipe        on   connected · 2 tools  stdio: pipe-server\n", output);
-        Assert.Contains("  · 🔌 pipe: off\n  · 🔌 pipe: stopped\n▸ pipe        off  off  stdio: pipe-server\n", output);
+        Assert.Contains("  · 🔌 pipe: off\n  · 🔌 pipe: stopped\n" + HeadingRow("── " + McpText.ServersHeading + " · 1") + "\n▸ pipe        off  off  stdio: pipe-server\n", output);   // under its heading (2026-10-10)
         Assert.Contains(McpText.NoToolsLine, output);   // the Tools tab after the stop
-        Assert.Contains("\n▸ MCP servers              on\n", output);
+        Assert.Contains("\n" + HeadingRow("── Servers") + "\n▸ MCP servers              on\n", output);
         Assert.Contains("  · MCP servers: off\n", output);
         Assert.Equal(["pipe"], _settings.Current.McpServersDisabled);
         Assert.False(_settings.Current.McpServers);
@@ -4567,7 +4567,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains(McpText.Label + " │ Servers · Tools · Options ", output);
-        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ pipe", output);
+        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n" + HeadingRow("── " + McpText.ServersHeading + " · 1") + "\n▸ pipe", output);
         Assert.Contains("  · 🔌 pipe__echo: off", output);
         Assert.Equal(["pipe__echo"], _settings.Current.ToolsDisabled);
         Assert.Empty(_settings.Current.McpServersDisabled);
@@ -4650,7 +4650,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · Integrations · Database · Media · Options ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ", output);
         Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.ComfyTools) + " ", output);   // a menu on Media since 2026-10-09 (its own tab from 2026-09-24), a sub-tab the arrows walk since 2026-10-10 (ToolsMenuTests)
         Assert.DoesNotContain("Claude Code executable", output);   // /claude's rows here from 2026-09-27 (off /settings), the advisor's under them; both gone from /tools on 2026-10-10 (the four to /settings › Servers › Anthropic)
         Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
@@ -4658,12 +4658,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + HeadingRow("── Clock · 3") + "\n  get_current_time      on   ", output);
         Assert.Equal([CameraCaptureTool.ToolName], _settings.Current.ToolsDisabled);
         Assert.Contains("\n" + ToolsText.OfferedKeys, output);
-        Assert.Contains("\n▸ $-mention enabled    on\n  Tool collapse count  off\n  Code collapse count  off\n", output);   // the fixture's 0s (2026-09-22)
+        Assert.Contains("\n▸ $-mention enabled    on\n" + HeadingRow("── Folding") + "\n  Tool collapse count  off\n  Code collapse count  off\n", output);   // the fixture's 0s (2026-09-22)
         Assert.Contains("\n▸ Ask user                      on\n", output);
         Assert.Contains("\n▸ File tools                      on\n", output);
         Assert.Contains("\n▸ Image tools               off\n  Image edit quality        90\n", output);   // the Image menu (2026-10-10), its switch first, padded to its own column
-        Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
-        Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
+        Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n" + HeadingRow("── Identity") + "\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
+        Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n" + HeadingRow("── Guards") + "\n  Shell police                    on\n  Shell police forbidden strings  none\n" + HeadingRow("── Commands") + "\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n" + HeadingRow("── Scripts") + "\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
         Assert.Contains("\n▸ Web tools                 on\n", output);
         Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.SqlTools) + " ", output);   // a menu on Database since 2026-10-09 (its own tab from 2026-09-23), a sub-tab since 2026-10-10
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
@@ -4706,7 +4706,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · Integrations · Database · Media · Options ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ", output);
         Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.ComfyTools) + " ", output);   // a menu on Media since 2026-10-09 (its own tab from 2026-09-24), a sub-tab the arrows walk since 2026-10-10 (ToolsMenuTests)
         Assert.DoesNotContain("Claude Code executable", output);   // /claude's rows here from 2026-09-27 (off /settings), the advisor's under them; both gone from /tools on 2026-10-10 (the four to /settings › Servers › Anthropic)
         Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
@@ -4714,12 +4714,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + HeadingRow("── Clock · 3") + "\n  get_current_time      on   ", output);
         Assert.Equal([CameraCaptureTool.ToolName], _settings.Current.ToolsDisabled);
         Assert.Contains("\n" + ToolsText.OfferedKeys, output);
-        Assert.Contains("\n▸ $-mention enabled    on\n  Tool collapse count  off\n  Code collapse count  off\n", output);   // the fixture's 0s (2026-09-22)
+        Assert.Contains("\n▸ $-mention enabled    on\n" + HeadingRow("── Folding") + "\n  Tool collapse count  off\n  Code collapse count  off\n", output);   // the fixture's 0s (2026-09-22)
         Assert.Contains("\n▸ Ask user                      on\n", output);
         Assert.Contains("\n▸ File tools                      on\n", output);
         Assert.Contains("\n▸ Image tools               off\n  Image edit quality        90\n", output);   // the Image menu (2026-10-10), its switch first, padded to its own column
-        Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
-        Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   zsh\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
+        Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n" + HeadingRow("── Identity") + "\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
+        Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n" + HeadingRow("── Guards") + "\n  Shell police                    on\n  Shell police forbidden strings  none\n" + HeadingRow("── Commands") + "\n  Shell prefer native tools       on\n  Shell default                   zsh\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n" + HeadingRow("── Scripts") + "\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
         Assert.Contains("\n▸ Web tools                 on\n", output);
         Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.SqlTools) + " ", output);   // a menu on Database since 2026-10-09 (its own tab from 2026-09-23), a sub-tab since 2026-10-10
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
@@ -5093,10 +5093,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ·   Files (13 of 14)\n", output);
         Assert.Contains("  ·     zip                   off  ", output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", output);
-        Assert.Contains("  · Options\n  ·   $-mention enabled: on\n", output);
-        Assert.Contains("  · Ask\n  ·   Ask user: on\n", output);
+        Assert.Contains("  ·   Options\n  ·     $-mention enabled: on\n", output);
+        Assert.Contains("  · Standard\n  ·   Ask\n  ·     Ask user: on\n", output);
         Assert.Contains("  · Files\n  ·   File\n  ·     File tools: on\n", output);   // the Files group's File menu since 2026-10-10
-        Assert.Contains("  · Web\n  ·   Web tools: on\n", output);
+        Assert.Contains("  ·   Web\n  ·     Web tools: on\n", output);
         Assert.Empty(_chat.Requests);
     }
 
@@ -5143,10 +5143,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ·   Files (13 of 14)\n", output);
         Assert.Contains("  ·     zip                   off  ", output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", output);
-        Assert.Contains("  · Options\n  ·   $-mention enabled: on\n", output);
-        Assert.Contains("  · Ask\n  ·   Ask user: on\n", output);
+        Assert.Contains("  ·   Options\n  ·     $-mention enabled: on\n", output);
+        Assert.Contains("  · Standard\n  ·   Ask\n  ·     Ask user: on\n", output);
         Assert.Contains("  · Files\n  ·   File\n  ·     File tools: on\n", output);   // the Files group's File menu since 2026-10-10
-        Assert.Contains("  · Web\n  ·   Web tools: on\n", output);
+        Assert.Contains("  ·   Web\n  ·     Web tools: on\n", output);
         Assert.Empty(_chat.Requests);
     }
 
@@ -5168,7 +5168,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · Integrations · Database · Media · Options ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ", output);
         Assert.Contains("  · " + CameraCaptureTool.ToolName + ": off", output);
         Assert.Equal([CameraCaptureTool.ToolName], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -7218,10 +7218,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("🤖 averyveryverylongprof…", _titles[^1]);
     }
 
-    /// <summary>The default profile with a memory, a persona, operating rules and a voice directive on disk: what <c>/profile add</c> copies under the advanced mode.</summary>
+    /// <summary>The default profile with a memory, a persona, operating rules and a voice directive on disk: of these <c>/profile add</c> copies the memory alone.</summary>
     private void FurnishedDefaultProfile()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.NewProfileMode = "advanced"; });   // basic is the default
+        _settings.Update(d => d.TtsOutput = false);
         _memory.Add("They like tea.");
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName), "You are Rex.");
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, OperataFile.FileName), "Answer in haiku.");
@@ -7229,41 +7229,14 @@ public partial class ChatScreenTests : IDisposable
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, McpConfigFile.FileName), McpConfigFile.EmptyText);   // the fifth sidekick file (2026-09-20)
     }
 
+    /// <summary>
+    /// <c>/profile add</c> copies the settings and the memories, never the persona, operating rules, voice directive or MCP servers
+    /// (New profile mode's <c>basic</c>, the only way since its <c>advanced</c> was retired on 2026-10-10, the user's call: <c>/profile push|pull</c> copies those).
+    /// </summary>
     [Fact]
-    public async Task Profile_Add_Advanced_CopiesTheSidekickFiles_AndTheNewProfileUsesThem()
+    public async Task Profile_Add_CopiesTheSettingsAndTheMemories_NeverThePromptFiles()
     {
         FurnishedDefaultProfile();
-        _chat.EnqueueText("Hello.");
-        PushLine("/profile add work");
-        PushLine("hi");
-        PushLine("/exit");
-
-        string output = await RunAsync();
-
-        Assert.Contains("  · " + ChatScreen.ProfileCreatedNotice("work", Profiles.SidekickFiles), output);
-        Assert.Contains("  · " + SettingsMenu.SwitchedNotice("work"), output);
-        Assert.Equal("work", _settings.ProfileName);
-        Assert.Equal(
-            new[] { MemoryStore.FileName, OperataFile.FileName, PersonaFile.FileName, Profiles.FileName, VocaliaFile.FileName, McpConfigFile.FileName }.Order(),
-            Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order());   // sessions.db from the turn sits under db\sessions (2026-10-10)
-        Assert.Equal("Speak like a pirate.", File.ReadAllText(Path.Combine(ProfileDir("work"), VocaliaFile.FileName)));
-        Assert.Equal(McpConfigFile.EmptyText, File.ReadAllText(Path.Combine(ProfileDir("work"), McpConfigFile.FileName)));
-        Assert.Equal(new[] { "They like tea." }, new MemoryStore(ProfileDir("work")).Snapshot());
-        // The copies are bound: the first reply on the new profile carries them (the memory as the opening pair's result).
-        var request = Assert.Single(_chat.Requests);
-        string prompt = request[0].Text!;
-        Assert.StartsWith("You are Rex.\n\nAnswer in haiku.\n\n", prompt, StringComparison.Ordinal);
-        Assert.Contains("- They like tea.", MemoryResult(request));
-        // Copies, not moves: the default profile keeps its own.
-        Assert.Equal(new[] { "They like tea." }, new MemoryStore(ProfileDir(Profiles.DefaultName)).Snapshot());
-        Assert.Equal("You are Rex.", File.ReadAllText(Path.Combine(ProfileDir(Profiles.DefaultName), PersonaFile.FileName)));
-    }
-
-    [Fact]
-    public async Task Profile_Add_Basic_CopiesTheSettingsAndTheMemories()
-    {
-        FurnishedDefaultProfile();
-        _settings.Update(d => d.NewProfileMode = "basic");
         _chat.EnqueueText("Hello.");
         PushLine("/profile add work");
         PushLine("hi");
@@ -7275,31 +7248,20 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("(🪪 created profile \"work\" from the current settings, memories)", output);
         Assert.Equal("work", _settings.ProfileName);
         Assert.Equal(new[] { MemoryStore.FileName, Profiles.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order());   // sessions.db from the turn sits under db\sessions (2026-10-10), never copied
-        Assert.Equal("basic", _settings.Current.NewProfileMode);   // the setting itself came along, like every saved value
         var request = Assert.Single(_chat.Requests);
         string prompt = request[0].Text!;
         Assert.DoesNotContain("Rex", prompt);
         Assert.DoesNotContain("haiku", prompt);
         Assert.Contains("- They like tea.", MemoryResult(request));
+        // Copies, not moves: the default profile keeps its own.
+        Assert.Equal(new[] { "They like tea." }, new MemoryStore(ProfileDir(Profiles.DefaultName)).Snapshot());
+        Assert.Equal("You are Rex.", File.ReadAllText(Path.Combine(ProfileDir(Profiles.DefaultName), PersonaFile.FileName)));
     }
 
     [Fact]
-    public async Task Profile_Add_Basic_WithNoMemoriesFile_IsTheSettingsAlone()
+    public async Task Profile_Add_WithNoMemoriesFile_IsTheSettingsAlone_APersonaStaysBehind()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.NewProfileMode = "basic"; });
-        PushLine("/profile add work");
-        PushLine("/exit");
-
-        string output = await RunAsync();
-
-        Assert.Contains("  · " + ChatScreen.ProfileCreatedNotice("work"), output);
-        Assert.Equal(new[] { Profiles.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // sessions.db (the /exit typed there) sits under db\sessions (2026-10-10)
-    }
-
-    [Fact]
-    public async Task Profile_Add_Advanced_WithOnlySomeFiles_NamesTheOnesCopied()
-    {
-        _settings.Update(d => { d.TtsOutput = false; d.NewProfileMode = "advanced"; });
+        _settings.Update(d => d.TtsOutput = false);
         Directory.CreateDirectory(_settings.ProfileDirectory);   // the debounced settings save has not made it yet
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName), "You are Rex.");
         PushLine("/profile add work");
@@ -7307,8 +7269,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · " + ChatScreen.ProfileCreatedNotice("work", new[] { PersonaFile.FileName }), output);
-        Assert.Equal(new[] { PersonaFile.FileName, Profiles.FileName }.Order(), Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order());   // sessions.db (the /exit typed there) sits under db\sessions (2026-10-10)
+        Assert.Contains("  · " + ChatScreen.ProfileCreatedNotice("work"), output);
+        Assert.Equal(new[] { Profiles.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // sessions.db (the /exit typed there) sits under db\sessions (2026-10-10)
     }
 
     [Fact]
@@ -9675,7 +9637,7 @@ public partial class ChatScreenTests : IDisposable
             Key(Keys.Escape),                                                    // closed, unchanged: the draft back
             input => input.Push(Keys.Char('!'), Keys.Enter),
             Line("/settings"),
-            input => input.Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Escape),   // General's fifth row, Memory mode (since 2026-10-01; Avatar above it since 2026-10-10): its page on read-write, disabled picked; the pane closed: the disk on its slab
+            input => input.Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Escape),   // Chat's fourth row since New profile mode went (later on 2026-10-10; General's fifth until then), Memory mode (since 2026-10-01; Avatar above it since 2026-10-10): its page on read-write, disabled picked; the pane closed: the disk on its slab
             input => { input.PushClick(33, 103); input.PushClick(33, 103); },    // 🔒 still at 33: the list
             Key(Keys.Escape),
             Line("/tools"),
@@ -9693,7 +9655,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.ShellPolice);
         string memory = "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · Integrations · Database · Media · Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -10317,8 +10279,7 @@ public partial class ChatScreenTests : IDisposable
         PushLine("/settings");
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);          // Memory mode (General, fifth row: Avatar under Profile since 2026-10-10, New profile mode under it, Memory under Working directory since 2026-10-01)
+        _console.Input.PushKey(Keys.Down);          // Memory mode (Chat, fourth row: Avatar under Profile since 2026-10-10, New profile mode under it until later that day, Memory under Working directory since 2026-10-01)
         _console.Input.PushKey(Keys.Enter);         // its on/off page (2026-09-17)
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Enter);         // read-only (Memory mode's second, 2026-10-04)
@@ -10661,8 +10622,7 @@ public partial class ChatScreenTests : IDisposable
         PushLine("/settings");
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);          // Memory mode (General, fifth row: Avatar under Profile since 2026-10-10, New profile mode under it, Memory under Working directory since 2026-10-01)
+        _console.Input.PushKey(Keys.Down);          // Memory mode (Chat, fourth row: Avatar under Profile since 2026-10-10, New profile mode under it until later that day, Memory under Working directory since 2026-10-01)
         _console.Input.PushKey(Keys.Enter);         // its on/off page
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Enter);         // read-only: the list again
@@ -10830,7 +10790,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · Integrations · Database · Media · Options ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + " │ Servers · Tools · Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + " │ Offered · Reflection · Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n", StringComparison.Ordinal);
@@ -10905,7 +10865,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · Integrations · Database · Media · Options ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + " │ Servers · Tools · Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + " │ Offered · Reflection · Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n", StringComparison.Ordinal);
@@ -11005,7 +10965,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · Integrations · Database · Media · Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -11093,7 +11053,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · Integrations · Database · Media · Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -12220,8 +12180,8 @@ public partial class ChatScreenTests : IDisposable
         // After the reply the upper rule names the session (2026-09-18), the pane's title row under it.
         strip = TitledRule("hi") + "\n" + Titled(UsageText.Label) + "\n\n";
         // The Statistics tab after the reply: the Context section (no window from the stub's server), then the three scopes, the last reply's with its timings.
-        Assert.Contains(strip + "Context              unknown\nWindow               unknown\nIn use               25\n\nLast reply\nTotal                25\nPrompt               10\nCompletion           15\nReasoning            —\nRequests             1\nTime to first token  0.5 s\nSpeed                3.0 tok/s\n\nThis conversation    every request summed\nTotal                25\n", output);
-        Assert.Contains("\nSince launch         every request summed\nTotal                25\nPrompt               10\nCompletion           15\nReasoning            —\nRequests             1\nTime to first token  0.5 s\nSpeed                3.0 tok/s\n", output);
+        Assert.Contains(strip + HeadingRow("── Context ── unknown") + "\n  Window               unknown\n  In use               25\n\n" + HeadingRow("── Last reply") + "\n  Total                25\n  Prompt               10\n  Completion           15\n  Reasoning            —\n  Requests             1\n  Time to first token  0.5 s\n  Speed                3.0 tok/s\n\n" + HeadingRow("── This conversation ── every request summed") + "\n  Total                25\n", output);
+        Assert.Contains("\n" + HeadingRow("── Since launch ── every request summed") + "\n  Total                25\n  Prompt               10\n  Completion           15\n  Reasoning            —\n  Requests             1\n  Time to first token  0.5 s\n  Speed                3.0 tok/s\n", output);
         Assert.Contains(rule + "\n" + Row(InfoPane.SingleTabHintText) + "\n", output);
         // Nothing went to the transcript: the pane held it all.
         Assert.DoesNotContain("  · Tokens —", output);
@@ -12326,12 +12286,12 @@ public partial class ChatScreenTests : IDisposable
         string rule = new(ScreenPane.RuleGlyph, 240);
         string strip = rule + "\n" + Titled(UsageText.Label) + "\n\n";
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        // Before the reply: the Context section over the empty note (the label column sized to that note).
-        Assert.Contains(strip + "Context                  loaded_context_length on /api/v0/models\nWindow                   100\n\n" + UsageText.NothingCounted + "\n", output);
+        // Before the reply: the Context section over the empty note.
+        Assert.Contains(strip + HeadingRow("── Context ── loaded_context_length on /api/v0/models") + "\n  Window  100\n\n  " + UsageText.NothingCounted + "\n", output);   // the source on the rule since 2026-10-10, the label column the rows' own
         // The hint row after the reply: the share between the size and the speed.
         Assert.Contains(rule + "\n" + Row(ChatScreen.HintLine(null, "25 / 100 · 25% · 3 tok/s")), output);
         // After /clear: the window stays, the context in use went with the history; the hint row's share with it.
-        Assert.Contains(strip + "Context              loaded_context_length on /api/v0/models\nWindow               100\n\nLast reply\nTotal                25\n", output);
+        Assert.Contains(strip + HeadingRow("── Context ── loaded_context_length on /api/v0/models") + "\n  Window               100\n\n" + HeadingRow("── Last reply") + "\n  Total                25\n", output);
         Assert.Contains(rule + "\n" + Row(InfoPane.SingleTabHintText) + "\n", output);
     }
 
@@ -12917,9 +12877,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(bare > 0 && measured > bare);
         Assert.DoesNotContain(idle("15 / 100 · 15% · 1 tok/s"), output[compacted..]);
         // /usage: c's reply alone in use; the summariser's request in the conversation and launch totals (25 + 15 + 34 + 24).
-        Assert.Contains("Context              loaded_context_length on /api/v0/models\nWindow               100\nIn use               24\nUsed                 24%\n\nLast reply\nTotal                24\n", output);
-        Assert.Contains("This conversation    every request summed\nTotal                98\n", output);
-        Assert.Contains("Since launch         every request summed\nTotal                98\n", output);
+        Assert.Contains(HeadingRow("── Context ── loaded_context_length on /api/v0/models") + "\n  Window               100\n  In use               24\n  Used                 24%\n\n" + HeadingRow("── Last reply") + "\n  Total                24\n", output);
+        Assert.Contains(HeadingRow("── This conversation ── every request summed") + "\n  Total                98\n", output);
+        Assert.Contains(HeadingRow("── Since launch ── every request summed") + "\n  Total                98\n", output);
     }
 
     // ── Commands during a reply ─────────────────────────────────────────────
@@ -13181,7 +13141,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · Integrations · Database · Media · Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n";
@@ -13241,7 +13201,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · Integrations · Database · Media · Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n";
@@ -18002,7 +17962,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Ask ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Standard ", output);
         Assert.DoesNotContain("› /tools", output);
         Assert.Single(_chat.Requests);
         Assert.Equal("keep", UserText(_chat.Requests[0]));
@@ -18272,7 +18232,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Equal(1, Refreshes(output));     // /clear's wipe
-        Assert.Contains(ToolsText.Label + " │ Offered · Ask ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Standard ", output);
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("b", UserText(_chat.Requests[1]));   // the one user message: the conversation forgotten
     }
@@ -20648,7 +20608,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("  · Offered\n  ·   haiku  profile  v1  Writes haiku. Use when asked for one.\n  · Reflection\n", output);   // Reflection right after Offered since 2026-09-22
         Assert.Contains("  · Options\n  ·   Agent skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n", output);   // the Options section last (2026-09-22; between Offered and Reflection from 2026-09-19), the Project file row among it since 2026-10-01
-        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: off\n  ·   Reflection yields to turns: off\n  ·   Reflection edit supporting files: off\n  ·   Reflection downloaded skills: allow-and-mark\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
+        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection includes sessions: off\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection yields to turns: off\n  ·   Reflection edit supporting files: off\n  ·   Reflection downloaded skills: allow-and-mark\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
         Assert.DoesNotContain("  · Project\n", output);   // the Project section, the toggle row alone from later on 2026-09-19, went on 2026-10-01
         Assert.DoesNotContain("Roots", output);
         Assert.DoesNotContain("Working directory", output);

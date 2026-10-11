@@ -26,11 +26,11 @@ public sealed record ServerWriteFamily(
     public string KindsSetting => Title + " statements allowed";
 
     /// <summary>
-    /// Where the user changes either: <c>/tools › Database › PostgreSQL</c> since 2026-10-09, when the five database tabs became menus
+    /// Where the user changes either: <c>/tools › Databases › PostgreSQL</c> since 2026-10-09, when the five database tabs became menus
     /// on one Database tab (the user's call; <c>the PostgreSQL tab of /tools</c> until then). The menu is the strip's title, which is
     /// the family's own since 2026-10-10 (PostgreSQL's menu was <c>Postgres</c> until then).
     /// </summary>
-    public string Tab => "/tools › Database › " + Title;
+    public string Tab => "/tools › Databases › " + Title;
 }
 
 /// <summary>

@@ -286,17 +286,10 @@ internal sealed partial class SettingsMenu
                 continue;
             }
 
-            try
+            string avatar = SavedAvatar(home, other);
+            if (avatar.Length > 0)
             {
-                string avatar = AvatarRules.Normalize(Profiles.ReadProfileFile(Profiles.ProfileFile(home, other)).Avatar);
-                if (avatar.Length > 0)
-                {
-                    (usedBy.TryGetValue(avatar, out var names) ? names : usedBy[avatar] = []).Add(other);
-                }
-            }
-            catch (Exception e) when (e is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
-            {
-                // An unreadable profile has no avatar to mark; /profile says what is wrong with it.
+                (usedBy.TryGetValue(avatar, out var names) ? names : usedBy[avatar] = []).Add(other);
             }
         }
 
@@ -314,6 +307,45 @@ internal sealed partial class SettingsMenu
         return new AvatarContext(catalog, EmojiPrefs.Load(home), AvatarRules.Normalize(_settings.Current.Avatar), profile, usedBy,
             EmojiSuggest.For(profile, persona, catalog.Entries));
     }
+
+    /// <summary>
+    /// Profile <paramref name="name"/>'s saved avatar under <paramref name="home"/>, normalised (<see cref="AvatarRules.Normalize"/>): ""
+    /// for none, and for a profile file that cannot be read (/profile says what is wrong with it). The loaded profile's is
+    /// <see cref="AppSettings.Current"/>'s, unsaved edits and all (<see cref="ProfileAvatar"/>).
+    /// </summary>
+    private static string SavedAvatar(string home, string name)
+    {
+        try
+        {
+            return AvatarRules.Normalize(Profiles.ReadProfileFile(Profiles.ProfileFile(home, name)).Avatar);
+        }
+        catch (Exception e) when (e is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
+        {
+            return "";
+        }
+    }
+
+    /// <summary>Profile <paramref name="name"/>'s avatar for a picker: the loaded one's from the store, another's from its file (<see cref="SavedAvatar"/>).</summary>
+    private string ProfileAvatar(string name) =>
+        Profiles.NameEquals(name, _settings.ProfileName) ? AvatarRules.Normalize(_settings.Current.Avatar) : SavedAvatar(_settings.StorageDirectory, name);
+
+    /// <summary>
+    /// A row of a profile picker (2026-10-10, the user's ask: <c>/profile</c>'s list and the advisor's): the profile's avatar, a space,
+    /// its name escaped; a profile with none is led by three blanks, so the names stand in one column. Pure.
+    /// </summary>
+    public static string ProfilePickerRow(string name, string avatar)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(avatar);
+        string lead = AvatarRules.Normalize(avatar) is { Length: > 0 } face ? face + " " : new string(' ', ProfileAvatarCells + 1);
+        return Markup.Escape(lead + name);
+    }
+
+    /// <summary>The cells an avatar takes in a profile picker's row: one two-cell emoji (<see cref="AvatarRules"/>).</summary>
+    public const int ProfileAvatarCells = 2;
+
+    /// <summary>The rows of a profile picker over <paramref name="names"/>, each led by its avatar (<see cref="ProfilePickerRow"/>).</summary>
+    private List<string> ProfilePickerRows(IReadOnlyList<string> names) => names.Select(name => ProfilePickerRow(name, ProfileAvatar(name))).ToList();
 
     // The tabs: For you (when it has any), Recent, then a tab per group.
     private static List<AvatarTab> AvatarTabs(AvatarContext context)

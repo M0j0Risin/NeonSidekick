@@ -59,7 +59,6 @@ public class AppSettingsTests : IDisposable
         BotChatMemoryMode = "independent",
         BotChatVision = true,
         MemoryMode = "read-only",
-        NewProfileMode = "advanced",
         PastePreviewLines = 7,
         QueueCancelMode = "drain",
         QueueMode = "manual",
@@ -197,7 +196,6 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.ImageThumbnailSize, actual.ImageThumbnailSize);
         Assert.Equal(expected.Theme, actual.Theme);
         Assert.Equal(expected.MemoryMode, actual.MemoryMode);
-        Assert.Equal(expected.NewProfileMode, actual.NewProfileMode);
         Assert.Equal(expected.PastePreviewLines, actual.PastePreviewLines);
         Assert.Equal(expected.QueueCancelMode, actual.QueueCancelMode);
         Assert.Equal(expected.QueueMode, actual.QueueMode);
@@ -358,7 +356,6 @@ public class AppSettingsTests : IDisposable
             d.ImageThumbnailSize = full.ImageThumbnailSize;
             d.Theme = full.Theme;
             d.MemoryMode = full.MemoryMode;
-            d.NewProfileMode = full.NewProfileMode;
             d.PastePreviewLines = full.PastePreviewLines;
             d.QueueCancelMode = full.QueueCancelMode;
             d.QueueMode = full.QueueMode;
@@ -505,7 +502,6 @@ public class AppSettingsTests : IDisposable
                 d.ImageThumbnailSize = full.ImageThumbnailSize;
                 d.Theme = full.Theme;
                 d.MemoryMode = full.MemoryMode;
-                d.NewProfileMode = full.NewProfileMode;
                 d.PastePreviewLines = full.PastePreviewLines;
                 d.QueueCancelMode = full.QueueCancelMode;
                 d.QueueMode = full.QueueMode;
@@ -1528,7 +1524,6 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(500, s.FileTreeMaxLength);
         Assert.True(s.FileTreeShowSizes);
         Assert.Equal(10, s.FileViewImageMaxPerCall);   // 2026-09-19 (a constant 4 in the tool until then)
-        Assert.Equal("basic", s.NewProfileMode);
         Assert.True(s.LlmOfferTools);
         Assert.False(s.LlmUseFunVerbs);
         Assert.True(s.LlmShowThinking);

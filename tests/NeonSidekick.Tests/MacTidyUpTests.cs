@@ -140,7 +140,7 @@ public sealed class MacTidyUpTests : IDisposable
         Assert.Equal(["file     encrypted (Keychain key) in sql.json", "credman  the macOS Keychain"], SettingsMenu.SqlWizardStoreRows);
         Assert.Equal(["file     encrypted (Keychain key) in postgres.json", "credman  the macOS Keychain"], SettingsMenu.PostgresWizardStoreRows);
         Assert.Equal("Saved the password of 'pg' to the macOS Keychain as NeonSidekick/postgres/pg.", SqlText.PasswordSavedToCredman("pg", "NeonSidekick/postgres/pg"));
-        Assert.Equal("the password cannot be decrypted — it was saved by another user or on another Mac (bad tag); set it again on /tools › Database › SQL", SqlText.CannotDecrypt("bad tag"));
+        Assert.Equal("the password cannot be decrypted — it was saved by another user or on another Mac (bad tag); set it again on /tools › Databases › SQL", SqlText.CannotDecrypt("bad tag"));
         Assert.Equal(@"no password in the macOS Keychain for NeonSidekick/unc/x; set it on the UNC tab of /tools, or: security add-generic-password -s NeonSidekick/unc/x -a <DOMAIN\name> -w", UncText.NoCredential("NeonSidekick/unc/x"));
         Assert.Equal("The database file: a full path (/Users/you/data/app.db), or one relative to sqlite.json's folder.", SettingsMenu.SqliteWizardPathQuestion);
     }

@@ -271,14 +271,6 @@ public sealed class AppSettingsData
     public string MemoryMode { get; set; } = App.MemoryMode.Default;
 
     /// <summary>
-    /// What <c>/profile add</c> copies from the current profile: <c>basic</c> (the default: the settings and
-    /// the memories) or <c>advanced</c> (the settings plus the memories, persona, operating rules and voice
-    /// directive files, each when it exists). One of <see cref="Settings.NewProfileMode.Names"/>; anything
-    /// else reads as <see cref="Settings.NewProfileMode.Default"/>. No variable.
-    /// </summary>
-    public string NewProfileMode { get; set; } = Settings.NewProfileMode.Default;
-
-    /// <summary>
     /// How many lines of a collapsed paste the transcript shows under the sent line (2026-09-16),
     /// dim, closed by <c>[… +K more lines]</c> when the block is longer: 0 to
     /// <see cref="UI.PasteBlocks.MaxPreviewLines"/>, 0 = the <c>[Pasted text #n +L lines]</c>

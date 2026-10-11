@@ -186,7 +186,7 @@ public sealed class MySqlWriteGateTests
     public void Check_RefusesAKindNotTicked_AndARoutineIsCode()
     {
         Assert.Equal(
-            "Error: the SQL is deleting (DELETE, TRUNCATE), which the user has not allowed; mysql_execute may run changing data, creating, reading — the user ticks more in MySQL statements allowed on /tools › Database › MySQL",
+            "Error: the SQL is deleting (DELETE, TRUNCATE), which the user has not allowed; mysql_execute may run changing data, creating, reading — the user ticks more in MySQL statements allowed on /tools › Databases › MySQL",
             MySqlWriteGate.Check("TRUNCATE t", ServerStatementKinds.Resolve(null)));
         Assert.StartsWith("Error: the SQL is procedures and triggers", MySqlWriteGate.Check("CREATE FUNCTION f() RETURNS INT DETERMINISTIC RETURN 1", ServerStatementKinds.Resolve(null)));
         Assert.Null(MySqlWriteGate.Kinds("GRANT ALL ON t TO bob"));

@@ -253,8 +253,8 @@ public sealed class SqlToolsTests
         Assert.StartsWith("1 SQL connection (", listing);
         Assert.EndsWith("\n" + SqlText.HiddenConnections(2), listing);
         Assert.DoesNotContain("secret", listing);
-        Assert.Equal("2 more connections in sql.json are switched off for this profile (/tools › Database › SQL).", SqlText.HiddenConnections(2));
-        Assert.Equal("1 more connection in sql.json is switched off for this profile (/tools › Database › SQL).", SqlText.HiddenConnections(1));
+        Assert.Equal("2 more connections in sql.json are switched off for this profile (/tools › Databases › SQL).", SqlText.HiddenConnections(2));
+        Assert.Equal("1 more connection in sql.json is switched off for this profile (/tools › Databases › SQL).", SqlText.HiddenConnections(1));
 
         Assert.Equal(SqlText.UnknownConnection("secret", "prod"), await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("connection", "secret")));
         Assert.StartsWith("Error: could not connect to prod: ", await Invoke<SqlQueryTool>(("sql", "SELECT 1")));   // the only one offered: the hidden ones do not count

@@ -186,76 +186,113 @@ public static class SkillsText
         return lines;
     }
 
+    /// <summary>The catalog's heading on the Offered tab (2026-10-10, the user's ask: the <c>/settings</c> look). Pinned.</summary>
+    public const string CatalogTitle = "Skills";
+
+    /// <summary>The shadowed skills' heading on the Offered tab (2026-10-10), <see cref="ShadowedNote"/> on its rule. Pinned.</summary>
+    public const string ShadowedTitle = "Shadowed";
+
+    /// <summary>What the shadowed skills' rule says after its count (2026-10-10; <see cref="ShadowedHeading"/>'s brackets until then). Pinned.</summary>
+    public const string ShadowedNote = "a higher root holds the name";
+
+    /// <summary>The skipped folders' heading on the Offered tab (2026-10-10). Pinned.</summary>
+    public const string ProblemsTitle = "Skipped";
+
     /// <summary>
-    /// The Loaded tab as menu rows (2026-09-18): <see cref="LoadedLines"/>' content without its blank
-    /// separators, each as markup — a catalog row with the name in the label colour, the scope and
-    /// the description escaped after it, the <see cref="Skill"/> it stands for beside it; its warning
-    /// dim under it; the two headings in the label colour; a shadowed row dim with its skill beside
-    /// it (its scope is pickable too: the duplicate is the thing to clean up); a skipped folder dim;
-    /// <see cref="OffLine"/> or <see cref="NoneLine"/> dim and alone. Null beside every row that is
-    /// not a skill's. Under a <paramref name="filter"/> (2026-10-03, the user's ask, <see cref="MenuFilter"/>) only the skills
-    /// whose name or description holds it, each with its warning, the shadowed ones likewise and the skipped folders whose line
-    /// holds it, a heading left out with nothing under it; <see cref="MenuFilter.NoMatchRow"/> alone when none is left.
+    /// The Loaded tab as menu rows (2026-09-18): <see cref="LoadedLines"/>' content, each as markup — a catalog row with the name in
+    /// the label colour, the scope and the description escaped after it, the <see cref="Skill"/> it stands for beside it; its warning
+    /// dim under it; a shadowed row dim with its skill beside it (its scope is pickable too: the duplicate is the thing to clean up);
+    /// a skipped folder dim; <see cref="OffLine"/> or <see cref="NoneLine"/> dim and alone. Null beside every row that is not a skill's.
+    /// Under a <paramref name="filter"/> (2026-10-03, the user's ask, <see cref="MenuFilter"/>) only the skills whose name or description
+    /// holds it, each with its warning, the shadowed ones likewise and the skipped folders whose line holds it, a heading left out with
+    /// nothing under it; <see cref="MenuFilter.NoMatchRow"/> alone when none is left.
     /// </summary>
     /// <remarks>
     /// <paramref name="scope"/> (2026-10-10, the user's ask: the Offered tab's sub-tabs, <see cref="ScopeTabs"/>) keeps the skills and the
     /// shadowed ones of that root alone, and the skipped folders under it (<see cref="ProblemScope"/>); a scope holding none says
     /// <see cref="ScopeNoneLine"/>. Null is every root, as it was. The columns stay the whole catalog's either way.
+    /// Later on 2026-10-10 (the user's ask: the <c>/settings</c> look) each block sits under a <see cref="SectionRule"/> —
+    /// <see cref="CatalogTitle"/>, <see cref="ShadowedTitle"/>, <see cref="ProblemsTitle"/>, each with the count its scope holds,
+    /// whatever the filter leaves — an empty row before every one but the first (the <c>/tools</c> Offered shape), the rows under them
+    /// no longer indented; <c>Heading</c> true beside a heading alone (<see cref="HeadingRows"/>, the pane's <see cref="MenuTab.Headings"/>).
     /// </remarks>
-    public static IReadOnlyList<(string Markup, Skill? Skill)> LoadedRows(SkillsFacts facts, string filter = "", SkillScope? scope = null)
+    public static IReadOnlyList<(string Markup, Skill? Skill, bool Heading)> LoadedRows(SkillsFacts facts, string filter = "", SkillScope? scope = null)
     {
         ArgumentNullException.ThrowIfNull(facts);
         ArgumentNullException.ThrowIfNull(filter);
         if (!facts.Enabled)
         {
-            return [(Theme.DimMarkup(OffLine), null)];
+            return [(Theme.DimMarkup(OffLine), null, false)];
         }
 
         if (facts.Skills.Count == 0)
         {
-            return [(Theme.DimMarkup(NoneLine), null)];
+            return [(Theme.DimMarkup(NoneLine), null, false)];
         }
 
-        var rows = new List<(string, Skill?)>();
+        var rows = new List<(string, Skill?, bool)>();
         int width = NameWidth(facts);
         int versions = VersionWidth(facts);   // the version column (2026-10-07), sized on the whole list so a filter does not shift it
-        foreach (var skill in facts.Skills.Where(s => InScope(s, scope) && MenuFilter.Matches(filter, s.Name, s.Description)))
+        var listed = facts.Skills.Where(s => InScope(s, scope) && MenuFilter.Matches(filter, s.Name, s.Description)).ToList();
+        if (listed.Count > 0)
         {
-            // A disabled skill's row is dim whole, its name too (2026-10-09, the user's ask: the shadowed rows' look).
-            string rest = "  " + SkillScopes.Name(skill.Scope).PadRight(9) + VersionCell(facts, skill, versions) + skill.Description;
-            rows.Add((skill.Disabled ? Theme.DimMarkup(skill.Name.PadRight(width) + rest) : Styled(Theme.AccentSecondary, skill.Name.PadRight(width)) + Markup.Escape(rest), skill));
-            if (skill.Warning is { } warning)
+            Heading(CatalogTitle, facts.Skills.Count(s => InScope(s, scope)), null);
+            foreach (var skill in listed)
             {
-                rows.Add((Theme.DimMarkup(new string(' ', width + 2) + "(" + warning + ")"), null));
+                // A disabled skill's row is dim whole, its name too (2026-10-09, the user's ask: the shadowed rows' look).
+                string rest = "  " + SkillScopes.Name(skill.Scope).PadRight(9) + VersionCell(facts, skill, versions) + skill.Description;
+                rows.Add((skill.Disabled ? Theme.DimMarkup(skill.Name.PadRight(width) + rest) : Styled(Theme.AccentSecondary, skill.Name.PadRight(width)) + Markup.Escape(rest), skill, false));
+                if (skill.Warning is { } warning)
+                {
+                    rows.Add((Theme.DimMarkup(new string(' ', width + 2) + "(" + warning + ")"), null, false));
+                }
             }
         }
 
         var shadowed = facts.Shadowed.Where(s => InScope(s, scope) && MenuFilter.Matches(filter, s.Name, s.Description)).ToList();
         if (shadowed.Count > 0)
         {
-            rows.Add((Styled(Theme.AccentSecondary, ShadowedHeading), null));
+            Heading(ShadowedTitle, facts.Shadowed.Count(s => InScope(s, scope)), ShadowedNote);
             foreach (var skill in shadowed)
             {
-                rows.Add((Theme.DimMarkup("  " + ShadowedLine(skill, width)), skill));
+                rows.Add((Theme.DimMarkup(ShadowedLine(skill, width)), skill, false));
             }
         }
 
-        var problems = facts.Problems.Where(p => scope is null || ProblemScope(facts.Roots, p) == scope).Select(ProblemLine).Where(line => MenuFilter.Matches(filter, line, null)).ToList();
+        var inScope = facts.Problems.Where(p => scope is null || ProblemScope(facts.Roots, p) == scope).Select(ProblemLine).ToList();
+        var problems = inScope.Where(line => MenuFilter.Matches(filter, line, null)).ToList();
         if (problems.Count > 0)
         {
-            rows.Add((Styled(Theme.AccentSecondary, ProblemsHeading), null));
+            Heading(ProblemsTitle, inScope.Count, null);
             foreach (var line in problems)
             {
-                rows.Add((Theme.DimMarkup("  " + line), null));
+                rows.Add((Theme.DimMarkup(line), null, false));
             }
         }
 
         if (rows.Count == 0)
         {
-            rows.Add(filter.Length == 0 && scope is { } empty ? (Theme.DimMarkup(ScopeNoneLine(empty)), null) : (MenuFilter.NoMatchRow(filter), null));
+            rows.Add(filter.Length == 0 && scope is { } empty ? (Theme.DimMarkup(ScopeNoneLine(empty)), null, false) : (MenuFilter.NoMatchRow(filter), null, false));
         }
 
         return rows;
+
+        void Heading(string title, int count, string? note)
+        {
+            if (rows.Count > 0)
+            {
+                rows.Add(("", null, false));
+            }
+
+            rows.Add((SectionRule.Markup(title, count.ToString(System.Globalization.CultureInfo.InvariantCulture), note), null, true));
+        }
+    }
+
+    /// <summary>The indices of the heading rows of <paramref name="rows"/>: the pane's <see cref="MenuTab.Headings"/> (2026-10-10).</summary>
+    public static IReadOnlySet<int> HeadingRows(IReadOnlyList<(string Markup, Skill? Skill, bool Heading)> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        return Enumerable.Range(0, rows.Count).Where(i => rows[i].Heading).ToHashSet();
     }
 
     /// <summary>The Offered tab's first sub-tab (2026-10-10, the user's ask): every root's skills, the list as it was. Pinned.</summary>

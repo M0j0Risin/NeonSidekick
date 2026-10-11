@@ -111,9 +111,6 @@ public enum SettingsField
     /// <summary>Whether a <c>/tree</c> line carries the file's size (<see cref="Settings.AppSettingsData.FileTreeShowSizes"/>). The Files tab's row under Tree max length (on General until 2026-09-15; the last until the @-mention folder mode, 2026-09-17); no reconnect.</summary>
     FileTreeShowSizes,
 
-    /// <summary>A picker over <see cref="Settings.NewProfileMode.Names"/>: what <c>/profile add</c> copies. On the Chat tab under <see cref="Profile"/>; no reconnect (read at each <c>/profile add</c>).</summary>
-    NewProfileMode,
-
     /// <summary>Whether the thinking spinner reads a random <see cref="ThinkingVerbs"/> entry (<see cref="Settings.AppSettingsData.LlmUseFunVerbs"/>). Labelled <c>LLM use fun verbs</c> since 2026-09-15 (the member and the JSON key keep their name so a saved profile still loads); the Common tab's last row (the LLM tab's until 2026-10-10), alone as the cosmetic one (2026-10-01, the user's call); no reconnect (read at each spinner start).</summary>
     LlmUseFunVerbs,
 
@@ -1411,7 +1408,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
-        [SettingsField.Profile, SettingsField.Avatar, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.MemoryMode,
+        [SettingsField.Profile, SettingsField.Avatar, SettingsField.WorkingDirectory, SettingsField.MemoryMode,
          SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete,
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle,
          SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight,
@@ -1451,12 +1448,13 @@ internal sealed partial class SettingsMenu
     /// window, min calls and max requests; the cooldown, its mode and the sessions switch, 2026-09-19; the verbose switch, 2026-09-17, went later still on 2026-09-19). Edited through <see cref="FieldsTab"/> / <see cref="EditAsync"/>
     /// under the <c>/skills</c> strip (<see cref="SkillsMenu"/>), the pickers titled <c>Skills › …</c> (<see cref="Root"/>); none of
     /// them is <see cref="RefusedMidTurn"/>. With <see cref="TabFields"/> and <see cref="ToolsTabFields"/> they are every
-    /// <see cref="SettingsField"/> once (pinned); the flat no-pane list keeps them all.
+    /// <see cref="SettingsField"/> once (pinned); the flat no-pane list keeps them all. Both headed since 2026-10-10 (<see cref="SkillsMenuSections"/>, the user's ask),
+    /// the sessions switch moved up under the reflection's window rows.
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> SkillsTabFields =
     [
         [SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention],
-        [SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles, SettingsField.ReflectionInstalledSkills],
+        [SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles, SettingsField.ReflectionInstalledSkills],
     ];
 
     /// <summary>
@@ -1482,6 +1480,7 @@ internal sealed partial class SettingsMenu
     /// On 2026-10-10 (the user's call) the advisor's six were retired with <c>claude_code_advisor</c> and the four <c>/claude</c> rows joined
     /// them there, so the tab went.
     /// Image (2026-10-10, the user's ask, after File) is the File list's last five until then: <c>image_edit</c>'s quality, metadata, the edit mode, its output folder and the pasted pictures' folder.
+    /// Since later still on 2026-10-10 each list is headed (<see cref="ToolsMenuSections"/>, the user's ask), YouTube's autoplay and voice moved after its search rows to sit under Playing.
     /// With <see cref="TabFields"/> and <see cref="SkillsTabFields"/> they are every <see cref="SettingsField"/> once (pinned); the flat no-pane list keeps them all.
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
@@ -1504,7 +1503,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe],
         [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
         [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyOutputFolder],
-        [SettingsField.YouTubeTools, SettingsField.YouTubeApiKey, SettingsField.YouTubeSearchMaxResults, SettingsField.YouTubeAutoplay, SettingsField.YouTubeVoice, SettingsField.YouTubeSearchOrder, SettingsField.YouTubeSafeSearch, SettingsField.YouTubeRegion, SettingsField.YouTubeLanguage],
+        [SettingsField.YouTubeTools, SettingsField.YouTubeApiKey, SettingsField.YouTubeSearchMaxResults, SettingsField.YouTubeSearchOrder, SettingsField.YouTubeSafeSearch, SettingsField.YouTubeRegion, SettingsField.YouTubeLanguage, SettingsField.YouTubeAutoplay, SettingsField.YouTubeVoice],
         [SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount],
     ];
@@ -1996,7 +1995,6 @@ internal sealed partial class SettingsMenu
         SettingsField.ImageThumbnailSize => "Image thumbnail size",
         SettingsField.FileTreeMaxLength => "File /tree max length",
         SettingsField.FileTreeShowSizes => "File /tree show sizes",
-        SettingsField.NewProfileMode => "New profile mode",
         SettingsField.LlmOfferTools => "LLM offer tools",
         SettingsField.LlmUseFunVerbs => "LLM use fun verbs",
         SettingsField.LlmShowThinking => "LLM show thinking",
@@ -2329,7 +2327,6 @@ internal sealed partial class SettingsMenu
             SettingsField.ImageThumbnailSize => data.ImageThumbnailSize,
             SettingsField.FileTreeMaxLength => Entries(data.FileTreeMaxLength),
             SettingsField.FileTreeShowSizes => OnOff(data.FileTreeShowSizes),
-            SettingsField.NewProfileMode => data.NewProfileMode,
             SettingsField.LlmOfferTools => OnOff(data.LlmOfferTools),
             SettingsField.LlmUseFunVerbs => OnOff(data.LlmUseFunVerbs),
             SettingsField.LlmShowThinking => OnOff(data.LlmShowThinking),
@@ -3470,10 +3467,6 @@ internal sealed partial class SettingsMenu
         return Markup.Escape(name.PadRight(width)) + Theme.DimMarkup(ThemeName.Describe(name, themes));
     }
 
-    /// <summary>One row of the new-profile-mode picker: the mode and its hint (padded to nine: <c>advanced</c> is eight). Pinned.</summary>
-    public static string NewProfileModeLabel(string name) =>
-        Markup.Escape(name.PadRight(9)) + Theme.DimMarkup(NewProfileMode.Describe(name));
-
     /// <summary>One row of the push-to-talk picker: the key's name, the default marked. Pinned.</summary>
     public static string PushToTalkLabel(ConsoleKey key) =>
         Markup.Escape(key.ToString()) + (key == ConsoleKey.F4 ? Theme.DimMarkup("  the default") : "");
@@ -4398,7 +4391,8 @@ internal sealed partial class SettingsMenu
     /// A temporary profile (<see cref="Profiles.IsTemporary"/>, a <c>_</c> name) is left off unless it is the loaded one
     /// (2026-10-02, the user's ask); <c>/profile _name</c> still switches to it (<see cref="PickerNames"/>). A typed letter or
     /// digit jumps to the next profile starting with it (2026-10-06, the user's ask: as the theme picker does,
-    /// <see cref="MenuPage.JumpNames"/>).
+    /// <see cref="MenuPage.JumpNames"/>). Each row is led by its profile's avatar since 2026-10-10 (the user's ask,
+    /// <see cref="ProfilePickerRow"/>), blanks for none.
     /// </summary>
     public Task<bool> PickProfileAsync(CancellationToken cancellationToken) =>
         PickProfileAsync(ProfileTitle, ProfileKeys, close: true, cancellationToken);
@@ -4414,7 +4408,8 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        var page = new MenuPage(label, names.Select(Markup.Escape).ToList(), keys) { JumpNames = names };
+        // Each name led by its profile's avatar (2026-10-10, the user's ask); the type-ahead still reads the bare names.
+        var page = new MenuPage(label, ProfilePickerRows(names), keys) { JumpNames = names };
         int cursor = names.ToList().IndexOf(current);
         int? picked = close
             ? await PickOnceAsync(page, cursor, cancellationToken).ConfigureAwait(false)
@@ -4829,11 +4824,6 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.ImageThumbnailSize)
         {
             return await PickImageThumbnailSizeAsync(saved, cancellationToken).ConfigureAwait(false);
-        }
-
-        if (field == SettingsField.NewProfileMode)
-        {
-            return await PickNewProfileModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.WorkingDirectory && _browseFolder is not null && _pane.Enabled)
@@ -8687,21 +8677,6 @@ internal sealed partial class SettingsMenu
         int Row(string wanted) => themes.ToList().FindIndex(t => string.Equals(t.Name, wanted, StringComparison.OrdinalIgnoreCase));
         int row = Row(name.Trim());
         return row >= 0 ? row : Math.Max(0, Row(ThemeName.Default));
-    }
-
-    /// <summary>The new-profile-mode picker under the settings list: one <see cref="NewProfileModeLabel"/> row per <see cref="NewProfileMode.Names"/> entry, the saved one under the cursor.</summary>
-    private async Task<bool> PickNewProfileModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
-    {
-        var page = new MenuPage(Crumb(FieldName(SettingsField.NewProfileMode)), NewProfileMode.Names.Select(NewProfileModeLabel).ToList(), PickKeys);
-        int? picked = await PickAsync(page, Array.IndexOf(NewProfileMode.Names, saved.NewProfileMode), cancellationToken).ConfigureAwait(false);
-        if (picked is not { } index)
-        {
-            return Unchanged();
-        }
-
-        string name = NewProfileMode.Names[index];
-        Apply(SettingsField.NewProfileMode, d => d.NewProfileMode = name);
-        return true;
     }
 
     /// <summary>The row of <paramref name="level"/> in <see cref="Llm.ReasoningLevel.Levels"/>, or -1 when it is not one.</summary>

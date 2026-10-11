@@ -195,8 +195,11 @@ public static class ToolsText
     /// <summary>The print tools' tab and group (2026-09-28), after UNC, before Camera, since 2026-10-03 (the user's order; after Claude, before Obsidian, from later on 2026-10-01; after Home Assistant until then).</summary>
     public const string PrintTabTitle = "Print";
 
+    /// <summary>The tab that holds the Ask, Web, Shell and Options menus (2026-10-10, the user's ask): after Offered, before Files, each a tab of its own until then (Options the strip's last). Pinned.</summary>
+    public const string StandardTabTitle = "Standard";
+
     /// <summary>The tab that holds the five database menus (2026-10-09, the user's call): SQL, MySQL, SQLite, Postgres and Oracle, each a tab of its own until then.</summary>
-    public const string DatabaseTabTitle = "Database";
+    public const string DatabaseTabTitle = "Databases";   // "Database" until later on 2026-10-10 (the user's ask)
 
     /// <summary>The tab that holds the media menus (2026-10-09, the user's call): Print, Camera and Screen since 2026-10-10 (ComfyUI and YouTube on Integrations since, the user's ask), each a tab of its own until 2026-10-09.</summary>
     public const string MediaTabTitle = "Media";
@@ -220,17 +223,18 @@ public static class ToolsText
     /// Media, the user's ask): Offered, Ask, Web, Shell, Files, Integrations, Database, Media, Options — the arrows walking the menus as before
     /// up to Home, then ComfyUI and YouTube, the five databases, Print, Camera, Screen. Later on 2026-10-10 (the user's ask) the Image menu
     /// after File on Files (<see cref="ImageMenuTitle"/>), and later still the ClaudeCode menu went (the Claude Code advisor tool retired, <c>/claude</c>'s
-    /// rows to <c>/settings</c>' Anthropic tab), Integrations opening on Docker.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, AskTabTitle, WebTabTitle, ShellTabTitle, FilesTabTitle, IntegrationsTabTitle, DatabaseTabTitle, MediaTabTitle, OptionsTabTitle];
+    /// rows to <c>/settings</c>' Anthropic tab), Integrations opening on Docker. Later still on 2026-10-10 (the user's ask) Ask, Web and Shell went
+    /// under one Standard tab after Offered (<see cref="StandardTabTitle"/>), Options its last menu (the user's ask): Offered, Standard, Files, Integrations, Database, Media.</summary>
+    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, StandardTabTitle, FilesTabTitle, IntegrationsTabTitle, DatabaseTabTitle, MediaTabTitle];
 
     /// <summary>
     /// The menus each tab after Offered holds, as indexes into <see cref="SettingsMenu.ToolsTabFields"/> and <see cref="MenuTitles"/> (2026-10-09):
-    /// one for a plain tab, its rows the tab's; more for a group tab — <see cref="FilesTabTitle"/>, <see cref="IntegrationsTabTitle"/> (2026-10-10),
+    /// one for a plain tab, its rows the tab's; more for a group tab — <see cref="StandardTabTitle"/> (later on 2026-10-10), <see cref="FilesTabTitle"/>, <see cref="IntegrationsTabTitle"/> (2026-10-10),
     /// <see cref="DatabaseTabTitle"/> and <see cref="MediaTabTitle"/> — whose menus are sub-tabs on a second strip (<see cref="ToolsMenu"/>). Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[0], [1], [2], [3, 4, 5, 19, 9], [15, 16, 17, 18], [10, 11, 12, 13, 14], [6, 7, 8], [20]];
+    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[0, 1, 2, 20], [3, 4, 5, 19, 9], [15, 16, 17, 18], [10, 11, 12, 13, 14], [6, 7, 8]];
 
-    /// <summary>Whether tab <paramref name="tab"/> (a <see cref="TabTitles"/> index) holds menus rather than rows: Files, Integrations, Database and Media.</summary>
+    /// <summary>Whether tab <paramref name="tab"/> (a <see cref="TabTitles"/> index) holds menus rather than rows: Standard, Files, Integrations, Database and Media.</summary>
     public static bool IsGroupTab(int tab) => tab > 0 && tab < TabTitles.Count && TabMenus[tab - 1].Count > 1;
 
     /// <summary>The menu titled <paramref name="title"/>'s index into <see cref="MenuTitles"/>; −1 for none.</summary>

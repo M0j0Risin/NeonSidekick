@@ -59,7 +59,6 @@ public static class HelpSettings
         SettingsField.ImageThumbnailSize => "`tiny` (32×8), `small` (48×12), `medium` (64×16), `large` (80×20) or `xlarge` (96×24) columns × rows, or `fullsize`: each picture as large as the transcript allows, stacked.",
         SettingsField.FileTreeMaxLength => "How many entries `/tree` prints before it stops (1–10000).",
         SettingsField.FileTreeShowSizes => "`/tree` shows each file's size.",
-        SettingsField.NewProfileMode => "What `/profile add` copies from the current profile: `basic` copies the settings and memories; `advanced` also copies the persona, operating-rules and voice-directive files.",
         SettingsField.LlmUseFunVerbs => "The thinking spinner shows a random verb instead of `thinking` / `writing`.",
         SettingsField.LlmScanMode => "Where the app looks for a server while *LLM URL* is blank: `local` (the usual ports on this machine), `remote` (the same ports across the local network), `both`, or `disabled`. With `disabled` nothing is scanned: set the URL by hand, or pick the embedded model or the Anthropic API in `/server`.",
         SettingsField.WebTools => "Offers `web_search`, `web_fetch`, `open_url` and `download_file`.",

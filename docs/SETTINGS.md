@@ -18,7 +18,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 
 ## Navigation
 * **Keyboard:** ←/→ switch tabs, ↑/↓ move, Enter edits or toggles, Space flips an on/off row at once, ESC closes.
-* **What a row does:** under the list, the highlighted setting's description and its default. On the Offered tabs of `/tools` and `/skills`, and `/mcp`'s Tools tab, it is the highlighted tool's or skill's whole description, with why it isn't offered (a tool's) or its warning (a skill's) on the last line. A long tab is split into sections (Chat, Common, Http, Botchat), and a tab whose rows all start with its name drops the name (the Botchat tab's *Botchat LLM mode* reads *LLM mode*; notices and this file keep the full name).
+* **What a row does:** under the list, the highlighted setting's description and its default. On the Offered tabs of `/tools` and `/skills`, and `/mcp`'s Tools tab, it is the highlighted tool's or skill's whole description, with why it isn't offered (a tool's) or its warning (a skill's) on the last line. Every settings tab of `/settings`, `/tools`, `/skills` and `/mcp` is split into runs under headings the cursor steps past (the Offered lists and `/mcp`'s Servers tab too, and `/usage`'s figures), and a tab whose rows all start with its name drops the name (the Botchat tab's *Botchat LLM mode* reads *LLM mode*; notices and this file keep the full name).
 * **Under a list:** the other list panes show the highlighted row whole under the list too, with what the row has no room for: `/sessions` (when it started and last ran, its turns and model), `/queue` and `/rewind` (the whole message), `/process` (the whole command, its state and run time), `/docker` (image, project, ports, networks, status), `/youtube list` and a YouTube search's results, the `/server` and `/model` pickers (the URL, the probe's detail, the whole model id), `/mcp`'s Servers tab (a failed server's whole error, a connected one's tools, the file an edit row opens), and the allowed commands and police strings.
 * **Typing to filter:** on `/sessions`, `/server`, `/docker`, `/youtube list` and the allowed commands, as on `/model` and the Offered tabs, typing narrows the list (the caption counts what is left); Backspace erases, the first ESC clears it. A pane's own key letters (`/docker`'s `r`, `/youtube list`'s `d` and `c`) still work until you start typing.
 * **Keys:** the hint row names each key in lowercase (`w = watch`), and ESC reads *close* on a pane's top level and *back* on a page opened from it. Removing anything from a list asks first, with No on the cursor, and an empty list opens its pane on one dim line. Every pane's keys are listed under [Pane keys](COMMANDS.md#pane-keys).
@@ -26,7 +26,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 * **Tabs:** the tab you are on is underlined. A small number after a tab's name (`Client³`) counts its settings that differ from the default; those settings' values show in the same colour.
 * **Scrolling:** a list cut by the window ends in a row like `▲▼ 13–25 of 58`, an arrow for each way there is more.
 * **`/tools` Offered:** a group that is off says why on its heading (the one reason that holds), and a tool switched on under it reads `(on)`.
-* **Second strip:** some tabs hold tabs of their own, shown as a second row of tabs under the first while you are on it: `/settings`' Client (Chat, Sessions, Botchat), Servers (Common, Http, Embedded, Docker, Anthropic, OpenAI) and Voice (TTS, STT), `/tools`' Files, Integrations, Database and Media (their menus), `/skills`' Offered (all, profile, global) and `/mcp`'s Tools with two servers or more connected (all, then each server). ←/→ step through every one in turn and on into the next tab (on `/tools` from Obsidian into Docker, from YouTube into SQL, from Oracle into Print), Tab and Shift+Tab jump a whole tab and skip past them, and coming back finds the one you left. A click on a name shows it.
+* **Second strip:** some tabs hold tabs of their own, shown as a second row of tabs under the first while you are on it: `/settings`' Client (Chat, Sessions, Botchat), Servers (Common, Http, Embedded, Docker, Anthropic, OpenAI) and Voice (TTS, STT), `/tools`' Standard, Files, Integrations, Databases and Media (their menus), `/skills`' Offered (all, profile, global) and `/mcp`'s Tools with two servers or more connected (all, then each server). ←/→ step through every one in turn and on into the next tab (on `/tools` from Options into File, from Obsidian into Docker, from YouTube into SQL, from Oracle into Print), Tab and Shift+Tab jump a whole tab and skip past them, and coming back finds the one you left. A click on a name shows it.
 * **Mouse:** a click moves the cursor; a double-click picks a row or tab (on the input line, selects a word). The × at the top right works like ESC, and a double-click outside an open pane closes it. A double-click on a picture in the transcript opens it in the [picture viewer](COMMANDS.md#picture-viewer).
 
 ## The input line
@@ -164,7 +164,6 @@ The pane heads its runs **Who and where**, **Input line**, **Transcript**, **Scr
 |---|---|---|
 | Profile | Switches profile (each has its own settings, persona, memory, skills and sessions); a typed letter jumps to the next profile starting with it. | `neon` |
 | Avatar | The profile's emoji: it opens each of the profile's replies in place of ●, marks its `/botchat` speaker line in place of ◆, and goes before its name in the window title. Enter opens a grid picker (see [The avatar picker](#the-avatar-picker)); `/avatar` opens it too. 🚫 on the picker (or `/avatar clear`) leaves none. `/profile reset` keeps it; a profile `/profile add` makes starts with 🤖; `/profile push`/`pull` never carry it. | 🤖 |
-| New profile mode | What `/profile add` copies: `basic` the settings and memories; `advanced` also the persona, operating-rules and voice-directive files. | `basic` |
 | Working directory (cwd) | The folder the file and GitLib tools work in; empty is the profile's `files\` folder. The row opens the `/cwd browse` folder picker; `/cwd <path>` sets one by hand. | profile's `files\` |
 | Memory mode | `read-write` offers `save_memory` / `recall_memory` and opens every conversation with what is remembered; `read-only` offers `recall_memory` alone, so the model reads but never saves (your `/remember` still does); `disabled` turns memory off and refuses `/remember`. | read-write |
 | Queue mode | How messages are queued. `automatic`: messages sent during a reply are listed (a count, and `/queue`) and sent when it ends. `manual`: every typed message is queued, at the idle line too, and nothing is sent until you press `➤ send` (or `s`) on `/queue`; each press sends one, and under a reply it goes when the reply ends. Commands and spoken requests are never queued. Without the bottom pane, `manual` acts as `automatic`. `disabled`: no queue; a line sent during a reply still goes when the reply ends, just not listed, and `/queue` leaves the `/` list. | `automatic` |
@@ -556,11 +555,13 @@ Other profiles this one consults, each in a role you give it: `neon_advisor` for
 
 ### Offered
 
-The loaded skills with their scope (`profile`, `global` or `external`), their version (`v1` as written, one more for each older text kept; blank for an external skill) and description, then any shadowed duplicates and skipped folders (with the reason). Enter on a skill can move it between the profile and global folders, rename it (lower-case-with-hyphens; a taken name is refused), edit its `SKILL.md` in your editor, revert it to a kept version you pick (see [Skill history](#skill-history)), lock or unlock it (see [Locking a skill](#locking-a-skill)), disable or enable it (see [Disabling a skill](#disabling-a-skill)), or delete it after a confirmation. A locked skill's version reads `🔒 v4`, and its footer says it is locked. A disabled skill's reads `⛔ v4` (also when it is locked), its whole row is dim, and its footer says it is disabled.
+The loaded skills with their scope (`profile`, `global` or `external`), their version (`v1` as written, one more for each older text kept; blank for an external skill) and description, then any shadowed duplicates and skipped folders (with the reason), each run under its heading with its count (**Skills**, **Shadowed**, **Skipped**). Enter on a skill can move it between the profile and global folders, rename it (lower-case-with-hyphens; a taken name is refused), edit its `SKILL.md` in your editor, revert it to a kept version you pick (see [Skill history](#skill-history)), lock or unlock it (see [Locking a skill](#locking-a-skill)), disable or enable it (see [Disabling a skill](#disabling-a-skill)), or delete it after a confirmation. A locked skill's version reads `🔒 v4`, and its footer says it is locked. A disabled skill's reads `⛔ v4` (also when it is locked), its whole row is dim, and its footer says it is disabled.
 
 The tab's second strip narrows the list to one scope: *all* (the whole list, where every visit starts), *profile*, *global*, and *external* while an external skill is listed, each with its count. A scope shows its own skills, the shadowed skills from its folder and the skipped folders under it. ←/→ walk the scopes on the way to the next tab, and Tab steps past them. The typed filter works on every scope.
 
 ### Reflection
+
+The pane heads its runs **Learning**, **What it reads**, **Pace** and **What it may change**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -569,9 +570,9 @@ The tab's second strip narrows the list to one scope: *all* (the whole list, whe
 | Reflection window | How many recent turns a reflection reads (1–5; the last in full, earlier ones trimmed). | 3 |
 | Reflection min tool calls | The model's own tool calls since the last reflection that make a task worth a skill (3–20). | 4 |
 | Reflection max requests | Model requests one reflection may spend (1–20). | 4 |
+| Reflection includes sessions | The reflection starts from earlier sessions that match the turn, and can search them. | on |
 | Reflection cooldown (minutes) | How long automatic reflections wait after one wrote a skill (0–1440; 0 = off). A turn where that skill was loaded and then hit an error never waits. | 5 |
 | Reflection cooldown mode | `last-written-skill`: only turns that used the skill just written wait. `all-skills`: every automatic reflection waits. | `last-written-skill` |
-| Reflection includes sessions | The reflection starts from earlier sessions that match the turn, and can search them. | on |
 | Reflection yields to turns | A message sent during a reflection pauses it so the reply gets the server; it reruns afterwards. Turn off if your server handles parallel requests. | on |
 | Reflection edit supporting files | Lets a reflection change a skill's supporting files too (with `skill_editor`'s `write_file` and `edit_file`), not just `SKILL.md`. The main chat always may. | off |
 | Reflection downloaded skills | For skills from `/skills add`: `read-only` makes the reflection write a companion skill instead, so updates stay clean; `allow-and-mark` lets it change the skill, and a later update warns first. | `allow-and-mark` |
@@ -579,6 +580,8 @@ The tab's second strip narrows the list to one scope: *all* (the whole list, whe
 A reflection must `load_skill` a skill before rewriting its instructions or a supporting file, and is refused if the skill changed since that load. A description-only change needs no load.
 
 ### Options
+
+The pane heads its runs **Sources** and **Prompt and mentions**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -654,7 +657,13 @@ On `/skills`, Enter on a skill, then `disable`, switches it off without removing
 
 Every tool, grouped, the groups in alphabetical order, with the description the model reads. Enter or Space switches one; a group whose switch is off is dim. The Help group (`neon_help`) has no switch of its own, so turn it off here. In a new profile, `gitlib_delete`, `zip`, `unzip`, `unc_delete`, `docker_remove`, `docker_prune` and `ha_todo` start off.
 
-### Ask
+### Standard
+
+The tools most profiles use and the pane's own options, four menus on one tab, each a tab of the second strip (Ask · Web · Shell · Options): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10.
+
+#### Ask
+
+The pane heads its runs **Questions** and **Limits**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -662,7 +671,9 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 | Ask max questions | Questions per call (1–10). | 10 |
 | Ask max choices per question | Options per question (2–15). | 10 |
 
-### Web
+#### Web
+
+The pane heads its runs **Browser**, **Search** and **Downloads**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -675,7 +686,9 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 | Web search max results | Hits per search (1–20). | 20 |
 | Web download max (MB) | The largest file `download_file` saves (1–102400), streamed to disk. A download silent for 60 s is dropped, and no partial file stays. | 50 |
 
-### Shell
+#### Shell
+
+The pane heads its runs **Policy**, **Guards**, **Commands** and **Scripts**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -693,7 +706,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 | Shell tool bridge | Lets an `execute_code` script call the app's other tools through its `neon_tools` module (a loopback socket with a per-run token). | off |
 | Shell tool bridge max calls | Tool calls one script may make through the bridge (1–500). | 50 |
 
-#### Shell guards
+##### Shell guards
 
 * **Approval (`ask`):** the pane offers Deny, Allow once, Allow the prefixes for this session, or Allow them always. The command shows above them, cut to three rows (a script by its first line); `v` or the **≡ view** button shows the whole of it, a script's lines numbered, and ESC comes back to the question. A prefix is the program plus its subcommand for git, dotnet, npm, pip, gh, docker, cargo, go, winget, net and the like, otherwise the program alone. `--yolo` and `NEONSIDEKICK_COMMAND_POLICY` override the policy for one launch.
 * **Path police** reads the text of a `run_command` line, an `execute_code` script, or `process` input, and refuses an absolute path outside the working directory (`C:\…`, a UNC share, `/etc/hosts`), a `..` that climbs out, `~`, or a folder variable (`%USERPROFILE%`, `$env:TEMP`, `$HOME`, `Path.home()`…). The model gets `Error: outside the working directory: '…'` and the transcript shows 👮.
@@ -730,11 +743,28 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 
   A lone command such a tool covers comes back as `Not run: 'cat' has a tool of its own — call read_file instead…`, once a turn (sent again, it goes to the pane). Pipes and compound lines, commands with no tool (`git push`) and tools switched off are never sent back.
 
+#### Options
+
+The pane heads its runs **Mentions**, **Folding** and **Diffs**.
+
+| Setting | What it does | Default |
+|---|---|---|
+| $-mention enabled | `$` and part of a name lists the tools the next turn offers; a pick writes `$name`. | on |
+| Tool collapse count | A run of more tool calls than this folds to one summary line (`▸ 🛠️ 7 tool calls — read_file ×3, …`); 0 never folds (0–100). | 2 |
+| Code collapse count | A code block longer than this folds to its label (`▸ 📜 csharp · 57 lines`) once complete; while streaming, only its last lines show (0–100; 0 never folds). Needs *Transcript markdown*. | 20 |
+| Show file diffs | A file edit (`patch_file`, `write_file`, `unc_patch`, `unc_write`) shows its diff under its line: `└ Added 3 lines, removed 1 line`, then the changed lines numbered with three of context, added ones on a green slab, removed ones on a red, coloured by the file's language. It folds with the tool run (the note and its diff count as one). The model's result is the same either way. | on |
+| Diff max lines | The most rows of an edit's diff shown; past it `… 12 more lines` ends it (0–500; 0 = the header line alone). | 10 |
+| Diff collapse count | An edit's diff of more rows than this (counted over the whole diff, past *Diff max lines* too) shows open while its tool run goes on, then folds to `▸ Added 3 lines, removed 1 line · 14 rows` once the run is over (0–500; 0 never folds). | 10 |
+
+To see a folded block or diff, click it, press Ctrl+O, click **⤡** or use `/expand`.
+
 ### Files
 
 The file tools and the places beyond the working directory they reach, five menus on one tab, each a tab of the second strip (File · Image · UNC · GitLib · Obsidian): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10.
 
 #### File
+
+The pane heads its runs **Files**, **/tree**, **Browsing** and **Limits**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -748,7 +778,7 @@ The file tools and the places beyond the working directory they reach, five menu
 
 #### Image
 
-The picture tools' switch and their rows: `image_edit`'s defaults, where an edit goes (the picture menu's too) and where a pasted picture is saved. On File until 2026-10-10.
+The picture tools' switch and their rows: `image_edit`'s defaults, where an edit goes (the picture menu's too) and where a pasted picture is saved. On File until 2026-10-10. The pane heads its runs **Editing** and **Folders**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -760,6 +790,8 @@ The picture tools' switch and their rows: `image_edit`'s defaults, where an edit
 | Pasted images folder | Where a picture pasted from the clipboard is saved when its message is sent, under the profile's `images` folder (empty = the `images` folder). The message names the file (`[Image #1, saved as …]`) so the model's picture tools can use it. A dropped file isn't copied. | `pasted_images` |
 
 #### UNC
+
+The pane heads its runs **Access**, **Shares** and **Files**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -774,6 +806,8 @@ The picture tools' switch and their rows: `image_edit`'s defaults, where an edit
 
 #### GitLib
 
+The pane heads its runs **Tools** and **Identity**.
+
 | Setting | What it does | Default |
 |---|---|---|
 | GitLib tools | Offers the in-process git tools (status, log, show, diff, blame, branch, stage, commit, stash, discard, delete) over the working directory's repository. Off, git goes through the shell and `/gituser` does nothing. | off |
@@ -783,6 +817,8 @@ The picture tools' switch and their rows: `image_edit`'s defaults, where an edit
 | GitLib name | The `user.name` `/gituser` writes beside it. | (not set) |
 
 #### Obsidian
+
+The pane heads its run **Vault**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -796,6 +832,8 @@ The apps and services the tools reach, four menus on one tab, each a tab of the 
 
 #### Docker
 
+The pane heads its runs **Access** and **Engine**.
+
 | Setting | What it does | Default |
 |---|---|---|
 | Docker tools | Offers `docker_containers`, `docker_logs`, `docker_inspect`, `docker_stats`, `docker_resources` and `docker_compose`, whether Docker Desktop runs or not. `/docker` works either way. See [Docker](TOOLS.md#docker). Never on a Mac (`/tools`: *off: it needs Windows*). | off |
@@ -803,6 +841,8 @@ The apps and services the tools reach, four menus on one tab, each a tab of the 
 | Docker engine pipe | The engine's named pipe: a name (`docker_engine` is Docker Desktop's), `\\.\pipe\name` or `npipe:////./pipe/name`. Blank is the default. | `\\.\pipe\docker_engine` |
 
 #### HomeAssistant
+
+The pane heads its runs **Connection** and **Requests**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -817,6 +857,8 @@ The apps and services the tools reach, four menus on one tab, each a tab of the 
 The services that run unasked under `ask` can be changed in `profile.json` (`homeAssistantSafeServices`: `light.*`, `remote.send_command`…).
 
 #### ComfyUI
+
+The pane heads its runs **Server**, **Workflows**, **Runs** and **Pictures**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -834,23 +876,27 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 
 #### YouTube
 
+The pane heads its runs **Connection**, **Search** and **Playing**.
+
 | Setting | What it does | Default |
 |---|---|---|
 | YouTube tools | Offers the YouTube tools: `youtube_search` and `youtube_playlist` (with a key below), and `youtube_play`, `youtube_control` and `youtube_status`, which play a video or a public playlist in the app's own video window (Windows, with the WebView2 Runtime Windows 11 has; or macOS 14 or later, through WebKit). Playing by a video's or playlist's id or link needs no key. Headless offers the search and the playlist listing. The top of its on/off page has **max** (`m`), **voice** (`v`), **order** (`o`) and **safe** (`s`) buttons that open *YouTube search max results*, *YouTube while speaking*, *YouTube search order* and *YouTube safe search*; ESC there comes back. | off |
 | YouTube API key | A YouTube Data API v3 key, for searching: in the [Google Cloud Console](https://console.cloud.google.com/), create a project, enable *YouTube Data API v3* (APIs & Services › Library), create an API key under Credentials and restrict it to that API, with no application restriction. A search costs 100 of the project's 10,000 free units a day (about 100 searches). Typed masked and saved encrypted (DPAPI on Windows, the Keychain on a Mac); sent only to www.googleapis.com, in a header, never in a URL. `/profile push keys` copies it; a plain `/profile reset` keeps it. | (none) |
 | YouTube search max results | How many videos (or playlists, or channels) a search lists (1–20), for the model and in `/youtube`'s picker. The quota cost is the same whatever the count. | 8 |
-| YouTube autoplay | Whether a played video starts at once, sound included, or waits cued for a play. | on |
-| YouTube while speaking | What a playing video does while the app speaks a reply (first word to last) or listens to you (push-to-talk, or after the wake phrase): `pause` and play on after, `duck` to 15% and back up, or `none`. Only what the app did is undone: a video you paused stays paused. | `pause` |
 | YouTube search order | The order a search lists in unless it names one (a picker): `relevance` (YouTube's own ranking), `date` (newest first), `views`, `rating` or `title`. The model's `order` and `/youtube search --order` override it for one search. | `relevance` |
 | YouTube safe search | How much restricted content a search leaves out unless it names a level (a picker): `none`, `moderate` (YouTube's own default) or `strict`. The model's `safe_search` and `/youtube search --safe` override it. | `moderate` |
 | YouTube region | A two-letter country code (`US`, `GB`, `DE`) a search asks for: what can be watched and is popular there. Empty for any region. The model's `region` and `/youtube search --region` override it. | (any region) |
 | YouTube language | A language code (`en`, `es`, `zh-Hans`) a search favours: results in it rank higher, the rest are still listed. Empty for any language. The model's `language` and `/youtube search --lang` override it. | (any language) |
+| YouTube autoplay | Whether a played video starts at once, sound included, or waits cued for a play. | on |
+| YouTube while speaking | What a playing video does while the app speaks a reply (first word to last) or listens to you (push-to-talk, or after the wake phrase): `pause` and play on after, `duck` to 15% and back up, or `none`. Only what the app did is undone: a video you paused stays paused. | `pause` |
 
-### Database
+### Databases
 
-The five database families, five menus on one tab, as on Media: a second strip under the first (SQL · MySQL · SQLite · PostgreSQL · Oracle), ←/→ walking them. Each was a tab of its own until 2026-10-09.
+The five database families, five menus on one tab, as on Media: a second strip under the first (SQL · MySQL · SQLite · PostgreSQL · Oracle), ←/→ walking them. Each was a tab of its own until 2026-10-09; the tab was Database until 2026-10-10.
 
 #### SQL
+
+The pane heads its runs **Access**, **Connections**, **Queries** and **Files**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -871,6 +917,8 @@ The Oracle, MySQL and PostgreSQL menus and the UNC tab work like this one, over 
 
 #### MySQL
 
+The pane heads its runs **Access**, **Connections**, **Queries** and **Files**.
+
 | Setting | What it does | Default |
 |---|---|---|
 | MySQL tools | Offers the MySQL tools (connections, tables, columns, describe, relationships, indexes, query), for MySQL 8.0.16+ and MariaDB 10.2+, each connection held to its own database. | off |
@@ -886,6 +934,8 @@ The Oracle, MySQL and PostgreSQL menus and the UNC tab work like this one, over 
 | MySQL connections (global) | As *SQL connections (global)*. | (none) |
 
 #### SQLite
+
+The pane heads its runs **Access**, **Databases**, **Queries** and **Files**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -903,6 +953,8 @@ The Oracle, MySQL and PostgreSQL menus and the UNC tab work like this one, over 
 
 #### PostgreSQL
 
+The pane heads its runs **Access**, **Connections**, **Queries** and **Files**.
+
 | Setting | What it does | Default |
 |---|---|---|
 | PostgreSQL tools | Offers the PostgreSQL tools (connections, schemas, tables, columns, describe, relationships, indexes, query), each connection held to its own database (and to one schema when its entry names one). | off |
@@ -918,6 +970,8 @@ The Oracle, MySQL and PostgreSQL menus and the UNC tab work like this one, over 
 | PostgreSQL connections (global) | As *SQL connections (global)*. | (none) |
 
 #### Oracle
+
+The pane heads its runs **Access**, **Connections**, **Queries** and **Files**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -939,6 +993,8 @@ The picture and print tools, three menus on one tab, each a tab of the second st
 
 #### Print
 
+The pane heads its runs **Printing** and **Output**.
+
 | Setting | What it does | Default |
 |---|---|---|
 | Print tools | Offers `list_printers` and `print_file`. `/print` works either way. On a Mac they print through CUPS, to the printers set up in System Settings. The top of its on/off page has a **printer** button (`p`) that opens *Print default printer*; ESC there comes back. | off |
@@ -948,6 +1004,8 @@ The picture and print tools, three menus on one tab, each a tab of the second st
 | PDF engine | What makes a PDF for `convert_to_pdf` and `/pdf`. `auto`: Edge, Chrome or Brave, else Microsoft Print to PDF, which also takes over when the browser fails. `browser`: the browser only. `printer`: Microsoft Print to PDF only (Markdown, text and pictures). See [Making PDFs](TOOLS.md#making-pdfs). On a Mac only the browser makes PDFs (Edge, Chrome, Brave or Chromium); `printer` needs Windows. | `auto` |
 
 #### Camera
+
+The pane heads its runs **Shutter**, **Device**, **Photos** and **Watch**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -965,6 +1023,8 @@ The picture and print tools, three menus on one tab, each a tab of the second st
 
 #### Screen
 
+The pane heads its runs **Capture** and **Pictures**.
+
 | Setting | What it does | Default |
 |---|---|---|
 | Screen capture tool | Offers `screen_capture` and `screen_list`, so the model can see a monitor, every monitor or one window. Never offered headless or to an embedded model without vision. `/screen` works either way. On a Mac the terminal app needs the Screen Recording permission (see [Screen capture](COMMANDS.md#screen-capture)). The top of its on/off page has **ask** (`a`) and **preview** (`p`) buttons that open *Screen capture ask* and *Screen capture preview*; ESC there comes back. | off |
@@ -973,30 +1033,19 @@ The picture and print tools, three menus on one tab, each a tab of the second st
 | Screen capture output folder | Where screenshots are saved, under the profile's `images` folder (empty = the `images` folder), out of the working directory. | `screen_images` |
 | Screen capture keep in sessions | Off, a stored session keeps a line naming the screenshot instead of the picture. | off |
 
-### Options
-
-| Setting | What it does | Default |
-|---|---|---|
-| $-mention enabled | `$` and part of a name lists the tools the next turn offers; a pick writes `$name`. | on |
-| Tool collapse count | A run of more tool calls than this folds to one summary line (`▸ 🛠️ 7 tool calls — read_file ×3, …`); 0 never folds (0–100). | 2 |
-| Code collapse count | A code block longer than this folds to its label (`▸ 📜 csharp · 57 lines`) once complete; while streaming, only its last lines show (0–100; 0 never folds). Needs *Transcript markdown*. | 20 |
-| Show file diffs | A file edit (`patch_file`, `write_file`, `unc_patch`, `unc_write`) shows its diff under its line: `└ Added 3 lines, removed 1 line`, then the changed lines numbered with three of context, added ones on a green slab, removed ones on a red, coloured by the file's language. It folds with the tool run (the note and its diff count as one). The model's result is the same either way. | on |
-| Diff max lines | The most rows of an edit's diff shown; past it `… 12 more lines` ends it (0–500; 0 = the header line alone). | 10 |
-| Diff collapse count | An edit's diff of more rows than this (counted over the whole diff, past *Diff max lines* too) shows open while its tool run goes on, then folds to `▸ Added 3 lines, removed 1 line · 14 rows` once the run is over (0–500; 0 never folds). | 10 |
-
-To see a folded block or diff, click it, press Ctrl+O, click **⤡** or use `/expand`.
-
 ## MCP servers (`/mcp`)
 
 ### Servers
 
-One row per server in `mcp.json` (the profile's, then the home folder's; the profile's wins a name clash), with its transport and state: `connected · N tools`, `connecting`, `failed: …` or `off`. Enter or Space turns one on or off (Enter on a failed one retries). Below them: `edit profile mcp.json`, `edit global mcp.json`, `reload`, and any skipped entries.
+One row per server in `mcp.json` (the profile's, then the home folder's; the profile's wins a name clash), with its transport and state: `connected · N tools`, `connecting`, `failed: …` or `off`. Enter or Space turns one on or off (Enter on a failed one retries). Below them: `edit profile mcp.json`, `edit global mcp.json`, `reload`, and any skipped entries. The three runs sit under the headings **Servers**, **Files** and **Skipped**, the first and last with their counts.
 
 ### Tools
 
 Every connected server's tools, as `<server>__<tool>`, with the server's description. Enter or Space switches one. With two servers or more connected, the tab's second strip shows *all* of them or one server's alone (←/→ walk them on the way to Options, Tab steps past), and the typed filter works on each.
 
 ### Options
+
+The pane heads its run **Servers**.
 
 | Setting | What it does | Default |
 |---|---|---|

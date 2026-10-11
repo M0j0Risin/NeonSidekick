@@ -1,4 +1,5 @@
 using NeonSidekick.App;
+using NeonSidekick.UI;
 using NeonSidekick.Llm;
 using Spectre.Console.Testing;
 
@@ -177,7 +178,7 @@ public class UsageTextTests
         console.Profile.Width = 2000;
         console.Write(UsageText.StatisticsTab(tally, null));
         string[] lines = Lines(console);
-        Assert.Equal("Skill learning       2 requests · 3,120 tokens", lines[^2]);   // under the launch section's blank row
+        Assert.Equal("  Skill learning       2 requests · 3,120 tokens", lines.Last(l => l.Length > 0));   // the launch section's last row
 
         var one = new TokenTally();
         one.AddLearning(TokenUsage.Zero, requests: 1);
@@ -226,42 +227,49 @@ public class UsageTextTests
         Assert.Equal([("Window", "4,096")], UsageText.ContextRows(cleared, Window));
     }
 
+    /// <summary>A section's rule as the tab draws it at <paramref name="width"/> (2026-10-10, the user's ask): the label, its note after a run of rule, the rule to the edge.</summary>
+    private static string Head(string label, string note = "", int width = 80)
+    {
+        string text = "── " + label + (note.Length > 0 ? " ── " + note : "");
+        return text + " " + new string(ScreenPane.RuleGlyph, width - TextCells.Width(text) - 1);
+    }
+
     [Fact]
     public void StatisticsTab_RendersAHeadingPerScope_OverItsRows()
     {
         using var console = new TestConsole();
-        console.Profile.Width = 2000;
+        console.Profile.Width = 80;
         console.Write(UsageText.StatisticsTab(Filled(), Window));
 
         string[] lines = Lines(console);
-        // The Context section first, its source dim in the value column.
-        Assert.Equal("Context              max_model_len on /v1/models", lines[0]);
-        Assert.Equal("Window               4,096", lines[1]);
-        Assert.Equal("In use               1,240", lines[2]);
-        Assert.Equal("Used                 30%", lines[3]);
+        // The Context section first, its source dim on its rule (2026-10-10; in the value column until then), the rows two cells in under it.
+        Assert.Equal(Head(UsageText.ContextHeading, "max_model_len on /v1/models"), lines[0]);
+        Assert.Equal("  Window               4,096", lines[1]);
+        Assert.Equal("  In use               1,240", lines[2]);
+        Assert.Equal("  Used                 30%", lines[3]);
         Assert.Equal("", lines[4]);
-        Assert.Equal(UsageText.LastReplyHeading, lines[5]);
-        Assert.Equal("Total                1,240", lines[6]);
-        Assert.Equal("Prompt               1,102", lines[7]);
-        Assert.Equal("Completion           138", lines[8]);
-        Assert.Equal("Reasoning            120", lines[9]);
-        Assert.Equal("Requests             2", lines[10]);
-        Assert.Equal("Time to first token  0.8 s", lines[11]);
-        Assert.Equal("Speed                46.0 tok/s", lines[12]);
+        Assert.Equal(Head(UsageText.LastReplyHeading), lines[5]);
+        Assert.Equal("  Total                1,240", lines[6]);
+        Assert.Equal("  Prompt               1,102", lines[7]);
+        Assert.Equal("  Completion           138", lines[8]);
+        Assert.Equal("  Reasoning            120", lines[9]);
+        Assert.Equal("  Requests             2", lines[10]);
+        Assert.Equal("  Time to first token  0.8 s", lines[11]);
+        Assert.Equal("  Speed                46.0 tok/s", lines[12]);
         Assert.Equal("", lines[13]);
-        // One grid for the four sections: the value column stays where the widest label put it.
-        Assert.Equal("This conversation    every request summed", lines[14]);
-        Assert.Equal("Total                12,480", lines[15]);
-        Assert.Equal("Reasoning            120", lines[18]);   // the one request that reported a count
-        Assert.Equal("Time to first token  0.5 s", lines[20]);   // per request: 4.8 s over 9
-        Assert.Equal("Speed                40.0 tok/s", lines[21]);
+        // One label width for the four sections: the value column stays where the widest label put it.
+        Assert.Equal(Head(UsageText.ConversationHeading, UsageText.SummedNote), lines[14]);
+        Assert.Equal("  Total                12,480", lines[15]);
+        Assert.Equal("  Reasoning            120", lines[18]);   // the one request that reported a count
+        Assert.Equal("  Time to first token  0.5 s", lines[20]);   // per request: 4.8 s over 9
+        Assert.Equal("  Speed                40.0 tok/s", lines[21]);
         Assert.Equal("", lines[22]);
-        Assert.Equal("Since launch         every request summed", lines[23]);
-        Assert.Equal("Total                30,112", lines[24]);
-        Assert.Equal("Requests             21", lines[28]);
-        Assert.Equal("Time to first token  0.5 s", lines[29]);   // 9.8 s over 21
-        Assert.Equal("Speed                40.0 tok/s", lines[30]);
-        Assert.Equal("", lines[31]);
+        Assert.Equal(Head(UsageText.SessionHeading, UsageText.SummedNote), lines[23]);
+        Assert.Equal("  Total                30,112", lines[24]);
+        Assert.Equal("  Requests             21", lines[28]);
+        Assert.Equal("  Time to first token  0.5 s", lines[29]);   // 9.8 s over 21
+        Assert.Equal("  Speed                40.0 tok/s", lines[30]);
+        Assert.Equal(19, UsageText.LabelWidth([("Time to first token", ""), ("Total", "")]));
     }
 
     [Fact]
@@ -271,15 +279,15 @@ public class UsageTextTests
         empty.Write(UsageText.StatisticsTab(new TokenTally(), null));
         Assert.Equal(UsageText.NothingCounted, empty.Output);
 
-        // A known window before the first reply: the Context section, then the empty note.
+        // A known window before the first reply: the Context section, then the empty note under it.
         using var known = new TestConsole();
-        known.Profile.Width = 2000;
+        known.Profile.Width = 80;
         known.Write(UsageText.StatisticsTab(new TokenTally(), Window));
         string[] before = Lines(known);
-        Assert.Equal("Context                  max_model_len on /v1/models", before[0]);
-        Assert.Equal("Window                   4,096", before[1]);
+        Assert.Equal(Head(UsageText.ContextHeading, "max_model_len on /v1/models"), before[0]);
+        Assert.Equal("  Window  4,096", before[1]);
         Assert.Equal("", before[2]);
-        Assert.Equal(UsageText.NothingCounted, before[3]);
+        Assert.Equal("  " + UsageText.NothingCounted, before[3]);
 
         var tally = new TokenTally();
         tally.BeginTurn();
@@ -289,22 +297,22 @@ public class UsageTextTests
         tally.EndTurn();
 
         using var console = new TestConsole();
-        console.Profile.Width = 2000;
+        console.Profile.Width = 80;
         console.Write(UsageText.StatisticsTab(tally, null));
 
         string[] lines = Lines(console);
-        // The aggregates carry the Time to first token row now (2026-09-17), the widest label of the grid.
-        Assert.Equal("Context              unknown", lines[0]);
-        Assert.Equal("Window               unknown", lines[1]);
-        Assert.Equal("In use               120", lines[2]);
+        // The aggregates carry the Time to first token row now (2026-09-17), the widest label of the tab.
+        Assert.Equal(Head(UsageText.ContextHeading, UsageText.WindowUnknown), lines[0]);
+        Assert.Equal("  Window               unknown", lines[1]);
+        Assert.Equal("  In use               120", lines[2]);
         Assert.Equal("", lines[3]);
-        // The notes sit in the value column, so a long one never widens the label column.
-        Assert.Equal("Last reply           " + UsageText.NoReportNote, lines[4]);
+        // The notes sit on the rules.
+        Assert.Equal(Head(UsageText.LastReplyHeading, UsageText.NoReportNote), lines[4]);
         Assert.Equal("", lines[5]);   // no rows under an empty scope
-        Assert.Equal("This conversation    every request summed; 1 reply reported no usage", lines[6]);
-        Assert.Equal("Total                120", lines[7]);
-        Assert.Equal("Reasoning            —", lines[10]);   // no request counted its thinking: the row stays, with a dash
-        Assert.Equal("Time to first token  0.5 s", lines[12]);
+        Assert.Equal(Head(UsageText.ConversationHeading, "every request summed; 1 reply reported no usage"), lines[6]);
+        Assert.Equal("  Total                120", lines[7]);
+        Assert.Equal("  Reasoning            —", lines[10]);   // no request counted its thinking: the row stays, with a dash
+        Assert.Equal("  Time to first token  0.5 s", lines[12]);
     }
 
     /// <summary>The rendered rows with the grid's column padding trimmed off.</summary>

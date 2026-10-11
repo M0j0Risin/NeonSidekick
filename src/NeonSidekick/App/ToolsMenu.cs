@@ -36,8 +36,10 @@ namespace NeonSidekick.App;
 /// the five as a page of their own under the crumb <c>Tools › Database</c>; the user found reaching a menu through its switch unintuitive,
 /// so since then they are sub-tabs (<see cref="MenuTab.SubTabs"/>): a second strip under the first while the group is on show, the
 /// menu's rows under it edited as a plain tab's are, ←/→ walking every menu along both strips and Tab / Shift+Tab stepping past a group,
-/// which keeps the menu last shown (<see cref="MenuPane.StepLeaf"/>). A picker under a group is still titled <c>Tools › Database › …</c>
-/// (<see cref="GroupCrumb"/>). Files holds File, Image (later on 2026-10-10, the user's ask: the File menu's picture rows), UNC, GitLib and Obsidian.
+/// which keeps the menu last shown (<see cref="MenuPane.StepLeaf"/>). A picker under a group is still titled <c>Tools › Databases › …</c>
+/// (<see cref="GroupCrumb"/>). Files holds File, Image (later on 2026-10-10, the user's ask: the File menu's picture rows), UNC, GitLib and Obsidian;
+/// Standard (later still on 2026-10-10, the user's ask) Ask, Web, Shell and Options, four tabs of their own until then. Every menu is headed since then too
+/// (<see cref="SettingsMenu.ToolsMenuSections"/>, the <c>/settings</c> look): a row is found through <see cref="SettingsMenu.SectionedField"/>, never by index.
 /// </summary>
 internal sealed class ToolsMenu
 {
@@ -95,7 +97,7 @@ internal sealed class ToolsMenu
             var menus = ToolsText.TabMenus[t - 1];
             tabs[t] = menus.Count > 1
                 ? GroupTab(t, saved, menu, subs is not null && t < subs.Count ? subs[t] : 0)
-                : menu.FieldsTab(ToolsText.TabTitles[t], SettingsMenu.ToolsTabFields[menus[0]], saved);
+                : menu.FieldsTab(ToolsText.TabTitles[t], SettingsMenu.ToolsTabFields[menus[0]], saved, sections: SettingsMenu.ToolsMenuSections[menus[0]]);
         }
 
         return MenuPage.Tabbed(ToolsText.Label, tabs, tab, SettingsMenu.TabKeys) with
@@ -121,23 +123,24 @@ internal sealed class ToolsMenu
         var subs = menus.Select(m =>
         {
             var fields = SettingsMenu.ToolsTabFields[m];
-            return menu.FieldsTab(ToolsText.MenuTitles[m], fields, saved) with { Footer = row => row >= 0 && row < fields.Count ? menu.FieldFooter(fields[row], saved) : null };
+            var sections = SettingsMenu.ToolsMenuSections[m];
+            return menu.FieldsTab(ToolsText.MenuTitles[m], fields, saved, sections: sections) with { Footer = row => SettingsMenu.SectionedField(fields, sections, row) is { } field ? menu.FieldFooter(field, saved) : null };
         }).ToList();
         return new MenuTab(ToolsText.TabTitles[tab], []) { SubTabs = subs, Sub = Math.Clamp(sub, 0, subs.Count - 1), Badge = menu.GroupBadge(menus, saved) };
     }
 
     /// <summary>
     /// The field behind row <paramref name="row"/> of tab <paramref name="tab"/> (after Offered): a plain tab's row, or on a group tab
-    /// (2026-10-10) the row of its menu <paramref name="sub"/>; null past the rows.
+    /// (2026-10-10) the row of its menu <paramref name="sub"/>; null for a heading (<see cref="SettingsMenu.ToolsMenuSections"/>, later on 2026-10-10) and past the rows.
     /// </summary>
     private static SettingsField? RowField(int tab, int sub, int row)
     {
         var menus = ToolsText.TabMenus[tab - 1];
-        var fields = SettingsMenu.ToolsTabFields[menus[menus.Count > 1 ? Math.Clamp(sub, 0, menus.Count - 1) : 0]];
-        return row >= 0 && row < fields.Count ? fields[row] : null;
+        int m = menus[menus.Count > 1 ? Math.Clamp(sub, 0, menus.Count - 1) : 0];
+        return SettingsMenu.SectionedField(SettingsMenu.ToolsTabFields[m], SettingsMenu.ToolsMenuSections[m], row);
     }
 
-    /// <summary>The root a picker under group tab <paramref name="tab"/> is titled from (2026-10-09; the group's page's crumb until 2026-10-10): <c>🛠️ Tools › Database</c>. Pinned.</summary>
+    /// <summary>The root a picker under group tab <paramref name="tab"/> is titled from (2026-10-09; the group's page's crumb until 2026-10-10): <c>🛠️ Tools › Databases</c>. Pinned.</summary>
     public static string GroupCrumb(int tab) => ToolsText.Label + " › " + ToolsText.TabTitles[tab];
 
     /// <summary>The tabs as plain lines, for a console without the pane: each tab's title as a heading, its content indented; a group tab's menus (2026-10-09) each a heading under it, their rows indented again.</summary>
@@ -247,7 +250,7 @@ internal sealed class ToolsMenu
                 // The page on the tab (and the group's menu) the pane ended on, so a typed edit under it keeps those rows (PickSettingAsync's shape).
                 var shown = pick.Tab == page.Tab && pick.Sub == page.Sub ? page : Page(offered, saved, _menu, tab, filter, 0, null, subs);
                 bool group = ToolsText.IsGroupTab(tab);
-                _menu.Root = group ? GroupCrumb(tab) : ToolsText.Label;   // a group's pickers titled Tools › Database › … (2026-10-09)
+                _menu.Root = group ? GroupCrumb(tab) : ToolsText.Label;   // a group's pickers titled Tools › Databases › … (2026-10-09)
                 try
                 {
                     changes |= await RowAsync(field, pick.Toggle, saved, shown, cursor, midTurn, cancellationToken).ConfigureAwait(false);

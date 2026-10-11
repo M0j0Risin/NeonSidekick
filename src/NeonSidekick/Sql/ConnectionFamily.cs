@@ -101,7 +101,7 @@ public sealed class ConnectionFamily<TConfig, TNamed>
     /// <summary>What a fresh file holds.</summary>
     public required string EmptyText { get; init; }
 
-    /// <summary>Where on <c>/tools</c> the rows that fix a password are (<c>/tools › Database › MySQL</c>; <c>the MySQL tab</c> until 2026-10-09), put in for <see cref="SqlText.SqlMenuPath"/> in <see cref="WindowsCredentials"/>' wording.</summary>
+    /// <summary>Where on <c>/tools</c> the rows that fix a password are (<c>/tools › Databases › MySQL</c>; <c>the MySQL tab</c> until 2026-10-09), put in for <see cref="SqlText.SqlMenuPath"/> in <see cref="WindowsCredentials"/>' wording.</summary>
     public required string Tab { get; init; }
 
     /// <summary>Why a <c>null</c> entry cannot connect (<c>MySqlText.NoHost</c>).</summary>

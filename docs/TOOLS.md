@@ -145,7 +145,7 @@ Read-only queries against SQL Server over named connections, with no ODBC driver
 
 ### Managing connections
 
-* **SQL add/edit connection** (`/tools` › Database › SQL) walks through a new connection one page per choice, access (`read`/`readwrite`) included. With connections saved, its first page lists them: **+ New connection**, or one to edit, opened prefilled on its summary (Enter on a row changes it; the stored password is kept unless you type another). The summary can **test** the draft (`SELECT @@VERSION`, nothing written): it also names the other databases the login could open, or says it opens none. It saves with the file's comments kept. ESC steps back.
+* **SQL add/edit connection** (`/tools` › Databases › SQL) walks through a new connection one page per choice, access (`read`/`readwrite`) included. With connections saved, its first page lists them: **+ New connection**, or one to edit, opened prefilled on its summary (Enter on a row changes it; the stored password is kept unless you type another). The summary can **test** the draft (`SELECT @@VERSION`, nothing written): it also names the other databases the login could open, or says it opens none. It saves with the file's comments kept. ESC steps back.
 * **SQL set password** updates a password.
 * Or edit `sql.json` directly: `%USERPROFILE%\.neonsidekick\sql.json` (global; `~/.neonsidekick/sql.json` on a Mac) or `…/profiles/<profile>/sql.json` (comments and trailing commas allowed).
 
@@ -251,7 +251,7 @@ The SQL tools' twin for Oracle, through ODP.NET Core (fully managed; no Oracle C
 
 ### Managing connections
 
-**Oracle add/edit connection** (`/tools` › Database › Oracle) walks through a new connection, or edits a saved one as SQL's does. Its test (nothing written) shows who it signed in as, the container and the version, names the other schemas the account could read (and any `SELECT ANY` privilege) or says it reads none, and warns when the account could change data: the tools only write through `oracle_execute` on a `readwrite` connection, and a read-only account is the real guard. It asks for the access too (`read` or `readwrite`). **Oracle set password** updates a password; or edit `oracle.json` directly.
+**Oracle add/edit connection** (`/tools` › Databases › Oracle) walks through a new connection, or edits a saved one as SQL's does. Its test (nothing written) shows who it signed in as, the container and the version, names the other schemas the account could read (and any `SELECT ANY` privilege) or says it reads none, and warns when the account could change data: the tools only write through `oracle_execute` on a `readwrite` connection, and a read-only account is the real guard. It asks for the access too (`read` or `readwrite`). **Oracle set password** updates a password; or edit `oracle.json` directly.
 
 ```json
 {
@@ -366,7 +366,7 @@ The same tools for MySQL 8.0.16+ and MariaDB 10.2+, through MySqlConnector (full
 }
 ```
 
-**MySQL add/edit connection** (`/tools` › Database › MySQL) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: who it signs in as, the version, a warning when `SHOW GRANTS` allows changes, and the other databases the account could reach (or that it sees none). It asks for the access too (`read` or `readwrite`). **MySQL set password** updates a password.
+**MySQL add/edit connection** (`/tools` › Databases › MySQL) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: who it signs in as, the version, a warning when `SHOW GRANTS` allows changes, and the other databases the account could reach (or that it sees none). It asks for the access too (`read` or `readwrite`). **MySQL set password** updates a password.
 
 ### Safety
 
@@ -434,7 +434,7 @@ SQLite database files, through the same Microsoft.Data.Sqlite the sessions use: 
 }
 ```
 
-**SQLite add/edit database** (`/tools` › Database › SQLite) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: it opens the file read-only and counts its tables.
+**SQLite add/edit database** (`/tools` › Databases › SQLite) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: it opens the file read-only and counts its tables.
 
 ### Safety
 
@@ -505,7 +505,7 @@ The same tools for PostgreSQL, through Npgsql (fully managed, PostgreSQL licence
 }
 ```
 
-**PostgreSQL add/edit connection** (`/tools` › Database › PostgreSQL) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: who it signs in as, the version, a warning when the role is a superuser or holds write grants, and what else the role could reach (other databases, foreign servers, and other schemas under a schema lock), or that it reaches nothing more. It asks for the schema and the access too (`read` or `readwrite`). **PostgreSQL set password** updates a password.
+**PostgreSQL add/edit connection** (`/tools` › Databases › PostgreSQL) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: who it signs in as, the version, a warning when the role is a superuser or holds write grants, and what else the role could reach (other databases, foreign servers, and other schemas under a schema lock), or that it reaches nothing more. It asks for the schema and the access too (`read` or `readwrite`). **PostgreSQL set password** updates a password.
 
 ### Safety
 

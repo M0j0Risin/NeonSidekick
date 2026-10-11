@@ -38,8 +38,9 @@ public static class Profiles
     public static readonly string[] SidekickFiles = { "memory.json", "persona.md", "operata.md", "vocalia.md", "mcp.json" };
 
     /// <summary>
-    /// The subset of <see cref="SidekickFiles"/> <c>/profile add</c> copies under the <c>basic</c>
-    /// <see cref="NewProfileMode"/>: the memories alone (the user's call 2026-09-15).
+    /// The subset of <see cref="SidekickFiles"/> <c>/profile add</c> copies: the memories alone (the user's call 2026-09-15, then the
+    /// <c>basic</c> mode of <c>New profile mode</c>). Since 2026-10-10 (the user's call) it is the only way: the setting and its
+    /// <c>advanced</c> mode (the persona, operating rules and voice directive too) were retired; <c>/profile push|pull</c> copies those.
     /// </summary>
     public static readonly string[] BasicSidekickFiles = { "memory.json" };
 
@@ -188,8 +189,7 @@ public static class Profiles
     /// <summary>
     /// Creates the directory and writes <paramref name="seed"/> as its <c>profile.json</c> (a temp
     /// file then a move, like every settings write). The settings alone: the sidekick's files come
-    /// along only through <see cref="CopySidekickFiles"/>, which the caller runs over the files the
-    /// <see cref="NewProfileMode"/> names (<see cref="NewProfileMode.FilesFor"/>). Throws <see cref="IOException"/> /
+    /// along only through <see cref="CopySidekickFiles"/>, which the caller runs over <see cref="BasicSidekickFiles"/>. Throws <see cref="IOException"/> /
     /// <see cref="UnauthorizedAccessException"/>; the caller reports.
     /// </summary>
     public static void Create(string home, string name, AppSettingsData seed)
@@ -209,7 +209,7 @@ public static class Profiles
     /// Copies each of <see cref="SidekickFiles"/> that exists in <paramref name="sourceDirectory"/>
     /// into the profile <paramref name="name"/> (just <see cref="Create"/>d, so nothing is
     /// overwritten) and returns the names copied, in <see cref="SidekickFiles"/> order; with
-    /// <paramref name="only"/> (<see cref="NewProfileMode.FilesFor"/>) just the ones it names. Never the
+    /// <paramref name="only"/> (<see cref="BasicSidekickFiles"/>) just the ones it names. Never the
     /// <c>files</c> sandbox: that is the sidekick's own. Throws
     /// <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/>; the caller reports.
     /// </summary>

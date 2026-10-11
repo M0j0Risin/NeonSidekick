@@ -121,7 +121,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/process` | Lists the background processes the model started (`run_command`'s `background`) in a pane: id, state, elapsed, shell and command. Enter or a double-click on a row opens it in the [process window](#process-window); the **✖ kill** button (or `k`) stops the highlighted one after a yes/no. With none started, the pane opens on that line. |
 | `/process <id>` | Shows one process's output live in the [process window](#process-window) (any unique start of the id; Tab completes it). Another id switches the window. |
 | `/profile [<name>]` | Switches profiles: a picker alone (a typed letter jumps to the next profile starting with it), or straight to the one named. See Profiles. |
-| `/profile add\|delete <name>` | Creates or deletes a profile. |
+| `/profile add\|delete <name>` | Creates or deletes a profile. A new one starts from this profile's settings and memories; `/profile push\|pull` copies the persona, operating rules and voice directive. |
 | `/profile rename <name> <new-name>` | Renames a profile. |
 | `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its avatar, URLs, paths and keys unless `--all`. |
 | `/profile push\|pull <name>` | Copies its settings to (`push`) or from (`pull`) another. Every setting but the working directory; a pull clears the conversation. |

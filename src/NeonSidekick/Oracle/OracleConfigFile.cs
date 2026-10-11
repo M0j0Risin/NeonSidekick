@@ -78,7 +78,7 @@ public sealed class OracleConfigFile
         "  // },\n" +
         "  //\n" +
         "  // A full descriptor, the password in Windows Credential Manager as NeonSidekick/oracle/<name> — set it with Oracle set\n" +
-        "  // password on /tools › Database › Oracle, or: cmdkey /generic:NeonSidekick/oracle/ledger /user:ledger_ro /pass\n" +
+        "  // password on /tools › Databases › Oracle, or: cmdkey /generic:NeonSidekick/oracle/ledger /user:ledger_ro /pass\n" +
         "  // \"ledger\": {\n" +
         "  //   \"dataSource\": \"(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=dbhost01.example.com)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=LEDGER)))\",\n" +
         "  //   \"user\": \"ledger_ro\", \"passwordStore\": \"credman\"\n" +
@@ -101,7 +101,7 @@ public sealed class OracleConfigFile
         FileName = FileName,
         Category = Category,
         EmptyText = EmptyText,
-        Tab = "/tools › Database › Oracle",
+        Tab = "/tools › Databases › Oracle",
         NullEntry = OracleText.NoDataSource,
         Deserialize = json => JsonSerializer.Deserialize(json, OracleJsonContext.Default.OracleConfigFile)?.Connections,
         EntryInfo = OracleJsonContext.Default.OracleConnectionConfig,

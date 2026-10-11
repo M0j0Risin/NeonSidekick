@@ -328,6 +328,12 @@ internal sealed class SkillsMenu
     /// <summary>The <see cref="SettingsMenu.SkillsTabFields"/> list a settings tab shows: Options' first, Reflection's second.</summary>
     private static IReadOnlyList<SettingsField> SettingsFields(int tab) => SettingsMenu.SkillsTabFields[tab == OptionsTab ? 0 : 1];
 
+    /// <summary>The headings over a settings tab's rows (2026-10-10, the user's ask: the <c>/settings</c> look), <see cref="SettingsMenu.SkillsMenuSections"/> as <see cref="SettingsFields"/> picks.</summary>
+    private static IReadOnlyList<(SettingsField First, string Title)> SettingsSections(int tab) => SettingsMenu.SkillsMenuSections[tab == OptionsTab ? 0 : 1];
+
+    /// <summary>The field on row <paramref name="row"/> of settings tab <paramref name="tab"/>, headings counted; null for a heading or past the rows.</summary>
+    private static SettingsField? SettingsRow(int tab, int row) => SettingsMenu.SectionedField(SettingsFields(tab), SettingsSections(tab), row);
+
     /// <summary>The tabbed page: the Offered rows first, the Reflection rows (<see cref="SettingsMenu.FieldsTab"/> under <see cref="SettingsMenu.TabKeys"/>) second, the Options rows last (2026-09-22); Space is nothing anywhere since the Project tab, its one flip, went (2026-10-01), as on <c>/settings</c>.</summary>
     /// <remarks>
     /// The Offered tab filters (2026-10-03, the user's ask, <see cref="MenuFilter"/>): <paramref name="loaded"/> are the rows under <paramref name="filter"/>, and the caption counts the skills they keep.
@@ -336,7 +342,7 @@ internal sealed class SkillsMenu
     /// <c>/tools</c>' groups' shape): <paramref name="loaded"/> holds each one's rows in that order, <paramref name="sub"/> the one on show, and
     /// the one typed filter runs on each; with no scope tabs (the skills off, none installed) it holds the tab's one list, a plain tab.
     /// </remarks>
-    public static MenuPage Page(SkillsFacts facts, IReadOnlyList<IReadOnlyList<(string Markup, Skill? Skill)>> loaded, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int sub = 0)
+    public static MenuPage Page(SkillsFacts facts, IReadOnlyList<IReadOnlyList<(string Markup, Skill? Skill, bool Heading)>> loaded, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int sub = 0)
     {
         ArgumentNullException.ThrowIfNull(facts);
         ArgumentNullException.ThrowIfNull(loaded);
@@ -354,21 +360,22 @@ internal sealed class SkillsMenu
         var tabs = new MenuTab[]
         {
             offered,
-            menu.FieldsTab(SkillsText.ReflectionTabTitle, SettingsFields(ReflectionTab), saved) with { Hint = SettingsMenu.TabKeys },
-            menu.FieldsTab(SkillsText.OptionsTabTitle, SettingsFields(OptionsTab), saved) with { Hint = SettingsMenu.TabKeys },
+            menu.FieldsTab(SkillsText.ReflectionTabTitle, SettingsFields(ReflectionTab), saved, sections: SettingsSections(ReflectionTab)) with { Hint = SettingsMenu.TabKeys },
+            menu.FieldsTab(SkillsText.OptionsTabTitle, SettingsFields(OptionsTab), saved, sections: SettingsSections(OptionsTab)) with { Hint = SettingsMenu.TabKeys },
         };
         return MenuPage.Tabbed(SkillsText.Label, tabs, tab, OtherKeys) with
         {
             TabCursors = [0, 0, 0],
             // The settings tabs' band; the Offered tab's (and each scope's) is its own, below. The page's is what turns the band on.
-            Footer = (t, row) => t is OptionsTab or ReflectionTab && row < SettingsFields(t).Count ? menu.FieldFooter(SettingsFields(t)[row], saved) : null,
+            Footer = (t, row) => t is OptionsTab or ReflectionTab && SettingsRow(t, row) is { } field ? menu.FieldFooter(field, saved) : null,
         };
 
         // The Offered rows (or one scope's): the hint and the filter, the caption counting the skills kept of those the scope holds, and
         // the band saying the cursor's skill whole, its warning on a last line (2026-10-05, the user's ask: it stood blank there while every
         // row cuts its description at the pane's edge); the off, none and problem rows name none.
-        MenuTab Offered(string title, IReadOnlyList<(string Markup, Skill? Skill)> rows, SkillScope? scope) => new(title, rows.Select(r => r.Markup).ToList())
+        MenuTab Offered(string title, IReadOnlyList<(string Markup, Skill? Skill, bool Heading)> rows, SkillScope? scope) => new(title, rows.Select(r => r.Markup).ToList())
         {
+            Headings = SkillsText.HeadingRows(rows),   // the catalog's, the shadowed and the skipped blocks' rules (2026-10-10), never a stop
             Hint = MenuFilter.Hint(LoadedKeys, filter),
             Filter = filter,
             Caption = MenuFilter.CaptionOrNull(filter, rows.Count(r => r.Skill is not null), facts.Skills.Concat(facts.Shadowed).Count(s => scope is null || s.Scope == scope)),
@@ -377,7 +384,7 @@ internal sealed class SkillsMenu
     }
 
     /// <summary>The Offered tab's rows for <paramref name="facts"/> under <paramref name="filter"/>: one list per <see cref="SkillsText.ScopeTabs"/> (2026-10-10), or the one list when there are none.</summary>
-    public static IReadOnlyList<IReadOnlyList<(string Markup, Skill? Skill)>> OfferedRows(SkillsFacts facts, string filter)
+    public static IReadOnlyList<IReadOnlyList<(string Markup, Skill? Skill, bool Heading)>> OfferedRows(SkillsFacts facts, string filter)
     {
         ArgumentNullException.ThrowIfNull(facts);
         var scopes = SkillsText.ScopeTabs(facts);
@@ -451,13 +458,11 @@ internal sealed class SkillsMenu
 
                 if (tab is OptionsTab or ReflectionTab)
                 {
-                    var fields = SettingsFields(tab);
-                    if (cursor >= fields.Count)
+                    if (SettingsRow(tab, cursor) is not { } field)
                     {
-                        continue;
+                        continue;   // a heading (2026-10-10) or past the rows
                     }
 
-                    var field = fields[cursor];
                     if (midTurn && SettingsMenu.RefusedMidTurn(field))
                     {
                         Sink.Notice(SettingsMenu.NotWhileReplyRunsNotice);

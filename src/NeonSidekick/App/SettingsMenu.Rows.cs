@@ -99,6 +99,53 @@ internal sealed partial class SettingsMenu
             ],
         };
 
+    /// <summary>
+    /// The section headings of <c>/tools</c>' menus, indexed like <see cref="ToolsTabFields"/> (2026-10-10, the user's ask: the
+    /// <c>/settings</c> look on the other panes' menus): each heading over the field it names, every menu headed, even the short
+    /// ones. The YouTube menu moved its autoplay and voice rows under the search rows to sit under Playing (the user's call, as
+    /// <see cref="TabSections"/>' four tabs did). Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<IReadOnlyList<(SettingsField First, string Title)>> ToolsMenuSections =
+    [
+        [(SettingsField.AskUser, "Questions"), (SettingsField.AskMaxQuestions, "Limits")],
+        [(SettingsField.WebTools, "Browser"), (SettingsField.WebSearchMethod, "Search"), (SettingsField.WebDownloadMaxMegabytes, "Downloads")],
+        [(SettingsField.ShellCommandPolicy, "Policy"), (SettingsField.ShellPolice, "Guards"), (SettingsField.ShellPreferNative, "Commands"), (SettingsField.ShellCodeLanguages, "Scripts")],
+        [(SettingsField.FileTools, "Files"), (SettingsField.FileTreeMaxLength, "/tree"), (SettingsField.FileMentionFolderMode, "Browsing"), (SettingsField.FileViewImageMaxPerCall, "Limits")],
+        [(SettingsField.ImageTools, "Editing"), (SettingsField.ImageEditOutputFolder, "Folders")],
+        [(SettingsField.UncTools, "Access"), (SettingsField.UncSharesOffered, "Shares"), (SettingsField.UncSharesProfile, "Files")],
+        [(SettingsField.PrintTools, "Printing"), (SettingsField.PrintDefaultPrinter, "Output")],
+        [(SettingsField.CameraTools, "Shutter"), (SettingsField.CameraDevice, "Device"), (SettingsField.CameraOutputFolder, "Photos"), (SettingsField.CameraWatchSeconds, "Watch")],
+        [(SettingsField.ScreenTools, "Capture"), (SettingsField.ScreenOutputFolder, "Pictures")],
+        [(SettingsField.ObsidianTools, "Vault")],
+        [(SettingsField.SqlTools, "Access"), (SettingsField.SqlConnectionsOffered, "Connections"), (SettingsField.SqlQueryMaxRows, "Queries"), (SettingsField.SqlConnectionsProfile, "Files")],
+        [(SettingsField.MySqlTools, "Access"), (SettingsField.MySqlConnectionsOffered, "Connections"), (SettingsField.MySqlQueryMaxRows, "Queries"), (SettingsField.MySqlConnectionsProfile, "Files")],
+        [(SettingsField.SqliteTools, "Access"), (SettingsField.SqliteDatabasesOffered, "Databases"), (SettingsField.SqliteQueryMaxRows, "Queries"), (SettingsField.SqliteDatabasesProfile, "Files")],
+        [(SettingsField.PostgresTools, "Access"), (SettingsField.PostgresConnectionsOffered, "Connections"), (SettingsField.PostgresQueryMaxRows, "Queries"), (SettingsField.PostgresConnectionsProfile, "Files")],
+        [(SettingsField.OracleTools, "Access"), (SettingsField.OracleConnectionsOffered, "Connections"), (SettingsField.OracleQueryMaxRows, "Queries"), (SettingsField.OracleConnectionsProfile, "Files")],
+        [(SettingsField.DockerTools, "Access"), (SettingsField.DockerEnginePipe, "Engine")],
+        [(SettingsField.HomeAssistantTools, "Connection"), (SettingsField.HomeAssistantActionPolicy, "Requests")],
+        [(SettingsField.ComfyTools, "Server"), (SettingsField.ComfyWorkflowsOffered, "Workflows"), (SettingsField.ComfyTimeoutSeconds, "Runs"), (SettingsField.ComfyPictureStrip, "Pictures")],
+        [(SettingsField.YouTubeTools, "Connection"), (SettingsField.YouTubeSearchMaxResults, "Search"), (SettingsField.YouTubeAutoplay, "Playing")],
+        [(SettingsField.GitLibTools, "Tools"), (SettingsField.GitLibEmail, "Identity")],
+        [(SettingsField.ToolsDollarMention, "Mentions"), (SettingsField.ToolCollapseCount, "Folding"), (SettingsField.ShowFileDiffs, "Diffs")],
+    ];
+
+    /// <summary>
+    /// The section headings of <c>/skills</c>' settings tabs, indexed like <see cref="SkillsTabFields"/> (2026-10-10, the user's ask):
+    /// Options, then Reflection, whose sessions switch moved up under What it reads (the user's call). Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<IReadOnlyList<(SettingsField First, string Title)>> SkillsMenuSections =
+    [
+        [(SettingsField.AgentSkills, "Sources"), (SettingsField.SkillCompactMode, "Prompt and mentions")],
+        [(SettingsField.ReflectionAutoLearn, "Learning"), (SettingsField.ReflectionWindow, "What it reads"), (SettingsField.ReflectionCooldownMinutes, "Pace"), (SettingsField.ReflectionEditsSupportingFiles, "What it may change")],
+    ];
+
+    /// <summary>The section headings of <c>/mcp</c>' Options tab, indexed like <see cref="McpTabFields"/> (2026-10-10, the user's ask). Pinned.</summary>
+    public static readonly IReadOnlyList<IReadOnlyList<(SettingsField First, string Title)>> McpMenuSections =
+    [
+        [(SettingsField.McpServers, "Servers")],
+    ];
+
     /// <summary>Each settings tab's rows as the pane shows them: its field, or null for a heading. Built once from <see cref="TabFields"/> and <see cref="TabSections"/>.</summary>
     private static readonly IReadOnlyList<SettingsField?>[] s_tabRows = BuildTabRows();
 
@@ -107,22 +154,39 @@ internal sealed partial class SettingsMenu
         var rows = new IReadOnlyList<SettingsField?>[TabFields.Count];
         for (int tab = 0; tab < rows.Length; tab++)
         {
-            var sections = TabSections.GetValueOrDefault((SettingsTab)tab);
-            var list = new List<SettingsField?>(TabFields[tab].Count + (sections?.Count ?? 0));
-            foreach (var field in TabFields[tab])
-            {
-                if (sections is not null && sections.Any(s => s.First == field))
-                {
-                    list.Add(null);
-                }
-
-                list.Add(field);
-            }
-
-            rows[tab] = list;
+            rows[tab] = SectionedRows(TabFields[tab], TabSections.GetValueOrDefault((SettingsTab)tab));
         }
 
         return rows;
+    }
+
+    /// <summary>
+    /// <paramref name="fields"/> as a pane shows them under <paramref name="sections"/> (<see cref="FieldsTab"/>'s rows): each field,
+    /// a null before one a section starts at — the heading's row. The <c>/settings</c> tabs' map since 2026-10-10 the other panes'
+    /// menus' too (<see cref="ToolsMenuSections"/>, <see cref="SkillsMenuSections"/>, <see cref="McpMenuSections"/>). Pure.
+    /// </summary>
+    public static IReadOnlyList<SettingsField?> SectionedRows(IReadOnlyList<SettingsField> fields, IReadOnlyList<(SettingsField First, string Title)>? sections)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+        var list = new List<SettingsField?>(fields.Count + (sections?.Count ?? 0));
+        foreach (var field in fields)
+        {
+            if (sections is not null && sections.Any(s => s.First == field))
+            {
+                list.Add(null);
+            }
+
+            list.Add(field);
+        }
+
+        return list;
+    }
+
+    /// <summary>The field on pane row <paramref name="row"/> of <paramref name="fields"/> under <paramref name="sections"/>; null for a heading or past the rows. Pure.</summary>
+    public static SettingsField? SectionedField(IReadOnlyList<SettingsField> fields, IReadOnlyList<(SettingsField First, string Title)>? sections, int row)
+    {
+        var rows = SectionedRows(fields, sections);
+        return row >= 0 && row < rows.Count ? rows[row] : null;
     }
 
     /// <summary>The rows of settings tab <paramref name="tab"/> on the pane: a field, or null for a heading (<see cref="TabSections"/>). Pure.</summary>

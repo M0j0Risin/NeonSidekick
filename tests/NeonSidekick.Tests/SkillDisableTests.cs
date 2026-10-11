@@ -182,9 +182,10 @@ public class SkillDisableTests : IDisposable
         Assert.Equal("v1", SkillsText.VersionText(Facts(open), open));
 
         var rows = SkillsText.LoadedRows(Facts(disabled, open));
-        Assert.Equal(Theme.DimMarkup("pdf-tools  profile  ⛔ v4  d"), rows[0].Markup);
-        Assert.StartsWith("[", rows[1].Markup, StringComparison.Ordinal);
-        Assert.DoesNotContain(Theme.DimMarkup("haiku"), rows[1].Markup);
+        Assert.True(rows[0].Heading);   // the catalog's heading (2026-10-10)
+        Assert.Equal(Theme.DimMarkup("pdf-tools  profile  ⛔ v4  d"), rows[1].Markup);
+        Assert.StartsWith("[", rows[2].Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain(Theme.DimMarkup("haiku"), rows[2].Markup);
 
         Assert.Equal(SkillRecordText.DisabledFooter, SkillsMenu.LockedLast(disabled));
         Assert.Equal("w · " + SkillRecordText.DisabledFooter + " · " + SkillRecordText.LockedFooter, SkillsMenu.LockedLast(both with { Warning = "w" }));

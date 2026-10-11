@@ -9163,7 +9163,8 @@ internal sealed partial class ChatScreen
     public static string ProfileCreatedNotice(string name) => $"({NoticeGlyphs.Profile}created profile \"{name}\" from the current settings)";
 
     /// <summary>
-    /// The created notice naming what came along under the <c>advanced</c> <see cref="NewProfileMode"/>:
+    /// The created notice naming what came along (the memories, <see cref="Profiles.BasicSidekickFiles"/>; the prompt files too under
+    /// <c>New profile mode</c>'s <c>advanced</c>, retired 2026-10-10):
     /// <paramref name="copiedFiles"/> is <see cref="Profiles.CopySidekickFiles"/>'s answer, each file
     /// in <see cref="Profiles.Describe"/>'s word. Nothing copied reads like <see cref="ProfileCreatedNotice(string)"/>.
     /// </summary>
@@ -12285,15 +12286,15 @@ internal sealed partial class ChatScreen
                     }
 
                     // The saved values, never the effective ones; and its own files folder, not this one's
-                    // (a sandbox is the sidekick's own). The memories come along under either mode, the
-                    // persona, operating rules and voice directive under the advanced one, each when it
-                    // exists on disk (every one is written synchronously, so the disk is current).
+                    // (a sandbox is the sidekick's own). The memories come along when they exist on disk (written
+                    // synchronously, so the disk is current); the persona, operating rules and voice directive
+                    // stay behind since 2026-10-10 (New profile mode retired, the user's call: /profile push|pull copies them).
                     var seed = AppSettings.Copy(_settings.Current);
                     seed.WorkingDirectory = "";
                     seed.Avatar = Emojis.AvatarRules.DefaultAvatar;   // 2026-10-10: a picked face is the profile's own, as its sandbox, so a new one starts on the default (none until later that day)
                     Profiles.Create(home, action.Name, seed);
                     IReadOnlyList<string> copied = Profiles.CopySidekickFiles(
-                        _settings.ProfileDirectory, home, action.Name, NewProfileMode.FilesFor(NewProfileMode.Resolve(_effective())));
+                        _settings.ProfileDirectory, home, action.Name, Profiles.BasicSidekickFiles);
                     if (await _menu.SwitchProfileAsync(action.Name).ConfigureAwait(false))
                     {
                         await AfterProfileSwitchAsync(cancellationToken, ProfileCreatedNotice(action.Name, copied)).ConfigureAwait(false);

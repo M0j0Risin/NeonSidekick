@@ -17,8 +17,8 @@ public static class PostgresText
     public const string NoUser = "no \"user\" is given";
     public static string BadPort(int port) => $"\"port\" is {Invariant(port)}; it must be 1 to 65535";
     public static string BadSslMode(string word) => $"\"sslMode\" is '{word}'; it must be prefer, require, verify-ca, verify-full or disable";
-    public static string NoPassword(string name) => $"'{name}' has no password; set it on /tools › Database › PostgreSQL (PostgreSQL set password)";
-    public static string NoCredential(string target) => $"no password in {SqlText.CredentialStore} for {target}; set it on /tools › Database › PostgreSQL, or: {SqlText.CredentialCommand(target, "<user>")}";
+    public static string NoPassword(string name) => $"'{name}' has no password; set it on /tools › Databases › PostgreSQL (PostgreSQL set password)";
+    public static string NoCredential(string target) => $"no password in {SqlText.CredentialStore} for {target}; set it on /tools › Databases › PostgreSQL, or: {SqlText.CredentialCommand(target, "<user>")}";
     public static string ProfilesUnlistedLogLine(string root, string detail) => $"could not list the profiles in {root}, so only the home's postgres.json was checked for plain passwords: {detail}";
     public const string NoPasswordConnections = "No connection in postgres.json yet; add one first (PostgreSQL add connection).";
 
@@ -34,8 +34,8 @@ public static class PostgresText
 
     public static string HiddenConnections(int count) =>
         count == 1
-            ? "1 more connection in postgres.json is switched off for this profile (/tools › Database › PostgreSQL)."
-            : $"{Invariant(count)} more connections in postgres.json are switched off for this profile (/tools › Database › PostgreSQL).";
+            ? "1 more connection in postgres.json is switched off for this profile (/tools › Databases › PostgreSQL)."
+            : $"{Invariant(count)} more connections in postgres.json are switched off for this profile (/tools › Databases › PostgreSQL).";
 
     public static string MentionNote(PostgresNamedConnection connection)
     {
@@ -159,7 +159,7 @@ public static class PostgresText
 
     // ─── outcomes ───────────────────────────────────────────────────────────────
 
-    public const string NoConnections = "Error: no PostgreSQL connection is defined; the user adds one to postgres.json (/tools › Database › PostgreSQL)";
+    public const string NoConnections = "Error: no PostgreSQL connection is defined; the user adds one to postgres.json (/tools › Databases › PostgreSQL)";
     public static string UnknownConnection(string name, string names) => $"Error: no PostgreSQL connection is named '{name}'; the connections are {names}";
 
     /// <summary>A call that names no connection while several are offered (2026-10-09: the default-connection settings gone). Pinned.</summary>

@@ -91,8 +91,8 @@ public class SkillsTextTests
                 "                (name 'pdf-processing' does not match the folder 'pdf')",
             ],
             SkillsText.LoadedLines(facts));
-        Assert.Equal(Cyan("haiku         ") + "  profile  v12  Writes haiku.", SkillsText.LoadedRows(facts)[0].Markup);
-        Assert.Equal(Cyan("csv           ") + "  global   v1   Tidies CSV.", SkillsText.LoadedRows(facts, "csv")[0].Markup);   // a filter keeps the column's width
+        Assert.Equal(Cyan("haiku         ") + "  profile  v12  Writes haiku.", SkillsText.LoadedRows(facts)[1].Markup);   // under the catalog's heading (2026-10-10)
+        Assert.Equal(Cyan("csv           ") + "  global   v1   Tidies CSV.", SkillsText.LoadedRows(facts, "csv")[1].Markup);   // a filter keeps the column's width
 
         Assert.Equal("v4", SkillsText.VersionLabel(4));
         Assert.Equal("", SkillsText.VersionLabel(null));
@@ -103,28 +103,41 @@ public class SkillsTextTests
     private static string Cyan(string text) => $"[{Theme.AccentSecondary.ToMarkup()}]{text}[/]";
     private static string Dim(string text) => $"[#9A8BB8]{text}[/]";
 
-    /// <summary>The Offered tab (Loaded until 2026-09-19) as menu rows (2026-09-18): the lines without the blank separators, the name column in the label colour, the skill beside a catalog or shadowed row and null elsewhere.</summary>
+    // A row of the Offered tab: a heading's rule (2026-10-10), a gap, or a plain row with its skill.
+    private static (string, Skill?, bool) Rule(string title, int count, string? note = null) => (SectionRule.Markup(title, count.ToString(System.Globalization.CultureInfo.InvariantCulture), note), null, true);
+    private static readonly (string, Skill?, bool) Gap = ("", null, false);
+    private static (string, Skill?, bool) Row(string markup, Skill? skill = null) => (markup, skill, false);
+
+    /// <summary>
+    /// The Offered tab (Loaded until 2026-09-19) as menu rows (2026-09-18): the name column in the label colour, the skill beside a catalog
+    /// or shadowed row and null elsewhere. Since 2026-10-10 (the user's ask: the <c>/settings</c> look) each block under a rule with its
+    /// count — Skills, Shadowed with its note, Skipped — a gap between blocks, the rows under them no longer indented.
+    /// </summary>
     [Fact]
-    public void LoadedRows_AreTheLinesWithoutTheBlanks_TheSkillOnCatalogAndShadowedRowsAlone()
+    public void LoadedRows_AreTheBlocksUnderTheirRules_TheSkillOnCatalogAndShadowedRowsAlone()
     {
         var rows = SkillsText.LoadedRows(Facts(skills: [Haiku, Pdf], shadowed: [Hidden], problems: [Broken]));
 
         Assert.Equal(
             [
-                (Cyan("haiku         ") + "  profile  Writes haiku.", Haiku),
-                (Cyan("pdf-processing") + "  external Extracts PDF text.", Pdf),
-                (Dim("                (name 'pdf-processing' does not match the folder 'pdf')"), null),
-                (Cyan("Shadowed (a higher root holds the name):"), null),
-                (Dim("  haiku           global   shadowed by the profile skills"), Hidden),
-                (Cyan("Skipped:"), null),
-                (Dim(@"  D:\home\skills\broken: the frontmatter has no description"), null),
+                Rule("Skills", 2),
+                Row(Cyan("haiku         ") + "  profile  Writes haiku.", Haiku),
+                Row(Cyan("pdf-processing") + "  external Extracts PDF text.", Pdf),
+                Row(Dim("                (name 'pdf-processing' does not match the folder 'pdf')")),
+                Gap,
+                Rule("Shadowed", 1, "a higher root holds the name"),
+                Row(Dim("haiku           global   shadowed by the profile skills"), Hidden),
+                Gap,
+                Rule("Skipped", 1),
+                Row(Dim(@"D:\home\skills\broken: the frontmatter has no description")),
             ],
             rows);
-        Assert.Equal([(Dim(SkillsText.OffLine), (Skill?)null)], SkillsText.LoadedRows(Facts(enabled: false, skills: [Haiku])));
-        Assert.Equal([(Dim(SkillsText.NoneLine), (Skill?)null)], SkillsText.LoadedRows(Facts()));
+        Assert.Equal(new HashSet<int> { 0, 5, 8 }, SkillsText.HeadingRows(rows));
+        Assert.Equal([Row(Dim(SkillsText.OffLine))], SkillsText.LoadedRows(Facts(enabled: false, skills: [Haiku])));
+        Assert.Equal([Row(Dim(SkillsText.NoneLine))], SkillsText.LoadedRows(Facts()));
     }
 
-    /// <summary>Under a filter (2026-10-03, the user's ask): the skills whose name or description holds it, a warning with its skill, a heading only over what is left.</summary>
+    /// <summary>Under a filter (2026-10-03, the user's ask): the skills whose name or description holds it, a warning with its skill, a heading only over what is left, its count the whole block's.</summary>
     [Fact]
     public void LoadedRows_UnderAFilter_KeepTheMatches_TheWarningWithItsSkill_AndAHeadingOnlyOverWhatIsLeft()
     {
@@ -132,26 +145,29 @@ public class SkillsTextTests
 
         Assert.Equal(
             [
-                (Cyan("haiku         ") + "  profile  Writes haiku.", Haiku),
-                (Cyan("Shadowed (a higher root holds the name):"), null),
-                (Dim("  haiku           global   shadowed by the profile skills"), Hidden),
+                Rule("Skills", 2),
+                Row(Cyan("haiku         ") + "  profile  Writes haiku.", Haiku),
+                Gap,
+                Rule("Shadowed", 1, "a higher root holds the name"),
+                Row(Dim("haiku           global   shadowed by the profile skills"), Hidden),
             ],
             SkillsText.LoadedRows(facts, "HAIKU"));
         Assert.Equal(
             [
-                (Cyan("pdf-processing") + "  external Extracts PDF text.", Pdf),
-                (Dim("                (name 'pdf-processing' does not match the folder 'pdf')"), null),
+                Rule("Skills", 2),
+                Row(Cyan("pdf-processing") + "  external Extracts PDF text.", Pdf),
+                Row(Dim("                (name 'pdf-processing' does not match the folder 'pdf')")),
             ],
             SkillsText.LoadedRows(facts, "extracts"));   // the description's word
         Assert.Equal(
             [
-                (Cyan("Skipped:"), null),
-                (Dim(@"  D:\home\skills\broken: the frontmatter has no description"), null),
+                Rule("Skipped", 1),
+                Row(Dim(@"D:\home\skills\broken: the frontmatter has no description")),
             ],
             SkillsText.LoadedRows(facts, "broken"));
-        Assert.Equal([(Dim(MenuFilter.NoMatchLine("sonnet")), (Skill?)null)], SkillsText.LoadedRows(facts, "sonnet"));
+        Assert.Equal([Row(Dim(MenuFilter.NoMatchLine("sonnet")))], SkillsText.LoadedRows(facts, "sonnet"));
         Assert.Equal(SkillsText.LoadedRows(facts), SkillsText.LoadedRows(facts, ""));
-        Assert.Equal([(Dim(SkillsText.OffLine), (Skill?)null)], SkillsText.LoadedRows(Facts(enabled: false, skills: [Haiku]), "x"));
+        Assert.Equal([Row(Dim(SkillsText.OffLine))], SkillsText.LoadedRows(Facts(enabled: false, skills: [Haiku]), "x"));
     }
 
     /// <summary>A description is the author's: brackets are escaped, never markup.</summary>
@@ -159,12 +175,12 @@ public class SkillsTextTests
     public void LoadedRows_EscapeTheDescription()
     {
         var odd = new Skill("odd", "Uses [bold] tags.", SkillScope.Global, @"D:\home\skills\odd");
-        Assert.Equal(Cyan("odd ") + "  global   Uses [[bold]] tags.", SkillsText.LoadedRows(Facts(skills: [odd]))[0].Markup);
+        Assert.Equal(Cyan("odd ") + "  global   Uses [[bold]] tags.", SkillsText.LoadedRows(Facts(skills: [odd]))[1].Markup);
     }
 
     /// <summary>
     /// The Offered tab's scope sub-tabs (2026-10-10, the user's ask): each keeps its root's skills, the shadowed ones of that root and the
-    /// skipped folders under it, the columns the whole catalog's; a scope with none says so, or the no-match row under a filter.
+    /// skipped folders under it, the columns the whole catalog's, each heading counting its scope's; a scope with none says so, or the no-match row under a filter.
     /// </summary>
     [Fact]
     public void LoadedRows_ForAScope_KeepThatRootsSkills_ShadowedAndSkippedFolders()
@@ -172,29 +188,33 @@ public class SkillsTextTests
         Skill csv = new("csv", "Tidies CSV.", SkillScope.Global, @"D:\home\skills\csv");
         var facts = Facts(skills: [Haiku, csv, Pdf], shadowed: [Hidden], problems: [Broken]);
 
-        Assert.Equal([(Cyan("haiku         ") + "  profile  Writes haiku.", Haiku)], SkillsText.LoadedRows(facts, "", SkillScope.Profile));
+        Assert.Equal([Rule("Skills", 1), Row(Cyan("haiku         ") + "  profile  Writes haiku.", Haiku)], SkillsText.LoadedRows(facts, "", SkillScope.Profile));
         Assert.Equal(
             [
-                (Cyan("csv           ") + "  global   Tidies CSV.", csv),
-                (Cyan("Shadowed (a higher root holds the name):"), null),
-                (Dim("  haiku           global   shadowed by the profile skills"), Hidden),
-                (Cyan("Skipped:"), null),
-                (Dim(@"  D:\home\skills\broken: the frontmatter has no description"), null),
+                Rule("Skills", 1),
+                Row(Cyan("csv           ") + "  global   Tidies CSV.", csv),
+                Gap,
+                Rule("Shadowed", 1, "a higher root holds the name"),
+                Row(Dim("haiku           global   shadowed by the profile skills"), Hidden),
+                Gap,
+                Rule("Skipped", 1),
+                Row(Dim(@"D:\home\skills\broken: the frontmatter has no description")),
             ],
             SkillsText.LoadedRows(facts, "", SkillScope.Global));
         Assert.Equal(
             [
-                (Cyan("pdf-processing") + "  external Extracts PDF text.", Pdf),
-                (Dim("                (name 'pdf-processing' does not match the folder 'pdf')"), null),
+                Rule("Skills", 1),
+                Row(Cyan("pdf-processing") + "  external Extracts PDF text.", Pdf),
+                Row(Dim("                (name 'pdf-processing' does not match the folder 'pdf')")),
             ],
             SkillsText.LoadedRows(facts, "", SkillScope.External));
         Assert.Equal(SkillsText.LoadedRows(facts), SkillsText.LoadedRows(facts, "", null));
 
         // The filter on a scope; a scope with nothing of its own.
-        Assert.Equal([(Cyan("csv           ") + "  global   Tidies CSV.", csv)], SkillsText.LoadedRows(facts, "tidies", SkillScope.Global));
-        Assert.Equal([(Dim(MenuFilter.NoMatchLine("tidies")), (Skill?)null)], SkillsText.LoadedRows(facts, "tidies", SkillScope.Profile));
-        Assert.Equal([(Dim("(no global skills)"), (Skill?)null)], SkillsText.LoadedRows(Facts(skills: [Haiku]), "", SkillScope.Global));
-        Assert.Equal([(Dim(SkillsText.OffLine), (Skill?)null)], SkillsText.LoadedRows(Facts(enabled: false, skills: [Haiku]), "", SkillScope.Profile));
+        Assert.Equal([Rule("Skills", 1), Row(Cyan("csv           ") + "  global   Tidies CSV.", csv)], SkillsText.LoadedRows(facts, "tidies", SkillScope.Global));
+        Assert.Equal([Row(Dim(MenuFilter.NoMatchLine("tidies")))], SkillsText.LoadedRows(facts, "tidies", SkillScope.Profile));
+        Assert.Equal([Row(Dim("(no global skills)"))], SkillsText.LoadedRows(Facts(skills: [Haiku]), "", SkillScope.Global));
+        Assert.Equal([Row(Dim(SkillsText.OffLine))], SkillsText.LoadedRows(Facts(enabled: false, skills: [Haiku]), "", SkillScope.Profile));
     }
 
     [Fact]

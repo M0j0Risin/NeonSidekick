@@ -78,7 +78,7 @@ public sealed class PostgresConfigFile
         "  // },\n" +
         "  //\n" +
         "  // TLS checked against the host name, the password in Windows Credential Manager as NeonSidekick/postgres/<name> — set it\n" +
-        "  // with PostgreSQL set password on /tools › Database › PostgreSQL, or: cmdkey /generic:NeonSidekick/postgres/billing /user:billing_ro /pass\n" +
+        "  // with PostgreSQL set password on /tools › Databases › PostgreSQL, or: cmdkey /generic:NeonSidekick/postgres/billing /user:billing_ro /pass\n" +
         "  // \"billing\": {\n" +
         "  //   \"host\": \"db01.example.com\", \"database\": \"billing\", \"schema\": \"invoices\", \"user\": \"billing_ro\",\n" +
         "  //   \"passwordStore\": \"credman\", \"sslMode\": \"verify-full\"\n" +
@@ -101,7 +101,7 @@ public sealed class PostgresConfigFile
         FileName = FileName,
         Category = Category,
         EmptyText = EmptyText,
-        Tab = "/tools › Database › PostgreSQL",
+        Tab = "/tools › Databases › PostgreSQL",
         NullEntry = PostgresText.NoHost,
         Deserialize = json => JsonSerializer.Deserialize(json, PostgresJsonContext.Default.PostgresConfigFile)?.Connections,
         EntryInfo = PostgresJsonContext.Default.PostgresConnectionConfig,

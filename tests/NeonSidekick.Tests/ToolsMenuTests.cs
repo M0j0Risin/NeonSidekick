@@ -132,7 +132,7 @@ public partial class ToolsMenuTests : IDisposable
             : row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The strip as the pane prints it: the label, then every tab title with a space either side, two spaces between. Pinned.</summary>
-    private const string Strip = ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · Integrations · Database · Media · Options ";   // Media and Database since 2026-10-09 (the user's call: the five media and five database tabs as menus on one tab each); the user's order since 2026-10-03; before it Camera after Ask and Docker after UNC since 2026-10-02; HA second to last since later on 2026-10-01 (the user's ask); Print since later on 2026-09-28, Home Assistant since 2026-09-28, Images since 2026-09-24, SQL since 2026-09-23, Obsidian since 2026-09-22, Options last since later that day (second from later on 2026-09-19); the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
+    private const string Strip = ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ";   // Standard (Ask, Web, Shell, Options) and Databases (Database until then) since later on 2026-10-10 (the user's asks); Media and Database since 2026-10-09 (the user's call: the five media and five database tabs as menus on one tab each); the user's order since 2026-10-03; before it Camera after Ask and Docker after UNC since 2026-10-02; HA second to last since later on 2026-10-01 (the user's ask); Print since later on 2026-09-28, Home Assistant since 2026-09-28, Images since 2026-09-24, SQL since 2026-09-23, Obsidian since 2026-09-22, Options last since later that day (second from later on 2026-09-19); the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
 
     /// <summary>
     /// The rows of the settings menu titled <paramref name="title"/>: <see cref="SettingsMenu.ToolsTabFields"/> at <see cref="ToolsText.MenuIndex"/>,
@@ -173,7 +173,39 @@ public partial class ToolsMenuTests : IDisposable
     private string Row(string name, bool on, string mark = "  ") => Fitted(mark + name.PadRight(22) + (on ? "on" : "off").PadRight(5) + Description(name, on));
 
     /// <summary>A heading row as the pane prints it (2026-10-03): <paramref name="text"/> (<c>── Clock · 3</c>), a space and the rule to the fixture's width.</summary>
+    /// <summary>The crumb a picker opened from a Standard menu (Ask, Web, Shell, Options) is titled under since later on 2026-10-10: <c>🛠️ Tools › Standard</c>.</summary>
+    private static string StandardCrumb => ToolsMenu.GroupCrumb(TabIndex(ToolsText.StandardTabTitle));
+
     private string Heading(string text) => text + " " + Rule(_console.Profile.Width - TextCells.Width(text) - 1);
+
+    /// <summary>
+    /// The heading row over the menu titled <paramref name="title"/>'s field <paramref name="field"/>, newline and all, or "" when no section
+    /// starts there (2026-10-10, <see cref="SettingsMenu.ToolsMenuSections"/>).
+    /// </summary>
+    private string HeadingOver(string title, SettingsField field) =>
+        SettingsMenu.ToolsMenuSections[ToolsText.MenuIndex(title)].FirstOrDefault(s => s.First == field).Title is { } heading ? Heading("── " + heading) + "\n" : "";
+
+    /// <summary>
+    /// The menu titled <paramref name="title"/>'s rows as the pane prints them (2026-10-10): <paramref name="rows"/>, one line per field from its
+    /// first, each heading's rule put before the row its section starts at.
+    /// </summary>
+    private string Headed(string title, string rows)
+    {
+        var fields = TabFields(title);
+        var lines = rows.Split('\n');
+        var text = new System.Text.StringBuilder();
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (i == lines.Length - 1 && lines[i].Length == 0)
+            {
+                break;   // the rows' last newline
+            }
+
+            text.Append(i < fields.Count ? HeadingOver(title, fields[i]) : "").Append(lines[i]).Append(i < lines.Length - 1 ? "\n" : "");
+        }
+
+        return text.ToString();
+    }
 
     private static string Fitted(string row) => row.Length <= 240 ? row : row[..239] + "…";   // the fixture's width (220 until 2026-10-05; 190 until 2026-10-04; 180 until the Docker tab, 2026-10-02; 170 until the MySQL tab, 160 until the Oracle tab, 2026-09-30; 150 until the Print tab, later on 2026-09-28)
 
@@ -198,15 +230,16 @@ public partial class ToolsMenuTests : IDisposable
         // the Options tab ahead of them (later on 2026-09-19): the pane's own $-mention switch.
         Assert.Equal(12, SettingsMenu.TabFields.Count);   // the LLM tab two (Common and Http) and Advisors since 2026-10-10; /settings' Claude and OpenAI tabs since 2026-10-03; Docker tab since 2026-10-02; the Claude (API) tab went to /tools' Claude tab on 2026-09-29; Embedded model since 2026-09-29; Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25
         Assert.Equal(21, SettingsMenu.ToolsTabFields.Count);   // ClaudeCode gone later on 2026-10-10 (its /claude rows to /settings' Anthropic tab); Image 2026-10-10; YouTube 2026-10-05; Screen, SQLite and Postgres 2026-10-04; Camera and Docker 2026-10-02; UNC later still on 2026-09-30; MySQL and Oracle since 2026-09-30; Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23   // Obsidian since 2026-09-22   // Git since 2026-09-20, Shell since 2026-09-21; the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
-        Assert.Equal(["Offered", "Ask", "Web", "Shell", "Files", "Integrations", "Database", "Media", "Options"], ToolsText.TabTitles);   // Files and Integrations since 2026-10-10 (the user's pick);   // the user's order later on 2026-10-09; Media and Database since 2026-10-09; the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04)
+        Assert.Equal(["Offered", "Standard", "Files", "Integrations", "Databases", "Media"], ToolsText.TabTitles);   // Standard (Ask, Web, Shell and Options) and Databases since later on 2026-10-10 (the user's asks); Files and Integrations since 2026-10-10 (the user's pick);   // the user's order later on 2026-10-09; Media and Database since 2026-10-09; the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04)
         Assert.Equal(["Ask", "Web", "Shell", "File", "Image", "UNC", "Print", "Camera", "Screen", "Obsidian", "SQL", "MySQL", "SQLite", "PostgreSQL", "Oracle", "Docker", "HomeAssistant", "ComfyUI", "YouTube", "GitLib", "Options"], ToolsText.MenuTitles);   // one per ToolsTabFields list, every one a tab until 2026-10-09
         Assert.Equal(ToolsText.TabTitles.Count - 1, ToolsText.TabMenus.Count);
         Assert.Equal(Enumerable.Range(0, SettingsMenu.ToolsTabFields.Count), ToolsText.TabMenus.SelectMany(m => m).Order());   // every menu on one tab
+        Assert.Equal(["Ask", "Web", "Shell", "Options"], ToolsText.TabMenus[TabIndex(ToolsText.StandardTabTitle) - 1].Select(m => ToolsText.MenuTitles[m]));   // later on 2026-10-10 (the user's asks)
         Assert.Equal(["Print", "Camera", "Screen"], ToolsText.TabMenus[TabIndex(ToolsText.MediaTabTitle) - 1].Select(m => ToolsText.MenuTitles[m]));   // ComfyUI and YouTube on Integrations since 2026-10-10
         Assert.Equal(["File", "Image", "UNC", "GitLib", "Obsidian"], ToolsText.TabMenus[TabIndex(ToolsText.FilesTabTitle) - 1].Select(m => ToolsText.MenuTitles[m]));   // 2026-10-10; Image later that day
         Assert.Equal(["Docker", "HomeAssistant", "ComfyUI", "YouTube"], ToolsText.TabMenus[TabIndex(ToolsText.IntegrationsTabTitle) - 1].Select(m => ToolsText.MenuTitles[m]));   // 2026-10-10; ClaudeCode first until later that day
         Assert.Equal(["SQL", "MySQL", "SQLite", "PostgreSQL", "Oracle"], ToolsText.TabMenus[TabIndex(ToolsText.DatabaseTabTitle) - 1].Select(m => ToolsText.MenuTitles[m]));
-        Assert.Equal([TabIndex(ToolsText.FilesTabTitle), TabIndex(ToolsText.IntegrationsTabTitle), TabIndex(ToolsText.DatabaseTabTitle), TabIndex(ToolsText.MediaTabTitle)], Enumerable.Range(0, ToolsText.TabTitles.Count).Where(ToolsText.IsGroupTab));   // Database before Media since later on 2026-10-09
+        Assert.Equal([TabIndex(ToolsText.StandardTabTitle), TabIndex(ToolsText.FilesTabTitle), TabIndex(ToolsText.IntegrationsTabTitle), TabIndex(ToolsText.DatabaseTabTitle), TabIndex(ToolsText.MediaTabTitle)], Enumerable.Range(0, ToolsText.TabTitles.Count).Where(ToolsText.IsGroupTab));   // every tab but Offered since later on 2026-10-10   // Database before Media since later on 2026-10-09
         Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount], TabFields(ToolsText.OptionsTabTitle));
         Assert.Equal([SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds], TabFields(ToolsText.HomeAssistantTabTitle));   // the switch, the server and its token, the test, the policy, Assist's agent, the timeout (2026-09-28)   // the fold's count under the switch (2026-09-22, the user's place), the code fold's under it
         Assert.Equal([SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine], TabFields(ToolsText.PrintTabTitle));   // the switch, the policy, the printer, the size (later on 2026-09-28); the PDF engine (2026-10-03)
@@ -443,18 +476,17 @@ public partial class ToolsMenuTests : IDisposable
     {
         // The $-mention switch (later on 2026-09-19): the pane's own row, last on the strip in the /skills shape (second until later on 2026-09-22).
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Left);                                        // the strip wraps: Offered → Options
+        Push(ToTab(ToolsText.OptionsTabTitle));                 // Standard's last menu since later on 2026-10-10 (the strip's last tab, Offered ← wrapping to it, until then)
         Push(Keys.Enter, Keys.Down, Keys.Enter);                // $-mention enabled: the page, off picked
-        Push(Keys.Right);                                       // back round to Offered
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.False(_settings.Current.ToolsDollarMention);
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ $-mention enabled    on\n  Tool collapse count  2 lines\n  Code collapse count  20 lines\n  Show file diffs      on\n  Diff max lines       10 lines\n  Diff collapse count  10 lines\n", 100);
-        Assert.Contains(ToolsText.Label + " › $-mention enabled", Output);
+        AssertTabEnds(Strips(ToolsText.StandardTabTitle) + Headed(ToolsText.OptionsTabTitle, "▸ $-mention enabled    on\n  Tool collapse count  2 lines\n  Code collapse count  20 lines\n  Show file diffs      on\n  Diff max lines       10 lines\n  Diff collapse count  10 lines\n"), 100);
+        Assert.Contains(StandardCrumb + " › $-mention enabled", Output);
         Assert.Contains("$ is ordinary text", Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · $-mention enabled: off\n▸ $-mention enabled    off\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.StandardTabTitle) + "\n  · $-mention enabled: off\n" + Heading("── Mentions") + "\n▸ $-mention enabled    off\n", Output);
         pane.Dispose();
     }
 
@@ -465,15 +497,15 @@ public partial class ToolsMenuTests : IDisposable
         var (menu, pane, _) = PaneMenu();
         Push(Keys.Right);                                       // Ask
         Push(Keys.Enter, Keys.Down, Keys.Enter);                // Ask user: the page, off picked
-        Push(Keys.Right, Keys.Right, Keys.Right);               // Web, Shell, Files
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Right);   // Web, Shell, Options, Files (File)
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.False(_settings.Current.AskUser);
         // The three rows padded to the tab's own column (30), the toggle's notice on the status line under the strip.
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Ask user                      on\n  Ask max questions             10 questions\n  Ask max choices per question  10 choices\n", 100);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Ask user: off\n▸ Ask user                      off\n", Output);
+        AssertTabEnds(Strips(ToolsText.StandardTabTitle) + Headed(ToolsText.AskTabTitle, "▸ Ask user                      on\n  Ask max questions             10 questions\n  Ask max choices per question  10 choices\n"), 100);
+        Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.StandardTabTitle) + "\n  · Ask user: off\n" + Heading("── Questions") + "\n▸ Ask user                      off\n", Output);
         Assert.Contains("\n▸ File tools                      on\n", Output);
         pane.Dispose();
     }
@@ -491,8 +523,8 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.False(_settings.Current.FileTools);
         // The six rows (the view_image cap last, 2026-09-19; the @-mention folder mode before it, 2026-09-17, and the browser mode under that, 2026-09-21; Safe edits gone since 2026-10-01, folder-remain the default since then, Always return line numbers gone later that day and the stale line number guard later still, with edit_lines) padded to the tab's own column (32), the toggle's notice on the status line under the strip.
-        AssertTabEnds(Strips(ToolsText.FilesTabTitle) + "▸ File tools                      on\n  File /tree max length           500 entries\n  File /tree show sizes           on\n  File @-mention folder mode      folder-remain\n  File browser/tree mode          default\n  File view image max (per call)  10 pictures\n  File search max results         200 results\n", 100);
-        Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.FilesTabTitle) + "\n  · File tools: off\n▸ File tools                      off\n", Output);
+        AssertTabEnds(Strips(ToolsText.FilesTabTitle) + Headed(ToolsText.FileMenuTitle, "▸ File tools                      on\n  File /tree max length           500 entries\n  File /tree show sizes           on\n  File @-mention folder mode      folder-remain\n  File browser/tree mode          default\n  File view image max (per call)  10 pictures\n  File search max results         200 results\n"), 100);
+        Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.FilesTabTitle) + "\n  · File tools: off\n" + Heading("── Files") + "\n▸ File tools                      off\n", Output);
         Assert.Contains("\n▸ GitLib tools            on\n", Output);
         pane.Dispose();
     }
@@ -516,7 +548,7 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.Equal(vault, _settings.Current.ObsidianVault);
         Assert.Contains("Obsidian vault " + SettingsMenu.ObsidianVaultError[..40], Output);   // the status line, cut at the pane's width
-        Assert.Contains(Strips(ToolsText.FilesTabTitle) + "▸ Obsidian tools                  on\n  Obsidian vault                  (not set)\n  Obsidian allow delete (.trash)  on\n", Output);
+        Assert.Contains(Strips(ToolsText.FilesTabTitle) + Headed(ToolsText.ObsidianTabTitle, "▸ Obsidian tools                  on\n  Obsidian vault                  (not set)\n  Obsidian allow delete (.trash)  on\n"), Output);
     }
 
     /// <summary>
@@ -1307,7 +1339,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(1000, _settings.Current.GitLibDiffMaxLines);
         Assert.Equal(20, _settings.Current.GitLibLogMaxCommits);
         // The five rows padded to the tab's own column (24 since the GitLib labels, 2026-09-30; 28 before), the diff cap's notice then the log cap's refusal on the status line.
-        AssertTabEnds(Strips(ToolsText.FilesTabTitle) + "▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", 100);
+        AssertTabEnds(Strips(ToolsText.FilesTabTitle) + Headed(ToolsText.GitTabTitle, "▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n"), 100);
         Assert.Contains("\n  GitLib diff max lines   1000 lines\n", Output);
         Assert.Contains("GitLib log max commits must be 1 to 200 commits; keeping 20.", Output);
         pane.Dispose();
@@ -1335,12 +1367,12 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("cmd", _settings.Current.ShellDefault);
         Assert.Equal(180, _settings.Current.ShellTimeoutSeconds);
         // The ten rows padded to the tab's own column (27), then the picker's rows, the list's, and the notices on the status line.
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", 100);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(2, police: true).Select(b => b.Title)) + " ") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
+        AssertTabEnds(Strips(ToolsText.StandardTabTitle) + Headed(ToolsText.ShellTabTitle, "▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n"), 100);
+        Assert.Contains("\n" + Titled(StandardCrumb + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(2, police: true).Select(b => b.Title)) + " ") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
         Assert.Contains("  · Shell command policy: yolo\n", Output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
+        Assert.Contains("\n" + Titled(StandardCrumb + " › Shell allowed commands │ " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
         Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", Output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell default") + "\n \n▸ powershell pwsh when installed, else Windows PowerShell 5.1\n  cmd        cmd.exe: batch syntax\n  bash       Git Bash, when bash.exe is found\n", Output);
+        Assert.Contains("\n" + Titled(StandardCrumb + " › Shell default") + "\n \n▸ powershell pwsh when installed, else Windows PowerShell 5.1\n  cmd        cmd.exe: batch syntax\n  bash       Git Bash, when bash.exe is found\n", Output);
         Assert.Contains("  · Shell default: cmd\n", Output);
         Assert.Contains("Shell timeout (s) must be 1 to 3600 seconds; keeping 180.", Output);
         pane.Dispose();
@@ -1368,12 +1400,12 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("bash", _settings.Current.ShellDefault);   // the second of the Mac's three
         Assert.Equal(180, _settings.Current.ShellTimeoutSeconds);
         // The ten rows padded to the tab's own column (27), then the picker's rows, the list's, and the notices on the status line.
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   zsh\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", 100);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(2, police: true).Select(b => b.Title)) + " ") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
+        AssertTabEnds(Strips(ToolsText.StandardTabTitle) + Headed(ToolsText.ShellTabTitle, "▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   zsh\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n"), 100);
+        Assert.Contains("\n" + Titled(StandardCrumb + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(2, police: true).Select(b => b.Title)) + " ") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
         Assert.Contains("  · Shell command policy: yolo\n", Output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
+        Assert.Contains("\n" + Titled(StandardCrumb + " › Shell allowed commands │ " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
         Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", Output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell default") + "\n \n▸ zsh        the macOS shell\n  bash       bash from the PATH, else /bin/bash\n  powershell pwsh, when installed\n", Output);
+        Assert.Contains("\n" + Titled(StandardCrumb + " › Shell default") + "\n \n▸ zsh        the macOS shell\n  bash       bash from the PATH, else /bin/bash\n  powershell pwsh, when installed\n", Output);
         Assert.Contains("  · Shell default: bash\n", Output);
         Assert.Contains("Shell timeout (s) must be 1 to 3600 seconds; keeping 180.", Output);
         pane.Dispose();
@@ -1392,7 +1424,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.True(_settings.Current.ShellToolBridge);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell tool bridge") + "\n \n  on  a script may call this app's other tools through its neon_tools module\n▸ off a script does everything itself: no neon_tools module, no tool calls\n", Output);
+        Assert.Contains("\n" + Titled(StandardCrumb + " › Shell tool bridge") + "\n \n  on  a script may call this app's other tools through its neon_tools module\n▸ off a script does everything itself: no neon_tools module, no tool calls\n", Output);
         Assert.Contains("  · Shell tool bridge: on", Output);
         Assert.Contains("\n▸ Shell tool bridge               on\n  Shell tool bridge max calls     50 tool calls\n", Output);
         pane.Dispose();
@@ -1414,9 +1446,9 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.False(_settings.Current.ShellPolice);
         Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", Output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police │ ≡ strings (none) ") + "\n \n▸ on  shell police enabled\n  off shell police disabled\n", Output);
+        Assert.Contains("\n" + Titled(StandardCrumb + " › Shell police │ ≡ strings (none) ") + "\n \n▸ on  shell police enabled\n  off shell police disabled\n", Output);
         Assert.Contains("  · Shell police: off", Output);
-        Assert.Contains("\n▸ Shell police                    off\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n", Output);
+        Assert.Contains("\n▸ Shell police                    off\n  Shell police forbidden strings  none\n" + Heading("── Commands") + "\n  Shell prefer native tools       on\n  Shell default                   powershell\n", Output);
         pane.Dispose();
     }
 
@@ -1436,9 +1468,9 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.False(_settings.Current.ShellPolice);
         Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", Output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police │ ≡ strings (none) ") + "\n \n▸ on  shell police enabled\n  off shell police disabled\n", Output);
+        Assert.Contains("\n" + Titled(StandardCrumb + " › Shell police │ ≡ strings (none) ") + "\n \n▸ on  shell police enabled\n  off shell police disabled\n", Output);
         Assert.Contains("  · Shell police: off", Output);
-        Assert.Contains("\n▸ Shell police                    off\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   zsh\n", Output);
+        Assert.Contains("\n▸ Shell police                    off\n  Shell police forbidden strings  none\n" + Heading("── Commands") + "\n  Shell prefer native tools       on\n  Shell default                   zsh\n", Output);
         pane.Dispose();
     }
 
@@ -1605,7 +1637,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["node"], _settings.Current.ShellCodeLanguages);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell code languages │ " + SettingsMenu.SelectAllButton + " · " + SettingsMenu.SelectNoneButton + " ") + "\n \n▸ [x] powershell a .ps1 through pwsh or Windows PowerShell; Invoke-NeonTool calls a tool\n  [x] python     a .py through python.exe; from neon_tools import …\n  [x] node       a .js through node.exe; require('neon_tools')\n", Output);
+        Assert.Contains("\n" + Titled(StandardCrumb + " › Shell code languages │ " + SettingsMenu.SelectAllButton + " · " + SettingsMenu.SelectNoneButton + " ") + "\n \n▸ [x] powershell a .ps1 through pwsh or Windows PowerShell; Invoke-NeonTool calls a tool\n  [x] python     a .py through python.exe; from neon_tools import …\n  [x] node       a .js through node.exe; require('neon_tools')\n", Output);
         Assert.Contains("  · Shell code languages: python, node\n", Output);
         Assert.Contains("  · Shell code languages: node\n", Output);
         Assert.Contains("At least one language stays on.", Output);
@@ -1628,7 +1660,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["node"], _settings.Current.ShellCodeLanguages);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell code languages │ " + SettingsMenu.SelectAllButton + " · " + SettingsMenu.SelectNoneButton + " ") + "\n \n▸ [x] powershell a .ps1 through pwsh; Invoke-NeonTool calls a tool\n  [x] python     a .py through python3; from neon_tools import …\n  [x] node       a .js through node; require('neon_tools')\n", Output);
+        Assert.Contains("\n" + Titled(StandardCrumb + " › Shell code languages │ " + SettingsMenu.SelectAllButton + " · " + SettingsMenu.SelectNoneButton + " ") + "\n \n▸ [x] powershell a .ps1 through pwsh; Invoke-NeonTool calls a tool\n  [x] python     a .py through python3; from neon_tools import …\n  [x] node       a .js through node; require('neon_tools')\n", Output);
         Assert.Contains("  · Shell code languages: python, node\n", Output);
         Assert.Contains("  · Shell code languages: node\n", Output);
         Assert.Contains("At least one language stays on.", Output);
@@ -1649,8 +1681,8 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.False(_settings.Current.WebTools);
         // The seven rows padded to the tab's own column (26), the toggle's notice on the status line under the strip.
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Web tools                 on\n  Web browser mode          default\n  Web browser path          (auto: msedge.exe)\n  Web browser network mode  internet\n  Web search method         duckduckgo\n  Web SearXNG URL           (not set)\n  Web search max results    20 results\n  Web download max (MB)     50 MB\n", 100);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Web tools: off\n▸ Web tools                 off\n", Output);
+        AssertTabEnds(Strips(ToolsText.StandardTabTitle) + Headed(ToolsText.WebTabTitle, "▸ Web tools                 on\n  Web browser mode          default\n  Web browser path          (auto: msedge.exe)\n  Web browser network mode  internet\n  Web search method         duckduckgo\n  Web SearXNG URL           (not set)\n  Web search max results    20 results\n  Web download max (MB)     50 MB\n"), 100);
+        Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.StandardTabTitle) + "\n  · Web tools: off\n" + Heading("── Browser") + "\n▸ Web tools                 off\n", Output);
         pane.Dispose();
     }
 
@@ -1668,8 +1700,8 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.False(_settings.Current.WebTools);
         // The seven rows padded to the tab's own column (26), the toggle's notice on the status line under the strip.
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Web tools                 on\n  Web browser mode          default\n  Web browser path          " + SettingsMenu.AutoBrowserLabel(FakeBrowserPath) + "\n  Web browser network mode  internet\n  Web search method         duckduckgo\n  Web SearXNG URL           (not set)\n  Web search max results    20 results\n  Web download max (MB)     50 MB\n", 100);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Web tools: off\n▸ Web tools                 off\n", Output);
+        AssertTabEnds(Strips(ToolsText.StandardTabTitle) + Headed(ToolsText.WebTabTitle, "▸ Web tools                 on\n  Web browser mode          default\n  Web browser path          " + SettingsMenu.AutoBrowserLabel(FakeBrowserPath) + "\n  Web browser network mode  internet\n  Web search method         duckduckgo\n  Web SearXNG URL           (not set)\n  Web search max results    20 results\n  Web download max (MB)     50 MB\n"), 100);
+        Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.StandardTabTitle) + "\n  · Web tools: off\n" + Heading("── Browser") + "\n▸ Web tools                 off\n", Output);
         pane.Dispose();
     }
 
@@ -1685,7 +1717,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal("httpclient", _settings.Current.WebBrowserMode);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Web browser mode") + "\n", Output);
+        Assert.Contains("\n" + Titled(StandardCrumb + " › Web browser mode") + "\n", Output);
         Assert.DoesNotContain(SettingsMenu.Title + " › Web browser mode", Output);
         Assert.Contains("  · Web browser mode: httpclient\n", Output);
         Assert.Equal(SettingsMenu.Title, settings.Root);   // restored for /settings
@@ -1717,7 +1749,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         // Later on 2026-10-03: under Show file diffs; 0 to 500, 10 by default (40 until later that day), 0 = the header line alone.
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Left);                                                                     // Options, the strip wrapped
+        Push(ToTab(ToolsText.OptionsTabTitle));                                              // Options, Standard's last menu (the strip wrapped to it until later on 2026-10-10)
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);                        // Diff max lines: the typed slot with "10"
         Push(Keys.Backspace, Keys.Backspace, Keys.Char('5'), Keys.Char('0'), Keys.Char('1'), Keys.Enter);   // refused: 501
         Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);        // 0: the header alone
@@ -1738,7 +1770,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         // 2026-10-04, the user's ask and place: under Diff max lines; 0 to 500, 10 by default, 0 = off.
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Left);                                                                     // Options, the strip wrapped
+        Push(ToTab(ToolsText.OptionsTabTitle));                                              // Options, Standard's last menu (the strip wrapped to it until later on 2026-10-10)
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);             // Diff collapse count: the typed slot with "10"
         Push(Keys.Backspace, Keys.Backspace, Keys.Char('5'), Keys.Char('0'), Keys.Char('1'), Keys.Enter);   // refused: 501
         Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);        // 0: off
@@ -1762,7 +1794,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         // 2026-09-22, the user's place: under $-mention enabled; 0 to 100, 2 by default, 0 = off.
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Left);                                          // Options, the strip wrapped
+        Push(ToTab(ToolsText.OptionsTabTitle));                   // Options, Standard's last menu (the strip wrapped to it until later on 2026-10-10)
         Push(Keys.Down, Keys.Enter);                              // Tool collapse count: the typed slot with "2"
         Push(Keys.Backspace, Keys.Char('1'), Keys.Char('0'), Keys.Char('1'), Keys.Enter);   // refused: 101
         Push(Keys.Enter, Keys.Backspace, Keys.Char('0'), Keys.Enter);                        // 0: off
@@ -1788,7 +1820,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         // Later on 2026-09-22, the user's place: under Tool collapse count; 0 to 100, 20 by default, 0 = off.
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Left);                                          // Options, the strip wrapped
+        Push(ToTab(ToolsText.OptionsTabTitle));                   // Options, Standard's last menu (the strip wrapped to it until later on 2026-10-10)
         Push(Keys.Down, Keys.Down, Keys.Enter);                   // Code collapse count: the typed slot with "20"
         Push(Keys.Backspace, Keys.Backspace, Keys.Char('1'), Keys.Char('0'), Keys.Char('1'), Keys.Enter);   // refused: 101
         Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);                      // 0: off
@@ -2019,13 +2051,13 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("switched off in /tools", Output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", Output);
         // The tabs in strip order, the user's since 2026-10-03: Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Obsidian, SQL, MySQL, Oracle, Claude, Docker, HA, ComfyUI, GitLib, Options. Before it Web right after Offered, then Files, Shell, Ask (the user's order, later on 2026-09-21), Claude (Claude (CLI) until 2026-09-29, the Anthropic API's four rows last since), Obsidian, ComfyUI, SQL, Git (native) (the user's order, 2026-09-27), HA (2026-09-28; second to last since later on 2026-10-01, the user's ask) and Options last (2026-09-22).
-        Assert.Contains("  · Web\n  ·   Web tools: on\n  ·   Web browser mode: default\n  ·   Web browser path: (auto: msedge.exe)\n", Output);
-        Assert.Contains("  ·   Web search max results: 20 results\n  ·   Web download max (MB): 50 MB\n  · Shell\n  ·   Shell command policy: ask\n", Output);
+        Assert.Contains("  ·   Web\n  ·     Web tools: on\n  ·     Web browser mode: default\n  ·     Web browser path: (auto: msedge.exe)\n", Output);
+        Assert.Contains("  ·     Web search max results: 20 results\n  ·     Web download max (MB): 50 MB\n  ·   Shell\n  ·     Shell command policy: ask\n", Output);
         Assert.Contains("  ·     File view image max (per call): 10 pictures\n  ·     File search max results: 200 results\n  ·   Image\n  ·     Image tools: off\n  ·     Image edit quality: 90\n  ·     Image edit metadata: none\n  ·     Image edit mode: beside-original\n  ·     Image edit output folder: (beside the source)\n  ·     Pasted images folder: pasted_images\n  ·   UNC\n", Output);
-        Assert.Contains("  · Shell\n  ·   Shell command policy: ask\n", Output);
-        Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Web\n", Output);
-        Assert.Contains("  ·   Shell tool bridge max calls: 50 tool calls\n  · Files\n  ·   File\n  ·     File tools: on\n", Output);
-        Assert.Contains("  ·     File search max results: 200 results\n  ·   Image\n  ·     Image tools: off\n  ·     Image edit quality: 90\n  ·     Image edit metadata: none\n  ·     Image edit mode: beside-original\n  ·     Image edit output folder: (beside the source)\n  ·     Pasted images folder: pasted_images\n  ·   UNC\n  ·     UNC tools: off\n  ·     UNC writes: off\n  ·     UNC shares offered: none of 0\n  ·     UNC set password: Enter to set password for a runas share\n  ·     UNC add/edit share: Enter to start share wizard\n  ·     UNC *-mention enabled: on\n  ·     UNC shares (profile): (none) · Enter edits unc.json\n  ·     UNC shares (global): (none) · Enter edits unc.json\n  ·   GitLib\n  ·     GitLib tools: on\n  ·     GitLib diff max lines: 500 lines\n  ·     GitLib log max commits: 20 commits\n  ·     GitLib email: (not set)\n  ·     GitLib name: (not set)\n  ·   Obsidian\n  ·     Obsidian tools: on\n  ·     Obsidian vault: (not set)\n  ·     Obsidian allow delete (.trash): on\n  · Integrations\n  ·   Docker\n  ·     Docker tools: off\n  ·     Docker writes: off\n  ·     Docker engine pipe: \\\\.\\pipe\\docker_engine\n  ·   HomeAssistant\n  ·     Home Assistant tools: on\n  ·     Home Assistant URL: (not set)\n  ·     Home Assistant API key: (none)\n  ·     Home Assistant test connection: Enter to ask the server for its version\n  ·     Home Assistant action policy: ask\n  ·     Home Assistant Assist agent: (Home Assistant's default)\n  ·     Home Assistant timeout (s): 10\n  ·   ComfyUI\n  ·     ComfyUI tools: on\n  ·     ComfyUI URL: (not set)\n  ·     ComfyUI workflows offered: none of 0\n  ·     ComfyUI add workflow: Enter to start workflow wizard\n  ·     ComfyUI ^-mention enabled: on\n  ·     ComfyUI timeout (s): 300\n  ·     ComfyUI max pictures per call: 5 pictures\n  ·     ComfyUI reinforce negatives: on\n  ·     ComfyUI show prompts: on\n  ·     ComfyUI picture strip: on\n  ·     ComfyUI output folder: comfy_images\n  ·   YouTube\n  ·     YouTube tools: off\n  ·     YouTube API key: (none)\n  ·     YouTube search max results: 8 results\n  ·     YouTube autoplay: on\n  ·     YouTube while speaking: pause\n  ·     YouTube search order: relevance\n  ·     YouTube safe search: moderate\n  ·     YouTube region: (any region)\n  ·     YouTube language: (any language)\n  · Database\n  ·   SQL\n  ·     SQL tools: on\n  ·     SQL mode: read-only\n  ·     SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQL connections offered: none of 0\n  ·     SQL set password: Enter to set password for a connection\n  ·     SQL add/edit connection: Enter to start the connection wizard\n  ·     SQL %-mention enabled: on\n  ·     SQL max rows: 100 rows\n  ·     SQL query timeout (s): 30\n  ·     SQL query result max chars: 32,000 chars\n  ·     SQL connections (profile): (none) · Enter edits sql.json\n  ·     SQL connections (global): (none) · Enter edits sql.json\n  ·   MySQL\n  ·     MySQL tools: off\n  ·     MySQL mode: read-only\n  ·     MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     MySQL connections offered: none of 0\n  ·     MySQL set password: Enter to set password for a connection\n  ·     MySQL add/edit connection: Enter to start the connection wizard\n  ·     MySQL %-mention enabled: on\n  ·     MySQL max rows: 100 rows\n  ·     MySQL query timeout (s): 30\n  ·     MySQL connections (profile): (none) · Enter edits mysql.json\n  ·     MySQL connections (global): (none) · Enter edits mysql.json\n  ·   SQLite\n  ·     SQLite tools: off\n  ·     SQLite mode: read-only\n  ·     SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQLite databases offered: none of 0\n  ·     SQLite sandbox files: off\n  ·     SQLite add/edit database: Enter to start database wizard\n  ·     SQLite %-mention enabled: on\n  ·     SQLite max rows: 100 rows\n  ·     SQLite query timeout (s): 30\n  ·     SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·     SQLite databases (global): (none) · Enter edits sqlite.json\n  ·   PostgreSQL\n  ·     PostgreSQL tools: off\n  ·     PostgreSQL mode: read-only\n  ·     PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     PostgreSQL connections offered: none of 0\n  ·     PostgreSQL set password: Enter to set password for a connection\n  ·     PostgreSQL add/edit connection: Enter to start the connection wizard\n  ·     PostgreSQL %-mention enabled: on\n  ·     PostgreSQL max rows: 100 rows\n  ·     PostgreSQL query timeout (s): 30\n  ·     PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·     PostgreSQL connections (global): (none) · Enter edits postgres.json\n  ·   Oracle\n  ·     Oracle tools: off\n  ·     Oracle mode: read-only\n  ·     Oracle statements allowed: changing data, creating, reading (used under read-write)\n  ·     Oracle connections offered: none of 0\n  ·     Oracle set password: Enter to set password for a connection\n  ·     Oracle add/edit connection: Enter to start the connection wizard\n  ·     Oracle %-mention enabled: on\n  ·     Oracle max rows: 100 rows\n  ·     Oracle query timeout (s): 30\n  ·     Oracle connections (profile): (none) · Enter edits oracle.json\n  ·     Oracle connections (global): (none) · Enter edits oracle.json\n  · Media\n  ·   Print\n  ·     Print tools: off\n  ·     Print action policy: ask\n  ·     Print default printer: (Windows default)\n  ·     Print font size (pt): 10 pt\n  ·     PDF engine: auto\n  ·   Camera\n  ·     Camera tool: off\n  ·     Camera shutter: user\n  ·     Camera preview: live\n  ·     Camera device: (first camera)\n  ·     Camera resolution: 1280x720\n  ·     Camera output folder: camera_images\n  ·     Camera keep in sessions: off\n  ·     Camera watch interval (s): 10\n  ·     Camera watch change (%): 8%\n  ·     Camera watch speaks up: off\n  ·     Camera watch min gap (s): 120\n  ·   Screen\n  ·     Screen capture tool: off\n  ·     Screen capture ask: ask\n  ·     Screen capture preview: on\n  ·     Screen capture output folder: screen_images\n  ·     Screen capture keep in sessions: off\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", Output);
+        Assert.Contains("  ·   Shell\n  ·     Shell command policy: ask\n", Output);
+        Assert.Contains("  · Standard\n  ·   Ask\n  ·     Ask user: on\n  ·     Ask max questions: 10 questions\n  ·     Ask max choices per question: 10 choices\n  ·   Web\n", Output);
+        Assert.Contains("  ·     Shell tool bridge max calls: 50 tool calls\n  ·   Options\n  ·     $-mention enabled: on\n", Output);
+        Assert.Contains("  ·     File search max results: 200 results\n  ·   Image\n  ·     Image tools: off\n  ·     Image edit quality: 90\n  ·     Image edit metadata: none\n  ·     Image edit mode: beside-original\n  ·     Image edit output folder: (beside the source)\n  ·     Pasted images folder: pasted_images\n  ·   UNC\n  ·     UNC tools: off\n  ·     UNC writes: off\n  ·     UNC shares offered: none of 0\n  ·     UNC set password: Enter to set password for a runas share\n  ·     UNC add/edit share: Enter to start share wizard\n  ·     UNC *-mention enabled: on\n  ·     UNC shares (profile): (none) · Enter edits unc.json\n  ·     UNC shares (global): (none) · Enter edits unc.json\n  ·   GitLib\n  ·     GitLib tools: on\n  ·     GitLib diff max lines: 500 lines\n  ·     GitLib log max commits: 20 commits\n  ·     GitLib email: (not set)\n  ·     GitLib name: (not set)\n  ·   Obsidian\n  ·     Obsidian tools: on\n  ·     Obsidian vault: (not set)\n  ·     Obsidian allow delete (.trash): on\n  · Integrations\n  ·   Docker\n  ·     Docker tools: off\n  ·     Docker writes: off\n  ·     Docker engine pipe: \\\\.\\pipe\\docker_engine\n  ·   HomeAssistant\n  ·     Home Assistant tools: on\n  ·     Home Assistant URL: (not set)\n  ·     Home Assistant API key: (none)\n  ·     Home Assistant test connection: Enter to ask the server for its version\n  ·     Home Assistant action policy: ask\n  ·     Home Assistant Assist agent: (Home Assistant's default)\n  ·     Home Assistant timeout (s): 10\n  ·   ComfyUI\n  ·     ComfyUI tools: on\n  ·     ComfyUI URL: (not set)\n  ·     ComfyUI workflows offered: none of 0\n  ·     ComfyUI add workflow: Enter to start workflow wizard\n  ·     ComfyUI ^-mention enabled: on\n  ·     ComfyUI timeout (s): 300\n  ·     ComfyUI max pictures per call: 5 pictures\n  ·     ComfyUI reinforce negatives: on\n  ·     ComfyUI show prompts: on\n  ·     ComfyUI picture strip: on\n  ·     ComfyUI output folder: comfy_images\n  ·   YouTube\n  ·     YouTube tools: off\n  ·     YouTube API key: (none)\n  ·     YouTube search max results: 8 results\n  ·     YouTube search order: relevance\n  ·     YouTube safe search: moderate\n  ·     YouTube region: (any region)\n  ·     YouTube language: (any language)\n  ·     YouTube autoplay: on\n  ·     YouTube while speaking: pause\n  · Databases\n  ·   SQL\n  ·     SQL tools: on\n  ·     SQL mode: read-only\n  ·     SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQL connections offered: none of 0\n  ·     SQL set password: Enter to set password for a connection\n  ·     SQL add/edit connection: Enter to start the connection wizard\n  ·     SQL %-mention enabled: on\n  ·     SQL max rows: 100 rows\n  ·     SQL query timeout (s): 30\n  ·     SQL query result max chars: 32,000 chars\n  ·     SQL connections (profile): (none) · Enter edits sql.json\n  ·     SQL connections (global): (none) · Enter edits sql.json\n  ·   MySQL\n  ·     MySQL tools: off\n  ·     MySQL mode: read-only\n  ·     MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     MySQL connections offered: none of 0\n  ·     MySQL set password: Enter to set password for a connection\n  ·     MySQL add/edit connection: Enter to start the connection wizard\n  ·     MySQL %-mention enabled: on\n  ·     MySQL max rows: 100 rows\n  ·     MySQL query timeout (s): 30\n  ·     MySQL connections (profile): (none) · Enter edits mysql.json\n  ·     MySQL connections (global): (none) · Enter edits mysql.json\n  ·   SQLite\n  ·     SQLite tools: off\n  ·     SQLite mode: read-only\n  ·     SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQLite databases offered: none of 0\n  ·     SQLite sandbox files: off\n  ·     SQLite add/edit database: Enter to start database wizard\n  ·     SQLite %-mention enabled: on\n  ·     SQLite max rows: 100 rows\n  ·     SQLite query timeout (s): 30\n  ·     SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·     SQLite databases (global): (none) · Enter edits sqlite.json\n  ·   PostgreSQL\n  ·     PostgreSQL tools: off\n  ·     PostgreSQL mode: read-only\n  ·     PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     PostgreSQL connections offered: none of 0\n  ·     PostgreSQL set password: Enter to set password for a connection\n  ·     PostgreSQL add/edit connection: Enter to start the connection wizard\n  ·     PostgreSQL %-mention enabled: on\n  ·     PostgreSQL max rows: 100 rows\n  ·     PostgreSQL query timeout (s): 30\n  ·     PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·     PostgreSQL connections (global): (none) · Enter edits postgres.json\n  ·   Oracle\n  ·     Oracle tools: off\n  ·     Oracle mode: read-only\n  ·     Oracle statements allowed: changing data, creating, reading (used under read-write)\n  ·     Oracle connections offered: none of 0\n  ·     Oracle set password: Enter to set password for a connection\n  ·     Oracle add/edit connection: Enter to start the connection wizard\n  ·     Oracle %-mention enabled: on\n  ·     Oracle max rows: 100 rows\n  ·     Oracle query timeout (s): 30\n  ·     Oracle connections (profile): (none) · Enter edits oracle.json\n  ·     Oracle connections (global): (none) · Enter edits oracle.json\n  · Media\n  ·   Print\n  ·     Print tools: off\n  ·     Print action policy: ask\n  ·     Print default printer: (Windows default)\n  ·     Print font size (pt): 10 pt\n  ·     PDF engine: auto\n  ·   Camera\n  ·     Camera tool: off\n  ·     Camera shutter: user\n  ·     Camera preview: live\n  ·     Camera device: (first camera)\n  ·     Camera resolution: 1280x720\n  ·     Camera output folder: camera_images\n  ·     Camera keep in sessions: off\n  ·     Camera watch interval (s): 10\n  ·     Camera watch change (%): 8%\n  ·     Camera watch speaks up: off\n  ·     Camera watch min gap (s): 120\n  ·   Screen\n  ·     Screen capture tool: off\n  ·     Screen capture ask: ask\n  ·     Screen capture preview: on\n  ·     Screen capture output folder: screen_images\n  ·     Screen capture keep in sessions: off\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -2051,13 +2083,13 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("switched off in /tools", Output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", Output);
         // The tabs in strip order, the user's since 2026-10-03: Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Obsidian, SQL, MySQL, Oracle, Claude, Docker, HA, ComfyUI, GitLib, Options. Before it Web right after Offered, then Files, Shell, Ask (the user's order, later on 2026-09-21), Claude (Claude (CLI) until 2026-09-29, the Anthropic API's four rows last since), Obsidian, ComfyUI, SQL, Git (native) (the user's order, 2026-09-27), HA (2026-09-28; second to last since later on 2026-10-01, the user's ask) and Options last (2026-09-22).
-        Assert.Contains("  · Web\n  ·   Web tools: on\n  ·   Web browser mode: default\n  ·   Web browser path: " + SettingsMenu.AutoBrowserLabel(FakeBrowserPath) + "\n", Output);
-        Assert.Contains("  ·   Web search max results: 20 results\n  ·   Web download max (MB): 50 MB\n  · Shell\n  ·   Shell command policy: ask\n", Output);
+        Assert.Contains("  ·   Web\n  ·     Web tools: on\n  ·     Web browser mode: default\n  ·     Web browser path: " + SettingsMenu.AutoBrowserLabel(FakeBrowserPath) + "\n", Output);
+        Assert.Contains("  ·     Web search max results: 20 results\n  ·     Web download max (MB): 50 MB\n  ·   Shell\n  ·     Shell command policy: ask\n", Output);
         Assert.Contains("  ·     File view image max (per call): 10 pictures\n  ·     File search max results: 200 results\n  ·   Image\n  ·     Image tools: off\n  ·     Image edit quality: 90\n  ·     Image edit metadata: none\n  ·     Image edit mode: beside-original\n  ·     Image edit output folder: (beside the source)\n  ·     Pasted images folder: pasted_images\n  ·   UNC\n", Output);
-        Assert.Contains("  · Shell\n  ·   Shell command policy: ask\n", Output);
-        Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Web\n", Output);
-        Assert.Contains("  ·   Shell tool bridge max calls: 50 tool calls\n  · Files\n  ·   File\n  ·     File tools: on\n", Output);
-        Assert.Contains("  ·     File search max results: 200 results\n  ·   Image\n  ·     Image tools: off\n  ·     Image edit quality: 90\n  ·     Image edit metadata: none\n  ·     Image edit mode: beside-original\n  ·     Image edit output folder: (beside the source)\n  ·     Pasted images folder: pasted_images\n  ·   UNC\n  ·     UNC tools: off\n  ·     UNC writes: off\n  ·     UNC shares offered: none of 0\n  ·     UNC set password: Enter to set password for a runas share\n  ·     UNC add/edit share: Enter to start share wizard\n  ·     UNC *-mention enabled: on\n  ·     UNC shares (profile): (none) · Enter edits unc.json\n  ·     UNC shares (global): (none) · Enter edits unc.json\n  ·   GitLib\n  ·     GitLib tools: on\n  ·     GitLib diff max lines: 500 lines\n  ·     GitLib log max commits: 20 commits\n  ·     GitLib email: (not set)\n  ·     GitLib name: (not set)\n  ·   Obsidian\n  ·     Obsidian tools: on\n  ·     Obsidian vault: (not set)\n  ·     Obsidian allow delete (.trash): on\n  · Integrations\n  ·   Docker\n  ·     Docker tools: off\n  ·     Docker writes: off\n  ·     Docker engine pipe: \\\\.\\pipe\\docker_engine\n  ·   HomeAssistant\n  ·     Home Assistant tools: on\n  ·     Home Assistant URL: (not set)\n  ·     Home Assistant API key: (none)\n  ·     Home Assistant test connection: Enter to ask the server for its version\n  ·     Home Assistant action policy: ask\n  ·     Home Assistant Assist agent: (Home Assistant's default)\n  ·     Home Assistant timeout (s): 10\n  ·   ComfyUI\n  ·     ComfyUI tools: on\n  ·     ComfyUI URL: (not set)\n  ·     ComfyUI workflows offered: none of 0\n  ·     ComfyUI add workflow: Enter to start workflow wizard\n  ·     ComfyUI ^-mention enabled: on\n  ·     ComfyUI timeout (s): 300\n  ·     ComfyUI max pictures per call: 5 pictures\n  ·     ComfyUI reinforce negatives: on\n  ·     ComfyUI show prompts: on\n  ·     ComfyUI picture strip: on\n  ·     ComfyUI output folder: comfy_images\n  ·   YouTube\n  ·     YouTube tools: off\n  ·     YouTube API key: (none)\n  ·     YouTube search max results: 8 results\n  ·     YouTube autoplay: on\n  ·     YouTube while speaking: pause\n  ·     YouTube search order: relevance\n  ·     YouTube safe search: moderate\n  ·     YouTube region: (any region)\n  ·     YouTube language: (any language)\n  · Database\n  ·   SQL\n  ·     SQL tools: on\n  ·     SQL mode: read-only\n  ·     SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQL connections offered: none of 0\n  ·     SQL set password: Enter to set password for a connection\n  ·     SQL add/edit connection: Enter to start the connection wizard\n  ·     SQL %-mention enabled: on\n  ·     SQL max rows: 100 rows\n  ·     SQL query timeout (s): 30\n  ·     SQL query result max chars: 32,000 chars\n  ·     SQL connections (profile): (none) · Enter edits sql.json\n  ·     SQL connections (global): (none) · Enter edits sql.json\n  ·   MySQL\n  ·     MySQL tools: off\n  ·     MySQL mode: read-only\n  ·     MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     MySQL connections offered: none of 0\n  ·     MySQL set password: Enter to set password for a connection\n  ·     MySQL add/edit connection: Enter to start the connection wizard\n  ·     MySQL %-mention enabled: on\n  ·     MySQL max rows: 100 rows\n  ·     MySQL query timeout (s): 30\n  ·     MySQL connections (profile): (none) · Enter edits mysql.json\n  ·     MySQL connections (global): (none) · Enter edits mysql.json\n  ·   SQLite\n  ·     SQLite tools: off\n  ·     SQLite mode: read-only\n  ·     SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQLite databases offered: none of 0\n  ·     SQLite sandbox files: off\n  ·     SQLite add/edit database: Enter to start database wizard\n  ·     SQLite %-mention enabled: on\n  ·     SQLite max rows: 100 rows\n  ·     SQLite query timeout (s): 30\n  ·     SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·     SQLite databases (global): (none) · Enter edits sqlite.json\n  ·   PostgreSQL\n  ·     PostgreSQL tools: off\n  ·     PostgreSQL mode: read-only\n  ·     PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     PostgreSQL connections offered: none of 0\n  ·     PostgreSQL set password: Enter to set password for a connection\n  ·     PostgreSQL add/edit connection: Enter to start the connection wizard\n  ·     PostgreSQL %-mention enabled: on\n  ·     PostgreSQL max rows: 100 rows\n  ·     PostgreSQL query timeout (s): 30\n  ·     PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·     PostgreSQL connections (global): (none) · Enter edits postgres.json\n  ·   Oracle\n  ·     Oracle tools: off\n  ·     Oracle mode: read-only\n  ·     Oracle statements allowed: changing data, creating, reading (used under read-write)\n  ·     Oracle connections offered: none of 0\n  ·     Oracle set password: Enter to set password for a connection\n  ·     Oracle add/edit connection: Enter to start the connection wizard\n  ·     Oracle %-mention enabled: on\n  ·     Oracle max rows: 100 rows\n  ·     Oracle query timeout (s): 30\n  ·     Oracle connections (profile): (none) · Enter edits oracle.json\n  ·     Oracle connections (global): (none) · Enter edits oracle.json\n  · Media\n  ·   Print\n  ·     Print tools: off\n  ·     Print action policy: ask\n  ·     Print default printer: " + SettingsMenu.WindowsDefaultPrinterLabel + "\n  ·     Print font size (pt): 10 pt\n  ·     PDF engine: auto\n  ·   Camera\n  ·     Camera tool: off\n  ·     Camera shutter: user\n  ·     Camera preview: live\n  ·     Camera device: (first camera)\n  ·     Camera resolution: 1280x720\n  ·     Camera output folder: camera_images\n  ·     Camera keep in sessions: off\n  ·     Camera watch interval (s): 10\n  ·     Camera watch change (%): 8%\n  ·     Camera watch speaks up: off\n  ·     Camera watch min gap (s): 120\n  ·   Screen\n  ·     Screen capture tool: off\n  ·     Screen capture ask: ask\n  ·     Screen capture preview: on\n  ·     Screen capture output folder: screen_images\n  ·     Screen capture keep in sessions: off\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", Output);
+        Assert.Contains("  ·   Shell\n  ·     Shell command policy: ask\n", Output);
+        Assert.Contains("  · Standard\n  ·   Ask\n  ·     Ask user: on\n  ·     Ask max questions: 10 questions\n  ·     Ask max choices per question: 10 choices\n  ·   Web\n", Output);
+        Assert.Contains("  ·     Shell tool bridge max calls: 50 tool calls\n  ·   Options\n  ·     $-mention enabled: on\n", Output);
+        Assert.Contains("  ·     File search max results: 200 results\n  ·   Image\n  ·     Image tools: off\n  ·     Image edit quality: 90\n  ·     Image edit metadata: none\n  ·     Image edit mode: beside-original\n  ·     Image edit output folder: (beside the source)\n  ·     Pasted images folder: pasted_images\n  ·   UNC\n  ·     UNC tools: off\n  ·     UNC writes: off\n  ·     UNC shares offered: none of 0\n  ·     UNC set password: Enter to set password for a runas share\n  ·     UNC add/edit share: Enter to start share wizard\n  ·     UNC *-mention enabled: on\n  ·     UNC shares (profile): (none) · Enter edits unc.json\n  ·     UNC shares (global): (none) · Enter edits unc.json\n  ·   GitLib\n  ·     GitLib tools: on\n  ·     GitLib diff max lines: 500 lines\n  ·     GitLib log max commits: 20 commits\n  ·     GitLib email: (not set)\n  ·     GitLib name: (not set)\n  ·   Obsidian\n  ·     Obsidian tools: on\n  ·     Obsidian vault: (not set)\n  ·     Obsidian allow delete (.trash): on\n  · Integrations\n  ·   Docker\n  ·     Docker tools: off\n  ·     Docker writes: off\n  ·     Docker engine pipe: \\\\.\\pipe\\docker_engine\n  ·   HomeAssistant\n  ·     Home Assistant tools: on\n  ·     Home Assistant URL: (not set)\n  ·     Home Assistant API key: (none)\n  ·     Home Assistant test connection: Enter to ask the server for its version\n  ·     Home Assistant action policy: ask\n  ·     Home Assistant Assist agent: (Home Assistant's default)\n  ·     Home Assistant timeout (s): 10\n  ·   ComfyUI\n  ·     ComfyUI tools: on\n  ·     ComfyUI URL: (not set)\n  ·     ComfyUI workflows offered: none of 0\n  ·     ComfyUI add workflow: Enter to start workflow wizard\n  ·     ComfyUI ^-mention enabled: on\n  ·     ComfyUI timeout (s): 300\n  ·     ComfyUI max pictures per call: 5 pictures\n  ·     ComfyUI reinforce negatives: on\n  ·     ComfyUI show prompts: on\n  ·     ComfyUI picture strip: on\n  ·     ComfyUI output folder: comfy_images\n  ·   YouTube\n  ·     YouTube tools: off\n  ·     YouTube API key: (none)\n  ·     YouTube search max results: 8 results\n  ·     YouTube search order: relevance\n  ·     YouTube safe search: moderate\n  ·     YouTube region: (any region)\n  ·     YouTube language: (any language)\n  ·     YouTube autoplay: on\n  ·     YouTube while speaking: pause\n  · Databases\n  ·   SQL\n  ·     SQL tools: on\n  ·     SQL mode: read-only\n  ·     SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQL connections offered: none of 0\n  ·     SQL set password: Enter to set password for a connection\n  ·     SQL add/edit connection: Enter to start the connection wizard\n  ·     SQL %-mention enabled: on\n  ·     SQL max rows: 100 rows\n  ·     SQL query timeout (s): 30\n  ·     SQL query result max chars: 32,000 chars\n  ·     SQL connections (profile): (none) · Enter edits sql.json\n  ·     SQL connections (global): (none) · Enter edits sql.json\n  ·   MySQL\n  ·     MySQL tools: off\n  ·     MySQL mode: read-only\n  ·     MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     MySQL connections offered: none of 0\n  ·     MySQL set password: Enter to set password for a connection\n  ·     MySQL add/edit connection: Enter to start the connection wizard\n  ·     MySQL %-mention enabled: on\n  ·     MySQL max rows: 100 rows\n  ·     MySQL query timeout (s): 30\n  ·     MySQL connections (profile): (none) · Enter edits mysql.json\n  ·     MySQL connections (global): (none) · Enter edits mysql.json\n  ·   SQLite\n  ·     SQLite tools: off\n  ·     SQLite mode: read-only\n  ·     SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQLite databases offered: none of 0\n  ·     SQLite sandbox files: off\n  ·     SQLite add/edit database: Enter to start database wizard\n  ·     SQLite %-mention enabled: on\n  ·     SQLite max rows: 100 rows\n  ·     SQLite query timeout (s): 30\n  ·     SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·     SQLite databases (global): (none) · Enter edits sqlite.json\n  ·   PostgreSQL\n  ·     PostgreSQL tools: off\n  ·     PostgreSQL mode: read-only\n  ·     PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     PostgreSQL connections offered: none of 0\n  ·     PostgreSQL set password: Enter to set password for a connection\n  ·     PostgreSQL add/edit connection: Enter to start the connection wizard\n  ·     PostgreSQL %-mention enabled: on\n  ·     PostgreSQL max rows: 100 rows\n  ·     PostgreSQL query timeout (s): 30\n  ·     PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·     PostgreSQL connections (global): (none) · Enter edits postgres.json\n  ·   Oracle\n  ·     Oracle tools: off\n  ·     Oracle mode: read-only\n  ·     Oracle statements allowed: changing data, creating, reading (used under read-write)\n  ·     Oracle connections offered: none of 0\n  ·     Oracle set password: Enter to set password for a connection\n  ·     Oracle add/edit connection: Enter to start the connection wizard\n  ·     Oracle %-mention enabled: on\n  ·     Oracle max rows: 100 rows\n  ·     Oracle query timeout (s): 30\n  ·     Oracle connections (profile): (none) · Enter edits oracle.json\n  ·     Oracle connections (global): (none) · Enter edits oracle.json\n  · Media\n  ·   Print\n  ·     Print tools: off\n  ·     Print action policy: ask\n  ·     Print default printer: " + SettingsMenu.WindowsDefaultPrinterLabel + "\n  ·     Print font size (pt): 10 pt\n  ·     PDF engine: auto\n  ·   Camera\n  ·     Camera tool: off\n  ·     Camera shutter: user\n  ·     Camera preview: live\n  ·     Camera device: (first camera)\n  ·     Camera resolution: 1280x720\n  ·     Camera output folder: camera_images\n  ·     Camera keep in sessions: off\n  ·     Camera watch interval (s): 10\n  ·     Camera watch change (%): 8%\n  ·     Camera watch speaks up: off\n  ·     Camera watch min gap (s): 120\n  ·   Screen\n  ·     Screen capture tool: off\n  ·     Screen capture ask: ask\n  ·     Screen capture preview: on\n  ·     Screen capture output folder: screen_images\n  ·     Screen capture keep in sessions: off\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -2222,13 +2254,13 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["Format"], _settings.Current.ShellPoliceForbiddenStrings);
-        Assert.Contains("\n" + Titled(ForbiddenListTitle) + "\n \n▸ " + SettingsMenu.AddForbiddenRow + "\n", Output);
+        Assert.Contains("\n" + Titled(ForbiddenListTitle.Replace(ToolsText.Label, StandardCrumb, StringComparison.Ordinal)) + "\n \n▸ " + SettingsMenu.AddForbiddenRow + "\n", Output);   // from the pane: under Standard's crumb (later on 2026-10-10)
         Assert.Contains(SettingsMenu.ForbiddenPaneKeys, Output);
         Assert.Contains("  · " + SettingsMenu.ForbiddenAddedNotice("rm -rf") + "\n▸ " + SettingsMenu.AddForbiddenRow + "\n  rm -rf\n", Output);
         Assert.Contains("  · " + SettingsMenu.ForbiddenAddedNotice("Format") + "\n▸ " + SettingsMenu.AddForbiddenRow + "\n  Format\n  rm -rf\n", Output);
         Assert.Contains("  · Shell police forbidden strings: RM -RF is already in the list\n", Output);
         Assert.Contains("  · Shell police forbidden strings: rm -rf removed\n", Output);
-        Assert.Contains("\n▸ Shell police forbidden strings  1 string\n  Shell prefer native tools       on\n", Output);
+        Assert.Contains("\n▸ Shell police forbidden strings  1 string\n" + Heading("── Commands") + "\n  Shell prefer native tools       on\n", Output);
         pane.Dispose();
     }
 

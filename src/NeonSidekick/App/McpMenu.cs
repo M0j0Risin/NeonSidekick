@@ -69,7 +69,7 @@ internal sealed class McpMenu
     /// (<see cref="McpRows.ToolTabs"/>: all, then each connected server) — its title, its rows under the same filter and the tools it
     /// holds for the caption — <paramref name="sub"/> the one on show; null or empty leaves the tab plain over <paramref name="tools"/>.
     /// </remarks>
-    public static MenuPage Page(IReadOnlyList<(string Markup, McpRow? Row)> servers, IReadOnlyList<(string Markup, string? Tool, bool Heading)> tools, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int total = 0, Func<string, MenuFooter?>? toolFooter = null, Func<McpRow?, MenuFooter?>? serverFooter = null,
+    public static MenuPage Page(IReadOnlyList<(string Markup, McpRow? Row, bool Heading)> servers, IReadOnlyList<(string Markup, string? Tool, bool Heading)> tools, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int total = 0, Func<string, MenuFooter?>? toolFooter = null, Func<McpRow?, MenuFooter?>? serverFooter = null,
         IReadOnlyList<(string Title, IReadOnlyList<(string Markup, string? Tool, bool Heading)> Rows, int Total)>? byServer = null, int sub = 0)
     {
         ArgumentNullException.ThrowIfNull(servers);
@@ -79,7 +79,7 @@ internal sealed class McpMenu
         ArgumentNullException.ThrowIfNull(filter);
         var tabs = new MenuTab[]
         {
-            new(McpText.ServersTabTitle, servers.Select(r => r.Markup).ToList()) { Hint = McpText.ServersKeys },
+            new(McpText.ServersTabTitle, servers.Select(r => r.Markup).ToList()) { Hint = McpText.ServersKeys, Headings = McpRows.HeadingRows(servers) },
             byServer is { Count: > 0 }
                 ? new MenuTab(McpText.ToolsTabTitle, [])
                 {
@@ -87,7 +87,7 @@ internal sealed class McpMenu
                     Sub = Math.Clamp(sub, 0, byServer.Count - 1),
                 }
                 : ToolsTab(McpText.ToolsTabTitle, tools, total),
-            menu.FieldsTab(McpText.OptionsTabTitle, SettingsMenu.McpTabFields[0], saved),
+            menu.FieldsTab(McpText.OptionsTabTitle, SettingsMenu.McpTabFields[0], saved, sections: SettingsMenu.McpMenuSections[0]),
         };
         return MenuPage.Tabbed(McpText.Label, tabs, tab, SettingsMenu.TabKeys) with
         {
@@ -98,7 +98,7 @@ internal sealed class McpMenu
             {
                 0 => row < servers.Count ? serverFooter?.Invoke(servers[row].Row) : null,
                 1 => row < tools.Count && tools[row].Tool is { } name ? toolFooter?.Invoke(name) : null,
-                2 => row < SettingsMenu.McpTabFields[0].Count ? menu.FieldFooter(SettingsMenu.McpTabFields[0][row], saved) : null,
+                2 => OptionsField(row) is { } field ? menu.FieldFooter(field, saved) : null,
                 _ => null,
             },
         };
@@ -223,13 +223,11 @@ internal sealed class McpMenu
                     continue;
                 }
 
-                var fields = SettingsMenu.McpTabFields[0];
-                if (cursor >= fields.Count)
+                if (OptionsField(cursor) is not { } field)
                 {
-                    continue;
+                    continue;   // the heading (2026-10-10) or past the rows
                 }
 
-                var field = fields[cursor];
                 if (midTurn && SettingsMenu.RefusedMidTurn(field))
                 {
                     Sink.Notice(SettingsMenu.NotWhileReplyRunsNotice);
@@ -260,6 +258,9 @@ internal sealed class McpMenu
             _pane.Close();
         }
     }
+
+    /// <summary>The field on row <paramref name="row"/> of the Options tab, its heading counted (2026-10-10, <see cref="SettingsMenu.McpMenuSections"/>); null for the heading or past the rows.</summary>
+    private static SettingsField? OptionsField(int row) => SettingsMenu.SectionedField(SettingsMenu.McpTabFields[0], SettingsMenu.McpMenuSections[0], row);
 
     private static int IndexOf(IReadOnlyList<string?> tabs, string? server)
     {

@@ -278,7 +278,7 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        var page = new MenuPage(Crumb(FieldName(SettingsField.AdvisorList) + " › " + AdvisorProfileTitle), names.Select(Markup.Escape).ToList(), PickKeys) { JumpNames = names };
+        var page = new MenuPage(Crumb(FieldName(SettingsField.AdvisorList) + " › " + AdvisorProfileTitle), ProfilePickerRows(names), PickKeys) { JumpNames = names };   // avatars led (2026-10-10)
         if (await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { } picked)
         {
             return false;
