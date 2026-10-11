@@ -15,12 +15,17 @@ namespace NeonSidekick.App;
 /// and a seeded poll, as there. The <see cref="QueueMenu"/> shape: it opens under a reply too (a <c>Pane</c>-class command),
 /// where both acts are safe — the window is its own thread and the stop writes nothing to the screen. The list is read again
 /// after every act. Without the pane the screen prints the lines instead (<c>ChatScreen.ListProcessesAsync</c>).
+/// <para>The state filter (2026-10-11, the user's ask: the running ones were lost among the finished): <see cref="RunningButton"/>
+/// and <see cref="EndedButton"/> after the kill button, a radio pair as the embedded catalog's installed and uninstalled — one lit
+/// at a time, the lit one pressed again goes dark, none lit every process. Nothing is saved: every visit starts with none lit. The
+/// count over the rows stays the whole list's; a filter that leaves nothing shows <see cref="NoMatchLine"/> and keeps the pane
+/// open (it closes only once the registry is empty).</para>
 /// </summary>
 internal sealed class ProcessMenu
 {
     // The label and the key hints. Pinned.
     public const string Title = ChatScreen.ProcessToolGlyph + " Process";
-    public const string Keys = "Enter = open window · k = kill · ESC = close";
+    public const string Keys = "Enter = open window · k = kill · r / e = running / ended · ESC = close";
 
     /// <summary>
     /// The title row's button: the highlighted process stopped, after a yes/no. Two spaces after the glyph (2026-10-05, the user's
@@ -32,8 +37,45 @@ internal sealed class ProcessMenu
     /// <summary>The key that is the button.</summary>
     public const char KillKey = 'k';
 
-    /// <summary>The page's buttons: the one.</summary>
-    public static readonly IReadOnlyList<MenuButton> Buttons = [new(KillButton, KillKey)];
+    /// <summary>The filter buttons' titles (2026-10-11): the running processes alone, the ended ones alone. Pinned.</summary>
+    public const string RunningButton = "● running";
+
+    public const string EndedButton = "○ ended";
+
+    /// <summary>Their keys.</summary>
+    public const char RunningKey = 'r';
+
+    public const char EndedKey = 'e';
+
+    /// <summary>The filter buttons' indices on the title row: after the kill button, which stays first.</summary>
+    public const int RunningIndex = 1;
+
+    public const int EndedIndex = 2;
+
+    /// <summary>
+    /// The page's buttons under <paramref name="running"/> (null = no filter, true = the running ones, false = the ended ones):
+    /// kill, then running and ended, the lit one <see cref="MenuButton.On"/>.
+    /// </summary>
+    public static IReadOnlyList<MenuButton> ButtonsFor(bool? running) =>
+        [new(KillButton, KillKey), new(RunningButton, RunningKey, running == true), new(EndedButton, EndedKey, running == false)];
+
+    /// <summary>The filter after the button at <paramref name="index"/> is pressed: a radio pair, the lit one pressed again goes dark; any other index changes nothing.</summary>
+    public static bool? Press(bool? running, int index) => index switch
+    {
+        RunningIndex => running == true ? null : true,
+        EndedIndex => running == false ? null : false,
+        _ => running,
+    };
+
+    /// <summary>Whether <paramref name="session"/> stays under <paramref name="running"/>.</summary>
+    public static bool Matches(bool? running, ProcessSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return running is not { } wanted || wanted == !session.HasExited;
+    }
+
+    /// <summary>The one dim row when the filter leaves nothing. Pinned.</summary>
+    public static string NoMatchLine(bool running) => running ? "No running processes." : "No ended processes.";
 
     /// <summary>What a declined kill says on the status line: the transcript's word.</summary>
     public const string KeptNotice = ChatScreen.KeptNotice;
@@ -124,14 +166,16 @@ internal sealed class ProcessMenu
         }
 
         int cursor = 0;
+        bool? running = null;   // the state filter (2026-10-11): none lit
         try
         {
             while (true)
             {
-                var shown = sessions;
-                var page = new MenuPage(Title, sessions.Select(RowMarkup).ToList(), Keys)
+                var shown = sessions.Where(s => Matches(running, s)).ToList();
+                List<string> rows = shown.Count > 0 ? shown.Select(RowMarkup).ToList() : [Theme.DimMarkup(NoMatchLine(running == true))];
+                var page = new MenuPage(Title, rows, Keys)
                 {
-                    Buttons = Buttons,
+                    Buttons = ButtonsFor(running),
                     Caption = Caption(sessions),
                     Footer = (_, row) => row < shown.Count ? ProcessWindowText.Footer(shown[row]) : null,   // the whole command (2026-10-07)
                 };
@@ -141,8 +185,29 @@ internal sealed class ProcessMenu
                     return;
                 }
 
-                cursor = Math.Clamp(pick.Row, 0, sessions.Count - 1);
-                var session = sessions[cursor];
+                if (pick.Button is RunningIndex or EndedIndex)
+                {
+                    // The cursor stays on its process while the new filter still shows it, else the first row.
+                    var under = pick.Row >= 0 && pick.Row < shown.Count ? shown[pick.Row] : null;
+                    running = Press(running, pick.Button);
+                    sessions = _processes.List();
+                    if (sessions.Count == 0)
+                    {
+                        return;
+                    }
+
+                    var next = sessions.Where(s => Matches(running, s)).ToList();
+                    cursor = under is not null && next.Contains(under) ? next.IndexOf(under) : 0;
+                    continue;
+                }
+
+                if (shown.Count == 0)
+                {
+                    continue;   // the no-match row: nothing to open or stop
+                }
+
+                cursor = Math.Clamp(pick.Row, 0, shown.Count - 1);
+                var session = shown[cursor];
                 if (pick.Button < 0)
                 {
                     _open(session, Sink);
@@ -161,7 +226,7 @@ internal sealed class ProcessMenu
                     return;
                 }
 
-                cursor = CursorAfter(sessions, session, cursor);
+                cursor = CursorAfter(sessions.Where(s => Matches(running, s)).ToList(), session, cursor);
             }
         }
         finally

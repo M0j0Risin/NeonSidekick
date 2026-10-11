@@ -119,7 +119,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/pdf <file> [to=<path>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF in the working directory from Markdown, text or code, HTML or a picture, beside the file unless `to=` says (see [Making PDFs](TOOLS.md#making-pdfs)). On a Mac only the browser makes it. |
 | `/pdf <url> [to=<path>] [overwrite]` | Makes a PDF of a web page as the browser shows it; *Web browser network mode* still applies. |
 | `/pdf reply [<options>]` | Makes a PDF of the last reply as formatted Markdown. |
-| `/process` | Lists the background processes the model started (`run_command`'s `background`) in a pane: id, state, elapsed, shell and command. Enter or a double-click on a row opens it in the [process window](#process-window); the **✖ kill** button (or `k`) stops the highlighted one after a yes/no. With none started, the pane opens on that line. |
+| `/process` | Lists the background processes the model started (`run_command`'s `background`) in a pane: id, state, elapsed, shell and command. Enter or a double-click on a row opens it in the [process window](#process-window); the **✖ kill** button (or `k`) stops the highlighted one after a yes/no. The **● running** and **○ ended** buttons (or `r` and `e`) show only the running or only the ended processes; press the lit one again to show them all. Every visit starts unfiltered. With none started, the pane opens on that line. |
 | `/process <id>` | Shows one process's output live in the [process window](#process-window) (any unique start of the id; Tab completes it). Another id switches the window. |
 | `/profile [<name>]` | Switches profiles: a picker alone (a typed letter jumps to the next profile starting with it), or straight to the one named. See Profiles. |
 | `/profile add\|delete <name>` | Creates or deletes a profile. A new one starts from this profile's settings and memories; `/profile push\|pull` copies the persona, operating rules and voice directive. |
@@ -605,7 +605,7 @@ Every list pane works the same way: ↑/↓ move, Enter picks the highlighted ro
 | `/queue` | Enter removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) |
 | `/rewind` | Enter rewinds to before the message |
 | `/sessions` | Enter opens · type to filter |
-| `/process` | Enter opens the window · `k` kills (asks) |
+| `/process` | Enter opens the window · `k` kills (asks) · `r` / `e` running / ended only |
 | `/skills` › a skill | Enter on a row: move, rename, edit, revert, `lock`/`unlock`, `disable`/`enable`, delete (asks); a locked skill refuses rename, move and delete; a disabled one is never offered to the model |
 | `/skills` › a skill › `revert` | Enter puts the version back · `d` removes it (asks) · `c` clear all (asks) |
 | `/docker` | Enter opens · `r` refresh · type to filter |
