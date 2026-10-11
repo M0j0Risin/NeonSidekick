@@ -215,6 +215,16 @@ public sealed class ImageStoreTests : IDisposable
         Assert.DoesNotContain("Error", ToolAnswers.Text(await open.InvokeAsync(Args(("path", Path.Combine(_imagesRoot, "comfy_images"))))), StringComparison.Ordinal);
         Assert.Equal(new[] { Path.Combine(_imagesRoot, "comfy_images") }, opened);
 
+        // Code review, later still: a picture image_edit writes and the viewer cannot read (TIFF, JXL, HEIF) is a picture too.
+        opened.Clear();
+        pictures.Clear();
+        string tiff = Path.Combine(_imagesRoot, "comfy_images", "photo-edited.tiff");
+        File.WriteAllBytes(tiff, [0x49, 0x49, 0x2A, 0x00]);
+        Assert.DoesNotContain("Error", ToolAnswers.Text(await open.InvokeAsync(Args(("path", tiff)))), StringComparison.Ordinal);
+        Assert.Equal(new[] { tiff }, opened.Concat(pictures));   // the registered app on Windows, the viewer on macOS (it reads TIFF there)
+        opened.Clear();
+        pictures.Clear();
+
         // Without the folder, the refusal sends the model to the tools that say they reach it, not to open itself.
         var bare = new OpenTool(_files, opened.Add);
         Assert.Equal(FileText.InImagesFolder(saved), bare.Describe(saved));

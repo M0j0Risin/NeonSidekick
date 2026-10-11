@@ -156,26 +156,27 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     /// however it ends, so the probe opens only a file that is there: one a browser holds, where its failed open costs nothing, or
     /// one left by a machine that lost power, where a browser starting within the same few microseconds is the whole risk.
     /// Elsewhere (code review, the macOS build) its <see cref="SingletonLockName"/> names a browser on this machine still running
-    /// (<see cref="SingletonHeld"/>).</para>
+    /// (<see cref="SingletonHeld"/>): one of the browsers <see cref="IsBrowserName"/> knows, or <paramref name="executable"/>, the one the
+    /// app would start there (code review, later on 2026-10-11: a browser path set to Chrome Canary, Edge Dev or Vivaldi went unseen).</para>
     /// </summary>
-    public static bool ProfileInUse(string userDataDirectory, int looks = HeldLooks) =>
-        ProfileInUseAsync(userDataDirectory, looks, CancellationToken.None).GetAwaiter().GetResult();
+    public static bool ProfileInUse(string userDataDirectory, int looks = HeldLooks, string? executable = null) =>
+        ProfileInUseAsync(userDataDirectory, looks, executable, CancellationToken.None).GetAwaiter().GetResult();
 
-    /// <summary><see cref="ProfileInUseAsync(string, int, CancellationToken)"/> with its full <see cref="HeldLooks"/>.</summary>
-    public static Task<bool> ProfileInUseAsync(string userDataDirectory, CancellationToken cancellationToken) =>
-        ProfileInUseAsync(userDataDirectory, HeldLooks, cancellationToken);
+    /// <summary><see cref="ProfileInUseAsync(string, int, string, CancellationToken)"/> with its full <see cref="HeldLooks"/>.</summary>
+    public static Task<bool> ProfileInUseAsync(string userDataDirectory, string? executable, CancellationToken cancellationToken) =>
+        ProfileInUseAsync(userDataDirectory, HeldLooks, executable, cancellationToken);
 
     /// <summary>
     /// <see cref="ProfileInUse(string, int)"/> for the runs, whose waits between looks are delays, not a pool thread asleep (code review,
     /// later on 2026-10-11). The one loop: the smoke's synchronous form waits on this one (code review, later still: two copies of it
     /// could drift apart between the smoke and the runs).
     /// </summary>
-    public static async Task<bool> ProfileInUseAsync(string userDataDirectory, int looks, CancellationToken cancellationToken)
+    public static async Task<bool> ProfileInUseAsync(string userDataDirectory, int looks, string? executable, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(userDataDirectory);
         for (int look = 1; ; look++)
         {
-            if (LookOnce(userDataDirectory) is { } held)
+            if (LookOnce(userDataDirectory, executable) is { } held)
             {
                 return held;
             }
@@ -190,11 +191,11 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     }
 
     /// <summary>One look: false when the folder is free, true when held (off Windows), null when the lockfile refused a writer just now (look again).</summary>
-    private static bool? LookOnce(string userDataDirectory)
+    private static bool? LookOnce(string userDataDirectory, string? executable)
     {
         if (!OperatingSystem.IsWindows())
         {
-            return SingletonHeld(userDataDirectory, IsBrowser);
+            return SingletonHeld(userDataDirectory, process => IsBrowserName(process.ProcessName, executable));
         }
 
         string lockFile = Path.Combine(userDataDirectory, LockFileName);
@@ -243,9 +244,6 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         }
     }
 
-    /// <summary>Whether <paramref name="process"/> is a Chromium browser's main process by its name: Edge, Chrome, Brave or Chromium.</summary>
-    private static bool IsBrowser(Process process) => IsBrowserName(process.ProcessName);
-
     /// <summary>
     /// The main process names of the browsers <see cref="Candidates"/> finds: macOS's app names, and the executables' names elsewhere
     /// (Linux's <c>chromium-browser</c> cut to the kernel's 15 characters as well).
@@ -260,12 +258,17 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     /// Whether a process name is a Chromium browser's main process (<c>Microsoft Edge</c>, <c>msedge</c>, <c>Google Chrome</c>, <c>chrome</c>,
     /// <c>Brave Browser</c>, <c>Chromium</c>…): the whole name, not a part of it (code review, later on 2026-10-11: "edge" in <c>Knowledge…</c>,
     /// "chrome" in <c>Google Chrome Helper</c> or <c>chrome_crashpad_handler</c>, a process that got a dead lock's id, blocked every run
-    /// until it ended; the lock names the browser's main process, which none of those is). Pure.
+    /// until it ended; the lock names the browser's main process, which none of those is). <paramref name="executable"/>, the browser the
+    /// app would start, counts by its file name too (code review, later still: a configured Chrome Canary, Edge Dev, Vivaldi or a build of
+    /// Chromium, whose names no list holds, was never seen holding the folder). Pure.
     /// </summary>
-    public static bool IsBrowserName(string name)
+    public static bool IsBrowserName(string name, string? executable = null)
     {
         ArgumentNullException.ThrowIfNull(name);
-        return BrowserNames.Contains(name.Trim());
+        string trimmed = name.Trim();
+        return BrowserNames.Contains(trimmed)
+            || (executable is { Length: > 0 } && trimmed.Length > 0
+                && string.Equals(trimmed, Path.GetFileNameWithoutExtension(executable), StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -744,7 +747,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     /// One finished browser run: what it said on stderr, how it ended, or why it never started; the profile folder it ran on, whether
     /// its browser was gone at the end, and whether it began in the app's job (<see cref="BrowserDump.InJob"/>).
     /// </summary>
-    private sealed record BrowserRun(string? StartError, int ExitCode, string Stderr, bool TimedOut, string Summary, string UserData = "", bool Exited = false, bool InJob = false)
+    private sealed record BrowserRun(string? StartError, int ExitCode, string Stderr, bool TimedOut, string Summary, string UserData = "", bool Exited = false, bool InJob = false, string Executable = "")
     {
         public string StderrTail => Stderr.Length > 0 ? $"; stderr: {LastLine(Stderr)}" : "";
 
@@ -755,7 +758,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         /// </summary>
         public async Task<string> FailureAsync(string quiet, CancellationToken cancellationToken)
         {
-            if (Exited && UserData.Length > 0 && await ProfileInUseAsync(UserData, cancellationToken).ConfigureAwait(false))
+            if (Exited && UserData.Length > 0 && await ProfileInUseAsync(UserData, Executable, cancellationToken).ConfigureAwait(false))
             {
                 DiagnosticLog.Debug(Category, $"{Summary}, the profile folder held by another browser");
                 return WebText.BrowserProfileInUse(UserData);
@@ -783,7 +786,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     /// </summary>
     private static async Task<BrowserRun> RunProcessAsync(string executable, Uri page, string userData, Func<string, IReadOnlyList<string>> arguments, TimeSpan timeout, Func<Process, string, CancellationToken, Task<bool>> watch, CancellationToken cancellationToken)
     {
-        if (await ProfileInUseAsync(userData, cancellationToken).ConfigureAwait(false))
+        if (await ProfileInUseAsync(userData, executable, cancellationToken).ConfigureAwait(false))
         {
             return new BrowserRun(WebText.BrowserProfileInUse(userData), 0, "", false, "");
         }
@@ -815,39 +818,29 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             {
                 stopped = await watch(process, userData, budget.Token).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                timedOut = !cancellationToken.IsCancellationRequested;
-                TryKill(process);
-                if (!timedOut)
-                {
-                    _ = started.ReadStderr();   // on Windows, its file read and gone
-                    throw;
-                }
+                timedOut = true;
             }
-
-            if (stopped)
+            catch
             {
-                TryKill(process);
+                // ESC, or a watch that threw (a WebSocket, JSON or IO error from the DevTools client): the browser is stopped, reaped and
+                // its stderr read (the file closed, so gone) before the exception goes on (code review, later on 2026-10-11: only ESC killed
+                // it, without waiting, and any other exception left the browser holding the folder and the file open until the app ended).
+                await StopAsync(process).ConfigureAwait(false);
+                await ReadStderrBoundedAsync(started).ConfigureAwait(false);
+                throw;
             }
 
             if (stopped || timedOut)
             {
-                using var reaped = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                try
-                {
-                    await process.WaitForExitAsync(reaped.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    // Not reaped in time: the run is over either way.
-                }
+                await StopAsync(process).ConfigureAwait(false);
             }
 
-            string errors = await started.ReadStderr().ConfigureAwait(false);
+            string errors = await ReadStderrBoundedAsync(started).ConfigureAwait(false);
             string how = stopped ? "stopped" : process.HasExited ? $"exit {process.ExitCode.ToString(CultureInfo.InvariantCulture)}" : "still running";
             string summary = $"{Path.GetFileName(executable)} {page}: {how} after {clock.Elapsed.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)} s";
-            return new BrowserRun(null, stopped || !process.HasExited ? 0 : process.ExitCode, errors, timedOut, summary, userData, process.HasExited, started.InJob);
+            return new BrowserRun(null, stopped || !process.HasExited ? 0 : process.ExitCode, errors, timedOut, summary, userData, process.HasExited, started.InJob, executable);
         }
     }
 
@@ -928,7 +921,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             using var reader = new StreamReader(held, new UTF8Encoding(false), detectEncodingFromByteOrderMarks: false, leaveOpen: true);
             return await reader.ReadToEndAsync(CancellationToken.None).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ObjectDisposedException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ObjectDisposedException or NotSupportedException)
         {
             return "";
         }
@@ -997,6 +990,41 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             return null;
         }
     }
+
+    /// <summary>The browser killed with its tree and reaped, waiting up to 5 s (not the run's token: a cancelled run still waits for its kill).</summary>
+    private static async Task StopAsync(Process process)
+    {
+        TryKill(process);
+        using var reaped = new CancellationTokenSource(ReapWait);
+        try
+        {
+            await process.WaitForExitAsync(reaped.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Not reaped in time: the run is over either way.
+        }
+    }
+
+    /// <summary>
+    /// The run's stderr (<see cref="Started.ReadStderr"/>, on Windows its file read and closed, so gone), waiting up to 5 s and never
+    /// throwing (code review, later on 2026-10-11: off Windows a child the kill missed still holding the pipe would hold the read
+    /// open, and a read that failed went unobserved): "" when it could not be had.
+    /// </summary>
+    private static async Task<string> ReadStderrBoundedAsync(Started started)
+    {
+        try
+        {
+            return await started.ReadStderr().WaitAsync(ReapWait).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is TimeoutException or IOException or ObjectDisposedException or InvalidOperationException or NotSupportedException)
+        {
+            DiagnosticLog.Debug(Category, "The browser's stderr was not read: " + ex.Message);
+            return "";
+        }
+    }
+
+    private static readonly TimeSpan ReapWait = TimeSpan.FromSeconds(5);
 
     private static void TryKill(Process process)
     {

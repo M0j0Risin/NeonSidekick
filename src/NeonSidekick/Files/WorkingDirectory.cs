@@ -499,7 +499,8 @@ public sealed class WorkingDirectory
     /// <summary>
     /// The profile's images folder, a full path (2026-10-09, the user's call, after a model listed <c>images</c> and then the folder's
     /// full path with <c>search_files</c> and was told only "outside the working directory"): read when a path is refused as outside,
-    /// so one inside that folder is <see cref="FileOutcome.InImagesFolder"/>, whose sentence names the tools that reach it. Set on the
+    /// so one inside that folder is <see cref="FileOutcome.InImagesFolder"/>, whose sentence points at the tools' descriptions, which say
+    /// whether they reach it (it named six tools until code review, 2026-10-11, whatever the turn offered). Set on the
     /// working directory alone (never a share's, nor the images folder's own); null, or a null answer, keeps every refusal
     /// <see cref="FileOutcome.OutsideRoot"/>. It reaches nothing itself: those tools route a full path there (<see cref="Llm.Tools.FileTool.For"/>).
     /// </summary>

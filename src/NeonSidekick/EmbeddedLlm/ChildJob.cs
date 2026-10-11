@@ -54,7 +54,8 @@ public static class ChildJob
     /// assigned, then let run: every process it ever starts is born in the job. No window; stdin and stdout on <c>NUL</c>, stderr
     /// into <paramref name="stderrPath"/> (opened, or made when missing), and those the only handles it inherits
     /// (<c>PROC_THREAD_ATTRIBUTE_HANDLE_LIST</c>, so it takes none of the app's). They are inheritable only under
-    /// <see cref="ProcessStartLock"/>, so no <c>Process.Start</c> elsewhere in the app takes them either. Null with <paramref name="error"/> when it could not start; <paramref name="inJob"/> false (logged) when it runs
+    /// <see cref="ProcessStartLock"/>, so no <c>Process.Start</c> elsewhere in the app takes them either; without that lock stderr goes to
+    /// <c>NUL</c> as well and the file stays as it was. Null with <paramref name="error"/> when it could not start; <paramref name="inJob"/> false (logged) when it runs
     /// outside the job. The headless browser's own process-start site, moved here from its <c>Process.Start</c>.
     /// </summary>
     [SupportedOSPlatform("windows")]
@@ -86,10 +87,20 @@ public static class ChildJob
             return null;
         }
 
+        // Without .NET's process-start lock stderr goes to NUL as well and the file is never handed over (code review, later on 2026-10-11:
+        // its write handle inheritable unguarded is the race below; a NUL handle another child takes costs nothing).
+        object? processStart = ProcessStartLock();
         try
         {
-            // OpenOrCreate: the caller may hold the file already, delete-on-close (the headless browser's, so it never stays behind).
-            log = File.OpenHandle(stderrPath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+            // OpenOrCreate: the caller may hold the file already, delete-on-close (the headless browser's, so it never stays behind); emptied,
+            // since Create's truncation went with Create (code review, later on 2026-10-11: a file reused kept the last run's tail after the new).
+            log = processStart is null
+                ? File.OpenHandle("NUL", FileMode.Open, FileAccess.Write, FileShare.ReadWrite)
+                : File.OpenHandle(stderrPath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+            if (processStart is not null)
+            {
+                RandomAccess.SetLength(log, 0);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -100,7 +111,6 @@ public static class ChildJob
 
         nint list = 0;
         bool listMade = false;
-        object? processStart = ProcessStartLock();
         bool locked = false;
         try
         {
@@ -244,7 +254,9 @@ public static class ChildJob
     /// <summary>
     /// <see cref="Process"/>'s private <c>s_createProcessLock</c>, which every <c>Process.Start</c> on Windows holds around its handles and
     /// <c>CreateProcess</c> (checked in .NET 10.0.11), reached through an <see cref="UnsafeAccessorAttribute"/> (no reflection; it binds
-    /// under AOT). Null (logged once) where a runtime no longer has it: the start then runs unlocked, as it did before.
+    /// under AOT). Null (logged once) where a runtime no longer has it: the start then hands the browser no file, only <c>NUL</c> (code
+    /// review, later on 2026-10-11: running unlocked brought the race back unseen), and the test suite's pin of it fails first
+    /// (<c>Start_IntoAHeldDeleteOnCloseFile_UnderTheProcessStartLock</c>, a plain Windows fact).
     /// </summary>
     internal static object? ProcessStartLock()
     {
@@ -345,16 +357,32 @@ public static class ChildJob
 
         using var nul = File.OpenHandle("NUL", FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
         nint handle = nul.DangerousGetHandle();
-        if (!JobObjectNative.SetHandleInformation(handle, JobObjectNative.HandleFlagInherit, JobObjectNative.HandleFlagInherit)
-            || !JobObjectNative.GetHandleInformation(handle, out uint flags) || (flags & JobObjectNative.HandleFlagInherit) == 0)
+        // A call that fails says why by its Win32 error; a flag read back wrong has no error to give (code review, later on 2026-10-11:
+        // it printed "The operation completed successfully").
+        if (!JobObjectNative.SetHandleInformation(handle, JobObjectNative.HandleFlagInherit, JobObjectNative.HandleFlagInherit))
         {
             return (false, LastError("SetHandleInformation (inherit)"));
         }
 
-        Private(handle, handle);
-        if (!JobObjectNative.GetHandleInformation(handle, out flags) || (flags & JobObjectNative.HandleFlagInherit) != 0)
+        if (!JobObjectNative.GetHandleInformation(handle, out uint flags))
         {
-            return (false, LastError("SetHandleInformation (private)"));
+            return (false, LastError("GetHandleInformation"));
+        }
+
+        if ((flags & JobObjectNative.HandleFlagInherit) == 0)
+        {
+            return (false, "the inherit flag read back unset after SetHandleInformation set it");
+        }
+
+        Private(handle, handle);
+        if (!JobObjectNative.GetHandleInformation(handle, out flags))
+        {
+            return (false, LastError("GetHandleInformation"));
+        }
+
+        if ((flags & JobObjectNative.HandleFlagInherit) != 0)
+        {
+            return (false, "the inherit flag read back still set after SetHandleInformation took it off");
         }
 
         nint size = 0;

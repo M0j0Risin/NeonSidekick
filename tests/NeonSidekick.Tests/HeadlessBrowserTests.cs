@@ -190,6 +190,18 @@ public class HeadlessBrowserTests
         Assert.Equal(browser, HeadlessBrowser.IsBrowserName(name));
     }
 
+    /// <summary>The browser the app would start counts by its file name, whatever it is (code review, later on 2026-10-11: a configured Canary or Vivaldi went unseen).</summary>
+    [Fact]
+    public void IsBrowserName_TheConfiguredExecutable_Counts()
+    {
+        string canary = "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary";
+        Assert.False(HeadlessBrowser.IsBrowserName("Google Chrome Canary"));
+        Assert.True(HeadlessBrowser.IsBrowserName("Google Chrome Canary", canary));
+        Assert.True(HeadlessBrowser.IsBrowserName("vivaldi", "/usr/bin/vivaldi"));
+        Assert.False(HeadlessBrowser.IsBrowserName("Google Chrome Canary Helper", canary));   // its helpers still are not
+        Assert.False(HeadlessBrowser.IsBrowserName("", ""));
+    }
+
     /// <summary>One look gives no second chance to a holder that lets go (code review, later on 2026-10-11: the smoke's polling loop counts its own time).</summary>
     [WindowsFact]
     public void ProfileInUse_LooksAsOftenAsAsked()
@@ -205,10 +217,10 @@ public class HeadlessBrowserTests
                 var one = System.Diagnostics.Stopwatch.StartNew();
                 Assert.True(HeadlessBrowser.ProfileInUse(folder, looks: 1));
                 Assert.True(one.ElapsedMilliseconds < 50, $"one look took {one.ElapsedMilliseconds} ms");
-                Assert.True(HeadlessBrowser.ProfileInUseAsync(folder, CancellationToken.None).GetAwaiter().GetResult());
+                Assert.True(HeadlessBrowser.ProfileInUseAsync(folder, executable: null, CancellationToken.None).GetAwaiter().GetResult());
             }
 
-            Assert.False(HeadlessBrowser.ProfileInUseAsync(folder, CancellationToken.None).GetAwaiter().GetResult());
+            Assert.False(HeadlessBrowser.ProfileInUseAsync(folder, executable: null, CancellationToken.None).GetAwaiter().GetResult());
         }
         finally
         {

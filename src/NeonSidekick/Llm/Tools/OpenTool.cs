@@ -37,50 +37,35 @@ public sealed class OpenTool : FileTool
     public const string ToolName = "open";
     public const string ShareArgument = UncTool.ShareArgument;
 
-    private static readonly JsonElement Schema = ToolSchema.Parse(
-        """
-        {
-          "type": "object",
-          "properties": {
-            "path": { "type": "string", "description": "The file or folder to open, relative to the working directory. Leave it out to open the working directory itself." }
-          }
-        }
-        """);
+    // The four schemas, by whether the images folder is reached and a UNC share offered (code review, later on 2026-10-11: four
+    // literals that differed by a phrase each). The images folder's (as file_info's): path may be a full path there too, so the
+    // schema and the description agree.
+    private static readonly JsonElement Schema = SchemaFor(images: false, shares: false);
+    private static readonly JsonElement ShareSchema = SchemaFor(images: false, shares: true);
+    private static readonly JsonElement ImagesSchema = SchemaFor(images: true, shares: false);
+    private static readonly JsonElement ImagesShareSchema = SchemaFor(images: true, shares: true);
 
-    /// <summary>The schema while a UNC share is offered: <see cref="Schema"/> and the <c>share</c>.</summary>
-    private static readonly JsonElement ShareSchema = ToolSchema.Parse(
+    /// <summary><c>path</c>, and <c>share</c> while <paramref name="shares"/>; a full path in the images folder named while <paramref name="images"/>.</summary>
+    private static JsonElement SchemaFor(bool images, bool shares)
+    {
+        string relative = shares ? "relative to the working directory (or to the share when share is given)" : "relative to the working directory";
+        string full = images ? ", or a full path in the user's images folder" : "";
+        string none = shares ? "the working directory (or the share's root)" : "the working directory";
+        return ToolSchema.Parse($$"""
+            {
+              "type": "object",
+              "properties": {
+                "path": { "type": "string", "description": "The file or folder to open, {{relative}}{{full}}. Leave it out to open {{none}} itself." }{{(shares ? ShareProperty : "")}}
+              }
+            }
+            """);
+    }
+
+    private const string ShareProperty =
         """
-        {
-          "type": "object",
-          "properties": {
-            "path": { "type": "string", "description": "The file or folder to open, relative to the working directory (or to the share when share is given). Leave it out to open the working directory (or the share's root) itself." },
+        ,
             "share": { "type": "string", "description": "A UNC share's name (unc_shares lists them) to open the file or folder there instead of the working directory; not needed when path is a full \\\\server\\share path under one." }
-          }
-        }
-        """);
-
-    // The images folder's (code review, 2026-10-11, as file_info's): path may be a full path there too, so the schema and the
-    // description no longer disagree.
-    private static readonly JsonElement ImagesSchema = ToolSchema.Parse(
-        """
-        {
-          "type": "object",
-          "properties": {
-            "path": { "type": "string", "description": "The file or folder to open, relative to the working directory, or a full path in the user's images folder. Leave it out to open the working directory itself." }
-          }
-        }
-        """);
-
-    private static readonly JsonElement ImagesShareSchema = ToolSchema.Parse(
-        """
-        {
-          "type": "object",
-          "properties": {
-            "path": { "type": "string", "description": "The file or folder to open, relative to the working directory (or to the share when share is given), or a full path in the user's images folder. Leave it out to open the working directory (or the share's root) itself." },
-            "share": { "type": "string", "description": "A UNC share's name (unc_shares lists them) to open the file or folder there instead of the working directory; not needed when path is a full \\\\server\\share path under one." }
-          }
-        }
-        """);
+        """;
 
     private const string BaseDescription =
         "Opens a file in the user's own editor or viewer, or a folder in Explorer, on their screen; no path opens the working directory (the user's cwd / current directory) itself. " +
@@ -136,9 +121,11 @@ public sealed class OpenTool : FileTool
     private string OpenIn(WorkingDirectory files, string path)
     {
         // In the images folder only pictures and folders open (code review, 2026-10-11): the folder is reached for the app's own
-        // pictures, and the shell's "open" runs a .bat, .lnk or .exe that ended up there.
+        // pictures, and the shell's "open" runs a .bat, .lnk or .exe that ended up there. A picture is one the viewer reads or one
+        // image_edit writes (code review, later that day: its TIFF, JXL and HEIF files were refused as no picture); those it cannot
+        // show go to the opener, the registered app.
         if (ReferenceEquals(files, Images) && files.Resolve(path, forWrite: false, out string target) == FileOutcome.Ok
-            && File.Exists(target) && !ImageFile.IsImagePath(target))
+            && File.Exists(target) && !ImageFile.IsImagePath(target) && NeonSidekick.Images.ImageFormats.ByExtension(target) is null)
         {
             return FileText.OpenImagesFolderNotPicture(path);
         }
