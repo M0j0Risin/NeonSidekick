@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using NeonSidekick.Diagnostics;
+using NeonSidekick.EmbeddedLlm;
 
 namespace NeonSidekick.Web;
 
@@ -118,6 +119,39 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     /// <summary>The profile folder under the temp directory, so the user's own browser profile is never touched.</summary>
     public static string UserDataDirectory => Path.Combine(Path.GetTempPath(), "NeonSidekick", "browser");
 
+    /// <summary>The file a Chromium browser on Windows holds open, unshared, in its profile folder while it runs, and deletes as it exits (checked on Edge 155, 2026-10-11).</summary>
+    public const string LockFileName = "lockfile";
+
+    /// <summary>
+    /// Whether a running browser holds <paramref name="userDataDirectory"/> (2026-10-11): its <see cref="LockFileName"/> there and
+    /// not to be opened unshared. A second browser started on a held folder hands its page to the holder and exits (code 21), so
+    /// a run checks first and says so rather than "exited before it opened its DevTools port". Windows only: elsewhere the lock is
+    /// a symlink, never held open, so false.
+    /// </summary>
+    public static bool ProfileInUse(string userDataDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(userDataDirectory);
+        string lockFile = Path.Combine(userDataDirectory, LockFileName);
+        if (!OperatingSystem.IsWindows() || !File.Exists(lockFile))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var held = new FileStream(lockFile, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            return false;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     private const string Category = "Web";
     private readonly SemaphoreSlim _oneAtATime = new(1, 1);
 
@@ -214,6 +248,10 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         "--disable-extensions",
         "--disable-background-networking",
         "--mute-audio",
+        // 2026-10-11: Edge that believes it runs under a compatibility layer starts a new copy of itself with this switch and
+        // exits, and the copy outlived the app (not the process the app started, so no kill reached it) holding the profile
+        // folder; given up front it never relaunches. Chrome and Brave ignore a switch they do not know.
+        "--edge-skip-compat-layer-relaunch",
     ];
 
     /// <summary>The command line after the executable for a page read over DevTools as <paramref name="identity"/>. Pinned.</summary>
@@ -552,13 +590,21 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     }
 
     /// <summary>One finished browser run: what it printed, how it ended, or why it never started.</summary>
-    private sealed record BrowserRun(string? StartError, int ExitCode, string Stdout, string Stderr, bool TimedOut, string Summary)
+    private sealed record BrowserRun(string? StartError, int ExitCode, string Stdout, string Stderr, bool TimedOut, string Summary, string? HeldBy = null)
     {
         public string StderrTail => Stderr.Length > 0 ? $"; stderr: {LastLine(Stderr)}" : "";
 
-        /// <summary>Why a run that ended made nothing: the exit code when it was not 0, else <paramref name="quiet"/>; stderr's last line after.</summary>
+        /// <summary>
+        /// Why a run that ended made nothing: another browser holding the profile folder (<see cref="HeldBy"/>, 2026-10-11), else the
+        /// exit code when it was not 0, else <paramref name="quiet"/>; stderr's last line after.
+        /// </summary>
         public string Failure(string quiet)
         {
+            if (HeldBy is not null)
+            {
+                return WebText.BrowserProfileInUse(HeldBy);
+            }
+
             string reason = ExitCode != 0 ? $"exit code {ExitCode.ToString(CultureInfo.InvariantCulture)}" : quiet;
             string tail = LastLine(Stderr);
             return tail.Length > 0 ? $"{reason}: {tail}" : reason;
@@ -570,10 +616,19 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     /// so a watch never dials the last run's port), the process run with no window, stdout and stderr read, and
     /// <paramref name="watch"/> run on it — true when the run is done and the browser must be stopped, false when it exited by
     /// itself — killed with its tree then or when <paramref name="timeout"/> runs out. The caller holds <c>_oneAtATime</c>.
+    ///
+    /// <para>2026-10-11 (a relaunched Edge outlived the app and held the folder): a folder another browser holds is refused before
+    /// a start (<see cref="ProfileInUse"/>) and named after a run that made nothing; the browser goes into the app's kill-on-close
+    /// job (<see cref="ChildJob"/>, as <c>llama-server</c> does), so whatever it starts dies with the app however the app ends.</para>
     /// </summary>
     private static async Task<BrowserRun> RunProcessAsync(string executable, Uri page, Func<string, IReadOnlyList<string>> arguments, TimeSpan timeout, Func<Process, string, CancellationToken, Task<bool>> watch, CancellationToken cancellationToken)
     {
         string userData = UserDataDirectory;
+        if (ProfileInUse(userData))
+        {
+            return new BrowserRun(WebText.BrowserProfileInUse(userData), 0, "", "", false, "");
+        }
+
         try
         {
             Directory.CreateDirectory(userData);
@@ -614,6 +669,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             return new BrowserRun($"could not start {Path.GetFileName(executable)}", 0, "", "", false, "");
         }
 
+        ChildJob.Assign(process);
         using (process)
         {
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -660,7 +716,9 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             string errors = await stderr.ConfigureAwait(false);
             string how = stopped ? "stopped" : process.HasExited ? $"exit {process.ExitCode.ToString(CultureInfo.InvariantCulture)}" : "still running";
             string summary = $"{Path.GetFileName(executable)} {page}: {how} after {clock.Elapsed.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)} s";
-            return new BrowserRun(null, stopped || !process.HasExited ? 0 : process.ExitCode, output, errors, timedOut, summary);
+            // Ours gone and the folder still held: another browser has it (one a relaunch left, another app's).
+            string? heldBy = process.HasExited && ProfileInUse(userData) ? userData : null;
+            return new BrowserRun(null, stopped || !process.HasExited ? 0 : process.ExitCode, output, errors, timedOut, summary + (heldBy is null ? "" : ", the profile folder held by another browser"), heldBy);
         }
     }
 

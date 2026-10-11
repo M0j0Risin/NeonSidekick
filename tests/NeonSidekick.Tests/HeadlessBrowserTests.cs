@@ -66,13 +66,48 @@ public class HeadlessBrowserTests
             {
                 "--headless=new", "--remote-debugging-port=0", "--disable-blink-features=AutomationControlled", "--no-first-run",
                 "--no-default-browser-check", "--disable-extensions", "--disable-background-networking", "--mute-audio",
-                "--blink-settings=imagesEnabled=false", "--window-size=1920,1080", "--screen-info={1920x1080}",
+                "--edge-skip-compat-layer-relaunch", "--blink-settings=imagesEnabled=false", "--window-size=1920,1080", "--screen-info={1920x1080}",
                 "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0",
                 @"--user-data-dir=C:\Temp\NeonSidekick\browser", "https://example.com/a?b=c",
             },
             HeadlessBrowser.Arguments(new Uri("https://example.com/a?b=c"), @"C:\Temp\NeonSidekick\browser", new BrowserIdentity(BrowserBrand.Edge, 155, BrowserPlatform.Windows)));
         Assert.Equal(TimeSpan.FromSeconds(30), HeadlessBrowser.Timeout);
         Assert.Equal(TimeSpan.FromSeconds(3), HeadlessBrowser.CloseGrace);
+    }
+
+    /// <summary>
+    /// A profile folder another browser holds (2026-10-11: a relaunched Edge outlived the app and held it, every later run
+    /// exiting with code 21): its <c>lockfile</c> open unshared is held; the file free, or none, is not.
+    /// </summary>
+    [WindowsFact]
+    public void ProfileInUse_IsTheLockFileHeldOpen()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "NeonSidekick.tests." + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            Assert.False(HeadlessBrowser.ProfileInUse(folder));   // no lock file
+            string lockFile = Path.Combine(folder, HeadlessBrowser.LockFileName);
+            using (new FileStream(lockFile, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+            {
+                Assert.True(HeadlessBrowser.ProfileInUse(folder));
+            }
+
+            Assert.False(HeadlessBrowser.ProfileInUse(folder));   // left behind, no longer held
+            Assert.False(HeadlessBrowser.ProfileInUse(Path.Combine(folder, "missing")));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BrowserProfileInUse_NamesTheFolder_AndWhatToDo()
+    {
+        string text = WebText.BrowserProfileInUse(@"C:\T\browser");
+        Assert.Contains(@"C:\T\browser", text);
+        Assert.Contains("another browser", text);
     }
 
     [Fact]

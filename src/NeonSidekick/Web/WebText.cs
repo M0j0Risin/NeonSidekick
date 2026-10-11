@@ -64,6 +64,14 @@ public static class WebText
     public const string DuckDuckGoName = "DuckDuckGo";
     public const string SearxngName = "SearXNG";
 
+    /// <summary>
+    /// Why a browser run made nothing when another browser held its profile folder (2026-10-11: an Edge that relaunched itself
+    /// outlived the app and held <see cref="HeadlessBrowser.UserDataDirectory"/>, and every later run exited with code 21 behind
+    /// "it exited before it opened its DevTools port"). The detail after a fetch's or a PDF's own lead-in. Pinned.
+    /// </summary>
+    public static string BrowserProfileInUse(string folder) =>
+        "another browser is using its profile folder " + folder + " (one left running, or another NeonSidekick reading a page); end it and try again";
+
     public static readonly string NoBrowser =
         "Error: no headless browser (Edge, Chrome or Brave) was found; the user can set Web browser path on the Web tab of /tools";
 
