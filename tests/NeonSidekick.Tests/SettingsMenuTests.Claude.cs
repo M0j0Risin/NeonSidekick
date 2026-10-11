@@ -8,11 +8,11 @@ namespace NeonSidekick.Tests;
 /// <summary>
 /// <c>/claude</c>'s model picker (2026-09-27, the user's ask: pick, don't type) on <c>/settings</c>' Anthropic tab, where its four rows
 /// sit under the Claude Code server's since 2026-10-10 (the user's call; <c>/tools</c>' ClaudeCode tab until then, which went with the
-/// Claude Code advisor tool).
+/// Claude Code advisor tool), the executable above the server's switch since later that day, each run under its heading.
 /// </summary>
 public partial class SettingsMenuTests
 {
-    /// <summary>The Anthropic tab, then the row (1 the executable, 2 the permissions, 3 the model, 4 the effort) and Enter: its picker.</summary>
+    /// <summary>The Anthropic tab, then the row (0 the executable, 1 the server, 2 the permissions, 3 the model, 4 the effort; the headings never count) and Enter: its picker.</summary>
     private void OpenClaudeRow(int row)
     {
         GoTo(SettingsTab.Anthropic);
@@ -24,10 +24,16 @@ public partial class SettingsMenuTests
     public void TheAnthropicTab_ClaudeCodeFirst_ThenClaudesFour_ThenTheApi()
     {
         Assert.Equal(
-            [SettingsField.ClaudeCodeServer, SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort,
+            [SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodeServer, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort,
              SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching],
             SettingsMenu.TabFields[(int)SettingsTab.Anthropic]);
-        Assert.All(SettingsMenu.TabFields[(int)SettingsTab.Anthropic].Skip(1).Take(4), field => Assert.False(SettingsMenu.IsLlmField(field)));   // read at each /claude: no reconnect
+        Assert.All([SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort],
+            field => Assert.False(SettingsMenu.IsLlmField(field)));   // read at each /claude: no reconnect
+        Assert.True(SettingsMenu.IsLlmField(SettingsField.ClaudeCodeServer));
+        // The runs (later on 2026-10-10, the user's ask): what both read, the server's, /claude's, the API's.
+        Assert.Equal(["Claude Code", "Claude Code server", "/claude command", "Anthropic API"], SettingsMenu.TabSections[SettingsTab.Anthropic].Select(s => s.Title));
+        Assert.Equal([null, SettingsField.ClaudeCodeExecutable, null, SettingsField.ClaudeCodeServer, null, SettingsField.ClaudeCodePermissions],
+            SettingsMenu.TabRows((int)SettingsTab.Anthropic).Take(6));
     }
 
     [Fact]

@@ -12,8 +12,8 @@ namespace NeonSidekick.App;
 /// <summary>
 /// Every knob the settings menu edits, in menu order: on the flat list (no pane) the row order IS
 /// the declaration order (<c>Enum.GetValues</c>); on the pane the rows sit under the six
-/// <see cref="SettingsTab"/>s in <see cref="SettingsMenu.TabFields"/>'s order (the STT tab
-/// follows this order, the others are spelled out) — and, since 2026-09-19, the Options, Ask, Files and Web
+/// <see cref="SettingsTab"/>s in <see cref="SettingsMenu.TabFields"/>'s order (every tab spelled out; the STT
+/// tab followed this order until 2026-10-10) — and, since 2026-09-19, the Options, Ask, Files and Web
 /// rows a member's summary names are <c>/tools</c>' tabs (<see cref="SettingsMenu.ToolsTabFields"/>),
 /// edited through the same menu. The tests navigate by row, so moving a member changes
 /// every <c>Down(n)</c> and row-number assertion in <c>SettingsMenuTests</c> / <c>ChatScreenTests</c>
@@ -159,7 +159,7 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Speech.TtsSource.Names"/>: the server over HTTP or Kokoro in this process (<see cref="Settings.AppSettingsData.TtsSource"/>). On the TTS tab under <see cref="SpeechOutput"/> (2026-09-16); a reconnect (<see cref="SettingsMenu.IsTtsField"/>).</summary>
     TtsSource,
 
-    /// <summary>A picker over <see cref="ModelStore.VoskModelNames"/>: the Vosk model the wake word and the interrupt listen with (<see cref="Settings.AppSettingsData.SttVoskModel"/>). The STT tab's last row (2026-09-16); never typed, no path form; a voice reconnect (<see cref="SettingsMenu.IsVoiceField"/>).</summary>
+    /// <summary>A picker over <see cref="ModelStore.VoskModelNames"/>: the Vosk model the wake word and the interrupt listen with (<see cref="Settings.AppSettingsData.SttVoskModel"/>). The STT tab's row under the wake phrase, last of the Wake word run (2026-10-10, the user's ask; the tab's last row from 2026-09-16); never typed, no path form; a voice reconnect (<see cref="SettingsMenu.IsVoiceField"/>).</summary>
     SttVoskModel,
 
     /// <summary>A picker over <see cref="Files.MentionFolderMode.Names"/>: what applying a folder from the line's @-mention list does (<see cref="Settings.AppSettingsData.FileMentionFolderMode"/>). The Files tab's last row (2026-09-17; General's row under Image thumbnail size before); no reconnect (read at each idle read).</summary>
@@ -222,16 +222,16 @@ public enum SettingsField
     /// <summary>A toggle: whether every completed turn is written to the profile's <c>sessions.db</c> (<see cref="Settings.AppSettingsData.SessionLogging"/>). The Sessions tab's first row (2026-09-18); no reconnect (read at each turn's end).</summary>
     SessionLogging,
 
-    /// <summary>Typed: days a session is kept after its last turn, 0 = forever (<see cref="Settings.AppSettingsData.SessionRetentionDays"/>). The Sessions tab's second row (2026-09-18, the user's order; third that morning); no reconnect (read at startup and after a profile switch).</summary>
+    /// <summary>Typed: days a session is kept after its last turn, 0 = forever (<see cref="Settings.AppSettingsData.SessionRetentionDays"/>). The Sessions tab's third row, under Session save thinking (2026-10-10, the Saving run; the second from 2026-09-18, the user's order; third that morning); no reconnect (read at startup and after a profile switch).</summary>
     SessionRetentionDays,
 
-    /// <summary>A picker over <see cref="Sessions.SessionNamingMode.Names"/>: where a new session's title comes from (<see cref="Settings.AppSettingsData.SessionNamingMode"/>). The Sessions tab's third row (2026-09-18; second that morning); no reconnect (read at the first turn's end).</summary>
+    /// <summary>A picker over <see cref="Sessions.SessionNamingMode.Names"/>: where a new session's title comes from (<see cref="Settings.AppSettingsData.SessionNamingMode"/>). The Sessions tab's fourth row, first of the Titles run (2026-10-10; the third from 2026-09-18; second that morning); no reconnect (read at the first turn's end).</summary>
     SessionNamingMode,
 
-    /// <summary>A picker over <see cref="Sessions.SessionShowName.Names"/>: which session names the rule above the input row shows (<see cref="Settings.AppSettingsData.SessionShowName"/>). The Sessions tab's fourth row, under the naming mode (2026-09-18); no reconnect (read at each draw).</summary>
+    /// <summary>A picker over <see cref="Sessions.SessionShowName.Names"/>: which session names the rule above the input row shows (<see cref="Settings.AppSettingsData.SessionShowName"/>). The Sessions tab's fifth row, under the naming mode (2026-09-18; fourth until 2026-10-10); no reconnect (read at each draw).</summary>
     SessionShowName,
 
-    /// <summary>A toggle: whether <c>session_manager</c> is offered to the model (<see cref="Settings.AppSettingsData.SessionTool"/>). The Sessions tab's fifth row (2026-09-18, the user's order; last that morning, fourth until the show-name row); no reconnect (read at each turn).</summary>
+    /// <summary>A toggle: whether <c>session_manager</c> is offered to the model (<see cref="Settings.AppSettingsData.SessionTool"/>). The Sessions tab's sixth row, first of the Search tool run (2026-10-10; fifth from 2026-09-18, the user's order; last that morning, fourth until the show-name row); no reconnect (read at each turn).</summary>
     SessionTool,
 
     /// <summary>Typed: how many sessions a <c>session_manager</c> search or list without <c>max_results</c> returns, 1 to 20 (<see cref="Settings.AppSettingsData.SessionSearchMaxResults"/>). The Sessions tab's last row (2026-09-18; fourth that morning); no reconnect (read at each call).</summary>
@@ -433,10 +433,10 @@ public enum SettingsField
     /// <summary>A toggle: whether the model's thinking streams into the transcript and folds when the answer starts (<see cref="Settings.AppSettingsData.LlmShowThinking"/>). The Common tab's row under <see cref="LlmReasoning"/> (2026-10-01, the user's call: the thinking rows together; the last row from 2026-09-26, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
     LlmShowThinking,
 
-    /// <summary>Typed: the Claude Code CLI <c>/claude</c> starts (<see cref="Settings.AppSettingsData.ClaudeCodeExecutable"/>); empty = looked up. <c>/settings</c>' Anthropic tab's second row, under the Claude Code server's (2026-10-10, the user's call, when <c>/tools</c>' ClaudeCode tab went; its first row from 2026-09-27, on <c>/settings</c> that morning); read at each <c>/claude</c> and by the Claude Code server.</summary>
+    /// <summary>Typed: the Claude Code CLI <c>/claude</c> starts (<see cref="Settings.AppSettingsData.ClaudeCodeExecutable"/>); empty = looked up. <c>/settings</c>' Anthropic tab's first row, alone under its Claude Code heading, as both the server and <c>/claude</c> read it (later on 2026-10-10, the user's ask; the second, under the Claude Code server's, from earlier that day, when <c>/tools</c>' ClaudeCode tab went; its first row from 2026-09-27, on <c>/settings</c> that morning); read at each <c>/claude</c> and by the Claude Code server.</summary>
     ClaudeCodeExecutable,
 
-    /// <summary>A picker over <see cref="Claude.ClaudePermission.Names"/>: what the Claude Code child may do on its own (<see cref="Settings.AppSettingsData.ClaudeCodePermissions"/>). Under the executable on the Anthropic tab (2026-10-10; <c>/tools</c>' ClaudeCode tab's second row from 2026-09-27).</summary>
+    /// <summary>A picker over <see cref="Claude.ClaudePermission.Names"/>: what the Claude Code child may do on its own (<see cref="Settings.AppSettingsData.ClaudeCodePermissions"/>). The first of the Anthropic tab's <c>/claude</c> command run, under the Claude Code server's switch (later on 2026-10-10; under the executable earlier that day;<c>/tools</c>' ClaudeCode tab's second row from 2026-09-27).</summary>
     ClaudeCodePermissions,
 
     /// <summary>Typed: the <c>--model</c> of a <c>/claude</c> run (<see cref="Settings.AppSettingsData.ClaudeCodeModel"/>); empty = the CLI's own. Under the permissions on the Anthropic tab (2026-10-10; <c>/tools</c>' ClaudeCode tab's third row from 2026-09-27).</summary>
@@ -478,7 +478,7 @@ public enum SettingsField
     /// <summary>A toggle: whether every turn's thinking goes back to a local server and the chat template is asked to keep it (<see cref="Settings.AppSettingsData.LlmPreserveThinking"/>). The Http tab's thinking run, first (2026-10-10, the user's call: only an OpenAI-compatible server reads it; the LLM tab, under Show thinking, from 2026-09-28, the user's question); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
     LlmPreserveThinking,
 
-    /// <summary>A toggle: whether a reply's thinking is saved with the session (<see cref="Settings.AppSettingsData.SessionSaveThinking"/>). The Sessions tab's last row (2026-09-28, the user's ask); no reconnect (read at each save). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether a reply's thinking is saved with the session (<see cref="Settings.AppSettingsData.SessionSaveThinking"/>). The Sessions tab's second row, under Session logging in the Saving run (2026-10-10, the user's ask; the last row from 2026-09-28, the user's ask); no reconnect (read at each save). Last in the enum, as every newcomer.</summary>
     SessionSaveThinking,
 
     /// <summary>A door: the models with sampling overrides (<see cref="Settings.AppSettingsData.LlmSampling"/>); Enter opens the <c>/sampling</c> pane (<see cref="SettingsMenu.SamplingPane"/>). The Http tab's sampling run, first (2026-10-10, the user's call: no sampling goes to the Anthropic API, the OpenAI API or the Claude Code server; the LLM tab's row under <see cref="LlmReasoningEstimate"/> from 2026-10-01, the last row from 2026-09-28, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
@@ -1000,7 +1000,7 @@ public enum SettingsField
     /// <summary>A picker over <see cref="App.BotChatMultiEmbedded.Names"/>: an embedded advisor naming another model (<see cref="Settings.AppSettingsData.AdvisorEmbedded"/>). The Advisors tab (2026-10-10).</summary>
     AdvisorEmbedded,
 
-    /// <summary>A toggle: whether each advisor call asks first (<see cref="Settings.AppSettingsData.AdvisorConfirm"/>). The Advisors tab's last row (2026-10-10). Last in the enum until <see cref="DockerServerMatchWords"/>.</summary>
+    /// <summary>A toggle: whether each advisor call asks first (<see cref="Settings.AppSettingsData.AdvisorConfirm"/>). The Advisors tab's row under the tool iterations, last of the Each call run (later on 2026-10-10, the user's ask; the tab's last row earlier that day). Last in the enum until <see cref="DockerServerMatchWords"/>.</summary>
     AdvisorConfirm,
 
     /// <summary>A list the user types into: the words that make a container an LLM server in <see cref="DockerServerContainers"/>' checklist (<see cref="Settings.AppSettingsData.DockerServerMatchWords"/>), its top row adding one, Enter on one removing it, a button restoring the defaults. The Docker tab, under the containers (2026-10-10, the user's ask); no reconnect. Last in the enum until <see cref="Avatar"/>.</summary>
@@ -1049,7 +1049,9 @@ public enum SettingsTab
     /// advisor's): the Claude Code server's switch, <c>/claude</c>'s executable, permissions, model and effort (2026-10-10, the user's call:
     /// the advisor tool retired and that tab gone), then the Anthropic API's switch, key, output cap and prompt caching (the Claude Code
     /// server last until 2026-10-10, the user's call). "Claude" until 2026-10-04 (the user's call: Anthropic, so it no longer shares a
-    /// name with <c>/tools</c>' tab).
+    /// name with <c>/tools</c>' tab). Since later on 2026-10-10 the executable leads, under its own heading (both the server and
+    /// <c>/claude</c> read it), then the server's switch, <c>/claude</c>'s three and the Anthropic API's four, each run headed
+    /// (<see cref="SettingsMenu.TabSections"/>, the user's ask).
     /// </summary>
     Anthropic,
 
@@ -1387,9 +1389,16 @@ internal sealed partial class SettingsMenu
     /// pictures and fun verbs last; Http holds what only an OpenAI-compatible HTTP server reads, in the order they had there — the
     /// connection (the scan mode, where a blank URL looks; the key), the thinking (the preserve and estimate rows), the sampling door
     /// and its Hugging Face switch; TTS is spelled out (the user's order, 2026-09-16): the switch, the
-    /// source, the server's URL, the preview toggle (no reconnect), then the voice preset (2026-09-27, just above the voice), the voices, the mix and the speed; STT is the <see cref="IsVoiceField"/>
+    /// source, the server's URL, the preview toggle (no reconnect), then the voice preset (2026-09-27, just above the voice), the voices, the mix and the speed; STT was the <see cref="IsVoiceField"/>
     /// fields in enum order, <see cref="SettingsField.SttDestination"/> (2026-10-02, no reconnect, so not a voice field) under the first, the switch; Sessions (2026-09-18, last that morning, second since) is the
-    /// logging switch, the retention days, the naming mode, the show-name picker under it (later that day), the tool switch and the search cap (the user's order, 2026-09-18). With <see cref="SkillsTabFields"/> and <see cref="ToolsTabFields"/> they are every <see cref="SettingsField"/> once (pinned).
+    /// logging switch, the retention days, the naming mode, the show-name picker under it (later that day), the tool switch and the search cap (the user's order, 2026-09-18).
+    /// Since later on 2026-10-10 every tab is headed (<see cref="TabSections"/>, the user's ask) and four moved a row to sit under its
+    /// heading (the user's call): Anthropic leads with <see cref="SettingsField.ClaudeCodeExecutable"/>, the one row the Claude Code server
+    /// and <c>/claude</c> both read, above the server's switch; STT is spelled out — listening (the switch, the destination, the
+    /// push-to-talk key, the Whisper model), the wake word (its switch, the phrase, the Vosk model it listens with), the interruptions (the
+    /// switch, the echo guard, the confirm time); Sessions' save-thinking switch went from last to under the logging switch, the Saving run
+    /// with the retention days; Advisors' confirm switch from last to under the tool iterations, the Each call run.
+    /// With <see cref="SkillsTabFields"/> and <see cref="ToolsTabFields"/> they are every <see cref="SettingsField"/> once (pinned).
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
@@ -1408,14 +1417,20 @@ internal sealed partial class SettingsMenu
          SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
         [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
         [SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerMatchWords, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit],
-        [SettingsField.ClaudeCodeServer, SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort,
+        [SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodeServer, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort,
          SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching],
         [SettingsField.OpenAIApi, SettingsField.OpenAIApiKey, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
-        [SettingsField.SttInput, SettingsField.SttDestination, .. Fields.Where(f => IsVoiceField(f) && f != SettingsField.SttInput)],
-        [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults, SettingsField.SessionSaveThinking],
+        [SettingsField.SttInput, SettingsField.SttDestination, SettingsField.SttPushToTalkKey, SettingsField.SttWhisperModel,
+         SettingsField.SttWake, SettingsField.SttWakePhrase, SettingsField.SttVoskModel,
+         SettingsField.SttInterrupt, SettingsField.SttInterruptEchoGuard, SettingsField.SttInterruptConfirmMs],
+        [SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays,
+         SettingsField.SessionNamingMode, SettingsField.SessionShowName,
+         SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera],
-        [SettingsField.Advisors, SettingsField.AdvisorList, SettingsField.AdvisorContext, SettingsField.AdvisorCallsPerTurn, SettingsField.AdvisorMaxToolIterations, SettingsField.AdvisorThreadPairs, SettingsField.AdvisorEmbedded, SettingsField.AdvisorConfirm],
+        [SettingsField.Advisors, SettingsField.AdvisorList,
+         SettingsField.AdvisorContext, SettingsField.AdvisorCallsPerTurn, SettingsField.AdvisorMaxToolIterations, SettingsField.AdvisorConfirm,
+         SettingsField.AdvisorThreadPairs, SettingsField.AdvisorEmbedded],
     ];
 
     /// <summary>

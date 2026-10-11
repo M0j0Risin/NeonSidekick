@@ -55,7 +55,7 @@ public partial class SettingsMenuTests
 
         Assert.Contains("\n" + Head(SettingsTab.Common) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL ", Output);   // whole names: no row starts "Common " (2026-10-10)
         Assert.EndsWith(" │ ↳ Common · Http · Embedded · Docker · Anthropic · OpenAI ", Head(SettingsTab.Common));
-        Assert.Contains("\n" + Head(SettingsTab.Tts) + "\n \n▸ Output ", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Tts) + "\n \n" + MenuLayout.Heading("Read aloud", 120) + "\n▸ Output ", Output);   // headed since later on 2026-10-10
         Assert.EndsWith(" │ ↳ TTS · STT ", Head(SettingsTab.Tts));
         Assert.DoesNotContain("\n▸ Servers enabled", Output);   // Tab went past Embedded
         pane.Dispose();

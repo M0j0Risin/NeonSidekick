@@ -294,14 +294,15 @@ public class ClaudeTests
         var anthropic = SettingsMenu.TabFields[(int)SettingsTab.Anthropic];
 
         // /tools' ClaudeCode tab from 2026-09-27 (on /settings that morning) until 2026-10-10 (the user's call: the advisor tool retired,
-        // the four /claude rows under the Claude Code server's on /settings' Anthropic tab, the tab gone).
+        // the four /claude rows under the Claude Code server's on /settings' Anthropic tab, the tab gone). Later that day the executable,
+        // which the server reads too, went above the server's switch under a heading of its own (the user's ask).
         Assert.DoesNotContain("ClaudeCode", ToolsText.MenuTitles);
         Assert.DoesNotContain("Claude (API)", SettingsMenu.TabTitles);   // gone since 2026-09-29
         Assert.Equal(
-            [SettingsField.ClaudeCodeServer, SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort],
+            [SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodeServer, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort],
             anthropic.Take(5));
         Assert.Equal(
-            ["Claude Code server", "Claude Code executable", "Claude Code slash command permissions", "Claude Code slash command model", "Claude Code slash command effort"],
+            ["Claude Code executable", "Claude Code server", "Claude Code slash command permissions", "Claude Code slash command model", "Claude Code slash command effort"],
             anthropic.Take(5).Select(SettingsMenu.FieldName));
         Assert.DoesNotContain(SettingsMenu.ToolsTabFields, menu => menu.Contains(SettingsField.ClaudeCodeExecutable));
         Assert.Equal("(looked up)", SettingsMenu.FieldValue(SettingsField.ClaudeCodeExecutable, data, "C:\\p"));

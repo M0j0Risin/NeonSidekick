@@ -154,6 +154,8 @@ Settings that an environment variable or flag can override for one launch are li
 
 ### General
 
+The pane heads its runs **Who and where**, **Input line**, **Transcript**, **Screen** and **Outside apps**; every tab's runs are headed the same way, and the cursor skips the headings.
+
 | Setting | What it does | Default |
 |---|---|---|
 | Profile | Switches profile (each has its own settings, persona, memory, skills and sessions); a typed letter jumps to the next profile starting with it. | `neon` |
@@ -216,7 +218,7 @@ The LLM connection and every kind of server it can be: six tabs on one, each a t
 
 #### Common
 
-The LLM settings every server reads, whatever its kind: a server on this machine or the LAN, the embedded LLM, a Docker container, the Anthropic API, the OpenAI API or the Claude Code server.
+The LLM settings every server reads, whatever its kind: a server on this machine or the LAN, the embedded LLM, a Docker container, the Anthropic API, the OpenAI API or the Claude Code server. The pane heads its runs **Connection**, **How it answers**, **Tools and limits**, **Context** and **Pictures and verbs**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -242,7 +244,7 @@ The LLM settings every server reads, whatever its kind: a server on this machine
 
 #### Http
 
-The LLM settings only an OpenAI-compatible HTTP server reads: a server on this machine or the LAN (LM Studio, llama.cpp, vLLM, SGLang, Ollama), the embedded LLM and a Docker container, which are such servers too. The Anthropic API, the OpenAI API and the Claude Code server never read them: they have keys of their own (or none), and no sampling or thinking goes back to them this way.
+The LLM settings only an OpenAI-compatible HTTP server reads: a server on this machine or the LAN (LM Studio, llama.cpp, vLLM, SGLang, Ollama), the embedded LLM and a Docker container, which are such servers too. The Anthropic API, the OpenAI API and the Claude Code server never read them: they have keys of their own (or none), and no sampling or thinking goes back to them this way. The pane heads its runs **Connection**, **Thinking** and **Sampling**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -281,7 +283,7 @@ Until you override them, sampling is left to the server and the model's defaults
 
 #### Embedded
 
-A model the app downloads and runs itself on llama.cpp's `llama-server`, for when no other server is around: Gemma 4 from E2B to 31B, Meta's Muse Glimmer 30B, Qwen3.6 35B A3B and Qwen3.8 27B (also in NVFP4 for NVIDIA Blackwell GPUs).
+A model the app downloads and runs itself on llama.cpp's `llama-server`, for when no other server is around: Gemma 4 from E2B to 31B, Meta's Muse Glimmer 30B, Qwen3.6 35B A3B and Qwen3.8 27B (also in NVFP4 for NVIDIA Blackwell GPUs). The pane heads its runs **Server and models**, **GPU and memory** and **Vision and drafting**.
 
 * **Install:** open **Embedded models** on this tab and pick *Install*. It downloads in the background (📥 and a percentage on the hint row; double-click 📥 to pause) and switches to the model when done, unless you picked another server meanwhile.
 * **Use:** `/server` and the startup picker list one **Embedded** row per installed model; `/server embedded` lists only those, and `/model` on the embedded server picks between them.
@@ -377,7 +379,7 @@ A model the app downloads and runs itself on llama.cpp's `llama-server`, for whe
 
 #### Docker
 
-Your own LLM containers (vLLM, SGLang, anything serving `/v1/models`) as `/server` choices, one running at a time, over Docker Desktop's engine pipe. Windows only: on a Mac `/server` lists none. See [Docker servers](TOOLS.md#docker-servers).
+Your own LLM containers (vLLM, SGLang, anything serving `/v1/models`) as `/server` choices, one running at a time, over Docker Desktop's engine pipe. Windows only: on a Mac `/server` lists none. See [Docker servers](TOOLS.md#docker-servers). The pane heads its runs **Containers** and **Starting and stopping**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -391,12 +393,12 @@ Your own LLM containers (vLLM, SGLang, anything serving `/v1/models`) as `/serve
 
 #### Anthropic
 
-Claude Code as a `/server` choice and for `/claude` (you message it), then the Anthropic API as a `/server` choice.
+Claude Code as a `/server` choice and for `/claude` (you message it), then the Anthropic API as a `/server` choice. The pane heads each run: **Claude Code** (the executable both use), **Claude Code server**, **/claude command** and **Anthropic API**.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Claude Code server | Offers Claude Code on `/server` while it is found (*Claude Code executable*, or the PATH). Off (or missing) while it is the saved URL, the app scans as if the URL were blank, and a running Claude Code server stops. | off |
 | Claude Code executable | The Claude Code CLI, for `/claude` and the Claude Code server. Blank looks on the PATH and in `%USERPROFILE%\.local\bin` (`~/.local/bin` on a Mac); a path you set must exist. | (looked up) |
+| Claude Code server | Offers Claude Code on `/server` while it is found (*Claude Code executable*, or the PATH). Off (or missing) while it is the saved URL, the app scans as if the URL were blank, and a running Claude Code server stops. | off |
 | Claude Code slash command permissions | What `/claude` may do: `read-only` (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), or `read-write` (its usual tools with file edits, no commands). Anything else is denied, never asked. It works in the working directory but outside the app's sandbox and approvals. | `read-only` |
 | Claude Code slash command model | `/claude`'s `--model`: Claude Code's default, `fable`, `opus`, `sonnet`, `haiku`, or *Other…*. | (Claude Code's default) |
 | Claude Code slash command effort | `/claude`'s `--effort`: Claude Code's default, `low`, `medium`, `high`, `xhigh` or `max`. | (Claude Code's default) |
@@ -423,7 +425,7 @@ Claude Code as a `/server` choice and for `/claude` (you message it), then the A
 
 #### OpenAI
 
-The OpenAI API as a `/server` choice, over the Responses API (stateless: nothing is stored on OpenAI's side).
+The OpenAI API as a `/server` choice, over the Responses API (stateless: nothing is stored on OpenAI's side). The pane heads its runs **Connection** and **Requests**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -448,7 +450,7 @@ Speech out and voice in, two tabs on one, each a tab of the second strip (TTS ·
 
 #### TTS
 
-Speech output sets up in the background (🔈 on the hint row); replies are text-only until it's ready.
+Speech output sets up in the background (🔈 on the hint row); replies are text-only until it's ready. The pane heads its runs **Read aloud** and **Voices**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -464,34 +466,38 @@ Speech output sets up in the background (🔈 on the hint row); replies are text
 
 #### STT
 
-Voice input sets up in the background (🎙️ on the hint row); until it's ready, push-to-talk says so.
+Voice input sets up in the background (🎙️ on the hint row); until it's ready, push-to-talk says so. The pane heads its runs **Listening**, **Wake word** and **Interruptions**.
 
 | Setting | What it does | Default |
 |---|---|---|
 | STT input | Turns the microphone on: the push-to-talk key records a message (`/stt`). On a Mac, macOS asks once whether your terminal app may use the microphone (System Settings › Privacy & Security › Microphone), and a MacBook's own microphone is off while its lid is closed. | off |
 | STT destination | `chat` sends what you say straight to the model; `draft` adds it to the input line for you to edit and send. Under `draft`, push-to-talk and the wake word work with text on the line (except a push-to-talk key of `Home`, `End`, `PageUp` or `PageDown`, which still move the cursor). | `chat` |
+| STT push-to-talk key | `F1`–`F8`, `Insert`, `Home`, `End`, `PageUp` or `PageDown`. | `F4` |
+| STT whisper model | `ggml-tiny.en.bin`, `ggml-base.en.bin` or `ggml-small.en.bin` (downloaded on first use). | `ggml-base.en.bin` |
 | STT wake | Saying the wake phrase at the idle line starts listening (`/stt wake`). | off |
 | STT wake phrase | One to three words; also the interrupt phrase. | `hey neon` |
+| STT vosk model | The wake-word model: `vosk-model-small-en-us-0.15`, `vosk-model-en-us-0.22-lgraph` or `vosk-model-small-en-in-0.4`. | `vosk-model-small-en-us-0.15` |
 | STT interrupt | Saying the wake phrase while a reply is spoken cuts it short and listens (`/stt interrupt`). | off |
 | STT interrupt echo guard | Ignores the assistant's own voice: speech this close to the wake phrase that it just spoke is an echo (50–100 %; 100 = the exact phrase only). | 100 |
 | STT interrupt confirm | How long the phrase must hold in the recogniser's interim results before it counts (0–2000 ms). | 200 |
-| STT push-to-talk key | `F1`–`F8`, `Insert`, `Home`, `End`, `PageUp` or `PageDown`. | `F4` |
-| STT whisper model | `ggml-tiny.en.bin`, `ggml-base.en.bin` or `ggml-small.en.bin` (downloaded on first use). | `ggml-base.en.bin` |
-| STT vosk model | The wake-word model: `vosk-model-small-en-us-0.15`, `vosk-model-en-us-0.22-lgraph` or `vosk-model-small-en-in-0.4`. | `vosk-model-small-en-us-0.15` |
 
 ### Sessions
+
+The pane heads its runs **Saving**, **Titles** and **Search tool**.
 
 | Setting | What it does | Default |
 |---|---|---|
 | Session logging | Saves every turn to the profile's `sessions.db` for `/sessions` to list, search and restore. | on |
+| Session save thinking | Saves each reply's thinking, so a resumed session can send it back under *LLM preserve thinking*. | off |
 | Session retention (days) | Deletes sessions older than this at startup (0–3650; 0 = keep forever). | 0 |
 | Session naming mode | `model-written` asks the model for a title after the first turn; `first-line` uses your first line. | `model-written` |
 | Session show name | Which titles show on the rule above the input row: `all-names`, `model-written` (a model-written or typed name only) or `none`. | `all-names` |
 | Session tool | Offers `session_manager`, to search, list and read earlier sessions (never restore or purge). | on |
 | Session search max results | Sessions one search or list returns (1–20). | 10 |
-| Session save thinking | Saves each reply's thinking, so a resumed session can send it back under *LLM preserve thinking*. | off |
 
 ### Botchat
+
+The pane heads its runs **Models**, **Pictures**, **Pace**, **Tools and skills**, **Memory** and **Seeing**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -525,7 +531,7 @@ Voice input sets up in the background (🎙️ on the hint row); until it's read
 
 ### Advisors
 
-Other profiles this one consults, each in a role you give it: `neon_advisor` for the model, `/advisor` for you (see [TOOLS.md](TOOLS.md#advisors) and [COMMANDS.md](COMMANDS.md#advisor)). An advisor answers on **its own profile's** server, model, key, reasoning and sampling, under its own `persona.md` and its role. It may call this chat's read-only tools (never `ask_user`, the camera, the screen or another advisor), and it remembers its earlier questions and answers for the session.
+Other profiles this one consults, each in a role you give it: `neon_advisor` for the model, `/advisor` for you (see [TOOLS.md](TOOLS.md#advisors) and [COMMANDS.md](COMMANDS.md#advisor)). An advisor answers on **its own profile's** server, model, key, reasoning and sampling, under its own `persona.md` and its role. It may call this chat's read-only tools (never `ask_user`, the camera, the screen or another advisor), and it remembers its earlier questions and answers for the session. The pane heads its runs **The panel**, **Each call** and **Threads and servers**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -534,9 +540,9 @@ Other profiles this one consults, each in a role you give it: `neon_advisor` for
 | Advisor context | `brief`: the model's question and context. `recent`: also the last 10 messages (tool results cut to 500 characters). | `brief` |
 | Advisor calls per turn | The most advisor calls one reply may make, all advisors together (1–10). | 2 |
 | Advisor tool iterations | Tool round trips an advisor may make before answering (0–10; 0 = text only). Its last round is always asked for words. | 4 |
+| Advisor confirm | Each call waits for your yes on the pane. Headless runs refuse the calls. | off |
 | Advisor thread length | Earlier questions and answers each advisor remembers (1–50); the oldest go first. Saved with the session; `/new` starts them over. | 10 |
 | Advisor embedded mode | For an advisor on the embedded server naming another model than the one running. `parent-server`: it answers on the running model, and the footer names both. `multi-server`: an extra `llama-server` for its model, kept for its later calls until *Embedded servers enabled* goes off, a botchat stops its extras, or you quit. | `parent-server` |
-| Advisor confirm | Each call waits for your yes on the pane. Headless runs refuse the calls. | off |
 
 * **Servers:** a blank *LLM URL* in the advisor's profile borrows this chat's server (with its own *LLM model* if set). A Docker advisor only shares the container already running, which keeps running when this chat moves to the Claude Code server, a hosted API or another machine's server. An embedded advisor needs this profile's *Embedded servers enabled*. With no embedded server running, the advisor's model starts as the main one, and the next connect to another server stops it.
 * **On the Claude Code server:** the server is one `claude` process, so one advisor at a time may run its turns there, with the read-only tools offered over the same MCP relay the chat's own turns use: the first listed advisor whose profile is on it, while this chat is on another server. Any other advisor on Claude Code answers text-only, a one-shot `claude -p` with no tools, its footer saying why (`no tools: this chat is on the Claude Code server`, or `no tools: dba is the Claude Code advisor with tools`). The *Advisor list*'s editor marks each one `claudecode · <model> · tools` or `· text only`. The one with tools keeps its own Claude conversation, saved with the session; its first call starts the `claude` process, and this chat reconnecting stops it (the next call resumes).

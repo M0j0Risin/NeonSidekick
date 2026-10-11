@@ -11,7 +11,11 @@ internal sealed partial class SettingsMenu
     /// The section headings of the long tabs (2026-10-04, the UI review: General, LLM and Botchat were long flat lists whose runs the
     /// <see cref="TabFields"/> comment named but the pane never showed): each heading over the field it names, drawn as a
     /// <see cref="SectionRule"/> the cursor never rests on. The LLM tab's split (2026-10-10) kept its runs on Common, Connection
-    /// over the URL now, and gave Http three of its own. The other tabs have none. Pinned.
+    /// over the URL now, and gave Http three of its own. Every other tab got its own later that day (the user's ask: the Anthropic
+    /// tab ran the Claude Code server, <c>/claude</c> and the Anthropic API together with nothing saying whose row was whose, and
+    /// the rest wanted the same look): Anthropic's Claude Code (the executable both read), Claude Code server, <c>/claude</c>
+    /// command and Anthropic API; Embedded, Docker, OpenAI, TTS, STT, Sessions and Advisors in runs of their own, a few rows moved
+    /// to sit under theirs (<see cref="TabFields"/>). Pinned.
     /// </summary>
     public static readonly IReadOnlyDictionary<SettingsTab, IReadOnlyList<(SettingsField First, string Title)>> TabSections =
         new Dictionary<SettingsTab, IReadOnlyList<(SettingsField First, string Title)>>
@@ -38,6 +42,46 @@ internal sealed partial class SettingsMenu
                 (SettingsField.LlmPreserveThinking, "Thinking"),
                 (SettingsField.LlmSampling, "Sampling"),
             ],
+            [SettingsTab.Embedded] =
+            [
+                (SettingsField.EmbeddedLlmServer, "Server and models"),
+                (SettingsField.EmbeddedBackend, "GPU and memory"),
+                (SettingsField.EmbeddedVision, "Vision and drafting"),
+            ],
+            [SettingsTab.Docker] =
+            [
+                (SettingsField.DockerServers, "Containers"),
+                (SettingsField.DockerServerStopTimeoutSeconds, "Starting and stopping"),
+            ],
+            [SettingsTab.Anthropic] =
+            [
+                (SettingsField.ClaudeCodeExecutable, "Claude Code"),
+                (SettingsField.ClaudeCodeServer, "Claude Code server"),
+                (SettingsField.ClaudeCodePermissions, "/claude command"),
+                (SettingsField.AnthropicApi, "Anthropic API"),
+            ],
+            [SettingsTab.OpenAI] =
+            [
+                (SettingsField.OpenAIApi, "Connection"),
+                (SettingsField.OpenAIApiMaxTokens, "Requests"),
+            ],
+            [SettingsTab.Tts] =
+            [
+                (SettingsField.TtsOutput, "Read aloud"),
+                (SettingsField.TtsVoicePreview, "Voices"),
+            ],
+            [SettingsTab.Stt] =
+            [
+                (SettingsField.SttInput, "Listening"),
+                (SettingsField.SttWake, "Wake word"),
+                (SettingsField.SttInterrupt, "Interruptions"),
+            ],
+            [SettingsTab.Sessions] =
+            [
+                (SettingsField.SessionLogging, "Saving"),
+                (SettingsField.SessionNamingMode, "Titles"),
+                (SettingsField.SessionTool, "Search tool"),
+            ],
             [SettingsTab.BotChat] =
             [
                 (SettingsField.BotChatLlmMode, "Models"),
@@ -46,6 +90,12 @@ internal sealed partial class SettingsMenu
                 (SettingsField.BotChatTools, "Tools and skills"),
                 (SettingsField.BotChatMemory, "Memory"),
                 (SettingsField.BotChatVision, "Seeing"),
+            ],
+            [SettingsTab.Advisors] =
+            [
+                (SettingsField.Advisors, "The panel"),
+                (SettingsField.AdvisorContext, "Each call"),
+                (SettingsField.AdvisorThreadPairs, "Threads and servers"),
             ],
         };
 

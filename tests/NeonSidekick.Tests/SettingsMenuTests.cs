@@ -1521,8 +1521,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsField.LlmScanMode, SettingsMenu.TabFields[(int)SettingsTab.Http][0]);
         Assert.Equal([SettingsField.LlmApiKey], SettingsMenu.TabFields[(int)SettingsTab.Http].Where(SettingsMenu.IsLlmField));   // the Http tab's one reconnecting row
         // The reconnecting rows: the LLM tab's seven (the Common tab's six with the Http tab's key after the model, in the enum's order, since 2026-10-10; in three runs since 2026-10-01, rows 2 to 8 before), then the Anthropic API's four (2026-09-27; /settings' Claude tab's four above its last since 2026-10-03, below its first since 2026-10-10, below /claude's four later that day), then the
-        // Embedded tab's, then the Claude Code server's switch (2026-09-30: the Claude tab's last row; its first since 2026-10-10), then Embedded VRAM only (2026-10-01), then Docker servers enabled (2026-10-02), then the OpenAI tab's five (2026-10-03).
-        Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsLlmField), SettingsMenu.TabFields[(int)SettingsTab.Common].Where(SettingsMenu.IsLlmField).Take(2).Append(SettingsField.LlmApiKey).Concat(SettingsMenu.TabFields[(int)SettingsTab.Common].Where(SettingsMenu.IsLlmField).Skip(2)).Concat(SettingsMenu.TabFields[(int)SettingsTab.Anthropic].Skip(5)).Concat(SettingsMenu.TabFields[(int)SettingsTab.Embedded].Where(f => f is not (SettingsField.EmbeddedHfDownloadType or SettingsField.EmbeddedVramOnly)).OrderBy(f => f)).Append(SettingsMenu.TabFields[(int)SettingsTab.Anthropic][0]).Append(SettingsField.EmbeddedVramOnly).Append(SettingsField.DockerServers).Concat(SettingsMenu.TabFields[(int)SettingsTab.OpenAI]));   // Docker servers enabled last (2026-10-02, the Docker tab's one reconnecting row); the Embedded LLM tab's rows all reconnect (2026-09-29) but the filter type, display only (later that day), and the HF download type (2026-09-30)
+        // Embedded tab's, then the Claude Code server's switch (2026-09-30: the Claude tab's last row; its first since 2026-10-10, its second, under the executable, later that day), then Embedded VRAM only (2026-10-01), then Docker servers enabled (2026-10-02), then the OpenAI tab's five (2026-10-03).
+        Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsLlmField), SettingsMenu.TabFields[(int)SettingsTab.Common].Where(SettingsMenu.IsLlmField).Take(2).Append(SettingsField.LlmApiKey).Concat(SettingsMenu.TabFields[(int)SettingsTab.Common].Where(SettingsMenu.IsLlmField).Skip(2)).Concat(SettingsMenu.TabFields[(int)SettingsTab.Anthropic].Skip(5)).Concat(SettingsMenu.TabFields[(int)SettingsTab.Embedded].Where(f => f is not (SettingsField.EmbeddedHfDownloadType or SettingsField.EmbeddedVramOnly)).OrderBy(f => f)).Append(SettingsField.ClaudeCodeServer).Append(SettingsField.EmbeddedVramOnly).Append(SettingsField.DockerServers).Concat(SettingsMenu.TabFields[(int)SettingsTab.OpenAI]));   // Docker servers enabled last (2026-10-02, the Docker tab's one reconnecting row); the Embedded LLM tab's rows all reconnect (2026-09-29) but the filter type, display only (later that day), and the HF download type (2026-09-30)
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmScanMode) || SettingsMenu.IsTtsField(SettingsField.LlmScanMode) || SettingsMenu.IsVoiceField(SettingsField.LlmScanMode));
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmScanMode));
         Assert.Equal("LLM server scan mode", SettingsMenu.FieldName(SettingsField.LlmScanMode));
@@ -1566,10 +1566,14 @@ public partial class SettingsMenuTests : IDisposable
         Assert.False(SettingsMenu.IsLlmField(SettingsField.TtsVoicePreview) || SettingsMenu.IsTtsField(SettingsField.TtsVoicePreview) || SettingsMenu.IsVoiceField(SettingsField.TtsVoicePreview));
         var chunker = new SentenceChunker();
         Assert.Equal(PreviewSentences, new List<string>([.. chunker.Append(SettingsMenu.VoicePreviewText), chunker.Flush()]));
-        // STT: the voice fields in enum order, the destination picker (2026-10-02) under the switch.
+        // STT: the voice fields and the destination picker (2026-10-02) under the switch; in three runs since 2026-10-10 (the user's ask; the voice
+        // fields in enum order until then): listening (the key and the Whisper model with it), the wake word (the Vosk model with it), the interruptions.
         Assert.Equal(
-            [SettingsField.SttInput, SettingsField.SttDestination, .. Enum.GetValues<SettingsField>().Where(f => SettingsMenu.IsVoiceField(f) && f != SettingsField.SttInput)],
+            [SettingsField.SttInput, SettingsField.SttDestination, SettingsField.SttPushToTalkKey, SettingsField.SttWhisperModel,
+             SettingsField.SttWake, SettingsField.SttWakePhrase, SettingsField.SttVoskModel,
+             SettingsField.SttInterrupt, SettingsField.SttInterruptEchoGuard, SettingsField.SttInterruptConfirmMs],
             SettingsMenu.TabFields[(int)SettingsTab.Stt]);
+        Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsVoiceField).Order(), SettingsMenu.TabFields[(int)SettingsTab.Stt].Where(SettingsMenu.IsVoiceField).Order());
         // STT destination (2026-10-02, the user's ask): a picker, chat by default, no reconnect and never refused mid-turn.
         Assert.False(SettingsMenu.IsVoiceField(SettingsField.SttDestination));
         Assert.False(SettingsMenu.IsToggle(SettingsField.SttDestination));
@@ -3346,13 +3350,14 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         // Each tab under the strip, padded to its own column (26, 32, 19, 26), the whole tab in view, nothing of another tab on it.
-        AssertTabEnds("\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n  Session save thinking       off\n", 120);
+        // Every tab headed since later on 2026-10-10 (the user's ask), Sessions' save thinking up in the Saving run.
+        AssertTabEnds("\n \n" + MenuLayout.Heading("Saving", 120) + "\n▸ Session logging             on\n  Session save thinking       off\n  Session retention (days)    forever\n" + MenuLayout.Heading("Titles", 120) + "\n  Session naming mode         model-written\n  Session show name           all-names\n" + MenuLayout.Heading("Search tool", 120) + "\n  Session tool                on\n  Session search max results  10 results\n", 120);
         // The Common tab (2026-10-10, the user's call; the LLM tab before): whole names, no row starting "Common ", in the LLM tab's five runs (2026-10-01, the user's call).
         AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL                   (probe local ports)\n  LLM model                 (first listed)\n" + MenuLayout.Heading("How it answers", 120) + "\n  LLM reasoning             none\n  LLM show thinking         on\n" + MenuLayout.Heading("Tools and limits", 120) + "\n  LLM offer tools           on\n  LLM max tool iterations   10000 round trips\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n" + MenuLayout.Heading("Context", 120) + "\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM max turns             auto\n  LLM auto compact (%)      85 %\n  LLM compact type          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM tool compact type     compact\n" + MenuLayout.Heading("Pictures and verbs", 120) + "\n  LLM picture keep          20 pictures\n  LLM picture megabytes     24 MB\n  LLM use fun verbs         off\n", 120);
         // The Http tab (2026-10-10): the six rows only an OpenAI-compatible HTTP server reads, whole names too, in three runs.
         AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM server scan mode            local\n  LLM API key                     em•••\n" + MenuLayout.Heading("Thinking", 120) + "\n  LLM preserve thinking           off\n  LLM reasoning estimate          chars\n" + MenuLayout.Heading("Sampling", 120) + "\n  LLM sampling                    (server defaults)\n  LLM sampling from Hugging Face  off\n", 120);
-        AssertTabEnds("\n \n▸ Output         on\n  Source         http\n  HTTP URL       http://localhost:8880/v1\n  Voice preview  on\n  Voice preset   neon\n  Voice          af_heart\n  Voice 2        am_eric\n  Voice mix      80 % / 20 %\n  Speed          1.2\n", 120);
-        AssertTabEnds("\n \n▸ Input                 off\n  Destination           chat\n  Wake                  off\n  Wake phrase           hey neon\n  Interrupt             off\n  Interrupt echo guard  100 %\n  Interrupt confirm     200 ms\n  Push-to-talk key      F4\n  Whisper model         ggml-base.en.bin\n  Vosk model            vosk-model-small-en-us-0.15\n", 120);
+        AssertTabEnds("\n \n" + MenuLayout.Heading("Read aloud", 120) + "\n▸ Output         on\n  Source         http\n  HTTP URL       http://localhost:8880/v1\n" + MenuLayout.Heading("Voices", 120) + "\n  Voice preview  on\n  Voice preset   neon\n  Voice          af_heart\n  Voice 2        am_eric\n  Voice mix      80 % / 20 %\n  Speed          1.2\n", 120);
+        AssertTabEnds("\n \n" + MenuLayout.Heading("Listening", 120) + "\n▸ Input                 off\n  Destination           chat\n  Push-to-talk key      F4\n  Whisper model         ggml-base.en.bin\n" + MenuLayout.Heading("Wake word", 120) + "\n  Wake                  off\n  Wake phrase           hey neon\n  Vosk model            vosk-model-small-en-us-0.15\n" + MenuLayout.Heading("Interruptions", 120) + "\n  Interrupt             off\n  Interrupt echo guard  100 %\n  Interrupt confirm     200 ms\n", 120);
         Assert.DoesNotContain("Ask user", Output);   // /tools' since 2026-09-19
         Assert.DoesNotContain("File tools", Output);
         Assert.DoesNotContain("Web tools", Output);
@@ -3376,7 +3381,7 @@ public partial class SettingsMenuTests : IDisposable
         // The on/off page under the breadcrumb: the saved value on the cursor, each row with its sentence.
         Assert.Contains("\n" + Titled(GroupBreadcrumb(SettingsTab.Tts, "TTS output")) + "\n \n▸ on  " + SettingsMenu.ToggleDescribe(SettingsField.TtsOutput, true) + "\n  off " + SettingsMenu.ToggleDescribe(SettingsField.TtsOutput, false) + "\n", Output);
         // The status under the strip: the saved notice and the override warning, the tab's list under them with the cursor kept.
-        Assert.Contains("\n" + Head(SettingsTab.Tts) + "\n  · TTS output: off\n  ! " + SettingsMenu.OverrideNotice("X") + "\n▸ Output         off  (overridden by X)\n  Source", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Tts) + "\n  · TTS output: off\n  ! " + SettingsMenu.OverrideNotice("X") + "\n" + MenuLayout.Heading("Read aloud", 120) + "\n▸ Output         off  (overridden by X)\n  Source", Output);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
@@ -3475,8 +3480,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.False(_settings.Current.SttInput);
         // The refusal on the status line under the strip (a redraw repeats it, so no count), the toggle's own line too.
         Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n" + MenuLayout.Heading("Who and where", 120) + "\n▸ Profile", Output);
-        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ Output", Output);
-        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ Input", Output);
+        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n" + MenuLayout.Heading("Read aloud", 120) + "\n▸ Output", Output);
+        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n" + MenuLayout.Heading("Listening", 120) + "\n▸ Input", Output);
         Assert.Contains("  · Memory mode: read-only", Output);
         Assert.DoesNotContain(SettingsMenu.ProfileTitle + "\n", Output);
         Assert.Equal(0, pane.FlowRow);
@@ -3602,7 +3607,7 @@ public partial class SettingsMenuTests : IDisposable
     {
         _console.EmitAnsiSequences();
         var (menu, pane) = PaneMenu();
-        GoTo(SettingsTab.Stt); Push(Keys.Down, Keys.Down, Keys.Down);   // the STT tab, its fourth row (the destination second since 2026-10-02)
+        GoTo(SettingsTab.Stt); Down(Array.IndexOf(SettingsMenu.TabFields[(int)SettingsTab.Stt].ToArray(), SettingsField.SttWakePhrase));   // the STT tab's sixth field since 2026-10-10 (the fourth before; the destination second since 2026-10-02)
         Push(Keys.Enter);                       // Wake phrase, pre-filled
         _console.Input.PushText(" there");
         Push(Keys.Enter);                       // saved: the list again
@@ -3986,7 +3991,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.False(_settings.Current.TtsVoicePreview);
         Assert.Contains("\n" + Head(SettingsTab.Tts) + "\n  · TTS voice preview: off\n", Output);
-        Assert.Contains("\n  HTTP URL       http://localhost:8880/v1\n▸ Voice preview  off\n  Voice preset   neon\n  Voice          af_heart\n", Output);
+        Assert.Contains("\n  HTTP URL       http://localhost:8880/v1\n" + MenuLayout.Heading("Voices", 120) + "\n▸ Voice preview  off\n  Voice preset   neon\n  Voice          af_heart\n", Output);
         pane.Dispose();
     }
 
@@ -4494,11 +4499,11 @@ public partial class SettingsMenuTests : IDisposable
     {
         var (menu, pane) = PaneMenu();
         GoTo(SettingsTab.Sessions);                             // nine Rights (Common and Http for LLM since 2026-10-10; eight from 2026-10-04, LLM second; Claude and OpenAI before LLM from 2026-10-03; six from 2026-10-02, Docker before LLM; five from 2026-09-29, after STT; one from 2026-09-18, the wrap from General that morning)
-        Push(Keys.Down, Keys.Enter);                            // Session retention (days), the second row: typed
+        Push(Keys.Down, Keys.Down, Keys.Enter);                 // Session retention (days), the third row (under save thinking since 2026-10-10): typed
         _console.Input.PushText("30");
         Push(Keys.Enter);
-        Push(Keys.Down, Keys.Enter, Keys.Up, Keys.Enter);       // Session naming mode, the third row: the page opens on model-written (the default), first-line picked
-        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter);   // Session show name, the fourth row: the page opens on all-names (the default), none picked
+        Push(Keys.Down, Keys.Enter, Keys.Up, Keys.Enter);       // Session naming mode, the fourth row, past the Titles heading: the page opens on model-written (the default), first-line picked
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter);   // Session show name, the fifth row: the page opens on all-names (the default), none picked
         Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
@@ -4506,8 +4511,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("first-line", _settings.Current.SessionNamingMode);
         Assert.Equal("none", _settings.Current.SessionShowName);
         Assert.Equal(30, _settings.Current.SessionRetentionDays);
-        // The seven rows padded to the tab's own column (28) in the user's order (retention second, the show-name picker under the naming mode, the tool above the search cap, save thinking last since 2026-09-28), then the picker's page, then the notices on the status line.
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n  Session save thinking       off\n", 120);
+        // The seven rows padded to the tab's own column (28) in the user's order (the show-name picker under the naming mode, the tool above the search cap; save thinking last
+        // from 2026-09-28, under the logging switch since 2026-10-10), in three runs since 2026-10-10, then the picker's page, then the notices on the status line.
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Saving", 120) + "\n▸ Session logging             on\n  Session save thinking       off\n  Session retention (days)    forever\n" + MenuLayout.Heading("Titles", 120) + "\n  Session naming mode         model-written\n  Session show name           all-names\n" + MenuLayout.Heading("Search tool", 120) + "\n  Session tool                on\n  Session search max results  10 results\n", 120);
         Assert.Contains("\n" + Titled(Breadcrumb("Session naming mode")) + "\n \n  first-line     the session is named after its first sent line\n▸ model-written  the model writes a short title after the first turn\n" + Rule(120), Output);
         Assert.Contains("\n  · Session retention (days): 30 days\n", Output);
         Assert.Contains("\n▸ Session retention (days)    30 days\n", Output);
@@ -4521,8 +4527,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsTab.Common, (SettingsTab)1);        // the user's order, 2026-10-04 (LLM until 2026-10-10)
         Assert.Equal(SettingsTab.Http, (SettingsTab)2);        // right after Common, 2026-10-10
         Assert.Equal(SettingsTab.Embedded, (SettingsTab)3);   // third from 2026-10-04 until Http, 2026-10-10; second from 2026-09-29 (the user's order) until LLM, 2026-10-04
-        Assert.Equal([SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults, SettingsField.SessionSaveThinking], SettingsMenu.TabFields[(int)SettingsTab.Sessions]);
-        // Save thinking (2026-09-28): the Sessions tab's last row, a toggle off by default.
+        Assert.Equal([SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults], SettingsMenu.TabFields[(int)SettingsTab.Sessions]);
+        // Save thinking (2026-09-28): a toggle off by default; the Sessions tab's last row until 2026-10-10, under the logging switch since.
         Assert.True(SettingsMenu.IsToggle(SettingsField.SessionSaveThinking));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.SessionSaveThinking, new AppSettingsData(), ""));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.SessionSaveThinking, new AppSettingsData { SessionSaveThinking = true }, ""));
@@ -5203,7 +5209,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.True(_settings.Current.SttInput);
         Assert.Contains("\n" + Titled(GroupBreadcrumb(SettingsTab.Stt, "STT input")) + "\n \n  on  " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, true) + "\n▸ off " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, false) + "\n", Output);
-        Assert.Contains("\n" + Head(SettingsTab.Stt) + "\n  · STT input: on\n▸ Input                 on\n", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Stt) + "\n  · STT input: on\n" + MenuLayout.Heading("Listening", 120) + "\n▸ Input                 on\n", Output);
         pane.Dispose();
     }
 
@@ -5270,6 +5276,17 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsField.LlmUrl, SettingsMenu.TabSections[SettingsTab.Common][0].First);   // Connection over the URL (over the scan mode until 2026-10-10)
         Assert.Equal(SettingsField.LlmScanMode, SettingsMenu.TabSections[SettingsTab.Http][0].First);
         Assert.Equal(["Models", "Pictures", "Pace", "Tools and skills", "Memory", "Seeing"], SettingsMenu.TabSections[SettingsTab.BotChat].Select(s => s.Title));
+        // Every other tab's, later on 2026-10-10 (the user's ask: the same look everywhere, and the Anthropic tab saying whose row is whose).
+        Assert.Equal(["Server and models", "GPU and memory", "Vision and drafting"], SettingsMenu.TabSections[SettingsTab.Embedded].Select(s => s.Title));
+        Assert.Equal(["Containers", "Starting and stopping"], SettingsMenu.TabSections[SettingsTab.Docker].Select(s => s.Title));
+        Assert.Equal(["Claude Code", "Claude Code server", "/claude command", "Anthropic API"], SettingsMenu.TabSections[SettingsTab.Anthropic].Select(s => s.Title));
+        Assert.Equal(["Connection", "Requests"], SettingsMenu.TabSections[SettingsTab.OpenAI].Select(s => s.Title));
+        Assert.Equal(["Read aloud", "Voices"], SettingsMenu.TabSections[SettingsTab.Tts].Select(s => s.Title));
+        Assert.Equal(["Listening", "Wake word", "Interruptions"], SettingsMenu.TabSections[SettingsTab.Stt].Select(s => s.Title));
+        Assert.Equal(["Saving", "Titles", "Search tool"], SettingsMenu.TabSections[SettingsTab.Sessions].Select(s => s.Title));
+        Assert.Equal(["The panel", "Each call", "Threads and servers"], SettingsMenu.TabSections[SettingsTab.Advisors].Select(s => s.Title));
+        Assert.Equal(Enum.GetValues<SettingsTab>(), SettingsMenu.TabSections.Keys.Order());   // every tab headed
+        Assert.All(SettingsMenu.TabSections, tab => Assert.Equal(SettingsMenu.TabFields[(int)tab.Key][0], tab.Value[0].First));   // each opens on a heading
         Assert.All(SettingsMenu.TabSections, tab => Assert.All(tab.Value, s => Assert.Contains(s.First, SettingsMenu.TabFields[(int)tab.Key])));
         // The rows: a heading is null, every field once and in the tab's order.
         var general = SettingsMenu.TabRows((int)SettingsTab.General);
@@ -5277,7 +5294,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsField.Profile, general[1]);
         Assert.Equal(SettingsMenu.TabFields[(int)SettingsTab.General], general.OfType<SettingsField>());
         Assert.Equal(5, general.Count(r => r is null));
-        Assert.Equal(SettingsMenu.TabRows((int)SettingsTab.Tts).Count, SettingsMenu.TabFields[(int)SettingsTab.Tts].Count);   // no sections there
+        Assert.Equal(SettingsMenu.TabFields[(int)SettingsTab.Tts].Count + 2, SettingsMenu.TabRows((int)SettingsTab.Tts).Count);   // two headings there (none until later on 2026-10-10)
+        Assert.Equal(SettingsMenu.TabFields[(int)SettingsTab.Tts], SettingsMenu.TabRows((int)SettingsTab.Tts).OfType<SettingsField>());
         Assert.Equal(1, SettingsMenu.RowOf((int)SettingsTab.General, SettingsField.Profile));
         Assert.Equal(-1, SettingsMenu.RowOf((int)SettingsTab.General, SettingsField.LlmUrl));
         // The names: the tab's title off the front, the first letter raised; anything else whole.

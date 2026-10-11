@@ -7190,6 +7190,8 @@ internal sealed partial class ChatScreen
     /// list): how the model answers came along — LLM reasoning, its estimate, the sampling overrides (every model's, a deep copy)
     /// and the Hugging Face switch — and the Anthropic and OpenAI APIs' own rows beyond their switches (output caps, prompt
     /// caching, organization and project). Later on 2026-10-10 (the user's pick) <c>/claude</c>'s four rows, once they joined the Anthropic tab.
+    /// The pane has moved rows since (the Anthropic tab's executable above the server's switch, the Http tab's scan mode off the URL's
+    /// tab); this list keeps the order each row joined it in, pinned, as nothing reads it by position.
     /// </summary>
     public static readonly IReadOnlyList<(SettingsField Field, Action<AppSettingsData, AppSettingsData> Copy)> ProfileServerFields =
     [

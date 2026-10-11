@@ -15,14 +15,17 @@ public partial class SettingsMenuTests
         Assert.Equal("Advisors", SettingsMenu.TabTitles[tab]);
         Assert.Equal("Botchat", SettingsMenu.TabTitles[tab - 1]);
         Assert.Equal((5, 0), SettingsMenu.PlaceOf(SettingsTab.Advisors));
-        Assert.Equal(["Advisors enabled", "Advisor list", "Advisor context", "Advisor calls per turn", "Advisor tool iterations", "Advisor thread length", "Advisor embedded mode", "Advisor confirm"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
+        // The confirm under the iterations, in the Each call run, since later on 2026-10-10 (the user's ask; last until then).
+        Assert.Equal(["Advisors enabled", "Advisor list", "Advisor context", "Advisor calls per turn", "Advisor tool iterations", "Advisor confirm", "Advisor thread length", "Advisor embedded mode"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
+        Assert.Equal(["The panel", "Each call", "Threads and servers"], SettingsMenu.TabSections[SettingsTab.Advisors].Select(s => s.Title));
+        Assert.Equal([SettingsField.Advisors, SettingsField.AdvisorContext, SettingsField.AdvisorThreadPairs], SettingsMenu.TabSections[SettingsTab.Advisors].Select(s => s.First));
         Assert.Equal("Enabled", SettingsMenu.RowName(SettingsField.Advisors, "Advisors"));
         Assert.All(SettingsMenu.TabFields[tab], f => Assert.False(SettingsMenu.IsLlmField(f), f.ToString()));   // read at each call
         Assert.True(SettingsMenu.IsToggle(SettingsField.Advisors) && SettingsMenu.IsToggle(SettingsField.AdvisorConfirm));
         Assert.False(SettingsMenu.IsToggle(SettingsField.AdvisorList));
 
         var data = new AppSettingsData();
-        Assert.Equal(["off", "none", "brief", "2 calls", "4 round trips", "10 questions", "parent-server", "off"], SettingsMenu.TabFields[tab].Select(f => SettingsMenu.FieldValue(f, data, "C:\\p")));
+        Assert.Equal(["off", "none", "brief", "2 calls", "4 round trips", "off", "10 questions", "parent-server"],SettingsMenu.TabFields[tab].Select(f => SettingsMenu.FieldValue(f, data, "C:\\p")));
         Assert.Equal("none (text only)", SettingsMenu.AdvisorIterations(0));
         Assert.Equal("1 round trip", SettingsMenu.AdvisorIterations(1));
         Assert.Equal("1 question", SettingsMenu.AdvisorPairs(1));
@@ -171,7 +174,7 @@ public partial class SettingsMenuTests
         Push(Keys.Enter, Keys.Ctrl(ConsoleKey.A), Keys.Backspace);   // tool iterations
         _console.Input.PushText("0");
         Push(Keys.Enter);
-        Down(2);
+        Down(3);                                                     // past the confirm and the thread length (the confirm under the iterations since later on 2026-10-10)
         Push(Keys.Enter, Keys.Down, Keys.Enter);                     // embedded: multi-server
         Push(Keys.Escape);
 
