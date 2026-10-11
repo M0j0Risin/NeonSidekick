@@ -13,7 +13,8 @@ public static partial class SmokeChecks
     /// <c>KILL_ON_JOB_CLOSE</c> set through the extended-limit struct, the flags read back through the same struct (which
     /// proves the source-generated marshalling kept its layout under AOT), and the job closed. No process is put in it. Since
     /// 2026-10-11 (code review) the attribute list the headless browser's start in the job hands <c>CreateProcessW</c> too
-    /// (<see cref="ChildJob.ProbeAttributeList"/>), made with a handle list and deleted; the browser probes start one in it.
+    /// (<see cref="ChildJob.ProbeAttributeList"/>), made with a handle list and deleted; since code review later that day also .NET's
+    /// process-start lock reached, a handle made inheritable and private again, and <c>STARTUPINFOEXW</c>'s size. The browser probes start one in it.
     /// </summary>
     public static SmokeCheck ProbeJobObject()
     {
@@ -48,8 +49,8 @@ public static partial class SmokeChecks
                 // 2026-10-11 (code review): the browser's start in the job, its attribute list made and given a handle list.
                 var (listed, listError) = ChildJob.ProbeAttributeList();
                 return listed
-                    ? new SmokeCheck(name, true, string.Create(CultureInfo.InvariantCulture, $"limit flags 0x{flags:X4}; a handle list for a start in it"))
-                    : new SmokeCheck(name, false, "no handle list for a start in the job: " + listError);
+                    ? new SmokeCheck(name, true, string.Create(CultureInfo.InvariantCulture, $"limit flags 0x{flags:X4}; a start in it prepared (process-start lock, inheritable handle, handle list)"))
+                    : new SmokeCheck(name, false, "a start in the job not prepared: " + listError);
             }
             finally
             {
@@ -176,14 +177,7 @@ public static partial class SmokeChecks
         }
         finally
         {
-            try
-            {
-                Directory.Delete(root, recursive: true);
-            }
-            catch (IOException)
-            {
-                // a temp folder left behind is harmless
-            }
+            Files.WorkingDirectory.DeleteDirectoryQuietly(root);
         }
     }
 
@@ -263,14 +257,7 @@ public static partial class SmokeChecks
         }
         finally
         {
-            try
-            {
-                Directory.Delete(llama, recursive: true);
-            }
-            catch (IOException)
-            {
-                // a temp folder left behind is harmless
-            }
+            Files.WorkingDirectory.DeleteDirectoryQuietly(llama);
         }
     }
 }

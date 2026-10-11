@@ -158,7 +158,19 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     /// Elsewhere (code review, the macOS build) its <see cref="SingletonLockName"/> names a browser on this machine still running
     /// (<see cref="SingletonHeld"/>).</para>
     /// </summary>
-    public static bool ProfileInUse(string userDataDirectory, int looks = HeldLooks)
+    public static bool ProfileInUse(string userDataDirectory, int looks = HeldLooks) =>
+        ProfileInUseAsync(userDataDirectory, looks, CancellationToken.None).GetAwaiter().GetResult();
+
+    /// <summary><see cref="ProfileInUseAsync(string, int, CancellationToken)"/> with its full <see cref="HeldLooks"/>.</summary>
+    public static Task<bool> ProfileInUseAsync(string userDataDirectory, CancellationToken cancellationToken) =>
+        ProfileInUseAsync(userDataDirectory, HeldLooks, cancellationToken);
+
+    /// <summary>
+    /// <see cref="ProfileInUse(string, int)"/> for the runs, whose waits between looks are delays, not a pool thread asleep (code review,
+    /// later on 2026-10-11). The one loop: the smoke's synchronous form waits on this one (code review, later still: two copies of it
+    /// could drift apart between the smoke and the runs).
+    /// </summary>
+    public static async Task<bool> ProfileInUseAsync(string userDataDirectory, int looks, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(userDataDirectory);
         for (int look = 1; ; look++)
@@ -169,29 +181,6 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             }
 
             if (look >= looks)
-            {
-                return true;
-            }
-
-            Thread.Sleep(LookInterval);
-        }
-    }
-
-    /// <summary>
-    /// <see cref="ProfileInUse(string, int)"/> for the runs, whose waits between looks are delays, not a pool thread asleep (code review,
-    /// later on 2026-10-11).
-    /// </summary>
-    public static async Task<bool> ProfileInUseAsync(string userDataDirectory, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(userDataDirectory);
-        for (int look = 1; ; look++)
-        {
-            if (LookOnce(userDataDirectory) is { } held)
-            {
-                return held;
-            }
-
-            if (look >= HeldLooks)
             {
                 return true;
             }
@@ -254,15 +243,29 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         }
     }
 
-    /// <summary>Whether <paramref name="process"/> is a Chromium browser by its name: Edge, Chrome, Brave or Chromium.</summary>
+    /// <summary>Whether <paramref name="process"/> is a Chromium browser's main process by its name: Edge, Chrome, Brave or Chromium.</summary>
     private static bool IsBrowser(Process process) => IsBrowserName(process.ProcessName);
 
-    /// <summary>Whether a process name is a Chromium browser's (<c>Microsoft Edge</c>, <c>msedge</c>, <c>Google Chrome</c>, <c>chrome</c>, <c>Brave Browser</c>, <c>Chromium</c>…). Pure.</summary>
+    /// <summary>
+    /// The main process names of the browsers <see cref="Candidates"/> finds: macOS's app names, and the executables' names elsewhere
+    /// (Linux's <c>chromium-browser</c> cut to the kernel's 15 characters as well).
+    /// </summary>
+    private static readonly HashSet<string> BrowserNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Microsoft Edge", "Google Chrome", "Brave Browser", "Chromium",
+        "msedge", "chrome", "brave", "chromium", "chromium-browser", "chromium-browse",
+    };
+
+    /// <summary>
+    /// Whether a process name is a Chromium browser's main process (<c>Microsoft Edge</c>, <c>msedge</c>, <c>Google Chrome</c>, <c>chrome</c>,
+    /// <c>Brave Browser</c>, <c>Chromium</c>…): the whole name, not a part of it (code review, later on 2026-10-11: "edge" in <c>Knowledge…</c>,
+    /// "chrome" in <c>Google Chrome Helper</c> or <c>chrome_crashpad_handler</c>, a process that got a dead lock's id, blocked every run
+    /// until it ended; the lock names the browser's main process, which none of those is). Pure.
+    /// </summary>
     public static bool IsBrowserName(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
-        return name.Contains("edge", StringComparison.OrdinalIgnoreCase) || name.Contains("chrome", StringComparison.OrdinalIgnoreCase)
-            || name.Contains("brave", StringComparison.OrdinalIgnoreCase) || name.Contains("chromium", StringComparison.OrdinalIgnoreCase);
+        return BrowserNames.Contains(name.Trim());
     }
 
     /// <summary>
@@ -853,22 +856,34 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
 
     /// <summary>
     /// The browser started as <see cref="RunProcessAsync"/> describes: on Windows in the app's job with stderr to a file in
-    /// <paramref name="userData"/> (read when the run is over, then deleted); elsewhere by <c>Process.Start</c> with both streams
-    /// piped, stdout drained.
+    /// <paramref name="userData"/> (read when the run is over); elsewhere by <c>Process.Start</c> with both streams piped, stdout
+    /// drained. The file is made delete-on-close and the app holds it open for the run (code review, later on 2026-10-11: deleted
+    /// only by the read, it stayed behind for good when the app crashed, was killed or closed mid-fetch), so it goes with the last
+    /// handle: the read's, or the app's and the browser's however they end.
     /// </summary>
     private static Started Start(string executable, IReadOnlyList<string> arguments, string userData)
     {
         if (OperatingSystem.IsWindows())
         {
             string log = Path.Combine(userData, "stderr-" + Guid.NewGuid().ToString("N") + ".log");
+            FileStream held;
+            try
+            {
+                held = new FileStream(log, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.DeleteOnClose);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return new Started(null, Nothing, false, "could not create " + log + " (" + ex.Message + ")");
+            }
+
             var process = ChildJob.Start(executable, arguments, log, out bool inJob, out string error);
             if (process is null)
             {
-                Files.WorkingDirectory.DeleteQuietly(log);
+                held.Dispose();
                 return new Started(null, Nothing, false, error);
             }
 
-            return new Started(process, () => ReadStderrAsync(log), inJob, "");
+            return new Started(process, () => ReadStderrAsync(held), inJob, "");
         }
 
         var start = new ProcessStartInfo(executable)
@@ -904,22 +919,22 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
 
     private static Task<string> Nothing() => Task.FromResult("");
 
-    /// <summary>The stderr file of a browser started on Windows, read as it stands (the run is over), then deleted.</summary>
-    private static async Task<string> ReadStderrAsync(string log)
+    /// <summary>The stderr file of a browser started on Windows, read through the app's own handle as it stands (the run is over), then closed, which deletes it.</summary>
+    private static async Task<string> ReadStderrAsync(FileStream held)
     {
         try
         {
-            using var stream = new FileStream(log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            using var reader = new StreamReader(stream, new UTF8Encoding(false));
+            held.Position = 0;
+            using var reader = new StreamReader(held, new UTF8Encoding(false), detectEncodingFromByteOrderMarks: false, leaveOpen: true);
             return await reader.ReadToEndAsync(CancellationToken.None).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ObjectDisposedException)
         {
             return "";
         }
         finally
         {
-            Files.WorkingDirectory.DeleteQuietly(log);
+            await held.DisposeAsync().ConfigureAwait(false);
         }
     }
 

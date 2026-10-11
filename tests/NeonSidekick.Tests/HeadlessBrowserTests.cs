@@ -178,6 +178,13 @@ public class HeadlessBrowserTests
     [InlineData("Chromium", true)]
     [InlineData("testhost", false)]
     [InlineData("zsh", false)]
+    // Code review, later on 2026-10-11: the whole name, so a helper or another program with "edge" or "chrome" in it is no browser.
+    [InlineData("Google Chrome Helper", false)]
+    [InlineData("Google Chrome Helper (Renderer)", false)]
+    [InlineData("chrome_crashpad_handler", false)]
+    [InlineData("Microsoft Edge Helper", false)]
+    [InlineData("KnowledgeBase", false)]
+    [InlineData("msedgewebview2", false)]
     public void IsBrowserName_IsAChromiumBrowsers(string name, bool browser)
     {
         Assert.Equal(browser, HeadlessBrowser.IsBrowserName(name));

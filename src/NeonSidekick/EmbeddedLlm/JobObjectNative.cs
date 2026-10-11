@@ -155,6 +155,11 @@ internal static partial class JobObjectNative
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool SetHandleInformation(nint handle, uint mask, uint flags);
 
+    /// <summary>The smoke's read-back of <see cref="SetHandleInformation"/> (code review, later on 2026-10-11).</summary>
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool GetHandleInformation(nint handle, out uint flags);
+
     /// <summary>The thread's previous suspend count, or <c>0xFFFFFFFF</c> on failure.</summary>
     [LibraryImport("kernel32.dll", SetLastError = true)]
     internal static partial uint ResumeThread(nint thread);

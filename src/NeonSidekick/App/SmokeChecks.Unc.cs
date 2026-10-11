@@ -63,7 +63,7 @@ public static partial class SmokeChecks
         }
         finally
         {
-            try { Directory.Delete(folder, recursive: true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* a temp folder left behind */ }
+            Files.WorkingDirectory.DeleteDirectoryQuietly(folder);
         }
     }
 }

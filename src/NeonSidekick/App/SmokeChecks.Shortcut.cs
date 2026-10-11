@@ -45,14 +45,7 @@ public static partial class SmokeChecks
         }
         finally
         {
-            try
-            {
-                Directory.Delete(folder, recursive: true);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // A leftover temp folder is harmless.
-            }
+            Files.WorkingDirectory.DeleteDirectoryQuietly(folder);
         }
     }
 
@@ -104,14 +97,7 @@ public static partial class SmokeChecks
         }
         finally
         {
-            try
-            {
-                Directory.Delete(folder, recursive: true);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // A leftover temp folder is harmless.
-            }
+            Files.WorkingDirectory.DeleteDirectoryQuietly(folder);
         }
     }
 }

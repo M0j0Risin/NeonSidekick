@@ -52,9 +52,9 @@ public static class ChildJob
     /// child it started before the assignment — Edge's crash handler, a copy relaunched of itself — was outside the job, outliving
     /// the app holding the profile folder; a snapshot swept in after still missed what those started in turn). Created suspended,
     /// assigned, then let run: every process it ever starts is born in the job. No window; stdin and stdout on <c>NUL</c>, stderr
-    /// into <paramref name="stderrPath"/> (a file, so a handle some other start inherits in the moment they are inheritable holds
-    /// up no pipe's end), and those the only handles it inherits (<c>PROC_THREAD_ATTRIBUTE_HANDLE_LIST</c>, so it takes none of
-    /// the app's). Null with <paramref name="error"/> when it could not start; <paramref name="inJob"/> false (logged) when it runs
+    /// into <paramref name="stderrPath"/> (opened, or made when missing), and those the only handles it inherits
+    /// (<c>PROC_THREAD_ATTRIBUTE_HANDLE_LIST</c>, so it takes none of the app's). They are inheritable only under
+    /// <see cref="ProcessStartLock"/>, so no <c>Process.Start</c> elsewhere in the app takes them either. Null with <paramref name="error"/> when it could not start; <paramref name="inJob"/> false (logged) when it runs
     /// outside the job. The headless browser's own process-start site, moved here from its <c>Process.Start</c>.
     /// </summary>
     [SupportedOSPlatform("windows")]
@@ -88,7 +88,8 @@ public static class ChildJob
 
         try
         {
-            log = File.OpenHandle(stderrPath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+            // OpenOrCreate: the caller may hold the file already, delete-on-close (the headless browser's, so it never stays behind).
+            log = File.OpenHandle(stderrPath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -99,11 +100,22 @@ public static class ChildJob
 
         nint list = 0;
         bool listMade = false;
+        object? processStart = ProcessStartLock();
+        bool locked = false;
         try
         {
             nint* handles = stackalloc nint[2];
             handles[0] = nul.DangerousGetHandle();
             handles[1] = log.DangerousGetHandle();
+
+            // The handles are inheritable only while .NET's own process-start lock is held, and made private again before it is let go
+            // (code review, later on 2026-10-11): Process.Start passes bInheritHandles=TRUE with no handle list, so a run_command, an MCP
+            // server or llama-server starting on another thread in that window took the stderr file's write handle for its whole life.
+            if (processStart is not null)
+            {
+                Monitor.Enter(processStart, ref locked);
+            }
+
             if (!JobObjectNative.SetHandleInformation(handles[0], JobObjectNative.HandleFlagInherit, JobObjectNative.HandleFlagInherit)
                 || !JobObjectNative.SetHandleInformation(handles[1], JobObjectNative.HandleFlagInherit, JobObjectNative.HandleFlagInherit))
             {
@@ -141,10 +153,23 @@ public static class ChildJob
                 return null;
             }
 
+            Private(handles[0], handles[1]);
+            if (locked)
+            {
+                Monitor.Exit(processStart!);
+                locked = false;
+            }
+
             return Launch(job, started, out inJob, out error);
         }
         finally
         {
+            if (locked)
+            {
+                Private(nul.DangerousGetHandle(), log.DangerousGetHandle());
+                Monitor.Exit(processStart!);
+            }
+
             if (listMade)
             {
                 JobObjectNative.DeleteProcThreadAttributeList(list);
@@ -177,7 +202,7 @@ public static class ChildJob
                 }
             }
 
-            Process process;
+            Process? process = null;
             try
             {
                 process = Process.GetProcessById((int)started.ProcessId);
@@ -185,6 +210,7 @@ public static class ChildJob
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
             {
+                process?.Dispose();   // found but its handle refused (code review, 2026-10-11): not left to the finalizer
                 JobObjectNative.TerminateProcess(started.Process, 1);
                 error = "could not hold the started process (" + ex.Message + ")";
                 return null;
@@ -206,6 +232,42 @@ public static class ChildJob
             JobObjectNative.CloseHandle(started.Process);
         }
     }
+
+    /// <summary>Takes the inherit flag off handles made inheritable for one start.</summary>
+    [SupportedOSPlatform("windows")]
+    private static void Private(nint first, nint second)
+    {
+        JobObjectNative.SetHandleInformation(first, JobObjectNative.HandleFlagInherit, 0);
+        JobObjectNative.SetHandleInformation(second, JobObjectNative.HandleFlagInherit, 0);
+    }
+
+    /// <summary>
+    /// <see cref="Process"/>'s private <c>s_createProcessLock</c>, which every <c>Process.Start</c> on Windows holds around its handles and
+    /// <c>CreateProcess</c> (checked in .NET 10.0.11), reached through an <see cref="UnsafeAccessorAttribute"/> (no reflection; it binds
+    /// under AOT). Null (logged once) where a runtime no longer has it: the start then runs unlocked, as it did before.
+    /// </summary>
+    internal static object? ProcessStartLock()
+    {
+        try
+        {
+            return CreateProcessLock(null);
+        }
+        catch (MissingMemberException ex)
+        {
+            if (!_lockMissingLogged)
+            {
+                _lockMissingLogged = true;
+                DiagnosticLog.Warn(Category, "No process-start lock to share with Process.Start: " + ex.Message);
+            }
+
+            return null;
+        }
+    }
+
+    private static bool _lockMissingLogged;
+
+    [UnsafeAccessor(UnsafeAccessorKind.StaticField, Name = "s_createProcessLock")]
+    private static extern ref object CreateProcessLock(Process? process);
 
     /// <summary>
     /// The command line for <paramref name="executable"/> and <paramref name="arguments"/> as <c>ProcessStartInfo.ArgumentList</c> writes
@@ -257,9 +319,11 @@ public static class ChildJob
     }
 
     /// <summary>
-    /// The attribute list <see cref="Start(string, IReadOnlyList{string}, string, out bool, out string)"/> hands <c>CreateProcessW</c>,
-    /// made, given a handle list and deleted — the smoke check's proof that the calls resolve and take their sizes under AOT, no
-    /// process started. False and why when a step fails, and always off Windows.
+    /// What <see cref="Start(string, IReadOnlyList{string}, string, out bool, out string)"/> needs before <c>CreateProcessW</c>, short of
+    /// starting anything — the smoke check's proof that it binds under AOT: .NET's process-start lock reached (<see cref="ProcessStartLock"/>),
+    /// a handle made inheritable and read back so and private again, <c>STARTUPINFOEXW</c> at its Windows size, and the attribute list made,
+    /// given that handle and deleted. <c>CreateProcessW</c> itself, the job and the resume are proven by the browser probes, which start
+    /// one through it (code review, later on 2026-10-11: this said more than it checked). False and why when a step fails, and always off Windows.
     /// </summary>
     internal static unsafe (bool Ok, string Error) ProbeAttributeList()
     {
@@ -268,8 +332,31 @@ public static class ChildJob
             return (false, "not Windows");
         }
 
+        if (ProcessStartLock() is null)
+        {
+            return (false, "no process-start lock (Process.s_createProcessLock)");
+        }
+
+        int expected = IntPtr.Size == 8 ? 112 : 72;
+        if (sizeof(JobObjectNative.StartupInfoEx) != expected)
+        {
+            return (false, string.Create(CultureInfo.InvariantCulture, $"STARTUPINFOEXW is {sizeof(JobObjectNative.StartupInfoEx)} bytes, expected {expected}"));
+        }
+
         using var nul = File.OpenHandle("NUL", FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
         nint handle = nul.DangerousGetHandle();
+        if (!JobObjectNative.SetHandleInformation(handle, JobObjectNative.HandleFlagInherit, JobObjectNative.HandleFlagInherit)
+            || !JobObjectNative.GetHandleInformation(handle, out uint flags) || (flags & JobObjectNative.HandleFlagInherit) == 0)
+        {
+            return (false, LastError("SetHandleInformation (inherit)"));
+        }
+
+        Private(handle, handle);
+        if (!JobObjectNative.GetHandleInformation(handle, out flags) || (flags & JobObjectNative.HandleFlagInherit) != 0)
+        {
+            return (false, LastError("SetHandleInformation (private)"));
+        }
+
         nint size = 0;
         JobObjectNative.InitializeProcThreadAttributeList(0, 1, 0, ref size);
         if (size <= 0)

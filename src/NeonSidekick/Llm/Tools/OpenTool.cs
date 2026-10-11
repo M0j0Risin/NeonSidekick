@@ -28,7 +28,9 @@ namespace NeonSidekick.Llm.Tools;
 ///
 /// <para><b>The images folder</b> (2026-10-11, code review: the description sends the model here to show a picture, and the app
 /// keeps its camera, screen, ComfyUI and pasted pictures in the profile's images folder, outside the working directory): with
-/// <c>images</c> given, a full path in that folder opens there, as <c>file_info</c> reads one (<see cref="FileTool.FilesFor"/>).</para>
+/// <c>images</c> given, a full path in that folder opens there, as <c>file_info</c> reads one (<see cref="FileTool.FilesFor"/>) — a
+/// picture or a folder only (code review, later that day: the shell would run any other file found there,
+/// <see cref="FileText.OpenImagesFolderNotPicture"/>), and the schema's <c>path</c> says a full path there works.</para>
 /// </summary>
 public sealed class OpenTool : FileTool
 {
@@ -52,6 +54,29 @@ public sealed class OpenTool : FileTool
           "type": "object",
           "properties": {
             "path": { "type": "string", "description": "The file or folder to open, relative to the working directory (or to the share when share is given). Leave it out to open the working directory (or the share's root) itself." },
+            "share": { "type": "string", "description": "A UNC share's name (unc_shares lists them) to open the file or folder there instead of the working directory; not needed when path is a full \\\\server\\share path under one." }
+          }
+        }
+        """);
+
+    // The images folder's (code review, 2026-10-11, as file_info's): path may be a full path there too, so the schema and the
+    // description no longer disagree.
+    private static readonly JsonElement ImagesSchema = ToolSchema.Parse(
+        """
+        {
+          "type": "object",
+          "properties": {
+            "path": { "type": "string", "description": "The file or folder to open, relative to the working directory, or a full path in the user's images folder. Leave it out to open the working directory itself." }
+          }
+        }
+        """);
+
+    private static readonly JsonElement ImagesShareSchema = ToolSchema.Parse(
+        """
+        {
+          "type": "object",
+          "properties": {
+            "path": { "type": "string", "description": "The file or folder to open, relative to the working directory (or to the share when share is given), or a full path in the user's images folder. Leave it out to open the working directory (or the share's root) itself." },
             "share": { "type": "string", "description": "A UNC share's name (unc_shares lists them) to open the file or folder there instead of the working directory; not needed when path is a full \\\\server\\share path under one." }
           }
         }
@@ -100,7 +125,7 @@ public sealed class OpenTool : FileTool
 
     private static string Base => OperatingSystem.IsMacOS() ? MacBaseDescription : BaseDescription;
 
-    public override JsonElement JsonSchema => SharesOffered ? ShareSchema : Schema;
+    public override JsonElement JsonSchema => Images is null ? (SharesOffered ? ShareSchema : Schema) : (SharesOffered ? ImagesShareSchema : ImagesSchema);
 
     /// <summary>Whether a UNC share can be named now: the door given, <c>UNC tools</c> on, a share offered.</summary>
     private bool SharesOffered => _unc is not null && _effective is not null && _unc.IsOffered(_effective());
@@ -110,6 +135,14 @@ public sealed class OpenTool : FileTool
     /// <summary><paramref name="path"/> opened in <paramref name="files"/> (the working directory or a share's), a picture through <see cref="_openPicture"/>, and the result's line.</summary>
     private string OpenIn(WorkingDirectory files, string path)
     {
+        // In the images folder only pictures and folders open (code review, 2026-10-11): the folder is reached for the app's own
+        // pictures, and the shell's "open" runs a .bat, .lnk or .exe that ended up there.
+        if (ReferenceEquals(files, Images) && files.Resolve(path, forWrite: false, out string target) == FileOutcome.Ok
+            && File.Exists(target) && !ImageFile.IsImagePath(target))
+        {
+            return FileText.OpenImagesFolderNotPicture(path);
+        }
+
         string? where = null;
         var result = files.Open(path, full =>
         {
@@ -121,13 +154,6 @@ public sealed class OpenTool : FileTool
 
             _opener(full);
         });
-
-        // FileText.InImagesFolder names open among the tools that reach the folder: one built without it says outside instead of
-        // sending the model back to itself (code review, 2026-10-11).
-        if (result.Outcome == FileOutcome.InImagesFolder && Images is null)
-        {
-            result = result with { Outcome = FileOutcome.OutsideRoot };
-        }
 
         return FileText.Opened(result, where);
     }

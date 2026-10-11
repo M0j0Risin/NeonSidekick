@@ -87,7 +87,7 @@ Every path is relative to the working directory; nothing outside it can be reach
 | `delete` | `path` | Deletes a file or folder for good. `.git`, anything in it and a folder holding one are refused. |
 | `zip` | `path, to?, overwrite?` | Packs a file or folder into a `.zip`, beside it by default. A folder's entries are written sorted by path, so the same folder makes the same zip on Windows and a Mac. |
 | `unzip` | `path, to?, overwrite?` | Extracts a `.zip` into a folder, all or nothing. |
-| `open` | `path?, share?` | Opens a file in your own editor or viewer, or a folder in Explorer (Finder on a Mac; the working directory by default), a full path in the profile's images folder too. A picture opens where a double-click on one would (*Image viewer*): the built-in viewer by default, without taking the keyboard from the chat. `share` (or a full `\\server\share` path) opens one on a UNC share; a network runas share is refused. |
+| `open` | `path?, share?` | Opens a file in your own editor or viewer, or a folder in Explorer (Finder on a Mac; the working directory by default), a full path in the profile's images folder too (a picture or a folder there; any other file in it is refused, so nothing found there is run). A picture opens where a double-click on one would (*Image viewer*): the built-in viewer by default, without taking the keyboard from the chat. `share` (or a full `\\server\share` path) opens one on a UNC share; a network runas share is refused. |
 | `convert_to_pdf` | `path? \| url? \| markdown?, title?, to?, overwrite?, landscape?, paper?` | Makes a PDF in the working directory from a file, a web page (needs *Web tools* too) or Markdown it writes (see Making PDFs). Not in plan mode. |
 
 ### GitLib

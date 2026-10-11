@@ -205,8 +205,20 @@ public sealed class ImageStoreTests : IDisposable
         Assert.Equal(new[] { saved }, pictures);
         Assert.Empty(opened);
         Assert.Contains(FileText.ImagesFolderInfoSentence(_images.Root), open.Description, StringComparison.Ordinal);
-        // Without the folder, refused as outside: the images-folder sentence names open itself (code review, later that day).
-        Assert.Equal(FileText.OutsideRoot(saved), new OpenTool(_files, opened.Add).Describe(saved));
+        Assert.Contains("or a full path in the user's images folder", open.JsonSchema.GetRawText(), StringComparison.Ordinal);
+
+        // Code review, later that day: there only pictures and folders open, never a file the shell would run.
+        string script = Path.Combine(_imagesRoot, "comfy_images", "run.bat");
+        File.WriteAllText(script, "echo hi");
+        Assert.Equal(FileText.OpenImagesFolderNotPicture(script), ToolAnswers.Text(await open.InvokeAsync(Args(("path", script)))));
+        Assert.Empty(opened);
+        Assert.DoesNotContain("Error", ToolAnswers.Text(await open.InvokeAsync(Args(("path", Path.Combine(_imagesRoot, "comfy_images"))))), StringComparison.Ordinal);
+        Assert.Equal(new[] { Path.Combine(_imagesRoot, "comfy_images") }, opened);
+
+        // Without the folder, the refusal sends the model to the tools that say they reach it, not to open itself.
+        var bare = new OpenTool(_files, opened.Add);
+        Assert.Equal(FileText.InImagesFolder(saved), bare.Describe(saved));
+        Assert.DoesNotContain("images folder", bare.JsonSchema.GetRawText(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -260,7 +272,7 @@ public sealed class ImageStoreTests : IDisposable
         _files.ImagesFolder = null;
         Assert.Equal(FileOutcome.OutsideRoot, _files.Resolve(saved, forWrite: false, out _));
         Assert.Equal(
-            "Error: 'C:\\p\\images\\a.png' is in the user's images folder, outside the working directory: only search_files, file_info, open, view_image, image_info and image_edit reach it, by full path",
+            "Error: 'C:\\p\\images\\a.png' is in the user's images folder, outside the working directory, and this tool cannot reach it; the tools that can say so in their descriptions (a full path in the user's images folder, or a saved picture's full path)",
             FileText.InImagesFolder("C:\\p\\images\\a.png"));
     }
 

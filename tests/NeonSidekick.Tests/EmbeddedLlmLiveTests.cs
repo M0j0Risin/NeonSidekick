@@ -177,6 +177,33 @@ public class EmbeddedLlmLiveTests
         WorkingDirectory.DeleteQuietly(log);
     }
 
+    /// <summary>
+    /// Code review, later on 2026-10-11: the stderr file the caller already holds delete-on-close (the headless browser's, so a crash
+    /// leaves none behind) is written through and gone with the caller's handle; and the start shares .NET's process-start lock, which
+    /// the smoke's preparation reaches too.
+    /// </summary>
+    [WindowsFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void Start_IntoAHeldDeleteOnCloseFile_UnderTheProcessStartLock()
+    {
+        Assert.NotNull(ChildJob.ProcessStartLock());
+        var (prepared, why) = ChildJob.ProbeAttributeList();
+        Assert.True(prepared, why);
+
+        string log = Path.Combine(Path.GetTempPath(), "NeonSidekick.tests." + Guid.NewGuid().ToString("N") + ".log");
+        var held = new FileStream(log, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.DeleteOnClose);
+        using (held)
+        {
+            using var process = ChildJob.Start(0, Path.Combine(Environment.SystemDirectory, "cmd.exe"), ["/c", "echo kept 1>&2"], log, out _, out string error);
+            Assert.True(process is not null, error);
+            Assert.True(process!.WaitForExit(10_000));
+            using var reader = new StreamReader(held, leaveOpen: true);
+            Assert.Contains("kept", reader.ReadToEnd(), StringComparison.Ordinal);
+        }
+
+        Assert.False(File.Exists(log));
+    }
+
     /// <summary>The command line as the C runtime splits it back into the arguments (code review, 2026-10-11): <c>ProcessStartInfo.ArgumentList</c>'s quoting.</summary>
     [Fact]
     public void CommandLine_QuotesEachArgument_AsTheCRuntimeSplitsIt()

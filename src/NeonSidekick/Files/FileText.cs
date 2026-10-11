@@ -48,8 +48,16 @@ public static class FileText
 
     public static string OutsideRoot(string path) => $"Error: '{path}' is outside the working directory; every path must stay inside it";
 
-    /// <summary>A path refused as outside that lies in the profile's images folder (<see cref="FileOutcome.InImagesFolder"/>, 2026-10-09): the tools that do reach it. Pinned.</summary>
-    public static string InImagesFolder(string path) => $"Error: '{path}' is in the user's images folder, outside the working directory: only search_files, file_info, open, view_image, image_info and image_edit reach it, by full path";
+    /// <summary>
+    /// A path refused as outside that lies in the profile's images folder (<see cref="FileOutcome.InImagesFolder"/>, 2026-10-09): where the
+    /// way in is. It named six tools until code review on 2026-10-11, whatever this turn offered (the picture tools are off by default,
+    /// <c>set_splash_image</c> was missing, and <c>open</c> built without the folder sent the model back to itself); now it points at the
+    /// descriptions, which name the folder (or a saved picture's full path) only on the tools that reach it. Pinned.
+    /// </summary>
+    public static string InImagesFolder(string path) => $"Error: '{path}' is in the user's images folder, outside the working directory, and this tool cannot reach it; the tools that can say so in their descriptions (a full path in the user's images folder, or a saved picture's full path)";
+
+    /// <summary><c>open</c> on a file in the images folder that is no picture (code review, 2026-10-11): the shell would run it. Pinned.</summary>
+    public static string OpenImagesFolderNotPicture(string path) => $"Error: '{path}' is not a picture: in the user's images folder open shows only pictures and folders";
 
     /// <summary>
     /// What <c>search_files</c>' description adds while the images folder is offered (2026-10-09, the user's call: a model asked for

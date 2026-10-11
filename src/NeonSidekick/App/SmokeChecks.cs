@@ -1120,7 +1120,7 @@ public static partial class SmokeChecks
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+            Files.WorkingDirectory.DeleteDirectoryQuietly(dir);
         }
     }
 
