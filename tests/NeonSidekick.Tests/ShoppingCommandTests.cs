@@ -38,7 +38,7 @@ public sealed class ShoppingCommandTests : IDisposable
     }
 
     private Task<IReadOnlyList<string>> Run(string args, Func<string, CancellationToken, Task<bool>>? confirm = null, Func<string, string, CancellationToken, Task<string>>? print = null) =>
-        ShoppingCommandRunner.RunAsync(_list, ShoppingCommand.Parse(args), _files, confirm, print, CancellationToken.None);
+        ShoppingCommandRunner.RunAsync(_list, ShoppingCommand.Parse(args), _files, confirm, print, CancellationToken.None, time: _time);
 
     [Theory]
     [InlineData("", ShoppingVerb.Pane, "")]
@@ -133,14 +133,19 @@ public sealed class ShoppingCommandTests : IDisposable
         await Run("add Bread, Soy milk, Eggs");
         await Run("check eggs");
 
-        string path = Path.Combine(_files.Root, ShoppingText.ExportFileName);
+        // A file per export, named for the local time (2026-10-11): the next one a minute on is a second file, the first kept.
+        string path = Path.Combine(_files.Root, ShoppingText.ExportFileName(_time.GetLocalNow()));
+        Assert.Equal("shopping-list-" + _time.GetLocalNow().ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture) + ".md", Path.GetFileName(path));
         Assert.Equal([ShoppingText.Exported(path, 2)], await Run("export"));
-        // Compact by default (2026-10-11): a line per group, a hard break ending each; verbose is the roomy form it was.
-        const string Compact = "**Shopping list — H-E-B** · 2 items\\\n**Dairy:** Soy milk (guess)\\\n**Unplaced:** Bread\n";
+        // Compact by default: the store's heading, then a line per group, a hard break ending each but the last; verbose is the roomy form.
+        const string Compact = "## Shopping List — H-E-B\n\n**Dairy:** Soy milk (guess)\\\n**Unplaced:** Bread\n";
         const string Verbose = "# Shopping list — H-E-B\n\n## Dairy\n\n- [ ] Soy milk (guess)\n\n## Unplaced\n\n- [ ] Bread\n";
         Assert.Equal(Compact, File.ReadAllText(path));
-        Assert.Equal([ShoppingText.Exported(path, 2)], await Run("export verbose"));
-        Assert.Equal(Verbose, File.ReadAllText(path));
+        _time.Advance(TimeSpan.FromMinutes(1));
+        string later = Path.Combine(_files.Root, ShoppingText.ExportFileName(_time.GetLocalNow()));
+        Assert.Equal([ShoppingText.Exported(later, 2)], await Run("export verbose"));
+        Assert.Equal(Verbose, File.ReadAllText(later));
+        Assert.Equal(Compact, File.ReadAllText(path));
 
         (string Markdown, string Title)? printed = null;
         Task<string> Printer(string md, string title, CancellationToken _) { printed = (md, title); return Task.FromResult("Printed 1 page."); }
@@ -153,7 +158,7 @@ public sealed class ShoppingCommandTests : IDisposable
         // Another store, named: its own walk (nothing placed there yet), the active store unchanged.
         await Run("store add Costco");
         Assert.Equal(["Printed 1 page."], await Run("print Costco", print: Printer));
-        Assert.Equal(("**Shopping list — Costco** · 2 items\\\n**Unplaced:** Bread · Soy milk\n", "Shopping list — Costco"), printed);
+        Assert.Equal(("## Shopping List — Costco\n\n**Unplaced:** Bread · Soy milk\n", "Shopping list — Costco"), printed);
         Assert.Equal("H-E-B", _list.StoreFor(null, out _)!.Name);
         Assert.Equal([ShoppingText.NoSuchStore("Kroger", _list.Store.Stores())], await Run("export Kroger"));
     }

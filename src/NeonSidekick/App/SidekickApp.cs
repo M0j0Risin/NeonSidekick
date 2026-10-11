@@ -1095,7 +1095,7 @@ public sealed class SidekickApp
                 if (SlashCommands.Parse(text) is (SlashCommand.Shopping, var shoppingArgs))
                 {
                     Func<string, string, CancellationToken, Task<string>>? shoppingPrint = Printing.PrintText.Supported ? (markdown, title, token) => print.RunAsync(new Printing.PrintRequest(null, Markdown: markdown, Title: title), token) : null;
-                    foreach (string shoppingRow in await Shopping.ShoppingCommandRunner.RunAsync(shopping, Shopping.ShoppingCommand.Parse(shoppingArgs), files, confirm: null, shoppingPrint, cancellationToken, shoppingReference).ConfigureAwait(false))
+                    foreach (string shoppingRow in await Shopping.ShoppingCommandRunner.RunAsync(shopping, Shopping.ShoppingCommand.Parse(shoppingArgs), files, confirm: null, shoppingPrint, cancellationToken, shoppingReference, _time).ConfigureAwait(false))
                     {
                         await HeadlessLineAsync(shoppingRow.StartsWith("Error: ", StringComparison.Ordinal) ? "[error] " + shoppingRow["Error: ".Length..] : shoppingRow).ConfigureAwait(false);
                     }

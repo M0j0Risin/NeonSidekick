@@ -20,7 +20,8 @@ public static class ShoppingCommandRunner
         Func<string, CancellationToken, Task<bool>>? confirm,
         Func<string, string, CancellationToken, Task<string>>? print,
         CancellationToken cancellationToken,
-        ShoppingReference? reference = null)
+        ShoppingReference? reference = null,
+        TimeProvider? time = null)
     {
         ArgumentNullException.ThrowIfNull(list);
         ArgumentNullException.ThrowIfNull(line);
@@ -154,10 +155,12 @@ public static class ShoppingCommandRunner
                     return [ShoppingText.NothingToBuy];
                 }
 
-                var written = files.WriteText(ShoppingText.ExportFileName, ShoppingText.Markdown(view, line.Verbose), overwrite: true);
+                // A file per export, stamped with the local time (2026-10-11); one the same second is written over.
+                string name = ShoppingText.ExportFileName((time ?? TimeProvider.System).GetLocalNow());
+                var written = files.WriteText(name, ShoppingText.Markdown(view, line.Verbose), overwrite: true);
                 return [written.Outcome == FileOutcome.Ok
                     ? ShoppingText.Exported(Path.Combine(files.Root, written.Relative), open)
-                    : FileText.Error(written.Outcome, ShoppingText.ExportFileName, "write", written.Detail)];
+                    : FileText.Error(written.Outcome, name, "write", written.Detail)];
             }
 
             case ShoppingVerb.Print:

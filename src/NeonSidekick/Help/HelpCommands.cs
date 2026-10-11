@@ -327,7 +327,7 @@ public static class HelpCommands
             new("/shopping clear [all]", "Remove the ticked items; `all` empties the whole list, after a yes."),
             new("/shopping store [<name>]", "List the stores and the active one's layout; with a name, shop there: the list walks through it."),
             new("/shopping store add|remove <name>", "Add a store (its reference folder is made), or remove one with its layout, after a yes."),
-            new("/shopping export [<store>] [verbose]", "Write the items left to buy at the active store, or the one named, to `shopping-list.md` in the working directory, overwritten each time: compact (a line per aisle, its items run together), or with `verbose` a heading per aisle over a checkbox per item."),
+            new("/shopping export [<store>] [verbose]", "Write the items left to buy at the active store, or the one named, to a new `shopping-list-<time>.md` in the working directory (`shopping-list-20261011-162530.md`, the local time): compact (a heading naming the store, then a line per aisle, its items run together), or with `verbose` a heading per aisle over a checkbox per item."),
             new("/shopping print [<store>] [verbose]", "Print the items left to buy at the active store, or the one named, through `/print`'s printer settings: compact (a line per aisle), or roomy with `verbose`."),
             new("/shopping reindex [<store>]", "Read the active store's reference documents again, or the named one's: every PDF, text file and picture in its folder under `db\\shopping\\reference`. They are read on their own whenever a file changes; this reads them all."),
         ]),

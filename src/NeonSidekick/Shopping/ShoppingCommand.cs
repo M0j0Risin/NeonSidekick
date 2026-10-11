@@ -39,7 +39,7 @@ public enum ShoppingVerb
     /// <summary><c>store remove &lt;name&gt;</c>: a store and its layout gone, after a yes (the model cannot).</summary>
     RemoveStore,
 
-    /// <summary><c>export [&lt;store&gt;] [verbose]</c>: the list as Markdown in the working directory's <see cref="ShoppingText.ExportFileName"/>, compact unless verbose.</summary>
+    /// <summary><c>export [&lt;store&gt;] [verbose]</c>: the list as Markdown in the working directory's stamped file (<see cref="ShoppingText.ExportFileName"/>), compact unless verbose.</summary>
     Export,
 
     /// <summary><c>print [&lt;store&gt;] [verbose]</c>: the list printed, through <c>/print</c>'s service, compact unless verbose.</summary>
@@ -76,7 +76,7 @@ public static class ShoppingCommand
         ("list", "print the list walked through the store: /shopping list [<store>]"),
         ("clear", "remove the ticked items; /shopping clear all empties the list, after a yes"),
         ("store", "the stores; /shopping store <name> shops there, store add|remove <name>"),
-        ("export", "write the list to " + ShoppingText.ExportFileName + ": /shopping export [<store>] [verbose]"),
+        ("export", "write the list to " + ShoppingText.ExportFilePattern + ": /shopping export [<store>] [verbose]"),
         ("print", "print the list, compact: /shopping print [<store>] [verbose]"),
         ("reindex", "read the store's reference documents again: /shopping reindex [<store>]"),
     ];

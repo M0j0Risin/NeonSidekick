@@ -114,7 +114,7 @@ internal sealed partial class ChatScreen
                 return spinner ? _transcript.WithSpinnerAsync(Printing.PrintText.Working, run) : run();
             }
             : null;
-        foreach (string result in await ShoppingCommandRunner.RunAsync(_shopping, line, _files, ConfirmAsync, print, cancellationToken, _shoppingReference).ConfigureAwait(false))
+        foreach (string result in await ShoppingCommandRunner.RunAsync(_shopping, line, _files, ConfirmAsync, print, cancellationToken, _shoppingReference, _time).ConfigureAwait(false))
         {
             Show(result, sink);
         }

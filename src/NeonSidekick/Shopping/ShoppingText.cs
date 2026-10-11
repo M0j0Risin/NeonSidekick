@@ -391,17 +391,26 @@ public static class ShoppingText
     public const string CommandUsage =
         "/shopping takes add <items>, check|uncheck|remove <item>, list [<store>], clear [all], store [<name>|add <name>|remove <name>], export|print [<store>] [verbose] or reindex [<store>]; alone, the list's pane.";
 
-    /// <summary>The file <c>/shopping export</c> writes in the working directory, overwritten each time. Pinned.</summary>
-    public const string ExportFileName = "shopping-list.md";
+    /// <summary>
+    /// The file <c>/shopping export</c> writes in the working directory (2026-10-11, the user's ask: one per export, stamped, so an
+    /// earlier list is kept): <c>shopping-list-20261011-162530.md</c>, the local time in <c>--log</c>'s <c>{ts}</c> form. Pinned.
+    /// </summary>
+    public static string ExportFileName(DateTimeOffset localNow) => "shopping-list-" + localNow.ToString(App.SidekickOptions.LogStampFormat, CultureInfo.InvariantCulture) + ".md";
+
+    /// <summary>How the export's file is named where it is described (completion, help). Pinned.</summary>
+    public const string ExportFilePattern = "shopping-list-<time>.md";
+
+    /// <summary>The compact list's heading (2026-10-11, the user's form). Pinned.</summary>
+    public const string CompactTitle = "Shopping List";
 
     /// <summary>The title a printed or exported list carries.</summary>
     public static string Title(ShopStore? store) => "Shopping list" + (store is null ? "" : " — " + store.Name);
 
     /// <summary>
     /// The list as Markdown (<c>/shopping export</c> and <c>print</c>), the ticked lines left out (bought), a guess keeping its mark.
-    /// Compact by default (2026-10-11, the user's ask: a list that prints small): one paragraph, a hard line break ending each line, so
-    /// it prints as tight lines at the body size — the title and the count, then a line per group in the store's walk, its label in
-    /// bold (<see cref="CompactLabel"/>) and its items run together. <paramref name="verbose"/> is the roomy form it was until then:
+    /// Compact by default (2026-10-11, the user's ask: a list that prints small; later that day the user's form): a <c>##</c> heading
+    /// naming the store (<see cref="CompactTitle"/>), then one paragraph, a hard line break ending each line but the last, so it prints
+    /// as tight lines at the body size — a line per group in the store's walk, its label in bold (<see cref="CompactLabel"/>) and its items run together. <paramref name="verbose"/> is the roomy form it was until then:
     /// the title, each group a heading over its lines as unticked boxes.
     /// </summary>
     public static string Markdown(ShopView view, bool verbose = false)
@@ -409,10 +418,10 @@ public static class ShoppingText
         ArgumentNullException.ThrowIfNull(view);
         if (!verbose)
         {
-            int count = view.Groups.Sum(g => g.Items.Count);
-            var lines = new List<string> { "**" + Title(view.Store) + "** · " + Count(count, "item") };
+            string heading = "## " + CompactTitle + (view.Store is { } store ? " — " + store.Name : "");
+            var lines = new List<string>();
             lines.AddRange(view.Groups.Select(g => "**" + CompactLabel(g) + ":** " + string.Join(" · ", g.Items.Select(p => Line(p.Item) + (p.Place.IsGuess ? " " + GuessMark : "")))));
-            return string.Join("\\\n", lines) + "\n";
+            return heading + "\n\n" + string.Join("\\\n", lines) + "\n";
         }
 
         var sb = new StringBuilder("# ").Append(Title(view.Store)).Append('\n');
