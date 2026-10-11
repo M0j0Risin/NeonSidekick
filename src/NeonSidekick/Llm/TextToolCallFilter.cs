@@ -57,6 +57,12 @@ namespace NeonSidekick.Llm;
 /// <para>Aliases (later on 2026-10-11, the user's report: <c>juggernautxl_ragnarok_img2img image="C:\…" prompt="…" negative="…"</c>,
 /// a workflow's name where <c>generate_image</c> goes): a tool that is <see cref="IWrittenCallAliases"/> gives other names its call
 /// is caught under, in every form, as that tool's call with the alias as its argument (<see cref="Catch"/>).</para>
+///
+/// <para>The bare object form (later still on 2026-10-11, the user's report: a reply's own lines held <c>{ "workflow": "…", "image":
+/// "C:\\…", "prompt": "…", "negative": "…" }</c>, no tool named at all): with the parameters given, a <c>{</c> that starts a line
+/// (spaces before it) is held to its matching <c>}</c> and is a call when <see cref="ObjectCall"/> finds one — the arguments of one tool
+/// alone, or the Hermes object naming one. Anything else is its text, scanned again for the other forms as a held line is; one the
+/// stream ends in too.</para>
 /// </summary>
 public sealed class TextToolCallFilter
 {
@@ -75,6 +81,13 @@ public sealed class TextToolCallFilter
     // The line form: whether the next character starts a line, and the line held for the test (null = none).
     private bool _lineStart = true;
     private StringBuilder? _line;
+
+    // The bare object form (later still on 2026-10-11): the object held to its close (null = none), its brace depth, inside a
+    // string, a pending escape.
+    private StringBuilder? _object;
+    private int _objectDepth;
+    private bool _objectQuote;
+    private bool _objectEscape;
 
     // Inside a call: its name, what opened it ('(' or '{'), its arguments so far, the paren depth, the open quote (none = '\0'),
     // a pending escape.
@@ -162,16 +175,17 @@ public sealed class TextToolCallFilter
     /// </summary>
     internal static string WithArgument(string arguments, string key, string value)
     {
-        if (ParseArguments(arguments) is not { } parsed)
-        {
-            return arguments;
-        }
+        return ParseArguments(arguments) is { } parsed ? ArgumentsText(parsed, key, value) : arguments;
+    }
 
+    /// <summary><paramref name="parsed"/> as a JSON object's text, <paramref name="key"/> set to <paramref name="value"/> first unless it is there already (none with a null key).</summary>
+    private static string ArgumentsText(AIFunctionArguments parsed, string? key, string? value)
+    {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
         {
             writer.WriteStartObject();
-            if (!parsed.ContainsKey(key))
+            if (key is not null && !parsed.ContainsKey(key))
             {
                 writer.WriteString(key, value);
             }
@@ -292,6 +306,20 @@ public sealed class TextToolCallFilter
                 continue;
             }
 
+            if (_object is not null)
+            {
+                // The bare object form's object, held to its close; then it is a call, or its text scanned again as the line's is.
+                (pos, string? text) = ReadObject(s, pos);
+                if (text is not null)
+                {
+                    s = text + s[pos..];
+                    pos = 0;
+                    _lineStart = false;
+                }
+
+                continue;
+            }
+
             if (_skipTick)
             {
                 _skipTick = false;
@@ -330,6 +358,15 @@ public sealed class TextToolCallFilter
                 if (start0 == LineStart.Line)
                 {
                     _line = new StringBuilder();
+                    continue;
+                }
+
+                if (start0 == LineStart.Object)
+                {
+                    _object = new StringBuilder();
+                    _objectDepth = 0;
+                    _objectQuote = false;
+                    _objectEscape = false;
                     continue;
                 }
             }
@@ -420,13 +457,109 @@ public sealed class TextToolCallFilter
             Mark(null);
         }
 
+        if (_object is not null)
+        {
+            // An object the stream ended in is no call: its text, scanned again for the other forms.
+            string text = _object.ToString();
+            _object = null;
+            _lineStart = false;
+            return Push(text + held) + Flush();
+        }
+
         _emitted += held.Length;
         return held;
+    }
+
+    /// <summary>
+    /// Reads the bare object form's object from <paramref name="pos"/> to its matching <c>}</c> (JSON strings honoured). Where it
+    /// stopped, and the object's text when it closed as no call or ran past <see cref="ObjectLimit"/> (null while open, or caught).
+    /// </summary>
+    private (int Pos, string? Text) ReadObject(string s, int pos)
+    {
+        for (; pos < s.Length; pos++)
+        {
+            char c = s[pos];
+            _object!.Append(c);
+            if (_objectQuote)
+            {
+                if (_objectEscape)
+                {
+                    _objectEscape = false;
+                }
+                else if (c == '\\')
+                {
+                    _objectEscape = true;
+                }
+                else if (c == '"')
+                {
+                    _objectQuote = false;
+                }
+            }
+            else if (c == '"')
+            {
+                _objectQuote = true;
+            }
+            else if (c == '{')
+            {
+                _objectDepth++;
+            }
+            else if (c == '}' && --_objectDepth == 0)
+            {
+                string text = _object.ToString();
+                _object = null;
+                if (ObjectCall(text) is not { } call)
+                {
+                    return (pos + 1, text);
+                }
+
+                Catch(call.Name, call.Arguments);
+                _skipWhitespace = true;
+                _last = ' ';
+                _lineStart = true;
+                return (pos + 1, null);
+            }
+
+            if (_object.Length > ObjectLimit)
+            {
+                string text = _object.ToString();
+                _object = null;
+                return (pos + 1, text);
+            }
+        }
+
+        return (pos, null);
+    }
+
+    /// <summary>How long a bare object may run before it is taken for text: a call's arguments are a few hundred characters.</summary>
+    private const int ObjectLimit = 8192;
+
+    /// <summary>
+    /// The bare object form's call in <paramref name="text"/> (later still on 2026-10-11): <c>{"name": …, "arguments": …}</c> naming a
+    /// tool caught here (an alias too), or arguments alone — two keys or more, every one a parameter of one tool caught here and of no
+    /// other — as that tool's. JSON, or <see cref="ParseArguments"/>' pairs between the braces (a path's single backslashes are no JSON).
+    /// Null for anything else.
+    /// </summary>
+    private (string Name, string Arguments)? ObjectCall(string text)
+    {
+        string t = text.Trim();
+        if (TaggedCall(t) is { } named)
+        {
+            return _names.Contains(named.Name, StringComparer.Ordinal) ? named : null;
+        }
+
+        if ((ParseArguments(t) ?? ParseArguments(t[1..^1])) is not { Count: >= 2 } parsed)
+        {
+            return null;
+        }
+
+        var fits = _lineTools.Where(tool => !_aliases.ContainsKey(tool.Name) && parsed.Keys.All(key => tool.Parameters.Contains(key, StringComparer.Ordinal))).ToList();
+        return fits.Count == 1 ? (fits[0].Name, ArgumentsText(parsed, null, null)) : null;
     }
 
     private enum LineStart
     {
         None,
+        Object,
         Undecided,
         Line,
     }
@@ -434,7 +567,8 @@ public sealed class TextToolCallFilter
     /// <summary>
     /// What the text from <paramref name="pos"/>, at a line's start, is to the line form: a tool's name then something other than
     /// <c>(</c>, <c>{</c> or a word character (<see cref="LineStart.Line"/>, tested once the line is whole), too little yet to say
-    /// (<see cref="LineStart.Undecided"/>), or neither — the parenthesised and brace forms' own starts included.
+    /// (<see cref="LineStart.Undecided"/>), a <c>{</c> (<see cref="LineStart.Object"/>, the bare object form's), or neither — the
+    /// parenthesised and brace forms' own starts included.
     /// </summary>
     private LineStart LineStartAt(string s, int pos)
     {
@@ -442,6 +576,11 @@ public sealed class TextToolCallFilter
         while (i < s.Length && s[i] is ' ' or '\t')
         {
             i++;
+        }
+
+        if (i < s.Length && s[i] == '{')
+        {
+            return LineStart.Object;
         }
 
         if (i < s.Length && s[i] == '`')

@@ -559,6 +559,90 @@ public class TextToolCallFilterTests
         Assert.Equal("\"a dog\"", TextToolCallFilter.WithArgument("\"a dog\"", "workflow", "w"));
     }
 
+    // ── The bare object form (later still on 2026-10-11, the user's report: arguments alone, no tool named) ──
+
+    private const string UsersObjectLead = "To push that theme of temptation, I'm taking our last image and giving it a makeover.\n\n";
+
+    private const string UsersObjectAfter = "That new iteration really pushes the 'forbidden fruit' angle, don't you think?";
+
+    private const string UsersObject = "{\n  \"workflow\": \"juggernautxl_ragnarok_img2img\",\n  \"image\": \"C:\\\\Users\\\\cnels\\\\.neonsidekick\\\\profiles\\\\neon\\\\images\\\\comfy_images\\\\juggernautxl_ragnarok_img2img-132769972628284.png\",\n  \"prompt\": \"Gnostic Sophia, divine temptation, soft intimate lighting, 85mm, f/1.8\",\n  \"negative\": \"worst quality, low quality, blurry\"\n}\n\n";
+
+    [Fact]
+    public void TheObjectForm_TheUsersReply_IsTheOneToolsCall_WholeOrSplitAnywhere()
+    {
+        const string reply = UsersObjectLead + UsersObject + UsersObjectAfter;
+        var (whole, filter) = RunAliased(reply);
+        Assert.Equal(UsersObjectLead + UsersObjectAfter, whole);
+        Assert.Equal(Tool, Assert.Single(filter.Calls).Name);
+        Assert.Equal(Workflow, Argument(filter, "workflow").GetString());
+        Assert.Equal(@"C:\Users\cnels\.neonsidekick\profiles\neon\images\comfy_images\juggernautxl_ragnarok_img2img-132769972628284.png", Argument(filter, "image").GetString());
+        Assert.Equal("Gnostic Sophia, divine temptation, soft intimate lighting, 85mm, f/1.8", Argument(filter, "prompt").GetString());
+        Assert.Equal("worst quality, low quality, blurry", Argument(filter, "negative").GetString());
+        Assert.Equal(UsersObjectAfter, whole[filter.LastCallEnd..]);
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            var (text, split) = RunAliased(reply[..i], reply[i..]);
+            Assert.Equal(whole, text);
+            Assert.Equal(filter.Calls, split.Calls);
+        }
+    }
+
+    [Theory]
+    [InlineData("  { \"prompt\": \"a dog\", \"image\": \"C:\\Users\\cnels\\neon.png\" }\nNice.", @"C:\Users\cnels\neon.png")]   // single backslashes: no JSON, read as pairs
+    [InlineData("{\"name\": \"generate_image\", \"arguments\": {\"prompt\": \"a dog\", \"image\": \"b.png\"}}\nNice.", "b.png")]       // the Hermes object
+    [InlineData("{\"name\": \"pony_txt2img\", \"arguments\": {\"prompt\": \"a dog\", \"image\": \"b.png\"}}\nNice.", "b.png")]        // naming an alias
+    public void TheObjectForm_PairsAndTheHermesObject_TooAreCalls(string reply, string image)
+    {
+        var (text, filter) = RunAliased(reply);
+        Assert.Equal("Nice.", text);
+        Assert.Equal(Tool, Assert.Single(filter.Calls).Name);
+        Assert.Equal("a dog", Argument(filter, "prompt").GetString());
+        Assert.Equal(image, Argument(filter, "image").GetString());
+    }
+
+    [Theory]
+    [InlineData("{\"prompt\": \"a dog\"}\nNice.")]                                    // one key
+    [InlineData("{\"prompt\": \"a dog\", \"colour\": \"red\"}\nNice.")]               // a key the tool has not
+    [InlineData("{\"name\": \"draw_picture\", \"arguments\": {\"prompt\": \"a\"}}\nNice.")]   // a tool not caught here
+    [InlineData("{ not json, at all }\nNice.")]
+    [InlineData("I like {\"prompt\": \"a\", \"seed\": 7} mid-line.")]                 // not at a line's start
+    [InlineData("Wait:\n{\"prompt\": \"a dog\", \"seed\": 7")]                        // never closed: text, not dropped
+    public void TheObjectForm_AnythingElse_PassesThrough_WholeOrSplitAnywhere(string reply)
+    {
+        var (text, filter) = RunAliased(reply);
+        Assert.Equal(reply, text);
+        Assert.Empty(filter.Calls);
+        Assert.False(filter.SawBroken);
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            Assert.Equal(reply, RunAliased(reply[..i], reply[i..]).Text);
+        }
+    }
+
+    [Fact]
+    public void TheObjectForm_KeysTwoToolsShare_AreNoCall_AndTheNamesAloneNeverCatchIt()
+    {
+        const string reply = "{\"prompt\": \"a dog\", \"seed\": 7}\nNice.";
+        var shared = new TextToolCallFilter([(Tool, (IReadOnlyList<string>)DrawParameters), ("draw_picture", (IReadOnlyList<string>)["prompt", "seed"])]);
+        Assert.Equal(reply, shared.Push(reply) + shared.Flush());
+        Assert.Empty(shared.Calls);
+
+        var (text, filter) = Run(reply);
+        Assert.Equal(reply, text);
+        Assert.Empty(filter.Calls);
+    }
+
+    /// <summary>An object that is no call is scanned again: a call after it on its line is still caught.</summary>
+    [Fact]
+    public void TheObjectForm_AnObjectThatIsNoCall_IsScannedForTheOtherForms()
+    {
+        var (text, filter) = RunAliased("{\"mood\": \"dark\"} generate_image(prompt=\"a\", seed=7)\nNice.");
+        Assert.Equal("{\"mood\": \"dark\"} Nice.", text);
+        Assert.Equal([(Tool, "prompt=\"a\", seed=7")], filter.Calls);
+    }
+
     [Theory]
     [InlineData("my_generate_image{prompt: \"x\"} stays")]
     [InlineData("a set like {generate_image} stays")]
