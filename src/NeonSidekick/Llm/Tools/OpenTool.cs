@@ -25,6 +25,10 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>openPicture</c> given, a file <see cref="ImageFile.IsImagePath"/> calls a picture goes there instead of the opener — the screen opens it
 /// where a double-click would (the <c>Image viewer</c> setting; the built-in viewer quietly when it is empty) and says where, for
 /// the result. Other files and folders are as before; headless gives none.</para>
+///
+/// <para><b>The images folder</b> (2026-10-11, code review: the description sends the model here to show a picture, and the app
+/// keeps its camera, screen, ComfyUI and pasted pictures in the profile's images folder, outside the working directory): with
+/// <c>images</c> given, a full path in that folder opens there, as <c>file_info</c> reads one (<see cref="FileTool.FilesFor"/>).</para>
 /// </summary>
 public sealed class OpenTool : FileTool
 {
@@ -80,7 +84,8 @@ public sealed class OpenTool : FileTool
     /// <param name="effective">The settings in force, read at each call for <c>UNC tools</c> and the offered shares; needed with <paramref name="unc"/>.</param>
     /// <param name="openPicture">Opens a picture's full path where a double-click would (2026-10-11) and returns where it went
     /// (<see cref="FileText.InPictureViewer"/>, <see cref="FileText.InImageApp"/>); null = pictures go to <paramref name="opener"/> like any file.</param>
-    public OpenTool(WorkingDirectory files, Action<string> opener, UncAccess? unc = null, Func<AppSettingsData>? effective = null, Func<string, string>? openPicture = null) : base(files)
+    /// <param name="images">The profile's images folder, opened by its full paths (2026-10-11); null = the working directory alone.</param>
+    public OpenTool(WorkingDirectory files, Action<string> opener, UncAccess? unc = null, Func<AppSettingsData>? effective = null, Func<string, string>? openPicture = null, WorkingDirectory? images = null) : base(files, images)
     {
         _opener = opener ?? throw new ArgumentNullException(nameof(opener));
         _unc = unc;
@@ -90,7 +95,8 @@ public sealed class OpenTool : FileTool
 
     public override string Name => ToolName;
 
-    public override string Description => (_openPicture is null ? Base : Base + PictureDescription) + (SharesOffered ? ShareDescription : "");
+    public override string Description =>
+        (_openPicture is null ? Base : Base + PictureDescription) + (Images is null ? "" : " " + FileText.ImagesFolderInfoSentence(Images.Root)) + (SharesOffered ? ShareDescription : "");
 
     private static string Base => OperatingSystem.IsMacOS() ? MacBaseDescription : BaseDescription;
 
@@ -99,7 +105,7 @@ public sealed class OpenTool : FileTool
     /// <summary>Whether a UNC share can be named now: the door given, <c>UNC tools</c> on, a share offered.</summary>
     private bool SharesOffered => _unc is not null && _effective is not null && _unc.IsOffered(_effective());
 
-    public string Describe(string path) => OpenIn(Files, path);
+    public string Describe(string path) => OpenIn(FilesFor(path), path);
 
     /// <summary><paramref name="path"/> opened in <paramref name="files"/> (the working directory or a share's), a picture through <see cref="_openPicture"/>, and the result's line.</summary>
     private string OpenIn(WorkingDirectory files, string path)
@@ -131,11 +137,11 @@ public sealed class OpenTool : FileTool
         return await OpenOnShareAsync(share, path, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Whether a call without a share means one: a full path outside the working directory while a share is offered.</summary>
+    /// <summary>Whether a call without a share means one: a full path outside the working directory (and the images folder) while a share is offered.</summary>
     private bool OnAShare(string path)
     {
         string spelled = path.Trim().Replace('/', '\\');
-        return UncCatalog.IsAbsolute(spelled) && SharesOffered && Files.Resolve(spelled, forWrite: false, out _) != FileOutcome.Ok;
+        return UncCatalog.IsAbsolute(spelled) && SharesOffered && FilesFor(spelled).Resolve(spelled, forWrite: false, out _) != FileOutcome.Ok;
     }
 
     /// <summary>The open on the share the call means, or the refusal: no share offered, the share unknown, a network <c>runas</c> share.</summary>

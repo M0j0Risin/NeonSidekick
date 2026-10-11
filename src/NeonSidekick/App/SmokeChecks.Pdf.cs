@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-using NeonSidekick.Diagnostics;
 using NeonSidekick.Pdf;
 using NeonSidekick.Printing;
 using NeonSidekick.Web;
@@ -48,7 +46,8 @@ public static partial class SmokeChecks
     public static SmokeCheck ProbePdfBrowser()
     {
         const string name = "pdf:browser";
-        var browser = new HeadlessBrowser();
+        string folder = ProbeProfileFolder();
+        var browser = new HeadlessBrowser(folder);
         if (browser.Locate("") is not { } executable)
         {
             return new SmokeCheck(name, true, "skipped: no Edge, Chrome or Brave");
@@ -57,9 +56,6 @@ public static partial class SmokeChecks
         string stem = Path.Combine(Path.GetTempPath(), "NeonSidekick.smoke." + Guid.NewGuid().ToString("N"));
         string html = stem + ".html";
         string pdf = stem + ".pdf";
-        var jobWarnings = new ConcurrentQueue<string>();
-        void Watch(DiagnosticEvent e) => NoteJobWarning(e, jobWarnings);
-        DiagnosticLog.Emitted += Watch;
         try
         {
             File.WriteAllText(html, PdfHtml.Document("smoke", PdfHtml.Markdown("# Smoke\n\nOne **page**.", _ => null), PdfPaperSize.Letter, landscape: false));
@@ -70,7 +66,7 @@ public static partial class SmokeChecks
             }
 
             long bytes = new FileInfo(pdf).Length;
-            return BrowserLeftovers(jobWarnings) is { } wrong
+            return BrowserLeftovers(made.InJob, folder) is { } wrong
                 ? new SmokeCheck(name, false, wrong)
                 : new SmokeCheck(name, true, $"{PdfText.BrowserName(executable)} printed a page to PDF ({bytes} bytes){LeftNothing}");
         }
@@ -80,9 +76,9 @@ public static partial class SmokeChecks
         }
         finally
         {
-            DiagnosticLog.Emitted -= Watch;
             Files.WorkingDirectory.DeleteQuietly(html);
             Files.WorkingDirectory.DeleteQuietly(pdf);
+            DeleteProbeProfile(folder);
         }
     }
 
@@ -97,16 +93,14 @@ public static partial class SmokeChecks
     public static SmokeCheck ProbeWebDevTools()
     {
         const string name = "web:devtools";
-        var browser = new HeadlessBrowser();
+        string folder = ProbeProfileFolder();
+        var browser = new HeadlessBrowser(folder);
         if (browser.Locate("") is not { } executable)
         {
             return new SmokeCheck(name, true, "skipped: no Edge, Chrome or Brave");
         }
 
         string html = Path.Combine(Path.GetTempPath(), "NeonSidekick.smoke." + Guid.NewGuid().ToString("N") + ".html");
-        var jobWarnings = new ConcurrentQueue<string>();
-        void Watch(DiagnosticEvent e) => NoteJobWarning(e, jobWarnings);
-        DiagnosticLog.Emitted += Watch;
         try
         {
             File.WriteAllText(html, "<html><body><p id=\"s\">early</p><script>setTimeout(function () { document.getElementById('s').textContent = 'late ' + navigator.userAgent + ' webdriver=' + navigator.webdriver; }, 2000);</script></body></html>");
@@ -118,7 +112,7 @@ public static partial class SmokeChecks
                 : page.Contains("HeadlessChrome", StringComparison.Ordinal) ? "the browser still says HeadlessChrome"
                 : !page.Contains(BrowserIdentity.For(executable).UserAgent, StringComparison.Ordinal) ? "the browser did not take the user agent"
                 : !page.Contains("webdriver=false", StringComparison.Ordinal) ? "navigator.webdriver is not false"
-                : BrowserLeftovers(jobWarnings);
+                : BrowserLeftovers(dump.InJob, folder);
             return new SmokeCheck(name, wrong is null, wrong ?? $"{PdfText.BrowserName(executable)} ran a page in real time as {BrowserIdentity.For(executable).BrandName} {BrowserIdentity.For(executable).Major}{LeftNothing}");
         }
         catch (Exception ex)
@@ -127,41 +121,56 @@ public static partial class SmokeChecks
         }
         finally
         {
-            DiagnosticLog.Emitted -= Watch;
             Files.WorkingDirectory.DeleteQuietly(html);
+            DeleteProbeProfile(folder);
         }
     }
 
     /// <summary>What a passing browser probe adds on Windows, where the job and the held folder are checked.</summary>
     private static string LeftNothing => OperatingSystem.IsWindows() ? "; in the app's job, nothing left holding its profile folder" : "";
 
-    /// <summary>A warning <see cref="EmbeddedLlm.ChildJob"/> gave during a browser probe (the browser outside the job), kept; a subscriber, so it never blocks.</summary>
-    private static void NoteJobWarning(DiagnosticEvent e, ConcurrentQueue<string> warnings)
+    /// <summary>
+    /// A profile folder of the probe's own (code review, 2026-10-11: on the app's shared folder, a running copy of the app reading a
+    /// page read as the probe's browser left behind), under the temp folder beside the app's; <see cref="DeleteProbeProfile"/> after.
+    /// </summary>
+    private static string ProbeProfileFolder() => Path.Combine(Path.GetTempPath(), "NeonSidekick", "smoke-browser-" + Guid.NewGuid().ToString("N"));
+
+    private static void DeleteProbeProfile(string folder)
     {
-        if (e.Level >= DiagnosticLevel.Warning && e.Message.Contains("job object", StringComparison.Ordinal))
+        try
         {
-            warnings.Enqueue(e.Message);
+            Directory.Delete(folder, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A temp folder left behind is harmless (and a browser still in it was already reported).
         }
     }
 
     /// <summary>
-    /// What a browser probe's run left wrong (2026-10-11, an Edge that relaunched itself outlived the app and held the profile folder,
-    /// so every later run failed): the browser outside the app's kill-on-close job (<paramref name="jobWarnings"/>), or a browser
-    /// still holding <see cref="HeadlessBrowser.UserDataDirectory"/> 3 s after the run (<see cref="HeadlessBrowser.ProfileInUse"/>,
-    /// Windows only); null when neither.
+    /// What a browser probe's run left wrong on Windows (2026-10-11, an Edge that relaunched itself outlived the app and held the
+    /// profile folder, so every later run failed): the browser, or anything it had started, outside the app's kill-on-close job
+    /// (<paramref name="inJob"/>, the run's own answer since code review the same day, no longer a warning's words in the log), or a
+    /// browser still holding the probe's own <paramref name="folder"/> 3 s after the run (<see cref="HeadlessBrowser.ProfileInUse"/>);
+    /// null when neither, and off Windows, where there is no job.
     /// </summary>
-    private static string? BrowserLeftovers(ConcurrentQueue<string> jobWarnings)
+    private static string? BrowserLeftovers(bool inJob, string folder)
     {
-        if (jobWarnings.TryPeek(out string? warning))
+        if (!OperatingSystem.IsWindows())
         {
-            return "the browser ran outside the app's job: " + warning;
+            return null;
         }
 
-        for (int i = 0; i < 30 && HeadlessBrowser.ProfileInUse(HeadlessBrowser.UserDataDirectory); i++)
+        if (!inJob)
+        {
+            return "the browser ran outside the app's job (the log's EmbeddedLlm lines say why)";
+        }
+
+        for (int i = 0; i < 30 && HeadlessBrowser.ProfileInUse(folder); i++)
         {
             Thread.Sleep(100);
         }
 
-        return HeadlessBrowser.ProfileInUse(HeadlessBrowser.UserDataDirectory) ? "a browser was left running, holding " + HeadlessBrowser.UserDataDirectory : null;
+        return HeadlessBrowser.ProfileInUse(folder) ? "a browser was left running, holding " + folder : null;
     }
 }

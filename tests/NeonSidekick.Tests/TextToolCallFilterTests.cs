@@ -704,6 +704,49 @@ public class TextToolCallFilterTests
         }
     }
 
+    /// <summary>
+    /// Code review, later still on 2026-10-11: the rule above cut a value that starts with a path at its first escaped quote, so a
+    /// command line quoting its own arguments was dropped, and a <c>}</c> inside one ended the brace form early. <c>\"</c> closes a
+    /// path only when a value's end follows; otherwise it is an escaped quote, as it always was.
+    /// </summary>
+    [Theory]
+    [InlineData("Here: generate_image(prompt=\"C:\\Python\\python.exe -c \\\"print(1)\\\"\", seed=7)\nNice.", "C:\\Python\\python.exe -c \"print(1)\"")]
+    [InlineData("Here: generate_image{\"prompt\":\"C:\\\\x.exe \\\"a}\\\"\", \"seed\": 7}\nNice.", "C:\\x.exe \"a}\"")]
+    [InlineData("Here: generate_image(prompt=\"C:\\pics\\\" , seed=7)\nNice.", "C:\\pics\\")]
+    [InlineData("Here: generate_image(prompt=\"C:\\a \\\"b\\\", c\", seed=7)\nNice.", "C:\\a \"b\", c")]
+    public void AnEscapedQuote_InAValueStartingWithAPath_StaysInIt(string reply, string prompt)
+    {
+        var (whole, filter) = Run(reply);
+        Assert.Equal("Here: Nice.", whole);
+        var arguments = TextToolCallFilter.ParseArguments(Assert.Single(filter.Calls).Arguments)!;
+        Assert.Equal(prompt, arguments["prompt"] is JsonElement element ? element.GetString() : arguments["prompt"]);
+        Assert.Equal(7L, arguments["seed"] is JsonElement seed ? seed.GetInt64() : arguments["seed"]);
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            var (text, split) = Run(reply[..i], reply[i..]);
+            Assert.Equal(whole, text);
+            Assert.Equal(filter.Calls, split.Calls);
+        }
+    }
+
+    [Theory]
+    [InlineData("{\"prompt\": \"a dog\", \"image\": \"C:\\\\x \\\"a}\\\"\"}\nNice.", "C:\\x \"a}\"")]
+    [InlineData("{\"prompt\": \"a dog\", \"image\": \"C:\\pics\\\"  }\nNice.", "C:\\pics\\")]
+    public void TheObjectForm_AnEscapedQuote_InAPath_StaysInIt(string reply, string image)
+    {
+        var (whole, filter) = RunAliased(reply);
+        Assert.Equal("Nice.", whole);
+        Assert.Equal(image, Argument(filter, "image").GetString());
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            var (text, split) = RunAliased(reply[..i], reply[i..]);
+            Assert.Equal(whole, text);
+            Assert.Equal(filter.Calls, split.Calls);
+        }
+    }
+
     [Theory]
     [InlineData("my_generate_image{prompt: \"x\"} stays")]
     [InlineData("a set like {generate_image} stays")]

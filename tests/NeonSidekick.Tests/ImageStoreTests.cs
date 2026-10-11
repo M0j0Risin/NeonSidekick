@@ -185,6 +185,29 @@ public sealed class ImageStoreTests : IDisposable
         Assert.StartsWith("Error: ", new FileInfoTool(_files).Describe(saved), StringComparison.Ordinal);   // without the folder, as before
     }
 
+    /// <summary>
+    /// <c>open</c> on a full path in the images folder (2026-10-11, code review: its description sends the model there to show a
+    /// picture, and the app's own pictures live in that folder): the picture opener gets it, and the description names the folder.
+    /// </summary>
+    [Fact]
+    public async Task Open_OpensAFullPathInTheImagesFolder()
+    {
+        string saved = Picture(_imagesRoot, Path.Combine("comfy_images", "c.bmp"));
+        _files.ImagesFolder = () => _imagesRoot;
+        var pictures = new List<string>();
+        var opened = new List<string>();
+        var tools = ChatScreen.FileTools(_files, () => true, opened.Add, () => _settings, images: _images, openPicture: path => { pictures.Add(path); return FileText.InPictureViewer; });
+        var open = tools.Single(t => t.Name == OpenTool.ToolName);
+
+        string answer = ToolAnswers.Text(await open.InvokeAsync(Args(("path", saved))));
+
+        Assert.DoesNotContain("Error", answer, StringComparison.Ordinal);
+        Assert.Equal(new[] { saved }, pictures);
+        Assert.Empty(opened);
+        Assert.Contains(FileText.ImagesFolderInfoSentence(_images.Root), open.Description, StringComparison.Ordinal);
+        Assert.Equal(FileText.InImagesFolder(saved), new OpenTool(_files, opened.Add).Describe(saved));   // without the folder, refused
+    }
+
     [Fact]
     public void TheDescriptions_NameTheImagesFolder_OnlyWhileItIsOffered()
     {
@@ -236,7 +259,7 @@ public sealed class ImageStoreTests : IDisposable
         _files.ImagesFolder = null;
         Assert.Equal(FileOutcome.OutsideRoot, _files.Resolve(saved, forWrite: false, out _));
         Assert.Equal(
-            "Error: 'C:\\p\\images\\a.png' is in the user's images folder, outside the working directory: only search_files, file_info, view_image, image_info and image_edit reach it, by full path",
+            "Error: 'C:\\p\\images\\a.png' is in the user's images folder, outside the working directory: only search_files, file_info, open, view_image, image_info and image_edit reach it, by full path",
             FileText.InImagesFolder("C:\\p\\images\\a.png"));
     }
 

@@ -89,6 +89,67 @@ public class EmbeddedLlmLiveTests
         }
     }
 
+    /// <summary>
+    /// Code review, 2026-10-11: a child the process started before it joined the job (the headless browser's crash handler, a
+    /// relaunched copy) was outside it. <c>cmd</c> starts <c>ping</c> at once; it is assigned only after, and closing the job still
+    /// ends both.
+    /// </summary>
+    [WindowsFact]
+    public void AssignTree_TakesTheChildrenStartedBeforeTheAssignment()
+    {
+        var (job, error) = ChildJob.CreateKillOnClose();
+        Assert.True(job != 0, error);
+        using var parent = Process.Start(new ProcessStartInfo("cmd.exe", "/c ping -n 60 127.0.0.1 >nul") { UseShellExecute = false, CreateNoWindow = true })!;
+        var children = new List<Process>();
+        try
+        {
+            // Until ping is running (cmd's conhost may come first).
+            var deadline = Stopwatch.StartNew();
+            while (deadline.Elapsed < TimeSpan.FromSeconds(10))
+            {
+                children.ForEach(child => child.Dispose());
+                children.Clear();
+                children.AddRange(ChildJob.Descendants(ChildJob.Snapshot(), parent.Id).Select(Process.GetProcessById));
+                if (children.Any(child => child.ProcessName.Equals("ping", StringComparison.OrdinalIgnoreCase)))
+                {
+                    break;
+                }
+
+                Thread.Sleep(50);
+            }
+
+            Assert.Contains(children, child => child.ProcessName.Equals("ping", StringComparison.OrdinalIgnoreCase));
+
+            Assert.True(ChildJob.AssignTree(job, parent));
+            ChildJob.Close(job);
+
+            Assert.True(parent.WaitForExit(10_000), "the parent outlived its job");
+            Assert.All(children, child => Assert.True(child.WaitForExit(10_000), "a child started before the assignment outlived the job"));
+        }
+        finally
+        {
+            foreach (var process in children.Append(parent))
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+
+            children.ForEach(child => child.Dispose());
+        }
+    }
+
+    [Fact]
+    public void Descendants_AreTheTreeUnderTheRoot_ChildrenFirst_ACycleEnded()
+    {
+        (int, int)[] processes = [(10, 1), (11, 10), (12, 11), (13, 10), (20, 2), (30, 12), (1, 30)];
+
+        Assert.Equal([10, 11, 13, 12, 30], ChildJob.Descendants(processes, 1));   // 30's child 1 is the root again: not repeated
+        Assert.Equal([11, 13, 12, 30, 1], ChildJob.Descendants(processes, 10));   // nor is 10 under 1
+        Assert.Empty(ChildJob.Descendants(processes, 99));
+    }
+
     [Fact]
     public void TheSmokeProbes_PassHere()
     {

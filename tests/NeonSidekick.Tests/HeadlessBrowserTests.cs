@@ -95,6 +95,54 @@ public class HeadlessBrowserTests
 
             Assert.False(HeadlessBrowser.ProfileInUse(folder));   // left behind, no longer held
             Assert.False(HeadlessBrowser.ProfileInUse(Path.Combine(folder, "missing")));
+
+            // Code review, later that day: a scanner or an indexer reading it with everything shared is no browser.
+            using (new FileStream(lockFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            {
+                Assert.False(HeadlessBrowser.ProfileInUse(folder));
+            }
+
+            // A holder that writes and lets others only read (Chromium's ProcessSingleton) is.
+            using (new FileStream(lockFile, FileMode.Open, FileAccess.Write, FileShare.Read))
+            {
+                Assert.True(HeadlessBrowser.ProfileInUse(folder));
+            }
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>The macOS lock (code review, 2026-10-11): <c>SingletonLock</c> points at <c>host-pid</c>, a host name with dashes too.</summary>
+    [Theory]
+    [InlineData("MacBook-Pro.local-4242", 4242)]
+    [InlineData("host-1", 1)]
+    [InlineData("host", null)]
+    [InlineData("-42", null)]
+    [InlineData("host-", null)]
+    [InlineData("host-0", null)]
+    [InlineData("host-+5", null)]
+    public void SingletonPid_IsTheNumberAfterTheLastDash(string target, int? pid)
+    {
+        Assert.Equal(pid, HeadlessBrowser.SingletonPid(target));
+    }
+
+    /// <summary>Off Windows the held folder is a <c>SingletonLock</c> naming a running process: this one; a dead one is not held.</summary>
+    [UnixFact]
+    public void ProfileInUse_OffWindows_IsTheSingletonLocksProcessRunning()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "NeonSidekick.tests." + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            string link = Path.Combine(folder, HeadlessBrowser.SingletonLockName);
+            Assert.False(HeadlessBrowser.ProfileInUse(folder));
+            File.CreateSymbolicLink(link, "host-" + Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Assert.True(HeadlessBrowser.ProfileInUse(folder));
+            File.Delete(link);
+            File.CreateSymbolicLink(link, "host-" + int.MaxValue.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Assert.False(HeadlessBrowser.ProfileInUse(folder));
         }
         finally
         {

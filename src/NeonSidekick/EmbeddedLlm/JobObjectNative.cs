@@ -71,4 +71,43 @@ internal static partial class JobObjectNative
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool CloseHandle(nint handle);
+
+    // 2026-10-11 (code review): the process snapshot ChildJob.AssignTree reads for a child started before its parent joined the job.
+
+    /// <summary><c>TH32CS_SNAPPROCESS</c>.</summary>
+    internal const uint SnapProcess = 0x2;
+
+    /// <summary><c>INVALID_HANDLE_VALUE</c>, what a failed snapshot returns.</summary>
+    internal const nint InvalidHandle = -1;
+
+    /// <summary><c>PROCESSENTRY32W</c>, the name as UTF-16 units so the struct stays blittable (568 bytes on x64).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal unsafe struct ProcessEntry32
+    {
+        public uint Size;
+        public uint Usage;
+        public uint ProcessId;
+        public nuint DefaultHeapId;
+        public uint ModuleId;
+        public uint Threads;
+        public uint ParentProcessId;
+        public int PriorityClassBase;
+        public uint Flags;
+        public fixed ushort ExeFile[260];
+    }
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    internal static partial nint CreateToolhelp32Snapshot(uint flags, uint processId);
+
+    [LibraryImport("kernel32.dll", EntryPoint = "Process32FirstW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool Process32First(nint snapshot, ref ProcessEntry32 entry);
+
+    [LibraryImport("kernel32.dll", EntryPoint = "Process32NextW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool Process32Next(nint snapshot, ref ProcessEntry32 entry);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool IsProcessInJob(nint process, nint job, [MarshalAs(UnmanagedType.Bool)] out bool result);
 }

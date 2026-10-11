@@ -34,20 +34,179 @@ public static class ChildJob
 
         lock (Gate)
         {
-            if (_job == 0)
-            {
-                var (job, error) = CreateKillOnClose();
-                if (job == 0)
-                {
-                    DiagnosticLog.Warn(Category, "No job object for child processes: " + error);
-                    return false;
-                }
+            nint job = Job();
+            return job != 0 && AssignTo(job, process);
+        }
+    }
 
-                _job = job;
+    /// <summary>
+    /// Makes the app's job now (2026-10-11), so a start that is assigned right after (<see cref="AssignTree"/>) waits on nothing
+    /// between the two; false (logged) when it cannot be made, and always off Windows.
+    /// </summary>
+    public static bool Prepare()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        lock (Gate)
+        {
+            return Job() != 0;
+        }
+    }
+
+    /// <summary>
+    /// <see cref="Assign"/>, and then every process <paramref name="process"/> started before it joined (2026-10-11, code review of
+    /// the headless browser: <c>Process.Start</c> hands back a process already running, and a child it starts in the moment before
+    /// the assignment — Edge's crash handler, a copy relaunched of itself — is outside the job, outliving the app holding the profile
+    /// folder). A child joins the job its parent is in only from the assignment on, so one snapshot after it finds the rest: those
+    /// whose parent is <paramref name="process"/> or one already found, started no earlier than it, not yet in the job. True when
+    /// <paramref name="process"/> and every one found are in the job; false (logged) otherwise, and always off Windows.
+    /// </summary>
+    public static bool AssignTree(Process process)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        lock (Gate)
+        {
+            nint job = Job();
+            return job != 0 && AssignTree(job, process);
+        }
+    }
+
+    /// <summary><see cref="AssignTree(Process)"/> into <paramref name="job"/> (the tests' own, so closing it shows who was in it).</summary>
+    internal static bool AssignTree(nint job, Process process)
+    {
+        // The parent may already be gone (a relaunch exits as it starts its copy): its children are still caught by its id.
+        bool all = AssignTo(job, process) || process.HasExited;
+        DateTime started;
+        try
+        {
+            started = process.StartTime;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            return all;
+        }
+
+        foreach (int child in Descendants(Snapshot(), process.Id))
+        {
+            all &= AssignLate(job, child, started);
+        }
+
+        return all;
+    }
+
+    /// <summary>
+    /// Every process id under <paramref name="root"/> in <paramref name="processes"/> (id, parent id), children before theirs; a
+    /// cycle (ids reused) ends where it would repeat. Pure.
+    /// </summary>
+    internal static IReadOnlyList<int> Descendants(IReadOnlyList<(int Id, int Parent)> processes, int root)
+    {
+        var found = new List<int>();
+        var seen = new HashSet<int> { root };
+        for (int at = -1; at < found.Count; at++)
+        {
+            int parent = at < 0 ? root : found[at];
+            foreach (var (id, of) in processes)
+            {
+                if (of == parent && seen.Add(id))
+                {
+                    found.Add(id);
+                }
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>Every running process's id and its parent's (a Toolhelp snapshot); empty (logged) when none could be taken.</summary>
+    internal static IReadOnlyList<(int Id, int Parent)> Snapshot()
+    {
+        var list = new List<(int, int)>();
+        if (!OperatingSystem.IsWindows())
+        {
+            return list;
+        }
+
+        nint snapshot = JobObjectNative.CreateToolhelp32Snapshot(JobObjectNative.SnapProcess, 0);
+        if (snapshot == JobObjectNative.InvalidHandle)
+        {
+            DiagnosticLog.Warn(Category, "No process snapshot to find a child outside the job object: " + LastError("CreateToolhelp32Snapshot"));
+            return list;
+        }
+
+        try
+        {
+            var entry = new JobObjectNative.ProcessEntry32 { Size = (uint)Unsafe.SizeOf<JobObjectNative.ProcessEntry32>() };
+            for (bool more = JobObjectNative.Process32First(snapshot, ref entry); more; more = JobObjectNative.Process32Next(snapshot, ref entry))
+            {
+                list.Add(((int)entry.ProcessId, (int)entry.ParentProcessId));
+            }
+        }
+        finally
+        {
+            JobObjectNative.CloseHandle(snapshot);
+        }
+
+        return list;
+    }
+
+    /// <summary>
+    /// Puts the process <paramref name="id"/> in <paramref name="job"/> unless it is there already, gone, or older than
+    /// <paramref name="since"/> (its parent's id reused, so not the parent's child); false (logged) only when one belongs and fails.
+    /// </summary>
+    private static bool AssignLate(nint job, int id, DateTime since)
+    {
+        try
+        {
+            using var child = Process.GetProcessById(id);
+            if (child.StartTime < since)
+            {
+                return true;
             }
 
-            return AssignTo(_job, process);
+            if (OperatingSystem.IsWindows() && JobObjectNative.IsProcessInJob(child.Handle, job, out bool inJob) && inJob)
+            {
+                return true;
+            }
+
+            bool assigned = AssignTo(job, child);
+            if (assigned)
+            {
+                DiagnosticLog.Debug(Category, string.Create(CultureInfo.InvariantCulture, $"Process {id} started before its parent joined the job object, put in it after"));
+            }
+
+            return assigned || child.HasExited;
         }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            // Gone between the snapshot and now, or not ours to open: nothing of the browser's left to hold the folder.
+            return true;
+        }
+    }
+
+    /// <summary>The app's job, made on first use; 0 (logged) when it cannot be. The caller holds <see cref="Gate"/>.</summary>
+    private static nint Job()
+    {
+        if (_job == 0)
+        {
+            var (job, error) = CreateKillOnClose();
+            if (job == 0)
+            {
+                DiagnosticLog.Warn(Category, "No job object for child processes: " + error);
+                return 0;
+            }
+
+            _job = job;
+        }
+
+        return _job;
     }
 
     /// <summary>A new job that kills its processes when its last handle closes, or 0 and why not.</summary>

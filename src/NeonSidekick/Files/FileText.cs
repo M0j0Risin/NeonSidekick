@@ -49,7 +49,7 @@ public static class FileText
     public static string OutsideRoot(string path) => $"Error: '{path}' is outside the working directory; every path must stay inside it";
 
     /// <summary>A path refused as outside that lies in the profile's images folder (<see cref="FileOutcome.InImagesFolder"/>, 2026-10-09): the tools that do reach it. Pinned.</summary>
-    public static string InImagesFolder(string path) => $"Error: '{path}' is in the user's images folder, outside the working directory: only search_files, file_info, view_image, image_info and image_edit reach it, by full path";
+    public static string InImagesFolder(string path) => $"Error: '{path}' is in the user's images folder, outside the working directory: only search_files, file_info, open, view_image, image_info and image_edit reach it, by full path";
 
     /// <summary>
     /// What <c>search_files</c>' description adds while the images folder is offered (2026-10-09, the user's call: a model asked for

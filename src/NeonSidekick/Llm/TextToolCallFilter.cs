@@ -90,18 +90,20 @@ public sealed class TextToolCallFilter
     private StringBuilder? _line;
 
     // The bare object form (later still on 2026-10-11): the object held to its close (null = none), its brace depth, inside a
-    // string, a pending escape; where the open string began, where the current line's text began (-1 before the first '{') and
-    // whether that line has been found to start as a call's would.
+    // string, a pending escape; where the open string began, whether a path's \" closed it only if a value's end follows
+    // (PathCloseHolds), where the current line's text began (-1 before the first '{') and whether that line has been found to
+    // start as a call's would.
     private StringBuilder? _object;
     private int _objectDepth;
     private bool _objectQuote;
     private bool _objectEscape;
     private int _objectQuoteStart;
+    private bool _objectPathClose;
     private int _objectLine;
     private bool _objectLineFits;
 
     // Inside a call: its name, what opened it ('(' or '{'), its arguments so far, the paren depth, the open quote (none = '\0'),
-    // where in the arguments it opened, a pending escape.
+    // where in the arguments it opened, a pending escape, the quote a path's \" closed only if a value's end follows (none = '\0').
     private string? _callName;
     private char _opener;
     private readonly StringBuilder _arguments = new();
@@ -109,6 +111,7 @@ public sealed class TextToolCallFilter
     private char _quote;
     private int _quoteStart;
     private bool _escape;
+    private char _pathClose;
     private bool _backticked;
 
     // After a call: a closing backtick (when one opened it), then whitespace, are dropped.
@@ -379,6 +382,7 @@ public sealed class TextToolCallFilter
                     _objectDepth = 0;
                     _objectQuote = false;
                     _objectEscape = false;
+                    _objectPathClose = false;
                     _objectLine = -1;
                     _objectLineFits = false;
                     continue;
@@ -426,6 +430,7 @@ public sealed class TextToolCallFilter
             _depth = 0;
             _quote = '\0';
             _escape = false;
+            _pathClose = '\0';
             pos = open + 1;
         }
 
@@ -486,7 +491,7 @@ public sealed class TextToolCallFilter
 
     /// <summary>
     /// Reads the bare object form's object from <paramref name="pos"/> to its matching <c>}</c> (JSON strings honoured, a path's
-    /// <c>\"</c> its close). Where it stopped, and the object's text when it closed as no call, ran past <see cref="ObjectLimit"/>,
+    /// <c>\"</c> its close when a line break, <c>,</c> or <c>}</c> follows). Where it stopped, and the object's text when it closed as no call, ran past <see cref="ObjectLimit"/>,
     /// had a line no call would (<see cref="ObjectLineFits"/>) or a string open at a line break (null while open, or caught).
     /// </summary>
     private (int Pos, string? Text) ReadObject(string s, int pos)
@@ -497,6 +502,14 @@ public sealed class TextToolCallFilter
             var held = _object!;
             held.Append(c);
             bool text = false;
+            if (_objectPathClose && c is not (' ' or '\t'))
+            {
+                // After a path's \" and any spaces: a line break, ',' or '}' says it closed the string; anything else, that it
+                // was an escaped quote inside it, and the string goes on with this character.
+                _objectPathClose = false;
+                _objectQuote = c is not ('\n' or '\r' or ',' or '}');
+            }
+
             if (_objectQuote)
             {
                 if (c == '\n')
@@ -509,6 +522,7 @@ public sealed class TextToolCallFilter
                     if (c == '"' && LooksLikePath(held, _objectQuoteStart + 1))
                     {
                         _objectQuote = false;
+                        _objectPathClose = true;
                     }
                 }
                 else if (c == '\\')
@@ -892,13 +906,27 @@ public sealed class TextToolCallFilter
     /// Reads a call's arguments from <paramref name="pos"/>; returns where it stopped (the end, or just past the closing paren or brace).
     /// In a value that starts like a Windows path, <c>\"</c> is the path's last backslash and its close, as in the bare object form and
     /// <see cref="ReadQuoted"/> (later on 2026-10-11, the user's ask after the code review: <c>image="C:\pics\"</c> ran the call on to
-    /// the next quote).
+    /// the next quote). Only when a value's end follows it, spaces aside: a <c>,</c> or the call's close (code review, later still:
+    /// <c>"C:\Python\python.exe -c \"print(1)\""</c> was cut at its first escaped quote). The deltas may split the two, so the
+    /// quote waits in <see cref="_pathClose"/> for the next character that is not a space.
     /// </summary>
     private int ReadCall(string s, int pos)
     {
+        char closer = _opener == '{' ? '}' : ')';
         for (; pos < s.Length; pos++)
         {
             char c = s[pos];
+            if (_pathClose != '\0' && !char.IsWhiteSpace(c))
+            {
+                // A ',' or the call's close: the path's \" closed its string. Anything else: an escaped quote, the string goes on.
+                if (c != ',' && !(c == closer && _depth == 0))
+                {
+                    _quote = _pathClose;
+                }
+
+                _pathClose = '\0';
+            }
+
             if (_quote != '\0')
             {
                 if (_escape)
@@ -906,6 +934,7 @@ public sealed class TextToolCallFilter
                     _escape = false;
                     if (c == _quote && LooksLikePath(_arguments, _quoteStart + 1))
                     {
+                        _pathClose = _quote;
                         _quote = '\0';
                     }
                 }
@@ -929,7 +958,7 @@ public sealed class TextToolCallFilter
             }
             else if (c is ')' or '}' or ']')
             {
-                if (_depth == 0 && c == (_opener == '{' ? '}' : ')'))
+                if (_depth == 0 && c == closer)
                 {
                     Catch(_callName!, _arguments.ToString());
                     _callName = null;
@@ -1443,7 +1472,8 @@ public sealed class TextToolCallFilter
     /// <c>C:Userscnels.neonsidekickprofiles</c>, a line break, <c>eon…</c>): any other escape keeps its backslash, and a value that
     /// starts like a path (<see cref="LooksLikePath"/>) keeps <c>\n</c> and <c>\t</c> as written, so a path comes through whether the
     /// model doubled its backslashes or not. In such a value <c>\"</c> is the path's last backslash and the close (later that day,
-    /// code review: <c>"C:\pics\"</c> ran on to the next quote).</para>
+    /// code review: <c>"C:\pics\"</c> ran on to the next quote) when the arguments end after it or go on to the next key
+    /// (<see cref="ValueEndsAt"/>); otherwise it is an escaped quote, as in <c>"C:\Python\python.exe -c \"print(1)\""</c>.</para>
     /// </summary>
     private static string? ReadQuoted(string t, ref int pos)
     {
@@ -1463,8 +1493,9 @@ public sealed class TextToolCallFilter
                 char next = t[pos++];
                 switch (next)
                 {
-                    case var close when path && close == quote:
-                        // A path's last backslash, then its close: a path holds no quote (code review, 2026-10-11: "C:\pics\").
+                    case var close when path && close == quote && ValueEndsAt(t, pos):
+                        // A path's last backslash, then its close (code review, 2026-10-11: "C:\pics\"), when the value ends
+                        // there; else an escaped quote in a command that starts with a path (later still: C:\x.exe -c \"…\").
                         return value.Append('\\').ToString();
                     case '\\' or '"' or '\'':
                         value.Append(next);
@@ -1487,6 +1518,13 @@ public sealed class TextToolCallFilter
         }
 
         return null;
+    }
+
+    /// <summary>Whether a value ends at <paramref name="pos"/>, spaces aside: the end of the arguments, or a comma and the next key (with <c>=</c> or <c>:</c>).</summary>
+    private static bool ValueEndsAt(string t, int pos)
+    {
+        SkipSpace(t, ref pos);
+        return pos == t.Length || (t[pos] == ',' && (NextIsKey(t, pos + 1, '=') || NextIsKey(t, pos + 1, ':')));
     }
 
     /// <summary>Whether the text at <paramref name="pos"/> starts like a Windows path: a drive letter, <c>:</c> and a slash, or <c>\\</c>.</summary>

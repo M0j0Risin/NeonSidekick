@@ -11,7 +11,8 @@ public static partial class SmokeChecks
     /// <summary>
     /// <c>llm:job-object</c> (2026-09-29): the embedded model's kill-on-close job in the published binary — a job created,
     /// <c>KILL_ON_JOB_CLOSE</c> set through the extended-limit struct, the flags read back through the same struct (which
-    /// proves the source-generated marshalling kept its layout under AOT), and the job closed. No process is put in it.
+    /// proves the source-generated marshalling kept its layout under AOT), and the job closed. No process is put in it. Since
+    /// 2026-10-11 a process snapshot too (<see cref="ChildJob.Snapshot"/>, the headless browser's late children), this process in it.
     /// </summary>
     public static SmokeCheck ProbeJobObject()
     {
@@ -38,7 +39,16 @@ public static partial class SmokeChecks
                 }
 
                 bool kill = (flags & JobObjectNative.JobObjectLimitKillOnJobClose) != 0;
-                return new SmokeCheck(name, kill, string.Create(CultureInfo.InvariantCulture, $"limit flags 0x{flags:X4}{(kill ? "" : ": kill-on-close is not set")}"));
+                if (!kill)
+                {
+                    return new SmokeCheck(name, false, string.Create(CultureInfo.InvariantCulture, $"limit flags 0x{flags:X4}: kill-on-close is not set"));
+                }
+
+                // 2026-10-11: the process snapshot ChildJob.AssignTree reads, its PROCESSENTRY32W crossing intact: this process in it.
+                var processes = ChildJob.Snapshot();
+                return processes.Any(p => p.Id == Environment.ProcessId)
+                    ? new SmokeCheck(name, true, string.Create(CultureInfo.InvariantCulture, $"limit flags 0x{flags:X4}; a process snapshot of {processes.Count} holds this one"))
+                    : new SmokeCheck(name, false, string.Create(CultureInfo.InvariantCulture, $"a process snapshot of {processes.Count} does not hold this process ({Environment.ProcessId})"));
             }
             finally
             {

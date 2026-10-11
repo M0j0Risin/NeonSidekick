@@ -12,10 +12,18 @@ namespace NeonSidekick.Web;
 /// showing also brings the address it ended on (<see cref="FinalUrl"/>, <c>""</c> when unknown) and the browser's cookies for the
 /// host asked for and that one (<see cref="Cookies"/>), for the HTTP client's jar.
 /// </summary>
-public sealed record BrowserDump(string? Html, string Detail, string FinalUrl = "", IReadOnlyList<BrowserCookie>? Cookies = null);
+public sealed record BrowserDump(string? Html, string Detail, string FinalUrl = "", IReadOnlyList<BrowserCookie>? Cookies = null)
+{
+    /// <summary>Whether the run's browser, and all it had started by then, went into the app's kill-on-close job (2026-10-11, <see cref="EmbeddedLlm.ChildJob.AssignTree"/>); false for a run that never started, and off Windows.</summary>
+    public bool InJob { get; init; }
+}
 
 /// <summary>What a print-to-PDF run produced (2026-10-03): whether the PDF is at the output path, else why not.</summary>
-public sealed record BrowserPdf(bool Ok, string Detail);
+public sealed record BrowserPdf(bool Ok, string Detail)
+{
+    /// <summary>As <see cref="BrowserDump.InJob"/> (2026-10-11).</summary>
+    public bool InJob { get; init; }
+}
 
 /// <summary>The headless-browser seam: where the browser is, and a page through it. <see cref="HeadlessBrowser"/> in the app, a fake in tests.</summary>
 public interface IHeadlessBrowser
@@ -119,41 +127,102 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     /// <summary>The profile folder under the temp directory, so the user's own browser profile is never touched.</summary>
     public static string UserDataDirectory => Path.Combine(Path.GetTempPath(), "NeonSidekick", "browser");
 
-    /// <summary>The file a Chromium browser on Windows holds open, unshared, in its profile folder while it runs, and deletes as it exits (checked on Edge 155, 2026-10-11).</summary>
+    /// <summary>The file a Chromium browser on Windows holds open for writing, the writes unshared, in its profile folder while it runs, and deletes as it exits (checked on Edge 155, 2026-10-11).</summary>
     public const string LockFileName = "lockfile";
 
+    /// <summary>The symlink a Chromium browser on macOS (and Linux) keeps in its profile folder while it runs, pointing at <c>host-pid</c>.</summary>
+    public const string SingletonLockName = "SingletonLock";
+
+    /// <summary>Win32 <c>ERROR_SHARING_VIOLATION</c> as an <see cref="IOException.HResult"/>.</summary>
+    private const int SharingViolation = unchecked((int)0x80070020);
+
     /// <summary>
-    /// Whether a running browser holds <paramref name="userDataDirectory"/> (2026-10-11): its <see cref="LockFileName"/> there and
-    /// not to be opened unshared. A second browser started on a held folder hands its page to the holder and exits (code 21), so
-    /// a run checks first and says so rather than "exited before it opened its DevTools port". Windows only: elsewhere the lock is
-    /// a symlink, never held open, so false.
+    /// Whether a running browser holds <paramref name="userDataDirectory"/> (2026-10-11). A second browser started on a held folder
+    /// hands its page to the holder and exits (code 21), so a run checks first and says so rather than "exited before it opened
+    /// its DevTools port".
+    /// <para>On Windows its <see cref="LockFileName"/> there will not open for a write that shares everything: only a holder that
+    /// refuses writers (the browser) stops it, not a scanner or an indexer that reads with everything shared, and only a sharing
+    /// violation counts, seen three times 50 ms apart (code review, later that day: the first version opened it unshared, so any
+    /// brief reader read as a browser, and its own open could stop a browser starting then). Elsewhere (code review, the macOS
+    /// build) its <see cref="SingletonLockName"/> names a process still running (<see cref="SingletonPid"/>).</para>
     /// </summary>
     public static bool ProfileInUse(string userDataDirectory)
     {
         ArgumentNullException.ThrowIfNull(userDataDirectory);
-        string lockFile = Path.Combine(userDataDirectory, LockFileName);
-        if (!OperatingSystem.IsWindows() || !File.Exists(lockFile))
+        if (!OperatingSystem.IsWindows())
         {
-            return false;
+            return SingletonHeld(userDataDirectory);
         }
 
+        string lockFile = Path.Combine(userDataDirectory, LockFileName);
+        for (int look = 0; look < 3; look++)
+        {
+            if (look > 0)
+            {
+                Thread.Sleep(50);
+            }
+
+            if (!File.Exists(lockFile))
+            {
+                return false;
+            }
+
+            try
+            {
+                using var open = new FileStream(lockFile, FileMode.Open, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+                return false;
+            }
+            catch (IOException ex) when (ex.HResult == SharingViolation)
+            {
+                // Held now: a browser, or a reader that will let go; look again.
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Whether <paramref name="userDataDirectory"/>'s <see cref="SingletonLockName"/> points at a process that is running.</summary>
+    private static bool SingletonHeld(string userDataDirectory)
+    {
         try
         {
-            using var held = new FileStream(lockFile, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-            return false;
+            if (new FileInfo(Path.Combine(userDataDirectory, SingletonLockName)).LinkTarget is not { } target || SingletonPid(target) is not { } pid)
+            {
+                return false;
+            }
+
+            using var holder = Process.GetProcessById(pid);
+            return !holder.HasExited;
         }
-        catch (IOException)
-        {
-            return true;
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
             return false;
         }
     }
 
+    /// <summary>The process id at the end of a <see cref="SingletonLockName"/> target, <c>host-pid</c> (a host name may hold dashes); null for anything else. Pure.</summary>
+    public static int? SingletonPid(string target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        int dash = target.LastIndexOf('-');
+        return dash > 0 && int.TryParse(target.AsSpan(dash + 1), NumberStyles.None, CultureInfo.InvariantCulture, out int pid) && pid > 0 ? pid : null;
+    }
+
     private const string Category = "Web";
     private readonly SemaphoreSlim _oneAtATime = new(1, 1);
+    private readonly string _userData;
+
+    /// <param name="userDataDirectory">The profile folder its runs use; null = <see cref="UserDataDirectory"/>, the app's. The smoke
+    /// gives one of its own (2026-10-11, code review: on the shared folder a copy of the app reading a page read as the probe's
+    /// browser left running).</param>
+    public HeadlessBrowser(string? userDataDirectory = null)
+    {
+        _userData = userDataDirectory ?? UserDataDirectory;
+    }
 
     /// <summary>The known executables in the order they are tried, under the standard install folders of this machine.</summary>
     public static IReadOnlyList<string> Candidates()
@@ -311,7 +380,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         {
             var identity = BrowserIdentity.For(executable);
             var read = new PageRead();
-            var run = await RunProcessAsync(executable, url, userData => Arguments(url, userData, identity), Timeout, (process, userData, token) => WatchPageAsync(process, userData, url, read, token), cancellationToken).ConfigureAwait(false);
+            var run = await RunProcessAsync(executable, url, _userData, userData => Arguments(url, userData, identity), Timeout, (process, userData, token) => WatchPageAsync(process, userData, url, read, token), cancellationToken).ConfigureAwait(false);
             if (run.StartError is not null)
             {
                 return new BrowserDump(null, run.StartError);
@@ -322,15 +391,15 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             DiagnosticLog.Debug(Category, $"{run.Summary}, {how} after {read.Looks.ToString(CultureInfo.InvariantCulture)} looks, {(read.Html?.Length ?? 0).ToString(CultureInfo.InvariantCulture)} chars{(read.ChallengeSeen ? (read.Gated ? ", still a bot check" : ", a bot check cleared") : "")}{cookies}" + (read.Failure is null ? "" : $"; {read.Failure}") + run.StderrTail);
             if (read.Html is not null)
             {
-                return new BrowserDump(read.Html, "", read.FinalUrl, read.Cookies);
+                return new BrowserDump(read.Html, "", read.FinalUrl, read.Cookies) { InJob = run.InJob };
             }
 
             if (run.TimedOut)
             {
-                return new BrowserDump(null, $"no page within {Llm.LlmTimeouts.Format(Timeout)}");
+                return new BrowserDump(null, $"no page within {Llm.LlmTimeouts.Format(Timeout)}") { InJob = run.InJob };
             }
 
-            return new BrowserDump(null, run.Failure(read.Failure ?? "it showed no page"));
+            return new BrowserDump(null, run.Failure(read.Failure ?? "it showed no page")) { InJob = run.InJob };
         }
         finally
         {
@@ -348,7 +417,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         {
             bool isWeb = page.Scheme is "http" or "https";
             var identity = BrowserIdentity.For(executable);
-            var run = await RunProcessAsync(executable, page, userData => PdfArguments(page, outputPath, userData, isWeb, identity), PdfTimeout, (process, _, token) => WaitForExitOrWholeAsync(process, () => WholePdf(outputPath), token), cancellationToken).ConfigureAwait(false);
+            var run = await RunProcessAsync(executable, page, _userData, userData => PdfArguments(page, outputPath, userData, isWeb, identity), PdfTimeout, (process, _, token) => WaitForExitOrWholeAsync(process, () => WholePdf(outputPath), token), cancellationToken).ConfigureAwait(false);
             if (run.StartError is not null)
             {
                 return new BrowserPdf(false, run.StartError);
@@ -357,15 +426,15 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             DiagnosticLog.Debug(Category, $"{run.Summary}, PDF to {outputPath}" + run.StderrTail);
             if (run.TimedOut)
             {
-                return new BrowserPdf(false, $"no PDF within {Llm.LlmTimeouts.Format(PdfTimeout)}");
+                return new BrowserPdf(false, $"no PDF within {Llm.LlmTimeouts.Format(PdfTimeout)}") { InJob = run.InJob };
             }
 
             if (!File.Exists(outputPath))
             {
-                return new BrowserPdf(false, run.Failure("it wrote no PDF"));
+                return new BrowserPdf(false, run.Failure("it wrote no PDF")) { InJob = run.InJob };
             }
 
-            return Printing.PrintToFile.IsPdf(outputPath) ? new BrowserPdf(true, "") : new BrowserPdf(false, "it wrote a file that is not a PDF");
+            return (Printing.PrintToFile.IsPdf(outputPath) ? new BrowserPdf(true, "") : new BrowserPdf(false, "it wrote a file that is not a PDF")) with { InJob = run.InJob };
         }
         finally
         {
@@ -589,20 +658,25 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             : null;
     }
 
-    /// <summary>One finished browser run: what it printed, how it ended, or why it never started.</summary>
-    private sealed record BrowserRun(string? StartError, int ExitCode, string Stdout, string Stderr, bool TimedOut, string Summary, string? HeldBy = null)
+    /// <summary>
+    /// One finished browser run: what it printed, how it ended, or why it never started; the profile folder it ran on, whether its
+    /// browser was gone at the end, and whether it went into the app's job (<see cref="BrowserDump.InJob"/>).
+    /// </summary>
+    private sealed record BrowserRun(string? StartError, int ExitCode, string Stdout, string Stderr, bool TimedOut, string Summary, string UserData = "", bool Exited = false, bool InJob = false)
     {
         public string StderrTail => Stderr.Length > 0 ? $"; stderr: {LastLine(Stderr)}" : "";
 
         /// <summary>
-        /// Why a run that ended made nothing: another browser holding the profile folder (<see cref="HeldBy"/>, 2026-10-11), else the
-        /// exit code when it was not 0, else <paramref name="quiet"/>; stderr's last line after.
+        /// Why a run that ended made nothing: another browser holding the profile folder after this one exited (2026-10-11; looked
+        /// at here, only for a run that made nothing, since code review the same day), else the exit code when it was not 0, else
+        /// <paramref name="quiet"/>; stderr's last line after.
         /// </summary>
         public string Failure(string quiet)
         {
-            if (HeldBy is not null)
+            if (Exited && UserData.Length > 0 && ProfileInUse(UserData))
             {
-                return WebText.BrowserProfileInUse(HeldBy);
+                DiagnosticLog.Debug(Category, $"{Summary}, the profile folder held by another browser");
+                return WebText.BrowserProfileInUse(UserData);
             }
 
             string reason = ExitCode != 0 ? $"exit code {ExitCode.ToString(CultureInfo.InvariantCulture)}" : quiet;
@@ -619,11 +693,12 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     ///
     /// <para>2026-10-11 (a relaunched Edge outlived the app and held the folder): a folder another browser holds is refused before
     /// a start (<see cref="ProfileInUse"/>) and named after a run that made nothing; the browser goes into the app's kill-on-close
-    /// job (<see cref="ChildJob"/>, as <c>llama-server</c> does), so whatever it starts dies with the app however the app ends.</para>
+    /// job (<see cref="ChildJob"/>, as <c>llama-server</c> does), so on Windows whatever it starts dies with the app however the app
+    /// ends. The job is made before the start and the browser's tree swept into it after (<see cref="ChildJob.AssignTree"/>, code
+    /// review the same day: a child started before the assignment was outside it, and the assignment's answer went unread).</para>
     /// </summary>
-    private static async Task<BrowserRun> RunProcessAsync(string executable, Uri page, Func<string, IReadOnlyList<string>> arguments, TimeSpan timeout, Func<Process, string, CancellationToken, Task<bool>> watch, CancellationToken cancellationToken)
+    private static async Task<BrowserRun> RunProcessAsync(string executable, Uri page, string userData, Func<string, IReadOnlyList<string>> arguments, TimeSpan timeout, Func<Process, string, CancellationToken, Task<bool>> watch, CancellationToken cancellationToken)
     {
-        string userData = UserDataDirectory;
         if (ProfileInUse(userData))
         {
             return new BrowserRun(WebText.BrowserProfileInUse(userData), 0, "", "", false, "");
@@ -653,6 +728,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             start.ArgumentList.Add(argument);
         }
 
+        ChildJob.Prepare();
         var clock = Stopwatch.StartNew();
         Process? process;
         try
@@ -669,7 +745,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             return new BrowserRun($"could not start {Path.GetFileName(executable)}", 0, "", "", false, "");
         }
 
-        ChildJob.Assign(process);
+        bool inJob = ChildJob.AssignTree(process);
         using (process)
         {
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -716,9 +792,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             string errors = await stderr.ConfigureAwait(false);
             string how = stopped ? "stopped" : process.HasExited ? $"exit {process.ExitCode.ToString(CultureInfo.InvariantCulture)}" : "still running";
             string summary = $"{Path.GetFileName(executable)} {page}: {how} after {clock.Elapsed.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)} s";
-            // Ours gone and the folder still held: another browser has it (one a relaunch left, another app's).
-            string? heldBy = process.HasExited && ProfileInUse(userData) ? userData : null;
-            return new BrowserRun(null, stopped || !process.HasExited ? 0 : process.ExitCode, output, errors, timedOut, summary + (heldBy is null ? "" : ", the profile folder held by another browser"), heldBy);
+            return new BrowserRun(null, stopped || !process.HasExited ? 0 : process.ExitCode, output, errors, timedOut, summary, userData, process.HasExited, inJob);
         }
     }
 

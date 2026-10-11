@@ -5315,7 +5315,7 @@ internal sealed partial class ChatScreen
             new DeleteTool(files),
             new ZipTool(files),
             new UnzipTool(files),
-            new OpenTool(files, openFile, unc, effective, openPicture),
+            new OpenTool(files, openFile, unc, effective, openPicture, images),
         };
 
         if (pdf is not null)
@@ -15734,7 +15734,6 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        string editor = _effective().ImageEditor;
         try
         {
             string path;
@@ -15756,27 +15755,7 @@ internal sealed partial class ChatScreen
                 File.WriteAllBytes(path, source.Bytes);
             }
 
-            switch (PictureOpenerFor(editor, _viewPicture is not null))
-            {
-                case PictureOpener.Command:
-                    _openImage(path, editor);
-                    break;
-                case PictureOpener.Viewer:
-                    try
-                    {
-                        _viewPicture!(path);
-                    }
-                    catch (Exception ex) when (ex is InvalidOperationException or PlatformNotSupportedException or ArgumentException)
-                    {
-                        DiagnosticLog.Warn("Viewer", $"The picture viewer would not open {path} ({ex.Message}); opening it in the registered app instead.");
-                        _openImage(path, "");
-                    }
-
-                    break;
-                default:
-                    _openImage(path, "");
-                    break;
-            }
+            OpenPictureWith(path, _viewPicture);
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
@@ -15793,15 +15772,24 @@ internal sealed partial class ChatScreen
     /// went (<see cref="FileText.InPictureViewer"/>, <see cref="FileText.InImageApp"/>); a launch that fails throws, and
     /// <see cref="WorkingDirectory.Open"/> words it. Any thread.
     /// </summary>
-    private string OpenPictureForModel(string path)
+    private string OpenPictureForModel(string path) => OpenPictureWith(path, _showInViewer);
+
+    /// <summary>
+    /// <paramref name="path"/> opened where <see cref="PictureOpenerFor"/> says, the <c>Image viewer</c> setting read now: the built-in
+    /// viewer through <paramref name="viewer"/> (none: the registered app), the setting's command, or the registered app; a viewer
+    /// that will not start falls back to the registered app, logged. Where it went (<see cref="FileText.InPictureViewer"/>,
+    /// <see cref="FileText.InImageApp"/>). The one set of rules a double-click (<see cref="OpenPicture"/>) and the model's
+    /// <c>open</c> (<see cref="OpenPictureForModel"/>) share (code review, 2026-10-11: each had its copy). A launch that fails throws.
+    /// </summary>
+    private string OpenPictureWith(string path, Action<string>? viewer)
     {
         string editor = _effective().ImageEditor;
-        switch (PictureOpenerFor(editor, _showInViewer is not null))
+        switch (PictureOpenerFor(editor, viewer is not null))
         {
             case PictureOpener.Viewer:
                 try
                 {
-                    _showInViewer!(path);
+                    viewer!(path);
                     return FileText.InPictureViewer;
                 }
                 catch (Exception ex) when (ex is InvalidOperationException or PlatformNotSupportedException or ArgumentException)
