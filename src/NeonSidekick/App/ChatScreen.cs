@@ -1275,6 +1275,8 @@ internal sealed partial class ChatScreen
             // The upper rule's way back to a strip its × put away (2026-10-03, the user's ask): the strip's own 🎞️, viewer or
             // not — this one brings the strip back, the rule's opens the viewer.
             StripReopen = () => _effective().ComfyPictureStrip && _pictureStrip.Closed && _pictureStrip.Count > 0 ? ViewerText.StripButton : null,
+            // The draft row's ☺ (2026-10-11, the user's ask): the emoji picker's button while Emoji picker is on.
+            EmojiButton = () => _effective().EmojiPicker,
             Placeholder = InputPlaceholder,
         };
         _keys.Mirror = _pane;
@@ -4029,6 +4031,24 @@ internal sealed partial class ChatScreen
         {
             var picked = await _menuPane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false);
             return picked is null ? null : line;
+        }
+        finally
+        {
+            _menuPane.Close();
+        }
+    }
+
+    /// <summary>
+    /// The emoji button's picker (2026-10-11, <see cref="SettingsMenu.PickEmojiAsync"/>): the pane this visit's own and closed after, the
+    /// command chords nobody's while it is up (the typo intercept's reason: a chord's close would run under the pick). The emoji, or
+    /// null on ESC.
+    /// </summary>
+    private async Task<string?> PickEmojiAsync(CancellationToken cancellationToken)
+    {
+        using var chords = _pane.SuppressChords();
+        try
+        {
+            return await _menu.PickEmojiAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -9672,6 +9692,17 @@ internal sealed partial class ChatScreen
                         if (toolbarLine is not null && await HandleAsync(toolbarLine, [], cancellationToken).ConfigureAwait(false))
                         {
                             return 0;
+                        }
+
+                        break;
+                    case InputResult.EmojiButton:
+                        // The draft row's ☺ (2026-10-11, the user's ask): the emoji picker, the pick at the draft's cursor — no
+                        // transcript row, no history; the next read draws the draft with it.
+                        _timers.Acknowledge();
+                        DisarmExit();
+                        if (await PickEmojiAsync(cancellationToken).ConfigureAwait(false) is { } emoji)
+                        {
+                            _input.Chat.InsertAtCursor(emoji);
                         }
 
                         break;

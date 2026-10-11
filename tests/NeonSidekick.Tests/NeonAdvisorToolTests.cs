@@ -7,6 +7,7 @@ using NeonSidekick.Llm.Tools;
 using NeonSidekick.Plans;
 using NeonSidekick.Settings;
 using NeonSidekick.Tests.Fakes;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
 
@@ -46,12 +47,22 @@ public partial class NeonAdvisorToolTests
     {
         public List<string> Lines { get; } = [];
 
-        public void Began(AdvisorEntry advisor, string question) => Lines.Add("began " + advisor.Profile + " " + question);
+        /// <summary>The avatar each of Began and Answered was handed, in order.</summary>
+        public List<string> Avatars { get; } = [];
+
+        public void Began(AdvisorEntry advisor, string question, string avatar)
+        {
+            Lines.Add("began " + advisor.Profile + " " + question);
+            Avatars.Add(avatar);
+        }
 
         public void Tool(AdvisorEntry advisor, string name, string detail) => Lines.Add("tool " + advisor.Profile + " " + name);
 
-        public void Answered(AdvisorEntry advisor, string answer, string model, TokenUsage usage, string? warning) =>
+        public void Answered(AdvisorEntry advisor, string answer, string model, TokenUsage usage, string? warning, string avatar)
+        {
             Lines.Add("answered " + advisor.Profile + " " + answer + " on " + model + (warning is null ? "" : " (" + warning + ")"));
+            Avatars.Add(avatar);
+        }
     }
 
     private sealed class NamedTool(string name) : AIFunction
@@ -111,6 +122,28 @@ public partial class NeonAdvisorToolTests
         Assert.Equal(["read_file"], tools);   // write_file, ask_user and neon_advisor are never an advisor's
         Assert.Equal(["began dba Which index?", "answered dba Index the foreign key. on dba-model"], _view.Lines);
         Assert.Equal([new AdvisorPair("Which index?", "Index the foreign key.")], _threads.Of("dba"));
+    }
+
+    [Fact]
+    public async Task TheView_IsHandedTheAdvisorsAvatar_OrNoneWithoutOne()
+    {
+        _host.Add("dba", settings: new AppSettingsData { Avatar = "🦉" }).EnqueueText("one");
+        _host.Add("ux", settings: new AppSettingsData { Avatar = "" }).EnqueueText("two");
+        var tool = Tool();
+
+        await Ask(tool, "dba", "q1");
+        await Ask(tool, "ux", "q2");
+
+        Assert.Equal(["🦉", "🦉", "", ""], _view.Avatars);
+    }
+
+    [Fact]
+    public void AdvisorGlyph_IsTheAvatarInTheToolGlyphsCells_ElseTheToolGlyph()
+    {
+        Assert.Equal("  🦉 ", TranscriptRenderer.AdvisorGlyph("🦉"));
+        Assert.Equal(TranscriptRenderer.ToolGlyph, TranscriptRenderer.AdvisorGlyph(null));
+        Assert.Equal(TranscriptRenderer.ToolGlyph, TranscriptRenderer.AdvisorGlyph(""));
+        Assert.Equal(TranscriptRenderer.ToolGlyph, TranscriptRenderer.AdvisorGlyph("dba"));   // not an emoji
     }
 
     [Fact]

@@ -33,7 +33,8 @@ internal sealed partial class SettingsMenu
     }
 
     // What one visit of the picker reads once: the catalog, the prefs, the avatar, whose avatars are whose, the suggestions.
-    private sealed record AvatarContext(EmojiCatalog Catalog, EmojiPrefs Prefs, string Current, string Profile, IReadOnlyDictionary<string, List<string>> UsedBy, IReadOnlyList<EmojiEntry> Suggested);
+    // ForDraft (2026-10-11): the draft line's emoji picker, not the avatar's — no avatar, owners, suggestions or preview.
+    private sealed record AvatarContext(EmojiCatalog Catalog, EmojiPrefs Prefs, string Current, string Profile, IReadOnlyDictionary<string, List<string>> UsedBy, IReadOnlyList<EmojiEntry> Suggested, bool ForDraft = false);
 
     /// <summary>
     /// The avatar picker (2026-10-10, the user's ask: "an intuitive picker … searching by name, a category filter, and any other way
@@ -57,7 +58,7 @@ internal sealed partial class SettingsMenu
         string? chosen;
         try
         {
-            chosen = await ChooseAvatarAsync(filter, cancellationToken).ConfigureAwait(false);
+            chosen = await ChooseEmojiAsync(AvatarContextNow(), Crumb(FieldName(SettingsField.Avatar)), filter, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -77,10 +78,29 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
-    // The grid's visit: the emoji chosen ("" for 🚫), or null when ESC backed out. A pick goes on the Recent list here.
-    private async Task<string?> ChooseAvatarAsync(string filter, CancellationToken cancellationToken)
+    /// <summary>
+    /// The draft line's emoji picker (2026-10-11, the user's ask: the <c>Emoji picker</c> setting's button at the draft row's end): the
+    /// avatar picker's grid, tabs, search and skin tones under <see cref="EmojiText.PickerTitle"/>, without what is the avatar's — no 🚫,
+    /// no avatars in use or For you, no preview — opening on Recent when it has any (the avatar's Recent, one list in
+    /// <see cref="EmojiPrefs"/>). The emoji picked, or null on ESC (and without the pane, where no button is drawn). The caller closes
+    /// the pane; nothing is saved but the Recent list.
+    /// </summary>
+    public async Task<string?> PickEmojiAsync(CancellationToken cancellationToken)
     {
-        var context = AvatarContextNow();
+        if (!_pane.Enabled)
+        {
+            return null;
+        }
+
+        var context = new AvatarContext(EmojiCatalog.Shipped, EmojiPrefs.Load(_settings.StorageDirectory), "", _settings.ProfileName,
+            new Dictionary<string, List<string>>(StringComparer.Ordinal), [], ForDraft: true);
+        string? chosen = await ChooseEmojiAsync(context, EmojiText.PickerTitle, "", cancellationToken).ConfigureAwait(false);
+        return string.IsNullOrEmpty(chosen) ? null : chosen;
+    }
+
+    // The grid's visit under title: the emoji chosen ("" for 🚫), or null when ESC backed out. A pick goes on the Recent list here.
+    private async Task<string?> ChooseEmojiAsync(AvatarContext context, string title, string filter, CancellationToken cancellationToken)
+    {
         var tabs = AvatarTabs(context);
         int tab = OpeningAvatarTab(tabs, context);
         int cursor = context.Current.Length > 0 && tabs[tab].RowOf(context.Current) is >= 0 and var at ? at : tabs[tab].FirstEmoji;
@@ -94,7 +114,7 @@ internal sealed partial class SettingsMenu
             {
                 // A search: one page of results across the whole catalog, the strip gone until ESC clears it.
                 shown = AvatarResults(context, filter);
-                page = new MenuPage(Crumb(FieldName(SettingsField.Avatar)), shown.Rows, MenuFilter.Hint(EmojiText.Keys, filter))
+                page = new MenuPage(title, shown.Rows, MenuFilter.Hint(EmojiText.Keys, filter))
                 {
                     Grid = new MenuGrid(AvatarCellWidth),
                     Headings = shown.Headings,
@@ -109,7 +129,7 @@ internal sealed partial class SettingsMenu
             {
                 var built = tabs;
                 var menuTabs = built.Select(t => new MenuTab(t.Title, t.Rows) { Headings = t.Headings, Marks = t.Marks, Caption = t.Caption, Filter = "" }).ToList();
-                page = MenuPage.Tabbed(Crumb(FieldName(SettingsField.Avatar)), menuTabs, tab, EmojiText.Keys) with
+                page = MenuPage.Tabbed(title, menuTabs, tab, EmojiText.Keys) with
                 {
                     Grid = new MenuGrid(AvatarCellWidth),
                     Footer = (t, row) => AvatarFooter(context, built[t], row),
@@ -171,7 +191,7 @@ internal sealed partial class SettingsMenu
             int? tone = null;
             if (cell.Entry is { HasTones: true } toned)
             {
-                if (await PickAvatarToneAsync(context, toned, cancellationToken).ConfigureAwait(false) is not { } choice)
+                if (await PickAvatarToneAsync(context, title, toned, cancellationToken).ConfigureAwait(false) is not { } choice)
                 {
                     // ESC on the tones: back on the grid where it was.
                     if (filter.Length > 0)
@@ -221,7 +241,7 @@ internal sealed partial class SettingsMenu
     /// The skin tones of <paramref name="entry"/> as a grid of six: as it is, then light to dark, the cursor on the tone last chosen
     /// (<see cref="EmojiPrefs.Tone"/>). The tone picked (0 for none), or null on ESC.
     /// </summary>
-    private async Task<int?> PickAvatarToneAsync(AvatarContext context, EmojiEntry entry, CancellationToken cancellationToken)
+    private async Task<int?> PickAvatarToneAsync(AvatarContext context, string title, EmojiEntry entry, CancellationToken cancellationToken)
     {
         var forms = Enumerable.Range(0, EmojiCatalog.ToneCount + 1).Select(entry.InTone).ToList();
         var marks = new Dictionary<int, Style>();
@@ -233,12 +253,12 @@ internal sealed partial class SettingsMenu
             }
         }
 
-        var page = new MenuPage(Crumb(FieldName(SettingsField.Avatar)) + " › " + EmojiText.ToneTitle, forms.Select(Markup.Escape).ToList(), EmojiText.ToneKeys)
+        var page = new MenuPage(title + " › " + EmojiText.ToneTitle, forms.Select(Markup.Escape).ToList(), EmojiText.ToneKeys)
         {
             Grid = new MenuGrid(AvatarCellWidth),
             Marks = marks,
             Footer = (_, row) => row >= 0 && row < forms.Count
-                ? new MenuFooter(string.Join('\n', EmojiText.NameLine(forms[row], entry) + " · " + EmojiText.ToneNames[row], EmojiText.CodeLine(forms[row], entry, forms[row] == context.Current, UsersOf(context, forms[row])), EmojiText.PreviewLine(forms[row], context.Profile))) { KeepLines = true }
+                ? new MenuFooter(string.Join('\n', new[] { EmojiText.NameLine(forms[row], entry) + " · " + EmojiText.ToneNames[row], EmojiText.CodeLine(forms[row], entry, forms[row] == context.Current, UsersOf(context, forms[row])), context.ForDraft ? "" : EmojiText.PreviewLine(forms[row], context.Profile) }.Where(l => l.Length > 0))) { KeepLines = true }
                 : null,
         };
         return await _pane.PickAsync(page, Math.Clamp(context.Prefs.Tone, 0, EmojiCatalog.ToneCount), cancellationToken).ConfigureAwait(false) is { } pick ? pick.Row : null;
@@ -452,9 +472,15 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    // The tab the picker opens on: the current avatar's group, else For you, else the first group.
+    // The tab the picker opens on: the current avatar's group, else For you, else the first group. The draft's: Recent when it has any.
     private static int OpeningAvatarTab(List<AvatarTab> tabs, AvatarContext context)
     {
+        if (context.ForDraft && tabs.FindIndex(t => t.Title == EmojiText.RecentTab) is >= 0 and var recentFirst
+            && tabs[recentFirst].Cells.Any(c => c is { Kind: AvatarCellKind.Emoji }))
+        {
+            return recentFirst;
+        }
+
         if (context.Current.Length > 0 && context.Catalog.Find(context.Current) is { } found)
         {
             int group = tabs.FindIndex(t => t.Title == EmojiText.GroupTab(found.Entry.Group));
@@ -496,7 +522,7 @@ internal sealed partial class SettingsMenu
             EmojiText.NameLine(cell.Emoji, cell.Entry),
             EmojiText.KeywordLine(cell.Entry),
             EmojiText.CodeLine(cell.Emoji, cell.Entry, cell.Emoji == context.Current, UsersOf(context, cell.Emoji)),
-            EmojiText.PreviewLine(cell.Emoji, context.Profile),
+            context.ForDraft ? "" : EmojiText.PreviewLine(cell.Emoji, context.Profile),
         };
         if (cell.Entry is { HasTones: true })
         {

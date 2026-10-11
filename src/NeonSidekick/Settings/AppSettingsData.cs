@@ -251,6 +251,13 @@ public sealed class AppSettingsData
     public bool HideExitAutocomplete { get; set; } = true;
 
     /// <summary>
+    /// Whether the draft row shows the emoji button at its right end (2026-10-11, the user's ask; off by default): a dim ☺
+    /// (<c>ScreenPane.EmojiGlyph</c>) whose click opens the emoji picker, the avatar picker's grid, and puts the pick at the cursor.
+    /// Read at each draw. No variable.
+    /// </summary>
+    public bool EmojiPicker { get; set; }
+
+    /// <summary>
     /// How big the thumbnail under a sent picture is drawn (<see cref="ShowImageThumbnails"/>):
     /// <c>tiny</c> (32 columns × 8 rows), <c>small</c> (48 × 12), <c>medium</c> (64 × 16), <c>large</c> (80 × 20), <c>xlarge</c> (96 × 24) or <c>fullsize</c>
     /// (2026-09-24: each picture as large as the transcript window allows, more than one wrapping below). One of

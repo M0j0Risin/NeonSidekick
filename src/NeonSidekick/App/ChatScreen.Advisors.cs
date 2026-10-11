@@ -212,18 +212,19 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// An advisor on the transcript as it answers (2026-10-10, the shape of the Claude Code advisor tool's view, retired later that day): the question as a tool note, each tool
     /// it calls as a dim line, then its answer in <see cref="AdvisorColor"/> and the footer naming its model and tokens. The result's own
-    /// line is left to <see cref="Render"/>, which prints only a refusal or a failure.
+    /// line is left to <see cref="Render"/>, which prints only a refusal or a failure. The question and the footer wear the advisor's avatar
+    /// (later on 2026-10-10, the user's ask; <see cref="TranscriptRenderer.AdvisorGlyph"/>, 🛠️ without one); its tool lines keep 🛠️.
     /// </summary>
     private sealed class NeonAdvisorView(ChatScreen screen) : IAdvisorView
     {
-        public void Began(AdvisorEntry advisor, string question) => screen._transcript.ToolNote(AdvisorText.QuestionNote(advisor, question));
+        public void Began(AdvisorEntry advisor, string question, string avatar) => screen._transcript.AdvisorNote(AdvisorText.QuestionNote(advisor, question), avatar);
 
         public void Tool(AdvisorEntry advisor, string name, string detail) => screen._transcript.ToolNote(AdvisorText.ToolNote(advisor.Profile, name, detail));
 
-        public void Answered(AdvisorEntry advisor, string answer, string model, TokenUsage usage, string? warning)
+        public void Answered(AdvisorEntry advisor, string answer, string model, TokenUsage usage, string? warning, string avatar)
         {
             screen._transcript.ToolAnswer(answer, AdvisorColor);
-            screen._transcript.ToolNote(AdvisorText.Footer(advisor.Profile, model, usage, warning));
+            screen._transcript.AdvisorNote(AdvisorText.Footer(advisor.Profile, model, usage, warning), avatar);
         }
     }
 }

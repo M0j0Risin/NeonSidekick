@@ -60,6 +60,13 @@ public abstract record InputResult
     public sealed record ToolbarRow(string Draft, ScreenPane.ToolbarHit Hit) : InputResult;
 
     /// <summary>
+    /// A click on the draft row's emoji button (2026-10-11, <see cref="ScreenPane.EmojiButton"/>): the screen opens its emoji
+    /// picker and puts the pick at the chat editor's cursor (<see cref="Editor.InsertAtCursor"/>); <see cref="Draft"/> as
+    /// <see cref="HintRow"/>'s.
+    /// </summary>
+    public sealed record EmojiButton(string Draft) : InputResult;
+
+    /// <summary>
     /// A double-click on the session's name at the upper rule's right edge (2026-09-28, the user's ask): the screen opens
     /// the rename box, as a bare <c>/sessions title</c> does; <see cref="Draft"/> as <see cref="HintRow"/>'s.
     /// </summary>

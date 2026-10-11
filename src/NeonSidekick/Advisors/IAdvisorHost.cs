@@ -31,12 +31,15 @@ public interface IAdvisorHost
     void Forget(string profile);
 }
 
-/// <summary>An advisor call on the transcript as it runs (2026-10-10, the shape of the Claude Code advisor tool's view, retired later that day).</summary>
+/// <summary>
+/// An advisor call on the transcript as it runs (2026-10-10, the shape of the Claude Code advisor tool's view, retired later that day).
+/// <c>avatar</c> is the advisor profile's (<see cref="Emojis.AvatarRules.Normalize"/>, "" for none), for its question line and footer.
+/// </summary>
 public interface IAdvisorView
 {
-    void Began(AdvisorEntry advisor, string question);
+    void Began(AdvisorEntry advisor, string question, string avatar);
 
     void Tool(AdvisorEntry advisor, string name, string detail);
 
-    void Answered(AdvisorEntry advisor, string answer, string model, TokenUsage usage, string? warning);
+    void Answered(AdvisorEntry advisor, string answer, string model, TokenUsage usage, string? warning, string avatar);
 }

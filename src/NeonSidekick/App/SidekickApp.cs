@@ -1948,13 +1948,13 @@ public sealed class SidekickApp
     /// </summary>
     private sealed class HeadlessNeonAdvisorView(SidekickApp app) : Advisors.IAdvisorView
     {
-        public void Began(AdvisorEntry advisor, string question)
+        public void Began(AdvisorEntry advisor, string question, string avatar)
         {
         }
 
         public void Tool(AdvisorEntry advisor, string name, string detail) => app.HeadlessSyncLine("[tool] " + Advisors.AdvisorText.ToolNote(advisor.Profile, name, detail));
 
-        public void Answered(AdvisorEntry advisor, string answer, string model, Llm.TokenUsage usage, string? warning) =>
+        public void Answered(AdvisorEntry advisor, string answer, string model, Llm.TokenUsage usage, string? warning, string avatar) =>
             app.HeadlessSyncLine("[notice] " + Advisors.AdvisorText.Footer(advisor.Profile, model, usage, warning));
     }
 

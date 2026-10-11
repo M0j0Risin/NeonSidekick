@@ -84,6 +84,9 @@ public static class EmojiText
     /// <summary>The tone grid's title after the crumb.</summary>
     public const string ToneTitle = "Skin tone";
 
+    /// <summary>The draft line's emoji picker's title (2026-10-11, <c>SettingsMenu.PickEmojiAsync</c>).</summary>
+    public const string PickerTitle = "😀 Emoji";
+
     /// <summary>The tone names, 0 (none) to 5.</summary>
     public static readonly IReadOnlyList<string> ToneNames = ["no skin tone", "light skin tone", "medium-light skin tone", "medium skin tone", "medium-dark skin tone", "dark skin tone"];
 

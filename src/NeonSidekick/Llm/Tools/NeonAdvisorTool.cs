@@ -4,6 +4,7 @@ using Microsoft.Extensions.AI;
 using NeonSidekick.Advisors;
 using NeonSidekick.Claude;
 using NeonSidekick.Diagnostics;
+using NeonSidekick.Emojis;
 using NeonSidekick.Plans;
 using NeonSidekick.Settings;
 
@@ -179,7 +180,8 @@ public sealed class NeonAdvisorTool : AIFunction
             return AdvisorText.MissingProfileError(advisor.Profile);
         }
 
-        _view?.Began(advisor, question);
+        string avatar = AvatarRules.Normalize(profile.Settings.Avatar);
+        _view?.Began(advisor, question, avatar);
         var (link, problem) = await _host.LinkAsync(profile, cancellationToken).ConfigureAwait(false);
         if (link is null)
         {
@@ -263,7 +265,7 @@ public sealed class NeonAdvisorTool : AIFunction
         DiagnosticLog.Info(AdvisorText.Category, AdvisorText.ResultLog(advisor.Profile, link.Model, usage, calls));
         text = text.Length > 0 ? text : AdvisorText.NoAnswer(advisor.Profile);
         _threads.Add(advisor.Profile, new AdvisorPair(question, text), effective.AdvisorThreadPairs);
-        _view?.Answered(advisor, text, link.Model, usage, link.Warning);
+        _view?.Answered(advisor, text, link.Model, usage, link.Warning, avatar);
         return text;
     }
 }

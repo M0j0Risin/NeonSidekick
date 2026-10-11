@@ -2764,6 +2764,77 @@ public class ScreenPaneTests : IDisposable
         return pane;
     }
 
+    /// <summary>
+    /// The draft row's emoji button (2026-10-11, the user's ask): ☺ in column 38 of 40 on the first input row, one blank before it and the
+    /// last column empty; the draft wraps two cells narrower (35 cells, not 37) while it shows; off, the row is as it was.
+    /// </summary>
+    [Fact]
+    public void EmojiButton_On_EndsTheFirstRow_AndTheWrapIsTwoCellsNarrower()
+    {
+        bool on = true;
+        using var pane = Pane();
+        pane.EmojiButton = () => on;
+        pane.Show();
+        Assert.Contains(InputLine.PromptGlyph + new string(' ', 36) + ScreenPane.EmojiGlyph + "\n", Output);   // the empty row: its 35 cells and the blank
+
+        string fits = new('x', 36);   // one row without the button (37 cells), two with it
+        pane.ShowInput(fits, fits.Length);
+        Assert.Contains(InputLine.PromptGlyph + new string('x', 35) + " " + ScreenPane.EmojiGlyph + "\n" + InputLine.ContinuationIndent + "x\n", Output);
+
+        on = false;
+        int mark = Output.Length;
+        pane.ShowInput(fits + "y", fits.Length + 1);
+        Assert.Contains(InputLine.PromptGlyph + fits + "y\n", Output[mark..]);
+        Assert.DoesNotContain(ScreenPane.EmojiGlyph, Output[mark..]);
+    }
+
+    /// <summary>Typing under the emoji button rewrites the row in place, its pad short of the button's cells: no redraw, the ☺ not written again.</summary>
+    [Fact]
+    public void EmojiButton_StandsThroughAnInPlaceRewrite()
+    {
+        using var pane = Pane();
+        pane.EmojiButton = () => true;
+        pane.Show();
+        pane.ShowInput("hi", 2);
+        int draws = Draws;
+        int mark = Output.Length;
+
+        pane.ShowInput("hi there", 8);
+        pane.ShowInput("hi", 2);
+
+        Assert.Equal(draws, Draws);
+        Assert.DoesNotContain(ScreenPane.EmojiGlyph, Output[mark..]);
+        Assert.Contains("hi there", Output[mark..]);
+    }
+
+    /// <summary>A click on the ☺ or the cell either side hits the emoji button; the draft's own cells, another row and a pane without it miss; a spinner hides it.</summary>
+    [Fact]
+    public void TryHitEmojiButton_OnTheGlyphAndItsNeighbours_NotWhileBusy()
+    {
+        bool on = true;
+        using var pane = PaneWithDraft(100, "hi", 2);
+        pane.EmojiButton = () => on;
+        pane.ShowInput("hi!", 3);   // laid out again with the button
+
+        Assert.True(pane.TryHitEmojiButton(38, 100));
+        Assert.True(pane.TryHitEmojiButton(37, 100));
+        Assert.True(pane.TryHitEmojiButton(39, 100));
+        Assert.False(pane.TryHitEmojiButton(36, 100));
+        Assert.False(pane.TryHitEmojiButton(38, 101));   // the rule under the row
+        Assert.True(pane.TryHitInput(3, 100, out int at));
+        Assert.Equal(1, at);
+
+        using (pane.BeginBusy("thinking"))
+        {
+            Assert.False(pane.TryHitEmojiButton(38, 100));   // a reply's clicks are the watcher's
+        }
+
+        Assert.True(pane.TryHitEmojiButton(38, 100));
+        on = false;
+        pane.ShowInput("hi", 2);
+        Assert.False(pane.TryHitEmojiButton(38, 100));
+    }
+
     [Fact]
     public void TryHitInput_MapsAClickToTheDraft()
     {

@@ -52,7 +52,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 ### Models
 * **Local servers:** finds OpenAI-compatible servers on this machine or your network (LM Studio, Ollama, llama.cpp, vLLM…), or takes a URL.
 * **Embedded LLM:** No server needed — install Gemma, Qwen or Muse models from `/settings` › Servers › Embedded and the app runs them on a built-in llama.cpp, backed by CUDA, Vulkan or CPU (Metal on a Mac). Every model supports vision and tool-calling. Quants run Q4 and up, chosen to fit GPUs with 8–32 GB of VRAM. Several NVFP4 quants are included for Nvidia GPUs.
-* **Docker servers (Windows):** your vLLM or SGLang containers as `/server` choices, one running at a time ([vLLM](docs/VLLM_EXAMPLES_WINDOWS.md) and [SGLang](docs/SGLANG_EXAMPLES_WINDOWS.md) examples).
+* **Docker servers (Windows):** your vLLM or SGLang containers as `/server` choices, one running at a time ([vLLM](docs/DOCKER_WINDOWS_VLLM.md) and [SGLang](docs/DOCKER_WINDOWS_SGLANG.md) examples).
 * **Cloud models:** the Anthropic and OpenAI APIs with your own key, or your Claude Code install. All off until you turn them on.
 * **Context control:** automatic compaction keeps the conversation inside the model's window; `/compact` and `/rewind` do it by hand.
 * **Prompt transparency:** `/sys` shows exactly what the model is sent.
@@ -105,7 +105,7 @@ Only for some features:
 * **Reading web pages that need a real browser, and saving them as PDFs:** Edge, Chrome or Brave.
 * **`/claude` and the Claude Code server:** Claude Code installed.
 * **Scripts in Python or Node:** Python or Node installed.
-* **Better web search:** a SearXNG server ([setup with Docker](docs/SEARXNG_DOCKER_WINDOWS.md)), or an MCP web-search server.
+* **Better web search:** a SearXNG server ([setup with Docker](docs/DOCKER_WINDOWS_SEARXNG.md)), or an MCP web-search server.
 
 ### Install
 1. Download `NeonSidekick-v<version>-win-x64.zip` from the [Releases page](https://github.com/M0j0Risin/NeonSidekick/releases).
@@ -177,6 +177,7 @@ Everything is set from panes inside the app, and each explains itself: the highl
 * **↑/↓** bring back earlier messages.
 * **`/`** lists commands, **`@`** files and folders, **`#`** skills and **`$`** tools.
 * **Ctrl+O** opens or folds tool calls, code and thinking.
+* **☺** at the line's right end opens an emoji picker, once *Emoji picker* is on under `/settings › Client › Chat`.
 
 ### Handy shortcuts
 

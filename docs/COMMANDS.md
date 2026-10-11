@@ -263,7 +263,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 
 * It answers on its own profile's server and model, under its own `persona.md` and the role you gave it, and may use this chat's read-only tools (the ones plan mode keeps) for up to *Advisor tool iterations* round trips.
 * Your question goes with the conversation's last 10 messages (tool results cut to 500 characters), whatever *Advisor context* says; that setting is for the model's calls.
-* The transcript shows the question, each tool it calls, its answer and a footer with its model and tokens (and, under *Advisor embedded mode* `parent-server`, which model it wanted).
+* The transcript shows the question, each tool it calls, its answer and a footer with its model and tokens (and, under *Advisor embedded mode* `parent-server`, which model it wanted). The question and the footer wear the advisor profile's avatar (🛠️ without one); its tool lines keep 🛠️.
 * The pair joins the conversation tagged `[to dba]` and `[dba]`, so the model can build on it, and the advisor's thread remembers it for its next question (the model's calls and yours share one thread per advisor).
 * Works whether *Advisors enabled* is on or off, never capped or confirmed. ESC stops it. Headless, the answer prints as `dba: …`.
 * A bare `/advisor` lists the advisors one a line, each with the kind of server its profile is on and its model (`doug — expert .NET solution architect · docker · Qwen3-32B`; the kind is `claudecode`, `embedded`, `docker`, `anthropic`, `openai`, `http` (any other server by URL) or `scan` (no URL saved)); one whose profile is gone is marked `(missing)`.

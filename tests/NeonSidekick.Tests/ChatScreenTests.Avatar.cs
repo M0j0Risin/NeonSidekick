@@ -100,4 +100,32 @@ public partial class ChatScreenTests
         transcript.EndAssistant();
         Assert.StartsWith("🐙 Hi.", console.Output);
     }
+
+    /// <summary>
+    /// The draft row's emoji button (2026-10-11, the user's ask): a click on the ☺ opens the emoji picker over the draft; ESC leaves
+    /// the draft as it was, a search and Enter put the emoji at its cursor, on the Recent list too, and Enter sends the line.
+    /// </summary>
+    [Fact]
+    public async Task TheEmojiButton_OpensThePicker_AndThePickLandsInTheDraft()
+    {
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        _settings.Update(d => d.EmojiPicker = true);
+        _chat.EnqueueText("Purr.");
+        string cat = EmojiSearch.Rank("cat", EmojiCatalog.Shipped.Entries).First().Emoji;
+        StepsWhenIdle(
+            input => { input.Push(Keys.Char('h'), Keys.Char('i'), Keys.Char(' ')); input.PushClick(118, 100); },   // the ☺: column 118 of 120
+            input => input.Push(Keys.Escape),                                                                         // the picker: nothing picked
+            input => input.PushClick(118, 100),
+            input => input.Push(Keys.Char('c'), Keys.Char('a'), Keys.Char('t'), Keys.Enter),                          // a search, its first emoji
+            Key(Keys.Enter),                                                                                          // the line, sent
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(EmojiText.PickerTitle, output);
+        Assert.Equal("hi " + cat, _chat.Requests[0].Last(m => m.Role == Microsoft.Extensions.AI.ChatRole.User).Text);
+        Assert.Equal(cat, EmojiPrefs.Load(_settings.StorageDirectory).Recent[0]);
+    }
 }

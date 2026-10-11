@@ -19,9 +19,10 @@ public partial class ChatScreenTests
     private static Dictionary<string, object?> NeonAdvisorArgs(string advisor, string question) =>
         new() { [NeonAdvisorTool.AdvisorArgument] = advisor, [NeonAdvisorTool.QuestionArgument] = question };
 
-    private void AdvisorProfiles(bool on = true, bool confirm = false)
+    // The dba wears no avatar unless one is given (a fresh AppSettingsData wears 🤖), so its lines keep 🛠️.
+    private void AdvisorProfiles(bool on = true, bool confirm = false, string avatar = "")
     {
-        Profiles.Create(_settings.StorageDirectory, "dba", new AppSettingsData());
+        Profiles.Create(_settings.StorageDirectory, "dba", new AppSettingsData { Avatar = avatar });
         _settings.Update(d =>
         {
             d.TtsOutput = false;
@@ -71,6 +72,26 @@ public partial class ChatScreenTests
         var record = store.Load(Assert.Single(store.List(10)).Id)!;
         var threads = SessionHistory.AdvisorThreadsOf(record.HistoryJson);
         Assert.Equal([new AdvisorPair("Which index?", "Index the foreign key.")], threads!["dba"]);
+    }
+
+    [Fact]
+    public async Task Advisors_TheQuestionAndTheFooter_WearTheAdvisorsAvatar_ItsToolLinesKeepTheTools()
+    {
+        AdvisorProfiles(avatar: "🦉");
+        _chat.Enqueue(FakeChatClient.Call("c1", NeonAdvisorTool.ToolName, NeonAdvisorArgs("dba", "Which index?")));
+        _chat.Enqueue(FakeChatClient.Call("a1", "read_file", new Dictionary<string, object?> { ["path"] = "schema.sql" }));   // the advisor reads a file first
+        _chat.EnqueueText("Index the foreign key.");
+        _chat.EnqueueText("I'll add it.");
+        PushLine("speed up the joins");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string question = AdvisorText.QuestionNote(new AdvisorEntry("dba", "database architect"), "Which index?");
+        Assert.Contains("🦉 " + question + "\n", output);
+        Assert.DoesNotContain("🛠️ " + question, output);
+        Assert.Contains("🦉 dba · ", output);
+        Assert.Contains("🛠️ dba › read_file", output);
     }
 
     [Fact]

@@ -250,6 +250,20 @@ public sealed partial class InputLine
             _dismissed = null;
         }
 
+        /// <summary>
+        /// <paramref name="text"/> at the cursor, in place of the selection, the cursor after it (2026-10-11, the emoji button's pick):
+        /// as typed, but not drawn — the next read, or <see cref="Redraw"/>, draws it.
+        /// </summary>
+        public void InsertAtCursor(string text)
+        {
+            ArgumentNullException.ThrowIfNull(text);
+            DeleteSelection();
+            _cursor = Math.Clamp(_cursor, 0, _text.Length);
+            _text.Insert(_cursor, text);
+            _cursor += text.Length;
+            _dismissed = null;
+        }
+
         /// <summary>The keys go to a pane (a mid-turn command's, a tool's question): the list closes; <see cref="Redraw"/> brings the row back after.</summary>
         public void Suspend() => CloseList();
 
@@ -934,6 +948,16 @@ public sealed partial class InputLine
                 hintClicks.Reset();
                 await PasteFromClipboardAsync().ConfigureAwait(false);
                 return EditOutcome.Handled;
+            }
+
+            if (!_o.Live && ReferenceEquals(this, _line._chat) && pane.TryHitEmojiButton(click.X, click.Y))
+            {
+                // The draft row's emoji button (2026-10-11): one click ends the read for the screen's picker, the draft and its
+                // cursor kept in this editor for the pick to land at. Ahead of the row's own hit, which would move the cursor.
+                _anchor = -1;
+                hintClicks.Reset();
+                EndRow();
+                return new EditOutcome.End(new InputResult.EmojiButton(_text.ToString()));
             }
 
             if (pane.TryHitInput(click.X, click.Y, out int at, out int under))

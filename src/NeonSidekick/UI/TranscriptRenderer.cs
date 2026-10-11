@@ -67,6 +67,14 @@ public sealed class TranscriptRenderer : INoticeSink
     public const string ToolGlyph = "  🛠️ ";
 
     /// <summary>
+    /// What an advisor's question line and footer open with (2026-10-10, the user's ask): the advisor profile's avatar in the tool glyph's
+    /// five cells when it has one (<see cref="Emojis.AvatarRules"/>, as <see cref="GlyphFor"/> reads it), else <see cref="ToolGlyph"/>.
+    /// Its own tool lines keep <see cref="ToolGlyph"/>, so they still read as tool calls. Pure.
+    /// </summary>
+    public static string AdvisorGlyph(string? avatar) =>
+        Emojis.AvatarRules.Normalize(avatar) is { Length: > 0 } face ? "  " + face + " " : ToolGlyph;
+
+    /// <summary>
     /// A tool result that failed (2026-10-04, the UI review: a failure read as dim as a success): its own mark in the warning colour,
     /// the tool glyph's five cells. Pinned.
     /// </summary>
@@ -207,10 +215,13 @@ public sealed class TranscriptRenderer : INoticeSink
             : Theme.ColorMarkup(Theme.Dim, $"{ToolAnswerIndent}{ToolResultView.Arrow}{Truncate(text, ToolTextLimit)}");
 
     /// <summary>A tool's outcome on one line without its name or arguments (<c>🛠️ remembered: …</c>), for a tool whose result says it all.</summary>
-    public static string ToolNoteMarkup(string text) =>
+    public static string ToolNoteMarkup(string text) => ToolNoteMarkup(text, ToolGlyph);
+
+    /// <summary><see cref="ToolNoteMarkup(string)"/> behind <paramref name="glyph"/> (an advisor's, <see cref="AdvisorGlyph"/>); a failure keeps ✗.</summary>
+    public static string ToolNoteMarkup(string text, string glyph) =>
         IsToolFailure(text)
             ? Theme.ColorMarkup(Theme.Warn, ToolFailedGlyph + Truncate(text, ToolTextLimit))
-            : Theme.ColorMarkup(Theme.Dim, ToolGlyph + Truncate(text, ToolTextLimit));
+            : Theme.ColorMarkup(Theme.Dim, glyph + Truncate(text, ToolTextLimit));
 
     /// <summary>A skill tool's outcome as <see cref="ToolNoteMarkup"/> is a tool's, behind <see cref="SkillGlyph"/>.</summary>
     public static string SkillNoteMarkup(string text) =>
@@ -380,12 +391,20 @@ public sealed class TranscriptRenderer : INoticeSink
         return open;
     }
 
-    public void ToolNote(string text)
+    public void ToolNote(string text) => Note(text, ToolGlyph);
+
+    /// <summary>
+    /// An advisor's question line or footer (2026-10-10, the user's ask): <see cref="ToolNote"/> behind <see cref="AdvisorGlyph"/>, still a
+    /// tool line, so the run folds as before.
+    /// </summary>
+    public void AdvisorNote(string text, string? avatar) => Note(text, AdvisorGlyph(avatar));
+
+    private void Note(string text, string glyph)
     {
         ArgumentNullException.ThrowIfNull(text);
-        ToolLine(ToolNoteMarkup(text), sameUnit: TakeCall(), inlineMarkup: IsToolFailure(text)
+        ToolLine(ToolNoteMarkup(text, glyph), sameUnit: TakeCall(), inlineMarkup: IsToolFailure(text)
             ? Theme.ColorMarkup(Theme.Warn, ToolFailedGlyph.TrimStart() + Truncate(text, ToolTextLimit))
-            : Theme.ColorMarkup(Theme.Dim, ToolGlyph.TrimStart() + Truncate(text, ToolTextLimit)));
+            : Theme.ColorMarkup(Theme.Dim, glyph.TrimStart() + Truncate(text, ToolTextLimit)));
         CountFailure(text);
     }
 

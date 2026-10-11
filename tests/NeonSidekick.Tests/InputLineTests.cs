@@ -1260,6 +1260,37 @@ public class InputLineTests : IDisposable
         Assert.All(keys, key => Assert.True(key < InputLine.HintPairKey(new ScreenPane.HintHit(ScreenPane.HintZone.Row, "", -1))));
     }
 
+    /// <summary>
+    /// One click on the draft row's emoji button (2026-10-11) ends the chat editor's read as EmojiButton with the draft, the cursor kept
+    /// where it was for <see cref="InputLine.Editor.InsertAtCursor"/>; another read's editor takes the click as a click on its row.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_AClickOnTheEmojiButton_EndsTheChatRead_AndThePickLandsAtTheCursor()
+    {
+        _console.Profile.Height = 10;
+        _console.Profile.Width = 40;
+        var time = new ManualTimeProvider();
+        using var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100), time) { EmojiButton = () => true };
+        pane.Show();
+        var scripted = new ScriptedInput();
+        var line = new InputLine(pane, new KeySource(scripted, TimeSpan.FromMilliseconds(1)));
+        scripted.Push(Chars("hi there"));
+        scripted.Push(Keys.Left, Keys.Left, Keys.Left);
+        scripted.PushClick(38, 100);              // the ☺: column 38 of 40 on the one input row
+
+        var emoji = Assert.IsType<InputResult.EmojiButton>(await line.ReadAsync(editor: line.Chat));
+        Assert.Equal("hi there", emoji.Draft);
+        Assert.Empty(line.History);
+        line.Chat.InsertAtCursor("🐱");
+        Assert.Equal("hi th🐱ere", line.Chat.Text);
+        Assert.Equal("hi th🐱".Length, line.Chat.Cursor);
+
+        // Another read's editor: the button is the row's, the cursor to its end; Enter sends the line.
+        scripted.PushClick(38, 100);
+        scripted.Push(Keys.Enter);
+        Assert.Equal("ask", Assert.IsType<InputResult.Submitted>(await line.ReadAsync(initialText: "ask")).Text);
+    }
+
     /// <summary>Two left clicks on a toolbar glyph or on the path within DoubleClick.Interval end the read as ToolbarRow with the draft (2026-09-21); the blanks between them, or one click on each of two parts, are nothing.</summary>
     [Fact]
     public async Task OnThePane_ADoubleClickOnTheToolbar_EndsTheRead_WithTheDraft_AndItsPart()

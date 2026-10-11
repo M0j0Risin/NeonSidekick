@@ -189,6 +189,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private string? _drawnReopen;
     private int _reopenColumn = -1;
 
+    // The draft row's emoji button (2026-10-11, EmojiButton): whether the last layout made room for it (the wrap two cells
+    // narrower) and so the draw put it at the first input row's end, for TryHitEmojiButton, the rewrites and the row moves.
+    private Func<bool> _emojiButton = static () => false;
+    private bool _emojiShown;
+
     // The upper rule's title (2026-09-28): the column it landed at (-1 = none drawn) and its cells, for TryHitRuleTitle.
     private int _ruleTitleColumn = -1;
     private int _ruleTitleCells;
@@ -887,6 +892,65 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     {
         get => _stripReopen;
         set => _stripReopen = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
+    /// The draft row's emoji button (2026-10-11, the user's ask; the screen answers its <c>Emoji picker</c> setting):
+    /// <see cref="EmojiGlyph"/> in <see cref="Theme.Hint"/> at the first input row's end, one blank before it and the last column
+    /// left empty as every row's is, the draft wrapped <see cref="EmojiButtonCells"/> narrower to keep clear of it. Drawn only at
+    /// the idle line: not under an overlay, nor while a spinner runs (a reply's clicks are the watcher's), nor in a window too
+    /// narrow to spare the cells. False = no button (the default). Read at each layout; a click on it is
+    /// <see cref="TryHitEmojiButton"/>.
+    /// </summary>
+    public Func<bool> EmojiButton
+    {
+        get => _emojiButton;
+        set => _emojiButton = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
+    /// The emoji button's glyph (2026-10-11, the user's pick of four): the CP437 smiley, a text glyph the terminal's font draws, so
+    /// <see cref="Theme.Hint"/>'s grey dims it as no colour emoji can be dimmed. One cell.
+    /// </summary>
+    public const string EmojiGlyph = "☺";
+
+    /// <summary>The cells the emoji button takes from the draft's wrap: the blank before <see cref="EmojiGlyph"/> and the glyph.</summary>
+    public const int EmojiButtonCells = 2;
+
+    // The fewest cells the draft keeps for itself before the button gives way (a very narrow window).
+    private const int EmojiButtonMinCells = 10;
+
+    /// <summary>Whether a layout at <paramref name="width"/> makes room for the emoji button now (see <see cref="EmojiButton"/>).</summary>
+    private bool EmojiButtonApplies(int width) =>
+        _overlay is null && _busyLabel is null && InputLine.AvailableCells(width) - EmojiButtonCells >= EmojiButtonMinCells && _emojiButton();
+
+    /// <summary>The cells a draft row wraps at, at <paramref name="width"/>: <see cref="InputLine.AvailableCells"/>, less the emoji button's while the last layout made room for it.</summary>
+    private int InputCells(int width) =>
+        _emojiShown ? InputLine.AvailableCells(width) - EmojiButtonCells : InputLine.AvailableCells(width);
+
+    /// <summary>
+    /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on the draft row's emoji button
+    /// (2026-10-11, <see cref="EmojiButton"/>), or the cell either side of it — three cells, as the strip's × gives. False with no
+    /// button drawn, the pane lifted, disabled or under an overlay, or no geometry.
+    /// </summary>
+    public bool TryHitEmojiButton(int x, int y)
+    {
+        if (!Enabled)
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            if (!_drawn || _drawnOverlay || !_emojiShown || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+            {
+                return false;
+            }
+
+            // The terminal's cursor is on the area's row _cursorRow; the button is on its first row.
+            int column = Width - 2;
+            return y == top - _cursorRow && x >= column - 1 && x <= column + 1;
+        }
     }
 
     /// <summary>
@@ -2706,13 +2770,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             return;
         }
 
-        if (GhostApplies() == _shownGhostCells > 0)
+        bool emoji = _emojiShown;
+        if (GhostApplies() == _shownGhostCells > 0 && EmojiButtonApplies(Width) == emoji)
         {
             return;
         }
 
         var shown = LayoutInput(Width, Height - BarRows - _stripRows - _scrollRows);
-        if (shown.Rows.Count == _inputRows)
+        if (shown.Rows.Count == _inputRows && _emojiShown == emoji)
         {
             RewriteInputRows(shown);
         }
@@ -2726,10 +2791,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private bool GhostApplies() => _placeholder.Length > 0 && _text.Length == 0 && _overlay is null && _busyLabel is null;
 
     /// <summary>The placeholder as the row shows it: cut to the row's cells at <paramref name="width"/> (<see cref="Fit"/>), so no row ever fills the width. Pinned.</summary>
-    public static string PlaceholderRow(string placeholder, int width)
+    public static string PlaceholderRow(string placeholder, int width) => PlaceholderRow(placeholder, width, emojiButton: false);
+
+    /// <summary><see cref="PlaceholderRow(string, int)"/>, kept clear of the emoji button while <paramref name="emojiButton"/> (2026-10-11, <see cref="EmojiButton"/>).</summary>
+    public static string PlaceholderRow(string placeholder, int width, bool emojiButton)
     {
         ArgumentNullException.ThrowIfNull(placeholder);
-        return Fit(placeholder, InputLine.AvailableCells(width));
+        return Fit(placeholder, InputLine.AvailableCells(width) - (emojiButton ? EmojiButtonCells : 0));
     }
 
     /// <summary>The spinner's label beside its elapsed time: <c>thinking 00:12</c>, <c>01:02:03</c> past an hour (<see cref="ElapsedText.Countdown"/>, the timer line's shape). Pinned.</summary>
@@ -3178,13 +3246,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
 
         int firstRow = _firstRow;
+        bool emoji = _emojiShown;
         var shown = LayoutInput(Width, Height - BarRows - _stripRows - _scrollRows);
         if (_stripRows > 0 && (text.Length == 0) != _drawnStripHighlight)
         {
             // The draft emptied or filled under a highlighted strip: the highlight follows it, the whole pane again.
             Redraw();
         }
-        else if (shown.Rows.Count == _inputRows && firstRow == _firstRow)
+        else if (shown.Rows.Count == _inputRows && firstRow == _firstRow && _emojiShown == emoji)
         {
             RewriteInputRows(shown);
             // A hint that reads the draft (the splash hint, 2026-09-20) follows it on the same
@@ -3225,7 +3294,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private void RewriteInputRows(ShownInput shown)
     {
         var (rows, cursorRow, cursorCol) = (shown.Rows, shown.CursorRow, shown.CursorCol);
-        int available = InputLine.AvailableCells(Width);
+        // Kept to the wrap's cells, the pad never reaches the emoji button's: it stands through every rewrite.
+        int available = InputCells(Width);
         int prefix = TextCells.Width(InputLine.PromptGlyph);
         bool sync = rows.Count > 1;
         if (sync)
@@ -3250,7 +3320,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             // text; the cells the last draw gave the ghost count as the row's previous cells,
             // so the first key blanks them and a Backspace to nothing writes the ghost again.
             string row = rows[i];
-            string? ghost = i == 0 && row.Length == 0 && GhostApplies() ? PlaceholderRow(_placeholder, Width) : null;
+            string? ghost = i == 0 && row.Length == 0 && GhostApplies() ? PlaceholderRow(_placeholder, Width, _emojiShown) : null;
             int cells = ghost is null ? TextCells.Width(row) : TextCells.Width(ghost);
             int previous = (i < _shownRows.Count ? TextCells.Width(_shownRows[i]) : 0) + (i == 0 ? _shownGhostCells : 0);
             int pad = Math.Clamp(previous - cells, 0, Math.Max(0, available - cells));
@@ -3310,7 +3380,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// </summary>
     private ShownInput LayoutInput(int width, int height)
     {
-        var layout = InputLayout.Wrap(_text, _cursor, InputLine.AvailableCells(width));
+        // The emoji button's room is decided here, so the draw, the rewrites and the hits all wrap as this layout did.
+        _emojiShown = EmojiButtonApplies(width);
+        var layout = InputLayout.Wrap(_text, _cursor, InputCells(width));
         int shown = Math.Min(layout.Rows.Count, MaxInputRows(height));
         if (layout.CursorRow < _firstRow)
         {
@@ -3406,7 +3478,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            var layout = InputLayout.Wrap(_text, _cursor, InputLine.AvailableCells(Width));
+            var layout = InputLayout.Wrap(_text, _cursor, InputCells(Width));
             int target = layout.CursorRow + delta;
             if (layout.Rows.Count < 2 || target < 0 || target >= layout.Rows.Count)
             {
@@ -4279,16 +4351,26 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             for (int i = 0; i < shown.Rows.Count; i++)
             {
                 _inner.Write(new RawText(Prefix(_firstRow + i), Theme.User));
+                int rowCells;
                 if (i == 0 && shown.Rows[i].Length == 0 && GhostApplies())
                 {
                     // The empty idle row: the placeholder after the glyph, in place of the draft.
-                    string ghost = PlaceholderRow(_placeholder, w);
+                    string ghost = PlaceholderRow(_placeholder, w, _emojiShown);
                     _inner.Write(new RawText(ghost, Theme.Placeholder));
                     ghostCells = TextCells.Width(ghost);
+                    rowCells = ghostCells;
                 }
                 else
                 {
                     WriteRowText(shown.Rows[i], shown.Starts[i], 0);
+                    rowCells = TextCells.Width(shown.Rows[i]);
+                }
+
+                if (i == 0 && _emojiShown)
+                {
+                    // The emoji button (2026-10-11) past the wrap's cells and one blank, dim, the last column left empty.
+                    _inner.Write(new RawText(new string(' ', Math.Max(0, InputCells(w) - rowCells) + 1)));
+                    _inner.Write(new RawText(EmojiGlyph, Theme.Hint));
                 }
 
                 EndRow();

@@ -41,6 +41,7 @@ public class AppSettingsTests : IDisposable
         CopyUserPrompt = false,
         DraftEditor = "code --wait",
         HideExitAutocomplete = false,
+        EmojiPicker = true,
         ImageThumbnailSize = "large",
         Theme = "noir",
         BotChatLlmMode = "multi",
@@ -193,6 +194,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.CopyUserPrompt, actual.CopyUserPrompt);
         Assert.Equal(expected.DraftEditor, actual.DraftEditor);
         Assert.Equal(expected.HideExitAutocomplete, actual.HideExitAutocomplete);
+        Assert.Equal(expected.EmojiPicker, actual.EmojiPicker);
         Assert.Equal(expected.ImageThumbnailSize, actual.ImageThumbnailSize);
         Assert.Equal(expected.Theme, actual.Theme);
         Assert.Equal(expected.MemoryMode, actual.MemoryMode);
@@ -353,6 +355,7 @@ public class AppSettingsTests : IDisposable
             d.CopyUserPrompt = full.CopyUserPrompt;
             d.DraftEditor = full.DraftEditor;
             d.HideExitAutocomplete = full.HideExitAutocomplete;
+            d.EmojiPicker = full.EmojiPicker;
             d.ImageThumbnailSize = full.ImageThumbnailSize;
             d.Theme = full.Theme;
             d.MemoryMode = full.MemoryMode;
@@ -499,6 +502,7 @@ public class AppSettingsTests : IDisposable
                 d.CopyUserPrompt = full.CopyUserPrompt;
                 d.DraftEditor = full.DraftEditor;
                 d.HideExitAutocomplete = full.HideExitAutocomplete;
+                d.EmojiPicker = full.EmojiPicker;
                 d.ImageThumbnailSize = full.ImageThumbnailSize;
                 d.Theme = full.Theme;
                 d.MemoryMode = full.MemoryMode;
