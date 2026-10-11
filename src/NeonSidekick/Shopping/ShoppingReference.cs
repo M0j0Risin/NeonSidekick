@@ -161,7 +161,7 @@ public sealed class ShoppingReference(ShoppingList list, IHeadlessBrowser? brows
 
             if (PictureExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase))
             {
-                return store.SaveRefDoc(shop.Id, file, size, modified, 1, "", [(1, "", full)]) ? null : ShoppingText.WriteFailed;
+                return store.SaveRefDoc(shop.Id, file, size, modified, 1, "", [(1, "", store.StoredImage(full))]) ? null : ShoppingText.WriteFailed;
             }
 
             if (browser is null || _executable() is not { } exe)
@@ -189,7 +189,7 @@ public sealed class ShoppingReference(ShoppingList list, IHeadlessBrowser? brows
                     await File.WriteAllBytesAsync(image, png, cancellationToken).ConfigureAwait(false);
                 }
 
-                pages.Add((page.Number, page.Text, image));
+                pages.Add((page.Number, page.Text, image is null ? null : store.StoredImage(image)));
             }
 
             return store.SaveRefDoc(shop.Id, file, size, modified, result.PageCount, result.Detail, pages) ? null : ShoppingText.WriteFailed;

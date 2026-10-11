@@ -199,11 +199,116 @@ public sealed class ShoppingStore : IDisposable
         return id is { } made ? new ShopStore(made, name.Trim(), unique, notes) : null;
     }
 
-    /// <summary>Renames a store (its folder stays). False when another store has the name or the write failed.</summary>
-    public bool RenameStore(long storeId, string name) =>
-        Execute("UPDATE stores SET name = $name WHERE id = $id AND NOT EXISTS (SELECT 1 FROM stores WHERE name = $name COLLATE NOCASE AND id <> $id)",
-            c => { c.Parameters.AddWithValue("$id", storeId); c.Parameters.AddWithValue("$name", name.Trim()); }, "rename a store") is > 0;
+    /// <summary>
+    /// Renames a store and, with <paramref name="folder"/>, moves its folder's name too (2026-10-11, the user's ask: the folder follows the
+    /// name): the store's row and every picture path of its indexed pages that lies under its old <c>reference</c> or <c>cache</c> folder,
+    /// in one transaction (a full path from before is stored relative after). The folders on disk are the caller's to move. False when
+    /// another store has the name or the folder, or the write failed (nothing changed then).
+    /// </summary>
+    public bool RenameStore(long storeId, string name, string? folder = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        lock (_gate)
+        {
+            if (Open() is not { } connection)
+            {
+                return false;
+            }
 
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                string? oldFolder = null;
+                using (var read = connection.CreateCommand())
+                {
+                    read.Transaction = transaction;
+                    read.CommandText = "SELECT folder FROM stores WHERE id = $id";
+                    read.Parameters.AddWithValue("$id", storeId);
+                    oldFolder = read.ExecuteScalar() as string;
+                }
+
+                using (var update = connection.CreateCommand())
+                {
+                    update.Transaction = transaction;
+                    update.CommandText = "UPDATE stores SET name = $name, folder = coalesce($folder, folder) WHERE id = $id " +
+                        "AND NOT EXISTS (SELECT 1 FROM stores WHERE (name = $name COLLATE NOCASE OR folder = $folder COLLATE NOCASE) AND id <> $id)";
+                    update.Parameters.AddWithValue("$id", storeId);
+                    update.Parameters.AddWithValue("$name", name.Trim());
+                    update.Parameters.AddWithValue("$folder", (object?)folder ?? DBNull.Value);
+                    if (oldFolder is null || update.ExecuteNonQuery() == 0)
+                    {
+                        transaction.Rollback();
+                        return false;
+                    }
+                }
+
+                if (folder is not null && !string.Equals(folder, oldFolder, StringComparison.Ordinal))
+                {
+                    var moved = new List<(long Id, string Image)>();
+                    using (var pages = connection.CreateCommand())
+                    {
+                        pages.Transaction = transaction;
+                        pages.CommandText = "SELECT p.id, p.image FROM ref_pages p JOIN ref_docs d ON d.id = p.doc_id WHERE d.store_id = $id AND p.image IS NOT NULL";
+                        pages.Parameters.AddWithValue("$id", storeId);
+                        using var reader = pages.ExecuteReader();
+                        while (reader.Read())
+                        {
+                            moved.Add((reader.GetInt64(0), MovedImage(reader.GetString(1), oldFolder, folder)));
+                        }
+                    }
+
+                    foreach (var (id, image) in moved)
+                    {
+                        using var row = connection.CreateCommand();
+                        row.Transaction = transaction;
+                        row.CommandText = "UPDATE ref_pages SET image = $image WHERE id = $id";
+                        row.Parameters.AddWithValue("$id", id);
+                        row.Parameters.AddWithValue("$image", image);
+                        row.ExecuteNonQuery();
+                    }
+                }
+
+                transaction.Commit();
+                return true;
+            }
+            catch (SqliteException ex)
+            {
+                transaction.Rollback();
+                Fail("rename a store", ex);
+                return false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// A page's picture path once its store's folder <paramref name="from"/> is <paramref name="to"/>: relative to the store file's folder
+    /// (<c>cache\h-e-b\guide.pdf-p2.png</c>), the store's folder swapped where the path lies under its <c>reference</c> or <c>cache</c>
+    /// folder; any other path relative as it is, or full when it lies outside. Pure but for the folder it is relative to.
+    /// </summary>
+    public string MovedImage(string image, string from, string to)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        string relative = Path.GetRelativePath(Folder, FullImage(image));
+        var parts = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (parts.Length > 2 && (parts[0].Equals(ReferenceFolderName, StringComparison.OrdinalIgnoreCase) || parts[0].Equals(ShoppingReference.CacheFolderName, StringComparison.OrdinalIgnoreCase))
+            && parts[1].Equals(from, StringComparison.OrdinalIgnoreCase))
+        {
+            parts[1] = to;
+            return string.Join(Path.DirectorySeparatorChar, parts);
+        }
+
+        return relative;
+    }
+
+    /// <summary>A stored picture path made full: one relative to the store file's folder (since 2026-10-11) joined to it, a full one (earlier) as it is.</summary>
+    public string FullImage(string image) => Path.IsPathRooted(image) ? image : Path.GetFullPath(Path.Combine(Folder, image));
+
+    /// <summary>A picture path to store: relative to the store file's folder when it lies under it, so a profile moved or a store renamed keeps it.</summary>
+    public string StoredImage(string full)
+    {
+        string relative = Path.GetRelativePath(Folder, full);
+        return relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative) ? full : relative;
+    }
     /// <summary>Removes a store with its sections, locations and placements. False when nothing was removed.</summary>
     public bool RemoveStore(long storeId) =>
         Execute("DELETE FROM stores WHERE id = $id", c => c.Parameters.AddWithValue("$id", storeId), "remove a store") is > 0;
@@ -483,7 +588,8 @@ public sealed class ShoppingStore : IDisposable
             c => { c.Parameters.AddWithValue("$s", storeId); c.Parameters.AddWithValue("$f", file); c.Parameters.AddWithValue("$p", page); },
             ReadRefPage, "read a reference page").FirstOrDefault();
 
-    private static ShopRefPage ReadRefPage(SqliteDataReader r) => new(r.GetInt64(0), r.GetInt64(1), r.GetString(2), r.GetInt32(3), r.GetString(4), r.IsDBNull(5) ? null : r.GetString(5));
+    /// <summary>A page read, its picture's path made full (<see cref="FullImage"/>).</summary>
+    private ShopRefPage ReadRefPage(SqliteDataReader r) => new(r.GetInt64(0), r.GetInt64(1), r.GetString(2), r.GetInt32(3), r.GetString(4), r.IsDBNull(5) ? null : FullImage(r.GetString(5)));
 
     // ---- plumbing ----
 

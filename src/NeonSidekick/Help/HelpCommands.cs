@@ -326,7 +326,7 @@ public static class HelpCommands
             new("/shopping list [<store>]", "Print the list walked through the active store, or the one named."),
             new("/shopping clear [all]", "Remove the ticked items; `all` empties the whole list, after a yes."),
             new("/shopping store [<name>]", "List the stores and the active one's layout; with a name, shop there: the list walks through it."),
-            new("/shopping store rename <name> to <new-name>", "Rename a store; its reference folder keeps its name. *Shopping stores* (`/tools` › Core › Shopping, or the `/shopping` pane's `s`) adds, renames, removes and reindexes stores on the pane."),
+            new("/shopping store rename <name> to <new-name>", "Rename a store; its reference folder is renamed to match (left as it was, with the reason, if it cannot be moved: open in Explorer, a file in use). *Shopping stores* (`/tools` › Core › Shopping, or the `/shopping` pane's `s`) adds, renames, removes and reindexes stores on the pane."),
             new("/shopping store add|remove <name>", "Add a store (its reference folder is made), or remove one with its layout, after a yes."),
             new("/shopping export [<store>] [verbose]", "Write the items left to buy at the active store, or the one named, to a new `shopping-list-<time>.md` in the working directory (`shopping-list-20261011-162530.md`, the local time): compact (a heading naming the store, then a line per aisle, its items run together), or with `verbose` a heading per aisle over a checkbox per item."),
             new("/shopping print [<store>] [verbose]", "Print the items left to buy at the active store, or the one named, through `/print`'s printer settings: compact (a line per aisle), or roomy with `verbose`."),

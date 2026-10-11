@@ -89,7 +89,7 @@ public sealed class ShoppingLayoutTool(ShoppingList list) : ShoppingTool(list)
                 return store.FindStore(name) is { } used ? List.UseStore(used) : ShoppingText.NoSuchStore(name, store.Stores());
             case "rename_store":
                 return store.FindStore(name) is not { } renamed ? ShoppingText.NoSuchStore(name, store.Stores())
-                    : store.RenameStore(renamed.Id, to) ? Done(ShoppingText.Renamed("store", name, to)) : "Error: " + ShoppingText.NameTaken("store", to);
+                    : List.RenameStore(renamed, to);   // the folder follows the name (2026-10-11), audited there
         }
 
         if (StoreOf(arguments, out string? error) is not { } shop)

@@ -365,8 +365,12 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
     }
 
     /// <summary>
-    /// <paramref name="shop"/> renamed (2026-10-11, the store manager): its reference folder keeps its name, so its documents stay where
-    /// they are. The answer as a sentence; <c>Error: </c> leads a refusal.
+    /// <paramref name="shop"/> renamed (2026-10-11, the store manager; its folder follows the name since later that day, the user's ask):
+    /// the folder name the new name makes (<see cref="FolderFor"/>, a number added when another store or a folder on disk has it) is
+    /// given to the store's reference and cache folders, moved on disk, and to its row and its pages' picture paths, in one transaction
+    /// (<see cref="ShoppingStore.RenameStore"/>). A name that makes the same folder moves nothing. A move that fails (the folder open
+    /// in Explorer, a file in it in use) is put back and the store renamed with its folder as it was, the answer saying why; a database
+    /// write that fails puts the folders back too. The answer as a sentence; <c>Error: </c> leads a refusal.
     /// </summary>
     public string RenameStore(ShopStore shop, string name)
     {
@@ -376,13 +380,87 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
             return "Error: " + ShoppingText.NoStoreName;
         }
 
-        if (!_store().RenameStore(shop.Id, name))
+        var store = _store();
+        string trimmed = name.Trim();
+        if (store.FindStore(trimmed) is { } other && other.Id != shop.Id)
         {
-            return "Error: " + ShoppingText.NameTaken("store", name);
+            return "Error: " + ShoppingText.NameTaken("store", trimmed);
         }
 
-        Audit(ShoppingText.AuditStoreRenamed(shop, name.Trim()));
-        return ShoppingText.Renamed("store", shop.Name, name);
+        string wanted = FolderFor(trimmed);
+        if (string.Equals(wanted, shop.Folder, StringComparison.OrdinalIgnoreCase))
+        {
+            return store.RenameStore(shop.Id, trimmed) ? Renamed(shop, trimmed, null, null) : "Error: " + ShoppingText.NameTaken("store", trimmed);
+        }
+
+        string cacheRoot = Path.Combine(store.Folder, ShoppingReference.CacheFolderName);
+        string folder = wanted;
+        for (int n = 2; Taken(folder); n++)
+        {
+            folder = wanted + "-" + n.ToString(CultureInfo.InvariantCulture);
+        }
+
+        var moves = new List<(string From, string To)>
+        {
+            (Path.Combine(store.ReferenceRoot, shop.Folder), Path.Combine(store.ReferenceRoot, folder)),
+            (Path.Combine(cacheRoot, shop.Folder), Path.Combine(cacheRoot, folder)),
+        };
+        var done = new List<(string From, string To)>();
+        string? why = null;
+        foreach (var (from, to) in moves.Where(m => Directory.Exists(m.From)))
+        {
+            try
+            {
+                Directory.Move(from, to);
+                done.Add((from, to));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                why = ex.Message;
+                break;
+            }
+        }
+
+        if (why is null && store.RenameStore(shop.Id, trimmed, folder))
+        {
+            return Renamed(shop, trimmed, folder, null);
+        }
+
+        // Undone, newest first: the store keeps its folder, and only its name changes (when the name itself can).
+        foreach (var (from, to) in Enumerable.Reverse(done))
+        {
+            try
+            {
+                Directory.Move(to, from);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                DiagnosticLog.Warn(ShoppingStore.Category, $"Could not move {to} back to {from}: {ex.Message}", ex);
+            }
+        }
+
+        if (!store.RenameStore(shop.Id, trimmed))
+        {
+            return "Error: " + ShoppingText.NameTaken("store", trimmed);
+        }
+
+        return Renamed(shop, trimmed, null, why ?? ShoppingText.WriteFailed);
+
+        // A folder name another store has, or one already on disk under reference or cache.
+        bool Taken(string candidate) =>
+            store.Stores().Any(s => s.Id != shop.Id && string.Equals(s.Folder, candidate, StringComparison.OrdinalIgnoreCase))
+            || Directory.Exists(Path.Combine(store.ReferenceRoot, candidate))
+            || Directory.Exists(Path.Combine(cacheRoot, candidate));
+    }
+
+    /// <summary>A rename's answer, audited: the names, then the folder it moved to or why it stayed.</summary>
+    private string Renamed(ShopStore shop, string name, string? folder, string? kept)
+    {
+        Audit(ShoppingText.AuditStoreRenamed(shop, name) + (folder is null ? "" : " (folder " + folder + ")"));
+        return ShoppingText.Renamed("store", shop.Name, name)
+            + (folder is not null ? " " + ShoppingText.FolderMoved(Path.Combine(_store().ReferenceRoot, folder))
+               : kept is not null ? " " + ShoppingText.FolderKept(shop.Folder, kept)
+               : "");
     }
 
     /// <summary>

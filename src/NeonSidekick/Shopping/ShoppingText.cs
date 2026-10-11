@@ -461,6 +461,12 @@ public static class ShoppingText
 
     public static string AuditStoreRemoved(ShopStore store) => "Removed the store \"" + store.Name + "\"";
 
+    /// <summary>After a rename that moved the store's folder (2026-10-11). Pinned.</summary>
+    public static string FolderMoved(string folder) => "Its reference documents are now in " + folder + ".";
+
+    /// <summary>After a rename whose folder could not move: the store is renamed, its folder as it was. Pinned.</summary>
+    public static string FolderKept(string folder, string why) => "Its folder stays " + folder + ": " + why.TrimEnd('.') + ".";
+
     public static string AuditStoreRenamed(ShopStore store, string name) => "Renamed the store \"" + store.Name + "\" to \"" + name + "\"";
 
     // ---- the pane (/shopping) ----

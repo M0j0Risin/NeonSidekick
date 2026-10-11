@@ -74,8 +74,13 @@ public sealed class ShoppingCommandTests : IDisposable
         Assert.Equal(new ShoppingCommandLine(ShoppingVerb.RenameStore, "H-E-B #372", To: "H-E-B Bandera"), ShoppingCommand.Parse("store rename H-E-B #372 to H-E-B Bandera"));
         Assert.Equal(ShoppingVerb.Unknown, ShoppingCommand.Parse("store rename H-E-B").Verb);
         await Run("store add H-E-B #372");
-        Assert.Equal([ShoppingText.Renamed("store", "H-E-B #372", "H-E-B Bandera")], await Run("store rename h-e-b #372 to H-E-B Bandera"));
-        Assert.Equal("h-e-b-372", _list.Store.FindStore("H-E-B Bandera")!.Folder);
+        string moved = Path.Combine(_list.Store.ReferenceRoot, "h-e-b-bandera");
+        Assert.Equal([ShoppingText.Renamed("store", "H-E-B #372", "H-E-B Bandera") + " " + ShoppingText.FolderMoved(moved)], await Run("store rename h-e-b #372 to H-E-B Bandera"));
+        Assert.Equal("h-e-b-bandera", _list.Store.FindStore("H-E-B Bandera")!.Folder);   // the folder follows the name
+        Assert.True(Directory.Exists(moved));
+        Assert.False(Directory.Exists(Path.Combine(_list.Store.ReferenceRoot, "h-e-b-372")));
+        // Only the capitals changed: the same folder, nothing moved, nothing said of it.
+        Assert.Equal([ShoppingText.Renamed("store", "H-E-B Bandera", "h-e-b bandera")], await Run("store rename H-E-B Bandera to h-e-b bandera"));
         Assert.Equal([ShoppingText.NoSuchStore("Kroger", _list.Store.Stores())], await Run("store rename Kroger to Fiesta"));
     }
 

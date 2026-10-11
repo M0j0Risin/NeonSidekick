@@ -38,7 +38,9 @@ public partial class SettingsMenuTests
 
         var stores = list.Store.Stores();
         Assert.Equal(["Costco Business"], stores.Select(s => s.Name));
-        Assert.Equal("costco", stores[0].Folder);   // the folder keeps its name
+        Assert.Equal("costco-business", stores[0].Folder);   // the folder follows the name (later on 2026-10-11)
+        Assert.True(Directory.Exists(list.Store.ReferenceFolder(stores[0])));
+        Assert.False(Directory.Exists(Path.Combine(list.Store.ReferenceRoot, "costco")));
         Assert.Equal("Costco Business", list.Store.ActiveStore()!.Name);
         Assert.Contains(ShoppingText.Renamed("store", "Costco", "Costco Business"), Output);
         Assert.Contains("Remove the store \"H-E-B\" with its layout (0 placement facts)? Its reference folder stays.", Output);

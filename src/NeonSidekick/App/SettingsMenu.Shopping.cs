@@ -32,7 +32,7 @@ internal sealed partial class SettingsMenu
     /// The shopping stores' manager (2026-10-11, the user's ask: stores added, renamed and removed somewhere other than a typed line):
     /// the <c>Shopping stores</c> row of <c>/tools</c> › Core › Shopping and the <c>/shopping</c> pane's <c>⇄ store</c> both open it.
     /// The first row adds a store (its name typed on the input row; its reference folder made); Enter on a store makes it the one the list
-    /// walks through. The buttons rename the highlighted store (its folder keeps its name), remove it after a yes (its layout and cached
+    /// walks through. The buttons rename the highlighted store (its folders follow the name, <see cref="ShoppingList.RenameStore"/>), remove it after a yes (its layout and cached
     /// pictures go, its reference documents stay), open its reference folder, and read its documents again. The band under a store says
     /// what its layout holds. Without the pane there are no buttons: the add row and Enter still work. True when anything changed.
     /// </summary>

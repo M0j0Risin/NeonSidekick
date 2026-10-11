@@ -165,4 +165,51 @@ public sealed class ShoppingReferenceTests : IDisposable
         Assert.True(ShoppingReference.IsReadable("map.jpeg"));
         Assert.False(ShoppingReference.IsReadable("guide.docx"));
     }
+
+    [WindowsFact]
+    public async Task RenamingAStore_MovesItsFolders_ThePicturesFollow_AndAFolderInUseStaysPut()
+    {
+        Put("guide.pdf", BrowserPdfReaderTests.MiniPdf("x"));
+        Put("maps/front.png", Png);
+        await _reference.RefreshAsync(_heb, force: false, CancellationToken.None);
+
+        string answer = _list.RenameStore(_heb, "H-E-B Bandera");
+
+        var renamed = _list.Store.FindStore("H-E-B Bandera")!;
+        Assert.Equal("h-e-b-bandera", renamed.Folder);
+        Assert.EndsWith(ShoppingText.FolderMoved(_list.Store.ReferenceFolder(renamed)), answer, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Path.Combine(_list.Store.ReferenceRoot, "h-e-b-372")));
+        var map = _list.Store.RefPage(renamed.Id, "guide.pdf", 2)!;
+        Assert.Equal(Path.Combine(_reference.CacheFolder(renamed), "guide.pdf-p2.png"), map.Image);
+        Assert.True(File.Exists(map.Image));
+        Assert.True(File.Exists(_list.Store.RefPage(renamed.Id, Path.Combine("maps", "front.png"), 1)!.Image));
+        Assert.False(_reference.IsStale(renamed));   // nothing to read again
+
+        // A file in the folder held open: the move fails, is undone, and the store is renamed with its folder as it was.
+        using (File.Open(Path.Combine(_list.Store.ReferenceFolder(renamed), "guide.pdf"), FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            string kept = _list.RenameStore(renamed, "Bandera");
+            Assert.Contains("Its folder stays h-e-b-bandera: ", kept, StringComparison.Ordinal);
+        }
+
+        var bandera = _list.Store.FindStore("Bandera")!;
+        Assert.Equal("h-e-b-bandera", bandera.Folder);
+        Assert.True(File.Exists(_list.Store.RefPage(bandera.Id, "guide.pdf", 2)!.Image));
+        Assert.False(Directory.Exists(Path.Combine(_list.Store.ReferenceRoot, "bandera")));
+        Assert.False(Directory.Exists(Path.Combine(_reference.CacheFolder(bandera), "..", "bandera")));
+    }
+
+    [Fact]
+    public void APicturePath_IsStoredRelative_AndAFullOneFromBefore_FollowsARename()
+    {
+        var store = _list.Store;
+        string full = Path.Combine(store.Folder, "cache", "h-e-b-372", "guide.pdf-p2.png");
+        Assert.Equal(Path.Combine("cache", "h-e-b-372", "guide.pdf-p2.png"), store.StoredImage(full));
+        Assert.Equal(full, store.FullImage(Path.Combine("cache", "h-e-b-372", "guide.pdf-p2.png")));
+        Assert.Equal(Path.Combine("cache", "bandera", "guide.pdf-p2.png"), store.MovedImage(full, "h-e-b-372", "bandera"));
+        Assert.Equal(Path.Combine("reference", "bandera", "maps", "front.png"), store.MovedImage(Path.Combine("reference", "H-E-B-372", "maps", "front.png"), "h-e-b-372", "bandera"));
+        Assert.Equal(Path.Combine("cache", "other", "x.png"), store.MovedImage(Path.Combine("cache", "other", "x.png"), "h-e-b-372", "bandera"));
+        string outside = Path.Combine(Path.GetTempPath(), "elsewhere.png");
+        Assert.Equal(outside, store.StoredImage(outside));
+    }
 }
