@@ -38,13 +38,16 @@ internal sealed class ShoppingMenu
     private readonly ShoppingList _list;
     private readonly MenuPane _pane;
     private readonly Func<CancellationToken, Task<bool>>? _manageStores;
+    private readonly bool _closeWhenDone;
 
     /// <param name="list">The list's operations over the loaded profile's store.</param>
     /// <param name="pane">The menu host in the bottom pane.</param>
     /// <param name="manageStores">The stores' manager the store button opens (2026-10-11, <see cref="SettingsMenu.ManageShoppingStoresAsync"/>); null: a plain picker of the stores.</param>
-    public ShoppingMenu(ShoppingList list, MenuPane pane, Func<CancellationToken, Task<bool>>? manageStores = null)
+    /// <param name="closeWhenDone">Whether ESC closes the pane (the <c>/shopping</c> pane's own); false under a host that drew it, the <c>Shopping list</c> row of <c>/tools</c> (2026-10-11), whose page comes back.</param>
+    public ShoppingMenu(ShoppingList list, MenuPane pane, Func<CancellationToken, Task<bool>>? manageStores = null, bool closeWhenDone = true)
     {
         _manageStores = manageStores;
+        _closeWhenDone = closeWhenDone;
         _list = list ?? throw new ArgumentNullException(nameof(list));
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
     }
@@ -96,8 +99,19 @@ internal sealed class ShoppingMenu
                 var (rows, headings, items) = Rows(view);
                 if (rows.Count == 0)
                 {
-                    _pane.Close();
-                    await _pane.ShowEmptyAsync(ShoppingText.PaneLabel(shop), ShoppingText.EmptyList, cancellationToken).ConfigureAwait(false);
+                    if (_closeWhenDone)
+                    {
+                        _pane.Close();
+                        await _pane.ShowEmptyAsync(ShoppingText.PaneLabel(shop), ShoppingText.EmptyList, cancellationToken).ConfigureAwait(false);
+                        return;
+                    }
+
+                    // Under a host: the empty list's page (ShowEmptyAsync's, which closes the pane) until ESC, the host's page coming back.
+                    var empty = new MenuPage(ShoppingText.PaneLabel(shop), [Theme.DimMarkup(ShoppingText.EmptyList)], MenuPane.EmptyKeys);
+                    while (await _pane.PickAsync(empty, 0, cancellationToken).ConfigureAwait(false) is not null)
+                    {
+                    }
+
                     return;
                 }
 
@@ -154,7 +168,10 @@ internal sealed class ShoppingMenu
         }
         finally
         {
-            _pane.Close();
+            if (_closeWhenDone)
+            {
+                _pane.Close();
+            }
         }
     }
 

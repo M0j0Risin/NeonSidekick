@@ -130,6 +130,28 @@ internal sealed partial class SettingsMenu
         }
     }
 
+    /// <summary>
+    /// The shopping list's pane from <c>/tools</c> › Core › Shopping's <c>Shopping list</c> row (2026-10-11, the user's ask): the bare
+    /// <c>/shopping</c>'s checklist (<see cref="ShoppingMenu"/>), its store button this manager, ESC back to the row. Without the pane,
+    /// the command that shows the list.
+    /// </summary>
+    public async Task ManageShoppingListAsync(CancellationToken cancellationToken)
+    {
+        if (Shopping is not { } list || !list.Store.Available)
+        {
+            Sink.Error(ShoppingText.Unavailable["Error: ".Length..]);
+            return;
+        }
+
+        if (!_pane.Enabled)
+        {
+            Sink.Notice(ShoppingText.ListNeedsPane);
+            return;
+        }
+
+        await new ShoppingMenu(list, _pane, ManageShoppingStoresAsync, closeWhenDone: false).ShowAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>The band under a store's row: <see cref="ShoppingText.StoreFooter"/> over its layout's counts and its documents.</summary>
     private static MenuFooter StoreFooter(ShoppingStore store, ShopStore shop)
     {

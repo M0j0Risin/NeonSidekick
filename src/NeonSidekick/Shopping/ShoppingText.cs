@@ -550,8 +550,14 @@ public static class ShoppingText
     /// <summary>Reindexing under way, on the manager's status line. Pinned.</summary>
     public static string Reading(ShopStore store) => "Reading " + store.Name + "'s reference documents…";
 
+    /// <summary>The settings row's value: Enter opens the list's pane, <c>/shopping</c>'s (2026-10-11). Pinned.</summary>
+    public const string ManageListLabel = "Enter to manage the list";
+
     /// <summary>The settings row's value: Enter opens the manager. Pinned.</summary>
     public const string ManageStoresLabel = "Enter to manage stores";
+
+    /// <summary>The list's row where the pane cannot be drawn. Pinned.</summary>
+    public const string ListNeedsPane = "The shopping list's checklist needs the pane; /shopping list prints it.";
 
     /// <summary>The manager where it cannot be drawn (no pane). Pinned.</summary>
     public const string StoresNeedPane = "The store manager needs the pane; /shopping store lists the stores, /shopping store add|rename|remove changes them.";

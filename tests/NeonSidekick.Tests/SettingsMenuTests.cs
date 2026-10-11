@@ -944,6 +944,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.EmojiPicker,   // 2026-10-11, Chat's input-line run's last row: the draft row's ☺
                 SettingsField.ShoppingTools,   // 2026-10-11, /tools › Core › Shopping: the shopping list's tools
                 SettingsField.ShoppingStores,  // 2026-10-11, the stores' manager under it
+                SettingsField.ShoppingList,    // 2026-10-11, the list's checklist, above the stores' row
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.

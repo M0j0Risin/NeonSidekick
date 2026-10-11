@@ -51,11 +51,33 @@ public partial class SettingsMenuTests
     }
 
     [Fact]
+    public async Task OnThePane_TheListRow_OpensTheChecklist_AndLeavesThePaneOpenForItsHost()
+    {
+        using var holder = new ShoppingStoreHolder(() => _settings.ProfileDirectory);
+        var list = new ShoppingList(holder.Current);
+        list.Add("Bread", 1, null);
+        list.Add("Milk", 2, null);
+        var (menu, pane) = PaneMenu();
+        menu.Shopping = list;
+        Push(Keys.Enter);                                        // Bread ticked
+        Push(Keys.Escape);
+
+        await menu.ManageShoppingListAsync(CancellationToken.None);
+
+        Assert.Equal([("Bread", true), ("Milk", false)], list.Store.Items().Select(i => (i.Name, i.Checked)));
+        Assert.True(pane.OverlayOpen);   // the row's page comes back over it; /shopping's own pane closes
+        Assert.Contains(ShoppingText.TickAllButton, Output);
+        pane.Dispose();
+    }
+
+    [Fact]
     public void TheStoresRow_IsAnActionRow_OnTheShoppingMenu()
     {
         Assert.Equal("Shopping stores", SettingsMenu.FieldName(SettingsField.ShoppingStores));
         Assert.Equal(ShoppingText.ManageStoresLabel, SettingsMenu.FieldValue(SettingsField.ShoppingStores, new Settings.AppSettingsData(), _settings.ProfileDirectory));
-        Assert.Equal([SettingsField.ShoppingTools, SettingsField.ShoppingStores], SettingsMenu.ToolsTabFields[ToolsText.MenuIndex(ToolsText.ShoppingMenuTitle)]);
+        Assert.Equal([SettingsField.ShoppingTools, SettingsField.ShoppingList, SettingsField.ShoppingStores], SettingsMenu.ToolsTabFields[ToolsText.MenuIndex(ToolsText.ShoppingMenuTitle)]);
+        Assert.Equal("Shopping list", SettingsMenu.FieldName(SettingsField.ShoppingList));
+        Assert.Equal(ShoppingText.ManageListLabel, SettingsMenu.FieldValue(SettingsField.ShoppingList, new Settings.AppSettingsData(), _settings.ProfileDirectory));
         Assert.False(SettingsMenu.IsToggle(SettingsField.ShoppingStores));
         Assert.Equal(["✎ rename", "✖  remove", "📂 folder", "⟳ reindex"], SettingsMenu.StoreButtons.Select(b => b.Title));
         Assert.Equal("● H-E-B (active)", ShoppingText.StoreRow(new ShopStore(1, "H-E-B", "h-e-b", ""), active: true));

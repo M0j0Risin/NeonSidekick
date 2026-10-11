@@ -757,6 +757,7 @@ The pane heads its run **The list**.
 | Setting | What it does | Default |
 |---|---|---|
 | Shopping tools | Offers the shopping list's tools: `shopping_list`, `shopping_add`, `shopping_check`, `shopping_remove`, `shopping_clear`, `shopping_locate`, `shopping_place`, `shopping_stores`, `shopping_layout` and `shopping_reference` (see [Tools](TOOLS.md#shopping-list)). The list and its stores live in the profile's `db\shopping\shopping.db`. `/tools shopping` opens its on/off page; the toolbar's 🛒 opens the list (`/shopping`). | off |
+| Shopping list | Enter opens the shopping list's checklist, the same pane as the bare `/shopping` and the toolbar's 🛒 (see [Commands](COMMANDS.md)); ESC comes back to the row. | — |
 | Shopping stores | Enter opens the stores' manager: the first row adds a store (its folder under `db\shopping\reference` is made), Enter on a store makes it the one the list is walked through, and the buttons `✎ rename` (`n`; its folder is renamed to match), `✖  remove` (`r`, after a yes; its layout goes, its documents stay), `📂 folder` (`f`, opens its reference folder) and `⟳ reindex` (`i`). Under each store: its locations, sections, placement facts and reference documents. The `/shopping` pane's `⇄ store` opens it too. | — |
 
 #### Options
