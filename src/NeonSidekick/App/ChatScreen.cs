@@ -13266,6 +13266,9 @@ internal sealed partial class ChatScreen
                 // A load_skill written with none offered (2026-09-30, code review: a skill's content can name it, and the line
                 // reached the transcript and the voice) is taken out, never run — as the picture writer's is.
                 assistant.WrittenCallsTakenOut = skillTool is null ? [LoadSkillTool.WrittenForm] : [];
+                // Vision off, the bots see text alone (2026-10-10, the user's call): a bot's own generate_image pictures reach the
+                // transcript, the strip and the picture log as ever, but not its model — a text-only server would fail the turn.
+                assistant.ToolPicturesUnseen = BotChat.UnseenToolPictures(effective.BotChatVision);
 
                 DiagnosticLog.Info(AppCategory, BotChat.TurnLogLine(replies + 1, bot.Name));
                 int turnId = ladder.BeginBot();

@@ -388,6 +388,13 @@ public class BotChatTests
     }
 
     [Fact]
+    public void UnseenToolPictures_VisionOff_IsGenerateImageAlone_VisionOn_None()
+    {
+        Assert.Equal(["generate_image"], BotChat.UnseenToolPictures(vision: false));
+        Assert.Empty(BotChat.UnseenToolPictures(vision: true));
+    }
+
+    [Fact]
     public void TurnTools_ANameTheMainChatShares_IsBotchatsOwn_AndEachNameOnce()
     {
         var botImage = new NamedTool("generate_image");

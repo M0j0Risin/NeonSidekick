@@ -154,9 +154,36 @@ public partial class ChatScreenTests
         await RunAsync();
 
         Assert.Equal(4, _chat.Requests.Count);
+        // neon sees its own picture as it draws it: the carrier after the tool result.
+        Assert.Equal(1, ImagesIn(_chat.Requests[1][^1]));
         Assert.Equal(1, ImagesIn(_chat.Requests[2][^1]));
         Assert.EndsWith("neon's picture.)", _chat.Requests[2][^1].Text, StringComparison.Ordinal);
         Assert.Equal(0, ImagesIn(_chat.Requests[3][^1]));
+    }
+
+    /// <summary>
+    /// Autonomous, vision off (2026-10-10, the user's call): the bot that drew is not shown its own picture either — its model gets
+    /// the result's text alone, so a text-only server keeps working — while the transcript still draws the thumbnail.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_VisionOff_Autonomous_ABotsOwnPicture_IsNotShownToItsModel_ButIsDrawn()
+    {
+        BotPicturesFixture(mode: "autonomous", width: 512, height: 4);
+        _settings.Update(d => d.ImageThumbnailSize = "tiny");
+        _chat.Enqueue(FakeChatClient.Call("g1", GenerateImageTool.ToolName, new Dictionary<string, object?> { ["prompt"] = "a dog surfing", ["seed"] = 7, ["verbatim"] = true }));
+        _chat.EnqueueText("Here is my dog.");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.All(_chat.Requests.SelectMany(r => r), m => Assert.Equal(0, ImagesIn(m)));
+        var result = Assert.Single(_chat.Requests[1].SelectMany(m => m.Contents).OfType<FunctionResultContent>());
+        Assert.Contains("generated 1 picture with pony (seed 7", result.Result?.ToString(), StringComparison.Ordinal);
+        Assert.Contains(new string('▀', 32), output);
     }
 
     [Fact]

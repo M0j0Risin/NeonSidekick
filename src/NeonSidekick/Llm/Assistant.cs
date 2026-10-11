@@ -767,6 +767,15 @@ public sealed class Assistant
     public IReadOnlySet<string>? TextToolCallNames { get; set; }
 
     /// <summary>
+    /// The tools whose pictures are the user's alone (2026-10-10, the user's call: a <c>/botchat</c> bot under <c>Botchat image
+    /// mode</c> <c>autonomous</c> with <c>Botchat vision enabled</c> off was shown its own <c>generate_image</c> pictures, though
+    /// the setting says the bots see text alone, and a text-only server would fail its turn): their pictures still ride the
+    /// <see cref="TurnEvent.ToolResult"/> for the screen to draw, but never the carrier message, so the model gets the result's
+    /// text alone. Empty, the default, keeps none back.
+    /// </summary>
+    public IReadOnlySet<string> ToolPicturesUnseen { get; set; } = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
     /// Whether the last round trip <see cref="MaxToolIterations"/> allows is asked without the tools, so the model must answer in
     /// words (2026-09-30, the user's report: a <c>/botchat</c> bot a few turns in spent all three of its round trips on
     /// <c>generate_image</c> and the chat showed "Stopped after 3 tool iterations without a final answer" in place of its line).
@@ -1599,8 +1608,14 @@ public sealed class Assistant
 
                 var (result, pictures, diff, shown) = await InvokeToolWithDiffAsync(_tools, call, cancellationToken).ConfigureAwait(false);
                 results.Add(ResultContent(call, result));
-                fetched.AddRange(pictures);
-                if (pictures.Count > 0 && !fetchers.Contains(call.Name, StringComparer.Ordinal))
+                // A tool whose pictures are the user's alone (ToolPicturesUnseen) still hands them to the screen below.
+                bool seen = !ToolPicturesUnseen.Contains(call.Name);
+                if (seen)
+                {
+                    fetched.AddRange(pictures);
+                }
+
+                if (seen && pictures.Count > 0 && !fetchers.Contains(call.Name, StringComparer.Ordinal))
                 {
                     fetchers.Add(call.Name);
                 }

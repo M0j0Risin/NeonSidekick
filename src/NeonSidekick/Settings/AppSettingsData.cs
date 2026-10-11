@@ -1038,7 +1038,9 @@ public sealed class AppSettingsData
     /// it last spoke — the app's pictures, and the other bots' own <c>generate_image</c> pictures (not the ones it drew
     /// itself, seen as it drew them) — the newest <see cref="App.BotChat.MaxVisionPictures"/>, with a caption saying whose.
     /// Only for models that read images: a text-only server fails the turn (in <c>multi</c> mode every bot's own model
-    /// counts). Not kept for <c>/botchat --resume</c> or the stored session. Off (the default), the bots see text alone.
+    /// counts). Not kept for <c>/botchat --resume</c> or the stored session. Off (the default), the bots see text alone: since
+    /// 2026-10-10 (the user's call) a bot's own <c>generate_image</c> pictures too, which it saw as it drew them until then
+    /// (<see cref="App.BotChat.UnseenToolPictures"/>), so a text-only server never fails an <c>autonomous</c> bot's turn.
     /// Read per reply. The Botchat tab of <c>/settings</c>, its last row. No variable.
     /// </summary>
     public bool BotChatVision { get; set; }
