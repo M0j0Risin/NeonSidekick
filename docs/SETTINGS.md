@@ -133,12 +133,13 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/tools shell allowed` |
 | 👮 / 🥷 | *Shell police* is on / off, and the policy isn't `off` | `/tools shell police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first; `c` the allowed commands, `p` the police) |
-| 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 🛒 | always; on the slab while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping`: that group's on/off page. 📁 🌄 💎 🖨️'s have setting buttons at the top (see *File tools*, *Image tools*, *Obsidian tools*, *Print tools*). 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (`w`), **live** (`l`), **snap** (`s`) and **screen** (`c`); see *Camera tool* |
+| 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 📁 🌄 💎 🖨️'s have setting buttons at the top (see *File tools*, *Image tools*, *Obsidian tools*, *Print tools*). 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (`w`), **live** (`l`), **snap** (`s`) and **screen** (`c`); see *Camera tool* |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
 | ⚡ | always | `/process`, the background processes' list |
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
 | 🪟 | always | `/comfy thumbs`, the thumbnail browser on the ComfyUI output folder |
 | 📺 | always | `/youtube list`, the saved videos |
+| 🛒 | always | `/shopping`, the shopping list's checklist (the *Shopping tools* switch is `/tools shopping`) |
 | 📈 | always | `/perfbar`: hides or shows the performance bar |
 | working directory (right edge) | always | `/cwd browse` |
 | blank space | — | `/settings` |
@@ -755,7 +756,7 @@ The pane heads its run **The list**.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Shopping tools | Offers the shopping list's tools: `shopping_list`, `shopping_add`, `shopping_check`, `shopping_remove`, `shopping_clear`, `shopping_locate`, `shopping_place`, `shopping_stores`, `shopping_layout` and `shopping_reference` (see [Tools](TOOLS.md#shopping-list)). The list and its stores live in the profile's `db\shopping\shopping.db`. `/tools shopping` and the toolbar's 🛒 open its on/off page. | off |
+| Shopping tools | Offers the shopping list's tools: `shopping_list`, `shopping_add`, `shopping_check`, `shopping_remove`, `shopping_clear`, `shopping_locate`, `shopping_place`, `shopping_stores`, `shopping_layout` and `shopping_reference` (see [Tools](TOOLS.md#shopping-list)). The list and its stores live in the profile's `db\shopping\shopping.db`. `/tools shopping` opens its on/off page; the toolbar's 🛒 opens the list (`/shopping`). | off |
 
 #### Options
 

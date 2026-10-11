@@ -15,15 +15,16 @@ public sealed class ToolbarItemsTests
         Assert.Equal(
         [
             "settings", "profile", "themes", "tools", "mcp", "skills", "sys", "sessions", "usage", "memory", "ask", "cmdlist", "police",
-            "shell", "files", "image", "web", "advisors", "docker", "obsidian", "sql", "oracle", "mysql", "sqlite", "postgres", "unc", "ha", "comfy", "camera", "print", "shopping",
-            "log", "process", "comfyview", "comfythumbs", "youtube", "perf", "path",
+            "shell", "files", "image", "web", "advisors", "docker", "obsidian", "sql", "oracle", "mysql", "sqlite", "postgres", "unc", "ha", "comfy", "camera", "print",
+            "log", "process", "comfyview", "comfythumbs", "youtube", "shoppinglist", "perf", "path",
         ], ToolbarItems.Names);
-        Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 💾 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 🛒 📄 ⚡ 🎞️ 🪟 📺 📈 📂", string.Join(" ", ToolbarItems.Names.Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
+        Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 💾 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 🛒 📈 📂", string.Join(" ", ToolbarItems.Names.Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
         Assert.Equal(ChatScreen.ToolbarStrip, string.Join(" ", ToolbarItems.Names.Where(id => id is not ("cmdlist" or "police" or "path")).Select(ToolbarItems.Glyph)));   // one source for the glyphs
         Assert.Equal(FolderText.FolderGlyph, ToolbarItems.Glyph(ToolbarItems.Path));   // the Folders pane's, one source
         Assert.All(ToolbarItems.Names.SkipLast(1), id => Assert.Equal(ChatScreen.ToolbarWord(ToolbarItems.Glyph(id)), ToolbarItems.Describe(id)));   // the note is the line the glyph runs
         Assert.Equal(ChatScreen.CwdBrowseLine, ToolbarItems.Describe(ToolbarItems.Path));
-        Assert.Equal(ToolsText.SwitchWords, ToolbarItems.Names.Where(id => ToolsText.SwitchField(id) is not null));   // each switch's id is its /tools word
+        Assert.Equal(ToolsText.SwitchWords.Where(w => w != ToolsText.ShoppingSwitchWord), ToolbarItems.Names.Where(id => ToolsText.SwitchField(id) is not null));
+        Assert.Equal([ToolbarItems.Files, ToolbarItems.ShoppingList], ToolbarItems.Resolve(["files", "Shopping"]).Order(StringComparer.Ordinal));   // a saved "shopping" (🛒's id for a few hours) is the list's item   // each switch's id is its /tools word; shopping's 🛒 opens the list instead (2026-10-11)
     }
 
     [Fact]

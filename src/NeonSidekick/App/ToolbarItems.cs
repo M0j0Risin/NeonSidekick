@@ -61,7 +61,6 @@ public static class ToolbarItems
     public const string Comfy = "comfy";
     public const string Camera = "camera";
     public const string Print = "print";
-    public const string Shopping = "shopping";   // 2026-10-11, the user's ask: 🛒, the Shopping tools switch (/tools shopping), after Print
 
     // The windows (2026-10-03, the user's ask): each opens or closes its window as its Ctrl+Alt chord does.
     public const string Log = "log";
@@ -69,6 +68,7 @@ public static class ToolbarItems
     public const string ComfyView = "comfyview";
     public const string ComfyThumbs = "comfythumbs"; // 2026-10-04, the user's ask: 🪟, /comfy thumbs
     public const string YouTube = "youtube";         // 2026-10-08, the user's ask: 📺, /youtube list (a pane; after 🪟 later that day)
+    public const string ShoppingList = "shoppinglist"; // 2026-10-11, the user's ask: 🛒, /shopping's list (a pane), after 📺; the Shopping tools switch (id shopping, after Print) until later that day
     public const string Path = "path";
 
     /// <summary>
@@ -82,8 +82,8 @@ public static class ToolbarItems
     public static readonly string[] Names =
     [
         Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Ask, CmdList, Police,
-        Shell, Files, Image, Web, Advisors, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print, Shopping,
-        Log, Process, ComfyView, ComfyThumbs, YouTube, Perf, Path,
+        Shell, Files, Image, Web, Advisors, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
+        Log, Process, ComfyView, ComfyThumbs, YouTube, ShoppingList, Perf, Path,
     ];
 
     /// <summary>
@@ -133,12 +133,12 @@ public static class ToolbarItems
         Comfy => ChatScreen.ComfyToolGlyph,
         Camera => ChatScreen.CameraToolGlyph,
         Print => ChatScreen.PrintToolGlyph,
-        Shopping => ChatScreen.ShoppingToolGlyph,
         Log => ChatScreen.LogToolGlyph,
         Process => ChatScreen.ProcessToolGlyph,
         ComfyView => ChatScreen.ComfyViewToolGlyph,
         ComfyThumbs => ChatScreen.ComfyThumbsToolGlyph,
         YouTube => ChatScreen.YouTubeToolGlyph,
+        ShoppingList => ChatScreen.ShoppingToolGlyph,
         Path => FolderText.FolderGlyph,
         _ => "",
     };
@@ -177,12 +177,12 @@ public static class ToolbarItems
         Comfy => "ComfyUI",
         Camera => "Camera",
         Print => "Print",
-        Shopping => "Shopping",
         Log => "Log",
         Process => "Process",
         ComfyView => "Comfy viewer",
         ComfyThumbs => "Comfy thumb viewer",
         YouTube => "YouTube",
+        ShoppingList => "Shopping list",
         Path => "Working directory path",
         _ => id,
     };
@@ -211,6 +211,7 @@ public static class ToolbarItems
         ComfyView => ChatScreen.ComfyViewToolLine,
         ComfyThumbs => ChatScreen.ComfyThumbsToolLine,
         YouTube => ChatScreen.YouTubeToolLine,
+        ShoppingList => ChatScreen.ShoppingToolLine,
         Path => "/cwd browse",
         _ => ToolsText.SwitchField(id) is null ? "" : ToolsText.SwitchLine(id),
     };
@@ -248,7 +249,7 @@ public static class ToolbarItems
         }
 
         // A null in a hand-edited list is skipped (later on 2026-09-30): this runs on the pane's tick, where a throw repeats.
-        var wanted = saved.OfType<string>().Select(w => w.Trim().ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
+        var wanted = saved.OfType<string>().Select(w => w.Trim().ToLowerInvariant()).Select(w => w == ToolsText.ShoppingSwitchWord ? ShoppingList : w).ToHashSet(StringComparer.Ordinal);   // 🛒's id was the switch word for a few hours (2026-10-11): a profile that checked it keeps the cart
         return Names.Where(wanted.Contains).ToHashSet(StringComparer.Ordinal);
     }
 

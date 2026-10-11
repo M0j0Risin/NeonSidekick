@@ -39,8 +39,14 @@ public static class ToolsText
     [
         ToolbarItems.Ask, ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Image, ToolbarItems.Web, ToolbarItems.Advisors, ToolbarItems.Docker, ToolbarItems.Obsidian,
         ToolbarItems.Sql, ToolbarItems.Oracle, ToolbarItems.MySql, ToolbarItems.Sqlite, ToolbarItems.Postgres, ToolbarItems.Unc, ToolbarItems.Ha, ToolbarItems.Comfy,
-        ToolbarItems.Camera, ToolbarItems.Print, ToolbarItems.Shopping,
+        ToolbarItems.Camera, ToolbarItems.Print, ShoppingSwitchWord,
     ];
+
+    /// <summary>
+    /// <c>/tools shopping</c>'s word (2026-10-11): the Shopping tools switch. The one switch word that is no toolbar item's id: the toolbar's 🛒
+    /// opens the list itself (<see cref="ToolbarItems.ShoppingList"/>, the user's call later that day). Pinned.
+    /// </summary>
+    public const string ShoppingSwitchWord = "shopping";
 
     /// <summary>The setting a <see cref="SwitchWords"/> word opens (any case, trimmed); null for any other word. Pinned.</summary>
     public static SettingsField? SwitchField(string word) => word.Trim().ToLowerInvariant() switch
@@ -63,7 +69,7 @@ public static class ToolsText
         ToolbarItems.Comfy => SettingsField.ComfyTools,
         ToolbarItems.Camera => SettingsField.CameraTools,
         ToolbarItems.Print => SettingsField.PrintTools,
-        ToolbarItems.Shopping => SettingsField.ShoppingTools,   // 2026-10-11, the shopping list's switch
+        ShoppingSwitchWord => SettingsField.ShoppingTools,   // 2026-10-11, the shopping list's switch
         _ => null,
     };
 

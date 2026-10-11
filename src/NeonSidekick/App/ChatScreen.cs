@@ -1560,8 +1560,6 @@ internal sealed partial class ChatScreen
     public const string CameraToolGlyph = "📸";
     public const string PrintToolGlyph = "🖨️";
 
-    /// <summary>The Shopping tools switch's glyph (2026-10-11): a cart.</summary>
-    public const string ShoppingToolGlyph = "🛒";
 
     /// <summary>
     /// The windows (2026-10-03, the user's picks): the log and the picture viewer (the picture strip's button glyph), always drawn;
@@ -1587,6 +1585,15 @@ internal sealed partial class ChatScreen
     /// double-click off it closes it. Pinned.
     /// </summary>
     public const string YouTubeToolGlyph = "📺";
+
+    /// <summary>
+    /// The shopping list's item (2026-10-11, the user's ask): a cart, <see cref="ShoppingToolLine"/>, the list's checklist pane — a pane like
+    /// 📺's, after it; the Shopping tools switch's glyph after the printer earlier that day, whose page <c>/tools shopping</c> still opens. Pinned.
+    /// </summary>
+    public const string ShoppingToolGlyph = "🛒";
+
+    /// <summary>The line the shopping item runs (2026-10-11): the bare <c>/shopping</c>, the list's pane.</summary>
+    public const string ShoppingToolLine = Shopping.ShoppingCommand.Word;
 
     /// <summary>The lines the window items run (2026-10-03): the typed commands their chords run. Pinned.</summary>
     public const string LogToolLine = "/log";
@@ -2035,12 +2042,12 @@ internal sealed partial class ChatScreen
         ComfyToolGlyph => ToolsText.SwitchLine(ToolbarItems.Comfy),
         CameraToolGlyph => ToolsText.SwitchLine(ToolbarItems.Camera),
         PrintToolGlyph => ToolsText.SwitchLine(ToolbarItems.Print),
-        ShoppingToolGlyph => ToolsText.SwitchLine(ToolbarItems.Shopping),
         LogToolGlyph => LogToolLine,
         ProcessToolGlyph => ProcessWindowText.Word,
         ComfyViewToolGlyph => ComfyViewToolLine,
         ComfyThumbsToolGlyph => ComfyThumbsToolLine,
         YouTubeToolGlyph => YouTubeToolLine,
+        ShoppingToolGlyph => ShoppingToolLine,
         _ => null,
     };
 
