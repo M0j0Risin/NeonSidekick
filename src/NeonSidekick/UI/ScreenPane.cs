@@ -2280,43 +2280,101 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             var fold = renderable is IFoldLayout { Fold: { } layout }
                 ? new Scrollback.FoldSpec(layout.Head, layout.Keep, layout.Size, SpacedSegments(layout.Collapsed.GetSegments(_inner)), SpacedSegments(layout.Expanded.GetSegments(_inner)))
                 : null;
-            if (_top >= 0)
-            {
-                // Scrolled: the store takes it, the screen shows the window; the count below changed
-                // (and a run that folded above it redraws the window).
-                FlushLive();
-                EmitAs(segments, member, spans, fold);
-                if (_store.Reshaped)
-                {
-                    Redraw();
-                }
-                else
-                {
-                    RedrawScrollRow();
-                }
+            FlowLocked(segments, member, spans, fold);
+        }
+    }
 
+    /// <summary>
+    /// Where the transcript's next write starts (2026-10-11): a mark for <see cref="LinesSince"/>, read right after the welcome splash
+    /// is drawn first so the lines the startup writes under it can be put back under a refitted picture.
+    /// </summary>
+    public Scrollback.Place StoreMark
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _store.Mark;
+            }
+        }
+    }
+
+    /// <summary>The lines written since <paramref name="mark"/> (<see cref="StoreMark"/>), copied at the window's width; null with nothing or a line that folds or holds a picture (<see cref="Scrollback.Since"/>).</summary>
+    public Scrollback.Copied? LinesSince(Scrollback.Place mark)
+    {
+        if (!Enabled)
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            return _store.Since(mark, Width);
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="lines"/> (<see cref="LinesSince"/>) written to the flow again, as they were, their pictures where they were:
+    /// after a wipe, under what was drawn since.
+    /// </summary>
+    public void Rewrite(Scrollback.Copied lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        if (!Enabled)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            if (_modal > 0)
+            {
                 return;
             }
 
-            bool sync = _batch == 0 && _drawn;
-            if (sync)
-            {
-                BeginSync();
-            }
+            FlowLocked([.. lines.Segments], member: false, spans: null, fold: null);
+        }
+    }
 
-            Lift();
-            RestoreFlow();
+    /// <summary>One flow write's segments out, under the gate: <see cref="WriteFlow"/>'s and <see cref="Rewrite"/>'s.</summary>
+    private void FlowLocked(List<Segment> segments, bool member, IReadOnlyList<IReadOnlyList<PictureSpan>>? spans, Scrollback.FoldSpec? fold)
+    {
+        if (_top >= 0)
+        {
+            // Scrolled: the store takes it, the screen shows the window; the count below changed
+            // (and a run that folded above it redraws the window).
             FlushLive();
             EmitAs(segments, member, spans, fold);
-            if (_batch == 0)
+            if (_store.Reshaped)
             {
-                Draw();
+                Redraw();
+            }
+            else
+            {
+                RedrawScrollRow();
             }
 
-            if (sync)
-            {
-                EndSync();
-            }
+            return;
+        }
+
+        bool sync = _batch == 0 && _drawn;
+        if (sync)
+        {
+            BeginSync();
+        }
+
+        Lift();
+        RestoreFlow();
+        FlushLive();
+        EmitAs(segments, member, spans, fold);
+        if (_batch == 0)
+        {
+            Draw();
+        }
+
+        if (sync)
+        {
+            EndSync();
         }
     }
 

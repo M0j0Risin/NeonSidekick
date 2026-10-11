@@ -6900,7 +6900,7 @@ public partial class ChatScreenTests : IDisposable
     private string ProfileDir(string name) => Profiles.Directory(_dir, name);
 
     /// <summary>A second profile on disk with its own settings, one memory, a persona, operating rules and a voice directive, so a switch has something to show.</summary>
-    private void WorkProfile(string llmUrl = "")
+    private void WorkProfile(string llmUrl = "", Action<AppSettingsData>? more = null)
     {
         var work = PreFlipDefaults.Data();   // the fixture's opt-ins of 2026-09-29 for this profile too
         work.LlmUrl = llmUrl;
@@ -6910,6 +6910,7 @@ public partial class ChatScreenTests : IDisposable
         work.ToolCollapseCount = 0;
         work.CodeCollapseCount = 0;
         work.DiffCollapseCount = 0;
+        more?.Invoke(work);
         Profiles.Create(_dir, "work", work);   // the fixture's titling and tool-fold opt-outs for this profile too (a reset of it brings the defaults back)
         new MemoryStore(ProfileDir("work")).Add("They like tea.");
         File.WriteAllText(Path.Combine(ProfileDir("work"), PersonaFile.FileName), "You are Rex.");
@@ -17133,6 +17134,7 @@ public partial class ChatScreenTests : IDisposable
         }
 
         _splash = new SplashSource(images.Keys.ToArray(), name => { _splashLoads.Add(name); return images[name]; });
+        _settings.Update(SavedServer);
     }
 
     /// <summary>
@@ -17409,7 +17411,7 @@ public partial class ChatScreenTests : IDisposable
         PaneOf40Rows();
         _random = new Random(7);
         SplashOf(2380, 100);   // the embedded stand-in: the startup picture (the default profile has no folder)
-        WorkProfile();
+        WorkProfile("http://127.0.0.1:1234/v1");   // a saved server: no LLM line under the switch's splash to draw it again over (2026-10-11)
         string folder = Path.Combine(ProfileDir("work"), AppSettings.ImagesFolderName, SplashImages.ProfileFolderName);
         Directory.CreateDirectory(folder);
         File.WriteAllBytes(Path.Combine(folder, "one.bmp"), SmokeChecks.SolidBmp(2380, 60));   // three half-block rows
@@ -17437,6 +17439,78 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(rows[1 - first], Count(output[screens[3]..screens[4]], wide));  // the other on Right
         Assert.DoesNotContain("▀", output[screens[4]..]);
         Assert.Single(_chat.Requests);
+    }
+
+    /// <summary>The rows of the first run of picture rows (lines holding a half block) in <paramref name="text"/>.</summary>
+    private static int PictureRows(string text) => text.Split('\n').SkipWhile(l => !l.Contains('▀')).TakeWhile(l => l.Contains('▀')).Count();
+
+    [WindowsFact]
+    public async Task Startup_WelcomeSplash_IsDrawnBeforeTheLlmsConnect()
+    {
+        // 2026-10-11, the user's ask: the splash at once, not after the connect (an embedded model's load, a probe, a scan).
+        _settings.Update(d => d.TtsOutput = false);
+        PaneOf40Rows();
+        SplashOf(2380, 100);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        int picture = output.IndexOf('▀', StringComparison.Ordinal);
+        int connecting = output.IndexOf(ChatScreen.ConnectingLabel, StringComparison.Ordinal);
+        Assert.True(picture > output.IndexOf(ScreenMarker, StringComparison.Ordinal), output);
+        Assert.True(connecting > picture, output);
+        Assert.Equal(1, Refreshes(output));   // nothing written under it: no refit, /exit's wipe alone
+    }
+
+    [WindowsFact]
+    public async Task Startup_WelcomeSplash_ALineTheConnectWroteUnderIt_IsKept_UnderThePictureFittedAgain()
+    {
+        // The splash drawn first is fitted again once the connects are done (2026-10-11): the banner, the same picture a row
+        // shorter, then the line the connect wrote under it, once.
+        PaneOf40Rows();
+        SplashOf(100, 4000);   // height-bound: the rows left over the line count
+        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "disabled"; d.LlmUrl = ""; });
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string line = "✗ " + LlmSession.NoServerLine(ScanScope.Disabled);
+        Assert.Equal(2, Refreshes(output));   // the refit, then /exit's wipe
+        int[] screens = Enumerable.Range(0, 3).Select(i => NthScreen(output, i)).ToArray();
+        string first = output[screens[0]..screens[1]];
+        string refit = output[screens[1]..screens[2]];
+        Assert.Equal([SplashName(0), SplashName(0)], _splashLoads);   // the same picture drawn again
+        Assert.True(PictureRows(refit) < PictureRows(first), output);
+        Assert.True(refit.IndexOf(line, StringComparison.Ordinal) > refit.IndexOf('▀'), refit);   // under the picture
+        Assert.Equal(0, Count(refit[..refit.IndexOf('▀')], line));                                  // never over it
+        Assert.DoesNotContain("▀", output[screens[2]..]);
+    }
+
+    [WindowsFact]
+    public async Task ProfileSwitch_WelcomeSplash_IsDrawnUnderTheNotice_ThenFittedAgainOverTheConnectsLine()
+    {
+        // The switch's shape (2026-10-11): the banner, the switched notice and the picture first; the new profile's connect
+        // line under it; then all three again with the line put back under the picture.
+        _settings.Update(d => d.TtsOutput = false);
+        PaneOf40Rows();
+        SplashOf(100, 4000);
+        WorkProfile(more: d => d.LlmScanMode = "disabled");
+        StepsWhenIdle(Line("/profile work"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        string notice = SettingsMenu.SwitchedNotice("work");
+        string line = "✗ " + LlmSession.NoServerLine(ScanScope.Disabled);
+        // The screens: the startup, the /profile line's wipe, the switch's banner, its refit, /exit's wipe.
+        Assert.Equal(4, Refreshes(output));
+        int[] screens = Enumerable.Range(0, 5).Select(i => NthScreen(output, i)).ToArray();
+        string switched = output[screens[2]..screens[3]];
+        string refit = output[screens[3]..screens[4]];
+        Assert.True(switched.IndexOf(notice, StringComparison.Ordinal) is >= 0 and var at && at < switched.IndexOf('▀'), switched);
+        Assert.True(refit.IndexOf(notice, StringComparison.Ordinal) is >= 0 and var again && again < refit.IndexOf('▀'), refit);
+        Assert.True(PictureRows(refit) < PictureRows(switched), output);
+        Assert.True(refit.IndexOf(line, StringComparison.Ordinal) > refit.IndexOf('▀'), refit);   // under the picture
+        Assert.Equal(0, Count(refit[..refit.IndexOf('▀')], line));                                  // never over it
     }
 
     [WindowsFact]
@@ -17627,6 +17701,19 @@ public partial class ChatScreenTests : IDisposable
     }
 
     // ── The tiled splash (2026-09-24) ───────────────────────────────────────
+
+    /// <summary>
+    /// A saved server and model (2026-10-11), set by <see cref="SplashOf"/>: the startup connects quietly, with no scan, no server
+    /// picker and no <c>LLM:</c> line. The splash is drawn before the connect since then: a line under it draws it again over the
+    /// line (<c>RefitSplash</c>, its own tests), and a picker's overlay over it writes it back from the store when it closes, which
+    /// the splash tests' counts of loads, picture lines and wipes would read as more pictures. A test after the refit sets its own
+    /// server after <see cref="SplashOf"/>.
+    /// </summary>
+    private static void SavedServer(AppSettingsData d)
+    {
+        d.LlmUrl = "http://127.0.0.1:1234/v1";
+        d.LlmModel = "llama";
+    }
 
     /// <summary>Ten 480 × 240 pictures: at the small thumbnail (48 × 12) each is 48 cells by twelve lines, four to a 240-wide strip row (a fifth needs 248), two rows (12 + 1 + 12) under the banner of a 40-row screen — eight a page, then two.</summary>
     private void TiledSplashOfTen()

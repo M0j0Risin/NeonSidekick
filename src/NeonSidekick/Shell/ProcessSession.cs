@@ -58,6 +58,13 @@ public sealed class ProcessSession : IDisposable
     /// <summary>Whether the user (and the model) are told when it exits; the registry's flag.</summary>
     public bool Notify { get; set; }
 
+    /// <summary>
+    /// The user's own run (2026-10-11, <c>/cmd --bg</c>, the user's call): <c>/process</c> and its window show it, the model's
+    /// <c>process</c> tool never does (<see cref="ProcessRegistry.ListForModel"/>, <see cref="ProcessRegistry.FindForModel"/>), and its
+    /// exit is always alerted (<see cref="ProcessAlert.Mine"/>) for the screen's report, never a seeded poll. Set before the watch starts.
+    /// </summary>
+    public bool Mine { get; internal set; }
+
     /// <summary>How many lines the last <c>poll</c> had seen; the registry's cursor into <see cref="Output"/>.</summary>
     public long PollCursor { get; set; }
 

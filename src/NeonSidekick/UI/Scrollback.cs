@@ -189,8 +189,62 @@ public sealed class Scrollback
     /// <summary>The logical lines kept (tests).</summary>
     public int LineCount => _lines.Count;
 
+    /// <summary>
+    /// A place in the store (<see cref="Mark"/>, 2026-10-11): the lines before it, and of the open last line the segments and rows it
+    /// held — a picture's write leaves its last row open, and the next write joins it.
+    /// </summary>
+    public readonly record struct Place(int Lines, int Segments, int Rows);
+
+    /// <summary>Where the next write starts, for <see cref="Since"/>: after the last line, or inside it while it is open.</summary>
+    public Place Mark => LastLineOpen ? new(_lines.Count - 1, _lines[^1].Segments.Count, _lines[^1].Rows) : new(_lines.Count, 0, 0);
+
     /// <summary>The last line has no line break after it yet: the flow cursor sits at its end, not on the row under it.</summary>
     public bool LastLineOpen => _lines.Count > 0 && !_lines[^1].Closed;
+
+    /// <summary>
+    /// What was written since a <see cref="Mark"/> (<see cref="Since"/>, 2026-10-11): one flow write's segments, line breaks after
+    /// the closed lines — written where the mark stood, it joins an open line as the first did — and the <see cref="Rows"/> it added at
+    /// the width it was read at.
+    /// </summary>
+    public sealed record Copied(IReadOnlyList<Segment> Segments, int Rows);
+
+    /// <summary>
+    /// What was written after <paramref name="mark"/> as one write that puts it back (2026-10-11, the welcome splash drawn first and
+    /// fitted again over the startup's lines, <c>ChatScreen.RefitSplash</c>). Null with nothing visible written, a mark the store no longer
+    /// holds (the cap dropped lines from the front since), or a line that folds (a tool run, a code or thinking block, a diff) or
+    /// holds a picture after it: neither survives a copy, so nothing is copied.
+    /// </summary>
+    public Copied? Since(Place mark, int width)
+    {
+        if (mark.Lines < 0 || mark.Lines >= _lines.Count || mark.Segments > _lines[mark.Lines].Segments.Count)
+        {
+            return null;
+        }
+
+        Layout(width);
+        var segments = new List<Segment>();
+        int rows = 0;
+        for (int i = mark.Lines; i < _lines.Count; i++)
+        {
+            var line = _lines[i];
+            bool joined = i == mark.Lines && (mark.Segments > 0 || mark.Rows > 0);
+            if (line.Group is not null || line.Fold is not null || (!joined && line.Pictures is not null))
+            {
+                return null;
+            }
+
+            segments.AddRange(joined ? line.Segments.Skip(mark.Segments) : line.Segments);
+            if (line.Closed)
+            {
+                segments.Add(Segment.LineBreak);
+            }
+
+            rows += joined ? line.Rows - mark.Rows : line.Rows;
+        }
+
+        // Nothing to see (the break that closed a picture's open row, a blank line): nothing worth drawing the picture again for.
+        return segments.Any(s => !s.IsLineBreak && !string.IsNullOrWhiteSpace(s.Text)) ? new Copied(segments, Math.Max(0, rows)) : null;
+    }
 
     /// <summary>The rows at <paramref name="width"/>, laid out afresh when the width changed.</summary>
     public IReadOnlyList<SegmentLine> Rows(int width)

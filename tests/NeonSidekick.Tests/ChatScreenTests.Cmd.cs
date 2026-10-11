@@ -244,6 +244,91 @@ public partial class ChatScreenTests
         Assert.Contains("the whole output is in .shell\\" + ChatScreen.CmdIdPrefix, reply.Text, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// /cmd --bg (2026-10-11): the start notice and the chat back at once; the end comes as the report at the idle loop top — the
+    /// header as a notice, the output under the indent — and the pair, tagged as a background run, in the next request. The read is
+    /// left to the alert's signal (no spin in the script: the report is drawn only once the read gives way).
+    /// </summary>
+    [WindowsFact]
+    public async Task Cmd_Bg_StartsInTheBackground_ThenReportsTheEnd_AndTheModelSeesThePair()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ShellCommandPolicy = "yolo"; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("It said hi.");
+        var input = Scripted();
+        var steps = new Queue<string>(["/cmd --bg --shell cmd echo hi", "what did it say?", "/exit"]);
+        input.OnWait = () =>
+        {
+            // The command first; the message once the report is on the screen; /exit once the reply is.
+            bool ready = steps.Count switch
+            {
+                3 => true,
+                2 => _console.Output.Contains(Header("echo hi"), StringComparison.Ordinal),
+                _ => _console.Output.Contains("It said hi.", StringComparison.Ordinal),
+            };
+            if (ready && steps.Count > 0)
+            {
+                PushLine(input, steps.Dequeue());
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.Contains("started " + ProcessRegistry.IdPrefix, output);
+        Assert.Contains(" in the background (cmd, pid ", output);
+        Assert.Contains(TranscriptRenderer.NoticeGlyph + Header("echo hi") + "\n", output);
+        Assert.Contains(TranscriptRenderer.ToolAnswerIndent + "hi\n", output);
+        var request = Assert.Single(_chat.Requests);
+        Assert.Contains(request, m => m.Role == ChatRole.User && m.Text == "[I ran in the shell (cmd, in the background)] echo hi");
+        Assert.Contains(request, m => m.Role == ChatRole.Assistant && m.Text == "[shell output] " + Header("echo hi") + "\nhi");
+        Assert.DoesNotContain(request, m => m.Contents.OfType<FunctionCallContent>().Any());   // no seeded process poll
+
+    }
+
+    /// <summary>--bg passes the same checks before anything starts: policy off refuses it, as the police do.</summary>
+    [WindowsFact]
+    public async Task Cmd_Bg_UnderOff_IsRefused_NothingStarts()
+    {
+        _settings.Update(d => d.ShellCommandPolicy = "off");
+        CmdFixture("/cmd --bg --shell cmd echo hi", ShellText.CmdPolicyOff);
+
+        string output = await RunAsync();
+
+        Assert.Contains(TranscriptRenderer.ErrorGlyph + ShellText.CmdPolicyOff + "\n", output);
+        Assert.DoesNotContain(" in the background (", output);
+    }
+
+    /// <summary>The background switch: before or after --shell, alone the usage error, and a word that only starts with it is the command.</summary>
+    [Fact]
+    public void Cmd_TheArgument_ParsesTheBackgroundSwitch()
+    {
+        var effective = new AppSettingsData { ShellDefault = ShellKinds.PlatformDefault };
+        Assert.False(ChatScreen.TryParseCmd("--bg", effective, out _, out _, out bool background, out string? bare));
+        Assert.Equal(ShellText.CmdUsage, bare);
+        Assert.False(ChatScreen.TryParseCmd("--bg --shell bash", effective, out _, out _, out _, out string? noCommand));
+        Assert.Equal(ShellText.CmdUsage, noCommand);
+
+        Assert.True(ChatScreen.TryParseCmd("--BG git status", effective, out var kind, out string command, out background, out _));
+        Assert.True(background);
+        Assert.Equal(ShellKinds.Resolve(effective), kind);
+        Assert.Equal("git status", command);
+        Assert.True(ChatScreen.TryParseCmd("--bg --shell bash ls -l", effective, out kind, out command, out background, out _));
+        Assert.True(background);
+        Assert.Equal(ShellKind.Bash, kind);
+        Assert.Equal("ls -l", command);
+        Assert.True(ChatScreen.TryParseCmd("--shell bash --bg ls -l", effective, out kind, out command, out background, out _));
+        Assert.True(background);
+        Assert.Equal(ShellKind.Bash, kind);
+        Assert.Equal("ls -l", command);
+        Assert.True(ChatScreen.TryParseCmd("--bgx", effective, out _, out command, out background, out _));
+        Assert.False(background);
+        Assert.Equal("--bgx", command);
+        Assert.True(ChatScreen.TryParseCmd("echo --bg", effective, out _, out command, out background, out _));
+        Assert.False(background);
+        Assert.Equal("echo --bg", command);
+    }
+
     /// <summary>A bare /cmd, and --shell with nothing after it, are the usage error; an unknown shell is named with the choices.</summary>
     [Fact]
     public void Cmd_TheArgument_ParsesTheShellOption()
@@ -268,15 +353,21 @@ public partial class ChatScreenTests
         Assert.Equal("--shellish", command);
     }
 
-    /// <summary>The argument list: --shell while the first word is typed, then the shells, then nothing.</summary>
+    /// <summary>The argument list: the options not yet given while a leading word is typed (--bg since 2026-10-11), then the shells, then nothing.</summary>
     [Fact]
-    public void Cmd_TheArgumentList_OffersTheOptionThenTheShells()
+    public void Cmd_TheArgumentList_OffersTheOptionsThenTheShells()
     {
-        Assert.Equal(new[] { ShellText.CmdShellOption }, ChatScreen.CmdChoices("").Select(i => i.Text));
+        Assert.Equal(new[] { ShellText.CmdBgOption, ShellText.CmdShellOption }, ChatScreen.CmdChoices("").Select(i => i.Text));
         Assert.Equal(new[] { ShellText.CmdShellOption }, ChatScreen.CmdChoices("--sh").Select(i => i.Text));
+        Assert.Equal(new[] { ShellText.CmdBgOption }, ChatScreen.CmdChoices("--b").Select(i => i.Text));
         Assert.Equal(ShellKinds.Names.Select(n => "--shell " + n), ChatScreen.CmdChoices("--shell ").Select(i => i.Text));
+        Assert.Equal(new[] { "--bg --shell" }, ChatScreen.CmdChoices("--bg ").Select(i => i.Text));
+        Assert.Equal(ShellKinds.Names.Select(n => "--bg --shell " + n), ChatScreen.CmdChoices("--bg --shell ").Select(i => i.Text));
+        Assert.Equal(new[] { "--shell bash --bg" }, ChatScreen.CmdChoices("--shell bash ").Select(i => i.Text));
         Assert.Empty(ChatScreen.CmdChoices("git "));
         Assert.Empty(ChatScreen.CmdChoices("--shell bash ls"));
+        Assert.Empty(ChatScreen.CmdChoices("--bg --shell bash ls"));
+        Assert.Empty(ChatScreen.CmdChoices("--bg git"));
     }
 
     /// <summary>The history's tag reads back as the line that runs it again (/rewind), the shell named; any other text is not one.</summary>
@@ -288,6 +379,9 @@ public partial class ChatScreenTests
         Assert.Null(ShellText.CmdHistoryCommand("[I ran in the shell] nothing"));
         Assert.Null(ShellText.CmdHistoryCommand("plain text"));
         Assert.Equal("/cmd --shell powershell Get-Date", ConversationRewind.UserLine(new ChatMessage(ChatRole.User, ShellText.CmdHistoryUser("powershell", "Get-Date"))));
+        // A background run (2026-10-11) reads back with its switch.
+        Assert.Equal("[I ran in the shell (bash, in the background)] make", ShellText.CmdHistoryUser("bash", "make", background: true));
+        Assert.Equal("/cmd --bg --shell bash make", ShellText.CmdHistoryCommand(ShellText.CmdHistoryUser("bash", "make", background: true)));
     }
 
     /// <summary>The registration: one word, an argument, A to Z on /help, and a reply's end waited for.</summary>

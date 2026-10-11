@@ -605,4 +605,58 @@ public class ScrollbackTests
         Assert.Equal(new[] { "x" }, Texts(store.Rows(40)));
         Assert.False(store.AnyFolds);
     }
+
+    // ── A mark and what was written since (2026-10-11: the welcome splash drawn first, fitted again over the startup's lines) ──
+
+    [Fact]
+    public void Since_AClosedMark_CopiesTheLinesAfterIt_AsOneWriteThatPutsThemBack()
+    {
+        var store = new Scrollback();
+        store.Append(Segments("banner\n"), 10);
+        var mark = store.Mark;
+        store.Append(Segments("one two three\n", "four\n"), 10);
+
+        var copied = Assert.IsType<Scrollback.Copied>(store.Since(mark, 10));
+        Assert.Equal(3, copied.Rows);   // "one two th" + "ree" + "four"
+
+        var again = new Scrollback();
+        again.Append(Segments("banner\n"), 10);
+        again.Append(copied.Segments, 10);
+        Assert.Equal(Texts(store.Rows(10)), Texts(again.Rows(10)));
+    }
+
+    [Fact]
+    public void Since_AMarkInsideAnOpenLine_CopiesWhatJoinedIt_AndTheRowsItAdded()
+    {
+        // A picture's write leaves its last row open; the next write joins it.
+        var store = new Scrollback();
+        store.Append(Segments("0123456789"), 10);
+        var mark = store.Mark;
+        store.Append(Segments("  error\n"), 10);
+
+        var copied = Assert.IsType<Scrollback.Copied>(store.Since(mark, 10));
+        Assert.Equal(1, copied.Rows);
+        Assert.Equal("  error", string.Concat(copied.Segments.Where(s => !s.IsLineBreak).Select(s => s.Text)));
+
+        var again = new Scrollback();
+        again.Append(Segments("ABCDEFGHIJ"), 10);
+        again.Append(copied.Segments, 10);
+        Assert.Equal(new[] { "ABCDEFGHIJ", "  error" }, Texts(again.Rows(10)));
+    }
+
+    [Fact]
+    public void Since_IsNull_WithNothingToSee_AMarkPastTheEnd_OrALineThatFolds()
+    {
+        var store = new Scrollback();
+        store.Append(Segments("0123456789"), 10);
+        var mark = store.Mark;
+        Assert.Null(store.Since(mark, 10));   // nothing written
+        store.Append(Segments("\n", "   \n"), 10);
+        Assert.Null(store.Since(mark, 10));   // the break that closed the row and a blank line
+        Assert.Null(new Scrollback().Since(mark, 10));   // a store that no longer holds the mark
+
+        store.BeginGroup(1);
+        store.Append(Segments("tool line\n"), 10, member: true);
+        Assert.Null(store.Since(mark, 10));   // a tool run's line does not survive a copy
+    }
 }

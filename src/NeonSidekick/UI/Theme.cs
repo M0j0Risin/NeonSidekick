@@ -147,10 +147,11 @@ public static class Theme
     public static Style Hint => s_current[ThemeStyleSlot.Hint];
     /// <summary>
     /// A toolbar tool switch that is off (2026-10-03, the user's pick after trying faint, a grey colour and the text
-    /// presentation in Windows Terminal: only a background reads on a colour emoji): the hint's colour on the palette's panel
-    /// fill, the slab a code block sits on, so every theme has its own.
+    /// presentation in Windows Terminal: only a background reads on a colour emoji): the hint's colour on the palette's deep
+    /// colour, the pane rule's, so every theme has its own. The panel fill a code block sits on until 2026-10-11 (the user's
+    /// call: about 1.1:1 against the page in every built-in theme, the slab hard to see; deep is 1.4 to 3.4:1).
     /// </summary>
-    public static Style ToolbarOff => new(Hint.Foreground, MarkdownCodeBlock.Background);
+    public static Style ToolbarOff => new(Hint.Foreground, Deep);
     /// <summary>The mark after the trailer on the hint row (the reasoning glyph beside the model): violet, plain — the user's call, 2026-09-15.</summary>
     public static Style TrailerMark => s_current[ThemeStyleSlot.TrailerMark];
     /// <summary>A command form's typed words on <c>/help</c>'s Commands tabs (2026-10-05, the user's pick): the tertiary accent, <see cref="TrailerMark"/>'s.</summary>

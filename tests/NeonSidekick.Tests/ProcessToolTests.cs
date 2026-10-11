@@ -37,7 +37,52 @@ public sealed class ProcessToolTests : IDisposable
         GitAccessTests.DeleteTree(_dir);
     }
 
-    private ProcessSession Start(string command, bool notify = false) => _registry.Start(ShellCommandLine.For(ShellKind.Cmd, command, _interpreters.Locate(ShellKind.Cmd)!, _dir), notify);
+    private ProcessSession Start(string command, bool notify = false, bool mine = false) => _registry.Start(ShellCommandLine.For(ShellKind.Cmd, command, _interpreters.Locate(ShellKind.Cmd)!, _dir), notify, mine);
+
+    /// <summary>
+    /// The user's own /cmd --bg run (2026-10-11): /process's views have it, the model's tool never does (list, poll, kill, write all
+    /// read it as no process), and its exit is alerted, marked Mine, without a seeded poll — a stop from /process's window too.
+    /// </summary>
+    [WindowsFact]
+    public async Task AUsersRun_IsHiddenFromTheModel_AndAlertedWithoutANote()
+    {
+        var model = Start("echo m");
+        var mine = Start("ping -n 30 127.0.0.1 >nul", mine: true);
+        Assert.True(mine.Mine);
+        Assert.Equal([model.Id, mine.Id], _registry.List().Select(s => s.Id));
+        Assert.Equal([model.Id], _registry.ListForModel().Select(s => s.Id));
+        Assert.Equal(FindOutcome.Found, _registry.Find(mine.Id, out _, out _));
+        Assert.Equal(FindOutcome.None, _registry.FindForModel(mine.Id, out _, out _));
+        Assert.Equal(FindOutcome.Found, _registry.FindForModel("proc_", out var only, out _));   // the one prefix match the model can see
+        Assert.Same(model, only);
+
+        Assert.DoesNotContain(mine.Id, await Invoke(("action", "list")), StringComparison.Ordinal);
+        foreach (string action in new[] { "poll", "log", "kill", "close" })
+        {
+            Assert.Equal(ShellText.NoProcess(mine.Id), await Invoke(("action", action), ("session_id", mine.Id)));
+        }
+
+        Assert.Equal(ShellText.NoProcess(mine.Id), await Invoke(("action", "write"), ("session_id", mine.Id), ("data", "x")));
+        Assert.False(mine.HasExited);
+
+        Assert.True(_registry.StopByUser(mine));
+        await Exit(mine);
+        await Exit(model);
+        Assert.True(_registry.TryTakeAlert(out var alert));
+        Assert.True(alert.Mine);
+        Assert.True(alert.ByUser);
+        Assert.Equal(mine.Id, alert.Id);
+        Assert.False(_registry.TryTakeAlert(out _));   // the model's run was not notified
+        Assert.Empty(_registry.TakeNotes());
+
+        var quick = Start("echo q", mine: true);
+        await Exit(quick);
+        Assert.True(_registry.TryTakeAlert(out var quickAlert));
+        Assert.True(quickAlert.Mine);
+        Assert.False(quickAlert.Killed);
+        Assert.Equal(0, quickAlert.ExitCode);
+        Assert.Empty(_registry.TakeNotes());
+    }
 
     private static AIFunctionArguments Args(params (string Name, object? Value)[] pairs) => new(pairs.ToDictionary(p => p.Name, p => p.Value));
 

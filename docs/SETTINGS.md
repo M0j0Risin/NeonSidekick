@@ -119,7 +119,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 
 **⤡** at the left end of that rule appears when something can fold; a click does what Ctrl+O does (unfold all if anything is folded, else fold all).
 
-**The toolbar** (*Show toolbar*) sits under the hint row. A glyph opens or closes its pane (or switches to it from another); a window glyph opens or closes its window. A tool switch, and 💾 while *Memory mode* is `disabled`, sits on a dark slab. By default it shows ⚙️, 🛠️, 🎓, 💾, the lock, 👮, 🐚, 📁, 🌐 and the working directory. One click on a glyph says what it is on the hint row (`🐚 Shell: ask · double-click to open`); a double-click opens it. A strip too wide for the window ends in `+N` for the glyphs it leaves off, and the working directory shows your profile folder as `~` (`~\Repo\app`), cut from the front when it does not fit.
+**The toolbar** (*Show toolbar*) sits under the hint row. A glyph opens or closes its pane (or switches to it from another); a window glyph opens or closes its window. A tool switch, and 💾 while *Memory mode* is `disabled`, sits on a slab in the theme's deep colour (the rule's). By default it shows ⚙️, 🛠️, 🎓, 💾, the lock, 👮, 🐚, 📁, 🌐 and the working directory. One click on a glyph says what it is on the hint row (`🐚 Shell: ask · double-click to open`); a double-click opens it. A strip too wide for the window ends in `+N` for the glyphs it leaves off, and the working directory shows your profile folder as `~` (`~\Repo\app`), cut from the front when it does not fit.
 
 | Toolbar item | Shown | Opens |
 |---|---|---|
@@ -197,7 +197,7 @@ The pane heads its runs **Who and where**, **Input line**, **Transcript**, **Scr
 * Type to search every emoji by name and keyword at once (`fox`, `red heart`, `chef`): every word must match, a whole name first. An emoji typed or pasted (Win+. opens Windows' emoji panel) is a search for itself, one outside the catalog too. Backspace erases, ESC clears the search, the next ESC backs out.
 * Every tab starts with 🎲, which puts the cursor on an emoji at random from the tab or the search (Enter takes it, 🎲 again rerolls), and 🚫, which clears the avatar.
 * Enter on a hand or a person opens its six skin tones, the cursor on the tone last chosen; the grid shows them in that tone from then on.
-* The profile's avatar sits on a highlighted slab, another profile's on a darker one, so bots in `/botchat` stay easy to tell apart. The band under the grid names the emoji, its keywords, code points and emoji version, who wears it, and how the title and a reply will read.
+* The profile's avatar sits on a highlighted slab, another profile's on the toolbar's off slab (the theme's deep colour), so bots in `/botchat` stay easy to tell apart. The band under the grid names the emoji, its keywords, code points and emoji version, who wears it, and how the title and a reply will read.
 * The recent picks and the last tone live in `emoji.json` in the home folder.
 
 ##### Welcome splash

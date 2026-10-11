@@ -26,6 +26,7 @@ public class ThemeTests
             [p.Primary, p.Secondary, p.Tertiary, p.Deep, p.Highlight, p.Warm, p.Tint, p.Ink, p.Dim, p.Dimmer, p.Bg, p.PanelBg, p.Good, p.Bad, p.Warn],
             [Theme.Primary, Theme.Secondary, Theme.Tertiary, Theme.Deep, Theme.Highlight, Theme.Warm, Theme.Tint, Theme.Ink, Theme.Dim, Theme.Dimmer, Theme.Bg, Theme.PanelBg, Theme.Good, Theme.Bad, Theme.Warn]);
         Assert.Equal(Theme.Dimmer, Theme.Placeholder.Foreground);
+        Assert.Equal(Theme.Deep, Theme.ToolbarOff.Background);   // the off switch's slab, the rule's colour (2026-10-11)
     }
 
     [Fact]

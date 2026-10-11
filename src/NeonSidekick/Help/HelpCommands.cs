@@ -74,6 +74,7 @@ public static class HelpCommands
         [
             new("/cmd <command>", "Run a shell line yourself in the working directory, in *Shell default*'s shell, its output drawn as it prints; ESC kills it. It passes the model's checks: *Shell command policy* off refuses, the shell police refuse what they refuse whatever the policy, and under ask a line not on *Shell allowed commands* is put to the approval pane. The line and its output (cut at *Shell output max chars*, the whole in `.shell\\cmd_….log`) go into the conversation, so the model sees them."),
             new("/cmd --shell <shell> <command>", "The same in another shell: `powershell`, `cmd` or `bash` on Windows; `zsh`, `bash` or `powershell` on a Mac."),
+            new("/cmd --bg <command>", "The same checks, then the line runs in the background while you chat (with `--shell` too, either order). `/process` lists it and its window shows the output live; Ctrl+K twice there stops it. When it ends or is stopped, its output is shown (cut at *Shell output max chars*, the whole in `.shell\\proc_….log`) and goes into the conversation before the next message; the model's process tool never sees it."),
         ]),
         new("/collapse",
         [

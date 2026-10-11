@@ -6,8 +6,9 @@ namespace NeonSidekick.Shell;
 /// <summary>
 /// One exit to tell the user about: printed as an alert line, and carried to the model as a seeded <c>process poll</c> pair.
 /// <paramref name="ByUser"/> (2026-10-05): the user stopped it from <c>/process</c>'s window (<see cref="ProcessRegistry.StopByUser"/>).
+/// <paramref name="Mine"/> (2026-10-11): the user's own <c>/cmd --bg</c> run (<see cref="ProcessSession.Mine"/>), reported by the screen in full, never polled for the model.
 /// </summary>
-public readonly record struct ProcessAlert(string Id, string Label, string Kind, int ExitCode, TimeSpan Elapsed, bool Killed, bool ByUser = false);
+public readonly record struct ProcessAlert(string Id, string Label, string Kind, int ExitCode, TimeSpan Elapsed, bool Killed, bool ByUser = false, bool Mine = false);
 
 /// <summary>How <see cref="ProcessRegistry.Find"/> read a session id.</summary>
 public enum FindOutcome
@@ -68,9 +69,12 @@ public sealed class ProcessRegistry : IDisposable
         }
     }
 
-    /// <summary>Starts <paramref name="launch"/> as a background session; stdin stays open for <c>write</c>.</summary>
+    /// <summary>
+    /// Starts <paramref name="launch"/> as a background session; stdin stays open for <c>write</c>. <paramref name="mine"/> (2026-10-11):
+    /// the user's own <c>/cmd --bg</c> run, hidden from the model and always alerted (<see cref="ProcessSession.Mine"/>).
+    /// </summary>
     /// <exception cref="ShellStartException">Too many are running, or the program could not start.</exception>
-    public ProcessSession Start(ProcessLaunch launch, bool notify)
+    public ProcessSession Start(ProcessLaunch launch, bool notify, bool mine = false)
     {
         ArgumentNullException.ThrowIfNull(launch);
         string id;
@@ -91,6 +95,7 @@ public sealed class ProcessRegistry : IDisposable
 
         var session = _runner.Start(launch, id);
         session.Notify = notify;
+        session.Mine = mine;
         lock (_lock)
         {
             _sessions.Add(session);
@@ -107,9 +112,9 @@ public sealed class ProcessRegistry : IDisposable
         bool tell;
         lock (_lock)
         {
-            // Closed (or disposed) before it exited: nothing to tell.
-            tell = session.Notify && !_disposed && _sessions.Contains(session);
-            if (tell)
+            // Closed (or disposed) before it exited: nothing to tell. The user's own run is always told, to the user alone (no seeded poll).
+            tell = (session.Notify || session.Mine) && !_disposed && _sessions.Contains(session);
+            if (tell && !session.Mine)
             {
                 _notes.Add(session.Id);
             }
@@ -119,7 +124,7 @@ public sealed class ProcessRegistry : IDisposable
 
         if (tell)
         {
-            _alerts.Enqueue(new ProcessAlert(session.Id, session.Label, session.Kind, code, session.Elapsed, session.Killed, session.StoppedByUser));
+            _alerts.Enqueue(new ProcessAlert(session.Id, session.Label, session.Kind, code, session.Elapsed, session.Killed, session.StoppedByUser, session.Mine));
             _signal();
         }
     }
@@ -138,13 +143,18 @@ public sealed class ProcessRegistry : IDisposable
     }
 
     /// <summary>The session whose id starts with <paramref name="prefix"/> (trimmed, case-insensitive), unique; <paramref name="matches"/> names the candidates when several do.</summary>
-    public FindOutcome Find(string prefix, out ProcessSession? session, out IReadOnlyList<string> matches)
+    public FindOutcome Find(string prefix, out ProcessSession? session, out IReadOnlyList<string> matches) => Find(prefix, includeMine: true, out session, out matches);
+
+    /// <summary><see cref="Find"/> for the model's <c>process</c> tool (2026-10-11): the user's own runs (<see cref="ProcessSession.Mine"/>) are not there.</summary>
+    public FindOutcome FindForModel(string prefix, out ProcessSession? session, out IReadOnlyList<string> matches) => Find(prefix, includeMine: false, out session, out matches);
+
+    private FindOutcome Find(string prefix, bool includeMine, out ProcessSession? session, out IReadOnlyList<string> matches)
     {
         ArgumentNullException.ThrowIfNull(prefix);
         string wanted = prefix.Trim();
         lock (_lock)
         {
-            var found = wanted.Length == 0 ? [] : _sessions.Where(s => s.Id.StartsWith(wanted, StringComparison.OrdinalIgnoreCase)).ToList();
+            var found = wanted.Length == 0 ? [] : _sessions.Where(s => (includeMine || !s.Mine) && s.Id.StartsWith(wanted, StringComparison.OrdinalIgnoreCase)).ToList();
             matches = found.Select(s => s.Id).ToList();
             session = found.Count == 1 ? found[0] : null;
             return found.Count switch { 0 => FindOutcome.None, 1 => FindOutcome.Found, _ => FindOutcome.Ambiguous };
@@ -185,6 +195,15 @@ public sealed class ProcessRegistry : IDisposable
         lock (_lock)
         {
             return _sessions.ToList();
+        }
+    }
+
+    /// <summary><see cref="List"/> for the model's <c>process</c> tool (2026-10-11): without the user's own runs (<see cref="ProcessSession.Mine"/>).</summary>
+    public IReadOnlyList<ProcessSession> ListForModel()
+    {
+        lock (_lock)
+        {
+            return _sessions.Where(s => !s.Mine).ToList();
         }
     }
 

@@ -108,7 +108,7 @@ public sealed class ProcessTool : AIFunction
         int maxChars = Math.Clamp(_effective().ShellOutputMaxChars, AppSettingsData.MinShellOutputMaxChars, AppSettingsData.MaxShellOutputMaxChars);
         if (action == ListAction)
         {
-            var all = _registry.List();
+            var all = _registry.ListForModel();
             var lines = new List<string> { ShellText.ListHeader(all.Count, all.Count(s => !s.HasExited)) };
             lines.AddRange(all.Select(ShellText.ListRow));
             return string.Join("\n", lines);
@@ -120,7 +120,8 @@ public sealed class ProcessTool : AIFunction
             return ShellText.SessionRequired;
         }
 
-        switch (_registry.Find(prefix, out var session, out var matches))
+        // The model's view (2026-10-11): the user's own /cmd --bg runs are not there, so their ids read as no process.
+        switch (_registry.FindForModel(prefix, out var session, out var matches))
         {
             case FindOutcome.None:
                 return ShellText.NoProcess(prefix);

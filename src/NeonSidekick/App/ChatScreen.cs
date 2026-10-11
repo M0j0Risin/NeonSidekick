@@ -615,6 +615,13 @@ internal sealed partial class ChatScreen
     private int? _splashPage;
     private SplashTiles? _splashTiles;
 
+    // The welcome splash drawn first (2026-10-11, the user's ask: at once, not after the LLM's connect): the place in the pane's
+    // store right after the picture (ScreenPane.StoreMark), so what the connects wrote under it is put back under a refitted one (RefitSplash); null once the
+    // splash is gone, with the rest (ForgetSplash). The reserve is the rows of those lines while the picture is drawn again over
+    // them (SplashArea).
+    private Scrollback.Place? _splashMark;
+    private int _splashReserve;
+
     /// <summary>The tiled splash's decoded pictures for one source and one thumbnail box, with their double-click ids.</summary>
     private sealed record SplashTiles(IReadOnlyList<string> Names, string? Directory, ThumbnailBox Box, List<ImageThumbnail> Thumbnails, List<int> Ids);
     private readonly IReadOnlyList<AIFunction> _clockTools;
@@ -9402,6 +9409,9 @@ internal sealed partial class ChatScreen
             }
 
             _pane.Show();
+            // The welcome splash at once (2026-10-11, the user's ask: not after the connects below), once the pane is drawn so the
+            // rows it takes are known.
+            ShowSplash();
             // The mouse and the wheel are the screen's from here: a click on the row, the wheel
             // over the transcript, the panes' rows (Shift keeps the terminal's own selection).
             _mouse?.Invoke(true);
@@ -9417,10 +9427,10 @@ internal sealed partial class ChatScreen
             await ConnectSpeechAsync(cancellationToken, quiet: true).ConfigureAwait(false);
             await ConnectVoiceAsync(cancellationToken, quiet: true).ConfigureAwait(false);
             await ConnectMcpAsync(cancellationToken).ConfigureAwait(false);
-            // After the LLM's connect: a failed probe's line sits under the banner and the picture fills what is left, and no
-            // picture write lands under a spinner. Speech, voice and MCP run behind the line since 2026-09-29; their lines
-            // follow the picture as each finishes.
-            ShowSplash();
+            // The splash drawn first fitted again over what the connects wrote under it (2026-10-11; drawn here until then, so a
+            // failed probe's line sat under the banner and the picture filled what was left: RefitSplash keeps that look). Speech,
+            // voice and MCP run behind the line since 2026-09-29; the lines of those still running follow the picture as each finishes.
+            RefitSplash(() => _renderScreen(_pane));
 
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -9980,11 +9990,20 @@ internal sealed partial class ChatScreen
         PrintProcessAlerts();
     }
 
-    /// <summary>The exits of notified background processes as lines (2026-09-21), never spoken: the model hears of them through the next turn's seeded poll.</summary>
+    /// <summary>
+    /// The exits of notified background processes as lines (2026-09-21), never spoken: the model hears of them through the next turn's
+    /// seeded poll. The user's own <c>/cmd --bg</c> runs (2026-10-11) are held instead for <see cref="ReportCmdRuns"/> at the idle loop top.
+    /// </summary>
     private void PrintProcessAlerts()
     {
         while (_processes.TryTakeAlert(out var alert))
         {
+            if (alert.Mine)
+            {
+                _cmdReports.Enqueue(alert);
+                continue;
+            }
+
             _transcript.ProcessAlert(ShellText.AlertLine(alert));
         }
     }
@@ -10001,6 +10020,8 @@ internal sealed partial class ChatScreen
         // The /imagine pictures that ended behind the line (2026-10-04).
         DrainImagine();
         PrintProcessAlerts();
+        // The /cmd --bg runs that ended, here alone: their pairs join the history between turns (2026-10-11).
+        ReportCmdRuns();
         var sentences = new List<string>();
         while (_timers.TryTakeAlert(out var alert))
         {
@@ -10186,12 +10207,14 @@ internal sealed partial class ChatScreen
         _splashCount = 0;
         _splashFolder = null;
         _splashPage = null;
+        _splashMark = null;
         Volatile.Write(ref _splashDeleteArmedUntil, 0);
     }
 
     /// <summary>
     /// The welcome splash (2026-09-18): one of the embedded pictures (<see cref="SplashImages"/>,
-    /// picked with the screen's <see cref="Random"/>) drawn once at startup, centred, filling the
+    /// picked with the screen's <see cref="Random"/>) drawn once at startup, with the banner since 2026-10-11 and fitted again
+    /// over the startup lines (<see cref="RefitSplash"/>), centred, filling the
     /// rows of the transcript region under the banner and the startup lines — the <c>/view</c>
     /// shape (<see cref="ThumbnailSize.Fit"/> with the flow's rows, <see cref="ScreenPane.FlowRow"/>, reserved too), so the aspect is
     /// kept and the banner stays. Behind <see cref="AppSettingsData.WelcomeSplashMode"/> and the pane;
@@ -10223,6 +10246,51 @@ internal sealed partial class ChatScreen
         {
             ShowSplash(source, name);
             _splashForced = force && _splashShown;
+        }
+    }
+
+    /// <summary>
+    /// The welcome splash drawn first, before the connects (2026-10-11, the user's ask: at once, not after the LLM's connect — an
+    /// embedded model's load, a scan and its pickers, the jobs' grace), fitted again where it used to be drawn once they are done:
+    /// when the connects wrote lines under it (a failed probe, the scan's <c>LLM:</c> line, the MCP line, a warning), the screen is
+    /// wiped to <paramref name="head"/> (the banner, and the switch's notices), the same picture or page is drawn again at the rows
+    /// left over those lines, and the lines are put back under it as they were (<see cref="ScreenPane.LinesSince"/>,
+    /// <see cref="ScreenPane.Rewrite"/>), in one batch. Nothing when nothing was written under it, the splash went in the meantime
+    /// (a line sent over it during a load, a redraw), or a line under it folds (a tool run's: left as it is, the picture scrolled).
+    /// </summary>
+    private void RefitSplash(Action head)
+    {
+        if (!_splashShown || _splashMark is not { } mark || _pane.LinesSince(mark) is not { } lines || CurrentSplash() is not { } source)
+        {
+            return;
+        }
+
+        bool forced = _splashForced;
+        string? name = _splashName;
+        int? page = _splashPage;
+        using (_pane.Batch())
+        {
+            head();
+            ForgetSplash();
+            _splashReserve = lines.Rows;
+            try
+            {
+                if (page is { } at)
+                {
+                    ShowSplashPage(source, at);
+                }
+                else if (name is not null)
+                {
+                    ShowSplash(source, name);
+                }
+            }
+            finally
+            {
+                _splashReserve = 0;
+            }
+
+            _splashForced = forced && _splashShown;
+            _pane.Rewrite(lines);
         }
     }
 
@@ -10275,11 +10343,16 @@ internal sealed partial class ChatScreen
         _splashCount = source.Names.Count;
         _splashFolder = source.Directory;
         _splashPage = null;
+        _splashMark = _pane.StoreMark;
     }
 
-    /// <summary>The transcript's rows under the banner and the startup lines: the <c>/view</c> box with the flow's rows reserved too — the whole splash's, and the tiled splash's page.</summary>
+    /// <summary>
+    /// The transcript's rows under the banner and the startup lines: the <c>/view</c> box with the flow's rows reserved too — the
+    /// whole splash's, and the tiled splash's page — and, while <see cref="RefitSplash"/> draws it again, the rows of the lines it
+    /// puts back under it.
+    /// </summary>
     private ThumbnailBox SplashArea() =>
-        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.FlowRow + ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows + _pane.PerfRows);
+        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.FlowRow + _splashReserve + ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows + _pane.PerfRows);
 
     /// <summary>
     /// The tiled splash (2026-09-24, the user's ask: <c>Welcome splash</c> <c>tiled</c>): page
@@ -10327,6 +10400,7 @@ internal sealed partial class ChatScreen
         _splashCount = pages.Count;
         _splashFolder = null;
         _splashPage = at;
+        _splashMark = _pane.StoreMark;
     }
 
     /// <summary>
@@ -12639,7 +12713,7 @@ internal sealed partial class ChatScreen
         _log.Clear();
         ForgetReading();
         ForgetSplash();
-        using (_pane.Batch())
+        void Head()
         {
             _renderScreen(_pane);
             if (preface is not null)
@@ -12650,15 +12724,21 @@ internal sealed partial class ChatScreen
             _transcript.Notice(notice ?? SettingsMenu.SwitchedNotice(_settings.ProfileName));
         }
 
+        using (_pane.Batch())
+        {
+            Head();
+            // The welcome splash again under the fresh banner (later on 2026-09-19, the user's ask): the
+            // new profile's own folder or the embedded set, the arrows walking it, the first sent line
+            // wiping it — the startup's shape: drawn first and fitted again after the connects (2026-10-11).
+            ShowSplash();
+        }
+
         await ConnectLlmAsync(cancellationToken, quiet: true).ConfigureAwait(false);
         await ConnectSpeechAsync(cancellationToken, quiet: true).ConfigureAwait(false);
         await ConnectVoiceAsync(cancellationToken, quiet: true).ConfigureAwait(false);
         await ConnectMcpAsync(cancellationToken).ConfigureAwait(false);
         ReportTimers();
-        // The welcome splash again under the fresh banner (later on 2026-09-19, the user's ask): the
-        // new profile's own folder or the embedded set, the arrows walking it, the first sent line
-        // wiping it — the startup's shape, after the connects for the same reason.
-        ShowSplash();
+        RefitSplash(Head);
     }
 
     /// <summary><c>/remember &lt;text&gt;</c>: straight into the store, no model involved. Off means nothing is saved.</summary>

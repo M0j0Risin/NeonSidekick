@@ -583,8 +583,14 @@ public static class ShellText
     /// <summary>The completion note beside <see cref="CmdShellOption"/>. Pinned.</summary>
     public const string CmdShellNote = "run it in another shell than Shell default";
 
-    /// <summary>A bare <c>/cmd</c>, or <c>--shell</c> with nothing after its name. Pinned.</summary>
-    public const string CmdUsage = "/cmd takes a shell line: /cmd [--shell <shell>] <command>";
+    /// <summary><c>/cmd</c>'s background switch (2026-10-11), before the command, with or around <see cref="CmdShellOption"/>.</summary>
+    public const string CmdBgOption = "--bg";
+
+    /// <summary>The completion note beside <see cref="CmdBgOption"/>. Pinned.</summary>
+    public const string CmdBgNote = "run it in the background; its output is reported when it ends";
+
+    /// <summary>A bare <c>/cmd</c>, or an option with no command after it. Pinned.</summary>
+    public const string CmdUsage = "/cmd takes a shell line: /cmd [--bg] [--shell <shell>] <command>";
 
     /// <summary>
     /// <c>/cmd</c> while <c>Shell command policy</c> is <c>off</c> (the user's pick: off means no shell at all, the user's line
@@ -612,23 +618,38 @@ public static class ShellText
     public static string CmdCancelledHeader(string kind, TimeSpan elapsed, string label) =>
         $"cancelled after {Elapsed(elapsed)} ({kind}, killed): {label}";
 
+    /// <summary>
+    /// A <c>/cmd --bg</c> line started (2026-10-11): <c>started proc_3f2a1b in the background (powershell, pid 1234): npm run build;
+    /// /process proc_3f2a1b watches it</c>. Pinned.
+    /// </summary>
+    public static string CmdStarted(string id, string kind, int pid, string label) =>
+        $"started {id} in the background ({kind}, pid {N(pid)}): {label}; /process {id} watches it";
+
+    /// <summary><c>stopped by you after 12.0 s (powershell, killed): ping -n 60 127.0.0.1</c>: a <c>/cmd --bg</c> line stopped from <c>/process</c>'s window. Pinned.</summary>
+    public static string CmdStoppedHeader(string kind, TimeSpan elapsed, string label) =>
+        $"stopped by you after {Elapsed(elapsed)} ({kind}, killed): {label}";
+
     /// <summary>What the user's side of a <c>/cmd</c> run opens with in the history.</summary>
     public const string CmdHistoryHead = "[I ran in the shell";
+
+    /// <summary>The words after the shell's name in a background run's <see cref="CmdHistoryUser"/> (2026-10-11).</summary>
+    public const string CmdHistoryBackground = ", in the background";
 
     /// <summary>
     /// The user's side of a <c>/cmd</c> run in the history (the user's pick: the model sees it, the <c>/claude</c> shape):
     /// <c>[I ran in the shell (powershell)] git status</c>, tagged, so the model reads it as the user's own run and not a
-    /// request. Pinned.
+    /// request; a <c>/cmd --bg</c> run (2026-10-11) <c>[I ran in the shell (powershell, in the background)] npm run build</c>. Pinned.
     /// </summary>
-    public static string CmdHistoryUser(string kind, string command) => $"{CmdHistoryHead} ({kind})] {command}";
+    public static string CmdHistoryUser(string kind, string command, bool background = false) =>
+        $"{CmdHistoryHead} ({kind}{(background ? CmdHistoryBackground : "")})] {command}";
 
     /// <summary>The run's side: <c>[shell output] exit 0 in 0.3 s (powershell): git status</c> and the output, as <c>run_command</c> would have it. Pinned.</summary>
     public static string CmdHistoryReply(string result) => "[shell output] " + result;
 
     /// <summary>
     /// <see cref="CmdHistoryUser"/> read back (<c>/rewind</c>): the line that runs it again in the same shell,
-    /// <c>/cmd --shell powershell git status</c> — the shell named, so a changed <c>Shell default</c> runs the same thing — or
-    /// null for any other text. Pinned.
+    /// <c>/cmd --shell powershell git status</c> — the shell named, so a changed <c>Shell default</c> runs the same thing — and
+    /// <c>/cmd --bg --shell …</c> for a background run, or null for any other text. Pinned.
     /// </summary>
     public static string? CmdHistoryCommand(string text)
     {
@@ -647,7 +668,13 @@ public static class ShellText
 
         string kind = text[open.Length..close];
         string command = text[(close + 3)..];
-        return $"{CmdWord} {CmdShellOption} {kind} {command}";
+        bool background = kind.EndsWith(CmdHistoryBackground, StringComparison.Ordinal);
+        if (background)
+        {
+            kind = kind[..^CmdHistoryBackground.Length];
+        }
+
+        return $"{CmdWord} {(background ? CmdBgOption + " " : "")}{CmdShellOption} {kind} {command}";
     }
 
     /// <summary><c>/cmd: powershell "git status" → exit 0 in 1.2 s (2,340 chars)</c>.</summary>

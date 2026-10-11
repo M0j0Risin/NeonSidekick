@@ -46,6 +46,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/clear` | Starts a new conversation and clears the screen. |
 | `/cmd <command>` | Runs a shell line yourself in the working directory, in *Shell default*'s shell, its output drawn as it prints. It passes the model's checks. See [Your own shell line](#your-own-shell-line). |
 | `/cmd --shell <shell> <command>` | The same in another shell (`powershell`, `cmd` or `bash` on Windows; `zsh`, `bash` or `powershell` on a Mac). |
+| `/cmd --bg <command>` | The same, run in the background while you chat (`--shell` too, in either order); its output is reported when it ends or is stopped. See [Your own shell line](#your-own-shell-line). |
 | `/keycheck` | Lists the app's key chords and whether another program holds each as a global hotkey, the held ones first, in a pane. A held chord never reaches the app. Only hotkeys registered with Windows show; a keyboard hook (AutoHotkey, PowerToys Keyboard Manager) or a Windows Terminal key binding can still take a key. Needs Windows. |
 | `/compact [<focus>]` | Shrinks the context; a focus tells the summary what to concentrate on. |
 | `/copy [<n>\|all] [--thinking]` | Copies the last reply (or the last *n*, or the whole transcript) as Markdown. `--thinking` includes the thinking, quoted under `💭 **Thinking**`. |
@@ -276,6 +277,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 * **The wait** is *Shell timeout (s)*, at most *Shell foreground cap (s)*; ESC kills the line and everything it started.
 * **Output over *Shell output max chars*** stops being drawn at one notice; the line runs on, and the whole output goes to `.shell\cmd_<id>.log` in the working directory.
 * **The model sees it.** The line and its output join the conversation tagged `[I ran in the shell (<shell>)]` and `[shell output]`, the output cut as `run_command`'s would be. `/rewind` puts the line back as `/cmd --shell <shell> <command>`.
+* **In the background.** `/cmd --bg <command>` passes the same checks, then starts the line and gives the chat back at once, with no timeout. `/process` lists it, its window shows the output as it prints, and Ctrl+K twice there stops it; closing the app kills it. When it ends or is stopped, at the next moment no reply is running, its header and output are drawn (cut at *Shell output max chars*, the whole in `.shell\proc_<id>.log`) and the pair joins the conversation tagged `[I ran in the shell (<shell>, in the background)]`. The model's `process` tool never lists or touches it. `/rewind` puts it back as `/cmd --bg --shell <shell> <command>`.
 * Plan mode does not stop it, and it waits for a reply to end. Not in headless mode, where the line goes to the model as text.
 
 ### Loops
@@ -538,7 +540,7 @@ The easiest start is `/theme export <name> [<new-name>]`, which writes any theme
 | `primary` | The main accent: headings, borders, keywords, markup tags. |
 | `secondary` | The counter-accent: your lines, the spinner, table headers, inline code, types and keys, the selection. |
 | `tertiary` | The third accent: section headings, bullets, the quote bar, function calls, the paste label. |
-| `deep` | The receding structural colour: the pane rule, a reply table's border. |
+| `deep` | The receding structural colour: the pane rule, a reply table's border, the slab under a toolbar switch that is off. |
 | `highlight` | The warm highlight: string literals. |
 | `warm` | Numbers. |
 | `tint` | A soft accent: `$variables`. |
