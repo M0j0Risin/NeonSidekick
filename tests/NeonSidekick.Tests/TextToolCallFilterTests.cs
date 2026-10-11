@@ -683,6 +683,27 @@ public class TextToolCallFilterTests
         }
     }
 
+    /// <summary>Later on 2026-10-11 (after the code review): a path's last backslash escaped its quote in these forms too, and the call ran on.</summary>
+    [Theory]
+    [InlineData("Here: generate_image(prompt=\"a dog\", image=\"C:\\pics\\\")\nNice.")]
+    [InlineData("Here: generate_image{prompt: \"a dog\", image: \"C:\\pics\\\"}\nNice.")]
+    [InlineData("Here: generate_image(image='C:\\pics\\', prompt='a dog')\nNice.")]
+    public void TheParenAndBraceForms_APathEndingInABackslash_ClosesItsString_AndIsTheCall(string reply)
+    {
+        var (whole, filter) = Run(reply);
+        Assert.Equal("Here: Nice.", whole);
+        var arguments = TextToolCallFilter.ParseArguments(Assert.Single(filter.Calls).Arguments)!;
+        Assert.Equal("a dog", arguments["prompt"]);
+        Assert.Equal(@"C:\pics\", arguments["image"]);
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            var (text, split) = Run(reply[..i], reply[i..]);
+            Assert.Equal(whole, text);
+            Assert.Equal(filter.Calls, split.Calls);
+        }
+    }
+
     [Theory]
     [InlineData("my_generate_image{prompt: \"x\"} stays")]
     [InlineData("a set like {generate_image} stays")]

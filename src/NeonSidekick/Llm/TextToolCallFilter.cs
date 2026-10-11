@@ -101,12 +101,13 @@ public sealed class TextToolCallFilter
     private bool _objectLineFits;
 
     // Inside a call: its name, what opened it ('(' or '{'), its arguments so far, the paren depth, the open quote (none = '\0'),
-    // a pending escape.
+    // where in the arguments it opened, a pending escape.
     private string? _callName;
     private char _opener;
     private readonly StringBuilder _arguments = new();
     private int _depth;
     private char _quote;
+    private int _quoteStart;
     private bool _escape;
     private bool _backticked;
 
@@ -887,7 +888,12 @@ public sealed class TextToolCallFilter
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    /// <summary>Reads a call's arguments from <paramref name="pos"/>; returns where it stopped (the end, or just past the closing paren or brace).</summary>
+    /// <summary>
+    /// Reads a call's arguments from <paramref name="pos"/>; returns where it stopped (the end, or just past the closing paren or brace).
+    /// In a value that starts like a Windows path, <c>\"</c> is the path's last backslash and its close, as in the bare object form and
+    /// <see cref="ReadQuoted"/> (later on 2026-10-11, the user's ask after the code review: <c>image="C:\pics\"</c> ran the call on to
+    /// the next quote).
+    /// </summary>
     private int ReadCall(string s, int pos)
     {
         for (; pos < s.Length; pos++)
@@ -898,6 +904,10 @@ public sealed class TextToolCallFilter
                 if (_escape)
                 {
                     _escape = false;
+                    if (c == _quote && LooksLikePath(_arguments, _quoteStart + 1))
+                    {
+                        _quote = '\0';
+                    }
                 }
                 else if (c == '\\')
                 {
@@ -911,6 +921,7 @@ public sealed class TextToolCallFilter
             else if (c is '"' or '\'' && AtValueStart())
             {
                 _quote = c;
+                _quoteStart = _arguments.Length;
             }
             else if (c is '(' or '{' or '[')
             {
@@ -1483,7 +1494,7 @@ public sealed class TextToolCallFilter
         (pos + 2 < t.Length && char.IsAsciiLetter(t[pos]) && t[pos + 1] == ':' && t[pos + 2] is '\\' or '/')
         || (pos + 1 < t.Length && t[pos] == '\\' && t[pos + 1] == '\\');
 
-    /// <summary><see cref="LooksLikePath(string, int)"/> on the bare object held so far.</summary>
+    /// <summary><see cref="LooksLikePath(string, int)"/> on the text held so far (the bare object, a call's arguments).</summary>
     private static bool LooksLikePath(StringBuilder t, int pos) =>
         (pos + 2 < t.Length && char.IsAsciiLetter(t[pos]) && t[pos + 1] == ':' && t[pos + 2] is '\\' or '/')
         || (pos + 1 < t.Length && t[pos] == '\\' && t[pos + 1] == '\\');
