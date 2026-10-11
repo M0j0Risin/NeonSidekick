@@ -47,6 +47,12 @@ namespace NeonSidekick.Llm;
 /// wanted here. Models leave the outer close tag off, so a <c>&lt;tool_call&gt;</c> ends at its <c>&lt;/function&gt;</c> when no
 /// <c>&lt;/tool_call&gt;</c> follows it, and the words after it are kept. A block that does not parse, or is still open when the
 /// stream ends, is dropped (<see cref="SawBroken"/>).</para>
+///
+/// <para>The brace form (2026-10-11, the user's report from <c>/botchat</c> on Gemma 4 E2B/E4B: <c>generate_image{image: "C:\…",
+/// prompt: "…"}</c> in the replies, the call never made): Gemma's own call shape with its <c>&lt;|tool_call&gt;</c> tokens left off,
+/// which the server cannot turn into a call. A <c>{</c> after the name opens a call as <c>(</c> does, and its matching <c>}</c> closes
+/// it; the text between is the arguments, as the parenthesised form's are. Uncaught, the text was passed on to the other bot as the
+/// speaker's line and both bots copied it every turn after.</para>
 /// </summary>
 public sealed class TextToolCallFilter
 {
@@ -66,8 +72,10 @@ public sealed class TextToolCallFilter
     private bool _lineStart = true;
     private StringBuilder? _line;
 
-    // Inside a call: its name, its arguments so far, the paren depth, the open quote (none = '\0'), a pending escape.
+    // Inside a call: its name, what opened it ('(' or '{'), its arguments so far, the paren depth, the open quote (none = '\0'),
+    // a pending escape.
     private string? _callName;
+    private char _opener;
     private readonly StringBuilder _arguments = new();
     private int _depth;
     private char _quote;
@@ -116,7 +124,7 @@ public sealed class TextToolCallFilter
             .ToArray();
     }
 
-    /// <summary>The calls caught so far, in order: the tool's name and the text between its parentheses.</summary>
+    /// <summary>The calls caught so far, in order: the tool's name and the text between its parentheses (or braces).</summary>
     public IReadOnlyList<(string Name, string Arguments)> Calls => _calls;
 
     /// <summary>A call was still open when the stream ended; its text was dropped.</summary>
@@ -280,6 +288,7 @@ public sealed class TextToolCallFilter
 
             Emit(ref output, s, pos, start - pos);
             _callName = name;
+            _opener = s[open];
             _backticked = s[start] == '`';
             _arguments.Clear();
             _depth = 0;
@@ -343,8 +352,8 @@ public sealed class TextToolCallFilter
 
     /// <summary>
     /// What the text from <paramref name="pos"/>, at a line's start, is to the line form: a tool's name then something other than
-    /// <c>(</c> or a word character (<see cref="LineStart.Line"/>, tested once the line is whole), too little yet to say
-    /// (<see cref="LineStart.Undecided"/>), or neither — the parenthesised form's own start included.
+    /// <c>(</c>, <c>{</c> or a word character (<see cref="LineStart.Line"/>, tested once the line is whole), too little yet to say
+    /// (<see cref="LineStart.Undecided"/>), or neither — the parenthesised and brace forms' own starts included.
     /// </summary>
     private LineStart LineStartAt(string s, int pos)
     {
@@ -380,7 +389,7 @@ public sealed class TextToolCallFilter
                 continue;
             }
 
-            if (k == name.Length && !IsWordChar(s[i + k]) && s[i + k] != '(')
+            if (k == name.Length && !IsWordChar(s[i + k]) && s[i + k] is not ('(' or '{'))
             {
                 int j = i + k;
                 while (j < s.Length && s[j] is ' ' or '\t')
@@ -394,7 +403,7 @@ public sealed class TextToolCallFilter
                     continue;
                 }
 
-                if (s[j] != '(')
+                if (s[j] is not ('(' or '{'))
                 {
                     return LineStart.Line;
                 }
@@ -563,7 +572,7 @@ public sealed class TextToolCallFilter
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    /// <summary>Reads a call's arguments from <paramref name="pos"/>; returns where it stopped (the end, or just past the closing paren).</summary>
+    /// <summary>Reads a call's arguments from <paramref name="pos"/>; returns where it stopped (the end, or just past the closing paren or brace).</summary>
     private int ReadCall(string s, int pos)
     {
         for (; pos < s.Length; pos++)
@@ -594,7 +603,7 @@ public sealed class TextToolCallFilter
             }
             else if (c is ')' or '}' or ']')
             {
-                if (_depth == 0 && c == ')')
+                if (_depth == 0 && c == (_opener == '{' ? '}' : ')'))
                 {
                     _calls.Add((_callName!, _arguments.ToString()));
                     _callName = null;
@@ -769,7 +778,7 @@ public sealed class TextToolCallFilter
     }
 
     /// <summary>
-    /// The first call start at or after <paramref name="pos"/>: where it starts (its backtick included), where its <c>(</c> is, and
+    /// The first call start at or after <paramref name="pos"/>: where it starts (its backtick included), where its <c>(</c> or <c>{</c> is, and
     /// the tool's name. With no whole start, <c>Name</c> is null and <c>Hold</c> is where the text that could still become one begins
     /// (<paramref name="s"/>'s length when none can). A tagged start (2026-09-30) comes back as its <see cref="Tag"/>, <c>Open</c> on
     /// its last <c>&gt;</c>, and a null name.
@@ -834,7 +843,7 @@ public sealed class TextToolCallFilter
                     continue;
                 }
 
-                if (s[j] == '(')
+                if (s[j] is '(' or '{')
                 {
                     return (StartWithTick(s, pos, i), j, name, hold, Tag.None);
                 }
@@ -916,7 +925,7 @@ public sealed class TextToolCallFilter
 
     /// <summary>
     /// A written call's arguments as the tool reads them (2026-09-25): <c>key="value"</c> or <c>key: 'value'</c> pairs split by commas —
-    /// quoted strings (<c>\" \' \\ \n</c> escapes), whole numbers, numbers, <c>true</c>/<c>false</c>, <c>null</c>/<c>None</c> (left out),
+    /// quoted strings (<c>\" \' \\ \n \t</c> escapes, any other backslash kept; <see cref="ReadQuoted"/>), whole numbers, numbers, <c>true</c>/<c>false</c>, <c>null</c>/<c>None</c> (left out),
     /// or a bare word as a string — or one JSON object. Empty text is a call with no arguments. Null when it does not parse. Pure.
     ///
     /// <para>A bare value keeps its commas up to the next key (2026-09-28, code review): a comma ends it only when a key and the
@@ -1101,10 +1110,18 @@ public sealed class TextToolCallFilter
         return t[start..pos];
     }
 
-    /// <summary>A quoted string from <paramref name="pos"/> (on its opening quote) to its closing one, unescaped; null when it never closes.</summary>
+    /// <summary>
+    /// A quoted string from <paramref name="pos"/> (on its opening quote) to its closing one, unescaped; null when it never closes.
+    /// <para>Only <c>\\ \" \'</c> lose their backslash, and <c>\n \t</c> are a line break and a tab — except in a Windows path
+    /// (2026-10-11, the user's <c>/botchat</c> log: <c>image="C:\Users\cnels\.neonsidekick\profiles\neon\…"</c> reached the tool as
+    /// <c>C:Userscnels.neonsidekickprofiles</c>, a line break, <c>eon…</c>): any other escape keeps its backslash, and a value that
+    /// starts like a path (<see cref="LooksLikePath"/>) keeps <c>\n</c> and <c>\t</c> as written, so a path comes through whether the
+    /// model doubled its backslashes or not.</para>
+    /// </summary>
     private static string? ReadQuoted(string t, ref int pos)
     {
         char quote = t[pos++];
+        bool path = LooksLikePath(t, pos);
         var value = new StringBuilder();
         while (pos < t.Length)
         {
@@ -1117,7 +1134,22 @@ public sealed class TextToolCallFilter
             if (c == '\\' && pos < t.Length)
             {
                 char next = t[pos++];
-                value.Append(next switch { 'n' => '\n', 't' => '\t', _ => next });
+                switch (next)
+                {
+                    case '\\' or '"' or '\'':
+                        value.Append(next);
+                        break;
+                    case 'n' when !path:
+                        value.Append('\n');
+                        break;
+                    case 't' when !path:
+                        value.Append('\t');
+                        break;
+                    default:
+                        value.Append('\\').Append(next);
+                        break;
+                }
+
                 continue;
             }
 
@@ -1126,4 +1158,9 @@ public sealed class TextToolCallFilter
 
         return null;
     }
+
+    /// <summary>Whether the text at <paramref name="pos"/> starts like a Windows path: a drive letter, <c>:</c> and a slash, or <c>\\</c>.</summary>
+    private static bool LooksLikePath(string t, int pos) =>
+        (pos + 2 < t.Length && char.IsAsciiLetter(t[pos]) && t[pos + 1] == ':' && t[pos + 2] is '\\' or '/')
+        || (pos + 1 < t.Length && t[pos] == '\\' && t[pos + 1] == '\\');
 }

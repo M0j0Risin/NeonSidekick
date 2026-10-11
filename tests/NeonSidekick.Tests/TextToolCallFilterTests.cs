@@ -143,6 +143,22 @@ public class TextToolCallFilterTests
         Assert.Equal(7L, colons["seed"]);
     }
 
+    /// <summary>
+    /// 2026-10-11, the user's /botchat log: a Windows path lost every backslash (<c>\U</c> read as <c>U</c>, <c>\n</c> of <c>\neon</c>
+    /// as a line break) and the tool refused it. Single or doubled, a path comes through; a prompt's <c>\n</c> is still a line break.
+    /// </summary>
+    [Theory]
+    [InlineData(@"image=""C:\Users\cnels\.neonsidekick\profiles\neon\a.png""", @"C:\Users\cnels\.neonsidekick\profiles\neon\a.png")]
+    [InlineData(@"image=""C:\\Users\\cnels\\.neonsidekick\\profiles\\neon\\a.png""", @"C:\Users\cnels\.neonsidekick\profiles\neon\a.png")]
+    [InlineData(@"image: 'D:/pictures\tiles\new.png'", @"D:/pictures\tiles\new.png")]
+    [InlineData(@"image=""\\\\server\\share\\neon.png""", @"\\server\share\neon.png")]
+    [InlineData(@"image=""a \w b \d""", @"a \w b \d")]
+    [InlineData(@"image=""line\nnext\tcell""", "line\nnext\tcell")]
+    public void ParseArguments_KeepsAPathsBackslashes(string text, string expected)
+    {
+        Assert.Equal(expected, TextToolCallFilter.ParseArguments(text)!["image"]);
+    }
+
     // ── The line form (later on 2026-09-25, the user's report from /botchat) ──
 
     private static readonly string[] Parameters = ["prompt", "negative", "negative_extra", "width", "height", "seed", "image", "image2"];
@@ -413,5 +429,68 @@ public class TextToolCallFilterTests
         Assert.Null(TextToolCallFilter.TaggedCall("{\"name\":\"draw\",\"arguments\":[1]}"));
         Assert.Null(TextToolCallFilter.TaggedCall("{\"arguments\":{}}"));
         Assert.Null(TextToolCallFilter.TaggedCall("hello"));
+    }
+
+    // ── The brace form (2026-10-11, the user's report from /botchat on Gemma 4 E2B/E4B) ──
+
+    private const string UsersPath = @"C:\Users\cnels\.neonsidekick\profiles\neon\images\comfy_images\juggernautxl_ragnarok_img2img-253494935477047.png";
+
+    private const string UsersPrompt = "Gnostic Sophia, female divine revelation, absolute extreme chiaroscuro, 85mm lens, f/1.8, ultimate cinematic photo style";
+
+    private const string UsersBraces = "generate_image{image: \"" + UsersPath + "\", prompt: \"" + UsersPrompt + "\"}";
+
+    [Fact]
+    public void TheBraceForm_TheUsersReply_IsCaught_WholeOrSplitAnywhere_ItsPathWhole()
+    {
+        const string reply = "Behold! " + UsersBraces + " What do you think?";
+        var (whole, filter) = Run(reply);
+        Assert.Equal("Behold! What do you think?", whole);
+        var arguments = TextToolCallFilter.ParseArguments(Assert.Single(filter.Calls).Arguments)!;
+        Assert.Equal(UsersPath, arguments["image"]);
+        Assert.Equal(UsersPrompt, arguments["prompt"]);
+        Assert.False(filter.SawBroken);
+
+        for (int i = 1; i < reply.Length; i++)
+        {
+            var (text, split) = Run(reply[..i], reply[i..]);
+            Assert.Equal(whole, text);
+            Assert.Equal(filter.Calls, split.Calls);
+
+            var (lines, lineFilter) = RunLines(reply[..i], reply[i..]);
+            Assert.Equal(whole, lines);
+            Assert.Equal(filter.Calls, lineFilter.Calls);
+        }
+    }
+
+    [Fact]
+    public void TheBraceForm_QuotedKeys_ABraceInAValue_AndTheDoubledPath()
+    {
+        var (text, filter) = Run("Here. generate_image {\"prompt\": \"a {curly} dog }\", \"image\": \"C:\\\\pics\\\\neon.png\", \"seed\": 7} Done.");
+        Assert.Equal("Here. Done.", text);
+        var arguments = TextToolCallFilter.ParseArguments(Assert.Single(filter.Calls).Arguments)!;
+        Assert.Equal("a {curly} dog }", arguments["prompt"]);
+        Assert.Equal(@"C:\pics\neon.png", arguments["image"]);
+        Assert.Equal(7L, arguments["seed"]);
+    }
+
+    /// <summary>A brace call at a line's start is not the line form's: the words after it come out with the push, not at the line's end.</summary>
+    [Fact]
+    public void TheBraceForm_AtALinesStart_IsNotHeldForTheLineForm()
+    {
+        var filter = new TextToolCallFilter([(Tool, (IReadOnlyList<string>)Parameters)]);
+        Assert.Equal("Look!\nNice, right", filter.Push("Look!\ngenerate_image{prompt: \"a dog\"} Nice, right"));
+        Assert.Equal("?", filter.Push("?") + filter.Flush());
+        Assert.Equal([(Tool, "prompt: \"a dog\"")], filter.Calls);
+    }
+
+    [Theory]
+    [InlineData("my_generate_image{prompt: \"x\"} stays")]
+    [InlineData("a set like {generate_image} stays")]
+    [InlineData("generate_image } stays")]
+    public void TheBraceForm_AnythingElse_PassesThrough(string reply)
+    {
+        var (text, filter) = Run(reply);
+        Assert.Equal(reply, text);
+        Assert.Empty(filter.Calls);
     }
 }
