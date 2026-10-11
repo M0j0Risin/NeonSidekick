@@ -11,8 +11,9 @@ namespace NeonSidekick.Postgres;
 /// databases, the roles and their passwords, the settings, other sessions' queries, the user mappings' passwords) whatever the lock;
 /// and, under a schema lock, a qualifier naming another schema: a lexer cannot tell <c>sales.orders</c> from an alias's <c>o.id</c>, so
 /// the tools read the schemas' names first (<see cref="Names"/>) and a qualifier among them is refused — an alias spelled like one too,
-/// which the refusal says to rename — and <c>information_schema</c> at once (it lists every schema's tables). <c>pg_catalog</c> stays:
-/// its functions are the language's own. What the text cannot show (a view, function or foreign table that reads elsewhere) is the
+/// which the refusal says to rename — and <c>information_schema</c> at once (it lists every schema's tables), and since 2026-10-11 the
+/// catalogs that do the same (<see cref="SchemaListings"/>: <c>pg_class</c>, <c>pg_tables</c>…). <c>pg_catalog</c> stays: its functions are
+/// the language's own. What the text cannot show (a view, function or foreign table that reads elsewhere) is the
 /// role's to guard. Pure.
 /// </summary>
 public static class PostgresBoundary
@@ -25,6 +26,28 @@ public static class PostgresBoundary
         "pg_stat_database_conflicts", "pg_stat_replication", "pg_stat_ssl", "pg_stat_gssapi", "pg_stat_wal_receiver", "pg_replication_slots",
         "pg_user_mappings", "pg_user_mapping", "pg_subscription", "pg_shdescription", "pg_shdepend", "pg_shseclabel",
         "pg_database_size", "pg_tablespace_size", "pg_tablespace_databases", "has_database_privilege", "pg_stat_get_activity",
+        // 2026-10-11, the review: other sessions' query text (pg_stat_statements and its kin, as pg_stat_activity), their locks and
+        // prepared transactions, and the functions that name or test the cluster's roles (pg_get_userbyid over a series lists them).
+        "pg_stat_statements", "pg_stat_statements_info", "pg_stat_monitor", "pg_locks", "pg_prepared_xacts", "pg_stat_subscription",
+        "pg_get_userbyid", "pg_has_role",
+    };
+
+    /// <summary>
+    /// The catalogs that list the objects of every schema in the database, and the functions that describe an object named in their
+    /// argument (2026-10-11, the review: under a lock to sales, <c>SELECT tablename FROM pg_tables</c> listed payroll's tables — the reason
+    /// <c>information_schema</c> was refused). Refused under a schema lock; without one they stay in the connection's database. Case-blind.
+    /// </summary>
+    public static readonly IReadOnlySet<string> SchemaListings = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "pg_namespace", "pg_class", "pg_tables", "pg_views", "pg_matviews", "pg_indexes", "pg_sequences", "pg_sequence", "pg_proc",
+        "pg_attribute", "pg_attrdef", "pg_constraint", "pg_index", "pg_trigger", "pg_rewrite", "pg_policy", "pg_policies", "pg_depend",
+        "pg_description", "pg_inherits", "pg_partitioned_table", "pg_statistic", "pg_statistic_ext", "pg_statistic_ext_data", "pg_stats",
+        "pg_stats_ext", "pg_stats_ext_exprs", "pg_foreign_table", "pg_publication_tables", "pg_publication_rel", "pg_type",
+        "pg_stat_all_tables", "pg_stat_user_tables", "pg_stat_sys_tables", "pg_stat_xact_all_tables", "pg_stat_xact_user_tables",
+        "pg_stat_all_indexes", "pg_stat_user_indexes", "pg_stat_sys_indexes", "pg_stat_user_functions", "pg_stat_xact_user_functions",
+        "pg_statio_all_tables", "pg_statio_user_tables", "pg_statio_sys_tables", "pg_statio_all_indexes", "pg_statio_user_indexes",
+        "pg_statio_sys_indexes", "pg_statio_all_sequences", "pg_statio_user_sequences", "pg_statio_sys_sequences",
+        "pg_get_viewdef", "pg_get_functiondef", "pg_get_indexdef", "pg_get_triggerdef", "pg_get_ruledef", "pg_get_constraintdef",
     };
 
     /// <summary>The function families of other sessions: <c>pg_stat_get_backend_*</c>.</summary>
@@ -85,6 +108,11 @@ public static class PostgresBoundary
         if (tokens.FirstOrDefault(t => t.Kind is GateTokenKind.Word or GateTokenKind.Name && XmlExports.Contains(t.Text)) is { Text: { } export })
         {
             return ([], PostgresText.XmlExport(export.ToLowerInvariant(), own));
+        }
+
+        if (tokens.FirstOrDefault(t => t.Kind is GateTokenKind.Word or GateTokenKind.Name && SchemaListings.Contains(t.Text)) is { Text: { } listing })
+        {
+            return ([], PostgresText.SchemaListing(listing.ToLowerInvariant(), own));
         }
 
         var heads = ServerWriteGate.Prefixes(tokens).Select(Fold).Where(h => !h.Equals(own, StringComparison.Ordinal) && !AlwaysSchemas.Contains(h)).ToList();

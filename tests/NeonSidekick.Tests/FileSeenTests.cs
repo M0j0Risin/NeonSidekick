@@ -78,4 +78,49 @@ public sealed class FileSeenTests : IDisposable
         Assert.StartsWith("Error: 'notes.txt' already exists", await Invoke<WriteFileTool>(("path", "notes.txt"), ("content", "x")));
         Assert.False(_files.WasSeen("missing.txt"));
     }
+
+    /// <summary>The review of 2026-10-11: a window of a file, a read cut at the cap, or an append says nothing of the rest, so none marks it seen.</summary>
+    [Fact]
+    public async Task APartialRead_ACutRead_AndAnAppend_MarkNothing()
+    {
+        File.WriteAllText(Path.Combine(_root, "big.cs"), string.Join('\n', Enumerable.Range(1, 40).Select(i => "line " + i.ToString(System.Globalization.CultureInfo.InvariantCulture))) + "\n");
+        await Invoke<ReadFileTool>(("path", "big.cs"), ("max_lines", 20));
+        Assert.False(_files.WasSeen("big.cs"));
+        await Invoke<ReadFileTool>(("path", "big.cs"), ("start_line", 21));
+        Assert.False(_files.WasSeen("big.cs"));   // two halves are not one whole read
+        Assert.StartsWith("Error: 'big.cs' already exists", await Invoke<WriteFileTool>(("path", "big.cs"), ("content", "line 1\n")));
+
+        File.WriteAllText(Path.Combine(_root, "long.txt"), new string('x', WorkingDirectory.MaxReadChars + 10));   // one line past the cap
+        await Invoke<ReadFileTool>(("path", "long.txt"));
+        Assert.False(_files.WasSeen("long.txt"));
+
+        File.WriteAllText(Path.Combine(_root, "journal.md"), "the user's entries\n");
+        await Invoke<WriteFileTool>(("path", "journal.md"), ("content", "a new line"), ("mode", "append"));
+        Assert.False(_files.WasSeen("journal.md"));
+        Assert.StartsWith("Error: 'journal.md' already exists", await Invoke<WriteFileTool>(("path", "journal.md"), ("content", "x")));
+        Assert.StartsWith("the user's entries", Text("journal.md"));
+
+        await Invoke<ReadFileTool>(("path", "big.cs"));
+        Assert.True(_files.WasSeen("big.cs"));   // the whole file at once
+    }
+
+    /// <summary>The review of 2026-10-11: under <see cref="WorkingDirectory.SeenOff"/> (an advisor's turn, a bot's reply) a read marks nothing and a mark already there is not found.</summary>
+    [Fact]
+    public async Task UnderSeenOff_ReadsMarkNothing_AndMarksAreNotFound()
+    {
+        File.WriteAllText(Path.Combine(_root, "Program.cs"), "Console.WriteLine(1);\n");
+        File.WriteAllText(Path.Combine(_root, "seen.cs"), "x\n");
+        await Invoke<ReadFileTool>(("path", "seen.cs"));
+        await Task.Run(async () =>
+        {
+            using var off = WorkingDirectory.SeenOff();
+            await Invoke<ReadFileTool>(("path", "Program.cs"));
+            Assert.False(_files.WasSeen("seen.cs"));
+            Assert.StartsWith("Error: 'seen.cs' already exists", await Invoke<WriteFileTool>(("path", "seen.cs"), ("content", "y")));
+        });
+
+        Assert.False(_files.WasSeen("Program.cs"));   // the advisor's read is not the main model's
+        Assert.StartsWith("Error: 'Program.cs' already exists", await Invoke<WriteFileTool>(("path", "Program.cs"), ("content", "x")));
+        Assert.True(_files.WasSeen("seen.cs"));   // the flow outside never had it off
+    }
 }

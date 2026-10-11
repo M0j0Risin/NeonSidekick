@@ -32,8 +32,8 @@ internal static class PostgresCheck
     private static List<string> Column(SqlRun run, int set) => set < run.Grids.Count ? run.Grids[set].Rows.Select(r => r[0]).ToList() : [];
 
     /// <summary>
-    /// The lock's line: the cluster's own catalogs refused; under a schema lock, another schema the database holds (when there is one) and
-    /// <c>information_schema</c> refused, the schema's own and <c>pg_catalog</c> passed.
+    /// The lock's line: the cluster's own catalogs refused; under a schema lock, another schema the database holds (when there is one),
+    /// <c>information_schema</c> and <c>pg_tables</c> refused, the schema's own and <c>pg_catalog</c> passed.
     /// </summary>
     private static SmokeCheck BoundaryCheck(string? schema, SqlRun names)
     {
@@ -48,6 +48,7 @@ internal static class PostgresCheck
         if (schema is not null)
         {
             outside.Add("SELECT * FROM information_schema.tables");
+            outside.Add("SELECT schemaname, tablename FROM pg_tables");   // a catalog listing every schema (2026-10-11)
             if (visible.FirstOrDefault(v => !v.Equals(schema, StringComparison.OrdinalIgnoreCase) && !PostgresBoundary.AlwaysSchemas.Contains(v) && v != "information_schema") is { } other)
             {
                 outside.Add($"SELECT 1 FROM \"{other}\".t");

@@ -346,7 +346,8 @@ internal sealed partial class ChatScreen
                     ? ShellText.ExitHeader(request.Kind, session.ExitCode ?? -1, session.Elapsed, request.Command)
                     : ShellText.TimedOutHeader(request.Kind, timeout, request.Command);
             var lines = session.Output.Lines();
-            string body = ShellText.Body(lines);
+            long dropped = session.Output.FirstKeptLine - 1;
+            string body = ShellText.Body(lines, dropped);
             string? spill = body.Length > maxChars ? ShellPoliceChecks.Spill(_files.Root, session.Id, body) : null;
             if (exited && session.ExitCode == 0)
             {
@@ -361,13 +362,13 @@ internal sealed partial class ChatScreen
                 : exited ? "exit " + (session.ExitCode ?? -1).ToString(CultureInfo.InvariantCulture) + " in " + ShellText.Elapsed(session.Elapsed)
                 : "timed out after " + ShellText.Elapsed(timeout);
             DiagnosticLog.Info(ShellKinds.Category, ShellText.CmdLogLine(request.Kind, request.Command, outcome, body.Length));
-            return new CmdRun(ShellText.Result(header, lines, maxChars, spill), body.Length, cancelled);
+            return new CmdRun(ShellText.Result(header, lines, maxChars, spill, dropped), body.Length, cancelled);
         }
     }
 
     /// <summary>
     /// Output lines onto the transcript until <paramref name="shown"/> passes <paramref name="maxChars"/>, where one notice says so
-    /// (<paramref name="cut"/>) and the rest are skipped: the foreground's live draw and a background run's report alike.
+    /// (<paramref name="cut"/>) and the rest are skipped: the foreground's live draw (a background run's report shows the tail instead, <see cref="CmdTailStart"/>).
     /// </summary>
     private void DrawCmdLines(IEnumerable<OutputLine> lines, int maxChars, ref long shown, ref bool cut)
     {
@@ -410,6 +411,7 @@ internal sealed partial class ChatScreen
         }
 
         session.CloseInput();
+        _cmdConversations[session.Id] = _conversation;
         _transcript.Notice(ShellText.CmdStarted(session.Id, request.Kind, session.Pid, request.Command));
         DiagnosticLog.Info(ShellKinds.Category, ShellText.CmdLogLine(request.Kind, request.Command, "started " + session.Id + " in the background", 0));
     }
@@ -418,16 +420,26 @@ internal sealed partial class ChatScreen
     private readonly System.Collections.Concurrent.ConcurrentQueue<ProcessAlert> _cmdReports = new();
 
     /// <summary>
+    /// The conversation on screen, a count bumped whenever it is left (<see cref="ForgetSession"/>: <c>/new</c>, <c>/clear</c>, a profile
+    /// switch; <see cref="RestoreSession"/>), and the one each <c>/cmd --bg</c> run started in (2026-10-11, the review): a run that ends
+    /// in another is shown, never kept in that conversation's history or store.
+    /// </summary>
+    private int _conversation;
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _cmdConversations = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The held ends of <c>/cmd --bg</c> runs, at the idle loop top (2026-10-11): each one's header (a notice for exit 0, else a warning;
-    /// <see cref="ShellText.CmdStoppedHeader"/> for a stop from <c>/process</c>'s window), its output drawn up to <c>Shell output max
-    /// chars</c>, the whole in <c>.shell\proc_….log</c> when over, then the tagged pair into the history (the model reads it on the next
-    /// turn), <c>/copy</c>'s log and the store — <see cref="KeepCmdRun"/>, as a foreground run. A session gone meanwhile (closed or
-    /// evicted) leaves only its alert line.
+    /// <see cref="ShellText.CmdStoppedHeader"/> for a stop from <c>/process</c>'s window), the end of its output that fits <c>Shell output
+    /// max chars</c>, the rest in <c>.shell\proc_….log</c> when over, then the tagged pair into the history (the model reads it on the next
+    /// turn), <c>/copy</c>'s log and the store — <see cref="KeepCmdRun"/>, as a foreground run — unless it was started in another
+    /// conversation (<see cref="_conversation"/>), which is shown and not kept. A session gone meanwhile (closed or evicted) leaves only its alert line.
     /// </summary>
     private void ReportCmdRuns()
     {
         while (_cmdReports.TryDequeue(out var alert))
         {
+            bool here = _cmdConversations.TryRemove(alert.Id, out int started) && started == _conversation;
             if (_processes.Find(alert.Id, out var session, out _) != FindOutcome.Found || session is null)
             {
                 _transcript.ProcessAlert(ShellText.AlertLine(alert));
@@ -449,17 +461,57 @@ internal sealed partial class ChatScreen
             }
 
             var lines = session.Output.Lines();
-            long shown = 0;
-            bool cut = false;
-            DrawCmdLines(lines, maxChars, ref shown, ref cut);
-            string body = ShellText.Body(lines);
+            long dropped = session.Output.FirstKeptLine - 1;
+            string body = ShellText.Body(lines, dropped);
             string? spill = body.Length > maxChars ? ShellPoliceChecks.Spill(_files.Root, session.Id, body) : null;
+            // The end of the output, not its start (2026-10-11, the review): a finished run's errors and summary are last, and the
+            // buffer may already have dropped its first lines; the hidden ones are counted and the spill named.
+            int from = CmdTailStart(lines, maxChars);
+            if (from > 0 || dropped > 0)
+            {
+                _transcript.Notice(ShellText.CmdEarlierHidden(dropped + from, spill, whole: dropped == 0));
+            }
+
+            for (int i = from; i < lines.Count; i++)
+            {
+                _transcript.ShellOutput(lines[i].Text, lines[i].IsError);
+            }
+
             string outcome = alert.Killed ? "stopped by the user after " + ShellText.Elapsed(alert.Elapsed)
                 : "exit " + alert.ExitCode.ToString(CultureInfo.InvariantCulture) + " in " + ShellText.Elapsed(alert.Elapsed);
             DiagnosticLog.Info(ShellKinds.Category, ShellText.CmdLogLine(alert.Kind, alert.Label, outcome, body.Length));
+            if (!here)
+            {
+                _transcript.Notice(ShellText.CmdOtherConversation);
+                continue;
+            }
+
             string line = $"{ShellText.CmdWord} {ShellText.CmdBgOption} {ShellText.CmdShellOption} {alert.Kind} {alert.Label}";
-            KeepCmdRun(line, alert.Kind, alert.Label, background: true, new CmdRun(ShellText.Result(header, lines, maxChars, spill), body.Length, Cancelled: false), effective);
+            KeepCmdRun(line, alert.Kind, alert.Label, background: true, new CmdRun(ShellText.Result(header, lines, maxChars, spill, dropped), body.Length, Cancelled: false), effective);
         }
+    }
+
+    /// <summary>
+    /// The index of the first of <paramref name="lines"/> whose run to the end fits <paramref name="maxChars"/> (each line counted with
+    /// its newline), the last line always shown: a background report's tail.
+    /// </summary>
+    internal static int CmdTailStart(IReadOnlyList<OutputLine> lines, int maxChars)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        long chars = 0;
+        int from = lines.Count;
+        while (from > 0)
+        {
+            chars += lines[from - 1].Text.Length + 1;
+            if (chars > maxChars && from < lines.Count)
+            {
+                break;
+            }
+
+            from--;
+        }
+
+        return from;
     }
 
     /// <summary>

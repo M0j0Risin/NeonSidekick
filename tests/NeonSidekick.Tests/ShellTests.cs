@@ -423,6 +423,31 @@ public sealed class ShellTests
         string result = ShellText.Result("h", Enumerable.Range(1, 40).Select(i => new OutputLine("line " + i.ToString(System.Globalization.CultureInfo.InvariantCulture), false)).ToList(), 100, null);
         Assert.StartsWith("h — output cut\nline 1\n", result);
         Assert.Equal(0.6, ShellText.HeadShare);
+
+        // A buffer that dropped its oldest lines (2026-10-11, the review): the output says so first, and a cut names the spill as the output kept.
+        Assert.Equal("… (the first 15,000 lines were not kept) …", ShellText.DroppedLine(15000));
+        Assert.Equal("… (the first 3 lines were not kept) …\na\nb", ShellText.Body([new("a", false), new("b", false)], 3));
+        Assert.Equal("a\nb", ShellText.Body([new("a", false), new("b", false)], 0));
+        Assert.Equal("… (9 characters cut; the output kept is in x.log) …", ShellText.CutLine(9, "x.log", whole: false));
+        string dropped = ShellText.Result("h", Enumerable.Range(1, 40).Select(i => new OutputLine("line " + i.ToString(System.Globalization.CultureInfo.InvariantCulture), false)).ToList(), 100, "x.log", dropped: 7);
+        Assert.StartsWith("h — output cut\n… (the first 7 lines were not kept) …\n", dropped);
+        Assert.Contains("; the output kept is in x.log) …", dropped);
+    }
+
+    /// <summary>The review of 2026-10-11: a /cmd --bg report shows the end of the output, the earlier lines counted and the spill named.</summary>
+    [Fact]
+    public void ACmdReport_ShowsTheTail()
+    {
+        OutputLine[] lines = [new("aaaa", false), new("bbbb", false), new("cccc", false)];   // five characters each with the newline
+        Assert.Equal(0, NeonSidekick.App.ChatScreen.CmdTailStart(lines, 15));
+        Assert.Equal(1, NeonSidekick.App.ChatScreen.CmdTailStart(lines, 14));
+        Assert.Equal(2, NeonSidekick.App.ChatScreen.CmdTailStart(lines, 5));
+        Assert.Equal(2, NeonSidekick.App.ChatScreen.CmdTailStart(lines, 1));   // the last line always shown
+        Assert.Equal(0, NeonSidekick.App.ChatScreen.CmdTailStart([], 10));
+        Assert.Equal(@"(the first 14,880 lines are not shown here; the whole output is in .shell\proc_1.log)", ShellText.CmdEarlierHidden(14880, @".shell\proc_1.log", whole: true));
+        Assert.Equal("(the first 1 line is not shown here; the output kept is in x.log)", ShellText.CmdEarlierHidden(1, "x.log", whole: false));
+        Assert.Equal("(the first 2 lines are not shown here)", ShellText.CmdEarlierHidden(2, null, whole: true));
+        Assert.Equal("(started in an earlier conversation: shown here, not added to this one)", ShellText.CmdOtherConversation);
     }
 
     [WindowsFact]

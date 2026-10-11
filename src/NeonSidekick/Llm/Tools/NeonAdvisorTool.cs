@@ -5,6 +5,7 @@ using NeonSidekick.Advisors;
 using NeonSidekick.Claude;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Emojis;
+using NeonSidekick.Files;
 using NeonSidekick.Plans;
 using NeonSidekick.Settings;
 
@@ -213,6 +214,9 @@ public sealed class NeonAdvisorTool : AIFunction
             assistant.LastRoundAnswers = tools.Count > 0;
         }
 
+        // The advisor's reads are not the main model's (2026-10-11, the review): over the chat's own file tools, its read_file would mark
+        // a file seen, and the main model's write_file without a mode then replace one it never read.
+        using var seenOff = WorkingDirectory.SeenOff();
         var answer = new StringBuilder();
         var usage = TokenUsage.Zero;
         int requests = 0;

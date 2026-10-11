@@ -11,7 +11,8 @@ namespace NeonSidekick.Shell;
 /// line breaks — so the police judge only the rest: <c>dotnet add package X &amp;&amp; sqlite3 a.db</c> is still refused at
 /// <c>sqlite3</c>, and a script that later uses the package is still read. A segment is cut only when it starts with one of
 /// <see cref="Forms"/> and holds no shell operator or substitution outside quotes (<c>$(</c>, <c>${</c>, a backtick, <c>&lt;</c>,
-/// <c>&gt;</c>, <c>@(</c>, a <c>&amp;</c> past a leading call operator). Pure.
+/// <c>&gt;</c>, <c>@(</c>, a <c>&amp;</c> past a leading call operator, and since 2026-10-11 any bracket of <c>( ) { }</c>: PowerShell
+/// runs a parenthesised argument). Pure.
 /// </summary>
 public static partial class PackageCommands
 {
@@ -71,7 +72,9 @@ public static partial class PackageCommands
     {
         string bare = Quoted().Replace(text, "\"\"");
         return bare.Contains("$(", StringComparison.Ordinal) || bare.Contains("${", StringComparison.Ordinal) || bare.Contains("@(", StringComparison.Ordinal)
-            || bare.IndexOfAny(['`', '<', '>', '&']) >= 0
+            // A bare ( or { too (2026-10-11, the review): PowerShell runs a parenthesised argument, so `pip install (sqlite3 a.db …)`
+            // would run sqlite3 past the police; a script block's braces never belong in a package spec either.
+            || bare.IndexOfAny(['`', '<', '>', '&', '(', ')', '{', '}']) >= 0
             // A double-quoted run expands $( and backticks in bash: never cut one holding them.
             || DoubleQuoted().Matches(text).Any(m => m.Value.Contains("$(", StringComparison.Ordinal) || m.Value.Contains('`'));
     }

@@ -110,6 +110,13 @@ public static class PostgresText
     public static string XmlExport(string named, string schema) =>
         $"Error: the SQL uses {named}, which reads the table, schema or database its argument names, but this connection is held to schema '{schema}'; select from the schema's tables instead";
 
+    /// <summary>
+    /// A catalog that lists every schema's objects, or a function that describes one named in its argument, under a schema lock
+    /// (2026-10-11, the review: <c>pg_tables</c> listed payroll's tables to a connection held to sales). Pinned.
+    /// </summary>
+    public static string SchemaListing(string named, string schema) =>
+        $"Error: the SQL reads {named}, which lists or describes the objects of every schema in this database, but this connection is held to schema '{schema}'; postgres_tables, postgres_columns and postgres_describe read the schema's own catalog";
+
     /// <summary>A tool's <c>schema</c> (or a <c>schema.name</c> table) naming another under a schema lock. Pinned.</summary>
     public static string SchemaElsewhere(string named, string schema) =>
         $"Error: this connection is held to schema '{schema}', so '{named}' is out of its reach; leave \"schema\" out or give {schema}";

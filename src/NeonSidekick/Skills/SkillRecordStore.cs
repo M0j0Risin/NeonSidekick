@@ -126,8 +126,8 @@ public sealed class SkillRecordStore : IDisposable
 
     /// <summary>
     /// The folder under the home that holds <see cref="FileName"/> and its WAL siblings: <c>db\skills</c> since 2026-10-10 (the user's
-    /// call, beside the profiles' <c>db\sessions</c>), the home's root until then. No migration in the app: the user's existing file was
-    /// moved by hand once. Pinned.
+    /// call, beside the profiles' <c>db\sessions</c>), the home's root until then. The user's own file was moved by hand once; since
+    /// 2026-10-11 (the review) a file still at the root moves itself at the first open (<see cref="Sessions.LegacyStoreMove"/>). Pinned.
     /// </summary>
     public static readonly string FolderName = Path.Combine("db", "skills");
 
@@ -148,7 +148,9 @@ public sealed class SkillRecordStore : IDisposable
     public SkillRecordStore(string directory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
-        _filePath = Path.Combine(Path.GetFullPath(directory), FolderName, FileName);
+        string full = Path.GetFullPath(directory);
+        // A file an older build left at the home's root moves into the folder once (2026-10-11, the review); read in place if it cannot.
+        _filePath = Sessions.LegacyStoreMove.Resolve(Path.Combine(full, FileName), Path.Combine(full, FolderName, FileName), SkillCatalog.Category);
     }
 
     public string FilePath => _filePath;

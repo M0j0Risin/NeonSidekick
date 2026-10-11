@@ -309,6 +309,9 @@ public sealed class ProcessToolTests : IDisposable
         var ex = Assert.Throws<ShellStartException>(() => Start("echo no"));
         Assert.Equal("Error: too many background processes (16); kill or close one", ex.Message);
         Assert.Equal(16, _registry.Running);
+        // The cap is each owner's (2026-10-11, the review): the model's sixteen leave the user's own /cmd --bg free, and the other way round.
+        sleepers.Add(Start("ping -n 30 127.0.0.1 >nul", mine: true));
+        Assert.Equal(17, _registry.Running);
 
         _registry.Dispose();
         foreach (var sleeper in sleepers)

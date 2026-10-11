@@ -74,7 +74,8 @@ public sealed class SessionStore : IDisposable
 
     /// <summary>
     /// The folder under the profile that holds <see cref="FileName"/> and its WAL siblings: <c>db\sessions</c> since 2026-10-10 (the
-    /// user's call), the profile's root until then. No migration in the app: the user's existing files were moved by hand once. Pinned.
+    /// user's call), the profile's root until then. The user's own files were moved by hand once; since 2026-10-11 (the review) a file still
+    /// at the root moves itself at the first open (<see cref="LegacyStoreMove"/>). Pinned.
     /// </summary>
     public static readonly string FolderName = Path.Combine("db", "sessions");
 
@@ -117,7 +118,9 @@ public sealed class SessionStore : IDisposable
     public SessionStore(string directory, TimeProvider? time = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
-        _filePath = Path.Combine(Path.GetFullPath(directory), FolderName, FileName);
+        string full = Path.GetFullPath(directory);
+        // A file an older build left at the profile's root moves into the folder once (2026-10-11, the review); read in place if it cannot.
+        _filePath = LegacyStoreMove.Resolve(Path.Combine(full, FileName), Path.Combine(full, FolderName, FileName), Category);
         _time = time ?? TimeProvider.System;
     }
 

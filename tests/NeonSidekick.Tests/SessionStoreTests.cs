@@ -493,6 +493,47 @@ public class SessionStoreTests : IDisposable
         Assert.Equal(Path.Combine("db", "sessions"), SessionStore.FolderName);   // the profile's root until 2026-10-10
         Assert.Equal(Path.Combine(Path.GetFullPath(_dir), "db", "sessions", "sessions.db"), _store.FilePath);
     }
+
+    /// <summary>
+    /// The review of 2026-10-11: a store an older build left at the profile's root moves into db\sessions at the open, its history with it;
+    /// a file already in the folder is never overwritten.
+    /// </summary>
+    [Fact]
+    public void AnOldRootFile_MovesIntoTheFolder_WithItsHistory()
+    {
+        string home = Path.Combine(_dir, "old-profile");
+        long id;
+        using (var older = new SessionStore(Path.Combine(_dir, "seed"), _time))
+        {
+            id = older.Begin("from before the move", "llama")!.Value;
+        }
+
+        Directory.CreateDirectory(home);
+        foreach (string file in Directory.GetFiles(Path.Combine(_dir, "seed", SessionStore.FolderName)))
+        {
+            File.Move(file, Path.Combine(home, Path.GetFileName(file)));   // the layout before 2026-10-10: the file at the root
+        }
+
+        using (var store = new SessionStore(home, _time))
+        {
+            Assert.Equal(Path.Combine(Path.GetFullPath(home), SessionStore.FolderName, SessionStore.FileName), store.FilePath);
+            Assert.False(File.Exists(Path.Combine(home, SessionStore.FileName)));
+            Assert.Equal("from before the move", Assert.Single(store.List(0)).Title);
+            Assert.Equal(id, store.List(0)[0].Id);
+        }
+
+        File.WriteAllText(Path.Combine(home, SessionStore.FileName), "a stray copy");
+        Assert.Equal(Path.Combine(home, SessionStore.FolderName, SessionStore.FileName), LegacyStoreMove.Resolve(Path.Combine(home, SessionStore.FileName), Path.Combine(home, SessionStore.FolderName, SessionStore.FileName), "Sessions"));
+        Assert.Equal("a stray copy", File.ReadAllText(Path.Combine(home, SessionStore.FileName)));   // both there: neither touched
+    }
+
+    [Fact]
+    public void TheMovesLogLines_ArePinned()
+    {
+        Assert.Equal("moved a to b, its folder since 2026-10-10", LegacyStoreMove.MovedLogLine("a", "b"));
+        Assert.Equal("could not move a to b (busy); reading it where it is, and trying again at the next start", LegacyStoreMove.NotMovedLogLine("a", "b", "busy"));
+    }
+
     [Fact]
     public void SessionLogLines_ArePinned()
     {

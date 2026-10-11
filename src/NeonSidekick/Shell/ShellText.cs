@@ -48,10 +48,12 @@ public static class ShellText
     /// <see cref="CutLine"/> between; <paramref name="spill"/> is the relative path the whole text
     /// went to (null when it could not be written).
     /// </summary>
-    public static string Result(string header, IReadOnlyList<OutputLine> lines, int maxChars, string? spill)
+    /// <param name="dropped">The oldest lines the buffer no longer keeps (2026-10-11, the review): over 0, the output opens with
+    /// <see cref="DroppedLine"/> and a cut says the spill holds the output kept, not the whole.</param>
+    public static string Result(string header, IReadOnlyList<OutputLine> lines, int maxChars, string? spill, long dropped = 0)
     {
         ArgumentNullException.ThrowIfNull(header);
-        string body = Body(lines);
+        string body = Body(lines, dropped);
         if (body.Length == 0)
         {
             return header + "\n" + NoOutput;
@@ -62,8 +64,18 @@ public static class ShellText
             return header + "\n" + body;
         }
 
-        return header + CutSuffix + "\n" + Cut(body, maxChars, spill);
+        return header + CutSuffix + "\n" + Cut(body, maxChars, spill, whole: dropped == 0);
     }
+
+    /// <summary><see cref="Body(IReadOnlyList{OutputLine})"/> after <see cref="DroppedLine"/> when the buffer dropped its oldest lines: what the spill file gets too.</summary>
+    public static string Body(IReadOnlyList<OutputLine> lines, long dropped) =>
+        dropped > 0 ? DroppedLine(dropped) + "\n" + Body(lines) : Body(lines);
+
+    /// <summary>
+    /// <c>… (the first 15,000 lines were not kept) …</c>: the output's first line when the buffer (<see cref="OutputBuffer"/>, the last
+    /// 5,000 lines within 2 MB) dropped the oldest (2026-10-11, the review: a long run's spill claimed to be the whole). Pinned.
+    /// </summary>
+    public static string DroppedLine(long dropped) => $"… (the first {Count(dropped)} lines were not kept) …";
 
     /// <summary>The output as one text: stdout lines, then the separator and the stderr lines when there are any. Pinned.</summary>
     public static string Body(IReadOnlyList<OutputLine> lines)
@@ -85,7 +97,7 @@ public static class ShellText
     }
 
     /// <summary>The head and the tail of <paramref name="text"/> within <paramref name="maxChars"/>, cut at line ends, <see cref="CutLine"/> between them.</summary>
-    public static string Cut(string text, int maxChars, string? spill)
+    public static string Cut(string text, int maxChars, string? spill, bool whole = true)
     {
         ArgumentNullException.ThrowIfNull(text);
         int headChars = (int)(maxChars * HeadShare);
@@ -105,14 +117,17 @@ public static class ShellText
         }
 
         int removed = text.Length - head.Length - tail.Length;
-        return head + "\n" + CutLine(removed, spill) + "\n" + tail;
+        return head + "\n" + CutLine(removed, spill, whole) + "\n" + tail;
     }
 
-    /// <summary><c>… (412,345 chars cut; the whole output is in .shell\run_9c04e1.log) …</c>, or without the file when none could be written. Pinned.</summary>
-    public static string CutLine(int chars, string? spill) =>
+    /// <summary>
+    /// <c>… (412,345 chars cut; the whole output is in .shell\run_9c04e1.log) …</c>, or without the file when none could be written;
+    /// <c>the output kept is in</c> when the buffer had dropped lines (<paramref name="whole"/> false, 2026-10-11). Pinned.
+    /// </summary>
+    public static string CutLine(int chars, string? spill, bool whole = true) =>
         spill is null
             ? $"… ({Count(chars)} characters cut) …"
-            : $"… ({Count(chars)} characters cut; the whole output is in {spill}) …";
+            : $"… ({Count(chars)} characters cut; the {(whole ? "whole output" : "output kept")} is in {spill}) …";
 
     // ── Background processes (phase B, 2026-09-21) ───────────────────────────
 
@@ -628,6 +643,21 @@ public static class ShellText
     /// <summary><c>stopped by you after 12.0 s (powershell, killed): ping -n 60 127.0.0.1</c>: a <c>/cmd --bg</c> line stopped from <c>/process</c>'s window. Pinned.</summary>
     public static string CmdStoppedHeader(string kind, TimeSpan elapsed, string label) =>
         $"stopped by you after {Elapsed(elapsed)} ({kind}, killed): {label}";
+
+    /// <summary>
+    /// Before a <c>/cmd --bg</c> report's output when only its end fits <c>Shell output max chars</c> (2026-10-11, the review: the report
+    /// drew the start and cut the ending, the errors and the summary): <c>(the first 14,880 lines are not shown here; the whole output is
+    /// in .shell\proc_3f2a1b.log)</c>, <c>the output kept</c> when the buffer had dropped lines, no file when none could be written. Pinned.
+    /// </summary>
+    public static string CmdEarlierHidden(long lines, string? spill, bool whole) =>
+        $"(the first {Count(lines)} {(lines == 1 ? "line is" : "lines are")} not shown here"
+        + (spill is null ? ")" : $"; the {(whole ? "whole output" : "output kept")} is in {spill})");
+
+    /// <summary>
+    /// After a <c>/cmd --bg</c> run's report when it was started in another conversation (2026-10-11, the review: a run that ended
+    /// after <c>/new</c>, <c>/resume</c> or a profile switch was kept in the new conversation and its store): shown, never kept.
+    /// </summary>
+    public const string CmdOtherConversation = "(started in an earlier conversation: shown here, not added to this one)";
 
     /// <summary>What the user's side of a <c>/cmd</c> run opens with in the history.</summary>
     public const string CmdHistoryHead = "[I ran in the shell";

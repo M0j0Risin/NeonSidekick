@@ -75,8 +75,31 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     /// <summary>The window and screen a page sees: a desktop's.</summary>
     public const string WindowSize = "1920,1080";
 
-    /// <summary>What a page is asked for at each look: its ready state and its DOM.</summary>
+    /// <summary>What a page is asked for when its DOM is read: its ready state and its DOM.</summary>
     public const string PageExpression = "({ s: document.readyState, h: document.documentElement ? document.documentElement.outerHTML : '' })";
+
+    /// <summary>
+    /// What a page is asked for at each look (2026-10-11, the review: the whole DOM, up to megabytes, crossed the socket and was
+    /// converted to Markdown at every look of a page with a clock or rotating ads): its ready state and its DOM's <see cref="Fingerprint"/>
+    /// worked out in the page — the length and an FNV-1a hash over its UTF-16 units — leaving nothing there a script could find.
+    /// </summary>
+    public const string PrintExpression =
+        "(() => { const d = document.documentElement; const h = d ? d.outerHTML : ''; let x = 0x811c9dc5; " +
+        "for (let i = 0; i < h.length; i++) { x = Math.imul(x ^ h.charCodeAt(i), 0x01000193); } " +
+        "return { s: document.readyState, n: h.length, x: x >>> 0 }; })()";
+
+    /// <summary><see cref="PrintExpression"/>'s fingerprint of <paramref name="html"/>, worked out here: its length and its 32-bit FNV-1a hash over UTF-16 units. Pure.</summary>
+    public static (int Length, uint Hash) Fingerprint(string html)
+    {
+        ArgumentNullException.ThrowIfNull(html);
+        uint x = 2166136261;
+        foreach (char c in html)
+        {
+            x = unchecked((x ^ c) * 16777619);
+        }
+
+        return (html.Length, x);
+    }
 
     /// <summary>How long the output must stay whole and unchanged before a browser that has not exited is stopped (<see cref="WaitForExitOrWholeAsync"/>).</summary>
     public static readonly TimeSpan WholeGrace = TimeSpan.FromSeconds(1.5);
@@ -315,8 +338,11 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
 
     /// <summary>
     /// Watches the page over DevTools until <see cref="DomSettle"/> says it is ready, then closes the browser: true when it must
-    /// still be killed (it did not exit within <see cref="CloseGrace"/>), false when it exited. Every look's DOM lands in
-    /// <paramref name="read"/>; a DevTools failure is noted there and ends the watch (the caller kills the browser).
+    /// still be killed (it did not exit within <see cref="CloseGrace"/>), false when it exited. Each look reads the DOM's fingerprint
+    /// alone (<see cref="PrintExpression"/>); the DOM itself is read into <paramref name="read"/> and judged (a bot check, a thin page)
+    /// when it differs from the one last read and that read is <see cref="DomSettle.Quiet"/> old — so a page changing at every look
+    /// moves its DOM once a quiet window, not twice a second (2026-10-11, the review) — and once more when the page is ready and
+    /// changed since. A DevTools failure is noted in <paramref name="read"/> and ends the watch (the caller kills the browser).
     /// </summary>
     private static async Task<bool> WatchPageAsync(Process process, string userData, Uri url, PageRead read, CancellationToken cancellationToken)
     {
@@ -329,23 +355,48 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             var watch = Stopwatch.StartNew();
             string? session = null;
             bool thin = false;
+            (int, uint)? last = null;        // the last look's fingerprint
+            (int, uint)? readPrint = null;   // the fingerprint of read.Html
+            var readAt = TimeSpan.Zero;
+
+            // The DOM read and judged; nothing while the page has none to give (mid-navigation): the next look tries again.
+            async Task ReadDomAsync()
+            {
+                if (await LookAsync(client, session!, cancellationToken).ConfigureAwait(false) is not { } full)
+                {
+                    return;
+                }
+
+                read.Html = full.Html;
+                readPrint = Fingerprint(full.Html);
+                readAt = watch.Elapsed;
+                var page = HtmlToMarkdown.Convert(full.Html, url);
+                read.Gated = WebFetcher.LooksLikeChallenge(full.Html, page.Markdown);
+                read.ChallengeSeen |= read.Gated;
+                thin = DomSettle.LooksThin(full.Html, page.Markdown);
+            }
+
             while (true)
             {
                 session ??= await AttachAsync(client, cancellationToken).ConfigureAwait(false);
-                if (session is not null && await LookAsync(client, session, cancellationToken).ConfigureAwait(false) is { } look)
+                if (session is not null && await PrintAsync(client, session, cancellationToken).ConfigureAwait(false) is { } look)
                 {
                     read.Looks++;
-                    bool changed = !string.Equals(look.Html, read.Html, StringComparison.Ordinal);
-                    if (changed)
+                    bool changed = look.Print != last;
+                    last = look.Print;
+                    if (look.Print != readPrint && (readPrint is null || watch.Elapsed - readAt >= DomSettle.Quiet))
                     {
-                        read.Html = look.Html;
-                        var page = HtmlToMarkdown.Convert(look.Html, url);
-                        read.Gated = WebFetcher.LooksLikeChallenge(look.Html, page.Markdown);
-                        read.ChallengeSeen |= read.Gated;
-                        thin = DomSettle.LooksThin(look.Html, page.Markdown);
+                        await ReadDomAsync().ConfigureAwait(false);
                     }
 
-                    if (settle.Observe(watch.Elapsed, look.State is "interactive" or "complete", changed, read.Gated, thin))
+                    bool ready = settle.Observe(watch.Elapsed, look.State is "interactive" or "complete", changed, read.Gated, thin);
+                    if (ready && look.Print != readPrint)
+                    {
+                        // Ready: the DOM as it is now, when the last read is older than the last change.
+                        await ReadDomAsync().ConfigureAwait(false);
+                    }
+
+                    if (ready && read.Html is not null)
                     {
                         read.Settled = true;
                         break;
@@ -406,15 +457,42 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         return attached.ValueKind == JsonValueKind.Object && attached.TryGetProperty("sessionId", out var session) && session.ValueKind == JsonValueKind.String ? session.GetString() : null;
     }
 
-    /// <summary>One look at the page (<see cref="PageExpression"/>); null while it has no document to ask, mid-navigation.</summary>
+    /// <summary>The DOM read (<see cref="PageExpression"/>); null while it has no document to ask, mid-navigation.</summary>
     private static async Task<(string State, string Html)?> LookAsync(DevToolsClient client, string session, CancellationToken cancellationToken)
+    {
+        if (await EvaluateAsync(client, session, PageExpression, cancellationToken).ConfigureAwait(false) is not { } value)
+        {
+            return null;
+        }
+
+        string state = value.TryGetProperty("s", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() ?? "" : "";
+        string html = value.TryGetProperty("h", out var h) && h.ValueKind == JsonValueKind.String ? h.GetString() ?? "" : "";
+        return html.Length == 0 ? null : (state, html);
+    }
+
+    /// <summary>One look at the page (<see cref="PrintExpression"/>): its ready state and its DOM's fingerprint; null while it has no document to ask.</summary>
+    private static async Task<(string State, (int, uint) Print)?> PrintAsync(DevToolsClient client, string session, CancellationToken cancellationToken)
+    {
+        if (await EvaluateAsync(client, session, PrintExpression, cancellationToken).ConfigureAwait(false) is not { } value
+            || !value.TryGetProperty("n", out var n) || !n.TryGetInt32(out int length) || length == 0
+            || !value.TryGetProperty("x", out var x) || !x.TryGetUInt32(out uint hash))
+        {
+            return null;
+        }
+
+        string state = value.TryGetProperty("s", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() ?? "" : "";
+        return (state, (length, hash));
+    }
+
+    /// <summary><paramref name="expression"/> run in the page, its value returned as an object; null when it threw, returned no object, or the page is navigating.</summary>
+    private static async Task<JsonElement?> EvaluateAsync(DevToolsClient client, string session, string expression, CancellationToken cancellationToken)
     {
         JsonElement answer;
         try
         {
             answer = await client.SendAsync("Runtime.evaluate", w =>
             {
-                w.WriteString("expression", PageExpression);
+                w.WriteString("expression", expression);
                 w.WriteBoolean("returnByValue", true);
             }, session, cancellationToken).ConfigureAwait(false);
         }
@@ -423,15 +501,10 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             return null;   // "Execution context was destroyed": the page is navigating; the next look finds the new one.
         }
 
-        if (answer.ValueKind != JsonValueKind.Object || answer.TryGetProperty("exceptionDetails", out _)
-            || !answer.TryGetProperty("result", out var result) || !result.TryGetProperty("value", out var value) || value.ValueKind != JsonValueKind.Object)
-        {
-            return null;
-        }
-
-        string state = value.TryGetProperty("s", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() ?? "" : "";
-        string html = value.TryGetProperty("h", out var h) && h.ValueKind == JsonValueKind.String ? h.GetString() ?? "" : "";
-        return html.Length == 0 ? null : (state, html);
+        return answer.ValueKind == JsonValueKind.Object && !answer.TryGetProperty("exceptionDetails", out _)
+            && answer.TryGetProperty("result", out var result) && result.TryGetProperty("value", out var value) && value.ValueKind == JsonValueKind.Object
+            ? value
+            : null;
     }
 
     /// <summary>One finished browser run: what it printed, how it ended, or why it never started.</summary>

@@ -138,6 +138,20 @@ public class BrowserIdentityTests
         Assert.False(DomSettle.LooksThin("<html><body><script>x()</script></body></html>", new string('a', WebFetcher.ShellTextChars)));
     }
 
+    /// <summary>
+    /// The page's fingerprint worked out here as the page's script works it out (2026-10-11, the review): FNV-1a's 32-bit offset basis
+    /// for nothing and its published value for "a", over UTF-16 units, so a character past the BMP counts as its two halves.
+    /// </summary>
+    [Fact]
+    public void Fingerprint_IsTheLengthAndFnv1a_OverUtf16Units()
+    {
+        Assert.Equal((0, 0x811c9dc5u), HeadlessBrowser.Fingerprint(""));
+        Assert.Equal((1, 0xe40c292cu), HeadlessBrowser.Fingerprint("a"));
+        Assert.Equal(2, HeadlessBrowser.Fingerprint("😀").Length);
+        Assert.NotEqual(HeadlessBrowser.Fingerprint("<p>12:00</p>"), HeadlessBrowser.Fingerprint("<p>12:01</p>"));
+        Assert.Contains("Math.imul(x ^ h.charCodeAt(i), 0x01000193)", HeadlessBrowser.PrintExpression, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void ParseActivePort_IsThePortThenTheBrowsersPath()
     {

@@ -747,8 +747,11 @@ internal sealed partial class ChatScreen
     /// <summary>Reads the current session's summary again (null without a session or a row).</summary>
     private void RefreshSessionTitle() => _sessionTitle = _sessionId is { } id ? _sessions.Summary(id) : null;
 
-    /// <summary>The conversation on screen is no longer a stored session: the next turn begins a new row.</summary>
-    private void ForgetSession()
+    /// <summary>
+    /// The conversation on screen is no longer a stored session: the next turn begins a new row. <paramref name="left"/> false for a purge
+    /// of its row, the conversation staying on screen (2026-10-11): a <c>/cmd --bg</c> run started in it is still kept in it.
+    /// </summary>
+    private void ForgetSession(bool left = true)
     {
         _sessionId = null;
         _sessionTitle = null;
@@ -758,6 +761,11 @@ internal sealed partial class ChatScreen
         _advisorHost.Reset();
         // The files the model saw go with the session too (2026-10-10): a new conversation's write_file asks for a mode again.
         _files.ForgetSeen();
+        // A /cmd --bg run still going belongs to the conversation left (2026-10-11, the review): its end is shown, never kept in the next.
+        if (left)
+        {
+            _conversation++;
+        }
         _claudeServerSessionId = null;
         _cameraAllowed = false;
         _screenAllowed = false;
@@ -5056,7 +5064,7 @@ internal sealed partial class ChatScreen
         _sessions?.Dispose();
         _sessions = new SessionStore(_settings.ProfileDirectory, _time);
         _sessionTools = SessionTools(_sessions, _effective, () => _sessionId, _time);
-        _sessionsMenu = new SessionsMenu(_sessions, () => _sessionId, _flow, _menuPane, _input, _time, id => { if (_sessionId == id) { ForgetSession(); } });
+        _sessionsMenu = new SessionsMenu(_sessions, () => _sessionId, _flow, _menuPane, _input, _time, id => { if (_sessionId == id) { ForgetSession(left: false); } });
         PurgeExpiredSessions();
         LoadCommandHistory();
         ReconcileSkills();
@@ -6818,6 +6826,9 @@ internal sealed partial class ChatScreen
             ForgetReading();
             _sessionId = id;
             _sessionTitle = record.Summary;
+            // The files the last conversation saw are not this one's (2026-10-11, the review): its write_file asks for a mode again.
+            _files.ForgetSeen();
+            _conversation++;
             _claudeSessionId = claudeSessionId;
             _advisorThreads.Restore(SessionHistory.AdvisorThreadsOf(record.HistoryJson));
             _advisorThreads.RestoreSessions(SessionHistory.AdvisorSessionsOf(record.HistoryJson));
@@ -6854,7 +6865,7 @@ internal sealed partial class ChatScreen
         {
             if (_sessionId == id)
             {
-                ForgetSession();
+                ForgetSession(left: false);
             }
 
             _transcript.Notice(SessionsMenu.PurgedNotice(id));
@@ -6891,7 +6902,7 @@ internal sealed partial class ChatScreen
         int purged = _sessions.PurgeOlderThan(cutoff);
         if (_sessionId is { } current && sessions.Any(session => session.Id == current && session.UpdatedAt < cutoff))
         {
-            ForgetSession();
+            ForgetSession(left: false);
         }
 
         _transcript.Notice(SessionsPurgedOlderNotice(purged, age));
@@ -6914,7 +6925,7 @@ internal sealed partial class ChatScreen
         }
 
         int purged = _sessions.PurgeAll();
-        ForgetSession();
+        ForgetSession(left: false);
         _transcript.Notice(SessionsPurgedNotice(purged));
     }
 
@@ -14801,6 +14812,9 @@ internal sealed partial class ChatScreen
     {
         using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
+        // A bot's reply is not the main model's (2026-10-11, the review): its reads mark no file seen, and its write_file without a mode
+        // finds none marked, so neither side replaces a file on the other's read.
+        using var seenOff = bot is null ? null : WorkingDirectory.SeenOff();
         // The reply is the model's work: Ctrl+Alt+X cancels it, and its unload is finished once the turn has wound down.
         using var killScope = BeginKillScope(turnCts);
         // The mid-turn line hook (the pane only: without it nothing can be shown or typed under

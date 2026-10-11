@@ -23,7 +23,7 @@ public enum FindOutcome
 /// for the process like the <see cref="Timers.TimerBoard"/> — nothing is persisted, and a child
 /// still running when the app closes is killed by <see cref="Dispose"/> (a crash leaves it to
 /// Windows). Ids are <c>proc_</c> and six hex digits; any unique prefix finds one. At most
-/// <see cref="MaxRunning"/> run at once and the newest <see cref="MaxKept"/> finished ones stay for
+/// <see cref="MaxRunning"/> of the model's and as many of the user's own run at once and the newest <see cref="MaxKept"/> finished ones stay for
 /// <c>poll</c> / <c>log</c> until <c>close</c> or eviction. A session started with <c>notify</c>
 /// queues a <see cref="ProcessAlert"/> when it exits and calls <c>signal</c> (the screen's, which
 /// ends an idle read; never writes) — the shape of the timer board — and its id waits in
@@ -81,7 +81,9 @@ public sealed class ProcessRegistry : IDisposable
         lock (_lock)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_sessions.Count(s => !s.HasExited) >= MaxRunning)
+            // The cap is each owner's (2026-10-11, the review): the user's own runs, which the model's process tool never lists, counted
+            // against the model's background run_command, refused with a count its process list could not explain.
+            if (_sessions.Count(s => !s.HasExited && s.Mine == mine) >= MaxRunning)
             {
                 throw new ShellStartException(ShellText.TooManyProcesses(MaxRunning));
             }

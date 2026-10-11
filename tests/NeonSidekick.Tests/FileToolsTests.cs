@@ -525,7 +525,7 @@ public sealed class FileToolsTests : IDisposable
         Assert.EndsWith(DeleteTool.GitNote, DeleteTool.DescriptionText, StringComparison.Ordinal);
         Assert.Equal(
             "Writes a text file under the working directory (the user's cwd / current directory), creating any missing folders. " +
-            "mode create (the default) leaves a file that already exists alone — unless you read, wrote or patched it in this conversation and it is unchanged since, which it replaces; mode overwrite replaces any; mode append adds the content at its end on a new line, creating the file if missing — for journals, logs and lists. " +
+            "mode create (the default) leaves a file that already exists alone — unless you read it whole, wrote it or patched it in this conversation and it is unchanged since, which it replaces; mode overwrite replaces any; mode append adds the content at its end on a new line, creating the file if missing — for journals, logs and lists. " +
             "The result reports the file's size, line count and word count, so nothing else is needed to check them. To change part of a file use patch_file.",
             write.Description);
         Assert.Equal(

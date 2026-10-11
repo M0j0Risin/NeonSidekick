@@ -325,11 +325,26 @@ public sealed class PostgresToolsTests : IDisposable
     [InlineData("SELECT pg_database_size('other')", "pg_database_size")]
     [InlineData("SELECT pg_stat_get_backend_activity(1)", "pg_stat_get_backend_activity")]
     [InlineData("SELECT * FROM \"pg_stat_activity\"", "pg_stat_activity")]
+    [InlineData("SELECT query FROM pg_stat_statements", "pg_stat_statements")]   // the review, 2026-10-11
+    [InlineData("SELECT pg_get_userbyid(g) FROM generate_series(1, 20000) g", "pg_get_userbyid")]
+    [InlineData("SELECT * FROM pg_locks", "pg_locks")]
     public void TheBoundary_RefusesTheClustersCatalogs_LockedOrNot(string sql, string named)
     {
         Assert.Equal(PostgresText.ServerCatalog(named), PostgresBoundary.Check(sql, null, []));
         Assert.Equal(PostgresText.ServerCatalog(named), PostgresBoundary.Qualifiers(sql, "sales").Refused);
         Assert.Null(PostgresBoundary.Check("SELECT relname FROM pg_class", null, []));
+    }
+
+    /// <summary>The review of 2026-10-11: under a schema lock the catalogs that list every schema's objects read another schema's names, as <c>information_schema</c> did.</summary>
+    [Theory]
+    [InlineData("SELECT schemaname, tablename FROM pg_tables", "pg_tables")]
+    [InlineData("SELECT relname FROM pg_catalog.pg_class", "pg_class")]
+    [InlineData("SELECT nspname FROM \"pg_namespace\"", "pg_namespace")]
+    [InlineData("SELECT pg_get_viewdef('payroll.v'::regclass)", "pg_get_viewdef")]
+    public void TheBoundary_RefusesTheSchemaListings_UnderALock(string sql, string named)
+    {
+        Assert.Equal(PostgresText.SchemaListing(named, "sales"), PostgresBoundary.Check(sql, "sales", ["sales", "payroll"]));
+        Assert.Null(PostgresBoundary.Check(sql, null, []));
     }
 
     [Fact]

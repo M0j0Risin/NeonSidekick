@@ -63,6 +63,9 @@ public sealed class PackageCommandsTests : IDisposable
     [InlineData("pip install x <(sqlite3 shop.db)")]
     [InlineData("pip install x & sqlite3 shop.db")]
     [InlineData("Install-Package @(sqlite3)")]
+    [InlineData("pip install (sqlite3 data.db 'DELETE FROM users')")]   // PowerShell runs a parenthesised argument (2026-10-11, the review)
+    [InlineData("npm i (psql -h pg01)")]
+    [InlineData("pip install x {sqlite3 shop.db}")]
     public void ALookAlike_OrAnOperator_IsKept(string line)
     {
         Assert.False(PackageCommands.IsPackageCommand(line), line);

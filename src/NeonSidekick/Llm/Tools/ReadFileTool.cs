@@ -48,9 +48,10 @@ public sealed class ReadFileTool : FileTool
     public string Describe(string path, int? startLine, int? maxLines)
     {
         var read = Files.ReadText(path, startLine, maxLines);
-        if (read.Outcome == FileOutcome.Ok)
+        if (read.Whole)
         {
-            Files.MarkSeen(path);   // write_file may replace it without a mode while it stays as read (2026-10-10)
+            // write_file may replace it without a mode while it stays as read (2026-10-10); a window or a cut read never (2026-10-11).
+            Files.MarkSeen(path);
         }
 
         return FileText.Read(read);

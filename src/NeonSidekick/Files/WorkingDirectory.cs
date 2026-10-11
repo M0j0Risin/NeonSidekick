@@ -167,7 +167,15 @@ public sealed record InfoResult(
     bool Bom = false,
     string Detail = "");
 
-public sealed record ReadResult(FileOutcome Outcome, string Relative, string Text, int TotalLines, int FromLine, int ToLine, bool Truncated, string Detail = "");
+/// <param name="LineCut">A line longer than <see cref="WorkingDirectory.MaxReadChars"/> came back cut (2026-10-11).</param>
+public sealed record ReadResult(FileOutcome Outcome, string Relative, string Text, int TotalLines, int FromLine, int ToLine, bool Truncated, string Detail = "", bool LineCut = false)
+{
+    /// <summary>
+    /// Every line of the file came back as it is (2026-10-11, the review: a window or a cut read marked the whole file seen, and
+    /// <c>write_file</c> without a mode then replaced it with the part the model had): only such a read marks the file seen.
+    /// </summary>
+    public bool Whole => Outcome == FileOutcome.Ok && !Truncated && !LineCut && (TotalLines == 0 || (FromLine == 1 && ToLine == TotalLines));
+}
 
 /// <param name="Image">The picture as the model gets it, its <see cref="ImageAttachment.Path"/> the relative one; null unless <paramref name="Outcome"/> is <see cref="FileOutcome.Ok"/>.</param>
 public sealed record ImageResult(FileOutcome Outcome, string Relative, ImageAttachment? Image, string Detail = "");
@@ -454,6 +462,11 @@ public sealed class WorkingDirectory
     // MarkSeen): write_file without a mode replaces one still as it was. Keyed by full path, case-blind where the file system is.
     private readonly Dictionary<string, (long Length, DateTime Written)> _seen = new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
     private readonly object _seenGate = new();
+
+    // Set for the flow of a turn that is not the main model's own (2026-10-11, the review: an advisor's read_file, over the chat's
+    // own tools and this same instance, marked a file the main model never saw, and its write_file without a mode then replaced it;
+    // a bot's the same both ways): such a flow neither marks a file nor finds one marked (SeenOff).
+    private static readonly AsyncLocal<bool> s_seenOff = new();
 
     /// <param name="root">The resolved root, read on every call (<see cref="Resolve(string, string)"/> over the effective settings).</param>
     /// <param name="time">The clock behind the dates shown.</param>
@@ -1390,17 +1403,18 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>
-    /// A text file, or a window of it: <paramref name="startLine"/> is 1-based, a negative one
-    /// counts from the end (<c>-20</c> = the last 20 lines); <paramref name="maxLines"/> null = all
-    /// that fit in <see cref="MaxReadChars"/>.
-    /// </summary>
-    /// <summary>
     /// <paramref name="relative"/> as the model has now seen it (2026-10-10, the user's call after a run's <c>write_file</c> was refused
-    /// twice for files the model had just read or written, each retry a whole request): <c>read_file</c>, <c>write_file</c> and
-    /// <c>patch_file</c> mark the file after they succeed, with its size and write time. Nothing for a file that is not there.
+    /// twice for files the model had just read or written, each retry a whole request): <c>read_file</c> (a whole read only), <c>write_file</c>
+    /// (create or overwrite, never an append: 2026-10-11, the review) and <c>patch_file</c> mark the file after they succeed, with its size
+    /// and write time. Nothing for a file that is not there, nor under <see cref="SeenOff"/>.
     /// </summary>
     public void MarkSeen(string relative)
     {
+        if (s_seenOff.Value)
+        {
+            return;
+        }
+
         if (Stamp(relative) is { } stamp)
         {
             lock (_seenGate)
@@ -1416,7 +1430,7 @@ public sealed class WorkingDirectory
     /// </summary>
     public bool WasSeen(string relative)
     {
-        if (Stamp(relative) is not { } stamp)
+        if (s_seenOff.Value || Stamp(relative) is not { } stamp)
         {
             return false;
         }
@@ -1435,6 +1449,29 @@ public sealed class WorkingDirectory
             _seen.Clear();
         }
     }
+
+    /// <summary>
+    /// Seen files off for the rest of the calling flow until disposed (2026-10-11, the review): an advisor's turn and a bot's reply run under
+    /// it, so their reads mark nothing and their <c>write_file</c> without a mode finds nothing marked, as before 2026-10-10. Flows
+    /// through awaits and into tasks started inside, never out to the caller.
+    /// </summary>
+    public static IDisposable SeenOff()
+    {
+        bool was = s_seenOff.Value;
+        s_seenOff.Value = true;
+        return new SeenRestore(was);
+    }
+
+    private sealed class SeenRestore(bool was) : IDisposable
+    {
+        public void Dispose() => s_seenOff.Value = was;
+    }
+
+    /// <summary>
+    /// A text file, or a window of it: <paramref name="startLine"/> is 1-based, a negative one
+    /// counts from the end (<c>-20</c> = the last 20 lines); <paramref name="maxLines"/> null = all
+    /// that fit in <see cref="MaxReadChars"/>.
+    /// </summary>
 
     private (string Full, long Length, DateTime Written)? Stamp(string relative)
     {
@@ -1504,6 +1541,7 @@ public sealed class WorkingDirectory
             int to = Math.Min(total, from + want - 1);
             var sb = new StringBuilder();
             bool truncated = false;
+            bool lineCut = false;
             int shown = from - 1;
             for (int i = from - 1; i < to; i++)
             {
@@ -1518,11 +1556,12 @@ public sealed class WorkingDirectory
                     sb.Append('\n');
                 }
 
+                lineCut |= lines[i].Length > MaxReadChars;
                 sb.Append(lines[i].Length > MaxReadChars ? lines[i][..MaxReadChars] : lines[i]);
                 shown = i + 1;
             }
 
-            return new ReadResult(FileOutcome.Ok, display, sb.ToString(), total, from, shown, truncated);
+            return new ReadResult(FileOutcome.Ok, display, sb.ToString(), total, from, shown, truncated, LineCut: lineCut);
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
