@@ -59,4 +59,20 @@ public partial class SidekickAppTests
         Assert.Contains("dba: The foreign key.", output);
         Assert.Contains("[error] \"nobody\" names no single advisor", output);
     }
+
+    [Fact]
+    public async Task Headless_AdvisorCommand_SendsTheRecentMessages_EvenUnderBrief()
+    {
+        ServerOn1234("llama");
+        HeadlessAdvisor();
+        _settings.Update(d => d.AdvisorContext = AdvisorContextMode.Brief);   // the model's calls' setting, not /advisor's (2026-10-10, the user's call)
+        _chat.EnqueueText("Postgres 16.");
+        _chat.EnqueueText("The foreign key.");
+
+        await Headless("which database do we run?\n/advisor dba Which index?\n");
+
+        string prompt = _chat.Requests[1][^1].Text;
+        Assert.StartsWith("Question: Which index?\n\nIts conversation so far", prompt, StringComparison.Ordinal);
+        Assert.Contains("\nassistant: Postgres 16.", prompt, StringComparison.Ordinal);
+    }
 }

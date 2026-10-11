@@ -8,7 +8,8 @@ namespace NeonSidekick.Advisors;
 /// choice; the profile advisors' since 2026-10-10, and theirs alone once that tool was retired the same day): what an advisor call
 /// sends besides the model's question. <c>brief</c> — the question and the model's own <c>context</c> argument, nothing else;
 /// <c>recent</c> — those and the last <see cref="AdvisorText.RecentMessages"/> messages of the conversation. Pure; an unknown saved
-/// word reads as <see cref="Default"/> with a warning.
+/// word reads as <see cref="Default"/> with a warning. The model's calls only since later on 2026-10-10 (the user's call): <c>/advisor</c>
+/// has no model to write a brief, so it always sends <see cref="AdvisorRecent.Lines"/>.
 /// </summary>
 public static class AdvisorContextMode
 {

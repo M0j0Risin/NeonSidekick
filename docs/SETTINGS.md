@@ -26,7 +26,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 * **Tabs:** the tab you are on is underlined. A small number after a tab's name (`Client³`) counts its settings that differ from the default; those settings' values show in the same colour.
 * **Scrolling:** a list cut by the window ends in a row like `▲▼ 13–25 of 58`, an arrow for each way there is more.
 * **`/tools` Offered:** a group that is off says why on its heading (the one reason that holds), and a tool switched on under it reads `(on)`.
-* **Second strip:** some tabs hold tabs of their own, shown as a second row of tabs under the first while you are on it: `/settings`' Client (Chat, Sessions, Botchat), Servers (Common, Http, Embedded, Docker, Anthropic, OpenAI) and Voice (TTS, STT), `/tools`' Standard, Files, Integrations, Databases and Media (their menus), `/skills`' Offered (all, profile, global) and `/mcp`'s Tools with two servers or more connected (all, then each server). ←/→ step through every one in turn and on into the next tab (on `/tools` from Options into File, from Obsidian into Docker, from YouTube into SQL, from Oracle into Print), Tab and Shift+Tab jump a whole tab and skip past them, and coming back finds the one you left. A click on a name shows it.
+* **Second strip:** some tabs hold tabs of their own, shown as a second row of tabs under the first while you are on it: `/settings`' Client (Chat, Sessions, Botchat), Servers (Common, Http, Embedded, Docker, Anthropic, OpenAI) and Voice (TTS, STT), `/tools`' Core, Files, Integrations, Databases and Devices (their menus), `/skills`' Offered (all, profile, global) and `/mcp`'s Tools with two servers or more connected (all, then each server). ←/→ step through every one in turn and on into the next tab (on `/tools` from Options into File, from Obsidian into Docker, from YouTube into SQL, from Oracle into Print), Tab and Shift+Tab jump a whole tab and skip past them, and coming back finds the one you left. A click on a name shows it.
 * **Mouse:** a click moves the cursor; a double-click picks a row or tab (on the input line, selects a word). The × at the top right works like ESC, and a double-click outside an open pane closes it. A double-click on a picture in the transcript opens it in the [picture viewer](COMMANDS.md#picture-viewer).
 
 ## The input line
@@ -141,7 +141,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | performance bar (anywhere on it) | *Show performance bar* has a meter checked | `/settings` |
 
 ## Panes
-* `/settings`: the app (Client: Chat, Sessions, Botchat), the LLM and its servers (Servers: Common, Http, Embedded, Docker, Anthropic with Claude Code and `/claude`, OpenAI), voice (Voice: TTS, STT) and the profile advisors (Advisors)
+* `/settings`: the app (Client: Chat, Sessions, Botchat), the LLM and its servers (Servers: Common, Http, Embedded, Docker, Anthropic with Claude Code and `/claude`, OpenAI), the profile advisors (Advisors) and voice (Voice: TTS, STT)
 * `/skills`: agent skills and self-reflection
 * `/tools`: the model's tools
 * `/mcp`: external MCP servers
@@ -450,9 +450,9 @@ Claude Code as a `/server` choice and for `/claude` (you message it), then the A
 |---|---|---|
 | Claude Code executable | The Claude Code CLI, for `/claude` and the Claude Code server. Blank looks on the PATH and in `%USERPROFILE%\.local\bin` (`~/.local/bin` on a Mac); a path you set must exist. | (looked up) |
 | Claude Code server | Offers Claude Code on `/server` while it is found (*Claude Code executable*, or the PATH). Off (or missing) while it is the saved URL, the app scans as if the URL were blank, and a running Claude Code server stops. | off |
-| Claude Code slash command permissions | What `/claude` may do: `read-only` (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), or `read-write` (its usual tools with file edits, no commands). Anything else is denied, never asked. It works in the working directory but outside the app's sandbox and approvals. | `read-only` |
-| Claude Code slash command model | `/claude`'s `--model`: Claude Code's default, `fable`, `opus`, `sonnet`, `haiku`, or *Other…*. | (Claude Code's default) |
-| Claude Code slash command effort | `/claude`'s `--effort`: Claude Code's default, `low`, `medium`, `high`, `xhigh` or `max`. | (Claude Code's default) |
+| Claude Code command permissions | What `/claude` may do: `read-only` (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), or `read-write` (its usual tools with file edits, no commands). Anything else is denied, never asked. It works in the working directory but outside the app's sandbox and approvals. | `read-only` |
+| Claude Code command model | `/claude`'s `--model`: Claude Code's default, `fable`, `opus`, `sonnet`, `haiku`, or *Other…*. | (Claude Code's default) |
+| Claude Code command effort | `/claude`'s `--effort`: Claude Code's default, `low`, `medium`, `high`, `xhigh` or `max`. | (Claude Code's default) |
 | Anthropic API | Offers the Anthropic API on `/server` while a key is set. Off (or keyless) while it is the saved URL, the app scans as if the URL were blank. | off |
 | Anthropic API key | Your Anthropic key (`sk-ant-…`), typed masked and saved encrypted (DPAPI on Windows, the Keychain on a Mac). An empty entry clears it. | (none) |
 | Anthropic API max tokens | The output cap per request, thinking included (1,024–128,000). | 32,000 |
@@ -495,6 +495,25 @@ The OpenAI API as a `/server` choice, over the Responses API (stateless: nothing
 * *LLM sampling* is not sent (the reasoning models refuse a temperature), nor is another server's thinking.
 * The context window comes from the app's model table (the model list names none); *LLM context length* overrides it. `/usage` adds *Cache* and *Cost* rows: an estimate at OpenAI's list prices of 2026-10-03, long-context prices past 272K prompt tokens, cache writes from GPT-5.6 on.
 
+### Advisors
+
+Other profiles this one consults, each in a role you give it: `neon_advisor` for the model, `/advisor` for you (see [TOOLS.md](TOOLS.md#advisors) and [COMMANDS.md](COMMANDS.md#advisor)). An advisor answers on **its own profile's** server, model, key, reasoning and sampling, under its own `persona.md` and its role. It may call this chat's read-only tools (never `ask_user`, the camera, the screen or another advisor), and it remembers its earlier questions and answers for the session. The pane heads its runs **The panel**, **Each call** and **Threads and servers**.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Advisors enabled | Offers the model `neon_advisor` while the list holds an advisor. `/advisor` works either way. | off |
+| Advisor list | The advisors: a profile and its role (free text). *+ Add an advisor…* picks a profile (not this one, not one already listed) and asks its role; Enter on an advisor changes its role or removes it. One whose profile is gone shows `(missing)` and is refused. With the cursor on the row, the description band lists the advisors one a line, each with the kind of server its profile is on and its model (`doug — expert .NET solution architect · docker · Qwen3-32B`; the kind is `claudecode`, `embedded`, `docker`, `anthropic`, `openai`, `http` (any other server by URL) or `scan` (no URL saved)); the editor's rows show the same in columns. | (none) |
+| Advisor context | What the model's calls send. `brief`: the model's question and context. `recent`: also the last 10 messages (tool results cut to 500 characters). `/advisor` always sends the last 10. | `brief` |
+| Advisor calls per turn | The most advisor calls one reply may make, all advisors together (1–10). | 2 |
+| Advisor tool iterations | Tool round trips an advisor may make before answering (0–10; 0 = text only). Its last round is always asked for words. | 4 |
+| Advisor confirm | Each call waits for your yes on the pane. Headless runs refuse the calls. | off |
+| Advisor thread length | Earlier questions and answers each advisor remembers (1–50); the oldest go first. Saved with the session; `/new` starts them over. | 10 |
+| Advisor embedded mode | For an advisor on the embedded server naming another model than the one running. `parent-server`: it answers on the running model, and the footer names both. `multi-server`: an extra `llama-server` for its model, kept for its later calls until *Embedded servers enabled* goes off, a botchat stops its extras, or you quit. | `parent-server` |
+
+* **Servers:** a blank *LLM URL* in the advisor's profile borrows this chat's server (with its own *LLM model* if set). A Docker advisor only shares the container already running, which keeps running when this chat moves to the Claude Code server, a hosted API or another machine's server. An embedded advisor needs this profile's *Embedded servers enabled*. With no embedded server running, the advisor's model starts as the main one, and the next connect to another server stops it.
+* **On the Claude Code server:** the server is one `claude` process, so one advisor at a time may run its turns there, with the read-only tools offered over the same MCP relay the chat's own turns use: the first listed advisor whose profile is on it, while this chat is on another server. Any other advisor on Claude Code answers text-only, a one-shot `claude -p` with no tools, its footer saying why (`no tools: this chat is on the Claude Code server`, or `no tools: dba is the Claude Code advisor with tools`). The *Advisor list*'s editor marks each one `claudecode · <model> · tools` or `· text only`. The one with tools keeps its own Claude conversation, saved with the session; its first call starts the `claude` process, and this chat reconnecting stops it (the next call resumes).
+* **Output caps and headers** (Anthropic and OpenAI max tokens, prompt caching, organization, project) are the advisor profile's own when it has its own URL; a borrowed server keeps this profile's.
+
 ### Voice
 
 Speech out and voice in, two tabs on one, each a tab of the second strip (TTS · STT): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10.
@@ -531,25 +550,6 @@ Voice input sets up in the background (🎙️ on the hint row); until it's read
 | STT interrupt | Saying the wake phrase while a reply is spoken cuts it short and listens (`/stt interrupt`). | off |
 | STT interrupt echo guard | Ignores the assistant's own voice: speech this close to the wake phrase that it just spoke is an echo (50–100 %; 100 = the exact phrase only). | 100 |
 | STT interrupt confirm | How long the phrase must hold in the recogniser's interim results before it counts (0–2000 ms). | 200 |
-
-### Advisors
-
-Other profiles this one consults, each in a role you give it: `neon_advisor` for the model, `/advisor` for you (see [TOOLS.md](TOOLS.md#advisors) and [COMMANDS.md](COMMANDS.md#advisor)). An advisor answers on **its own profile's** server, model, key, reasoning and sampling, under its own `persona.md` and its role. It may call this chat's read-only tools (never `ask_user`, the camera, the screen or another advisor), and it remembers its earlier questions and answers for the session. The pane heads its runs **The panel**, **Each call** and **Threads and servers**.
-
-| Setting | What it does | Default |
-|---|---|---|
-| Advisors enabled | Offers the model `neon_advisor` while the list holds an advisor. `/advisor` works either way. | off |
-| Advisor list | The advisors: a profile and its role (free text). *+ Add an advisor…* picks a profile (not this one, not one already listed) and asks its role; Enter on an advisor changes its role or removes it. One whose profile is gone shows `(missing)` and is refused. With the cursor on the row, the description band lists the advisors one a line, each with the kind of server its profile is on and its model (`doug — expert .NET solution architect · docker · Qwen3-32B`; the kind is `claudecode`, `embedded`, `docker`, `anthropic`, `openai`, `http` (any other server by URL) or `scan` (no URL saved)); the editor's rows show the same in columns. | (none) |
-| Advisor context | `brief`: the model's question and context. `recent`: also the last 10 messages (tool results cut to 500 characters). | `brief` |
-| Advisor calls per turn | The most advisor calls one reply may make, all advisors together (1–10). | 2 |
-| Advisor tool iterations | Tool round trips an advisor may make before answering (0–10; 0 = text only). Its last round is always asked for words. | 4 |
-| Advisor confirm | Each call waits for your yes on the pane. Headless runs refuse the calls. | off |
-| Advisor thread length | Earlier questions and answers each advisor remembers (1–50); the oldest go first. Saved with the session; `/new` starts them over. | 10 |
-| Advisor embedded mode | For an advisor on the embedded server naming another model than the one running. `parent-server`: it answers on the running model, and the footer names both. `multi-server`: an extra `llama-server` for its model, kept for its later calls until *Embedded servers enabled* goes off, a botchat stops its extras, or you quit. | `parent-server` |
-
-* **Servers:** a blank *LLM URL* in the advisor's profile borrows this chat's server (with its own *LLM model* if set). A Docker advisor only shares the container already running, which keeps running when this chat moves to the Claude Code server, a hosted API or another machine's server. An embedded advisor needs this profile's *Embedded servers enabled*. With no embedded server running, the advisor's model starts as the main one, and the next connect to another server stops it.
-* **On the Claude Code server:** the server is one `claude` process, so one advisor at a time may run its turns there, with the read-only tools offered over the same MCP relay the chat's own turns use: the first listed advisor whose profile is on it, while this chat is on another server. Any other advisor on Claude Code answers text-only, a one-shot `claude -p` with no tools, its footer saying why (`no tools: this chat is on the Claude Code server`, or `no tools: dba is the Claude Code advisor with tools`). The *Advisor list*'s editor marks each one `claudecode · <model> · tools` or `· text only`. The one with tools keeps its own Claude conversation, saved with the session; its first call starts the `claude` process, and this chat reconnecting stops it (the next call resumes).
-* **Output caps and headers** (Anthropic and OpenAI max tokens, prompt caching, organization, project) are the advisor profile's own when it has its own URL; a borrowed server keeps this profile's.
 
 ## Skills settings (`/skills`)
 
@@ -657,9 +657,9 @@ On `/skills`, Enter on a skill, then `disable`, switches it off without removing
 
 Every tool, grouped, the groups in alphabetical order, with the description the model reads. Enter or Space switches one; a group whose switch is off is dim. The Help group (`neon_help`) has no switch of its own, so turn it off here. In a new profile, `gitlib_delete`, `zip`, `unzip`, `unc_delete`, `docker_remove`, `docker_prune` and `ha_todo` start off.
 
-### Standard
+### Core
 
-The tools most profiles use and the pane's own options, four menus on one tab, each a tab of the second strip (Ask · Web · Shell · Options): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10.
+The tools most profiles use and the pane's own options, four menus on one tab, each a tab of the second strip (Ask · Web · Shell · Options): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10; the tab was Standard until later that day.
 
 #### Ask
 
@@ -828,7 +828,7 @@ The pane heads its run **Vault**.
 
 ### Integrations
 
-The apps and services the tools reach, four menus on one tab, each a tab of the second strip (Docker · HomeAssistant · ComfyUI · YouTube): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10 (ComfyUI and YouTube on Media from 2026-10-09). `/claude`'s settings are on `/settings` › Servers › Anthropic.
+The apps and services the tools reach, four menus on one tab, each a tab of the second strip (Docker · HomeAssistant · ComfyUI · YouTube): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10 (ComfyUI and YouTube on Devices, then called Media, from 2026-10-09). `/claude`'s settings are on `/settings` › Servers › Anthropic.
 
 #### Docker
 
@@ -892,7 +892,7 @@ The pane heads its runs **Connection**, **Search** and **Playing**.
 
 ### Databases
 
-The five database families, five menus on one tab, as on Media: a second strip under the first (SQL · MySQL · SQLite · PostgreSQL · Oracle), ←/→ walking them. Each was a tab of its own until 2026-10-09; the tab was Database until 2026-10-10.
+The five database families, five menus on one tab, as on Devices: a second strip under the first (SQL · MySQL · SQLite · PostgreSQL · Oracle), ←/→ walking them. Each was a tab of its own until 2026-10-09; the tab was Database until 2026-10-10.
 
 #### SQL
 
@@ -987,9 +987,9 @@ The pane heads its runs **Access**, **Connections**, **Queries** and **Files**.
 | Oracle connections (profile) | As *SQL connections (profile)*. | (none) |
 | Oracle connections (global) | As *SQL connections (global)*. | (none) |
 
-### Media
+### Devices
 
-The picture and print tools, three menus on one tab, each a tab of the second strip under the first (Print · Camera · Screen): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-09; ComfyUI and YouTube are on Integrations since 2026-10-10.
+The printer, camera and screen tools, three menus on one tab, each a tab of the second strip under the first (Print · Camera · Screen): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-09; ComfyUI and YouTube are on Integrations since 2026-10-10; the tab was Media until later that day.
 
 #### Print
 

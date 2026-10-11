@@ -108,6 +108,24 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task AdvisorCommand_SendsTheRecentMessages_EvenUnderBrief()
+    {
+        AdvisorProfiles(on: false);
+        _settings.Update(d => d.AdvisorContext = AdvisorContextMode.Brief);   // the model's calls' setting, not /advisor's (2026-10-10, the user's call)
+        _chat.EnqueueText("Postgres 16.");
+        _chat.EnqueueText("Index the foreign key.");   // the advisor, on the borrowed server
+        PushLine("which database do we run?");
+        PushLine("/advisor dba Which index?");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        string prompt = _chat.Requests[1][^1].Text;
+        Assert.StartsWith("Question: Which index?\n\nIts conversation so far", prompt, StringComparison.Ordinal);
+        Assert.Contains("\nassistant: Postgres 16.", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AdvisorCommand_Lists_Asks_AndThePairJoinsTheHistory_SwitchOffOrNot()
     {
         AdvisorProfiles(on: false);

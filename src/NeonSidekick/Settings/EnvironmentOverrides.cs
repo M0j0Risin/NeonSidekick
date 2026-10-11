@@ -117,7 +117,7 @@ public sealed class EnvironmentOverrides
     /// <summary>The Claude Code CLI's path for <c>/claude</c>, or null (2026-09-27). Checked where it is used (a path that is no file is <c>/claude</c>'s error), not here.</summary>
     public string? ClaudeCodeExecutable => Read(ClaudeCodeExeVariable);
 
-    /// <summary><c>Claude Code slash command permissions</c> for this launch as one of <see cref="Claude.ClaudePermission.Names"/> (lowercased), or null when unset or not a level (2026-09-27: a scripted headless run says <c>read-write</c> without saving it).</summary>
+    /// <summary><c>Claude Code command permissions</c> for this launch as one of <see cref="Claude.ClaudePermission.Names"/> (lowercased), or null when unset or not a level (2026-09-27: a scripted headless run says <c>read-write</c> without saving it).</summary>
     public string? ClaudeCodePermissions => ReadClaudePermissions(ClaudeCodePermissionsVariable);
 
     /// <summary>Whisper model name or path, or null. Validated where it is used, not here.</summary>

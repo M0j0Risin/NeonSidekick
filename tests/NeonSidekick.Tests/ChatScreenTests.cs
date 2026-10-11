@@ -4650,7 +4650,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ", output);
         Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.ComfyTools) + " ", output);   // a menu on Media since 2026-10-09 (its own tab from 2026-09-24), a sub-tab the arrows walk since 2026-10-10 (ToolsMenuTests)
         Assert.DoesNotContain("Claude Code executable", output);   // /claude's rows here from 2026-09-27 (off /settings), the advisor's under them; both gone from /tools on 2026-10-10 (the four to /settings › Servers › Anthropic)
         Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
@@ -4706,7 +4706,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ", output);
         Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.ComfyTools) + " ", output);   // a menu on Media since 2026-10-09 (its own tab from 2026-09-24), a sub-tab the arrows walk since 2026-10-10 (ToolsMenuTests)
         Assert.DoesNotContain("Claude Code executable", output);   // /claude's rows here from 2026-09-27 (off /settings), the advisor's under them; both gone from /tools on 2026-10-10 (the four to /settings › Servers › Anthropic)
         Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
@@ -5094,7 +5094,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ·     zip                   off  ", output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", output);
         Assert.Contains("  ·   Options\n  ·     $-mention enabled: on\n", output);
-        Assert.Contains("  · Standard\n  ·   Ask\n  ·     Ask user: on\n", output);
+        Assert.Contains("  · Core\n  ·   Ask\n  ·     Ask user: on\n", output);
         Assert.Contains("  · Files\n  ·   File\n  ·     File tools: on\n", output);   // the Files group's File menu since 2026-10-10
         Assert.Contains("  ·   Web\n  ·     Web tools: on\n", output);
         Assert.Empty(_chat.Requests);
@@ -5144,7 +5144,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ·     zip                   off  ", output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", output);
         Assert.Contains("  ·   Options\n  ·     $-mention enabled: on\n", output);
-        Assert.Contains("  · Standard\n  ·   Ask\n  ·     Ask user: on\n", output);
+        Assert.Contains("  · Core\n  ·   Ask\n  ·     Ask user: on\n", output);
         Assert.Contains("  · Files\n  ·   File\n  ·     File tools: on\n", output);   // the Files group's File menu since 2026-10-10
         Assert.Contains("  ·   Web\n  ·     Web tools: on\n", output);
         Assert.Empty(_chat.Requests);
@@ -5168,7 +5168,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ", output);
         Assert.Contains("  · " + CameraCaptureTool.ToolName + ": off", output);
         Assert.Equal([CameraCaptureTool.ToolName], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -6402,7 +6402,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        const string strip = SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ";   // the Client group since later on 2026-10-10; six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
+        const string strip = SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ";   // the Client group since later on 2026-10-10; six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
         Assert.Contains("\n" + Titled(strip) + "\n" + Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["Common", "Http", "Embedded", "Docker", "Anthropic", "OpenAI"], 0, 240)[0]) + "\n  · 🖥️ LLM offer tools: off\n", output);   // under the Servers group's second strip (2026-10-10)
         Assert.Contains("  · " + ChatScreen.ToolsChangedNotice(false) + "\n", output);
         Assert.Equal("(LLM offer tools off; conversation cleared)", ChatScreen.ToolsChangedNotice(false));
@@ -9572,7 +9572,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Yolo, false), cwd, 239), output);
         Assert.DoesNotContain(ChatScreen.CmdAskToolGlyph, output);
-        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n", StringComparison.Ordinal);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n", StringComparison.Ordinal);
         int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
         Assert.True(settings > 0 && allowed > settings, output);
         Assert.Empty(_chat.Requests);
@@ -9601,7 +9601,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Yolo, false), cwd, 239), output);
         Assert.DoesNotContain(ChatScreen.CmdAskToolGlyph, output);
-        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n", StringComparison.Ordinal);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n", StringComparison.Ordinal);
         int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
         Assert.True(settings > 0 && allowed > settings, output);
         Assert.Empty(_chat.Requests);
@@ -9654,8 +9654,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("disabled", _settings.Current.MemoryMode);
         Assert.False(_settings.Current.ShellPolice);
         string memory = "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n";
-        string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -10295,7 +10295,7 @@ public partial class ChatScreenTests : IDisposable
 
         string rule = new(ScreenPane.RuleGlyph, 240);
         // The list in the pane under the rule, its tab strip and its own hint; the toggle and the save on its status line.
-        const string strip = SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ";   // the Client group since later on 2026-10-10; six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
+        const string strip = SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ";   // the Client group since later on 2026-10-10; six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
         Assert.Contains(rule + "\n" + Titled(strip) + "\n" + Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["Chat", "Sessions", "Botchat"], 0, 240)[0]) + "\n \n" + HeadingRow("── Who and where") + "\n▸ Profile", output);   // the Client group's second strip (later on 2026-10-10)
         AssertPaneEnds(output, rule + "\n" + Row(SettingsMenu.SettingsTabKeys));
         Assert.Contains("\n" + Titled(strip) + "\n" + Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["Chat", "Sessions", "Botchat"], 0, 240)[0]) + "\n  · Memory mode: read-only\n", output);
@@ -10684,7 +10684,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        const string strip = SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ";   // the Client group since later on 2026-10-10; six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
+        const string strip = SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ";   // the Client group since later on 2026-10-10; six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
         Assert.Contains("\n" + Titled(strip) + "\n" + Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["Chat", "Sessions", "Botchat"], 0, 240)[0]) + "\n \n" + HeadingRow("── Who and where") + "\n▸ Profile", output);   // the Client group's second strip (later on 2026-10-10)
         Assert.DoesNotContain("› /settings", output);
         Assert.Contains("› hi!", output);
@@ -10722,7 +10722,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.StartsWith("25 tokens", UsageText.HintPart(_session.Usage, _session.ContextLength));
         int usage = output.IndexOf("\n" + Titled(UsageText.Label) + "\n", StringComparison.Ordinal);
-        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n", StringComparison.Ordinal);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n", StringComparison.Ordinal);
         Assert.True(usage > 0 && settings > usage, output);
         Assert.DoesNotContain("› /usage", output);
         Assert.Contains("› ok!", output);
@@ -10789,8 +10789,8 @@ public partial class ChatScreenTests : IDisposable
         string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
-        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ", StringComparison.Ordinal);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + " │ Servers · Tools · Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + " │ Offered · Reflection · Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n", StringComparison.Ordinal);
@@ -10799,11 +10799,11 @@ public partial class ChatScreenTests : IDisposable
         int memory = output.IndexOf("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n", StringComparison.Ordinal);
         int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
         int police = output.IndexOf("\n" + Titled(PoliceTitle) + "\n", StringComparison.Ordinal);
-        int blanks = output.LastIndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n", StringComparison.Ordinal);
+        int blanks = output.LastIndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n", StringComparison.Ordinal);
         int folder = output.IndexOf("\n" + Titled(FolderText.Title + " │ " + FolderText.CollapseAllButton + " ") + "\n" + cwd + "\n", StringComparison.Ordinal);
         Assert.True(settings > 0 && tools > settings && mcp > tools && skills > mcp && sys > skills && sessions > sys && usage > sessions && memory > usage && allowed > memory && police > allowed && blanks > police && folder > blanks, output);
         Assert.Equal(1, output.Split("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n").Length - 1);
-        Assert.Equal(2, output.Split("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n").Length - 1);   // the gear and the blanks
+        Assert.Equal(2, output.Split("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n").Length - 1);   // the gear and the blanks
         Assert.DoesNotContain(MemoryMenu.EmptyNotice, output);
         Assert.Contains("  · " + FolderText.KeptNotice + "\n", output);
         Assert.All(new[] { "/settings", "/skills", "/tools", "/mcp", "/sys", "/sessions", "/memory", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
@@ -10864,8 +10864,8 @@ public partial class ChatScreenTests : IDisposable
         string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
-        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ", StringComparison.Ordinal);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + " │ Servers · Tools · Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + " │ Offered · Reflection · Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n", StringComparison.Ordinal);
@@ -10874,11 +10874,11 @@ public partial class ChatScreenTests : IDisposable
         int memory = output.IndexOf("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n", StringComparison.Ordinal);
         int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
         int police = output.IndexOf("\n" + Titled(PoliceTitle) + "\n", StringComparison.Ordinal);
-        int blanks = output.LastIndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n", StringComparison.Ordinal);
+        int blanks = output.LastIndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n", StringComparison.Ordinal);
         int folder = output.IndexOf("\n" + Titled(FolderText.Title + " │ " + FolderText.CollapseAllButton + " ") + "\n" + cwd + "\n", StringComparison.Ordinal);
         Assert.True(settings > 0 && tools > settings && mcp > tools && skills > mcp && sys > skills && sessions > sys && usage > sessions && memory > usage && allowed > memory && police > allowed && blanks > police && folder > blanks, output);
         Assert.Equal(1, output.Split("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n").Length - 1);
-        Assert.Equal(2, output.Split("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n").Length - 1);   // the gear and the blanks
+        Assert.Equal(2, output.Split("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n").Length - 1);   // the gear and the blanks
         Assert.DoesNotContain(MemoryMenu.EmptyNotice, output);
         Assert.Contains("  · " + FolderText.KeptNotice + "\n", output);
         Assert.All(new[] { "/settings", "/skills", "/tools", "/mcp", "/sys", "/sessions", "/memory", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
@@ -10964,8 +10964,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -11052,8 +11052,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -11125,7 +11125,7 @@ public partial class ChatScreenTests : IDisposable
 
         string model = "\n" + Titled(SettingsMenu.ServerTitle) + "\n";
         string reasoning = "\n" + Titled(SettingsMenu.ReasoningTitle) + "\n";
-        string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
         string folder = "\n" + Titled(FolderText.Title + " │ " + FolderText.CollapseAllButton + " ") + "\n";
         Assert.Equal(2, output.Split(model).Length - 1);
         Assert.Equal(1, output.Split(reasoning).Length - 1);
@@ -13141,10 +13141,10 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
-        string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         int at = output.IndexOf(tools, StringComparison.Ordinal);
         Assert.True(at > 0, output);
@@ -13201,10 +13201,10 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Standard · Files · Integrations · Databases · Media ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
-        string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Voice · Advisors ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         int at = output.IndexOf(tools, StringComparison.Ordinal);
         Assert.True(at > 0, output);
@@ -17962,7 +17962,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Standard ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Core ", output);
         Assert.DoesNotContain("› /tools", output);
         Assert.Single(_chat.Requests);
         Assert.Equal("keep", UserText(_chat.Requests[0]));
@@ -18232,7 +18232,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Equal(1, Refreshes(output));     // /clear's wipe
-        Assert.Contains(ToolsText.Label + " │ Offered · Standard ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Core ", output);
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("b", UserText(_chat.Requests[1]));   // the one user message: the conversation forgotten
     }

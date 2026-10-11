@@ -14,7 +14,7 @@ public static class HelpText
     /// <summary>The group <c>neon_help</c> sits in on <c>/tools</c>' Offered tab and <c>/sys</c>: no switch of its own, the tool switched off by name. Pinned.</summary>
     public const string GroupTitle = "Help";
 
-    /// <summary>Between a pane, a tab, a menu and a row in a setting's place: <c>/tools › Media › Camera › Camera tool</c>.</summary>
+    /// <summary>Between a pane, a tab, a menu and a row in a setting's place: <c>/tools › Devices › Camera › Camera tool</c>.</summary>
     public const string PathSeparator = " › ";
 
     /// <summary>The cap on one answer, in characters: the command list (<see cref="CommandList"/>) and the longest tab fit, and a broad query is cut with <see cref="CutNote"/>.</summary>
@@ -24,8 +24,8 @@ public static class HelpText
     public const int MaxMatches = 8;
 
     // The panes' one-liners: README's Available Panes, kept short.
-    public const string SettingsPaneSummary = "the app's settings: the profile and screen (Chat), sessions (Sessions) and /botchat (Botchat), a tab each under Client; the LLM settings every server reads (Common) and those only an OpenAI-compatible HTTP server reads (Http), the embedded model, Docker servers, the Anthropic and OpenAI APIs, the Claude Code server and /claude (Servers, a tab each on a second strip); speech output and voice input (Voice: TTS and STT); the profile advisors (Advisors)";
-    public const string ToolsPaneSummary = "the model's tools: Offered lists every tool, on or off (Enter flips one); Standard, Files, Integrations, Database and Media hold each tool group's settings, a menu per group on a second strip (←/→ walk every menu, Tab skips past a group), the pane's own Options last under Standard";
+    public const string SettingsPaneSummary = "the app's settings: the profile and screen (Chat), sessions (Sessions) and /botchat (Botchat), a tab each under Client; the LLM settings every server reads (Common) and those only an OpenAI-compatible HTTP server reads (Http), the embedded model, Docker servers, the Anthropic and OpenAI APIs, the Claude Code server and /claude (Servers, a tab each on a second strip); the profile advisors (Advisors); speech output and voice input (Voice: TTS and STT)";
+    public const string ToolsPaneSummary = "the model's tools: Offered lists every tool, on or off (Enter flips one); Core, Files, Integrations, Databases and Devices hold each tool group's settings, a menu per group on a second strip (←/→ walk every menu, Tab skips past a group), the pane's own Options last under Core";
     public const string SkillsPaneSummary = "agent skills (SKILL.md folders) and the model's self-reflection";
     public const string McpPaneSummary = "external MCP servers: Servers lists and edits them, Tools shows what each offers, Options holds the switch and timeout";
 

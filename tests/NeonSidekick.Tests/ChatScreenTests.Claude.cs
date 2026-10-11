@@ -120,7 +120,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains("  ✗ " + ClaudeText.UsageError, output);
-        Assert.Contains("  · Claude was denied Bash (Claude Code slash command permissions: read-write).", output);
+        Assert.Contains("  · Claude was denied Bash (Claude Code command permissions: read-write).", output);
         Assert.Equal(ClaudePermissionLevel.ReadWrite, Assert.Single(_claudeCli.Requests).Permission);
     }
 

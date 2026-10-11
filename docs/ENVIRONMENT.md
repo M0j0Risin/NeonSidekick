@@ -63,7 +63,7 @@ Every variable starts with `NEONSIDEKICK_`. Each overrides a setting for one lau
 | Variable | Overrides | Accepts |
 |---|---|---|
 | `NEONSIDEKICK_CLAUDE_CODE_EXE` | Claude Code executable | The Claude Code CLI's full path. |
-| `NEONSIDEKICK_CLAUDE_CODE_PERMISSIONS` | Claude Code slash command permissions | `read-only`, `read-write`. |
+| `NEONSIDEKICK_CLAUDE_CODE_PERMISSIONS` | Claude Code command permissions | `read-only`, `read-write`. |
 | `NEONSIDEKICK_ADVISORS` | Advisors enabled (the profile advisors' `neon_advisor`) | on/off |
 | `NEONSIDEKICK_ANTHROPIC_API` | Anthropic API | on/off |
 | `NEONSIDEKICK_ANTHROPIC_API_KEY` | Anthropic API key | The key as issued. Never logged. |

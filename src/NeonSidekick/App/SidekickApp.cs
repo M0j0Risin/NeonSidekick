@@ -1928,7 +1928,7 @@ public sealed class SidekickApp
             return null;
         }
 
-        var recent = Advisors.AdvisorContextMode.IsRecent(effective.AdvisorContext) ? Advisors.AdvisorRecent.Lines(session.History.Messages) : null;
+        var recent = Advisors.AdvisorRecent.Lines(session.History.Messages);   // always, as the screen's /advisor (2026-10-10, the user's call)
         string answer = await tool.AskAsync(advisor!, question, "", recent, effective, cancellationToken).ConfigureAwait(false);
         if (Advisors.AdvisorText.IsError(answer))
         {

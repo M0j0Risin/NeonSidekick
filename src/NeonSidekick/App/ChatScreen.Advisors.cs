@@ -112,7 +112,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// <c>/advisor</c> (2026-10-10, the user's own hand on the profile advisors): bare, the advisors listed; <c>/advisor &lt;name&gt;
     /// &lt;question&gt;</c>, the question put to that one through <c>neon_advisor</c>'s own path — its thread, its link, this chat's
-    /// read-only tools, <c>Advisor context</c> — on or off whatever <c>Advisors enabled</c> says, never capped or confirmed (it is the
+    /// read-only tools, the conversation's last messages always (<c>Advisor context</c> is the model's calls'; the user's call, later on 2026-10-10) — on or off whatever <c>Advisors enabled</c> says, never capped or confirmed (it is the
     /// user's own ask). ESC cancels. The pair joins the model's history tagged (<see cref="AdvisorText.HistoryUser"/>), as
     /// <c>/claude</c>'s does, and the store as a turn.
     /// </summary>
@@ -157,7 +157,9 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var recent = AdvisorContextMode.IsRecent(effective.AdvisorContext) ? AdvisorRecent.Lines(_session.History.Messages) : null;
+        // Always the recent messages (2026-10-10, the user's call): no model writes a brief for /advisor, so under Advisor context
+        // brief the advisor knew nothing of the conversation; that setting is the model's calls' alone.
+        var recent = AdvisorRecent.Lines(_session.History.Messages);
         using var askCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
         using var killScope = BeginKillScope(askCts);

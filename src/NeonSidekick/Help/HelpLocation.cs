@@ -13,10 +13,10 @@ public sealed record HelpPane(string Command, string Summary, IReadOnlyList<stri
 /// </summary>
 public sealed record HelpRow(SettingsField Field, string Pane, string Tab, string Label, string? Menu = null)
 {
-    /// <summary><c>/tools › Media › Camera › Camera watch interval (s)</c> (<c>/tools › Camera › …</c> until 2026-10-09). Pinned.</summary>
+    /// <summary><c>/tools › Devices › Camera › Camera watch interval (s)</c> (<c>/tools › Camera › …</c> until 2026-10-09; Media for Devices until later on 2026-10-10). Pinned.</summary>
     public string Path => Pane + HelpText.PathSeparator + Place + HelpText.PathSeparator + Label;
 
-    /// <summary>The tab, and the menu on it when there is one: <c>Media › Camera</c>.</summary>
+    /// <summary>The tab, and the menu on it when there is one: <c>Devices › Camera</c>.</summary>
     public string Place => Menu is null ? Tab : Tab + HelpText.PathSeparator + Menu;
 }
 
@@ -27,7 +27,7 @@ public sealed record HelpRow(SettingsField Field, string Pane, string Tab, strin
 /// <see cref="SkillsMenu.SettingsTabTitles"/>, <see cref="SettingsMenu.McpTabFields"/> as <c>/mcp</c>' Options — so a row
 /// moved to another tab is found there with nothing written here. The four lists are every <see cref="SettingsField"/> once
 /// (pinned by the settings tests), so every field has one row. <c>/tools</c>' lists are menus since 2026-10-09, placed on the strip by
-/// <see cref="ToolsText.TabMenus"/>: a menu on Media or Database names the tab and itself (<see cref="HelpRow.Menu"/>).
+/// <see cref="ToolsText.TabMenus"/>: a menu on a group tab (Devices, Databases…) names the tab and itself (<see cref="HelpRow.Menu"/>).
 /// </summary>
 internal static class HelpLocation
 {
@@ -58,7 +58,7 @@ internal static class HelpLocation
     public static IReadOnlyList<HelpRow> OnTab(string pane, string tab) =>
         Rows.Where(r => string.Equals(r.Pane, pane, StringComparison.Ordinal) && string.Equals(r.Tab, tab, StringComparison.Ordinal)).ToList();
 
-    /// <summary>The menus on a pane's group tabs, each with its tab (2026-10-09): <c>/tools</c>' Files, Integrations, Database and Media, <c>/settings</c>' Client, Servers and Voice (2026-10-10).</summary>
+    /// <summary>The menus on a pane's group tabs, each with its tab (2026-10-09): <c>/tools</c>' Core, Files, Integrations, Databases and Devices, <c>/settings</c>' Client, Servers and Voice (2026-10-10).</summary>
     public static IReadOnlyList<(string Tab, string Menu)> Menus(string pane) =>
         Rows.Where(r => string.Equals(r.Pane, pane, StringComparison.Ordinal) && r.Menu is not null).Select(r => (r.Tab, r.Menu!)).Distinct().ToList();
 

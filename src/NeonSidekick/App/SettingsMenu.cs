@@ -1066,13 +1066,13 @@ public enum SettingsTab
     /// <summary>The OpenAI API's rows (2026-10-03, the user's ask): the switch, the key, the output cap, the organization and the project.</summary>
     OpenAI,
 
+    /// <summary>The profile advisors' rows (2026-10-10, the user's ask: a tab of its own under <c>/settings</c>, after Botchat; after STT once Sessions and Botchat moved under Client, later that day; after OpenAI and before TTS later still, the user's order): the switch, the list, then how a call goes.</summary>
+    Advisors,
+
     Tts,
 
-    /// <summary>The voice rows, last since 2026-09-19 (Ask, Files and Web after it until then) until the Sessions and Botchat tabs came after them; before Advisors since Sessions and Botchat moved under Client (2026-10-10).</summary>
+    /// <summary>The voice rows, last since 2026-09-19 (Ask, Files and Web after it until then) until the Sessions and Botchat tabs came after them; before Advisors since Sessions and Botchat moved under Client (2026-10-10); last again since later that day (Advisors before Voice, the user's order).</summary>
     Stt,
-
-    /// <summary>The profile advisors' rows (2026-10-10, the user's ask: a tab of its own under <c>/settings</c>, after Botchat; after STT once Sessions and Botchat moved under Client, later that day): the switch, the list, then how a call goes.</summary>
-    Advisors,
 }
 
 /// <summary>What <see cref="SettingsMenu.ShowAsync"/> changed, so the screen rebuilds only what depends on it.</summary>
@@ -1107,7 +1107,7 @@ public enum SettingsChanges
 
 /// <summary>
 /// The <c>/settings</c> and <c>/model</c> screens and every other picker: a list in the bottom pane
-/// (<see cref="MenuPane"/>: <c>/settings</c> is one level — its rows under the Client / Servers / Voice / Advisors
+/// (<see cref="MenuPane"/>: <c>/settings</c> is one level — its rows under the Client / Servers / Advisors / Voice
 /// groups' tabs of <see cref="TabFields"/>, the strip and keys the info pane's — a row's picker or typed
 /// edit a second, ESC backs out one level, the notices on the pane's status line) — or, on a
 /// console without the pane, a themed <see cref="SelectionPrompt{T}"/> over
@@ -1357,7 +1357,7 @@ internal sealed partial class SettingsMenu
     private static readonly SettingsField[] Fields = Enum.GetValues<SettingsField>();
 
     /// <summary>The leaf tabs' titles, one per <see cref="SettingsTab"/>, each a sub-tab of <see cref="StripTitles"/>' groups (five since 2026-09-19: Ask, Files and Web are <c>/tools</c>' tabs, <see cref="ToolsText.TabTitles"/>, and Skills is <c>/skills</c>' Options tab, <see cref="SkillsText.OptionsTabTitle"/>). Pinned.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [ChatTabTitle, "Sessions", "Botchat", CommonTabTitle, HttpTabTitle, EmbeddedTabTitle, DockerTabTitle, AnthropicTabTitle, OpenAITabTitle, "TTS", "STT", AdvisorsTabTitle];
+    public static readonly IReadOnlyList<string> TabTitles = [ChatTabTitle, "Sessions", "Botchat", CommonTabTitle, HttpTabTitle, EmbeddedTabTitle, DockerTabTitle, AnthropicTabTitle, OpenAITabTitle, AdvisorsTabTitle, "TTS", "STT"];
 
     /// <summary>The title of the tab of the chat's own rows: the profile, the input line, the transcript, the screen, the outside apps (2026-10-10, the user's pick; "General" until then). Pinned.</summary>
     public const string ChatTabTitle = "Chat";
@@ -1373,7 +1373,8 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The rows of each tab on the pane, indexed by <see cref="SettingsTab"/>, in the order shown
-    /// (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat, and Sessions
+    /// (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, Advisors, TTS, STT — Advisors before Voice, the user's order,
+    /// later still on 2026-10-10; Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat, and Sessions
     /// and Botchat beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic,
     /// OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04;
     /// General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03;
@@ -1430,13 +1431,13 @@ internal sealed partial class SettingsMenu
         [SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodeServer, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort,
          SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching],
         [SettingsField.OpenAIApi, SettingsField.OpenAIApiKey, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject],
+        [SettingsField.Advisors, SettingsField.AdvisorList,
+         SettingsField.AdvisorContext, SettingsField.AdvisorCallsPerTurn, SettingsField.AdvisorMaxToolIterations, SettingsField.AdvisorConfirm,
+         SettingsField.AdvisorThreadPairs, SettingsField.AdvisorEmbedded],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         [SettingsField.SttInput, SettingsField.SttDestination, SettingsField.SttPushToTalkKey, SettingsField.SttWhisperModel,
          SettingsField.SttWake, SettingsField.SttWakePhrase, SettingsField.SttVoskModel,
          SettingsField.SttInterrupt, SettingsField.SttInterruptEchoGuard, SettingsField.SttInterruptConfirmMs],
-        [SettingsField.Advisors, SettingsField.AdvisorList,
-         SettingsField.AdvisorContext, SettingsField.AdvisorCallsPerTurn, SettingsField.AdvisorMaxToolIterations, SettingsField.AdvisorConfirm,
-         SettingsField.AdvisorThreadPairs, SettingsField.AdvisorEmbedded],
     ];
 
     /// <summary>
@@ -2004,9 +2005,9 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmSamplingFromHuggingFace => "LLM sampling from Hugging Face",
         SettingsField.SessionSaveThinking => "Session save thinking",
         SettingsField.ClaudeCodeExecutable => "Claude Code executable",
-        SettingsField.ClaudeCodePermissions => "Claude Code slash command permissions",
-        SettingsField.ClaudeCodeModel => "Claude Code slash command model",
-        SettingsField.ClaudeCodeEffort => "Claude Code slash command effort",
+        SettingsField.ClaudeCodePermissions => "Claude Code command permissions",
+        SettingsField.ClaudeCodeModel => "Claude Code command model",
+        SettingsField.ClaudeCodeEffort => "Claude Code command effort",
         SettingsField.Advisors => "Advisors enabled",
         SettingsField.AdvisorList => "Advisor list",
         SettingsField.AdvisorContext => "Advisor context",
@@ -6253,7 +6254,7 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// The Claude-effort picker under the settings list (<c>Claude Code slash command effort</c>; <c>Claude Code advisor tool effort</c>'s too
+    /// The Claude-effort picker under the settings list (<c>Claude Code command effort</c>; <c>Claude Code advisor tool effort</c>'s too
     /// until 2026-10-10): <see cref="ClaudeDefaultLabel"/> first (the CLI's default), then <c>--effort</c>'s words; the saved one under the cursor.
     /// </summary>
     private async Task<bool> PickClaudeEffortAsync(string saved, CancellationToken cancellationToken)

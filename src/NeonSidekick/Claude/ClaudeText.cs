@@ -63,7 +63,7 @@ public static class ClaudeText
 
     /// <summary>The tools the permission level turned away, once under the reply. Pinned.</summary>
     public static string DeniedNotice(IReadOnlyList<string> tools, string level) =>
-        $"Claude was denied {string.Join(", ", tools.Distinct(StringComparer.Ordinal))} (Claude Code slash command permissions: {level}).";
+        $"Claude was denied {string.Join(", ", tools.Distinct(StringComparer.Ordinal))} (Claude Code command permissions: {level}).";
 
     /// <summary>The reply's footer: <c>Claude · $0.0256 · 6,254 in · 5 out</c> (the Claude Code advisor tool's said its own name until 2026-10-10, when the tool was retired). Pinned.</summary>
     public static string Footer(decimal costUsd, Llm.TokenUsage usage) =>

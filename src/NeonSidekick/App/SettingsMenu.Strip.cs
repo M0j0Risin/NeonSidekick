@@ -23,20 +23,21 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The strip <c>/settings</c> shows (2026-10-10, the user's pick, <c>/tools</c>' Database and Media shape: the strip had grown to ten):
     /// General, Servers, Voice, Sessions, Botchat, and Advisors after it (later that day, the profile advisors); Client, Servers, Voice, Advisors
-    /// since later still (the user's call: General renamed Chat and grouped with Sessions and Botchat under <see cref="ClientTabTitle"/>).
+    /// since later still (the user's call: General renamed Chat and grouped with Sessions and Botchat under <see cref="ClientTabTitle"/>);
+    /// Client, Servers, Advisors, Voice later still (the user's order: Advisors before Voice).
     /// <see cref="TabTitles"/> and <see cref="TabFields"/> stay the leaf tabs (twelve since the LLM tab's split, later that day), in the order the
     /// arrows walk them (<see cref="StripTabs"/>), each a sub-tab of its group on the second strip. Pinned.
     /// </summary>
     /// <remarks>Spelled out, never read off <see cref="TabTitles"/>: a static of another part of the class may not be set yet.</remarks>
-    public static readonly IReadOnlyList<string> StripTitles = [ClientTabTitle, ServersTabTitle, VoiceTabTitle, AdvisorsTabTitle];
+    public static readonly IReadOnlyList<string> StripTitles = [ClientTabTitle, ServersTabTitle, AdvisorsTabTitle, VoiceTabTitle];
 
     /// <summary>The tabs each of <see cref="StripTitles"/> holds, in <see cref="SettingsTab"/> order (the enum follows the walk): one for a plain tab, more for a group. Pinned.</summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsTab>> StripTabs =
     [
         [SettingsTab.Chat, SettingsTab.Sessions, SettingsTab.BotChat],
         [SettingsTab.Common, SettingsTab.Http, SettingsTab.Embedded, SettingsTab.Docker, SettingsTab.Anthropic, SettingsTab.OpenAI],
-        [SettingsTab.Tts, SettingsTab.Stt],
         [SettingsTab.Advisors],
+        [SettingsTab.Tts, SettingsTab.Stt],
     ];
 
     /// <summary>Whether strip tab <paramref name="strip"/> (a <see cref="StripTitles"/> index) is a group: Client, Servers and Voice. Pure.</summary>

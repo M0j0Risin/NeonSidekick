@@ -2519,7 +2519,8 @@ public sealed class AppSettingsData
     /// <summary>
     /// What an advisor call sends besides the model's question (2026-10-10, the retired Claude Code advisor tool's choice): one of
     /// <see cref="NeonSidekick.Advisors.AdvisorContextMode.Names"/> — <c>brief</c>, the question and the model's own context argument;
-    /// <c>recent</c>, those and the last messages of the conversation. Anything else reads as <c>brief</c>. No variable.
+    /// <c>recent</c>, those and the last messages of the conversation. Anything else reads as <c>brief</c>. No variable. The model's
+    /// <c>neon_advisor</c> calls only since later on 2026-10-10 (the user's call): <c>/advisor</c> always sends the recent messages.
     /// </summary>
     public string AdvisorContext { get; set; } = NeonSidekick.Advisors.AdvisorContextMode.Default;
 

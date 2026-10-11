@@ -16,28 +16,29 @@ public partial class SettingsMenuTests
     [Fact]
     public void TheStrip_AndItsGroups_ArePinned()
     {
-        Assert.Equal(["Client", "Servers", "Voice", "Advisors"], SettingsMenu.StripTitles);   // Client since later on 2026-10-10 (the user's pick)
+        Assert.Equal(["Client", "Servers", "Advisors", "Voice"], SettingsMenu.StripTitles);   // Client since later on 2026-10-10 (the user's pick); Advisors before Voice later still (the user's order)
         Assert.Equal(
             [
                 [SettingsTab.Chat, SettingsTab.Sessions, SettingsTab.BotChat],
                 [SettingsTab.Common, SettingsTab.Http, SettingsTab.Embedded, SettingsTab.Docker, SettingsTab.Anthropic, SettingsTab.OpenAI],
-                [SettingsTab.Tts, SettingsTab.Stt],
                 [SettingsTab.Advisors],
+                [SettingsTab.Tts, SettingsTab.Stt],
             ],
             SettingsMenu.StripTabs);
         Assert.Equal(Enum.GetValues<SettingsTab>(), SettingsMenu.StripTabs.SelectMany(t => t));   // every tab once, in the arrows' order
 
         Assert.Equal((1, 1), SettingsMenu.PlaceOf(SettingsTab.Http));   // right after Common (2026-10-10, the user's place)
         Assert.Equal((1, 5), SettingsMenu.PlaceOf(SettingsTab.OpenAI));
-        Assert.Equal((2, 1), SettingsMenu.PlaceOf(SettingsTab.Stt));
+        Assert.Equal((3, 1), SettingsMenu.PlaceOf(SettingsTab.Stt));
         Assert.Equal((0, 1), SettingsMenu.PlaceOf(SettingsTab.Sessions));   // Chat, Sessions, Botchat: the user's order
         Assert.Equal((0, 2), SettingsMenu.PlaceOf(SettingsTab.BotChat));
-        Assert.Equal((3, 0), SettingsMenu.PlaceOf(SettingsTab.Advisors));
+        Assert.Equal((2, 0), SettingsMenu.PlaceOf(SettingsTab.Advisors));
         Assert.Equal(SettingsTab.Docker, SettingsMenu.TabAt(1, 3));
-        Assert.Equal(SettingsTab.Advisors, SettingsMenu.TabAt(3, -1));   // a plain tab's sub (none) is its one tab
+        Assert.Equal(SettingsTab.Advisors, SettingsMenu.TabAt(2, -1));   // a plain tab's sub (none) is its one tab
         Assert.True(SettingsMenu.IsGroup(0));
         Assert.True(SettingsMenu.IsGroup(1));
-        Assert.False(SettingsMenu.IsGroup(3));
+        Assert.False(SettingsMenu.IsGroup(2));
+        Assert.True(SettingsMenu.IsGroup(3));
 
         Assert.Equal(SettingsMenu.Title + " › Servers", SettingsMenu.GroupCrumb(SettingsTab.Anthropic));
         Assert.Equal(SettingsMenu.Title + " › Servers", SettingsMenu.GroupCrumb(SettingsTab.Http));
@@ -52,6 +53,7 @@ public partial class SettingsMenuTests
     {
         var (menu, pane) = PaneMenu();
         Push(Keys.Tab);                       // Servers, on Common
+        Push(Keys.Tab);                       // Advisors (before Voice since later on 2026-10-10, the user's order)
         Push(Keys.Tab);                       // Voice, on TTS
         Push(Keys.Escape);
 
@@ -70,7 +72,7 @@ public partial class SettingsMenuTests
     {
         var (menu, pane) = PaneMenu();
         GoTo(SettingsTab.Docker);                   // Sessions, Botchat, Common, Http, Embedded, Docker
-        Push(Keys.Tab, Keys.ShiftTab);              // Voice, then Servers again — on Docker
+        Push(Keys.Tab, Keys.ShiftTab);              // Advisors, then Servers again — on Docker
         Push(Keys.Enter, Keys.Escape, Keys.Escape); // Docker's first row: the group's crumb on its page
 
         await menu.ShowAsync(CancellationToken.None);

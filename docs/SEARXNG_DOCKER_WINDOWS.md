@@ -87,7 +87,7 @@ docker compose up
 
 ## Using it in NeonSidekick
 
-On `/tools` › Standard › Web, set *Web search method* to `searxng` and *Web SearXNG URL* to `http://localhost:8888` (or set `NEONSIDEKICK_SEARXNG_URL`). The `json` format above is required.
+On `/tools` › Core › Web, set *Web search method* to `searxng` and *Web SearXNG URL* to `http://localhost:8888` (or set `NEONSIDEKICK_SEARXNG_URL`). The `json` format above is required.
 
 ## Test output types
 

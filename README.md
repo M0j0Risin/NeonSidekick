@@ -159,7 +159,7 @@ Everything is set from panes inside the app, and each explains itself: the highl
 
 | Pane | Opens with | What's in it |
 |---|---|---|
-| `/settings` | Ctrl+/ or `//` | The app; the LLM server, the embedded model, Docker, Anthropic and OpenAI (Servers); voice (Voice); sessions, `/botchat` and the advisors (Advisors). |
+| `/settings` | Ctrl+/ or `//` | The app: chat, sessions and `/botchat` (Client); the LLM server, the embedded model, Docker, Anthropic and OpenAI (Servers); the advisors (Advisors); voice (Voice). |
 | `/tools` | Ctrl+Alt+T | Which tools the model may use, and each group's options. |
 | `/skills` | Ctrl+Alt+S | Agent skills and self-learning. |
 | `/mcp` | Ctrl+Alt+D | External MCP servers. |
@@ -206,8 +206,8 @@ The hint row under the input line shows the model, the context used and anything
 | TTS output, STT input | `/settings` › Voice › TTS, STT | Reads replies aloud; voice input on a push-to-talk key (F4). | off |
 | File tools | `/tools` › Files › File | Lets the model read and write files in the working directory. | off |
 | Image tools | `/tools` › Files › Image | Lets the model look at, inspect and edit pictures. | off |
-| Web tools | `/tools` › Standard › Web | Lets the model search the web and read pages. | off |
-| Shell command policy | `/tools` › Standard › Shell | Whether the model may run commands: `off`, `ask` (you approve each one) or `yolo` (no asking). | `off` |
+| Web tools | `/tools` › Core › Web | Lets the model search the web and read pages. | off |
+| Shell command policy | `/tools` › Core › Shell | Whether the model may run commands: `off`, `ask` (you approve each one) or `yolo` (no asking). | `off` |
 
 A few settings can be overridden for one launch by a [command-line option](docs/COMMANDLINE.md) or an [environment variable](docs/ENVIRONMENT.md).
 

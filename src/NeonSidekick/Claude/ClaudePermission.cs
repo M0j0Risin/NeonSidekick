@@ -14,7 +14,7 @@ public enum ClaudePermissionLevel
 }
 
 /// <summary>
-/// The <c>Claude Code slash command permissions</c> setting (2026-09-27, the user's pick of the four offered: a level, denied
+/// The <c>Claude Code command permissions</c> setting (2026-09-27, the user's pick of the four offered: a level, denied
 /// automatically past it — <c>--permission-prompts none</c> — rather than asked on the approval pane): the two
 /// words and their mapping to <see cref="ClaudePermissionLevel"/>, the way <see cref="Llm.CompactType"/> maps its
 /// words. <see cref="Resolve"/> is the one place the saved string becomes the enum: a hand-edited value that is none
@@ -104,7 +104,7 @@ public static class ClaudeEffort
 }
 
 /// <summary>
-/// The <c>Claude Code slash command model</c> picker's words (2026-09-27, the user's ask: pick, don't type; the <c>Claude Code advisor tool model</c> picker's too until 2026-10-10):
+/// The <c>Claude Code command model</c> picker's words (2026-09-27, the user's ask: pick, don't type; the <c>Claude Code advisor tool model</c> picker's too until 2026-10-10):
 /// the aliases <c>claude --model</c> takes for the latest of each family (its help names <c>fable</c>, <c>opus</c> and
 /// <c>sonnet</c>; <c>haiku</c> is the live tests'). A full model name is still typed, through the picker's <c>Other…</c> row;
 /// whatever is saved goes to <c>--model</c> as it is. Pure.

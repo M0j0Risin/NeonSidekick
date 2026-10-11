@@ -25,7 +25,7 @@ public partial class ToolsMenuTests
     public void TheSubStrips_ArePinned()
     {
         Assert.Equal("         │ ↳ SQL · MySQL · SQLite · PostgreSQL · Oracle ", SubStrip(ToolsText.DatabaseTabTitle));
-        Assert.Equal("         │ ↳ Print · Camera · Screen ", SubStrip(ToolsText.MediaTabTitle));   // ComfyUI and YouTube on Integrations since 2026-10-10
+        Assert.Equal("         │ ↳ Print · Camera · Screen ", SubStrip(ToolsText.DevicesTabTitle));   // ComfyUI and YouTube on Integrations since 2026-10-10
         Assert.Equal("         │ ↳ File · Image · UNC · GitLib · Obsidian ", SubStrip(ToolsText.FilesTabTitle));   // 2026-10-10; Image later that day
         Assert.Equal("         │ ↳ Docker · HomeAssistant · ComfyUI · YouTube ", SubStrip(ToolsText.IntegrationsTabTitle));   // 2026-10-10; ClaudeCode first until later that day
     }
@@ -67,12 +67,12 @@ public partial class ToolsMenuTests
     public async Task OnThePane_TheMediaTab_ShowsTheSecondStrip_AndTheFirstMenusRows()
     {
         var (menu, pane, _) = PaneMenu();
-        Push(ToTab(ToolsText.MediaTabTitle));
+        Push(ToTab(ToolsText.DevicesTabTitle));
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(Strips(ToolsText.MediaTabTitle) + HeadingOver(ToolsText.PrintTabTitle, SettingsField.PrintTools) + "▸ " + SettingsMenu.FieldName(SettingsField.PrintTools) + "  ", Output);
+        Assert.Contains(Strips(ToolsText.DevicesTabTitle) + HeadingOver(ToolsText.PrintTabTitle, SettingsField.PrintTools) + "▸ " + SettingsMenu.FieldName(SettingsField.PrintTools) + "  ", Output);
         pane.Dispose();
     }
 
@@ -88,7 +88,7 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         string oracle = Strips(ToolsText.DatabaseTabTitle) + HeadingOver(ToolsText.OracleTabTitle, SettingsField.OracleTools) + "▸ " + SettingsMenu.FieldName(SettingsField.OracleTools) + "  ";
-        string print = Strips(ToolsText.MediaTabTitle) + HeadingOver(ToolsText.PrintTabTitle, SettingsField.PrintTools) + "▸ " + SettingsMenu.FieldName(SettingsField.PrintTools) + "  ";
+        string print = Strips(ToolsText.DevicesTabTitle) + HeadingOver(ToolsText.PrintTabTitle, SettingsField.PrintTools) + "▸ " + SettingsMenu.FieldName(SettingsField.PrintTools) + "  ";
         Assert.Contains(print, Output);
         Assert.True(Output.LastIndexOf(oracle, StringComparison.Ordinal) > Output.IndexOf(print, StringComparison.Ordinal));
         pane.Dispose();
@@ -108,7 +108,7 @@ public partial class ToolsMenuTests
 
         Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n", Output);
         string sqlite = Strips(ToolsText.DatabaseTabTitle) + HeadingOver(ToolsText.SqliteTabTitle, SettingsField.SqliteTools) + "▸ " + SettingsMenu.FieldName(SettingsField.SqliteTools) + "  ";
-        Assert.True(Output.LastIndexOf(sqlite, StringComparison.Ordinal) > Output.LastIndexOf(Strips(ToolsText.MediaTabTitle), StringComparison.Ordinal));
+        Assert.True(Output.LastIndexOf(sqlite, StringComparison.Ordinal) > Output.LastIndexOf(Strips(ToolsText.DevicesTabTitle), StringComparison.Ordinal));
         pane.Dispose();
     }
 
@@ -158,11 +158,11 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.NotEqual(new AppSettingsData().CameraShutter, _settings.Current.CameraShutter);
-        Assert.Equal(ToolsText.Label + " › Media", ToolsMenu.GroupCrumb(TabIndex(ToolsText.MediaTabTitle)));
-        string picker = "\n" + Titled(ToolsText.Label + " › Media › Camera shutter") + "\n";
+        Assert.Equal(ToolsText.Label + " › Devices", ToolsMenu.GroupCrumb(TabIndex(ToolsText.DevicesTabTitle)));
+        string picker = "\n" + Titled(ToolsText.Label + " › Devices › Camera shutter") + "\n";
         Assert.Contains(picker, Output);
         string after = Output[Output.LastIndexOf(picker, StringComparison.Ordinal)..];
-        Assert.Contains("\n" + SubStrip(ToolsText.MediaTabTitle) + "\n", after);   // back on Camera's rows
+        Assert.Contains("\n" + SubStrip(ToolsText.DevicesTabTitle) + "\n", after);   // back on Camera's rows
         Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.CameraShutter) + "  ", after);
         Assert.Equal(SettingsMenu.Title, settings.Root);   // restored for /settings
         pane.Dispose();
@@ -191,7 +191,7 @@ public partial class ToolsMenuTests
         var saved = _settings.Current;
         var (_, pane, settings) = PaneMenu();
         int database = TabIndex(ToolsText.DatabaseTabTitle);
-        int media = TabIndex(ToolsText.MediaTabTitle);
+        int media = TabIndex(ToolsText.DevicesTabTitle);
         var subs = new int[ToolsText.TabTitles.Count];
         subs[database] = 4;
         var page = ToolsMenu.Page(ToolsText.OfferedRows(Facts()), saved, settings, database, subs: subs);

@@ -65,11 +65,11 @@ public class NeonHelpTests
     [Fact]
     public void Location_IsWorkedOutFromTheMenus()
     {
-        Assert.Equal("/tools › Media › Camera › Camera watch interval (s)", HelpLocation.Of(SettingsField.CameraWatchSeconds).Path);   // a menu on Media since 2026-10-09
+        Assert.Equal("/tools › Devices › Camera › Camera watch interval (s)", HelpLocation.Of(SettingsField.CameraWatchSeconds).Path);   // a menu on Media since 2026-10-09
         Assert.Equal("/tools › Databases › PostgreSQL › PostgreSQL mode", HelpLocation.Of(SettingsField.PostgresMode).Path);
-        Assert.Equal("/tools › Standard › Shell › Shell police", HelpLocation.Of(SettingsField.ShellPolice).Path);   // a menu on Standard since 2026-10-10 (a plain tab until then)
+        Assert.Equal("/tools › Core › Shell › Shell police", HelpLocation.Of(SettingsField.ShellPolice).Path);   // a menu on Standard since 2026-10-10 (a plain tab until then)
         Assert.Equal("Shell", HelpLocation.Of(SettingsField.ShellPolice).Menu);
-        Assert.Equal("/tools › Standard › Options › Tool collapse count", HelpLocation.Of(SettingsField.ToolCollapseCount).Path);   // Options last on Standard
+        Assert.Equal("/tools › Core › Options › Tool collapse count", HelpLocation.Of(SettingsField.ToolCollapseCount).Path);   // Options last on Standard
         Assert.Equal("/settings › Client › Chat › Profile", HelpLocation.Of(SettingsField.Profile).Path);   // General's until later on 2026-10-10
         Assert.Equal("/settings › Client › Botchat › Botchat camera", HelpLocation.Of(SettingsField.BotChatCamera).Path);
         Assert.Equal("/settings › Advisors › Advisor list", HelpLocation.Of(SettingsField.AdvisorList).Path);   // a plain tab names no menu
@@ -139,7 +139,7 @@ public class NeonHelpTests
     public void ASettingByName_IsWhereItIs_ItsDefault_AndWhatItDoes(string query)
     {
         Assert.Equal(
-            "Setting Camera watch interval (s)\n  Where: /tools › Media › Camera › Camera watch interval (s) (open /tools, go to the Media tab, then Camera on the second strip, Enter on the row edits it)\n  Default: 10\n  What it does: " + HelpSettings.Describe(SettingsField.CameraWatchSeconds),
+            "Setting Camera watch interval (s)\n  Where: /tools › Devices › Camera › Camera watch interval (s) (open /tools, go to the Devices tab, then Camera on the second strip, Enter on the row edits it)\n  Default: 10\n  What it does: " + HelpSettings.Describe(SettingsField.CameraWatchSeconds),
             Invoke(query));
     }
 
@@ -160,7 +160,7 @@ public class NeonHelpTests
     {
         string text = Invoke(query);
 
-        Assert.StartsWith("Tab /tools › Media › Camera:\n", text, StringComparison.Ordinal);   // a menu on Media since 2026-10-09, answered as its tab was
+        Assert.StartsWith("Tab /tools › Devices › Camera:\n", text, StringComparison.Ordinal);   // a menu on Media since 2026-10-09, answered as its tab was
         Assert.Equal(11, HelpLocation.InMenu("/tools", ToolsText.CameraTabTitle).Count);
         foreach (var row in HelpLocation.InMenu("/tools", ToolsText.CameraTabTitle))
         {
@@ -232,7 +232,7 @@ public class NeonHelpTests
         Assert.Contains("\n- Oracle: Oracle tools, ", text);
         Assert.EndsWith("\nAsk for one menu (/tools sql) for its rows' defaults and what each does.", text, StringComparison.Ordinal);
         Assert.Equal("the menus Print, Camera (a second strip under the tab; ←/→ walk them)", HelpText.MenusTab(["Print", "Camera"]));
-        Assert.Equal([(ToolsText.StandardTabTitle, "Ask"), (ToolsText.StandardTabTitle, "Web"), (ToolsText.StandardTabTitle, "Shell"), (ToolsText.StandardTabTitle, "Options"), (ToolsText.FilesTabTitle, "File")], HelpLocation.Menus("/tools").Take(5));   // the Standard group first since later on 2026-10-10, then Files
+        Assert.Equal([(ToolsText.CoreTabTitle, "Ask"), (ToolsText.CoreTabTitle, "Web"), (ToolsText.CoreTabTitle, "Shell"), (ToolsText.CoreTabTitle, "Options"), (ToolsText.FilesTabTitle, "File")], HelpLocation.Menus("/tools").Take(5));   // the Standard group first since later on 2026-10-10, then Files
         Assert.Equal([(SettingsMenu.ClientTabTitle, "Chat"), (SettingsMenu.ClientTabTitle, "Sessions"), (SettingsMenu.ClientTabTitle, "Botchat"), (SettingsMenu.ServersTabTitle, "Common")], HelpLocation.Menus("/settings").Take(4));   // the Servers and Voice groups since 2026-10-10; Common and Http (the LLM tab) later that day; the Client group first later still
     }
 

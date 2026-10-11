@@ -177,7 +177,7 @@ internal static class NeonHelp
     {
         var rows = HelpLocation.OnTab(pane.Command, tab);
         return rows.Any(r => r.Menu is not null)
-            ? HelpText.GroupTab(pane, tab, rows)   // Media or Database (2026-10-09): the menus, each answered on its own
+            ? HelpText.GroupTab(pane, tab, rows)   // a group tab, Devices or Databases (2026-10-09): the menus, each answered on its own
             : HelpText.Tab(pane, tab, rows, HelpLocation.Default, HelpSettings.Describe);
     }
 

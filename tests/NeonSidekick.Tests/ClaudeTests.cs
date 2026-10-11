@@ -302,7 +302,7 @@ public class ClaudeTests
             [SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodeServer, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort],
             anthropic.Take(5));
         Assert.Equal(
-            ["Claude Code executable", "Claude Code server", "Claude Code slash command permissions", "Claude Code slash command model", "Claude Code slash command effort"],
+            ["Claude Code executable", "Claude Code server", "Claude Code command permissions", "Claude Code command model", "Claude Code command effort"],
             anthropic.Take(5).Select(SettingsMenu.FieldName));
         Assert.DoesNotContain(SettingsMenu.ToolsTabFields, menu => menu.Contains(SettingsField.ClaudeCodeExecutable));
         Assert.Equal("(looked up)", SettingsMenu.FieldValue(SettingsField.ClaudeCodeExecutable, data, "C:\\p"));
@@ -351,7 +351,7 @@ public class ClaudeTests
         Assert.Equal("Claude › Read a.cs", ClaudeText.ToolNote("Read", "a.cs"));
         Assert.Equal("Claude › Glob", ClaudeText.ToolNote("Glob", " "));
         Assert.Equal("Claude · $0.0200 · 1,234 in · 5 out", ClaudeText.Footer(0.02m, new TokenUsage(1234, 5, 1239, 1, default, default)));
-        Assert.Equal("Claude was denied Bash, Edit (Claude Code slash command permissions: read-only).", ClaudeText.DeniedNotice(["Bash", "Edit", "Bash"], "read-only"));
+        Assert.Equal("Claude was denied Bash, Edit (Claude Code command permissions: read-only).", ClaudeText.DeniedNotice(["Bash", "Edit", "Bash"], "read-only"));
         Assert.Equal("exit code 1: bad", ClaudeText.NoResult(1, "bad\n"));
         Assert.Equal("exit code 2, nothing on stderr", ClaudeText.NoResult(2, ""));
         Assert.Equal("[to Claude] hi", ClaudeText.HistoryUser("hi"));

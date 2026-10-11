@@ -17,7 +17,7 @@ public partial class ToolsMenuTests
         int tab = ToolsText.MenuIndex(ToolsText.CameraTabTitle) + 1;   // a menu on Media since 2026-10-09, its rows ToolsTabFields' as before
 
         Assert.Equal(ToolsText.MenuIndex(ToolsText.PrintTabTitle) + 2, tab);   // the user's order since 2026-10-03 (after Ask from 2026-10-02); after Print on Media since 2026-10-09
-        Assert.Equal(ToolsText.MediaTabTitle, ToolsText.TabTitles[TabIndex(ToolsText.CameraTabTitle)]);
+        Assert.Equal(ToolsText.DevicesTabTitle, ToolsText.TabTitles[TabIndex(ToolsText.CameraTabTitle)]);
         Assert.Equal(
             ["Camera tool", "Camera shutter", "Camera preview", "Camera device", "Camera resolution", "Camera output folder", "Camera keep in sessions", "Camera watch interval (s)", "Camera watch change (%)", "Camera watch speaks up", "Camera watch min gap (s)"],
             SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
