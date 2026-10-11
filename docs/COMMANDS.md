@@ -137,7 +137,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/queue [clear]` | Lists and prunes the queued messages (Enter removes one after a yes; `⊠ clear all` or `c` drops them all). While the queue is held (*Queue cancel mode* `hold`, after a cancelled reply), `➤ send` or `s` sends the next one now, and its reply's end releases the hold. Under *Queue mode* `manual`, `➤ send` is always there: each press sends the next message, and under a reply it goes when the reply ends. `/queue clear` drops them without the pane. |
 | `/read [<file> [<n>]\|<n>]` | Reads a text file from the working directory aloud. Alone it resumes; a number starts at that sentence. On an empty line, Space pauses and resumes it, and ←/→ step a sentence back or forward (while paused they only move the position; Space or `/read` plays from it). The hint row leads with `← → ␣ pause`, `← → ␣ play` or, once it has run through, `␣ replay` while the keys apply. |
 | `/reasoning [none\|low\|medium\|high\|xhigh]` | Picks the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |
-| `/rewind [<n>]` | Goes back to an earlier message: pick one (n back), confirm, and it and everything after leave the conversation (and the stored session), its text returning to the input row, pictures and pastes included. Only the conversation rewinds; the confirmation names the tools whose changes stay. Compacted messages can't be picked. |
+| `/rewind [<n>]` | Goes back to an earlier message: pick one (n back), confirm, and it and everything after leave the conversation (and the stored session), its text returning to the input row, pictures and pastes included. The turns that stay are drawn again with their pictures, ComfyUI's back in the picture strip. Only the conversation rewinds; the confirmation names the tools whose changes stay. Compacted messages can't be picked. |
 | `/remember <text>` | Adds a memory. |
 | `/rename [<name>]` | Renames the current session, as `/sessions title` does; on its own it opens the rename box with the current name. |
 | `/sampling` | Edits the per-model sampling on a pane. See [Sampling per model](SETTINGS.md#sampling-per-model). |
@@ -145,7 +145,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/sampling extra <json>\|clear` | Sets or clears its extra request body. |
 | `/sampling clear` | Clears every override of the connected model. |
 | `/server [<url>\|embedded\|claude-code\|docker\|docker:<container>]` | Picks an LLM server (found, Anthropic API, OpenAI API, Claude Code, installed embedded models, chosen Docker containers (Windows only)) or sets one by URL, then the model and reasoning, with one reconnect. `embedded`, `claude-code`, `docker` and `docker:<container>` go straight to those. A container serves its own model, so no model picker follows. The argument list offers each of those words while it applies. |
-| `/sessions [<id>]` | Lists the stored sessions, or restores one by its id. |
+| `/sessions [<id>]` | Lists the stored sessions, or restores one by its id: its turns come back with their pictures (ComfyUI's into the picture strip; every kept one drawn in its turn while *Show image thumbnails* is on). |
 | `/sessions purge <id>\|all` | Deletes one stored session, or every one. |
 | `/sessions purge older <age>` | Deletes the sessions older than an age: days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). |
 | `/sessions title [<text>]` | Renames the current session; alone it opens a box with the current name. |

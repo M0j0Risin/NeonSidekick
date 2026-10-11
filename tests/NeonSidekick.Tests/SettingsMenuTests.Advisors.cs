@@ -122,6 +122,10 @@ public partial class SettingsMenuTests
         Assert.Contains("gone  " + "critic  " + SettingsMenu.MissingAdvisorMark, Output);
         Assert.Equal(Markup("gone  ") + Theme.DimMarkup("critic  (missing)"), SettingsMenu.AdvisorRow(new AdvisorEntry("gone", "critic"), exists: false, 6));
         Assert.Equal(Markup("qa  ") + Theme.DimMarkup("(no role)"), SettingsMenu.AdvisorRow(new AdvisorEntry("qa"), exists: true, 4));
+        // The avatar leads (later on 2026-10-10), three blanks for none so the names line up, the missing one's too.
+        Assert.Equal(Markup("🦉 qa  ") + Theme.DimMarkup("(no role)"), SettingsMenu.AdvisorRow(new AdvisorEntry("qa"), exists: true, 4, avatar: "🦉"));
+        Assert.Equal(Markup("   gone  ") + Theme.DimMarkup("critic  (missing)"), SettingsMenu.AdvisorRow(new AdvisorEntry("gone", "critic"), exists: false, 6, avatar: ""));
+        Assert.Contains("   gone  critic  " + SettingsMenu.MissingAdvisorMark, Output);
         pane.Dispose();
 
         static string Markup(string text) => Spectre.Console.Markup.Escape(text);
@@ -131,7 +135,7 @@ public partial class SettingsMenuTests
     public async Task OnThePane_TheAdvisorListsBand_AndItsEditor_NameEachAdvisorsServerAndModel()
     {
         Profiles.Create(_dir, "doug", new AppSettingsData { LlmUrl = "docker:vllm", LlmModel = "Qwen3.8-27B-NVFP4-RTX5090" });
-        Profiles.Create(_dir, "einstein", new AppSettingsData { LlmUrl = "claude-code" });
+        Profiles.Create(_dir, "einstein", new AppSettingsData { LlmUrl = "claude-code", Avatar = "🦉" });
         _settings.Update(d => d.AdvisorList = [new AdvisorEntry("doug", "expert .NET solution architect"), new AdvisorEntry("einstein", "UX designer")]);
         var doug = new AdvisorServerFacts(AdvisorServer.Docker, "Qwen3.8-27B-NVFP4-RTX5090");
         var einstein = new AdvisorServerFacts(AdvisorServer.ClaudeCode, "sonnet");
@@ -152,6 +156,9 @@ public partial class SettingsMenuTests
         Assert.Contains("einstein — UX designer · claudecode · sonnet", Output);
         Assert.Contains("doug      expert .NET solution architect · docker · Qwen3.8-27B", Output);
         Assert.Contains("einstein  " + "UX designer".PadRight("expert .NET solution architect".Length) + " · claudecode · sonnet · tools", Output);
+        // Each led by its profile's avatar (later on 2026-10-10): doug wears the default robot, einstein its owl.
+        Assert.Contains(NeonSidekick.Emojis.AvatarRules.DefaultAvatar + " doug      expert", Output);
+        Assert.Contains("🦉 einstein  UX designer", Output);
         pane.Dispose();
 
         // With none listed, the band is the field's description again.

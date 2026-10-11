@@ -67,15 +67,18 @@ internal sealed partial class SettingsMenu
     /// One row of the list editor: the profile padded, then dim its role and what it runs on (2026-10-10, the user's ask): the role
     /// padded to <paramref name="roleWidth"/> (cut past it), <c>· docker · Qwen3-32B</c> from <paramref name="facts"/>, then
     /// <paramref name="mark"/> — on the Claude Code server whether it gets the tools (<see cref="AdvisorText.ClaudeCodeMark"/>), or
-    /// <see cref="AdvisorText.UnreadableMark"/>. A profile no longer in the home says so in their place. Pinned.
+    /// <see cref="AdvisorText.UnreadableMark"/>. A profile no longer in the home says so in their place. With <paramref name="avatar"/>
+    /// (later on 2026-10-10, the user's ask) the profile's avatar leads the row as it leads a profile picker's
+    /// (<see cref="ProfilePickerRow"/>): the emoji and a space, or three blanks for "" so the names stand in one column; null leads with nothing. Pinned.
     /// </summary>
-    public static string AdvisorRow(AdvisorEntry entry, bool exists, int width, AdvisorServerFacts? facts = null, int roleWidth = 0, string? mark = null)
+    public static string AdvisorRow(AdvisorEntry entry, bool exists, int width, AdvisorServerFacts? facts = null, int roleWidth = 0, string? mark = null, string? avatar = null)
     {
         ArgumentNullException.ThrowIfNull(entry);
         string role = entry.Role.Length == 0 ? "(no role)" : entry.Role;
+        string name = avatar is null ? Markup.Escape(entry.Profile.PadRight(width)) : ProfilePickerRow(entry.Profile.PadRight(width), avatar);
         if (!exists)
         {
-            return Markup.Escape(entry.Profile.PadRight(width)) + Theme.DimMarkup(Markup.Escape(role + "  " + MissingAdvisorMark));
+            return name + Theme.DimMarkup(Markup.Escape(role + "  " + MissingAdvisorMark));
         }
 
         string tail = (facts is null ? "" : " · " + facts.Kind + " · " + facts.Model) + (mark is null ? "" : " · " + mark);
@@ -84,7 +87,7 @@ internal sealed partial class SettingsMenu
             role = ScreenPane.Fit(role, roleWidth).PadRight(roleWidth);
         }
 
-        return Markup.Escape(entry.Profile.PadRight(width)) + Theme.DimMarkup(Markup.Escape(role + tail));
+        return name + Theme.DimMarkup(Markup.Escape(role + tail));
     }
 
     /// <summary>The editor's role column: the longest role (or <c>(no role)</c>), at most <see cref="AdvisorRoleWidth"/>.</summary>
@@ -214,7 +217,9 @@ internal sealed partial class SettingsMenu
             IReadOnlyList<string> rows = [Markup.Escape(AddAdvisorRow), .. entries.Select(e =>
             {
                 var (exists, facts) = AdvisorFactsOf(e.Profile);
-                return AdvisorRow(e, exists, width, facts, roleWidth, marks(e));
+                // Each advisor's avatar ahead of its name (later on 2026-10-10, the user's ask), as the profile pickers show theirs; a
+                // missing profile none (its file would read as the defaults, the robot).
+                return AdvisorRow(e, exists, width, facts, roleWidth, marks(e), exists ? ProfileAvatar(e.Profile) : "");
             })];
             var page = new MenuPage(Crumb(title), rows, AdvisorListKeys);
             if (await PickAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { } index)

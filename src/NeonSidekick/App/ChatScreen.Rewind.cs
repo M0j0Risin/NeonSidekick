@@ -3,6 +3,7 @@ using Microsoft.Extensions.AI;
 using NeonSidekick.Claude;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
+using NeonSidekick.Llm;
 using NeonSidekick.Sessions;
 
 namespace NeonSidekick.App;
@@ -161,24 +162,31 @@ internal sealed partial class ChatScreen
             ForgetReading();
             _log.Clear();
             _lastReply = "";
+            // The kept turns' pictures back in the strip and, with thumbnails on, the transcript (2026-10-10, the user's ask).
+            var pictures = RestoredPictures.Turns(_session.History.Messages);
+            var box = ReplayPictures(pictures);
             if (_sessionId is { } id && _sessions.Load(id) is { } record)
             {
+                var byRow = PicturesByRow(pictures);
                 foreach (var stored in record.Turns)
                 {
-                    ReplayTurn(stored.UserText, stored.ReplyText, stored.ToolCalls, styled);
+                    ReplayTurn(stored.UserText, stored.ReplyText, stored.ToolCalls, styled, byRow.GetValueOrDefault(stored.Ordinal), box);
                 }
             }
             else
             {
-                foreach (var replay in ConversationRewind.Replay(_session.History.Messages))
+                var replays = ConversationRewind.Replay(_session.History.Messages);
+                for (int i = 0; i < replays.Count; i++)
                 {
+                    var replay = replays[i];
                     if (replay.Summary)
                     {
                         _transcript.Notice(RewindText.CompactedNotice);
                     }
                     else
                     {
-                        ReplayTurn(replay.UserText, replay.ReplyText, replay.ToolCalls, styled);
+                        // Both lists hold one entry per turn start, in order.
+                        ReplayTurn(replay.UserText, replay.ReplyText, replay.ToolCalls, styled, i < pictures.Count ? pictures[i] : null, box);
                     }
                 }
             }
@@ -196,15 +204,23 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// One stored turn back on screen, as <see cref="RestoreSession"/> draws it: the user's row, a <c>🛠️ N tool calls</c> line
     /// when the model called any, and the reply through the live slot, under Claude's name for a <c>/claude</c> exchange. The
-    /// pair also goes into the <c>/copy</c> log.
+    /// pair also goes into the <c>/copy</c> log. With <paramref name="box"/> (<c>Show image thumbnails</c> on, 2026-10-10, the
+    /// user's ask) the turn's <paramref name="pictures"/> are drawn where a live turn drew them: <c>/imagine</c>'s before the
+    /// user's row, the user's own under it, the tools' after the tool line.
     /// </summary>
-    private void ReplayTurn(string userText, string replyText, int toolCalls, bool styled)
+    private void ReplayTurn(string userText, string replyText, int toolCalls, bool styled, TurnPictures? pictures = null, UI.ThumbnailBox? box = null)
     {
+        var drawn = box is not null && pictures is { Any: true } turn ? turn : null;
+        ReplayThumbnails(drawn?.Imagined, box, sandbox: true);
         _transcript.User(userText);
+        // A dropped picture's path is full; a pasted one's has none, as live (its bytes are kept for a double-click).
+        ReplayThumbnails(drawn?.Own, box, sandbox: false);
         if (toolCalls > 0)
         {
             _transcript.ToolNote(SessionText.ToolCallsNote(toolCalls));
         }
+
+        ReplayThumbnails(drawn?.Tools, box, sandbox: true);
 
         if (replyText.Length > 0)
         {
@@ -222,6 +238,68 @@ internal sealed partial class ChatScreen
         }
 
         _log.Add(userText, replyText);
+    }
+
+    /// <summary>The turns' pictures by the store row each turn wrote (<see cref="TurnPictures.Ordinal"/>); a turn never stamped has none to find (a session saved before 2026-09-30).</summary>
+    private static Dictionary<int, TurnPictures> PicturesByRow(IReadOnlyList<TurnPictures> turns)
+    {
+        var byRow = new Dictionary<int, TurnPictures>();
+        foreach (var turn in turns)
+        {
+            if (turn.Ordinal is { } ordinal)
+            {
+                byRow[ordinal] = turn;
+            }
+        }
+
+        return byRow;
+    }
+
+    /// <summary>A restored turn's pictures as thumbnails at <paramref name="box"/>, as <see cref="ToolThumbnails"/> draws a live one's; nothing without either.</summary>
+    private void ReplayThumbnails(IReadOnlyList<DataContent>? pictures, UI.ThumbnailBox? box, bool sandbox)
+    {
+        if (box is { } size && pictures is { Count: > 0 })
+        {
+            var (tiles, ids) = ReadThumbnails(RestoredImages(pictures), size, sandbox);
+            _transcript.Images(tiles, ids);
+        }
+    }
+
+    /// <summary>
+    /// A restored conversation's pictures before its turns are replayed (2026-10-10, the user's ask): the ComfyUI ones into the
+    /// strip first, as a live turn puts them (a thumbnail box then leaves the strip's rows), and the box the turns' pictures are
+    /// drawn at — null with <c>Show image thumbnails</c> off, when the transcript gets none.
+    /// </summary>
+    private UI.ThumbnailBox? ReplayPictures(IReadOnlyList<TurnPictures> turns)
+    {
+        var strip = turns.SelectMany(t => t.Strip).ToList();
+        if (strip.Count > 0)
+        {
+            AddToPictureStrip(RestoredImages(strip));
+        }
+
+        var effective = _effective();
+        return effective.ShowImageThumbnails ? UI.ThumbnailSize.Resolve(effective, WindowBox()) : null;
+    }
+
+    /// <summary>
+    /// Stored pictures as attachments again (2026-10-10), each under its own path (<see cref="ConversationHistory.PicturePath"/>), so
+    /// a double-click and the strip's order find its file as they did live; one with none is named as a pasted one is. A picture whose
+    /// bytes no longer read is left out.
+    /// </summary>
+    private static List<ImageAttachment> RestoredImages(IReadOnlyList<DataContent> pictures)
+    {
+        var images = new List<ImageAttachment>(pictures.Count);
+        foreach (var picture in pictures)
+        {
+            string name = ConversationHistory.PicturePath(picture) ?? ImageFile.ClipboardName(images.Count + 1);
+            if (ImageFile.TryLoad(picture.Data.ToArray(), name, out var image, out _) && image is not null)
+            {
+                images.Add(image with { Path = name });
+            }
+        }
+
+        return images;
     }
 
     /// <summary>

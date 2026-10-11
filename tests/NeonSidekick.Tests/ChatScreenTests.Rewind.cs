@@ -141,6 +141,99 @@ public partial class ChatScreenTests
         Assert.Single(sent.Contents.OfType<DataContent>());
         Assert.Equal(["first", "look at [Image #1]"], UserLines(request));
     }
+    // ── A restored chat's pictures (2026-10-10) ─────────────────────────────
+
+    /// <summary>
+    /// A stored session with two pictured turns, as a run with ComfyUI would have left it: <c>look</c> carried an <c>/imagine</c>
+    /// picture (its note leading the message), and <c>draw a dog</c> called <c>generate_image</c>, whose picture is the carrier after it.
+    /// </summary>
+    private long SeedPictureSession()
+    {
+        byte[] png = ImageFileTests.BlackPng(4, 4);
+        using var store = OpenSessions();
+        long id = store.Begin("look", "llama")!.Value;
+        var history = new ConversationHistory("");
+        history.AddUser(NeonSidekick.Comfy.ComfyText.ImagineNote("generated 1 picture") + "\n\nlook", [new ImageAttachment("comfy_images\\pony-1.png", png, ImageFile.Png, 4, 4)]);
+        history.AddAssistant("A pony.");
+        ConversationHistory.SetTurnOrdinal(history.LastTurnStart()!, store.AppendTurn(id, "look", "A pony.", 0, [], [], 0, 1, 1, false)!.Value);
+        history.AddUser("draw a dog");
+        history.AddToolImages([new ImageAttachment("comfy_images\\pony-2.png", png, ImageFile.Png, 4, 4)], NeonSidekick.Llm.Tools.GenerateImageTool.ToolName);
+        history.AddAssistant("Here is a dog.");
+        ConversationHistory.SetTurnOrdinal(history.LastTurnStart()!, store.AppendTurn(id, "draw a dog", "Here is a dog.", 1, ["generate_image"], [], 0, 1, 1, false)!.Value);
+        store.SaveHistory(id, SessionHistory.ToJson(history.Messages));
+        return id;
+    }
+
+    /// <summary>
+    /// A restored session's pictures in the transcript (2026-10-10, the user's ask), under <c>Show image thumbnails</c>: the
+    /// <c>/imagine</c> picture before its message's row, the <c>generate_image</c> one after the tool line and before the reply.
+    /// Off, none is drawn.
+    /// </summary>
+    [WindowsTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Session_Restore_DrawsItsPictures_WhereTheTurnsHadThem(bool thumbnails)
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ShowImageThumbnails = thumbnails; });
+        long id = SeedPictureSession();
+        PushLine("/sessions " + id);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        int look = output.IndexOf(InputLine.PromptGlyph + "look", StringComparison.Ordinal);
+        int tools = output.IndexOf(TranscriptRenderer.ToolGlyph + SessionText.ToolCallsNote(1), StringComparison.Ordinal);
+        int reply = output.IndexOf("Here is a dog.", StringComparison.Ordinal);
+        Assert.True(look >= 0 && tools > look && reply > tools);
+        if (thumbnails)
+        {
+            int restored = output.IndexOf("restored session ", StringComparison.Ordinal);
+            Assert.Contains("▀", output[restored..look]);
+            Assert.DoesNotContain("▀", output[look..tools]);
+            Assert.Contains("▀", output[tools..reply]);
+        }
+        else
+        {
+            Assert.DoesNotContain("▀", output);
+        }
+    }
+
+    /// <summary>A restored session's ComfyUI pictures go back in the strip (2026-10-10, the user's ask), thumbnails or none: → walks both.</summary>
+    [WindowsFact]
+    public async Task Session_Restore_PutsItsComfyPicturesInTheStrip()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ShowImageThumbnails = false; });
+        PaneOf40Rows();
+        long id = SeedPictureSession();
+        StepsWhenIdle(Line("/sessions " + id), Key(Keys.Right), Key(Keys.Right), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(NeonSidekick.Comfy.ComfyText.StripSelectedHint(1, 2), output);
+        Assert.Contains(NeonSidekick.Comfy.ComfyText.StripSelectedHint(2, 2), output);
+    }
+
+    /// <summary>A rewind keeps the kept turns' pictures in the strip (2026-10-10; it emptied it): the second turn rewound and sent again, → finds the first's.</summary>
+    [WindowsFact]
+    public async Task Rewind_KeepsTheKeptTurnsPicturesInTheStrip()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ShowImageThumbnails = false; });
+        PaneOf40Rows();
+        long id = SeedPictureSession();
+        _chat.EnqueueText("Again.");
+        StepsWhenIdle(
+            Line("/sessions " + id),
+            Line("/rewind 1"), Key(Keys.Enter), Key(Keys.Char('y')), Key(Keys.Enter),
+            Key(Keys.Enter),
+            Key(Keys.Right),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains("· " + RewindText.RewoundNotice(1, "draw a dog"), output);
+        Assert.Contains(NeonSidekick.Comfy.ComfyText.StripSelectedHint(1, 1), output);
+    }
+
     /// <summary>Without the bottom pane there is no list: <c>/rewind 2</c> asks the yes/no for the second message from the end; No keeps.</summary>
     [Fact]
     public async Task Rewind_WithoutThePane_AsksForTheCountedMessage()

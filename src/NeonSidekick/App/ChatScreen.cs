@@ -6742,7 +6742,9 @@ internal sealed partial class ChatScreen
     /// keeps them current rather than seeding them again), then each turn replayed under the
     /// notice — the user's row, one <c>🛠️ N tool calls</c> line when the model called any, the reply
     /// through the live slot as <c>/read</c> prints a file (styled as a live reply would be). The
-    /// pictures of a turn are not redrawn. New turns append to the restored row. The one on screen
+    /// pictures come back too (2026-10-10, the user's ask; until then they were not redrawn): the ComfyUI ones into the strip
+    /// and, with <c>Show image thumbnails</c> on, every kept one into its turn (<see cref="RestoredPictures"/>,
+    /// <see cref="ReplayPictures"/>). New turns append to the restored row. The one on screen
     /// already is <see cref="SessionsMenu.CurrentNotice"/>.
     /// </summary>
     private void RestoreSession(long id)
@@ -6796,9 +6798,12 @@ internal sealed partial class ChatScreen
             _transcript.Notice(SessionRestoredNotice(record.Summary, _time.LocalTimeZone));
             RestorePlan(plan, executing);
             DiagnosticLog.Info(SessionsCategory, SessionRestoredLogLine(record.Summary.Id, record.Summary.Turns));
+            var pictures = RestoredPictures.Turns(messages);
+            var box = ReplayPictures(pictures);
+            var byRow = PicturesByRow(pictures);
             foreach (var turn in record.Turns)
             {
-                ReplayTurn(turn.UserText, turn.ReplyText, turn.ToolCalls, styled);
+                ReplayTurn(turn.UserText, turn.ReplyText, turn.ToolCalls, styled, byRow.GetValueOrDefault(turn.Ordinal), box);
             }
         }
     }
