@@ -39,6 +39,9 @@ public enum ShoppingVerb
     /// <summary><c>store remove &lt;name&gt;</c>: a store and its layout gone, after a yes (the model cannot).</summary>
     RemoveStore,
 
+    /// <summary><c>store rename &lt;name&gt; to &lt;new-name&gt;</c> (2026-10-11).</summary>
+    RenameStore,
+
     /// <summary><c>export [&lt;store&gt;] [verbose]</c>: the list as Markdown in the working directory's stamped file (<see cref="ShoppingText.ExportFileName"/>), compact unless verbose.</summary>
     Export,
 
@@ -56,7 +59,7 @@ public enum ShoppingVerb
 /// A <c>/shopping</c> line read: the verb, its text (the items, the item, the store's name), the error for a line that is no command,
 /// and <see cref="Verbose"/> for an <c>export</c> or <c>print</c> asked for in the roomy form (2026-10-11).
 /// </summary>
-public sealed record ShoppingCommandLine(ShoppingVerb Verb, string Text = "", string? Error = null, bool Verbose = false);
+public sealed record ShoppingCommandLine(ShoppingVerb Verb, string Text = "", string? Error = null, bool Verbose = false, string To = "");
 
 /// <summary>
 /// <c>/shopping</c>'s words (2026-10-11, the user's ask), pure: <see cref="Parse"/> the line, <see cref="Complete"/> for the input line's
@@ -75,7 +78,7 @@ public static class ShoppingCommand
         ("remove", "take an item off the list: /shopping remove <item|n>"),
         ("list", "print the list walked through the store: /shopping list [<store>]"),
         ("clear", "remove the ticked items; /shopping clear all empties the list, after a yes"),
-        ("store", "the stores; /shopping store <name> shops there, store add|remove <name>"),
+        ("store", "the stores; /shopping store <name> shops there, store add|remove <name>, store rename <name> to <new>"),
         ("export", "write the list to " + ShoppingText.ExportFilePattern + ": /shopping export [<store>] [verbose]"),
         ("print", "print the list, compact: /shopping print [<store>] [verbose]"),
         ("reindex", "read the store's reference documents again: /shopping reindex [<store>]"),
@@ -136,7 +139,9 @@ public static class ShoppingCommand
         {
             "add" when name.Length > 0 => new(ShoppingVerb.AddStore, name),
             "remove" when name.Length > 0 => new(ShoppingVerb.RemoveStore, name),
-            "add" or "remove" => Usage(),
+            "rename" when name.LastIndexOf(" to ", StringComparison.OrdinalIgnoreCase) is > 0 and var at && name[(at + 4)..].Trim().Length > 0
+                => new(ShoppingVerb.RenameStore, name[..at].Trim(), To: name[(at + 4)..].Trim()),
+            "add" or "remove" or "rename" => Usage(),
             _ => new(ShoppingVerb.UseStore, rest),
         };
     }
@@ -171,7 +176,7 @@ public static class ShoppingCommand
         return word switch
         {
             "store" => MentionCompleter.Matches(
-                [new(head + "add ", "a new store: /shopping store add <name>"), new(head + "remove ", "a store and its layout gone, after a yes"), .. stores.Select(s => new CompletionItem(head + s, "shop at " + s))],
+                [new(head + "add ", "a new store: /shopping store add <name>"), new(head + "rename ", "/shopping store rename <name> to <new-name>"), new(head + "remove ", "a store and its layout gone, after a yes"), .. stores.Select(s => new CompletionItem(head + s, "shop at " + s))],
                 argText),
             "check" or "tick" or "uncheck" or "untick" or "remove" => MentionCompleter.Matches(items.Select(i => new CompletionItem(head + i, "")).ToList(), argText),
             "list" => MentionCompleter.Matches(stores.Select(s => new CompletionItem(head + s, "the list walked through " + s)).ToList(), argText),

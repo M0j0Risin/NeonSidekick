@@ -68,6 +68,17 @@ public sealed class ShoppingCommandTests : IDisposable
     public void PrintAndExport_TakeAStoreAndVerbose(string args, ShoppingVerb verb, string store, bool verbose) =>
         Assert.Equal(new ShoppingCommandLine(verb, store, Verbose: verbose), ShoppingCommand.Parse(args));
 
+    [Fact]
+    public async Task StoreRename_TakesTheOldNameToTheNew_TheFolderKept()
+    {
+        Assert.Equal(new ShoppingCommandLine(ShoppingVerb.RenameStore, "H-E-B #372", To: "H-E-B Bandera"), ShoppingCommand.Parse("store rename H-E-B #372 to H-E-B Bandera"));
+        Assert.Equal(ShoppingVerb.Unknown, ShoppingCommand.Parse("store rename H-E-B").Verb);
+        await Run("store add H-E-B #372");
+        Assert.Equal([ShoppingText.Renamed("store", "H-E-B #372", "H-E-B Bandera")], await Run("store rename h-e-b #372 to H-E-B Bandera"));
+        Assert.Equal("h-e-b-372", _list.Store.FindStore("H-E-B Bandera")!.Folder);
+        Assert.Equal([ShoppingText.NoSuchStore("Kroger", _list.Store.Stores())], await Run("store rename Kroger to Fiesta"));
+    }
+
     [Theory]
     [InlineData("add")]
     [InlineData("check")]
@@ -82,7 +93,7 @@ public sealed class ShoppingCommandTests : IDisposable
     {
         Assert.Equal(["add", "check", "uncheck", "remove", "list", "clear", "store", "export", "print", "reindex"], ShoppingCommand.Words.Select(w => w.Word));
         Assert.Equal(["clear"], ShoppingCommand.Complete("cl", [], []).Select(c => c.Text));
-        Assert.Equal(["store add ", "store remove ", "store Costco", "store H-E-B"], ShoppingCommand.Complete("store ", ["Costco", "H-E-B"], []).Select(c => c.Text));
+        Assert.Equal(["store add ", "store rename ", "store remove ", "store Costco", "store H-E-B"], ShoppingCommand.Complete("store ", ["Costco", "H-E-B"], []).Select(c => c.Text));
         Assert.Equal(["check Soy milk"], ShoppingCommand.Complete("check so", [], ["Soy milk", "Bread"]).Select(c => c.Text));
         Assert.Empty(ShoppingCommand.Complete("add mi", ["Costco"], ["Milk"]));
         Assert.Equal(["milk", "2 eggs", "bread x2"], ShoppingCommand.Items(" milk, 2 eggs;; bread x2 ,"));

@@ -37,11 +37,14 @@ internal sealed class ShoppingMenu
 
     private readonly ShoppingList _list;
     private readonly MenuPane _pane;
+    private readonly Func<CancellationToken, Task<bool>>? _manageStores;
 
     /// <param name="list">The list's operations over the loaded profile's store.</param>
     /// <param name="pane">The menu host in the bottom pane.</param>
-    public ShoppingMenu(ShoppingList list, MenuPane pane)
+    /// <param name="manageStores">The stores' manager the store button opens (2026-10-11, <see cref="SettingsMenu.ManageShoppingStoresAsync"/>); null: a plain picker of the stores.</param>
+    public ShoppingMenu(ShoppingList list, MenuPane pane, Func<CancellationToken, Task<bool>>? manageStores = null)
     {
+        _manageStores = manageStores;
         _list = list ?? throw new ArgumentNullException(nameof(list));
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
     }
@@ -126,6 +129,9 @@ internal sealed class ShoppingMenu
 
                     case ClearTicked:
                         Say(_list.Clear(all: false) is { } cleared ? ShoppingText.Cleared(cleared, all: false) : "Error: " + ShoppingText.WriteFailed);
+                        break;
+                    case Store when _manageStores is not null:
+                        await _manageStores(cancellationToken).ConfigureAwait(false);
                         break;
                     case Store:
                         await PickStoreAsync(shop, cancellationToken).ConfigureAwait(false);

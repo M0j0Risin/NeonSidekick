@@ -943,6 +943,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.BotChatRecentContext,   // later still on 2026-10-10, the Botchat tab's last row: the main chat's last messages
                 SettingsField.EmojiPicker,   // 2026-10-11, Chat's input-line run's last row: the draft row's ☺
                 SettingsField.ShoppingTools,   // 2026-10-11, /tools › Core › Shopping: the shopping list's tools
+                SettingsField.ShoppingStores,  // 2026-10-11, the stores' manager under it
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.

@@ -160,6 +160,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/shopping list [<store>]` | Prints the list walked through the active store, or the one named. |
 | `/shopping clear [all]` | Removes the ticked items; `all` empties the whole list, after a yes (headless: straight away). |
 | `/shopping store [<name>]` | Lists the stores and the active one's layout; with a name, makes it the store the list walks through. |
+| `/shopping store rename <name> to <new-name>` | Renames a store; its reference folder keeps its name. The stores' manager (`/tools` › Core › Shopping › *Shopping stores*, or the `/shopping` pane's `⇄ store`) adds, renames, removes and reindexes them on the pane. |
 | `/shopping store add\|remove <name>` | Adds a store (its folder under `db\shopping\reference` is made), or removes one with its layout, after a yes (headless: straight away); its reference folder stays. |
 | `/shopping export [<store>] [verbose]` | Writes the items left to buy at the active store, or the one named, to a new file in the working directory named for the local time, `shopping-list-20261011-162530.md`, so earlier lists are kept. Compact by default: a `## Shopping List — <store>` heading, then one line per aisle in the store's order with its items run together (`**Aisle 2:** Bread · Goya guava nectar`); `verbose` writes a heading per aisle over a checkbox per item. |
 | `/shopping print [<store>] [verbose]` | Prints the same list (compact, or `verbose`) with `/print`'s printer and font settings. |
@@ -620,7 +621,8 @@ Every list pane works the same way: ↑/↓ move, Enter picks the highlighted ro
 | `/skills` › a skill | Enter on a row: move, rename, edit, revert, `lock`/`unlock`, `disable`/`enable`, delete (asks); a locked skill refuses rename, move and delete; a disabled one is never offered to the model |
 | `/skills` › a skill › `revert` | Enter puts the version back · `d` removes it (asks) · `c` clear all (asks) |
 | `/docker` | Enter opens · `r` refresh · type to filter |
-| `/shopping` | Enter / Space tick or untick · `+` / `-` quantity · `r` remove · `a` tick all (untick all once every item is) · `c` clear ticked · `s` pick the store |
+| `/shopping` | Enter / Space tick or untick · `+` / `-` quantity · `r` remove · `a` tick all (untick all once every item is) · `c` clear ticked · `s` the stores' manager |
+| *Shopping stores* (`/shopping`'s `s`) | Enter on a store shops there (the first row adds one) · `n` rename · `r` remove (asks) · `f` open its reference folder · `i` reindex |
 | `/youtube list` | Enter plays · `d` remove selected (asks) · `c` clear all (asks) · type to filter |
 | `/youtube <words>`, `/youtube playlist` | Enter plays (a playlist from the entry, a channel's uploads) · `s` save the highlighted video |
 | `/tools shell` (*Shell command policy*) | `c` the allowed commands · `p` the police |

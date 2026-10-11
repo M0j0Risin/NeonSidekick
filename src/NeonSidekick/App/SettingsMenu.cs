@@ -1014,6 +1014,9 @@ public enum SettingsField
 
     /// <summary>A toggle: whether a turn offers the shopping list's tools (<see cref="Settings.AppSettingsData.ShoppingTools"/>). The Shopping menu's first row on <c>/tools</c> › Core (2026-10-11, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
     ShoppingTools,
+
+    /// <summary>An action row: Enter opens the shopping stores' manager (<see cref="ManageShoppingStoresAsync"/>), the stores added, renamed, removed and reindexed. The Shopping menu's second row (2026-10-11, the user's ask). Last in the enum, as every newcomer.</summary>
+    ShoppingStores,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1517,7 +1520,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.YouTubeTools, SettingsField.YouTubeApiKey, SettingsField.YouTubeSearchMaxResults, SettingsField.YouTubeSearchOrder, SettingsField.YouTubeSafeSearch, SettingsField.YouTubeRegion, SettingsField.YouTubeLanguage, SettingsField.YouTubeAutoplay, SettingsField.YouTubeVoice],
         [SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount],
-        [SettingsField.ShoppingTools],
+        [SettingsField.ShoppingTools, SettingsField.ShoppingStores],
     ];
 
     /// <summary>
@@ -2185,6 +2188,7 @@ internal sealed partial class SettingsMenu
         SettingsField.FileTools => "File tools",
         SettingsField.ImageTools => "Image tools",
         SettingsField.ShoppingTools => "Shopping tools",
+        SettingsField.ShoppingStores => "Shopping stores",
         SettingsField.WebSearchMethod => "Web search method",
         SettingsField.AnthropicApi => "Anthropic API",
         SettingsField.AnthropicApiKey => "Anthropic API key",
@@ -2552,6 +2556,7 @@ internal sealed partial class SettingsMenu
             SettingsField.FileTools => OnOff(data.FileTools),
             SettingsField.ImageTools => OnOff(data.ImageTools),
             SettingsField.ShoppingTools => OnOff(data.ShoppingTools),
+            SettingsField.ShoppingStores => NeonSidekick.Shopping.ShoppingText.ManageStoresLabel,
             SettingsField.WebSearchMethod => data.WebSearchMethod,
             SettingsField.AskUser => OnOff(data.AskUser),
             SettingsField.AskMaxQuestions => Questions(data.AskMaxQuestions),
@@ -5007,6 +5012,13 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.DockerServerMatchWords)
         {
             return await EditDockerServerWordsAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.ShoppingStores)
+        {
+            // The stores live in the profile's shopping.db, not in the settings: nothing here saves (2026-10-11).
+            await ManageShoppingStoresAsync(cancellationToken).ConfigureAwait(false);
+            return false;
         }
 
         if (field == SettingsField.UncAddShare)

@@ -1390,6 +1390,9 @@ internal sealed partial class ChatScreen
         _menu.CameraChord = _camera.Available ? _pane.Chord : null;
         _menu.ScreenOffered = _screenSystem is not null;
         _menu.Effective = _effective;
+        // The shopping stores' manager (2026-10-11): /tools › Core › Shopping's row and the /shopping pane's store button.
+        _menu.Shopping = _shopping;
+        _menu.ShoppingReference = _shoppingReference;
         _menu.BeforeEmbeddedRemove = StopEmbeddedDownloadOfAsync;
         BindProfile();
     }

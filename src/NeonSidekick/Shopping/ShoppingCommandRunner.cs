@@ -124,20 +124,11 @@ public static class ShoppingCommandRunner
                     return [App.ChatScreen.KeptNotice];
                 }
 
-                if (!store.RemoveStore(gone.Id))
-                {
-                    return ["Error: " + ShoppingText.WriteFailed];
-                }
-
-                DiagnosticLog.Info(ShoppingStore.Category, ShoppingText.AuditStoreRemoved(gone));
-                if (reference is not null)
-                {
-                    // Its pages' pictures are the index's, gone with it; the documents themselves stay.
-                    WorkingDirectory.DeleteDirectoryQuietly(reference.CacheFolder(gone));
-                }
-
-                return [ShoppingText.StoreRemoved(gone)];
+                return [list.RemoveStore(gone)];
             }
+
+            case ShoppingVerb.RenameStore:
+                return [store.FindStore(line.Text) is { } renamed ? list.RenameStore(renamed, line.To) : ShoppingText.NoSuchStore(line.Text, store.Stores())];
 
             case ShoppingVerb.Export:
             {

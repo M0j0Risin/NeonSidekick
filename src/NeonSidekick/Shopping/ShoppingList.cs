@@ -364,6 +364,45 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
         return ShoppingText.StoreAdded(made, folder, first);
     }
 
+    /// <summary>
+    /// <paramref name="shop"/> renamed (2026-10-11, the store manager): its reference folder keeps its name, so its documents stay where
+    /// they are. The answer as a sentence; <c>Error: </c> leads a refusal.
+    /// </summary>
+    public string RenameStore(ShopStore shop, string name)
+    {
+        ArgumentNullException.ThrowIfNull(shop);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "Error: " + ShoppingText.NoStoreName;
+        }
+
+        if (!_store().RenameStore(shop.Id, name))
+        {
+            return "Error: " + ShoppingText.NameTaken("store", name);
+        }
+
+        Audit(ShoppingText.AuditStoreRenamed(shop, name.Trim()));
+        return ShoppingText.Renamed("store", shop.Name, name);
+    }
+
+    /// <summary>
+    /// <paramref name="shop"/> removed with its layout and its pages' cached pictures (2026-10-11); its reference folder and the documents
+    /// in it stay. The answer as a sentence; <c>Error: </c> leads a refusal. The caller asks first.
+    /// </summary>
+    public string RemoveStore(ShopStore shop)
+    {
+        ArgumentNullException.ThrowIfNull(shop);
+        var store = _store();
+        if (!store.RemoveStore(shop.Id))
+        {
+            return "Error: " + ShoppingText.WriteFailed;
+        }
+
+        Files.WorkingDirectory.DeleteDirectoryQuietly(Path.Combine(store.Folder, ShoppingReference.CacheFolderName, shop.Folder));
+        Audit(ShoppingText.AuditStoreRemoved(shop));
+        return ShoppingText.StoreRemoved(shop);
+    }
+
     /// <summary>Makes <paramref name="shop"/> the active store. The answer as a sentence.</summary>
     public string UseStore(ShopStore shop)
     {

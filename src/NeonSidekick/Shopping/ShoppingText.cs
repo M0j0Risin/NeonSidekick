@@ -389,7 +389,7 @@ public static class ShoppingText
 
     /// <summary><c>/shopping</c> given a line no form takes. Pinned.</summary>
     public const string CommandUsage =
-        "/shopping takes add <items>, check|uncheck|remove <item>, list [<store>], clear [all], store [<name>|add <name>|remove <name>], export|print [<store>] [verbose] or reindex [<store>]; alone, the list's pane.";
+        "/shopping takes add <items>, check|uncheck|remove <item>, list [<store>], clear [all], store [<name>|add <name>|rename <name> to <new>|remove <name>], export|print [<store>] [verbose] or reindex [<store>]; alone, the list's pane.";
 
     /// <summary>
     /// The file <c>/shopping export</c> writes in the working directory (2026-10-11, the user's ask: one per export, stamped, so an
@@ -461,6 +461,8 @@ public static class ShoppingText
 
     public static string AuditStoreRemoved(ShopStore store) => "Removed the store \"" + store.Name + "\"";
 
+    public static string AuditStoreRenamed(ShopStore store, string name) => "Renamed the store \"" + store.Name + "\" to \"" + name + "\"";
+
     // ---- the pane (/shopping) ----
 
     /// <summary>The pane's title: the toolbar's cart and the store the list walks through. Pinned.</summary>
@@ -507,6 +509,46 @@ public static class ShoppingText
 
     /// <summary>The store picker with no store. Pinned.</summary>
     public const string NoStoresYet = "No store is set up yet: /shopping store add <name>, or ask the model.";
+
+    // ---- the store manager (/tools › Core › Shopping › Shopping stores, the /shopping pane's ⇄ store; 2026-10-11) ----
+
+    /// <summary>The store manager's title. Pinned.</summary>
+    public const string StoresTitle = "Shopping stores";
+
+    /// <summary>The manager's first row: Enter types a new store's name. Pinned.</summary>
+    public const string AddStoreRow = "+ add a store…";
+
+    /// <summary>The manager's hint row. Pinned.</summary>
+    public const string StoresKeys = "Enter = shop here (the first row adds) · n = rename · r = remove · f = folder · i = reindex · Esc = back";
+
+    /// <summary>The manager's buttons' titles and keys. Pinned.</summary>
+    public const string RenameStoreButton = "✎ rename";
+    public const char RenameStoreKey = 'n';
+    public const string RemoveStoreButton = "✖  remove";
+    public const char RemoveStoreKey = 'r';
+    public const string FolderButton = "📂 folder";
+    public const char FolderKey = 'f';
+    public const string ReindexButton = "⟳ reindex";
+    public const char ReindexKey = 'i';
+
+    /// <summary>A store's row: the active one filled, the rest open, as <c>/memory</c>'s modes are. Pinned.</summary>
+    public static string StoreRow(ShopStore store, bool active) => (active ? "● " : "○ ") + store.Name + (active ? " (active)" : "");
+
+    /// <summary>The band under a store's row: what its layout holds and its documents, then its reference folder. Pinned.</summary>
+    public static (string Text, string Folder) StoreFooter(int locations, int sections, int facts, int documents, string folder) =>
+        (Count(locations, "location") + " · " + Count(sections, "section") + " · " + Count(facts, "placement fact") + " · " + Count(documents, "reference document"), folder);
+
+    /// <summary>What opening a store's folder said. Pinned.</summary>
+    public static string FolderOpened(string folder) => "Opened " + folder + ".";
+
+    /// <summary>Reindexing under way, on the manager's status line. Pinned.</summary>
+    public static string Reading(ShopStore store) => "Reading " + store.Name + "'s reference documents…";
+
+    /// <summary>The settings row's value: Enter opens the manager. Pinned.</summary>
+    public const string ManageStoresLabel = "Enter to manage stores";
+
+    /// <summary>The manager where it cannot be drawn (no pane). Pinned.</summary>
+    public const string StoresNeedPane = "The store manager needs the pane; /shopping store lists the stores, /shopping store add|rename|remove changes them.";
 
     // ---- shopping_layout's answers ----
 
