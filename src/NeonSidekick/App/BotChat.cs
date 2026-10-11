@@ -1121,7 +1121,7 @@ public static partial class BotChat
 
     // ── The screen's words (pinned) ──────────────────────────────────────────
 
-    public const string UsageError = "Usage: /botchat [profile ...] [[--] topic]: names two or more profiles (this one always joins), or none for every profile; after --, the rest is the topic whatever its first word; ESC stops the voice, then cuts the bot replying short, then ends the chat, and /botchat --resume [line] carries it on.";
+    public const string UsageError = "Usage: /botchat [profile ...] [[--] topic]: names two or more profiles (this one always joins), or none for every profile; after --, the rest is the topic whatever its first word; ESC stops the voice, then cuts the bot replying short, then ends the chat (Ctrl+Alt+B at once), and /botchat --resume [line] (or Ctrl+Alt+B) carries it on.";
 
     public const string TooFewError = "/botchat needs at least two profiles: add one with /profile add <name>.";
 
@@ -1131,8 +1131,8 @@ public static partial class BotChat
     /// <summary>The line above the chat: the cast and how to stop it.</summary>
     public static string StartNotice(IReadOnlyList<string> names, string topic) =>
         topic.Length > 0
-            ? $"(botchat: {JoinNames(names)} on \"{topic}\"; type to join in; ESC stops the voice, then the reply, then the chat)"
-            : $"(botchat: {JoinNames(names)}; type to join in; ESC stops the voice, then the reply, then the chat)";
+            ? $"(botchat: {JoinNames(names)} on \"{topic}\"; type to join in; ESC stops the voice, then the reply, then the chat; Ctrl+Alt+B ends it at once)"
+            : $"(botchat: {JoinNames(names)}; type to join in; ESC stops the voice, then the reply, then the chat; Ctrl+Alt+B ends it at once)";
 
     /// <summary>The notice under a bot's reply the ESC ladder cut short (2026-09-25): the chat goes on with the next bot. Pinned.</summary>
     public static string CutShortNotice(string name) => $"(botchat: {name} cut short)";
@@ -1200,6 +1200,61 @@ public static partial class BotChat
     /// <summary><c>/botchat --kill</c> with none running. Pinned.</summary>
     public const string NoExtrasNotice = "(botchat: no extra embedded server is running)";
 
+    // ── The hint strip's botchat glyphs (2026-10-11) ────────────────────────
+
+    /// <summary>
+    /// The hint strip's glyph while the last chat of this run can be resumed from the loaded profile (2026-10-11, the user's pick: a
+    /// stopped chat showed nothing, and only a typed <c>/botchat --resume</c> carried it on). A double-click resumes it, as Ctrl+Alt+B does. Pinned.
+    /// </summary>
+    public const string ResumeGlyph = "👥";
+
+    /// <summary>
+    /// The hint strip's glyph while extra embedded servers a multi-server chat left are running with no chat (2026-10-11, the user's
+    /// pick: "zombie" servers holding the GPU). A double-click stops them, as Ctrl+Alt+K and <c>/botchat --kill</c> do. Pinned.
+    /// </summary>
+    public const string ExtrasGlyph = "🧟";
+
+    /// <summary><c>/botchat --resume</c> as one line (2026-10-11): what Ctrl+Alt+B and a double-click on <see cref="ResumeGlyph"/> run.</summary>
+    public const string ResumeLine = "/botchat " + ResumeSwitch;
+
+    /// <summary><c>/botchat --kill</c> as one line (2026-10-11): what Ctrl+Alt+K and a double-click on <see cref="ExtrasGlyph"/> run.</summary>
+    public const string KillLine = "/botchat " + KillSwitch;
+
+    /// <summary>The line a double-click on <paramref name="glyph"/> runs: <see cref="ResumeLine"/>, <see cref="KillLine"/>, or null for any other glyph. Pure.</summary>
+    public static string? GlyphLine(string glyph) => glyph switch
+    {
+        ResumeGlyph => ResumeLine,
+        ExtrasGlyph => KillLine,
+        _ => null,
+    };
+
+    /// <summary>
+    /// The strip with the botchat glyphs ahead of the rest (2026-10-11): <see cref="ResumeGlyph"/> while <paramref name="resumable"/>, then
+    /// <see cref="ExtrasGlyph"/> while <paramref name="extras"/>, joined by <paramref name="separator"/>; the strip as it was with neither. Pure.
+    /// </summary>
+    public static string Strip(bool resumable, bool extras, string strip, string separator)
+    {
+        ArgumentNullException.ThrowIfNull(strip);
+        ArgumentNullException.ThrowIfNull(separator);
+        var parts = new List<string>(3);
+        if (resumable)
+        {
+            parts.Add(ResumeGlyph);
+        }
+
+        if (extras)
+        {
+            parts.Add(ExtrasGlyph);
+        }
+
+        if (strip.Length != 0)
+        {
+            parts.Add(strip);
+        }
+
+        return string.Join(separator, parts);
+    }
+
     // ── Resuming (2026-09-25) ───────────────────────────────────────────────
 
     /// <summary>
@@ -1237,7 +1292,7 @@ public static partial class BotChat
     public static string ResumeNotice(IReadOnlyList<string> names, string topic, int replies)
     {
         string about = topic.Length > 0 ? $" on \"{topic}\"" : "";
-        return $"(botchat resumed: {JoinNames(names)}{about}, {UsageText.Plural(replies, "reply", "replies")} so far; type to join in; ESC stops the voice, then the reply, then the chat)";
+        return $"(botchat resumed: {JoinNames(names)}{about}, {UsageText.Plural(replies, "reply", "replies")} so far; type to join in; ESC stops the voice, then the reply, then the chat; Ctrl+Alt+B ends it at once)";
     }
 
     /// <summary>The session's title (2026-09-24): <c>Botchat: neon, ada and max</c>.</summary>

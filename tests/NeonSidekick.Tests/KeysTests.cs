@@ -199,8 +199,9 @@ public class KeysTests
         // The Ctrl+Alt chords they replaced are gone (Ctrl+Alt+P came back as /splash, Ctrl+Alt+G as /log on 2026-10-02), and Ctrl+Alt+K with /skills' move.
         Assert.Equal("/log", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.G)));
         Assert.Equal("/header", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.H)));   // back later still on 2026-10-01 as /header (the user's ask)
-        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.K)));
-        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.B)));   // /toolbar on Ctrl+T, /perfbar on Ctrl+F since later still on 2026-10-01
+        // Ctrl+Alt+K and Ctrl+Alt+B came back on 2026-10-11 as the botchat chords (ShortcutLine_TheBotChatChords_…).
+        Assert.Equal(NeonSidekick.App.BotChat.KillLine, Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.K)));
+        Assert.Equal(NeonSidekick.App.BotChat.ResumeLine, Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.B)));   // /toolbar on Ctrl+T, /perfbar on Ctrl+F since later still on 2026-10-01
         Assert.Equal("/sessions", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));   // back later on 2026-10-03 as /sessions (the user's ask)
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Y)));   // /sys on Ctrl+Y since 2026-10-03
         Assert.Equal("/tools", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.T)));
@@ -222,6 +223,23 @@ public class KeysTests
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: true, control: false)));
         Assert.NotEqual(line, Keys.ShortcutLine(Keys.Ctrl(key)));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('@', key, shift: false, alt: true, control: true)));
+        Assert.False(Keys.IsKillSwitch(Keys.CtrlAlt(key)));
+    }
+
+    [Theory]
+    [InlineData(ConsoleKey.B, '\x02', "/botchat --resume")]
+    [InlineData(ConsoleKey.K, '\x0b', "/botchat --kill")]
+    public void ShortcutLine_TheBotChatChords_AreTheirLines_AndAnAltGrCharacterStaysACharacter(ConsoleKey key, char control, string line)
+    {
+        // 2026-10-11 (the user's ask: a key to carry a stopped /botchat on, or to stop the servers it left). The console's STX and VT
+        // and the test factory's '\0' count; Shift, Alt alone, plain Ctrl and an AltGr key that types a character do not.
+        Assert.Equal(line, Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: false, alt: true, control: true)));
+        Assert.Equal(line, Keys.ShortcutLine(Keys.CtrlAlt(key)));
+        Assert.Equal(NeonSidekick.App.SlashCommand.BotChat, NeonSidekick.App.SlashCommands.Parse(line).Command);
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: true, alt: true, control: true)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: true, control: false)));
+        Assert.Null(Keys.ShortcutLine(Keys.Ctrl(key)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('{', key, shift: false, alt: true, control: true)));
         Assert.False(Keys.IsKillSwitch(Keys.CtrlAlt(key)));
     }
 

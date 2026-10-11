@@ -658,6 +658,143 @@ public partial class ChatScreenTests
         Assert.Empty(_chat.Requests);
     }
 
+    // ── Ctrl+Alt+B (2026-10-11) ─────────────────────────────────────────────
+
+    /// <summary>Waits (20 s at most) for <paramref name="text"/> in the screen's output from <paramref name="from"/> on; its index, or -1.</summary>
+    private async Task<int> WaitForOutputAsync(string text, int from = 0)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        int at;
+        while ((at = Output.IndexOf(text, Math.Min(from, Output.Length), StringComparison.Ordinal)) < 0 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+
+        return at;
+    }
+
+    /// <summary>Ctrl+Alt+B while a bot replies (2026-10-11, the user's pick): the chat ends in one press, the bot never "cut short" first.</summary>
+    [Fact]
+    public async Task BotChat_CtrlAltB_WhileABotReplies_EndsTheChatInOnePress()
+    {
+        BotChatFixture();
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("Hello ", "from Neon.");
+        _chat.EnqueueText("never");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (_chat.Requests.Count == 1 && i == 1)
+            {
+                _console.Input.PushKey(Keys.CtrlAlt(ConsoleKey.B));
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(5, CancellationToken.None);
+                }
+
+                PushLine("/exit");
+            }
+        };
+        PushLine("/botchat");
+
+        string output = await RunAsync();
+
+        Assert.Single(_chat.Requests);
+        Assert.Contains("(botchat stopped after", output);
+        Assert.DoesNotContain(BotChat.CutShortNotice("neon"), output);
+    }
+
+    /// <summary>
+    /// Ctrl+Alt+B during the pause ends the chat (the wait woken, no second request); pressed again at the idle line it resumes the
+    /// chat (<see cref="BotChat.ResumeNotice"/>), the hint strip's 👥 standing in between; a third press ends the resumed one.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_CtrlAltB_EndsThePausedChat_ThenResumesIt_AtTheIdleLine()
+    {
+        BotChatFixture();
+        _settings.Update(d => d.BotChatNonTtsDelaySeconds = 5);   // the manual clock never ends the pause on its own
+        UsePane();
+        _chat.EnqueueText("One.");
+        _chat.EnqueueText("Two.");
+        _chat.EnqueueText("never");
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            // The idle reads: the chat started, resumed by the chord once the first stopped, the exit once the second did.
+            if (step == 0)
+            {
+                step++;
+                PushLine(input, "/botchat pizza");
+            }
+            else if (step == 1 && Output.Contains(BotChat.StoppedNotice(1), StringComparison.Ordinal))
+            {
+                step++;
+                input.Push(Keys.CtrlAlt(ConsoleKey.B));
+            }
+            else if (step == 2 && Output.Contains(BotChat.StoppedNotice(2), StringComparison.Ordinal))
+            {
+                step++;
+                PushLine(input, "/exit");
+            }
+        };
+        // The presses under the chats, from the watchers' side: each once its bot's line is out and the chat sits in the pause.
+        var press = Task.Run(async () =>
+        {
+            await WaitForOutputAsync("One.");
+            await Task.Delay(300);
+            input.Push(Keys.CtrlAlt(ConsoleKey.B));
+            int resumed = await WaitForOutputAsync(BotChat.ResumeNotice(["neon", "ada"], "pizza", 1));
+            await WaitForOutputAsync("Two.", Math.Max(resumed, 0));
+            await Task.Delay(300);
+            input.Push(Keys.CtrlAlt(ConsoleKey.B));
+        });
+
+        string output = await RunAsync(input);
+        await press;
+
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Contains(AdaMarker, SystemText(_chat.Requests[1]));   // the resumed chat goes on with ada
+        int stopped = output.IndexOf(BotChat.StoppedNotice(1), StringComparison.Ordinal);
+        int resumed = output.IndexOf(BotChat.ResumeNotice(["neon", "ada"], "pizza", 1), StringComparison.Ordinal);
+        Assert.True(stopped >= 0 && resumed > stopped, $"stopped {stopped}, resumed {resumed}");
+        Assert.InRange(output.IndexOf(BotChat.ResumeGlyph, stopped, StringComparison.Ordinal), stopped, resumed);
+        Assert.True(output.IndexOf(BotChat.StoppedNotice(2), resumed, StringComparison.Ordinal) > resumed);
+        Assert.DoesNotContain(BotChat.CutShortNotice("neon"), output);
+    }
+
+    /// <summary>Ctrl+Alt+B with no chat to resume says so, as the typed <c>/botchat --resume</c> does.</summary>
+    [Fact]
+    public async Task BotChat_CtrlAltB_WithNothingToResume_IsRefusedAsTyped()
+    {
+        BotChatFixture();
+        var input = WhenIdle(i =>
+        {
+            i.Push(Keys.CtrlAlt(ConsoleKey.B));
+            PushLine(i, "/exit");
+        });
+
+        string output = await RunAsync(input);
+
+        Assert.Contains(BotChat.NothingToResumeError, output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public void BotChatStrip_PutsTheResumeAndExtrasGlyphsFirst()
+    {
+        Assert.Equal("🔊", ChatScreen.BotChatStrip(false, false, "🔊"));
+        Assert.Equal("", ChatScreen.BotChatStrip(false, false, ""));
+        Assert.Equal(BotChat.ResumeGlyph, ChatScreen.BotChatStrip(true, false, ""));
+        Assert.Equal(BotChat.ResumeGlyph + ChatScreen.GlyphSeparator + BotChat.ExtrasGlyph + ChatScreen.GlyphSeparator + "🔊", ChatScreen.BotChatStrip(true, true, "🔊"));
+        Assert.Equal(BotChat.ExtrasGlyph + ChatScreen.GlyphSeparator + "🔊", ChatScreen.BotChatStrip(false, true, "🔊"));
+        Assert.Equal(BotChat.ResumeLine, BotChat.GlyphLine(BotChat.ResumeGlyph));
+        Assert.Equal(BotChat.KillLine, BotChat.GlyphLine(BotChat.ExtrasGlyph));
+        Assert.Null(BotChat.GlyphLine("🔊"));
+        Assert.Equal((SlashCommand.BotChat, BotChat.ResumeSwitch), SlashCommands.Parse(BotChat.ResumeLine));
+        Assert.Equal((SlashCommand.BotChat, BotChat.KillSwitch), SlashCommands.Parse(BotChat.KillLine));
+    }
+
     // ── Botchat LLM mode (2026-09-25) ───────────────────────────────────────
 
     /// <summary>Multi: ada talks through her own server, model and reasoning, the starter through its own; the chat says where each bot talks.</summary>

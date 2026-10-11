@@ -62,6 +62,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Ctrl+U | `/usage` | opens over the reply |
 | Ctrl+Y | `/sys` | opens over the reply |
 | Ctrl+Z | `/theme` | waits for the reply |
+| Ctrl+Alt+B | `/botchat --resume`: carries on the last botchat | during a botchat, ends it at once; otherwise waits for the reply |
 | Ctrl+Alt+C | `/clear` | stops the reply first |
 | Ctrl+Alt+N | `/new` | stops the reply first |
 | Ctrl+Alt+P | `/splash` | stops the reply first |
@@ -69,6 +70,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Ctrl+Alt+D | `/mcp` | opens over the reply |
 | Ctrl+Alt+E | `/sessions` | opens over the reply |
 | Ctrl+Alt+H | `/header` | at once |
+| Ctrl+Alt+K | `/botchat --kill`: stops the extra embedded servers a botchat left | waits for the reply (or the botchat) to end |
 | Ctrl+Alt+L | `/tools shell allowed` | opens over the reply |
 | Ctrl+Alt+M | `/memory` | opens over the reply |
 | Ctrl+Alt+O | `/tools shell police` | opens over the reply |
@@ -114,6 +116,8 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | 📥 / 🔌 / 🎙️ / 🔈 (setting up) | cancels that download or setup |
 | the queued count | `/queue` |
 | 📷 (camera on) | `/camera off` |
+| 👥 (a botchat to resume) | `/botchat --resume` |
+| 🧟 (extra embedded servers a botchat left running) | `/botchat --kill` |
 | blank space on the hint row | `/settings` |
 | the session name on the rule above the input row (a model-written name reads as words, `Summary of notes file`) | renames it, like `/sessions title` (during `/botchat` the rule shows the cast instead) |
 

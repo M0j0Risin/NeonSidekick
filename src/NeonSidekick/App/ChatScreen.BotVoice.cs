@@ -73,6 +73,34 @@ internal sealed partial class ChatScreen
     /// <summary>The log's line for a talk asked for under a botchat.</summary>
     public const string BotTalkLogLine = "Botchat: the user asked to talk.";
 
+    /// <summary>
+    /// Ctrl+Alt+B under a running <c>/botchat</c> (2026-10-11, the user's pick: end it in one press, not three up the ESC ladder): the
+    /// ladder told the chat ends (<see cref="BotEscLadder.End"/>, the kill switch's way), the speaking voice stopped, the bot still
+    /// replying cancelled — not a skip, so the chat's loop reads it as the end — and a voice or pause being waited for woken. A picture
+    /// still rendering for the chat runs to its end; the loop stops before the next bot. The chat's own <c>finally</c> keeps it for
+    /// <c>/botchat --resume</c> as ever. Any thread.
+    /// </summary>
+    private void RequestBotEnd()
+    {
+        if (Volatile.Read(ref _botLadder) is not { } ladder)
+        {
+            return;
+        }
+
+        ladder.End();
+        _speech.Stop();
+        if (Volatile.Read(ref _botTurn) is { } turn)
+        {
+            VoiceSession.SafeCancel(turn.Cts);
+        }
+
+        Post(static () => { });
+        DiagnosticLog.Debug(AppCategory, BotEndLogLine);
+    }
+
+    /// <summary>The log's line for a botchat ended by Ctrl+Alt+B.</summary>
+    public const string BotEndLogLine = "Botchat: Ctrl+Alt+B ended the chat.";
+
     /// <summary>Marks <paramref name="turnCts"/> as the bot turn running now until the result is disposed.</summary>
     private IDisposable EnterBotTurn(BotEscLadder ladder, int id, CancellationTokenSource turnCts)
     {

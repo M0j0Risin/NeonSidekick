@@ -98,8 +98,8 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/loop <count>\|infinite [<delay>] /imagine\|/read <arguments>` | Runs `/imagine` or `/read` itself each pass. |
 | `/plan <requirement>` | Researches with read-only tools and presents a plan before anything changes. See Plan mode. |
 | `/botchat [<profile> ...] [--] [<topic>]` | Lets profiles talk to each other until you stop them; `--` makes the rest the topic. See Bot conversations. |
-| `/botchat --resume [<line>]` | Carries on the last bot conversation. |
-| `/botchat --kill` | Stops the extra embedded servers the bots started. |
+| `/botchat --resume [<line>]` | Carries on the last bot conversation (Ctrl+Alt+B, or a double-click on the hint row's 👥). |
+| `/botchat --kill` | Stops the extra embedded servers the bots started (Ctrl+Alt+K, or a double-click on the hint row's 🧟). |
 | `/expand` | Unfolds every tool run, code block, diff and thinking block, now and from here on. Ctrl+O switches between this and `/collapse`. |
 | `/collapse` | Folds them again. |
 | `/find [<words>]` | Finds words in the transcript: a find row opens over the input row, every match marked, the newest shown; matches inside folded tool runs, code, diffs and thinking unfold until the find ends. Keys under [Pane keys](#pane-keys). A word the window wraps across two rows is not found. Ctrl+Shift+F runs it too (in Windows Terminal once its own Ctrl+Shift+F find is unbound; a Mac terminal sends it as Ctrl+F, which is `/perfbar`, so type `/find` there). |
@@ -240,9 +240,9 @@ Type `/` to list every command with a summary; after a command and a space, its 
 * **Joining in:** a line you type joins before the next reply.
 * **Keys and clicks** work throughout, as under a normal reply, including under the spinners while a bot's reply is held for its picture or a picture is made.
 * **Talking:** with *STT input* on, push-to-talk stops the speaking bot, cuts the replying one short (a reply held for its picture too), and listens; what you say follows *STT destination*. With *TTS output* off, the wake phrase (*STT wake*) does the same. The wake phrase during speech (*STT interrupt*) ends the chat.
-* **ESC** steps: stop the voice, then cut the replying bot short (the next one answers), then, before the next bot has said anything, end the chat. `/exit`, `/clear` and `/new` end the chat, then run.
-* **Resume:** `/botchat --resume [<line>]` continues this run's last chat; a line after it joins as yours.
-* **Embedded bots:** see *Botchat multi-embedded*. `/botchat --kill` stops leftover extra servers (never this profile's own).
+* **ESC** steps: stop the voice, then cut the replying bot short (the next one answers), then, before the next bot has said anything, end the chat. **Ctrl+Alt+B** ends it in one press. `/exit`, `/clear` and `/new` end the chat, then run.
+* **Resume:** `/botchat --resume [<line>]` continues this run's last chat; a line after it joins as yours. Ctrl+Alt+B, or a double-click on the hint row's 👥 (shown while there is a chat to resume), does the same without a line.
+* **Embedded bots:** see *Botchat multi-embedded*. `/botchat --kill` (or Ctrl+Alt+K) stops leftover extra servers (never this profile's own). While any are left running, 🧟 shows on the hint row; a double-click on it stops them too.
 * **Pronouns** come from each profile's first TTS voice (`am_`, `bm_`… male, anything else female).
 * **Saved** as a session of its own under *Session logging*, each reply with its tool calls and tokens, the session naming every model the bots spoke through; the current conversation is left alone.
 * **Usage:** the bots' tokens are a *Botchat* row of their own on `/usage`, apart from this chat's figures.

@@ -42,8 +42,8 @@ public static class HelpCommands
         new("/botchat",
         [
             new("/botchat [<profile> ...] [--] [<topic>]", "Let profiles talk to each other, each in its own persona, until you stop them. Leading words that name profiles are the cast (every profile when none is named; the loaded one always speaks first); the first other word starts the topic, and `--` makes everything after it the topic. See Bot conversations."),
-            new("/botchat --resume [<line>]", "Carry on the last bot conversation, with an optional line of your own to it first."),
-            new("/botchat --kill", "Stop the extra embedded servers the bots started."),
+            new("/botchat --resume [<line>]", "Carry on the last bot conversation, with an optional line of your own to it first. Ctrl+Alt+B or a double-click on the hint row's 👥 does it without a line; during a bot conversation Ctrl+Alt+B ends it at once."),
+            new("/botchat --kill", "Stop the extra embedded servers the bots started (Ctrl+Alt+K, or a double-click on the hint row's 🧟 while any run)."),
         ]),
         new("/browse",
         [

@@ -251,6 +251,14 @@ internal sealed partial class ChatScreen
         }
 
         var (command, args) = ParseLine(text);
+        if (line.Chord && _botChatRunning && command == SlashCommand.BotChat && BotChat.ParseResume(args).Resume)
+        {
+            // Ctrl+Alt+B under a running /botchat (2026-10-11, the user's pick): the chat ends in one press, not up the ESC
+            // ladder. The chord alone: a typed /botchat --resume still waits for the chat's end, as every /botchat does.
+            RequestBotEnd();
+            return true;
+        }
+
         bool load = LoadRunning;
         var policy = load ? MidTurnPolicyUnderLoad(command, args) : MidTurnPolicy(command, args);
         if (policy != MidTurnClass.Message)

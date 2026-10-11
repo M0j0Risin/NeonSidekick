@@ -11513,7 +11513,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new KeyRow("Option+Delete", "delete the word before the cursor (Ctrl+Delete opens the help: a Mac terminal sends it as Ctrl+H)"), mac[8]);
         string[] keys = mac.Select(r => r.Key).ToArray();
         Assert.Equal(["Ctrl+.", "Ctrl+]", "Ctrl+/", "Ctrl+D", "Ctrl+E"], keys[Array.IndexOf(keys, "Ctrl+.")..(Array.IndexOf(keys, "Ctrl+E") + 1)]);
-        Assert.Equal("Ctrl+Alt+A", keys[Array.IndexOf(keys, "Ctrl+Alt+C") - 1]);
+        Assert.Equal("Ctrl+Alt+A", keys[Array.IndexOf(keys, "Ctrl+Alt+B") - 1]);
         Assert.Equal(new KeyRow("Ctrl+]", "open a terminal in the working directory", "/terminal"), mac.Single(r => r.Key == "Ctrl+]"));
         Assert.Equal(new KeyRow("Ctrl+D", "open the model picker", "/model"), mac.Single(r => r.Key == "Ctrl+D"));
         Assert.Equal(new KeyRow("Ctrl+Alt+A", "open the memory pane", "/memory"), mac.Single(r => r.Key == "Ctrl+Alt+A"));
@@ -11524,9 +11524,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 51)]   // Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
-    [InlineData(true, false, 52)]
-    [InlineData(true, true, 53)]   // the word moves and deletes joined (2026-10-04)
+    [InlineData(false, false, 53)]   // Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
+    [InlineData(true, false, 54)]
+    [InlineData(true, true, 55)]   // the word moves and deletes joined (2026-10-04)
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon", mac: false);   // Windows' list on any machine (2026-10-07)
@@ -11589,16 +11589,18 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+U", "open the usage pane", "/usage"),   // from Ctrl+Alt+G
             new("Ctrl+Y", "open the system prompt pane", "/sys"),   // from Ctrl+Alt+Y on 2026-10-03, the user's ask
             new("Ctrl+Z", "open the theme picker", "/theme"),   // 2026-10-04, the user's ask
-        ], rows[^35..^17]);
+        ], rows[^37..^19]);
 
         // The command chords after them (2026-09-30), one block A to Z by the letter since the pane chords joined later that day.
         Assert.Equal(
         [
+            new("Ctrl+Alt+B", "resume the last botchat · during one, end it at once", "/botchat --resume"),   // 2026-10-11, the user's ask
             new("Ctrl+Alt+C", "start a new conversation and clear the screen", "/clear"),
             new("Ctrl+Alt+D", "open the MCP pane", "/mcp"),
             new("Ctrl+Alt+E", "open the sessions pane", "/sessions"),   // later on 2026-10-03, the user's ask
             new("Ctrl+Alt+G", "show or hide the log window", "/log"),   // 2026-10-02, the user's ask
             new("Ctrl+Alt+H", "show or hide the header from the next clear", "/header"),   // later still on 2026-10-01, the user's ask
+            new("Ctrl+Alt+K", "stop the extra embedded servers a botchat left running", "/botchat --kill"),   // 2026-10-11, the user's ask
             new("Ctrl+Alt+L", "open the allowed commands list", "/tools shell allowed"),   // /cmdlist until 2026-10-09
             new("Ctrl+Alt+M", "open the memory pane", "/memory"),
             new("Ctrl+Alt+N", "start a new conversation, keeping the screen", "/new"),
@@ -11611,7 +11613,7 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+Alt+U", "show or hide the ComfyUI picture viewer", "/comfy view"),   // 2026-10-02, the user's ask
             new("Ctrl+Alt+V", "show or hide the camera's live view", "/camera live"),   // 2026-10-02, the user's ask
             new("Ctrl+Alt+X", "unload the embedded model at once (press twice)"),   // 2026-10-01, the user's place
-        ], rows[^17..]);
+        ], rows[^19..]);
 
         // Every chord's command is the one it runs, and a row with none runs none: Ctrl+L (the learning's cancel, 2026-10-04) and
         // the kill switch (2026-10-01). The ESC ESC and wake rows name a command they do not type for you.
@@ -11670,7 +11672,7 @@ public partial class ChatScreenTests : IDisposable
         string[] advanced = CommandsTabLines(advanced: true);
         var basicEntries = SlashCommands.HelpEntries.Where(SlashCommands.IsBasic).ToArray();
         var advancedEntries = SlashCommands.HelpEntries.Where(e => !SlashCommands.IsBasic(e)).ToArray();
-        Assert.Equal(31, basicEntries.Length);   // /msgclear 2026-10-10; /wake gone 2026-10-09 (into /stt); /rename 2026-10-05; seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
+        Assert.Equal(32, basicEntries.Length);   // /avatar 2026-10-11; /msgclear 2026-10-10; /wake gone 2026-10-09 (into /stt); /rename 2026-10-05; seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
         Assert.Equal(SlashCommands.HelpEntries.Count, basicEntries.Length + advancedEntries.Length);
         // Three columns since 2026-10-05 (the user's ask): label, description, forms — each further form on a line of its own.
         Assert.Equal(basicEntries.SelectMany(HelpRows), basic.Select(l => l.TrimEnd()));
@@ -11678,7 +11680,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(
         [
-            "/about", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/msgclear", "/new", "/perfbar", "/profile",
+            "/about", "/avatar", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/msgclear", "/new", "/perfbar", "/profile",
             "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/toolbar", "/tools", "/tree", "/tts",
         ], basicEntries.Select(e => e.Command));
         Assert.DoesNotContain(basic, string.IsNullOrWhiteSpace);

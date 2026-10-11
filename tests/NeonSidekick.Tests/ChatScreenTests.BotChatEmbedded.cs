@@ -2,6 +2,7 @@ using NeonSidekick.App;
 using NeonSidekick.EmbeddedLlm;
 using NeonSidekick.Settings;
 using NeonSidekick.Tests.Fakes;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
 
@@ -105,6 +106,28 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(BotChat.KillUsageError, output);
+        Assert.Contains(BotChat.ExtrasStoppedNotice(["Gemma 4 E2B"]), output);
+        Assert.Contains(BotChat.NoExtrasNotice, output);
+        Assert.Empty(embedded.Extras);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>Ctrl+Alt+K (2026-10-11, the user's ask) is <c>/botchat --kill</c> from the keyboard: the extras stopped, then none.</summary>
+    [Fact]
+    public async Task BotChat_CtrlAltK_StopsTheExtras_AsTheTypedKillDoes()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
+        await embedded.StartExtraAsync(EmbeddedModelCatalog.Find("gemma-4-e2b")!, new AppSettingsData(), null, CancellationToken.None);
+        var input = WhenIdle(i =>
+        {
+            i.Push(Keys.CtrlAlt(ConsoleKey.K));
+            i.Push(Keys.CtrlAlt(ConsoleKey.K));
+            PushLine(i, "/exit");
+        });
+
+        string output = await RunAsync(input);
+
         Assert.Contains(BotChat.ExtrasStoppedNotice(["Gemma 4 E2B"]), output);
         Assert.Contains(BotChat.NoExtrasNotice, output);
         Assert.Empty(embedded.Extras);

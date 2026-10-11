@@ -1237,7 +1237,7 @@ internal sealed partial class ChatScreen
             // jobs (LlmSession.IsLearning / IsTitling), nothing pushed.
             // The jobs behind the line (2026-09-29) after the pictures; a switch whose setup runs shows its job's glyph, not
             // its own (a click on 🎤 or 🔊 turns it off).
-            Strip = () => CameraStrip(_camera.Live, PlanStrip(_plan.Active, StripGlyphs(_session.IsLearning, _session.IsTitling, _pendingPictures.Glyph, _speech.Enabled && !_jobs.Running(BackgroundJobKind.Speech), _voice.Enabled && !_jobs.Running(BackgroundJobKind.Voice), _voice.WakeReady, _voice.InterruptReady, _jobs.Strip()))),
+            Strip = () => CameraStrip(_camera.Live, PlanStrip(_plan.Active, BotChatStrip(BotChatResumable, BotExtrasIdle, StripGlyphs(_session.IsLearning, _session.IsTitling, _pendingPictures.Glyph, _speech.Enabled && !_jobs.Running(BackgroundJobKind.Speech), _voice.Enabled && !_jobs.Running(BackgroundJobKind.Voice), _voice.WakeReady, _voice.InterruptReady, _jobs.Strip())))),
             // The model at the row's right edge, from the live connection: empty until one lands;
             // the reasoning glyph after it in its own colour, none with the model.
             // The session's name at the right edge of the rule above the input row (2026-09-18, the user's
@@ -2334,11 +2334,14 @@ internal sealed partial class ChatScreen
             rows.Add(new("Ctrl+Alt+A", "open the memory pane", "/memory"));
         }
 
+        // The botchat chords (2026-10-11, the user's ask): carry a stopped chat on (or end a running one), and stop the servers it left.
+        rows.Add(new("Ctrl+Alt+B", "resume the last botchat · during one, end it at once", BotChat.ResumeLine));
         rows.Add(new("Ctrl+Alt+C", "start a new conversation and clear the screen", "/clear"));
         rows.Add(new("Ctrl+Alt+D", "open the MCP pane", "/mcp"));
         rows.Add(new("Ctrl+Alt+E", "open the sessions pane", "/sessions"));
         rows.Add(new("Ctrl+Alt+G", "show or hide the log window", "/log"));
         rows.Add(new("Ctrl+Alt+H", "show or hide the header from the next clear", "/header"));
+        rows.Add(new("Ctrl+Alt+K", "stop the extra embedded servers a botchat left running", BotChat.KillLine));
         rows.Add(new("Ctrl+Alt+L", "open the allowed commands list", ToolsText.ShellSubLine(ToolsText.ShellAllowedWord)));
         rows.Add(new("Ctrl+Alt+M", mac ? "open the memory pane (in the app's windows; Ctrl+Alt+A in the terminal)" : "open the memory pane", "/memory"));
         rows.Add(new("Ctrl+Alt+N", "start a new conversation, keeping the screen", "/new"));
@@ -9668,6 +9671,14 @@ internal sealed partial class ChatScreen
                                 return 0;
                             }
                         }
+                        else if (hint.Hit.Zone == ScreenPane.HintZone.Strip && BotChat.GlyphLine(hint.Hit.Glyph) is { } botLine)
+                        {
+                            // The botchat glyphs (2026-10-11): 👥 /botchat --resume, 🧟 /botchat --kill, as typed.
+                            if (await HandleAsync(botLine, [], cancellationToken).ConfigureAwait(false))
+                            {
+                                return 0;
+                            }
+                        }
                         else if (hint.Hit.Zone == ScreenPane.HintZone.Strip && SwitchForGlyph(hint.Hit.Glyph) is { } glyphSwitch)
                         {
                             await HandleSwitchAsync(glyphSwitch.Command, glyphSwitch.Off, midTurn: false, cancellationToken).ConfigureAwait(false);
@@ -13280,7 +13291,8 @@ internal sealed partial class ChatScreen
         var recent = effective.BotChatRecentContext ? NeonSidekick.Advisors.AdvisorRecent.Lines(_session.History.Messages) : null;
         try
         {
-            while (!cancellationToken.IsCancellationRequested)
+            // Ctrl+Alt+B (2026-10-11, RequestBotEnd) may end the chat between bots too: under a picture's spinner, or a listen.
+            while (!cancellationToken.IsCancellationRequested && !ladder.EndRequested)
             {
                 // The lines typed under the last reply join the chat as the user's, in order; then the pictures made meanwhile.
                 TakeInterjections(lines);
@@ -13290,6 +13302,11 @@ internal sealed partial class ChatScreen
                 if (_botTalk && await BotListenAsync(lines, cancellationToken).ConfigureAwait(false))
                 {
                     return true;
+                }
+
+                if (ladder.EndRequested)
+                {
+                    break;
                 }
 
                 ArmBotWake(_effective());
@@ -13613,6 +13630,19 @@ internal sealed partial class ChatScreen
 
     /// <summary>The last <c>/botchat</c> of this run, kept when it stopped, for <see cref="BotChat.ResumeSwitch"/> (2026-09-25); null before the first.</summary>
     private BotChatState? _lastBotChat;
+
+    /// <summary>
+    /// Whether <c>/botchat --resume</c> would carry a chat on now (2026-10-11, the hint strip's <see cref="BotChat.ResumeGlyph"/>): one
+    /// kept, started from the loaded profile, none running. The pane's tick may read it from the timer thread.
+    /// </summary>
+    private bool BotChatResumable =>
+        !_botChatRunning && Volatile.Read(ref _lastBotChat) is { } saved && Profiles.NameEquals(saved.Starter, _settings.ProfileName);
+
+    /// <summary>Whether extra embedded servers run with no chat to use them (2026-10-11, the hint strip's <see cref="BotChat.ExtrasGlyph"/>).</summary>
+    private bool BotExtrasIdle => !_botChatRunning && _session.Embedded?.Extras.Count > 0;
+
+    /// <summary>The strip with the botchat glyphs ahead of the rest (2026-10-11, <see cref="BotChat.Strip"/>), as <see cref="PlanStrip"/>. Pinned.</summary>
+    public static string BotChatStrip(bool resumable, bool extras, string strip) => BotChat.Strip(resumable, extras, strip, GlyphSeparator);
 
     /// <summary>
     /// The <c>/botchat</c> rest after a reply with no voice (<see cref="AppSettingsData.BotChatNonTtsDelaySeconds"/>,
@@ -14270,7 +14300,7 @@ internal sealed partial class ChatScreen
         try
         {
             // A talk asked for (2026-10-02, ChatScreen.BotVoice) ends the wait too: the chat listens before the next bot.
-            while (!done.IsCompleted && !waitCts.IsCancellationRequested && !_botTalk)
+            while (!done.IsCompleted && !waitCts.IsCancellationRequested && !_botTalk && !ladder.EndRequested)
             {
                 // The queue is read before the first wait (2026-10-04): a line queued under the reply woke a signal the
                 // reply's own drain has since replaced, so it would otherwise wait out the pause. The drain re-arms the
@@ -14304,7 +14334,8 @@ internal sealed partial class ChatScreen
             await EndTurnAsync(closePane: waitCts.IsCancellationRequested, cancellationToken).ConfigureAwait(false);
         }
 
-        bool ended = waitCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested;
+        // Ctrl+Alt+B (2026-10-11, RequestBotEnd) ends the chat as the ladder's last press does, without cancelling the wait.
+        bool ended = (waitCts.IsCancellationRequested || ladder.EndRequested) && !cancellationToken.IsCancellationRequested;
         if (skipped && !ended)
         {
             // The device silent before the next bot speaks; the line says why this voice ended early.

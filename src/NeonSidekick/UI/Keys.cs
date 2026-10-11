@@ -148,6 +148,10 @@ public static class Keys
     /// Ctrl+] (GS) is <c>/terminal</c> there; Ctrl+M sends CR, which is Enter, so Ctrl+D (EOT; nothing in the app used it) is
     /// <c>/model</c>; Ctrl+Alt+M sends ESC CR, Alt+Enter, so Ctrl+Option+A (ESC SOH) is <c>/memory</c> — plain Ctrl+A stays the
     /// line's select-all. Windows' chords are unchanged and these are not Windows' (each arm is guarded).
+    /// On 2026-10-11 (the user's ask: a key to carry a stopped <c>/botchat</c> on, or to stop the servers it left, without typing)
+    /// Ctrl+Alt+B is <c>/botchat --resume</c> and Ctrl+Alt+K <c>/botchat --kill</c>, both free since <c>/toolbar</c> and
+    /// <c>/skills</c> left them: their STX and VT count as no character. Under a running chat Ctrl+Alt+B ends it in one press
+    /// (<c>ChatScreen.RequestBotEnd</c>, the chord alone; the typed line still waits), and Ctrl+Alt+K waits for the chat's end, as typed.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -204,9 +208,11 @@ public static class Keys
 
         return (key.Key, key.KeyChar) switch
         {
+            (ConsoleKey.B, '\0' or '\x02') => App.BotChat.ResumeLine,
             (ConsoleKey.C, '\0' or '\x03') => "/clear",
             (ConsoleKey.G, '\0' or '\x07') => "/log",
             (ConsoleKey.H, '\0' or '\x08') => "/header",
+            (ConsoleKey.K, '\0' or '\x0b') => App.BotChat.KillLine,
             (ConsoleKey.N, '\0' or '\x0e') => "/new",
             (ConsoleKey.P, '\0' or '\x10') => "/splash",
             (ConsoleKey.Q, '\0' or '\x11') => "/queue clear",
