@@ -476,13 +476,144 @@ public static class ShoppingText
 
     public static string AuditStoreRenamed(ShopStore store, string name) => "Renamed the store \"" + store.Name + "\" to \"" + name + "\"";
 
+    // ---- the layout editor (store manager › ▦ layout, 2026-10-11) ----
+
+    public const string LayoutButton = "▦ layout";
+    public const char LayoutKey = 'l';
+
+    /// <summary>The editor's title. Pinned.</summary>
+    public static string LayoutTitle(ShopStore store) => "▦ " + store.Name;
+
+    /// <summary>The editor's tabs. Pinned.</summary>
+    public const string AislesTab = "Aisles";
+    public const string SectionsTab = "Sections";
+    public const string FactsTab = "Facts";
+    public const string GuessesTab = "Guesses";
+
+    /// <summary>The editor's hint row (the Facts tab adds typing to filter). Pinned.</summary>
+    public const string LayoutKeys = "Enter = change the row (the first row adds) · ←/→ tabs · Esc = back";
+    public const string FactsKeys = "Enter = change the fact · ←/→ tabs · Esc = back";
+
+    public const string AddLocationRow = "+ add an aisle or zone…";
+    public const string AddSectionRow = "+ add a section…";
+    public const string NoFactsRow = "No placement facts yet: the model records them, or place a line from /shopping (p).";
+    public const string NoGuessesRow = "No guesses to review.";
+
+    /// <summary>A location on the Aisles tab: its walk number, label, section and the facts at it. Pinned.</summary>
+    public static string LayoutLocationRow(int walk, ShopLocation location, int facts) =>
+        walk.ToString(CultureInfo.InvariantCulture).PadLeft(2) + ". " + LocationChoice(location) + " · " + Count(facts, "fact");
+
+    /// <summary>A section on the Sections tab: its name, its locations and the facts in it. Pinned.</summary>
+    public static string LayoutSectionRow(ShopSection section, int locations, int facts) =>
+        section.Name + " · " + Count(locations, "location") + " · " + Count(facts, "fact");
+
+    /// <summary>A fact on the Facts tab: the term, its kind, where it puts things, how it was learnt. Pinned.</summary>
+    public static string FactRow(ShopPlacement fact, ShopPlace place) =>
+        fact.Term + " · " + fact.Kind + " → " + Where(place) + " · " + fact.Source + (fact.Note.Length > 0 ? " · " + fact.Note : "");
+
+    /// <summary>A guess on the Guesses tab: the term, where it guessed, and the lines of the list it places now. Pinned.</summary>
+    public static string GuessRow(ShopPlacement fact, ShopPlace place, IReadOnlyList<ShopItem> lines) =>
+        fact.Term + " → " + Where(place) + (lines.Count > 0 ? " · places " + string.Join(", ", lines.Select(l => l.Name)) : "");
+
+    /// <summary>The Guesses tab's title, with the count. Pinned.</summary>
+    public static string GuessesTitle(int count) => count > 0 ? GuessesTab + " (" + count.ToString(CultureInfo.InvariantCulture) + ")" : GuessesTab;
+
+    /// <summary>The actions on a location, a section, a fact and a guess, in the order listed. Pinned.</summary>
+    public static readonly IReadOnlyList<string> LocationActions = ["rename", "section…", "move up the walk", "move down the walk", "remove"];
+    public static readonly IReadOnlyList<string> SectionActions = ["rename", "remove"];
+    public static readonly IReadOnlyList<string> FactActions = ["move to…", "kind…", "remove"];
+    public static readonly IReadOnlyList<string> GuessActions = ["✓ keep (it is right)", "move to…", "remove"];
+
+    /// <summary>The section picker's first row: no section. Pinned.</summary>
+    public const string NoSectionRow = "(no section)";
+
+    public static string RemoveLocationPrompt(ShopLocation location, int facts) => "Remove \"" + location.Label + "\" with " + Count(facts, "placement fact") + " at it?";
+
+    public static string RemoveSectionPrompt(ShopSection section) => "Remove the section \"" + section.Name + "\"? Its locations and facts keep their places with no section.";
+
+    /// <summary>The editor where it cannot be drawn. Pinned.</summary>
+    public const string LayoutNeedsPane = "The layout editor needs the pane; the model changes a layout with shopping_layout and shopping_place.";
+
+    // ---- the pane's add and place (2026-10-11) ----
+
+    public const string AddButton = "⊕ add";
+    public const char AddKey = 'i';
+    public const string PlaceButton = "⌖ place";
+    public const char PlaceKey = 'p';
+    public const string ForgetButton = "✖  forget";
+    public const char ForgetKey = 'x';
+
+    /// <summary>The add page's title. Pinned.</summary>
+    public const string AddTitle = "🛒 Add to the list";
+
+    /// <summary>The add page's first row: Enter types new lines. Pinned.</summary>
+    public const string AddItemRow = "+ type a new item…";
+
+    /// <summary>The add page's hint row. Pinned.</summary>
+    public const string AddKeys = "Enter = add (the first row types new ones) · x = forget a bought line · Esc = back";
+
+    /// <summary>The add page's caption with nothing bought yet. Pinned.</summary>
+    public const string NothingBoughtYet = "Lines ticked and cleared are remembered here, to add again.";
+
+    /// <summary>The add page's caption. Pinned.</summary>
+    public static string BoughtCaption(int count) => Count(count, "line") + " bought before and not on the list";
+
+    /// <summary>A bought line on the add page: its name and last quantity, how often, when last (the local date). Pinned.</summary>
+    public static string BoughtRow(ShopBought bought, TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(bought);
+        string when = TimeZoneInfo.ConvertTime(bought.Last, zone).ToString("MMM d", CultureInfo.InvariantCulture);
+        return bought.Name + (bought.Quantity > 1 ? " " + Times + bought.Quantity.ToString(CultureInfo.InvariantCulture) : "")
+            + " · " + (bought.Times == 1 ? "once" : bought.Times.ToString(CultureInfo.InvariantCulture) + " times") + " · last " + when;
+    }
+
+    /// <summary>What an add on the pane or <c>/shopping add</c> says: <see cref="Added"/> without the line meant for the model.</summary>
+    public static string AddedForUser(IReadOnlyList<ShopAdded> added, ShopStore? shop) =>
+        string.Join("\n", Added(added, shop).Split('\n').Where(l => l != UnplacedHint));
+
+    /// <summary>What <c>shopping_recent</c> lists: each line, how many times, its last quantity and date (UTC), and how many there are in all.</summary>
+    public static string Recent(IReadOnlyList<ShopBought> shown, int total)
+    {
+        ArgumentNullException.ThrowIfNull(shown);
+        if (total == 0)
+        {
+            return "Nothing bought yet: a line is remembered when it leaves the list ticked.";
+        }
+
+        var sb = new StringBuilder("Bought before and not on the list now (").Append(Count(total, "line")).Append(shown.Count < total ? ", the first " + shown.Count.ToString(CultureInfo.InvariantCulture) : "").Append("), the most often first:");
+        foreach (var b in shown)
+        {
+            sb.Append("\n- ").Append(b.Name).Append(b.Quantity > 1 ? " " + Times + b.Quantity.ToString(CultureInfo.InvariantCulture) : "")
+              .Append(" (").Append(b.Times == 1 ? "once" : b.Times.ToString(CultureInfo.InvariantCulture) + " times").Append(", last ")
+              .Append(b.Last.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)).Append(')');
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>The place picker's title. Pinned.</summary>
+    public static string PlaceTitle(ShopItem item) => "⌖ Where is " + item.Name + "?";
+
+    /// <summary>A location on the place picker: its label and section. Pinned.</summary>
+    public static string LocationChoice(ShopLocation location) =>
+        location.Label + (location.SectionName is { } s && !string.Equals(s, location.Label, StringComparison.OrdinalIgnoreCase) ? " · " + s : "");
+
+    /// <summary>A section on the place picker, for a product with no aisle. Pinned.</summary>
+    public static string SectionChoice(ShopSection section) => "Section: " + section.Name;
+
+    /// <summary>The place picker's last row while the line has an item fact of its own. Pinned.</summary>
+    public const string ForgetPlaceRow = "(forget where it is)";
+
+    /// <summary>The place picker with a store that has no layout yet. Pinned.</summary>
+    public static string NoLayoutYet(ShopStore shop) => shop.Name + " has no aisles or sections yet: add them in Shopping stores › layout (s, then l).";
+
     // ---- the pane (/shopping) ----
 
     /// <summary>The pane's title: the toolbar's cart and the store the list walks through, or <c>Shopping list</c> with none (the store alone since later on 2026-10-11, for the buttons' room). Pinned.</summary>
     public static string PaneLabel(ShopStore? store) => "🛒 " + (store?.Name ?? "Shopping list");
 
     /// <summary>The pane's hint row. Pinned.</summary>
-    public const string PaneKeys = "Enter / Space = tick or untick · + / - = quantity · n = rename · r = remove · a = tick all · c = clear ticked · s = stores · Esc = close";
+    public const string PaneKeys = "Enter / Space = tick · i = add · p = place · n = rename · r = remove · a = tick all · c = clear · s = stores · + / - = quantity · Esc = close";
 
     /// <summary>
     /// The pane's buttons' titles and keys, each with a glyph in the other panes' style (2026-10-11, the user's ask: <c>⊠ clear all</c>,
@@ -494,7 +625,7 @@ public static class ShoppingText
     public const char LessKey = '-';
     public const string RenameButton = "✎ rename";
     public const char RenameKey = 'n';
-    public const string RemoveButton = "✖  remove";
+    public const string RemoveButton = "✖  del";
     public const char RemoveKey = 'r';
     public const string TickAllButton = "☑  all";
     public const string UntickAllButton = "☐  none";
@@ -520,13 +651,34 @@ public static class ShoppingText
     public static string PaneRow(ShopItem item, bool guess) => (item.Checked ? "[x] " : "[ ] ") + Line(item) + (guess ? " " + GuessMark : "");
 
     /// <summary>The pane's caption: the counts. Pinned.</summary>
-    public static string PaneCaption(int open, int ticked) => Count(open, "item") + " to get" + (ticked > 0 ? ", " + ticked.ToString(CultureInfo.InvariantCulture) + " ticked" : "");
+    public static string PaneCaption(int open, int ticked, int guesses = 0) =>
+        Count(open, "item") + " to get" + (ticked > 0 ? ", " + ticked.ToString(CultureInfo.InvariantCulture) + " ticked" : "")
+        + (guesses > 0 ? " · " + Count(guesses, "guess") + " (p places one)" : "");
 
     /// <summary>The store picker's title. Pinned.</summary>
     public const string StorePickTitle = "Shop at";
 
     /// <summary>The store picker with no store. Pinned.</summary>
     public const string NoStoresYet = "No store is set up yet: /shopping store add <name>, or ask the model.";
+
+    // ---- the layout editor, the pane's place and add (2026-10-11) ----
+
+    public static string FactKind(ShopPlacement fact, string kind) => "\"" + fact.Term + "\" is a " + kind + " now.";
+
+    public static string FactConfirmed(ShopPlacement fact) => "Kept: \"" + fact.Term + "\" is no longer a guess.";
+
+    public static string LocationSection(ShopLocation location, ShopSection? section) =>
+        section is null ? "\"" + location.Label + "\" is in no section now." : "\"" + location.Label + "\" is in " + section.Name + " now.";
+
+    public static string WalkEnd(ShopLocation location, bool up) => "\"" + location.Label + "\" is " + (up ? "first" : "last") + " on the walk already.";
+
+    public static string BoughtForgotten(ShopBought bought) => "Forgot \"" + bought.Name + "\" from the recently bought.";
+
+    public static string AuditFactKind(ShopStore shop, ShopPlacement fact, string kind) => "Layout: at " + shop.Name + ", \"" + fact.Term + "\" is a " + kind;
+
+    public static string AuditFactConfirmed(ShopStore shop, ShopPlacement fact) => "Layout: at " + shop.Name + ", kept the guess \"" + fact.Term + "\"";
+
+    public static string AuditBoughtForgotten(ShopBought bought) => "Forgot from the recently bought: " + bought.Name;
 
     // ---- the store manager (/tools › Core › Shopping › Shopping stores, the /shopping pane's ⇄ store; 2026-10-11) ----
 
@@ -537,7 +689,7 @@ public static class ShoppingText
     public const string AddStoreRow = "+ add a store…";
 
     /// <summary>The manager's hint row. Pinned.</summary>
-    public const string StoresKeys = "Enter = shop here (the first row adds) · n = rename · r = remove · f = folder · i = reindex · Esc = back";
+    public const string StoresKeys = "Enter = shop here (the first row adds) · l = layout · n = rename · r = remove · f = folder · i = reindex · Esc = back";
 
     /// <summary>The manager's buttons' titles and keys. Pinned.</summary>
     public const string RenameStoreButton = "✎ rename";
@@ -553,8 +705,8 @@ public static class ShoppingText
     public static string StoreRow(ShopStore store, bool active) => (active ? "● " : "○ ") + store.Name + (active ? " (active)" : "");
 
     /// <summary>The band under a store's row: what its layout holds and its documents, then its reference folder. Pinned.</summary>
-    public static (string Text, string Folder) StoreFooter(int locations, int sections, int facts, int documents, string folder) =>
-        (Count(locations, "location") + " · " + Count(sections, "section") + " · " + Count(facts, "placement fact") + " · " + Count(documents, "reference document"), folder);
+    public static (string Text, string Folder) StoreFooter(int locations, int sections, int facts, int documents, string folder, int guesses = 0) =>
+        (Count(locations, "location") + " · " + Count(sections, "section") + " · " + Count(facts, "placement fact") + (guesses > 0 ? " (" + Count(guesses, "guess") + " to review)" : "") + " · " + Count(documents, "reference document"), folder);
 
     /// <summary>What opening a store's folder said. Pinned.</summary>
     public static string FolderOpened(string folder) => "Opened " + folder + ".";

@@ -1,5 +1,6 @@
 using NeonSidekick.App;
 using NeonSidekick.Files;
+using NeonSidekick.Llm.Tools;
 using NeonSidekick.Shopping;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
@@ -85,7 +86,6 @@ public sealed class ShoppingCommandTests : IDisposable
     }
 
     [Theory]
-    [InlineData("add")]
     [InlineData("check")]
     [InlineData("clear some")]
     [InlineData("store add")]
@@ -196,6 +196,84 @@ public sealed class ShoppingCommandTests : IDisposable
         Assert.Equal([ShoppingText.NotOnList("butter")], await Run("rename butter to ghee"));
     }
 
+    private (ShoppingMenu Menu, ScreenPane Pane, ScriptedInput Input) PaneWithInput()
+    {
+        var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100), _time) { Hint = () => "idle" };
+        var input = new ScriptedInput();
+        var keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
+        var menu = new ShoppingMenu(_list, new MenuPane(pane, keys), input: new InputLine(pane, keys), zone: TimeZoneInfo.Utc);
+        pane.Show();
+        return (menu, pane, input);
+    }
+
+    [Fact]
+    public async Task ThePane_PlacesALine_AtAnAisle_AndForgetsIt()
+    {
+        await Run("store add H-E-B");
+        var shop = _list.StoreFor(null, out _)!;
+        _list.AddLocation(shop, "Aisle 7", null);
+        _list.AddSection(shop, "Deli & Meats");
+        await Run("add Kombucha");
+        var (menu, pane, input) = PaneWithInput();
+        input.Push(Keys.Char('p'), Keys.Enter);                 // Aisle 7, the first choice
+        input.Push(Keys.Char('p'), Keys.Down, Keys.Down, Keys.Enter);   // Aisle 7, Section: Deli & Meats, (forget where it is)
+        input.Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Empty(_list.Store.Placements(shop.Id));
+        Assert.Contains("At H-E-B, item \"Kombucha\" is in Aisle 7.", TabStrips.Unbadged(_console.Output));
+        Assert.Contains(ShoppingText.Unplaced(shop, "Kombucha"), TabStrips.Unbadged(_console.Output));
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task ThePane_AddPage_AddsALineBoughtBefore_AndTypedOnes()
+    {
+        await Run("add 2 Milk");
+        await Run("check milk");
+        await Run("clear");                                      // Milk ×2 remembered as bought
+        Assert.Equal([("Milk", 2, 1)], _list.Bought().Select(b => (b.Name, b.Quantity, b.Times)));
+        var (menu, pane, input) = PaneWithInput();
+        input.Push(Keys.Char('i'));                              // the add page
+        input.Push(Keys.Down, Keys.Enter);                       // Milk again, at ×2
+        input.Push(Keys.Up, Keys.Enter);                         // the typed row
+        foreach (char c in "Bread, 3 eggs")
+        {
+            input.Push(Keys.Char(c));
+        }
+
+        input.Push(Keys.Enter, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal([("Milk", 2), ("Bread", 1), ("eggs", 3)], _list.Store.Items().Select(i => (i.Name, i.Quantity)));
+        Assert.Empty(_list.Bought());                            // Milk is on the list again, so not offered
+        Assert.Contains("Milk ×2 · once · last Sep 11", TabStrips.Unbadged(_console.Output));
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task Recent_ListsWhatWasBought_TheMostOftenFirst_AndTheCaptionCountsGuesses()
+    {
+        var recent = ChatScreen.ShoppingTools(_list, null).Single(t => t.Name == ShoppingRecentTool.ToolName);
+        Assert.Equal("Nothing bought yet: a line is remembered when it leaves the list ticked.", (string)(await recent.InvokeAsync(new Microsoft.Extensions.AI.AIFunctionArguments()))!);
+        foreach (string round in new[] { "Eggs, Bread", "Eggs" })
+        {
+            await Run("add " + round);
+            await Run("tick all");
+            _list.CheckAll(true);
+            await Run("clear");
+        }
+
+        await Run("add Soap");
+        await Run("remove soap");                                // removed unticked: not bought
+        Assert.Equal(
+            "Bought before and not on the list now (2 lines), the most often first:\n- Eggs (2 times, last 2026-09-11)\n- Bread (once, last 2026-09-11)",
+            (string)(await recent.InvokeAsync(new Microsoft.Extensions.AI.AIFunctionArguments()))!);
+        Assert.Equal("1 item to get · 1 guess (p places one)", ShoppingText.PaneCaption(1, 0, 1));
+    }
+
     [Fact]
     public async Task ThePane_RenamesTheHighlightedLine_OnTheInputRow()
     {
@@ -229,10 +307,12 @@ public sealed class ShoppingCommandTests : IDisposable
     {
         // The bar drawn (later on 2026-10-11, the user's pick: the title row ran out of room): + and - keys alone, hidden and last.
         var buttons = ShoppingMenu.ButtonsFor(anyOpen: true);
-        Assert.Equal(["✎ rename", "✖  remove", "☑  all", "⊠ clear", "⇄ store"], buttons.Where(b => !b.Hidden).Select(b => b.Title));
-        Assert.Equal(['n', 'r', 'a', 'c', 's', '+', '-'], buttons.Select(b => b.Key!.Value));
-        Assert.Equal([false, false, false, false, false, true, true], buttons.Select(b => b.Hidden));
-        Assert.Equal("☐  none", ShoppingMenu.ButtonsFor(anyOpen: false)[2].Title);
+        Assert.Equal(["⊕ add", "⌖ place", "✎ rename", "✖  del", "☑  all", "⊠ clear", "⇄ store"], buttons.Where(b => !b.Hidden).Select(b => b.Title));
+        Assert.Equal(['i', 'p', 'n', 'r', 'a', 'c', 's', '+', '-'], buttons.Select(b => b.Key!.Value));
+        Assert.Equal([false, false, false, false, false, false, false, true, true], buttons.Select(b => b.Hidden));
+        Assert.Equal("☐  none", ShoppingMenu.ButtonsFor(anyOpen: false)[4].Title);
+        Assert.Equal(new ShoppingCommandLine(ShoppingVerb.Add, ""), ShoppingCommand.Parse("add"));   // alone: the add page on the pane
+        Assert.Equal(["Error: " + ShoppingText.NoItems + ": /shopping add milk, 2 eggs"], await Run("add"));   // without one
 
         await Run("add Bread, Eggs, Milk");
         await Run("check eggs");

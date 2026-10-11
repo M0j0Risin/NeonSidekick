@@ -79,7 +79,7 @@ public partial class SettingsMenuTests
         Assert.Equal("Shopping list", SettingsMenu.FieldName(SettingsField.ShoppingList));
         Assert.Equal(ShoppingText.ManageListLabel, SettingsMenu.FieldValue(SettingsField.ShoppingList, new Settings.AppSettingsData(), _settings.ProfileDirectory));
         Assert.False(SettingsMenu.IsToggle(SettingsField.ShoppingStores));
-        Assert.Equal(["✎ rename", "✖  remove", "📂 folder", "⟳ reindex"], SettingsMenu.StoreButtons.Select(b => b.Title));
+        Assert.Equal(["▦ layout", "✎ rename", "✖  remove", "📂 folder", "⟳ reindex"], SettingsMenu.StoreButtons.Select(b => b.Title));
         Assert.Equal("● H-E-B (active)", ShoppingText.StoreRow(new ShopStore(1, "H-E-B", "h-e-b", ""), active: true));
     }
 }

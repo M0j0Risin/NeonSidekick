@@ -24,6 +24,9 @@ public sealed record ShopLocation(long Id, long StoreId, string Label, long? Sec
 /// </summary>
 public sealed record ShopPlacement(long Id, long StoreId, string Term, string Kind, long? LocationId, long? SectionId, string Source, string Note);
 
+/// <summary>A line bought before (2026-10-11, the recently bought): its last name and quantity, how many times it was bought and when last.</summary>
+public sealed record ShopBought(long Id, string Name, int Quantity, int Times, DateTimeOffset Last);
+
 /// <summary>A line of the list (2026-10-11): store-independent, placed per store when it is shown (<see cref="ShoppingPlacer"/>).</summary>
 public sealed record ShopItem(long Id, string Name, int Quantity, string Note, bool Checked, DateTimeOffset Created);
 
@@ -372,6 +375,11 @@ public sealed class ShoppingStore : IDisposable
         Execute("UPDATE locations SET label = $l WHERE id = $id AND NOT EXISTS (SELECT 1 FROM locations o WHERE o.store_id = locations.store_id AND o.label = $l COLLATE NOCASE AND o.id <> $id)",
             c => { c.Parameters.AddWithValue("$id", locationId); c.Parameters.AddWithValue("$l", label.Trim()); }, "rename a location") is > 0;
 
+    /// <summary>Puts a location in a section (null: none). False when nothing changed.</summary>
+    public bool SetLocationSection(long locationId, long? sectionId) =>
+        Execute("UPDATE locations SET section_id = $s WHERE id = $id",
+            c => { c.Parameters.AddWithValue("$id", locationId); c.Parameters.AddWithValue("$s", (object?)sectionId ?? DBNull.Value); }, "set a location's section") is > 0;
+
     /// <summary>Sets a location's place on the walk (null: back to its label's natural order).</summary>
     public bool SetWalk(long locationId, int? walk) =>
         Execute("UPDATE locations SET walk = $w WHERE id = $id",
@@ -417,6 +425,20 @@ public sealed class ShoppingStore : IDisposable
                 c.Parameters.AddWithValue("$at", Now());
             }, "record a placement") is not null;
     }
+
+    /// <summary>Changes what a placement's term names (2026-10-11, the layout editor). False when nothing changed.</summary>
+    public bool SetKind(long placementId, string kind) =>
+        Execute("UPDATE placements SET kind = $k, updated_at = $at WHERE id = $id",
+            c => { c.Parameters.AddWithValue("$id", placementId); c.Parameters.AddWithValue("$k", kind); c.Parameters.AddWithValue("$at", Now()); }, "change a placement's kind") is > 0;
+
+    /// <summary>Changes how a placement was learnt (2026-10-11: a guess kept becomes the user's). False when nothing changed.</summary>
+    public bool SetSource(long placementId, string source) =>
+        Execute("UPDATE placements SET source = $s, updated_at = $at WHERE id = $id",
+            c => { c.Parameters.AddWithValue("$id", placementId); c.Parameters.AddWithValue("$s", source); c.Parameters.AddWithValue("$at", Now()); }, "change a placement's source") is > 0;
+
+    /// <summary>Forgets a placement by its id (2026-10-11, the layout editor). False when there was none.</summary>
+    public bool RemovePlacement(long placementId) =>
+        Execute("DELETE FROM placements WHERE id = $id", c => c.Parameters.AddWithValue("$id", placementId), "forget a placement") is > 0;
 
     /// <summary>Forgets where <paramref name="term"/> is at a store (any case). False when there was no such placement.</summary>
     public bool Unplace(long storeId, string term) =>
@@ -590,6 +612,59 @@ public sealed class ShoppingStore : IDisposable
 
     /// <summary>A page read, its picture's path made full (<see cref="FullImage"/>).</summary>
     private ShopRefPage ReadRefPage(SqliteDataReader r) => new(r.GetInt64(0), r.GetInt64(1), r.GetString(2), r.GetInt32(3), r.GetString(4), r.IsDBNull(5) ? null : FullImage(r.GetString(5)));
+
+    // ---- bought (2026-10-11, the recently bought) ----
+
+    /// <summary>
+    /// <paramref name="items"/> recorded as bought: each by its folded name (<see cref="ShoppingPlacer.Key"/>), its count of times up by
+    /// one, its latest name, quantity and time kept. False when the write failed.
+    /// </summary>
+    public bool RecordBought(IEnumerable<ShopItem> items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        lock (_gate)
+        {
+            if (Open() is not { } connection)
+            {
+                return false;
+            }
+
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                foreach (var item in items)
+                {
+                    using var command = connection.CreateCommand();
+                    command.Transaction = transaction;
+                    command.CommandText = "INSERT INTO bought(key, name, quantity, times, last_at) VALUES ($k, $n, $q, 1, $at) " +
+                        "ON CONFLICT(key) DO UPDATE SET name = excluded.name, quantity = excluded.quantity, times = times + 1, last_at = excluded.last_at";
+                    command.Parameters.AddWithValue("$k", ShoppingPlacer.Key(item.Name));
+                    command.Parameters.AddWithValue("$n", item.Name);
+                    command.Parameters.AddWithValue("$q", item.Quantity);
+                    command.Parameters.AddWithValue("$at", Now());
+                    command.ExecuteNonQuery();
+                }
+
+                transaction.Commit();
+                return true;
+            }
+            catch (SqliteException ex)
+            {
+                transaction.Rollback();
+                Fail("record what was bought", ex);
+                return false;
+            }
+        }
+    }
+
+    /// <summary>What was bought before, the most often first, then the most recent.</summary>
+    public IReadOnlyList<ShopBought> Bought() =>
+        Query("SELECT id, name, quantity, times, last_at FROM bought ORDER BY times DESC, last_at DESC", null,
+            r => new ShopBought(r.GetInt64(0), r.GetString(1), r.GetInt32(2), r.GetInt32(3), Parse(r.GetString(4))), "read what was bought");
+
+    /// <summary>Forgets a line bought before. False when there was none.</summary>
+    public bool ForgetBought(long id) =>
+        Execute("DELETE FROM bought WHERE id = $id", c => c.Parameters.AddWithValue("$id", id), "forget a bought line") is > 0;
 
     // ---- plumbing ----
 
@@ -799,6 +874,13 @@ public sealed class ShoppingStore : IDisposable
             checked_at TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS bought(
+            id INTEGER PRIMARY KEY,
+            key TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            times INTEGER NOT NULL,
+            last_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS ref_docs(
             id INTEGER PRIMARY KEY,
             store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,

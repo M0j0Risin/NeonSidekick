@@ -48,6 +48,11 @@ public static class ShoppingCommandRunner
 
             case ShoppingVerb.Add:
             {
+                if (ShoppingCommand.Items(line.Text).Count == 0)
+                {
+                    return ["Error: " + ShoppingText.NoItems + ": /shopping add milk, 2 eggs"];   // the screen opens the add page instead
+                }
+
                 var shop = list.StoreFor(null, out _);
                 var added = new List<ShopAdded>();
                 foreach (string item in ShoppingCommand.Items(line.Text))

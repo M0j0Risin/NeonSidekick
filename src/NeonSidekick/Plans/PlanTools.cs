@@ -63,6 +63,8 @@ public static class PlanTools
         "shopping_list", "shopping_locate", "shopping_stores",
         // the stores' reference documents (2026-10-11, phase 3): read, and read again when a file changed (the index is derived, the files untouched)
         "shopping_reference",
+        // what was bought before (2026-10-11): read from the profile's shopping.db
+        "shopping_recent",
     };
 
     /// <summary>The tools plan mode drops because they change something or start something: named, so the classification test can hold every tool to one list.</summary>

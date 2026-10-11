@@ -106,6 +106,43 @@ public sealed class ShoppingStoreTests : IDisposable
     }
 
     [Fact]
+    public void ATickedLine_LeavingTheList_IsRememberedAsBought_AnUntickedOneIsNot()
+    {
+        var list = new ShoppingList(() => _store);
+        list.Add("Eggs", 2, null);
+        list.Add("Bread", 1, null);
+        list.Add("Soap", 1, null);
+        var items = _store.Items();
+        list.Check(items[0], true);
+        Assert.True(list.Remove(items[0]));                     // Eggs, ticked: bought
+        Assert.True(list.Remove(items[2]));                     // Soap, unticked: not
+        list.Check(items[1], true);
+        Assert.Equal(1, list.Clear(all: true));                 // Bread, ticked
+        Assert.Equal([("Eggs", 2, 1), ("Bread", 1, 1)], _store.Bought().Select(b => (b.Name, b.Quantity, b.Times)).OrderBy(b => b.Name == "Bread"));
+
+        // Bought again under another spelling: the same line, counted twice, its latest name and quantity kept.
+        Assert.True(_store.RecordBought([new ShopItem(0, "EGGS", 6, "", true, DateTimeOffset.UnixEpoch)]));
+        var eggs = _store.Bought()[0];
+        Assert.Equal(("EGGS", 6, 2), (eggs.Name, eggs.Quantity, eggs.Times));
+        Assert.True(_store.ForgetBought(eggs.Id));
+        Assert.Equal(["Bread"], _store.Bought().Select(b => b.Name));
+    }
+
+    [Fact]
+    public void APlacementsKindAndSource_ChangeInPlace()
+    {
+        var heb = _store.AddStore("H-E-B", "heb")!;
+        var aisle = _store.EnsureLocation(heb.Id, "Aisle 2")!;
+        Assert.True(_store.Place(heb.Id, "Goya", ShoppingKinds.Category, aisle.Id, null, ShoppingSources.Guess));
+        long id = _store.Placements(heb.Id)[0].Id;
+        Assert.True(_store.SetKind(id, ShoppingKinds.Brand));
+        Assert.True(_store.SetSource(id, ShoppingSources.User));
+        var fact = Assert.Single(_store.Placements(heb.Id));
+        Assert.Equal((ShoppingKinds.Brand, ShoppingSources.User), (fact.Kind, fact.Source));
+        Assert.False(_store.SetKind(id + 1, ShoppingKinds.Item));
+    }
+
+    [Fact]
     public void Locations_ComeInWalkOrder_NumberedAislesAsNumbers()
     {
         var heb = _store.AddStore("H-E-B", "heb")!;

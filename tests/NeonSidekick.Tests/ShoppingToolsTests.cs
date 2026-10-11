@@ -42,9 +42,9 @@ public sealed class ShoppingToolsTests : IDisposable
     {
         var names = ChatScreen.ShoppingTools(_list, null).Select(t => t.Name).ToList();
         Assert.Equal(
-            ["shopping_list", "shopping_add", "shopping_check", "shopping_remove", "shopping_clear", "shopping_locate", "shopping_place", "shopping_stores", "shopping_layout"],
+            ["shopping_list", "shopping_add", "shopping_check", "shopping_remove", "shopping_clear", "shopping_locate", "shopping_place", "shopping_stores", "shopping_layout", "shopping_recent"],
             names);
-        Assert.Equal(["shopping_list", "shopping_locate", "shopping_stores"], names.Where(PlanTools.Allowed));
+        Assert.Equal(["shopping_list", "shopping_locate", "shopping_stores", "shopping_recent"], names.Where(PlanTools.Allowed));
         Assert.All(names.Where(n => !PlanTools.Allowed(n)), n => Assert.Contains(n, PlanTools.Mutating));
     }
 
@@ -160,7 +160,7 @@ public sealed class ShoppingToolsTests : IDisposable
 
         // Plan mode keeps the reads alone.
         var planning = ChatScreen.ComposeTurnTools(new TurnToolInputs { Standing = [], Shopping = tools, ShoppingEnabled = true, PlanReadOnly = true });
-        Assert.Equal(["shopping_list", "shopping_locate", "shopping_stores"], planning.Tools.Select(t => t.Name));
+        Assert.Equal(["shopping_list", "shopping_locate", "shopping_stores", "shopping_recent"], planning.Tools.Select(t => t.Name));
     }
 
     [Fact]

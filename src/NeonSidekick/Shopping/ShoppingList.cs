@@ -213,11 +213,20 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
         return true;
     }
 
-    /// <summary>Takes <paramref name="item"/> off the list. False when the write failed.</summary>
+    /// <summary>
+    /// Takes <paramref name="item"/> off the list. A ticked line is recorded as bought first (2026-10-11, <see cref="Bought"/>). False when
+    /// the write failed.
+    /// </summary>
     public bool Remove(ShopItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
-        if (!_store().RemoveItem(item.Id))
+        var store = _store();
+        if (store.Items().FirstOrDefault(i => i.Id == item.Id) is { Checked: true } ticked)
+        {
+            store.RecordBought([ticked]);
+        }
+
+        if (!store.RemoveItem(item.Id))
         {
             return false;
         }
@@ -226,16 +235,191 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
         return true;
     }
 
-    /// <summary>Removes the ticked lines (every line with <paramref name="all"/>): how many went, null when the write failed.</summary>
+    /// <summary>
+    /// Removes the ticked lines (every line with <paramref name="all"/>): how many went, null when the write failed. The ticked ones are
+    /// recorded as bought first (2026-10-11, <see cref="Bought"/>); an unticked line cleared with all was not bought.
+    /// </summary>
     public int? Clear(bool all)
     {
-        int? cleared = _store().Clear(all);
+        var store = _store();
+        var ticked = store.Items().Where(i => i.Checked).ToList();
+        if (ticked.Count > 0)
+        {
+            store.RecordBought(ticked);
+        }
+
+        int? cleared = store.Clear(all);
         if (cleared is > 0)
         {
             Audit(ShoppingText.AuditCleared(cleared.Value, all));
         }
 
         return cleared;
+    }
+
+    /// <summary>What was bought before and is not on the list now (2026-10-11, the recently bought): the most often first, then the most recent.</summary>
+    public IReadOnlyList<ShopBought> Bought()
+    {
+        var store = _store();
+        var onList = store.Items().Select(i => ShoppingPlacer.Key(i.Name)).ToHashSet(StringComparer.Ordinal);
+        return store.Bought().Where(b => !onList.Contains(ShoppingPlacer.Key(b.Name))).ToList();
+    }
+
+    /// <summary>Forgets a line bought before (it never comes back on the add page until bought again). The answer as a sentence.</summary>
+    public string ForgetBought(ShopBought bought)
+    {
+        ArgumentNullException.ThrowIfNull(bought);
+        if (!_store().ForgetBought(bought.Id))
+        {
+            return "Error: " + ShoppingText.WriteFailed;
+        }
+
+        Audit(ShoppingText.AuditBoughtForgotten(bought));
+        return ShoppingText.BoughtForgotten(bought);
+    }
+
+    // ---- the layout, by hand (2026-10-11, the layout editor and the pane's place) ----
+
+    /// <summary>
+    /// <paramref name="item"/> placed at <paramref name="location"/> (or in <paramref name="section"/> alone): an item fact of its name, the
+    /// user's, so it lands there now and every time. The answer as a sentence.
+    /// </summary>
+    public string PlaceItem(ShopStore shop, ShopItem item, ShopLocation? location, ShopSection? section)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return Place(shop, item.Name, ShoppingKinds.Item, location?.Label, location is null ? section?.Name : null, ShoppingSources.User);
+    }
+
+    /// <summary>A fact moved to <paramref name="location"/> (or <paramref name="section"/> alone), its kind and note kept, the user's from then on.</summary>
+    public string MoveFact(ShopStore shop, ShopPlacement fact, ShopLocation? location, ShopSection? section)
+    {
+        ArgumentNullException.ThrowIfNull(fact);
+        return Place(shop, fact.Term, fact.Kind, location?.Label, location is null ? section?.Name : null, ShoppingSources.User, fact.Note);
+    }
+
+    /// <summary>A fact's kind changed. The answer as a sentence.</summary>
+    public string SetFactKind(ShopStore shop, ShopPlacement fact, string kind)
+    {
+        ArgumentNullException.ThrowIfNull(fact);
+        if (!_store().SetKind(fact.Id, kind))
+        {
+            return "Error: " + ShoppingText.WriteFailed;
+        }
+
+        Audit(ShoppingText.AuditFactKind(shop, fact, kind));
+        return ShoppingText.FactKind(fact, kind);
+    }
+
+    /// <summary>A guess kept: the fact becomes the user's. The answer as a sentence.</summary>
+    public string ConfirmFact(ShopStore shop, ShopPlacement fact)
+    {
+        ArgumentNullException.ThrowIfNull(fact);
+        if (!_store().SetSource(fact.Id, ShoppingSources.User))
+        {
+            return "Error: " + ShoppingText.WriteFailed;
+        }
+
+        Audit(ShoppingText.AuditFactConfirmed(shop, fact));
+        return ShoppingText.FactConfirmed(fact);
+    }
+
+    /// <summary>A fact forgotten. The answer as a sentence.</summary>
+    public string RemoveFact(ShopStore shop, ShopPlacement fact)
+    {
+        ArgumentNullException.ThrowIfNull(fact);
+        return _store().RemovePlacement(fact.Id) ? Logged(ShoppingText.Unplaced(shop, fact.Term)) : "Error: " + ShoppingText.WriteFailed;
+    }
+
+    /// <summary>A location added (in <paramref name="section"/> when given, made when missing). The answer as a sentence.</summary>
+    public string AddLocation(ShopStore shop, string label, string? section)
+    {
+        ArgumentNullException.ThrowIfNull(shop);
+        var store = _store();
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return "Error: " + ShoppingText.NoPlaceGiven;
+        }
+
+        if (store.Locations(shop.Id).Any(l => string.Equals(l.Label, label.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Error: " + ShoppingText.NameTaken("location", label);
+        }
+
+        var inSection = string.IsNullOrWhiteSpace(section) ? null : store.EnsureSection(shop.Id, section);
+        return store.EnsureLocation(shop.Id, label, inSection?.Id) is { } made ? Logged(ShoppingText.LocationAdded(shop, made)) : "Error: " + ShoppingText.WriteFailed;
+    }
+
+    /// <summary>A location renamed. The answer as a sentence.</summary>
+    public string RenameLocation(ShopLocation location, string label) =>
+        _store().RenameLocation(location.Id, label) ? Logged(ShoppingText.Renamed("location", location.Label, label)) : "Error: " + ShoppingText.NameTaken("location", label);
+
+    /// <summary>A location put in <paramref name="section"/> (null: none). The answer as a sentence.</summary>
+    public string SetLocationSection(ShopStore shop, ShopLocation location, ShopSection? section) =>
+        _store().SetLocationSection(location.Id, section?.Id)
+            ? Logged(ShoppingText.LocationSection(location, section))
+            : "Error: " + ShoppingText.WriteFailed;
+
+    /// <summary>
+    /// A location moved one place up or down the walk: every location of the store numbered 1..n in the walk as it stands with the two
+    /// swapped, so the order is the user's from then on. The answer as a sentence; nothing to do at an end.
+    /// </summary>
+    public string MoveLocation(ShopStore shop, ShopLocation location, bool up)
+    {
+        var store = _store();
+        var walk = store.Locations(shop.Id).ToList();
+        int at = walk.FindIndex(l => l.Id == location.Id);
+        int to = at + (up ? -1 : 1);
+        if (at < 0 || to < 0 || to >= walk.Count)
+        {
+            return ShoppingText.WalkEnd(location, up);
+        }
+
+        (walk[at], walk[to]) = (walk[to], walk[at]);
+        for (int i = 0; i < walk.Count; i++)
+        {
+            if (!store.SetWalk(walk[i].Id, i + 1) && walk[i].Walk != i + 1)
+            {
+                return "Error: " + ShoppingText.WriteFailed;
+            }
+        }
+
+        return Logged(ShoppingText.WalkSet(shop, location, to + 1));
+    }
+
+    /// <summary>A location removed with the facts at it. The answer as a sentence.</summary>
+    public string RemoveLocation(ShopStore shop, ShopLocation location) =>
+        _store().RemoveLocation(location.Id) ? Logged(ShoppingText.LocationRemoved(shop, location)) : "Error: " + ShoppingText.WriteFailed;
+
+    /// <summary>A section added. The answer as a sentence.</summary>
+    public string AddSection(ShopStore shop, string name)
+    {
+        var store = _store();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "Error: " + ShoppingText.NoPlaceGiven;
+        }
+
+        if (store.Sections(shop.Id).Any(s => string.Equals(s.Name, name.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Error: " + ShoppingText.NameTaken("section", name);
+        }
+
+        return store.EnsureSection(shop.Id, name) is { } made ? Logged(ShoppingText.SectionAdded(shop, made)) : "Error: " + ShoppingText.WriteFailed;
+    }
+
+    /// <summary>A section renamed. The answer as a sentence.</summary>
+    public string RenameSection(ShopSection section, string name) =>
+        _store().RenameSection(section.Id, name) ? Logged(ShoppingText.Renamed("section", section.Name, name)) : "Error: " + ShoppingText.NameTaken("section", name);
+
+    /// <summary>A section removed; its locations and facts keep their places with no section. The answer as a sentence.</summary>
+    public string RemoveSection(ShopStore shop, ShopSection section) =>
+        _store().RemoveSection(section.Id) ? Logged(ShoppingText.SectionRemoved(shop, section)) : "Error: " + ShoppingText.WriteFailed;
+
+    /// <summary>An answer, audited as a layout change.</summary>
+    private static string Logged(string answer)
+    {
+        Audit("Layout: " + answer);
+        return answer;
     }
 
     /// <summary>

@@ -155,7 +155,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/settings <words>` | Searches every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by its name, tab or description; Enter edits the row found. |
 | `/settings changed` | Lists the settings that are not their defaults, with each default; Enter edits, `r` puts the row back to its default. A changed value reads in the accent colour on every settings tab. |
 | `/shopping` | The shopping list on the pane, walked through the active store (see [Tools](TOOLS.md#shopping-list)): each aisle a heading over its items, the ticked ones last. Without the pane (and headless) the list is printed. |
-| `/shopping add <items>` | Puts items on the list, separated by commas (`/shopping add milk, 2 eggs, bread x2`); an item already there gets the quantity added. |
+| `/shopping add [<items>]` | Puts items on the list, separated by commas (`/shopping add milk, 2 eggs, bread x2`); an item already there gets the quantity added. Alone, it opens the add page: type new items, or pick from what was bought before (the most often first). |
 | `/shopping check\|uncheck\|remove <item>` | Ticks an item as bought, unticks it, or takes it off, by its name or its number in the order added. |
 | `/shopping rename <item> to <new-name>` | Renames an item, by its name or its number in the order added; its quantity and tick are kept, and it moves to wherever the store places the new name. A name already on the list merges the two, their quantities added. The pane's `n` does the same on the highlighted item. |
 | `/shopping list [<store>]` | Prints the list walked through the active store, or the one named. |
@@ -622,8 +622,10 @@ Every list pane works the same way: ↑/↓ move, Enter picks the highlighted ro
 | `/skills` › a skill | Enter on a row: move, rename, edit, revert, `lock`/`unlock`, `disable`/`enable`, delete (asks); a locked skill refuses rename, move and delete; a disabled one is never offered to the model |
 | `/skills` › a skill › `revert` | Enter puts the version back · `d` removes it (asks) · `c` clear all (asks) |
 | `/docker` | Enter opens · `r` refresh · type to filter |
-| `/shopping` | Enter / Space tick or untick · `+` / `-` quantity (keys only, no button) · `n` rename (typed under the list) · `r` remove · `a` tick all (untick all once every item is) · `c` clear ticked · `s` the stores' manager |
-| *Shopping stores* (`/shopping`'s `s`) | Enter on a store shops there (the first row adds one) · `n` rename · `r` remove (asks) · `f` open its reference folder · `i` reindex |
+| `/shopping` | Enter / Space tick or untick · `i` add (typed, or the recently bought) · `p` place the item at an aisle or section · `n` rename (typed under the list) · `r` remove · `a` tick all (untick all once every item is) · `c` clear ticked · `s` the stores' manager · `+` / `-` quantity (keys only, no button) |
+| `/shopping`'s add page (`i`, or `/shopping add` alone) | Enter on the first row types new items · Enter on one bought before adds it again at its last quantity · `x` forgets it · type to filter |
+| *Shopping stores* (`/shopping`'s `s`) | Enter on a store shops there (the first row adds one) · `l` its layout · `n` rename · `r` remove (asks) · `f` open its reference folder · `i` reindex |
+| A store's layout (*Shopping stores*' `l`) | Tabs **Aisles** (the first row adds one; Enter: rename, section, move up or down the walk, remove), **Sections** (add; rename, remove), **Facts** (type to filter; Enter: move, kind, remove) and **Guesses** (the model's; Enter: keep, move, remove), ←/→ between them |
 | `/youtube list` | Enter plays · `d` remove selected (asks) · `c` clear all (asks) · type to filter |
 | `/youtube <words>`, `/youtube playlist` | Enter plays (a playlist from the entry, a channel's uploads) · `s` save the highlighted video |
 | `/tools shell` (*Shell command policy*) | `c` the allowed commands · `p` the police |

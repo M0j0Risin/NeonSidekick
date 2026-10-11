@@ -892,6 +892,7 @@ Each store's reference documents (a store guide, a floor map) go in `db\shopping
 | `shopping_place` | `term, kind?, location?, section?, source?, note?, forget?, store?` | Records where a product, brand or category is (a new aisle, zone or section is made), or forgets it; `source` is `user`, `reference` or `guess`. |
 | `shopping_stores` | `store?` | The stores, the active one marked, and one store's layout: its locations in walk order, its sections, how many facts it holds and its reference documents. Allowed in plan mode. |
 | `shopping_layout` | `action, name, to?, section?, walk?, notes?, store?` | Adds a store or makes it the active one, renames it; adds, renames or removes a section or a location; sets a location's place in the walk. |
+| `shopping_recent` | `limit?` | What was bought before and is not on the list now, the most often first, with how many times and when last. A line counts as bought when it leaves the list ticked. Allowed in plan mode. |
 
 Every change is one line in the log under `[Shopping]`. The shopping tools are the list's only home: the operating rules tell the model never to keep it in a file, a note or a Home Assistant to-do list.
 

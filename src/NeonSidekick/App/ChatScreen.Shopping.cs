@@ -42,6 +42,7 @@ internal sealed partial class ChatScreen
             new ShoppingPlaceTool(list),
             new ShoppingStoresTool(list),
             new ShoppingLayoutTool(list),
+            new ShoppingRecentTool(list),
         };
         if (reference is not null)
         {
@@ -103,7 +104,22 @@ internal sealed partial class ChatScreen
         var line = ShoppingCommand.Parse(args);
         if (line.Verb == ShoppingVerb.Pane && line.Error is null && _pane.Enabled && _shopping.Store.Available)
         {
-            await new ShoppingMenu(_shopping, _menuPane, _menu.ManageShoppingStoresAsync, input: _input).ShowAsync(cancellationToken).ConfigureAwait(false);
+            await new ShoppingMenu(_shopping, _menuPane, _menu.ManageShoppingStoresAsync, input: _input, zone: _time.LocalTimeZone).ShowAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (line is { Verb: ShoppingVerb.Add, Text.Length: 0 } && _pane.Enabled && _shopping.Store.Available)
+        {
+            // /shopping add alone (2026-10-11): the add page, typed lines or the recently bought.
+            try
+            {
+                await new ShoppingMenu(_shopping, _menuPane, input: _input, zone: _time.LocalTimeZone).AddAsync(cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                _menuPane.Close();
+            }
+
             return;
         }
 

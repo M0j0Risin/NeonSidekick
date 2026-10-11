@@ -102,7 +102,7 @@ public static class ShoppingCommand
         return word switch
         {
             "list" => new(ShoppingVerb.List, rest),
-            "add" when rest.Length > 0 => new(ShoppingVerb.Add, rest),
+            "add" => new(ShoppingVerb.Add, rest),   // alone (2026-10-11): the add page on the pane, the recently bought on it
             "check" or "tick" when rest.Length > 0 => new(ShoppingVerb.Check, rest),
             "uncheck" or "untick" when rest.Length > 0 => new(ShoppingVerb.Uncheck, rest),
             "remove" when rest.Length > 0 => new(ShoppingVerb.Remove, rest),

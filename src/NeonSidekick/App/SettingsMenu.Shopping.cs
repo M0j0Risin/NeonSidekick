@@ -17,16 +17,18 @@ internal sealed partial class SettingsMenu
     /// <summary>The manager's buttons, in the order drawn, each with its glyph. Pinned.</summary>
     public static readonly IReadOnlyList<MenuButton> StoreButtons =
     [
+        new(ShoppingText.LayoutButton, ShoppingText.LayoutKey),
         new(ShoppingText.RenameStoreButton, ShoppingText.RenameStoreKey),
         new(ShoppingText.RemoveStoreButton, ShoppingText.RemoveStoreKey),
         new(ShoppingText.FolderButton, ShoppingText.FolderKey),
         new(ShoppingText.ReindexButton, ShoppingText.ReindexKey),
     ];
 
-    private const int RenameStoreIndex = 0;
-    private const int RemoveStoreIndex = 1;
-    private const int FolderIndex = 2;
-    private const int ReindexIndex = 3;
+    private const int LayoutIndex = 0;
+    private const int RenameStoreIndex = 1;
+    private const int RemoveStoreIndex = 2;
+    private const int FolderIndex = 3;
+    private const int ReindexIndex = 4;
 
     /// <summary>
     /// The shopping stores' manager (2026-10-11, the user's ask: stores added, renamed and removed somewhere other than a typed line):
@@ -87,6 +89,10 @@ internal sealed partial class SettingsMenu
             {
                 case < 0:
                     Say(list.UseStore(shop));
+                    changed = true;
+                    break;
+                case LayoutIndex:
+                    await EditStoreLayoutAsync(shop, cancellationToken).ConfigureAwait(false);
                     changed = true;
                     break;
                 case RenameStoreIndex:
@@ -155,7 +161,8 @@ internal sealed partial class SettingsMenu
     /// <summary>The band under a store's row: <see cref="ShoppingText.StoreFooter"/> over its layout's counts and its documents.</summary>
     private static MenuFooter StoreFooter(ShoppingStore store, ShopStore shop)
     {
-        var (text, folder) = ShoppingText.StoreFooter(store.Locations(shop.Id).Count, store.Sections(shop.Id).Count, store.Placements(shop.Id).Count, store.RefDocs(shop.Id).Count, store.ReferenceFolder(shop));
+        var facts = store.Placements(shop.Id);
+        var (text, folder) = ShoppingText.StoreFooter(store.Locations(shop.Id).Count, store.Sections(shop.Id).Count, facts.Count, store.RefDocs(shop.Id).Count, store.ReferenceFolder(shop), facts.Count(f => f.Source == ShoppingSources.Guess));
         return new MenuFooter(text, folder);
     }
 
