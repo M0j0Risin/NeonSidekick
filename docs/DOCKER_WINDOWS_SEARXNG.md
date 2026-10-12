@@ -97,3 +97,69 @@ curl -s "http://localhost:8888/search?q=cheese&format=html" | head -c 300
 curl -s "http://localhost:8888/search?q=cheese&format=csv" | head -c 300
 curl -s "http://localhost:8888/search?q=cheese&format=rss" | head -c 300
 ```
+
+## (optional) Boot guard `docker-compose.yml`
+
+Without this I've found that SEARXNG can fall back to defaults until you manually restart the container after a Windows boot.
+
+```yaml
+# Read the documentation before using the `docker-compose.yml` file:
+# https://docs.searxng.org/admin/installation-docker.html
+#
+# Boot-time guard for Docker Desktop + WSL:
+# core-config/ lives on the Ubuntu WSL distro. At a Windows boot, this
+# container (restart: always) can start before that filesystem is served,
+# and the image's entrypoint then silently regenerates a stock settings.yml
+# from its template, so SearXNG runs with default settings until you
+# restart the container.
+#
+# The entrypoint below refuses to start unless the real settings.yml is
+# mounted (it checks for the "formats:" line, which is not in the image's
+# template), so Docker's backoff simply retries until the source is there.
+# Keep a "formats:" line in settings.yml, or adjust the marker below.
+
+name: searxng
+
+services:
+  core:
+    container_name: searxng-core
+    image: docker.io/searxng/searxng:${SEARXNG_VERSION:-latest}
+    restart: "always"
+    depends_on:
+      valkey:
+        condition: service_healthy
+    ports:
+      - ${SEARXNG_HOST:+${SEARXNG_HOST}:}${SEARXNG_PORT:-8080}:${SEARXNG_PORT:-8080}
+    env_file: ./.env
+    volumes:
+      - ./core-config/:/etc/searxng/:Z
+      - core-data:/var/cache/searxng/
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ ! -f /etc/searxng/settings.yml ] || ! grep -qs 'formats:' /etc/searxng/settings.yml; then
+          echo "searxng: real settings.yml not mounted yet (host source unavailable) - exiting, Docker will retry"
+          exit 1
+        fi
+        exec /usr/local/searxng/entrypoint.sh
+
+  valkey:
+    container_name: searxng-valkey
+    image: docker.io/valkey/valkey:9-alpine
+    command: valkey-server --save 30 1 --loglevel warning
+    restart: "always"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - valkey-data:/data/
+
+volumes:
+  core-data:
+  valkey-data:
+
+```
