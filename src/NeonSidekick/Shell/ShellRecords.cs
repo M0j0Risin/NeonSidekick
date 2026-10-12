@@ -1,6 +1,6 @@
 using System.Globalization;
 using NeonSidekick.Diagnostics;
-using NeonSidekick.EmbeddedLlm;
+using NeonSidekick.Files;
 
 namespace NeonSidekick.Shell;
 
@@ -22,12 +22,11 @@ public sealed record ShellRecord(int OwnerPid, long OwnerStartTicks, int LeaderP
 ///
 /// <para>Lines of text, like <see cref="LlamaRecords"/>' (<c>owner &lt;pid&gt; &lt;ticks&gt;</c>, <c>leader &lt;pid&gt; &lt;ticks&gt;</c>);
 /// no executable is kept, since zsh hands its last command its own process (<c>exec</c>) and the leader's program changes. Windows writes
-/// none: its kill-on-close job does this job.</para>
+/// none: its kill-on-close job does this job. The line grammar, the start rule, the folder's reading and the removal are shared with
+/// <see cref="EmbeddedLlm.LlamaRecords"/> (<see cref="RecordFiles"/>, the code review).</para>
 /// </summary>
 public static class ShellRecords
 {
-    private static readonly TimeSpan StartTolerance = TimeSpan.FromSeconds(1);
-
     /// <summary>The records' folder under <paramref name="home"/>. Pinned.</summary>
     public static string FolderIn(string home) => Path.Combine(home, "shell", "running");
 
@@ -44,44 +43,32 @@ public static class ShellRecords
     /// <summary>A record read back from <paramref name="text"/>; null for anything that is not one whole record.</summary>
     public static ShellRecord? Parse(string text)
     {
-        (int Pid, long Ticks)? owner = null, leader = null;
-        foreach (var raw in (text ?? "").Split('\n'))
-        {
-            var parts = raw.TrimEnd('\r').Split(' ');
-            if (parts.Length == 3
-                && int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out int pid)
-                && long.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out long ticks))
-            {
-                if (parts[0] == "owner")
-                {
-                    owner = (pid, ticks);
-                }
-                else if (parts[0] == "leader")
-                {
-                    leader = (pid, ticks);
-                }
-            }
-        }
-
-        return owner is { } o && leader is { } l && o.Pid > 0 && l.Pid > 1 ? new ShellRecord(o.Pid, o.Ticks, l.Pid, l.Ticks) : null;
+        var pairs = RecordFiles.Pairs(text);
+        return pairs.TryGetValue("owner", out var o) && pairs.TryGetValue("leader", out var l) && o.Pid > 0 && l.Pid > 1
+            ? new ShellRecord(o.Pid, o.Ticks, l.Pid, l.Ticks)
+            : null;
     }
 
     /// <summary>
     /// Writes the record of group <paramref name="leaderPid"/> started by this app into <paramref name="folder"/>. The file's path, or
-    /// null (logged) when it could not be written: the group still runs, killed with its session as before, only unwatched.
-    /// <paramref name="startTicks"/> reads a process's start (<see cref="LlamaRecords.StartTicks"/> when null).
+    /// null (logged) when it could not be written: the group still runs, killed with its session and by the exit signals, only unwatched.
+    /// A leader whose start cannot be read (gone already: a zombie's is unreadable) is recorded with 0 (the code review, 2026-10-12): the
+    /// guard still kills its group, and the sweep, which cannot prove it, only names it. <paramref name="startTicks"/> reads a process's
+    /// start (<see cref="RecordFiles.StartTicks"/> when null).
     /// </summary>
     public static string? Write(string folder, int leaderPid, Func<int, long?>? startTicks = null)
     {
-        startTicks ??= LlamaRecords.StartTicks;
+        startTicks ??= RecordFiles.StartTicks;
         try
         {
             int owner = Environment.ProcessId;
-            if (startTicks(owner) is not { } ownerStart || startTicks(leaderPid) is not { } leaderStart)
+            if (startTicks(owner) is not { } ownerStart)
             {
-                DiagnosticLog.Debug(ShellKinds.Category, "No record of group " + leaderPid.ToString(CultureInfo.InvariantCulture) + ": its start time could not be read");
+                DiagnosticLog.Debug(ShellKinds.Category, "No record of group " + leaderPid.ToString(CultureInfo.InvariantCulture) + ": this process's start time could not be read");
                 return null;
             }
+
+            long leaderStart = startTicks(leaderPid) ?? 0;
 
             Directory.CreateDirectory(folder);
             string path = PathOf(folder, leaderPid);
@@ -96,22 +83,7 @@ public static class ShellRecords
     }
 
     /// <summary>Removes a record; nothing when it is gone already or <paramref name="path"/> is null.</summary>
-    public static void Remove(string? path)
-    {
-        if (path is null)
-        {
-            return;
-        }
-
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            DiagnosticLog.Debug(ShellKinds.Category, "Removing " + path + ": " + ex.Message);
-        }
-    }
+    public static void Remove(string? path) => RecordFiles.Remove(path, ShellKinds.Category);
 
     /// <summary>
     /// The guard's work as its app dies (see the class): every group the records under <paramref name="folder"/> show
@@ -122,7 +94,7 @@ public static class ShellRecords
     {
         ArgumentNullException.ThrowIfNull(killGroup);
         var killed = new List<int>();
-        foreach (var (file, record) in Read(folder))
+        foreach (var (file, record) in RecordFiles.ReadAll(folder, Parse, ShellKinds.Category))
         {
             if (record?.OwnerPid != ownerPid)
             {
@@ -148,14 +120,14 @@ public static class ShellRecords
         ArgumentNullException.ThrowIfNull(killGroup);
         ArgumentNullException.ThrowIfNull(groupAlive);
         var killed = new List<int>();
-        foreach (var (file, record) in Read(folder))
+        foreach (var (file, record) in RecordFiles.ReadAll(folder, Parse, ShellKinds.Category))
         {
-            if (record is not null && Same(startTicks(record.OwnerPid), record.OwnerStartTicks))
+            if (record is not null && RecordFiles.SameStart(startTicks(record.OwnerPid), record.OwnerStartTicks))
             {
                 continue;   // its app is alive: its group, whoever's it is
             }
 
-            if (record is not null && Same(startTicks(record.LeaderPid), record.LeaderStartTicks))
+            if (record is not null && record.LeaderStartTicks != 0 && RecordFiles.SameStart(startTicks(record.LeaderPid), record.LeaderStartTicks))
             {
                 DiagnosticLog.Warn(ShellKinds.Category, ShellText.GroupLeftBehind(record.LeaderPid, record.OwnerPid));
                 killGroup(record.LeaderPid);
@@ -171,38 +143,4 @@ public static class ShellRecords
 
         return killed;
     }
-
-    /// <summary>Every <c>.txt</c> under <paramref name="folder"/> with its record (null for one that does not parse); one unreadable file never ends the rest.</summary>
-    private static List<(string File, ShellRecord? Record)> Read(string folder)
-    {
-        var records = new List<(string, ShellRecord?)>();
-        try
-        {
-            if (!Directory.Exists(folder))
-            {
-                return records;
-            }
-
-            foreach (var file in Directory.EnumerateFiles(folder, "*.txt"))
-            {
-                try
-                {
-                    records.Add((file, Parse(File.ReadAllText(file))));
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    DiagnosticLog.Debug(ShellKinds.Category, "Reading " + file + ": " + ex.Message);
-                }
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            DiagnosticLog.Warn(ShellKinds.Category, "Reading " + folder + ": " + ex.Message);
-        }
-
-        return records;
-    }
-
-    private static bool Same(long? actual, long recorded) =>
-        actual is { } ticks && Math.Abs(ticks - recorded) <= StartTolerance.Ticks;
 }

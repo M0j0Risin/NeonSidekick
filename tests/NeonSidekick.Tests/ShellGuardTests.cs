@@ -114,11 +114,107 @@ public sealed class ShellGuardTests : IDisposable
         Assert.Equal("shell:records", check.Name);
     }
 
+    [Fact]
+    public void TheSharedRecordLines_AndTheStartRule()
+    {
+        var pairs = Files.RecordFiles.Pairs("owner 1 2\r\nexecutable /x y\nleader 3 4\nleader 5 6\nnoise\n");
+        Assert.Equal((1, 2L), pairs["owner"]);
+        Assert.Equal((5, 6L), pairs["leader"]);   // the last of a word
+        Assert.Equal(2, pairs.Count);
+        Assert.True(Files.RecordFiles.SameStart(TimeSpan.TicksPerSecond, 0));
+        Assert.False(Files.RecordFiles.SameStart(TimeSpan.TicksPerSecond + 1, 0));
+        Assert.False(Files.RecordFiles.SameStart(null, 0));
+    }
+
+    [Fact]
+    public void TheTrackersLogLines_ArePinned()
+    {
+        Assert.Equal("group 345: killed at exit", ShellText.GroupKilledAtExit(345));
+        Assert.Equal("No shell guard (background commands are not stopped should the app crash): denied", ShellText.NoGuard("denied"));
+        Assert.Equal("group 345: not recorded for the shell guard (full)", ShellText.GroupNotRecorded(345, "full"));
+        Assert.Equal("shell guard: pid 12", ShellText.GuardStarted(12));
+        Assert.Equal("shell guard: hi", ShellText.GuardSaid("hi"));
+    }
+
+    /// <summary>A leader whose start could not be read is recorded with 0 (the code review): the guard kills by group, the sweep cannot prove it and only names it.</summary>
+    [Fact]
+    public void ALeaderWithNoStartTime_IsRecorded_ButNeverKilledByTheSweep()
+    {
+        string? path = ShellRecords.Write(_folder, 5555, pid => pid == Environment.ProcessId ? 10 * TimeSpan.TicksPerSecond : null);
+        Assert.Equal(new ShellRecord(Environment.ProcessId, 10 * TimeSpan.TicksPerSecond, 5555, 0), ShellRecords.Parse(File.ReadAllText(path!)));
+
+        var killed = ShellRecords.Sweep(_folder, pid => pid == 5555 ? 0 : null, _ => throw new InvalidOperationException("killed"), _ => true);
+
+        Assert.Empty(killed);
+        Assert.Empty(Directory.GetFiles(_folder));
+    }
+
     // ── The tracker over real groups ────────────────────────────────────────
+
+    /// <summary>
+    /// Every group is tracked, a foreground one too (the code review): it leads a session of its own, so the terminal's hangup no longer
+    /// reaches it, and the exit signals' kill must; only a background one is recorded for the guard.
+    /// </summary>
+    [MacFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    public async Task AForegroundCommand_IsTrackedButNotRecorded_AndTheExitSignalsKillItToo()
+    {
+        var groups = new ShellGroups(_folder, guardExecutable: null);
+        ShellGroups.Current = groups;
+        using var foreground = new ShellRunner(_time).Start(Zsh("sleep 30"), "run_000002");
+
+        Assert.Equal([foreground.Pid], groups.Tracked);
+        Assert.False(Directory.Exists(_folder) && Directory.GetFiles(_folder).Length > 0);
+        Assert.Equal(1, groups.KillTracked());
+        Assert.Equal(137, await ExitAsync(foreground));
+    }
+
+    /// <summary>A group whose record cannot be written is still tracked (the code review): the exit signals find it.</summary>
+    [MacFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    public async Task ABackgroundCommandWhoseRecordFails_IsStillTracked()
+    {
+        string blocked = Path.Combine(_dir, "a-file");
+        File.WriteAllText(blocked, "");   // the records' folder would be under a file: no record can be written
+        var groups = new ShellGroups(Path.Combine(blocked, "running"), guardExecutable: null);
+        ShellGroups.Current = groups;
+        using var registry = new ProcessRegistry(new ShellRunner(_time), new Random(10), () => { });
+        var background = registry.Start(Zsh("sleep 30"), notify: false);
+
+        Assert.Equal([background.Pid], groups.Tracked);
+        Assert.Equal(1, groups.KillTracked());
+        Assert.Equal(137, await ExitAsync(background));
+    }
+
+    /// <summary>
+    /// A kept leader is reaped as its group's last member ends on its own (the code review: it waited for the session's close), and
+    /// its record goes with it.
+    /// </summary>
+    [MacFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    public async Task AKeptLeader_IsReapedWhenWhatItLeftEnds_BeforeTheSessionCloses()
+    {
+        var groups = new ShellGroups(_folder, guardExecutable: null);
+        ShellGroups.Current = groups;
+        using var registry = new ProcessRegistry(new ShellRunner(_time), new Random(11), () => { });
+        var background = registry.Start(Zsh("sleep 2 </dev/null >/dev/null 2>&1 & exit 0"), notify: false);
+        await ExitAsync(background);
+        Assert.Equal([background.Pid], groups.Tracked);   // the sleep runs: kept, recorded
+
+        var until = DateTime.UtcNow.AddSeconds(15);
+        while (groups.Tracked.Count > 0 && DateTime.UtcNow < until)
+        {
+            await Task.Delay(100);
+        }
+
+        Assert.Empty(groups.Tracked);
+        Assert.Empty(Directory.GetFiles(_folder));
+        Assert.Contains(background, registry.List());   // not closed: reaped all the same
+    }
 
     [MacFact]
     [System.Runtime.Versioning.SupportedOSPlatform("macos")]
-    public async Task ABackgroundCommand_IsRecordedWhileItsLeaderIsUnreaped_AForegroundOneNever()
+    public async Task ABackgroundCommand_IsRecordedWhileItsLeaderIsUnreaped_AForegroundOneNever_ThoughTracked()
     {
         var groups = new ShellGroups(_folder, guardExecutable: null);
         ShellGroups.Current = groups;
@@ -134,7 +230,8 @@ public sealed class ShellGuardTests : IDisposable
 
         using (var foreground = runner.Start(Zsh("sleep 30"), "run_000001"))
         {
-            Assert.DoesNotContain(foreground.Pid, groups.Tracked);
+            Assert.Contains(foreground.Pid, groups.Tracked);   // for the exit signals
+            Assert.False(File.Exists(ShellRecords.PathOf(_folder, foreground.Pid)));   // never for the guard
         }
 
         background.Kill();

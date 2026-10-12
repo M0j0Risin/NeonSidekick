@@ -51,14 +51,7 @@ public static class ShellGuard
         using var quit = PosixSignalRegistration.Create(PosixSignal.SIGQUIT, Ignore);
         using (var stdin = Console.OpenStandardInput())
         {
-            await Task.Run(() =>
-            {
-                var buffer = new byte[256];
-                while (stdin.Read(buffer) > 0)
-                {
-                    // Nothing is sent: only the end of the pipe means anything.
-                }
-            }).ConfigureAwait(false);
+            await Files.RecordFiles.WaitForEndOfInputAsync(stdin).ConfigureAwait(false);
         }
 
         // Quietly: whoever read the guard's output went with the app.

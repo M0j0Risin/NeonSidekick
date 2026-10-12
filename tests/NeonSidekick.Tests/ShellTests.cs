@@ -141,6 +141,9 @@ public sealed class ShellTests
     [InlineData("zsh", "export y==(rm z)", new[] { "export", "rm" })]
     [InlineData("zsh", "echo '=(rm x)' \"=(rm y)\" \\=(rm z)", new[] { "echo" })]   // quoted or escaped: text
     [InlineData("zsh", "echo x=(rm y)", new[] { "echo" })]   // inside an argument: a glob qualifier
+    [InlineData("zsh", "git log ${:-=(rm -rf src)}", new[] { "git log", "rm" })]   // a parameter expansion's default runs it (the code review)
+    [InlineData("zsh", "echo ${x:+=(rm y)} x${x-=(rm z)}", new[] { "echo", "rm" })]
+    [InlineData("zsh", "echo \"${x:-=(rm y)}\"", new[] { "echo" })]   // in double quotes: text
     [InlineData("zsh", "echo --opt==(rm z)", new[] { "echo", "rm" })]   // a glob qualifier too, but read: reading more only asks
     [InlineData("zsh", "files=(rm x) && ls", new[] { "x)", "ls" })]   // an array, not a command: read as bash reads it
     [InlineData("bash", "files=(rm x) && ls", new[] { "x)", "ls" })]

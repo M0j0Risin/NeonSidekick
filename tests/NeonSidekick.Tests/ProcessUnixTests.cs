@@ -289,27 +289,34 @@ public sealed class ProcessUnixTests : IDisposable
         Assert.False(foreign.HasExited);
     }
 
+    /// <summary>
+    /// zsh exits at once while the sleep it left in the background holds the output pipe open (ProcessWindowTests' cmd case, where
+    /// Windows refuses the stop). On a Mac the leader is kept unreaped while its group has members (GroupChild), so the user's stop
+    /// still reaches what it left (the code review, 2026-10-12: such a command could not be stopped at all); the exit stays the
+    /// command's own, and the alert says the user stopped it.
+    /// </summary>
     [UnixFact]
-    public async Task StopByUser_AChildGoneWhileItsOutputDrains_IsNotStopped_NorNotified()
+    public async Task StopByUser_AChildGoneWhileItsOutputDrains_StopsWhatItLeft()
     {
-        // zsh exits at once while the sleep it left in the background holds the output pipe open (ProcessWindowTests' cmd case).
-        // Its pid stays a zombie while the sleep runs (GroupChild, 2026-10-12), so the child's own exit is asked.
-        var session = Start("sleep 4 & exit 3");
+        var session = Start("sleep 60 & echo $!; exit 3");
         var deadline = DateTime.UtcNow.AddSeconds(30);
-        while (!session.ChildHasExited && DateTime.UtcNow < deadline)
+        while ((!session.ChildHasExited || session.Output.TotalLines == 0) && DateTime.UtcNow < deadline)
         {
             await Task.Delay(20);
         }
 
+        int left = int.Parse(session.Output.Lines()[0].Text, System.Globalization.CultureInfo.InvariantCulture);
         Assert.True(session.ChildHasExited);
         Assert.False(session.HasExited);
-        Assert.False(_registry.StopByUser(session));
-        Assert.False(session.Notify);
+        Assert.True(_registry.StopByUser(session));
+        Assert.True(session.Notify);
 
         await Exit(session);
-        Assert.False(session.StoppedByUser);
+        Assert.True(session.StoppedByUser);
         Assert.Equal(3, session.ExitCode);
-        Assert.False(_registry.TryTakeAlert(out _));
+        Assert.Null(EmbeddedLlm.LlamaRecords.StartTicks(left));
+        Assert.True(_registry.TryTakeAlert(out var alert));
+        Assert.True(alert.ByUser);
     }
 
     // ── The /process pane ───────────────────────────────────────────────────

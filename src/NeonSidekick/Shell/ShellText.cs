@@ -484,6 +484,21 @@ public static class ShellText
     public static string GroupUnproven(int pgid, int ownerPid) =>
         $"A background command's process group {N(pgid)}, left by NeonSidekick {N(ownerPid)}, may still run; its leader is gone, so it was not killed (pgrep -l -g {N(pgid)} lists it)";
 
+    /// <summary>The exit signals' kill of a command's group on a Mac (2026-10-12, <see cref="ShellGroups.KillTracked"/>). Pinned.</summary>
+    public static string GroupKilledAtExit(int pgid) => $"group {N(pgid)}: killed at exit";
+
+    /// <summary>The crash watcher could not be started (2026-10-12, <see cref="ShellGroups"/>): the run goes on unwatched. Pinned.</summary>
+    public static string NoGuard(string reason) => $"No shell guard (background commands are not stopped should the app crash): {reason}";
+
+    /// <summary>A background command's group the watcher could not record (2026-10-12): still killed by the exit signals. Pinned.</summary>
+    public static string GroupNotRecorded(int pgid, string reason) => $"group {N(pgid)}: not recorded for the shell guard ({reason})";
+
+    /// <summary>The guard's start and its output, at debug (2026-10-12). Pinned.</summary>
+    public static string GuardStarted(int pid) => $"shell guard: pid {N(pid)}";
+
+    /// <inheritdoc cref="GuardStarted"/>
+    public static string GuardSaid(string line) => "shell guard: " + line;
+
     /// <summary><see cref="CouldNotStart"/>'s detail for a raw argument string on a Mac (2026-10-12, <see cref="GroupChild"/>): only cmd.exe's launch has one. Pinned.</summary>
     public const string RawArgumentsAreCmds = "a raw argument string is cmd's";
 

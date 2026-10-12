@@ -27,6 +27,9 @@ internal abstract class ShellChild : IDisposable
     /// <summary>Whether a job of its own holds it (Windows).</summary>
     public virtual bool InJob => false;
 
+    /// <summary>Whether it has exited but what it left can still be killed (a Mac's kept group leader, <see cref="GroupChild"/>).</summary>
+    public virtual bool HoldsLeftovers => false;
+
     public abstract Task WaitForExitAsync();
 
     public abstract bool WaitForExit(int milliseconds);

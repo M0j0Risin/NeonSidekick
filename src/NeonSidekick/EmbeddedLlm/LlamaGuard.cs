@@ -86,14 +86,7 @@ public static class LlamaGuard
             try
             {
                 using var stdin = Console.OpenStandardInput();
-                var released = Task.Run(() =>
-                {
-                    var buffer = new byte[256];
-                    while (stdin.Read(buffer) > 0)
-                    {
-                        // Nothing is sent: only the end of the pipe means anything.
-                    }
-                });
+                var released = Files.RecordFiles.WaitForEndOfInputAsync(stdin);
                 var exited = server.WaitForExitAsync();
                 await Task.WhenAny(released, exited).ConfigureAwait(false);
                 if (!server.HasExited)

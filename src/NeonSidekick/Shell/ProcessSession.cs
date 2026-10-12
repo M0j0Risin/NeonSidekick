@@ -186,14 +186,16 @@ public sealed class ProcessSession : IDisposable, IAsyncDisposable
     {
         try
         {
-            if (!_child.HasExited)
+            // On a Mac also after the child's own exit while what it left is still running and its output still drains (the code review,
+            // 2026-10-12: a background `server & exit` could not be stopped): the group kill reaches it.
+            if (!_child.HasExited || (!HasExited && _child.HoldsLeftovers))
             {
                 Killed = true;
                 _child.Kill();
                 return true;
             }
         }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException or AggregateException)
         {
             // Already gone, or not ours to kill: the wait ends either way.
         }

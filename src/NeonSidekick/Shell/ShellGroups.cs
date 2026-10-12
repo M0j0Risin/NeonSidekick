@@ -6,16 +6,23 @@ using NeonSidekick.Diagnostics;
 namespace NeonSidekick.Shell;
 
 /// <summary>
-/// The app's side of the crash watcher on a Mac (2026-10-12, the user's ask): the background command groups this run has alive, their
-/// records (<see cref="ShellRecords"/>) and the guard (<see cref="ShellGuard"/>) that kills them should the app die. Set once by
-/// <c>Program</c> as <see cref="Current"/>; null elsewhere and in the tests that do not make their own, so a run with none tracks nothing.
+/// The app's side of the crash watcher on a Mac (2026-10-12, the user's ask): the shell command groups this run has alive, the records
+/// of its background ones (<see cref="ShellRecords"/>) and the guard (<see cref="ShellGuard"/>) that kills those should the app die. Set
+/// once by <c>Program</c> as <see cref="Current"/>; null elsewhere and in the tests that do not make their own, so a run with none tracks
+/// nothing.
 /// <list type="bullet">
-/// <item><see cref="Track"/>, as a background command starts (<see cref="GroupChild"/>, <c>tiedToApp</c>): its record, and the guard
-/// started if it is not running — once, at the first, and again should it have died. Only when this process is the app's own
-/// executable (<see cref="EmbeddedLlm.LlamaGuard.DefaultExecutable"/>); a test host records without a guard.</item>
+/// <item><see cref="Track"/>, as a command starts (<see cref="GroupChild"/>): every group is tracked, foreground ones too, for the exit
+/// signals; a background one (<c>watched</c>) also gets its record, and the guard is started if it is not running — once, at the first,
+/// and again should it have died. Only when this process is the app's own executable
+/// (<see cref="EmbeddedLlm.LlamaGuard.DefaultExecutable"/>); a test host records without a guard. A group is tracked even when its
+/// record could not be written (the code review, 2026-10-12): the exit signals still find it, only the guard does not.</item>
 /// <item><see cref="Untrack"/>, before the leader is reaped: the record goes while the group id is still certainly ours.</item>
-/// <item><see cref="KillTracked"/>, the exit signals' (SIGTERM, SIGQUIT, SIGHUP: no <c>finally</c> runs after them, so the registry is
-/// never disposed): every tracked group killed at once. The records stay for the guard, which finds the groups gone.</item>
+/// <item><see cref="KillTracked"/>, the exit signals' (SIGTERM, SIGQUIT, SIGHUP: no <c>finally</c> runs after them, so the registries
+/// are never disposed): every tracked group killed at once, a foreground command's too — it leads a session of its own, so the
+/// terminal's hangup no longer reaches it as it did while it shared the app's process group (the code review). The records stay for the
+/// guard, which finds the groups gone. A crash still ends only the background ones, as on Windows (a foreground job is not kill-on-close).</item>
+/// <item><see cref="Sweep"/>, the start's, under the same lock as <see cref="Track"/>, so a record the sweep reads is never one this run
+/// is writing under the same pid (the code review).</item>
 /// </list>
 /// Starting the guard is a counted process-start site (the app's own executable; the user's call, 2026-10-12).
 /// </summary>
@@ -26,7 +33,7 @@ public sealed class ShellGroups
     private readonly string? _guardExecutable;
     private readonly Func<int, long?>? _startTicks;
     private readonly object _lock = new();
-    private readonly Dictionary<int, string> _tracked = new();
+    private readonly Dictionary<int, string?> _tracked = new();
     private Process? _guard;
     private bool _guardFailed;
 
@@ -80,20 +87,33 @@ public sealed class ShellGroups
         return guard is null || guard.WaitForExit((int)timeout.TotalMilliseconds);
     }
 
-    /// <summary>A background command's group, led by <paramref name="pgid"/>, started: recorded, and the guard made sure of.</summary>
-    internal void Track(int pgid)
+    /// <summary>
+    /// A command's group, led by <paramref name="pgid"/>, started: tracked; with <paramref name="watched"/> (a background command)
+    /// recorded too, and the guard made sure of. Never throws: a failure is logged and the command runs on, tracked.
+    /// </summary>
+    internal void Track(int pgid, bool watched)
     {
         lock (_lock)
         {
-            EnsureGuard();
-            if (ShellRecords.Write(_folder, pgid, _startTicks) is { } path)
+            _tracked[pgid] = null;
+            if (!watched)
             {
-                _tracked[pgid] = path;
+                return;
+            }
+
+            try
+            {
+                EnsureGuard();
+                _tracked[pgid] = ShellRecords.Write(_folder, pgid, _startTicks);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                DiagnosticLog.Warn(ShellKinds.Category, ShellText.GroupNotRecorded(pgid, ex.Message));
             }
         }
     }
 
-    /// <summary>The group's leader about to be reaped: its record removed.</summary>
+    /// <summary>The group's leader about to be reaped: untracked, its record removed.</summary>
     internal void Untrack(int pgid)
     {
         lock (_lock)
@@ -112,7 +132,7 @@ public sealed class ShellGroups
         {
             foreach (int pgid in _tracked.Keys)
             {
-                DiagnosticLog.Info(ShellKinds.Category, "group " + pgid.ToString(CultureInfo.InvariantCulture) + ": killed at exit");
+                DiagnosticLog.Info(ShellKinds.Category, ShellText.GroupKilledAtExit(pgid));
                 ShellGuard.KillGroup(pgid);
             }
 
@@ -120,9 +140,14 @@ public sealed class ShellGroups
         }
     }
 
-    /// <summary>The start's sweep over this tracker's folder (<see cref="ShellRecords.Sweep"/>); the groups killed. Never throws.</summary>
-    public IReadOnlyList<int> Sweep() =>
-        ShellRecords.Sweep(_folder, _startTicks ?? EmbeddedLlm.LlamaRecords.StartTicks, ShellGuard.KillGroup, ShellGuard.GroupAlive);
+    /// <summary>The start's sweep over this tracker's folder (<see cref="ShellRecords.Sweep"/>), under the tracker's lock; the groups killed. Never throws.</summary>
+    public IReadOnlyList<int> Sweep()
+    {
+        lock (_lock)
+        {
+            return ShellRecords.Sweep(_folder, _startTicks ?? Files.RecordFiles.StartTicks, ShellGuard.KillGroup, ShellGuard.GroupAlive);
+        }
+    }
 
     /// <summary>Starts the guard when there is none running; under the lock. A failure is logged once and the run goes on unwatched.</summary>
     private void EnsureGuard()
@@ -155,12 +180,12 @@ public sealed class ShellGroups
             guard.BeginOutputReadLine();
             guard.BeginErrorReadLine();
             _guard = guard;
-            DiagnosticLog.Debug(ShellKinds.Category, "shell guard: pid " + guard.Id.ToString(CultureInfo.InvariantCulture));
+            DiagnosticLog.Debug(ShellKinds.Category, ShellText.GuardStarted(guard.Id));
         }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             _guardFailed = true;
-            DiagnosticLog.Warn(ShellKinds.Category, "No shell guard (background commands are not stopped should the app crash): " + ex.Message);
+            DiagnosticLog.Warn(ShellKinds.Category, ShellText.NoGuard(ex.Message));
         }
     }
 
@@ -168,7 +193,7 @@ public sealed class ShellGroups
     {
         if (!string.IsNullOrEmpty(line))
         {
-            DiagnosticLog.Debug(ShellKinds.Category, "shell guard: " + line);
+            DiagnosticLog.Debug(ShellKinds.Category, ShellText.GuardSaid(line));
         }
     }
 }

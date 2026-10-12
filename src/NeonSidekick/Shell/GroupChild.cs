@@ -24,14 +24,18 @@ namespace NeonSidekick.Shell;
 /// that left the group while its parent lives), then <c>killpg(pid, SIGKILL)</c>, which ends every member, the adopted orphans too.</item>
 /// <item><b>The pid kept while it matters.</b> A waiter thread learns the exit with <c>waitid(WNOWAIT)</c>, which leaves the leader a
 /// zombie. While the zombie lives neither its pid nor its group id can be used again, so a <c>killpg</c> never reaches a stranger's group.
-/// It is reaped at once unless a background command left members running (<c>killpg(pid, 0)</c> answers 0 for a live member, EPERM for
-/// the zombie alone, measured on 15.7); then only in <see cref="Dispose"/>, after the group kill, so <c>ps</c> shows a
-/// <c>(zsh) &lt;defunct&gt;</c> just while there is something left to kill. (.NET's own SIGCHLD handling reaps only the children .NET started — unless the
-/// app began with SIGCHLD ignored; a child reaped elsewhere answers ECHILD, its code is -1, and no group kill is sent after that.)</item>
+/// It is reaped at once unless the command left members running (<c>killpg(pid, 0)</c> answers 0 for a live member, EPERM for the zombie
+/// alone, measured on 15.7). Then the waiter keeps watching (the code review, 2026-10-12: nothing reaped it when the members ended on
+/// their own) and reaps it as the last member goes, or <see cref="Dispose"/> does after its group kill, so <c>ps</c> shows a
+/// <c>(zsh) &lt;defunct&gt;</c> just while there is something left to kill. Meanwhile <see cref="HoldsLeftovers"/> lets the session's kill
+/// (a stop in <c>/process</c>, the <c>process</c> tool's kill, a timeout, ESC) reach those members after the leader's exit (the code review:
+/// a background <c>server &amp; exit</c> could not be stopped at all). (.NET's own SIGCHLD handling reaps only the children .NET started —
+/// unless the app began with SIGCHLD ignored; a child reaped elsewhere answers ECHILD, its code is -1, and no group kill is sent after that.)</item>
 /// <item><b>A background command's leftovers</b> (<c>tiedToApp</c>, the user's call): the dispose kills the group even after the leader
 /// exited, as Windows' kill-on-close job does at its close — the registry's close, its eviction and the app's exit all come here. A
-/// foreground command's leftovers are left alone, as there. Should the app die, its crash watcher kills the group instead
-/// (<see cref="ShellGroups"/>, <see cref="ShellGuard"/>, the same day): the group is recorded at the start, unrecorded before the reap.</item>
+/// foreground command's leftovers are left alone at its dispose, as there. Every group is tracked (<see cref="ShellGroups"/>) for the exit
+/// signals' kill, since a session of its own no longer gets the terminal's hangup; a background one is recorded for the crash watcher too
+/// (<see cref="ShellGuard"/>, the same day), at the start, and unrecorded before the reap.</item>
 /// <item><b>The rest as <c>Process.Start</c> does it:</b> three CLOEXEC pipes (.NET's own anonymous pipes) put on 0/1/2, every other
 /// descriptor closed in the child (<c>POSIX_SPAWN_CLOEXEC_DEFAULT</c>); every signal back to its default and none blocked (.NET ignores
 /// SIGPIPE, and an ignored signal survives exec); the environment from <see cref="ChildEnvironment.Apply"/> over a
@@ -95,7 +99,9 @@ internal sealed unsafe class GroupChild : ShellChild
         int error;
         try
         {
-            error = Spawn(
+            try
+            {
+                error = Spawn(
                 launch.Executable,
                 [launch.Executable, .. arguments],
                 environment.Environment.Where(e => e.Value is not null).Select(e => e.Key + "=" + e.Value).ToList(),
@@ -104,13 +110,21 @@ internal sealed unsafe class GroupChild : ShellChild
                 (int)stdout.ClientSafePipeHandle.DangerousGetHandle(),
                 (int)stderr.ClientSafePipeHandle.DangerousGetHandle(),
                 out pid);
+            }
+            finally
+            {
+                // The child has its copies on 0/1/2; ours would keep the pipes open past its exit.
+                stdin.DisposeLocalCopyOfClientHandle();
+                stdout.DisposeLocalCopyOfClientHandle();
+                stderr.DisposeLocalCopyOfClientHandle();
+            }
         }
-        finally
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
-            // The child has its copies on 0/1/2; ours would keep the pipes open past its exit.
-            stdin.DisposeLocalCopyOfClientHandle();
-            stdout.DisposeLocalCopyOfClientHandle();
-            stderr.DisposeLocalCopyOfClientHandle();
+            // libc's doors missing (the code review: the pipes leaked); the smoke's shell:posix-spawn is there to catch it first.
+            error = -1;
+            pid = 0;
+            DiagnosticLog.Warn(ShellKinds.Category, "posix_spawnp: " + ex.Message);
         }
 
         if (error != 0)
@@ -118,12 +132,13 @@ internal sealed unsafe class GroupChild : ShellChild
             stdin.Dispose();
             stdout.Dispose();
             stderr.Dispose();
-            throw new ShellStartException(ShellText.CouldNotStart(name, Marshal.GetPInvokeErrorMessage(error)));
+            throw new ShellStartException(ShellText.CouldNotStart(name, error < 0 ? "posix_spawnp is not available" : Marshal.GetPInvokeErrorMessage(error)));
         }
 
-        // A background command's group is watched (the crash watcher, 2026-10-12): recorded before the waiter can reap its leader.
-        var groups = tiedToApp ? ShellGroups.Current : null;
-        groups?.Track(pid);
+        // Tracked before the waiter can reap its leader (the crash watcher, 2026-10-12): every group for the exit signals, a background
+        // one recorded for the guard too. Track never throws.
+        var groups = ShellGroups.Current;
+        groups?.Track(pid, watched: tiedToApp);
         return new GroupChild(pid, tiedToApp, groups, stdin, stdout, stderr);
     }
 
@@ -231,7 +246,22 @@ internal sealed unsafe class GroupChild : ShellChild
 
     public override bool WaitForExit(int milliseconds) => _exited.Task.Wait(milliseconds);
 
-    /// <summary>The waiter: the exit learnt without reaping, then reaped here unless a background command's group still has members (see the class).</summary>
+    /// <summary>Whether the leader has exited but is kept unreaped because its group still had members: they can still be killed.</summary>
+    public override bool HoldsLeftovers
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _exitSeen && !_reaped && !_reapedElsewhere;
+            }
+        }
+    }
+
+    /// <summary>How often the waiter asks whether a kept zombie's group still has members.</summary>
+    private static readonly TimeSpan LeftoverPoll = TimeSpan.FromSeconds(1);
+
+    /// <summary>The waiter: the exit learnt without reaping, then reaped here at once, or once the group's last member is gone (see the class).</summary>
     private void Wait()
     {
         var info = stackalloc byte[PosixSpawnNative.SigInfoBytes];
@@ -274,14 +304,35 @@ internal sealed unsafe class GroupChild : ShellChild
         {
             _exitCode = code;
             _exitSeen = true;
-            if (_disposed || !_tiedToApp || _reapedElsewhere || PosixSpawnNative.KillPg(_pid, 0) != 0)
-            {
-                // Nothing the dispose would kill: no zombie kept.
-                Reap();
-            }
+            ReapUnlessMembers();
         }
 
         _exited.TrySetResult();
+
+        // A kept zombie: watched until its group's last member is gone (or a kill or the dispose reaps it first).
+        while (true)
+        {
+            Thread.Sleep(LeftoverPoll);
+            lock (_lock)
+            {
+                if (_reaped || _reapedElsewhere || ReapUnlessMembers())
+                {
+                    return;
+                }
+            }
+        }
+    }
+
+    /// <summary>Reaps the leader unless its group still has a live member to kill; under the lock. Whether it is reaped (or never will be by us).</summary>
+    private bool ReapUnlessMembers()
+    {
+        if (_disposed || _reapedElsewhere || PosixSpawnNative.KillPg(_pid, 0) != 0)
+        {
+            Reap();
+            return true;
+        }
+
+        return false;
     }
 
     public override void Kill()
@@ -302,13 +353,19 @@ internal sealed unsafe class GroupChild : ShellChild
                     using var leader = Process.GetProcessById(_pid);
                     leader.Kill(entireProcessTree: true);
                 }
-                catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+                catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException or AggregateException)
                 {
-                    // Gone the instant before: the group kill still finds what it left.
+                    // Gone the instant before, or a descendant the walk could not stop (AggregateException, another user's: the code
+                    // review): the group kill still runs.
                 }
             }
 
             KillGroup();
+            if (_exitSeen)
+            {
+                // Its members were what kept it: they are killed, so it need not wait for the watch.
+                ReapUnlessMembers();
+            }
         }
     }
 

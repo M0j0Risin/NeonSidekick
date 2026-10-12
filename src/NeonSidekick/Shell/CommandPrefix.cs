@@ -519,14 +519,15 @@ public static partial class CommandPrefix
     }
 
     /// <summary>
-    /// Whether zsh's <c>=(…)</c> at <paramref name="at"/> is a substitution (2026-10-12): only at the start of an argument, as
-    /// <c>zshexpn(1)</c> has it — the line's start, after a blank, a separator or a redirection (<c>;=(…)</c>, <c>&lt;=(…)</c>,
-    /// <c>&gt;=(…)</c> run it) — or as an assignment's value, after any <c>=</c>: <c>x==(…)</c>, <c>x+==(…)</c>, <c>a[1]==(…)</c>,
-    /// <c>export y==(…)</c> all run it. Checked in zsh 5.9 on macOS 15: inside an argument (<c>x=(…)</c>) it is a glob qualifier, and
-    /// <c>files=(a b)</c> is an array, not a command. <c>--opt==(…)</c> is a glob qualifier too but is read: reading more only asks.
+    /// Whether zsh's <c>=(…)</c> at <paramref name="at"/> is a substitution (2026-10-12): everywhere outside quotes but straight after a
+    /// name's character or a subscript's close. <c>zshexpn(1)</c> says the start of an argument, but zsh 5.9 on macOS 15 runs it in more
+    /// places: after <c>;</c>, a redirection, an assignment's <c>=</c> (<c>x==(…)</c>, <c>x+==(…)</c>, <c>a[1]==(…)</c>) and a parameter
+    /// expansion's default (<c>${x:-=(…)}</c>, <c>${x:+=(…)}</c>, <c>${x-=(…)}</c>: the code review that day, which got
+    /// <c>git log ${:-=(touch x)}</c> past an allowed <c>git log</c>). Measured not to run, and not read: <c>files=(a b)</c> and
+    /// <c>a[1]=(…)</c>, arrays; <c>x=(…)</c> inside an argument, a glob qualifier. Whatever else is read, reading more only asks.
     /// </summary>
     private static bool StartsZshArgument(string text, int at) =>
-        at == 0 || char.IsWhiteSpace(text[at - 1]) || text[at - 1] is ';' or '&' or '|' or '(' or '<' or '>' or '=';
+        at == 0 || !(char.IsAsciiLetterOrDigit(text[at - 1]) || text[at - 1] is '_' or ']');
 
     /// <summary>PowerShell's call operator on a value (<c>&amp; $x</c>, <c>&amp; (…)</c>): the command it runs is whatever the value holds. Not <c>&amp;&amp;</c>.</summary>
     private static bool CallsAValue(string text, int at)
