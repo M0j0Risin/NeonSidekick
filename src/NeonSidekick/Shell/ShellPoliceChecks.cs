@@ -68,9 +68,14 @@ public static class ShellPoliceChecks
         return null;
     }
 
+    /// <summary>How many spill files <see cref="Spill"/> keeps; the oldest beyond go when it writes one.</summary>
+    public const int SpillKept = 50;
+
     /// <summary>
-    /// The whole output into <c>.shell\&lt;id&gt;.log</c> under <paramref name="root"/> (<c>run_command</c>'s and <c>/cmd</c>'s cut
-    /// output); the relative path, or null when it could not be written (logged).
+    /// The whole output into <c>.shell\&lt;id&gt;.log</c> under <paramref name="root"/> (<c>run_command</c>'s, <c>execute_code</c>'s and
+    /// <c>/cmd</c>'s cut output); the relative path, or null when it could not be written (logged). Since 2026-10-12 (the shell
+    /// review: the folder grew a file a long run, for good, in what is often the user's repository) it keeps the newest
+    /// <see cref="SpillKept"/> and holds a <c>.gitignore</c> of <c>*</c>, so <c>git status</c> never lists it.
     /// </summary>
     public static string? Spill(string root, string id, string body)
     {
@@ -78,17 +83,42 @@ public static class ShellPoliceChecks
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(body);
         string relative = Path.Combine(ShellText.SpillFolderName, id + ".log");
+        string folder = Path.Combine(root, ShellText.SpillFolderName);
         try
         {
-            string folder = Path.Combine(root, ShellText.SpillFolderName);
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, id + ".log"), body);
-            return relative;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
             DiagnosticLog.Warn(ShellKinds.Category, $"{id}: could not write {relative} ({ex.Message})");
             return null;
+        }
+
+        Tidy(folder);
+        return relative;
+    }
+
+    /// <summary>The spill folder's <c>.gitignore</c> written when missing and the logs past <see cref="SpillKept"/> deleted, oldest first; a failure is logged and the spill stands.</summary>
+    private static void Tidy(string folder)
+    {
+        try
+        {
+            string ignore = Path.Combine(folder, ".gitignore");
+            if (!File.Exists(ignore))
+            {
+                File.WriteAllText(ignore, "*\n");
+            }
+
+            var logs = new DirectoryInfo(folder).GetFiles("*.log").OrderByDescending(f => f.LastWriteTimeUtc).Skip(SpillKept);
+            foreach (var old in logs)
+            {
+                old.Delete();
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            DiagnosticLog.Debug(ShellKinds.Category, $"could not tidy {folder} ({ex.Message})");
         }
     }
 }

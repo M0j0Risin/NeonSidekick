@@ -522,6 +522,38 @@ public sealed class ShellTests
         Assert.Contains("; the output kept is in x.log) …", dropped);
     }
 
+    /// <summary>The spill folder (2026-10-12, the shell review): the newest 50 logs kept, and a .gitignore so git never lists it.</summary>
+    [Fact]
+    public void Spill_KeepsTheNewest_AndIgnoresItselfForGit()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            string folder = Path.Combine(root, ShellText.SpillFolderName);
+            for (int i = 0; i < ShellPoliceChecks.SpillKept + 3; i++)
+            {
+                string id = "run_" + i.ToString("x6", System.Globalization.CultureInfo.InvariantCulture);
+                Assert.Equal(Path.Combine(".shell", id + ".log"), ShellPoliceChecks.Spill(root, id, "body " + i));
+                File.SetLastWriteTimeUtc(Path.Combine(folder, id + ".log"), new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMinutes(i));
+            }
+
+            var logs = Directory.GetFiles(folder, "*.log").Select(Path.GetFileName).ToList();
+            Assert.Equal(ShellPoliceChecks.SpillKept, logs.Count);
+            Assert.DoesNotContain("run_000002.log", logs);   // the three oldest went
+            Assert.Contains("run_000003.log", logs);
+            ShellPoliceChecks.Spill(root, "run_ffffff", "last");
+            logs = Directory.GetFiles(folder, "*.log").Select(Path.GetFileName).ToList();
+            Assert.Equal(ShellPoliceChecks.SpillKept, logs.Count);
+            Assert.DoesNotContain("run_000003.log", logs);
+            Assert.Contains("run_ffffff.log", logs);
+            Assert.Equal("*\n", File.ReadAllText(Path.Combine(folder, ".gitignore")));
+        }
+        finally
+        {
+            GitAccessTests.DeleteTree(root);
+        }
+    }
+
     /// <summary>The review of 2026-10-11: a /cmd --bg report shows the end of the output, the earlier lines counted and the spill named.</summary>
     [Fact]
     public void ACmdReport_ShowsTheTail()
