@@ -129,6 +129,7 @@ internal sealed partial class SettingsMenu
         [(SettingsField.YouTubeTools, "Connection"), (SettingsField.YouTubeSearchMaxResults, "Search"), (SettingsField.YouTubeAutoplay, "Playing")],
         [(SettingsField.GitLibTools, "Tools"), (SettingsField.GitLibEmail, "Identity")],
         [(SettingsField.ToolsDollarMention, "Mentions"), (SettingsField.ToolCollapseCount, "Folding"), (SettingsField.ShowFileDiffs, "Diffs")],
+        [(SettingsField.ShoppingTools, "The list")],
     ];
 
     /// <summary>

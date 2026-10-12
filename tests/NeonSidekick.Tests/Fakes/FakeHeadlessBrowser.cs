@@ -72,4 +72,19 @@ public sealed class FakeHeadlessBrowser : IHeadlessBrowser
         File.WriteAllBytes(outputPath, PdfBytes);
         return Task.FromResult(new BrowserPdf(true, ""));
     }
+
+    /// <summary>What a PDF read answers (2026-10-11, the shopping list's reference documents): <see cref="PdfReadPages"/>'s pages, the count of them unless <see cref="PdfReadCount"/> says more; every read's size recorded.</summary>
+    public List<PdfPageRead> PdfReadPages { get; } = new();
+
+    public int? PdfReadCount { get; set; }
+
+    public List<int> PdfReads { get; } = new();
+
+    public Task<PdfRead> ReadPdfAsync(string executable, byte[] pdf, PdfReadOptions options, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        PdfReads.Add(pdf.Length);
+        var pages = PdfReadPages.Take(options.MaxPages).ToList();
+        return Task.FromResult(new PdfRead(pages.Count > 0, pages.Count > 0 ? "" : Failure, PdfReadCount ?? PdfReadPages.Count, pages));
+    }
 }

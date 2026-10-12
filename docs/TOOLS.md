@@ -2,7 +2,7 @@
 
 Back to the [README](../README.md). In the app, `/tools` switches these and shows what each one does.
 
-The tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds all of it: *File tools*, *Image tools*, *GitLib tools*, *Shell command policy*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *SQLite tools*, *PostgreSQL tools*, *UNC tools*, *Docker tools*, *ComfyUI tools*, *Home Assistant tools*, *Print tools*, *Camera tool*, *Screen capture tool*, *YouTube tools*, *Advisors enabled*, *Web tools*, *Memory mode*, *Agent skills*, *Session tool*, *Ask user* and *MCP servers*. Single tools switch on the Offered tab of `/tools`.
+The tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds all of it: *File tools*, *Image tools*, *GitLib tools*, *Shell command policy*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *SQLite tools*, *PostgreSQL tools*, *UNC tools*, *Docker tools*, *ComfyUI tools*, *Home Assistant tools*, *Print tools*, *Camera tool*, *Screen capture tool*, *YouTube tools*, *Advisors enabled*, *Shopping tools*, *Web tools*, *Memory mode*, *Agent skills*, *Session tool*, *Ask user* and *MCP servers*. Single tools switch on the Offered tab of `/tools`.
 
 ## Contents
 
@@ -29,6 +29,7 @@ The tools the model can call, grouped as `/tools` and `/sys` show them. Each gro
   - [Camera](#camera)
   - [Screen](#screen)
   - [YouTube](#youtube)
+- [Shopping list](#shopping-list)
 - [Shell & Web](#shell--web)
   - [Shell](#shell)
   - [Web](#web)
@@ -893,6 +894,30 @@ On a Mac (macOS 14 or later, not over SSH) the window plays the same page throug
 A playlist plays in YouTube's own player, which moves through it by itself; nothing is read through the API to play one, so it needs no key. A mix made for one viewer (`RD…`) may play but is not listed, and Watch Later and your own private lists are out of reach without signing in, which the app does not do. A saved video reached inside a playlist keeps its saved place: the playlist starts each entry at its beginning.
 
 Saved videos (your bookmarks, per profile, in `youtube.json`) resume where they were left: the app writes a saved video's place when it is paused, ends, is switched away from or its window closes, and every 15 seconds while it plays. `youtube_play` with no `start` picks a saved video up a few seconds before that place; one seen to the end (or stopped in its last 10 seconds) starts over and reads `watched`. A video saved by its id or link gets its title and channel from YouTube's oEmbed (no key, no quota), or, when that fails and a *YouTube API key* is set, from the Data API (1 quota unit, the length too); one found nowhere keeps its id until it first plays. `/youtube save`, `/youtube list` and `/youtube unsave` are your own hand on the list (see [Commands](COMMANDS.md)).
+
+## Shopping list
+
+Under *Shopping tools* (2026-10-11). One shopping list per profile and any number of stores, in the profile's `db\shopping\shopping.db`. A line is store-independent; where it is comes from the store you shop at (the active one, or one named in the call), so the list sorts itself into that store's walk: its aisles and zones in order (numbered aisles as numbers, Aisle 2 before Aisle 10, or the order you give), then items placed in a department with no aisle, then the unplaced, then the ticked lines.
+
+A store learns its layout as facts: a product, a brand or a category at an aisle or zone (`Aisle 7`, `Dairy`) or in a section (`Dairy & Eggs`). A line is placed by the best fact in its name: its whole name first, then a brand (so "Goya guava nectar" is where Goya is, not where nectar is), then the longest term, matched at word boundaries with plurals folded ("eggs" is "egg"); a term like `Jam/Jelly` stands for either word. A fact learnt later moves every line it covers. A fact the model guessed is marked `(guess)` wherever it places a line, until you confirm or correct it.
+
+Each store's reference documents (a store guide, a floor map) go in `db\shopping\reference\<store>`, the folder made with the store: PDFs, `.md` and `.txt` files, and pictures (`.png`, `.jpg`, `.gif`, `.webp`, `.bmp`). They are read into a search index the first time they are needed and again whenever a file is added, changed or removed (`/shopping reindex` reads them all). A PDF is read by the headless browser (*Web browser path*, or the Edge, Chrome or Brave found) with Mozilla's pdf.js, built into the app: each page's text, and a picture of each page kept in `db\shopping\cache\<store>`. A text file is one page of text, a picture one page to look at. `shopping_locate` shows the lines of the documents that name a product (a store guide's index is a line per product: `Bread ..... 2`), and `shopping_reference` reads a page, its picture too: a floor map is a picture, sent to the model as `view_image` sends one (a model that reads pictures; *Image tools* need not be on).
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `shopping_list` | `store?` | The list walked through the store, grouped, with the ticked lines and likely duplicates. Allowed in plan mode. |
+| `shopping_add` | `items, store?` | Adds lines (`"2 soy milk"`, `"eggs x3"`); a name already there gets the quantity added (one ticked is wanted again). Says where each is at the store, and how to place one that is not. |
+| `shopping_check` | `items, checked?` | Ticks lines as bought (or unticks them), by name or by their number in the order added. |
+| `shopping_remove` | `items` | Takes lines off the list. |
+| `shopping_clear` | `all?` | Removes the ticked lines; `all` empties the whole list, only after your yes on the pane (refused headless). |
+| `shopping_locate` | `term, store?` | Where the list would put a product and by which fact, the related facts (a brand, a category), and the lines of the store's reference documents that name it (read again first when a file changed). Allowed in plan mode. |
+| `shopping_reference` | `query?, file?, page?, picture?, reread?, store?` | The store's reference documents: searched for a product's words, one page read (its picture too with `picture`), listed with nothing asked, or all read again with `reread`. Allowed in plan mode. |
+| `shopping_place` | `term, kind?, location?, section?, source?, note?, forget?, store?` | Records where a product, brand or category is (a new aisle, zone or section is made), or forgets it; `source` is `user`, `reference` or `guess`. |
+| `shopping_stores` | `store?` | The stores, the active one marked, and one store's layout: its locations in walk order, its sections, how many facts it holds and its reference documents. Allowed in plan mode. |
+| `shopping_layout` | `action, name, to?, section?, walk?, notes?, store?` | Adds a store or makes it the active one, renames it; adds, renames or removes a section or a location; sets a location's place in the walk. |
+| `shopping_recent` | `limit?` | What was bought before and is not on the list now, the most often first, with how many times and when last. A line counts as bought when it leaves the list ticked. Allowed in plan mode. |
+
+Every change is one line in the log under `[Shopping]`. The shopping tools are the list's only home: the operating rules tell the model never to keep it in a file, a note or a Home Assistant to-do list.
 
 ## Shell & Web
 

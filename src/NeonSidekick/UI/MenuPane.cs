@@ -90,7 +90,14 @@ public sealed record MenuFooter(string Text, string? Last = null)
 /// <see cref="MenuPick.Button"/> set. <paramref name="On"/> (later on 2026-09-29, the embedded model lists' filters) draws
 /// it highlighted as the tab one is on, so a button that is a switch shows its state; any number may be.
 /// </summary>
-public sealed record MenuButton(string Title, char? Key, bool On = false);
+public sealed record MenuButton(string Title, char? Key, bool On = false)
+{
+    /// <summary>
+    /// A key with no button drawn (2026-10-11, the <c>/shopping</c> pane's + and -: the title row ran out of room): the key still returns
+    /// the button's pick, the strip neither draws nor clicks it. Hidden buttons go after the drawn ones, so a click's index is the same.
+    /// </summary>
+    public bool Hidden { get; init; }
+}
 
 /// <summary>
 /// One level of a menu in the pane: a title, the rows as markup (escaped by the caller), and the
@@ -1068,12 +1075,12 @@ public sealed class MenuPane : INoticeSink
 
     private static List<string> Titles(IReadOnlyList<MenuTab> tabs) => tabs.Select(t => t.Title).ToList();
 
-    private static List<string> Titles(IReadOnlyList<MenuButton> buttons) => buttons.Select(b => b.Title).ToList();
+    private static List<string> Titles(IReadOnlyList<MenuButton> buttons) => buttons.Where(b => !b.Hidden).Select(b => b.Title).ToList();
 
     private static List<string?> Badges(IReadOnlyList<MenuTab> tabs) => tabs.Select(t => t.Badge).ToList();
 
     /// <summary>The indices of the buttons that are <see cref="MenuButton.On"/>: the strip draws them highlighted (later on 2026-09-29).</summary>
-    private static HashSet<int> Lit(IReadOnlyList<MenuButton> buttons) => Enumerable.Range(0, buttons.Count).Where(i => buttons[i].On).ToHashSet();
+    private static HashSet<int> Lit(IReadOnlyList<MenuButton> buttons) => Enumerable.Range(0, buttons.Count).Where(i => buttons[i].On && !buttons[i].Hidden).ToHashSet();
 
     /// <summary>The index of the button whose key is <paramref name="key"/> (ignoring case), null for none. Pure.</summary>
     public static int? ButtonFor(IReadOnlyList<MenuButton> buttons, char key)

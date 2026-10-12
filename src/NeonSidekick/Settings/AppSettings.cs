@@ -865,6 +865,7 @@ public sealed class AppSettings : IDisposable
         FileViewImageMaxPerCall = source.FileViewImageMaxPerCall,
         FileSearchMaxResults = source.FileSearchMaxResults,
         ImageTools = source.ImageTools,
+        ShoppingTools = source.ShoppingTools,
         ImageEditQuality = source.ImageEditQuality,
         ImageEditMetadata = source.ImageEditMetadata,
         ImageEditMode = source.ImageEditMode,

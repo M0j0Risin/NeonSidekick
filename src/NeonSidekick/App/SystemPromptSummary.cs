@@ -70,6 +70,8 @@ namespace NeonSidekick.App;
 /// <param name="ServerWrites">The server families whose <c>_execute</c> tool is offered (2026-10-05, <see cref="ChatScreen.ServerWritesOf"/>): each family's rule is followed by its write sentence.</param>
 /// <param name="ImagesEnabled">The setting <c>Image tools</c> (2026-10-10, the picture tools' own group).</param>
 /// <param name="ImageTools">How many picture tools the next turn offers (none without codecs, the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.ImageRule"/> while any is.</param>
+/// <param name="ShoppingEnabled">The setting <c>Shopping tools</c> (2026-10-11).</param>
+/// <param name="ShoppingTools">How many shopping tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.ShoppingRule"/> while any is.</param>
 /// <param name="PlanDirective">Plan mode's directive while planning (2026-09-26, <see cref="Plans.PlanText.Directive"/>), else null: its own section, after the skills.</param>
 public sealed record SystemPromptFacts(
     string? Persona,
@@ -133,8 +135,13 @@ public sealed record SystemPromptFacts(
     bool ImagesEnabled = false,
     int ImageTools = 0,
     bool AdvisorsEnabled = false,
-    int AdvisorTools = 0)
+    int AdvisorTools = 0,
+    bool ShoppingEnabled = false,
+    int ShoppingTools = 0)
 {
+    /// <summary>Whether the rules carry <see cref="Assistant.ShoppingRule"/>: tools on, the switch on and a shopping tool offered (2026-10-11).</summary>
+    public bool Shopping => ToolsEnabled && ShoppingEnabled && ShoppingTools > 0;
+
     /// <summary>Whether the rules carry <see cref="Assistant.NeonAdvisorRule"/>: tools on, <c>Advisors enabled</c> with an advisor listed, and the tool offered (2026-10-10).</summary>
     public bool Advisors => ToolsEnabled && AdvisorsEnabled && AdvisorTools > 0;
 
@@ -354,6 +361,9 @@ public static class SystemPromptSummary
     /// <summary>The tail of the Image group while its tools cannot be offered: the switch off (2026-10-10, the picture tools' own group). Pinned.</summary>
     public const string ImagesOffSuffix = "Image tools is off";
 
+    /// <summary>The tail of the Shopping group while its tools cannot be offered: the switch off (2026-10-11). Pinned.</summary>
+    public const string ShoppingOffSuffix = "Shopping tools is off";
+
     /// <summary>The tail of the ComfyUI group while the image tools cannot be offered (2026-09-24). Pinned.</summary>
     /// <summary>Why the profile advisors' group is not offered (2026-10-10). Pinned.</summary>
     public const string AdvisorsOffSuffix = "Advisors enabled is off";
@@ -416,7 +426,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting, serverWrites: facts.ServerWrites, images: facts.Images, advisors: facts.Advisors);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting, serverWrites: facts.ServerWrites, images: facts.Images, advisors: facts.Advisors, shopping: facts.Shopping);
         sections.Add(new(
             "Operating rules",
             customRules ? $"{OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : defaultLabel,
@@ -542,7 +552,8 @@ public static class SystemPromptSummary
             sqliteWrite: facts.SqliteWriting,
             serverWrites: facts.ServerWrites,
             images: facts.Images,
-            advisors: facts.Advisors);
+            advisors: facts.Advisors,
+            shopping: facts.Shopping);
     }
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26): <see cref="PlanModeLabel"/> and <see cref="PlanModeStatus"/> as <see cref="SystemPromptSection.Heading"/> joins them. Pinned.</summary>
@@ -670,7 +681,9 @@ public static class SystemPromptSummary
         IReadOnlyList<AIFunction>? images = null,
         bool imagesEnabled = true,
         IReadOnlyList<AIFunction>? advisors = null,
-        bool advisorsEnabled = true)
+        bool advisorsEnabled = true,
+        IReadOnlyList<AIFunction>? shopping = null,
+        bool shoppingEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -813,6 +826,13 @@ public static class SystemPromptSummary
             string youTubeNote = !youTubeEnabled ? NotOffered(YouTubeOffSuffix) : standing;
             var youTubeNotes = !youTubeKey && youTube.Any(t => t is YouTubeSearchTool) ? new Dictionary<string, string>(StringComparer.Ordinal) { [YouTubeSearchTool.ToolName] = NotOffered(NoYouTubeKeySuffix) } : null;
             groups.Add(Group(ToolsText.YouTubeTabTitle, youTube, youTubeNote, youTubeEnabled && toolsEnabled, SettingsField.YouTubeTools, disabled, youTubeNotes));
+        }
+
+        if (shopping is not null)
+        {
+            // The shopping list (2026-10-11): after YouTube; offered while Shopping tools is on.
+            string shoppingNote = !shoppingEnabled ? NotOffered(ShoppingOffSuffix) : standing;
+            groups.Add(Group(ToolsText.ShoppingMenuTitle, shopping, shoppingNote, shoppingEnabled && toolsEnabled, SettingsField.ShoppingTools, disabled));
         }
 
         if (advisors is not null)

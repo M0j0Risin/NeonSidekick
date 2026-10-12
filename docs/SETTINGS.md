@@ -139,6 +139,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
 | 🪟 | always | `/comfy thumbs`, the thumbnail browser on the ComfyUI output folder |
 | 📺 | always | `/youtube list`, the saved videos |
+| 🛒 | always | `/shopping`, the shopping list's checklist (the *Shopping tools* switch is `/tools shopping`) |
 | 📈 | always | `/perfbar`: hides or shows the performance bar |
 | working directory (right edge) | always | `/cwd browse` |
 | blank space | — | `/settings` |
@@ -665,7 +666,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 
 ### Core
 
-The tools most profiles use and the pane's own options, four menus on one tab, each a tab of the second strip (Ask · Web · Shell · Options): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10; the tab was Standard until later that day.
+The tools most profiles use and the pane's own options, five menus on one tab, each a tab of the second strip (Ask · Web · Shell · Shopping · Options): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10; the tab was Standard until later that day.
 
 #### Ask
 
@@ -748,6 +749,16 @@ The pane heads its runs **Policy**, **Guards**, **Commands** and **Scripts**.
   * `net use` / `net share` / `net view` / `Get-SmbShare` / `Get-SmbMapping` → `unc_shares`; `dir \\server`, `copy \\server` → the UNC tools
 
   A lone command such a tool covers comes back as `Not run: 'cat' has a tool of its own — call read_file instead…`, once a turn (sent again, it goes to the pane). Pipes and compound lines, commands with no tool (`git push`) and tools switched off are never sent back.
+
+#### Shopping
+
+The pane heads its run **The list**.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Shopping tools | Offers the shopping list's tools: `shopping_list`, `shopping_add`, `shopping_check`, `shopping_remove`, `shopping_clear`, `shopping_locate`, `shopping_place`, `shopping_stores`, `shopping_layout`, `shopping_recent` and `shopping_reference` (see [Tools](TOOLS.md#shopping-list)). The list and its stores live in the profile's `db\shopping\shopping.db`. `/tools shopping` opens its on/off page; the toolbar's 🛒 opens the list (`/shopping`). | off |
+| Shopping list | Enter opens the shopping list's checklist, the same pane as the bare `/shopping` and the toolbar's 🛒 (see [Commands](COMMANDS.md)); ESC comes back to the row. | — |
+| Shopping stores | Enter opens the stores' manager: the first row adds a store (its folder under `db\shopping\reference` is made), Enter on a store makes it the one the list is walked through, and the buttons `▦ layout` (`l`: the store's aisles and walk order, sections, placement facts and the model's guesses to review, each changed with Enter; see [Commands](COMMANDS.md)), `✎ rename` (`n`; its folder is renamed to match), `✖  remove` (`r`, after a yes; its layout goes, its documents stay), `📂 folder` (`f`, opens its reference folder) and `⟳ reindex` (`i`). Under each store: its locations, sections, placement facts and reference documents. The `/shopping` pane's `⇄ store` opens it too. | — |
 
 #### Options
 

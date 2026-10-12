@@ -1011,6 +1011,15 @@ public enum SettingsField
 
     /// <summary>A toggle: whether the draft row shows the emoji button (<see cref="Settings.AppSettingsData.EmojiPicker"/>). The Chat tab's input-line run's last row, under Hide /exit autocomplete (2026-10-11, the user's ask); no reconnect (read at each draw). Last in the enum, as every newcomer.</summary>
     EmojiPicker,
+
+    /// <summary>A toggle: whether a turn offers the shopping list's tools (<see cref="Settings.AppSettingsData.ShoppingTools"/>). The Shopping menu's first row on <c>/tools</c> › Core (2026-10-11, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    ShoppingTools,
+
+    /// <summary>An action row: Enter opens the shopping stores' manager (<see cref="ManageShoppingStoresAsync"/>), the stores added, renamed, removed and reindexed. The Shopping menu's second row (2026-10-11, the user's ask). Last in the enum, as every newcomer.</summary>
+    ShoppingStores,
+
+    /// <summary>An action row: Enter opens the shopping list's pane, the bare <c>/shopping</c>'s (<see cref="ManageShoppingListAsync"/>). The Shopping menu's second row, above Shopping stores (2026-10-11, the user's ask). Last in the enum, as every newcomer.</summary>
+    ShoppingList,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1514,6 +1523,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.YouTubeTools, SettingsField.YouTubeApiKey, SettingsField.YouTubeSearchMaxResults, SettingsField.YouTubeSearchOrder, SettingsField.YouTubeSafeSearch, SettingsField.YouTubeRegion, SettingsField.YouTubeLanguage, SettingsField.YouTubeAutoplay, SettingsField.YouTubeVoice],
         [SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount],
+        [SettingsField.ShoppingTools, SettingsField.ShoppingList, SettingsField.ShoppingStores],
     ];
 
     /// <summary>
@@ -1927,7 +1937,8 @@ internal sealed partial class SettingsMenu
             or SettingsField.SqliteTools or SettingsField.SqliteSandboxFiles or SettingsField.SqlitePercentMention
             or SettingsField.PostgresTools or SettingsField.PostgresPercentMention
             or SettingsField.YouTubeTools or SettingsField.YouTubeAutoplay
-            or SettingsField.Advisors or SettingsField.AdvisorConfirm;
+            or SettingsField.Advisors or SettingsField.AdvisorConfirm
+            or SettingsField.ShoppingTools;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -2179,6 +2190,9 @@ internal sealed partial class SettingsMenu
         SettingsField.TtsVoicePreview => "TTS voice preview",
         SettingsField.FileTools => "File tools",
         SettingsField.ImageTools => "Image tools",
+        SettingsField.ShoppingTools => "Shopping tools",
+        SettingsField.ShoppingStores => "Shopping stores",
+        SettingsField.ShoppingList => "Shopping list",
         SettingsField.WebSearchMethod => "Web search method",
         SettingsField.AnthropicApi => "Anthropic API",
         SettingsField.AnthropicApiKey => "Anthropic API key",
@@ -2545,6 +2559,9 @@ internal sealed partial class SettingsMenu
             SettingsField.TtsVoicePreview => OnOff(data.TtsVoicePreview),
             SettingsField.FileTools => OnOff(data.FileTools),
             SettingsField.ImageTools => OnOff(data.ImageTools),
+            SettingsField.ShoppingTools => OnOff(data.ShoppingTools),
+            SettingsField.ShoppingStores => NeonSidekick.Shopping.ShoppingText.ManageStoresLabel,
+            SettingsField.ShoppingList => NeonSidekick.Shopping.ShoppingText.ManageListLabel,
             SettingsField.WebSearchMethod => data.WebSearchMethod,
             SettingsField.AskUser => OnOff(data.AskUser),
             SettingsField.AskMaxQuestions => Questions(data.AskMaxQuestions),
@@ -5002,6 +5019,20 @@ internal sealed partial class SettingsMenu
             return await EditDockerServerWordsAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        if (field == SettingsField.ShoppingList)
+        {
+            // The list lives in the profile's shopping.db: nothing here saves (2026-10-11).
+            await ManageShoppingListAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+
+        if (field == SettingsField.ShoppingStores)
+        {
+            // The stores live in the profile's shopping.db, not in the settings: nothing here saves (2026-10-11).
+            await ManageShoppingStoresAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+
         if (field == SettingsField.UncAddShare)
         {
             return await AddUncShareAsync(cancellationToken).ConfigureAwait(false);
@@ -7027,6 +7058,7 @@ internal sealed partial class SettingsMenu
             SettingsField.TtsVoicePreview => data.TtsVoicePreview,
             SettingsField.FileTools => data.FileTools,
             SettingsField.ImageTools => data.ImageTools,
+            SettingsField.ShoppingTools => data.ShoppingTools,
             SettingsField.AskUser => data.AskUser,
             SettingsField.AgentSkills => data.AgentSkills,
             SettingsField.ExternalSkills => data.ExternalSkills,
@@ -7135,6 +7167,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.TtsVoicePreview: data.TtsVoicePreview = on; break;
             case SettingsField.FileTools: data.FileTools = on; break;
             case SettingsField.ImageTools: data.ImageTools = on; break;
+            case SettingsField.ShoppingTools: data.ShoppingTools = on; break;
             case SettingsField.AskUser: data.AskUser = on; break;
             case SettingsField.AgentSkills: data.AgentSkills = on; break;
             case SettingsField.ExternalSkills: data.ExternalSkills = on; break;
@@ -7191,6 +7224,7 @@ internal sealed partial class SettingsMenu
         SettingsField.AskUser => on ? "ask user enabled" : "ask user disabled",
         SettingsField.FileTools => on ? "file tools enabled" : "file tools disabled",
         SettingsField.ImageTools => on ? "image tools enabled" : "image tools disabled",
+        SettingsField.ShoppingTools => on ? "shopping tools enabled" : "shopping tools disabled",
         SettingsField.FileTreeShowSizes => on ? "/tree carries each file's size" : "/tree lists names only",
         SettingsField.WebTools => on ? "web tools enabled" : "web tools disabled",
         SettingsField.GitLibTools => on ? "gitlib tools enabled" : "gitlib tools disabled",

@@ -232,7 +232,7 @@ public class NeonHelpTests
         Assert.Contains("\n- Oracle: Oracle tools, ", text);
         Assert.EndsWith("\nAsk for one menu (/tools sql) for its rows' defaults and what each does.", text, StringComparison.Ordinal);
         Assert.Equal("the menus Print, Camera (a second strip under the tab; ←/→ walk them)", HelpText.MenusTab(["Print", "Camera"]));
-        Assert.Equal([(ToolsText.CoreTabTitle, "Ask"), (ToolsText.CoreTabTitle, "Web"), (ToolsText.CoreTabTitle, "Shell"), (ToolsText.CoreTabTitle, "Options"), (ToolsText.FilesTabTitle, "File")], HelpLocation.Menus("/tools").Take(5));   // the Standard group first since later on 2026-10-10, then Files
+        Assert.Equal([(ToolsText.CoreTabTitle, "Ask"), (ToolsText.CoreTabTitle, "Web"), (ToolsText.CoreTabTitle, "Shell"), (ToolsText.CoreTabTitle, "Shopping"), (ToolsText.CoreTabTitle, "Options"), (ToolsText.FilesTabTitle, "File")], HelpLocation.Menus("/tools").Take(6));   // the Standard group first since later on 2026-10-10, then Files; Shopping before Options since 2026-10-11
         Assert.Equal([(SettingsMenu.ClientTabTitle, "Chat"), (SettingsMenu.ClientTabTitle, "Sessions"), (SettingsMenu.ClientTabTitle, "Botchat"), (SettingsMenu.ServersTabTitle, "Common")], HelpLocation.Menus("/settings").Take(4));   // the Servers and Voice groups since 2026-10-10; Common and Http (the LLM tab) later that day; the Client group first later still
     }
 

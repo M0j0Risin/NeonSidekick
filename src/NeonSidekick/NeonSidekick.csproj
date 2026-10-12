@@ -258,6 +258,11 @@
     <!-- The emoji catalog (2026-10-10, the avatar picker): assets\emoji\emoji.tsv, written by tools\EmojiGen.cs from Unicode's
          emoji-test.txt and CLDR's annotations (Unicode License v3), read once by Emojis/EmojiCatalog. Rerun the tool; never edit. -->
     <EmbeddedResource Include="..\..\assets\emoji\emoji.tsv" LogicalName="emoji/emoji.tsv" Visible="false" />
+    <!-- pdf.js (2026-10-11, the shopping list's reference PDFs): pdfjs-dist 4.10.38's two builds, Apache-2.0, as published
+         (assets\pdfjs\README.md has the version and the tarball's integrity). Web/BrowserPdfReader imports them into the headless
+         browser's blank page; nothing is written to disk. -->
+    <EmbeddedResource Include="..\..\assets\pdfjs\pdf.min.mjs" LogicalName="pdfjs/pdf.min.mjs" Visible="false" />
+    <EmbeddedResource Include="..\..\assets\pdfjs\pdf.worker.min.mjs" LogicalName="pdfjs/pdf.worker.min.mjs" Visible="false" />
   </ItemGroup>
 
   <!--
