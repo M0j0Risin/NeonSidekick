@@ -79,9 +79,10 @@ internal sealed partial class SettingsMenu
 
             var offered = _settings.Current.UncSharesOffered;
             var on = loaded.Offered(offered).Shares.Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            int width = loaded.Shares.Max(s => s.Name.Length) + 2;
-            var page = new MenuPage(Crumb(FieldName(SettingsField.UncSharesOffered)), loaded.Shares.Select(s => UncOfferedRow(s, on.Contains(s.Name), width)).ToList(), ToggleKeys) { SpaceToggles = true };
-            var picked = await PickChecklistAsync(page, Math.Min(cursor, loaded.Shares.Count - 1), cancellationToken).ConfigureAwait(false);
+            var shares = ByName(loaded.Shares, s => s.Name);   // A to Z (2026-10-11, the user's ask)
+            int width = shares.Max(s => s.Name.Length) + 2;
+            var page = new MenuPage(Crumb(FieldName(SettingsField.UncSharesOffered)), shares.Select(s => UncOfferedRow(s, on.Contains(s.Name), width)).ToList(), ToggleKeys) { SpaceToggles = true };
+            var picked = await PickChecklistAsync(page, Math.Min(cursor, shares.Count - 1), cancellationToken).ConfigureAwait(false);
             if (picked is not { } pick)
             {
                 if (!changed)
@@ -93,10 +94,10 @@ internal sealed partial class SettingsMenu
             }
 
             cursor = pick.Row;
-            string name = loaded.Shares[pick.Row].Name;
-            var next = pick.Button == SelectAllIndex ? loaded.Shares.Select(s => s.Name).ToList()
+            string name = shares[pick.Row].Name;
+            var next = pick.Button == SelectAllIndex ? shares.Select(s => s.Name).ToList()
                 : pick.Button == SelectNoneIndex ? []
-                : loaded.Shares.Select(s => s.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
+                : shares.Select(s => s.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
             if (next.Count == on.Count && next.All(on.Contains))
             {
                 continue;   // null and empty both offer none (2026-10-01)
@@ -121,7 +122,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     private async Task<bool> SetUncPasswordAsync(CancellationToken cancellationToken)
     {
-        var shares = UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Shares.Where(s => s.Config.NeedsPassword).ToList();
+        var shares = ByName(UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Shares.Where(s => s.Config.NeedsPassword), s => s.Name);
         if (shares.Count == 0)
         {
             Sink.Error(UncNoPasswordShares);

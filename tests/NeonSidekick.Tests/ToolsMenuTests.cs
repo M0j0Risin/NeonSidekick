@@ -957,6 +957,28 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("Enter to start share wizard", SettingsMenu.UncAddShareLabel);
     }
 
+    /// <summary><c>UNC shares offered</c> and <c>UNC set password</c> list A to Z (2026-10-11, the user's ask), not the file's order: <c>Alpha</c> first in both.</summary>
+    [Fact]
+    public async Task OnThePane_TheUncTab_ListsTheSharesAToZ()
+    {
+        string path = NeonSidekick.Unc.UncConfigFile.ProfilePath(_settings.ProfileDirectory);
+        Directory.CreateDirectory(_settings.ProfileDirectory);
+        File.WriteAllText(path, """{ "shares": { "zeta": { "path": "//fs01/zeta", "auth": "runas", "user": "CORP\\svc" }, "Alpha": { "path": "//fs02/alpha", "auth": "runas", "user": "CORP\\svc" } } }""");
+        var (menu, _, _) = PaneMenu();
+        OpenUncRow(3);                                       // set password: both take one
+        Push(Keys.Down, Keys.Enter);                         // zeta, under Alpha
+        Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
+        Push(Keys.Up, Keys.Enter);                           // the offered row, right above: the checklist
+        Push(Keys.Enter);                                    // Alpha on, the first row
+        Push(Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        var zeta = NeonSidekick.Unc.UncConfigFile.Load(path).Shares.Single(s => s.Name == "zeta");
+        Assert.Equal("s3cret", NeonSidekick.Unc.UncSecrets.Resolve(zeta).Value);
+        Assert.Equal(["Alpha"], _settings.Current.UncSharesOffered);
+    }
+
     /// <summary>The SQL tab, the add-connection row (the sixth, under the password prompt; the default row went 2026-10-09): the wizard.</summary>
     private void OpenSqlWizard() => Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);
 

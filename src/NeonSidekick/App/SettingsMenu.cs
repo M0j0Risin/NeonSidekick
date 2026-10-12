@@ -4226,8 +4226,8 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// <see cref="ModelOrder"/>'s order over things with a name (2026-10-11, the user's ask): the database panes' checklists and
-    /// password pickers list their connections A to Z instead of the files' order (the profile's, then the home's). Only the panes
+    /// <see cref="ModelOrder"/>'s order over things with a name (2026-10-11, the user's ask): the database and UNC panes' checklists and
+    /// password pickers list their connections and shares A to Z instead of the files' order (the profile's, then the home's). Only the panes
     /// sort; the catalogs, and so the tools, keep the files' order. Pure.
     /// </summary>
     public static List<T> ByName<T>(IEnumerable<T> items, Func<T, string> name)
