@@ -182,8 +182,13 @@ public static partial class ServerDatabasePolice
     /// The verdict on a <c>run_command</c> line: what in it reaches a family, else what in one of its script files does
     /// (<see cref="SqlitePolice.ScriptFiles"/>, <c>File</c> naming it); null when neither does.
     /// </summary>
-    public static (string Family, string Token, string? File)? Judge(string command, string workdir, string root, ServerDatabaseGuard guard)
+    public static (string Family, string Token, string? File)? Judge(string command, string workdir, string root, ServerDatabaseGuard guard) =>
+        Judge(command, new Lazy<IReadOnlyList<(string Name, string Text)>>(() => SqlitePolice.ScriptFiles(command, workdir, root)), guard);
+
+    /// <summary><see cref="Judge(string, string, string, ServerDatabaseGuard)"/> over script files read at most once (2026-10-12, the SQLite police's reason: <see cref="SqlitePolice.ScriptFiles"/> read once for both).</summary>
+    public static (string Family, string Token, string? File)? Judge(string command, Lazy<IReadOnlyList<(string Name, string Text)>> scripts, ServerDatabaseGuard guard)
     {
+        ArgumentNullException.ThrowIfNull(scripts);
         ArgumentNullException.ThrowIfNull(guard);
         // The line less its package-manager segments (2026-10-10, PackageCommands: dotnet add package Npgsql reaches no database).
         if (Find(PackageCommands.Strip(command), guard) is { } found)
@@ -191,7 +196,7 @@ public static partial class ServerDatabasePolice
             return (found.Family, found.Token, null);
         }
 
-        foreach (var (name, text) in SqlitePolice.ScriptFiles(command, workdir, root))
+        foreach (var (name, text) in scripts.Value)
         {
             if (Find(text, guard) is { } inScript)
             {

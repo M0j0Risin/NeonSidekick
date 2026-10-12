@@ -39,9 +39,12 @@ public static class ShellPoliceChecks
             return new ShellPoliceRefusal(ShellText.Forbidden, ShellText.ForbiddenShown(forbidden));
         }
 
+        // The line's script files, read once for both database polices and only if one needs them (2026-10-12).
+        var scripts = new Lazy<IReadOnlyList<(string Name, string Text)>>(() => SqlitePolice.ScriptFiles(command, workdir, files.Root));
+
         // The SQLite police (2026-10-05, the user's call), while the SQLite tools are on: a line, or a script
         // file it runs, that reaches SQLite is refused whatever the policy, so a database is reached only through the sqlite_ tools.
-        if (files.Databases?.Invoke() is { } databases && SqlitePolice.Judge(command, workdir, files.Root, databases) is { } sqlite)
+        if (files.Databases?.Invoke() is { } databases && SqlitePolice.Judge(command, scripts, databases) is { } sqlite)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.SqliteLogLine(request, sqlite.Token, sqlite.File));
             return new ShellPoliceRefusal(ShellText.SqlitePoliced, ShellText.SqliteShown(sqlite.Token, sqlite.File));
@@ -49,7 +52,7 @@ public static class ShellPoliceChecks
 
         // The server-database police (2026-10-05, SQLite's rule mirrored): while a server family's tools are on, a line, or a script
         // file it runs, that reaches one (its clients, its drivers, its connections' hosts) is refused whatever the policy.
-        if (files.ServerDatabases?.Invoke() is { } servers && ServerDatabasePolice.Judge(command, workdir, files.Root, servers) is { } server)
+        if (files.ServerDatabases?.Invoke() is { } servers && ServerDatabasePolice.Judge(command, scripts, servers) is { } server)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.ServerDatabaseLogLine(request, server.Family, server.Token, server.File));
             return new ShellPoliceRefusal(ShellText.ServerDatabasePoliced(ServerDatabasePolice.FamilyOf(servers, server.Family)), ShellText.ServerDatabaseShown(server.Family, server.Token, server.File));

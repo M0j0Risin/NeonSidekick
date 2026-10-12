@@ -123,8 +123,17 @@ public static partial class SqlitePolice
     /// The verdict on a <c>run_command</c> line: what in the line reaches SQLite, else what in one of its script files does
     /// (<c>File</c> naming it); null when neither does.
     /// </summary>
-    public static (string Token, string? File)? Judge(string command, string workdir, string root, DatabaseGuard guard)
+    public static (string Token, string? File)? Judge(string command, string workdir, string root, DatabaseGuard guard) =>
+        Judge(command, new Lazy<IReadOnlyList<(string Name, string Text)>>(() => ScriptFiles(command, workdir, root)), guard);
+
+    /// <summary>
+    /// <see cref="Judge(string, string, string, DatabaseGuard)"/> over script files read at most once and only when the line itself
+    /// passes (2026-10-12, the shell review: this police and <see cref="ServerDatabasePolice"/> each read them from disk, up to
+    /// <see cref="MaxScriptBytes"/> a file, for one command; <see cref="ShellPoliceChecks"/> now hands both the same <paramref name="scripts"/>).
+    /// </summary>
+    public static (string Token, string? File)? Judge(string command, Lazy<IReadOnlyList<(string Name, string Text)>> scripts, DatabaseGuard guard)
     {
+        ArgumentNullException.ThrowIfNull(scripts);
         ArgumentNullException.ThrowIfNull(guard);
         // The line less its package-manager segments (2026-10-10); its script files are read whole, as before.
         if (Find(PackageCommands.Strip(command), script: false, guard) is { } token)
@@ -132,7 +141,7 @@ public static partial class SqlitePolice
             return (token, null);
         }
 
-        foreach (var (name, text) in ScriptFiles(command, workdir, root))
+        foreach (var (name, text) in scripts.Value)
         {
             if (Find(text, script: true, guard) is { } inScript)
             {
