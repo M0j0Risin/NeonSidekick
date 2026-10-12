@@ -432,6 +432,16 @@ public sealed class AppSettingsData
     public Dictionary<string, string>? HomeBarAliases { get; set; }
 
     /// <summary>
+    /// The order of the four rows under the pane's lower rule (2026-10-12, the user's ask: "freely arrange the order" of the hint
+    /// bar, the toolbar, the performance bar and the home bar, the hint bar under the performance bar for one): every id of
+    /// <see cref="App.PaneBars.Names"/> (<c>hint</c>, <c>toolbar</c>, <c>perf</c>, <c>home</c>) top to bottom
+    /// (<see cref="App.PaneBars.Order"/>). Null (the default) is that order, the pane's until then, which the row's <c>⊡ default</c>
+    /// puts back. The order alone: each bar's own row shows or hides it, and one that is off keeps its place. The row is
+    /// <c>Toolbar order</c> (the user's name; <see cref="ToolbarOrder"/> is the toolbar's own items). Read on every pane tick. No variable.
+    /// </summary>
+    public List<string>? BarOrder { get; set; }
+
+    /// <summary>
     /// The look (2026-09-23, the user's ask): a theme's name — a built-in (<see cref="UI.ThemeName.Names"/>, every
     /// <c>assets/themes</c> file since 2026-10-05) or one of the home's <c>themes</c> folder; anything else reads as
     /// <see cref="UI.ThemeName.Default"/> (<c>collider</c> since 2026-10-05, the user's call; <c>synthwave</c> until then).

@@ -92,7 +92,7 @@ public partial class ChatScreenTests : IDisposable
     private string? _logFile;   // /log file (2026-09-22): the --log file the screen is handed; null = started without --log
     private Action? _openLogWindow;   // /log (2026-10-02): the log window's opener; null = no window here
     private Action<ProcessSession, Action<ProcessSession>>? _openProcessWindow;   // /process <id> (2026-10-05): the process window's opener; null = no window here
-    private Func<bool>? _closeLogWindow;   // Ctrl+Alt+G's second press (later on 2026-10-02): true when a window was open
+    private Func<bool>? _closeLogWindow;   // the log chord's second press (later on 2026-10-02; Ctrl+G since 2026-10-12): true when a window was open
     private Func<bool>? _closeViewer;      // Ctrl+Alt+U's second press (later on 2026-10-02): true when a viewer was open
     private Action<bool>? _mouse;
     private Action<bool>? _holdWheel;
@@ -11533,7 +11533,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 54)]   // Ctrl+W (the home bar; Ctrl+Alt+W for a few hours) on 2026-10-12; Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
+    [InlineData(false, false, 54)]   // Ctrl+W (the home bar; Ctrl+Alt+W for a few hours) on 2026-10-12; Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G (plain Ctrl+G since 2026-10-12), U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
     [InlineData(true, false, 55)]
     [InlineData(true, true, 56)]   // the word moves and deletes joined (2026-10-04)
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
@@ -11586,6 +11586,7 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+/", "open the settings", "/settings"),   // later still on 2026-10-01
             new("Ctrl+E", "open the working directory in the file browser", "/explore"),   // later on 2026-10-01
             new("Ctrl+F", "show or hide the performance bar", "/perfbar"),   // from Ctrl+Alt+E, later still on 2026-10-01
+            new("Ctrl+G", "show or hide the log window", "/log"),   // from Ctrl+Alt+G on 2026-10-12, the user's ask
             new("Ctrl+H", "open the help", "/help"),   // from Ctrl+Alt+H, later still on 2026-10-01
             new("Ctrl+L", "cancel a background learning turn"),   // 2026-10-04, the user's ask
             new("Ctrl+M", "open the model picker", "/model"),   // later still on 2026-10-01
@@ -11599,7 +11600,7 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+W", "show or hide the home bar", "/homebar"),   // 2026-10-12, the user's pick (Ctrl+Alt+W for a few hours)
             new("Ctrl+Y", "open the system prompt pane", "/sys"),   // from Ctrl+Alt+Y on 2026-10-03, the user's ask
             new("Ctrl+Z", "open the theme picker", "/theme"),   // 2026-10-04, the user's ask
-        ], rows[^38..^19]);
+        ], rows[^38..^18]);
 
         // The command chords after them (2026-09-30), one block A to Z by the letter since the pane chords joined later that day.
         Assert.Equal(
@@ -11608,7 +11609,6 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+Alt+C", "start a new conversation and clear the screen", "/clear"),
             new("Ctrl+Alt+D", "open the MCP pane", "/mcp"),
             new("Ctrl+Alt+E", "open the sessions pane", "/sessions"),   // later on 2026-10-03, the user's ask
-            new("Ctrl+Alt+G", "show or hide the log window", "/log"),   // 2026-10-02, the user's ask
             new("Ctrl+Alt+H", "show or hide the header from the next clear", "/header"),   // later still on 2026-10-01, the user's ask
             new("Ctrl+Alt+K", "stop the extra embedded servers a botchat left running", "/botchat --kill"),   // 2026-10-11, the user's ask
             new("Ctrl+Alt+L", "open the allowed commands list", "/tools shell allowed"),   // /cmdlist until 2026-10-09
@@ -11623,7 +11623,7 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+Alt+U", "show or hide the ComfyUI picture viewer", "/comfy view"),   // 2026-10-02, the user's ask
             new("Ctrl+Alt+V", "show or hide the camera's live view", "/camera live"),   // 2026-10-02, the user's ask
             new("Ctrl+Alt+X", "unload the embedded model at once (press twice)"),   // 2026-10-01, the user's place
-        ], rows[^19..]);
+        ], rows[^18..]);
 
         // Every chord's command is the one it runs, and a row with none runs none: Ctrl+L (the learning's cancel, 2026-10-04) and
         // the kill switch (2026-10-01). The ESC ESC and wake rows name a command they do not type for you.
@@ -11635,6 +11635,7 @@ public partial class ChatScreenTests : IDisposable
             ["Ctrl+/"] = Keys.CtrlSlash,
             ["Ctrl+E"] = Keys.CtrlE,
             ["Ctrl+F"] = Keys.CtrlF,
+            ["Ctrl+G"] = Keys.Ctrl(ConsoleKey.G),
             ["Ctrl+H"] = Keys.CtrlH,
             ["Ctrl+L"] = Keys.CtrlL,
             ["Ctrl+M"] = Keys.CtrlM,
@@ -18570,7 +18571,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task CtrlAltG_OpensTheLogWindow_AtTheIdleLine_AndInThePane_WithThePaneLeftOpen()
+    public async Task CtrlG_OpensTheLogWindow_AtTheIdleLine_AndInThePane_WithThePaneLeftOpen()
     {
         // 2026-10-02 (the user's ask): /log as typed at the idle line, the draft kept; in a pane in place, as Ctrl+E, so the "x" after
         // the chord is the pane's (nothing), never a draft the Enter after the ESC would send.
@@ -18581,9 +18582,9 @@ public partial class ChatScreenTests : IDisposable
         _openLogWindow = () => opened++;
         _chat.EnqueueText("one");
         StepsWhenIdle(
-            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlAlt(ConsoleKey.G)); },
+            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.Ctrl(ConsoleKey.G)); },
             Key(Keys.Enter),
-            input => { PushLine(input, "/help"); input.Push(Keys.CtrlAlt(ConsoleKey.G), Keys.Char('x'), Keys.Escape, Keys.Escape, Keys.Enter); },   // the x a find since 2026-10-07: the first ESC clears it
+            input => { PushLine(input, "/help"); input.Push(Keys.Ctrl(ConsoleKey.G), Keys.Char('x'), Keys.Escape, Keys.Escape, Keys.Enter); },   // the x a find since 2026-10-07: the first ESC clears it
             Line("/exit"));
 
         string output = await RunAsync();
@@ -18595,7 +18596,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task CtrlAltG_ClosesTheLogWindow_WhenItIsOpen_AtTheIdleLineAndInAPane_TheTypedLogOnlyOpens()
+    public async Task CtrlG_ClosesTheLogWindow_WhenItIsOpen_AtTheIdleLineAndInAPane_TheTypedLogOnlyOpens()
     {
         // Later on 2026-10-02 (the user's ask): the chord toggles its window; the typed /log still opens it or brings it forward.
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });
@@ -18606,11 +18607,11 @@ public partial class ChatScreenTests : IDisposable
         _openLogWindow = () => { opened++; open = true; };
         _closeLogWindow = () => { bool was = open; open = false; closed += was ? 1 : 0; return was; };
         StepsWhenIdle(
-            Key(Keys.CtrlAlt(ConsoleKey.G)),   // opens
-            Key(Keys.CtrlAlt(ConsoleKey.G)),   // closes
-            Key(Keys.CtrlAlt(ConsoleKey.G)),   // opens again
+            Key(Keys.Ctrl(ConsoleKey.G)),   // opens
+            Key(Keys.Ctrl(ConsoleKey.G)),   // closes
+            Key(Keys.Ctrl(ConsoleKey.G)),   // opens again
             Line("/log"),                      // typed: brought forward, never closed
-            input => { PushLine(input, "/help"); input.Push(Keys.CtrlAlt(ConsoleKey.G), Keys.CtrlAlt(ConsoleKey.G), Keys.Escape); },   // in the pane: closes, opens
+            input => { PushLine(input, "/help"); input.Push(Keys.Ctrl(ConsoleKey.G), Keys.Ctrl(ConsoleKey.G), Keys.Escape); },   // in the pane: closes, opens
             Line("/exit"));
 
         string output = await RunAsync();
@@ -18625,7 +18626,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task CtrlAltU_ClosesThePictureViewer_WhenItIsOpen_TheTypedComfyViewOnlyOpens()
     {
-        // Later on 2026-10-02 (the user's ask): Ctrl+Alt+G's toggle for the picture viewer.
+        // Later on 2026-10-02 (the user's ask): the log chord's toggle for the picture viewer.
         _settings.Update(d => d.TtsOutput = false);
         bool open = false;
         var opened = new List<string>();
@@ -18649,7 +18650,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task MidTurn_CtrlAltG_ClosesTheOpenLogWindow_ThenOpensIt_TheReplyRunsOn()
+    public async Task MidTurn_CtrlG_ClosesTheOpenLogWindow_ThenOpensIt_TheReplyRunsOn()
     {
         // Later on 2026-10-02: under a reply the chord's line is marked (WatchedLine.Chord), so it toggles there too.
         bool open = true;
@@ -18660,7 +18661,7 @@ public partial class ChatScreenTests : IDisposable
         {
             if (i is 1 or 2)
             {
-                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.G));
+                _scripted!.Push(Keys.Ctrl(ConsoleKey.G));
             }
         });
 
@@ -18674,7 +18675,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>
-    /// The toolbar's 📄 (2026-10-03, the user's ask) toggles the log window as Ctrl+Alt+G does: open, closed, open again at the
+    /// The toolbar's 📄 (2026-10-03, the user's ask) toggles the log window as Ctrl+G (Ctrl+Alt+G until 2026-10-12) does: open, closed, open again at the
     /// idle line, then closed from under a pane (the pane closes as for any click).
     /// </summary>
     [Fact]

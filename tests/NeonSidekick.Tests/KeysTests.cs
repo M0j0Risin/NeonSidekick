@@ -107,6 +107,7 @@ public class KeysTests
 
     [Theory]
     [InlineData(ConsoleKey.F, '\x06', "/perfbar")]     // from Ctrl+Alt+E later still on 2026-10-01 (the user's ask)
+    [InlineData(ConsoleKey.G, '\x07', "/log")]         // from Ctrl+Alt+G on 2026-10-12 (the user's ask)
     [InlineData(ConsoleKey.H, '\x08', "/help")]   // moved from Ctrl+Alt+H later still on 2026-10-01 (the user's ask)
     [InlineData(ConsoleKey.M, '\r', "/model")]
     [InlineData(ConsoleKey.P, '\x10', "/profile")]   // from Ctrl+Alt+P
@@ -196,8 +197,10 @@ public class KeysTests
         Assert.Equal(ConsoleKey.H, Keys.CtrlH.Key);   // the BS rides on the H key: never Backspace
         Assert.Null(Keys.ShortcutLine(Keys.Backspace));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\b', ConsoleKey.Backspace, false, false, true)));   // Ctrl+Backspace
-        // The Ctrl+Alt chords they replaced are gone (Ctrl+Alt+P came back as /splash, Ctrl+Alt+G as /log on 2026-10-02), and Ctrl+Alt+K with /skills' move.
-        Assert.Equal("/log", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.G)));
+        // The Ctrl+Alt chords they replaced are gone (Ctrl+Alt+P came back as /splash; Ctrl+Alt+G as /log on 2026-10-02, gone again
+        // on 2026-10-12 when /log moved to plain Ctrl+G), and Ctrl+Alt+K with /skills' move.
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.G)));
+        Assert.Equal("/log", Keys.ShortcutLine(Keys.Ctrl(ConsoleKey.G)));
         Assert.Equal("/header", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.H)));   // back later still on 2026-10-01 as /header (the user's ask)
         // Ctrl+Alt+K and Ctrl+Alt+B came back on 2026-10-11 as the botchat chords (ShortcutLine_TheBotChatChords_…).
         Assert.Equal(NeonSidekick.App.BotChat.KillLine, Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.K)));
@@ -208,14 +211,13 @@ public class KeysTests
     }
 
     [Theory]
-    [InlineData(ConsoleKey.G, '\x07', "/log")]
     [InlineData(ConsoleKey.U, '\x15', "/comfy view")]
     [InlineData(ConsoleKey.V, '\x16', "/camera live")]
     public void ShortcutLine_TheWindowChords_AreTheirLines_AndAnAltGrCharacterStaysACharacter(ConsoleKey key, char control, string line)
     {
-        // 2026-10-02 (the user's ask): the log window, the picture viewer and the camera's live view. The console's BEL, NAK and SYN
-        // and the test factory's '\0' count; Shift, Alt alone, plain Ctrl (Ctrl+U is /usage, Ctrl+V the paste) and an AltGr key that
-        // types a character do not.
+        // 2026-10-02 (the user's ask): the picture viewer and the camera's live view (and the log window, on plain Ctrl+G since
+        // 2026-10-12). The console's NAK and SYN and the test factory's '\0' count; Shift, Alt alone, plain Ctrl (Ctrl+U is /usage,
+        // Ctrl+V the paste) and an AltGr key that types a character do not.
         Assert.Equal(line, Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: false, alt: true, control: true)));
         Assert.Equal(line, Keys.ShortcutLine(Keys.CtrlAlt(key)));
         Assert.Contains(line.Split(' ')[0], NeonSidekick.App.SlashCommands.Words);

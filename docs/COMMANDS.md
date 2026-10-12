@@ -408,7 +408,7 @@ Like the viewer, it follows the theme, reopens where it was closed, and closes w
 | F11 or double-click | Toggle full screen |
 | Esc | Leave full screen, then close |
 | Tab | Bring the terminal to the front |
-| Any other Ctrl or Alt chord | Runs in the chat as if pressed there (Ctrl+Alt+G closes this window) |
+| Any other Ctrl or Alt chord | Runs in the chat as if pressed there (Ctrl+G closes this window) |
 
 Like the viewer, it follows the theme, reopens where it was closed, and closes with the app. **On a Mac** selecting and copying are the Mac's (⌘A, ⌘C), ⌘↑/⌘↓ go to the top or bottom, ⌃⌘F is full screen, and ⌘W or Esc closes it; Ctrl+C goes to the chat.
 

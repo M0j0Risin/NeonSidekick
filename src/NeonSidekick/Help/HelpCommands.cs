@@ -159,7 +159,7 @@ public static class HelpCommands
         ]),
         new("/homebar",
         [
-            new("/homebar [on|off]", "Show or hide the home bar, the row of Home Assistant chips under the performance bar (*Show home bar*). On its own it hides the bar, or shows it again with the items it last had; the first time, with nothing picked, it opens the picker. Works while a reply runs; Ctrl+W runs it too."),
+            new("/homebar [on|off]", "Show or hide the home bar, the row of Home Assistant chips under the performance bar by default (*Show home bar*; *Toolbar order* moves it). On its own it hides the bar, or shows it again with the items it last had; the first time, with nothing picked, it opens the picker. Works while a reply runs; Ctrl+W runs it too."),
             new("/homebar edit", "Choose the bar's rooms and devices, and their order: the picker's first tab is the bar in order (Shift+↑/↓ move an item, Shift+Home/End to the top or bottom, Delete removes it, Enter for the same as a list and Rename on the bar…), the other tabs Rooms, Lights, Switches, Sensors, Climate, Media, Scenes, Security, Zones and Other, where Space or Enter adds or removes and typing filters. A double-click on the bar's ⌂ opens it too."),
             new("/homebar tap <item>", "What a double-click on a chip does, by its item (`entity:light.desk`, `area:kitchen`) or its name: a light, switch or fan toggles, a room's lights go off or on, a scene or script runs, a player plays or pauses. An unlock, opening a garage, gate or door, and disarming an alarm ask Yes or No first."),
             new("/homebar show <item>", "A chip's pane, what a right-click opens: its actions (on, off, brightness, volume, open, close, lock…), or a room's devices to switch one by one."),
@@ -182,7 +182,7 @@ public static class HelpCommands
         ]),
         new("/log",
         [
-            new("/log", "Open the log window: this run's diagnostic lines, coloured by level, following the newest while it is at the bottom. Scrolling away pauses it; Ctrl+E, Ctrl+End or scrolling back to the bottom follows again, Ctrl+Home goes to the top. Drag to select, Ctrl+A selects all, Ctrl+C copies. F11 or a double-click is full screen, Esc leaves full screen and then closes it. TAB brings the terminal forward, and any other Ctrl or Alt chord runs in the chat as if pressed there (Ctrl+Alt+G closes the window)."),
+            new("/log", "Open the log window: this run's diagnostic lines, coloured by level, following the newest while it is at the bottom. Scrolling away pauses it; Ctrl+E, Ctrl+End or scrolling back to the bottom follows again, Ctrl+Home goes to the top. Drag to select, Ctrl+A selects all, Ctrl+C copies. F11 or a double-click is full screen, Esc leaves full screen and then closes it. TAB brings the terminal forward, and any other Ctrl or Alt chord runs in the chat as if pressed there (Ctrl+G closes the window)."),
             new("/log file", "Open the diagnostic log file in your editor. Only available when the app was started with `--log <path>`."),
             new("/log path", "Copy the diagnostic log file's path to the clipboard. Only available when the app was started with `--log <path>`."),
         ]),

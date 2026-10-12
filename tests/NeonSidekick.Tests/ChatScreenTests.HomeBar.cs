@@ -111,6 +111,45 @@ public partial class ChatScreenTests
         Assert.Empty(_chat.Requests);
     }
 
+    /// <summary>
+    /// A double-click on the home bar's blank space opens <c>/settings</c> (2026-10-12, the user's ask: as on the other bars; a
+    /// spent click until then), and switches nothing.
+    /// </summary>
+    [Fact]
+    public async Task HomeBar_ADoubleClickOnItsBlanks_OpensTheSettings()
+    {
+        var server = HomeServer();
+        _settings.Update(d => d.HomeBarItems = ["entity:light.desk"]);
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the hint row at 102, the home bar at 103
+        int mark = -1;
+        bool opened = false;
+        var input = Scripted();
+        input.OnWait = () =>
+        {
+            input.OnWait = null;
+            TickUntil(() => Output.Contains("⌂  💡 Desk ", StringComparison.Ordinal) && server.Subscribed.Count > 0);
+            mark = Output.Length;
+            input.PushClick(60, 103);
+            input.PushClick(60, 103);
+            input.OnWait = () =>
+            {
+                opened = Output[mark..].Contains(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice", StringComparison.Ordinal);
+                input.OnWait = null;
+                input.Push(Keys.Escape);
+                PushLine(input, "/exit");
+            };
+        };
+
+        await RunAsync();
+
+        Assert.True(mark >= 0);
+        Assert.True(opened);
+        Assert.Empty(server.Calls);
+        Assert.Equal("off", server.StateOf("light.desk"));
+    }
+
     [Fact]
     public async Task HomeBar_AnUnlock_AsksFirst_AndANoLeavesItLocked()
     {

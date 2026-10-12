@@ -65,7 +65,7 @@ public static class LogWindow
 
     /// <summary>
     /// The open window closed and waited for briefly; nothing without one. True when one was open (later on 2026-10-02, the
-    /// user's ask: Ctrl+Alt+G closes the window it opened), false when there was none or the user had closed it already.
+    /// user's ask: the chord, Ctrl+G since 2026-10-12, closes the window it opened), false when there was none or the user had closed it already.
     /// </summary>
     public static bool Close()
     {

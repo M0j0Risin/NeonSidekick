@@ -31,7 +31,7 @@ public static class LogViewText
     /// <summary><c>/log</c>'s notice once the window is open (or brought forward). Pinned.</summary>
     public static string WindowOpenedNotice => $"({App.NoticeGlyphs.Log}opened the log window; /log {FileWord} opens the --log file in your editor)";
 
-    /// <summary>Ctrl+Alt+G's notice when it closes the open window (later on 2026-10-02, the user's ask: the chord toggles). Pinned.</summary>
+    /// <summary>Ctrl+G's notice (Ctrl+Alt+G's until 2026-10-12) when it closes the open window (later on 2026-10-02, the user's ask: the chord toggles). Pinned.</summary>
     public static string WindowClosedNotice => $"({App.NoticeGlyphs.Log}closed the log window)";
 
     /// <summary><c>/log</c> where no window can be made (neither Windows nor a Mac, or no log kept in this run). Pinned.</summary>

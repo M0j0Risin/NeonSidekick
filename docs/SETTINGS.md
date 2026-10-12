@@ -44,6 +44,7 @@ Each shortcut runs its command as if typed; a draft on the row stays.
 | Ctrl+/ | `/settings` | opens over the reply |
 | Ctrl+E | `/explore` | at once |
 | Ctrl+F | `/perfbar` (performance bar on/off) | at once |
+| Ctrl+G | `/log`: opens or closes the log window | at once |
 | Ctrl+Shift+F | `/find` (find in the transcript; Windows Terminal keeps this chord until you unbind it) | waits for the reply to end |
 | Ctrl+H | `/help` | opens over the reply |
 | Ctrl+L | cancels the background learning (🧠) | at once |
@@ -72,7 +73,6 @@ Each shortcut runs its command as if typed; a draft on the row stays.
 | Ctrl+Alt+R | `/rename`: the rename box | opens over the reply |
 | Ctrl+Alt+S | `/skills` | opens over the reply |
 | Ctrl+Alt+T | `/tools` | opens over the reply |
-| Ctrl+Alt+G | `/log`: opens or closes the log window | at once |
 | Ctrl+Alt+U | `/comfy view`: opens or closes the picture viewer | at once |
 | Ctrl+Alt+V | `/camera live`: opens or closes the camera's window | at once |
 | Ctrl+Alt+X ×2 | unloads the embedded model (see below) | at once |
@@ -117,7 +117,7 @@ Each shortcut runs its command as if typed; a draft on the row stays.
 
 **⤡** at the left end of that rule appears when something can fold; a click folds or unfolds everything, like Ctrl+O.
 
-**The toolbar** (*Show toolbar*) sits under the hint row. One click on a glyph says what it is; a double-click opens its pane or window. A tool group that is off sits on a dark slab. A strip too wide for the window ends in `+N`, and the working directory shows your profile folder as `~`.
+**The toolbar** (*Show toolbar*) sits under the hint row by default: *Toolbar order* puts the hint row, the toolbar, the performance bar and the home bar in any order. One click on a glyph says what it is; a double-click opens its pane or window. A tool group that is off sits on a dark slab. A strip too wide for the window ends in `+N`, and the working directory shows your profile folder as `~`.
 
 | Toolbar item | Shown | Opens |
 |---|---|---|
@@ -128,7 +128,7 @@ Each shortcut runs its command as if typed; a draft on the row stays.
 | 👮 / 🥷 | *Shell police* is on / off, and the policy isn't `off` | `/tools shell police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (`c` the allowed commands, `p` the police) |
 | 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page, with its own buttons at the top (an **offered** checklist for the database, UNC and ComfyUI groups; **watch**, **live**, **snap** and **screen** for the camera) |
-| 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
+| 📄 | always | `/log`, the log window (Ctrl+G) |
 | ⚡ | always | `/process`, the background processes' list |
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
 | 🪟 | always | `/comfy thumbs`, the thumbnail browser on the ComfyUI output folder |
@@ -141,6 +141,7 @@ Each shortcut runs its command as if typed; a draft on the row stays.
 | home bar: ⌂ | *Show home bar* has an item | a click says how the connection stands; a double-click (or a right-click) opens the picker |
 | home bar: a chip | *Show home bar* has an item | a click shows its state; a double-click acts (see [Home bar](#home-bar)); a right-click opens its pane |
 | home bar: ‹ › | the chips need more room than the row has | the previous or next page of chips |
+| home bar: blank space | *Show home bar* has an item | `/settings` |
 
 ## Panes
 * `/settings`: the app (Client: Chat, Sessions, Botchat), the LLM and its servers (Servers: Common, Http, Embedded, Docker, Anthropic, OpenAI), the profile advisors (Advisors) and voice (Voice: TTS, STT)
@@ -186,7 +187,8 @@ The app itself, this side of the connection, in three tabs: Chat, Sessions and B
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
 | Show toolbar | A checklist of the toolbar's glyphs and the working-directory path. `a` / `n` / `d` pick all, none or the default (`d` puts the order back too); none hides the row. Shift+↑↓ moves the item under the cursor a place and Shift+Home/End to the top or bottom, and the toolbar draws its glyphs in that order (the path stays last). Del unchecks. | Settings, Tools, Skills, Memory, Shell allowed commands, Shell police, Shell, Files, Image, Web, path (11 of 38) |
 | Show performance bar | A checklist of the bar's meters: **CPU**, **RAM**, **GPU**, **VRAM** (**GMEM** on a Mac), **NET**, **NET↓**, **NET↑** and **PROC** (background processes). `/perfbar text`, `/perfbar gauge` or `/perfbar led` picks the look. None hides the bar. Shift+↑↓ moves the meter under the cursor a place and Shift+Home/End to the top or bottom, and the bar draws its meters in that order; `d` puts back the default meters and order. Del unchecks. See [Performance bar](#performance-bar). | CPU, RAM, GPU, VRAM, `led` |
-| Show home bar | Home Assistant rooms and devices as chips on a row under the performance bar, in the order you choose. Enter opens the picker. Needs *Home Assistant URL* and *Home Assistant API key*. See [Home bar](#home-bar). | off |
+| Show home bar | Home Assistant rooms and devices as chips on a row under the performance bar (by default; see *Toolbar order*), in the order you choose. Enter opens the picker. Needs *Home Assistant URL* and *Home Assistant API key*. See [Home bar](#home-bar). | off |
+| Toolbar order | The order of the four rows under the input line, top to bottom: **Hint bar** (the hint row, the busy row while a reply runs), **Toolbar**, **Performance bar** and **Home bar**. Shift+↑↓ (or Alt+↑↓) moves the bar under the cursor a place and Shift+Home/End to the top or bottom; the pane redraws in the new order at once. `d` (*default* on the title row) puts the order back. Only the order: each bar's own row shows or hides it, and one that is off keeps its place. A short window still drops the home bar first, then the performance bar, then the toolbar. | `default` (hint, toolbar, performance, home) |
 | Menus max height | How much of the window a pane may take: `half-screen`, `three-quarters` or `full-screen`. Longer lists scroll. | `full-screen` |
 | Draft editor | The program `/draft` opens (`code --wait`, `notepad`…); it must wait for the file to close. Empty uses the system's `.txt` editor. | (default .txt editor) |
 | Image viewer | Where a double-clicked picture opens: empty for the built-in viewer, `system` for the system's app, or a command the path is added to (`mspaint`). | (built-in viewer) |
@@ -223,7 +225,7 @@ The app itself, this side of the connection, in three tabs: Chat, Sessions and B
 * **What asks first**: unlocking a lock, opening a garage, gate or door, and disarming an alarm ask Yes or No on the pane (the cursor on No). An alarm that wants a code is disarmed in Home Assistant itself.
 * **The picker** (Enter on *Show home bar*, `/homebar edit`, or a double-click on ⌂): **On the bar** lists the items in order. **Shift+↑/↓** move the item under the cursor a place, **Shift+Home/End** to the top or bottom, **Delete** takes it off, and Enter offers the same as a list (for a terminal that keeps those keys) plus **Rename on the bar…**: an alias the chip shows in place of Home Assistant's name ("Den PC Monitor" as "PC"; blank takes it off). The alias is the chip's label only: a click's note, the chip's pane and this row keep the real name, and the other tabs show it quoted beside the item. Then **Rooms** (by floor), **Lights**, **Switches** (and fans), **Sensors**, **Climate**, **Media**, **Scenes** (and scripts), **Security** (locks, covers, alarms), **Zones** (how many people each holds) and **Other**, each in sections by room: Space or Enter adds an item at the end of the bar or takes it off; typing filters by name, id, room or label.
 * **Live**: while the bar shows, the app keeps one WebSocket to Home Assistant, signed in with the API key and watching only the bar's devices (and an open room pane's), so a change shows at once. Hidden for 15 seconds, it closes. A dropped connection is retried after 1, 2, 4… up to 30 seconds; a refused key is not retried until the URL or the key changes.
-* The bar is drawn last, so a short window drops it before the other bars. `/homebar` or Ctrl+W hides it, or shows it again with the items it had.
+* A short window drops it before the other bars, wherever *Toolbar order* puts it. A double-click on the bar's blank space opens `/settings`, as on the other bars. `/homebar` or Ctrl+W hides it, or shows it again with the items it had.
 
 #### Sessions
 

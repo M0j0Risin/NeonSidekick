@@ -96,4 +96,31 @@ public class ItemOrderTests
         Assert.NotSame(source.ToolbarOrder, copy.ToolbarOrder);
         Assert.NotSame(source.PerformanceBarOrder, copy.PerformanceBarOrder);
     }
+
+    /// <summary>
+    /// Toolbar order (2026-10-12, the user's ask): the four bars under the lower rule, null their default order; a saved order
+    /// mended as the others are; the row's value; the pane's <see cref="PaneBar"/>s; a copy keeps it apart.
+    /// </summary>
+    [Fact]
+    public void TheBarsOrder_IsTheFourBars_DefaultForNull_TheRowNamesThem()
+    {
+        Assert.Equal(["hint", "toolbar", "perf", "home"], PaneBars.Order(null));
+        Assert.Equal(["perf", "home", "hint", "toolbar"], PaneBars.Order([" PERF ", "spark", "hint"]));   // toolbar after hint, home after perf
+        Assert.Null(PaneBars.SaveOrder(PaneBars.Order(null)));
+        Assert.Equal(PaneBars.DefaultValue, PaneBars.Value(null));
+        Assert.Equal(PaneBars.DefaultValue, PaneBars.Value(["hint", "toolbar"]));
+        Assert.Equal("Toolbar, Performance bar, Hint bar, Home bar", PaneBars.Value(["toolbar", "perf", "hint", "home"]));
+        Assert.Equal([PaneBar.Toolbar, PaneBar.Perf, PaneBar.Hint, PaneBar.Home], PaneBars.Bars(["toolbar", "perf", "hint", "home"]));
+        Assert.Equal(ScreenPane.DefaultBarOrder, PaneBars.Bars(null));
+
+        Assert.True(PaneBars.Shown(PaneBars.Hint, new AppSettingsData()));
+        Assert.False(PaneBars.Shown(PaneBars.Home, new AppSettingsData()));
+        Assert.False(PaneBars.Shown(PaneBars.Perf, new AppSettingsData { PerformanceBarItems = [] }));
+        Assert.True(PaneBars.Shown(PaneBars.Perf, new AppSettingsData()));   // the default four
+
+        var source = new AppSettingsData { BarOrder = ["home"] };
+        var copy = AppSettings.Copy(source);
+        Assert.Equal(["home"], copy.BarOrder);
+        Assert.NotSame(source.BarOrder, copy.BarOrder);
+    }
 }

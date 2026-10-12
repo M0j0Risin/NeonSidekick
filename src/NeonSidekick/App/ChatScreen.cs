@@ -578,7 +578,7 @@ internal sealed partial class ChatScreen
     /// <summary>The log window opened, or the open one brought forward (2026-10-02, <c>/log</c>; <c>Viewer.LogWindow.Show</c> over the run's buffer). Null = no window here: <c>/log</c> says so.</summary>
     private readonly Action? _openLogWindow;
 
-    /// <summary>The log window closed, true when one was open (later on 2026-10-02, Ctrl+Alt+G's second press: <c>Viewer.LogWindow.Close</c>). Null = no window here.</summary>
+    /// <summary>The log window closed, true when one was open (later on 2026-10-02, the log chord's second press, Ctrl+G since 2026-10-12: <c>Viewer.LogWindow.Close</c>). Null = no window here.</summary>
     private readonly Func<bool>? _closeLogWindow;
 
     /// <summary>
@@ -1290,6 +1290,9 @@ internal sealed partial class ChatScreen
             Perf = PerfBarRow,
             // The home bar under the performance bar (2026-10-12): read per draw and on the tick, cached between feed changes.
             Home = HomeBarRow,
+            // The rows' order under the lower rule (2026-10-12, Toolbar order): read per draw and on the tick, so a move on the
+            // settings page shows at once, under the page itself.
+            BarOrder = () => PaneBars.Bars(_effective().BarOrder),
             // The menus' height cap (2026-10-01, the user's ask): read at every menu, info and folder pane draw, so a change
             // of Menus max height applies to the next pane shown.
             MenuHeight = () => _effective().MenuMaxHeight,
@@ -1578,7 +1581,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The windows (2026-10-03, the user's picks): the log and the picture viewer (the picture strip's button glyph), always drawn;
-    /// a double-click opens the window, or closes it while it is open, as Ctrl+Alt+G and U do (<see cref="CloseByChord"/>).
+    /// a double-click opens the window, or closes it while it is open, as Ctrl+G and Ctrl+Alt+U do (<see cref="CloseByChord"/>).
     /// <c>/camera live</c>'s window had one too (📺) until 2026-10-08, the user's call: Ctrl+Alt+V and the typed line still open it.
     /// The Comfy thumb viewer after them (2026-10-04, the user's ask): <c>/comfy thumbs</c>' browser, opened or closed the same way,
     /// though no chord runs it. Pinned.
@@ -1870,7 +1873,7 @@ internal sealed partial class ChatScreen
     /// A command chord pressed in a pane that leaves it open (2026-10-01, the user's call): Ctrl+F <c>/perfbar</c> and Ctrl+T
     /// <c>/toolbar</c> (Ctrl+Alt+E and B until later still that day) toggle their bar as typed — here at the idle line, posted to the turn task under a reply — and the tick
     /// repaints the pane's new shape. Ctrl+Alt+H <c>/header</c> the same (later still that day): a setting saved, nothing on the pane. Ctrl+E <c>/explore</c> the same (later on 2026-10-01): it opens a window outside the
-    /// terminal, so the pane has no reason to close. Ctrl+Alt+G <c>/log</c>, Ctrl+Alt+U <c>/comfy view</c> and Ctrl+Alt+V
+    /// terminal, so the pane has no reason to close. Ctrl+G <c>/log</c> (Ctrl+Alt+G until 2026-10-12), Ctrl+Alt+U <c>/comfy view</c> and Ctrl+Alt+V
     /// <c>/camera live</c> the same (2026-10-02, the user's ask): each opens a window of its own. Ctrl+W <c>/homebar</c> toggles its
     /// bar as Ctrl+F does (2026-10-12; Ctrl+Alt+W until later that day). False for every other chord:
     /// the pane closes and the screen runs it (<see cref="ScreenPane.Chord"/>, <see cref="OffPaneLine"/>).
@@ -1914,7 +1917,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// A window chord pressed while its window is open closes it (later on 2026-10-02, the user's ask: "close if they are
-    /// already open when their key chord is pressed"): Ctrl+Alt+G the log window, Ctrl+Alt+U the picture viewer (the camera's
+    /// already open when their key chord is pressed"): Ctrl+G the log window (Ctrl+Alt+G until 2026-10-12), Ctrl+Alt+U the picture viewer (the camera's
     /// window left alone) and Ctrl+Alt+V <c>/camera live</c>'s window — only while <c>/camera live</c> holds it; a live preview
     /// another use opened (the shutter pane's, botchat's) is not the chord's to close, and the chord takes it over as before.
     /// The chord alone toggles: the typed <c>/log</c>, <c>/comfy view</c> and <c>/camera live</c> still open the window or bring
@@ -2283,7 +2286,8 @@ internal sealed partial class ChatScreen
     /// Ctrl+M, R and S (<c>/model</c>, <c>/reasoning</c>, <c>/server</c>) later still, the user's ask and wording, each in its
     /// letter's place: A, C, E, M, O, R, S, X. Then <c>/help</c>, <c>/profile</c> and <c>/usage</c> moved from Ctrl+Alt+H, P and G
     /// to plain Ctrl+H, P and U (the user's ask), their rows' wording kept: A, C, E, H, M, O, P, R, S, U, X.
-    /// Ctrl+Alt+G (<c>/log</c>), U (<c>/comfy view</c>) and V (<c>/camera live</c>) on 2026-10-02, the user's ask, each in its letter's place.
+    /// Ctrl+Alt+G (<c>/log</c>), U (<c>/comfy view</c>) and V (<c>/camera live</c>) on 2026-10-02, the user's ask, each in its letter's place;
+    /// <c>/log</c> moved to plain Ctrl+G on 2026-10-12 (the user's ask), its row's wording kept, after Ctrl+F.
     /// <c>/sys</c> moved from Ctrl+Alt+Y to plain Ctrl+Y on 2026-10-03 (the user's ask), its row's wording kept, after Ctrl+X.
     /// Ctrl+Alt+E (<c>/sessions</c>) later on 2026-10-03, the user's ask and wording, in its letter's place; Ctrl+. (<c>/terminal</c>)
     /// the same day, ahead of Ctrl+/.
@@ -2357,6 +2361,7 @@ internal sealed partial class ChatScreen
 
         rows.Add(new("Ctrl+E", "open the working directory in the file browser", "/explore"));
         rows.Add(new("Ctrl+F", "show or hide the performance bar", "/perfbar"));
+        rows.Add(new("Ctrl+G", "show or hide the log window", "/log"));   // 2026-10-12, the user's pick (Ctrl+Alt+G until then)
         rows.Add(new("Ctrl+H", "open the help", "/help"));
         rows.Add(new("Ctrl+L", "cancel a background learning turn"));
         rows.Add(new("Ctrl+M", mac ? "open the model picker (in the app's windows; Ctrl+D in the terminal)" : "open the model picker", "/model"));
@@ -2380,7 +2385,6 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+Alt+C", "start a new conversation and clear the screen", "/clear"));
         rows.Add(new("Ctrl+Alt+D", "open the MCP pane", "/mcp"));
         rows.Add(new("Ctrl+Alt+E", "open the sessions pane", "/sessions"));
-        rows.Add(new("Ctrl+Alt+G", "show or hide the log window", "/log"));
         rows.Add(new("Ctrl+Alt+H", "show or hide the header from the next clear", "/header"));
         rows.Add(new("Ctrl+Alt+K", "stop the extra embedded servers a botchat left running", BotChat.KillLine));
         rows.Add(new("Ctrl+Alt+L", "open the allowed commands list", ToolsText.ShellSubLine(ToolsText.ShellAllowedWord)));

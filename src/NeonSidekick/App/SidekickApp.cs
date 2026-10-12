@@ -103,7 +103,7 @@ public sealed class SidekickApp
     /// <summary><c>/process &lt;id&gt;</c>'s window (2026-10-05, <c>Viewer.ProcessWindow.Show</c>), or null where there is none.</summary>
     private readonly Action<Shell.ProcessSession, Action<Shell.ProcessSession>>? _openProcessWindow;
 
-    /// <summary>The log window and the picture viewer closed, true when one was open (later on 2026-10-02, Ctrl+Alt+G and U close what they opened), or null where there is none.</summary>
+    /// <summary>The log window and the picture viewer closed, true when one was open (later on 2026-10-02, Ctrl+G — Ctrl+Alt+G until 2026-10-12 — and Ctrl+Alt+U close what they opened), or null where there is none.</summary>
     private readonly Func<bool>? _closeLogWindow;
     private readonly Func<bool>? _closeViewer;
     private readonly Func<Docker.IDockerServers>? _dockerServers;

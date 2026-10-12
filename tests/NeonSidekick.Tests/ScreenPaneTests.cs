@@ -4901,15 +4901,17 @@ public class ScreenPaneTests : IDisposable
         Assert.True(pane.TryHitToolbar(1, 104, out tool));
         Assert.Equal(ScreenPane.PerfBarHit, tool);
         Assert.Equal(new ScreenPane.OffPaneHit(null, ScreenPane.PerfBarHit), pane.OffPaneHitAt(1, 104));
-        Assert.False(pane.TryHitToolbar(1, 105, out _));   // the home bar is not the toolbar's
+        Assert.False(pane.TryHitToolbar(4, 105, out _));   // a chip is not the toolbar's
         Assert.True(pane.TryHitHomeBar(0, 105, out var hit));
         Assert.Equal(HomeTarget.Status, hit.Target);
         Assert.True(pane.TryHitHomeBar(4, 105, out hit));
         Assert.Equal((HomeTarget.Chip, 0), (hit.Target, hit.Index));
-        Assert.False(pane.TryHitHomeBar(30, 105, out _));   // a blank
-        Assert.True(pane.OnHomeBar(105));
+        Assert.False(pane.TryHitHomeBar(30, 105, out _));   // a blank: the toolbar's blanks since 2026-10-12, /settings on a double-click
+        Assert.True(pane.TryHitToolbar(30, 105, out tool));
+        Assert.Equal(ScreenPane.PerfBarHit, tool);
+        Assert.Equal(new ScreenPane.OffPaneHit(null, ScreenPane.PerfBarHit), pane.OffPaneHitAt(30, 105));
+        Assert.Equal(new ScreenPane.OffPaneHit(null, ScreenPane.PerfBarHit), pane.OffPaneHitAt(4, 104));   // the perf bar's, not a chip's
         Assert.False(pane.TryHitHomeBar(4, 104, out _));
-        Assert.False(pane.OnHomeBar(104));
         int draws = Draws;
 
         // A colour alone: the row again in place, nothing else.
@@ -4928,6 +4930,56 @@ public class ScreenPaneTests : IDisposable
         Assert.True(pane.TryHitToolbar(1, 104, out tool));
         Assert.Equal(ScreenPane.PerfBarHit, tool);
         Assert.False(pane.TryHitHomeBar(4, 105, out _));
+    }
+
+    /// <summary>
+    /// Toolbar order (2026-10-12, the user's ask: the hint bar under the performance bar, for one): the rows under the lower
+    /// rule in <see cref="ScreenPane.BarOrder"/>'s order, each one's clicks on its own row; an order changed on the tick draws
+    /// the whole pane again; a list with a repeat or a gap is mended (each bar once, a missing one at the end).
+    /// </summary>
+    [Fact]
+    public void BarOrder_DrawsTheRowsInItsOrder_TheirClicksFollow_AChangeRedrawsThePane()
+    {
+        _cursorTop = 100;
+        IReadOnlyList<PaneBar> order = [PaneBar.Toolbar, PaneBar.Perf, PaneBar.Hint, PaneBar.Home];
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Toolbar = () => new ScreenPane.ToolbarParts("🔧", @"D:\x");
+        pane.Perf = _ => new PerfRow([new PerfSegment("CPU 5%", Theme.DimText)]);
+        pane.Home = cells => HomeBar.Render([new HomeChip("entity:light.desk", HomeChips.LightGlyph, "Desk", "Desk", "", Theme.DimText, HomeChipAction.Call, null, "")], HaLiveStatus.Live, cells);
+        pane.BarOrder = () => order;
+        pane.Show();
+        pane.ShowInput("abc", 3);
+
+        // Rule / input / rule / toolbar / perf / hint / home: the toolbar at 102, the performance bar at 103, the hint at 104, the home bar at 105.
+        Assert.Contains("\n🔧" + new string(' ', 33) + @"D:\x" + "\nCPU 5%\nidle\n⌂  💡 Desk ", Output);
+        Assert.True(pane.TryHitToolbar(1, 102, out var tool));
+        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🔧", 0), tool);
+        Assert.True(pane.TryHitToolbar(1, 103, out tool));
+        Assert.Equal(ScreenPane.PerfBarHit, tool);
+        Assert.False(pane.TryHitToolbar(1, 104, out _));   // the hint row's
+        Assert.True(pane.TryHitHint(30, 104, out _));
+        Assert.False(pane.TryHitHint(30, 102, out _));
+        Assert.True(pane.TryHitHomeBar(4, 105, out var hit));
+        Assert.Equal((HomeTarget.Chip, 0), (hit.Target, hit.Index));
+        int draws = Draws;
+
+        // The same order on the tick: nothing drawn.
+        int mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal("", Output[mark..]);
+
+        // The hint row last, the home bar over it, a repeat and a gap mended: the whole pane again.
+        order = [PaneBar.Home, PaneBar.Home, PaneBar.Toolbar, PaneBar.Perf];
+        mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(draws + 1, Draws);
+        Assert.Contains("\n⌂  💡 Desk ", Output[mark..]);
+        Assert.EndsWith("\n🔧" + new string(' ', 33) + @"D:\x" + "\nCPU 5%\nidle", Output);
+        Assert.True(pane.TryHitHomeBar(4, 102, out hit));
+        Assert.True(pane.TryHitHint(30, 105, out _));
+        Assert.True(pane.TryHitToolbar(1, 103, out tool));
+        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🔧", 0), tool);
     }
 
     /// <summary>

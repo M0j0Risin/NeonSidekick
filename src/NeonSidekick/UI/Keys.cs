@@ -154,6 +154,8 @@ public static class Keys
     /// Ctrl+Alt+B is <c>/botchat --resume</c> and Ctrl+Alt+K <c>/botchat --kill</c>, both free since <c>/toolbar</c> and
     /// <c>/skills</c> left them: their STX and VT count as no character. Under a running chat Ctrl+Alt+B ends it in one press
     /// (<c>ChatScreen.RequestBotEnd</c>, the chord alone; the typed line still waits), and Ctrl+Alt+K waits for the chat's end, as typed.
+    /// On 2026-10-12 (the user's ask) <c>/log</c> moved to plain Ctrl+G and Ctrl+Alt+G went: its BEL counts as no character, as it
+    /// did there. Nothing in the app used Ctrl+G; Windows Terminal leaves it alone, and macOS's Terminal sends BEL, which this reads.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -174,6 +176,7 @@ public static class Keys
             {
                 (ConsoleKey.E, '\0' or '\x05') => "/explore",
                 (ConsoleKey.F, '\0' or '\x06') => "/perfbar",
+                (ConsoleKey.G, '\0' or '\x07') => "/log",   // 2026-10-12, the user's pick (Ctrl+Alt+G until then)
                 (ConsoleKey.H, '\0' or '\x08') => "/help",
                 (ConsoleKey.M, '\0' or '\r') => "/model",
                 (ConsoleKey.P, '\0' or '\x10') => "/profile",
@@ -213,7 +216,6 @@ public static class Keys
         {
             (ConsoleKey.B, '\0' or '\x02') => App.BotChat.ResumeLine,
             (ConsoleKey.C, '\0' or '\x03') => "/clear",
-            (ConsoleKey.G, '\0' or '\x07') => "/log",
             (ConsoleKey.H, '\0' or '\x08') => "/header",
             (ConsoleKey.K, '\0' or '\x0b') => App.BotChat.KillLine,
             (ConsoleKey.N, '\0' or '\x0e') => "/new",

@@ -316,6 +316,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private string? _shownHome;
     private IReadOnlyList<UI.HomeSpan> _homeSpans = [];
 
+    // The rows' order under the lower rule (2026-10-12, Toolbar order): the provider, and the order the last draw wrote them in
+    // (Draw the only writer) — what the rows' offsets under the cursor count over, and the tick's comparison.
+    private Func<IReadOnlyList<PaneBar>> _barOrder = static () => DefaultBarOrder;
+    private IReadOnlyList<PaneBar> _drawnBars = DefaultBarOrder;
+
     // The menus' height cap (2026-10-01): the saved word of Menus max height, read at every menu draw; full-screen (the
     // pane as it grew before the setting) until the screen sets it.
     private Func<string> _menuHeight = static () => "full-screen";
@@ -427,7 +432,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>Where on the toolbar a click landed: the zone, the strip glyph under it (<c>""</c> elsewhere) and the zone's first column (−1 for the row).</summary>
     public readonly record struct ToolbarHit(ToolbarZone Zone, string Glyph, int Column);
 
-    /// <summary>A click anywhere on the performance bar (2026-09-29): the toolbar's blanks, so every reader answers it with <c>/settings</c>. Pinned.</summary>
+    /// <summary>A click anywhere on the performance bar (2026-09-29), or on the home bar's blanks (2026-10-12): the toolbar's blanks, so every reader answers it with <c>/settings</c>. Pinned.</summary>
     public static readonly ToolbarHit PerfBarHit = new(ToolbarZone.Row, "", -1);
 
     /// <param name="inner">The console the pane draws on.</param>
@@ -640,7 +645,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return null;
             }
 
-            if (_perfRows > 0 && y == top + PerfRowBelowCursor)
+            if ((_perfRows > 0 && y == top + PerfRowBelowCursor) || HomeBlankAt(x, y, top))
             {
                 return new OffPaneHit(null, PerfBarHit);
             }
@@ -859,6 +864,30 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     public int HomeRows
     {
         get { lock (_gate) { return _homeRows; } }
+    }
+
+    /// <summary>
+    /// The order of the rows under the lower rule, top to bottom (2026-10-12, the user's ask: <c>Toolbar order</c>, the hint bar
+    /// under the performance bar for one): read on every draw and on the tick, which repaints the pane when it changes. Each of
+    /// the four once (<see cref="Bars"/> mends a list that is not); <see cref="DefaultBarOrder"/> (the default here) is the pane as
+    /// it always was. Only where the rows sit: which ones show, and which a short window drops first (the home bar, then the
+    /// performance bar, then the toolbar), stay as they were.
+    /// </summary>
+    public Func<IReadOnlyList<PaneBar>> BarOrder
+    {
+        get => _barOrder;
+        set => _barOrder = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>The hint row, the toolbar, the performance bar, the home bar: the order until 2026-10-12, and the default.</summary>
+    public static readonly IReadOnlyList<PaneBar> DefaultBarOrder = [PaneBar.Hint, PaneBar.Toolbar, PaneBar.Perf, PaneBar.Home];
+
+    /// <summary><see cref="BarOrder"/>'s answer as the draw takes it: each bar once, the first of a repeat, a missing one at the end in <see cref="DefaultBarOrder"/>'s order.</summary>
+    private static IReadOnlyList<PaneBar> Bars(IReadOnlyList<PaneBar>? order)
+    {
+        var bars = (order ?? DefaultBarOrder).Distinct().Where(DefaultBarOrder.Contains).ToList();
+        bars.AddRange(DefaultBarOrder.Where(b => !bars.Contains(b)));
+        return bars;
     }
 
     /// <summary>The rows every bar under the hint row took in the last draw (the toolbar, the performance bar, the home bar): what the thumbnail sizing adds.</summary>
@@ -3886,14 +3915,15 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) lands on the
-    /// drawn toolbar (2026-09-21) — the pane's last row while one is drawn — naming the part under
+    /// drawn toolbar (2026-09-21) — wherever <see cref="BarOrder"/> put it — naming the part under
     /// it (<see cref="ToolbarHitAt"/>). It answers under the busy row (the pane glyphs work under
     /// a reply, as the tally does) and while scrolled; false under an overlay (the row is off the
     /// pane there: a double-click is the overlay's dismiss, <see cref="TryHitOutside"/>, and
-    /// <see cref="OffPaneHitAt"/> names the part for the screen's switch), when neither the
-    /// toolbar nor the performance bar is drawn, when the pane is lifted, or when the console cannot say where the cursor is.
+    /// <see cref="OffPaneHitAt"/> names the part for the screen's switch), when no bar is drawn,
+    /// when the pane is lifted, or when the console cannot say where the cursor is.
     /// The performance bar is the toolbar's blanks anywhere on it (<see cref="PerfBarHit"/>; 2026-09-29, the user's ask),
-    /// with the toolbar or without it.
+    /// with the toolbar or without it, and so are the home bar's blanks (2026-10-12, the user's ask: a double-click on any free
+    /// space of a bar opens the settings); its chips, page arrows and status glyph are its own (<see cref="TryHitHomeBar"/>).
     /// </summary>
     public bool TryHitToolbar(int x, int y, out ToolbarHit hit)
     {
@@ -3905,12 +3935,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            if (!_drawn || _drawnOverlay || _toolbarRows + _perfRows == 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+            if (!_drawn || _drawnOverlay || _toolbarRows + _perfRows + _homeRows == 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
             {
                 return false;
             }
 
-            if (_perfRows > 0 && y == top + PerfRowBelowCursor)
+            if ((_perfRows > 0 && y == top + PerfRowBelowCursor) || HomeBlankAt(x, y, top))
             {
                 hit = PerfBarHit;
                 return true;
@@ -3942,7 +3972,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            if (!_drawn || _homeRows == 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top || y != top + LastRowBelowCursor)
+            if (!_drawn || _homeRows == 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top || y != top + HomeRowBelowCursor)
             {
                 return false;
             }
@@ -3957,19 +3987,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
     }
 
-    /// <summary>Whether buffer row <paramref name="y"/> is the home bar's, as drawn: a click on its blanks is no one else's.</summary>
-    public bool OnHomeBar(int y)
-    {
-        if (!Enabled)
-        {
-            return false;
-        }
-
-        lock (_gate)
-        {
-            return _drawn && _homeRows > 0 && _batch == 0 && _modal == 0 && _geometry?.CursorTop() is int top && y == top + LastRowBelowCursor;
-        }
-    }
+    /// <summary>
+    /// Whether buffer cell (<paramref name="x"/>, <paramref name="y"/>) is a blank of the home bar as drawn, under a cursor at
+    /// buffer row <paramref name="top"/> (2026-10-12, the user's ask: a double-click on any free space of a bar opens the settings,
+    /// as the hint row's, the toolbar's and the performance bar's do): no chip, page arrow or status glyph there. Under the gate.
+    /// </summary>
+    private bool HomeBlankAt(int x, int y, int top) =>
+        _homeRows > 0 && y == top + HomeRowBelowCursor && UI.HomeBar.HitAt(_homeSpans, x) is null;
 
     /// <summary>
     /// The zone of column <paramref name="x"/> on a toolbar whose strip is <paramref name="strip"/>
@@ -4533,33 +4557,60 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
 
         WriteRule(w);
-        WriteHintRow();
-        if (toolbarRows > 0)
+
+        // The rows under the lower rule in the user's order (2026-10-12, Toolbar order): the hint row always, each bar while it
+        // has its row; a row break before every one but the first. A bar with no row is forgotten wherever it would sit.
+        var bars = Bars(_barOrder());
+        _drawnBars = bars;
+        bool first = true;
+        foreach (var bar in bars)
         {
-            EndRow();
-            WriteToolbarRow(toolbar!.Value, w);
+            int rows = bar switch
+            {
+                PaneBar.Toolbar => toolbarRows,
+                PaneBar.Perf => perfRows,
+                PaneBar.Home => homeRows,
+                _ => 1,
+            };
+            if (rows == 0)
+            {
+                continue;
+            }
+
+            if (!first)
+            {
+                EndRow();
+            }
+
+            first = false;
+            switch (bar)
+            {
+                case PaneBar.Toolbar:
+                    WriteToolbarRow(toolbar!.Value, w);
+                    break;
+                case PaneBar.Perf:
+                    WritePerfRow(perf!);
+                    break;
+                case PaneBar.Home:
+                    WriteHomeRow(home!);
+                    break;
+                default:
+                    WriteHintRow();
+                    break;
+            }
         }
-        else
+
+        if (toolbarRows == 0)
         {
             ForgetToolbar();
         }
 
-        if (perfRows > 0)
-        {
-            EndRow();
-            WritePerfRow(perf!);
-        }
-        else
+        if (perfRows == 0)
         {
             _shownPerf = null;
         }
 
-        if (homeRows > 0)
-        {
-            EndRow();
-            WriteHomeRow(home!);
-        }
-        else
+        if (homeRows == 0)
         {
             _shownHome = null;
             _homeSpans = [];
@@ -4990,20 +5041,52 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// </summary>
     private int CursorDepth => !_drawnOverlay ? _cursorRow : _drawnInput ? _overlayRows + _cursorRow : 0;
 
-    /// <summary>How many rows under the terminal's cursor the hint row sits, as last drawn: over the rows under the cursor and the lower rule; the toolbar, when drawn, is one further.</summary>
-    private int HintRowBelowCursor => _paneRows - 2 - _toolbarRows - _perfRows - _homeRows - _stripRows - _scrollRows - CursorDepth;
+    /// <summary>How many rows under the terminal's cursor the first row under the lower rule sits, as last drawn: over the rows under the cursor and the rule; the hint row there by default.</summary>
+    private int FirstBarRowBelowCursor => _paneRows - 2 - _toolbarRows - _perfRows - _homeRows - _stripRows - _scrollRows - CursorDepth;
 
-    /// <summary>How many rows under the terminal's cursor the pane's last row sits, as last drawn: the hint row, or the toolbar under it (2026-09-21), or the performance bar under that (2026-09-29).</summary>
+    /// <summary>How many rows under the terminal's cursor the hint row sits, as last drawn: the first under the lower rule, or wherever <see cref="BarOrder"/> put it (2026-10-12).</summary>
+    private int HintRowBelowCursor => RowBelowCursor(PaneBar.Hint);
+
+    /// <summary>How many rows under the terminal's cursor the pane's last row sits, as last drawn: whichever row the order put last (the home bar by default, when drawn).</summary>
     private int LastRowBelowCursor => _paneRows - 2 - _stripRows - _scrollRows - CursorDepth;
 
     /// <summary>How many rows over the terminal's cursor the scroll's row sits (2026-10-01), as last drawn: over the upper rule, and the picture strip's rows with their rule when drawn.</summary>
     private int ScrollRowAboveCursor => CursorDepth + 1 + _stripRows + 1;
 
-    /// <summary>How many rows under the terminal's cursor the performance bar sits, as last drawn (2026-10-12): the last row, or the one over the home bar.</summary>
-    private int PerfRowBelowCursor => LastRowBelowCursor - _homeRows;
+    /// <summary>How many rows under the terminal's cursor the performance bar sits, as last drawn (2026-10-12).</summary>
+    private int PerfRowBelowCursor => RowBelowCursor(PaneBar.Perf);
 
-    /// <summary>How many rows under the terminal's cursor the toolbar sits, as last drawn: the last row, or the one over the performance bar (and the home bar).</summary>
-    private int ToolbarRowBelowCursor => PerfRowBelowCursor - _perfRows;
+    /// <summary>How many rows under the terminal's cursor the toolbar sits, as last drawn.</summary>
+    private int ToolbarRowBelowCursor => RowBelowCursor(PaneBar.Toolbar);
+
+    /// <summary>How many rows under the terminal's cursor the home bar sits, as last drawn (2026-10-12).</summary>
+    private int HomeRowBelowCursor => RowBelowCursor(PaneBar.Home);
+
+    /// <summary>
+    /// How many rows under the terminal's cursor <paramref name="bar"/> sits, as last drawn (2026-10-12, Toolbar order): the first
+    /// row under the lower rule and one more for each row drawn over it in <see cref="_drawnBars"/>.
+    /// </summary>
+    private int RowBelowCursor(PaneBar bar)
+    {
+        int down = FirstBarRowBelowCursor;
+        foreach (var drawn in _drawnBars)
+        {
+            if (drawn == bar)
+            {
+                break;
+            }
+
+            down += drawn switch
+            {
+                PaneBar.Toolbar => _toolbarRows,
+                PaneBar.Perf => _perfRows,
+                PaneBar.Home => _homeRows,
+                _ => 1,
+            };
+        }
+
+        return down;
+    }
 
     private void WriteRule(int width)
     {
@@ -5601,7 +5684,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             return;
         }
 
-        RedrawRow(LastRowBelowCursor, () => WriteHomeRow(row));
+        RedrawRow(HomeRowBelowCursor, () => WriteHomeRow(row));
     }
 
     /// <summary>The home bar's row on the cursor's row: its runs in their styles, the rest of the row erased; the key and the spans remembered for the tick and the clicks.</summary>
@@ -5742,10 +5825,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return;
             }
 
-            if (ToolbarRowsFor(h) != _toolbarRows || PerfRowsFor(h) != _perfRows || HomeRowsFor(h) != _homeRows)
+            if (ToolbarRowsFor(h) != _toolbarRows || PerfRowsFor(h) != _perfRows || HomeRowsFor(h) != _homeRows || !Bars(_barOrder()).SequenceEqual(_drawnBars))
             {
                 // The toolbar, the performance bar or the home bar came or went (the screen's settings, a window at the
-                // edge): the whole pane again — its shape changed.
+                // edge), or their order changed (Toolbar order, 2026-10-12): the whole pane again — its shape changed.
                 if (_busyLabel is not null)
                 {
                     _frame++;

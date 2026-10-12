@@ -571,6 +571,13 @@ public enum SettingsField
     ShowHomeBar,
 
     /// <summary>
+    /// The order of the rows under the pane's lower rule (<see cref="Settings.AppSettingsData.BarOrder"/>, 2026-10-12, the user's
+    /// ask): the hint bar, the toolbar, the performance bar and the home bar moved with the move keys (<see cref="EditBarOrderAsync"/>).
+    /// <c>Toolbar order</c>, the user's name. The Chat tab's row after Show home bar; no reconnect (the pane reads it at every tick).
+    /// </summary>
+    BarOrder,
+
+    /// <summary>
     /// Typed: off or 50 to 99 % of the biggest GPU's dedicated memory for the embedded server
     /// (<see cref="Settings.AppSettingsData.EmbeddedVramBudget"/>, later on 2026-09-29, the user's ask); a reconnect. The
     /// Embedded tab's row after Embedded GPU layers.
@@ -1435,7 +1442,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.Profile, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.Avatar,
          SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker,
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle,
-         SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.MenuMaxHeight,
+         SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder, SettingsField.MenuMaxHeight,
          SettingsField.DraftEditor, SettingsField.ImageEditor],
         [SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays,
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
@@ -2261,6 +2268,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ToolbarItems => "Show toolbar",
         SettingsField.ShowPerformanceBar => "Show performance bar",
         SettingsField.ShowHomeBar => "Show home bar",
+        SettingsField.BarOrder => "Toolbar order",
         SettingsField.Theme => "Theme",
         SettingsField.ThemedExternalWindows => "Themed external windows",   // the user's name, under "Themed background" (2026-10-03; "Themed image viewer" beside "Image viewer" from later on 2026-09-27)
         SettingsField.ThemedBackground => "Themed background",   // the user's name, under "Theme" (2026-10-03)
@@ -2617,6 +2625,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ToolbarItems => App.ToolbarItems.Value(data.ToolbarItems),
             SettingsField.ShowPerformanceBar => PerfBarItems.Value(data.PerformanceBarItems, data.PerformanceBarLook, data.PerformanceBarOrder),
             SettingsField.ShowHomeBar => HomeBarItems.Value(data.HomeBarItems, null),
+            SettingsField.BarOrder => PaneBars.Value(data.BarOrder),
             SettingsField.ThemedExternalWindows => OnOff(data.ThemedExternalWindows),
             SettingsField.ThemedBackground => OnOff(data.ThemedBackground),
             SettingsField.Theme => data.Theme,
@@ -3085,6 +3094,14 @@ internal sealed partial class SettingsMenu
     /// default); they went the same day, and <c>/perfbar &lt;look&gt;</c> is the one way to pick it. Pinned.
     /// </summary>
     public const string PerfBarToggleKeys = ToolbarToggleKeys;
+
+    /// <summary>The Toolbar order page's hint (2026-10-12): the move keys and default, nothing to check. Pinned.</summary>
+    public const string BarOrderKeys = "Shift+↑↓ = move · Shift+Home/End = top or bottom · d = default · ESC = back";
+
+    /// <summary>The Toolbar order page's title row (2026-10-12, the user's ask: a way back to the default order on the page): <see cref="DefaultsButton"/> alone, index 0.</summary>
+    public static readonly IReadOnlyList<MenuButton> BarOrderButtons = [new(DefaultsButton, DefaultsKey)];
+
+    private const int BarOrderDefaultIndex = 0;
 
     /// <summary>The status line when the last language would go: at least one stays (the user's rule, 2026-09-21). Pinned.</summary>
     public const string LastLanguageError = "At least one language stays on.";
@@ -4786,6 +4803,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.ShowHomeBar)
         {
             return await EditHomeBarAsync(own: false, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.BarOrder)
+        {
+            return await EditBarOrderAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.EmbeddedHfDownloadType)
@@ -8294,6 +8316,58 @@ internal sealed partial class SettingsMenu
 
             Apply(SettingsField.ShowPerformanceBar, d => d.PerformanceBarItems = PerfBarItems.Save(next));
             changed = true;
+        }
+    }
+
+    /// <summary>
+    /// The Toolbar order page under the settings list (2026-10-12, the user's ask: the hint bar, the toolbar, the performance bar
+    /// and the home bar in any order; the move keys of Show toolbar's checklist): one <see cref="PaneBars.Label"/> row per bar in the
+    /// saved order, a bar that is off marked so. Shift+↑↓ (or Alt) moves the cursor's bar a place, Shift+Home/End to the top or the
+    /// bottom, saving at once, the pane redrawing in the new order under the page; <c>⊡ default</c> on the title row (D; the user's
+    /// ask, later that day: a way back on the page itself) puts <see cref="PaneBars.Names"/>' order back. Nothing to check, so Enter,
+    /// Space and Delete do nothing. The list is re-shown until ESC. True when anything changed.
+    /// </summary>
+    private async Task<bool> EditBarOrderAsync(CancellationToken cancellationToken)
+    {
+        bool changed = false;
+        int cursor = 0;
+        while (true)
+        {
+            var saved = _settings.Current;
+            var order = PaneBars.Order(saved.BarOrder);
+            var page = new MenuPage(Crumb(FieldName(SettingsField.BarOrder)), order.Select(id => PaneBars.Label(id, PaneBars.Shown(id, saved))).ToList(), BarOrderKeys);
+            var picked = await PickOrderedChecklistAsync(page, cursor, cancellationToken, BarOrderButtons).ConfigureAwait(false);
+            if (picked is not { } pick)
+            {
+                if (!changed)
+                {
+                    Sink.Notice(UnchangedNotice);
+                }
+
+                return changed;
+            }
+
+            cursor = pick.Row;
+            if (pick.Move != 0)
+            {
+                var (moved, at) = ItemOrder.Move(order, pick.Row, pick.Move);
+                cursor = at;
+                if (at != pick.Row)
+                {
+                    Apply(SettingsField.BarOrder, d => d.BarOrder = PaneBars.SaveOrder(moved));
+                    changed = true;
+                }
+
+                continue;
+            }
+
+            if (pick.Button == BarOrderDefaultIndex && PaneBars.SaveOrder(order) is not null)
+            {
+                Apply(SettingsField.BarOrder, d => d.BarOrder = null);
+                changed = true;
+            }
+
+            // Enter, Space or Delete on a row, or default with the order already the default: nothing to save.
         }
     }
 

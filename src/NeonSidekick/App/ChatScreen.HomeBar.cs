@@ -169,13 +169,15 @@ internal sealed partial class ChatScreen
     /// A click on the screen (2026-10-12, <see cref="KeySource.HomeBarClick"/>, on the reading task): not the bar's, or the bar's
     /// — a single click on a chip flashes its note, a second within the pair's interval does what the chip does (a call at once,
     /// marked pending until the state changes; or the line that asks or opens its pane); a right-click opens its pane; ‹ › turn
-    /// the page; the status glyph's note, and a double-click on it the picker. A click on the bar's blanks is spent.
+    /// the page; the status glyph's note, and a double-click on it the picker. A click on the bar's blanks is not the bar's: it
+    /// goes on to the readers as a click on the toolbar's blanks (<see cref="ScreenPane.TryHitToolbar"/>), so a double-click there
+    /// opens <c>/settings</c> as on every other bar (2026-10-12, the user's ask; spent until then).
     /// </summary>
     private HomeClick HomeBarClick(InputEvent.Click click)
     {
         if (!_pane.TryHitHomeBar(click.X, click.Y, out var span))
         {
-            return _pane.OnHomeBar(click.Y) ? HomeClick.Spent : HomeClick.NotOurs;
+            return HomeClick.NotOurs;
         }
 
         HomeCache? cache;

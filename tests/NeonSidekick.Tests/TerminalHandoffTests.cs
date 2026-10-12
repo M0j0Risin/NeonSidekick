@@ -35,7 +35,7 @@ public sealed class TerminalHandoffTests
     [Fact]
     public void ToKey_IsTheConsolesShape_SoTheChatReadsItAsTyped()
     {
-        Assert.Equal("/log", Keys.ShortcutLine(TerminalHandoff.ToKey((int)ConsoleKey.G, control: true, alt: true, shift: false)));
+        Assert.Equal("/log", Keys.ShortcutLine(TerminalHandoff.ToKey((int)ConsoleKey.G, control: true, alt: false, shift: false)));
         Assert.Equal("/comfy view", Keys.ShortcutLine(TerminalHandoff.ToKey((int)ConsoleKey.U, control: true, alt: true, shift: false)));
         Assert.Equal("/model", Keys.ShortcutLine(TerminalHandoff.ToKey((int)ConsoleKey.M, control: true, alt: false, shift: false)));
         Assert.True(Keys.IsKillSwitch(TerminalHandoff.ToKey((int)ConsoleKey.X, control: true, alt: true, shift: false)));
