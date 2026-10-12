@@ -26,7 +26,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 * **Tabs:** the tab you are on is underlined. A small number after a tab's name (`Client³`) counts its settings that differ from the default; those settings' values show in the same colour.
 * **Scrolling:** a list cut by the window ends in a row like `▲▼ 13–25 of 58`, an arrow for each way there is more.
 * **`/tools` Offered:** a group that is off says why on its heading (the one reason that holds), and a tool switched on under it reads `(on)`.
-* **Second strip:** some tabs hold tabs of their own, shown as a second row of tabs under the first while you are on it: `/settings`' Client (Chat, Sessions, Botchat), Servers (Common, Http, Embedded, Docker, Anthropic, OpenAI) and Voice (TTS, STT), `/tools`' Core, Files, Integrations, Databases and Devices (their menus), `/skills`' Offered (all, profile, global) and `/mcp`'s Tools with two servers or more connected (all, then each server). ←/→ step through every one in turn and on into the next tab (on `/tools` from Options into File, from Obsidian into Docker, from YouTube into SQL, from Oracle into Print), Tab and Shift+Tab jump a whole tab and skip past them, and coming back finds the one you left. A click on a name shows it.
+* **Second strip:** some tabs hold tabs of their own, shown as a second row of tabs under the first while you are on it: `/settings`' Client (Chat, Sessions, Botchat), Servers (Common, Http, Embedded, Docker, Anthropic, OpenAI) and Voice (TTS, STT), `/tools`' Core, Files, Apps, Databases, Devices and Home (their menus), `/skills`' Offered (all, profile, global) and `/mcp`'s Tools with two servers or more connected (all, then each server). ←/→ step through every one in turn and on into the next tab (on `/tools` from Options into File, from Obsidian into Docker, from YouTube into SQL, from Oracle into Print), Tab and Shift+Tab jump a whole tab and skip past them, and coming back finds the one you left. A click on a name shows it.
 * **Mouse:** a click moves the cursor; a double-click picks a row or tab (on the input line, selects a word). The × at the top right works like ESC, and a double-click outside an open pane closes it. A double-click on a picture in the transcript opens it in the [picture viewer](COMMANDS.md#picture-viewer).
 
 ## The input line
@@ -176,7 +176,7 @@ The pane heads its runs **Who and where**, **Input line**, **Transcript**, **Scr
 | Keep message history | Saves the ↑/↓ history (newest 1,000 lines, no collapsed pastes or pictures) in `sessions.db`. Off deletes it at the next profile load; `/msgclear` empties it either way. *Keep command history* until 2026-10-10; its saved value was not carried over, so it is on again. | on |
 | Command typo intercept | A command name without its slash (`clear`) or with extra ones (`//profile work`) asks *Did you mean /clear?* first. A bare `//` is still `/settings`. | on |
 | Hide /exit autocomplete | Leaves `/exit` out of the `/` list; typing it in full still works. | on |
-| Emoji picker | Shows a dim ☺ at the right end of the draft row. A click opens the emoji picker (the avatar picker's grid: Recent, the categories, a search as you type, skin tones) and puts the emoji picked at the cursor. Only at the idle line, not while a reply runs. | off |
+| Emoji picker | Shows a dim ☺ at the right end of the draft row. A click opens the emoji picker (the avatar picker's grid: Recent, the categories, a search as you type, skin tones) and puts the emoji picked at the cursor. Only at the idle line, not while a reply runs. | on |
 | Transcript markdown | Renders replies as Markdown, with code fences highlighted (C#, JS/TS, Python, Bash, PowerShell, JSON, YAML, TOML/INI, SQL, C/C++, Java, Kotlin, Go, Rust, CSS, XML/HTML, diff). | on |
 | Paste preview lines | How many lines of a long paste show dimmed under its `[Pasted text #n]` placeholder (0–200). More than five fold to `▸ 📋 N lines of the paste` once the next thing is said (Ctrl+O or `/expand` shows them). A one-line paste's placeholder gives its size, `[Pasted text #1 · 840 chars]`. | 25 |
 | Show image thumbnails | Draws a small thumbnail of each picture you send, each one a tool fetches or makes, and each `/botchat` picture. `/view` and `/imagine` always draw theirs. A chat brought back by `/sessions` or `/rewind` draws its turns' pictures again where they were (not a `/botchat`'s, nor a camera or screen shot the session did not keep). | on |
@@ -666,7 +666,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 
 ### Core
 
-The tools most profiles use and the pane's own options, five menus on one tab, each a tab of the second strip (Ask · Web · Shell · Shopping · Options): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10; the tab was Standard until later that day.
+The tools most profiles use and the pane's own options, four menus on one tab, each a tab of the second strip (Ask · Web · Shell · Options): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10; the tab was Standard until later that day. Shopping was here from 2026-10-11 until later that day, when it went to [Home](#home).
 
 #### Ask
 
@@ -749,16 +749,6 @@ The pane heads its runs **Policy**, **Guards**, **Commands** and **Scripts**.
   * `net use` / `net share` / `net view` / `Get-SmbShare` / `Get-SmbMapping` → `unc_shares`; `dir \\server`, `copy \\server` → the UNC tools
 
   A lone command such a tool covers comes back as `Not run: 'cat' has a tool of its own — call read_file instead…`, once a turn (sent again, it goes to the pane). Pipes and compound lines, commands with no tool (`git push`) and tools switched off are never sent back.
-
-#### Shopping
-
-The pane heads its run **The list**.
-
-| Setting | What it does | Default |
-|---|---|---|
-| Shopping tools | Offers the shopping list's tools: `shopping_list`, `shopping_add`, `shopping_check`, `shopping_remove`, `shopping_clear`, `shopping_locate`, `shopping_place`, `shopping_stores`, `shopping_layout`, `shopping_recent` and `shopping_reference` (see [Tools](TOOLS.md#shopping-list)). The list and its stores live in the profile's `db\shopping\shopping.db`. `/tools shopping` opens its on/off page; the toolbar's 🛒 opens the list (`/shopping`). | off |
-| Shopping list | Enter opens the shopping list's checklist, the same pane as the bare `/shopping` and the toolbar's 🛒 (see [Commands](COMMANDS.md)); ESC comes back to the row. | — |
-| Shopping stores | Enter opens the stores' manager: the first row adds a store (its folder under `db\shopping\reference` is made), Enter on a store makes it the one the list is walked through, and the buttons `▦ layout` (`l`: the store's aisles and walk order, sections, placement facts and the model's guesses to review, each changed with Enter; see [Commands](COMMANDS.md)), `✎ rename` (`n`; its folder is renamed to match), `✖  remove` (`r`, after a yes; its layout goes, its documents stay), `📂 folder` (`f`, opens its reference folder) and `⟳ reindex` (`i`). Under each store: its locations, sections, placement facts and reference documents. The `/shopping` pane's `⇄ store` opens it too. | — |
 
 #### Options
 
@@ -843,9 +833,9 @@ The pane heads its run **Vault**.
 | Obsidian vault | The vault's folder (holding `.obsidian`), separate from the working directory. The row opens the folder picker. | (not set) |
 | Obsidian allow delete (.trash) | Offers `vault_delete`, which moves a note or attachment into the vault's `.trash`. | on |
 
-### Integrations
+### Apps
 
-The apps and services the tools reach, four menus on one tab, each a tab of the second strip (Docker · HomeAssistant · ComfyUI · YouTube): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10 (ComfyUI and YouTube on Devices, then called Media, from 2026-10-09). `/claude`'s settings are on `/settings` › Servers › Anthropic.
+The apps and services the tools reach, three menus on one tab, each a tab of the second strip (Docker · ComfyUI · YouTube): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10 (ComfyUI and YouTube on Devices, then called Media, from 2026-10-09). The tab was Integrations until 2026-10-11, when HomeAssistant went to [Home](#home). `/claude`'s settings are on `/settings` › Servers › Anthropic.
 
 #### Docker
 
@@ -853,26 +843,10 @@ The pane heads its runs **Access** and **Engine**.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Docker tools | Offers `docker_containers`, `docker_logs`, `docker_inspect`, `docker_stats`, `docker_resources` and `docker_compose`, whether Docker Desktop runs or not. `/docker` works either way. See [Docker](TOOLS.md#docker); on a Mac over the engine's socket, [Docker on a Mac](TOOLS.md#docker-on-a-mac). | off |
+| Docker tools | Offers `docker_containers`, `docker_logs`, `docker_inspect`, `docker_stats`, `docker_resources` and `docker_compose`, whether Docker Desktop runs or not. `/docker` works either way. The top of its on/off page has a **manage** (`m`) button that opens `/docker`'s container list; ESC there comes back. See [Docker](TOOLS.md#docker); on a Mac over the engine's socket, [Docker on a Mac](TOOLS.md#docker-on-a-mac). | off |
 | Docker writes | The master key for the model's changes: `docker_lifecycle`, `docker_pull`, `docker_remove` and `docker_prune` (the last two off by default in Offered). Every call asks first; headless refuses them. | off |
 | Docker engine pipe | The engine's named pipe: a name (`docker_engine` is Docker Desktop's), `\\.\pipe\name` or `npipe:////./pipe/name`. Blank is the default. | `\\.\pipe\docker_engine` |
 | Docker engine socket | On a Mac the same setting is the engine's Unix socket: a path (`/var/run/docker.sock`, `~/.orbstack/run/docker.sock`) or `unix:///path`. Empty, or Windows' pipe name, finds it: `DOCKER_HOST`, the Docker CLI's current context (a `tcp://` or `ssh://` one refused), then the usual places of Docker Desktop, OrbStack, Colima and Rancher Desktop ([the order](TOOLS.md#docker-on-a-mac)). The row shows what it found. | `auto: ~/.docker/run/docker.sock` |
-
-#### HomeAssistant
-
-The pane heads its runs **Connection** and **Requests**.
-
-| Setting | What it does | Default |
-|---|---|---|
-| Home Assistant tools | Offers the Home Assistant tools (`ha_overview`, `ha_states`, `ha_history`, `ha_lights`, `ha_scene`, `ha_media`, `ha_todo`, `ha_call_service`, `ha_assist`) once a URL and token are set. | off |
-| Home Assistant URL | Your server (`http://localhost:8123`, or on your LAN). The web tools' network mode never blocks it. | (not set) |
-| Home Assistant API key | A long-lived access token (your HA profile → Security). Typed masked, saved encrypted (DPAPI on Windows, the Keychain on a Mac), never logged; empty clears it. | (none) |
-| Home Assistant test connection | Asks the server for its version with the saved URL and token. | — |
-| Home Assistant action policy | `off`: read only. `ask`: lights, scenes, the TV's power, volume, source and playback, and to-do lists run; anything else (a remote key, a button, a switch, a script, an automation, a restart) asks first (refused headless). `allow`: everything runs. `/ha` never asks. | `ask` |
-| Home Assistant Assist agent | The conversation agent `ha_assist` and `/ha say` use (e.g. `conversation.google_generative_ai`); empty for the default. | (Home Assistant's default) |
-| Home Assistant timeout (s) | How long one request may take (2–60). | 10 |
-
-The services that run unasked under `ask` can be changed in `profile.json` (`homeAssistantSafeServices`: `light.*`, `remote.send_command`…).
 
 #### ComfyUI
 
@@ -1007,7 +981,7 @@ The pane heads its runs **Access**, **Connections**, **Queries** and **Files**.
 
 ### Devices
 
-The printer, camera and screen tools, three menus on one tab, each a tab of the second strip under the first (Print · Camera · Screen): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-09; ComfyUI and YouTube are on Integrations since 2026-10-10; the tab was Media until later that day.
+The printer, camera and screen tools, three menus on one tab, each a tab of the second strip under the first (Print · Camera · Screen): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-09; ComfyUI and YouTube are on Apps (then called Integrations) since 2026-10-10; the tab was Media until later that day.
 
 #### Print
 
@@ -1050,6 +1024,36 @@ The pane heads its runs **Capture** and **Pictures**.
 | Screen capture preview | The picture viewer opens on each screenshot (without the keyboard), so you see what was sent. | on |
 | Screen capture output folder | Where screenshots are saved, under the profile's `images` folder (empty = the `images` folder), out of the working directory. | `screen_images` |
 | Screen capture keep in sessions | Off, a stored session keeps a line naming the screenshot instead of the picture. | off |
+
+### Home
+
+The household's tools, two menus on one tab, the strip's last, each a tab of the second strip (HomeAssistant · Shopping): ←/→ walk them, Tab skips past them. Since 2026-10-11; HomeAssistant was on Integrations (now Apps) and Shopping on Core until then.
+
+#### HomeAssistant
+
+The pane heads its runs **Connection** and **Requests**.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Home Assistant tools | Offers the Home Assistant tools (`ha_overview`, `ha_states`, `ha_history`, `ha_lights`, `ha_scene`, `ha_media`, `ha_todo`, `ha_call_service`, `ha_assist`) once a URL and token are set. | off |
+| Home Assistant URL | Your server (`http://localhost:8123`, or on your LAN). The web tools' network mode never blocks it. | (not set) |
+| Home Assistant API key | A long-lived access token (your HA profile → Security). Typed masked, saved encrypted (DPAPI on Windows, the Keychain on a Mac), never logged; empty clears it. | (none) |
+| Home Assistant test connection | Asks the server for its version with the saved URL and token. | — |
+| Home Assistant action policy | `off`: read only. `ask`: lights, scenes, the TV's power, volume, source and playback, and to-do lists run; anything else (a remote key, a button, a switch, a script, an automation, a restart) asks first (refused headless). `allow`: everything runs. `/ha` never asks. | `ask` |
+| Home Assistant Assist agent | The conversation agent `ha_assist` and `/ha say` use (e.g. `conversation.google_generative_ai`); empty for the default. | (Home Assistant's default) |
+| Home Assistant timeout (s) | How long one request may take (2–60). | 10 |
+
+The services that run unasked under `ask` can be changed in `profile.json` (`homeAssistantSafeServices`: `light.*`, `remote.send_command`…).
+
+#### Shopping
+
+The pane heads its run **The list**.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Shopping tools | Offers the shopping list's tools: `shopping_list`, `shopping_add`, `shopping_check`, `shopping_remove`, `shopping_clear`, `shopping_locate`, `shopping_place`, `shopping_stores`, `shopping_layout`, `shopping_recent` and `shopping_reference` (see [Tools](TOOLS.md#shopping-list)). The list and its stores live in the profile's `db\shopping\shopping.db`. `/tools shopping` opens its on/off page; the toolbar's 🛒 opens the list (`/shopping`). | off |
+| Shopping list | Enter opens the shopping list's checklist, the same pane as the bare `/shopping` and the toolbar's 🛒 (see [Commands](COMMANDS.md)); ESC comes back to the row. | — |
+| Shopping stores | Enter opens the stores' manager: the first row adds a store (its folder under `db\shopping\reference` is made), Enter on a store makes it the one the list is walked through, and the buttons `▦ layout` (`l`: the store's aisles and walk order, sections, placement facts and the model's guesses to review, each changed with Enter; see [Commands](COMMANDS.md)), `✎ rename` (`n`; its folder is renamed to match), `✖  remove` (`r`, after a yes; its layout goes, its documents stay), `📂 folder` (`f`, opens its reference folder) and `⟳ reindex` (`i`). Under each store: its locations, sections, placement facts and reference documents. The `/shopping` pane's `⇄ store` opens it too. | — |
 
 ## MCP servers (`/mcp`)
 

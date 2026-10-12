@@ -64,7 +64,7 @@ The tools the model can call, grouped as `/tools` and `/sys` show them. Each gro
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `neon_help` | `query?, kind?` | NeonSidekick's own manual: every form of a command; a setting's effect, default and place (pane › tab › row, with the menu on a group tab: `/tools`' Core, Files, Integrations, Databases and Devices, `/settings`' Client, Servers and Voice); a pane's or tab's rows; the keys. `query` is a command (`/camera`), a setting, a pane or tab (`/tools camera`), a key (`Ctrl+H`) or plain words; none gives an overview. `kind` (`command`, `setting`, `pane`, `keys`) narrows it; `kind: command` alone lists every command. |
+| `neon_help` | `query?, kind?` | NeonSidekick's own manual: every form of a command; a setting's effect, default and place (pane › tab › row, with the menu on a group tab: `/tools`' Core, Files, Apps, Databases, Devices and Home, `/settings`' Client, Servers and Voice); a pane's or tab's rows; the keys. `query` is a command (`/camera`), a setting, a pane or tab (`/tools camera`), a key (`Ctrl+H`) or plain words; none gives an overview. `kind` (`command`, `setting`, `pane`, `keys`) narrows it; `kind: command` alone lists every command. |
 
 It is offered on every turn, headless and in plan mode too, and the rules tell the model to use it instead of guessing. It reads only the built-in reference, never your current settings. To withhold it, switch it off on the Offered tab.
 
@@ -637,6 +637,7 @@ The same tools and settings, with the differences a Mac brings:
 
 The Docker tools use the engine's own API: on Windows over its named pipe (*Docker engine pipe*), on a Mac over its Unix socket (*Docker engine socket*, [below](#docker-on-a-mac)). The app never starts `docker`, `docker-compose` or Docker Desktop, and says when the engine isn't running. A container is named by its name, a unique part of one ("mysql" for `mysql_dev`), or an id prefix of four or more characters; an ambiguous name comes back as a question.
 
+* **Your own hand:** `/docker` (or the **manage** button on the *Docker tools* page) lists the containers on a pane, `l` the LLM servers alone; what you do there never asks the model's questions.
 * **Changes need two keys:** *Docker writes* offers the changing tools, and every call asks on the pane ("Stop container mysql_dev (mysql:8.4, Up 3 days)?"); a prune says first how much it frees. Headless refuses them; `/docker` still works.
 * **Removals are opt-in:** `docker_remove` and `docker_prune` start off even under *Docker writes*.
 * **Secrets:** `docker_inspect` shows environment variable names, never values, and hides the values of secret-sounding labels and flags and passwords in URLs. Logs can't be redacted, so the model is told never to repeat a secret from one.
@@ -738,7 +739,7 @@ The image tools run **your own ComfyUI workflows** on your server (*ComfyUI URL*
 
 ### Adding a workflow
 
-**With the wizard** (*ComfyUI add workflow* on `/tools` › Integrations › ComfyUI):
+**With the wizard** (*ComfyUI add workflow* on `/tools` › Apps › ComfyUI):
 
 * **Build** makes a standard text → image or image → image workflow from your server's lists: checkpoint, family, folder (this profile's or every profile's), name, CLIP skip, sampler, scheduler, size, steps, CFG, denoise, negative and description.
 * **Import** takes a ComfyUI API export (*Workflow → Export (API)*). It finds the prompt, negative, seed, steps, CFG, size and input-image nodes, puts the placeholders in, and keeps the export's values as defaults. It reads both a plain `KSampler` graph and FLUX.2's custom-sampler graph. A value fed by a primitive node gets its placeholder there; one set by another node (a switch, a resolution picker) is left alone, and the wizard says so.

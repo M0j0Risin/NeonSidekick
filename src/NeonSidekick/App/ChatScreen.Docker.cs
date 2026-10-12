@@ -147,14 +147,23 @@ internal sealed partial class ChatScreen
     {
         if (args.Trim().Length == 0 && _pane.Enabled)
         {
-            var menu = new DockerMenu(_docker, _flow, _menuPane, _web.OpenUrl, _copy);
-            await menu.ShowAsync(cancellationToken).ConfigureAwait(false);
+            await DockerMenuFor(closeWhenDone: true).ShowAsync(cancellationToken).ConfigureAwait(false);
             return;
         }
 
         var result = await _transcript.WithSpinnerAsync(DockerText.Working, () => DockerCommand.RunAsync(_docker, args, cancellationToken)).ConfigureAwait(false);
         await ShowDockerResultAsync(result, args, _transcript, cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// The container list (<see cref="DockerMenu"/>): the bare <c>/docker</c>'s own (<paramref name="closeWhenDone"/>), or the Docker tools
+    /// page's manage button's (2026-10-11), ESC back to the page and <c>logs</c> run as a chord at the idle line. Its llm button reads the
+    /// effective match words and chosen containers at each pass.
+    /// </summary>
+    private DockerMenu DockerMenuFor(bool closeWhenDone) =>
+        new(_docker, _flow, _menuPane, _web.OpenUrl, _copy,
+            () => (_effective().DockerServerMatchWords ?? [], _effective().DockerServerContainers ?? []),
+            closeWhenDone, closeWhenDone ? null : _pane.Chord);
 
     /// <summary>
     /// <c>/docker</c> under a reply (2026-10-02, <c>/ha</c>'s way, <see cref="MidTurnPolicy(SlashCommand, bool)"/>): on the watcher, no

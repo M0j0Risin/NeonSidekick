@@ -942,7 +942,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.Avatar,   // later still on 2026-10-10, General under Profile: the profile's emoji
                 SettingsField.BotChatRecentContext,   // later still on 2026-10-10, the Botchat tab's last row: the main chat's last messages
                 SettingsField.EmojiPicker,   // 2026-10-11, Chat's input-line run's last row: the draft row's ☺
-                SettingsField.ShoppingTools,   // 2026-10-11, /tools › Core › Shopping: the shopping list's tools
+                SettingsField.ShoppingTools,   // 2026-10-11, /tools › Home › Shopping (Core's until later that day): the shopping list's tools
                 SettingsField.ShoppingStores,  // 2026-10-11, the stores' manager under it
                 SettingsField.ShoppingList,    // 2026-10-11, the list's checklist, above the stores' row
             },
@@ -1243,11 +1243,11 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.CommandTypoIntercept, data, _settings.ProfileDirectory));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.CommandTypoIntercept, new AppSettingsData { CommandTypoIntercept = false }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.HideExitAutocomplete) || SettingsMenu.RefusedMidTurn(SettingsField.CommandTypoIntercept));
-        // The draft row's emoji button (2026-10-11): a toggle, off by default, no reconnect, allowed mid-turn.
+        // The draft row's emoji button (2026-10-11): a toggle, on by default since later that day (off until then), no reconnect, allowed mid-turn.
         Assert.True(SettingsMenu.IsToggle(SettingsField.EmojiPicker));
         Assert.Equal("Emoji picker", SettingsMenu.FieldName(SettingsField.EmojiPicker));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.EmojiPicker, data, _settings.ProfileDirectory));
-        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.EmojiPicker, new AppSettingsData { EmojiPicker = true }, _settings.ProfileDirectory));
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.EmojiPicker, data, _settings.ProfileDirectory));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.EmojiPicker, new AppSettingsData { EmojiPicker = false }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.EmojiPicker));
         // Paste preview lines (2026-09-16): the General tab's last row until 2026-09-18, typed, 0 = off, no reconnect, allowed mid-turn.
         Assert.False(SettingsMenu.IsToggle(SettingsField.PastePreviewLines));
@@ -3292,7 +3292,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\neon\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Avatar                       🤖 robot\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Emoji picker                 off\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 11 of 38\n  Show performance bar         CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
+        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Avatar                       🤖 robot\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 11 of 38\n  Show performance bar         CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
         Assert.DoesNotContain("File /tree max length", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -3316,7 +3316,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"/profiles/neon/files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Avatar                       🤖 robot\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Emoji picker                 off\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 11 of 38\n  Show performance bar         CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
+        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Avatar                       🤖 robot\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 11 of 38\n  Show performance bar         CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
         Assert.DoesNotContain("File /tree max length", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -4593,18 +4593,18 @@ public partial class SettingsMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task OnThePane_EmojiPicker_IsTheInputLinesLastRow_OffByDefault_PersistsAndNeedsNoReconnect()
+    public async Task OnThePane_EmojiPicker_IsTheInputLinesLastRow_OnByDefault_PersistsAndNeedsNoReconnect()
     {
-        // 2026-10-11: the Chat tab's tenth row, under Hide /exit autocomplete.
-        Assert.False(_settings.Current.EmojiPicker);
+        // 2026-10-11: the Chat tab's tenth row, under Hide /exit autocomplete; on by default since later that day (the user's ask).
+        Assert.True(_settings.Current.EmojiPicker);
         var (menu, pane) = PaneMenu();
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down);
-        Push(Keys.Enter, Keys.Up, Keys.Enter, Keys.Escape);   // the on/off picker: the saved value under the cursor, the other row picked
+        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the on/off picker: the saved value under the cursor, the other row picked
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.True(_settings.Current.EmojiPicker);
-        Assert.Contains("  · Emoji picker: on", Output);
+        Assert.False(_settings.Current.EmojiPicker);
+        Assert.Contains("  · Emoji picker: off", Output);
         Assert.Equal("the draft row's ☺ opens the emoji picker", SettingsMenu.ToggleDescribe(SettingsField.EmojiPicker, true));
         Assert.Equal("no emoji button on the draft row", SettingsMenu.ToggleDescribe(SettingsField.EmojiPicker, false));
         Assert.Equal(0, _synth.ListCalls);

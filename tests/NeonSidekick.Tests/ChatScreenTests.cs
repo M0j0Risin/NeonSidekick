@@ -149,6 +149,9 @@ public partial class ChatScreenTests : IDisposable
         // The performance bar shows by default since 2026-10-02 (the user's ask): the same row-counting reason, the same opt-out; the
         // bar's tests opt in.
         _settings.Update(d => d.PerformanceBarItems = []);
+        // The draft row's emoji button is on by default since 2026-10-11 (the user's ask) and narrows the draft by its cells, so the
+        // screens pinned before it would wrap otherwise: the same opt-out; the emoji picker's tests opt in.
+        _settings.Update(d => d.EmojiPicker = false);
         // A fresh profile switches some tools off by name (gitlib_delete, zip, unzip, unc_delete): the scripts here pin every file tool
         // offered, so the fixture opts them back on; the fresh-profile tests pin that picture themselves.
         _settings.Update(d => { d.ToolsDisabled = []; d.GitLibTools = true; });   // GitLib tools off by default since 2026-09-21: the fixture opts in, the git-off test flips it back
@@ -4650,7 +4653,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ", output);
         Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.ComfyTools) + " ", output);   // a menu on Media since 2026-10-09 (its own tab from 2026-09-24), a sub-tab the arrows walk since 2026-10-10 (ToolsMenuTests)
         Assert.DoesNotContain("Claude Code executable", output);   // /claude's rows here from 2026-09-27 (off /settings), the advisor's under them; both gone from /tools on 2026-10-10 (the four to /settings › Servers › Anthropic)
         Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
@@ -4706,7 +4709,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ", output);
         Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.ComfyTools) + " ", output);   // a menu on Media since 2026-10-09 (its own tab from 2026-09-24), a sub-tab the arrows walk since 2026-10-10 (ToolsMenuTests)
         Assert.DoesNotContain("Claude Code executable", output);   // /claude's rows here from 2026-09-27 (off /settings), the advisor's under them; both gone from /tools on 2026-10-10 (the four to /settings › Servers › Anthropic)
         Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
@@ -5170,7 +5173,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ", output);
         Assert.Contains("  · " + CameraCaptureTool.ToolName + ": off", output);
         Assert.Equal([CameraCaptureTool.ToolName], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -9658,7 +9661,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.ShellPolice);
         string memory = "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -10791,7 +10794,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + " │ Servers · Tools · Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + " │ Offered · Reflection · Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n", StringComparison.Ordinal);
@@ -10866,7 +10869,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + " │ Servers · Tools · Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + " │ Offered · Reflection · Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n", StringComparison.Ordinal);
@@ -10966,7 +10969,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -11054,7 +11057,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -13145,7 +13148,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
@@ -13205,7 +13208,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Integrations · Databases · Devices ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
@@ -13650,6 +13653,78 @@ public partial class ChatScreenTests : IDisposable
         Assert.Single(engine.Requests, r => r.Method == HttpMethod.Post && r.Uri.PathAndQuery == "/v1.47/containers/c9e0889008d03fe42ce2ba7be159d07f2392a1c5abe9322dd7acb9bce852b7f3/stop?t=10");
         Assert.False(_settings.Current.DockerWrites);
         Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>
+    /// <c>/docker</c>'s llm button (2026-10-11, the user's ask): <c>l</c> narrows the list to the LLM servers by Docker server containers'
+    /// rule — a match word (searxng-core's image) or a container ticked there (open-webui) — and lights the button; <c>l</c> again shows every one.
+    /// </summary>
+    [Fact]
+    public async Task Docker_TheLlmButton_NarrowsTheList_ToTheServersByTheMatchWordsAndTheTicked()
+    {
+        DockerEngine();
+        _settings.Update(d =>
+        {
+            d.TtsOutput = false;
+            d.DockerServerMatchWords = ["searxng"];
+            d.DockerServerContainers = ["open-webui"];
+        });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(Line("/docker"), Key(Keys.Char(DockerMenu.LlmKey)), Key(Keys.Char(DockerMenu.LlmKey)), Key(Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(DockerMenu.LlmCaption(2, 6), output);   // searxng-core and open-webui of the six
+        Assert.Contains("\n▸ ● searxng-core ", output);          // the first server, running, the cursor on it
+        Assert.Contains("open-webui", output);
+        Assert.Contains("type = filter · ESC = close", output);   // the bare /docker's own hint
+    }
+
+    /// <summary>The llm button with no container a server by the words: the one dim line saying so, not the typed filter's no-match row.</summary>
+    [Fact]
+    public async Task Docker_TheLlmButton_WithNoServer_SaysSo()
+    {
+        DockerEngine();
+        _settings.Update(d =>
+        {
+            d.TtsOutput = false;
+            d.DockerServerMatchWords = ["vllm"];
+            d.DockerServerContainers = [];
+        });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(Line("/docker"), Key(Keys.Char(DockerMenu.LlmKey)), Key(Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(DockerMenu.NoLlmServersLine, output);
+        Assert.Contains(DockerMenu.LlmCaption(0, 6), output);
+    }
+
+    /// <summary>
+    /// The Docker tools page's manage button (2026-10-11, the user's ask): <c>/tools docker</c> opens the on/off page with ⊞ manage on its
+    /// title row; <c>m</c> opens <c>/docker</c>'s list under it (ESC = back), and ESC there brings the page back rather than closing the pane.
+    /// </summary>
+    [Fact]
+    public async Task ToolsDocker_TheManageButton_OpensTheContainerList_AndEscComesBackToThePage()
+    {
+        DockerEngine();
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(Line("/tools docker"), Key(Keys.Char(SettingsMenu.DockerManageKey)), Key(Keys.Escape), Key(Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.DockerManageButtonTitle, output);
+        Assert.Contains(SettingsMenu.DockerToolsKeys, output);
+        Assert.Contains(DockerMenu.Title, output);
+        Assert.Contains("type = filter · ESC = back", output);   // DockerMenu.BackKeys: the host's page comes back
+        Assert.Contains("\n▸ ● mariadb_dev     running (healthy)  3307→3306/tcp  mariadb:11\n", output);
+        int list = output.LastIndexOf("type = filter · ESC = back", StringComparison.Ordinal);
+        Assert.True(output.LastIndexOf(SettingsMenu.DockerToolsKeys, StringComparison.Ordinal) > list);   // the page drawn again after the list
+        Assert.False(_settings.Current.DockerTools);   // nothing saved by the visit
     }
 
     /// <summary><c>/docker</c> typed and under a reply (2026-10-02, /ha's way): its lines land in the reply, which runs on.</summary>

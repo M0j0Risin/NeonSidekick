@@ -58,7 +58,7 @@ internal static class HelpLocation
     public static IReadOnlyList<HelpRow> OnTab(string pane, string tab) =>
         Rows.Where(r => string.Equals(r.Pane, pane, StringComparison.Ordinal) && string.Equals(r.Tab, tab, StringComparison.Ordinal)).ToList();
 
-    /// <summary>The menus on a pane's group tabs, each with its tab (2026-10-09): <c>/tools</c>' Core, Files, Integrations, Databases and Devices, <c>/settings</c>' Client, Servers and Voice (2026-10-10).</summary>
+    /// <summary>The menus on a pane's group tabs, each with its tab (2026-10-09): <c>/tools</c>' Core, Files, Apps, Databases, Devices and Home, <c>/settings</c>' Client, Servers and Voice (2026-10-10).</summary>
     public static IReadOnlyList<(string Tab, string Menu)> Menus(string pane) =>
         Rows.Where(r => string.Equals(r.Pane, pane, StringComparison.Ordinal) && r.Menu is not null).Select(r => (r.Tab, r.Menu!)).Distinct().ToList();
 

@@ -55,6 +55,25 @@ public class DockerServerWordsTests
         Assert.True(DockerServerWords.Matches(Container("acme/mysql-llm"), ["mysql"]));   // the user's own word
     }
 
+    /// <summary>
+    /// The servers among a list (2026-10-11, the checklist's rule shared with <c>/docker</c>'s llm button): a match or a ticked name, in the
+    /// list's order; an empty or blank word list keeps every container.
+    /// </summary>
+    [Fact]
+    public void Servers_AreTheMatchedAndTheTicked_InOrder_AndNoWordsKeepsEveryOne()
+    {
+        var mysql = Container("mysql:8.4", "docker-entrypoint.sh mysqld") with { Name = "mysql_dev" };
+        var vllm = Container("vllm/vllm-openai:latest") with { Name = "qwen" };
+        var custom = Container("acme/runner") with { Name = "runner" };
+        var labelled = Container("acme/other", labels: new Dictionary<string, string> { [DockerServerWords.LlmLabel] = "true" }) with { Name = "other" };
+        IReadOnlyList<DockerContainer> all = [mysql, vllm, custom, labelled];
+
+        Assert.Equal(["qwen", "other"], DockerServerWords.Servers(all, DockerServerWords.Defaults, null).Select(c => c.Name));
+        Assert.Equal(["qwen", "runner", "other"], DockerServerWords.Servers(all, DockerServerWords.Defaults, [" runner "]).Select(c => c.Name));   // ticked, trimmed
+        Assert.Equal(["mysql_dev", "qwen", "runner", "other"], DockerServerWords.Servers(all, [], null).Select(c => c.Name));
+        Assert.Equal(["mysql_dev", "qwen", "runner", "other"], DockerServerWords.Servers(all, ["", "  "], ["qwen"]).Select(c => c.Name));
+    }
+
     [Fact]
     public void TheDefaults_AreTheKnownEngines_AFreshListEachRead_AndAFreshProfilesList()
     {

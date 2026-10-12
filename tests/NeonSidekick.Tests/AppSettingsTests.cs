@@ -41,7 +41,7 @@ public class AppSettingsTests : IDisposable
         CopyUserPrompt = false,
         DraftEditor = "code --wait",
         HideExitAutocomplete = false,
-        EmojiPicker = true,
+        EmojiPicker = false,   // on by default since later on 2026-10-11
         ImageThumbnailSize = "large",
         Theme = "noir",
         BotChatLlmMode = "multi",

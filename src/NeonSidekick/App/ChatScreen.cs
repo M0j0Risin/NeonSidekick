@@ -1380,6 +1380,8 @@ internal sealed partial class ChatScreen
         _menu.EmbeddedLlm = _session.Embedded;
         // The Docker tab's container checklist (2026-10-02): the screen's engine door, the pipe the settings name.
         _menu.DockerContainers = _docker.ContainersAsync;
+        // The Docker tools page's manage button (2026-10-11, the user's ask): the bare /docker's list, ESC back to the page.
+        _menu.ManageDocker = ct => DockerMenuFor(closeWhenDone: false).ShowAsync(ct);
         _menu.Cameras = _camera.Available ? _camera.List : null;
         // The Camera tool page's watch button (2026-10-04, the user's ask), only where there is a camera layer to watch with.
         _menu.CameraWatching = _camera.Available ? () => _cameraWatch.Running : null;
@@ -1390,7 +1392,7 @@ internal sealed partial class ChatScreen
         _menu.CameraChord = _camera.Available ? _pane.Chord : null;
         _menu.ScreenOffered = _screenSystem is not null;
         _menu.Effective = _effective;
-        // The shopping stores' manager (2026-10-11): /tools › Core › Shopping's row and the /shopping pane's store button.
+        // The shopping stores' manager (2026-10-11): /tools › Home › Shopping's row and the /shopping pane's store button.
         _menu.Shopping = _shopping;
         _menu.ShoppingReference = _shoppingReference;
         _menu.BeforeEmbeddedRemove = StopEmbeddedDownloadOfAsync;

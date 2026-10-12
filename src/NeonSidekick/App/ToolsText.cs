@@ -150,7 +150,7 @@ public static class ToolsText
     /// </summary>
     public const string ImageMenuTitle = "Image";
 
-    /// <summary>The shopping list's menu and group (2026-10-11, the user's ask): on Core, after Shell, before Options. Pinned.</summary>
+    /// <summary>The shopping list's menu and group (2026-10-11, the user's ask): on Home after HomeAssistant since later that day (the user's ask; on Core, after Shell, before Options, until then). Pinned.</summary>
     public const string ShoppingMenuTitle = "Shopping";
     /// <summary><c>Git</c> until 2026-09-21, when the user asked for <c>Git (native)</c> (the in-process LibGit2Sharp tools as against git through the shell), and <c>Git</c> again since 2026-09-29, the user's call: the tab and the Offered heading, the rows keep their <c>Git native …</c> labels. <c>GitLib</c> since 2026-09-30 (the user's ask), the tab, the heading, the rows and the tools' names (<c>gitlib_status</c> …) alike.</summary>
     public const string GitTabTitle = "GitLib";
@@ -187,13 +187,13 @@ public static class ToolsText
     /// <summary>The YouTube tab (2026-10-05, the YouTube plan): the search key and the video window's tools; after ComfyUI, before GitLib (the user's place, later that day; after Screen until then).</summary>
     public const string YouTubeTabTitle = "YouTube";
 
-    /// <summary>The Docker tools' tab and group (2026-10-02), Integrations' first menu since 2026-10-10 (the ClaudeCode tab before it went); after Claude, before HA, since 2026-10-03 (the user's order; after UNC, before GitLib, until then).</summary>
+    /// <summary>The Docker tools' tab and group (2026-10-02), Apps' (Integrations' until 2026-10-11) first menu since 2026-10-10 (the ClaudeCode tab before it went); after Claude, before HA, since 2026-10-03 (the user's order; after UNC, before GitLib, until then).</summary>
     public const string DockerTabTitle = "Docker";
 
     /// <summary>The image tools' tab and group (2026-09-24), after HA, before GitLib, since 2026-10-03 (the user's order; after Obsidian, before SQL, from 2026-09-27); "Images" until later on 2026-09-24 (the user's call: it is ComfyUI's tab).</summary>
     public const string ComfyTabTitle = "ComfyUI";
 
-    /// <summary>The Home Assistant tools' tab (2026-09-28), after Docker, before ComfyUI, since 2026-10-03 (the user's order; second to last, after GitLib, before Options, from later on 2026-10-01; after Claude, before Print, until then). "HA" since 2026-10-01 (the user's call: strip width); "Home Assistant" until then, which the group keeps (<see cref="HomeAssistantGroupTitle"/>). "Home" since 2026-10-09 (the user's ask; the toolbar's item keeps "HA"); "HomeAssistant" since 2026-10-10 (the user's ask; the toolbar's item keeps "Home", the user's pick).</summary>
+    /// <summary>The Home Assistant tools' tab (2026-09-28), after Docker, before ComfyUI, since 2026-10-03 (the user's order; second to last, after GitLib, before Options, from later on 2026-10-01; after Claude, before Print, until then). "HA" since 2026-10-01 (the user's call: strip width); "Home Assistant" until then, which the group keeps (<see cref="HomeAssistantGroupTitle"/>). "Home" since 2026-10-09 (the user's ask; the toolbar's item keeps "HA"); "HomeAssistant" since 2026-10-10 (the user's ask; the toolbar's item keeps "Home", the user's pick). On the Home tab, before Shopping, since 2026-10-11 (the user's ask).</summary>
     public const string HomeAssistantTabTitle = "HomeAssistant";
 
     /// <summary>The profile advisors' group heading on <c>/tools</c>' Offered tab and <c>/sys</c> (2026-10-10). Pinned.</summary>
@@ -214,9 +214,13 @@ public static class ToolsText
     /// <summary>The tab that holds the device menus (2026-10-09, the user's call): Print, Camera and Screen since 2026-10-10 (ComfyUI and YouTube on Integrations since, the user's ask), each a tab of its own until 2026-10-09. "Media" until later on 2026-10-10 (the user's call). Pinned.</summary>
     public const string DevicesTabTitle = "Devices";
 
-    /// <summary>The tab that holds the menus of the apps and services the tools reach (2026-10-10, the user's pick): Docker, HomeAssistant, ComfyUI and YouTube — ClaudeCode first too until later that day, when the Claude Code
-    /// advisor tool was retired and <c>/claude</c>'s rows went to <c>/settings</c>' Anthropic tab (the user's call). Pinned.</summary>
-    public const string IntegrationsTabTitle = "Integrations";
+    /// <summary>The tab that holds the menus of the apps and services the tools reach (2026-10-10, the user's pick): Docker, ComfyUI and YouTube — ClaudeCode first too until later that day, when the Claude Code
+    /// advisor tool was retired and <c>/claude</c>'s rows went to <c>/settings</c>' Anthropic tab (the user's call); HomeAssistant too until 2026-10-11, when it went to
+    /// <see cref="HomeTabTitle"/>. "Integrations" until then (the user's pick: it no longer held every integration). Pinned.</summary>
+    public const string AppsTabTitle = "Apps";
+
+    /// <summary>The tab that holds the household's menus, the strip's last after Devices (2026-10-11, the user's ask): HomeAssistant (off Integrations) and Shopping (off Core). Pinned.</summary>
+    public const string HomeTabTitle = "Home";
 
     /// <summary>
     /// The settings menus in <see cref="SettingsMenu.ToolsTabFields"/>' order, each list's title (2026-10-09): every one was a tab of its own
@@ -234,17 +238,18 @@ public static class ToolsText
     /// up to Home, then ComfyUI and YouTube, the five databases, Print, Camera, Screen. Later on 2026-10-10 (the user's ask) the Image menu
     /// after File on Files (<see cref="ImageMenuTitle"/>), and later still the ClaudeCode menu went (the Claude Code advisor tool retired, <c>/claude</c>'s
     /// rows to <c>/settings</c>' Anthropic tab), Integrations opening on Docker. Later still on 2026-10-10 (the user's ask) Ask, Web and Shell went
-    /// under one Standard tab after Offered (<see cref="CoreTabTitle"/>), Options its last menu (the user's ask): Offered, Standard, Files, Integrations, Database, Media; Standard renamed Core and Media Devices later still (the user's call).</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, CoreTabTitle, FilesTabTitle, IntegrationsTabTitle, DatabaseTabTitle, DevicesTabTitle];
+    /// under one Standard tab after Offered (<see cref="CoreTabTitle"/>), Options its last menu (the user's ask): Offered, Standard, Files, Integrations, Database, Media; Standard renamed Core and Media Devices later still (the user's call). Since 2026-10-11 (the user's ask) Home is
+    /// the last, HomeAssistant and Shopping on it, and Integrations is Apps: Offered, Core, Files, Apps, Databases, Devices, Home.</summary>
+    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, CoreTabTitle, FilesTabTitle, AppsTabTitle, DatabaseTabTitle, DevicesTabTitle, HomeTabTitle];
 
     /// <summary>
     /// The menus each tab after Offered holds, as indexes into <see cref="SettingsMenu.ToolsTabFields"/> and <see cref="MenuTitles"/> (2026-10-09):
-    /// one for a plain tab, its rows the tab's; more for a group tab — <see cref="CoreTabTitle"/> (later on 2026-10-10), <see cref="FilesTabTitle"/>, <see cref="IntegrationsTabTitle"/> (2026-10-10),
-    /// <see cref="DatabaseTabTitle"/> and <see cref="DevicesTabTitle"/> — whose menus are sub-tabs on a second strip (<see cref="ToolsMenu"/>). Pinned.
+    /// one for a plain tab, its rows the tab's; more for a group tab — <see cref="CoreTabTitle"/> (later on 2026-10-10), <see cref="FilesTabTitle"/>, <see cref="AppsTabTitle"/> (2026-10-10),
+    /// <see cref="DatabaseTabTitle"/>, <see cref="DevicesTabTitle"/> and <see cref="HomeTabTitle"/> (2026-10-11) — whose menus are sub-tabs on a second strip (<see cref="ToolsMenu"/>). Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[0, 1, 2, 21, 20], [3, 4, 5, 19, 9], [15, 16, 17, 18], [10, 11, 12, 13, 14], [6, 7, 8]];
+    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[0, 1, 2, 20], [3, 4, 5, 19, 9], [15, 17, 18], [10, 11, 12, 13, 14], [6, 7, 8], [16, 21]];
 
-    /// <summary>Whether tab <paramref name="tab"/> (a <see cref="TabTitles"/> index) holds menus rather than rows: Core, Files, Integrations, Databases and Devices.</summary>
+    /// <summary>Whether tab <paramref name="tab"/> (a <see cref="TabTitles"/> index) holds menus rather than rows: Core, Files, Apps, Databases, Devices and Home.</summary>
     public static bool IsGroupTab(int tab) => tab > 0 && tab < TabTitles.Count && TabMenus[tab - 1].Count > 1;
 
     /// <summary>The menu titled <paramref name="title"/>'s index into <see cref="MenuTitles"/>; −1 for none.</summary>

@@ -16,6 +16,24 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public Func<CancellationToken, Task<(IReadOnlyList<DockerContainer>? Containers, string? Error)>>? DockerContainers { get; set; }
 
+    /// <summary>
+    /// The Docker tools page's manage button (2026-10-11, the user's ask): the bare <c>/docker</c>'s container list, ESC there back to
+    /// the page; null where the screen hands none in, and the page has no button.
+    /// </summary>
+    public Func<CancellationToken, Task>? ManageDocker { get; set; }
+
+    /// <summary>The Docker tools page's button (2026-10-11): the container list. Pinned.</summary>
+    public const string DockerManageButtonTitle = "⊞ manage";
+
+    /// <summary>The key that is <see cref="DockerManageButtonTitle"/>.</summary>
+    public const char DockerManageKey = 'm';
+
+    /// <summary>The Docker tools page's buttons: <see cref="DockerManageButtonTitle"/> alone. Pinned.</summary>
+    public static readonly IReadOnlyList<MenuButton> DockerToolsButtons = [new(DockerManageButtonTitle, DockerManageKey)];
+
+    /// <summary>The Docker tools page's hint: <see cref="PickKeys"/> with the manage button's key. Pinned.</summary>
+    public const string DockerToolsKeys = "Enter = choose · m = manage · ESC = back";
+
     /// <summary>The Docker tab's strip title (2026-10-02, after Embedded, the user's place). Pinned.</summary>
     public const string DockerTabTitle = "Docker";
 
@@ -139,9 +157,7 @@ internal sealed partial class SettingsMenu
         var all = DockerText.Ordered(listed);
         var before = _settings.Current.DockerServerContainers;
         bool changed = PruneStale(SettingsField.DockerServerContainers, before, OfferedNames.Stale(before, all.Select(c => c.Name), [], StringComparer.Ordinal), StringComparer.Ordinal, (d, kept) => d.DockerServerContainers = kept);
-        var words = DockerServerWords.Sorted(_settings.Current.DockerServerMatchWords);
-        var ticked = (_settings.Current.DockerServerContainers ?? []).Select(n => n.Trim()).ToHashSet(StringComparer.Ordinal);
-        var containers = words.Count == 0 ? all : all.Where(c => ticked.Contains(c.Name) || DockerServerWords.Matches(c, words)).ToList();
+        var containers = DockerServerWords.Servers(all, _settings.Current.DockerServerMatchWords, _settings.Current.DockerServerContainers);
         if (containers.Count == 0)
         {
             Sink.Notice(NoLlmContainersNotice);

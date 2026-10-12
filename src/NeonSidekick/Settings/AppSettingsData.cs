@@ -251,11 +251,11 @@ public sealed class AppSettingsData
     public bool HideExitAutocomplete { get; set; } = true;
 
     /// <summary>
-    /// Whether the draft row shows the emoji button at its right end (2026-10-11, the user's ask; off by default): a dim ☺
-    /// (<c>ScreenPane.EmojiGlyph</c>) whose click opens the emoji picker, the avatar picker's grid, and puts the pick at the cursor.
-    /// Read at each draw. No variable.
+    /// Whether the draft row shows the emoji button at its right end (2026-10-11, the user's ask; on by default since later that day,
+    /// the user's ask, no migration: a profile saved off before then stays off): a dim ☺ (<c>ScreenPane.EmojiGlyph</c>) whose click
+    /// opens the emoji picker, the avatar picker's grid, and puts the pick at the cursor. Read at each draw. No variable.
     /// </summary>
-    public bool EmojiPicker { get; set; }
+    public bool EmojiPicker { get; set; } = true;
 
     /// <summary>
     /// How big the thumbnail under a sent picture is drawn (<see cref="ShowImageThumbnails"/>):
@@ -1611,7 +1611,7 @@ public sealed class AppSettingsData
     /// <c>shopping_list</c>, <c>shopping_add</c>, <c>shopping_check</c>, <c>shopping_remove</c>, <c>shopping_clear</c>, and the store's
     /// facts, <c>shopping_locate</c>, <c>shopping_place</c>, <c>shopping_stores</c> and <c>shopping_layout</c>, and (phase 3, the same day)
     /// <c>shopping_reference</c> over each store's reference documents. The first row of
-    /// <c>/tools</c> › Core › Shopping. Read at each turn, no reconnect. Off by default, as every tool group. No variable.
+    /// <c>/tools</c> › Home › Shopping. Read at each turn, no reconnect. Off by default, as every tool group. No variable.
     /// </summary>
     public bool ShoppingTools { get; set; }
 

@@ -6789,6 +6789,26 @@ internal sealed partial class SettingsMenu
                 break;
             }
         }
+        else if (field == SettingsField.DockerTools && ManageDocker is { } manage && _pane.Enabled)
+        {
+            // The Docker tools page carries the manage button (2026-10-11, the user's ask, the police's shape): the bare /docker's
+            // container list, then the page again; a logs pick there backs the whole stack out (its line run at the idle line).
+            var docker = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], DockerToolsKeys);
+            int cursor = was ? 0 : 1;
+            while (true)
+            {
+                var pressed = await PickChecklistAsync(docker, cursor, cancellationToken, DockerToolsButtons).ConfigureAwait(false);
+                if (pressed is { Button: >= 0 } button)
+                {
+                    cursor = button.Row;
+                    await manage(cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                picked = pressed?.Row;
+                break;
+            }
+        }
         else if (field == SettingsField.WebTools)
         {
             // The Web page carries the browser-mode buttons (2026-10-04, the user's ask): a press saves the mode at once, the

@@ -27,7 +27,8 @@ public partial class ToolsMenuTests
         Assert.Equal("         │ ↳ SQL · MySQL · SQLite · PostgreSQL · Oracle ", SubStrip(ToolsText.DatabaseTabTitle));
         Assert.Equal("         │ ↳ Print · Camera · Screen ", SubStrip(ToolsText.DevicesTabTitle));   // ComfyUI and YouTube on Integrations since 2026-10-10
         Assert.Equal("         │ ↳ File · Image · UNC · GitLib · Obsidian ", SubStrip(ToolsText.FilesTabTitle));   // 2026-10-10; Image later that day
-        Assert.Equal("         │ ↳ Docker · HomeAssistant · ComfyUI · YouTube ", SubStrip(ToolsText.IntegrationsTabTitle));   // 2026-10-10; ClaudeCode first until later that day
+        Assert.Equal("         │ ↳ Docker · ComfyUI · YouTube ", SubStrip(ToolsText.AppsTabTitle));   // 2026-10-10; ClaudeCode first until later that day; HomeAssistant until 2026-10-11
+        Assert.Equal("         │ ↳ HomeAssistant · Shopping ", SubStrip(ToolsText.HomeTabTitle));   // 2026-10-11 (the user's ask)
     }
 
     [Fact]
@@ -45,21 +46,22 @@ public partial class ToolsMenuTests
         pane.Dispose();
     }
 
-    /// <summary>The Files and Integrations groups (2026-10-10, the user's pick): each a second strip, its first menu's rows under it.</summary>
+    /// <summary>The Files and Apps (Integrations until 2026-10-11) groups (2026-10-10, the user's pick): each a second strip, its first menu's rows under it.</summary>
     [Fact]
-    public async Task OnThePane_TheFilesAndIntegrationsTabs_ShowTheSecondStrip_AndTheFirstMenusRows()
+    public async Task OnThePane_TheFilesAndAppsTabs_ShowTheSecondStrip_AndTheFirstMenusRows()
     {
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.FilesTabTitle));
-        Push(Keys.Tab);                              // Integrations, on Docker (ClaudeCode until later on 2026-10-10)
+        Push(Keys.Tab);                              // Apps, on Docker (ClaudeCode until later on 2026-10-10)
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(LeafIndex(ToolsText.FileMenuTitle), LeafIndex(ToolsText.FilesTabTitle));
         Assert.Contains(Strips(ToolsText.FilesTabTitle) + HeadingOver(ToolsText.FileMenuTitle, SettingsField.FileTools) + "▸ " + SettingsMenu.FieldName(SettingsField.FileTools) + "  ", Output);
-        Assert.Contains(Strips(ToolsText.IntegrationsTabTitle) + HeadingOver(ToolsText.DockerTabTitle, TabFields(ToolsText.DockerTabTitle)[0]) + "▸ " + SettingsMenu.FieldName(TabFields(ToolsText.DockerTabTitle)[0]) + "  ", Output);
-        Assert.Equal(LeafIndex(ToolsText.HomeAssistantTabTitle) + 1, LeafIndex(ToolsText.ComfyTabTitle));   // ComfyUI and YouTube after Home, off Media
+        Assert.Contains(Strips(ToolsText.AppsTabTitle) + HeadingOver(ToolsText.DockerTabTitle, TabFields(ToolsText.DockerTabTitle)[0]) + "▸ " + SettingsMenu.FieldName(TabFields(ToolsText.DockerTabTitle)[0]) + "  ", Output);
+        Assert.Equal(LeafIndex(ToolsText.DockerTabTitle) + 1, LeafIndex(ToolsText.ComfyTabTitle));   // ComfyUI and YouTube after Docker since 2026-10-11 (HomeAssistant between them, off to Home), off Media
+        Assert.Equal(LeafIndex(ToolsText.HomeAssistantTabTitle) + 1, LeafIndex(ToolsText.ShoppingMenuTitle));   // Home: HomeAssistant, then Shopping (2026-10-11)
         pane.Dispose();
     }
 

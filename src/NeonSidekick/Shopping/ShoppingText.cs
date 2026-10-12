@@ -680,7 +680,7 @@ public static class ShoppingText
 
     public static string AuditBoughtForgotten(ShopBought bought) => "Forgot from the recently bought: " + bought.Name;
 
-    // ---- the store manager (/tools › Core › Shopping › Shopping stores, the /shopping pane's ⇄ store; 2026-10-11) ----
+    // ---- the store manager (/tools › Home › Shopping › Shopping stores, the /shopping pane's ⇄ store; 2026-10-11) ----
 
     /// <summary>The store manager's title. Pinned.</summary>
     public const string StoresTitle = "Shopping stores";

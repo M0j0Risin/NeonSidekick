@@ -15,12 +15,19 @@ namespace NeonSidekick.App;
 /// published port (the browser, through the screen's existing opener — no process of Docker's own is started) and
 /// <c>copy id</c>. The user's own hand: <c>Docker writes</c> never judges it; every change is audited. The button on the
 /// title row reads the list again. Mid-turn the list shows and a pick is refused. Without the pane the list prints as lines.
+/// The <see cref="LlmButton"/> beside it (2026-10-11, the user's ask) narrows the list to the LLM servers by <c>Docker server containers</c>'
+/// own rule (<see cref="DockerServerWords.Servers"/>: the match words, plus the containers chosen there), off each time the list opens.
+/// The Docker tools page's manage button opens the same list (2026-10-11), ESC there back to the page (<c>closeWhenDone: false</c>).
 /// </summary>
 internal sealed class DockerMenu
 {
     // The key hints. Pinned.
     public const string Title = DockerText.Glyph + " Docker";
-    public const string Keys = "Enter = open · r = refresh · " + MenuFilter.TypeAndCloseKeys;   // type to filter since 2026-10-07
+    public const string Keys = "Enter = open · r = refresh · l = llm · " + MenuFilter.TypeAndCloseKeys;   // type to filter since 2026-10-07; l since 2026-10-11
+
+    /// <summary>The hint under a host that drew the list (2026-10-11, the Docker tools page's manage button): ESC goes back to it. Pinned.</summary>
+    public const string BackKeys = "Enter = open · r = refresh · l = llm · " + MenuFilter.TypeKeys + " · ESC = back";
+
     public const string RowKeys = SettingsMenu.PickKeys;
 
     public const string EmptyNotice = "(" + DockerText.Glyph + " no containers)";
@@ -31,8 +38,21 @@ internal sealed class DockerMenu
     /// <summary>The key that is the button.</summary>
     public const char RefreshKey = 'r';
 
-    /// <summary>The page's buttons.</summary>
-    public static readonly IReadOnlyList<MenuButton> Buttons = [new(RefreshButton, RefreshKey)];
+    /// <summary>The title row's filter (2026-10-11, the user's ask): the LLM servers alone, lit while on; pressed again, every container. Pinned.</summary>
+    public const string LlmButton = "◆ llm";
+
+    /// <summary>The key that is <see cref="LlmButton"/>.</summary>
+    public const char LlmKey = 'l';
+
+    /// <summary>The page's buttons: <see cref="RefreshButton"/>, then <see cref="LlmButton"/> lit while <paramref name="llmOnly"/>. Pinned.</summary>
+    public static IReadOnlyList<MenuButton> ButtonsFor(bool llmOnly) => [new(RefreshButton, RefreshKey), new(LlmButton, LlmKey, llmOnly)];
+
+    /// <summary>The caption while the LLM filter is on: <c>2 of 6 · LLM servers</c>, the typed filter counted in. Pinned.</summary>
+    public static string LlmCaption(int shown, int total) =>
+        shown.ToString(CultureInfo.InvariantCulture) + " of " + total.ToString(CultureInfo.InvariantCulture) + " · LLM servers";
+
+    /// <summary>The list's one row while the LLM filter is on and no container is a server by the rule. Pinned.</summary>
+    public const string NoLlmServersLine = "(no container is an LLM server by Docker server match words; l = every container)";
 
     public const string LogsWord = "logs";
     public const string CopyIdWord = "copy id";
@@ -49,19 +69,32 @@ internal sealed class DockerMenu
     private readonly MenuPane _pane;
     private readonly Action<string> _openUrl;
     private readonly Func<string, bool> _copy;
+    private readonly Func<(IReadOnlyList<string> Words, IReadOnlyList<string> Chosen)> _llmRule;
+    private readonly bool _closeWhenDone;
+    private readonly Func<string, bool>? _chord;
 
     /// <param name="docker">The door: the list is read when the pane opens and again after every change.</param>
     /// <param name="transcript">Where the lines outside the pane go.</param>
     /// <param name="pane">The menu host in the bottom pane.</param>
     /// <param name="openUrl">What <c>open :port</c> hands its URL to: the screen's browser opener.</param>
     /// <param name="copy">What <c>copy id</c> writes the id with, true on success.</param>
-    public DockerMenu(DockerSession docker, INoticeSink transcript, MenuPane pane, Action<string> openUrl, Func<string, bool> copy)
+    /// <param name="llmRule">The <see cref="LlmButton"/>'s rule, read at each pass: <c>Docker server match words</c> and <c>Docker server containers</c> (2026-10-11).</param>
+    /// <param name="closeWhenDone">Whether ESC closes the pane (the bare <c>/docker</c>'s own); false under a host that drew it, the Docker tools page (2026-10-11), whose page comes back.</param>
+    /// <param name="chord">
+    /// Under a host (<paramref name="closeWhenDone"/> false): what <c>logs</c> hands its <c>/docker logs</c> line to, the screen's
+    /// <see cref="ScreenPane.Chord"/>, so the whole pane stack backs out and the lines land at the idle line; false from it, the stack is gone.
+    /// </param>
+    public DockerMenu(DockerSession docker, INoticeSink transcript, MenuPane pane, Action<string> openUrl, Func<string, bool> copy,
+        Func<(IReadOnlyList<string> Words, IReadOnlyList<string> Chosen)> llmRule, bool closeWhenDone = true, Func<string, bool>? chord = null)
     {
         _docker = docker ?? throw new ArgumentNullException(nameof(docker));
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
         _openUrl = openUrl ?? throw new ArgumentNullException(nameof(openUrl));
         _copy = copy ?? throw new ArgumentNullException(nameof(copy));
+        _llmRule = llmRule ?? throw new ArgumentNullException(nameof(llmRule));
+        _closeWhenDone = closeWhenDone;
+        _chord = chord;
     }
 
     /// <summary>Where a notice goes: the pane's status line while the list is open there, else the transcript.</summary>
@@ -212,14 +245,14 @@ internal sealed class DockerMenu
         var (read, error) = await _docker.ContainersAsync(cancellationToken).ConfigureAwait(false);
         if (read is null)
         {
-            _transcript.Error(error!);
+            Sink.Error(error!);   // the host's status line under the Docker tools page, else the transcript
             return;
         }
 
         var containers = DockerText.Ordered(read);
         if (containers.Count == 0)
         {
-            _transcript.Notice(EmptyNotice);
+            Sink.Notice(EmptyNotice);
             return;
         }
 
@@ -235,20 +268,25 @@ internal sealed class DockerMenu
 
         int cursor = 0;
         string filter = "";
+        bool llmOnly = false;
         try
         {
             while (true)
             {
                 int width = containers.Max(c => c.Name.Length);
-                // The rows under the filter (2026-10-07): indices into the list.
+                // The rows under the filters (2026-10-07; the LLM servers alone first since 2026-10-11): indices into the list.
                 var listed = containers;
-                var shown = Enumerable.Range(0, listed.Count).Where(i => Matches(filter, listed[i])).ToList();
-                List<string> rows = shown.Count > 0 ? shown.Select(i => RowMarkup(listed[i], width)).ToList() : [MenuFilter.NoMatchRow(filter)];
-                var page = new MenuPage(Title, rows, MenuFilter.Hint(Keys, filter))
+                var (words, chosen) = _llmRule();
+                var servers = llmOnly ? DockerServerWords.Servers(listed, words, chosen).Select(c => c.Name).ToHashSet(StringComparer.Ordinal) : null;
+                var shown = Enumerable.Range(0, listed.Count).Where(i => (servers is null || servers.Contains(listed[i].Name)) && Matches(filter, listed[i])).ToList();
+                List<string> rows = shown.Count > 0 ? shown.Select(i => RowMarkup(listed[i], width)).ToList()
+                    : servers is { Count: 0 } ? [Theme.DimMarkup(NoLlmServersLine)] : [MenuFilter.NoMatchRow(filter)];
+                string keys = _closeWhenDone ? Keys : BackKeys;
+                var page = new MenuPage(Title, rows, MenuFilter.Hint(keys, filter))
                 {
-                    Buttons = Buttons,
+                    Buttons = ButtonsFor(llmOnly),
                     Filter = filter,
-                    Caption = MenuFilter.CaptionOrNull(filter, shown.Count, listed.Count),
+                    Caption = llmOnly ? LlmCaption(shown.Count, listed.Count) : MenuFilter.CaptionOrNull(filter, shown.Count, listed.Count),
                     Footer = (_, row) => row < shown.Count ? Footer(listed[shown[row]]) : null,
                 };
                 var picked = await _pane.PickAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken).ConfigureAwait(false);
@@ -270,6 +308,12 @@ internal sealed class DockerMenu
                 }
 
                 cursor = pick.Row >= 0 && pick.Row < shown.Count ? shown[pick.Row] : Math.Max(0, cursor);
+                if (pick.Button == 1)
+                {
+                    llmOnly = !llmOnly;   // the filter flips; the list is not read again
+                    continue;
+                }
+
                 if (pick.Button < 0)
                 {
                     if (midTurn)
@@ -295,8 +339,12 @@ internal sealed class DockerMenu
                 containers = DockerText.Ordered(again);
                 if (containers.Count == 0)
                 {
-                    _pane.Close();
-                    _transcript.Notice(EmptyNotice);
+                    if (_closeWhenDone)
+                    {
+                        _pane.Close();
+                    }
+
+                    Sink.Notice(EmptyNotice);
                     return;
                 }
 
@@ -305,7 +353,10 @@ internal sealed class DockerMenu
         }
         finally
         {
-            _pane.Close();
+            if (_closeWhenDone)
+            {
+                _pane.Close();
+            }
         }
     }
 
@@ -331,8 +382,14 @@ internal sealed class DockerMenu
         {
             case LogsWord:
             {
+                string count = DockerCommand.DefaultLogLines.ToString(CultureInfo.InvariantCulture);
+                if (!_closeWhenDone && _chord is { } chord && !chord("/docker logs " + container.Id + " " + count))
+                {
+                    return RowOutcome.Close;   // the stack backs out; the screen runs the line at the idle line (2026-10-11)
+                }
+
                 _pane.Close();
-                var result = await DockerCommand.RunAsync(_docker, "logs " + container.Id + " " + DockerCommand.DefaultLogLines.ToString(CultureInfo.InvariantCulture), cancellationToken).ConfigureAwait(false);
+                var result = await DockerCommand.RunAsync(_docker, "logs " + container.Id + " " + count, cancellationToken).ConfigureAwait(false);
                 foreach (string line in result.Lines)
                 {
                     if (result.Failed)

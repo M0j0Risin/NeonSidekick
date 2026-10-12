@@ -62,6 +62,25 @@ public static class DockerServerWords
         return false;
     }
 
+    /// <summary>
+    /// The LLM servers among <paramref name="all"/>, in its order (2026-10-11, the checklist's rule shared with <c>/docker</c>'s llm button):
+    /// a container <see cref="Matches"/> by <paramref name="words"/> (<see cref="Sorted"/> first) or named in <paramref name="ticked"/>
+    /// (the chosen <c>Docker server containers</c>, trimmed); an empty word list keeps every container.
+    /// </summary>
+    public static IReadOnlyList<DockerContainer> Servers(IReadOnlyList<DockerContainer> all, IReadOnlyList<string> words, IEnumerable<string>? ticked)
+    {
+        ArgumentNullException.ThrowIfNull(all);
+        ArgumentNullException.ThrowIfNull(words);
+        var sorted = Sorted(words);
+        if (sorted.Count == 0)
+        {
+            return all;
+        }
+
+        var chosen = (ticked ?? []).Select(n => (n ?? "").Trim()).ToHashSet(StringComparer.Ordinal);
+        return all.Where(c => chosen.Contains(c.Name) || Matches(c, sorted)).ToList();
+    }
+
     /// <summary><paramref name="word"/> trimmed: the form a word is saved and matched in.</summary>
     public static string Normalize(string word)
     {
