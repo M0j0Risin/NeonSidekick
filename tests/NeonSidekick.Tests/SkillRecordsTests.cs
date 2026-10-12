@@ -281,6 +281,11 @@ public class SkillRecordsTests : IDisposable
         Assert.Equal(t0.AddDays(5), changed(new Skill("csv", "d", SkillScope.Global, csv)));        // the file's: a hand edit since
         Assert.Equal(t0.AddDays(7), changed(new Skill("ext", "d", SkillScope.External, ext)));      // no record for an external skill
         Assert.Null(changed(new Skill("elsewhere", "d", SkillScope.Profile, Path.Combine(_roots.Profile, "elsewhere"))));   // ada's row, no file here
+
+        // The file's time read once per list (later on 2026-10-12): the same function keeps it; a list built afresh reads the new one.
+        File.SetLastWriteTimeUtc(Path.Combine(ext, SkillCatalog.FileName), t0.AddDays(9).UtcDateTime);
+        Assert.Equal(t0.AddDays(7), changed(new Skill("ext", "d", SkillScope.External, ext)));
+        Assert.Equal(t0.AddDays(9), _records.ChangedAt()(new Skill("ext", "d", SkillScope.External, ext)));
     }
 
     /// <summary>A skill the editor changes keeps the replaced text, so its version moves on (2026-10-07).</summary>

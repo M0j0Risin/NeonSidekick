@@ -376,7 +376,9 @@ public sealed class SkillRecords
     /// When each skill last changed, as the Offered tab shows it (2026-10-12, the user's ask): the later of its record's moment (the
     /// modified one, else the created, as <c>/skills purge</c>'s table) and its SKILL.md's last write, the records read once for the whole
     /// list. The file's time is what moves for an edit since the last <see cref="Reconcile"/>, which runs only at a load, a purge or a
-    /// reflection; an external skill has no record, so the file alone. Null with neither.
+    /// reflection; an external skill has no record, so the file alone. Null with neither. Each file's time is read once per list too
+    /// (later on 2026-10-12, the review's finding: the pane asks again at every redraw and filter keystroke, two file-system calls a
+    /// skill each time), kept in the function returned: a list built afresh reads afresh.
     /// </summary>
     public Func<Skill, DateTimeOffset?> ChangedAt()
     {
@@ -386,12 +388,13 @@ public sealed class SkillRecords
             records[(record.Scope, record.Folder)] = record.Modified > record.Created ? record.Modified : record.Created;
         }
 
+        var writes = new System.Collections.Concurrent.ConcurrentDictionary<string, DateTimeOffset?>(StringComparer.Ordinal);
         return skill =>
         {
             ArgumentNullException.ThrowIfNull(skill);
             DateTimeOffset? at = skill.Scope == SkillScope.External ? null
                 : records.TryGetValue((skill.Scope, skill.FolderName), out var recorded) ? recorded : null;
-            if (WrittenOf(skill.FilePath) is { } written && (at is null || written > at))
+            if (writes.GetOrAdd(skill.FilePath, WrittenOf) is { } written && (at is null || written > at))
             {
                 at = written;
             }
