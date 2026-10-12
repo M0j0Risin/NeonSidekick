@@ -309,7 +309,7 @@ public sealed class RunCommandTool : AIFunction
             return ex.Message;
         }
 
-        using (session)
+        await using (session.ConfigureAwait(false))
         {
             session.CloseInput();
             bool exited;

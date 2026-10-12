@@ -289,7 +289,7 @@ public sealed class ExecuteCodeTool : AIFunction
                 return ex.Message;
             }
 
-            using (session)
+            await using (session.ConfigureAwait(false))
             {
                 session.CloseInput();
                 bool exited;

@@ -267,7 +267,7 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        using (session)
+        await using (session.ConfigureAwait(false))
         {
             using var appended = new SemaphoreSlim(0);
             void Wake()

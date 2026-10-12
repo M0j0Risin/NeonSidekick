@@ -187,6 +187,20 @@ public sealed class ProcessToolTests : IDisposable
         Assert.Equal(session.Id + " exited 0 after 0.0 s (cmd): set /p name=Name? && call echo hello %name% — 1 new line\nName? hello bob", await Invoke(("action", "wait"), ("session_id", session.Id), ("timeout", 30)));
     }
 
+    /// <summary>The app's exit (2026-10-12, the shell review): every running child killed at once and gone by the time Dispose returns.</summary>
+    [WindowsFact]
+    public void Dispose_KillsEveryRunningChild_AndWaitsForThemTogether()
+    {
+        var sessions = Enumerable.Range(0, 4).Select(_ => Start("ping -n 60 127.0.0.1 >nul")).ToList();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        _registry.Dispose();
+
+        Assert.All(sessions, s => Assert.True(s.HasExited && s.Killed));
+        Assert.True(clock.Elapsed < ProcessSession.DisposeGrace, clock.Elapsed.ToString());
+        Assert.Empty(_registry.List());
+    }
+
     /// <summary>
     /// wait's until (2026-10-12, the shell review): it returns as soon as a line not yet polled holds the text, case ignored, the
     /// child still running; one already there and not polled returns at once; a prompt counts; one never seen waits out the timeout.

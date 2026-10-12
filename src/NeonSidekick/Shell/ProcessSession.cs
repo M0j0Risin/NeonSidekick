@@ -15,7 +15,7 @@ namespace NeonSidekick.Shell;
 /// clock drives a timeout in tests. A foreground run and a background one are the same object;
 /// only the registry's bookkeeping (<see cref="Notify"/>, <see cref="PollCursor"/>) differs.
 /// </summary>
-public sealed class ProcessSession : IDisposable
+public sealed class ProcessSession : IDisposable, IAsyncDisposable
 {
     private readonly Process _process;
     private readonly TimeProvider _time;
@@ -202,7 +202,33 @@ public sealed class ProcessSession : IDisposable
     /// is completed here as <c>-1</c>, the code a killed child gives, so a dispose never leaves a
     /// pending exit.
     /// </summary>
-    public void Dispose()
+    public void Dispose() => Dispose(DisposeGrace);
+
+    /// <summary>
+    /// <see cref="Dispose()"/> without blocking a thread on the grace (2026-10-12, the shell review: a tool's ESC and timeout paths
+    /// disposed on the turn's thread, up to <see cref="DisposeGrace"/> blocked there for a child slow to die): the kill, then the
+    /// exit awaited (the pumps drained too) for up to the grace on the real clock, then the handle — <see cref="Dispose(TimeSpan)"/>
+    /// with no wait left, whose <c>WaitForExit(0)</c> still raises a missed exit as the comment above needs.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        Kill();
+        CloseInput();
+        if (!HasExited)
+        {
+            await Task.WhenAny(_exited.Task, Task.Delay(DisposeGrace)).ConfigureAwait(false);
+        }
+
+        Dispose(TimeSpan.Zero);
+    }
+
+    /// <summary><see cref="Dispose()"/> with <paramref name="grace"/> for the kill to land: <see cref="ProcessRegistry.Dispose"/> kills all, waits for all at once, then disposes each with none.</summary>
+    internal void Dispose(TimeSpan grace)
     {
         if (_disposed)
         {
@@ -216,7 +242,7 @@ public sealed class ProcessSession : IDisposable
         {
             try
             {
-                _process.WaitForExit((int)DisposeGrace.TotalMilliseconds);
+                _process.WaitForExit((int)grace.TotalMilliseconds);
             }
             catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
             {

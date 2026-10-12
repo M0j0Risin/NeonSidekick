@@ -241,7 +241,11 @@ public sealed class ProcessRegistry : IDisposable
         }
     }
 
-    /// <summary>Kills what still runs and forgets everything: the app's exit.</summary>
+    /// <summary>
+    /// Kills what still runs and forgets everything: the app's exit. Every kill is sent first and the exits awaited together under
+    /// one <see cref="ProcessSession.DisposeGrace"/> (2026-10-12, the shell review: each session's own dispose waited its grace in
+    /// turn, so 16 children slow to die held the exit for 80 s), then each handle goes with no wait left.
+    /// </summary>
     public void Dispose()
     {
         List<ProcessSession> all;
@@ -263,9 +267,14 @@ public sealed class ProcessRegistry : IDisposable
             if (!session.HasExited)
             {
                 DiagnosticLog.Info(ShellKinds.Category, $"{session.Id}: killed at exit ({session.Kind}) {session.Label}");
+                session.Kill();
             }
+        }
 
-            session.Dispose();
+        Task.WaitAll(all.Select(s => (Task)s.Exited).ToArray(), ProcessSession.DisposeGrace);
+        foreach (var session in all)
+        {
+            session.Dispose(TimeSpan.Zero);
         }
     }
 }
