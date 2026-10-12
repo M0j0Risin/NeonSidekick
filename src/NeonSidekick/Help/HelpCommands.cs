@@ -226,7 +226,7 @@ public static class HelpCommands
         ]),
         new("/perfbar",
         [
-            new("/perfbar [off|text|gauge|spark|led]", "Show or hide the performance bar (*Show performance bar*). On its own it hides the bar, or shows it again with the meters it last had (CPU, RAM, GPU and VRAM the first time); `off` hides it; a look name sets that look and shows the bar. Works while a reply runs; the toolbar's 📈 and Ctrl+F run it too."),
+            new("/perfbar [off|text|gauge|led]", "Show or hide the performance bar (*Show performance bar*). On its own it hides the bar, or shows it again with the meters it last had (CPU, RAM, GPU and VRAM the first time); `off` hides it; a look name sets that look and shows the bar. Works while a reply runs; the toolbar's 📈 and Ctrl+F run it too."),
         ]),
         new("/plan",
         [

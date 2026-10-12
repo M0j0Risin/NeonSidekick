@@ -162,7 +162,7 @@ public sealed class SqliteWriteGateTests
     {
         Assert.Equal("read-only", SqliteModes.Default);
         Assert.Equal("read-only", new AppSettingsData().SqliteMode);
-        Assert.False(new AppSettingsData().SqliteSandboxFiles);   // off by default since 2026-10-05 (the user's call)
+        Assert.True(new AppSettingsData().SqliteSandboxFiles);   // off by default from 2026-10-05, on again since 2026-10-12 (the user's call)
         Assert.Equal(SqliteMode.ReadWrite, SqliteModes.Resolve(new AppSettingsData { SqliteMode = " Read-Write " }));
         Assert.Equal(SqliteMode.ReadOnly, SqliteModes.Resolve(new AppSettingsData { SqliteMode = "read-only" }));
         Assert.Equal(SqliteMode.ReadOnly, SqliteModes.Resolve(new AppSettingsData { SqliteMode = "yolo" }));

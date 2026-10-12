@@ -185,7 +185,7 @@ The app itself, this side of the connection, in three tabs: Chat, Sessions and B
 | Show header | Shows the banner at startup and after `/clear`, `/splash`, `/theme` and a profile switch. `/header` and Ctrl+Alt+H flip it. | on |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
 | Show toolbar | A checklist of the toolbar's glyphs and the working-directory path. `a` / `n` / `d` pick all, none or the default (`d` puts the order back too); none hides the row. Shift+↑↓ moves the item under the cursor a place and Shift+Home/End to the top or bottom, and the toolbar draws its glyphs in that order (the path stays last). Del unchecks. | Settings, Tools, Skills, Memory, Shell allowed commands, Shell police, Shell, Files, Image, Web, path (11 of 38) |
-| Show performance bar | A checklist of the bar's meters: **CPU**, **RAM**, **GPU**, **VRAM** (**GMEM** on a Mac), **NET**, **NET↓**, **NET↑** and **PROC** (background processes). The title row picks the look: **text**, **gauge**, **spark** or **led**. None hides the bar. Shift+↑↓ moves the meter under the cursor a place and Shift+Home/End to the top or bottom, and the bar draws its meters in that order; `d` puts back the default meters and order. Del unchecks. See [Performance bar](#performance-bar). | CPU, RAM, GPU, VRAM, `led` |
+| Show performance bar | A checklist of the bar's meters: **CPU**, **RAM**, **GPU**, **VRAM** (**GMEM** on a Mac), **NET**, **NET↓**, **NET↑** and **PROC** (background processes). The title row picks the look: **text**, **gauge** or **led**. None hides the bar. Shift+↑↓ moves the meter under the cursor a place and Shift+Home/End to the top or bottom, and the bar draws its meters in that order; `d` puts back the default meters and order. Del unchecks. See [Performance bar](#performance-bar). | CPU, RAM, GPU, VRAM, `led` |
 | Show home bar | Home Assistant rooms and devices as chips on a row under the performance bar, in the order you choose. Enter opens the picker. Needs *Home Assistant URL* and *Home Assistant API key*. See [Home bar](#home-bar). | off |
 | Menus max height | How much of the window a pane may take: `half-screen`, `three-quarters` or `full-screen`. Longer lists scroll. | `full-screen` |
 | Draft editor | The program `/draft` opens (`code --wait`, `notepad`…); it must wait for the file to close. Empty uses the system's `.txt` editor. | (default .txt editor) |
@@ -290,7 +290,7 @@ Settings every server reads, whatever its kind.
 | LLM context length | The context window in tokens, for the usage percentage. 0 takes the server's figure. | 0 (server) |
 | LLM mid-turn usage | The hint row's usage during a reply: `estimate` (live, marked `~`) or `last-known` (the last completed request's figures). | `last-known` |
 | LLM max turns | User turns the model sees before the oldest drop off (1–500). `auto` keeps them all while auto compact can run, else 24. | `auto` |
-| LLM auto compact (%) | How full the context may get before the next message compacts it (1–100; 0 = off). | 85 |
+| LLM auto compact (%) | How full the context may get before the next message compacts it (1–100; 0 = off). | 90 |
 | LLM compact type | What `/compact` does: `summary` folds older turns into a model-written summary; `prune` swaps their bulky tool results for stubs. | `summary` |
 | LLM compact keep recent | Recent user turns a compact keeps word for word (0–24). | 2 |
 | LLM compact show summary | After a compact, shows the summary (or the pruned results) and how many messages were kept. | off |
@@ -852,7 +852,7 @@ The other database menus and the UNC tab work like this one, over `mysql.json`, 
 | SQLite mode | `read-only`: the tools only read. `read-write`: `sqlite_execute` is offered too, one change per call, each allowed on a pane. See [Read-write mode](TOOLS.md#read-write-mode). | read-only |
 | SQLite statements allowed | Under `read-write`, the kinds of statement `sqlite_execute` may run (a checklist). With none ticked, it isn't offered. | changing data, creating, reading |
 | SQLite databases offered | Which databases of `sqlite.json` the model sees; none until ticked. | none |
-| SQLite sandbox files | The model may also open any SQLite file in the working directory by its path, and create one there. | off |
+| SQLite sandbox files | The model may also open any SQLite file in the working directory by its path, and create one there. | on |
 | SQLite add/edit database | The wizard (new or edit); its test opens the file read-only and counts the tables. | — |
 | SQLite %-mention enabled | Lists the SQLite databases in the `%` list too. | on |
 | SQLite max rows | As *SQL max rows*, for `sqlite_query`. | 100 |

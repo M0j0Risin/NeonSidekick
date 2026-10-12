@@ -1799,9 +1799,9 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        var (latest, history, _) = _perf.Read();
+        var (latest, _) = _perf.Read();
         int processes = items.Contains(PerfBarItems.Proc) ? _processes.Running : 0;
-        return PerfBar.Render(PerfBarMode.Parse(shown.PerformanceBarLook), items, latest, history, cells, processes, PerfBarItems.Order(shown.PerformanceBarOrder));
+        return PerfBar.Render(PerfBarMode.Parse(shown.PerformanceBarLook), items, latest, cells, processes, PerfBarItems.Order(shown.PerformanceBarOrder));
     }
 
     /// <summary>

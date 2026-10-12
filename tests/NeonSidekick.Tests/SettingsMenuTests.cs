@@ -1013,10 +1013,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("summary", SettingsMenu.FieldValue(SettingsField.LlmCompactType, data, _settings.ProfileDirectory));
         Assert.Equal("2 turns", SettingsMenu.FieldValue(SettingsField.LlmCompactKeepRecent, data, _settings.ProfileDirectory));
         Assert.Equal("1 turn", SettingsMenu.FieldValue(SettingsField.LlmCompactKeepRecent, new AppSettingsData { LlmCompactKeepRecent = 1 }, _settings.ProfileDirectory));
-        Assert.Equal("85 %", SettingsMenu.FieldValue(SettingsField.LlmAutoCompactPercent, data, _settings.ProfileDirectory));
+        Assert.Equal("90 %", SettingsMenu.FieldValue(SettingsField.LlmAutoCompactPercent, data, _settings.ProfileDirectory));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.LlmAutoCompactPercent, new AppSettingsData { LlmAutoCompactPercent = 0 }, _settings.ProfileDirectory));
         Assert.Equal("2", SettingsMenu.EditableValue(SettingsField.LlmCompactKeepRecent, data));
-        Assert.Equal("85", SettingsMenu.EditableValue(SettingsField.LlmAutoCompactPercent, data));
+        Assert.Equal("90", SettingsMenu.EditableValue(SettingsField.LlmAutoCompactPercent, data));
         Assert.Equal("must be 0 to 24 turns", SettingsMenu.LlmCompactKeepRecentRangeError);
         Assert.Equal("LLM max turns", SettingsMenu.FieldName(SettingsField.LlmMaxTurns));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmMaxTurns));
@@ -3338,7 +3338,7 @@ public partial class SettingsMenuTests : IDisposable
         // Every tab headed since later on 2026-10-10 (the user's ask), Sessions' save thinking up in the Saving run.
         AssertTabEnds("\n \n" + MenuLayout.Heading("Saving", 120) + "\n▸ Session logging             on\n  Session save thinking       off\n  Session retention (days)    forever\n" + MenuLayout.Heading("Titles", 120) + "\n  Session naming mode         model-written\n  Session show name           all-names\n" + MenuLayout.Heading("Search tool", 120) + "\n  Session tool                on\n  Session search max results  10 results\n", 120);
         // The Common tab (2026-10-10, the user's call; the LLM tab before): whole names, no row starting "Common ", in the LLM tab's five runs (2026-10-01, the user's call).
-        AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL                   (probe local ports)\n  LLM model                 (first listed)\n" + MenuLayout.Heading("How it answers", 120) + "\n  LLM reasoning             none\n  LLM show thinking         on\n" + MenuLayout.Heading("Tools and limits", 120) + "\n  LLM offer tools           on\n  LLM max tool iterations   10000 round trips\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n" + MenuLayout.Heading("Context", 120) + "\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM max turns             auto\n  LLM auto compact (%)      85 %\n  LLM compact type          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM tool compact type     compact\n" + MenuLayout.Heading("Pictures and verbs", 120) + "\n  LLM picture keep          20 pictures\n  LLM picture megabytes     24 MB\n  LLM use fun verbs         off\n", 120);
+        AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL                   (probe local ports)\n  LLM model                 (first listed)\n" + MenuLayout.Heading("How it answers", 120) + "\n  LLM reasoning             none\n  LLM show thinking         on\n" + MenuLayout.Heading("Tools and limits", 120) + "\n  LLM offer tools           on\n  LLM max tool iterations   10000 round trips\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n" + MenuLayout.Heading("Context", 120) + "\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM max turns             auto\n  LLM auto compact (%)      90 %\n  LLM compact type          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM tool compact type     compact\n" + MenuLayout.Heading("Pictures and verbs", 120) + "\n  LLM picture keep          20 pictures\n  LLM picture megabytes     24 MB\n  LLM use fun verbs         off\n", 120);
         // The Http tab (2026-10-10): the six rows only an OpenAI-compatible HTTP server reads, whole names too, in three runs.
         AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM server scan mode            local\n  LLM API key                     em•••\n" + MenuLayout.Heading("Thinking", 120) + "\n  LLM preserve thinking           off\n  LLM reasoning estimate          chars\n" + MenuLayout.Heading("Sampling", 120) + "\n  LLM sampling                    (server defaults)\n  LLM sampling from Hugging Face  off\n", 120);
         AssertTabEnds("\n \n" + MenuLayout.Heading("Read aloud", 120) + "\n▸ Output         on\n  Source         http\n  HTTP URL       http://localhost:8880/v1\n" + MenuLayout.Heading("Voices", 120) + "\n  Voice preview  on\n  Voice preset   neon\n  Voice          af_heart\n  Voice 2        am_eric\n  Voice mix      80 % / 20 %\n  Speed          1.2\n", 120);
@@ -4813,8 +4813,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains(SettingsMenu.SelectAllButton, Output);
         Assert.Contains("  · Show performance bar: CPU, RAM · gauge", Output);
         Assert.Equal(["◔ gauge"], SettingsMenu.PerfBarButtons(PerfBarStyle.Gauge).Where(b => b.On).Select(b => b.Title));
-        Assert.Equal(["⊞ select all", "⊠ select none", "⊡ default", "≡ text", "◔ gauge", "▁ spark", "● led"], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Title));   // the looks' glyphs since 2026-10-03
-        Assert.Equal(['a', 'n', 'd', 't', 'g', 's', 'l'], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Key!.Value));
+        Assert.Equal(["⊞ select all", "⊠ select none", "⊡ default", "≡ text", "◔ gauge", "● led"], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Title));   // the looks' glyphs since 2026-10-03
+        Assert.Equal(['a', 'n', 'd', 't', 'g', 'l'], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Key!.Value));
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
@@ -4840,7 +4840,7 @@ public partial class SettingsMenuTests : IDisposable
         _settings.Update(d =>
         {
             d.PerformanceBarItems = ["cpu", "netup"];
-            d.PerformanceBarLook = "spark";
+            d.PerformanceBarLook = "gauge";
         });
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
@@ -4852,9 +4852,9 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(PerfBarItems.Defaults, _settings.Current.PerformanceBarItems);
-        Assert.Equal("spark", _settings.Current.PerformanceBarLook);
+        Assert.Equal("gauge", _settings.Current.PerformanceBarLook);
         Assert.Contains(SettingsMenu.DefaultsButton, Output);
-        Assert.Contains("  · Show performance bar: CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · spark", Output);
+        Assert.Contains("  · Show performance bar: CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · gauge", Output);
         pane.Dispose();
     }
 

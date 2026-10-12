@@ -11,9 +11,6 @@ public enum PerfBarStyle
     /// <summary>A bar per meter in half-cell steps, coloured by load.</summary>
     Gauge,
 
-    /// <summary>The last samples per meter as a sparkline, coloured by load.</summary>
-    Spark,
-
     /// <summary>Ten segments per meter, lit ones along the theme's gradient.</summary>
     Led,
 }
@@ -23,8 +20,9 @@ public sealed record PerfToggle(List<string>? Items, List<string>? LastItems, st
 
 /// <summary>
 /// The performance bar's look (2026-09-29, the user's ask: a third bar, under the toolbar — "let's do all of them" for the
-/// look): the four words (<c>text</c>, <c>gauge</c>, <c>spark</c>, <c>led</c>) and their mapping to
-/// <see cref="PerfBarStyle"/>. Until 2026-09-30 the setting <c>Show performance bar</c> was one of these or <c>off</c>, the
+/// look): the three words (<c>text</c>, <c>gauge</c>, <c>led</c>) and their mapping to
+/// <see cref="PerfBarStyle"/>. A fourth, <c>spark</c> (the last ten readings as a sparkline), went on 2026-10-12 (the user's
+/// call), with the sampler's history only it read; a profile that saved it reads as <see cref="Default"/>. Until 2026-09-30 the setting <c>Show performance bar</c> was one of these or <c>off</c>, the
 /// switch and the look in one word; since, the meters shown are a checklist (<see cref="PerfBarItems"/>, the user's ask)
 /// and the look is <see cref="AppSettingsData.PerformanceBarLook"/>, picked on the same page's title row. <c>off</c> is a
 /// <c>/perfbar</c> word alone (<see cref="Words"/>). <see cref="Parse"/> is the one place the saved look becomes the enum: a
@@ -40,7 +38,7 @@ public static class PerfBarMode
     public const string OffWord = "off";
 
     /// <summary>The looks in the page's button order. Pinned.</summary>
-    public static readonly string[] Names = { "text", "gauge", "spark", "led" };
+    public static readonly string[] Names = { "text", "gauge", "led" };
 
     /// <summary><c>/perfbar</c>'s words, as its completion lists them: <see cref="OffWord"/>, then the looks.</summary>
     public static readonly string[] Words = [OffWord, .. Names];
@@ -52,7 +50,6 @@ public static class PerfBarMode
         {
             case "text": style = PerfBarStyle.Text; return true;
             case "gauge": style = PerfBarStyle.Gauge; return true;
-            case "spark": style = PerfBarStyle.Spark; return true;
             case "led": style = PerfBarStyle.Led; return true;
             default: style = PerfBarStyle.Led; return false;   // Default's, so a hand-edited word reads as a fresh profile does
         }
@@ -69,7 +66,6 @@ public static class PerfBarMode
     public static string Name(PerfBarStyle style) => style switch
     {
         PerfBarStyle.Gauge => "gauge",
-        PerfBarStyle.Spark => "spark",
         PerfBarStyle.Led => "led",
         _ => "text",
     };
@@ -82,7 +78,6 @@ public static class PerfBarMode
     {
         "text" => "≡ text",
         "gauge" => "◔ gauge",
-        "spark" => "▁ spark",
         "led" => "● led",
         _ => name,
     };
@@ -93,7 +88,6 @@ public static class PerfBarMode
         OffWord => "hide the performance bar",
         "text" => "the meters as numbers",
         "gauge" => "a bar per meter, coloured by load",
-        "spark" => "the last seconds per meter as a sparkline",
         "led" => "ten segments per meter along the theme's gradient",
         _ => "",
     };

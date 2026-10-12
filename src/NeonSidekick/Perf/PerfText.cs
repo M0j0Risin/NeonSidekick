@@ -19,7 +19,7 @@ public static class PerfText
         name == "off" ? "(" + Glyph + " performance bar off)" : "(" + Glyph + " performance bar on: " + name + ")";
 
     /// <summary><c>/perfbar</c> given something that is not a look. Pinned.</summary>
-    public const string UsageError = "/perfbar takes off, text, gauge, spark or led, or nothing to toggle.";
+    public const string UsageError = "/perfbar takes off, text, gauge or led, or nothing to toggle.";
 
     public const string CpuLabel = "CPU";
     public const string RamLabel = "RAM";
@@ -82,7 +82,7 @@ public static class PerfText
     /// <summary>Between two meters of the <c>text</c> look.</summary>
     public const string TextSeparator = " · ";
 
-    /// <summary>Between two meters of the drawn looks (gauge, spark, led).</summary>
+    /// <summary>Between two meters of the drawn looks (gauge, led).</summary>
     public const string MeterSeparator = "   ";
 
     /// <summary>
@@ -96,9 +96,6 @@ public static class PerfText
 
     /// <summary>The gauge's unfilled cells, a light line, dim.</summary>
     public const string GaugeTrack = "─";
-
-    /// <summary>The sparkline's eight heights, lowest first.</summary>
-    public static readonly string[] SparkLevels = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
 
     public const string LedOn = "▰";
 

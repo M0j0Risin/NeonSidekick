@@ -19,16 +19,16 @@ public sealed record PerfRow(IReadOnlyList<PerfSegment> Segments)
 /// in four looks — "let's do all of them"; since 2026-09-30 the meters the <c>Show performance bar</c> checklist checks,
 /// <see cref="PerfBarItems"/>, the network's among them — NET a share like the rest, NET↓ and NET↑ written as rates and
 /// drawn as shares of the link): <see cref="PerfBarStyle.Text"/> writes each meter's label and value;
-/// <see cref="PerfBarStyle.Gauge"/> draws a heavy line in half-cell steps (eighth blocks, a cell tall, until 2026-09-30); <see cref="PerfBarStyle.Spark"/> the last
-/// <see cref="PerfSampler.HistoryLength"/> readings as a sparkline; <see cref="PerfBarStyle.Led"/> ten segments lit along the
-/// theme's gradient. Values and the gauge's and sparkline's cells take the load's colour (<see cref="LoadColor"/>); labels,
+/// <see cref="PerfBarStyle.Gauge"/> draws a heavy line in half-cell steps (eighth blocks, a cell tall, until 2026-09-30);
+/// <see cref="PerfBarStyle.Led"/> ten segments lit along the theme's gradient (a sparkline look, spark, went on 2026-10-12, the
+/// user's call). Values and the gauge's cells take the load's colour (<see cref="LoadColor"/>); labels,
 /// separators and unlit cells are dim. Spectre's own charts (<c>BarChart</c>, <c>BreakdownChart</c>) are several rows of
 /// the transcript's flow and have no one-row form, so the glyphs are drawn here in the theme's colours. A meter the machine
 /// cannot read is left out. Too narrow a window shrinks the meters, then falls back to the text look, then cuts the row.
 /// Later on 2026-09-29 (the user's asks) every look is centred on its row (<see cref="Centered"/>; at the row's right for a
 /// few hours before), and the text look's values keep four cells as the drawn looks' do (<c>  8%</c>, <c>100%</c>), so
 /// nothing shifts as a value gains a digit; a cut row stays at the left. PROC (2026-10-05, the user's ask and pick) is a count, the
-/// model's background processes running, passed in: every look writes its label and number alone (no gauge, sparkline or LEDs —
+/// model's background processes running, passed in: every look writes its label and number alone (no gauge or LEDs —
 /// a count has no share to fill), dim at none and <see cref="Theme.Good"/> while any run. Pure: the tests drive it.
 /// </summary>
 public static class PerfBar
@@ -51,10 +51,9 @@ public static class PerfBar
     /// <paramref name="processes"/> is PROC's count, the background processes running. The meters go in <paramref name="order"/>
     /// (the user's, 2026-10-12, <see cref="PerfBarItems.Order"/>; <see cref="PerfBarItems.Names"/> when null).
     /// </summary>
-    public static PerfRow? Render(PerfBarStyle style, IReadOnlySet<string> items, PerfSnapshot latest, IReadOnlyList<PerfSnapshot> history, int cells, int processes = 0, IReadOnlyList<string>? order = null)
+    public static PerfRow? Render(PerfBarStyle style, IReadOnlySet<string> items, PerfSnapshot latest, int cells, int processes = 0, IReadOnlyList<string>? order = null)
     {
         ArgumentNullException.ThrowIfNull(items);
-        ArgumentNullException.ThrowIfNull(history);
         if (items.Count == 0)
         {
             return null;
@@ -65,7 +64,7 @@ public static class PerfBar
         {
             foreach (int width in MeterWidths)
             {
-                var drawn = Drawn(style, meters, history, width);
+                var drawn = Drawn(style, meters, width);
                 if (Width(drawn) <= cells)
                 {
                     return Centered(drawn, cells);
@@ -91,19 +90,15 @@ public static class PerfBar
         return (filled, string.Concat(Enumerable.Repeat(PerfText.GaugeTrack, cells - used)));
     }
 
-    /// <summary>The sparkline glyph for <paramref name="percent"/>: eight heights over 0–100. Pinned.</summary>
-    public static string SparkLevel(double percent) =>
-        PerfText.SparkLevels[Math.Clamp((int)(PerfMath.Clamp(percent) / 100 * PerfText.SparkLevels.Length), 0, PerfText.SparkLevels.Length - 1)];
-
     /// <summary>How many of <paramref name="cells"/> LED segments <paramref name="percent"/> lights (a started segment counts). Pinned.</summary>
     public static int LedsLit(double percent, int cells) => (int)Math.Ceiling(Math.Round(PerfMath.Clamp(percent) / 100 * cells, 6));
 
     /// <summary>
-    /// One meter as the row draws it: its label, the share that fills its gauge, colours it and picks its sparkline and LEDs
-    /// (<see cref="Read"/> for each reading of the history), and the value written after it — the share, or a network
-    /// direction's rate (2026-09-30). A count (2026-10-05, PROC) is written alone, in <see cref="Color"/>, with nothing drawn.
+    /// One meter as the row draws it: its label, the share that fills its gauge, colours it and lights its LEDs, and the value
+    /// written after it — the share, or a network direction's rate (2026-09-30). A count (2026-10-05, PROC) is written alone, in
+    /// <see cref="Color"/>, with nothing drawn.
     /// </summary>
-    private readonly record struct Meter(string Label, double Value, string ValueText, Func<PerfSnapshot, double?> Read, Color? Count = null);
+    private readonly record struct Meter(string Label, double Value, string ValueText, Color? Count = null);
 
     /// <summary>The colour a meter's value takes: a count's own, else the load's.</summary>
     private static Style ValueStyle(Meter meter) => new(meter.Count ?? LoadColor(meter.Value));
@@ -123,7 +118,7 @@ public static class PerfBar
                 case PerfBarItems.NetDown: Rate(PerfText.NetDownLabel, s => s.NetDown); break;
                 case PerfBarItems.NetUp: Rate(PerfText.NetUpLabel, s => s.NetUp); break;
                 case PerfBarItems.Proc:
-                    meters.Add(new Meter(PerfText.ProcLabel, 0, PerfText.Count(processes), _ => null, processes > 0 ? Theme.Good : Theme.Dim));
+                    meters.Add(new Meter(PerfText.ProcLabel, 0, PerfText.Count(processes), processes > 0 ? Theme.Good : Theme.Dim));
                     break;
             }
         }
@@ -134,7 +129,7 @@ public static class PerfBar
         {
             if (read(latest) is { } value)
             {
-                meters.Add(new Meter(label, PerfMath.Clamp(value), PerfText.Percent(value), read));
+                meters.Add(new Meter(label, PerfMath.Clamp(value), PerfText.Percent(value)));
             }
         }
 
@@ -143,7 +138,7 @@ public static class PerfBar
         {
             if (rate(latest) is { } value)
             {
-                meters.Add(new Meter(label, PerfMath.LinkPercent(value, latest.NetLink) ?? 0, PerfText.Rate(value), s => PerfMath.LinkPercent(rate(s), s.NetLink)));
+                meters.Add(new Meter(label, PerfMath.LinkPercent(value, latest.NetLink) ?? 0, PerfText.Rate(value)));
             }
         }
     }
@@ -165,7 +160,7 @@ public static class PerfBar
         return row;
     }
 
-    private static List<PerfSegment> Drawn(PerfBarStyle style, List<Meter> meters, IReadOnlyList<PerfSnapshot> history, int cells)
+    private static List<PerfSegment> Drawn(PerfBarStyle style, List<Meter> meters, int cells)
     {
         var row = new List<PerfSegment>();
         foreach (var meter in meters)
@@ -188,20 +183,6 @@ public static class PerfBar
                     var (filled, track) = Gauge(meter.Value, cells);
                     row.Add(new PerfSegment(filled, new Style(LoadColor(meter.Value))));
                     row.Add(new PerfSegment(track, Theme.DimText));
-                    break;
-                case PerfBarStyle.Spark:
-                    // The newest readings at the right; a history shorter than the meter leaves blanks at its left.
-                    var values = history.Select(meter.Read).OfType<double>().TakeLast(cells).ToList();
-                    if (values.Count < cells)
-                    {
-                        row.Add(new PerfSegment(new string(' ', cells - values.Count), Theme.DimText));
-                    }
-
-                    foreach (double value in values)
-                    {
-                        row.Add(new PerfSegment(SparkLevel(value), new Style(LoadColor(value))));
-                    }
-
                     break;
                 default:
                     int lit = LedsLit(meter.Value, cells);

@@ -4,8 +4,8 @@ namespace NeonSidekick.Perf;
 
 /// <summary>
 /// The performance bar's clock (2026-09-29): while the bar is on it reads its <see cref="IPerfSource"/> once every
-/// <see cref="Interval"/> on a timer of the injected <see cref="TimeProvider"/> and keeps the reading and the last
-/// <see cref="HistoryLength"/> of each meter (the sparklines'); off, the timer stops and the source is disposed, so an
+/// <see cref="Interval"/> on a timer of the injected <see cref="TimeProvider"/> and keeps the latest reading (the last ten
+/// too, for the spark look's sparklines, until 2026-10-12, when spark went); off, the timer stops and the source is disposed, so an
 /// unused bar costs nothing — NVML or PDH is opened only while it shows. The pane asks <see cref="Read"/> from its own
 /// tick, under its own lock; the sampling never runs there.
 /// </summary>
@@ -13,9 +13,6 @@ public sealed class PerfSampler : IDisposable
 {
     /// <summary>How often the machine is read. Pinned.</summary>
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(1);
-
-    /// <summary>How many readings a sparkline shows. Pinned.</summary>
-    public const int HistoryLength = 10;
 
     private const string Category = "Perf";
 
@@ -28,7 +25,6 @@ public sealed class PerfSampler : IDisposable
     private IPerfSource? _source;
     private ITimer? _timer;
     private PerfSnapshot _latest;
-    private readonly List<PerfSnapshot> _history = new(HistoryLength);
     private long _version;
     private bool _warned;
     private PerfReads _reads = PerfReads.All;
@@ -86,7 +82,6 @@ public sealed class PerfSampler : IDisposable
                 stopped = _source;
                 _source = null;
                 _latest = PerfSnapshot.None;
-                _history.Clear();
                 _version++;
             }
         }
@@ -100,12 +95,12 @@ public sealed class PerfSampler : IDisposable
         }
     }
 
-    /// <summary>The latest reading, the history oldest first (at most <see cref="HistoryLength"/>), and a version that moves with each reading.</summary>
-    public (PerfSnapshot Latest, IReadOnlyList<PerfSnapshot> History, long Version) Read()
+    /// <summary>The latest reading and a version that moves with each reading.</summary>
+    public (PerfSnapshot Latest, long Version) Read()
     {
         lock (_gate)
         {
-            return (_latest, _history.ToArray(), _version);
+            return (_latest, _version);
         }
     }
 
@@ -145,12 +140,6 @@ public sealed class PerfSampler : IDisposable
                 }
 
                 _latest = reading;
-                if (_history.Count == HistoryLength)
-                {
-                    _history.RemoveAt(0);
-                }
-
-                _history.Add(reading);
                 _version++;
             }
         }

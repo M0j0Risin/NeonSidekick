@@ -398,7 +398,7 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// The performance bar's look (later on 2026-09-29, the user's ask: "the last look used"; the look itself since
-    /// 2026-09-30): one of <see cref="App.PerfBarMode.Names"/> — <c>text</c>, <c>gauge</c>, <c>spark</c> or <c>led</c> (the
+    /// 2026-09-30): one of <see cref="App.PerfBarMode.Names"/> — <c>text</c>, <c>gauge</c> or <c>led</c> (<c>spark</c> until 2026-10-12, now read as <c>led</c>; the
     /// default since 2026-10-02, the user's ask; <c>text</c> until then, which a profile that saved it keeps) — picked on the
     /// <c>Show performance bar</c> page's title row or by <c>/perfbar &lt;look&gt;</c>. Anything else reads as <c>led</c>. No row of
     /// its own, no variable.
@@ -563,9 +563,9 @@ public sealed class AppSettingsData
     /// <summary>
     /// The share of the context window (percent) at which the next message compacts first, once
     /// the last reply's context reached it; 0 turns the automatic compact off. Needs a known window
-    /// (<see cref="LlmContextLength"/> or the server's figure). No variable.
+    /// (<see cref="LlmContextLength"/> or the server's figure). No variable. 90 by default since 2026-10-12 (the user's call), 85 until then.
     /// </summary>
-    public int LlmAutoCompactPercent { get; set; } = 85;
+    public int LlmAutoCompactPercent { get; set; } = 90;
 
     /// <summary>
     /// How many user turns the model sees before the oldest drop off (2026-09-27, the user's call; a fixed 24
@@ -2013,10 +2013,11 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Whether a SQLite tool may also open any file in the working directory by its path (2026-10-04, the user's call: named and
-    /// sandbox); the sandbox's own rule refuses a path outside it. On by default until 2026-10-05, off since (the user's call): a
-    /// database is offered by name in sqlite.json unless the user lets the working directory's files in; a saved value stands.
+    /// sandbox); the sandbox's own rule refuses a path outside it. On by default until 2026-10-05, off from then (the user's call:
+    /// a database offered by name in sqlite.json unless the user let the working directory's files in), on again since 2026-10-12
+    /// (the user's call); a saved value stands.
     /// </summary>
-    public bool SqliteSandboxFiles { get; set; }
+    public bool SqliteSandboxFiles { get; set; } = true;
 
     /// <summary>Whether <c>%</c> and part of a name lists the <c>sqlite.json</c> databases on the input line too; on by default.</summary>
     public bool SqlitePercentMention { get; set; } = true;

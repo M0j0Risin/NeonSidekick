@@ -76,8 +76,8 @@ public class ItemOrderTests
         List<string> saved = ["ram", "cpu", "gpu", "vram", "net", "netdown", "netup", "proc"];
         var items = new HashSet<string>(["cpu", "ram"], StringComparer.Ordinal);
         var reading = new PerfSnapshot(34, 50, null, null);
-        string usual = PerfBar.Render(PerfBarStyle.Text, items, reading, [], 120)!.Text;
-        string moved = PerfBar.Render(PerfBarStyle.Text, items, reading, [], 120, order: PerfBarItems.Order(saved))!.Text;
+        string usual = PerfBar.Render(PerfBarStyle.Text, items, reading, 120)!.Text;
+        string moved = PerfBar.Render(PerfBarStyle.Text, items, reading, 120, order: PerfBarItems.Order(saved))!.Text;
         Assert.True(usual.IndexOf("CPU", StringComparison.Ordinal) < usual.IndexOf("RAM", StringComparison.Ordinal));
         Assert.True(moved.IndexOf("RAM", StringComparison.Ordinal) < moved.IndexOf("CPU", StringComparison.Ordinal));
 

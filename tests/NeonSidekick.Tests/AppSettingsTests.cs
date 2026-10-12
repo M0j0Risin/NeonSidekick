@@ -1520,7 +1520,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("summary", s.LlmCompactType);
         Assert.Equal(2, s.LlmCompactKeepRecent);
         Assert.False(s.LlmCompactShowSummary);   // 2026-09-21: the one notice line unless asked
-        Assert.Equal(85, s.LlmAutoCompactPercent);
+        Assert.Equal(90, s.LlmAutoCompactPercent);   // 85 until 2026-10-12
         Assert.Equal(0, s.LlmMaxTurns);
         Assert.Equal(10000, s.LlmMaxToolIterations);
         Assert.Equal("small", s.ImageThumbnailSize);

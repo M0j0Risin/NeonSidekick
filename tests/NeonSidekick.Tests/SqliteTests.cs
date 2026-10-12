@@ -82,7 +82,7 @@ public sealed class SqliteToolsTests : IDisposable
 {
     private readonly string _dir = Directory.CreateTempSubdirectory("neon-sqlite-").FullName;
     private readonly ManualTimeProvider _time = new();
-    private readonly AppSettingsData _settings = new() { SqliteTools = true, SqliteSandboxFiles = true, SqliteDatabasesOffered = ["shop", "notes"] };   // the sandbox off by default since 2026-10-05
+    private readonly AppSettingsData _settings = new() { SqliteTools = true, SqliteSandboxFiles = true, SqliteDatabasesOffered = ["shop", "notes"] };   // the sandbox on by default again since 2026-10-12, set here all the same
     private readonly string _profile;
     private readonly string _home;
     private readonly string _work;

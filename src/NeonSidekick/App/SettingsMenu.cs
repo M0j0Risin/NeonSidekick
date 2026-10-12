@@ -3083,7 +3083,7 @@ internal sealed partial class SettingsMenu
     /// Show performance bar's buttons (2026-09-30, the user's ask: the look on the checklist's own screen):
     /// <see cref="ChecklistButtons"/>, then <see cref="DefaultsButton"/> (index 2, 2026-10-02, the user's ask, as Show
     /// toolbar has: <see cref="PerfBarItems.Defaults"/>), then one per look (<see cref="PerfBarMode.Names"/>, from index
-    /// <see cref="PerfBarLookIndex"/>, keys T, G, S and L), the one in force lit — a radio group, as the embedded model lists'
+    /// <see cref="PerfBarLookIndex"/>, keys T, G and L; S was spark's until 2026-10-12), the one in force lit — a radio group, as the embedded model lists'
     /// size filters are. Pinned.
     /// </summary>
     public static IReadOnlyList<MenuButton> PerfBarButtons(PerfBarStyle look) =>
@@ -8237,7 +8237,7 @@ internal sealed partial class SettingsMenu
     /// The performance bar's page under the settings list (2026-09-30, the user's ask: the toolbar's checklist, and the look on
     /// the same screen): one <see cref="PerfBarItems.Label"/> row per meter, Enter or Space flipping it and saving at once,
     /// nothing checked no bar; on the title row the checklists' select all and select none, default (2026-10-02, the user's
-    /// ask: CPU, RAM, GPU and VRAM), then the four looks (<see cref="PerfBarButtons"/>), the one in force lit — the embedded model lists' radio buttons' shape. The list is
+    /// ask: CPU, RAM, GPU and VRAM), then the three looks (<see cref="PerfBarButtons"/>), the one in force lit — the embedded model lists' radio buttons' shape. The list is
     /// re-shown until ESC, the bar redrawing under it. Without the pane there are no buttons, and <c>/perfbar &lt;look&gt;</c>
     /// sets the look. Since 2026-10-12 (the user's ask, the home bar picker's move keys) the rows are the bar's order
     /// (<see cref="PerfBarItems.Order"/>): Shift+↑↓ moves the cursor's meter a place, Shift+Home/End to the top or the bottom;

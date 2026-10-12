@@ -12845,7 +12845,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.ContextGuardFor(data, null));
         Assert.Null(ChatScreen.ContextGuardFor(data, new ContextLength(0, "x")));
         Assert.Equal(ToolCompactMode.Compact, ChatScreen.ContextGuardFor(new AppSettingsData(), new ContextLength(100, "x"))!.Mode);   // the default type since 2026-09-28
-        Assert.Equal(85, ChatScreen.ContextGuardFor(new AppSettingsData(), new ContextLength(100, "x"))!.Percent);   // the default share
+        Assert.Equal(90, ChatScreen.ContextGuardFor(new AppSettingsData(), new ContextLength(100, "x"))!.Percent);   // the default share
     }
 
     [Fact]

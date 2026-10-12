@@ -118,7 +118,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/msgclear` | Clears the profile's message history (the ↑/↓ recall), after a confirmation. |
 | `/new` | Starts a new conversation without clearing the screen. |
 | `/open <file>` | Opens a file from the working directory in its default app (not a folder). |
-| `/perfbar [off\|text\|gauge\|spark\|led]` | Hides the performance bar or shows it again; a look name sets that look. |
+| `/perfbar [off\|text\|gauge\|led]` | Hides the performance bar or shows it again; a look name sets that look. |
 | `/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]` | Prints a file from the working directory (see [Printing](TOOLS.md#printing)); the printer matches by name or part of one. *Print action policy* never applies. On a Mac a PDF prints as it is (no landscape) and Office files are refused. |
 | `/print reply [<options>]` | Prints the last reply as formatted Markdown. |
 | `/print printers` | Lists the printers, marking the system default and *Print default printer*. `/print` alone shows its usage and the list. |
