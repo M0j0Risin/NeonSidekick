@@ -321,6 +321,10 @@ public static class ShellText
     public static string UnknownTool(string tool) => $"Error: unknown tool {tool}";
     public static string ToolCallLimit(int max) => $"Error: this run's tool call limit ({N(max)}) is reached";
     public const string BadToken = "Error: the bridge token did not match";
+
+    /// <summary><c>Error: the request is over 32 MB</c>: a bridge request past <see cref="Bridge.BridgeServer.MaxRequestBytes"/> (2026-10-12). Pinned.</summary>
+    public static string RequestTooLarge(int maxBytes) =>
+        maxBytes >= 1024 * 1024 ? $"Error: the request is over {N(maxBytes / (1024 * 1024))} MB" : $"Error: the request is over {N(maxBytes)} bytes";
     public const string BadRequest = "Error: the request is not {\"token\", \"tool\", \"arguments\"} on one line";
     public static string CouldNotWriteScript(string detail) => $"Error: could not write the script ({detail})";
 

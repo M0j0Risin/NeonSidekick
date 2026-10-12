@@ -419,6 +419,20 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.Equal(2, bridge.Calls);   // the refused ones never counted
     }
 
+    /// <summary>The request cap (2026-10-12, the shell review): a line past it is answered with the sentence and never dispatched.</summary>
+    [Fact]
+    public async Task Bridge_ALinePastTheCap_IsRefused_AndNeverDispatched()
+    {
+        int calls = 0;
+        await using var bridge = BridgeServer.Start((tool, _, _) => { calls++; return Task.FromResult("ok"); }, maxCalls: 5, maxRequestBytes: 100);
+        string line = "{\"token\":\"" + bridge.Token + "\",\"tool\":\"echo\",\"arguments\":{\"text\":\"" + new string('x', 200) + "\"}}";
+
+        Assert.Equal("{\"error\":\"Error: the request is over 100 bytes\"}", await SendAsync(bridge, line));
+        Assert.Equal(0, calls);
+        Assert.Equal("Error: the request is over 32 MB", ShellText.RequestTooLarge(BridgeServer.MaxRequestBytes));
+        Assert.Equal(32 * 1024 * 1024, BridgeServer.MaxRequestBytes);
+    }
+
     [Fact]
     public async Task Bridge_AThrowingDispatch_IsTheFailedSentence_AndTheArgumentsAreJsonElements()
     {

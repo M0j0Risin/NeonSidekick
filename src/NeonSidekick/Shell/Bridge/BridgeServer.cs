@@ -32,16 +32,18 @@ public sealed class BridgeServer : IAsyncDisposable
     private readonly TcpListener _listener;
     private readonly BridgeDispatch _dispatch;
     private readonly int _maxCalls;
+    private readonly int _maxRequestBytes;
     private readonly CancellationTokenSource _stop = new();
     private readonly Task _accepting;
     private int _calls;
 
-    private BridgeServer(TcpListener listener, string token, BridgeDispatch dispatch, int maxCalls)
+    private BridgeServer(TcpListener listener, string token, BridgeDispatch dispatch, int maxCalls, int maxRequestBytes)
     {
         _listener = listener;
         Token = token;
         _dispatch = dispatch;
         _maxCalls = maxCalls;
+        _maxRequestBytes = maxRequestBytes;
         _accepting = AcceptAsync();
     }
 
@@ -57,15 +59,26 @@ public sealed class BridgeServer : IAsyncDisposable
     public const string AddressVariable = "NEONSIDEKICK_BRIDGE_ADDRESS";
     public const string TokenVariable = "NEONSIDEKICK_BRIDGE_TOKEN";
 
+    /// <summary>
+    /// The longest request line read (2026-10-12, the shell review: a script that sent one line without its newline grew the
+    /// app's memory as long as it wrote); room for a large <c>write_file</c>. Past it the call is answered
+    /// <see cref="ShellText.RequestTooLarge"/> and the connection closed. Pinned.
+    /// </summary>
+    public const int MaxRequestBytes = 32 * 1024 * 1024;
+
     /// <summary>Binds the listener and starts accepting.</summary>
-    public static BridgeServer Start(BridgeDispatch dispatch, int maxCalls)
+    public static BridgeServer Start(BridgeDispatch dispatch, int maxCalls) => Start(dispatch, maxCalls, MaxRequestBytes);
+
+    /// <summary><see cref="Start(BridgeDispatch, int)"/> with another request cap: the tests'.</summary>
+    internal static BridgeServer Start(BridgeDispatch dispatch, int maxCalls, int maxRequestBytes)
     {
         ArgumentNullException.ThrowIfNull(dispatch);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxCalls, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxRequestBytes, 1);
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         string token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-        return new BridgeServer(listener, token, dispatch, maxCalls);
+        return new BridgeServer(listener, token, dispatch, maxCalls, maxRequestBytes);
     }
 
     private async Task AcceptAsync()
@@ -93,8 +106,9 @@ public sealed class BridgeServer : IAsyncDisposable
             try
             {
                 using var stream = client.GetStream();
-                string line = await ReadLineAsync(stream, _stop.Token).ConfigureAwait(false);
-                var response = await AnswerAsync(line, _stop.Token).ConfigureAwait(false);
+                var response = await ReadLineAsync(stream, _maxRequestBytes, _stop.Token).ConfigureAwait(false) is { } line
+                    ? await AnswerAsync(line, _stop.Token).ConfigureAwait(false)
+                    : new BridgeResponse { Error = ShellText.RequestTooLarge(_maxRequestBytes) };
                 byte[] bytes = Encoding.UTF8.GetBytes(Serialize(response) + "\n");
                 await stream.WriteAsync(bytes, _stop.Token).ConfigureAwait(false);
                 await stream.FlushAsync(_stop.Token).ConfigureAwait(false);
@@ -166,7 +180,8 @@ public sealed class BridgeServer : IAsyncDisposable
         return result.StartsWith("Error:", StringComparison.Ordinal) ? new BridgeResponse { Error = result } : new BridgeResponse { Result = result };
     }
 
-    private static async Task<string> ReadLineAsync(NetworkStream stream, CancellationToken cancellationToken)
+    /// <summary>The request line, its newline off; null once it passes <paramref name="maxBytes"/>.</summary>
+    private static async Task<string?> ReadLineAsync(NetworkStream stream, int maxBytes, CancellationToken cancellationToken)
     {
         var buffer = new MemoryStream();
         var chunk = new byte[16 * 1024];
@@ -179,7 +194,13 @@ public sealed class BridgeServer : IAsyncDisposable
             }
 
             int newline = Array.IndexOf(chunk, (byte)'\n', 0, read);
-            buffer.Write(chunk, 0, newline < 0 ? read : newline);
+            int take = newline < 0 ? read : newline;
+            if (buffer.Length + take > maxBytes)
+            {
+                return null;
+            }
+
+            buffer.Write(chunk, 0, take);
             if (newline >= 0)
             {
                 break;
