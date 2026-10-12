@@ -965,6 +965,20 @@ public sealed partial class InputLine
                 _cursor = DraftIndex(at);
                 _anchor = _cursor;
 
+                // A second click on the gutter — the prompt glyph or a continuation row's indent — selects the whole draft
+                // (2026-10-12, the user's ask), Ctrl+A's selection; the word pairing below stays the text's.
+                if (click.X < TextCells.Width(PromptGlyph))
+                {
+                    if (hintClicks.Second(DraftGutterPairKey) && _text.Length > 0)
+                    {
+                        _anchor = 0;
+                        _cursor = _text.Length;
+                    }
+
+                    Redraw();
+                    return EditOutcome.Handled;
+                }
+
                 // A second click on the same word within the interval selects it (2026-09-30, the user's ask): paired by the
                 // word's start, so the two presses may land on different letters of it. The word is the one under the
                 // pointer, not the caret's side of it: the whole of a paste's label is its token, and past a row's end

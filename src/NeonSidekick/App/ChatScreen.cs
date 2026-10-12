@@ -2514,8 +2514,9 @@ internal sealed partial class ChatScreen
             skills = _catalog.All;
         }
 
-        // Each skill's version from the records (2026-10-07): the Offered tab's v column.
-        return new SkillsFacts(effective.AgentSkills, skills, effective.AgentSkills ? _catalog.Shadowed : [], effective.AgentSkills ? _catalog.Problems : [], _catalog.Roots, _skillRecords.Versions());
+        // Each skill's version from the records (2026-10-07): the Offered tab's v column; and when it last changed (2026-10-12).
+        return new SkillsFacts(effective.AgentSkills, skills, effective.AgentSkills ? _catalog.Shadowed : [], effective.AgentSkills ? _catalog.Problems : [], _catalog.Roots, _skillRecords.Versions(),
+            _skillRecords.ChangedAt(), _skillRecords.Zone);
     }
 
     /// <summary>The refusal for <c>/learn</c> while the setting <c>Agent skills</c> is off (<c>/skill &lt;name&gt;</c>'s too, until later on 2026-09-18). Pinned.</summary>

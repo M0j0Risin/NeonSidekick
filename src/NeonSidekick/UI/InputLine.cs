@@ -376,6 +376,13 @@ public sealed partial class InputLine
     /// </summary>
     public static int DraftWordPairKey(int wordStart) => 1_000_000 + wordStart;
 
+    /// <summary>
+    /// What two clicks on the draft's gutter (the prompt glyph, or a continuation row's indent) must share to pair into the whole
+    /// draft's selection (2026-10-12, the user's ask): above every <see cref="HintPairKey"/> and below <see cref="DraftWordPairKey"/>'s
+    /// first, so a press on the glyph and one on the first letter never pair. Pinned.
+    /// </summary>
+    public const int DraftGutterPairKey = 500_000;
+
     /// <summary>What a double-click on a transcript picture does with its id (later on 2026-09-24): the screen's opener; null = nothing.</summary>
     public Action<int>? OpenPicture { get; set; }
 

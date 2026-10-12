@@ -372,6 +372,46 @@ public sealed class SkillRecords
         };
     }
 
+    /// <summary>
+    /// When each skill last changed, as the Offered tab shows it (2026-10-12, the user's ask): the later of its record's moment (the
+    /// modified one, else the created, as <c>/skills purge</c>'s table) and its SKILL.md's last write, the records read once for the whole
+    /// list. The file's time is what moves for an edit since the last <see cref="Reconcile"/>, which runs only at a load, a purge or a
+    /// reflection; an external skill has no record, so the file alone. Null with neither.
+    /// </summary>
+    public Func<Skill, DateTimeOffset?> ChangedAt()
+    {
+        var records = new Dictionary<(SkillScope, string), DateTimeOffset>(SkillRecordStore.FolderKey.Comparer);
+        foreach (var record in _store.List(CurrentProfile))
+        {
+            records[(record.Scope, record.Folder)] = record.Modified > record.Created ? record.Modified : record.Created;
+        }
+
+        return skill =>
+        {
+            ArgumentNullException.ThrowIfNull(skill);
+            DateTimeOffset? at = skill.Scope == SkillScope.External ? null
+                : records.TryGetValue((skill.Scope, skill.FolderName), out var recorded) ? recorded : null;
+            if (WrittenOf(skill.FilePath) is { } written && (at is null || written > at))
+            {
+                at = written;
+            }
+
+            return at;
+        };
+
+        static DateTimeOffset? WrittenOf(string path)
+        {
+            try
+            {
+                return File.Exists(path) ? new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero) : null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+    }
+
     /// <summary>The newest revision of <paramref name="skill"/>, or null when there is none.</summary>
     public SkillRevision? LatestRevision(Skill skill)
     {

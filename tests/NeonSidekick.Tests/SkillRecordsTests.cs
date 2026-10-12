@@ -256,6 +256,33 @@ public class SkillRecordsTests : IDisposable
         Assert.Null(versions(new Skill("ext", "d", SkillScope.External, Path.Combine(_roots.External, "ext"))));
     }
 
+    /// <summary>
+    /// The Offered tab's changed column (2026-10-12): the later of the record's moment and the SKILL.md's last write — the record's when
+    /// an app write is newer than the file, the file's for a hand edit since the reconcile — the folder matched ignoring case; an external
+    /// skill the file alone; null with neither, and another profile's record is not in view.
+    /// </summary>
+    [Fact]
+    public void ChangedAt_IsTheLaterOfTheRecordAndTheFile_TheFileAloneForAnExternal()
+    {
+        var t0 = new DateTimeOffset(2026, 1, 1, 9, 0, 0, TimeSpan.Zero);
+        string haiku = Write(_roots.Profile, "haiku");
+        string csv = Write(_roots.Global, "csv");
+        string ext = Write(_roots.External, "ext");
+        File.SetLastWriteTimeUtc(Path.Combine(haiku, SkillCatalog.FileName), t0.AddDays(-30).UtcDateTime);
+        File.SetLastWriteTimeUtc(Path.Combine(csv, SkillCatalog.FileName), t0.AddDays(5).UtcDateTime);
+        File.SetLastWriteTimeUtc(Path.Combine(ext, SkillCatalog.FileName), t0.AddDays(7).UtcDateTime);
+        _store.Insert(SkillScope.Profile, "neon", "Haiku", "haiku", t0, t0.AddDays(2));
+        _store.Insert(SkillScope.Global, "", "csv", "csv", t0, t0);
+        _store.Insert(SkillScope.Profile, "ada", "elsewhere", "elsewhere", t0, t0);
+
+        var changed = _records.ChangedAt();
+
+        Assert.Equal(t0.AddDays(2), changed(new Skill("haiku", "d", SkillScope.Profile, haiku)));   // the record's: newer than the file
+        Assert.Equal(t0.AddDays(5), changed(new Skill("csv", "d", SkillScope.Global, csv)));        // the file's: a hand edit since
+        Assert.Equal(t0.AddDays(7), changed(new Skill("ext", "d", SkillScope.External, ext)));      // no record for an external skill
+        Assert.Null(changed(new Skill("elsewhere", "d", SkillScope.Profile, Path.Combine(_roots.Profile, "elsewhere"))));   // ada's row, no file here
+    }
+
     /// <summary>A skill the editor changes keeps the replaced text, so its version moves on (2026-10-07).</summary>
     [Fact]
     public void Versions_MoveOn_WithAnEdit()

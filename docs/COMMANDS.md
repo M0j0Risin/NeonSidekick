@@ -168,7 +168,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/shopping print [<store>] [verbose]` | Prints the same list with `/print`'s printer and font settings. |
 | `/shopping reindex [<store>]` | Re-reads the store's reference documents (also done whenever a file changes). |
 | `/shortcut [<profile>] [--log]` | Puts a desktop shortcut that starts the app on this profile (or the one named); `--log` adds a log. On a Mac it is a `.command` file. See [Desktop shortcuts](#desktop-shortcuts). |
-| `/skills` | Lists the skills and edits the skill, reflection and project-file settings. The Offered tab shows each skill's version (🔒 [locked](SETTINGS.md#locking-a-skill), ⛔ [disabled](SETTINGS.md#disabling-a-skill)); a second strip picks the scope, and typing filters. |
+| `/skills` | Lists the skills and edits the skill, reflection and project-file settings. The Offered tab shows each skill's version (🔒 [locked](SETTINGS.md#locking-a-skill), ⛔ [disabled](SETTINGS.md#disabling-a-skill)) and when it last changed; a second strip picks the scope, and typing filters. |
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. Refused during a reply. See [Installing skills](SETTINGS.md#installing-skills). |
 | `/skills purge list\|commit <age>` | `list` shows the skills unused for that long; `commit` deletes them after a yes/no. See [Skill records and purging unused skills](SETTINGS.md#skill-records-and-purging-unused-skills). |
 | `/splash` | Starts a new conversation and shows the splash screen. |

@@ -1990,6 +1990,92 @@ public class InputLineTests : IDisposable
         Assert.True(InputLine.DraftWordPairKey(0) > InputLine.HintPairKey(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "", 500)));
     }
 
+    // ── A double-click on the gutter selects the whole draft (2026-10-12) ───
+
+    [Theory]
+    [InlineData(0, 1)]   // the glyph's two cells
+    [InlineData(0, 0)]
+    [InlineData(1, 1)]
+    public async Task ADoubleClickOnThePromptGlyph_SelectsTheWholeDraft_AndTypingReplacesIt(int first, int second)
+    {
+        var (line, keys, _) = WordClickLine();
+        keys.Push(Chars("the quick brown fox"));
+        keys.PushClick(first, 100).PushClick(second, 100);
+        keys.Push(Chars("x")).Push(Keys.Enter);
+
+        Assert.Equal("x", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+    }
+
+    [Fact]
+    public async Task ADoubleClickOnAContinuationIndent_SelectsTheWholeDraft()
+    {
+        // The wrapped draft's geometry (ADragAcrossAWrappedDraft_SelectsAcrossTheRows): row 0 at 99, row 1 at 100.
+        _console.Profile.Height = 10;
+        ScreenPane? pane = null;
+        pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 99 + pane!.CursorInputRow), new ManualTimeProvider());
+        pane.Show();
+        var keys = new ScriptedInput();
+        var copied = new List<string>();
+        var line = new InputLine(pane, new KeySource(keys, TimeSpan.FromMilliseconds(1)), copyToClipboard: text => { copied.Add(text); return true; });
+
+        string text = string.Join(' ', Enumerable.Repeat("word", 12));   // two rows at width 40
+        keys.Push(Chars(text));
+        keys.PushClick(0, 100).PushClick(1, 100).Push(Keys.Ctrl(ConsoleKey.C)).Push(Keys.Enter);
+
+        await line.ReadAsync();
+
+        Assert.Equal([text], copied);
+    }
+
+    [Fact]
+    public async Task AClickOnTheGlyph_ThenOnTheFirstWord_DoNotPair()
+    {
+        var (line, keys, _) = WordClickLine();
+        keys.Push(Chars("the quick"));
+        keys.PushClick(0, 100).PushClick(Col(1), 100).Push(Keys.Char('X')).Push(Keys.Enter);   // the glyph, then the h
+
+        Assert.Equal("tXhe quick", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+
+        (line, keys, _) = WordClickLine();
+        keys.Push(Chars("the quick"));
+        keys.PushClick(Col(1), 100).PushClick(0, 100).Push(Keys.Char('X')).Push(Keys.Enter);   // the h, then the glyph
+
+        Assert.Equal("Xthe quick", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+    }
+
+    [Fact]
+    public async Task TwoClicksOnTheGlyph_TooFarApart_OnlyPutTheCursorFirst()
+    {
+        var (line, keys, time) = WordClickLine();
+        keys.Push(Chars("the quick"));
+        keys.PushClick(0, 100);
+        keys.OnWait = () =>
+        {
+            keys.OnWait = null;
+            time.Advance(DoubleClick.Interval + TimeSpan.FromMilliseconds(1));
+            keys.PushClick(1, 100).Push(Keys.Char('X')).Push(Keys.Enter);
+        };
+
+        Assert.Equal("Xthe quick", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+    }
+
+    [Fact]
+    public async Task ADoubleClickOnTheGlyph_OfAnEmptyDraft_SelectsNothing()
+    {
+        var (line, keys, _) = WordClickLine();
+        keys.PushClick(0, 100).PushClick(1, 100).Push(Chars("x")).Push(Keys.Enter);
+
+        Assert.Equal("x", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+    }
+
+    [Fact]
+    public void DraftGutterPairKey_IsPinned_BetweenTheHintKeysAndTheWords()
+    {
+        Assert.Equal(500_000, InputLine.DraftGutterPairKey);
+        Assert.True(InputLine.DraftGutterPairKey > InputLine.HintPairKey(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "", 500)));
+        Assert.True(InputLine.DraftGutterPairKey < InputLine.DraftWordPairKey(0));
+    }
+
     [Theory]
     [InlineData(ConsoleKey.Delete)]
     [InlineData(ConsoleKey.Backspace)]

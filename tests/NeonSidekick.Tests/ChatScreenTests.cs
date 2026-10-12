@@ -20860,6 +20860,9 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => d.ProjectFile = true);
     }
 
+    // The Offered tab's changed cell (2026-10-12) as a pattern: the date is the SKILL.md's real write, not the fixture's clock.
+    private const string SkillChanged = @"\d{4}-\d\d-\d\d \d\d:\d\d  ";
+
     [Fact]
     public async Task Skill_Command_Bare_WithoutThePane_PrintsTheThreeTabs()
     {
@@ -20873,7 +20876,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · Offered\n  ·   haiku  profile  v1  Writes haiku. Use when asked for one.\n  · Reflection\n", output);   // Reflection right after Offered since 2026-09-22
+        Assert.Matches(@"  · Offered\n  ·   haiku  profile  v1  " + SkillChanged + @"Writes haiku\. Use when asked for one\.\n  · Reflection\n", output);   // Reflection right after Offered since 2026-09-22
         Assert.Contains("  · Options\n  ·   Agent skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n", output);   // the Options section last (2026-09-22; between Offered and Reflection from 2026-09-19), the Project file row among it since 2026-10-01
         Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection includes sessions: off\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection yields to turns: off\n  ·   Reflection edit supporting files: off\n  ·   Reflection downloaded skills: allow-and-mark\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
         Assert.DoesNotContain("  · Project\n", output);   // the Project section, the toggle row alone from later on 2026-09-19, went on 2026-10-01
@@ -20909,7 +20912,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n▸ Reflection (auto-learn)           off\n  Reflection reasoning              none\n", output);   // the Reflection tab, padded to its own column (the fixture turns the auto-learn off)
         Assert.Contains("\n▸ Agent skills                          on\n  " + SettingsMenu.ExternalSkillsName + "  off\n  Project file                          on\n", output);   // the Options tab, the rows padded to its own column
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
-        Assert.Contains("\n▸ haiku  profile  v1  Writes haiku. Use when asked for one.\n", output);
+        Assert.Matches(@"\n▸ haiku  profile  v1  " + SkillChanged + @"Writes haiku\. Use when asked for one\.\n", output);
         Assert.Contains("\n" + SkillsMenu.LoadedKeys, output);   // the trailer follows on the hint row
         // The Options tab's Project file row, the flip on the status line and the row re-read.
         Assert.Contains("\n  · Project file: off\n", output);
@@ -20940,7 +20943,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("│ ↳ all · profile · global \n", output);   // the counts cut by the fixture's Output (TabStrips.Unbadged)
-        Assert.Contains("\n▸ csv    global   v1  Tidies CSV files. Use when asked.\n", output);
+        Assert.Matches(@"\n▸ csv    global   v1  " + SkillChanged + @"Tidies CSV files\. Use when asked\.\n", output);
         Assert.Contains(SkillsMenu.ScopeTitle("csv"), output);
         Assert.DoesNotContain(SkillsMenu.ScopeTitle("haiku"), output);
         Assert.DoesNotContain("external", output);   // no external skill listed, no external sub-tab
@@ -22903,7 +22906,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains(SkillsText.Label + " │ Offered · Reflection · Options ", output);   // no Roots tab since later on 2026-09-19
-        Assert.Contains("▸ haiku  profile  v1  Writes haiku. Use when asked for one.", output);
+        Assert.Matches(@"▸ haiku  profile  v1  " + SkillChanged + @"Writes haiku\. Use when asked for one\.", output);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/skills"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);

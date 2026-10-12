@@ -100,6 +100,39 @@ public class SkillsTextTests
         Assert.Equal(0, SkillsText.VersionWidth(Facts(skills: [Haiku])));
     }
 
+    /// <summary>
+    /// The changed column (2026-10-12, the user's ask): after the version, before the description, <c>yyyy-MM-dd HH:mm</c> in the facts'
+    /// zone, blank and padded for a skill with no moment; the lines and the menu rows alike; none at all without a source.
+    /// </summary>
+    [Fact]
+    public void WithChangedDates_AColumn_SitsBetweenTheVersionAndTheDescription()
+    {
+        Skill global = new("csv", "Tidies CSV.", SkillScope.Global, @"D:\home\skills\csv");
+        var zone = TimeZoneInfo.CreateCustomTimeZone("plus2", TimeSpan.FromHours(2), "plus2", "plus2");
+        var facts = Facts(skills: [Haiku, global, Pdf]) with
+        {
+            Version = s => s.Scope == SkillScope.External ? null : 1,
+            Changed = s => s == Haiku ? new DateTimeOffset(2026, 10, 12, 12, 3, 0, TimeSpan.Zero) : s == Pdf ? new DateTimeOffset(2025, 1, 2, 3, 4, 0, TimeSpan.Zero) : null,
+            Zone = zone,
+        };
+
+        Assert.Equal(
+            [
+                "haiku           profile  v1  2026-10-12 14:03  Writes haiku.",
+                "csv             global   v1                    Tidies CSV.",
+                "pdf-processing  external     2025-01-02 05:04  Extracts PDF text.",
+                "                (name 'pdf-processing' does not match the folder 'pdf')",
+            ],
+            SkillsText.LoadedLines(facts));
+        Assert.Equal(Cyan("haiku         ") + "  profile  v1  2026-10-12 14:03  Writes haiku.", SkillsText.LoadedRows(facts)[1].Markup);
+        Assert.Equal(Cyan("csv           ") + "  global   v1                    Tidies CSV.", SkillsText.LoadedRows(facts, "csv")[1].Markup);
+
+        Assert.Equal("2026-10-12 12:03", SkillsText.ChangedText(facts with { Zone = null }, Haiku));   // UTC without a zone
+        Assert.Equal("", SkillsText.ChangedText(facts, global));
+        Assert.Equal("", SkillsText.ChangedCell(Facts(skills: [Haiku]), Haiku));
+        Assert.Equal(["haiku  profile  2026-10-12 14:03  Writes haiku."], SkillsText.LoadedLines(Facts(skills: [Haiku]) with { Changed = facts.Changed, Zone = zone }));   // no version column
+    }
+
     private static string Cyan(string text) => $"[{Theme.AccentSecondary.ToMarkup()}]{text}[/]";
     private static string Dim(string text) => $"[#9A8BB8]{text}[/]";
 

@@ -24,7 +24,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 * **Type to filter:** on `/sessions`, `/server`, `/model`, `/docker`, `/youtube list`, the allowed commands and the Offered tabs, typing narrows the list. Backspace erases; the first ESC clears it.
 * **Find:** on the read-only panes (`/help`, `/sys`, `/about`, `/tree`, `/docker logs`…) typing finds and marks every match. Enter or F3 goes to the next, Shift+Enter or Shift+F3 to the one before (Shift+F3 on a Mac); the first ESC clears the find. A word wrapped across two rows isn't found.
 * **Lists:** removing anything asks first, with No on the cursor. A list cut by the window ends in `▲▼ 13–25 of 58`. On `/tools` Offered, a group that is off says why on its heading.
-* **Mouse:** a click moves the cursor; a double-click picks a row or tab (on the input line, selects a word). The × at the top right works like ESC, and a double-click outside a pane closes it. A double-click on a picture in the transcript opens the [picture viewer](COMMANDS.md#picture-viewer).
+* **Mouse:** a click moves the cursor; a double-click picks a row or tab (on the input line, selects a word; on the `›` before it, the whole draft). The × at the top right works like ESC, and a double-click outside a pane closes it. A double-click on a picture in the transcript opens the [picture viewer](COMMANDS.md#picture-viewer).
 
 ## The input line
 * **A full editor**, even during a reply or `/botchat`: ←/→, Home/End (press again for the whole message), Ctrl+←/→ by word, Ctrl+Backspace / Ctrl+Delete delete a word (Option+Delete on a Mac), Shift+arrows, Ctrl+A or a drag to select, Ctrl+C / Ctrl+X copy / cut, right-click or Alt+V pastes (a copied picture too; on a Mac also Ctrl+V or Option+V), ↑/↓ walk the history.
@@ -535,7 +535,7 @@ Voice input sets up in the background (🎙️ on the hint row).
 
 ### Offered
 
-The loaded skills with their scope (`profile`, `global` or `external`), version and description, then any shadowed duplicates and skipped folders (with the reason). The second strip narrows the list to one scope. Enter on a skill can:
+The loaded skills with their scope (`profile`, `global` or `external`), version, last change (`yyyy-MM-dd HH:mm`, local time: the later of the app's record and the SKILL.md's own write) and description, then any shadowed duplicates and skipped folders (with the reason). The second strip narrows the list to one scope. Enter on a skill can:
 
 * move it between the profile and global folders, or rename it;
 * edit its `SKILL.md` in your editor;

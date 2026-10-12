@@ -1,3 +1,4 @@
+using NeonSidekick.Sessions;
 using NeonSidekick.Skills;
 using NeonSidekick.UI;
 using Spectre.Console;
@@ -8,6 +9,8 @@ namespace NeonSidekick.App;
 /// What <c>/skills</c> shows, read when it opens: the skills switch, the catalog as of its last scan and the roots (for the scope page). The
 /// <c>Project file</c> toggle and the notes on disk, for the Project tab, went with it (2026-10-01). <see cref="Version"/> (2026-10-07)
 /// is each skill's version from the records (<c>SkillRecords.Versions</c>), null for an external one; without it, no version column.
+/// <see cref="Changed"/> (2026-10-12) is when each last changed (<c>SkillRecords.ChangedAt</c>), shown in <see cref="Zone"/> (UTC without
+/// one); without it, no changed column.
 /// </summary>
 public sealed record SkillsFacts(
     bool Enabled,
@@ -15,7 +18,9 @@ public sealed record SkillsFacts(
     IReadOnlyList<Skill> Shadowed,
     IReadOnlyList<SkillProblem> Problems,
     SkillRoots Roots,
-    Func<Skill, int?>? Version = null);
+    Func<Skill, int?>? Version = null,
+    Func<Skill, DateTimeOffset?>? Changed = null,
+    TimeZoneInfo? Zone = null);
 
 /// <summary>
 /// The words for <c>/skills</c>: the pane's Offered tab — the catalog, what is shadowed and what was
@@ -56,12 +61,30 @@ public static class SkillsText
 
     /// <summary>
     /// One catalog row: the name padded to the column, the scope padded to nine, the version cell (<see cref="VersionCell"/>, empty
-    /// without a version column), the description. Pinned.
+    /// without a version column), the changed cell (<see cref="ChangedCell"/>, likewise), the description. Pinned.
     /// </summary>
-    public static string SkillLine(Skill skill, int nameWidth, string version = "")
+    public static string SkillLine(Skill skill, int nameWidth, string version = "", string changed = "")
     {
         ArgumentNullException.ThrowIfNull(skill);
-        return skill.Name.PadRight(nameWidth) + "  " + SkillScopes.Name(skill.Scope).PadRight(9) + version + skill.Description;
+        return skill.Name.PadRight(nameWidth) + "  " + SkillScopes.Name(skill.Scope).PadRight(9) + version + changed + skill.Description;
+    }
+
+    /// <summary>The changed column's width in cells: <c>yyyy-MM-dd HH:mm</c> (<see cref="SessionText.Moment"/>), the same for every row.</summary>
+    public const int ChangedWidth = 16;
+
+    /// <summary>When <paramref name="skill"/> last changed as the Offered tab shows it (2026-10-12, the user's pick: <c>2026-10-12 14:03</c>, <see cref="SessionText.Moment"/>); empty for none or without a source. Pinned.</summary>
+    public static string ChangedText(SkillsFacts facts, Skill skill)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        ArgumentNullException.ThrowIfNull(skill);
+        return facts.Changed?.Invoke(skill) is { } at ? SessionText.Moment(at, facts.Zone ?? TimeZoneInfo.Utc) : "";
+    }
+
+    /// <summary><paramref name="skill"/>'s changed cell (2026-10-12): <see cref="ChangedText"/> padded to <see cref="ChangedWidth"/> and two spaces; empty when there is no column.</summary>
+    public static string ChangedCell(SkillsFacts facts, Skill skill)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        return facts.Changed is null ? "" : ChangedText(facts, skill).PadRight(ChangedWidth) + "  ";
     }
 
     /// <summary>A skill's version as the Offered tab shows it (2026-10-07, the user's ask): <c>v4</c>; empty for none (an external skill). Pinned.</summary>
@@ -156,7 +179,7 @@ public static class SkillsText
         int versions = VersionWidth(facts);
         foreach (var skill in facts.Skills)
         {
-            lines.Add(SkillLine(skill, width, VersionCell(facts, skill, versions)));
+            lines.Add(SkillLine(skill, width, VersionCell(facts, skill, versions), ChangedCell(facts, skill)));
             if (skill.Warning is { } warning)
             {
                 lines.Add(new string(' ', width + 2) + "(" + warning + ")");
@@ -240,7 +263,7 @@ public static class SkillsText
             foreach (var skill in listed)
             {
                 // A disabled skill's row is dim whole, its name too (2026-10-09, the user's ask: the shadowed rows' look).
-                string rest = "  " + SkillScopes.Name(skill.Scope).PadRight(9) + VersionCell(facts, skill, versions) + skill.Description;
+                string rest = "  " + SkillScopes.Name(skill.Scope).PadRight(9) + VersionCell(facts, skill, versions) + ChangedCell(facts, skill) + skill.Description;
                 rows.Add((skill.Disabled ? Theme.DimMarkup(skill.Name.PadRight(width) + rest) : Styled(Theme.AccentSecondary, skill.Name.PadRight(width)) + Markup.Escape(rest), skill, false));
                 if (skill.Warning is { } warning)
                 {

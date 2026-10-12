@@ -221,8 +221,8 @@ public sealed class SkillRecordStore : IDisposable
         return counts;
     }
 
-    /// <summary>A (scope, folder) key compared as the <c>skills</c> table does: the folder ignoring case.</summary>
-    private sealed class FolderKey : IEqualityComparer<(SkillScope Scope, string Folder)>
+    /// <summary>A (scope, folder) key compared as the <c>skills</c> table does: the folder ignoring case. Internal since 2026-10-12 (<c>SkillRecords.ChangedAt</c>).</summary>
+    internal sealed class FolderKey : IEqualityComparer<(SkillScope Scope, string Folder)>
     {
         public static readonly FolderKey Comparer = new();
 
