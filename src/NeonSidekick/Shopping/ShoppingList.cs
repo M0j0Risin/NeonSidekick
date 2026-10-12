@@ -718,6 +718,47 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
     }
 
     /// <summary>
+    /// The places a place picker offers (the pane's ⌖ place, the layout editor's move): the locations in walk order, then the sections
+    /// alone, each section left out when a location bears its name (2026-10-11, the user's catch: the import made <c>Dairy &amp; Eggs</c>
+    /// both a location and the section it sits in, so the picker read <c>Dairy &amp; Eggs</c> and <c>Section: Dairy &amp; Eggs</c>, one
+    /// place to the user). A fact on such a section alone still finds a row: <see cref="PlaceChoiceIndex"/> lands on the location.
+    /// </summary>
+    public static IReadOnlyList<(string Label, ShopLocation? Location, ShopSection? Section)> PlaceChoices(IReadOnlyList<ShopLocation> locations, IReadOnlyList<ShopSection> sections)
+    {
+        ArgumentNullException.ThrowIfNull(locations);
+        ArgumentNullException.ThrowIfNull(sections);
+        var named = locations.Select(l => l.Label).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var choices = new List<(string Label, ShopLocation? Location, ShopSection? Section)>();
+        choices.AddRange(locations.Select(l => (ShoppingText.LocationChoice(l), (ShopLocation?)l, (ShopSection?)null)));
+        choices.AddRange(sections.Where(s => !named.Contains(s.Name)).Select(s => (ShoppingText.SectionChoice(s), (ShopLocation?)null, (ShopSection?)s)));
+        return choices;
+    }
+
+    /// <summary>
+    /// The row of <see cref="PlaceChoices"/> a place is on: its location's, else its section's alone, else the location named as that
+    /// section (the section's own row left out); -1 when none.
+    /// </summary>
+    public static int PlaceChoiceIndex(IReadOnlyList<(string Label, ShopLocation? Location, ShopSection? Section)> choices, IReadOnlyList<ShopSection> sections, long? locationId, long? sectionId)
+    {
+        ArgumentNullException.ThrowIfNull(choices);
+        ArgumentNullException.ThrowIfNull(sections);
+        var list = choices.ToList();
+        if (locationId is { } l)
+        {
+            return list.FindIndex(c => c.Location?.Id == l);
+        }
+
+        if (sectionId is not { } s)
+        {
+            return -1;
+        }
+
+        int alone = list.FindIndex(c => c.Location is null && c.Section?.Id == s);
+        string? name = sections.FirstOrDefault(x => x.Id == s)?.Name;
+        return alone >= 0 || name is null ? alone : list.FindIndex(c => c.Location is { } at && string.Equals(at.Label, name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// A store's reference folder name made from its name: lower case letters and digits, every other run a hyphen, trimmed; <c>store</c>
     /// for a name with none. <c>H-E-B San Antonio #372</c> → <c>h-e-b-san-antonio-372</c>.
     /// </summary>

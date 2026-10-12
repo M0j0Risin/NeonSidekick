@@ -208,16 +208,14 @@ internal sealed partial class SettingsMenu
     /// <summary>A fact moved: the place picker (locations in walk order, then sections alone); the user's from then on.</summary>
     private async Task MoveFactAsync(ShoppingList list, ShopStore shop, ShopPlacement fact, IReadOnlyList<ShopLocation> locations, IReadOnlyList<ShopSection> sections, CancellationToken cancellationToken)
     {
-        var choices = new List<(string Label, ShopLocation? Location, ShopSection? Section)>();
-        choices.AddRange(locations.Select(l => (ShoppingText.LocationChoice(l), (ShopLocation?)l, (ShopSection?)null)));
-        choices.AddRange(sections.Select(s => (ShoppingText.SectionChoice(s), (ShopLocation?)null, (ShopSection?)s)));
+        var choices = ShoppingList.PlaceChoices(locations, sections);
         if (choices.Count == 0)
         {
             Sink.Notice(ShoppingText.NoLayoutYet(shop));
             return;
         }
 
-        int at = Math.Max(0, choices.FindIndex(c => fact.LocationId is { } l ? c.Location?.Id == l : c.Location is null && c.Section?.Id == fact.SectionId));
+        int at = Math.Max(0, ShoppingList.PlaceChoiceIndex(choices, sections, fact.LocationId, fact.SectionId));
         var page = new MenuPage(Crumb(ShoppingText.PlaceTitle(new ShopItem(0, fact.Term, 1, "", false, DateTimeOffset.UnixEpoch))), choices.Select(c => Markup.Escape(c.Label)).ToList(), PickKeys);
         if (await PickAsync(page, at, cancellationToken).ConfigureAwait(false) is { } picked && picked < choices.Count)
         {

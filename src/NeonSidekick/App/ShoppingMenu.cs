@@ -298,15 +298,15 @@ internal sealed class ShoppingMenu
         var fact = store.Placements(shop.Id).FirstOrDefault(p => p.Kind == ShoppingKinds.Item && ShoppingPlacer.Key(p.Term) == key);
         var now = _list.PlaceOf(item.Name, shop);
         var choices = new List<(string Label, ShopLocation? Location, ShopSection? Section, bool Forget)>();
-        choices.AddRange(locations.Select(l => (ShoppingText.LocationChoice(l), (ShopLocation?)l, (ShopSection?)null, false)));
-        choices.AddRange(sections.Select(s => (ShoppingText.SectionChoice(s), (ShopLocation?)null, (ShopSection?)s, false)));
+        var places = ShoppingList.PlaceChoices(locations, sections);
+        choices.AddRange(places.Select(c => (c.Label, c.Location, c.Section, false)));
         if (fact is not null)
         {
             choices.Add((ShoppingText.ForgetPlaceRow, null, null, true));
         }
 
         string filter = "";
-        int cursor = Math.Max(0, choices.FindIndex(c => now.Location is { } l ? c.Location?.Id == l.Id : now.Section is { } s && c.Location is null && c.Section?.Id == s.Id));
+        int cursor = Math.Max(0, ShoppingList.PlaceChoiceIndex(places, sections, now.Location?.Id, now.Section?.Id));
         while (true)
         {
             var shown = Enumerable.Range(0, choices.Count).Where(i => filter.Length == 0 || choices[i].Label.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();

@@ -129,6 +129,25 @@ public sealed class ShoppingStoreTests : IDisposable
     }
 
     [Fact]
+    public void ThePlacePicker_LeavesOutASection_ALocationIsNamedAs()
+    {
+        var heb = _store.AddStore("H-E-B", "heb")!;
+        var dairy = _store.EnsureSection(heb.Id, "Dairy & Eggs")!;
+        var pantry = _store.EnsureSection(heb.Id, "Pantry")!;
+        _store.EnsureLocation(heb.Id, "Aisle 20", pantry.Id);
+        _store.EnsureLocation(heb.Id, "Dairy & Eggs", dairy.Id);
+        var locations = _store.Locations(heb.Id);
+        var sections = _store.Sections(heb.Id);
+
+        var choices = ShoppingList.PlaceChoices(locations, sections);
+
+        Assert.Equal(["Aisle 20 · Pantry", "Dairy & Eggs", "Section: Pantry"], choices.Select(c => c.Label));
+        Assert.Equal(1, ShoppingList.PlaceChoiceIndex(choices, sections, null, dairy.Id));   // a fact on the section alone: its location's row
+        Assert.Equal(2, ShoppingList.PlaceChoiceIndex(choices, sections, null, pantry.Id));
+        Assert.Equal(0, ShoppingList.PlaceChoiceIndex(choices, sections, locations[0].Id, null));
+    }
+
+    [Fact]
     public void APlacementsKindAndSource_ChangeInPlace()
     {
         var heb = _store.AddStore("H-E-B", "heb")!;
