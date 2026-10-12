@@ -173,7 +173,7 @@ internal sealed partial class SettingsMenu
         // The first page of the entries when there are any (2026-10-05, the user's ask), as the SQL wizard's.
         while (true)
         {
-            var entries = ConnectionWizardEntries(UncWizardPath(false), UncWizardPath(true), path => UncConfigFile.Load(path).Shares);
+            var entries = ConnectionWizardEntries(UncWizardPath(false), UncWizardPath(true), path => UncConfigFile.Load(path).Shares, c => c.Name);
             var draft = new UncDraft();
             if (entries.Count > 0)
             {

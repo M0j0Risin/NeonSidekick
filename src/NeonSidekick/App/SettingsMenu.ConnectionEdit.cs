@@ -96,8 +96,12 @@ internal sealed partial class SettingsMenu
         return copy;
     }
 
-    /// <summary>The entries the first page lists: the profile's file, then the home's (when it is another file), each by its load.</summary>
-    private static List<(T Named, bool Global)> ConnectionWizardEntries<T>(string profilePath, string globalPath, Func<string, IEnumerable<T>> load)
+    /// <summary>
+    /// The entries the first page lists: the profile's file and the home's (when it is another file), each by its load, A to Z by
+    /// <paramref name="name"/> (2026-10-11, the user's ask, after the offered and password panes; <see cref="ByName"/> is stable, so
+    /// a name in both files lists the profile's first).
+    /// </summary>
+    private static List<(T Named, bool Global)> ConnectionWizardEntries<T>(string profilePath, string globalPath, Func<string, IEnumerable<T>> load, Func<T, string> name)
     {
         var entries = load(profilePath).Select(named => (named, false)).ToList();
         if (!string.Equals(Path.GetFullPath(profilePath), Path.GetFullPath(globalPath), StringComparison.OrdinalIgnoreCase))
@@ -105,7 +109,7 @@ internal sealed partial class SettingsMenu
             entries.AddRange(load(globalPath).Select(named => (named, true)));
         }
 
-        return entries;
+        return ByName<(T Named, bool Global)>(entries, e => name(e.Named));
     }
 
     /// <summary>The first page: <see cref="ConnectionWizardNewRow"/>, then each entry. -1 for new, the entry's index, or null for ESC.</summary>

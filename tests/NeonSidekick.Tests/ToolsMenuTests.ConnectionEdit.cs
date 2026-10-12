@@ -89,6 +89,26 @@ public partial class ToolsMenuTests
         Assert.Equal(["adventure", "first"], _settings.Current.SqlConnectionsOffered);
     }
 
+    /// <summary>The first page lists the saved connections A to Z across both files (2026-10-11, the user's ask), not the profile's then the home's.</summary>
+    [Fact]
+    public async Task OnThePane_TheSqlWizard_ListsTheSavedConnectionsAToZ()
+    {
+        Directory.CreateDirectory(_settings.ProfileDirectory);
+        File.WriteAllText(SqlConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "connections": { "zeta": { "server": "x", "database": "db", "auth": "windows" }, "Alpha": { "server": "y", "database": "db", "auth": "windows" } } }""");
+        File.WriteAllText(SqlConfigFile.GlobalPath(_settings.StorageDirectory), """{ "connections": { "mid": { "server": "z", "database": "db", "auth": "windows" } } }""");
+        var (menu, _, _) = PaneMenu();
+        OpenSqlWizard();
+        Push(Keys.Escape);                               // the list: the visit ends
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        int list = Output.IndexOf(SettingsMenu.ConnectionWizardNewRow("connection"), StringComparison.Ordinal);
+        Assert.True(list >= 0);
+        int alpha = Output.IndexOf("Alpha", list, StringComparison.Ordinal), mid = Output.IndexOf("mid ", list, StringComparison.Ordinal), zeta = Output.IndexOf("zeta", list, StringComparison.Ordinal);
+        Assert.True(alpha < mid && mid < zeta, $"Alpha {alpha}, mid {mid}, zeta {zeta}");
+    }
+
     /// <summary>An edit's ESC on its summary is back to the list, Cancel there says nothing changed, ESC on the list ends the visit; the file untouched.</summary>
     [Fact]
     public async Task OnThePane_TheSqlWizard_AnEditsEscGoesBackToTheList_AndCancelChangesNothing()

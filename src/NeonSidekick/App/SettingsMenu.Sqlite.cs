@@ -278,7 +278,7 @@ internal sealed partial class SettingsMenu
     {
         while (true)
         {
-            var entries = ConnectionWizardEntries(SqliteWizardPath(false), SqliteWizardPath(true), path => SqliteConfigFile.Load(path).Databases);
+            var entries = ConnectionWizardEntries(SqliteWizardPath(false), SqliteWizardPath(true), path => SqliteConfigFile.Load(path).Databases, c => c.Name);
             var draft = new SqliteDraft();
             if (entries.Count > 0)
             {

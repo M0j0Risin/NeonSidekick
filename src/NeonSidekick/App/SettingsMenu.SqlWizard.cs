@@ -227,7 +227,7 @@ internal sealed partial class SettingsMenu
     {
         while (true)
         {
-            var entries = ConnectionWizardEntries(SqlWizardPath(false), SqlWizardPath(true), path => SqlConfigFile.Load(path).Connections);
+            var entries = ConnectionWizardEntries(SqlWizardPath(false), SqlWizardPath(true), path => SqlConfigFile.Load(path).Connections, c => c.Name);
             var draft = new SqlDraft();
             if (entries.Count > 0)
             {

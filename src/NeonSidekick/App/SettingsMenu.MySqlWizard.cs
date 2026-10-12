@@ -136,7 +136,7 @@ internal sealed partial class SettingsMenu
         // The first page of the entries when there are any (2026-10-05, the user's ask), as the SQL wizard's.
         while (true)
         {
-            var entries = ConnectionWizardEntries(MySqlWizardPath(false), MySqlWizardPath(true), path => MySqlConfigFile.Load(path).Connections);
+            var entries = ConnectionWizardEntries(MySqlWizardPath(false), MySqlWizardPath(true), path => MySqlConfigFile.Load(path).Connections, c => c.Name);
             var draft = new MySqlDraft();
             if (entries.Count > 0)
             {
