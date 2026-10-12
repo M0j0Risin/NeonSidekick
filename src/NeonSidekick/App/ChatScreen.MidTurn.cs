@@ -211,6 +211,7 @@ internal sealed partial class ChatScreen
         SlashCommand.View when ParseViewArgs(args) is { Chat: false, Path.Length: > 0 } => MidTurnClass.Quick,
         SlashCommand.Screen when NeonSidekick.Screen.ScreenText.IsFolderWord(args) => MidTurnClass.Quick,   // /screen view | thumbs (2026-10-09): a window of its own
         SlashCommand.Session when ParseSessionArgs(args).Kind == SessionActionKind.TitlePane => MidTurnClass.Pane,
+        SlashCommand.HomeBar => HomeBarToggles(args) ? MidTurnClass.Quick : MidTurnClass.Pane,   // 2026-10-12: a toggle at once; the picker, a chip's pane or confirm on the watcher
         _ => MidTurnPolicy(command, args.Length > 0),
     };
 
@@ -535,6 +536,10 @@ internal sealed partial class ChatScreen
                 // /ha (2026-09-30): the call on the watcher, the reply streaming on; its lines through the flow sink.
                 await HandleHomeAssistantMidTurnAsync(args, cancellationToken).ConfigureAwait(false);
                 break;
+            case SlashCommand.HomeBar:
+                // /homebar edit, a chip's pane or its confirm (2026-10-12): on the watcher, the reply streaming on.
+                await HandleHomeBarAsync(args, _flow, cancellationToken).ConfigureAwait(false);
+                break;
             case SlashCommand.YouTube:
                 // /youtube (2026-10-05): /ha's way — a search (and its picker) or the wait for the player on the watcher, the
                 // reply streaming on, the lines through the flow sink; the turn's end dropping it as it drops a pane.
@@ -579,6 +584,9 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Perf:
                 HandlePerf(args);
+                break;
+            case SlashCommand.HomeBar:
+                HandleHomeBarToggle(args);
                 break;
             case SlashCommand.Toolbar:
                 HandleToolbar(args);

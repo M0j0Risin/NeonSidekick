@@ -226,6 +226,7 @@ public static class Keys
             (ConsoleKey.O, '\0' or '\x0f') => "/tools shell police",
             (ConsoleKey.U, '\0' or '\x15') => "/comfy view",
             (ConsoleKey.V, '\0' or '\x16') => "/camera live",
+            (ConsoleKey.W, '\0' or '\x17') => "/homebar",   // 2026-10-12, the user's pick: the home bar, free on Windows and macOS alike
             (ConsoleKey.A, '\0' or '\x01') when OperatingSystem.IsMacOS() => "/memory",
             _ => null,
         };

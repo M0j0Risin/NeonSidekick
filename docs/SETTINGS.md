@@ -74,11 +74,12 @@ Each shortcut runs its command as if typed; a draft on the row stays.
 | Ctrl+Alt+G | `/log`: opens or closes the log window | at once |
 | Ctrl+Alt+U | `/comfy view`: opens or closes the picture viewer | at once |
 | Ctrl+Alt+V | `/camera live`: opens or closes the camera's window | at once |
+| Ctrl+Alt+W | `/homebar` (home bar on/off) | at once |
 | Ctrl+Alt+X ×2 | unloads the embedded model (see below) | at once |
 | F9 | `/camera snap`: a photo, attached to the line | waits for the reply |
 | F10 | `/screen`: a capture of the app's monitor, attached to the line | waits for the reply |
 
-* **Inside a pane**, a shortcut closes the pane and runs, so Ctrl+Alt+S in `/tools` opens `/skills`; a pane's own shortcut just closes it. Ctrl+E, Ctrl+., Ctrl+F, Ctrl+L, Ctrl+T, the three window chords and Ctrl+Alt+X act and leave the pane open.
+* **Inside a pane**, a shortcut closes the pane and runs, so Ctrl+Alt+S in `/tools` opens `/skills`; a pane's own shortcut just closes it. Ctrl+E, Ctrl+., Ctrl+F, Ctrl+L, Ctrl+T, Ctrl+Alt+W, the three window chords and Ctrl+Alt+X act and leave the pane open.
 * **Panes that ask you something** (an approval, `ask_user`, a confirmation) ignore the shortcuts, so none can answer them by accident.
 * **Window chords** close their window when pressed again; the typed command only opens it.
 * **Ctrl+Alt+X**, pressed twice within two seconds, unloads the embedded model and frees its memory, cancelling any reply, load or botchat using it. No server is connected until you pick one with `/server`; the saved *LLM URL* is kept. With any other server it does nothing.
@@ -91,8 +92,8 @@ Each shortcut runs its command as if typed; a draft on the row stays.
 
 | Behaviour | Commands |
 |---|---|
-| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/skills`, `/reasoning`, `/sampling`, `/msgclear`, `/tree`, `/vault`, `/browse`, `/camera list`, `/docker logs`, `/ha states`, `/keycheck`, `/process`, `/sys persona`, `/sys operata`, `/sys vocalia` |
-| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/camera view`, `/camera thumbs`, `/screen view`, `/screen thumbs`, `/tts`, `/stt`, `/stt wake`, `/stt interrupt`, `/perfbar`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/open`, `/terminal`, `/shortcut`, `/log`, `/process <id>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/view <path>`, `/view <path> --thumbs` |
+| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/skills`, `/reasoning`, `/sampling`, `/msgclear`, `/tree`, `/vault`, `/browse`, `/camera list`, `/docker logs`, `/ha states`, `/keycheck`, `/process`, `/sys persona`, `/sys operata`, `/sys vocalia`, `/homebar edit`, a home bar chip's pane and its Yes/No |
+| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/camera view`, `/camera thumbs`, `/screen view`, `/screen thumbs`, `/tts`, `/stt`, `/stt wake`, `/stt interrupt`, `/perfbar`, `/homebar`, `/homebar on`, `/homebar off`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/open`, `/terminal`, `/shortcut`, `/log`, `/process <id>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/view <path>`, `/view <path> --thumbs` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind earlier messages (*Queue cancel mode* applies) |
 
@@ -137,6 +138,9 @@ Each shortcut runs its command as if typed; a draft on the row stays.
 | working directory (right edge) | always | `/cwd browse` |
 | blank space | — | `/settings` |
 | performance bar (anywhere on it) | *Show performance bar* has a meter checked | `/settings` |
+| home bar: ⌂ | *Show home bar* has an item | a click says how the connection stands; a double-click (or a right-click) opens the picker |
+| home bar: a chip | *Show home bar* has an item | a click shows its state; a double-click acts (see [Home bar](#home-bar)); a right-click opens its pane |
+| home bar: ‹ › | the chips need more room than the row has | the previous or next page of chips |
 
 ## Panes
 * `/settings`: the app (Client: Chat, Sessions, Botchat), the LLM and its servers (Servers: Common, Http, Embedded, Docker, Anthropic, OpenAI), the profile advisors (Advisors) and voice (Voice: TTS, STT)
@@ -182,6 +186,7 @@ The app itself, this side of the connection, in three tabs: Chat, Sessions and B
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
 | Show toolbar | A checklist of the toolbar's glyphs and the working-directory path. `a` / `n` / `d` pick all, none or the default; none hides the row. | Settings, Tools, Skills, Memory, Shell allowed commands, Shell police, Shell, Files, Image, Web, path (11 of 38) |
 | Show performance bar | A checklist of the bar's meters: **CPU**, **RAM**, **GPU**, **VRAM** (**GMEM** on a Mac), **NET**, **NET↓**, **NET↑** and **PROC** (background processes). The title row picks the look: **text**, **gauge**, **spark** or **led**. None hides the bar. See [Performance bar](#performance-bar). | CPU, RAM, GPU, VRAM, `led` |
+| Show home bar | Home Assistant rooms and devices as chips on a row under the performance bar, in the order you choose. Enter opens the picker. Needs *Home Assistant URL* and *Home Assistant API key*. See [Home bar](#home-bar). | off |
 | Menus max height | How much of the window a pane may take: `half-screen`, `three-quarters` or `full-screen`. Longer lists scroll. | `full-screen` |
 | Draft editor | The program `/draft` opens (`code --wait`, `notepad`…); it must wait for the file to close. Empty uses the system's `.txt` editor. | (default .txt editor) |
 | Image viewer | Where a double-clicked picture opens: empty for the built-in viewer, `system` for the system's app, or a command the path is added to (`mspaint`). | (built-in viewer) |
@@ -210,6 +215,15 @@ The app itself, this side of the connection, in three tabs: Chat, Sessions and B
 * PROC counts the model's background processes still running (`/process` lists them).
 * **On a Mac** RAM is Activity Monitor's *Memory Used*, and **GMEM** is the memory the GPU holds, as a share of what macOS lets it use.
 * `/perfbar` or the toolbar's 📈 hides or shows the bar.
+
+##### Home bar
+
+* **What it shows**: each chip is a room or a device. A light's chip takes the light's own colour and shows its brightness; a room's counts its lights on (`2/5`); sensors show their value, thermostats current → target, players what is playing. Off is a dark slab; an open door, a leak or a low battery turns amber or red. While the connection to Home Assistant is down the chips go dim and the ⌂ at the left turns amber (retrying) or red (refused, or not set up).
+* **Clicks**: a click shows a chip's state and what a double-click will do. A double-click acts: a light, switch or fan toggles; a room's lights go off when any is on, else on; a scene or script runs; a player plays or pauses (or turns on); a cover closes, or opens. A right-click opens the chip's pane: its actions (on, off, brightness steps, volume, open, close, stop, lock, warmer, cooler…), or for a room its devices, Space switching one and Enter opening its actions. A chip clicked shows `…` until Home Assistant reports the change, and `!` if none comes within six seconds.
+* **What asks first**: unlocking a lock, opening a garage, gate or door, and disarming an alarm ask Yes or No on the pane (the cursor on No). An alarm that wants a code is disarmed in Home Assistant itself.
+* **The picker** (Enter on *Show home bar*, `/homebar edit`, or a double-click on ⌂): **On the bar** lists the items in order. **Shift+↑/↓** or **Alt+↑/↓** move the item under the cursor a place, **Alt+Home/End** to the top or bottom, **Delete** takes it off, and Enter offers the same as a list (for a terminal that keeps those keys). Then **Rooms** (by floor), **Lights**, **Switches** (and fans), **Sensors**, **Climate**, **Media**, **Scenes** (and scripts), **Security** (locks, covers, alarms) and **Other**, each in sections by room: Space or Enter adds an item at the end of the bar or takes it off; typing filters by name, id, room or label.
+* **Live**: while the bar shows, the app keeps one WebSocket to Home Assistant, signed in with the API key and watching only the bar's devices (and an open room pane's), so a change shows at once. Hidden for 15 seconds, it closes. A dropped connection is retried after 1, 2, 4… up to 30 seconds; a refused key is not retried until the URL or the key changes.
+* The bar is drawn last, so a short window drops it before the other bars. `/homebar` or Ctrl+Alt+W hides it, or shows it again with the items it had.
 
 #### Sessions
 

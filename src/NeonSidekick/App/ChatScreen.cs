@@ -1045,6 +1045,7 @@ internal sealed partial class ChatScreen
         Action<string>? openViewer = null,
         Action<string>? viewPicture = null,
         Func<Uri, string, HaClient>? haClient = null,
+        Func<Uri, CancellationToken, Task<IHaWire>>? haWire = null,
         Action<string>? followViewer = null,
         IPrintSpooler? printSpooler = null,
         Func<Perf.IPerfSource>? perfSource = null,
@@ -1159,6 +1160,9 @@ internal sealed partial class ChatScreen
         // The Home Assistant tools (2026-09-28): the client made for the URL and token in force; an asked call waits on the pane.
         _ha = new HaSession(_effective, haClient, _time);
         _haTools = HomeAssistantTools(_ha, ConfirmHomeAsync);
+        // The home bar (2026-10-12): one WebSocket while it shows (a scripted server in tests), its double-clicks on the screen's clock.
+        _homeLive = new HaLive(_ha, haWire, _time);
+        _homeClicks = new DoubleClick(_time);
         // The Docker tools and /docker (2026-10-02): the client made for the pipe in force; a model's change waits on the pane.
         _docker = new DockerSession(_effective, dockerClient, _time, environment);
         _dockerTools = DockerTools(_docker, ConfirmDockerAsync);
@@ -1284,6 +1288,8 @@ internal sealed partial class ChatScreen
             // The performance bar under the toolbar (2026-09-29): read per draw and on the tick, like the toolbar, so a
             // change of Show performance bar shows at once; the sampler runs only while it answers a row.
             Perf = PerfBarRow,
+            // The home bar under the performance bar (2026-10-12): read per draw and on the tick, cached between feed changes.
+            Home = HomeBarRow,
             // The menus' height cap (2026-10-01, the user's ask): read at every menu, info and folder pane draw, so a change
             // of Menus max height applies to the next pane shown.
             MenuHeight = () => _effective().MenuMaxHeight,
@@ -1305,6 +1311,8 @@ internal sealed partial class ChatScreen
         // Ctrl+Alt+X (2026-10-01): the embedded model's kill switch, wherever the key is read.
         _keys.KillSwitch = KillSwitch;
         _keys.LearnCancel = CancelLearnByKey;
+        // The home bar's clicks (2026-10-12), wherever they are read.
+        _keys.HomeBarClick = HomeBarClick;
         _transcript = new TranscriptRenderer(_pane)
         {
             // Tool collapse count (2026-09-22): read when a tool run opens, clamped as the menu saves it.
@@ -1363,6 +1371,8 @@ internal sealed partial class ChatScreen
         {
             // A picker opened mid-turn closes on the watcher task: its saved line waits for the turn task.
             Flow = _flow,
+            // The home bar's picker reads the registries through the live feed (2026-10-12).
+            HomeCatalog = _homeLive.CatalogAsync,
         };
         // Built once: the roots ride the facts, so a profile switch needs no rebind; the Options rows through the settings menu (2026-09-19).
         _skillsMenu = new SkillsMenu(SkillsFacts, settings, _menu, _flow, _menuPane, _input, _openFile, name => SkillsMenu.UsageCaption(_skillRecords, _catalog.Find(name), _time.LocalTimeZone), _skillRecords, SkillVersions, RestoreSkill, ForgetSkillVersions);
@@ -1883,6 +1893,9 @@ internal sealed partial class ChatScreen
             case SlashCommand.Perf:
                 RunOrPost(() => HandlePerf(""));
                 return true;
+            case SlashCommand.HomeBar when HomeBarToggles(args):
+                RunOrPost(() => HandleHomeBarToggle(args));
+                return true;
             case SlashCommand.Toolbar:
                 RunOrPost(() => HandleToolbar(""));
                 return true;
@@ -2375,6 +2388,7 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+Alt+T", "open the tools pane", "/tools"));
         rows.Add(new("Ctrl+Alt+U", "show or hide the ComfyUI picture viewer", "/comfy view"));
         rows.Add(new("Ctrl+Alt+V", "show or hide the camera's live view", "/camera live"));
+        rows.Add(new("Ctrl+Alt+W", "show or hide the home bar", HomeAssistant.HomeBarText.Command));
         rows.Add(new("Ctrl+Alt+X", "unload the embedded model at once (press twice)"));
         return rows.ToArray();
     }
@@ -4393,6 +4407,9 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Perf:
                 return MentionCompleter.Matches(PerfBarMode.Words.Select(name => new CompletionItem(name, PerfBarMode.Describe(name))).ToList(), argText);
+
+            case SlashCommand.HomeBar:
+                return MentionCompleter.Matches(HomeAssistant.HomeBarText.Words.Select(word => new CompletionItem(word, HomeAssistant.HomeBarText.Describe(word))).ToList(), argText);
 
             case SlashCommand.Tools:
             {
@@ -9874,6 +9891,7 @@ internal sealed partial class ChatScreen
             _timers.Dispose();
             _readSeekTimer?.Dispose();
             _perf.Dispose();
+            _homeLive.Dispose();
             // The background processes go with the screen (2026-09-21): what still runs is killed, tree and all.
             _processes.Dispose();
             _comfy.Dispose();
@@ -10439,7 +10457,7 @@ internal sealed partial class ChatScreen
     /// puts back under it.
     /// </summary>
     private ThumbnailBox SplashArea() =>
-        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.FlowRow + _splashReserve + ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows + _pane.PerfRows);
+        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.FlowRow + _splashReserve + ScreenPane.PaneRows + _pane.InputRows + _pane.BarRowsDrawn);
 
     /// <summary>
     /// The tiled splash (2026-09-24, the user's ask: <c>Welcome splash</c> <c>tiled</c>): page
@@ -12167,6 +12185,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Perf:
                 HandlePerf(args);
+                return false;
+
+            case SlashCommand.HomeBar:
+                await HandleHomeBarAsync(args, _transcript, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Toolbar:

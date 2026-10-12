@@ -50,6 +50,13 @@ public abstract record InputEvent
     /// (<c>WindowsConsoleInput.HoldWheel</c>); otherwise a notch hands the mouse back to the terminal.
     /// </summary>
     public sealed record Wheel(int X, int Y, int Notches) : InputEvent;
+
+    /// <summary>
+    /// A command line a click made (2026-10-12, the home bar: a chip's pane, its confirm, the picker), read as a command chord
+    /// is — the idle line runs it, a pane does it in place or closes for it, the watch under a reply hands it to the screen —
+    /// so the hook that made it never opens a pane itself. Every reader that has no use for one lets it pass as nothing.
+    /// </summary>
+    public sealed record Command(string Line) : InputEvent;
 }
 
 /// <summary>
@@ -114,4 +121,17 @@ public sealed class KeyEvents : IInputEvents
             return null;
         }
     }
+}
+
+/// <summary>
+/// What the home bar's hook made of a click (<see cref="KeySource.HomeBarClick"/>, 2026-10-12): not its own
+/// (<see cref="NotOurs"/>), done (<see cref="Spent"/>), or a command line to run as a chord would (<see cref="Run"/>).
+/// </summary>
+public readonly record struct HomeClick(bool Taken, string? Line)
+{
+    public static readonly HomeClick NotOurs = default;
+
+    public static readonly HomeClick Spent = new(true, null);
+
+    public static HomeClick Run(string line) => new(true, line);
 }

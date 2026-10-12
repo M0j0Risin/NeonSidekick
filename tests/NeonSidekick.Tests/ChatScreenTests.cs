@@ -77,6 +77,9 @@ public partial class ChatScreenTests : IDisposable
     // The Home Assistant client the screen's /ha reaches (2026-09-30: a stub server under a reply); null = the real one.
     private Func<Uri, string, NeonSidekick.HomeAssistant.HaClient>? _haClient;
 
+    // The home bar's socket (2026-10-12): a scripted server; null = the real one (no test shows the bar without one).
+    private Func<Uri, CancellationToken, Task<NeonSidekick.HomeAssistant.IHaWire>>? _haWire;
+
     /// <summary>The Docker engine (2026-10-02): an unmapped stub unless a test maps one, so no test reaches the real pipe.</summary>
     private Func<string, NeonSidekick.Docker.DockerClient> _dockerClient = pipe => new NeonSidekick.Docker.DockerClient(pipe, new HttpClient(new StubHttpMessageHandler()), transport: NeonSidekick.Docker.DockerTransport.Pipe);   // the stub speaks the pipe's words on every system (2026-10-11)
     private Action<string>? _openViewer;   // the picture viewer (2026-09-27): null = none, as off Windows
@@ -300,7 +303,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer);
         screen.UserProfileFolder = _userProfile;
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
@@ -10235,7 +10238,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab
-        _console.Profile.Height = 115;   // /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
+        _console.Profile.Height = 120;   // /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);   // Advanced, since later on 2026-09-27
@@ -11530,9 +11533,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 53)]   // Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
-    [InlineData(true, false, 54)]
-    [InlineData(true, true, 55)]   // the word moves and deletes joined (2026-10-04)
+    [InlineData(false, false, 54)]   // Ctrl+Alt+W (the home bar) on 2026-10-12; Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
+    [InlineData(true, false, 55)]
+    [InlineData(true, true, 56)]   // the word moves and deletes joined (2026-10-04)
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon", mac: false);   // Windows' list on any machine (2026-10-07)
@@ -11595,7 +11598,7 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+U", "open the usage pane", "/usage"),   // from Ctrl+Alt+G
             new("Ctrl+Y", "open the system prompt pane", "/sys"),   // from Ctrl+Alt+Y on 2026-10-03, the user's ask
             new("Ctrl+Z", "open the theme picker", "/theme"),   // 2026-10-04, the user's ask
-        ], rows[^37..^19]);
+        ], rows[^38..^20]);
 
         // The command chords after them (2026-09-30), one block A to Z by the letter since the pane chords joined later that day.
         Assert.Equal(
@@ -11618,8 +11621,9 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+Alt+T", "open the tools pane", "/tools"),
             new("Ctrl+Alt+U", "show or hide the ComfyUI picture viewer", "/comfy view"),   // 2026-10-02, the user's ask
             new("Ctrl+Alt+V", "show or hide the camera's live view", "/camera live"),   // 2026-10-02, the user's ask
+            new("Ctrl+Alt+W", "show or hide the home bar", "/homebar"),   // 2026-10-12, the user's pick
             new("Ctrl+Alt+X", "unload the embedded model at once (press twice)"),   // 2026-10-01, the user's place
-        ], rows[^19..]);
+        ], rows[^20..]);
 
         // Every chord's command is the one it runs, and a row with none runs none: Ctrl+L (the learning's cancel, 2026-10-04) and
         // the kill switch (2026-10-01). The ESC ESC and wake rows name a command they do not type for you.

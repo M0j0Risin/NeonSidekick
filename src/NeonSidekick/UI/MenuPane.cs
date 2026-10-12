@@ -65,6 +65,9 @@ public sealed record MenuTab(string Title, IReadOnlyList<string> Rows)
     /// <summary>The tab's <see cref="MenuPage.Marks"/>; null for none.</summary>
     public IReadOnlyDictionary<int, Style>? Marks { get; init; }
 
+    /// <summary>The tab's <see cref="MenuPage.Moves"/> (2026-10-12): its rows are an order the move keys change.</summary>
+    public bool Moves { get; init; }
+
     /// <summary>The tab whose rows show: the sub-tab on show, or this one when it holds none (2026-10-10).</summary>
     public MenuTab Shown => SubTabs is { Count: > 0 } subs ? subs[Math.Clamp(Sub, 0, subs.Count - 1)] : this;
 }
@@ -226,6 +229,16 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public IReadOnlyDictionary<int, Style>? Marks { get; init; }
 
     /// <summary>
+    /// The rows are an order the user changes (2026-10-12, the user's ask: the home bar's chips, "change the order of items"):
+    /// Shift+↑/↓ and Alt+↑/↓ return a <see cref="MenuPick"/> with <see cref="MenuPick.Move"/> −1 or +1 for the cursor's row,
+    /// Alt+Home/End (and Shift+Home/End) <see cref="int.MinValue"/> or <see cref="int.MaxValue"/> (to the top, to the bottom),
+    /// Delete one with <see cref="MenuPick.Remove"/>. Shift is there beside Alt because Windows Terminal binds Alt+arrows to
+    /// moving between panes and Terminal.app sends Option+↑ as a bare ESC first. Taken from the tab on a tabbed page. False (every
+    /// other page): the keys are what they were.
+    /// </summary>
+    public bool Moves { get; init; }
+
+    /// <summary>
     /// A page over <paramref name="tabs"/> showing <paramref name="tab"/>: the strip labelled
     /// <paramref name="title"/>, that tab's rows, its caption, and its hint when it has one else
     /// <paramref name="hint"/> (kept as <see cref="BaseHint"/> for the tabs without); a tab with sub-tabs gives its shown one's
@@ -241,7 +254,7 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
 
         tab = Math.Clamp(tab, 0, tabs.Count - 1);
         var shown = tabs[tab].Shown;
-        return new MenuPage(title, shown.Rows, shown.Hint ?? hint) { Tabs = tabs, Tab = tab, Caption = shown.Caption, BaseHint = hint, Headings = shown.Headings, Filter = shown.Filter, Marks = shown.Marks };
+        return new MenuPage(title, shown.Rows, shown.Hint ?? hint) { Tabs = tabs, Tab = tab, Caption = shown.Caption, BaseHint = hint, Headings = shown.Headings, Filter = shown.Filter, Marks = shown.Marks, Moves = shown.Moves };
     }
 
     /// <summary>Whether the cursor may rest on <paramref name="row"/>: any row of a page without <see cref="Headings"/>; on one with them, a row neither a heading nor empty. Pure.</summary>
@@ -321,7 +334,7 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
 /// <see cref="MenuPage.Filter"/> (2026-10-03) is <see cref="Filter"/>, the text it leaves; null otherwise. <see cref="Sub"/> is the sub-tab
 /// on show on a tab that holds them (2026-10-10, <see cref="MenuTab.SubTabs"/>), −1 on one that does not.
 /// </summary>
-public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, int Button = -1, string? Filter = null, int Sub = -1);
+public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, int Button = -1, string? Filter = null, int Sub = -1, int Move = 0, bool Remove = false);
 
 /// <summary>
 /// A menu in the bottom pane: the <see cref="InfoPane"/> shape for a list — a title, a status line
@@ -900,6 +913,15 @@ public sealed class MenuPane : INoticeSink
                     return new MenuPick(page.Tab, _cursor, Toggle: true, Sub: page.Sub);
                 }
 
+                if (page.Moves && count > 0 && MoveOf(k) is { } move)
+                {
+                    // An order the user changes (2026-10-12, the home bar's picker): the host moves or removes the row and shows the page again.
+                    _status.Clear();
+                    return move == 0
+                        ? new MenuPick(page.Tab, _cursor, Sub: page.Sub, Remove: true)
+                        : new MenuPick(page.Tab, _cursor, Sub: page.Sub, Move: move);
+                }
+
                 if (page.Tabs is { } tabs && (tabs.Count > 1 || page.Sub >= 0) && (page.Grid is null || k.Key == ConsoleKey.Tab) && InfoPane.TabStep(k) is int step)
                 {
                     // The arrows walk every sub-tab, Tab and Shift+Tab whole tabs (2026-10-10); the same on a strip without sub-tabs.
@@ -1064,13 +1086,31 @@ public sealed class MenuPane : INoticeSink
 
         // A `with`, never Tabbed() again: the hotkeys, the toggle and the cursors would go with a rebuild.
         var shown = tabs[tab].Shown;
-        _page = page with { Tabs = tabs, Rows = shown.Rows, Tab = tab, Caption = shown.Caption, Hint = shown.Hint ?? page.BaseHint ?? page.Hint, Headings = shown.Headings, Filter = shown.Filter, Marks = shown.Marks };
+        _page = page with { Tabs = tabs, Rows = shown.Rows, Tab = tab, Caption = shown.Caption, Hint = shown.Hint ?? page.BaseHint ?? page.Hint, Headings = shown.Headings, Filter = shown.Filter, Marks = shown.Marks, Moves = shown.Moves };
         int count = _page.Rows.Count;
         _cursor = _page.StopFrom(page.TabCursors is { } cursors && tab < cursors.Count && count > 0 ? cursors[tab] : 0, +1);
         _first = 0;
         _status.Clear();
         Show();
         return count;
+    }
+
+    /// <summary>
+    /// What a key does on a <see cref="MenuPage.Moves"/> page (2026-10-12): Shift/Alt+↑ −1, Shift/Alt+↓ +1, Shift/Alt+Home
+    /// <see cref="int.MinValue"/>, Shift/Alt+End <see cref="int.MaxValue"/>, Delete 0 (remove); null for any other key. Pure.
+    /// </summary>
+    public static int? MoveOf(ConsoleKeyInfo key)
+    {
+        bool held = (key.Modifiers & (ConsoleModifiers.Shift | ConsoleModifiers.Alt)) != 0 && (key.Modifiers & ConsoleModifiers.Control) == 0;
+        return key.Key switch
+        {
+            ConsoleKey.UpArrow when held => -1,
+            ConsoleKey.DownArrow when held => 1,
+            ConsoleKey.Home when held => int.MinValue,
+            ConsoleKey.End when held => int.MaxValue,
+            ConsoleKey.Delete when key.Modifiers == 0 => 0,
+            _ => null,
+        };
     }
 
     private static List<string> Titles(IReadOnlyList<MenuTab> tabs) => tabs.Select(t => t.Title).ToList();

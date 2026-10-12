@@ -759,6 +759,8 @@ public sealed class AppSettings : IDisposable
         ToolbarLastItems = source.ToolbarLastItems is null ? null : [.. source.ToolbarLastItems],
         PerformanceBarItems = source.PerformanceBarItems is null ? null : [.. source.PerformanceBarItems],
         PerformanceBarLastItems = source.PerformanceBarLastItems is null ? null : [.. source.PerformanceBarLastItems],
+        HomeBarItems = source.HomeBarItems is null ? null : [.. source.HomeBarItems],
+        HomeBarLastItems = source.HomeBarLastItems is null ? null : [.. source.HomeBarLastItems],
         PerformanceBarLook = source.PerformanceBarLook,
         Theme = source.Theme,
         TranscriptMarkdown = source.TranscriptMarkdown,

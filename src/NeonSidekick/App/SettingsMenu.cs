@@ -564,6 +564,13 @@ public enum SettingsField
     ShowPerformanceBar,
 
     /// <summary>
+    /// The home bar's items (<see cref="Settings.AppSettingsData.HomeBarItems"/>, 2026-10-12, the user's ask): a picker of Home
+    /// Assistant's rooms and devices, with the bar's order changed on its first tab (<see cref="EditHomeBarAsync"/>). The Chat
+    /// tab's row after Show performance bar; no reconnect (the pane reads it at every tick).
+    /// </summary>
+    ShowHomeBar,
+
+    /// <summary>
     /// Typed: off or 50 to 99 % of the biggest GPU's dedicated memory for the embedded server
     /// (<see cref="Settings.AppSettingsData.EmbeddedVramBudget"/>, later on 2026-09-29, the user's ask); a reconnect. The
     /// Embedded tab's row after Embedded GPU layers.
@@ -1428,7 +1435,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.Profile, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.Avatar,
          SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker,
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle,
-         SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight,
+         SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.MenuMaxHeight,
          SettingsField.DraftEditor, SettingsField.ImageEditor],
         [SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays,
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
@@ -2253,6 +2260,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ShowWorkingDirectory => "Working directory in header",
         SettingsField.ToolbarItems => "Show toolbar",
         SettingsField.ShowPerformanceBar => "Show performance bar",
+        SettingsField.ShowHomeBar => "Show home bar",
         SettingsField.Theme => "Theme",
         SettingsField.ThemedExternalWindows => "Themed external windows",   // the user's name, under "Themed background" (2026-10-03; "Themed image viewer" beside "Image viewer" from later on 2026-09-27)
         SettingsField.ThemedBackground => "Themed background",   // the user's name, under "Theme" (2026-10-03)
@@ -2608,6 +2616,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ShowWorkingDirectory => OnOff(data.ShowWorkingDirectory),
             SettingsField.ToolbarItems => App.ToolbarItems.Value(data.ToolbarItems),
             SettingsField.ShowPerformanceBar => PerfBarItems.Value(data.PerformanceBarItems, data.PerformanceBarLook),
+            SettingsField.ShowHomeBar => HomeBarItems.Value(data.HomeBarItems, null),
             SettingsField.ThemedExternalWindows => OnOff(data.ThemedExternalWindows),
             SettingsField.ThemedBackground => OnOff(data.ThemedBackground),
             SettingsField.Theme => data.Theme,
@@ -4756,6 +4765,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.ShowPerformanceBar)
         {
             return await EditPerfBarAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.ShowHomeBar)
+        {
+            return await EditHomeBarAsync(own: false, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.EmbeddedHfDownloadType)

@@ -81,6 +81,7 @@ public sealed class SidekickApp
     private readonly Func<Mcp.McpServerConfig, string, ModelContextProtocol.Client.IClientTransport> _mcpTransport;
     private readonly Func<Uri, Comfy.ComfyClient>? _comfyClient;
     private readonly Func<Uri, string, HomeAssistant.HaClient>? _haClient;
+    private readonly Func<Uri, CancellationToken, Task<HomeAssistant.IHaWire>>? _haWire;
     private readonly Func<string, Docker.DockerClient>? _dockerClient;
     private readonly Camera.ICameraSystem? _camera;
 
@@ -202,6 +203,7 @@ public sealed class SidekickApp
         Action<string>? viewPicture = null,
         ServerSamplingProbe? samplingProbe = null,
         Func<Uri, string, HomeAssistant.HaClient>? haClient = null,
+        Func<Uri, CancellationToken, Task<HomeAssistant.IHaWire>>? haWire = null,
         Action<string>? followViewer = null,
         Printing.IPrintSpooler? printSpooler = null,
         Func<EmbeddedLlm.IEmbeddedLlm>? embeddedLlm = null,
@@ -268,6 +270,8 @@ public sealed class SidekickApp
         _comfyClient = comfyClient;
         // The Home Assistant client (2026-09-28): over its own transport in the app, a stub handler in tests.
         _haClient = haClient;
+        // The home bar's socket (2026-10-12): ClientWebSocket in the app, a scripted server in tests.
+        _haWire = haWire;
         // The Docker engine's client (2026-10-02): over the engine's named pipe in the app, a stub handler in tests.
         _dockerClient = dockerClient;
         // The chosen Docker containers' switcher (2026-10-02): over the engine's pipe in the app, a fake in the session tests.
@@ -2260,7 +2264,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as IMouseInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

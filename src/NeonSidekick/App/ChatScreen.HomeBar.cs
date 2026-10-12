@@ -1,0 +1,674 @@
+using NeonSidekick.Diagnostics;
+using NeonSidekick.HomeAssistant;
+using NeonSidekick.UI;
+using Spectre.Console;
+
+namespace NeonSidekick.App;
+
+// ── The home bar (2026-10-12) ─────────────────────────────────────────────
+
+internal sealed partial class ChatScreen
+{
+    /// <summary>How long a clicked chip waits for its state to change before it shows <see cref="HomeBarText.FailedMark"/>.</summary>
+    public static readonly TimeSpan HomePendingWait = TimeSpan.FromSeconds(6);
+
+    /// <summary>How long the failed mark shows.</summary>
+    public static readonly TimeSpan HomeFailedShows = TimeSpan.FromSeconds(2);
+
+    /// <summary>The least time between two rebuilds from the feed alone: a sensor reporting every second redraws no faster.</summary>
+    public static readonly TimeSpan HomeRebuildEvery = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>The domains a room's pane lists, in this order.</summary>
+    public static readonly string[] HomeRoomDomains = ["light", "switch", "fan", "input_boolean", "media_player", "cover", "lock", "climate"];
+
+    // The status glyph's pair key: below every chip's index (≥ 0) and DoubleClick's −1.
+    private const int HomeStatusPairKey = -1000;
+
+    /// <summary>The home bar's live feed: one WebSocket while the bar is shown.</summary>
+    private readonly IHaLive _homeLive;
+
+    /// <summary>The chips' double-clicks (and the status glyph's).</summary>
+    private readonly DoubleClick _homeClicks;
+
+    private readonly object _homeGate = new();
+
+    // Chips clicked and waiting for their state to change, by reference.
+    private readonly Dictionary<string, HomePending> _homePending = new(StringComparer.Ordinal);
+
+    // A room pane's devices while it is open: kept current with the bar's.
+    private readonly HashSet<string> _homeExtra = new(StringComparer.Ordinal);
+
+    private int _homePage;
+
+    // Moves with a click, a page, a room pane's devices: the cache's key beside the feed's version.
+    private long _homeModel;
+
+    private HomeCache? _homeCache;
+
+    // The Home Assistant URL and token as stored, as the bar last saw them: a change wakes the feed (the review's finding,
+    // 2026-10-12: a key fixed in /settings, or a profile switch, waited for a wake that never came).
+    private string? _homeServerKey;
+
+    // A chip clicked: when, and the entities behind it as they were (any change ends the wait), and whether the wait ran out.
+    private sealed record HomePending(DateTimeOffset Since, IReadOnlyList<HaLiveEntity?> Before, IReadOnlyList<string> Ids, bool Failed);
+
+    // The bar as last built, and what it was built from.
+    private sealed record HomeCache(string ItemsKey, HaCatalog? Catalog, long Model, IReadOnlySet<string> Ids, long Live, int Cells, ThemePalette Palette, DateTimeOffset Built, IReadOnlyList<HomeChip> Chips, HomeRow? Row, HaLiveStatus Status);
+
+    /// <summary>
+    /// The home bar's row for the settings in force (2026-10-12, the user's ask) in <paramref name="cells"/> cells: null — no
+    /// row, the feed told the bar is hidden — while <c>Show home bar</c> has nothing on it; else the chips (<see cref="HomeChips"/>)
+    /// over the live feed, rendered by <see cref="HomeBar.Render"/>. Asked several times a pane tick, so the row is cached and
+    /// rebuilt only when the items, the feed's version, a click, the page, the width or the theme moved — the feed's version at
+    /// most every <see cref="HomeRebuildEvery"/> — and a pending chip's wait running out. The feed is told the entities to keep
+    /// current (<see cref="IHaLive.Want"/>) when they change. Never waits on the network.
+    /// </summary>
+    private HomeRow? HomeBarRow(int cells)
+    {
+        var effective = _effective();
+        var items = HomeBarItems.Resolve(effective.HomeBarItems);
+        string serverKey = (effective.HomeAssistantUrl ?? "").Trim() + "\n" + (effective.HomeAssistantToken ?? "");
+        if (!string.Equals(Interlocked.Exchange(ref _homeServerKey, serverKey), serverKey, StringComparison.Ordinal))
+        {
+            _homeLive.Nudge();
+        }
+
+        if (items.Count == 0)
+        {
+            lock (_homeGate)
+            {
+                _homeCache = null;
+            }
+
+            _homeLive.Want(null);
+            return null;
+        }
+
+        var live = _homeLive.Snapshot;
+        var now = _time.GetUtcNow();
+        IReadOnlySet<string>? want = null;
+        HomeRow? row;
+        lock (_homeGate)
+        {
+            string key = string.Join('\n', items);
+            var cache = _homeCache;
+            bool sameItems = cache is not null && string.Equals(cache.ItemsKey, key, StringComparison.Ordinal) && cache.Model == _homeModel;
+            var ids = sameItems && ReferenceEquals(cache!.Catalog, live.Catalog) ? cache.Ids : HomeIds(items, live.Catalog);
+            if (cache is null || !ReferenceEquals(ids, cache.Ids))
+            {
+                want = ids;
+            }
+
+            bool due = cache is null || !sameItems || cache.Cells != cells || !ReferenceEquals(cache.Palette, Theme.Current) || !ReferenceEquals(cache.Ids, ids)
+                || HomeExpiryDue(now)
+                || (cache.Live != live.Version && now - cache.Built >= HomeRebuildEvery);
+            if (!due)
+            {
+                return cache!.Row;
+            }
+
+            UpdateHomePending(live, now);
+            var status = live.Status == HaLiveStatus.Off && live.Error is null ? HaLiveStatus.Connecting : live.Status;
+            bool stale = live.Status != HaLiveStatus.Live;
+            var chips = items.Select(i => HomeChips.Build(i, live.Entities, live.Catalog, HomeMarkOf(i), stale)).ToList();
+            row = HomeBar.Render(chips, status, cells, _homePage);
+            if (row is not null && _homePage >= row.Pages)
+            {
+                _homePage = row.Pages - 1;
+                row = HomeBar.Render(chips, status, cells, _homePage);
+            }
+
+            _homeCache = new HomeCache(key, live.Catalog, _homeModel, ids, live.Version, cells, Theme.Current, now, chips, row, status);
+        }
+
+        if (want is not null)
+        {
+            _homeLive.Want(want.ToList());
+        }
+
+        return row;
+    }
+
+    // The entities the bar keeps current: its items' (an area's lights) and an open room pane's devices.
+    private IReadOnlySet<string> HomeIds(IReadOnlyList<string> items, HaCatalog? catalog)
+    {
+        var ids = new HashSet<string>(HomeBarItems.EntityIds(items, catalog), StringComparer.Ordinal);
+        ids.UnionWith(_homeExtra);
+        return ids;
+    }
+
+    // Under _homeGate: a pending chip's mark.
+    private HomeChipMark HomeMarkOf(string reference) =>
+        _homePending.TryGetValue(reference, out var pending) ? (pending.Failed ? HomeChipMark.Failed : HomeChipMark.Pending) : HomeChipMark.None;
+
+    // Under _homeGate: whether a pending chip's wait (or its failed mark) has run out since the last build.
+    private bool HomeExpiryDue(DateTimeOffset now) =>
+        _homePending.Values.Any(p => now - p.Since >= (p.Failed ? HomeFailedShows : HomePendingWait));
+
+    // Under _homeGate: the pending chips against the feed — a change ends the wait; a wait run out shows the failed mark, then goes.
+    private void UpdateHomePending(HaLiveSnapshot live, DateTimeOffset now)
+    {
+        foreach (var (reference, pending) in _homePending.ToList())
+        {
+            bool moved = pending.Ids.Select((id, i) => !ReferenceEquals(live.Entities.GetValueOrDefault(id), pending.Before[i])).Any(changed => changed);
+            if (moved || (pending.Failed && now - pending.Since >= HomeFailedShows))
+            {
+                _homePending.Remove(reference);
+            }
+            else if (!pending.Failed && now - pending.Since >= HomePendingWait)
+            {
+                _homePending[reference] = pending with { Since = now, Failed = true };
+                DiagnosticLog.Info(HaText.Category, HomeBarText.NoChange(HomeBarItems.NameOf(reference, live.Catalog)));
+            }
+        }
+    }
+
+    /// <summary>
+    /// A click on the screen (2026-10-12, <see cref="KeySource.HomeBarClick"/>, on the reading task): not the bar's, or the bar's
+    /// — a single click on a chip flashes its note, a second within the pair's interval does what the chip does (a call at once,
+    /// marked pending until the state changes; or the line that asks or opens its pane); a right-click opens its pane; ‹ › turn
+    /// the page; the status glyph's note, and a double-click on it the picker. A click on the bar's blanks is spent.
+    /// </summary>
+    private HomeClick HomeBarClick(InputEvent.Click click)
+    {
+        if (!_pane.TryHitHomeBar(click.X, click.Y, out var span))
+        {
+            return _pane.OnHomeBar(click.Y) ? HomeClick.Spent : HomeClick.NotOurs;
+        }
+
+        HomeCache? cache;
+        lock (_homeGate)
+        {
+            cache = _homeCache;
+        }
+
+        if (cache is null)
+        {
+            return HomeClick.Spent;
+        }
+
+        switch (span.Target)
+        {
+            case HomeTarget.Prev or HomeTarget.Next:
+                _homeClicks.Reset();
+                lock (_homeGate)
+                {
+                    _homePage = Math.Max(0, _homePage + (span.Target == HomeTarget.Next ? 1 : -1));
+                    _homeModel++;
+                }
+
+                return HomeClick.Spent;
+
+            case HomeTarget.Status:
+                if (click.Button == MouseButton.Right || _homeClicks.Second(HomeStatusPairKey))
+                {
+                    _homeClicks.Reset();
+                    return HomeClick.Run(HomeBarText.Command + " " + HomeBarText.EditWord);
+                }
+
+                _pane.Flash(HomeBarText.StatusNote(cache.Status, _homeLive.Snapshot.Error));
+                return HomeClick.Spent;
+        }
+
+        if (span.Index < 0 || span.Index >= cache.Chips.Count)
+        {
+            return HomeClick.Spent;
+        }
+
+        var chip = cache.Chips[span.Index];
+        if (click.Button == MouseButton.Right)
+        {
+            _homeClicks.Reset();
+            return HomeClick.Run(HomeBarText.Command + " " + HomeBarText.ShowWord + " " + chip.Reference);
+        }
+
+        if (!_homeClicks.Second(span.Index))
+        {
+            _pane.Flash(chip.Note);
+            return HomeClick.Spent;
+        }
+
+        switch (chip.Action)
+        {
+            case HomeChipAction.Call when chip.Call is { } call:
+                StartHomeCall(chip.Reference, chip.Name, call, cache.Catalog);
+                return HomeClick.Spent;
+            case HomeChipAction.Confirm:
+                return HomeClick.Run(HomeBarText.Command + " " + HomeBarText.TapWord + " " + chip.Reference);
+            case HomeChipAction.Detail:
+                return HomeClick.Run(HomeBarText.Command + " " + HomeBarText.ShowWord + " " + chip.Reference);
+            default:
+                _pane.Flash(chip.Note);
+                return HomeClick.Spent;
+        }
+    }
+
+    /// <summary>A call from the bar or a chip's pane: the chip marked pending, the call on a task of its own, a failure flashed.</summary>
+    private void StartHomeCall(string reference, string name, HaServiceCall call, HaCatalog? catalog)
+    {
+        var live = _homeLive.Snapshot;
+        var ids = HomeBarItems.EntityIds([reference], catalog ?? live.Catalog).ToList();
+        lock (_homeGate)
+        {
+            _homePending[reference] = new HomePending(_time.GetUtcNow(), ids.Select(id => live.Entities.GetValueOrDefault(id)).ToList(), ids, Failed: false);
+            _homeModel++;
+        }
+
+        _ = RunHomeCallAsync(reference, name, call);
+    }
+
+    private async Task RunHomeCallAsync(string reference, string name, HaServiceCall call)
+    {
+        HaReply reply;
+        try
+        {
+            reply = await _homeLive.CallAsync(call, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            reply = HaReply.Failed(ex.Message);
+        }
+
+        if (reply.Ok)
+        {
+            return;
+        }
+
+        DiagnosticLog.Info(HaText.Category, "The home bar's " + call.Name + " on " + name + " failed: " + reply.Error);
+        lock (_homeGate)
+        {
+            _homePending.Remove(reference);
+            _homeModel++;
+        }
+
+        _pane.Flash(HomeBarText.Failed(name, reply.Error ?? ""));
+    }
+
+    /// <summary>Whether <c>/homebar</c>'s argument is a show or hide (bare, <c>on</c>, <c>off</c>): display only, run at once anywhere. Pure.</summary>
+    internal static bool HomeBarToggles(string args)
+    {
+        string word = args.Trim();
+        return word.Length == 0
+            || string.Equals(word, HomeBarText.OnWord, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(word, HomeBarText.OffWord, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// <c>/homebar [on|off]</c> where no pane may open (under a reply, a chord in a pane): the bar shown or hidden
+    /// (<see cref="HomeBarItems.Toggle"/>); with nothing ever picked, a notice naming the picker.
+    /// </summary>
+    private void HandleHomeBarToggle(string args)
+    {
+        if (ApplyHomeBarToggle(args) is { NeedsPicker: true })
+        {
+            _transcript.Notice(HomeBarText.NothingPicked);
+        }
+    }
+
+    // The toggle saved, its notice written; the toggle (null after the usage error).
+    private HomeToggle? ApplyHomeBarToggle(string args)
+    {
+        var saved = _settings.Current;
+        if (HomeBarItems.Toggle(args, saved.HomeBarItems, saved.HomeBarLastItems) is not { } next)
+        {
+            _transcript.Error(HomeBarText.Usage);
+            return null;
+        }
+
+        if (next.NeedsPicker)
+        {
+            return next;
+        }
+
+        _settings.Update(d =>
+        {
+            d.HomeBarItems = next.Items;
+            d.HomeBarLastItems = next.LastItems;
+        });
+        _transcript.Notice(next.Items.Count > 0 ? HomeBarText.Shown : HomeBarText.Hidden);
+        return next;
+    }
+
+    /// <summary>
+    /// <c>/homebar …</c> where a pane may open (the idle line; under a reply on the watcher): a toggle (the picker when nothing
+    /// was ever picked), <c>edit</c> the picker, <c>tap</c> a chip's double-click that asks first, <c>show</c> its pane.
+    /// </summary>
+    private async Task HandleHomeBarAsync(string args, INoticeSink sink, CancellationToken cancellationToken)
+    {
+        if (HomeBarToggles(args))
+        {
+            if (ApplyHomeBarToggle(args) is { NeedsPicker: true })
+            {
+                await _menu.EditHomeBarAsync(own: true, cancellationToken).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        string[] parts = args.Trim().Split(' ', 2, StringSplitOptions.TrimEntries);
+        string word = parts[0].ToLowerInvariant();
+        string rest = parts.Length > 1 ? parts[1] : "";
+        switch (word)
+        {
+            case HomeBarText.EditWord when rest.Length == 0:
+                await _menu.EditHomeBarAsync(own: true, cancellationToken).ConfigureAwait(false);
+                break;
+            case HomeBarText.TapWord when rest.Length > 0:
+                await HomeTapAsync(rest, sink, cancellationToken).ConfigureAwait(false);
+                break;
+            case HomeBarText.ShowWord when rest.Length > 0:
+                await HomeShowAsync(rest, sink, cancellationToken).ConfigureAwait(false);
+                break;
+            default:
+                sink.Error(HomeBarText.Usage);
+                break;
+        }
+    }
+
+    /// <summary>The chip on the bar <paramref name="item"/> names: its reference, or its name (any case); null when none is.</summary>
+    private HomeChip? FindHomeChip(string item)
+    {
+        HomeCache? cache;
+        lock (_homeGate)
+        {
+            cache = _homeCache;
+        }
+
+        if (cache is null)
+        {
+            return null;
+        }
+
+        string? reference = HomeBarItems.Normalize(item);
+        return cache.Chips.FirstOrDefault(c => string.Equals(c.Reference, reference, StringComparison.Ordinal))
+            ?? cache.Chips.FirstOrDefault(c => string.Equals(c.Name, item.Trim(), StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary><c>/homebar tap &lt;item&gt;</c>: the chip's double-click — a call, or the Yes/No first for an unlock, a guarded opening, a disarm.</summary>
+    private async Task HomeTapAsync(string item, INoticeSink sink, CancellationToken cancellationToken)
+    {
+        if (FindHomeChip(item) is not { } chip)
+        {
+            sink.Error(HomeBarText.NotOnBar(item));
+            return;
+        }
+
+        switch (chip.Action)
+        {
+            case HomeChipAction.Call when chip.Call is { } call:
+                StartHomeCall(chip.Reference, chip.Name, call, null);
+                break;
+            case HomeChipAction.Confirm when chip.Call is { } asked:
+                await ConfirmedHomeCallAsync(chip.Reference, chip.Name, asked, cancellationToken).ConfigureAwait(false);
+                break;
+            case HomeChipAction.Detail:
+                await HomeShowAsync(item, sink, cancellationToken).ConfigureAwait(false);
+                break;
+            default:
+                sink.Notice(chip.Note);
+                break;
+        }
+    }
+
+    // The Yes/No pane (the cursor on No), then the call on a yes; a no flashed.
+    private async Task ConfirmedHomeCallAsync(string reference, string name, HaServiceCall call, CancellationToken cancellationToken)
+    {
+        if (!_menu.CanShowMenus() || !await _menu.ConfirmAsync(HomeBarText.Confirm(call, name), cancellationToken).ConfigureAwait(false))
+        {
+            _pane.Flash(HomeBarText.Declined(name));
+            return;
+        }
+
+        StartHomeCall(reference, name, call, null);
+    }
+
+    /// <summary><c>/homebar show &lt;item&gt;</c>: a chip's pane — its actions, or a room's devices.</summary>
+    private async Task HomeShowAsync(string item, INoticeSink sink, CancellationToken cancellationToken)
+    {
+        if (FindHomeChip(item) is not { } chip || !HomeBarItems.TryParse(chip.Reference, out var kind, out string id))
+        {
+            sink.Error(HomeBarText.NotOnBar(item));
+            return;
+        }
+
+        if (!_pane.Enabled)
+        {
+            sink.Notice(chip.Note);
+            return;
+        }
+
+        try
+        {
+            if (kind == HomeItemKind.Area)
+            {
+                await HomeRoomAsync(chip, id, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await HomeEntityAsync(chip, id, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            _menuPane.Close();
+        }
+    }
+
+    // One entity's pane: its actions (HomeActions); a pick runs one (asking first where the chip would), and the pane closes.
+    private async Task HomeEntityAsync(HomeChip chip, string id, CancellationToken cancellationToken)
+    {
+        var entity = _homeLive.Snapshot.Entities.GetValueOrDefault(id);
+        string title = HomeBarText.DetailTitle(chip.Name, entity is null ? "" : HomeBarText.StateWord(entity.State));
+        var actions = entity is null ? [] : HomeActions(entity);
+        if (actions.Count == 0)
+        {
+            await _menuPane.ShowEmptyAsync(title, HomeBarText.NothingToDo, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        var page = new MenuPage(title, actions.Select(a => Markup.Escape(a.Label)).ToList(), SettingsMenu.PickKeys);
+        if (await _menuPane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { } pick || pick.Row >= actions.Count)
+        {
+            return;
+        }
+
+        var (_, call, ask) = actions[pick.Row];
+        if (ask)
+        {
+            _menuPane.Close();
+            await ConfirmedHomeCallAsync(chip.Reference, chip.Name, call, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        StartHomeCall(chip.Reference, chip.Name, call, null);
+    }
+
+    // A room's pane: all its lights on or off, then each device (Space or Enter switches one; a lock or a guarded cover asks).
+    // Its devices are kept current while it is open, and the list is shown again after each switch.
+    private async Task HomeRoomAsync(HomeChip chip, string areaId, CancellationToken cancellationToken)
+    {
+        var catalog = _homeLive.Snapshot.Catalog;
+        var members = catalog?.MembersOf(areaId, HomeRoomDomains)
+            .OrderBy(id => Array.IndexOf(HomeRoomDomains, HaCatalog.DomainOf(id)))
+            .ToList() ?? [];
+        lock (_homeGate)
+        {
+            _homeExtra.UnionWith(members);
+            _homeModel++;
+        }
+
+        try
+        {
+            int cursor = 0;
+            while (true)
+            {
+                var entities = _homeLive.Snapshot.Entities;
+                var rows = new List<string> { Markup.Escape(HomeBarText.AllOnAction), Markup.Escape(HomeBarText.AllOffAction) };
+                foreach (string id in members)
+                {
+                    var entity = entities.GetValueOrDefault(id);
+                    string glyph = HomeChips.GlyphFor(id, entity);
+                    rows.Add(Markup.Escape(glyph + " " + (entity?.Name ?? catalog!.NameOf(id))) + Theme.DimMarkup("  " + HomeBarText.StateWord(entity?.State ?? "…")));
+                }
+
+                var page = new MenuPage(HomeBarText.DetailTitle(chip.Name, chip.Value), rows, HomeBarText.RoomKeys) { SpaceToggles = true };
+                if (await _menuPane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
+                {
+                    return;
+                }
+
+                cursor = pick.Row;
+                if (pick.Row < 2)
+                {
+                    StartHomeCall(chip.Reference, chip.Name, new HaServiceCall("light", pick.Row == 0 ? "turn_on" : "turn_off", [], areaId), catalog);
+                    continue;
+                }
+
+                string member = members[pick.Row - 2];
+                if (entities.GetValueOrDefault(member) is not { } device)
+                {
+                    continue;
+                }
+
+                if (!pick.Toggle)
+                {
+                    // Enter: the device's own pane, then this one again.
+                    var one = HomeChips.Build(HomeBarItems.Entity(member), entities, catalog, HomeChipMark.None, stale: false);
+                    await HomeEntityAsync(one, member, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                // Space: the device's first action, a thermostat's none (its warmer is no switch).
+                if (device.Domain == "climate" || HomeActions(device).FirstOrDefault() is not { Label.Length: > 0 } first)
+                {
+                    continue;
+                }
+
+                string name = device.Name;
+                if (first.Ask)
+                {
+                    _menuPane.Close();
+                    await ConfirmedHomeCallAsync(HomeBarItems.Entity(member), name, first.Call, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                StartHomeCall(HomeBarItems.Entity(member), name, first.Call, catalog);
+            }
+        }
+        finally
+        {
+            lock (_homeGate)
+            {
+                _homeExtra.ExceptWith(members);
+                _homeModel++;
+            }
+        }
+    }
+
+    /// <summary>
+    /// An entity's actions on its pane, the one a room's Space runs first: a toggle (and on, off, brightness steps for a light),
+    /// a player's play/pause, volume and mute, a cover's open (asking for a garage, gate or door), close and stop, a lock's lock and
+    /// unlock (asking), a thermostat's warmer and cooler, a scene or script run, an alarm's disarm (asking; none when it wants a
+    /// code). Empty for a sensor. Pure over the entity.
+    /// </summary>
+    internal static IReadOnlyList<(string Label, HaServiceCall Call, bool Ask)> HomeActions(HaLiveEntity entity)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        string id = entity.Id;
+        string domain = entity.Domain;
+        var actions = new List<(string Label, HaServiceCall Call, bool Ask)>();
+        switch (domain)
+        {
+            case "light":
+                actions.Add((HomeBarText.ToggleAction, HaServiceCall.On("light", "toggle", id), false));
+                actions.Add((HomeBarText.TurnOnAction, HaServiceCall.On("light", "turn_on", id), false));
+                actions.Add((HomeBarText.TurnOffAction, HaServiceCall.On("light", "turn_off", id), false));
+                foreach (int percent in (int[])[25, 50, 75, 100])
+                {
+                    actions.Add((HomeBarText.Brightness(percent), HaServiceCall.On("light", "turn_on", id, HaJson.Object(w => w.WriteNumber("brightness_pct", percent))), false));
+                }
+
+                break;
+            case "switch" or "input_boolean" or "fan":
+                actions.Add((HomeBarText.ToggleAction, HaServiceCall.On(domain, "toggle", id), false));
+                actions.Add((HomeBarText.TurnOnAction, HaServiceCall.On(domain, "turn_on", id), false));
+                actions.Add((HomeBarText.TurnOffAction, HaServiceCall.On(domain, "turn_off", id), false));
+                break;
+            case "media_player":
+                bool off = entity.State is "off" or "standby";
+                if (off)
+                {
+                    actions.Add((HomeBarText.TurnOnAction, HaServiceCall.On(domain, "turn_on", id), false));
+                    break;
+                }
+
+                actions.Add((HomeBarText.PlayPauseAction, HaServiceCall.On(domain, "media_play_pause", id), false));
+                actions.Add((HomeBarText.VolumeUpAction, HaServiceCall.On(domain, "volume_up", id), false));
+                actions.Add((HomeBarText.VolumeDownAction, HaServiceCall.On(domain, "volume_down", id), false));
+                bool muted = entity.Flag("is_volume_muted") == true;
+                actions.Add((HomeBarText.MuteAction, HaServiceCall.On(domain, "volume_mute", id, HaJson.Object(w => w.WriteBoolean("is_volume_muted", !muted))), false));
+                actions.Add((HomeBarText.TurnOffAction, HaServiceCall.On(domain, "turn_off", id), false));
+                break;
+            case "cover":
+                bool open = entity.State is "open" or "opening";
+                bool guarded = HomeChips.GuardedCovers.Contains(entity.Text("device_class") ?? "", StringComparer.Ordinal);
+                var opening = (HomeBarText.OpenAction, HaServiceCall.On(domain, "open_cover", id), guarded);
+                var closing = (HomeBarText.CloseAction, HaServiceCall.On(domain, "close_cover", id), false);
+                if (open)
+                {
+                    actions.Add(closing);
+                    actions.Add(opening);
+                }
+                else
+                {
+                    actions.Add(opening);
+                    actions.Add(closing);
+                }
+
+                actions.Add((HomeBarText.StopAction, HaServiceCall.On(domain, "stop_cover", id), false));
+                break;
+            case "lock":
+                var lockIt = (HomeBarText.LockAction, HaServiceCall.On(domain, "lock", id), false);
+                var unlockIt = (HomeBarText.UnlockAction, HaServiceCall.On(domain, "unlock", id), true);
+                if (entity.State == "locked")
+                {
+                    actions.Add(unlockIt);
+                    actions.Add(lockIt);
+                }
+                else
+                {
+                    actions.Add(lockIt);
+                    actions.Add(unlockIt);
+                }
+
+                break;
+            case "climate":
+                if (entity.Number("temperature") is { } target)
+                {
+                    double step = entity.Number("target_temp_step") is { } s and > 0 ? s : 0.5;
+                    actions.Add((HomeBarText.Warmer, HaServiceCall.On(domain, "set_temperature", id, HaJson.Object(w => w.WriteNumber("temperature", target + step))), false));
+                    actions.Add((HomeBarText.Cooler, HaServiceCall.On(domain, "set_temperature", id, HaJson.Object(w => w.WriteNumber("temperature", target - step))), false));
+                }
+
+                actions.Add((entity.State == "off" ? HomeBarText.TurnOnAction : HomeBarText.TurnOffAction, HaServiceCall.On(domain, entity.State == "off" ? "turn_on" : "turn_off", id), false));
+                break;
+            case "scene":
+                actions.Add((HomeBarText.RunAction, HaServiceCall.On(domain, "turn_on", id), false));
+                break;
+            case "script":
+                actions.Add(entity.State == "on" ? (HomeBarText.StopAction, HaServiceCall.On(domain, "turn_off", id), false) : (HomeBarText.RunAction, HaServiceCall.On(domain, "turn_on", id), false));
+                break;
+            case "alarm_control_panel":
+                bool armed = entity.State.StartsWith("armed", StringComparison.Ordinal) || entity.State is "triggered" or "arming" or "pending";
+                bool needsCode = entity.Attributes.TryGetValue("code_format", out var format) && format.ValueKind == System.Text.Json.JsonValueKind.String;
+                if (armed && !needsCode)
+                {
+                    actions.Add((HomeBarText.DisarmAction, HaServiceCall.On(domain, "alarm_disarm", id), true));
+                }
+
+                break;
+        }
+
+        return actions;
+    }
+}

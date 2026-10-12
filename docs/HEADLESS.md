@@ -105,7 +105,7 @@ scripts. What to use instead:
 | `/usage` | Not available; `--log` records the run. |
 | `/process` | Not available; ask the model (its `process` tool lists, reads and stops background processes). |
 | `/sys` | Not available; use `/sys` in the TUI on the same profile. |
-| `/copy`, `/draft`, `/view`, `/tree`, `/vault`, `/explore`, `/open`, `/browse`, `/terminal`, `/shortcut`, `/theme`, `/perfbar`, `/toolbar`, `/header`, `/window`, `/expand`, `/collapse`, `/find`, `/queue`, `/rename`, `/help`, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat` | Not available (they need the screen, an editor, the clipboard or a confirmation). For `/tree` or `/vault`, ask the model to list the folder. |
+| `/copy`, `/draft`, `/view`, `/tree`, `/vault`, `/explore`, `/open`, `/browse`, `/terminal`, `/shortcut`, `/theme`, `/perfbar`, `/homebar`, `/toolbar`, `/header`, `/window`, `/expand`, `/collapse`, `/find`, `/queue`, `/rename`, `/help`, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat` | Not available (they need the screen, an editor, the clipboard or a confirmation). For `/tree` or `/vault`, ask the model to list the folder. |
 
 ---
 

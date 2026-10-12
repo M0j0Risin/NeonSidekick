@@ -247,6 +247,36 @@ public class KeySourceTests
         Assert.Equal(new InputEvent.Key(Keys.CtrlAlt(ConsoleKey.X)), await keys.ReadInputAsync(CancellationToken.None));
     }
 
+    /// <summary>
+    /// The home bar's clicks (2026-10-12): a read asks the hook first — a click it spends never reaches the reader, a line it makes
+    /// reads as a command (a chord's way), and one that is not the bar's passes as read; without a hook every click passes.
+    /// </summary>
+    [Fact]
+    public async Task ReadInputAsync_HomeBarClicks_AreSpent_OrMadeCommands_OrPass()
+    {
+        var input = new ScriptedInput();
+        var keys = new KeySource(input, FastPoll);
+        keys.HomeBarClick = click => click.Y switch
+        {
+            1 => HomeClick.Spent,
+            2 => HomeClick.Run("/homebar show entity:light.x"),
+            4 => throw new InvalidOperationException("boom"),
+            _ => HomeClick.NotOurs,
+        };
+        input.PushClick(0, 1);
+        input.PushClick(0, 2);
+        input.PushClick(0, 3);
+        input.PushClick(0, 4);
+
+        Assert.Equal(new InputEvent.Command("/homebar show entity:light.x"), await keys.ReadInputAsync(CancellationToken.None));
+        Assert.Equal(new InputEvent.Click(0, 3, MouseButton.Left), await keys.ReadInputAsync(CancellationToken.None));
+        Assert.Equal(new InputEvent.Click(0, 4, MouseButton.Left), await keys.ReadInputAsync(CancellationToken.None));   // a hook that throws lets it pass
+
+        keys.HomeBarClick = null;
+        input.PushClick(0, 1);
+        Assert.Equal(new InputEvent.Click(0, 1, MouseButton.Left), await keys.ReadInputAsync(CancellationToken.None));
+    }
+
     /// <summary>The kill switch under a reply (2026-10-01): run on the watcher, never a cancel, never type-ahead, never a line.</summary>
     [Fact]
     public async Task Watch_KillSwitch_RunsTheHook_NeverBufferedNorALine()

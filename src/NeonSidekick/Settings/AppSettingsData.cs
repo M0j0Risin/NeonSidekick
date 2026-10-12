@@ -388,6 +388,22 @@ public sealed class AppSettingsData
     public string PerformanceBarLook { get; set; } = App.PerfBarMode.Default;
 
     /// <summary>
+    /// The home bar's items (2026-10-12, the user's ask: a bar under the performance bar showing Home Assistant's rooms and
+    /// devices, each a chip to click): <c>area:&lt;area_id&gt;</c> or <c>entity:&lt;entity_id&gt;</c>, <b>in the bar's order</b>
+    /// — the <c>Show home bar</c> picker's move keys change it (<see cref="App.HomeBarItems"/>). Null or empty (the default)
+    /// is no bar: a home is the user's own, so there are no defaults. The bar needs <see cref="HomeAssistantUrl"/> and
+    /// <see cref="HomeAssistantToken"/>, not <see cref="HomeAssistantTools"/> (the model's switch); while shown it keeps one
+    /// WebSocket to Home Assistant, subscribed to these entities alone. Read on every pane tick. No variable.
+    /// </summary>
+    public List<string>? HomeBarItems { get; set; }
+
+    /// <summary>
+    /// The items a bare <c>/homebar</c> (or Ctrl+Alt+W) brings back after it hid the bar (2026-10-12): what showed when it hid
+    /// it; null until then. No settings row, no variable.
+    /// </summary>
+    public List<string>? HomeBarLastItems { get; set; }
+
+    /// <summary>
     /// The look (2026-09-23, the user's ask): a theme's name — a built-in (<see cref="UI.ThemeName.Names"/>, every
     /// <c>assets/themes</c> file since 2026-10-05) or one of the home's <c>themes</c> folder; anything else reads as
     /// <see cref="UI.ThemeName.Default"/> (<c>collider</c> since 2026-10-05, the user's call; <c>synthwave</c> until then).

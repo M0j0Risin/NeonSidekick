@@ -186,7 +186,7 @@ internal sealed partial class ChatScreen
     /// the pane's rows. <c>/view</c>'s, a lone <c>/imagine</c> picture's, and every thumbnail's under <c>fullsize</c> (2026-09-24).
     /// </summary>
     private ThumbnailBox WindowBox() =>
-        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.Enabled ? ScreenPane.PaneRows + _pane.InputRows + _pane.ToolbarRows + _pane.PerfRows + _pane.StripRows : 0);
+        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.Enabled ? ScreenPane.PaneRows + _pane.InputRows + _pane.BarRowsDrawn + _pane.StripRows : 0);
 
     /// <summary>One picture as large as the window allows (the <c>/view</c> box), several as a thumbnail strip.</summary>
     private void ShowPictures(IReadOnlyList<ImageAttachment> images)

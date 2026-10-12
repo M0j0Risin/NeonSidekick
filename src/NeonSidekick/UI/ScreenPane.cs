@@ -308,6 +308,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int _perfRows;
     private string? _shownPerf;
 
+    // The home bar (2026-10-12): the provider (asked with the row's cells; null = no row), the rows the last draw gave it
+    // (0 or 1, Draw the only writer), the row's key as drawn (its text and styles: a light changing colour changes no text;
+    // null = no row) and its clickable spans as drawn. It is the pane's last row when drawn, under the performance bar.
+    private Func<int, UI.HomeRow?> _home = static _ => null;
+    private int _homeRows;
+    private string? _shownHome;
+    private IReadOnlyList<UI.HomeSpan> _homeSpans = [];
+
     // The menus' height cap (2026-10-01): the saved word of Menus max height, read at every menu draw; full-screen (the
     // pane as it grew before the setting) until the screen sets it.
     private Func<string> _menuHeight = static () => "full-screen";
@@ -632,7 +640,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return null;
             }
 
-            if (_perfRows > 0 && y == top + LastRowBelowCursor)
+            if (_perfRows > 0 && y == top + PerfRowBelowCursor)
             {
                 return new OffPaneHit(null, PerfBarHit);
             }
@@ -833,6 +841,30 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     {
         get => _perf;
         set => _perf = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
+    /// The home bar (2026-10-12, the user's ask: Home Assistant's rooms and devices under the perf bar): asked with the cells
+    /// the row has on every draw and on the tick; null draws no row. It takes the screen's last row, under the performance
+    /// bar, when the window keeps a transcript row over the smallest pane and the other bars — so a short window drops it
+    /// first; the tick rewrites it in place when its key (text and styles) changes and repaints the pane when it comes or goes.
+    /// </summary>
+    public Func<int, UI.HomeRow?> Home
+    {
+        get => _home;
+        set => _home = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>The rows the home bar took in the last draw: 1 while drawn, else 0.</summary>
+    public int HomeRows
+    {
+        get { lock (_gate) { return _homeRows; } }
+    }
+
+    /// <summary>The rows every bar under the hint row took in the last draw (the toolbar, the performance bar, the home bar): what the thumbnail sizing adds.</summary>
+    public int BarRowsDrawn
+    {
+        get { lock (_gate) { return BarRows; } }
     }
 
     /// <summary>
@@ -1226,11 +1258,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The rows the performance bar takes in a window of <paramref name="height"/>: one when <see cref="Perf"/> answers and the window keeps a transcript row over the smallest pane and the toolbar, else none.</summary>
     private int PerfRowsFor(int height) => _perf(Math.Max(1, Width - 1)) is not null && height >= PaneRows + 2 + ToolbarRowsFor(height) ? 1 : 0;
 
-    /// <summary>The rows under the hint row in a window of <paramref name="height"/>: the toolbar's and the performance bar's.</summary>
-    private int BarRowsFor(int height) => ToolbarRowsFor(height) + PerfRowsFor(height);
+    /// <summary>The rows the home bar takes in a window of <paramref name="height"/> (2026-10-12): one when <see cref="Home"/> answers and the window keeps a transcript row over the smallest pane and the other bars, else none.</summary>
+    private int HomeRowsFor(int height) => _home(Math.Max(1, Width - 1)) is not null && height >= PaneRows + 2 + ToolbarRowsFor(height) + PerfRowsFor(height) ? 1 : 0;
+
+    /// <summary>The rows under the hint row in a window of <paramref name="height"/>: the toolbar's, the performance bar's and the home bar's.</summary>
+    private int BarRowsFor(int height) => ToolbarRowsFor(height) + PerfRowsFor(height) + HomeRowsFor(height);
 
     /// <summary>The rows under the hint row as last drawn.</summary>
-    private int BarRows => _toolbarRows + _perfRows;
+    private int BarRows => _toolbarRows + _perfRows + _homeRows;
 
     /// <summary>
     /// A short glyph after the trailer, <see cref="MarkSeparator"/> between, drawn in
@@ -3045,6 +3080,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             {
                 RedrawPerf();
             }
+
+            if (HomeChanged())
+            {
+                RedrawHome();
+            }
         }
     }
 
@@ -3870,7 +3910,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return false;
             }
 
-            if (_perfRows > 0 && y == top + LastRowBelowCursor)
+            if (_perfRows > 0 && y == top + PerfRowBelowCursor)
             {
                 hit = PerfBarHit;
                 return true;
@@ -3883,6 +3923,51 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
             hit = ToolbarHitAt(_toolbarStrip, _toolbarPathColumn, _toolbarPathCells, x);
             return true;
+        }
+    }
+
+    /// <summary>
+    /// The home bar's span under buffer cell (<paramref name="x"/>, <paramref name="y"/>) (2026-10-12): a chip, a page arrow or
+    /// the status glyph. It answers under an overlay too (the bar stays drawn under every pane, and a chip acts without
+    /// closing it), under the busy row and while scrolled; false on a blank of the bar, off it, when it is not drawn, when the
+    /// pane is lifted, batched or modal, or when the console cannot say where the cursor is.
+    /// </summary>
+    public bool TryHitHomeBar(int x, int y, out UI.HomeSpan hit)
+    {
+        hit = default;
+        if (!Enabled)
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            if (!_drawn || _homeRows == 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top || y != top + LastRowBelowCursor)
+            {
+                return false;
+            }
+
+            if (UI.HomeBar.HitAt(_homeSpans, x) is not { } span)
+            {
+                return false;
+            }
+
+            hit = span;
+            return true;
+        }
+    }
+
+    /// <summary>Whether buffer row <paramref name="y"/> is the home bar's, as drawn: a click on its blanks is no one else's.</summary>
+    public bool OnHomeBar(int y)
+    {
+        if (!Enabled)
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            return _drawn && _homeRows > 0 && _batch == 0 && _modal == 0 && _geometry?.CursorTop() is int top && y == top + LastRowBelowCursor;
         }
     }
 
@@ -4124,7 +4209,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         // the smallest pane and the toolbar; from here on the bars count as one (barRows) wherever the toolbar did alone.
         var perf = _perf(Math.Max(1, w - 1));
         int perfRows = perf is not null && h >= PaneRows + 2 + toolbarRows ? 1 : 0;
-        int barRows = toolbarRows + perfRows;
+
+        // The home bar (2026-10-12) under the performance bar, the last row, when the window keeps a transcript row over the
+        // smallest pane and the other bars: in a short window it goes first.
+        var home = _home(Math.Max(1, w - 1));
+        int homeRows = home is not null && h >= PaneRows + 2 + toolbarRows + perfRows ? 1 : 0;
+        int barRows = toolbarRows + perfRows + homeRows;
 
         // The picture strip (later still on 2026-09-24) over the upper rule, under a rule of its own (2026-09-25): its rows,
         // the rule's with them, count into the pane's, so the
@@ -4190,6 +4280,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         _paneRows = 3 + overlayRows + (shown?.Rows.Count ?? 0) + barRows + stripRows + scrollRows;
         _toolbarRows = toolbarRows;
         _perfRows = perfRows;
+        _homeRows = homeRows;
         _stripRows = stripRows;
 
         // Scrolled: the anchor against the region this pane leaves; at or past the last window it
@@ -4461,6 +4552,17 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         else
         {
             _shownPerf = null;
+        }
+
+        if (homeRows > 0)
+        {
+            EndRow();
+            WriteHomeRow(home!);
+        }
+        else
+        {
+            _shownHome = null;
+            _homeSpans = [];
         }
 
         if (_overpaint)
@@ -4889,7 +4991,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int CursorDepth => !_drawnOverlay ? _cursorRow : _drawnInput ? _overlayRows + _cursorRow : 0;
 
     /// <summary>How many rows under the terminal's cursor the hint row sits, as last drawn: over the rows under the cursor and the lower rule; the toolbar, when drawn, is one further.</summary>
-    private int HintRowBelowCursor => _paneRows - 2 - _toolbarRows - _perfRows - _stripRows - _scrollRows - CursorDepth;
+    private int HintRowBelowCursor => _paneRows - 2 - _toolbarRows - _perfRows - _homeRows - _stripRows - _scrollRows - CursorDepth;
 
     /// <summary>How many rows under the terminal's cursor the pane's last row sits, as last drawn: the hint row, or the toolbar under it (2026-09-21), or the performance bar under that (2026-09-29).</summary>
     private int LastRowBelowCursor => _paneRows - 2 - _stripRows - _scrollRows - CursorDepth;
@@ -4897,8 +4999,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>How many rows over the terminal's cursor the scroll's row sits (2026-10-01), as last drawn: over the upper rule, and the picture strip's rows with their rule when drawn.</summary>
     private int ScrollRowAboveCursor => CursorDepth + 1 + _stripRows + 1;
 
-    /// <summary>How many rows under the terminal's cursor the toolbar sits, as last drawn: the last row, or the one over the performance bar.</summary>
-    private int ToolbarRowBelowCursor => LastRowBelowCursor - _perfRows;
+    /// <summary>How many rows under the terminal's cursor the performance bar sits, as last drawn (2026-10-12): the last row, or the one over the home bar.</summary>
+    private int PerfRowBelowCursor => LastRowBelowCursor - _homeRows;
+
+    /// <summary>How many rows under the terminal's cursor the toolbar sits, as last drawn: the last row, or the one over the performance bar (and the home bar).</summary>
+    private int ToolbarRowBelowCursor => PerfRowBelowCursor - _perfRows;
 
     private void WriteRule(int width)
     {
@@ -5485,7 +5590,31 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             return;
         }
 
-        RedrawRow(LastRowBelowCursor, () => WritePerfRow(row));
+        RedrawRow(PerfRowBelowCursor, () => WritePerfRow(row));
+    }
+
+    /// <summary><see cref="RedrawHint"/> for the home bar (2026-10-12): its row again, in place, the pane's last; nothing while none is drawn.</summary>
+    private void RedrawHome()
+    {
+        if (!_drawn || _batch > 0 || _modal > 0 || _homeRows == 0 || _home(Math.Max(1, Width - 1)) is not { } row)
+        {
+            return;
+        }
+
+        RedrawRow(LastRowBelowCursor, () => WriteHomeRow(row));
+    }
+
+    /// <summary>The home bar's row on the cursor's row: its runs in their styles, the rest of the row erased; the key and the spans remembered for the tick and the clicks.</summary>
+    private void WriteHomeRow(UI.HomeRow row)
+    {
+        foreach (var segment in row.Segments)
+        {
+            _inner.Write(new RawText(segment.Text, segment.Style));
+        }
+
+        _inner.Write(EraseLineEnd);
+        _shownHome = row.Key;
+        _homeSpans = row.Spans;
     }
 
     /// <summary>The performance bar's row on the cursor's row: its runs in their styles, the rest of the row erased; the text remembered for the tick.</summary>
@@ -5613,9 +5742,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return;
             }
 
-            if (ToolbarRowsFor(h) != _toolbarRows || PerfRowsFor(h) != _perfRows)
+            if (ToolbarRowsFor(h) != _toolbarRows || PerfRowsFor(h) != _perfRows || HomeRowsFor(h) != _homeRows)
             {
-                // The toolbar or the performance bar came or went (the screen's settings, a window at the
+                // The toolbar, the performance bar or the home bar came or went (the screen's settings, a window at the
                 // edge): the whole pane again — its shape changed.
                 if (_busyLabel is not null)
                 {
@@ -5657,6 +5786,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 RedrawPerf();
             }
 
+            if (HomeChanged())
+            {
+                // A device changed, a click's mark came or went: the row again, in place.
+                RedrawHome();
+            }
+
             if (ScrollRowChanged())
             {
                 // The count below moved with nothing redrawing it (a safety net: the writes that change it redraw it).
@@ -5684,6 +5819,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>The performance bar <see cref="Perf"/> answers now is not the drawn one (its text — a presence change is <see cref="PerfRowsFor"/> against the drawn rows).</summary>
     private bool PerfChanged() => _perfRows > 0 && _perf(Math.Max(1, Width - 1)) is { } row && !string.Equals(row.Text, _shownPerf, StringComparison.Ordinal);
+
+    /// <summary>The home bar <see cref="Home"/> answers now is not the drawn one (its key — a presence change is <see cref="HomeRowsFor"/> against the drawn rows).</summary>
+    private bool HomeChanged() => _homeRows > 0 && _home(Math.Max(1, Width - 1)) is { } row && !string.Equals(row.Key, _shownHome, StringComparison.Ordinal);
 
     /// <summary>The standing hint (the overlay's while one is open) with the trailer is not what the hint row shows.</summary>
     private bool HintChanged() =>

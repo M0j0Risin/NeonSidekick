@@ -86,6 +86,14 @@ public enum SlashCommand
     Perf,
 
     /// <summary>
+    /// <c>/homebar [on|off|edit]</c> (2026-10-12, the user's ask: a bar of Home Assistant rooms and devices under the performance
+    /// bar): bare, the home bar hidden, or shown again with the items it last had (the picker opens when it never had any);
+    /// <c>on</c>/<c>off</c> say which; <c>edit</c> opens the picker. <c>tap &lt;item&gt;</c> and <c>show &lt;item&gt;</c> are the bar's
+    /// own clicks (a confirm, a chip's pane), the lines a click makes. Ctrl+Alt+W.
+    /// </summary>
+    HomeBar,
+
+    /// <summary>
     /// <c>/toolbar [on|off]</c> (later on 2026-09-30, the user's ask: "same as how /perf works for the perfbar"): bare, the toolbar
     /// hidden while it shows — its items kept in <see cref="Settings.AppSettingsData.ToolbarLastItems"/> — else shown again with
     /// them (<see cref="ToolbarItems.Defaults"/> the first time); <c>on</c> and <c>off</c> say which. Display only, so it runs at
@@ -395,6 +403,7 @@ public static class SlashCommands
             new("/new", "start over, keeping the screen"),
             new("/open", "open a file in its default app"),
             new("/perfbar", "show or hide the performance bar"),
+            new(HomeAssistant.HomeBarText.Command, "show, hide or edit the home bar"),
             new("/plan", "plan before doing"),
             new("/pdf", "make a PDF of a file, page or reply"),
             new(Viewer.ProcessWindowText.Word, "watch the model's background processes"),
@@ -519,7 +528,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -589,6 +598,7 @@ public static class SlashCommands
             "/sys" => SlashCommand.Sys,
             "/usage" => SlashCommand.Usage,
             "/perfbar" => SlashCommand.Perf,
+            "/homebar" => SlashCommand.HomeBar,
             "/toolbar" => SlashCommand.Toolbar,
             "/header" => SlashCommand.Header,
             "/profile" => SlashCommand.Profile,
@@ -659,6 +669,6 @@ public static class SlashCommands
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.Profile or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browse or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Cmd or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
-        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind
+        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind
         or SlashCommand.Log or SlashCommand.Process or SlashCommand.Tools or SlashCommand.Settings or SlashCommand.Find;
 }

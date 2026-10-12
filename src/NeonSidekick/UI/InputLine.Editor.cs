@@ -434,6 +434,18 @@ public sealed partial class InputLine
                 return EditOutcome.Handled;
             }
 
+            if (input is InputEvent.Command command)
+            {
+                // A home bar click's line (2026-10-12): a command chord's way, the draft back after; nothing where chords are not read.
+                if (_o.Shortcuts && !_o.Live)
+                {
+                    EndRow();
+                    return new EditOutcome.End(new InputResult.Shortcut(_text.ToString(), command.Line));
+                }
+
+                return EditOutcome.Handled;
+            }
+
             if (input is not InputEvent.Key { Info: var k })
             {
                 // No other event reaches a read; nothing to do with one that did.

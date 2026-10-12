@@ -91,6 +91,9 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/ha say <sentence>` | Hands a sentence to Home Assistant's Assist agent. |
 | `/header [on\|off]` | Shows or hides the banner (*Show header*) from the next clear; alone, flips it. |
 | `/help` | The commands (Basic and Advanced tabs) and the keys. |
+| `/homebar [on\|off]` | Hides the home bar or shows it again with the items it had (Ctrl+Alt+W); the first time, with nothing picked, opens the picker. See [Home bar](SETTINGS.md#home-bar). |
+| `/homebar edit` | The home bar's picker: the bar's order (Shift/Alt+↑↓, Alt+Home/End, Delete) and the rooms and devices to add. |
+| `/homebar tap\|show <item>` | What a double-click and a right-click on a chip do, by its item (`entity:light.desk`, `area:kitchen`) or its name. |
 | `/learn [<note>]` | Writes or improves a skill in the background from the last turn. |
 | `/learn sessions [<n>\|<search>]` | The same from stored sessions: the newest 5, the newest n (up to 20), or those a search finds. |
 | `/log` | Opens the [log window](#log-window). Works without `--log`. |
@@ -604,6 +607,9 @@ In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes
 | The camera pane | Space takes · `r` retake · Enter attaches · ESC drops |
 | `/settings changed` | Enter edits · `r` back to default |
 | `/perfbar` | Enter or Space flips · `a` all · `n` none · `d` default · `t` / `g` / `s` / `l` the look |
+| `/homebar edit`, On the bar | Shift+↑/↓ or Alt+↑/↓ move · Alt+Home/End top or bottom · Delete removes · Enter the same as a list |
+| `/homebar edit`, the other tabs | Space or Enter adds or removes · type to filter |
+| A room's pane on the home bar | Space switches a device · Enter its actions |
 | *Embedded models* | `1` / `2` size · `i` / `u` installed or not · `d` drafter · `s` sort · `x` uncensored |
 | `/server`, `/model` | Enter chooses · type to filter |
 | The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · ESC denies |

@@ -1,5 +1,7 @@
 using NeonSidekick.Tests.Fakes;
 using System.Globalization;
+using NeonSidekick.App;
+using NeonSidekick.HomeAssistant;
 using NeonSidekick.UI;
 using NeonSidekick.UI.Markdown;
 using Spectre.Console;
@@ -4867,6 +4869,65 @@ public class ScreenPaneTests : IDisposable
         Assert.True(pane.TryHitToolbar(1, 103, out tool));   // the bar alone, the last row at 103 now, answers too
         Assert.Equal(ScreenPane.PerfBarHit, tool);
         Assert.False(pane.TryHitToolbar(1, 102, out _));     // the hint row is the hint row's
+    }
+
+    /// <summary>
+    /// The home bar (2026-10-12): the pane's last row, under the performance bar — the bars above keep their clicks one row up —
+    /// its chips hit by their spans, its blanks no one else's, rewritten in place when only a colour changes, the whole pane
+    /// again when it goes.
+    /// </summary>
+    [Fact]
+    public void HomeBar_IsTheLastRow_UnderThePerfBar_ItsSpansHit_AndAColourAloneRedrawsIt()
+    {
+        _cursorTop = 100;
+        var slab = new Style(Color.White, new Color(255, 0, 0));
+        bool shown = true;
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Toolbar = () => new ScreenPane.ToolbarParts("🔧", @"D:\x");
+        pane.Perf = _ => new PerfRow([new PerfSegment("CPU 5%", Theme.DimText)]);
+        pane.Home = cells => shown
+            ? HomeBar.Render([new HomeChip("entity:light.desk", HomeChips.LightGlyph, "Desk", "Desk", "", slab, HomeChipAction.Call, null, "")], HaLiveStatus.Live, cells)
+            : null;
+        pane.Show();
+        pane.ShowInput("abc", 3);
+
+        // Rule / input / rule / hint / toolbar / perf / home: the toolbar at 103, the performance bar at 104, the home bar at 105.
+        Assert.Equal((1, 1, 1), (pane.ToolbarRows, pane.PerfRows, pane.HomeRows));
+        Assert.Equal(3, pane.BarRowsDrawn);
+        Assert.Contains("\nidle\n🔧" + new string(' ', 33) + @"D:\x" + "\nCPU 5%\n⌂  💡 Desk ", Output);
+        Assert.True(pane.TryHitToolbar(1, 103, out var tool));
+        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🔧", 0), tool);
+        Assert.True(pane.TryHitToolbar(1, 104, out tool));
+        Assert.Equal(ScreenPane.PerfBarHit, tool);
+        Assert.Equal(new ScreenPane.OffPaneHit(null, ScreenPane.PerfBarHit), pane.OffPaneHitAt(1, 104));
+        Assert.False(pane.TryHitToolbar(1, 105, out _));   // the home bar is not the toolbar's
+        Assert.True(pane.TryHitHomeBar(0, 105, out var hit));
+        Assert.Equal(HomeTarget.Status, hit.Target);
+        Assert.True(pane.TryHitHomeBar(4, 105, out hit));
+        Assert.Equal((HomeTarget.Chip, 0), (hit.Target, hit.Index));
+        Assert.False(pane.TryHitHomeBar(30, 105, out _));   // a blank
+        Assert.True(pane.OnHomeBar(105));
+        Assert.False(pane.TryHitHomeBar(4, 104, out _));
+        Assert.False(pane.OnHomeBar(104));
+        int draws = Draws;
+
+        // A colour alone: the row again in place, nothing else.
+        slab = new Style(Color.White, new Color(0, 0, 255));
+        int mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal("⌂  💡 Desk ", Output[mark..]);
+        Assert.Equal(draws, Draws);
+
+        // Gone: the whole pane again, the performance bar its last row and its clicks there.
+        shown = false;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(draws + 1, Draws);
+        Assert.Equal((1, 0), (pane.PerfRows, pane.HomeRows));
+        Assert.EndsWith("\nCPU 5%", Output);
+        Assert.True(pane.TryHitToolbar(1, 104, out tool));
+        Assert.Equal(ScreenPane.PerfBarHit, tool);
+        Assert.False(pane.TryHitHomeBar(4, 105, out _));
     }
 
     /// <summary>

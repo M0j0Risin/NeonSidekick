@@ -143,6 +143,17 @@ public sealed class KeySource : IAnsiConsoleInput
     public Action? LearnCancel { get; set; }
 
     /// <summary>
+    /// The home bar's clicks (2026-10-12, the user's ask: a bar of Home Assistant chips under the perf bar): asked with every
+    /// click wherever it is read — the idle line, a pane, the watch under a reply — ahead of every reader, so a chip acts
+    /// without closing the pane open over it, and a right-click on one never reaches the line's paste. It answers
+    /// <see cref="HomeClick.NotOurs"/> (the click goes on as read), <see cref="HomeClick.Spent"/> (done, nothing more) or a
+    /// line (<see cref="HomeClick.Run"/>), which reads as an <see cref="InputEvent.Command"/>: a command chord's way.
+    /// <see cref="KillSwitch"/>'s contract: on the reading task, must not block, never throws. Null (the default, headless):
+    /// every click passes.
+    /// </summary>
+    public Func<InputEvent.Click, HomeClick>? HomeBarClick { get; set; }
+
+    /// <summary>
     /// Whether <paramref name="e"/> is a hooked chord's key and its hook took it: the kill switch's (<see cref="KillSwitch"/>) or
     /// the learning's cancel (<see cref="LearnCancel"/>, 2026-10-04; the method was the kill switch's alone until then).
     /// </summary>
@@ -171,6 +182,44 @@ public sealed class KeySource : IAnsiConsoleInput
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// <paramref name="e"/> as the home bar's hook (<see cref="HomeBarClick"/>) leaves it: unchanged when it is no click or
+    /// not the bar's; null with <paramref name="spent"/> when the hook took it; an <see cref="InputEvent.Command"/> for the
+    /// line it made.
+    /// </summary>
+    private InputEvent? OnHomeBar(InputEvent? e, out bool spent)
+    {
+        spent = false;
+        if (e is not InputEvent.Click click || HomeBarClick is not { } hook)
+        {
+            return e;
+        }
+
+        HomeClick taken;
+        try
+        {
+            taken = hook(click);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            DiagnosticLog.Debug("Keys", "The home bar's click failed: " + ex.Message);
+            return e;
+        }
+
+        if (!taken.Taken)
+        {
+            return e;
+        }
+
+        if (taken.Line is { } line)
+        {
+            return new InputEvent.Command(line);
+        }
+
+        spent = true;
+        return null;
     }
 
     /// <summary>
@@ -331,7 +380,14 @@ public sealed class KeySource : IAnsiConsoleInput
                 }
             }
 
-            if (!SpentOnHook(e))
+            if (SpentOnHook(e))
+            {
+                continue;
+            }
+
+            // The home bar's clicks (2026-10-12): spent here, or made a command line.
+            e = OnHomeBar(e, out bool spent);
+            if (!spent)
             {
                 return e;
             }
@@ -403,7 +459,13 @@ public sealed class KeySource : IAnsiConsoleInput
         while (true)
         {
             var input = await ReadInputAsync(cancellationToken).ConfigureAwait(false);
-            if (input is not InputEvent.Key { Info: var key } || Keys.ShortcutLine(key) is not { } line || !pane.OverlayOpen)
+            string? line = input switch
+            {
+                InputEvent.Key { Info: var key } => Keys.ShortcutLine(key),
+                InputEvent.Command command => command.Line,   // a home bar click's line (2026-10-12): a chord's way
+                _ => null,
+            };
+            if (line is null || !pane.OverlayOpen)
             {
                 return input;
             }
@@ -620,6 +682,28 @@ public sealed class KeySource : IAnsiConsoleInput
                     {
                         // The kill switch (2026-10-01) and the learning's cancel (2026-10-04): spent here, under a reply or a spinner, ahead of every other key.
                         continue;
+                    }
+
+                    if (e is InputEvent.Click)
+                    {
+                        // The home bar (2026-10-12): a chip acts under a reply too; the line a click makes (a pane, a confirm)
+                        // is a command chord's, handed to the line hook the same way.
+                        var home = OnHomeBar(e, out bool homeSpent);
+                        if (homeSpent)
+                        {
+                            continue;
+                        }
+
+                        if (home is InputEvent.Command command)
+                        {
+                            if (onLine is not null
+                                && !await ServiceAsync(LinePhase(onLine, ChordLine(command.Line), []), stop, null).ConfigureAwait(false))
+                            {
+                                return accepted ? Interrupt.Accept : Interrupt.None;
+                            }
+
+                            continue;
+                        }
                     }
 
                     if (e is InputEvent.Key { Info: var k })
