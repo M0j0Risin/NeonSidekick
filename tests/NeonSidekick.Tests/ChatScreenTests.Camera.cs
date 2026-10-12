@@ -417,9 +417,9 @@ public partial class ChatScreenTests
         _chat.EnqueueText("I see you.");
         WatchFixture(input =>
         {
-            // The sample runs on the camera's thread: wait for its frame, then a moment for the grid.
-            SpinWait.SpinUntil(() => _cameraSystem!.Reads >= 2, 5000);
-            Thread.Sleep(200);
+            // The sample runs on the camera's thread: wait until it is kept, not a fixed delay after its read (the v0.5.1
+            // release run, 2026-10-11: a Mac runner had not kept it 200 ms on, and the message went without the picture).
+            Assert.True(SpinWait.SpinUntil(() => _running!.WatchHasPending, TimeSpan.FromSeconds(5)), "the sample was never kept");
             PushLine(input, "what now?");
         }, Line("/exit"));
 
@@ -448,8 +448,7 @@ public partial class ChatScreenTests
         string? seen = null;
         WatchFixture(input =>
         {
-            SpinWait.SpinUntil(() => _cameraSystem!.Reads >= 2, 5000);
-            Thread.Sleep(200);
+            Assert.True(SpinWait.SpinUntil(() => _running!.WatchHasPending, TimeSpan.FromSeconds(5)), "the sample was never kept");
             PushLine(input, "what now?");
         }, DoubleClickDown(4), DoubleClickDown(10), input =>
         {

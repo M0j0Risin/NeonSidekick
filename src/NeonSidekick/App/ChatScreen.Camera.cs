@@ -35,6 +35,10 @@ internal sealed partial class ChatScreen
     /// <summary>Watch mode (<c>/camera watch</c>): off until asked for, never at startup.</summary>
     private readonly CameraWatch _cameraWatch;
 
+    /// <summary>Whether a changed watch frame waits, any thread (the watch's own lock): what a watch test waits for instead of a
+    /// fixed delay (the v0.5.1 release run, 2026-10-11, where a Mac runner had not kept the sample 200 ms after its read).</summary>
+    internal bool WatchHasPending => _cameraWatch.HasPending;
+
     /// <summary>The camera's photos by full path, so one put on the input line is still known as the camera's when it is sent (the session keeps a placeholder).</summary>
     private readonly ConcurrentDictionary<string, byte> _cameraPaths = new(StringComparer.OrdinalIgnoreCase);
 
