@@ -13,13 +13,13 @@ Not for Macs: Docker servers need Windows and an NVIDIA GPU. Back to the [README
 - A Hugging Face token: replace `YOUR_HUGGING_FACE_TOKEN` in each command
 - Run the commands from a WSL (Ubuntu) shell, not PowerShell; they use `~` and `\` line continuations
 
-Every example serves on port `8000`, so only one can run at a time. The container names record the model,
-the drafter, the GPU count and the context length.
+Every example serves on port `8000`, so only one can run at a time. Each container name records the model,
+drafter, GPU count and context length.
 
 ## Using them in NeonSidekick
 
 Each container can be a `/server` choice: tick it in *Docker server containers* on `/settings` › Servers › Docker and
-turn on *Docker servers enabled*. The app stops whichever one is running and starts the one you pick, so the
+turn on *Docker servers enabled*. The app stops the running one before starting the one you pick, so the
 shared port is never a problem. See [Docker servers](TOOLS.md#docker-servers).
 
 ## Models

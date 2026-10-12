@@ -8,7 +8,7 @@ A local SearXNG for the web tools. Back to the [README](../README.md).
 
 ## Prepare directory
 
-Use WSL (Ubuntu) on Windows. Start in your home directory (~). On a Mac, run the same commands in Terminal with Docker Desktop; skip WSL.
+On Windows, use a WSL (Ubuntu) shell; on a Mac, use Terminal. Start in your home directory (`~`).
 
 ```bash
 mkdir -p ~/searxng/core-config/
@@ -87,7 +87,7 @@ docker compose up
 
 ## Using it in NeonSidekick
 
-On `/tools` › Core › Web, set *Web search method* to `searxng` and *Web SearXNG URL* to `http://localhost:8888` (or set `NEONSIDEKICK_SEARXNG_URL`). The `json` format above is required.
+On `/tools` › Core › Web, set *Web search method* to `searxng` and *Web SearXNG URL* to `http://localhost:8888` (or set `NEONSIDEKICK_SEARXNG_URL`). The app needs the `json` format enabled above.
 
 ## Test output types
 

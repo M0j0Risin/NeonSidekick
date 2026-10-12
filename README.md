@@ -51,7 +51,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 
 ### Models
 * **Local servers:** finds OpenAI-compatible servers on this machine or your network (LM Studio, Ollama, llama.cpp, vLLM…), or takes a URL.
-* **Embedded LLM:** No server needed — install Gemma, Qwen or Muse models from `/settings` › Servers › Embedded and the app runs them on a built-in llama.cpp, backed by CUDA, Vulkan or CPU (Metal on a Mac). Every model supports vision and tool-calling. Quants run Q4 and up, chosen to fit GPUs with 8–32 GB of VRAM. Several NVFP4 quants are included for Nvidia GPUs.
+* **Embedded LLM:** no server needed. Install a Gemma, Qwen or Muse model from `/settings` › Servers › Embedded and the app runs it on a built-in llama.cpp (CUDA, Vulkan or CPU; Metal on a Mac). Every model does vision and tool calls, in Q4-and-up quants sized for 8–32 GB of VRAM, plus NVFP4 quants for NVIDIA cards.
 * **Docker servers (Windows):** your vLLM or SGLang containers as `/server` choices, one running at a time ([vLLM](docs/DOCKER_WINDOWS_VLLM.md) and [SGLang](docs/DOCKER_WINDOWS_SGLANG.md) examples).
 * **Cloud models:** the Anthropic and OpenAI APIs with your own key, or your Claude Code install. All off until you turn them on.
 * **Context control:** automatic compaction keeps the conversation inside the model's window; `/compact` and `/rewind` do it by hand.
@@ -61,12 +61,12 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Profiles:** each has its own working directory, settings, persona, memory and sessions.
 * **Sessions:** resume, search and learn from past conversations.
 * **Memory** you can edit, added to every conversation.
-* **Skills** at four levels (global, profile, project, or the project's `.agents/skills`), installed from [skills.sh](https://skills.sh) or GitHub with `/skills add`; lock one in `/skills` to keep the model from changing it, or disable it to stop offering it without deleting it.
+* **Skills** at four levels (global, profile, project, or the project's `.agents/skills`), installed from [skills.sh](https://skills.sh) or GitHub with `/skills add`. Lock one so the model can't change it, or disable it without deleting it.
 * **Self-learning:** a background reflection writes new skills and improves existing ones from your work.
 
 ### Tools & safety
-* **Built-in tools:** files, Git, shell (PowerShell, cmd, bash; zsh on a Mac), scripts (PowerShell, Python, Node), web search and browsing, questions on a pane, clock and timers, and `neon_help`, the app's own manual. Every integration below is a set of tools too, offered to the model only when you switch it on in `/tools`. [TOOLS.md](docs/TOOLS.md) lists them all.
-* **Sandboxed:** file tools reach only the working directory. Shell commands go through an approval pane (once, this session, or always), and the shell police refuses commands that reach outside it.
+* **Built-in tools:** files, Git, shell (PowerShell, cmd, bash; zsh on a Mac), scripts (PowerShell, Python, Node), web search and browsing, questions on a pane, clock and timers, and `neon_help`, the app's own manual. Each integration below is a set of tools too, offered only when you switch it on in `/tools`. [TOOLS.md](docs/TOOLS.md) lists them all.
+* **Sandboxed:** file tools reach only the working directory. Shell commands go through an approval pane (once, this session, or always), and commands that reach outside the working directory are refused.
 * **Plan mode:** `/plan <requirement>` researches with read-only tools and saves a plan; nothing changes until you approve it.
 * **MCP servers** for more tools and data sources.
 
@@ -78,15 +78,15 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Databases:** SQL Server, Oracle, MySQL/MariaDB, PostgreSQL and SQLite over named connections. Read-only by default; writes are opt-in per connection and ask first. Passwords are stored encrypted.
 * **Files elsewhere:** `\\server\share` paths (`smb://server/share` on a Mac) and folders outside the working directory, as you or another account.
 * **Obsidian:** search, read, write and link notes in your vault; Obsidian needn't be running.
-* **Docker:** Docker Desktop's containers (on a Mac also OrbStack's or Colima's): logs, health and resource use; starting, stopping and cleaning up are opt-in and ask first. `/docker` does the same by hand.
+* **Docker:** Docker Desktop's containers (on a Mac also OrbStack, Colima or Rancher Desktop): logs, health and resource use. Starting, stopping and cleaning up are opt-in and ask first; `/docker` does it by hand.
 * **Home Assistant:** lights, scenes, the TV, to-do lists and sensors ("dim the den to 30%"). `/ha` drives the house directly.
 * **ComfyUI:** pictures from your own workflows (text-to-image, image-to-image, face swaps), or `/imagine` with your own prompt.
-* **Picture viewer & editing:** a built-in picture viewer and thumbnail browser, and image editing (resize, crop, rotate, recolour, convert, strip metadata) by the model or a right-click.
-* **YouTube:** search for videos, playlists or channels (with your API key), then play a video or a whole public playlist in the app's own video window, controlled by the model or `/youtube`; saved videos resume where you left off.
+* **Picture editing:** resize, crop, rotate, recolour, convert or strip metadata, by the model or a right-click in the viewer.
+* **YouTube:** search videos, playlists and channels (with your API key) and play them in the app's video window, by the model or `/youtube`. Saved videos resume where you left off.
 * **Printing & PDFs:** `/print` to any installed printer (Windows or Mac), and `/pdf` from Markdown, text, pictures or a web page.
-* **Claude Code:** `/claude` messages your installed Claude Code, or run it as the chat's server (an advisor profile can be on it too).
+* **Claude Code:** `/claude` messages your installed Claude Code, or use it as the chat's server (an advisor profile can too).
 * **Bot chat:** `/botchat` lets your profiles talk to each other in their own personas and voices, optionally illustrated by ComfyUI.
-* **Advisors:** other profiles as advisors, each in a role you give it (a database architect, a UX designer); the model or `/advisor` asks one, and it answers on its own profile's server and model, using the chat's read-only tools.
+* **Advisors:** other profiles in a role you give them (a database architect, a UX designer). The model or `/advisor` asks one; it answers on its own server and model, with the chat's read-only tools.
 
 ### Extras
 * `/loop` repeats a message, `/test` benchmarks the connected model, and the performance bar shows CPU, RAM, GPU and network.
@@ -98,7 +98,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Windows Terminal** is recommended (it comes with Windows 11); the app is designed for it. On a Mac, Terminal or iTerm2 (iTerm2 shows pictures in full colour).
 * **A language model** for it to talk to. The app can download one for you (see below), or use one you already run.
 
-**On a Mac?** It runs on Apple Silicon Macs (M1 and later) in Terminal or iTerm2. Everything above works except Docker servers. Screen capture, the camera and YouTube playback need macOS 14 or later, and macOS asks your terminal app for the Microphone, Camera or Screen Recording permission the first time. Download it as below, or [build it yourself](docs/BUILD.md#building-on-a-mac).
+**On a Mac?** It runs on Apple Silicon (M1 and later) in Terminal or iTerm2. Everything works except Docker servers. Screen capture, the camera and YouTube need macOS 14 or later; macOS asks your terminal app for the Microphone, Camera or Screen Recording permission the first time. Download it as below, or [build it yourself](docs/BUILD.md#building-on-a-mac).
 
 Only for some features:
 * **Running a model inside the app:** an NVIDIA graphics card (driver 580 or newer) or any card that supports Vulkan. Without one it still works, but slowly. On a Mac it runs on the Apple Silicon GPU; a 16 GB Mac suits the smaller Gemma models.
@@ -115,7 +115,7 @@ On a Mac:
 1. Download `NeonSidekick-v<version>-osx-arm64.tar.gz` from the same page and unpack it (double-click it, or `tar -xzf` in Terminal).
 2. The build isn't notarized, so clear macOS's quarantine once: `xattr -dr com.apple.quarantine NeonSidekick-v<version>-osx-arm64`.
 3. In Terminal (or iTerm2), go into that folder and run `./NeonSidekick`. Keep everything in the folder together.
-4. macOS asks once whether the app may use its Keychain key: choose **Always Allow**. For the Ctrl+Option shortcuts, let Option act as Meta ([how](docs/BUILD.md#building-on-a-mac)).
+4. macOS asks once whether the app may use its Keychain key: choose **Always Allow**. For the Ctrl+Option shortcuts, let Option act as Meta ([how](docs/BUILD.md#what-differs-from-windows)).
 
 The `.sha256` file next to each download lets you check the package arrived intact.
 
@@ -129,7 +129,7 @@ If no model server answers when the app starts, it opens **Connect a model**:
 | Scan for local servers | You already run LM Studio, Ollama, llama.cpp or vLLM on this PC or your network. |
 | Enter a server's URL | You know the address of an OpenAI-compatible server. |
 | Download an embedded model | You have no server: the app downloads a model and runs it itself. |
-| Connect Docker container | You run vLLM or SGLang in Docker Desktop. |
+| Connect Docker container | You run vLLM or SGLang in Docker Desktop (Windows only). |
 | Use the Anthropic API / Use the OpenAI API | You have an API key (billed per message). |
 | Use Claude Code | You have Claude Code installed and a Claude subscription. |
 
@@ -167,7 +167,7 @@ Everything is set from panes inside the app, and each explains itself: the highl
 | `/usage` | Ctrl+U | Speed and token statistics. |
 
 ### Getting around
-* **Keyboard:** ←/→ switch tabs, ↑/↓ move, Enter edits or toggles, Space flips an on/off row, ESC closes. A tab with tabs of its own (`/settings`' Servers and Voice) shows them on a second row; ←/→ walk them too, Tab skips past.
+* **Keyboard:** ←/→ switch tabs, ↑/↓ move, Enter edits or toggles, Space flips an on/off row, ESC closes. A tab with tabs of its own (such as `/settings` › Servers) shows them on a second row; ←/→ walk them too, Tab skips past.
 * **Mouse:** a double-click picks a row or tab; the × at the top right closes the pane.
 * **Lost?** Ask the model where a setting is. Its `neon_help` tool knows every command and setting.
 
@@ -194,7 +194,7 @@ Everything is set from panes inside the app, and each explains itself: the highl
 On a Mac, Ctrl+D picks the model (a Mac terminal sends Ctrl+M as Enter). `/help` › Keys lists them all; so does [SETTINGS.md](docs/SETTINGS.md#keyboard-shortcuts).
 
 ### Hint row and toolbar
-The hint row under the input line shows the model, the context used and anything running in the background; double-click the model name to switch. The toolbar under it has a glyph for each pane and tool group: click one to see what it is, double-click to open it. Ctrl+T hides or shows it.
+The hint row under the input line shows the model, the context used and anything running in the background; double-click the model name to switch. The toolbar below has a glyph for each pane and tool group: click to see what it is, double-click to open it. Ctrl+T hides or shows it.
 
 ### Settings worth knowing first
 
@@ -216,6 +216,6 @@ A few settings can be overridden for one launch by a [command-line option](docs/
 
 **Why "Neon":** early on I was trying synthwave-style themes in Spectre.Console while testing the Vosk voice integration. I needed a short, punchy wake word, and "Neon" fit the look. The name stuck.
 
-**What's next:** stronger coding tools, shares on macOS, and Linux.
+**What's next:** stronger coding tools and Linux.
 
 **Licence:** GPLv3; see [LICENSE](LICENSE). Built on the libraries in [COMPONENTS.md](docs/COMPONENTS.md).
