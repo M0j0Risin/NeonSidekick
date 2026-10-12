@@ -187,6 +187,20 @@ public sealed class HomeBarTests
         Assert.Equal(service, chip.Call!.Service);
     }
 
+    /// <summary>A player's chip shows its play or pause mark, never its title (2026-10-12, the user's call); the note keeps the title.</summary>
+    [Fact]
+    public void APlayer_ShowsItsMark_NotItsTitle_WhichTheNoteKeeps()
+    {
+        var idle = HomeChips.Build("entity:media_player.tv", Entities(Entity("media_player.tv", "on", """{"device_class":"tv","media_title":"Smart TV"}""")), null, HomeChipMark.None, false);
+        Assert.Equal("", idle.Value);
+        Assert.Contains("Smart TV", idle.Note, StringComparison.Ordinal);
+        Assert.Equal(HomeChips.TvGlyph, idle.Glyph);
+
+        var playing = HomeChips.Build("entity:media_player.tv", Entities(Entity("media_player.tv", "playing", """{"media_title":"A very long title indeed"}""")), null, HomeChipMark.None, false);
+        Assert.Equal(HomeBarText.PlayingMark.Trim(), playing.Value);
+        Assert.Contains("A very long title indeed", playing.Note, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void AnAlarmThatWantsACode_OpensItsPane_InsteadOfAsking()
     {

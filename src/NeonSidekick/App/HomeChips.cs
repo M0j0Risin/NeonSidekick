@@ -201,8 +201,10 @@ public static class HomeChips
             {
                 bool off = state is "off" or "standby";
                 bool playing = state == "playing";
-                string title = entity.Text("media_title") is { Length: > 0 } t ? Clip(t, TitleCells) : "";
-                string value = off ? "" : (playing ? HomeBarText.PlayingMark : state == "paused" ? HomeBarText.PausedMark : "") + title;
+                // No title on the chip (2026-10-12, the user's call: an idle BRAVIA's "Smart TV" read as part of its renamed
+                // name, and a title changed the chip's width); the click's note still gives it.
+                string title = entity.Text("media_title") is { Length: > 0 } t ? t.Trim() : "";
+                string value = off ? "" : playing ? HomeBarText.PlayingMark : state == "paused" ? HomeBarText.PausedMark : "";
                 var call = off ? HaServiceCall.On("media_player", "turn_on", id) : HaServiceCall.On("media_player", "media_play_pause", id);
                 var style = off ? Off : Lit(playing ? Theme.Primary : Theme.Tertiary);
                 string note = HomeBarText.MediaNote(name, state, title, off);

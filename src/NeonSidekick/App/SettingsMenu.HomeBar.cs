@@ -220,7 +220,8 @@ internal sealed partial class SettingsMenu
         foreach (string item in items)
         {
             HomeBarItems.TryParse(item, out var kind, out string id);
-            string glyph = kind == HomeItemKind.Area ? HomeChips.AreaGlyph : HomeChips.GlyphFor(id, null);
+            // The entity's own glyph, as its chip has (2026-10-12: a TV's 📺 is in its device class, which a bare id lacks).
+            string glyph = kind == HomeItemKind.Area ? HomeChips.AreaGlyph : HomeChips.GlyphFor(id, catalog.State(id) is { } state ? HaLiveEntity.From(state) : null);
             string where = kind == HomeItemKind.Area ? HomeBarText.RoomsTab.ToLowerInvariant() : catalog.AreaOf(id) is { } area ? catalog.Area(area)?.Name ?? id : id;
             // An alias first, as the bar shows it, and the item's own name dim beside it.
             string name = HomeBarItems.NameOf(item, catalog);

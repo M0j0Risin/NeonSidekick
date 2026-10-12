@@ -84,6 +84,28 @@ public partial class SettingsMenuTests
         pane.Dispose();
     }
 
+    /// <summary>The bar's tab shows an item's own glyph, read from its state's attributes (2026-10-12: a TV was 🎵 there and 📺 on its chip).</summary>
+    [Fact]
+    public async Task ThePicker_ShowsAnItemsGlyphFromItsAttributes_AsItsChipDoes()
+    {
+        _settings.Update(d =>
+        {
+            d.HomeAssistantUrl = "http://ha.test:8123";
+            d.HomeAssistantToken = "secret";
+            d.HomeBarItems = ["entity:media_player.bravia"];
+        });
+        var (menu, pane) = PaneMenu();
+        var attributes = System.Text.Json.JsonDocument.Parse("""{"device_class":"tv"}""").RootElement;
+        var catalog = new HaCatalog([], [], [], [new HaRegistryEntity("media_player.bravia", null, null, null, false, false, null, [])], [], [new HaEntity("media_player.bravia", "BRAVIA", "on", null, attributes, null)]);
+        menu.HomeCatalog = _ => Task.FromResult<(HaCatalog?, string?)>((catalog, null));
+        Push(Keys.Escape);
+
+        Assert.False(await menu.EditHomeBarAsync(own: true, CancellationToken.None));   // nothing changed
+
+        Assert.Contains(" 1. " + HomeChips.TvGlyph + " BRAVIA", Output);
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task ThePicker_RenamesAnItemOnTheBar_ShowsTheAlias_AndABlankTakesItOff()
     {

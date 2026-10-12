@@ -49,6 +49,25 @@ public sealed record HaLiveEntity(string Id, string State, IReadOnlyDictionary<s
         return numbers.ToArray();
     }
 
+    /// <summary>
+    /// The live shape of a REST snapshot's <paramref name="entity"/> (2026-10-12): the home bar's picker has the catalog's states,
+    /// not the feed's, and its glyphs read the same attributes the chips do.
+    /// </summary>
+    public static HaLiveEntity From(HaEntity entity)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        var attributes = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        if (entity.Attributes.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var attribute in entity.Attributes.EnumerateObject())
+            {
+                attributes[attribute.Name] = attribute.Value.Clone();
+            }
+        }
+
+        return new HaLiveEntity(entity.Id, entity.State, attributes, entity.LastChanged);
+    }
+
     /// <summary>Whether it is a light group (a Hue room or zone, or any group listing its members).</summary>
     public bool IsGroup => Flag("is_hue_group") == true || (Attributes.TryGetValue("entity_id", out var members) && members.ValueKind == JsonValueKind.Array);
 }
