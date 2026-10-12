@@ -2402,12 +2402,15 @@ internal sealed partial class ChatScreen
         return rows.ToArray();
     }
 
-    /// <summary>The tabs <c>/help</c> opens; each builds its content when shown, from the live state. The one Commands tab split in two on 2026-09-27 (the user's call).</summary>
+    /// <summary>
+    /// The tabs <c>/help</c> opens; each builds its content when shown, from the live state. The one Commands tab split in two on
+    /// 2026-09-27 (the user's call). Keys carries the key check toggle since 2026-10-12 (<see cref="KeyCheckToggle"/>).
+    /// </summary>
     private IReadOnlyList<InfoTab> HelpTabs() =>
     [
         new(SlashCommands.BasicTabTitle, () => CommandsTab(advanced: false)),
         new(SlashCommands.AdvancedTabTitle, () => CommandsTab(advanced: true)),
-        new("Keys", KeysTab),
+        new("Keys", KeysTab) { Toggle = KeyCheckToggle() },
     ];
 
     /// <summary>

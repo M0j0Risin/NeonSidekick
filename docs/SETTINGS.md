@@ -86,7 +86,7 @@ Each shortcut runs its command as if typed; a draft on the row stays.
 * **Ctrl+L** cancels a running skill-learning reflection (🧠 on the hint row); a double-click on 🧠 does the same.
 * **F9 and F10** work only with no modifier held. In the picture viewer and thumbnail browser they keep their own meanings.
 * **On a Mac** three chords have stand-ins: **Ctrl+]** for Ctrl+. (`/terminal`), **Ctrl+D** for Ctrl+M (`/model`) and **Ctrl+Option+A** for Ctrl+Alt+M (`/memory`). Ctrl+Shift+F arrives as Ctrl+F, so type `/find`. The Ctrl+Option chords need Option to act as Alt (see [BUILD.md](BUILD.md#building-on-a-mac)).
-* **A chord that does nothing** may be held by another program as a global hotkey (a graphics overlay, say). `/keycheck` lists every chord and whether another program holds it.
+* **A chord that does nothing** may be held by another program as a global hotkey (a graphics overlay, say). `/keycheck` lists every chord and whether another program holds it; so does the *⌨ key check* button (`k`) at the top of `/help`'s Keys tab, pressed again to show the keys.
 
 ## Commands typed during a reply
 
@@ -666,7 +666,7 @@ The tools most profiles use and the pane's own options, in four tabs: Ask, Web, 
 | Setting | What it does | Default |
 |---|---|---|
 | Shell command policy | How the model may run shell commands: `off` (no shell tools), `ask` (anything not on the allowed list asks you first) or `yolo` (everything runs). See [Shell guards](#shell-guards). | `off` |
-| Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`). The approval pane's *Allow … always* adds one; Enter removes one. `/profile push commands` copies the list to another profile. | none |
+| Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`). The approval pane's *Allow … always* adds one; Enter removes one. The list's off, ask and yolo buttons (`o`, `a`, `y`) switch *Shell command policy*, yolo after a yes. `/profile push commands` copies the list to another profile. | none |
 | Shell police | Refuses a command, script or process input that names a path outside the working directory. Turning it off also stops the forbidden strings and the database rules. See [Shell guards](#shell-guards). | on |
 | Shell police forbidden strings | Strings the police refuses outright, case and spacing ignored. A new profile starts with a list of harmful actions; `r` restores it. `/profile push policestrings` copies the list. | the starter list (49 on Windows, 48 on a Mac) |
 | Shell prefer native tools | Sends back a lone shell command one of the app's own tools covers (once a turn). | on |

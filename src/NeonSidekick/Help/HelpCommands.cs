@@ -155,7 +155,7 @@ public static class HelpCommands
         ]),
         new("/help",
         [
-            new("/help", "Show the commands and keys: everyday commands on Basic, the rest on Advanced, then Keys. Ctrl+H runs it too."),
+            new("/help", "Show the commands and keys: everyday commands on Basic, the rest on Advanced, then Keys. The Keys tab's *⌨ key check* button at the top (`k`) swaps in `/keycheck`'s list, and pressed again shows the keys. Ctrl+H runs it too."),
         ]),
         new("/homebar",
         [
@@ -173,7 +173,7 @@ public static class HelpCommands
         ]),
         new("/keycheck",
         [
-            new("/keycheck", "List the app's key chords (the Keys tab of `/help`) and whether another program holds each as a global hotkey, the held ones first. A held chord never reaches the app: free it in the program that holds it, such as a graphics card's overlay. Only hotkeys registered with Windows show; a keyboard hook or a Windows Terminal key binding can still take a key."),
+            new("/keycheck", "List the app's key chords (the Keys tab of `/help`, whose *⌨ key check* button shows this list too) and whether another program holds each as a global hotkey, the held ones first. A held chord never reaches the app: free it in the program that holds it, such as a graphics card's overlay. Only hotkeys registered with Windows show; a keyboard hook or a Windows Terminal key binding can still take a key."),
         ]),
         new("/learn",
         [
@@ -394,7 +394,7 @@ public static class HelpCommands
         [
             new("/tools", "Switch the model's tools on or off, and edit each tool group's settings on its own tab. On the Offered tab, type to narrow the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes."),
             new("/tools <group>", "Open one group's switch on its own: `shell` (the *Shell command policy* picker; yolo asks first; its allowed and police buttons (`c`, `p`) open those pages and ESC comes back), `ask` (*Ask user*), `files`, `web`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print` (each tool group's on/off page; `web`'s carries default, httpclient and chromium buttons (`d`, `h`, `c`) that switch *Web browser mode*; `files`' browser and edit mode buttons (`b`, `e`), `obsidian`'s vault (`v`) and `print`'s printer (`p`) open those settings, and ESC comes back). The toolbar's tool items run it."),
-            new("/tools shell allowed", "Open the *Shell allowed commands* list. Enter removes a prefix after a yes; the ask and yolo buttons at the top (`a`, `y`) switch *Shell command policy*, yolo after a yes; ESC closes it. The toolbar's lock and Ctrl+Alt+L run it."),
+            new("/tools shell allowed", "Open the *Shell allowed commands* list. Enter removes a prefix after a yes; the off, ask and yolo buttons at the top (`o`, `a`, `y`) switch *Shell command policy*, yolo after a yes; ESC closes it. The toolbar's lock and Ctrl+Alt+L run it."),
             new("/tools shell police", "Open the on/off page for *Shell police*; turning it off asks first, and its strings button (`s`) opens *Shell police forbidden strings*. The toolbar's officer and Ctrl+Alt+O run it."),
         ]),
         new("/tree",

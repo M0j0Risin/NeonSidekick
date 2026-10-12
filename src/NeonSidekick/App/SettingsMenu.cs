@@ -3120,8 +3120,8 @@ internal sealed partial class SettingsMenu
     /// <summary>The one row of the allowed-commands list while nothing is allowed for good; the bare word since 2026-09-23 (the user's call, the hint on how to add one dropped). Pinned.</summary>
     public const string NoAllowedCommandsRow = "(none)";
 
-    /// <summary>The allowed-commands list's hint: Enter removes, A and Y are the policy buttons (<see cref="CommandPolicyButtons"/>, 2026-10-02). Pinned.</summary>
-    public const string AllowedCommandsKeys = "Enter = remove · a = ask · y = yolo · ESC = back";
+    /// <summary>The allowed-commands list's hint: Enter removes, O, A and Y are the policy buttons (<see cref="CommandPolicyButtons"/>, 2026-10-02; O since 2026-10-12). Pinned.</summary>
+    public const string AllowedCommandsKeys = "Enter = remove · o = off · a = ask · y = yolo · ESC = back";
 
     /// <summary>The question before an allowed prefix goes (2026-10-07, every list's remove asks). Pinned.</summary>
     public static string RemovePrefixQuestion(string prefix) => $"Remove \"{prefix}\" from the allowed commands? It will ask again.";
@@ -3136,10 +3136,20 @@ internal sealed partial class SettingsMenu
     public const string ForbiddenStringNote = "a command that holds this is refused, whatever the policy says";
 
     /// <summary>The allowed-commands list's hint while nothing is allowed for good: no prefix to remove, the policy buttons still there (2026-10-02). Pinned.</summary>
-    public const string AllowedCommandsEmptyKeys = "a = ask · y = yolo · ESC = back";
+    public const string AllowedCommandsEmptyKeys = "o = off · a = ask · y = yolo · ESC = back";
 
     /// <summary>
-    /// The allowed-commands list's first title-row button (2026-10-02, the user's ask: switch <c>Shell command policy</c> from the
+    /// The allowed-commands list's first title-row button (2026-10-12, the user's ask: the third policy beside ask and yolo, first):
+    /// the policy to <c>off</c>, at once and unasked, as ask is — no shell or script tool is offered from the next turn. ⊘, one cell
+    /// and monochrome as the checklists' ⊞ ⊠ ⊡. Pinned.
+    /// </summary>
+    public const string PolicyOffButton = "⊘ off";
+
+    /// <summary>The key that is <see cref="PolicyOffButton"/>.</summary>
+    public const char PolicyOffKey = 'o';
+
+    /// <summary>
+    /// The allowed-commands list's ask button, the first until 2026-10-12 (2026-10-02, the user's ask: switch <c>Shell command policy</c> from the
     /// list <c>/cmdlist</c> opened — <c>/tools shell allowed</c> since 2026-10-09 —, without going through the Shell tab's picker): the policy to <c>ask</c>, at once. The bare word:
     /// the toolbar lock's glyph here would be a second lock on the screen, a click on it no click on the toolbar's. A check before
     /// it since 2026-10-03 (the user's ask: every header button a glyph to its left, monochrome as the checklists' ⊞ ⊠ ⊡). Pinned.
@@ -3149,22 +3159,24 @@ internal sealed partial class SettingsMenu
     /// <summary>The key that is <see cref="PolicyAskButton"/>.</summary>
     public const char PolicyAskKey = 'a';
 
-    /// <summary>The allowed-commands list's second button (2026-10-02): the policy to <c>yolo</c>, after a yes to <see cref="YoloConfirmQuestion"/>; the warning sign before it since 2026-10-03, two spaces after it (later that day, the user's ask: Windows Terminal gives ⚠ one cell, as <see cref="UI.TextCells"/> counts it, but draws it from the colour emoji font two cells wide over the space after it, so the second space is the one that shows). Pinned.</summary>
+    /// <summary>The allowed-commands list's last button (2026-10-02): the policy to <c>yolo</c>, after a yes to <see cref="YoloConfirmQuestion"/>; the warning sign before it since 2026-10-03, two spaces after it (later that day, the user's ask: Windows Terminal gives ⚠ one cell, as <see cref="UI.TextCells"/> counts it, but draws it from the colour emoji font two cells wide over the space after it, so the second space is the one that shows). Pinned.</summary>
     public const string PolicyYoloButton = "⚠  yolo";
 
     /// <summary>The key that is <see cref="PolicyYoloButton"/>.</summary>
     public const char PolicyYoloKey = 'y';
 
-    private const int PolicyAskIndex = 0;
-    private const int PolicyYoloIndex = 1;
+    private const int PolicyOffIndex = 0;
+    private const int PolicyAskIndex = 1;
+    private const int PolicyYoloIndex = 2;
 
     /// <summary>
-    /// The allowed-commands list's buttons (2026-10-02): <see cref="PolicyAskButton"/> (index 0) and <see cref="PolicyYoloButton"/>
-    /// (index 1), the saved <paramref name="policy"/> lit — a radio pair, as Show performance bar's looks are; under <c>off</c>
-    /// neither is. Pinned.
+    /// The allowed-commands list's buttons (2026-10-02): <see cref="PolicyOffButton"/> (index 0, since 2026-10-12), <see cref="PolicyAskButton"/>
+    /// (index 1) and <see cref="PolicyYoloButton"/> (index 2), the saved <paramref name="policy"/> lit — a radio group, as the Web
+    /// tools page's modes are (a pair, neither lit under <c>off</c>, until 2026-10-12); a hand-edited value lights none. Pinned.
     /// </summary>
     public static IReadOnlyList<MenuButton> CommandPolicyButtons(string policy) =>
     [
+        new(PolicyOffButton, PolicyOffKey, string.Equals(policy, "off", StringComparison.Ordinal)),
         new(PolicyAskButton, PolicyAskKey, string.Equals(policy, "ask", StringComparison.Ordinal)),
         new(PolicyYoloButton, PolicyYoloKey, string.Equals(policy, "yolo", StringComparison.Ordinal)),
     ];
@@ -7698,7 +7710,7 @@ internal sealed partial class SettingsMenu
         int? picked;
         while (true)
         {
-            // Read again at each pass: a page the buttons open may have changed the list, the police or (the list's ask and yolo) the policy.
+            // Read again at each pass: a page the buttons open may have changed the list, the police or (the list's off, ask and yolo) the policy.
             var current = _settings.Current;
             var buttons = CommandPolicyPageButtons(Shell.CommandAllowList.Merge(current.ShellCommandAllowed, []).Count, current.ShellPolice);
             var pressed = await PickChecklistAsync(page, cursor, cancellationToken, buttons).ConfigureAwait(false);
@@ -7895,7 +7907,7 @@ internal sealed partial class SettingsMenu
     /// while it is empty. The session's own allows are not here: they live in the process, not the file.
     /// True when anything was removed. Internal since later on 2026-09-21 for <see cref="ToolsMenu.ShowAllowedCommandsAsync"/>,
     /// which opens it straight under the Tools crumb (<c>/tools shell allowed</c>, <c>/cmdlist</c> until 2026-10-09; the toolbar lock). Since 2026-10-02 (the user's ask) its
-    /// title row carries <see cref="CommandPolicyButtons"/>, the saved <c>Shell command policy</c> lit: <c>ask</c> saves at once,
+    /// title row carries <see cref="CommandPolicyButtons"/>, the saved <c>Shell command policy</c> lit: <c>off</c> (since 2026-10-12) and <c>ask</c> save at once,
     /// <c>yolo</c> after a yes to <see cref="YoloConfirmQuestion"/> asked on the same pane (not <see cref="ConfirmAsync"/>, which
     /// closes it), so the save shows on the list's status line; the lit one saves nothing. They work on the empty list too.
     /// </summary>
@@ -7931,10 +7943,10 @@ internal sealed partial class SettingsMenu
             }
 
             (int Row, int Button)? picked = pick is { } p ? (p.Row >= 0 && p.Row < shown.Count ? shown[p.Row] : -1, p.Button) : null;
-            if (picked is { Button: PolicyAskIndex or PolicyYoloIndex } pressed)
+            if (picked is { Button: PolicyOffIndex or PolicyAskIndex or PolicyYoloIndex } pressed)
             {
                 cursor = pressed.Row;
-                string next = pressed.Button == PolicyAskIndex ? "ask" : "yolo";
+                string next = pressed.Button switch { PolicyOffIndex => "off", PolicyAskIndex => "ask", _ => "yolo" };
                 if (string.Equals(policy, next, StringComparison.Ordinal))
                 {
                     continue;   // the lit one: nothing to save

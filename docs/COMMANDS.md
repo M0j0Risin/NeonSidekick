@@ -48,7 +48,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/cmd <command>` | Runs a shell line yourself in the working directory, in *Shell default*'s shell, under the same checks as the model's. See [Your own shell line](#your-own-shell-line). |
 | `/cmd --shell <shell> <command>` | The same in another shell (`powershell`, `cmd` or `bash`; on a Mac `zsh`, `bash` or `powershell`). |
 | `/cmd --bg <command>` | The same, run in the background while you chat; its output is reported when it ends. |
-| `/keycheck` | Lists the app's key chords and whether another program holds each as a global hotkey (a held chord never reaches the app). On a Mac it also names macOS shortcuts and a terminal whose Option key types characters. |
+| `/keycheck` | Lists the app's key chords and whether another program holds each as a global hotkey (a held chord never reaches the app). On a Mac it also names macOS shortcuts and a terminal whose Option key types characters. `/help`'s Keys tab shows the same list with its *⌨ key check* button (`k`). |
 | `/compact [<focus>]` | Shrinks the context; a focus tells the summary what to keep. |
 | `/copy [<n>\|all] [--thinking]` | Copies the last reply (the last *n*, or the whole transcript) as Markdown; `--thinking` includes the thinking. |
 | `/cwd [<path>\|~\|browse]` | Shows or changes the working directory (a path completes as you type). `~` returns to the profile's `files\`; `browse` opens the [folder picker](#folder-picker). |
@@ -90,7 +90,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/ha states [<filter>]` | Lists entities and their states, filtered by domain, name or id; an entity id shows all its attributes. |
 | `/ha say <sentence>` | Hands a sentence to Home Assistant's Assist agent. |
 | `/header [on\|off]` | Shows or hides the banner (*Show header*) from the next clear; alone, flips it. |
-| `/help` | The commands (Basic and Advanced tabs) and the keys. |
+| `/help` | The commands (Basic and Advanced tabs) and the keys. The Keys tab's *⌨ key check* button (`k`) swaps in `/keycheck`'s list, and pressed again shows the keys. |
 | `/homebar [on\|off]` | Hides the home bar or shows it again with the items it had (Ctrl+W); the first time, with nothing picked, opens the picker. See [Home bar](SETTINGS.md#home-bar). |
 | `/homebar edit` | The home bar's picker: the bar's order (Shift+↑↓, Shift+Home/End, Delete) and the rooms and devices to add. |
 | `/homebar tap\|show <item>` | What a double-click and a right-click on a chip do, by its item (`entity:light.desk`, `area:kitchen`) or its name. |
@@ -192,7 +192,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/toolbar [on\|off]` | Hides the toolbar or shows it again. |
 | `/tools` | Switches the model's tools on or off and edits each group's settings, one tab per group. On the Offered tab, typing filters the list. |
 | `/tools <group>` | Opens one group's page: `shell`, `ask`, `files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it; the pages' buttons are under [Pane keys](#pane-keys). |
-| `/tools shell allowed` | Opens *Shell allowed commands*: Enter removes a prefix (asks), `a`/`y` switch *Shell command policy* to ask or yolo, typing filters. The toolbar's lock or Ctrl+Alt+L. |
+| `/tools shell allowed` | Opens *Shell allowed commands*: Enter removes a prefix (asks), `o`/`a`/`y` switch *Shell command policy* to off, ask or yolo, typing filters. The toolbar's lock or Ctrl+Alt+L. |
 | `/tools shell police` | Opens *Shell police*; `s` opens its forbidden strings. The toolbar's officer or Ctrl+Alt+O. |
 | `/tree [<path>]` | Shows a tree of the working directory in a pane (hidden entries per *File browser/tree mode*; `.git` only when named). |
 | `/tts [on\|off]` | Toggles speech output. |
@@ -596,7 +596,7 @@ In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes
 | `/youtube list` | Enter plays · `d` remove (asks) · `c` clear all (asks) · type to filter |
 | `/youtube <words>`, `/youtube playlist` | Enter plays · `s` save the highlighted video |
 | `/tools shell` (*Shell command policy*) | `c` the allowed commands · `p` the police |
-| `/tools shell allowed` (*Shell allowed commands*) | Enter removes (asks) · `a` ask · `y` yolo · type to filter |
+| `/tools shell allowed` (*Shell allowed commands*) | Enter removes (asks) · `o` off · `a` ask · `y` yolo · type to filter |
 | *Shell police forbidden strings* | the top row adds · Enter removes (asks) · `r` restore defaults (asks) |
 | `/tools shell police` | `s` the forbidden strings |
 | `/tools web` | `d` default · `h` httpclient · `c` chromium (*Web browser mode*) |

@@ -1500,7 +1500,7 @@ public partial class ToolsMenuTests : IDisposable
         AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.ShellTabTitle, "▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n"), 100);
         Assert.Contains("\n" + Titled(CoreCrumb + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(2, police: true).Select(b => b.Title)) + " ") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
         Assert.Contains("  · Shell command policy: yolo\n", Output);
-        Assert.Contains("\n" + Titled(CoreCrumb + " › Shell allowed commands │ " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
+        Assert.Contains("\n" + Titled(CoreCrumb + " › Shell allowed commands │ " + SettingsMenu.PolicyOffButton + " · " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
         Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", Output);
         Assert.Contains("\n" + Titled(CoreCrumb + " › Shell default") + "\n \n▸ powershell pwsh when installed, else Windows PowerShell 5.1\n  cmd        cmd.exe: batch syntax\n  bash       Git Bash, when bash.exe is found\n", Output);
         Assert.Contains("  · Shell default: cmd\n", Output);
@@ -1533,7 +1533,7 @@ public partial class ToolsMenuTests : IDisposable
         AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.ShellTabTitle, "▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   zsh\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n"), 100);
         Assert.Contains("\n" + Titled(CoreCrumb + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(2, police: true).Select(b => b.Title)) + " ") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
         Assert.Contains("  · Shell command policy: yolo\n", Output);
-        Assert.Contains("\n" + Titled(CoreCrumb + " › Shell allowed commands │ " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
+        Assert.Contains("\n" + Titled(CoreCrumb + " › Shell allowed commands │ " + SettingsMenu.PolicyOffButton + " · " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
         Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", Output);
         Assert.Contains("\n" + Titled(CoreCrumb + " › Shell default") + "\n \n▸ zsh        the macOS shell\n  bash       bash from the PATH, else /bin/bash\n  powershell pwsh, when installed\n", Output);
         Assert.Contains("  · Shell default: bash\n", Output);
@@ -2239,7 +2239,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
         Assert.Equal(["git push"], _settings.Current.ShellCommandAllowed);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + SettingsMenu.PolicyOffButton + " · " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
         Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", Output);
         Assert.DoesNotContain(Strip, Output);
         Assert.Equal(SettingsMenu.Title, settings.Root);
@@ -2265,6 +2265,23 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains(MenuFilter.HintBeforeEsc(SettingsMenu.AllowedCommandsKeys, ""), Output);   // type to filter since 2026-10-07
         Assert.Contains("\n" + Titled(SettingsMenu.YoloConfirmQuestion) + "\n", Output);
         Assert.Contains("  · Shell command policy: yolo\n▸ git push\n", Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>From ask, O turns the shell tools off at once with nothing asked (2026-10-12, the user's ask: off first on the list).</summary>
+    [Fact]
+    public async Task ShowAllowedCommands_OffSavesAtOnce()
+    {
+        _settings.Update(d => d.ShellCommandPolicy = "ask");
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Char('o'), Keys.Escape);
+
+        await menu.ShowAllowedCommandsAsync(CancellationToken.None);
+
+        Assert.Equal("off", _settings.Current.ShellCommandPolicy);
+        Assert.DoesNotContain(SettingsMenu.YoloConfirmQuestion, Output);
+        Assert.Contains("  · Shell command policy: off\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -2416,7 +2433,7 @@ public partial class ToolsMenuTests : IDisposable
         string picker(bool police) => Titled(ToolsText.Label + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(1, police).Select(b => b.Title)) + " ");
         Assert.True(Output.Split(picker(police: true)).Length - 1 >= 2, Output);   // before the list and after it
         Assert.Contains(picker(police: false), Output);                         // after the police went off
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n", Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + SettingsMenu.PolicyOffButton + " · " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n", Output);
         Assert.Contains("\n" + ToolsText.Label + " › Shell police │ ", Output);
         Assert.Contains(SettingsMenu.CommandPolicyPageKeys, Output);
         Assert.False(_settings.Current.ShellPolice);

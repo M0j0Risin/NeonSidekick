@@ -547,6 +547,73 @@ public class InfoPaneTests : IDisposable
         Assert.Null(InfoPane.TabAt("Help", titles, 28, 20, 0));     // where Three was on one row
     }
 
+    // ── A tab's toggle (2026-10-12, /help's Keys tab's key check) ──────────────
+
+    private InfoTab Toggled(string title, string content) =>
+        Tab(title, content) with
+        {
+            Toggle = new InfoToggle("chk", 'k', "check", () =>
+            {
+                _built.Add("chk");
+                return new Markup("checked");
+            }),
+        };
+
+    [Fact]
+    public void AToggle_FollowsTheTitlesAfterABar_LitWhileOn_AndItsHintIsPinned()
+    {
+        // "Help │ One · Two │ chk ": the toggle laid out as one more title, a bar where the dot would be.
+        Assert.Equal(["Help │ One · Two │ chk "], InfoPane.TabStripRows("Help", ["One", "Two"], 1, 80, ("chk", false)).Select(Markup.Remove));
+        Assert.Contains($" [{Theme.TabIdle.ToMarkup()}]chk[/] ", InfoPane.TabStripRows("Help", ["One", "Two"], 1, 80, ("chk", false))[0]);
+        Assert.Contains($" [{Theme.TabLit.ToMarkup()}]chk[/] ", InfoPane.TabStripRows("Help", ["One", "Two"], 1, 80, ("chk", true))[0]);
+        Assert.Contains($"[{Theme.TabActive.ToMarkup()}]Two[/]", InfoPane.TabStripRows("Help", ["One", "Two"], 1, 80, ("chk", true))[0]);
+        Assert.Equal(2, InfoPane.TabAt("Help", ["One", "Two", "chk"], 80, 18, 0));
+        Assert.Null(InfoPane.TabAt("Help", ["One", "Two", "chk"], 80, 17, 0));   // the bar
+        Assert.Equal("↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · k = key check · type = find · ESC = close", InfoPane.ToggleHint('k', "key check"));
+        Assert.Equal("↑/↓ PgUp/PgDn = scroll · k = key check · type = find · ESC = close", InfoPane.ToggleHint('k', "key check", tabs: false));
+    }
+
+    [Fact]
+    public async Task AToggle_ItsKeySwapsTheContent_TheTabKeepsItOn_AndAgainSwapsBack()
+    {
+        _console.Profile.Width = 60;
+        using var pane = Pane();
+        pane.Show();
+        _console.Input.PushKey(Keys.Char('k'));   // on: the toggle's content
+        _console.Input.PushKey(Keys.Left);        // One: no toggle, the plain hint
+        _console.Input.PushKey(Keys.Right);       // Two again: still on, built afresh
+        _console.Input.PushKey(Keys.Char('k'));   // off: Two's own
+        _console.Input.PushKey(Keys.Escape);
+
+        await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("One", "first"), Toggled("Two", "second")], 1, CancellationToken.None);
+
+        Assert.Equal(["Two", "One", "chk", "One", "chk", "Two"], _built);   // the open measures One, never the toggle
+        Assert.Contains(Titled(InfoPane.Title + " │ One · Two │ chk ", 60), Output);
+        Assert.Contains("\nchecked\n", Output);
+        Assert.Contains(ScreenPane.Fit(InfoPane.ToggleHint('k', "check"), 59), Output);
+        Assert.Contains(ScreenPane.Fit(InfoPane.HintText, 59), Output);
+        Assert.False(pane.OverlayOpen);
+    }
+
+    [Fact]
+    public async Task AToggle_AClickOnItsTitleSwapsTheContent_AndUnderAFindItsKeyIsTyped()
+    {
+        _console.Profile.Width = 60;
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        int column = InfoPane.TabStripLayout(InfoPane.Title, ["One", "Two", "chk"], 60).Places[2].Column;
+        input.PushClick(column + 1, 100);                // the toggle: on
+        input.Push(Keys.Char('x'), Keys.Char('k'));      // a find under way: the k is the find's
+        input.Push(Keys.Escape, Keys.Escape);            // the find cleared, then the pane closed
+
+        await new InfoPane(pane, keys).ShowAsync(InfoPane.Title, [Tab("One", "first"), Toggled("Two", "second")], 1, CancellationToken.None);
+
+        Assert.Equal(["Two", "One", "chk"], _built);
+        Assert.Contains("\nchecked\n", Output);
+        Assert.Contains(InfoPane.FindHint("xk", 0, 0), Output);
+    }
+
     /// <summary>At 30 columns the strip is two rows (buffer 100 and 101), the spacer 102, the content from 103; a click on the second row's title switches to it.</summary>
     [Fact]
     public async Task AStripOnTwoRows_DrawsTheSecondUnderTheFirstTitle_AndAClickThereSwitches()

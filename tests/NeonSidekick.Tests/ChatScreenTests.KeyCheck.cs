@@ -92,4 +92,55 @@ public partial class ChatScreenTests
         Assert.Contains(KeyCheckText.Unsupported, output);
         Assert.Contains(ChatScreen.NoArgumentError("/keycheck"), output);
     }
+
+    /// <summary>
+    /// <c>/help</c>'s Keys tab carries the key check toggle (2026-10-12, the user's ask): K swaps in <c>/keycheck</c>'s list, probed
+    /// then and only then, and K again brings the keys back without asking the probe again.
+    /// </summary>
+    [Fact]
+    public async Task Help_TheKeysTab_KSwapsInTheKeyCheck_AndKAgainBringsTheKeysBack()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _hotkeyProbe = new FakeHotkeyProbe();
+        _hotkeyProbe.Held.Add(new KeyChord(true, true, false, ConsoleKey.S));
+        _console.Profile.Width = 120;
+        _console.Profile.Height = 60;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/help");
+        _console.Input.PushKey(Keys.Left);   // Basic wraps to Keys
+        _console.Input.PushKey(Keys.Char('k'));
+        _console.Input.PushKey(Keys.Char('k'));
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        int total = KeyCheck.Chords(ChatScreen.KeyRows(false, ConsoleKey.F4, false, "").Select(r => r.Pair), null).Count;
+        Assert.Equal(total, _hotkeyProbe.Asked.Count);   // once: the open, the measure and the swap back never probe
+        int strip = output.IndexOf(" │ " + KeyCheckText.ToggleTitle + " ", StringComparison.Ordinal);
+        Assert.True(strip >= 0, output);
+        int header = output.IndexOf(KeyCheckText.Header(1, total), strip, StringComparison.Ordinal);
+        Assert.True(header > strip, output);
+        int afterOn = output.LastIndexOf(InfoPane.ToggleHint(KeyCheckText.ToggleKey, KeyCheckText.ToggleWord), StringComparison.Ordinal);
+        Assert.True(afterOn > header, output);
+        Assert.Matches("open the usage pane +/usage", output[header..]);   // the keys again after the second K, the command column theirs alone
+    }
+
+    /// <summary>Without a probe (neither Windows nor macOS) the Keys tab has no toggle, and K is a find.</summary>
+    [Fact]
+    public async Task Help_WithNoProbe_TheKeysTabHasNoKeyCheck()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/help");
+        _console.Input.PushKey(Keys.Left);
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(KeyCheckText.ToggleTitle, output);
+        Assert.Contains(InfoPane.HintText[..40], output);
+    }
 }
