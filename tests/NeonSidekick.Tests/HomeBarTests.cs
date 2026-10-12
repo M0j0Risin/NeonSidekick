@@ -124,7 +124,7 @@ public sealed class HomeBarTests
         Assert.Equal("", chip.Value);   // no brightness on the chip (the user's call: it changed the widths)
         Assert.StartsWith("Den Lamp: on 80%", chip.Note, StringComparison.Ordinal);   // the note keeps it
         Assert.Equal(new Color(255, 200, 0), chip.Style.Foreground);   // the light's own colour as the text
-        Assert.Equal(Theme.Mix(new Color(255, 200, 0), Theme.Bg, HomeChips.LitFill), chip.Style.Background);   // on a quiet fill of it
+        Assert.Equal(Color.Default, chip.Style.Background);   // on the page, no fill
         Assert.Equal(HomeChipAction.Call, chip.Action);
         Assert.Equal("light.toggle", chip.Call!.Name);
         Assert.Contains("double-click to switch off", chip.Note, StringComparison.Ordinal);
@@ -244,12 +244,12 @@ public sealed class HomeBarTests
 
         var door = HomeChips.Build("entity:binary_sensor.d", Entities(Entity("binary_sensor.d", "on", """{"device_class":"door"}""")), null, HomeChipMark.None, false);
         Assert.Equal("open", door.Value);
-        Assert.Equal(Theme.Warn, door.Style.Background);
+        Assert.Equal(Theme.Warn, door.Style.Foreground);
         Assert.Equal(HomeChips.DoorGlyph, door.Glyph);
 
         var leak = HomeChips.Build("entity:binary_sensor.l", Entities(Entity("binary_sensor.l", "on", """{"device_class":"moisture"}""")), null, HomeChipMark.None, false);
         Assert.Equal("wet", leak.Value);
-        Assert.Equal(Theme.Bad, leak.Style.Background);
+        Assert.Equal(Theme.Bad, leak.Style.Foreground);
     }
 
     [Fact]
@@ -282,28 +282,37 @@ public sealed class HomeBarTests
         Assert.Equal(255, warm.R);
         Assert.True(warm.B < warm.G);
         Assert.Null(HomeChips.LightTint(Entity("light.x", "on", """{"brightness":3}""")));
-        Assert.Equal(Color.White, HomeChips.Slab(new Color(20, 20, 60)).Foreground);
     }
 
     /// <summary>
-    /// The quiet chips (2026-10-12, the user's call: the full slabs were overpowering): on is the colour as text on a darker fill
-    /// of it, off the theme's dim on its dimmer, and only an alert keeps a full slab.
+    /// The chips are coloured words on the page (2026-10-12, the user's call: fills, even quiet ones, were too much): on is the
+    /// colour, off is dim, an alert is bold amber or red, and none has a background.
     /// </summary>
     [Fact]
-    public void OnChips_AreTheirColourOnADarkerFill_OffIsTheDimmer_AndAlertsKeepTheirSlab()
+    public void Chips_AreColouredWords_OnThePage_AlertsBold()
     {
         var lamp = HomeChips.Build("entity:light.k", Entities(Entity("light.k", "on", """{"color_temp_kelvin":2700}""")), null, HomeChipMark.None, false);
-        Assert.True(HomeChips.Luminance(lamp.Style.Background) < HomeChips.Luminance(lamp.Style.Foreground) / 2);
-
         var fan = HomeChips.Build("entity:fan.f", Entities(Entity("fan.f", "on")), null, HomeChipMark.None, false);
-        Assert.Equal(HomeChips.Lit(Theme.Secondary), fan.Style);
-
-        Assert.Equal(new Style(Theme.Dim, Theme.Dimmer), HomeChips.Off);
-
+        var off = HomeChips.Build("entity:fan.f", Entities(Entity("fan.f", "off")), null, HomeChipMark.None, false);
         var garage = HomeChips.Build("entity:cover.g", Entities(Entity("cover.g", "open", """{"device_class":"garage"}""")), null, HomeChipMark.None, false);
-        Assert.Equal(HomeChips.Slab(Theme.Warn), garage.Style);
         var blind = HomeChips.Build("entity:cover.b", Entities(Entity("cover.b", "open", """{"device_class":"blind"}""")), null, HomeChipMark.None, false);
+        Assert.All(new[] { lamp, fan, off, garage, blind }, chip => Assert.Equal(Color.Default, chip.Style.Background));
+
+        Assert.Equal(HomeChips.Lit(Theme.Secondary), fan.Style);
         Assert.Equal(HomeChips.Lit(Theme.Secondary), blind.Style);
+        Assert.Equal(new Style(Theme.Dim), HomeChips.Off);
+        Assert.Equal(new Style(Theme.Warn, decoration: Decoration.Bold), garage.Style);
+    }
+
+    /// <summary>A lit chip's colour too dark for the page is lifted toward the ink; a bright one is kept (2026-10-12).</summary>
+    [Fact]
+    public void Readable_LiftsADarkColour_AndKeepsABrightOne()
+    {
+        var navy = HomeChips.Readable(new Color(0, 0, 60));
+        Assert.True(HomeChips.Luminance(navy) >= HomeChips.ReadableFloor);
+        Assert.True(navy.B > navy.R);   // still bluish
+        Assert.Equal(new Color(255, 200, 0), HomeChips.Readable(new Color(255, 200, 0)));
+        Assert.Equal(Theme.Ink, HomeChips.Readable(Theme.Ink));
     }
 
     // ─── the row ────────────────────────────────────────────────────────────────

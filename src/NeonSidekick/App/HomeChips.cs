@@ -53,10 +53,10 @@ public sealed record HomeChip(
 /// shows, its colour, and what a double-click does — a light, switch, fan or <c>input_boolean</c> toggles; an area switches
 /// its lights (off when any is on); a media player plays and pauses (on when off); a scene or script runs; a cover closes at
 /// once and opens at once unless it is a garage, gate or door (then the pane asks); a lock locks at once and unlocks only
-/// after a yes; an alarm disarms only after a yes; sensors and climate open their pane. On is <see cref="Lit"/> (a light's
-/// own colour as the text, on a dark fill of it); off is <see cref="Off"/> (the theme's dimmer); an alert (an open garage, a
-/// leak, a jammed lock, a triggered alarm) stays a full <see cref="Slab"/> — dimming a colour emoji does nothing in Windows
-/// Terminal, so the background carries the state. Unavailable is dim with <c>?</c>; while the
+/// after a yes; an alarm disarms only after a yes; sensors and climate open their pane. Every chip sits on the
+/// page and its words carry the state: on is <see cref="Lit"/> (a light's own colour), off is <see cref="Off"/> (dim), an
+/// alert (an open garage, a leak, a jammed lock, a triggered alarm) is <see cref="Alert"/> (bold amber or red). The emoji
+/// keeps its colour either way. Unavailable is dim with <c>?</c>; while the
 /// feed is not live every chip is dim (stale). Glyphs are emoji by default (no VS16 needed), two cells each. Pure.
 /// </summary>
 public static class HomeChips
@@ -228,7 +228,7 @@ public static class HomeChips
                 bool guarded = GuardedCovers.Contains(entity.Text("device_class") ?? "", StringComparer.Ordinal);
                 var call = HaServiceCall.On("cover", open ? "close_cover" : "open_cover", id);
                 var action = !open && guarded ? HomeChipAction.Confirm : HomeChipAction.Call;
-                var style = open ? guarded ? Slab(Theme.Warn) : Lit(Theme.Secondary) : Off;
+                var style = open ? guarded ? Alert(Theme.Warn) : Lit(Theme.Secondary) : Off;
                 return new HomeChip(reference, glyph, name, shortName, value, style, action, call, HomeBarText.CoverNote(name, state, open));
             }
 
@@ -239,9 +239,9 @@ public static class HomeChips
                     case "locked":
                         return new HomeChip(reference, glyph, name, shortName, "", Off, HomeChipAction.Confirm, HaServiceCall.On("lock", "unlock", id), HomeBarText.LockNote(name, state));
                     case "unlocked" or "open":
-                        return new HomeChip(reference, glyph, name, shortName, "", Slab(Theme.Warn), HomeChipAction.Call, HaServiceCall.On("lock", "lock", id), HomeBarText.LockNote(name, state));
+                        return new HomeChip(reference, glyph, name, shortName, "", Alert(Theme.Warn), HomeChipAction.Call, HaServiceCall.On("lock", "lock", id), HomeBarText.LockNote(name, state));
                     default:
-                        var bad = state == "jammed" ? Slab(Theme.Bad) : Off;
+                        var bad = state == "jammed" ? Alert(Theme.Bad) : Off;
                         return new HomeChip(reference, glyph, name, shortName, HomeBarText.StateWord(state), bad, HomeChipAction.Detail, null, HomeBarText.LockNote(name, state));
                 }
             }
@@ -250,7 +250,7 @@ public static class HomeChips
             {
                 bool armed = state.StartsWith("armed", StringComparison.Ordinal) || state is "triggered" or "arming" or "pending";
                 string value = HomeBarText.AlarmWord(state);
-                var style = state == "triggered" ? Slab(Theme.Bad) : armed ? Lit(Theme.Good) : Off;
+                var style = state == "triggered" ? Alert(Theme.Bad) : armed ? Lit(Theme.Good) : Off;
 
                 // A panel that wants a code cannot be disarmed with a click: its pane says so.
                 bool needsCode = entity.Attributes.TryGetValue("code_format", out var format) && format.ValueKind == System.Text.Json.JsonValueKind.String;
@@ -265,7 +265,7 @@ public static class HomeChips
                 bool on = state == "on";
                 bool alert = on && deviceClass is "door" or "window" or "garage_door" or "opening" or "moisture" or "smoke" or "gas" or "carbon_monoxide" or "problem" or "safety" or "tamper";
                 string value = HomeBarText.BinaryWord(deviceClass, on);
-                var style = alert ? Slab(deviceClass is "moisture" or "smoke" or "gas" or "carbon_monoxide" or "safety" ? Theme.Bad : Theme.Warn) : new Style(Theme.Ink);
+                var style = alert ? Alert(deviceClass is "moisture" or "smoke" or "gas" or "carbon_monoxide" or "safety" ? Theme.Bad : Theme.Warn) : new Style(Theme.Ink);
                 return new HomeChip(reference, glyph, name, shortName, value, style, HomeChipAction.Detail, null, HomeBarText.ValueNote(name, value));
             }
 
@@ -373,28 +373,48 @@ public static class HomeChips
     }
 
     /// <summary>
-    /// How far a lit chip's fill goes from its colour toward the page (<see cref="Theme.Bg"/>): 0 is the colour itself, 1 the
-    /// page. The fill keeps a trace of the colour, the text carries it whole.
+    /// An on chip (2026-10-12, the user's call, twice that day: first the full slabs of a warm bulb's orange or a theme's
+    /// violet were overpowering, then the quiet fills that replaced them were still too much): <paramref name="color"/> as the
+    /// words on the page, no fill, lifted by <see cref="Readable"/> when too dark to read. Pure for one theme.
     /// </summary>
-    public const double LitFill = 0.8;
+    public static Style Lit(Color color) => new(Readable(color));
 
     /// <summary>
-    /// An on chip (2026-10-12, the user's call: the full slabs of a warm bulb's orange or a theme's violet were overpowering):
-    /// <paramref name="color"/> as the text, on a fill of it mixed <see cref="LitFill"/> of the way into the page, so every
-    /// theme and every bulb gets its own quiet chip with no colour added to the themes. Pure for one theme.
+    /// An off chip (2026-10-12, with <see cref="Lit"/>): the theme's dim words on the page. Its emoji stays in full colour —
+    /// Windows Terminal ignores faint and grey on a colour emoji — so the words alone say it is off.
     /// </summary>
-    public static Style Lit(Color color) => new(color, Theme.Mix(color, Theme.Bg, LitFill));
+    public static Style Off => new(Theme.Dim);
 
     /// <summary>
-    /// An off chip (2026-10-12, the user's pick with <see cref="Lit"/>): the theme's dim text on its dimmer, a quiet grey with the
-    /// theme's hue. <see cref="Theme.ToolbarOff"/>'s deep fill was the chips' until then; synthwave's deep is a bright violet.
+    /// An alert's chip (an open garage, gate or door, an unlocked or jammed lock, a triggered alarm, a leak or smoke):
+    /// <paramref name="color"/> bold on the page, so with no fills it still stands out from a lit chip (2026-10-12; a full
+    /// slab until then).
     /// </summary>
-    public static Style Off => new(Theme.Dim, Theme.Dimmer);
+    public static Style Alert(Color color) => new(color, decoration: Decoration.Bold);
 
-    /// <summary>A slab: <paramref name="background"/> with black or white text, whichever reads (by its luminance); the alerts' chip. Pure.</summary>
-    public static Style Slab(Color background) => new(Luminance(background) > 0.55 ? Color.Black : Color.White, background);
+    /// <summary>The luminance below which a lit chip's colour is lifted (<see cref="Readable"/>): a deep blue scene vanished on the page.</summary>
+    public const double ReadableFloor = 0.35;
 
-    /// <summary>Relative luminance, 0 to 1 (Rec. 709 weights on the raw channels: enough to choose black or white). Pure.</summary>
+    /// <summary>
+    /// <paramref name="color"/>, or, when its <see cref="Luminance"/> is under <see cref="ReadableFloor"/>, the first tenth of
+    /// the way toward <see cref="Theme.Ink"/> that reads (the ink itself at worst): the light's hue kept, its words legible on
+    /// a dark page. Pure for one theme.
+    /// </summary>
+    public static Color Readable(Color color)
+    {
+        for (int tenths = 0; tenths < 10; tenths++)
+        {
+            var lifted = Theme.Mix(color, Theme.Ink, tenths / 10.0);
+            if (Luminance(lifted) >= ReadableFloor)
+            {
+                return lifted;
+            }
+        }
+
+        return Theme.Ink;
+    }
+
+    /// <summary>Relative luminance, 0 to 1 (Rec. 709 weights on the raw channels). Pure.</summary>
     public static double Luminance(Color color) => (0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B) / 255;
 
     /// <summary>A hue (0–360) and saturation (0–100) at full value as a colour. Pure.</summary>
