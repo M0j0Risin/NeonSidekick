@@ -48,9 +48,10 @@ public static class PerfBar
     /// The row of the meters <paramref name="items"/> checks (<see cref="PerfBarItems"/>, 2026-09-30) in <paramref name="style"/>
     /// in <paramref name="cells"/> cells; null — no row — with none checked. A checked meter the machine cannot read is left
     /// out, so a row may be empty (GPU alone on a machine without one): the row stays, and the pane's layout with it.
-    /// <paramref name="processes"/> is PROC's count, the background processes running.
+    /// <paramref name="processes"/> is PROC's count, the background processes running. The meters go in <paramref name="order"/>
+    /// (the user's, 2026-10-12, <see cref="PerfBarItems.Order"/>; <see cref="PerfBarItems.Names"/> when null).
     /// </summary>
-    public static PerfRow? Render(PerfBarStyle style, IReadOnlySet<string> items, PerfSnapshot latest, IReadOnlyList<PerfSnapshot> history, int cells, int processes = 0)
+    public static PerfRow? Render(PerfBarStyle style, IReadOnlySet<string> items, PerfSnapshot latest, IReadOnlyList<PerfSnapshot> history, int cells, int processes = 0, IReadOnlyList<string>? order = null)
     {
         ArgumentNullException.ThrowIfNull(items);
         ArgumentNullException.ThrowIfNull(history);
@@ -59,7 +60,7 @@ public static class PerfBar
             return null;
         }
 
-        var meters = Meters(items, latest, processes);
+        var meters = Meters(items, latest, processes, order ?? PerfBarItems.Names);
         if (style != PerfBarStyle.Text)
         {
             foreach (int width in MeterWidths)
@@ -107,10 +108,10 @@ public static class PerfBar
     /// <summary>The colour a meter's value takes: a count's own, else the load's.</summary>
     private static Style ValueStyle(Meter meter) => new(meter.Count ?? LoadColor(meter.Value));
 
-    private static List<Meter> Meters(IReadOnlySet<string> items, PerfSnapshot latest, int processes)
+    private static List<Meter> Meters(IReadOnlySet<string> items, PerfSnapshot latest, int processes, IReadOnlyList<string> order)
     {
         var meters = new List<Meter>(PerfBarItems.Names.Length);
-        foreach (string id in PerfBarItems.Names.Where(items.Contains))
+        foreach (string id in order.Where(items.Contains))
         {
             switch (id)
             {

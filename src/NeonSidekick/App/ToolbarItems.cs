@@ -22,7 +22,9 @@ namespace NeonSidekick.App;
 /// viewer's place on 2026-10-08 (the user's ask: the live viewer's item gone, <c>/camera live</c> and Ctrl+Alt+V still open its window),
 /// <c>/youtube list</c>'s saved videos (a pane); a saved <c>liveview</c> is an unknown word, dropped as any is. Later that day (the
 /// user's ask) 📺 moved behind 🪟, the two viewers together again. 🙋 Ask on 2026-10-09 (the user's ask): the <c>Ask user</c> switch
-/// between the disk and the lock, <c>/tools ask</c>.
+/// between the disk and the lock, <c>/tools ask</c>. The order is the user's to change since 2026-10-12 (the user's ask, the home bar
+/// picker's move keys on this checklist): <see cref="Order"/> over <see cref="Settings.AppSettingsData.ToolbarOrder"/>, the path
+/// always last; <see cref="Names"/> is the default order, which <c>⊡ default</c> puts back with the checks.
 /// </summary>
 public static class ToolbarItems
 {
@@ -263,6 +265,15 @@ public static class ToolbarItems
         var chosen = Names.Where(on.Contains).ToList();
         return chosen.SequenceEqual(Defaults, StringComparer.Ordinal) ? null : chosen;
     }
+
+    /// <summary>
+    /// The checklist's and the strip's order for <paramref name="saved"/> (<see cref="Settings.AppSettingsData.ToolbarOrder"/>,
+    /// 2026-10-12): every item, <see cref="Names"/>' order for null, the path last whatever was saved (<see cref="ItemOrder.Resolve"/>).
+    /// </summary>
+    public static List<string> Order(IReadOnlyList<string>? saved) => ItemOrder.Resolve(saved, Names, Path);
+
+    /// <summary>What saves for <paramref name="order"/>: null for <see cref="Names"/>' own order (<see cref="ItemOrder.Save"/>).</summary>
+    public static List<string>? SaveOrder(IReadOnlyList<string> order) => ItemOrder.Save(order, Names);
 
     /// <summary><c>/toolbar</c>'s words (later on 2026-09-30): <c>on</c> and <c>off</c>, the completion's list. Pinned.</summary>
     public const string OnWord = "on";

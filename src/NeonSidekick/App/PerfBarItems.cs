@@ -14,7 +14,9 @@ namespace NeonSidekick.App;
 /// rather than the machine's, so no reader samples it and every look writes it as a number alone (the user's pick); off by default.
 /// The look is <see cref="Settings.AppSettingsData.PerformanceBarLook"/>, picked on the same page's title row.
 /// <see cref="Resolve"/> is the one place the saved list becomes the set: a display setting, so an unknown word is dropped
-/// without a warning.
+/// without a warning. The bar's order is the user's to change since 2026-10-12 (the user's ask, the home bar picker's move keys on
+/// this checklist): <see cref="Order"/> over <see cref="Settings.AppSettingsData.PerformanceBarOrder"/>; <see cref="Names"/> is the
+/// default order, which <c>⊡ default</c> puts back with the checks.
 /// </summary>
 public static class PerfBarItems
 {
@@ -120,10 +122,20 @@ public static class PerfBarItems
     }
 
     /// <summary>
-    /// The <c>Show performance bar</c> row's value: <c>off</c> with nothing checked, else the checked meters and the look —
-    /// <c>CPU, RAM, NET↓ · gauge</c>, or <c>all · gauge</c> with every one. Pinned.
+    /// The checklist's and the bar's order for <paramref name="saved"/> (<see cref="Settings.AppSettingsData.PerformanceBarOrder"/>,
+    /// 2026-10-12): every meter, <see cref="Names"/>' order for null (<see cref="ItemOrder.Resolve"/>).
     /// </summary>
-    public static string Value(IReadOnlyList<string>? saved, string? look)
+    public static List<string> Order(IReadOnlyList<string>? saved) => ItemOrder.Resolve(saved, Names);
+
+    /// <summary>What saves for <paramref name="order"/>: null for <see cref="Names"/>' own order (<see cref="ItemOrder.Save"/>).</summary>
+    public static List<string>? SaveOrder(IReadOnlyList<string> order) => ItemOrder.Save(order, Names);
+
+    /// <summary>
+    /// The <c>Show performance bar</c> row's value: <c>off</c> with nothing checked, else the checked meters and the look —
+    /// <c>CPU, RAM, NET↓ · gauge</c>, or <c>all · gauge</c> with every one, in the bar's order (<paramref name="order"/>, the
+    /// saved <see cref="Settings.AppSettingsData.PerformanceBarOrder"/>, 2026-10-12). Pinned.
+    /// </summary>
+    public static string Value(IReadOnlyList<string>? saved, string? look, IReadOnlyList<string>? order = null)
     {
         var on = Resolve(saved);
         if (on.Count == 0)
@@ -131,7 +143,7 @@ public static class PerfBarItems
             return PerfText.NoMeters;
         }
 
-        string meters = on.Count == Names.Length ? PerfText.AllMeters : string.Join(", ", Names.Where(on.Contains).Select(Title));
+        string meters = on.Count == Names.Length ? PerfText.AllMeters : string.Join(", ", Order(order).Where(on.Contains).Select(Title));
         return meters + " · " + PerfBarMode.Name(PerfBarMode.Parse(look));
     }
 }

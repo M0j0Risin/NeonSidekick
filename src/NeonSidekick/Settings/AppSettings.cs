@@ -759,6 +759,8 @@ public sealed class AppSettings : IDisposable
         ToolbarLastItems = source.ToolbarLastItems is null ? null : [.. source.ToolbarLastItems],
         PerformanceBarItems = source.PerformanceBarItems is null ? null : [.. source.PerformanceBarItems],
         PerformanceBarLastItems = source.PerformanceBarLastItems is null ? null : [.. source.PerformanceBarLastItems],
+        ToolbarOrder = source.ToolbarOrder is null ? null : [.. source.ToolbarOrder],
+        PerformanceBarOrder = source.PerformanceBarOrder is null ? null : [.. source.PerformanceBarOrder],
         HomeBarItems = source.HomeBarItems is null ? null : [.. source.HomeBarItems],
         HomeBarLastItems = source.HomeBarLastItems is null ? null : [.. source.HomeBarLastItems],
         HomeBarAliases = source.HomeBarAliases is null ? null : new Dictionary<string, string>(source.HomeBarAliases, StringComparer.Ordinal),

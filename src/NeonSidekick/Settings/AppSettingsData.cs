@@ -357,6 +357,15 @@ public sealed class AppSettingsData
     public List<string>? ToolbarLastItems { get; set; }
 
     /// <summary>
+    /// The toolbar's order (2026-10-12, the user's ask: the home bar picker's move keys on the <c>Show toolbar</c> checklist):
+    /// every id of <see cref="App.ToolbarItems.Names"/>, checked or not, in the order the strip draws them, the path always last
+    /// (<see cref="App.ToolbarItems.Order"/>). Null (the default) is <see cref="App.ToolbarItems.Names"/>' own order, which the
+    /// checklist's <c>⊡ default</c> puts back with the checks; an id it leaves out goes in after the one before it there. Apart
+    /// from <see cref="ToolbarItems"/>, so <c>/toolbar</c> and the checks never touch it. No settings row of its own, no variable.
+    /// </summary>
+    public List<string>? ToolbarOrder { get; set; }
+
+    /// <summary>
     /// The performance bar's meters (2026-09-30, the user's ask: <c>Show performance bar</c> a checklist like Show toolbar,
     /// none by default, in place of the one word — <c>ShowPerformanceBar</c>, off or a look, from 2026-09-29 — that was both
     /// the switch and the look; that key is retired, so a profile saved with it shows no bar until a meter is checked): the
@@ -377,6 +386,15 @@ public sealed class AppSettingsData
     /// row, no variable.
     /// </summary>
     public List<string>? PerformanceBarLastItems { get; set; }
+
+    /// <summary>
+    /// The performance bar's order (2026-10-12, the user's ask: the home bar picker's move keys on the <c>Show performance bar</c>
+    /// checklist): every id of <see cref="App.PerfBarItems.Names"/>, checked or not, in the order the bar draws them
+    /// (<see cref="App.PerfBarItems.Order"/>). Null (the default) is <see cref="App.PerfBarItems.Names"/>' own order, which the
+    /// checklist's <c>⊡ default</c> puts back with the checks. Apart from <see cref="PerformanceBarItems"/>, so <c>/perfbar</c> and
+    /// the checks never touch it. No settings row of its own, no variable.
+    /// </summary>
+    public List<string>? PerformanceBarOrder { get; set; }
 
     /// <summary>
     /// The performance bar's look (later on 2026-09-29, the user's ask: "the last look used"; the look itself since

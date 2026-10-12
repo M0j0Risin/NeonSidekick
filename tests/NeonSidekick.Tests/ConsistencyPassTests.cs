@@ -29,7 +29,7 @@ public class ConsistencyPassTests
     public static TheoryData<string> Hints() =>
     [
         MemoryMenu.Keys, MemoryMenu.SwitchKeys, MemoryMenu.EmptySwitchKeys, QueueMenu.Keys, QueueMenu.KeysWithSend, RewindText.Keys,
-        SettingsMenu.SwitchKeys, SettingsMenu.ToggleKeys, SettingsMenu.DefaultToggleKeys, SettingsMenu.PerfBarToggleKeys,
+        SettingsMenu.SwitchKeys, SettingsMenu.ToggleKeys, SettingsMenu.DefaultToggleKeys, SettingsMenu.ToolbarToggleKeys, SettingsMenu.PerfBarToggleKeys,
         SettingsMenu.AllowedCommandsKeys, SettingsMenu.AllowedCommandsEmptyKeys, SettingsMenu.PoliceToggleKeys, SettingsMenu.OfferedToggleKeys,
         SettingsMenu.WebToggleKeys, SettingsMenu.CameraToggleKeys, SettingsMenu.ChangedKeys, SettingsMenu.ProfileKeys,
         SettingsMenu.ThemeKeepKeys, SettingsMenu.ThemePickKeys, EmbeddedModelFilter.Keys, EmbeddedModelFilter.CatalogKeys,

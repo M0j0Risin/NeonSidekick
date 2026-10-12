@@ -2615,7 +2615,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ShowHeader => OnOff(data.ShowHeader),
             SettingsField.ShowWorkingDirectory => OnOff(data.ShowWorkingDirectory),
             SettingsField.ToolbarItems => App.ToolbarItems.Value(data.ToolbarItems),
-            SettingsField.ShowPerformanceBar => PerfBarItems.Value(data.PerformanceBarItems, data.PerformanceBarLook),
+            SettingsField.ShowPerformanceBar => PerfBarItems.Value(data.PerformanceBarItems, data.PerformanceBarLook, data.PerformanceBarOrder),
             SettingsField.ShowHomeBar => HomeBarItems.Value(data.HomeBarItems, null),
             SettingsField.ThemedExternalWindows => OnOff(data.ThemedExternalWindows),
             SettingsField.ThemedBackground => OnOff(data.ThemedBackground),
@@ -3073,6 +3073,13 @@ internal sealed partial class SettingsMenu
     public const string DefaultToggleKeys = "Enter / Space = on or off · a = all · n = none · d = default · ESC = back";
 
     /// <summary>
+    /// Show toolbar's hint (2026-10-12, the user's ask: the home bar picker's move keys on this checklist): <see cref="DefaultToggleKeys"/>
+    /// with the move. Shift+Home/End (to the top or the bottom) and Delete (unchecks) work too, but the hint leaves them out to stay
+    /// on one row of a 120-cell window; the docs and <c>neon_help</c> name them. Pinned.
+    /// </summary>
+    public const string ToolbarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · a = all · n = none · d = default · ESC = back";
+
+    /// <summary>
     /// Show performance bar's buttons (2026-09-30, the user's ask: the look on the checklist's own screen):
     /// <see cref="ChecklistButtons"/>, then <see cref="DefaultsButton"/> (index 2, 2026-10-02, the user's ask, as Show
     /// toolbar has: <see cref="PerfBarItems.Defaults"/>), then one per look (<see cref="PerfBarMode.Names"/>, from index
@@ -3084,8 +3091,8 @@ internal sealed partial class SettingsMenu
 
     private static readonly int PerfBarLookIndex = DefaultsIndex + 1;
 
-    /// <summary>Show performance bar's hint: <see cref="ToggleKeys"/> with D (2026-10-02) and the looks' keys (2026-09-30). Pinned.</summary>
-    public const string PerfBarToggleKeys = "Enter / Space = on or off · a = all · n = none · d = default · t / g / s / l = look · ESC = back";
+    /// <summary>Show performance bar's hint: <see cref="ToggleKeys"/> with D (2026-10-02), the looks' keys (2026-09-30), and the move (2026-10-12, as <see cref="ToolbarToggleKeys"/>). Pinned.</summary>
+    public const string PerfBarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · a = all · n = none · d = default · t / g / s / l = look · ESC = back";
 
     /// <summary>The status line when the last language would go: at least one stays (the user's rule, 2026-09-21). Pinned.</summary>
     public const string LastLanguageError = "At least one language stays on.";
@@ -4109,6 +4116,23 @@ internal sealed partial class SettingsMenu
         }
 
         return await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { } row ? (row, -1) : null;
+    }
+
+    /// <summary>
+    /// <see cref="PickChecklistAsync"/> for a checklist whose rows are an order (2026-10-12, Show toolbar and Show performance bar,
+    /// the home bar picker's move keys): the page's <see cref="MenuPage.Moves"/> on, and a move (<see cref="MenuPick.Move"/>) or a
+    /// Delete (<see cref="MenuPick.Remove"/>) handed back beside the row and the button. Without the pane, no buttons and no moves.
+    /// </summary>
+    private async Task<(int Row, int Button, int Move, bool Remove)?> PickOrderedChecklistAsync(MenuPage page, int cursor, CancellationToken cancellationToken, IReadOnlyList<MenuButton> buttons)
+    {
+        if (_pane.Enabled)
+        {
+            return await _pane.PickAsync(page with { Buttons = buttons, Moves = true }, cursor, cancellationToken).ConfigureAwait(false) is { } picked
+                ? (picked.Row, picked.Button, picked.Move, picked.Remove)
+                : null;
+        }
+
+        return await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { } row ? (row, -1, 0, false) : null;
     }
 
     /// <summary>A single-level picker: the pane is closed as soon as the pick lands, so what follows goes to the transcript.</summary>
@@ -8111,7 +8135,10 @@ internal sealed partial class SettingsMenu
     /// The toolbar's checklist under the settings list (2026-09-29, the user's ask: <c>Show toolbar</c> a multiple choice in
     /// place of its switch): one <see cref="App.ToolbarItems.Label"/> row per item, Enter or Space flipping it and saving at
     /// once, the list re-shown until ESC. Nothing has to stay: nothing checked is no toolbar. Its buttons are the checklists'
-    /// and <see cref="DefaultsButton"/> (2026-09-29). True when anything was flipped.
+    /// and <see cref="DefaultsButton"/> (2026-09-29). Since 2026-10-12 (the user's ask, the home bar picker's move keys) the rows
+    /// are the strip's order (<see cref="App.ToolbarItems.Order"/>): Shift+↑↓ moves the cursor's row a place, Shift+Home/End to the
+    /// top or the bottom, the path always last and never moved; Delete unchecks it; default puts the order back with the checks.
+    /// True when anything changed.
     /// </summary>
     private async Task<bool> EditToolbarItemsAsync(CancellationToken cancellationToken)
     {
@@ -8120,9 +8147,11 @@ internal sealed partial class SettingsMenu
         var names = App.ToolbarItems.Names;
         while (true)
         {
-            var on = App.ToolbarItems.Resolve(_settings.Current.ToolbarItems);
-            var page = new MenuPage(Crumb(FieldName(SettingsField.ToolbarItems)), names.Select(id => App.ToolbarItems.Label(id, on.Contains(id))).ToList(), DefaultToggleKeys) { SpaceToggles = true };
-            var picked = await PickChecklistAsync(page, cursor, cancellationToken, DefaultChecklistButtons).ConfigureAwait(false);
+            var saved = _settings.Current;
+            var on = App.ToolbarItems.Resolve(saved.ToolbarItems);
+            var order = App.ToolbarItems.Order(saved.ToolbarOrder);
+            var page = new MenuPage(Crumb(FieldName(SettingsField.ToolbarItems)), order.Select(id => App.ToolbarItems.Label(id, on.Contains(id))).ToList(), ToolbarToggleKeys) { SpaceToggles = true };
+            var picked = await PickOrderedChecklistAsync(page, cursor, cancellationToken, DefaultChecklistButtons).ConfigureAwait(false);
             if (picked is not { } pick)
             {
                 if (!changed)
@@ -8134,13 +8163,39 @@ internal sealed partial class SettingsMenu
             }
 
             cursor = pick.Row;
+            if (pick.Move != 0)
+            {
+                var (moved, at) = ItemOrder.Move(order, pick.Row, pick.Move, App.ToolbarItems.Path);
+                cursor = at;
+                if (at != pick.Row)
+                {
+                    Apply(SettingsField.ToolbarItems, d => d.ToolbarOrder = App.ToolbarItems.SaveOrder(moved));
+                    changed = true;
+                }
+
+                continue;
+            }
+
+            if (pick.Button == DefaultsIndex)
+            {
+                if (on.SetEquals(App.ToolbarItems.Defaults) && App.ToolbarItems.SaveOrder(order) is null)
+                {
+                    continue;   // the default checks in the default order: nothing to save
+                }
+
+                Apply(SettingsField.ToolbarItems, d => { d.ToolbarItems = null; d.ToolbarOrder = null; });
+                changed = true;
+                continue;
+            }
+
+            string row = order[Math.Clamp(pick.Row, 0, order.Count - 1)];
             var next = pick.Button == SelectAllIndex ? names.ToHashSet(StringComparer.Ordinal)
                 : pick.Button == SelectNoneIndex ? new HashSet<string>(StringComparer.Ordinal)
-                : pick.Button == DefaultsIndex ? App.ToolbarItems.Defaults.ToHashSet(StringComparer.Ordinal)
-                : names.Where(n => on.Contains(n) != string.Equals(n, names[pick.Row], StringComparison.Ordinal)).ToHashSet(StringComparer.Ordinal);
+                : pick.Remove ? names.Where(n => on.Contains(n) && n != row).ToHashSet(StringComparer.Ordinal)
+                : names.Where(n => on.Contains(n) != (n == row)).ToHashSet(StringComparer.Ordinal);
             if (next.SetEquals(on))
             {
-                continue;   // select all with every item on, none with none, default on the defaults: nothing to save
+                continue;   // select all with every item on, none with none, Delete on an unchecked row: nothing to save
             }
 
             Apply(SettingsField.ToolbarItems, d => d.ToolbarItems = App.ToolbarItems.Save(next));
@@ -8184,7 +8239,9 @@ internal sealed partial class SettingsMenu
     /// nothing checked no bar; on the title row the checklists' select all and select none, default (2026-10-02, the user's
     /// ask: CPU, RAM, GPU and VRAM), then the four looks (<see cref="PerfBarButtons"/>), the one in force lit — the embedded model lists' radio buttons' shape. The list is
     /// re-shown until ESC, the bar redrawing under it. Without the pane there are no buttons, and <c>/perfbar &lt;look&gt;</c>
-    /// sets the look. True when anything changed.
+    /// sets the look. Since 2026-10-12 (the user's ask, the home bar picker's move keys) the rows are the bar's order
+    /// (<see cref="PerfBarItems.Order"/>): Shift+↑↓ moves the cursor's meter a place, Shift+Home/End to the top or the bottom;
+    /// Delete unchecks it; default puts the order back with the checks (the look stays). True when anything changed.
     /// </summary>
     private async Task<bool> EditPerfBarAsync(CancellationToken cancellationToken)
     {
@@ -8195,8 +8252,9 @@ internal sealed partial class SettingsMenu
         {
             var saved = _settings.Current;
             var on = PerfBarItems.Resolve(saved.PerformanceBarItems);
-            var page = new MenuPage(Crumb(FieldName(SettingsField.ShowPerformanceBar)), names.Select(id => PerfBarItems.Label(id, on.Contains(id))).ToList(), PerfBarToggleKeys) { SpaceToggles = true };
-            var picked = await PickChecklistAsync(page, cursor, cancellationToken, PerfBarButtons(PerfBarMode.Parse(saved.PerformanceBarLook))).ConfigureAwait(false);
+            var order = PerfBarItems.Order(saved.PerformanceBarOrder);
+            var page = new MenuPage(Crumb(FieldName(SettingsField.ShowPerformanceBar)), order.Select(id => PerfBarItems.Label(id, on.Contains(id))).ToList(), PerfBarToggleKeys) { SpaceToggles = true };
+            var picked = await PickOrderedChecklistAsync(page, cursor, cancellationToken, PerfBarButtons(PerfBarMode.Parse(saved.PerformanceBarLook))).ConfigureAwait(false);
             if (picked is not { } pick)
             {
                 if (!changed)
@@ -8220,13 +8278,39 @@ internal sealed partial class SettingsMenu
                 continue;
             }
 
+            if (pick.Move != 0)
+            {
+                var (moved, at) = ItemOrder.Move(order, pick.Row, pick.Move);
+                cursor = at;
+                if (at != pick.Row)
+                {
+                    Apply(SettingsField.ShowPerformanceBar, d => d.PerformanceBarOrder = PerfBarItems.SaveOrder(moved));
+                    changed = true;
+                }
+
+                continue;
+            }
+
+            if (pick.Button == DefaultsIndex)
+            {
+                if (on.SetEquals(PerfBarItems.Defaults) && PerfBarItems.SaveOrder(order) is null)
+                {
+                    continue;   // the default meters in the default order: nothing to save
+                }
+
+                Apply(SettingsField.ShowPerformanceBar, d => { d.PerformanceBarItems = PerfBarItems.Save(PerfBarItems.Defaults.ToHashSet(StringComparer.Ordinal)); d.PerformanceBarOrder = null; });
+                changed = true;
+                continue;
+            }
+
+            string row = order[Math.Clamp(pick.Row, 0, order.Count - 1)];
             var next = pick.Button == SelectAllIndex ? names.ToHashSet(StringComparer.Ordinal)
                 : pick.Button == SelectNoneIndex ? new HashSet<string>(StringComparer.Ordinal)
-                : pick.Button == DefaultsIndex ? PerfBarItems.Defaults.ToHashSet(StringComparer.Ordinal)
-                : names.Where(n => on.Contains(n) != string.Equals(n, names[pick.Row], StringComparison.Ordinal)).ToHashSet(StringComparer.Ordinal);
+                : pick.Remove ? names.Where(n => on.Contains(n) && n != row).ToHashSet(StringComparer.Ordinal)
+                : names.Where(n => on.Contains(n) != (n == row)).ToHashSet(StringComparer.Ordinal);
             if (next.SetEquals(on))
             {
-                continue;   // select all with every meter on, none with none, default on the defaults: nothing to save
+                continue;   // select all with every meter on, none with none, Delete on an unchecked row: nothing to save
             }
 
             Apply(SettingsField.ShowPerformanceBar, d => d.PerformanceBarItems = PerfBarItems.Save(next));

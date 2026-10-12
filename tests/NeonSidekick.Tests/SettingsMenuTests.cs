@@ -4747,7 +4747,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains(SettingsMenu.SelectAllButton, Output);
         Assert.Contains(SettingsMenu.SelectNoneButton, Output);
         Assert.Contains(SettingsMenu.DefaultsButton, Output);
-        Assert.Contains(SettingsMenu.DefaultToggleKeys, Output);
+        Assert.Contains(SettingsMenu.ToolbarToggleKeys, Output);
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(Output, "  · Show toolbar: all"));
         pane.Dispose();
 

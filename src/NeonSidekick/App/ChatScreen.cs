@@ -1652,12 +1652,13 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The strip for the items Show toolbar checks under <paramref name="shown"/>, and the glyphs in it drawn on the off slab
     /// (2026-10-03, the user's ask): by their place among the strip's glyphs, from 0 — each tool switch whose setting is off,
-    /// the shell under <c>off</c> (<see cref="ToolbarItemOff"/>). Pinned.
+    /// the shell under <c>off</c> (<see cref="ToolbarItemOff"/>). In <paramref name="shown"/>'s order since 2026-10-12
+    /// (<see cref="AppSettingsData.ToolbarOrder"/>, the checklist's move keys). Pinned.
     /// </summary>
     public static (string Strip, IReadOnlyList<int> Off) ToolbarStripFor(IReadOnlySet<string> items, AppSettingsData shown)
     {
         ArgumentNullException.ThrowIfNull(shown);
-        return ToolbarGlyphs(items, ToolbarPolicy(shown), shown.ShellPolice, id => ToolbarItemOff(id, shown));
+        return ToolbarGlyphs(items, ToolbarPolicy(shown), shown.ShellPolice, id => ToolbarItemOff(id, shown), ToolbarItems.Order(shown.ToolbarOrder));
     }
 
     /// <summary>
@@ -1731,13 +1732,16 @@ internal sealed partial class ChatScreen
     /// <summary>The folder the toolbar's path shows as <c>~</c> (2026-10-04, <see cref="ScreenPane.HomeTilde"/>): the user's profile; tests set their own.</summary>
     public string UserProfileFolder { get; set; } = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-    /// <summary>The one walk over <see cref="ToolbarItems.Names"/> the strips share: the glyphs drawn and the places of the ones <paramref name="off"/> names.</summary>
-    private static (string Strip, IReadOnlyList<int> Off) ToolbarGlyphs(IReadOnlySet<string> items, Shell.CommandPolicyMode policy, bool police, Func<string, bool> off)
+    /// <summary>
+    /// The one walk the strips share, over <paramref name="order"/> (the user's, 2026-10-12; <see cref="ToolbarItems.Names"/> when
+    /// null): the glyphs drawn and the places of the ones <paramref name="off"/> names.
+    /// </summary>
+    private static (string Strip, IReadOnlyList<int> Off) ToolbarGlyphs(IReadOnlySet<string> items, Shell.CommandPolicyMode policy, bool police, Func<string, bool> off, IReadOnlyList<string>? order = null)
     {
         ArgumentNullException.ThrowIfNull(items);
         var glyphs = new List<string>();
         var dim = new List<int>();
-        foreach (string id in ToolbarItems.Names)
+        foreach (string id in order ?? ToolbarItems.Names)
         {
             if (id == ToolbarItems.Path || !items.Contains(id))
             {
@@ -1797,7 +1801,7 @@ internal sealed partial class ChatScreen
 
         var (latest, history, _) = _perf.Read();
         int processes = items.Contains(PerfBarItems.Proc) ? _processes.Running : 0;
-        return PerfBar.Render(PerfBarMode.Parse(shown.PerformanceBarLook), items, latest, history, cells, processes);
+        return PerfBar.Render(PerfBarMode.Parse(shown.PerformanceBarLook), items, latest, history, cells, processes, PerfBarItems.Order(shown.PerformanceBarOrder));
     }
 
     /// <summary>
