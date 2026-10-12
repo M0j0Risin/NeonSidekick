@@ -557,8 +557,8 @@ public enum SettingsField
 
     /// <summary>
     /// A checklist: the performance bar's meters (<see cref="Settings.AppSettingsData.PerformanceBarItems"/>, 2026-09-30, the
-    /// user's ask; a picker of <c>off</c> or a look from 2026-09-29), with the look on the page's title row
-    /// (<see cref="Settings.AppSettingsData.PerformanceBarLook"/>). The Chat tab's row after Show toolbar; no reconnect (the
+    /// user's ask; a picker of <c>off</c> or a look from 2026-09-29); the look
+    /// (<see cref="Settings.AppSettingsData.PerformanceBarLook"/>) shown in its value, set by <c>/perfbar</c> (on the page's title row until 2026-10-12). The Chat tab's row after Show toolbar; no reconnect (the
     /// pane reads it at every tick).
     /// </summary>
     ShowPerformanceBar,
@@ -3080,19 +3080,11 @@ internal sealed partial class SettingsMenu
     public const string ToolbarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · a = all · n = none · d = default · ESC = back";
 
     /// <summary>
-    /// Show performance bar's buttons (2026-09-30, the user's ask: the look on the checklist's own screen):
-    /// <see cref="ChecklistButtons"/>, then <see cref="DefaultsButton"/> (index 2, 2026-10-02, the user's ask, as Show
-    /// toolbar has: <see cref="PerfBarItems.Defaults"/>), then one per look (<see cref="PerfBarMode.Names"/>, from index
-    /// <see cref="PerfBarLookIndex"/>, keys T, G and L; S was spark's until 2026-10-12), the one in force lit — a radio group, as the embedded model lists'
-    /// size filters are. Pinned.
+    /// Show performance bar's hint: <see cref="ToolbarToggleKeys"/>' words, the same page since 2026-10-12 (the user's ask). From
+    /// 2026-09-30 the page's title row also held the looks (<c>t / g / l = look</c> in the hint, a radio button per look after
+    /// default); they went the same day, and <c>/perfbar &lt;look&gt;</c> is the one way to pick it. Pinned.
     /// </summary>
-    public static IReadOnlyList<MenuButton> PerfBarButtons(PerfBarStyle look) =>
-        [.. ChecklistButtons, new(DefaultsButton, DefaultsKey), .. PerfBarMode.Names.Select(name => new MenuButton(PerfBarMode.ButtonTitle(name), name[0], PerfBarMode.Name(look) == name))];
-
-    private static readonly int PerfBarLookIndex = DefaultsIndex + 1;
-
-    /// <summary>Show performance bar's hint: <see cref="ToggleKeys"/> with D (2026-10-02), the looks' keys (2026-09-30), and the move (2026-10-12, as <see cref="ToolbarToggleKeys"/>). Pinned.</summary>
-    public const string PerfBarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · a = all · n = none · d = default · t / g / s / l = look · ESC = back";
+    public const string PerfBarToggleKeys = ToolbarToggleKeys;
 
     /// <summary>The status line when the last language would go: at least one stays (the user's rule, 2026-09-21). Pinned.</summary>
     public const string LastLanguageError = "At least one language stays on.";
@@ -8234,12 +8226,11 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// The performance bar's page under the settings list (2026-09-30, the user's ask: the toolbar's checklist, and the look on
-    /// the same screen): one <see cref="PerfBarItems.Label"/> row per meter, Enter or Space flipping it and saving at once,
-    /// nothing checked no bar; on the title row the checklists' select all and select none, default (2026-10-02, the user's
-    /// ask: CPU, RAM, GPU and VRAM), then the three looks (<see cref="PerfBarButtons"/>), the one in force lit — the embedded model lists' radio buttons' shape. The list is
-    /// re-shown until ESC, the bar redrawing under it. Without the pane there are no buttons, and <c>/perfbar &lt;look&gt;</c>
-    /// sets the look. Since 2026-10-12 (the user's ask, the home bar picker's move keys) the rows are the bar's order
+    /// The performance bar's page under the settings list (2026-09-30, the user's ask: the toolbar's checklist): one
+    /// <see cref="PerfBarItems.Label"/> row per meter, Enter or Space flipping it and saving at once, nothing checked no bar; on
+    /// the title row the checklists' select all and select none, and default (2026-10-02, the user's ask: CPU, RAM, GPU and
+    /// VRAM). The looks were radio buttons after default until 2026-10-12 (the user's call); <c>/perfbar &lt;look&gt;</c> sets
+    /// the look. The list is re-shown until ESC, the bar redrawing under it. Since 2026-10-12 (the user's ask, the home bar picker's move keys) the rows are the bar's order
     /// (<see cref="PerfBarItems.Order"/>): Shift+↑↓ moves the cursor's meter a place, Shift+Home/End to the top or the bottom;
     /// Delete unchecks it; default puts the order back with the checks (the look stays). True when anything changed.
     /// </summary>
@@ -8254,7 +8245,7 @@ internal sealed partial class SettingsMenu
             var on = PerfBarItems.Resolve(saved.PerformanceBarItems);
             var order = PerfBarItems.Order(saved.PerformanceBarOrder);
             var page = new MenuPage(Crumb(FieldName(SettingsField.ShowPerformanceBar)), order.Select(id => PerfBarItems.Label(id, on.Contains(id))).ToList(), PerfBarToggleKeys) { SpaceToggles = true };
-            var picked = await PickOrderedChecklistAsync(page, cursor, cancellationToken, PerfBarButtons(PerfBarMode.Parse(saved.PerformanceBarLook))).ConfigureAwait(false);
+            var picked = await PickOrderedChecklistAsync(page, cursor, cancellationToken, DefaultChecklistButtons).ConfigureAwait(false);
             if (picked is not { } pick)
             {
                 if (!changed)
@@ -8266,18 +8257,6 @@ internal sealed partial class SettingsMenu
             }
 
             cursor = pick.Row;
-            if (pick.Button >= PerfBarLookIndex)
-            {
-                string look = PerfBarMode.Names[pick.Button - PerfBarLookIndex];
-                if (!string.Equals(look, PerfBarMode.Name(PerfBarMode.Parse(saved.PerformanceBarLook)), StringComparison.Ordinal))
-                {
-                    Apply(SettingsField.ShowPerformanceBar, d => d.PerformanceBarLook = look);
-                    changed = true;
-                }
-
-                continue;
-            }
-
             if (pick.Move != 0)
             {
                 var (moved, at) = ItemOrder.Move(order, pick.Row, pick.Move);

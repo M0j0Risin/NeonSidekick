@@ -52,13 +52,13 @@ public partial class SettingsMenuTests
     }
 
     [Fact]
-    public async Task OnThePane_ShowPerformanceBar_TheMoveKeysOrderIt_TheLookLeavesItAlone_DefaultPutsItBack()
+    public async Task OnThePane_ShowPerformanceBar_TheMoveKeysOrderIt_DefaultPutsItBack_TheLookStays()
     {
+        _settings.Update(d => d.PerformanceBarLook = "gauge");   // /perfbar's since 2026-10-12, the page's look buttons gone
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
         Push(Keys.Enter);
         Push(ShiftDown);                        // CPU after RAM
-        Push(Keys.Char('g'));                   // the gauge look: the order stays
         Push(DeleteKey);                        // CPU unchecked (the cursor followed it)
         Push(Keys.Escape, Keys.Escape);
 
@@ -68,7 +68,7 @@ public partial class SettingsMenuTests
         Assert.Equal(["ram", "gpu", "vram"], _settings.Current.PerformanceBarItems);
         Assert.Equal("gauge", _settings.Current.PerformanceBarLook);
         Assert.Contains(SettingsMenu.PerfBarToggleKeys, Output);
-        Assert.Contains("  · Show performance bar: RAM, GPU, VRAM · gauge", Output);
+        Assert.Contains("  · Show performance bar: RAM, GPU, VRAM · gauge", Output);   // the look set before the page opened
         pane.Dispose();
 
         (menu, pane) = PaneMenu();

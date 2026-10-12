@@ -24,7 +24,8 @@ public sealed record PerfToggle(List<string>? Items, List<string>? LastItems, st
 /// <see cref="PerfBarStyle"/>. A fourth, <c>spark</c> (the last ten readings as a sparkline), went on 2026-10-12 (the user's
 /// call), with the sampler's history only it read; a profile that saved it reads as <see cref="Default"/>. Until 2026-09-30 the setting <c>Show performance bar</c> was one of these or <c>off</c>, the
 /// switch and the look in one word; since, the meters shown are a checklist (<see cref="PerfBarItems"/>, the user's ask)
-/// and the look is <see cref="AppSettingsData.PerformanceBarLook"/>, picked on the same page's title row. <c>off</c> is a
+/// and the look is <see cref="AppSettingsData.PerformanceBarLook"/>, picked by <c>/perfbar &lt;look&gt;</c> (on the same page's title row too until 2026-10-12, the user's call: those buttons and their
+/// glyphs went). <c>off</c> is a
 /// <c>/perfbar</c> word alone (<see cref="Words"/>). <see cref="Parse"/> is the one place the saved look becomes the enum: a
 /// hand-edited value that is none of them reads as <see cref="Default"/> without a warning, a display setting as the meters'
 /// list is (a <c>Resolve</c> that warned once went later on 2026-09-30, the review's catch: nothing but a test called it).
@@ -37,7 +38,7 @@ public static class PerfBarMode
     /// <summary>The <c>/perfbar</c> word that hides the bar.</summary>
     public const string OffWord = "off";
 
-    /// <summary>The looks in the page's button order. Pinned.</summary>
+    /// <summary>The looks in <c>/perfbar</c>'s completion order. Pinned.</summary>
     public static readonly string[] Names = { "text", "gauge", "led" };
 
     /// <summary><c>/perfbar</c>'s words, as its completion lists them: <see cref="OffWord"/>, then the looks.</summary>
@@ -68,18 +69,6 @@ public static class PerfBarMode
         PerfBarStyle.Gauge => "gauge",
         PerfBarStyle.Led => "led",
         _ => "text",
-    };
-
-    /// <summary>
-    /// A look's button on the <c>Show performance bar</c> checklist: a glyph that hints at the look, then its name (2026-10-03,
-    /// the user's ask and picks: every header button a monochrome glyph to its left). The saved word stays the bare name. Pinned.
-    /// </summary>
-    public static string ButtonTitle(string name) => name switch
-    {
-        "text" => "≡ text",
-        "gauge" => "◔ gauge",
-        "led" => "● led",
-        _ => name,
     };
 
     /// <summary><c>/perfbar</c>'s completion hint beside a word. Pinned.</summary>

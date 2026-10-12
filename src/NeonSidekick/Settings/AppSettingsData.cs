@@ -399,8 +399,8 @@ public sealed class AppSettingsData
     /// <summary>
     /// The performance bar's look (later on 2026-09-29, the user's ask: "the last look used"; the look itself since
     /// 2026-09-30): one of <see cref="App.PerfBarMode.Names"/> — <c>text</c>, <c>gauge</c> or <c>led</c> (<c>spark</c> until 2026-10-12, now read as <c>led</c>; the
-    /// default since 2026-10-02, the user's ask; <c>text</c> until then, which a profile that saved it keeps) — picked on the
-    /// <c>Show performance bar</c> page's title row or by <c>/perfbar &lt;look&gt;</c>. Anything else reads as <c>led</c>. No row of
+    /// default since 2026-10-02, the user's ask; <c>text</c> until then, which a profile that saved it keeps) — picked by
+    /// <c>/perfbar &lt;look&gt;</c> (on the <c>Show performance bar</c> page's title row too until 2026-10-12, the user's call). Anything else reads as <c>led</c>. No row of
     /// its own, no variable.
     /// </summary>
     public string PerformanceBarLook { get; set; } = App.PerfBarMode.Default;

@@ -4789,32 +4789,31 @@ public partial class SettingsMenuTests : IDisposable
 
     /// <summary>
     /// Show performance bar as a checklist (2026-09-30, the user's ask): Enter flips a meter and saves at once, in the bar's
-    /// order; the look is a title-row button (T, G, S, L), the one in force lit, and pressing it again saves nothing; N
-    /// unchecks every meter, which saves the empty list — no bar (null until 2026-10-02, when null became the four).
+    /// order; N unchecks every meter, which saves the empty list — no bar (null until 2026-10-02, when null became the four).
+    /// The looks were title-row buttons (T, G, L) until 2026-10-12 (the user's call): G is nothing now, the look kept.
     /// </summary>
     [Fact]
-    public async Task OnThePane_ShowPerformanceBar_ChecksMeters_AndTheLookIsATitleRowButton()
+    public async Task OnThePane_ShowPerformanceBar_ChecksMeters_TheLookIsNoButton()
     {
-        _settings.Update(d => d.PerformanceBarItems = []);   // from no bar (the four show by default since 2026-10-02)
+        _settings.Update(d => { d.PerformanceBarItems = []; d.PerformanceBarLook = "text"; });   // from no bar (the four show by default since 2026-10-02)
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
         Push(Keys.Enter);
         Push(Keys.Down, Keys.Enter);            // RAM
         Push(Keys.Up, Keys.Enter);              // CPU
-        Push(Keys.Char('g'));                   // the gauge look
-        Push(Keys.Char('G'));                   // again: nothing to save
+        Push(Keys.Char('g'));                   // no look button: the look stays text
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["cpu", "ram"], _settings.Current.PerformanceBarItems);
-        Assert.Equal("gauge", _settings.Current.PerformanceBarLook);
+        Assert.Equal("text", _settings.Current.PerformanceBarLook);
         Assert.Contains(SettingsMenu.PerfBarToggleKeys, Output);
         Assert.Contains(SettingsMenu.SelectAllButton, Output);
-        Assert.Contains("  · Show performance bar: CPU, RAM · gauge", Output);
-        Assert.Equal(["◔ gauge"], SettingsMenu.PerfBarButtons(PerfBarStyle.Gauge).Where(b => b.On).Select(b => b.Title));
-        Assert.Equal(["⊞ select all", "⊠ select none", "⊡ default", "≡ text", "◔ gauge", "● led"], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Title));   // the looks' glyphs since 2026-10-03
-        Assert.Equal(['a', 'n', 'd', 't', 'g', 'l'], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Key!.Value));
+        Assert.Contains("  · Show performance bar: CPU, RAM · text", Output);
+        Assert.DoesNotContain("◔ gauge", Output);
+        Assert.DoesNotContain("t / g / l", Output);
+        Assert.Equal(SettingsMenu.ToolbarToggleKeys, SettingsMenu.PerfBarToggleKeys);
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
@@ -4826,7 +4825,7 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Empty(_settings.Current.PerformanceBarItems!);   // none saves as the empty list (null is the four since 2026-10-02)
-        Assert.Equal("gauge", _settings.Current.PerformanceBarLook);   // the look stays for the next meter checked
+        Assert.Equal("text", _settings.Current.PerformanceBarLook);   // the look stays for the next meter checked
         pane.Dispose();
     }
 

@@ -12,7 +12,7 @@ namespace NeonSidekick.App;
 /// no row, nothing sampled. The network's three (NET, NET↓, NET↑) came with it, each a choice of its own (the user's
 /// pick). PROC (2026-10-05, the user's ask) is the last: the model's background processes still running, the app's own count
 /// rather than the machine's, so no reader samples it and every look writes it as a number alone (the user's pick); off by default.
-/// The look is <see cref="Settings.AppSettingsData.PerformanceBarLook"/>, picked on the same page's title row.
+/// The look is <see cref="Settings.AppSettingsData.PerformanceBarLook"/>, picked by <c>/perfbar</c> (on the same page's title row until 2026-10-12).
 /// <see cref="Resolve"/> is the one place the saved list becomes the set: a display setting, so an unknown word is dropped
 /// without a warning. The bar's order is the user's to change since 2026-10-12 (the user's ask, the home bar picker's move keys on
 /// this checklist): <see cref="Order"/> over <see cref="Settings.AppSettingsData.PerformanceBarOrder"/>; <see cref="Names"/> is the
