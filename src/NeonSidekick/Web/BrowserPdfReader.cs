@@ -70,11 +70,15 @@ public static partial class BrowserPdfReader
     /// <summary>
     /// The expression that reads page <paramref name="number"/>: its text, and with <paramref name="picture"/> its picture scaled so its
     /// longer side is at most <paramref name="maxSide"/> pixels (never above twice the page's own size); it answers <c>{ t, p, w, h }</c>.
+    /// The text is the items' strings run together, a line break after each <c>hasEOL</c>, as pdf.js's own find controller joins them:
+    /// pdf.js already gives a gap its <c>" "</c> item. A space after every item (until 2026-10-11, the Mac's first publish smoke) split
+    /// words wherever the font changes inside one: Chrome on a Mac prints <c>system-ui</c> (SF Pro) as several subsets a word, so
+    /// "Eggs" came as "E", "gg", "s" and read "E gg s"; Segoe UI on Windows prints whole runs, which is why it never showed there.
     /// </summary>
     public static string PageExpression(int number, int maxSide, bool picture) =>
         "(async () => { const page = await globalThis.__neonPdf.getPage(" + number.ToString(CultureInfo.InvariantCulture) + "); " +
         "const tc = await page.getTextContent(); " +
-        "const t = tc.items.map(i => (i.str || '') + (i.hasEOL ? '\\n' : ' ')).join(''); " +
+        "const t = tc.items.map(i => (i.str || '') + (i.hasEOL ? '\\n' : '')).join(''); " +
         (picture
             ? "const base = page.getViewport({ scale: 1 }); " +
               "const scale = Math.min(2, " + maxSide.ToString(CultureInfo.InvariantCulture) + " / Math.max(base.width, base.height)); " +

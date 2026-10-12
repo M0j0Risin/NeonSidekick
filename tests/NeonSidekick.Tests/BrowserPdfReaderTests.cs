@@ -68,6 +68,7 @@ public sealed class BrowserPdfReaderTests
         Assert.Contains("isEvalSupported: false", BrowserPdfReader.OpenExpression("JVBE"), StringComparison.Ordinal);
         Assert.Contains("getPage(3)", BrowserPdfReader.PageExpression(3, 1600, picture: true), StringComparison.Ordinal);
         Assert.Contains("1600 / Math.max", BrowserPdfReader.PageExpression(3, 1600, picture: true), StringComparison.Ordinal);
+        Assert.Contains("(i.str || '') + (i.hasEOL ? '\\n' : '')).join('')", BrowserPdfReader.PageExpression(3, 1600, picture: true), StringComparison.Ordinal);
         Assert.DoesNotContain("canvas", BrowserPdfReader.PageExpression(3, 1600, picture: false), StringComparison.Ordinal);
     }
 
