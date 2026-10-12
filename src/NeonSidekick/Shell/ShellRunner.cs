@@ -36,9 +36,15 @@ public sealed class ShellRunner
         return prefix + random.Next(0, 0x1000000).ToString("x6", CultureInfo.InvariantCulture);
     }
 
-    /// <summary>Starts <paramref name="launch"/> as <paramref name="id"/>; the session is the caller's to wait on, kill and dispose.</summary>
+    /// <summary>
+    /// Starts <paramref name="launch"/> as <paramref name="id"/>; the session is the caller's to wait on, kill and dispose. On Windows
+    /// the child goes into a job of its own right after the start (2026-10-12, the shell review, <see cref="EmbeddedLlm.ChildJob.CreateOwn"/>),
+    /// so a kill ends everything it started; with <paramref name="tiedToApp"/> (a background command, the user's call) the job is
+    /// kill-on-close, so the app's end, a crash too, and the session's dispose end what is left of it. A child the command starts in
+    /// the instant before the assignment runs outside the job; the tree walk still finds it while its parent lives.
+    /// </summary>
     /// <exception cref="ShellStartException">The program could not be started (missing, refused, not a program).</exception>
-    public ProcessSession Start(ProcessLaunch launch, string id)
+    public ProcessSession Start(ProcessLaunch launch, string id, bool tiedToApp = false)
     {
         ArgumentNullException.ThrowIfNull(launch);
         ArgumentNullException.ThrowIfNull(id);
@@ -84,6 +90,7 @@ public sealed class ShellRunner
         }
 
         var session = new ProcessSession(id, launch, process, _time);
+        session.AttachJob(EmbeddedLlm.ChildJob.CreateOwn(process, killOnClose: tiedToApp));
         DiagnosticLog.Debug(ShellKinds.Category, $"{id}: started pid {process.Id.ToString(CultureInfo.InvariantCulture)} ({launch.Kind}) {launch.Label}");
         _ = PumpAndCompleteAsync(session, process);
         return session;

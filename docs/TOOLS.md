@@ -71,7 +71,7 @@ When a site refuses `web_fetch`, shows a bot check, or needs scripts to fill in,
 
 Under *Shell command policy*. Commands run on your machine, starting in the working directory (`workdir` picks a folder under it), guarded by *Shell command policy* and *Shell police* (see [Shell guards](SETTINGS.md#shell-guards)). A denied command tells the model not to work around it.
 
-* Commands run hidden, with colours and pagers off and stdin closed. A progress bar redrawn with `\r` is kept as its last drawing, and a line over 8,192 characters is cut. A command that times out is killed with everything it started; background processes stop when the app closes.
+* Commands run hidden, with colours and pagers off and stdin closed. A progress bar redrawn with `\r` is kept as its last drawing, and a line over 8,192 characters is cut. A command that times out, is killed or is stopped with ESC goes with everything it started, even what it detached. Background processes stop when the app closes, or crashes; one closed (or forgotten after 64 newer finish) takes what it left running with it. A program a foreground command opens (`start notepad`, `code .`) stays open.
 * `/process` lists the background processes; `/process <id>` watches one live in the [process window](COMMANDS.md#process-window), where Ctrl+K twice stops it.
 * `/cmd <command>` runs a line of your own through the same guards ([Your own shell line](COMMANDS.md#your-own-shell-line)).
 * **Headless** there is no approval pane, so under `ask` only allow-listed commands run. If any was refused, the run ends with a notice and exit code 3. `--yolo` allows every command for one launch; `--no-police` also lifts the path police. See [HEADLESS.md](HEADLESS.md).

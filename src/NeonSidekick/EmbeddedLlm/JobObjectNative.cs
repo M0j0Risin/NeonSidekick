@@ -72,6 +72,11 @@ internal static partial class JobObjectNative
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool CloseHandle(nint handle);
 
+    // 2026-10-12 (the shell review): a shell command's own job, ended whole on a kill (ChildJob.Terminate).
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool TerminateJobObject(nint job, uint exitCode);
+
     // 2026-10-11 (code review of the headless browser): a start inside the job from the first instruction — CreateProcessW
     // suspended with an extended STARTUPINFO whose attribute list names the only handles the child inherits, the job assigned,
     // then the thread resumed (ChildJob.Start). Process.Start can do neither.

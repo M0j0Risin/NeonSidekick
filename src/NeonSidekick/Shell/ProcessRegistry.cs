@@ -95,7 +95,8 @@ public sealed class ProcessRegistry : IDisposable
             while (_sessions.Any(s => string.Equals(s.Id, id, StringComparison.Ordinal)));
         }
 
-        var session = _runner.Start(launch, id);
+        // Tied to the app (2026-10-12, the user's call): a crash, the app's exit, or the session's close or eviction ends what it started, even detached.
+        var session = _runner.Start(launch, id, tiedToApp: true);
         session.Notify = notify;
         session.Mine = mine;
         lock (_lock)

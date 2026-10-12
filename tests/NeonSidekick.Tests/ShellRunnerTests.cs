@@ -151,6 +151,130 @@ public sealed class ShellRunnerTests : IDisposable
         Assert.Matches("^run_[0-9a-f]{6}$", ShellRunner.NewId(new Random(2), "run_"));
     }
 
+    /// <summary>
+    /// <c>name.cmd</c>: it starts a grandchild that writes its pid to <c>name.pid</c> and sleeps, and exits at once. With
+    /// <paramref name="detached"/> the grandchild comes by <c>Start-Process</c> (ShellExecute: it takes none of the pipes, so the command's
+    /// session can end); without, by <c>start /b</c>, which hands it the pipes, so the session lasts as long as it does.
+    /// </summary>
+    private void WriteOrphan(string name, bool detached)
+    {
+        string body = "$PID | Out-File -Encoding ascii " + name + ".pid; Start-Sleep 120";
+        File.WriteAllText(Path.Combine(_dir, name + ".cmd"), detached
+            ? "@powershell -NoProfile -Command \"Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-Command','" + body + "'\"\r\n"
+            : "@start /b powershell -NoProfile -Command \"" + body + "\" >nul 2>nul\r\n");
+    }
+
+    /// <summary>The pid the grandchild of <see cref="WriteOrphan"/> wrote, once it is there.</summary>
+    private async Task<int> OrphanPidAsync(string name)
+    {
+        string pidFile = Path.Combine(_dir, name + ".pid");
+        var until = DateTime.UtcNow.AddSeconds(30);
+        while (DateTime.UtcNow < until)
+        {
+            try
+            {
+                // Whole once its newline is there; while PowerShell still holds it open the read is refused.
+                if (File.Exists(pidFile) && File.ReadAllText(pidFile) is var text && text.EndsWith('\n') && int.TryParse(text.Trim(), out int pid))
+                {
+                    return pid;
+                }
+            }
+            catch (IOException)
+            {
+            }
+
+            await Task.Delay(50);
+        }
+
+        throw new TimeoutException("the grandchild never wrote " + pidFile);
+    }
+
+    private static async Task<bool> GoneAsync(int pid)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(pid);
+            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return true;   // already gone
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The job (2026-10-12, the shell review): a grandchild whose parent already exited is outside the tree walk, so a kill left it
+    /// running; the command's own job ends it with the rest.
+    /// </summary>
+    [WindowsFact]
+    public async Task Kill_EndsAGrandchildWhoseParentIsGone()
+    {
+        WriteOrphan("orphan1", detached: false);
+        using var session = _runner.Start(Cmd("cmd /c .\\orphan1.cmd & ping -n 120 127.0.0.1 >nul"), "run_000010");
+        session.CloseInput();
+        Assert.True(session.InJob);
+        int orphan = await OrphanPidAsync("orphan1");
+
+        Assert.True(session.Kill());
+
+        Assert.True(await GoneAsync(orphan), "the orphan outlived the kill");
+        await ExitAsync(session);
+    }
+
+    /// <summary>
+    /// A background command is tied to the app (2026-10-12, the user's call): what it left running, even detached, ends when the
+    /// session is closed (or evicted, or the app ends: the job is kill-on-close). A foreground command's job is not: a program it opened
+    /// outlives it.
+    /// </summary>
+    [WindowsFact]
+    public async Task ABackgroundCommandsLeftovers_EndWithItsSession_AForegroundsDoNot()
+    {
+        using var registry = new ProcessRegistry(_runner, new Random(3), () => { });
+        WriteOrphan("orphan2", detached: true);
+        var background = registry.Start(Cmd("cmd /c .\\orphan2.cmd"), notify: false);
+        int left = await OrphanPidAsync("orphan2");
+        await ExitAsync(background);
+        Assert.False(await GoneQuicklyAsync(left));   // still running after its parent's exit
+
+        Assert.True(registry.Close(background));
+        Assert.True(await GoneAsync(left), "the background command's leftover outlived its session");
+
+        WriteOrphan("orphan3", detached: true);
+        var foreground = _runner.Start(Cmd("cmd /c .\\orphan3.cmd"), "run_000011");
+        foreground.CloseInput();
+        int opened = await OrphanPidAsync("orphan3");
+        await ExitAsync(foreground);
+        foreground.Dispose();
+        Assert.False(await GoneQuicklyAsync(opened));   // a foreground command's leftover lives on
+        using (var process = System.Diagnostics.Process.GetProcessById(opened))
+        {
+            process.Kill();
+        }
+    }
+
+    private static async Task<bool> GoneQuicklyAsync(int pid)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(pid);
+            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(1));
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>A reader that hands out the chunks it was given, one per read, and says after each what the buffer held.</summary>
     private sealed class ChunkedReader(OutputBuffer output, params string[] chunks) : TextReader
     {

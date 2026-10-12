@@ -48,9 +48,15 @@ public static partial class SmokeChecks
 
                 // 2026-10-11 (code review): the browser's start in the job, its attribute list made and given a handle list.
                 var (listed, listError) = ChildJob.ProbeAttributeList();
-                return listed
-                    ? new SmokeCheck(name, true, string.Create(CultureInfo.InvariantCulture, $"limit flags 0x{flags:X4}; a start in it prepared (process-start lock, inheritable handle, handle list)"))
-                    : new SmokeCheck(name, false, "a start in the job not prepared: " + listError);
+                if (!listed)
+                {
+                    return new SmokeCheck(name, false, "a start in the job not prepared: " + listError);
+                }
+
+                // 2026-10-12 (the shell review): a shell command's own job is ended whole on a kill; an empty one ends at once.
+                return ChildJob.Terminate(job, -1)
+                    ? new SmokeCheck(name, true, string.Create(CultureInfo.InvariantCulture, $"limit flags 0x{flags:X4}; a start in it prepared (process-start lock, inheritable handle, handle list); ended whole"))
+                    : new SmokeCheck(name, false, "TerminateJobObject failed on an empty job");
             }
             finally
             {

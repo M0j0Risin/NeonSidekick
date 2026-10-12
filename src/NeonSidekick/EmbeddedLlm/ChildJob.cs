@@ -430,7 +430,58 @@ public static class ChildJob
     }
 
     /// <summary>A new job that kills its processes when its last handle closes, or 0 and why not.</summary>
-    internal static (nint Job, string Error) CreateKillOnClose()
+    internal static (nint Job, string Error) CreateKillOnClose() => Create(killOnClose: true);
+
+    /// <summary>
+    /// A job of one child's own (2026-10-12, the shell tools: <c>ShellRunner</c> puts each command in one): ended whole by
+    /// <see cref="Terminate"/> — a grandchild whose parent already exited, which <c>Kill(entireProcessTree)</c>'s walk of parent ids
+    /// never finds, goes with it — and, with <paramref name="killOnClose"/> (a background command, the user's call), by the kernel when
+    /// <see cref="Close"/> or the app's end, a crash too, closes its handle. Without it, closing leaves what runs in it alone, so a
+    /// program a command opened (<c>start notepad</c>, <c>code .</c>) outlives the command. 0 off Windows or when it could not be made
+    /// (logged); the caller then kills by the tree walk alone, as before.
+    /// </summary>
+    public static nint CreateOwn(Process process, bool killOnClose)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+        if (!OperatingSystem.IsWindows())
+        {
+            return 0;
+        }
+
+        var (job, error) = Create(killOnClose);
+        if (job == 0)
+        {
+            DiagnosticLog.Warn(Category, "No job object for the command: " + error);
+            return 0;
+        }
+
+        if (AssignTo(job, process))
+        {
+            return job;
+        }
+
+        JobObjectNative.CloseHandle(job);
+        return 0;
+    }
+
+    /// <summary>Ends every process in <paramref name="job"/> with <paramref name="exitCode"/>; false (logged) when that failed. A no-op for 0 and off Windows.</summary>
+    public static bool Terminate(nint job, int exitCode)
+    {
+        if (job == 0 || !OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        if (JobObjectNative.TerminateJobObject(job, unchecked((uint)exitCode)))
+        {
+            return true;
+        }
+
+        DiagnosticLog.Debug(Category, LastError("TerminateJobObject"));
+        return false;
+    }
+
+    private static (nint Job, string Error) Create(bool killOnClose)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -441,6 +492,11 @@ public static class ChildJob
         if (job == 0)
         {
             return (0, LastError("CreateJobObject"));
+        }
+
+        if (!killOnClose)
+        {
+            return (job, "");
         }
 
         var info = new JobObjectNative.JobObjectExtendedLimitInformationStruct();
@@ -521,7 +577,7 @@ public static class ChildJob
         return returned == size ? (true, info.BasicLimitInformation.LimitFlags, "") : (false, 0, string.Create(CultureInfo.InvariantCulture, $"returned {returned} bytes, expected {size}"));
     }
 
-    /// <summary>Closes a job handle made by <see cref="CreateKillOnClose"/> — which kills what is in it.</summary>
+    /// <summary>Closes a job handle made by <see cref="CreateKillOnClose"/> — which kills what is in it — or by <see cref="CreateOwn"/>, whose kill-on-close ones the same. A no-op for 0 and off Windows.</summary>
     internal static void Close(nint job)
     {
         if (OperatingSystem.IsWindows() && job != 0)

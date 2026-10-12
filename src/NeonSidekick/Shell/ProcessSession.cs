@@ -28,6 +28,7 @@ public sealed class ProcessSession : IDisposable, IAsyncDisposable
     private bool _inputClosed;
     private bool _disposed;
     private bool _userStop;
+    private nint _job;
 
     internal ProcessSession(string id, ProcessLaunch launch, Process process, TimeProvider time)
     {
@@ -80,6 +81,16 @@ public sealed class ProcessSession : IDisposable, IAsyncDisposable
 
     /// <summary>The user's stop asked for (<see cref="ProcessRegistry.StopByUser"/>), before the kill.</summary>
     internal void MarkUserStop() => Volatile.Write(ref _userStop, true);
+
+    /// <summary>
+    /// The child's own job (2026-10-12, the shell review; <see cref="EmbeddedLlm.ChildJob.CreateOwn"/>, 0 for none): <see cref="Kill"/> ends
+    /// it whole, and <see cref="Dispose()"/> closes it — which, for a background command's kill-on-close job, ends what is left in it.
+    /// Set by the runner right after the start.
+    /// </summary>
+    internal void AttachJob(nint job) => _job = job;
+
+    /// <summary>Whether the child runs in a job of its own (<see cref="AttachJob"/>).</summary>
+    public bool InJob => _job != 0;
 
     /// <summary>Completes with the exit code once the process is gone and both pumps have drained.</summary>
     public Task<int> Exited => _exited.Task;
@@ -178,6 +189,9 @@ public sealed class ProcessSession : IDisposable, IAsyncDisposable
             if (!_process.HasExited)
             {
                 Killed = true;
+                // The job first (2026-10-12): it holds what the tree walk misses, a grandchild whose parent already exited. The walk
+                // stays for a child that runs outside one; on one already gone it does nothing.
+                EmbeddedLlm.ChildJob.Terminate(_job, -1);
                 _process.Kill(entireProcessTree: true);
                 return true;
             }
@@ -251,9 +265,11 @@ public sealed class ProcessSession : IDisposable, IAsyncDisposable
         }
 
         _process.Dispose();
+        EmbeddedLlm.ChildJob.Close(_job);
+        _job = 0;
         if (!HasExited)
         {
-            DiagnosticLog.Debug(ShellKinds.Category, $"{Id}: still running after the kill's grace; completed as -1");
+            DiagnosticLog.Debug(ShellKinds.Category, $"{Id}: still running after the kill's grace; completed as -1");   // or its pumps still draining
             Complete(-1);
         }
     }
