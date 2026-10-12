@@ -17,7 +17,7 @@ namespace NeonSidekick.Shell;
 /// <c>git log</c> allowed, <c>git log $(Remove-Item -Recurse src)</c> ran without the pane — the pane that was to show the whole
 /// line is never shown for an allowed prefix. <see cref="All"/> now takes the shell and adds the prefixes of every command a
 /// substitution runs, nested ones too: <c>$(…)</c> everywhere but in single quotes; in bash and zsh a backtick pair and
-/// <c>&lt;(…)</c>/<c>&gt;(…)</c>; in PowerShell <c>@(…)</c>, a bare <c>(…)</c> and a script block <c>{…}</c> (not <c>${…}</c>, not
+/// <c>&lt;(…)</c>/<c>&gt;(…)</c>; in zsh also <c>=(…)</c> where it opens an argument (the same day, the Mac's twin pass); in PowerShell <c>@(…)</c>, a bare <c>(…)</c> and a script block <c>{…}</c> (not <c>${…}</c>, not
 /// <c>@{…}</c>), where a statement that is only a value (<c>$_.Length -gt 1</c>, <c>"x"</c>, <c>42</c>) runs no command and
 /// <c>$x = Remove-Item y</c> runs its right side. cmd has none. What cannot be read — a substitution left open, nesting past
 /// <see cref="MaxDepth"/>, a command whose name or verb is a substitution's output (bash's <c>$(…) -rf x</c>, PowerShell's
@@ -413,7 +413,7 @@ public static partial class CommandPrefix
 
         if (!powerShell)
         {
-            return (c == '<' || c == '>') && next == '(' ? at + 2 : -1;
+            return ((c == '<' || c == '>') && next == '(') || (shell == ShellKind.Zsh && c == '=' && next == '(' && StartsZshArgument(text, at)) ? at + 2 : -1;
         }
 
         if (c == '@' && next == '(')
@@ -517,6 +517,16 @@ public static partial class CommandPrefix
 
         return false;
     }
+
+    /// <summary>
+    /// Whether zsh's <c>=(…)</c> at <paramref name="at"/> is a substitution (2026-10-12): only at the start of an argument, as
+    /// <c>zshexpn(1)</c> has it — the line's start, after a blank, a separator or a redirection (<c>;=(…)</c>, <c>&lt;=(…)</c>,
+    /// <c>&gt;=(…)</c> run it) — or as an assignment's value, after any <c>=</c>: <c>x==(…)</c>, <c>x+==(…)</c>, <c>a[1]==(…)</c>,
+    /// <c>export y==(…)</c> all run it. Checked in zsh 5.9 on macOS 15: inside an argument (<c>x=(…)</c>) it is a glob qualifier, and
+    /// <c>files=(a b)</c> is an array, not a command. <c>--opt==(…)</c> is a glob qualifier too but is read: reading more only asks.
+    /// </summary>
+    private static bool StartsZshArgument(string text, int at) =>
+        at == 0 || char.IsWhiteSpace(text[at - 1]) || text[at - 1] is ';' or '&' or '|' or '(' or '<' or '>' or '=';
 
     /// <summary>PowerShell's call operator on a value (<c>&amp; $x</c>, <c>&amp; (…)</c>): the command it runs is whatever the value holds. Not <c>&amp;&amp;</c>.</summary>
     private static bool CallsAValue(string text, int at)
