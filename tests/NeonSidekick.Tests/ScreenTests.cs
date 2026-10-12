@@ -413,7 +413,7 @@ public sealed class ScreenCaptureTests : IDisposable
             "Turn iTerm2 on in System Settings › Privacy & Security › Screen & System Audio Recording, then quit and reopen iTerm2.",
             ScreenText.NoPermission("iTerm2"));
         Assert.Equal(
-            OperatingSystem.IsMacOS() ? "There is no screen capture on this Mac: it needs macOS 14 or later." : "There is no screen capture on this system (Windows only).",
+            OperatingSystem.IsMacOS() ? "There is no screen capture on this Mac: it needs macOS 14 or later." : "There is no screen capture on this system (it needs Windows, or a Mac with macOS 14 or later).",
             ScreenText.Unsupported);
     }
 

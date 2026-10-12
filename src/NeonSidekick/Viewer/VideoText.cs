@@ -11,8 +11,8 @@ public static class VideoText
     /// <summary>The window's title before the player knows the video's, and what it ends with after.</summary>
     public const string AppTitle = "NeonSidekick video";
 
-    /// <summary>Off Windows: no window to play in.</summary>
-    public const string Unavailable = "The video window needs Windows; open_url can open the video in the browser instead.";
+    /// <summary>Neither Windows nor a Mac: no window to play in.</summary>
+    public const string Unavailable = "The video window needs Windows, or a Mac with macOS 14 or later; open_url can open the video in the browser instead.";
 
     /// <summary>
     /// On a Mac with no window to play in (2026-10-07): no window server (over SSH), a headless run, or macOS before 14 (the window's

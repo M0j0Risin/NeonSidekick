@@ -96,8 +96,8 @@ public static class ViewerText
     /// </summary>
     public const string SystemViewerWord = "system";
 
-    /// <summary>The transcript's error when there is no window to open (not Windows). Pinned.</summary>
-    public const string Unavailable = "The picture viewer needs Windows.";
+    /// <summary>The transcript's error when there is no window to open (neither Windows nor a Mac). Pinned.</summary>
+    public const string Unavailable = "The picture viewer needs Windows or a Mac.";
 
     /// <summary>
     /// The same error on a Mac (2026-10-07: the viewer works there over AppKit, but only with a window server — not over SSH, not

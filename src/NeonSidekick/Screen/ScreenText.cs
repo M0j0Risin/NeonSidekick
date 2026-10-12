@@ -94,7 +94,7 @@ public static class ScreenText
     public const string WindowMinimized = "That window is minimized: restore it first.";
 
     /// <summary>No screen system here: Windows' sentence, unchanged, and a Mac's own (2026-10-07: ScreenCaptureKit's screenshots need macOS 14).</summary>
-    public static string Unsupported => OperatingSystem.IsMacOS() ? UnsupportedMac : "There is no screen capture on this system (Windows only).";
+    public static string Unsupported => OperatingSystem.IsMacOS() ? UnsupportedMac : "There is no screen capture on this system (it needs Windows, or a Mac with macOS 14 or later).";
 
     public const string UnsupportedMac = "There is no screen capture on this Mac: it needs macOS 14 or later.";
 

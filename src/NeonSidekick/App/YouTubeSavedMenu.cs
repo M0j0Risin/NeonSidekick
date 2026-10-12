@@ -137,7 +137,7 @@ internal sealed class YouTubeSavedMenu
                 }
                 else
                 {
-                    Say(_play is null ? "Error: " + YouTubeText.NoWindow : await _play(videos[cursor], cancellationToken).ConfigureAwait(false));
+                    Say(_play is null ? "Error: " + YouTubeText.NoWindowHere : await _play(videos[cursor], cancellationToken).ConfigureAwait(false));
                 }
 
                 var video = cursor >= 0 && cursor < videos.Count ? videos[cursor] : null;

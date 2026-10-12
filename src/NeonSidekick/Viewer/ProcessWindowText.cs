@@ -103,8 +103,8 @@ public static class ProcessWindowText
     /// <summary><c>/process &lt;id&gt;</c>'s notice once the window shows it. Pinned.</summary>
     public static string OpenedNotice(string id) => $"({App.ChatScreen.ProcessToolGlyph} {id} in the process window; Ctrl+K twice there stops it)";
 
-    /// <summary><c>/process &lt;id&gt;</c> where no window can be made (not Windows, or headless). Pinned.</summary>
-    public const string Unavailable = "The process window needs Windows; the model's process tool can still read a process's output.";
+    /// <summary><c>/process &lt;id&gt;</c> where no window can be made (neither Windows nor a Mac, or headless). Pinned.</summary>
+    public const string Unavailable = "The process window needs Windows or a Mac; the model's process tool can still read a process's output.";
 
     /// <summary>The same error on a Mac (2026-10-07): the window works there, but only with a window server. Pinned.</summary>
     public const string UnavailableMac = "The process window needs the Mac's desktop (there is no window server here, over SSH, say); the model's process tool can still read a process's output.";

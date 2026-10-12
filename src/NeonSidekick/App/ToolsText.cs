@@ -351,8 +351,11 @@ public static class ToolsText
     public const string NoWorkflowReason = "no workflow is offered";
     public const string NoHomeAssistantReason = "no Home Assistant URL or API key is set";
 
-    /// <summary>A group whose tools need Windows, on a Mac (2026-10-06, the macOS build: UNC, Docker, printing). Pinned.</summary>
-    public const string NeedsWindowsReason = "it needs Windows";
+    /// <summary>
+    /// A group whose tools this system cannot run (2026-10-06, the macOS build: UNC, Docker, printing on a Mac). Since 2026-10-11 a
+    /// Mac runs all three, so only a system that is neither shows it, and it says so (the user's ask). Pinned.
+    /// </summary>
+    public const string NeedsWindowsReason = "it needs Windows or a Mac";
 
     /// <summary>The YouTube group off with its switch on (2026-10-05): no key to search with and no video window to play in.</summary>
     public const string NoYouTubeReason = "no YouTube API key is set and there is no video window";

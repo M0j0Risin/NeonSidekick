@@ -60,8 +60,8 @@ public static class ThumbsText
     /// <summary>The transcript's line after the toolbar's 🪟 closed the window (2026-10-04), <see cref="ViewerText.Closed"/>'s twin. Pinned.</summary>
     public const string Closed = "(🖼️ thumbnails closed)";
 
-    /// <summary>The transcript's error when there is no window to open (not Windows). Pinned.</summary>
-    public const string Unavailable = "The thumbnail browser needs Windows.";
+    /// <summary>The transcript's error when there is no window to open (neither Windows nor a Mac). Pinned.</summary>
+    public const string Unavailable = "The thumbnail browser needs Windows or a Mac.";
 
     /// <summary>The same error on a Mac (2026-10-07): the browser works there, but only with a window server. Pinned.</summary>
     public const string UnavailableMac = "The thumbnail browser needs the Mac's desktop: there is no window server here (over SSH, say).";

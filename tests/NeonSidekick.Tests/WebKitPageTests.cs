@@ -123,8 +123,9 @@ public sealed partial class WebKitPageTests
         Assert.Equal("The video window needs a desktop session and macOS 14 or later; open_url can open the video in the browser instead.", VideoText.UnavailableMac);
         Assert.Equal("The video window's web page stopped (its WebKit process ended); play the video again to reopen the window.", VideoText.ContentEnded);
         Assert.Equal("There is no video window here (it needs a desktop session and macOS 14 or later); /youtube <words> still searches.", YouTubeText.NoWindowMac);
-        Assert.Equal("There is no video window here (it needs Windows); /youtube <words> still searches.", YouTubeText.NoWindow);
-        Assert.Equal("The video window needs Windows; open_url can open the video in the browser instead.", VideoText.Unavailable);
+        Assert.Equal("There is no video window here (it needs Windows, or a Mac with macOS 14 or later); /youtube <words> still searches.", YouTubeText.NoWindow);
+        Assert.Equal("The video window needs Windows, or a Mac with macOS 14 or later; open_url can open the video in the browser instead.", VideoText.Unavailable);
+        Assert.Equal(OperatingSystem.IsMacOS() ? YouTubeText.NoWindowMac : YouTubeText.NoWindow, YouTubeText.NoWindowHere);   // the saved-videos pane's too since 2026-10-11
     }
 
     // ── The smoke's probe ────────────────────────────────────────────────────

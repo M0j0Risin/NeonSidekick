@@ -122,7 +122,7 @@ public static class PictureWindow
 
         if (!OperatingSystem.IsWindows())
         {
-            throw new PlatformNotSupportedException(ViewerText.Unavailable);
+            throw new PlatformNotSupportedException(ViewerText.UnavailableHere);
         }
 
         var view = new LiveView(title, closed);

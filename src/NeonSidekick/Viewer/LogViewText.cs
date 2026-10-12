@@ -34,8 +34,8 @@ public static class LogViewText
     /// <summary>Ctrl+Alt+G's notice when it closes the open window (later on 2026-10-02, the user's ask: the chord toggles). Pinned.</summary>
     public static string WindowClosedNotice => $"({App.NoticeGlyphs.Log}closed the log window)";
 
-    /// <summary><c>/log</c> where no window can be made (not Windows, or no log kept in this run). Pinned.</summary>
-    public const string Unavailable = "The log window needs Windows; start the app with --log <path> and use /log file to read the log in your editor.";
+    /// <summary><c>/log</c> where no window can be made (neither Windows nor a Mac, or no log kept in this run). Pinned.</summary>
+    public const string Unavailable = "The log window needs Windows or a Mac; start the app with --log <path> and use /log file to read the log in your editor.";
 
     /// <summary>The same error on a Mac (2026-10-07): the window works there, but only with a window server. Pinned.</summary>
     public const string UnavailableMac = "The log window needs the Mac's desktop (there is no window server here, over SSH, say); start the app with --log <path> and use /log file to read the log in your editor.";

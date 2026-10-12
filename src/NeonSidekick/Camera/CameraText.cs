@@ -63,7 +63,7 @@ public static class CameraText
         CameraFailure.Unplugged => "The camera was unplugged or stopped responding." + Tail(detail),
         CameraFailure.NoMediaFoundation => "Windows' Media Foundation is not installed (Windows N needs the Media Feature Pack), so the camera cannot be read.",
         CameraFailure.NoFrames => "The camera sent no picture.",
-        CameraFailure.Unsupported => "There is no camera support on this system (Windows only).",
+        CameraFailure.Unsupported => "There is no camera support on this system (it needs Windows, or a Mac with macOS 14 or later).",
         CameraFailure.Suspended => "The camera is suspended." + Tail(detail),
         CameraFailure.Asking => "The system is asking whether the camera may be used: answer its question, then try again.",
         CameraFailure.Restricted => "Camera access is restricted on this system, so the camera cannot be used.",

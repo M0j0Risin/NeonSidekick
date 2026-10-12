@@ -622,13 +622,19 @@ public static class YouTubeText
     /// <summary>Headless, and off Windows: every verb but a search wants the video window.</summary>
     public const string NeedsScreen = "/youtube plays videos in the app's video window, which a headless run has none of; /youtube <words> lists what a search finds.";
 
-    /// <summary>No video window to play in (not Windows).</summary>
-    public const string NoWindow = "There is no video window here (it needs Windows); /youtube <words> still searches.";
+    /// <summary>No video window to play in (neither Windows nor a Mac; 2026-10-11, the user's ask: no longer "it needs Windows", since a Mac plays too). Pinned.</summary>
+    public const string NoWindow = "There is no video window here (it needs Windows, or a Mac with macOS 14 or later); /youtube <words> still searches.";
 
     /// <summary>
     /// <see cref="NoWindow"/> on a Mac (2026-10-07: the window plays there too, but needs a desktop session and macOS 14 or later).
     /// </summary>
     public const string NoWindowMac = "There is no video window here (it needs a desktop session and macOS 14 or later); /youtube <words> still searches.";
+
+    /// <summary>
+    /// The error for this system (2026-10-11, the user's ask: the saved-videos pane said "it needs Windows" on a Mac too):
+    /// <see cref="NoWindowMac"/> on a Mac, <see cref="NoWindow"/> elsewhere.
+    /// </summary>
+    public static string NoWindowHere => OperatingSystem.IsMacOS() ? NoWindowMac : NoWindow;
 
     /// <summary>The window closed.</summary>
     public const string Closed = "Closed the video window.";
