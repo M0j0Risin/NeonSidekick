@@ -390,8 +390,12 @@ internal sealed class SpeechOutput
 
         if (_turnToken.IsCancellationRequested)
         {
-            // The queue's onCancelled already silenced the device.
+            // Usually the queue's onCancelled already silenced the device, but only when the queue saw the token: one cancelled
+            // after the queue drained the last sentence and before this check found nothing silenced (2026-10-12), and the tail
+            // played on as "stopped" with StoppedAtChunk 0 — the SpeechOutputTests (Expected 2, Actual 0) and SpeechSessionTests
+            // (Cleared 0) flakes. StopAll is idempotent: a second call keeps the first mark and finds the device already stopped.
             StoppedEarly = true;
+            StopAll();
             return;
         }
 

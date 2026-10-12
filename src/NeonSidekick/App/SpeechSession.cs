@@ -383,7 +383,8 @@ internal sealed class SpeechSession : IDisposable
 
     /// <summary>
     /// Silences the current speaker now: its token is cancelled, and the queue's cancellation
-    /// path drops what is queued and stops the device. Idempotent, never throws; the turn's
+    /// path (or, once the queue had drained, the speaker's own wait) drops what is queued and
+    /// stops the device. Idempotent, never throws; the turn's
     /// cancel registration (ESC, the wake phrase, the app token) and <see cref="Dispose"/> use
     /// this form, everything at the input line the awaited one.
     /// </summary>

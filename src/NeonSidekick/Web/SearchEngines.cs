@@ -81,6 +81,14 @@ public sealed class DuckDuckGoSearch : ISearchEngine
             || html.Contains("challenge-form", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The refusal's detail for the endpoint's rate limit (2026-10-12): an HTTP 202 with no hits, a page none of
+    /// <see cref="LooksRefused"/>'s marks are on, so it read as "no results" — the model told nothing exists, and
+    /// <c>LiveWebTests.Search_DuckDuckGo_OverTheRealClient</c> failing now and then. The scrapers read a 202 as the rate limit
+    /// too; one that does carry hits is still the answer. Pinned.
+    /// </summary>
+    public const string RateLimitDetail = "HTTP 202, its rate limit";
+
     /// <summary>The real URL behind a result link: the <c>uddg</c> parameter of the redirect, else the link itself. Pinned.</summary>
     public static string? ResolveHref(string? href)
     {
@@ -210,7 +218,12 @@ public sealed class DuckDuckGoSearch : ISearchEngine
         }
 
         var results = Parse(page.Text);
-        DiagnosticLog.Info(Category, $"DuckDuckGo \"{query}\": {results.Count.ToString(CultureInfo.InvariantCulture)} results ({page.Engine}).");
+        DiagnosticLog.Info(Category, $"DuckDuckGo \"{query}\": {results.Count.ToString(CultureInfo.InvariantCulture)} results ({page.Engine}, HTTP {page.Status.ToString(CultureInfo.InvariantCulture)}, {page.Text.Length.ToString(CultureInfo.InvariantCulture)} chars).");
+        if (results.Count == 0 && page.Status == (int)HttpStatusCode.Accepted)
+        {
+            return SearchOutcome.Failed(WebText.SearchRefused(Name, RateLimitDetail));
+        }
+
         return new SearchOutcome(results.Take(max).ToArray(), "");
     }
 

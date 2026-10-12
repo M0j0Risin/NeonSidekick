@@ -167,6 +167,23 @@ public class DuckDuckGoSearchTests
     }
 
     [Fact]
+    public async Task Search_A202WithNoHits_IsTheRateLimit_ARefusal_AndOneWithHits_TheAnswer()
+    {
+        // 2026-10-12: the endpoint's rate limit is a 202 and a page with nothing on it; read as "no results" until then.
+        string body = "<html><body><form action=\"/html/\"></form></body></html>";
+        _http.Map("https://html.duckduckgo.com/html/", (_, _) => Task.FromResult(StubHttpMessageHandler.Json(HttpStatusCode.Accepted, body, "text/html")));
+        var limited = await Engine().SearchAsync("x", 8, Options, CancellationToken.None);
+        Assert.False(limited.Ok);
+        Assert.Equal(WebText.SearchRefused(WebText.DuckDuckGoName, DuckDuckGoSearch.RateLimitDetail), limited.Error);
+        Assert.Contains("refused the search", limited.Error, StringComparison.Ordinal);   // what the live test lets pass
+
+        body = File.ReadAllText(FixturePath);
+        var answered = await Engine().SearchAsync("rust async traits", 3, Options, CancellationToken.None);
+        Assert.True(answered.Ok);
+        Assert.Equal(3, answered.Results.Count);
+    }
+
+    [Fact]
     public async Task Search_IsPaced_ByTheMinimumInterval()
     {
         _http.Map("https://html.duckduckgo.com/html/", HttpStatusCode.OK, File.ReadAllText(FixturePath), "text/html");
