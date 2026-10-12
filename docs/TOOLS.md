@@ -71,7 +71,7 @@ When a site refuses `web_fetch`, shows a bot check, or needs scripts to fill in,
 
 Under *Shell command policy*. Commands run on your machine, starting in the working directory (`workdir` picks a folder under it), guarded by *Shell command policy* and *Shell police* (see [Shell guards](SETTINGS.md#shell-guards)). A denied command tells the model not to work around it.
 
-* Commands run hidden, with colours and pagers off and stdin closed. A command that times out is killed with everything it started; background processes stop when the app closes.
+* Commands run hidden, with colours and pagers off and stdin closed. A progress bar redrawn with `\r` is kept as its last drawing, and a line over 8,192 characters is cut. A command that times out is killed with everything it started; background processes stop when the app closes.
 * `/process` lists the background processes; `/process <id>` watches one live in the [process window](COMMANDS.md#process-window), where Ctrl+K twice stops it.
 * `/cmd <command>` runs a line of your own through the same guards ([Your own shell line](COMMANDS.md#your-own-shell-line)).
 * **Headless** there is no approval pane, so under `ask` only allow-listed commands run. If any was refused, the run ends with a notice and exit code 3. `--yolo` allows every command for one launch; `--no-police` also lifts the path police. See [HEADLESS.md](HEADLESS.md).
@@ -80,7 +80,7 @@ Under *Shell command policy*. Commands run on your machine, starting in the work
 |---|---|---|
 | `run_command` | `command, shell?, workdir?, timeout?, background?, notify?` | Runs a command in `powershell` (default), `cmd` or `bash` (on macOS `zsh` (default), `bash` or `powershell`), returning the exit code, time, stdout and stderr. `background` (or a long timeout) returns a `proc_…` id; `notify` shows `⚡` when it exits and checks on it next turn. |
 | `execute_code` | `language, code, timeout?` | Runs a one-off `python` (`python3` on macOS), `node` or `powershell` script, approved once per language per session; nothing carries over between scripts. With *Shell tool bridge*, the script can call the app's tools (Python `from neon_tools import call`, Node `await neon.call(...)`, PowerShell `Invoke-NeonTool`), except `execute_code` and `ask_user`; a `run_command` through the bridge still needs approval and can't run in the background. |
-| `process` | `action, session_id?, data?, timeout?, offset?, limit?` | Manages up to 16 background processes (and the last 64 finished), by any unique id prefix: `list`, `poll`, `log` (from the last 5,000 lines), `wait`, `kill` (with children), `write` / `submit` (to stdin; `submit` adds a newline), `close`. Your own `/cmd --bg` runs are kept apart and never reachable here. |
+| `process` | `action, session_id?, data?, timeout?, until?, offset?, limit?` | Manages up to 16 background processes (and the last 64 finished), by any unique id prefix: `list`, `poll`, `log` (from the last 5,000 lines), `wait` (with `until`, also stops as soon as a line not yet polled contains that text: a server's "Listening on"), `kill` (with children), `write` / `submit` (to stdin; `submit` adds a newline), `close`. `poll`, `wait` and `log` end with any text still waiting for its newline, such as a prompt. Your own `/cmd --bg` runs are kept apart and never reachable here. |
 
 ## Files
 

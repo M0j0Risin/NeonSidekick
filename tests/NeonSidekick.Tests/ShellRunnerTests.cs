@@ -150,4 +150,84 @@ public sealed class ShellRunnerTests : IDisposable
         Assert.Matches("^proc_[0-9a-f]{6}$", id);
         Assert.Matches("^run_[0-9a-f]{6}$", ShellRunner.NewId(new Random(2), "run_"));
     }
+
+    /// <summary>A reader that hands out the chunks it was given, one per read, and says after each what the buffer held.</summary>
+    private sealed class ChunkedReader(OutputBuffer output, params string[] chunks) : TextReader
+    {
+        private int _next;
+
+        public List<IReadOnlyList<OutputLine>> UnfinishedAfterEachRead { get; } = new();
+
+        public override ValueTask<int> ReadAsync(Memory<char> buffer, CancellationToken cancellationToken = default)
+        {
+            if (_next > 0)
+            {
+                UnfinishedAfterEachRead.Add(output.Unfinished());
+            }
+
+            if (_next == chunks.Length)
+            {
+                return ValueTask.FromResult(0);
+            }
+
+            string chunk = chunks[_next++];
+            chunk.AsSpan().CopyTo(buffer.Span);
+            return ValueTask.FromResult(chunk.Length);
+        }
+    }
+
+    /// <summary>
+    /// The pump (2026-10-12, the shell review): lines end at \n or \r\n, also across reads; a lone \r starts the line over (a progress
+    /// bar is its last drawing); what a read leaves without a newline is the unfinished line, a prompt; the end appends it.
+    /// </summary>
+    [Fact]
+    public async Task Pump_SplitsLines_RedrawsOnCarriageReturns_AndKeepsAPromptAsTheUnfinishedLine()
+    {
+        var output = new OutputBuffer();
+        var reader = new ChunkedReader(output, "one\r\ntwo\r", "\nthree\n", " 10%\r 50%\r100%\n", "ü", "ber\nName: ", "bob");
+
+        await ShellRunner.PumpAsync(reader, output, isError: false);
+
+        Assert.Equal(["one", "two", "three", "100%", "über", "Name: bob"], output.Lines().Select(l => l.Text));
+        Assert.Equal(
+            ["two", "", "", "ü", "Name: ", "Name: bob"],
+            reader.UnfinishedAfterEachRead.Select(u => u.Count == 0 ? "" : Assert.Single(u).Text));
+        Assert.Empty(output.Unfinished());   // the end appended it
+        Assert.All(output.Lines(), l => Assert.False(l.IsError));
+    }
+
+    [Fact]
+    public async Task Pump_HoldsAHugeLineToTheCap_AsItArrives()
+    {
+        var output = new OutputBuffer();
+        string block = new('x', ShellRunner.PumpChunk);
+        var reader = new ChunkedReader(output, [.. Enumerable.Repeat(block, 64), "\nnext\n"]);
+
+        await ShellRunner.PumpAsync(reader, output, isError: true);
+
+        var lines = output.Lines();
+        Assert.Equal(2, lines.Count);
+        Assert.Equal(OutputBuffer.MaxLineChars, lines[0].Text.Length);
+        Assert.EndsWith(OutputBuffer.CutMark, lines[0].Text);
+        Assert.Equal("next", lines[1].Text);
+        Assert.True(lines[1].IsError);
+        Assert.All(reader.UnfinishedAfterEachRead.Take(64), u => Assert.True(Assert.Single(u).Text.Length <= OutputBuffer.MaxLineChars));
+    }
+
+    [Fact]
+    public void Unfinished_IsStdoutsThenStderrs_AndCountsNowhere()
+    {
+        var output = new OutputBuffer();
+        output.Append("done", false);
+        output.SetUnfinished("Password: ", true);
+        output.SetUnfinished(">>> ", false);
+
+        Assert.Equal([(">>> ", false), ("Password: ", true)], output.Unfinished().Select(l => (l.Text, l.IsError)));
+        Assert.Equal(1, output.TotalLines);
+        Assert.Single(output.Since(0, out long next));
+        Assert.Equal(1, next);
+        output.SetUnfinished("", false);
+        output.SetUnfinished(null, true);
+        Assert.Empty(output.Unfinished());
+    }
 }

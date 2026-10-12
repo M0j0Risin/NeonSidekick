@@ -100,7 +100,7 @@ public sealed class ProcessToolTests : IDisposable
         Assert.Equal("process", _tool.Name);
         Assert.Equal("The background processes run_command started: list them, poll or wait for one, read its log, send it input, kill it or forget it. poll returns only what arrived since your last poll; log a numbered window of its lines.", _tool.Description);
         var schema = _tool.JsonSchema;
-        Assert.Equal(["action", "session_id", "data", "timeout", "offset", "limit"], schema.GetProperty("properties").EnumerateObject().Select(p => p.Name));
+        Assert.Equal(["action", "session_id", "data", "timeout", "until", "offset", "limit"], schema.GetProperty("properties").EnumerateObject().Select(p => p.Name));
         Assert.Equal(["action"], schema.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
         Assert.Equal(["list", "poll", "log", "wait", "kill", "write", "submit", "close"], schema.GetProperty("properties").GetProperty("action").GetProperty("enum").EnumerateArray().Select(e => e.GetString()));
         Assert.Equal(["list", "poll", "log", "wait", "kill", "write", "submit", "close"], ProcessTool.Actions);
@@ -165,6 +165,64 @@ public sealed class ProcessToolTests : IDisposable
         Assert.Contains(" characters cut) …\n", poll);
         Assert.EndsWith("\nline 400", poll);
         Assert.False(Directory.Exists(Path.Combine(_dir, ".shell")));
+    }
+
+    /// <summary>
+    /// A prompt with no newline (2026-10-12, the shell review): the poll ends with it, so the model sees what a submit answers; once
+    /// the newline comes it is a line like any other, the answer's output after it on the same line, as a terminal shows it.
+    /// </summary>
+    [WindowsFact]
+    public async Task Poll_ShowsAPromptWithoutItsNewline()
+    {
+        var session = Start("set /p name=Name? && call echo hello %name%");
+        var until = DateTime.UtcNow.AddSeconds(30);
+        while (session.Output.Unfinished().Count == 0 && DateTime.UtcNow < until)
+        {
+            await Task.Delay(20);
+        }
+
+        Assert.Equal(session.Id + " running for 0.0 s (cmd): set /p name=Name? && call echo hello %name% — 1 new line\nName? ", await Invoke(("action", "poll"), ("session_id", session.Id)));
+        Assert.EndsWith("\nName? ", await Invoke(("action", "log"), ("session_id", session.Id)));
+        Assert.Equal("sent a line to " + session.Id, await Invoke(("action", "submit"), ("session_id", session.Id), ("data", "bob")));
+        Assert.Equal(session.Id + " exited 0 after 0.0 s (cmd): set /p name=Name? && call echo hello %name% — 1 new line\nName? hello bob", await Invoke(("action", "wait"), ("session_id", session.Id), ("timeout", 30)));
+    }
+
+    /// <summary>
+    /// wait's until (2026-10-12, the shell review): it returns as soon as a line not yet polled holds the text, case ignored, the
+    /// child still running; one already there and not polled returns at once; a prompt counts; one never seen waits out the timeout.
+    /// </summary>
+    [WindowsFact]
+    public async Task Wait_Until_ReturnsWhenALineHoldsTheText()
+    {
+        const string Server = "echo starting& ping -n 2 127.0.0.1 >nul& echo Listening on 8080& ping -n 60 127.0.0.1 >nul";
+        var session = Start(Server);
+        Assert.Equal(
+            session.Id + " running for 0.0 s, 'LISTENING' seen (cmd): " + Server + " — 2 new lines\nstarting\nListening on 8080",
+            await Invoke(("action", "wait"), ("session_id", session.Id), ("timeout", 60), ("until", "LISTENING")));
+        Assert.False(session.HasExited);
+
+        // Seen, but not polled yet: the next wait for it returns at once; once polled, it is not new.
+        var early = Start("echo ready& ping -n 60 127.0.0.1 >nul");
+        while (early.Output.TotalLines == 0)
+        {
+            await Task.Delay(20);
+        }
+
+        Assert.Contains("'ready' seen", await Invoke(("action", "wait"), ("session_id", early.Id), ("until", "ready")));
+        var again = _tool.InvokeAsync(Args(("action", "wait"), ("session_id", early.Id), ("timeout", 5), ("until", "ready")));
+        await Task.Delay(100);
+        Assert.False(again.IsCompleted);
+        _time.Advance(TimeSpan.FromSeconds(6));
+        Assert.StartsWith(early.Id + " still running after 5 s", (string)(await again.AsTask().WaitAsync(TimeSpan.FromSeconds(30)))!);
+
+        // A prompt with no newline is matched too.
+        var prompt = Start("set /p name=Your name? && call echo hello %name%");
+        Assert.EndsWith("'name?' seen (cmd): set /p name=Your name? && call echo hello %name% — 1 new line\nYour name? ", await Invoke(("action", "wait"), ("session_id", prompt.Id), ("timeout", 60), ("until", "name?")));
+        Assert.Equal("Error: timeout must be 1 to 600 for wait", await Invoke(("action", "wait"), ("session_id", prompt.Id), ("timeout", 0), ("until", "x")));
+        foreach (var running in new[] { session, early, prompt })
+        {
+            running.Kill();
+        }
     }
 
     [WindowsFact]

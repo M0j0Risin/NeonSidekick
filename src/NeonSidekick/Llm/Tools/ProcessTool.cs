@@ -8,7 +8,7 @@ using NeonSidekick.Shell;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>process(action, session_id?, data?, timeout?, offset?, limit?)</c> (2026-09-21): the model's
+/// <c>process(action, session_id?, data?, timeout?, until?, offset?, limit?)</c> (2026-09-21; <c>until</c> 2026-10-12): the model's
 /// hands on the background processes <c>run_command</c> started (<see cref="ProcessRegistry"/>).
 /// <c>list</c> shows them all; <c>poll</c> answers the state and the lines since the last poll;
 /// <c>log</c> a numbered window of lines (the last <see cref="DefaultLogLimit"/> without
@@ -17,7 +17,7 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>submit</c> send text to stdin (submit with a newline); <c>close</c> forgets a finished one.
 /// Every result is one text with a header line (<see cref="ShellText"/>), the output cut at
 /// <c>Shell output max chars</c> without a spill — the ring keeps the last lines, <c>log</c> reaches
-/// them. Any unique prefix of an id will do. Offered with <c>run_command</c>; the gate is not
+/// them. Since 2026-10-12 <c>poll</c>, <c>wait</c> and a tail <c>log</c> end with a stream's unfinished line, a prompt waiting for input. Any unique prefix of an id will do. Offered with <c>run_command</c>; the gate is not
 /// consulted here — what runs was approved when it started. The police is (2026-09-22, the user's
 /// call): with <c>Shell police</c> on, the text <c>write</c> / <c>submit</c> send is read by
 /// <see cref="PathPolice"/> before it goes — a background shell typed <c>cd C:\</c> would be the one
@@ -30,6 +30,7 @@ public sealed class ProcessTool : AIFunction
     public const string SessionIdArgument = "session_id";
     public const string DataArgument = "data";
     public const string TimeoutArgument = "timeout";
+    public const string UntilArgument = "until";
     public const string OffsetArgument = "offset";
     public const string LimitArgument = "limit";
 
@@ -63,6 +64,7 @@ public sealed class ProcessTool : AIFunction
             "session_id": { "type": "string", "description": "The id from run_command (proc_ and hex); a unique prefix is enough. Every action but list needs it." },
             "data": { "type": "string", "description": "For write and submit: the text to send." },
             "timeout": { "type": "integer", "description": "For wait: seconds to block, {{MinWaitSeconds}} to {{MaxWaitSeconds}} (default {{DefaultWaitSeconds}}); what arrived so far comes back on a timeout." },
+            "until": { "type": "string", "description": "For wait: also stop as soon as a line not yet polled contains this text, case ignored (a server's 'Listening on', a prompt)." },
             "offset": { "type": "integer", "description": "For log: the first line to show, 1-based; leave it out for the last lines." },
             "limit": { "type": "integer", "description": "For log: how many lines, {{MinLogLimit}} to {{MaxLogLimit}} (default {{DefaultLogLimit}})." }
           },
@@ -142,15 +144,17 @@ public sealed class ProcessTool : AIFunction
                 }
 
                 int wait = seconds ?? DefaultWaitSeconds;
-                bool exited = await session!.WaitAsync(TimeSpan.FromSeconds(wait), cancellationToken).ConfigureAwait(false);
-                if (exited)
+                string until = ToolArguments.ReadString(arguments, UntilArgument).Trim();
+                using var match = until.Length == 0 ? null : new UntilMatch(session!, until);
+                await session!.WaitAsync(TimeSpan.FromSeconds(wait), cancellationToken, match?.Found).ConfigureAwait(false);
+                if (session.HasExited)
                 {
                     return Poll(session, maxChars);
                 }
 
-                var fresh = session.Output.Since(session.PollCursor, out long next);
-                session.PollCursor = next;
-                return ShellText.Background(ShellText.StillRunning(session, wait, fresh.Count), fresh, maxChars);
+                var fresh = Fresh(session);
+                string header = match?.Found.IsCompleted == true ? ShellText.Matched(session, until, fresh.Count) : ShellText.StillRunning(session, wait, fresh.Count);
+                return ShellText.Background(header, fresh, maxChars);
             }
 
             case LogAction:
@@ -166,9 +170,10 @@ public sealed class ProcessTool : AIFunction
                 }
 
                 int limit = limitGiven ?? DefaultLogLimit;
+                // The last lines end with what the streams have written since their last newline (2026-10-12): a prompt waiting for input.
                 var window = offset is { } from
                     ? session!.Output.Slice(from, limit, out long first, out long last)
-                    : session!.Output.Tail(limit, out first, out last);
+                    : [.. session!.Output.Tail(limit, out first, out last), .. session.Output.Unfinished()];
                 string header = ShellText.LogHeader(session, first, last);
                 long firstKept = session.Output.FirstKeptLine;
                 if (firstKept > 1 && (offset is null || offset < firstKept))
@@ -257,8 +262,70 @@ public sealed class ProcessTool : AIFunction
 
     private static string Poll(ProcessSession session, int maxChars)
     {
-        var fresh = session.Output.Since(session.PollCursor, out long next);
-        session.PollCursor = next;
+        var fresh = Fresh(session);
         return ShellText.Background(ShellText.PollHeader(session, fresh.Count), fresh, maxChars);
+    }
+
+    /// <summary>
+    /// <c>wait</c>'s <c>until</c> (2026-10-12, the shell review: waiting for a server to come up was a loop of polls, a turn each):
+    /// <see cref="Found"/> completes once a line the model has not polled, or a stream's unfinished line, contains the text, case
+    /// ignored. It reads on each <see cref="OutputBuffer.Appended"/>, from the newest end (<see cref="OutputBuffer.CopyFrom"/>) and
+    /// only past what it read before, so a chatty child costs a line a line; the pumps raise it from two threads, hence the lock.
+    /// </summary>
+    private sealed class UntilMatch : IDisposable
+    {
+        private readonly ProcessSession _session;
+        private readonly string _text;
+        private readonly TaskCompletionSource _found = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly Lock _lock = new();
+        private readonly List<OutputLine> _fresh = new();
+        private long _next;
+
+        public UntilMatch(ProcessSession session, string text)
+        {
+            _session = session;
+            _text = text;
+            _next = session.PollCursor + 1;
+            session.Output.Appended += Check;
+            Check();
+        }
+
+        public Task Found => _found.Task;
+
+        private void Check()
+        {
+            lock (_lock)
+            {
+                if (_found.Task.IsCompleted)
+                {
+                    return;
+                }
+
+                _fresh.Clear();
+                long first = Math.Max(_next, _session.Output.CopyFrom(_next, _fresh));
+                _next = first + _fresh.Count;
+                if (_fresh.Any(Holds) || _session.Output.Unfinished().Any(Holds))
+                {
+                    _found.TrySetResult();
+                }
+            }
+        }
+
+        private bool Holds(OutputLine line) => line.Text.Contains(_text, StringComparison.OrdinalIgnoreCase);
+
+        public void Dispose() => _session.Output.Appended -= Check;
+    }
+
+    /// <summary>
+    /// The lines since the last poll, the cursor moved past them, then each stream's unfinished line (2026-10-12, the shell review: a
+    /// prompt with no newline — <c>Password:</c>, <c>&gt;&gt;&gt; </c> — never reached a poll, so the model could not see what a <c>write</c>
+    /// would answer). The unfinished line moves no cursor; once its newline comes it is polled again as a line, as a terminal shows it.
+    /// </summary>
+    private static IReadOnlyList<OutputLine> Fresh(ProcessSession session)
+    {
+        var lines = session.Output.Since(session.PollCursor, out long next);
+        session.PollCursor = next;
+        var unfinished = session.Output.Unfinished();
+        return unfinished.Count == 0 ? lines : [.. lines, .. unfinished];
     }
 }

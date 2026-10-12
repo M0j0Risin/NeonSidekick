@@ -10,7 +10,8 @@ public readonly record struct OutputLine(string Text, bool IsError);
 /// numbered from 1 over everything ever written (<see cref="TotalLines"/>), and
 /// <see cref="FirstKeptLine"/> says where the kept ones start, so a <c>log</c> offset stays stable
 /// across drops. Thread-safe: the two pumps append from the pool, the tools read on the turn task.
-/// Since 2026-10-05 <see cref="Appended"/> tells a reader (<c>/process</c>'s window) of each line, outside the lock.
+/// Since 2026-10-05 <see cref="Appended"/> tells a reader (<c>/process</c>'s window) of each line, outside the lock; since 2026-10-12
+/// each stream's line in progress is kept beside the lines (<see cref="SetUnfinished"/>), so a prompt with no newline is seen.
 /// </summary>
 public sealed class OutputBuffer
 {
@@ -26,6 +27,8 @@ public sealed class OutputBuffer
     private long _dropped;
     private long _bytes;
     private long _totalChars;
+    private string? _unfinishedOut;
+    private string? _unfinishedErr;
 
     public OutputBuffer(int maxLines = DefaultMaxLines, int maxBytes = DefaultMaxBytes)
     {
@@ -36,7 +39,8 @@ public sealed class OutputBuffer
     }
 
     /// <summary>
-    /// Raised after each line is appended, outside the lock, on the pump's pool thread (2026-10-05, <c>/process</c>'s window).
+    /// Raised after each line is appended, outside the lock, on the pump's pool thread (2026-10-05, <c>/process</c>'s window), and
+    /// since 2026-10-12 when a stream's unfinished line changes (<see cref="SetUnfinished"/>, for <c>process wait</c>'s <c>until</c>).
     /// A subscriber must not block: the window only posts itself a message and reads with <see cref="CopyFrom"/>.
     /// </summary>
     public event Action? Appended;
@@ -99,6 +103,11 @@ public sealed class OutputBuffer
             }
         }
 
+        Raise();
+    }
+
+    private void Raise()
+    {
         try
         {
             Appended?.Invoke();
@@ -141,6 +150,60 @@ public sealed class OutputBuffer
             }
 
             return first;
+        }
+    }
+
+    /// <summary>
+    /// The line a stream has written so far without its newline (2026-10-12, the shell review): a prompt (<c>Password:</c>,
+    /// <c>Continue? [y/N]</c>, Python's <c>&gt;&gt;&gt; </c>) that waits for <c>process write</c> and that a reader of whole lines never
+    /// saw; null (or empty) clears it. Not a line yet: it is in no count, no cursor and no number, and the newline that ends it
+    /// appends it as an ordinary one. Set by the pump (<see cref="ShellRunner"/>) after each read.
+    /// </summary>
+    public void SetUnfinished(string? text, bool isError)
+    {
+        if (text is { Length: > MaxLineChars })
+        {
+            text = text[..(MaxLineChars - CutMark.Length)] + CutMark;
+        }
+
+        text = string.IsNullOrEmpty(text) ? null : text;
+        lock (_lock)
+        {
+            ref string? field = ref isError ? ref _unfinishedErr : ref _unfinishedOut;
+            if (string.Equals(field, text, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            field = text;
+        }
+
+        // A change tells the readers as a line does (process wait's until reads a prompt; /process's window reads again and finds no line).
+        Raise();
+    }
+
+    /// <summary>The streams' unfinished lines (<see cref="SetUnfinished"/>), stdout's then stderr's: what <c>poll</c>, <c>wait</c> and a tail <c>log</c> show after the lines.</summary>
+    public IReadOnlyList<OutputLine> Unfinished()
+    {
+        lock (_lock)
+        {
+            if (_unfinishedOut is null && _unfinishedErr is null)
+            {
+                return [];
+            }
+
+            var unfinished = new List<OutputLine>(2);
+            if (_unfinishedOut is { } output)
+            {
+                unfinished.Add(new OutputLine(output, false));
+            }
+
+            if (_unfinishedErr is { } error)
+            {
+                unfinished.Add(new OutputLine(error, true));
+            }
+
+            return unfinished;
         }
     }
 

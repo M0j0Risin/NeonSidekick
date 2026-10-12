@@ -110,18 +110,67 @@ public sealed class ShellRunner
         session.Complete(code);
     }
 
-    private static async Task PumpAsync(StreamReader reader, OutputBuffer output, bool isError)
+    /// <summary>How many chars one read of a stream takes.</summary>
+    internal const int PumpChunk = 4096;
+
+    /// <summary>
+    /// One stream into the buffer, a chunk at a time (2026-10-12, the shell review; <c>ReadLineAsync</c> until then). A line ends at
+    /// <c>\n</c> or <c>\r\n</c>. A lone <c>\r</c> starts the line over, as a terminal draws it, so a progress bar (pip, npm, curl)
+    /// is the one line it ends as rather than a line per redraw pushing the real output out of the ring. A line is held to
+    /// <see cref="OutputBuffer.MaxLineChars"/> as it arrives and the rest of it dropped, so a single line of hundreds of MB (a
+    /// minified file, a binary typed) never sits whole in memory as it did. What a read leaves without its newline is the stream's
+    /// unfinished line (<see cref="OutputBuffer.SetUnfinished"/>): a prompt waiting for input is seen; the end of the stream appends it.
+    /// </summary>
+    internal static async Task PumpAsync(TextReader reader, OutputBuffer output, bool isError)
     {
+        var chunk = new char[PumpChunk];
+        var line = new StringBuilder();
+        bool carriage = false;
         try
         {
-            while (await reader.ReadLineAsync(CancellationToken.None).ConfigureAwait(false) is { } line)
+            int read;
+            while ((read = await reader.ReadAsync(chunk.AsMemory(), CancellationToken.None).ConfigureAwait(false)) > 0)
             {
-                output.Append(line, isError);
+                for (int i = 0; i < read; i++)
+                {
+                    char c = chunk[i];
+                    if (carriage)
+                    {
+                        carriage = false;
+                        if (c != '\n')
+                        {
+                            line.Clear();
+                        }
+                    }
+
+                    if (c == '\n')
+                    {
+                        output.Append(line.ToString(), isError);
+                        line.Clear();
+                    }
+                    else if (c == '\r')
+                    {
+                        carriage = true;
+                    }
+                    else if (line.Length <= OutputBuffer.MaxLineChars)
+                    {
+                        // One past the cap, so Append cuts it with the mark; the rest of the line is dropped as it comes.
+                        line.Append(c);
+                    }
+                }
+
+                output.SetUnfinished(line.Length > 0 ? line.ToString() : null, isError);
             }
         }
         catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
         {
             // The pipe went with the process (a kill, a dispose): what arrived is kept.
+        }
+
+        output.SetUnfinished(null, isError);
+        if (line.Length > 0)
+        {
+            output.Append(line.ToString(), isError);
         }
     }
 }

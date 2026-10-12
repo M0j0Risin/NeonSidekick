@@ -192,6 +192,14 @@ public static class ShellText
         return $"{session.Id} {state} ({session.Kind}): {session.Label} — {fresh}";
     }
 
+    /// <summary><c>proc_… running for 3.2 s, 'listening' seen (cmd): … — 5 new lines</c>: <c>wait</c>'s <c>until</c> found its text (2026-10-12). Pinned.</summary>
+    public static string Matched(ProcessSession session, string until, int newLines)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        string fresh = newLines == 0 ? "no new output" : $"{Count(newLines)} new {(newLines == 1 ? "line" : "lines")}";
+        return $"{session.Id} running for {Elapsed(session.Elapsed)}, '{until}' seen ({session.Kind}): {session.Label} — {fresh}";
+    }
+
     /// <summary><c>proc_… still running after 60 s (powershell): … — 5 new lines</c>. Pinned.</summary>
     public static string StillRunning(ProcessSession session, int waited, int newLines)
     {

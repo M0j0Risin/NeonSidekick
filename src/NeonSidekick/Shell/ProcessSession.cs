@@ -99,10 +99,13 @@ public sealed class ProcessSession : IDisposable
         _exited.TrySetResult(exitCode);
     }
 
-    /// <summary>True once it exited within <paramref name="timeout"/>; false on the timeout. The token's cancellation throws.</summary>
-    public async Task<bool> WaitAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    /// <summary>
+    /// True once it exited within <paramref name="timeout"/> — or <paramref name="orWhen"/> completed (2026-10-12, <c>process wait</c>'s
+    /// <c>until</c>: a line that matched); false on the timeout. The token's cancellation throws.
+    /// </summary>
+    public async Task<bool> WaitAsync(TimeSpan timeout, CancellationToken cancellationToken, Task? orWhen = null)
     {
-        if (HasExited)
+        if (HasExited || orWhen?.IsCompleted == true)
         {
             return true;
         }
@@ -110,7 +113,7 @@ public sealed class ProcessSession : IDisposable
         using var stop = new CancellationTokenSource();
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(stop.Token, cancellationToken);
         var delay = Task.Delay(timeout, _time, linked.Token);
-        var done = await Task.WhenAny(_exited.Task, delay).ConfigureAwait(false);
+        var done = await (orWhen is null ? Task.WhenAny(_exited.Task, delay) : Task.WhenAny(_exited.Task, orWhen, delay)).ConfigureAwait(false);
         if (done == delay)
         {
             cancellationToken.ThrowIfCancellationRequested();
