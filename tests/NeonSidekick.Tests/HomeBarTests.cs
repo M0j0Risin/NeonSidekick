@@ -113,7 +113,7 @@ public sealed class HomeBarTests
     // ─── chips ──────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void ALight_ShowsItsBrightness_OnItsOwnColour_AndToggles()
+    public void ALight_KeepsItsBrightnessInTheNote_InItsOwnColour_AndToggles()
     {
         var lamp = Entity("light.den_lamp", "on", """{"friendly_name":"Den Lamp","brightness":204,"rgb_color":[255,200,0]}""");
         var chip = HomeChips.Build("entity:light.den_lamp", Entities(lamp), Catalog(), HomeChipMark.None, stale: false);
@@ -123,18 +123,18 @@ public sealed class HomeBarTests
         Assert.Equal("Lamp", chip.Short);   // the area's name dropped
         Assert.Equal("", chip.Value);   // no brightness on the chip (the user's call: it changed the widths)
         Assert.StartsWith("Den Lamp: on 80%", chip.Note, StringComparison.Ordinal);   // the note keeps it
-        Assert.Equal(new Color(255, 200, 0), chip.Style.Background);
-        Assert.Equal(Color.Black, chip.Style.Foreground);   // a light slab reads in black
+        Assert.Equal(new Color(255, 200, 0), chip.Style.Foreground);   // the light's own colour as the text
+        Assert.Equal(Theme.Mix(new Color(255, 200, 0), Theme.Bg, HomeChips.LitFill), chip.Style.Background);   // on a quiet fill of it
         Assert.Equal(HomeChipAction.Call, chip.Action);
         Assert.Equal("light.toggle", chip.Call!.Name);
         Assert.Contains("double-click to switch off", chip.Note, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Off_IsTheOffSlab_Unavailable_IsDimWithAQuestion_AndStaleIsDim()
+    public void Off_IsTheOffChip_Unavailable_IsDimWithAQuestion_AndStaleIsDim()
     {
         var off = HomeChips.Build("entity:switch.k", Entities(Entity("switch.k", "off")), null, HomeChipMark.None, false);
-        Assert.Equal(Theme.ToolbarOff, off.Style);
+        Assert.Equal(HomeChips.Off, off.Style);
 
         var gone = HomeChips.Build("entity:switch.k", Entities(Entity("switch.k", "unavailable")), null, HomeChipMark.None, false);
         Assert.Equal("?", gone.Value);
@@ -166,7 +166,7 @@ public sealed class HomeBarTests
 
         var dark = HomeChips.Build("area:den", Entities(Entity("light.den_lamp", "off"), Entity("light.den_spot", "off")), Catalog(), HomeChipMark.None, false);
         Assert.Equal("turn_on", dark.Call!.Service);
-        Assert.Equal(Theme.ToolbarOff, dark.Style);
+        Assert.Equal(HomeChips.Off, dark.Style);
     }
 
     [Theory]
@@ -210,7 +210,7 @@ public sealed class HomeBarTests
 
         var work = HomeChips.Build("entity:zone.work", Entities(Entity("zone.work", "0")), null, HomeChipMark.None, false);
         Assert.Equal("0", work.Value);
-        Assert.Equal(Theme.ToolbarOff, work.Style);
+        Assert.Equal(HomeChips.Off, work.Style);
         Assert.Empty(ChatScreen.HomeActions(Entity("zone.work", "0")));
     }
 
@@ -271,10 +271,31 @@ public sealed class HomeBarTests
         Assert.Equal(Color.White, HomeChips.Slab(new Color(20, 20, 60)).Foreground);
     }
 
+    /// <summary>
+    /// The quiet chips (2026-10-12, the user's call: the full slabs were overpowering): on is the colour as text on a darker fill
+    /// of it, off the theme's dim on its dimmer, and only an alert keeps a full slab.
+    /// </summary>
+    [Fact]
+    public void OnChips_AreTheirColourOnADarkerFill_OffIsTheDimmer_AndAlertsKeepTheirSlab()
+    {
+        var lamp = HomeChips.Build("entity:light.k", Entities(Entity("light.k", "on", """{"color_temp_kelvin":2700}""")), null, HomeChipMark.None, false);
+        Assert.True(HomeChips.Luminance(lamp.Style.Background) < HomeChips.Luminance(lamp.Style.Foreground) / 2);
+
+        var fan = HomeChips.Build("entity:fan.f", Entities(Entity("fan.f", "on")), null, HomeChipMark.None, false);
+        Assert.Equal(HomeChips.Lit(Theme.Secondary), fan.Style);
+
+        Assert.Equal(new Style(Theme.Dim, Theme.Dimmer), HomeChips.Off);
+
+        var garage = HomeChips.Build("entity:cover.g", Entities(Entity("cover.g", "open", """{"device_class":"garage"}""")), null, HomeChipMark.None, false);
+        Assert.Equal(HomeChips.Slab(Theme.Warn), garage.Style);
+        var blind = HomeChips.Build("entity:cover.b", Entities(Entity("cover.b", "open", """{"device_class":"blind"}""")), null, HomeChipMark.None, false);
+        Assert.Equal(HomeChips.Lit(Theme.Secondary), blind.Style);
+    }
+
     // ─── the row ────────────────────────────────────────────────────────────────
 
     private static HomeChip Chip(string name, string value = "", string shortName = "") =>
-        new("entity:light." + name.ToLowerInvariant(), HomeChips.LightGlyph, name, shortName.Length > 0 ? shortName : name, value, Theme.ToolbarOff, HomeChipAction.Call, null, "");
+        new("entity:light." + name.ToLowerInvariant(), HomeChips.LightGlyph, name, shortName.Length > 0 ? shortName : name, value, HomeChips.Off, HomeChipAction.Call, null, "");
 
     private static string Text(HomeRow row) => string.Concat(row.Segments.Select(s => s.Text));
 

@@ -447,6 +447,9 @@ public static class Theme
         return Lerp(stops[idx], stops[idx + 1], frac);
     }
 
+    /// <summary><paramref name="a"/> moved <paramref name="t"/> (0 to 1) of the way to <paramref name="b"/>: a home bar chip's quiet fill (2026-10-12). Pure.</summary>
+    public static Color Mix(Color a, Color b, double t) => Lerp(a, b, Math.Clamp(t, 0.0, 1.0));
+
     private static Color Lerp(Color a, Color b, double t)
     {
         int r = (int)Math.Round(a.R + (b.R - a.R) * t);
