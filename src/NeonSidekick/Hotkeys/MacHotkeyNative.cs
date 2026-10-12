@@ -9,7 +9,7 @@ namespace NeonSidekick.Hotkeys;
 /// <c>CopySymbolicHotKeys</c>, <c>RegisterEventHotKey</c>/<c>UnregisterEventHotKey</c> on the application target, and
 /// <c>CFPreferencesCopyAppValue</c> for the terminals' settings (through cfprefsd, never the plist files, which it may not have
 /// written yet; never <c>defaults</c>, which would be a process-start site). The CLT SDK has no Carbon headers, so the prototypes and
-/// constants are the spike's, measured (<c>.docs/mac_keycheck_spike.md</c>). The rest of CoreFoundation comes from
+/// constants are the spike's, measured that day on macOS 15.7. The rest of CoreFoundation comes from
 /// <see cref="ImageIONative"/>. HIToolbox is a system framework in the dyld shared cache: bound by its install name, nothing joins
 /// <c>SmokeChecks.MacNativeLibraries</c>; smoke <c>keys:carbon</c> proves it on the published exe. Excluded from coverage.
 /// </summary>

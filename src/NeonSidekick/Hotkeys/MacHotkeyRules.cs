@@ -12,7 +12,7 @@ public enum OptionKey
 }
 
 /// <summary>
-/// A Mac's <c>/keycheck</c> decisions (2026-10-11, the user's pick after the spike of that day, <c>.docs/mac_keycheck_spike.md</c>):
+/// A Mac's <c>/keycheck</c> decisions (2026-10-11, the user's pick after the spike of that day):
 /// pure, so they are pinned on every OS; <see cref="MacHotkeyProbe"/> only reads the system and hands the facts here. A chord is
 /// held by macOS when an enabled entry of <c>CopySymbolicHotKeys</c> names it (no id or name comes with an entry, so the row says
 /// only "macOS shortcut"); else by another app when Carbon's <c>RegisterEventHotKey</c> with <c>kEventHotKeyExclusive</c> answers
