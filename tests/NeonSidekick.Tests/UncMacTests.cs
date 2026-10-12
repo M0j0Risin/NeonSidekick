@@ -292,17 +292,18 @@ public sealed class UncMacTests : IDisposable
         _system.ExistsAnyway = true;
         var mounts = Mounts();
 
-        var read = mounts.Root(Share("eng", "smb://fs01/eng"), password: null);
+        var eng = Share("eng", "smb://fs01/eng");
+        var read = mounts.Root(eng, password: null);
 
-        Assert.Equal(UncText.ReachFailed("eng", "smb://fs01/eng", UncText.MountStatus(17)), read.Error);
+        Assert.Equal(UncText.ReachFailed("eng", eng.Config.Root, UncText.MountStatus(17)), read.Error);   // the root as this OS spells it
 
         // The run's own runas mount of the share (made before EEXIST began), then an as-you share of the same flag: not taken.
         var other = new FakeMountSystem(Path.Combine(_dir, "Volumes2"), Uid);
         var mounts2 = new ShareMounts(other, Path.Combine(_dir, "home2"), Uid, pid => _alive.TryGetValue(pid, out long ticks) ? ticks : null, TimeSpan.FromSeconds(10));
         Assert.Null(mounts2.Root(RunAs("fin", "smb://fs01/eng", "svc"), "s3cret").Error);
         other.ExistsAnyway = true;
-        var asYou = mounts2.Root(Share("eng", "smb://fs01/eng"), password: null);
-        Assert.Equal(UncText.ReachFailed("eng", "smb://fs01/eng", UncText.MountStatus(17)), asYou.Error);
+        var asYou = mounts2.Root(eng, password: null);
+        Assert.Equal(UncText.ReachFailed("eng", eng.Config.Root, UncText.MountStatus(17)), asYou.Error);
     }
 
     /// <summary>A mount NetFS reports made that statfs cannot find at its point is unmounted again and refused, never left unrecorded (2026-10-11, code review).</summary>
@@ -312,9 +313,10 @@ public sealed class UncMacTests : IDisposable
         var mounts = Mounts();
         _system.Unreadable = true;
 
-        var eng = mounts.Root(Share("eng", "smb://fs01/eng"), password: null);
+        var share = Share("eng", "smb://fs01/eng");
+        var eng = mounts.Root(share, password: null);
 
-        Assert.Equal(UncText.ReachFailed("eng", "smb://fs01/eng", UncText.MountStatus(int.MinValue)), eng.Error);
+        Assert.Equal(UncText.ReachFailed("eng", share.Config.Root, UncText.MountStatus(int.MinValue)), eng.Error);   // the root as this OS spells it
         Assert.Equal([(Path.Combine(_system.Volumes, "eng"), false)], _system.Unmounts);
         Assert.False(Directory.Exists(RecordsFolder) && Directory.GetFiles(RecordsFolder).Length > 0);
     }

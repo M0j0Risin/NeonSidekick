@@ -273,12 +273,30 @@ public sealed class UncShareConfig
 
         try
         {
-            return UncPath.Normalize(text, windows: false) == "/" ? UncText.WholeDisk : null;
+            UncPath.Normalize(text, windows: false);
         }
         catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
         {
             return UncText.BadPath(text);
         }
+
+        return FoldsToRoot(text) ? UncText.WholeDisk : null;
+    }
+
+    /// <summary>
+    /// Whether a POSIX path folds to <c>/</c> (its <c>.</c> and <c>..</c> folded, a <c>..</c> at the top staying there), read the same on
+    /// any OS (2026-10-11, the shopping-list merge's Windows run): <see cref="Path.GetFullPath(string)"/> on Windows reads <c>/</c> as the
+    /// current drive's root, so comparing <see cref="UncPath.Normalize"/>'s answer with <c>/</c> held only on a Mac.
+    /// </summary>
+    private static bool FoldsToRoot(string path)
+    {
+        int depth = 0;
+        foreach (string part in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            depth = part switch { "." => depth, ".." => Math.Max(0, depth - 1), _ => depth + 1 };
+        }
+
+        return depth == 0;
     }
 
     /// <summary>
