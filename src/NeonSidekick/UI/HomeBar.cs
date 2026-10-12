@@ -25,8 +25,9 @@ public sealed record HomeRow(IReadOnlyList<PerfSegment> Segments, IReadOnlyList<
 
 /// <summary>
 /// The home bar's row (2026-10-12, the user's ask: a bar of Home Assistant rooms and devices under the perf bar): the status
-/// glyph <see cref="HomeBarText.StatusGlyph"/> at the left in the feed's colour, then the chips (<see cref="HomeChips"/>) one
-/// cell apart, each a slab — <c> 💡 Desk 80% </c>. Left-aligned (a row of things to press reads from its start, unlike the
+/// glyph <see cref="HomeBarText.StatusGlyph"/> at the left in the feed's colour, then the chips (<see cref="HomeChips"/>) side by side, each
+/// with a blank at either end — <c> 💡 Desk 80% </c> — so two blanks part one name from the next (a third, a gap between
+/// the chips, went on 2026-10-12, the user's call, once the chips lost their fills). Left-aligned (a row of things to press reads from its start, unlike the
 /// meters). Too narrow a window shortens the names (<see cref="HomeChip.Short"/>), then drops them (the glyph and the value),
 /// then splits the chips into pages behind <see cref="HomeBarText.PrevGlyph"/>/<see cref="HomeBarText.NextGlyph"/>. Pure.
 /// </summary>
@@ -56,7 +57,7 @@ public static class HomeBar
         foreach (var fit in new[] { Fit.Full, Fit.Short, Fit.Tight })
         {
             var texts = chips.Select(c => ChipText(c, fit)).ToList();
-            if (texts.Sum(t => TextCells.Width(t)) + (texts.Count - 1) <= room)
+            if (texts.Sum(t => TextCells.Width(t)) <= room)
             {
                 return Build(chips, texts, status, 0, chips.Count, pages: 1, page: 0);
             }
@@ -125,7 +126,7 @@ public static class HomeBar
         int used = 0;
         for (int i = 0; i < texts.Count; i++)
         {
-            int width = TextCells.Width(texts[i]) + (used > 0 ? 1 : 0);
+            int width = TextCells.Width(texts[i]);
             if (used > 0 && used + width > room)
             {
                 starts.Add(i);
@@ -179,11 +180,6 @@ public static class HomeBar
 
         for (int i = from; i < to; i++)
         {
-            if (i > from)
-            {
-                Add(" ", Style.Plain, null);
-            }
-
             var chip = chips[i];
             int width = TextCells.Width(texts[i]);
             Add(texts[i], chip.Style, new HomeSpan(column, width, HomeTarget.Chip, i));

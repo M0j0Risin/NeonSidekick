@@ -327,14 +327,14 @@ public sealed class HomeBarTests
     {
         var row = HomeBar.Render([Chip("Desk", "80%"), Chip("Hall")], HaLiveStatus.Live, 80)!;
 
-        Assert.Equal("⌂  💡 Desk 80%   💡 Hall ", Text(row));
+        Assert.Equal("⌂  💡 Desk 80%  💡 Hall ", Text(row));
         Assert.Equal(1, row.Pages);
         Assert.Equal(new HomeSpan(0, 1, HomeTarget.Status), row.Spans[0]);
         Assert.Equal(new HomeSpan(2, 13, HomeTarget.Chip, 0), row.Spans[1]);
-        Assert.Equal(new HomeSpan(16, 9, HomeTarget.Chip, 1), row.Spans[2]);
+        Assert.Equal(new HomeSpan(15, 9, HomeTarget.Chip, 1), row.Spans[2]);
         Assert.Equal(HomeTarget.Chip, HomeBar.HitAt(row.Spans, 5)!.Value.Target);
-        Assert.Null(HomeBar.HitAt(row.Spans, 15));   // the blank between
-        Assert.Equal(1, HomeBar.HitAt(row.Spans, 16)!.Value.Index);
+        Assert.Equal(0, HomeBar.HitAt(row.Spans, 14)!.Value.Index);   // no gap between the chips (2026-10-12): the first's last blank
+        Assert.Equal(1, HomeBar.HitAt(row.Spans, 15)!.Value.Index);
         Assert.Null(HomeBar.Render([], HaLiveStatus.Live, 80));
     }
 
@@ -343,8 +343,8 @@ public sealed class HomeBarTests
     {
         var chips = new[] { Chip("Living Room Lamp", "50%", "Lamp"), Chip("Kitchen Spot", "", "Spot"), Chip("Hallway Ceiling", "", "Ceiling") };
         Assert.Contains("Living Room Lamp", Text(HomeBar.Render(chips, HaLiveStatus.Live, 80)!), StringComparison.Ordinal);
-        Assert.Equal("⌂  💡 Lamp 50%   💡 Spot   💡 Ceiling ", Text(HomeBar.Render(chips, HaLiveStatus.Live, 40)!));
-        Assert.Equal("⌂  💡 50%   💡   💡 ", Text(HomeBar.Render(chips, HaLiveStatus.Live, 22)!));
+        Assert.Equal("⌂  💡 Lamp 50%  💡 Spot  💡 Ceiling ", Text(HomeBar.Render(chips, HaLiveStatus.Live, 40)!));
+        Assert.Equal("⌂  💡 50%  💡  💡 ", Text(HomeBar.Render(chips, HaLiveStatus.Live, 22)!));
 
         var paged = HomeBar.Render(chips, HaLiveStatus.Live, 16)!;
         Assert.True(paged.Pages > 1);
