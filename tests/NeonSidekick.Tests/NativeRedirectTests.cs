@@ -49,7 +49,7 @@ public sealed class NativeRedirectTests
 
     [Theory]
     [InlineData("git push")]              // no tool for the verb
-    [InlineData("git -C sub status")]     // an option before the verb reads as bare git
+    [InlineData("git -C sub status")]     // an option before the verb: the tool would not run in sub
     [InlineData("dotnet build")]
     [InlineData("python script.py")]
     [InlineData("net start spooler")]     // net's other verbs stay the shell's

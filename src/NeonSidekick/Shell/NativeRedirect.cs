@@ -68,7 +68,8 @@ public static class NativeRedirect
             return null;
         }
 
-        string prefix = CommandPrefix.Of(segments[0]);
+        // The verb straight after the program alone (2026-10-12): git -C sub status runs in sub, where git_status never looks.
+        string prefix = CommandPrefix.Of(segments[0], skipOptions: false);
         return Table.TryGetValue(prefix, out string? tool) && offered.Contains(tool) ? (prefix, tool) : null;
     }
 

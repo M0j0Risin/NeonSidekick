@@ -28,6 +28,12 @@ public sealed class CommandAllowList
     public bool IsAllowed(string prefix)
     {
         ArgumentNullException.ThrowIfNull(prefix);
+        // A command no reading could name (2026-10-12) is never allowed, whatever a hand-edited list holds.
+        if (IsNeverAllowed(prefix))
+        {
+            return false;
+        }
+
         lock (_lock)
         {
             if (_session.Contains(prefix))
@@ -60,7 +66,7 @@ public sealed class CommandAllowList
         ArgumentNullException.ThrowIfNull(prefixes);
         lock (_lock)
         {
-            foreach (string prefix in prefixes)
+            foreach (string prefix in prefixes.Where(p => !IsNeverAllowed(p)))
             {
                 _session.Add(prefix.Trim().ToLowerInvariant());
             }
@@ -88,6 +94,12 @@ public sealed class CommandAllowList
     /// <summary>Every allowed prefix, session and permanent, sorted ordinal, no duplicates.</summary>
     public IReadOnlyList<string> Snapshot() => Merge(_permanent(), SessionSnapshot());
 
+    /// <summary>
+    /// <see cref="CommandPrefix.Unreadable"/>: never allowed and never added, so a Session or Permanent pick on a line carrying it
+    /// allows its other prefixes and leaves the next unreadable substitution to the pane again.
+    /// </summary>
+    public static bool IsNeverAllowed(string prefix) => string.Equals(prefix.Trim(), CommandPrefix.Unreadable, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Whether the saved list holds <paramref name="prefix"/>, case-insensitive.</summary>
     public static bool Contains(IReadOnlyList<string> saved, string prefix)
     {
@@ -113,7 +125,7 @@ public sealed class CommandAllowList
         foreach (string entry in saved)
         {
             string trimmed = entry.Trim().ToLowerInvariant();
-            if (trimmed.Length > 0)
+            if (trimmed.Length > 0 && !IsNeverAllowed(trimmed))
             {
                 set.Add(trimmed);
             }
@@ -122,7 +134,7 @@ public sealed class CommandAllowList
         foreach (string prefix in prefixes)
         {
             string trimmed = prefix.Trim().ToLowerInvariant();
-            if (trimmed.Length > 0)
+            if (trimmed.Length > 0 && !IsNeverAllowed(trimmed))
             {
                 set.Add(trimmed);
             }

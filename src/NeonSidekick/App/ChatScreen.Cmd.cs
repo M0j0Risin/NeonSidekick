@@ -66,7 +66,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var request = new CommandRequest(ShellKinds.Name(kind), command, CommandPrefix.All(command));
+        var request = new CommandRequest(ShellKinds.Name(kind), command, CommandPrefix.All(command, kind));
         if (ShellPoliceChecks.Judge(request, command, workdir, _files, effective) is { } policed)
         {
             _transcript.PoliceNote(policed.Shown ?? ShellText.Note(policed.ModelText));

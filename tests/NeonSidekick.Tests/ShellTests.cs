@@ -50,7 +50,14 @@ public sealed class ShellTests
 
     [Theory]
     [InlineData("git push origin main", "git push")]
-    [InlineData("git -C x status", "git")]
+    [InlineData("git -C x status", "git status")]   // an option and its value skipped on the way to the verb (2026-10-12)
+    [InlineData("git -c alias.x=y push", "git push")]
+    [InlineData("git --no-pager -C x log -5", "git log")]
+    [InlineData("git --git-dir=.git log", "git log")]   // --name=value is one word
+    [InlineData("git --version", "git")]
+    [InlineData("kubectl -n prod delete pod x", "kubectl delete")]
+    [InlineData("docker --context remote rm -f x", "docker rm")]
+    [InlineData("npm --prefix web run build", "npm run")]
     [InlineData("GIT STATUS", "git status")]
     [InlineData("dotnet build -c Release", "dotnet build")]
     [InlineData("python -c \"print(1)\"", "python")]
@@ -91,6 +98,65 @@ public sealed class ShellTests
         Assert.DoesNotContain("powershell", CommandPrefix.VerbPrograms);
         Assert.Equal("foo", CommandPrefix.Program("Foo.exe"));
         Assert.Equal("foo.py", CommandPrefix.Program("foo.py"));   // not an executable extension
+    }
+
+    /// <summary>
+    /// Substitutions (2026-10-12, the shell review): the commands they run are prefixes of the line too, so an allowed prefix never
+    /// carries an unasked command inside it; what cannot be read is <see cref="CommandPrefix.Unreadable"/>.
+    /// </summary>
+    [Theory]
+    [InlineData("powershell", "git log $(Remove-Item -Recurse src)", new[] { "git log", "remove-item" })]
+    [InlineData("powershell", "git log \"$(Remove-Item x)\"", new[] { "git log", "remove-item" })]
+    [InlineData("powershell", "git log '$(Remove-Item x)'", new[] { "git log" })]   // single quotes: text
+    [InlineData("powershell", "git log `$(Remove-Item x)", new[] { "git log", "remove-item" })]   // the $ is text, the (…) after it still runs (checked in 5.1)
+    [InlineData("powershell", "git log '$(Remove-Item x)' \"`$(x)\"", new[] { "git log" })]   // in double quotes the escaped $( is text
+    [InlineData("powershell", "Write-Output @(Remove-Item x)", new[] { "write-output", "remove-item" })]
+    [InlineData("powershell", "Write-Output (Get-Date).Year", new[] { "write-output", "get-date" })]
+    [InlineData("powershell", "Get-ChildItem | ForEach-Object { Remove-Item $_ }", new[] { "get-childitem", "foreach-object", "remove-item" })]
+    [InlineData("powershell", "Get-ChildItem | Where-Object { $_.Length -gt 1 } | Sort-Object Name", new[] { "get-childitem", "where-object", "sort-object" })]
+    [InlineData("powershell", "Write-Output \"n: $($items.Count)\" @{ a = 1 } ${env:X}", new[] { "write-output" })]
+    [InlineData("powershell", "Write-Output { $x = Remove-Item y }", new[] { "write-output", "remove-item" })]
+    [InlineData("powershell", "[IO.File]::ReadAllText('x')", new[] { "[io.file]::readalltext" })]
+    [InlineData("powershell", "Write-Output $(Write-Output $(Remove-Item x))", new[] { "write-output", "remove-item" })]
+    [InlineData("powershell", "git log $(Remove-Item x; Stop-Process -Id 1)", new[] { "git log", "remove-item", "stop-process" })]   // the ; inside is the body's
+    [InlineData("powershell", "Get-Item x # (an unclosed note", new[] { "get-item" })]   // a comment
+    [InlineData("powershell", "git log $(Remove-Item x", new[] { "git log", CommandPrefix.Unreadable })]   // left open
+    [InlineData("powershell", "& $tool -x", new[] { "$tool", CommandPrefix.Unreadable })]   // the call operator on a value
+    [InlineData("powershell", "git $(Write-Output push)", new[] { CommandPrefix.Unreadable, "write-output" })]   // a verb from a substitution
+    [InlineData("bash", "git log `rm -rf src`", new[] { "git log", "rm" })]
+    [InlineData("bash", "git log \"$(rm -rf src)\"", new[] { "git log", "rm" })]
+    [InlineData("bash", "diff <(sort a) >(tee b)", new[] { "diff", "sort", "tee" })]
+    [InlineData("bash", "echo $((1 + 2)) ${HOME}", new[] { "echo" })]   // arithmetic and a variable run nothing
+    [InlineData("bash", "x=$(cat f) make test", new[] { "make test", "cat" })]
+    [InlineData("bash", "$(echo rm) -rf x", new[] { CommandPrefix.Unreadable, "echo" })]   // the command is the output
+    [InlineData("bash", @"echo \$(rm x)", new[] { "echo" })]   // escaped
+    [InlineData("zsh", "echo $(echo $(rm x))", new[] { "echo", "rm" })]
+    [InlineData("cmd", "echo $(rm x)", new[] { "echo" })]   // cmd has no substitutions
+    public void CommandPrefix_All_ReadsTheCommandsSubstitutionsRun(string shell, string command, string[] prefixes)
+    {
+        Assert.True(ShellKinds.TryParse(shell, out var kind));
+        Assert.Equal(prefixes, CommandPrefix.All(command, kind));
+    }
+
+    [Fact]
+    public void CommandPrefix_NestingPastTheCap_IsUnreadable()
+    {
+        string deep = string.Concat(Enumerable.Repeat("$(echo ", CommandPrefix.MaxDepth + 2)) + "x" + new string(')', CommandPrefix.MaxDepth + 2);
+        Assert.Contains(CommandPrefix.Unreadable, CommandPrefix.All(deep, ShellKind.Bash));
+        Assert.Equal("(unreadable substitution)", CommandPrefix.Unreadable);
+    }
+
+    [Fact]
+    public void CommandAllowList_NeverHolds_TheUnreadablePrefix()
+    {
+        var saved = new List<string> { CommandPrefix.Unreadable };
+        var list = new CommandAllowList(() => saved, merged => saved = [.. merged]);
+        Assert.False(list.IsAllowed(CommandPrefix.Unreadable));   // a hand-edited entry counts for nothing
+        list.AllowPermanently(["git log", CommandPrefix.Unreadable]);
+        Assert.Equal(["git log"], saved);
+        Assert.Equal(["git log"], list.SessionSnapshot());
+        Assert.False(list.AllowsAll(CommandPrefix.All("git log $(Remove-Item x", ShellKind.PowerShell)));
+        Assert.True(list.AllowsAll(CommandPrefix.All("git log $(git log -1)", ShellKind.PowerShell)));
     }
 
     // ── The allow list ───────────────────────────────────────────────────────

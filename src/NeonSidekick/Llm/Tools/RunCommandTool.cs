@@ -256,7 +256,7 @@ public sealed class RunCommandTool : AIFunction
         int seconds = timeoutSeconds ?? Math.Min(cap, Math.Clamp(effective.ShellTimeoutSeconds, AppSettingsData.MinShellTimeoutSeconds, AppSettingsData.MaxShellTimeoutSeconds));
         var timeout = TimeSpan.FromSeconds(seconds);
 
-        var request = new CommandRequest(ShellKinds.Name(kind), command, CommandPrefix.All(command));
+        var request = new CommandRequest(ShellKinds.Name(kind), command, CommandPrefix.All(command, kind));
         // The police before the gate (Shell police, 2026-09-22; the forbidden strings, the SQLite and server-database police and an
         // outside path, in that order, shared with /cmd since 2026-10-09): refused whatever the policy, the pane never asked.
         if (ShellPoliceChecks.Judge(request, command, workdir, _files, effective) is { } policed)
