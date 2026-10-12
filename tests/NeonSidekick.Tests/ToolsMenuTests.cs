@@ -821,10 +821,10 @@ public partial class ToolsMenuTests : IDisposable
         File.WriteAllText(path, """{ "connections": { "shop": { "host": "localhost", "database": "db", "user": "reader" }, "billing": { "host": "db", "database": "db", "user": "ro" } } }""");
         var (menu, _, _) = PaneMenu();
         OpenMySqlRow(4);
-        Push(Keys.Enter);                                    // shop
+        Push(Keys.Down, Keys.Enter);                         // shop, under billing (A to Z since 2026-10-11)
         Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
         Push(Keys.Up, Keys.Enter);                           // the offered row, right above: the checklist
-        Push(Keys.Down, Keys.Enter);                         // billing on
+        Push(Keys.Enter);                                    // billing on, the first row
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -1349,6 +1349,62 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("1 of 3", SettingsMenu.SqlOfferedValue(_settings.Current.SqlConnectionsOffered, loaded));   // the new one hidden until ticked
         Assert.Equal("none of 3", SettingsMenu.SqlOfferedValue(null, loaded));   // null offers none (2026-10-01)
         Assert.Equal("none of 3", SettingsMenu.SqlOfferedValue([], loaded));
+    }
+
+    /// <summary>The database panes' order (2026-10-11, the user's ask): A to Z, case folded, the exact spelling breaking a tie.</summary>
+    [Fact]
+    public void ByName_IsAToZ_CaseFolded_TheSpellingBreakingATie()
+    {
+        Assert.Equal(["Alpha", "beta", "Mid", "mid", "zeta"], SettingsMenu.ByName(["zeta", "mid", "Alpha", "Mid", "beta"], n => n));
+    }
+
+    /// <summary>
+    /// <c>SQL connections offered</c> lists A to Z (2026-10-11, the user's ask), not the files' order (the profile's, then the
+    /// home's): the second row is <c>mid</c>, the home's, and Select all saves the names A to Z.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheSqlOffered_ListsTheConnectionsAToZ_AcrossBothFiles()
+    {
+        Directory.CreateDirectory(_settings.ProfileDirectory);
+        File.WriteAllText(NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "connections": { "zeta": { "server": "x", "database": "db", "auth": "windows" }, "Alpha": { "server": "y", "database": "db", "auth": "windows" } } }""");
+        File.WriteAllText(NeonSidekick.Sql.SqlConfigFile.GlobalPath(_settings.StorageDirectory), """{ "connections": { "mid": { "server": "z", "database": "db", "auth": "windows" } } }""");
+        var (menu, _, _) = PaneMenu();
+        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the offered row: the checklist
+        Push(Keys.Down, Keys.Enter);                         // mid on, the second row
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["mid"], _settings.Current.SqlConnectionsOffered);
+
+        (menu, _, _) = PaneMenu();
+        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);
+        Push(Keys.Char('a'));
+        Push(Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["Alpha", "mid", "zeta"], _settings.Current.SqlConnectionsOffered);
+    }
+
+    /// <summary><c>SQL set password</c> lists the connections that take one A to Z (2026-10-11, the user's ask): the second row is <c>zeta</c>.</summary>
+    [Fact]
+    public async Task OnThePane_TheSqlSetPassword_ListsTheConnectionsAToZ()
+    {
+        string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
+        Directory.CreateDirectory(_settings.ProfileDirectory);
+        File.WriteAllText(path, """{ "connections": { "zeta": { "server": "x", "database": "db", "auth": "sql", "user": "z" }, "mine": { "server": "y", "database": "db", "auth": "windows" }, "Alpha": { "server": "w", "database": "db", "auth": "sql", "user": "a" } } }""");
+        var (menu, _, _) = PaneMenu();
+        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the set-password row: the pick
+        Push(Keys.Down, Keys.Enter);                         // zeta, under Alpha (mine takes no password)
+        Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        var zeta = NeonSidekick.Sql.SqlConfigFile.Load(path).Connections.Single(c => c.Name == "zeta");
+        Assert.Equal("s3cret", NeonSidekick.Sql.SqlSecrets.Resolve(zeta).Value);
+        Assert.Contains("Saved the password of 'zeta', encrypted, in ", Output);
     }
 
     /// <summary>The vault row's folder picker opens on the vault saved (later on 2026-09-22, the user's report: it opened on the working directory every time): empty the first time, the picked vault the next; nothing picked keeps it.</summary>

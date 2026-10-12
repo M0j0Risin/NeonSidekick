@@ -72,9 +72,10 @@ internal sealed partial class SettingsMenu
 
             var offered = _settings.Current.OracleConnectionsOffered;
             var on = loaded.Offered(offered).Connections.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            int width = loaded.Connections.Max(c => c.Name.Length) + 2;
-            var page = new MenuPage(Crumb(FieldName(SettingsField.OracleConnectionsOffered)), loaded.Connections.Select(c => OracleOfferedRow(c, on.Contains(c.Name), width)).ToList(), ToggleKeys) { SpaceToggles = true };
-            var picked = await PickChecklistAsync(page, Math.Min(cursor, loaded.Connections.Count - 1), cancellationToken).ConfigureAwait(false);
+            var connections = ByName(loaded.Connections, c => c.Name);   // A to Z (2026-10-11, the user's ask)
+            int width = connections.Max(c => c.Name.Length) + 2;
+            var page = new MenuPage(Crumb(FieldName(SettingsField.OracleConnectionsOffered)), connections.Select(c => OracleOfferedRow(c, on.Contains(c.Name), width)).ToList(), ToggleKeys) { SpaceToggles = true };
+            var picked = await PickChecklistAsync(page, Math.Min(cursor, connections.Count - 1), cancellationToken).ConfigureAwait(false);
             if (picked is not { } pick)
             {
                 if (!changed)
@@ -86,10 +87,10 @@ internal sealed partial class SettingsMenu
             }
 
             cursor = pick.Row;
-            string name = loaded.Connections[pick.Row].Name;
-            var next = pick.Button == SelectAllIndex ? loaded.Connections.Select(c => c.Name).ToList()
+            string name = connections[pick.Row].Name;
+            var next = pick.Button == SelectAllIndex ? connections.Select(c => c.Name).ToList()
                 : pick.Button == SelectNoneIndex ? []
-                : loaded.Connections.Select(c => c.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
+                : connections.Select(c => c.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
             if (next.Count == on.Count && next.All(on.Contains))
             {
                 continue;   // null and empty both offer none (2026-10-01)
@@ -115,7 +116,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     private async Task<bool> SetOraclePasswordAsync(CancellationToken cancellationToken)
     {
-        var connections = OracleConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Connections;
+        var connections = ByName(OracleConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Connections, c => c.Name);
         if (connections.Count == 0)
         {
             Sink.Error(OracleText.NoPasswordConnections);

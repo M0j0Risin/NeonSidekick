@@ -69,6 +69,23 @@ public partial class ToolsMenuTests
         Assert.Equal(["shop"], _settings.Current.SqliteDatabasesOffered);
     }
 
+    /// <summary><c>SQLite databases offered</c> lists A to Z (2026-10-11, the user's ask), not the file's order: the first row is <c>Alpha</c>.</summary>
+    [Fact]
+    public async Task OnThePane_TheSqliteOffered_ListsTheDatabasesAToZ()
+    {
+        Directory.CreateDirectory(_settings.ProfileDirectory);
+        File.WriteAllText(SqliteConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "databases": { "zeta": { "path": "z.db" }, "Alpha": { "path": "a.db" } } }""");
+        var (menu, _, _) = PaneMenu();
+        OpenSqliteRow(3);
+        Push(Keys.Enter);                         // Alpha on, the first row
+        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["Alpha"], _settings.Current.SqliteDatabasesOffered);
+    }
+
     /// <summary><c>SQLite mode</c> (2026-10-05): read-only by default, the pick lists both with their hints, read-write saved.</summary>
     [Fact]
     public async Task OnThePane_TheProtectionMode_PicksReadWrite()

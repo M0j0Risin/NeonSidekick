@@ -4226,6 +4226,18 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
+    /// <see cref="ModelOrder"/>'s order over things with a name (2026-10-11, the user's ask): the database panes' checklists and
+    /// password pickers list their connections A to Z instead of the files' order (the profile's, then the home's). Only the panes
+    /// sort; the catalogs, and so the tools, keep the files' order. Pure.
+    /// </summary>
+    public static List<T> ByName<T>(IEnumerable<T> items, Func<T, string> name)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        ArgumentNullException.ThrowIfNull(name);
+        return items.OrderBy(name, StringComparer.OrdinalIgnoreCase).ThenBy(name, StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>
     /// The model picker on the pane with the type-to-filter (2026-10-03, the user's ask: "a way to type to filter them down too
     /// like we did in the some other panes"; <see cref="MenuFilter"/>): a typed character narrows the rows to the ids that hold
     /// the text, case folded, the cursor on the first left (Enter takes it); Backspace erases; the first ESC clears the text,
@@ -7697,9 +7709,10 @@ internal sealed partial class SettingsMenu
 
             var offered = _settings.Current.SqlConnectionsOffered;
             var on = loaded.Offered(offered).Connections.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            int width = loaded.Connections.Max(c => c.Name.Length) + 2;
-            var page = new MenuPage(Crumb(FieldName(SettingsField.SqlConnectionsOffered)), loaded.Connections.Select(c => SqlOfferedRow(c, on.Contains(c.Name), width)).ToList(), ToggleKeys) { SpaceToggles = true };
-            var picked = await PickChecklistAsync(page, Math.Min(cursor, loaded.Connections.Count - 1), cancellationToken).ConfigureAwait(false);
+            var connections = ByName(loaded.Connections, c => c.Name);   // A to Z (2026-10-11, the user's ask)
+            int width = connections.Max(c => c.Name.Length) + 2;
+            var page = new MenuPage(Crumb(FieldName(SettingsField.SqlConnectionsOffered)), connections.Select(c => SqlOfferedRow(c, on.Contains(c.Name), width)).ToList(), ToggleKeys) { SpaceToggles = true };
+            var picked = await PickChecklistAsync(page, Math.Min(cursor, connections.Count - 1), cancellationToken).ConfigureAwait(false);
             if (picked is not { } pick)
             {
                 if (!changed)
@@ -7711,11 +7724,11 @@ internal sealed partial class SettingsMenu
             }
 
             cursor = pick.Row;
-            string name = loaded.Connections[pick.Row].Name;
+            string name = connections[pick.Row].Name;
             // Select all ticks the connections listed now, one added later still starting hidden (2026-09-29, the user's call).
-            var next = pick.Button == SelectAllIndex ? loaded.Connections.Select(c => c.Name).ToList()
+            var next = pick.Button == SelectAllIndex ? connections.Select(c => c.Name).ToList()
                 : pick.Button == SelectNoneIndex ? []
-                : loaded.Connections.Select(c => c.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
+                : connections.Select(c => c.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
             if (next.Count == on.Count && next.All(on.Contains))
             {
                 continue;   // a button that changes nothing saves nothing (null and empty both offer none, 2026-10-01)
@@ -7742,7 +7755,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     private async Task<bool> SetSqlPasswordAsync(CancellationToken cancellationToken)
     {
-        var connections = Sql.SqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Connections.Where(c => c.Config.NeedsPassword).ToList();
+        var connections = ByName(Sql.SqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Connections.Where(c => c.Config.NeedsPassword), c => c.Name);
         if (connections.Count == 0)
         {
             Sink.Error(Sql.SqlText.NoPasswordConnections);

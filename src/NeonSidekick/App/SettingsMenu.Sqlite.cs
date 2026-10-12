@@ -145,9 +145,10 @@ internal sealed partial class SettingsMenu
 
             var offered = _settings.Current.SqliteDatabasesOffered;
             var on = loaded.Offered(offered).Databases.Select(d => d.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            int width = loaded.Databases.Max(d => d.Name.Length) + 2;
-            var page = new MenuPage(Crumb(FieldName(SettingsField.SqliteDatabasesOffered)), loaded.Databases.Select(d => SqliteOfferedRow(d, on.Contains(d.Name), width)).ToList(), ToggleKeys) { SpaceToggles = true };
-            var picked = await PickChecklistAsync(page, Math.Min(cursor, loaded.Databases.Count - 1), cancellationToken).ConfigureAwait(false);
+            var databases = ByName(loaded.Databases, d => d.Name);   // A to Z (2026-10-11, the user's ask)
+            int width = databases.Max(d => d.Name.Length) + 2;
+            var page = new MenuPage(Crumb(FieldName(SettingsField.SqliteDatabasesOffered)), databases.Select(d => SqliteOfferedRow(d, on.Contains(d.Name), width)).ToList(), ToggleKeys) { SpaceToggles = true };
+            var picked = await PickChecklistAsync(page, Math.Min(cursor, databases.Count - 1), cancellationToken).ConfigureAwait(false);
             if (picked is not { } pick)
             {
                 if (!changed)
@@ -159,10 +160,10 @@ internal sealed partial class SettingsMenu
             }
 
             cursor = pick.Row;
-            string name = loaded.Databases[pick.Row].Name;
-            var next = pick.Button == SelectAllIndex ? loaded.Databases.Select(d => d.Name).ToList()
+            string name = databases[pick.Row].Name;
+            var next = pick.Button == SelectAllIndex ? databases.Select(d => d.Name).ToList()
                 : pick.Button == SelectNoneIndex ? []
-                : loaded.Databases.Select(d => d.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
+                : databases.Select(d => d.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
             if (next.Count == on.Count && next.All(on.Contains))
             {
                 continue;
