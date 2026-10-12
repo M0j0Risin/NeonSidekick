@@ -5071,7 +5071,7 @@ internal sealed partial class ChatScreen
     {
         var effective = _effective();
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
-        _interpreters.Refresh();
+        _interpreters.Revalidate();
         var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), images: _imageTools, imagesEnabled: effective.ImageTools, sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres), youTube: _youTubeTools, youTubeEnabled: YouTubeOffered(effective, _youTubeTools), youTubeKey: YouTube.YouTubeDataApi.Key(effective) is not null, shopping: _shoppingTools, shoppingEnabled: ShoppingOffered(effective));
         return groups.Where(g => g.Switch is not (SettingsField.MemoryMode or SettingsField.AgentSkills or SettingsField.ComfyTools)).ToList();
     }
@@ -13830,8 +13830,8 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        // The shells found are probed afresh, as a main-chat turn's (2026-09-21).
-        _interpreters.Refresh();
+        // The shells found are checked, as a main-chat turn's (2026-09-21; revalidated, not walked again, since 2026-10-12).
+        _interpreters.Revalidate();
         var inputs = TurnInputs(effective) with
         {
             Memory = [],
@@ -14985,14 +14985,15 @@ internal sealed partial class ChatScreen
         bool styled = StyledReply(effective.TranscriptMarkdown, _pane.Enabled);
         // The reply's glyph (2026-10-10): the profile's avatar, or the dot for a /botchat bot, whose speaker line says who it is.
         string glyph = bot is null ? TranscriptRenderer.GlyphFor(effective.Avatar) : TranscriptRenderer.AssistantGlyph;
-        // The shells found are probed afresh per turn (2026-09-21): an install during the session shows without a restart, and the schema and the run agree.
+        // The shells found are checked per turn (2026-09-21), so the schema and the run agree: since 2026-10-12 the cache is revalidated, not
+        // walked again (Interpreters.Revalidate); /tools opening walks the PATH afresh, so an install during the session still shows.
         // The picture budget (2026-10-03), a bot's turn too: read at each turn, so an edit lands at the next request.
         assistant.PictureBudget = new PictureBudget(effective.LlmPictureKeep, effective.LlmPictureMegabytes);
 
         // A /botchat turn's prompt and tool list are its own, set by HandleBotChatAsync (BotChat.TurnTools).
         if (bot is null)
         {
-            _interpreters.Refresh();
+            _interpreters.Revalidate();
             // A photo declined in the last turn may be asked for again in this one (2026-10-02); a screenshot too (2026-10-04).
             _cameraDeclined = false;
             _screenDeclined = false;

@@ -70,8 +70,9 @@ public static class InterpreterProbe
 /// Where the shells (and, from phase C, the script interpreters) are on this machine (2026-09-21):
 /// one probe per kind over the PATH read through the one environment door
 /// (<see cref="Settings.EnvironmentOverrides.System"/>), cached until <see cref="Refresh"/> — the
-/// screen refreshes before each turn and when <c>/tools</c> opens, so an install during the session
-/// shows without a restart, and a turn's schema and its run agree. <c>cmd.exe</c> and Windows
+/// screen refreshes when <c>/tools</c> opens, so an install during the session shows without a restart,
+/// and since 2026-10-12 only revalidates before each turn (<see cref="Revalidate"/>), so a turn's schema
+/// and its run still agree. <c>cmd.exe</c> and Windows
 /// PowerShell are found under <see cref="Environment.SystemDirectory"/> whatever the PATH says, so
 /// two shells are always there; <c>pwsh.exe</c> on the PATH is preferred for PowerShell; bash is
 /// the PATH's <c>bash.exe</c> that is not the WSL launcher, else Git's own folders.
@@ -92,13 +93,34 @@ public sealed class Interpreters
         _exists = exists ?? File.Exists;
     }
 
-    /// <summary>Forgets every cached path: the next <see cref="Locate"/> probes again.</summary>
+    /// <summary>Forgets every cached path: the next <see cref="Locate"/> probes again. <c>/tools</c> opening calls it.</summary>
     public void Refresh()
     {
         lock (_lock)
         {
             _shells = null;
             _languages = null;
+        }
+    }
+
+    /// <summary>
+    /// The turn's check (2026-10-12, the shell review: a turn called <see cref="Refresh"/>, and the walk it caused — every PATH folder
+    /// with every PATHEXT extension for each name, about 2,400 file checks and 50 ms on the user's machine — ran before every turn and
+    /// every bot's): the cached paths are kept while each found one is still there, and the whole cache forgotten when one is gone
+    /// (an uninstall). The PATH is the process's own and cannot change while it runs, so what a full walk could still find is an
+    /// interpreter dropped into a folder already on it; <c>/tools</c> opening walks again for that (<see cref="Refresh"/>).
+    /// </summary>
+    public void Revalidate()
+    {
+        lock (_lock)
+        {
+            bool gone = (_shells?.Values ?? Enumerable.Empty<string?>()).Concat(_languages?.Values ?? Enumerable.Empty<string?>())
+                .Any(path => path is not null && !_exists(path));
+            if (gone)
+            {
+                _shells = null;
+                _languages = null;
+            }
         }
     }
 

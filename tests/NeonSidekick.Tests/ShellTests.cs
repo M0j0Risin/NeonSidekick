@@ -354,6 +354,20 @@ public sealed class ShellTests
         counted.Locate(ShellKind.Bash);
         Assert.Equal(once * 2, probes);
 
+        // The turn's revalidation (2026-10-12): no walk while every found path is still there; the whole cache forgotten when one is gone.
+        files.Add(@"C:\Program Files\Git\bin\bash.exe");
+        int walks = 0;
+        var watched = new Interpreters(name => { walks++; return name switch { "PATH" => @"C:\pwsh", "ProgramFiles" => @"C:\Program Files", _ => null }; }, files.Contains);
+        Assert.NotNull(watched.Locate(ShellKind.Bash));
+        int first = walks;
+        watched.Revalidate();
+        watched.Locate(ShellKind.Bash);
+        Assert.Equal(first, walks);
+        files.Remove(@"C:\Program Files\Git\bin\bash.exe");
+        watched.Revalidate();
+        Assert.Null(watched.Locate(ShellKind.Bash));   // uninstalled: walked again, not found
+        Assert.True(walks > first);
+
         Assert.Equal([@"C:\PF64\Git\bin\bash.exe", @"C:\PF64\Git\usr\bin\bash.exe", @"C:\PF\Git\bin\bash.exe", @"C:\PF\Git\usr\bin\bash.exe", @"C:\Local\Programs\Git\bin\bash.exe", @"C:\Local\Programs\Git\usr\bin\bash.exe"],
             Interpreters.GitBashCandidates(@"C:\PF", @"C:\PF64", @"C:\Local"));
     }
