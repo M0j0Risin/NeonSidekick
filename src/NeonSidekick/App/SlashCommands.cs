@@ -89,7 +89,7 @@ public enum SlashCommand
     /// <c>/homebar [on|off|edit]</c> (2026-10-12, the user's ask: a bar of Home Assistant rooms and devices under the performance
     /// bar): bare, the home bar hidden, or shown again with the items it last had (the picker opens when it never had any);
     /// <c>on</c>/<c>off</c> say which; <c>edit</c> opens the picker. <c>tap &lt;item&gt;</c> and <c>show &lt;item&gt;</c> are the bar's
-    /// own clicks (a confirm, a chip's pane), the lines a click makes. Ctrl+Alt+W.
+    /// own clicks (a confirm, a chip's pane), the lines a click makes. <c>name &lt;item&gt; = &lt;alias&gt;</c> labels an item's chip. Ctrl+W (Ctrl+Alt+W until later that day).
     /// </summary>
     HomeBar,
 

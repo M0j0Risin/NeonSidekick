@@ -121,7 +121,8 @@ public sealed class HomeBarTests
         Assert.Equal(HomeChips.LightGlyph, chip.Glyph);
         Assert.Equal("Den Lamp", chip.Name);
         Assert.Equal("Lamp", chip.Short);   // the area's name dropped
-        Assert.Equal("80%", chip.Value);
+        Assert.Equal("", chip.Value);   // no brightness on the chip (the user's call: it changed the widths)
+        Assert.StartsWith("Den Lamp: on 80%", chip.Note, StringComparison.Ordinal);   // the note keeps it
         Assert.Equal(new Color(255, 200, 0), chip.Style.Background);
         Assert.Equal(Color.Black, chip.Style.Foreground);   // a light slab reads in black
         Assert.Equal(HomeChipAction.Call, chip.Action);
@@ -194,6 +195,23 @@ public sealed class HomeBarTests
         Assert.Null(chip.Call);
         Assert.Equal("home", chip.Value);
         Assert.Contains("needs a code", chip.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AZone_ShowsHowManyPeopleItHolds_DimWhenEmpty_AndOpensItsPane()
+    {
+        var home = HomeChips.Build("entity:zone.home", Entities(Entity("zone.home", "2", """{"friendly_name":"Home"}""")), null, HomeChipMark.None, false);
+        Assert.Equal(HomeChips.ZoneGlyph, home.Glyph);
+        Assert.Equal("2", home.Value);
+        Assert.Equal(new Style(Theme.Ink), home.Style);
+        Assert.Equal(HomeChipAction.Detail, home.Action);
+        Assert.Null(home.Call);
+        Assert.Equal(HomeBarText.ZoneNote("Home", 2), home.Note);
+
+        var work = HomeChips.Build("entity:zone.work", Entities(Entity("zone.work", "0")), null, HomeChipMark.None, false);
+        Assert.Equal("0", work.Value);
+        Assert.Equal(Theme.ToolbarOff, work.Style);
+        Assert.Empty(ChatScreen.HomeActions(Entity("zone.work", "0")));
     }
 
     [Fact]
@@ -338,11 +356,12 @@ public sealed class HomeBarTests
     // ─── keys and the pane ──────────────────────────────────────────────────────
 
     [Fact]
-    public void CtrlAltW_IsTheHomeBar_InBothSpellings()
+    public void CtrlW_IsTheHomeBar_InBothSpellings_AndCtrlAltW_IsNothingNow()
     {
-        Assert.Equal("/homebar", Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.W, shift: false, alt: true, control: true)));
-        Assert.Equal("/homebar", Keys.ShortcutLine(new ConsoleKeyInfo('\x17', ConsoleKey.W, shift: false, alt: true, control: true)));
-        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\x17', ConsoleKey.W, shift: false, alt: false, control: true)));
+        Assert.Equal("/homebar", Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.W, shift: false, alt: false, control: true)));
+        Assert.Equal("/homebar", Keys.ShortcutLine(new ConsoleKeyInfo('\x17', ConsoleKey.W, shift: false, alt: false, control: true)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\x17', ConsoleKey.W, shift: false, alt: true, control: true)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('w', ConsoleKey.W, shift: false, alt: false, control: false)));
     }
 
     [Theory]
@@ -400,6 +419,61 @@ public sealed class HomeBarTests
         Assert.Equal("2/5", HomeBarText.Count(2, 5));
         Assert.Equal("19→21°", HomeBarText.ClimateValue("19", "21"));
         Assert.Equal("home", HomeBarText.AlarmWord("armed_home"));
-        Assert.Equal("Usage: /homebar [on|off|edit] — show or hide the home bar, or choose what is on it", HomeBarText.Usage);
+        Assert.Equal("Usage: /homebar [on|off|edit|name <item> = <alias>] — show or hide the home bar, choose what is on it, or rename an item on it", HomeBarText.Usage);
+        Assert.Equal("The home bar shows Den PC Monitor as \"PC\"", HomeBarText.Renamed("Den PC Monitor", "PC"));
+        Assert.Equal("The home bar shows Den PC Monitor by its own name again", HomeBarText.Unnamed("Den PC Monitor"));
+    }
+
+    // ─── aliases ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Rename_SetsReplacesAndClears_OnABlankOrTheOwnName()
+    {
+        var one = HomeBarItems.Rename(null, "entity:Light.Den_PC", " PC ", "Den PC Monitor")!;
+        Assert.Equal("PC", one["entity:light.den_pc"]);
+        Assert.Equal("PC", HomeBarItems.AliasOf(one, "ENTITY:light.den_pc"));
+
+        var two = HomeBarItems.Rename(one, "area:den", "Office", "Den")!;
+        Assert.Equal(2, two.Count);
+        Assert.Equal("Screen", HomeBarItems.Rename(two, "entity:light.den_pc", "Screen", "Den PC Monitor")!["entity:light.den_pc"]);
+
+        Assert.Null(HomeBarItems.AliasOf(HomeBarItems.Rename(two, "entity:light.den_pc", "  ", "Den PC Monitor"), "entity:light.den_pc"));
+        Assert.Null(HomeBarItems.Rename(one, "entity:light.den_pc", "den pc monitor", "Den PC Monitor"));   // the own name, any case: none left
+        Assert.Null(HomeBarItems.AliasOf(null, "entity:light.den_pc"));
+        Assert.Equal(one, HomeBarItems.Rename(one, "bogus", "X", "Y"));
+    }
+
+    [Fact]
+    public void Find_TakesTheReference_TheAlias_TheName_OrTheId()
+    {
+        string[] items = ["area:den", "entity:light.den_lamp", "entity:light.den_spot"];
+        var aliases = new Dictionary<string, string> { ["entity:light.den_spot"] = "Spot" };
+        var catalog = new HaCatalog([], [new HaAreaEntry("den", "Den", null)], [], [], [], [new HaEntity("light.den_lamp", "Den Lamp", "on", null, default, null), new HaEntity("light.den_spot", "Den Spot", "on", null, default, null)]);
+
+        Assert.Equal("entity:light.den_lamp", HomeBarItems.Find(items, "entity:light.den_lamp", catalog, aliases));
+        Assert.Equal("entity:light.den_spot", HomeBarItems.Find(items, "spot", catalog, aliases));
+        Assert.Equal("entity:light.den_lamp", HomeBarItems.Find(items, "Den Lamp", catalog, aliases));
+        Assert.Equal("area:den", HomeBarItems.Find(items, "den", catalog, aliases));
+        Assert.Null(HomeBarItems.Find(items, "entity:light.kitchen", catalog, aliases));
+        Assert.Null(HomeBarItems.Find(items, " ", catalog, aliases));
+    }
+
+    [Fact]
+    public void AnAlias_IsTheChipsLabelAndShortName_TheNoteKeepsTheName()
+    {
+        var monitor = Entity("light.den_pc_monitor", "on", """{"friendly_name":"Den PC Monitor"}""");
+        var aliases = new Dictionary<string, string> { ["entity:light.den_pc_monitor"] = "PC" };
+        var chip = HomeChips.Build("entity:light.den_pc_monitor", Entities(monitor), Catalog(), HomeChipMark.None, stale: false, aliases);
+
+        Assert.Equal("PC", chip.Label);
+        Assert.Equal("PC", chip.Short);
+        Assert.Equal("Den PC Monitor", chip.Name);
+        Assert.StartsWith("Den PC Monitor: on", chip.Note, StringComparison.Ordinal);
+        Assert.Contains(" PC ", HomeBar.ChipText(chip, HomeBar.Fit.Full), StringComparison.Ordinal);
+        Assert.DoesNotContain("Monitor", HomeBar.ChipText(chip, HomeBar.Fit.Full), StringComparison.Ordinal);
+
+        var plain = HomeChips.Build("entity:light.den_pc_monitor", Entities(monitor), Catalog(), HomeChipMark.None, stale: false);
+        Assert.Null(plain.Label);
+        Assert.Contains("Den PC Monitor", HomeBar.ChipText(plain, HomeBar.Fit.Full), StringComparison.Ordinal);
     }
 }

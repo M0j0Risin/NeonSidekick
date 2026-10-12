@@ -32,7 +32,8 @@ public enum HomeChipMark
 /// <summary>
 /// One chip as the bar draws it and a click reads it: its reference, glyph, name (whole, and the short one a narrow bar uses),
 /// value, look (a slab — a coloured background — or plain text), what a double-click does (and the call it makes), and the
-/// one-line note a single click shows.
+/// one-line note a single click shows. <see cref="Label"/> is the user's alias for it (2026-10-12): what the bar draws in place
+/// of <see cref="Name"/>, which the note, the pane and the calls' outcomes keep.
 /// </summary>
 public sealed record HomeChip(
     string Reference,
@@ -44,7 +45,8 @@ public sealed record HomeChip(
     HomeChipAction Action,
     HaServiceCall? Call,
     string Note,
-    HomeChipMark Mark = HomeChipMark.None);
+    HomeChipMark Mark = HomeChipMark.None,
+    string? Label = null);
 
 /// <summary>
 /// The home bar's chips, kind by kind (2026-10-12, the user's ask; the looks and the clicks agreed in the plan): what each
@@ -86,13 +88,14 @@ public static class HomeChips
     public const string LockedGlyph = "🔒";
     public const string UnlockedGlyph = "🔓";
     public const string AlarmGlyph = "🚨";
+    public const string ZoneGlyph = "📍";
 
     /// <summary>Every glyph, for the width test.</summary>
     public static readonly string[] Glyphs =
     [
         AreaGlyph, LightGlyph, SwitchGlyph, ToggleGlyph, FanGlyph, SensorGlyph, HumidityGlyph, BatteryGlyph, PowerGlyph, LightLevelGlyph,
         DoorGlyph, WindowGlyph, GarageGlyph, GateGlyph, MotionGlyph, SmokeGlyph, CoolGlyph, IdleGlyph, TvGlyph, SpeakerGlyph,
-        MediaGlyph, SceneGlyph, ScriptGlyph, LockedGlyph, UnlockedGlyph, AlarmGlyph,
+        MediaGlyph, SceneGlyph, ScriptGlyph, LockedGlyph, UnlockedGlyph, AlarmGlyph, ZoneGlyph,
     ];
 
     /// <summary>The short name's widest, in cells.</summary>
@@ -106,9 +109,10 @@ public static class HomeChips
 
     /// <summary>
     /// The chip for <paramref name="reference"/> from the live entities and the registries; <paramref name="stale"/> while the
-    /// feed is not live. An item whose entity has not arrived yet is a dim chip with its catalog name and no action.
+    /// feed is not live. An item whose entity has not arrived yet is a dim chip with its catalog name and no action. An alias in
+    /// <paramref name="aliases"/> (<see cref="HomeBarItems.AliasOf"/>) is the chip's <see cref="HomeChip.Label"/> and its short name.
     /// </summary>
-    public static HomeChip Build(string reference, IReadOnlyDictionary<string, HaLiveEntity> entities, HaCatalog? catalog, HomeChipMark mark, bool stale)
+    public static HomeChip Build(string reference, IReadOnlyDictionary<string, HaLiveEntity> entities, HaCatalog? catalog, HomeChipMark mark, bool stale, IReadOnlyDictionary<string, string>? aliases = null)
     {
         ArgumentNullException.ThrowIfNull(reference);
         ArgumentNullException.ThrowIfNull(entities);
@@ -121,6 +125,11 @@ public static class HomeChips
             ? AreaChip(reference, id, entities, catalog)
             : entities.TryGetValue(id, out var entity) ? EntityChip(reference, entity, catalog) : Waiting(reference, GlyphFor(id, null), catalog?.NameOf(id) ?? id, mark);
         chip = chip with { Mark = mark };
+        if (HomeBarItems.AliasOf(aliases, reference) is { } alias)
+        {
+            chip = chip with { Label = alias, Short = Clip(alias, ShortCells) };
+        }
+
         return stale ? chip with { Style = Theme.DimText } : chip;
     }
 
@@ -166,10 +175,12 @@ public static class HomeChips
         {
             case "light":
             {
+                // No brightness on the chip (2026-10-12, the user's call: it made the chips' widths change; the slab's colour says
+                // it is on). The click's note still gives it.
                 bool on = state == "on";
-                string value = on && entity.Number("brightness") is { } b ? Percent(b / 255 * 100) : "";
+                string brightness = on && entity.Number("brightness") is { } b ? Percent(b / 255 * 100) : "";
                 var style = on ? Slab(LightTint(entity) ?? Theme.Highlight) : Theme.ToolbarOff;
-                return Toggle(reference, glyph, name, shortName, value, style, HaServiceCall.On("light", "toggle", id), on);
+                return Toggle(reference, glyph, name, shortName, "", style, HaServiceCall.On("light", "toggle", id), on) with { Note = HomeBarText.ToggleNote(name, on, brightness) };
             }
 
             case "switch" or "input_boolean":
@@ -265,6 +276,14 @@ public static class HomeChips
                 return new HomeChip(reference, glyph, name, shortName, value, style, HomeChipAction.Detail, null, HomeBarText.ValueNote(name, value));
             }
 
+            case "zone":
+            {
+                // A zone's state is how many people Home Assistant places in it (2026-10-12, the Zones tab): the count, lit while anyone is there.
+                int people = int.TryParse(state, NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) ? Math.Max(0, n) : 0;
+                string value = people.ToString(CultureInfo.InvariantCulture);
+                return new HomeChip(reference, glyph, name, shortName, value, people > 0 ? new Style(Theme.Ink) : Theme.ToolbarOff, HomeChipAction.Detail, null, HomeBarText.ZoneNote(name, people));
+            }
+
             case "climate":
             {
                 string action = entity.Text("hvac_action") ?? "";
@@ -302,6 +321,7 @@ public static class HomeChips
             "script" => ScriptGlyph,
             "lock" => entity?.State == "locked" ? LockedGlyph : entity is null ? LockedGlyph : UnlockedGlyph,
             "alarm_control_panel" => AlarmGlyph,
+            "zone" => ZoneGlyph,
             "media_player" => deviceClass == "tv" ? TvGlyph : deviceClass is "speaker" or "receiver" ? SpeakerGlyph : MediaGlyph,
             "climate" => entity?.Text("hvac_action") switch { "heating" => HeatGlyph, "cooling" => CoolGlyph, _ => IdleGlyph },
             "cover" => deviceClass switch { "garage" => GarageGlyph, "gate" => GateGlyph, "door" => DoorGlyph, _ => WindowGlyph },

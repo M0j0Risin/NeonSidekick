@@ -11533,7 +11533,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 54)]   // Ctrl+Alt+W (the home bar) on 2026-10-12; Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
+    [InlineData(false, false, 54)]   // Ctrl+W (the home bar; Ctrl+Alt+W for a few hours) on 2026-10-12; Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
     [InlineData(true, false, 55)]
     [InlineData(true, true, 56)]   // the word moves and deletes joined (2026-10-04)
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
@@ -11596,9 +11596,10 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+S", "open the server picker", "/server"),
             new("Ctrl+T", "show or hide the toolbar", "/toolbar"),   // from Ctrl+Alt+B
             new("Ctrl+U", "open the usage pane", "/usage"),   // from Ctrl+Alt+G
+            new("Ctrl+W", "show or hide the home bar", "/homebar"),   // 2026-10-12, the user's pick (Ctrl+Alt+W for a few hours)
             new("Ctrl+Y", "open the system prompt pane", "/sys"),   // from Ctrl+Alt+Y on 2026-10-03, the user's ask
             new("Ctrl+Z", "open the theme picker", "/theme"),   // 2026-10-04, the user's ask
-        ], rows[^38..^20]);
+        ], rows[^38..^19]);
 
         // The command chords after them (2026-09-30), one block A to Z by the letter since the pane chords joined later that day.
         Assert.Equal(
@@ -11621,9 +11622,8 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+Alt+T", "open the tools pane", "/tools"),
             new("Ctrl+Alt+U", "show or hide the ComfyUI picture viewer", "/comfy view"),   // 2026-10-02, the user's ask
             new("Ctrl+Alt+V", "show or hide the camera's live view", "/camera live"),   // 2026-10-02, the user's ask
-            new("Ctrl+Alt+W", "show or hide the home bar", "/homebar"),   // 2026-10-12, the user's pick
             new("Ctrl+Alt+X", "unload the embedded model at once (press twice)"),   // 2026-10-01, the user's place
-        ], rows[^20..]);
+        ], rows[^19..]);
 
         // Every chord's command is the one it runs, and a row with none runs none: Ctrl+L (the learning's cancel, 2026-10-04) and
         // the kill switch (2026-10-01). The ESC ESC and wake rows name a command they do not type for you.
@@ -11644,6 +11644,7 @@ public partial class ChatScreenTests : IDisposable
             ["Ctrl+S"] = Keys.CtrlS,
             ["Ctrl+T"] = Keys.CtrlT,
             ["Ctrl+U"] = Keys.CtrlU,
+            ["Ctrl+W"] = Keys.Ctrl(ConsoleKey.W),
             ["Ctrl+Y"] = Keys.Ctrl(ConsoleKey.Y),
             ["Ctrl+Z"] = Keys.Ctrl(ConsoleKey.Z),
         };

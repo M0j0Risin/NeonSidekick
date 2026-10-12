@@ -239,6 +239,62 @@ public static class HomeBarItems
         return catalog is null ? Readable(id) : catalog.NameOf(id);
     }
 
+    /// <summary>
+    /// The alias the chip of <paramref name="reference"/> shows instead of its name (2026-10-12, the user's ask: "Den PC Monitor"
+    /// as "PC"; <see cref="Settings.AppSettingsData.HomeBarAliases"/>), trimmed; null for none. Pure.
+    /// </summary>
+    public static string? AliasOf(IReadOnlyDictionary<string, string>? aliases, string reference) =>
+        aliases is not null && Normalize(reference) is { } r && aliases.TryGetValue(r, out string? alias) && alias?.Trim() is { Length: > 0 } trimmed ? trimmed : null;
+
+    /// <summary>
+    /// <paramref name="aliases"/> with <paramref name="reference"/>'s alias set to <paramref name="alias"/>, or taken out when it is
+    /// blank or the item's own <paramref name="name"/> (any case); null when none is left, as the setting's default. A malformed
+    /// reference changes nothing. Pure.
+    /// </summary>
+    public static Dictionary<string, string>? Rename(IReadOnlyDictionary<string, string>? aliases, string reference, string? alias, string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        var next = aliases is null ? new Dictionary<string, string>(StringComparer.Ordinal) : new Dictionary<string, string>(aliases, StringComparer.Ordinal);
+        if (Normalize(reference) is { } r)
+        {
+            string text = alias?.Trim() ?? "";
+            if (text.Length == 0 || string.Equals(text, name.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                next.Remove(r);
+            }
+            else
+            {
+                next[r] = text;
+            }
+        }
+
+        return next.Count > 0 ? next : null;
+    }
+
+    /// <summary>
+    /// The item of <paramref name="items"/> that <paramref name="item"/> names (<c>/homebar name</c>, <c>tap</c>, <c>show</c>): its
+    /// reference, its alias, its name or its bare id, in that order, any case; null for none. Pure.
+    /// </summary>
+    public static string? Find(IReadOnlyList<string> items, string item, HaCatalog? catalog, IReadOnlyDictionary<string, string>? aliases)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        ArgumentNullException.ThrowIfNull(item);
+        string text = item.Trim();
+        if (text.Length == 0)
+        {
+            return null;
+        }
+
+        if (Normalize(text) is { } reference && items.Contains(reference, StringComparer.Ordinal))
+        {
+            return reference;
+        }
+
+        return items.FirstOrDefault(i => string.Equals(AliasOf(aliases, i), text, StringComparison.OrdinalIgnoreCase))
+            ?? items.FirstOrDefault(i => string.Equals(NameOf(i, catalog), text, StringComparison.OrdinalIgnoreCase))
+            ?? items.FirstOrDefault(i => TryParse(i, out _, out string id) && string.Equals(id, text, StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>An id as words, for where no names are at hand (the settings row): <c>light.desk_lamp</c> → <c>desk lamp</c>, <c>living_room</c> → <c>living room</c>. Pure.</summary>
     public static string Readable(string id)
     {

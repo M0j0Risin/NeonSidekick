@@ -90,7 +90,9 @@ internal sealed partial class ChatScreen
         HomeRow? row;
         lock (_homeGate)
         {
-            string key = string.Join('\n', items);
+            // The items with their aliases (2026-10-12): a rename redraws at once, as an added item does.
+            var aliases = effective.HomeBarAliases;
+            string key = string.Join('\n', items.Select(i => HomeBarItems.AliasOf(aliases, i) is { } alias ? i + "=" + alias : i));
             var cache = _homeCache;
             bool sameItems = cache is not null && string.Equals(cache.ItemsKey, key, StringComparison.Ordinal) && cache.Model == _homeModel;
             var ids = sameItems && ReferenceEquals(cache!.Catalog, live.Catalog) ? cache.Ids : HomeIds(items, live.Catalog);
@@ -110,7 +112,7 @@ internal sealed partial class ChatScreen
             UpdateHomePending(live, now);
             var status = live.Status == HaLiveStatus.Off && live.Error is null ? HaLiveStatus.Connecting : live.Status;
             bool stale = live.Status != HaLiveStatus.Live;
-            var chips = items.Select(i => HomeChips.Build(i, live.Entities, live.Catalog, HomeMarkOf(i), stale)).ToList();
+            var chips = items.Select(i => HomeChips.Build(i, live.Entities, live.Catalog, HomeMarkOf(i), stale, aliases)).ToList();
             row = HomeBar.Render(chips, status, cells, _homePage);
             if (row is not null && _homePage >= row.Pages)
             {
@@ -331,7 +333,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/homebar …</c> where a pane may open (the idle line; under a reply on the watcher): a toggle (the picker when nothing
-    /// was ever picked), <c>edit</c> the picker, <c>tap</c> a chip's double-click that asks first, <c>show</c> its pane.
+    /// was ever picked), <c>edit</c> the picker, <c>tap</c> a chip's double-click that asks first, <c>show</c> its pane, <c>name</c>
+    /// an item's alias (<see cref="HomeRename"/>).
     /// </summary>
     private async Task HandleHomeBarAsync(string args, INoticeSink sink, CancellationToken cancellationToken)
     {
@@ -359,6 +362,9 @@ internal sealed partial class ChatScreen
             case HomeBarText.ShowWord when rest.Length > 0:
                 await HomeShowAsync(rest, sink, cancellationToken).ConfigureAwait(false);
                 break;
+            case HomeBarText.NameWord when rest.Contains('=', StringComparison.Ordinal):
+                HomeRename(rest, sink);
+                break;
             default:
                 sink.Error(HomeBarText.Usage);
                 break;
@@ -381,7 +387,31 @@ internal sealed partial class ChatScreen
 
         string? reference = HomeBarItems.Normalize(item);
         return cache.Chips.FirstOrDefault(c => string.Equals(c.Reference, reference, StringComparison.Ordinal))
+            ?? cache.Chips.FirstOrDefault(c => string.Equals(c.Label, item.Trim(), StringComparison.OrdinalIgnoreCase))
             ?? cache.Chips.FirstOrDefault(c => string.Equals(c.Name, item.Trim(), StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// <c>/homebar name &lt;item&gt; = &lt;alias&gt;</c> (2026-10-12, the user's ask): the chip of an item on the bar (its reference,
+    /// alias, name or id, <see cref="HomeBarItems.Find"/>) labelled <c>alias</c>; blank, or the item's own name, takes the alias off.
+    /// </summary>
+    private void HomeRename(string rest, INoticeSink sink)
+    {
+        int equals = rest.IndexOf('=', StringComparison.Ordinal);
+        string item = rest[..equals].Trim();
+        string alias = rest[(equals + 1)..].Trim();
+        var saved = _settings.Current;
+        var catalog = _homeLive.Snapshot.Catalog;
+        if (HomeBarItems.Find(HomeBarItems.Resolve(saved.HomeBarItems), item, catalog, saved.HomeBarAliases) is not { } reference)
+        {
+            sink.Error(HomeBarText.NotOnBar(item));
+            return;
+        }
+
+        string name = HomeBarItems.NameOf(reference, catalog);
+        var next = HomeBarItems.Rename(saved.HomeBarAliases, reference, alias, name);
+        _settings.Update(d => d.HomeBarAliases = next);
+        sink.Notice(HomeBarItems.AliasOf(next, reference) is { } shown ? HomeBarText.Renamed(name, shown) : HomeBarText.Unnamed(name));
     }
 
     /// <summary><c>/homebar tap &lt;item&gt;</c>: the chip's double-click — a call, or the Yes/No first for an unlock, a guarded opening, a disarm.</summary>
@@ -484,7 +514,10 @@ internal sealed partial class ChatScreen
     }
 
     // A room's pane: all its lights on or off, then each device (Space or Enter switches one; a lock or a guarded cover asks).
-    // Its devices are kept current while it is open, and the list is shown again after each switch.
+    // Its devices are kept current while it is open, and the list (and the title's count) is drawn again whenever a state it shows
+    // changes (2026-10-12, the user's report: a light turned on from its own page still read off back on the room's list — a call
+    // runs in the background, so the pass after it was built before Home Assistant's answer came). A watcher compares the live
+    // states with the drawn ones each tick (HomeRoomKey) and ends the wait for a key, the cursor kept, when they differ.
     private async Task HomeRoomAsync(HomeChip chip, string areaId, CancellationToken cancellationToken)
     {
         var catalog = _homeLive.Snapshot.Catalog;
@@ -511,9 +544,40 @@ internal sealed partial class ChatScreen
                     rows.Add(Markup.Escape(glyph + " " + (entity?.Name ?? catalog!.NameOf(id))) + Theme.DimMarkup("  " + HomeBarText.StateWord(entity?.State ?? "…")));
                 }
 
-                var page = new MenuPage(HomeBarText.DetailTitle(chip.Name, chip.Value), rows, HomeBarText.RoomKeys) { SpaceToggles = true };
-                if (await _menuPane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
+                string value = HomeChips.Build(chip.Reference, entities, catalog, HomeChipMark.None, stale: false).Value;
+                string drawn = HomeRoomKey(members, entities, value);
+                var page = new MenuPage(HomeBarText.DetailTitle(chip.Name, value), rows, HomeBarText.RoomKeys) { SpaceToggles = true };
+                MenuPick? picked;
+                bool redraw;
+                using (var watch = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
                 {
+                    var watcher = WatchHomeRoomAsync(chip.Reference, members, catalog, drawn, watch);
+                    try
+                    {
+                        // The key read answers a cancellation with null (KeySource's contract), so the pick ends as on ESC; the
+                        // watcher's own cancellation, not the caller's, tells a change from the user leaving.
+                        picked = await _menuPane.PickAsync(page, cursor, watch.Token, row => cursor = row).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        picked = null;
+                    }
+                    finally
+                    {
+                        redraw = watch.IsCancellationRequested && !cancellationToken.IsCancellationRequested;
+                        await watch.CancelAsync().ConfigureAwait(false);
+                        await watcher.ConfigureAwait(false);
+                    }
+                }
+
+                if (picked is not { } pick)
+                {
+                    if (redraw && !_pane.Dismissed)
+                    {
+                        // A state it shows changed: drawn again at the same row.
+                        continue;
+                    }
+
                     return;
                 }
 
@@ -563,6 +627,43 @@ internal sealed partial class ChatScreen
                 _homeModel++;
             }
         }
+    }
+
+    // The room pane's watcher: each tick, the live states against the drawn ones; a difference cancels the pane's wait. Never throws.
+    private async Task WatchHomeRoomAsync(string reference, IReadOnlyList<string> members, HaCatalog? catalog, string drawn, CancellationTokenSource watch)
+    {
+        try
+        {
+            while (true)
+            {
+                await Task.Delay(ScreenPane.Tick, _time, watch.Token).ConfigureAwait(false);
+                var entities = _homeLive.Snapshot.Entities;
+                string value = HomeChips.Build(reference, entities, catalog, HomeChipMark.None, stale: false).Value;
+                if (!string.Equals(HomeRoomKey(members, entities, value), drawn, StringComparison.Ordinal))
+                {
+                    await watch.CancelAsync().ConfigureAwait(false);
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The pane's pick ended first.
+        }
+    }
+
+    /// <summary>What a room's pane shows of the live states: each member's state in order, then the title's count. Pure.</summary>
+    internal static string HomeRoomKey(IReadOnlyList<string> members, IReadOnlyDictionary<string, HaLiveEntity> entities, string value)
+    {
+        ArgumentNullException.ThrowIfNull(members);
+        ArgumentNullException.ThrowIfNull(entities);
+        var key = new System.Text.StringBuilder(value);
+        foreach (string id in members)
+        {
+            key.Append('\n').Append(entities.GetValueOrDefault(id)?.State ?? "…");
+        }
+
+        return key.ToString();
     }
 
     /// <summary>

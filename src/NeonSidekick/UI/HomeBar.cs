@@ -94,7 +94,7 @@ public static class HomeBar
         var text = new StringBuilder(" ").Append(chip.Glyph);
         string name = fit switch
         {
-            Fit.Full => chip.Name,
+            Fit.Full => chip.Label ?? chip.Name,
             Fit.Short => chip.Short,
             _ => "",
         };

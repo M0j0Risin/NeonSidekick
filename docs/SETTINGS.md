@@ -54,6 +54,7 @@ Each shortcut runs its command as if typed; a draft on the row stays.
 | Ctrl+S | `/server` | waits for the reply |
 | Ctrl+T | `/toolbar` (toolbar on/off) | at once |
 | Ctrl+U | `/usage` | opens over the reply |
+| Ctrl+W | `/homebar` (home bar on/off) | at once |
 | Ctrl+Y | `/sys` | opens over the reply |
 | Ctrl+Z | `/theme` | waits for the reply |
 | Ctrl+Alt+B | `/botchat --resume`: carries on the last botchat | during a botchat, ends it at once; otherwise waits for the reply |
@@ -74,12 +75,11 @@ Each shortcut runs its command as if typed; a draft on the row stays.
 | Ctrl+Alt+G | `/log`: opens or closes the log window | at once |
 | Ctrl+Alt+U | `/comfy view`: opens or closes the picture viewer | at once |
 | Ctrl+Alt+V | `/camera live`: opens or closes the camera's window | at once |
-| Ctrl+Alt+W | `/homebar` (home bar on/off) | at once |
 | Ctrl+Alt+X ×2 | unloads the embedded model (see below) | at once |
 | F9 | `/camera snap`: a photo, attached to the line | waits for the reply |
 | F10 | `/screen`: a capture of the app's monitor, attached to the line | waits for the reply |
 
-* **Inside a pane**, a shortcut closes the pane and runs, so Ctrl+Alt+S in `/tools` opens `/skills`; a pane's own shortcut just closes it. Ctrl+E, Ctrl+., Ctrl+F, Ctrl+L, Ctrl+T, Ctrl+Alt+W, the three window chords and Ctrl+Alt+X act and leave the pane open.
+* **Inside a pane**, a shortcut closes the pane and runs, so Ctrl+Alt+S in `/tools` opens `/skills`; a pane's own shortcut just closes it. Ctrl+E, Ctrl+., Ctrl+F, Ctrl+L, Ctrl+T, Ctrl+W, the three window chords and Ctrl+Alt+X act and leave the pane open.
 * **Panes that ask you something** (an approval, `ask_user`, a confirmation) ignore the shortcuts, so none can answer them by accident.
 * **Window chords** close their window when pressed again; the typed command only opens it.
 * **Ctrl+Alt+X**, pressed twice within two seconds, unloads the embedded model and frees its memory, cancelling any reply, load or botchat using it. No server is connected until you pick one with `/server`; the saved *LLM URL* is kept. With any other server it does nothing.
@@ -218,12 +218,12 @@ The app itself, this side of the connection, in three tabs: Chat, Sessions and B
 
 ##### Home bar
 
-* **What it shows**: each chip is a room or a device. A light's chip takes the light's own colour and shows its brightness; a room's counts its lights on (`2/5`); sensors show their value, thermostats current → target, players what is playing. Off is a dark slab; an open door, a leak or a low battery turns amber or red. While the connection to Home Assistant is down the chips go dim and the ⌂ at the left turns amber (retrying) or red (refused, or not set up).
+* **What it shows**: each chip is a room or a device. A light's chip takes the light's own colour (its brightness is in the click's note, so the chips keep their widths); a room's counts its lights on (`2/5`); sensors show their value, thermostats current → target, players what is playing. Off is a dark slab; an open door, a leak or a low battery turns amber or red. While the connection to Home Assistant is down the chips go dim and the ⌂ at the left turns amber (retrying) or red (refused, or not set up).
 * **Clicks**: a click shows a chip's state and what a double-click will do. A double-click acts: a light, switch or fan toggles; a room's lights go off when any is on, else on; a scene or script runs; a player plays or pauses (or turns on); a cover closes, or opens. A right-click opens the chip's pane: its actions (on, off, brightness steps, volume, open, close, stop, lock, warmer, cooler…), or for a room its devices, Space switching one and Enter opening its actions. A chip clicked shows `…` until Home Assistant reports the change, and `!` if none comes within six seconds.
 * **What asks first**: unlocking a lock, opening a garage, gate or door, and disarming an alarm ask Yes or No on the pane (the cursor on No). An alarm that wants a code is disarmed in Home Assistant itself.
-* **The picker** (Enter on *Show home bar*, `/homebar edit`, or a double-click on ⌂): **On the bar** lists the items in order. **Shift+↑/↓** or **Alt+↑/↓** move the item under the cursor a place, **Alt+Home/End** to the top or bottom, **Delete** takes it off, and Enter offers the same as a list (for a terminal that keeps those keys). Then **Rooms** (by floor), **Lights**, **Switches** (and fans), **Sensors**, **Climate**, **Media**, **Scenes** (and scripts), **Security** (locks, covers, alarms) and **Other**, each in sections by room: Space or Enter adds an item at the end of the bar or takes it off; typing filters by name, id, room or label.
+* **The picker** (Enter on *Show home bar*, `/homebar edit`, or a double-click on ⌂): **On the bar** lists the items in order. **Shift+↑/↓** move the item under the cursor a place, **Shift+Home/End** to the top or bottom, **Delete** takes it off, and Enter offers the same as a list (for a terminal that keeps those keys) plus **Rename on the bar…**: an alias the chip shows in place of Home Assistant's name ("Den PC Monitor" as "PC"; blank takes it off). The alias is the chip's label only: a click's note, the chip's pane and this row keep the real name, and the other tabs show it quoted beside the item. Then **Rooms** (by floor), **Lights**, **Switches** (and fans), **Sensors**, **Climate**, **Media**, **Scenes** (and scripts), **Security** (locks, covers, alarms), **Zones** (how many people each holds) and **Other**, each in sections by room: Space or Enter adds an item at the end of the bar or takes it off; typing filters by name, id, room or label.
 * **Live**: while the bar shows, the app keeps one WebSocket to Home Assistant, signed in with the API key and watching only the bar's devices (and an open room pane's), so a change shows at once. Hidden for 15 seconds, it closes. A dropped connection is retried after 1, 2, 4… up to 30 seconds; a refused key is not retried until the URL or the key changes.
-* The bar is drawn last, so a short window drops it before the other bars. `/homebar` or Ctrl+Alt+W hides it, or shows it again with the items it had.
+* The bar is drawn last, so a short window drops it before the other bars. `/homebar` or Ctrl+W hides it, or shows it again with the items it had.
 
 #### Sessions
 

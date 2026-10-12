@@ -117,6 +117,8 @@ public static class Keys
     /// the console reports it with no character (US's <c>'\x1f'</c> counts too, should one send it), and a typed "/" carries its
     /// character, so it stays a "/" and the slash list still opens. Oem2 is the "/" key of a US layout; elsewhere it is
     /// whatever key sits there (# on a German one), since a "/" that needs Shift cannot be told from Ctrl+Shift.
+    /// On 2026-10-12 (the user's ask) <c>/homebar</c> is plain Ctrl+W (Ctrl+Alt+W for a few hours before): its ETB counts as no
+    /// character. Windows Terminal closes a pane on Ctrl+Shift+W, not Ctrl+W, and macOS's Terminal closes a window on Cmd+W.
     /// Later still on 2026-10-01 (the user's ask) <c>/toolbar</c> moved to plain Ctrl+T and <c>/perfbar</c> to Ctrl+F, and Ctrl+Alt+B
     /// and Ctrl+Alt+E went: their DC4 and ACK count as no character. Ctrl+Alt+T is still <c>/tools</c>.
     /// Later still on 2026-10-01 (the user's ask) Ctrl+Alt+H is <c>/header</c>, free since <c>/help</c> left it for Ctrl+H: <c>Show
@@ -180,6 +182,7 @@ public static class Keys
                 (ConsoleKey.S, '\0' or '\x13') => "/server",
                 (ConsoleKey.T, '\0' or '\x14') => "/toolbar",
                 (ConsoleKey.U, '\0' or '\x15') => "/usage",
+                (ConsoleKey.W, '\0' or '\x17') => "/homebar",   // 2026-10-12, the user's pick (Ctrl+Alt+W until later that day)
                 (ConsoleKey.Y, '\0' or '\x19') => "/sys",
                 (ConsoleKey.Z, '\0' or '\x1a') => "/theme",
                 (ConsoleKey.Oem2, '\0' or '\x1f') => "/settings",
@@ -226,7 +229,6 @@ public static class Keys
             (ConsoleKey.O, '\0' or '\x0f') => "/tools shell police",
             (ConsoleKey.U, '\0' or '\x15') => "/comfy view",
             (ConsoleKey.V, '\0' or '\x16') => "/camera live",
-            (ConsoleKey.W, '\0' or '\x17') => "/homebar",   // 2026-10-12, the user's pick: the home bar, free on Windows and macOS alike
             (ConsoleKey.A, '\0' or '\x01') when OperatingSystem.IsMacOS() => "/memory",
             _ => null,
         };

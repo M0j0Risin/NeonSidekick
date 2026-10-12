@@ -1867,7 +1867,8 @@ internal sealed partial class ChatScreen
     /// <c>/toolbar</c> (Ctrl+Alt+E and B until later still that day) toggle their bar as typed — here at the idle line, posted to the turn task under a reply — and the tick
     /// repaints the pane's new shape. Ctrl+Alt+H <c>/header</c> the same (later still that day): a setting saved, nothing on the pane. Ctrl+E <c>/explore</c> the same (later on 2026-10-01): it opens a window outside the
     /// terminal, so the pane has no reason to close. Ctrl+Alt+G <c>/log</c>, Ctrl+Alt+U <c>/comfy view</c> and Ctrl+Alt+V
-    /// <c>/camera live</c> the same (2026-10-02, the user's ask): each opens a window of its own. False for every other chord:
+    /// <c>/camera live</c> the same (2026-10-02, the user's ask): each opens a window of its own. Ctrl+W <c>/homebar</c> toggles its
+    /// bar as Ctrl+F does (2026-10-12; Ctrl+Alt+W until later that day). False for every other chord:
     /// the pane closes and the screen runs it (<see cref="ScreenPane.Chord"/>, <see cref="OffPaneLine"/>).
     /// </summary>
     private bool ChordInPlace(string line)
@@ -2362,6 +2363,7 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+S", "open the server picker", "/server"));
         rows.Add(new("Ctrl+T", "show or hide the toolbar", "/toolbar"));
         rows.Add(new("Ctrl+U", "open the usage pane", "/usage"));
+        rows.Add(new("Ctrl+W", "show or hide the home bar", HomeAssistant.HomeBarText.Command));
         rows.Add(new("Ctrl+Y", "open the system prompt pane", "/sys"));
         rows.Add(new("Ctrl+Z", "open the theme picker", "/theme"));
         if (mac)
@@ -2388,7 +2390,6 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+Alt+T", "open the tools pane", "/tools"));
         rows.Add(new("Ctrl+Alt+U", "show or hide the ComfyUI picture viewer", "/comfy view"));
         rows.Add(new("Ctrl+Alt+V", "show or hide the camera's live view", "/camera live"));
-        rows.Add(new("Ctrl+Alt+W", "show or hide the home bar", HomeAssistant.HomeBarText.Command));
         rows.Add(new("Ctrl+Alt+X", "unload the embedded model at once (press twice)"));
         return rows.ToArray();
     }

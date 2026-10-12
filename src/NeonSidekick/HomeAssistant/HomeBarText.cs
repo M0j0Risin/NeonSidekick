@@ -18,9 +18,10 @@ public static class HomeBarText
     public const string EditWord = "edit";
     public const string TapWord = "tap";
     public const string ShowWord = "show";
+    public const string NameWord = "name";
 
     /// <summary><c>/homebar</c>'s words, as its completion lists them.</summary>
-    public static readonly string[] Words = [OnWord, OffWord, EditWord];
+    public static readonly string[] Words = [OnWord, OffWord, EditWord, NameWord];
 
     /// <summary><c>/homebar</c>'s completion hint beside a word. Pinned.</summary>
     public static string Describe(string word) => word switch
@@ -28,11 +29,12 @@ public static class HomeBarText
         OnWord => "show the home bar",
         OffWord => "hide the home bar",
         EditWord => "choose the home bar's rooms and devices, and their order",
+        NameWord => "show an item on the bar under a name of your own: name <item> = <alias>",
         _ => "",
     };
 
     /// <summary>A word <c>/homebar</c> does not take. Pinned.</summary>
-    public const string Usage = "Usage: /homebar [on|off|edit] — show or hide the home bar, or choose what is on it";
+    public const string Usage = "Usage: /homebar [on|off|edit|name <item> = <alias>] — show or hide the home bar, choose what is on it, or rename an item on it";
 
     /// <summary>The bar shown, hidden. Pinned.</summary>
     public const string Shown = "Home bar shown";
@@ -44,6 +46,12 @@ public static class HomeBarText
 
     /// <summary>A <c>tap</c> or <c>show</c> naming nothing on the bar.</summary>
     public static string NotOnBar(string item) => $"'{item.Trim()}' is not on the home bar";
+
+    /// <summary><c>/homebar name</c> or the picker's rename: the alias set (2026-10-12). Pinned.</summary>
+    public static string Renamed(string name, string alias) => $"The home bar shows {name} as \"{alias}\"";
+
+    /// <summary>The alias taken off: the chip reads the item's own name again. Pinned.</summary>
+    public static string Unnamed(string name) => $"The home bar shows {name} by its own name again";
 
     /// <summary>Headless has no bar.</summary>
     public const string Headless = "The home bar is part of the interactive screen; use /ha here";
@@ -177,6 +185,10 @@ public static class HomeBarText
     public static string ClimateNote(string name, string state, string action, string value) =>
         name + ": " + StateWord(state) + (action.Length > 0 && action != state ? ", " + StateWord(action) : "") + (value.Length > 0 ? " · " + value : "") + " — double-click for more";
 
+    /// <summary>A zone's chip: how many people Home Assistant places in it (the zone's state, 2026-10-12).</summary>
+    public static string ZoneNote(string name, int people) =>
+        name + ": " + (people == 0 ? "nobody" : people == 1 ? "1 person" : people.ToString(CultureInfo.InvariantCulture) + " people") + " here — double-click for more";
+
     public static string ValueNote(string name, string value) => name + ": " + value + " — double-click for more";
 
     // ─── confirm and outcomes ───────────────────────────────────────────────────
@@ -238,10 +250,11 @@ public static class HomeBarText
     public const string MediaTab = "Media";
     public const string ScenesTab = "Scenes";
     public const string SafetyTab = "Security";
+    public const string ZonesTab = "Zones";
     public const string OtherTab = "Other";
 
     /// <summary>The bar tab's hint: the move keys.</summary>
-    public const string BarHint = "Shift/Alt+↑↓ = move · Alt+Home/End = top/bottom · Del = remove · Enter = more · ESC = close";
+    public const string BarHint = "Shift+↑↓ = move · Shift+Home/End = top/bottom · Del = remove · Enter = more · ESC = close";
 
     /// <summary>The other tabs' hint, before the filter's keys.</summary>
     public const string PickHint = "Space / Enter = add or remove";
@@ -266,7 +279,16 @@ public static class HomeBarText
     public const string MoveUp = "Move up";
     public const string MoveDown = "Move down";
     public const string MoveBottom = "Move to the bottom";
+    public const string RenameItem = "Rename on the bar…";
     public const string RemoveItem = "Remove from the bar";
+
+    /// <summary>The rename's input row: its crumb's last step and its keys (2026-10-12).</summary>
+    public const string RenameTitle = "Rename on the bar";
+
+    public const string RenameKeys = "Enter = save · blank = the Home Assistant name · ESC = keep";
+
+    /// <summary>A kind's or a room's row note for an item with an alias: the alias quoted ahead of the id or the lights.</summary>
+    public static string AliasNote(string alias, string note) => "\"" + alias + "\" · " + note;
 
     /// <summary>The detail pane's actions.</summary>
     public const string ToggleAction = "Toggle";

@@ -398,10 +398,20 @@ public sealed class AppSettingsData
     public List<string>? HomeBarItems { get; set; }
 
     /// <summary>
-    /// The items a bare <c>/homebar</c> (or Ctrl+Alt+W) brings back after it hid the bar (2026-10-12): what showed when it hid
+    /// The items a bare <c>/homebar</c> (or Ctrl+W) brings back after it hid the bar (2026-10-12): what showed when it hid
     /// it; null until then. No settings row, no variable.
     /// </summary>
     public List<string>? HomeBarLastItems { get; set; }
+
+    /// <summary>
+    /// The home bar's aliases (2026-10-12, the user's ask: "Den PC Monitor" read as "PC" on the bar): an item's reference
+    /// (<c>area:den</c>, <c>entity:light.den_pc_monitor</c>, as <see cref="App.HomeBarItems"/> spells them) to the label its chip shows
+    /// instead of Home Assistant's name. The chip's label only, the user's call: a click's note, the chip's pane and the
+    /// <c>Show home bar</c> row keep the real name. Set on the picker's actions page (<c>Rename on the bar…</c>) or with
+    /// <c>/homebar name &lt;item&gt; = &lt;alias&gt;</c>; an alias stays when its item leaves the bar, so adding it back brings it
+    /// back. Null or empty is none. No settings row, no variable.
+    /// </summary>
+    public Dictionary<string, string>? HomeBarAliases { get; set; }
 
     /// <summary>
     /// The look (2026-09-23, the user's ask): a theme's name — a built-in (<see cref="UI.ThemeName.Names"/>, every

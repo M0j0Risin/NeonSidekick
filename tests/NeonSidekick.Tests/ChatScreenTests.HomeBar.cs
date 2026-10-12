@@ -6,13 +6,13 @@ using NeonSidekick.UI;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The home bar on the screen (2026-10-12): <c>/homebar</c> and Ctrl+Alt+W hide it and show it again with its items; the bar
+/// The home bar on the screen (2026-10-12): <c>/homebar</c> and Ctrl+W hide it and show it again with its items; the bar
 /// draws the chips over the live feed (a scripted Home Assistant), a click shows a chip's note, a double-click calls its
 /// service over the socket and the chip follows the change; an unlock asks first.
 /// </summary>
 public partial class ChatScreenTests
 {
-    private static readonly ConsoleKeyInfo CtrlAltW = new('\x17', ConsoleKey.W, shift: false, alt: true, control: true);
+    private static readonly ConsoleKeyInfo CtrlW = new('\x17', ConsoleKey.W, shift: false, alt: false, control: true);
 
     private FakeHaServer HomeServer()
     {
@@ -44,7 +44,7 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task HomeBar_TogglesKeepingItsItems_AndCtrlAltW_IsTheBareWord()
+    public async Task HomeBar_TogglesKeepingItsItems_AndCtrlW_IsTheBareWord()
     {
         HomeServer();
         _settings.Update(d => d.HomeBarItems = ["entity:light.desk"]);
@@ -56,7 +56,7 @@ public partial class ChatScreenTests
         };
         StepsWhenIdle(
             Line("/homebar"),
-            Then(input => input.Push(CtrlAltW)),
+            Then(input => input.Push(CtrlW)),
             Then(input => PushLine(input, "/homebar off")),
             Then(input => PushLine(input, "/homebar on")),
             Then(input => PushLine(input, "/homebar sideways")),
@@ -141,5 +141,94 @@ public partial class ChatScreenTests
         Assert.True(asked);
         Assert.Empty(server.Calls);
         Assert.Equal("locked", server.StateOf("lock.front"));
+    }
+
+    [Fact]
+    public async Task HomeBar_TheRoomPane_DrawsAChangeThatComesWhileItWaits_ItsRowAndItsCount()
+    {
+        // The user's report (2026-10-12): a light switched from its own page still read off back on the room's list, since the
+        // call's answer came after the list was drawn. Here the change comes from the server while the list waits, as that
+        // answer does (a call's own timing would race the redraw).
+        var server = HomeServer();
+        _settings.Update(d => d.HomeBarItems = ["area:den"]);
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        bool before = false;
+        bool followed = false;
+        var input = Scripted();
+        input.OnWait = () =>
+        {
+            input.OnWait = null;
+            TickUntil(() => Output.Contains("⌂  🏠 Den ", StringComparison.Ordinal) && server.Subscribed.Count > 0);
+            PushLine(input, "/homebar show den");
+            input.OnWait = () =>
+            {
+                before = Output.Contains("💡 Desk  off", StringComparison.Ordinal) && Output.Contains("Den · 0/1", StringComparison.Ordinal);
+                server.Change("light.desk", "on");
+
+                // The clock ticks until the bar has it (the pane's watcher sees it on the same ticks), then the read returns
+                // with nothing pushed, so the cancelled wait draws the list again and reads once more.
+                TickUntil(() => Output.Contains("⌂  🏠 Den 1/1", StringComparison.Ordinal));
+                for (int i = 0; i < 3; i++)
+                {
+                    _time.Advance(ScreenPane.Tick);
+                    Thread.Sleep(10);
+                }
+
+                input.OnWait = () =>
+                {
+                    input.OnWait = null;
+                    followed = Output.Contains("💡 Desk  on", StringComparison.Ordinal) && Output.Contains("Den · 1/1", StringComparison.Ordinal);
+                    input.Push(Keys.Escape);
+                    PushLine(input, "/exit");
+                };
+            };
+        };
+
+        await RunAsync();
+
+        Assert.True(before);
+        Assert.True(followed);
+    }
+
+    [Fact]
+    public async Task HomeBar_Name_LabelsAChip_TakesItOff_AndRefusesWhatIsNotOnTheBar()
+    {
+        HomeServer();
+        _settings.Update(d => d.HomeBarItems = ["entity:light.desk"]);
+        string? afterSet = null;
+        StepsWhenIdle(
+            Line("/homebar name entity:light.desk = D"),
+            input =>
+            {
+                afterSet = _settings.Current.HomeBarAliases?.GetValueOrDefault("entity:light.desk");
+                PushLine(input, "/homebar name D =");
+            },
+            Line("/homebar name Kettle = K"),
+            Line("/homebar name Desk"),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal("D", afterSet);
+        Assert.Null(_settings.Current.HomeBarAliases);
+        Assert.Contains("as \"D\"", output);
+        Assert.Contains("by its own name again", output);
+        Assert.Contains(HomeBarText.NotOnBar("Kettle"), output);
+        Assert.Contains(HomeBarText.Usage, output);   // no "="
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public void HomeRoomKey_ChangesWithAMembersState_OrTheCount_NotWithAnotherEntity()
+    {
+        static HaLiveEntity Light(string id, string state) => new(id, state, new Dictionary<string, System.Text.Json.JsonElement>(), null);
+        string[] members = ["light.a", "light.b"];
+        var drawn = ChatScreen.HomeRoomKey(members, new Dictionary<string, HaLiveEntity> { ["light.a"] = Light("light.a", "off"), ["light.b"] = Light("light.b", "off") }, "0/2");
+
+        Assert.NotEqual(drawn, ChatScreen.HomeRoomKey(members, new Dictionary<string, HaLiveEntity> { ["light.a"] = Light("light.a", "on"), ["light.b"] = Light("light.b", "off") }, "0/2"));
+        Assert.NotEqual(drawn, ChatScreen.HomeRoomKey(members, new Dictionary<string, HaLiveEntity> { ["light.a"] = Light("light.a", "off"), ["light.b"] = Light("light.b", "off") }, "1/2"));
+        Assert.Equal(drawn, ChatScreen.HomeRoomKey(members, new Dictionary<string, HaLiveEntity> { ["light.a"] = Light("light.a", "off"), ["light.b"] = Light("light.b", "off"), ["switch.x"] = Light("switch.x", "on") }, "0/2"));
     }
 }
