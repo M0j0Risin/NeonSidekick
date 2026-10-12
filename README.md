@@ -10,13 +10,7 @@ Neon Sidekick is an agentic terminal client built first and foremost for local L
 It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing together the features I liked most in each, plus many they don't have. It runs on Windows and Apple Silicon Macs and is built on .NET 10. Use it as a Swiss Army knife for IT and creative work, or as a stable base for building and testing new agentic tools.
 
 <p align="center">
-  <img src="assets/screenshots/screen_markdown.png" alt="The model writing a Rust Hello World and then editing it: folded thinking and tool calls, the edit's highlighted diff, then its reply" width="49%">
-  <img src="assets/screenshots/screen_settings.png" alt="The settings pane on its Chat tab: profile, working directory, input line, transcript, screen and outside-app settings" width="49%">
-</p>
-
-<p align="center">
-  <img src="assets/screenshots/screen_tools.png" alt="The tools pane's Offered tab: tools by group (Camera, Clock, ComfyUI, Docker, Files), each switched on or off, with its description" width="49%">
-  <img src="assets/screenshots/screen_skills.png" alt="The skills pane's Offered tab: profile and global skills with their versions, some locked, each with its description" width="49%">
+  <img src="assets/screenshots/screen_splash.png" alt="The model writing a Rust Hello World and then editing it: folded thinking and tool calls, the edit's highlighted diff, then its reply" width="50%">
 </p>
 
 <p align="center"><b><a href="https://github.com/M0j0Risin/NeonSidekick/releases/latest">Download the latest release</a></b> · Windows x64 · macOS on Apple Silicon · unpack and run</p>
