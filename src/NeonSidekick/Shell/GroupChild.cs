@@ -30,7 +30,8 @@ namespace NeonSidekick.Shell;
 /// app began with SIGCHLD ignored; a child reaped elsewhere answers ECHILD, its code is -1, and no group kill is sent after that.)</item>
 /// <item><b>A background command's leftovers</b> (<c>tiedToApp</c>, the user's call): the dispose kills the group even after the leader
 /// exited, as Windows' kill-on-close job does at its close — the registry's close, its eviction and the app's exit all come here. A
-/// foreground command's leftovers are left alone, as there. A crash still stops nothing on a Mac.</item>
+/// foreground command's leftovers are left alone, as there. Should the app die, its crash watcher kills the group instead
+/// (<see cref="ShellGroups"/>, <see cref="ShellGuard"/>, the same day): the group is recorded at the start, unrecorded before the reap.</item>
 /// <item><b>The rest as <c>Process.Start</c> does it:</b> three CLOEXEC pipes (.NET's own anonymous pipes) put on 0/1/2, every other
 /// descriptor closed in the child (<c>POSIX_SPAWN_CLOEXEC_DEFAULT</c>); every signal back to its default and none blocked (.NET ignores
 /// SIGPIPE, and an ignored signal survives exec); the environment from <see cref="ChildEnvironment.Apply"/> over a
@@ -45,6 +46,7 @@ internal sealed unsafe class GroupChild : ShellChild
 {
     private readonly int _pid;
     private readonly bool _tiedToApp;
+    private readonly ShellGroups? _groups;
     private readonly AnonymousPipeServerStream _stdin;
     private readonly AnonymousPipeServerStream _stdout;
     private readonly AnonymousPipeServerStream _stderr;
@@ -56,10 +58,11 @@ internal sealed unsafe class GroupChild : ShellChild
     private bool _disposed;
     private bool _reaped;
 
-    private GroupChild(int pid, bool tiedToApp, AnonymousPipeServerStream stdin, AnonymousPipeServerStream stdout, AnonymousPipeServerStream stderr)
+    private GroupChild(int pid, bool tiedToApp, ShellGroups? groups, AnonymousPipeServerStream stdin, AnonymousPipeServerStream stdout, AnonymousPipeServerStream stderr)
     {
         _pid = pid;
         _tiedToApp = tiedToApp;
+        _groups = groups;
         _stdin = stdin;
         _stdout = stdout;
         _stderr = stderr;
@@ -118,7 +121,10 @@ internal sealed unsafe class GroupChild : ShellChild
             throw new ShellStartException(ShellText.CouldNotStart(name, Marshal.GetPInvokeErrorMessage(error)));
         }
 
-        return new GroupChild(pid, tiedToApp, stdin, stdout, stderr);
+        // A background command's group is watched (the crash watcher, 2026-10-12): recorded before the waiter can reap its leader.
+        var groups = tiedToApp ? ShellGroups.Current : null;
+        groups?.Track(pid);
+        return new GroupChild(pid, tiedToApp, groups, stdin, stdout, stderr);
     }
 
     /// <summary>One <c>posix_spawnp</c> of <paramref name="file"/> as a session leader, its three streams on 0/1/2 and nothing else open; 0 or the errno.</summary>
@@ -268,7 +274,7 @@ internal sealed unsafe class GroupChild : ShellChild
         {
             _exitCode = code;
             _exitSeen = true;
-            if (_disposed || !_tiedToApp || PosixSpawnNative.KillPg(_pid, 0) != 0)
+            if (_disposed || !_tiedToApp || _reapedElsewhere || PosixSpawnNative.KillPg(_pid, 0) != 0)
             {
                 // Nothing the dispose would kill: no zombie kept.
                 Reap();
@@ -316,9 +322,10 @@ internal sealed unsafe class GroupChild : ShellChild
         }
     }
 
-    /// <summary>Reaps the zombie; under the lock, after the exit is known.</summary>
+    /// <summary>Reaps the zombie; under the lock, after the exit is known. The group's record goes first, while its id is still ours.</summary>
     private void Reap()
     {
+        _groups?.Untrack(_pid);
         if (_reaped || _reapedElsewhere)
         {
             return;

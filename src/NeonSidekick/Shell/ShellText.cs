@@ -476,6 +476,14 @@ public static class ShellText
     public static string CommandTooLong(int max) => $"Error: the command is longer than {Count(max)} characters; put it in a script file and run that";
     public static string CouldNotStart(string executable, string detail) => $"Error: could not start {executable} ({detail})";
 
+    /// <summary>The start's sweep killing a background command's group a dead app left running on a Mac (2026-10-12, <see cref="ShellRecords.Sweep"/>). Pinned.</summary>
+    public static string GroupLeftBehind(int pgid, int ownerPid) =>
+        $"A background command left running by NeonSidekick {N(ownerPid)}, which is gone: its process group {N(pgid)} killed";
+
+    /// <summary>The sweep leaving a group whose leader is gone (2026-10-12): its id can no longer be proven the app's. Pinned.</summary>
+    public static string GroupUnproven(int pgid, int ownerPid) =>
+        $"A background command's process group {N(pgid)}, left by NeonSidekick {N(ownerPid)}, may still run; its leader is gone, so it was not killed (pgrep -l -g {N(pgid)} lists it)";
+
     /// <summary><see cref="CouldNotStart"/>'s detail for a raw argument string on a Mac (2026-10-12, <see cref="GroupChild"/>): only cmd.exe's launch has one. Pinned.</summary>
     public const string RawArgumentsAreCmds = "a raw argument string is cmd's";
 

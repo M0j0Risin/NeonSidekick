@@ -61,7 +61,7 @@ public static partial class SmokeChecks
 
         try
         {
-            using var child = Shell.GroupChild.Start(new Shell.ProcessLaunch("/bin/sleep", ["5"], null, Path.GetTempPath(), "sleep 5", "smoke"), tiedToApp: true);
+            using var child = Shell.GroupChild.Start(new Shell.ProcessLaunch("/bin/sleep", ["5"], null, Path.GetTempPath(), "sleep 5", "smoke"), tiedToApp: false);   // never watched: no guard or record from the smoke
             int pid = child.Pid;
             int sid = Shell.PosixSpawnNative.GetSid(pid);
             int pgid = Shell.PosixSpawnNative.GetPgid(pid);
@@ -83,6 +83,41 @@ public static partial class SmokeChecks
         catch (Exception ex) when (ex is Shell.ShellStartException or DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
         {
             return new SmokeCheck(name, false, ex.GetType().Name + ": " + Diagnostics.LogText.Excerpt(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// <c>shell:records</c> (2026-10-12, the crash watcher): a background command group's record written for this process (as owner and
+    /// leader) reads back, and the start's sweep keeps a live owner's record and kills nothing. Never starts a guard. Skipped off macOS.
+    /// </summary>
+    public static SmokeCheck ProbeShellRecords()
+    {
+        const string name = "shell:records";
+        if (!OperatingSystem.IsMacOS())
+        {
+            return new SmokeCheck(name, true, "skipped: not macOS");
+        }
+
+        string home = Path.Combine(Path.GetTempPath(), "neonsidekick-smoke-shell-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            string folder = Shell.ShellRecords.FolderIn(home);
+            string? record = Shell.ShellRecords.Write(folder, Environment.ProcessId);
+            if (record is null || Shell.ShellRecords.Parse(File.ReadAllText(record)) is not { } parsed || parsed.OwnerPid != Environment.ProcessId)
+            {
+                return new SmokeCheck(name, false, "the record did not read back");
+            }
+
+            var killed = Shell.ShellRecords.Sweep(folder, EmbeddedLlm.LlamaRecords.StartTicks, _ => throw new InvalidOperationException("the sweep killed a live owner's group"), _ => true);
+            return new SmokeCheck(name, killed.Count == 0 && File.Exists(record), "the record read back; a live owner's record kept");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            Files.WorkingDirectory.DeleteDirectoryQuietly(home);
         }
     }
 
