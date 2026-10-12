@@ -367,6 +367,24 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Equal(400, whole.Split('\n').Length);
     }
 
+    /// <summary>
+    /// A run longer than the buffer keeps (2026-10-12, the shell review): the result and the spill both open with the dropped-lines
+    /// line, as <c>/cmd</c>'s have since 2026-10-11, so neither claims to be the whole output.
+    /// </summary>
+    [WindowsFact]
+    public async Task OutputOverTheBuffer_SaysHowManyLinesWereNotKept_InTheResultAndTheSpill()
+    {
+        _settings.ShellOutputMaxChars = 2000;
+        string result = await Invoke(("command", "for /l %i in (1,1,5100) do @echo line %i"));
+
+        Assert.Contains("\n" + ShellText.DroppedLine(100) + "\n", result);
+        Assert.EndsWith("\nline 5100", result);
+        Assert.DoesNotContain("the whole output is in", result);
+        Assert.Contains(@"the output kept is in .shell\run_", result);
+        string whole = File.ReadAllText(Assert.Single(Directory.GetFiles(Path.Combine(_root, ".shell"), "run_*.log")));
+        Assert.StartsWith(ShellText.DroppedLine(100) + "\nline 101\n", whole);
+    }
+
     [Fact]
     public void Schema_Parses_ForAnyShellSet()
     {

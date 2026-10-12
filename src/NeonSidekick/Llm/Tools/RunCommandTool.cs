@@ -335,11 +335,11 @@ public sealed class RunCommandTool : AIFunction
                 ? ShellText.ExitHeader(request.Kind, session.ExitCode ?? -1, session.Elapsed, command)
                 : ShellText.TimedOutHeader(request.Kind, timeout, command);
             int maxChars = Math.Clamp(effective.ShellOutputMaxChars, AppSettingsData.MinShellOutputMaxChars, AppSettingsData.MaxShellOutputMaxChars);
-            var lines = session.Output.Lines();
-            string body = ShellText.Body(lines);
+            var lines = session.Output.Snapshot(out long dropped);
+            string body = ShellText.Body(lines, dropped);
             string? spill = body.Length > maxChars ? ShellPoliceChecks.Spill(_files.Root, session.Id, body) : null;
             DiagnosticLog.Info(ShellKinds.Category, ShellText.RunLogLine(request.Kind, command, exited ? "exit " + (session.ExitCode ?? -1).ToString(CultureInfo.InvariantCulture) + " in " + ShellText.Elapsed(session.Elapsed) : "timed out after " + ShellText.Elapsed(timeout), body.Length));
-            return ShellText.Result(header, lines, maxChars, spill);
+            return ShellText.Result(header, lines, maxChars, spill, dropped);
         }
     }
 

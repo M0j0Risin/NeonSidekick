@@ -345,8 +345,7 @@ internal sealed partial class ChatScreen
                 : exited
                     ? ShellText.ExitHeader(request.Kind, session.ExitCode ?? -1, session.Elapsed, request.Command)
                     : ShellText.TimedOutHeader(request.Kind, timeout, request.Command);
-            var lines = session.Output.Lines();
-            long dropped = session.Output.FirstKeptLine - 1;
+            var lines = session.Output.Snapshot(out long dropped);
             string body = ShellText.Body(lines, dropped);
             string? spill = body.Length > maxChars ? ShellPoliceChecks.Spill(_files.Root, session.Id, body) : null;
             if (exited && session.ExitCode == 0)
@@ -460,8 +459,7 @@ internal sealed partial class ChatScreen
                 _transcript.Warning(header);
             }
 
-            var lines = session.Output.Lines();
-            long dropped = session.Output.FirstKeptLine - 1;
+            var lines = session.Output.Snapshot(out long dropped);
             string body = ShellText.Body(lines, dropped);
             string? spill = body.Length > maxChars ? ShellPoliceChecks.Spill(_files.Root, session.Id, body) : null;
             // The end of the output, not its start (2026-10-11, the review): a finished run's errors and summary are last, and the

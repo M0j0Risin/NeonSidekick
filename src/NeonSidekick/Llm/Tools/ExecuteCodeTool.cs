@@ -314,11 +314,11 @@ public sealed class ExecuteCodeTool : AIFunction
                 string header = exited
                     ? ShellText.ScriptExitHeader(name, session.ExitCode ?? -1, session.Elapsed, calls, firstLine)
                     : ShellText.ScriptTimedOutHeader(name, timeout, calls, firstLine);
-                var lines = session.Output.Lines();
-                string body = ShellText.Body(lines);
-                string? spill = body.Length > maxChars ? Spill(id, body) : null;
+                var lines = session.Output.Snapshot(out long dropped);
+                string body = ShellText.Body(lines, dropped);
+                string? spill = body.Length > maxChars ? ShellPoliceChecks.Spill(_files.Root, id, body) : null;
                 DiagnosticLog.Info(ShellKinds.Category, ShellText.ScriptLogLine(name, firstLine, exited ? "exit " + (session.ExitCode ?? -1).ToString(CultureInfo.InvariantCulture) + " in " + ShellText.Elapsed(session.Elapsed) : "timed out after " + ShellText.Elapsed(timeout), calls, body.Length));
-                return ShellText.Result(header, lines, maxChars, spill);
+                return ShellText.Result(header, lines, maxChars, spill, dropped);
             }
         }
         finally
@@ -366,24 +366,6 @@ public sealed class ExecuteCodeTool : AIFunction
         string text => string.Equals(text.Trim(), "true", StringComparison.OrdinalIgnoreCase),
         _ => false,
     };
-
-    /// <summary>The whole output into <c>.shell\&lt;id&gt;.log</c> under the working directory; the relative path, or null when it could not be written (logged).</summary>
-    private string? Spill(string id, string body)
-    {
-        string relative = Path.Combine(ShellText.SpillFolderName, id + ".log");
-        try
-        {
-            string folder = Path.Combine(_files.Root, ShellText.SpillFolderName);
-            Directory.CreateDirectory(folder);
-            File.WriteAllText(Path.Combine(folder, id + ".log"), body);
-            return relative;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
-        {
-            DiagnosticLog.Warn(ShellKinds.Category, $"{id}: could not write {relative} ({ex.Message})");
-            return null;
-        }
-    }
 
     private static void TryDelete(string folder)
     {

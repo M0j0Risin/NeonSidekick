@@ -153,6 +153,21 @@ public sealed class OutputBuffer
         }
     }
 
+    /// <summary>
+    /// Every kept line, oldest first, and how many were dropped before them, read under one lock so the two agree (2026-10-12, the
+    /// shell review: <c>run_command</c> and <c>execute_code</c> built their result and spill from <see cref="Lines"/> alone, so a long
+    /// run's spill claimed to be the whole output — the <c>/cmd</c> fix of 2026-10-11 had not reached them — and a line landing between
+    /// two separate reads would have miscounted the drop).
+    /// </summary>
+    public IReadOnlyList<OutputLine> Snapshot(out long dropped)
+    {
+        lock (_lock)
+        {
+            dropped = _dropped;
+            return _lines.ToList();
+        }
+    }
+
     /// <summary>The kept lines numbered after <paramref name="cursor"/> (a line count seen so far), and the count to pass next time.</summary>
     public IReadOnlyList<OutputLine> Since(long cursor, out long next)
     {
