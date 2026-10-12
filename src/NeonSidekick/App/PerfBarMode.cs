@@ -41,8 +41,14 @@ public static class PerfBarMode
     /// <summary>The looks in <c>/perfbar</c>'s completion order. Pinned.</summary>
     public static readonly string[] Names = { "text", "gauge", "led" };
 
-    /// <summary><c>/perfbar</c>'s words, as its completion lists them: <see cref="OffWord"/>, then the looks.</summary>
-    public static readonly string[] Words = [OffWord, .. Names];
+    /// <summary><c>/perfbar edit</c> (2026-10-12, the user's ask, as <c>/homebar edit</c>): the <c>Performance bar</c> row's checklist. Pinned.</summary>
+    public const string EditWord = "edit";
+
+    /// <summary><c>/perfbar</c>'s words, as its completion lists them: <see cref="OffWord"/>, the looks, then <see cref="EditWord"/>.</summary>
+    public static readonly string[] Words = [OffWord, .. Names, EditWord];
+
+    /// <summary>Whether <c>/perfbar</c>'s argument is <see cref="EditWord"/> (any case, trimmed): the checklist, a pane, not a toggle. Pure.</summary>
+    public static bool IsEdit(string args) => string.Equals(args.Trim(), EditWord, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Trims and ignores case; false (and <see cref="Default"/>'s <see cref="PerfBarStyle.Led"/>) for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out PerfBarStyle style)
@@ -78,6 +84,7 @@ public static class PerfBarMode
         "text" => "the meters as numbers",
         "gauge" => "a bar per meter, coloured by load",
         "led" => "ten segments per meter along the theme's gradient",
+        EditWord => "choose the bar's meters and their order",
         _ => "",
     };
 

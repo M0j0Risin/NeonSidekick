@@ -30,7 +30,7 @@ public partial class SettingsMenuTests
     {
         var chat = SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList();
         Assert.Equal(chat.IndexOf(SettingsField.ShowPerformanceBar) + 1, chat.IndexOf(SettingsField.ShowHomeBar));
-        Assert.Equal("Show home bar", SettingsMenu.FieldName(SettingsField.ShowHomeBar));
+        Assert.Equal("Home bar", SettingsMenu.FieldName(SettingsField.ShowHomeBar));   // "Show home bar" until 2026-10-12, the user's name
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ShowHomeBar, new AppSettingsData(), "C:\\p"));
         Assert.Equal("2 · den, kettle", SettingsMenu.FieldValue(SettingsField.ShowHomeBar, new AppSettingsData { HomeBarItems = ["area:den", "entity:switch.kettle"] }, "C:\\p"));
     }

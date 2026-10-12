@@ -198,6 +198,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int _ruleTitleColumn = -1;
     private int _ruleTitleCells;
 
+    // The lower rule's title (2026-10-12, the running processes' count): its provider, the one last drawn for the tick, and the
+    // column it landed at (-1 = none drawn) and its cells, for TryHitLowerRuleTitle.
+    private Func<string> _lowerRuleTitle = static () => "";
+    private string _drawnLowerRuleTitle = "";
+    private int _lowerTitleColumn = -1;
+    private int _lowerTitleCells;
+
     // The hint row.
     private Func<string> _hint = static () => "";
     private Func<string> _strip = static () => "";
@@ -722,6 +729,18 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
+    /// The title at the right edge of the lower rule — the one under the input row — in every state (2026-10-12, the user's ask:
+    /// the running processes' count, <c>▶ 3</c>, as the session's name sits on the rule above), read like <see cref="RuleTitle"/>
+    /// on every draw and on the tick, which repaints the pane when it changes; empty = the bare rule, as it was until then.
+    /// <see cref="RuleWithTitle"/> is the row, so a window too narrow for it keeps the bare rule.
+    /// </summary>
+    public Func<string> LowerRuleTitle
+    {
+        get => _lowerRuleTitle;
+        set => _lowerRuleTitle = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
     /// The label at the right edge of the hint row in every state, read like <see cref="Strip"/>;
     /// empty = the row as it is. The screen puts the model's name there.
     /// </summary>
@@ -797,7 +816,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// state — idle, busy, scrolled, under an overlay — like the strip; null (the default) = no
     /// row. Read like <see cref="Strip"/> on every draw and on the tick, which rewrites the row in
     /// place when its text changes (the working directory) and repaints the pane when the row
-    /// comes or goes (the screen's <c>Show toolbar</c> switch). A window under
+    /// comes or goes (the screen's <c>Toolbar</c> switch). A window under
     /// <c>PaneRows + 2</c> rows draws none, so a transcript row survives. The screen puts the
     /// pane glyphs at the left and the working directory at the right;
     /// <see cref="ToolbarRow"/> is the row, <see cref="TryHitToolbar"/> the double-click's zones.
@@ -840,7 +859,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// The performance bar (2026-09-29, the user's ask: a third bar): asked with the cells the row has on every draw and on
     /// the tick; null draws no row. It takes the screen's last row, under the toolbar, when the window keeps a transcript
     /// row over the smallest pane and the toolbar; the tick rewrites it in place when its text changes and repaints the pane
-    /// when it comes or goes (the screen's <c>Show performance bar</c> setting).
+    /// when it comes or goes (the screen's <c>Performance bar</c> setting).
     /// </summary>
     public Func<int, UI.PerfRow?> Perf
     {
@@ -1137,6 +1156,29 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
 
             return y == top - CursorDepth - 1 && x >= _ruleTitleColumn - 1 && x <= _ruleTitleColumn + _ruleTitleCells;
+        }
+    }
+
+    /// <summary>
+    /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on the lower rule's title (2026-10-12,
+    /// the running processes' count: a double-click there opens <c>/process</c>), the space either side of it included. False
+    /// with no title drawn, an overlay drawn, the pane lifted or disabled, or no geometry — <see cref="TryHitRuleTitle"/>'s rules.
+    /// </summary>
+    public bool TryHitLowerRuleTitle(int x, int y)
+    {
+        if (!Enabled)
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            if (!_drawn || _drawnOverlay || _lowerTitleColumn < 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+            {
+                return false;
+            }
+
+            return y == top + FirstBarRowBelowCursor - 1 && x >= _lowerTitleColumn - 1 && x <= _lowerTitleColumn + _lowerTitleCells;
         }
     }
 
@@ -4556,7 +4598,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
         }
 
-        WriteRule(w);
+        WriteLowerRule(w);
 
         // The rows under the lower rule in the user's order (2026-10-12, Toolbar order): the hint row always, each bar while it
         // has its row; a row break before every one but the first. A bar with no row is forgotten wherever it would sit.
@@ -5088,9 +5130,15 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         return down;
     }
 
-    private void WriteRule(int width)
+    /// <summary>
+    /// The lower rule with <see cref="LowerRuleTitle"/> at its right edge (2026-10-12; the bare rule until then, and while none is
+    /// answered): the title remembered for the tick and where it landed for <see cref="TryHitLowerRuleTitle"/>.
+    /// </summary>
+    private void WriteLowerRule(int width)
     {
-        _inner.Write(new RawText(new string(RuleGlyph, width), Theme.PaneRule));
+        _drawnLowerRuleTitle = _lowerRuleTitle();
+        (_lowerTitleColumn, _lowerTitleCells) = TitleSpan(_drawnLowerRuleTitle, width, 0);
+        _inner.Write(new RawText(RuleWithTitle(_drawnLowerRuleTitle, width), Theme.PaneRule));
         _inner.WriteLine();
     }
 
@@ -5300,8 +5348,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             : new string(RuleGlyph, Math.Max(0, width));
     }
 
-    /// <summary>The title <see cref="RuleTitle"/> answers now is not the one on the drawn upper rule.</summary>
-    private bool RuleTitleChanged() => !string.Equals(_ruleTitle(), _drawnRuleTitle, StringComparison.Ordinal);
+    /// <summary>The title <see cref="RuleTitle"/> answers now is not the one on the drawn upper rule, or <see cref="LowerRuleTitle"/>'s not the lower one's (2026-10-12).</summary>
+    private bool RuleTitleChanged() =>
+        !string.Equals(_ruleTitle(), _drawnRuleTitle, StringComparison.Ordinal) || !string.Equals(_lowerRuleTitle(), _drawnLowerRuleTitle, StringComparison.Ordinal);
 
     private void WriteHintRow()
     {
@@ -5809,7 +5858,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
             if (RuleTitleChanged() || RuleButtonsChanged())
             {
-                // The session's name landed or went (the model's title arrives off-thread), or the
+                // The session's name landed or went (the model's title arrives off-thread), the running processes' count on
+                // the lower rule moved (2026-10-12), or the
                 // rule's ⤡ came or went (a run came to fold, the last fold went; 2026-09-28), or its
                 // 🎞️ (the strip closed or back, the setting flipped; 2026-10-03): the whole pane
                 // again, as a grown reply gets — the rule is drawn in every state.

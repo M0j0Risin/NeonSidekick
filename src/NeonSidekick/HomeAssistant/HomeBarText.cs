@@ -3,8 +3,8 @@ using System.Globalization;
 namespace NeonSidekick.HomeAssistant;
 
 /// <summary>
-/// The home bar's words (2026-10-12): the chips' values and notes (what a single click shows), the status glyph and its
-/// note, the confirm questions, the live feed's failures, <c>/homebar</c>'s words and usage, and the picker's titles and hints.
+/// The home bar's words (2026-10-12): the chips' values and notes (what a single click shows; the ⌂ status glyph and its
+/// note went later that day), the confirm questions, the live feed's failures, <c>/homebar</c>'s words and usage, and the picker's titles and hints.
 /// Pure; pinned by tests.
 /// </summary>
 public static class HomeBarText
@@ -78,9 +78,6 @@ public static class HomeBarText
 
     // ─── the bar ────────────────────────────────────────────────────────────────
 
-    /// <summary>The status glyph at the bar's left (one cell, not an emoji: it takes the status's colour).</summary>
-    public const string StatusGlyph = "⌂";
-
     /// <summary>The page arrows when the chips do not fit.</summary>
     public const string PrevGlyph = "‹";
 
@@ -95,16 +92,6 @@ public static class HomeBarText
     public const string PendingMark = "…";
 
     public const string FailedMark = "!";
-
-    /// <summary>The status glyph's note (a single click on it). Pinned.</summary>
-    public static string StatusNote(HaLiveStatus status, string? error) => status switch
-    {
-        HaLiveStatus.Live => "Home Assistant: live — double-click ⌂ to choose what is on the bar",
-        HaLiveStatus.Connecting => "Home Assistant: connecting…",
-        HaLiveStatus.Retrying => "Home Assistant: connection lost, retrying" + (error is { Length: > 0 } e ? " (" + Strip(e) + ")" : ""),
-        HaLiveStatus.Unauthorized => "Home Assistant refused the API key; set a new one on /tools › Home › HomeAssistant",
-        _ => error is { Length: > 0 } off ? Strip(off) : "Home Assistant: not connected",
-    };
 
     /// <summary>An area's lights on, of all: <c>2/5</c>. Pinned.</summary>
     public static string Count(int on, int total) => on.ToString(CultureInfo.InvariantCulture) + "/" + total.ToString(CultureInfo.InvariantCulture);

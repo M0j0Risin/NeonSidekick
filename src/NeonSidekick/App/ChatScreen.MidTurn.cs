@@ -212,6 +212,8 @@ internal sealed partial class ChatScreen
         SlashCommand.Screen when NeonSidekick.Screen.ScreenText.IsFolderWord(args) => MidTurnClass.Quick,   // /screen view | thumbs (2026-10-09): a window of its own
         SlashCommand.Session when ParseSessionArgs(args).Kind == SessionActionKind.TitlePane => MidTurnClass.Pane,
         SlashCommand.HomeBar => HomeBarToggles(args) ? MidTurnClass.Quick : MidTurnClass.Pane,   // 2026-10-12: a toggle at once; the picker, a chip's pane or confirm on the watcher
+        SlashCommand.Toolbar when ToolbarItems.IsEdit(args) => MidTurnClass.Pane,   // /toolbar edit (2026-10-12): the checklist on the watcher; a toggle stays quick
+        SlashCommand.Perf when PerfBarMode.IsEdit(args) => MidTurnClass.Pane,       // /perfbar edit, the same
         _ => MidTurnPolicy(command, args.Length > 0),
     };
 
@@ -539,6 +541,14 @@ internal sealed partial class ChatScreen
             case SlashCommand.HomeBar:
                 // /homebar edit, a chip's pane or its confirm (2026-10-12): on the watcher, the reply streaming on.
                 await HandleHomeBarAsync(args, _flow, cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.Toolbar:
+                // /toolbar edit (2026-10-12, the user's ask): the Toolbar row's checklist on the watcher, the reply streaming on.
+                await _menu.EditToolbarAsync(own: true, cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.Perf:
+                // /perfbar edit (2026-10-12, the user's ask): the Performance bar row's checklist, the same way.
+                await _menu.EditPerformanceBarAsync(own: true, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.YouTube:
                 // /youtube (2026-10-05): /ha's way — a search (and its picker) or the wait for the player on the watcher, the

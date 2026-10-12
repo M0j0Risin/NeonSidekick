@@ -1106,6 +1106,17 @@ public sealed partial class InputLine
                     return new EditOutcome.End(new InputResult.RuleTitle(_text.ToString()));
                 }
             }
+            else if (pane.TryHitLowerRuleTitle(click.X, click.Y))
+            {
+                // The running processes' count on the lower rule (2026-10-12, the user's ask): a double-click opens /process,
+                // the draft back after, as the session's name above.
+                _anchor = -1;
+                if (hintClicks.Second(LowerRuleTitlePairKey))
+                {
+                    EndRow();
+                    return new EditOutcome.End(new InputResult.LowerRuleTitle(_text.ToString()));
+                }
+            }
             else if (pane.PictureAt(click.X, click.Y) is int picture)
             {
                 // A picture in the transcript (later on 2026-09-24, the user's ask): a double-click

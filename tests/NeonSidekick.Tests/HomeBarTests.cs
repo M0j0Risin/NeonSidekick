@@ -269,8 +269,6 @@ public sealed class HomeBarTests
             Assert.Equal(2, TextCells.Width(glyph));
             Assert.DoesNotContain('️', glyph);
         }
-
-        Assert.Equal(1, TextCells.Width(HomeBarText.StatusGlyph));
     }
 
     [Fact]
@@ -323,36 +321,50 @@ public sealed class HomeBarTests
     private static string Text(HomeRow row) => string.Concat(row.Segments.Select(s => s.Text));
 
     [Fact]
-    public void Render_TheStatusThenTheChips_LeftAligned_WithTheirSpans()
+    public void Render_TheChips_Centred_WithTheirSpans()
     {
-        var row = HomeBar.Render([Chip("Desk", "80%"), Chip("Hall")], HaLiveStatus.Live, 80)!;
+        // Centred as the meters are (later on 2026-10-12, the user's ask), no ⌂ ahead of them: 22 cells of chips in 80, 29 blanks first.
+        var row = HomeBar.Render([Chip("Desk", "80%"), Chip("Hall")], 80)!;
 
-        Assert.Equal("⌂  💡 Desk 80%  💡 Hall ", Text(row));
+        Assert.Equal(new string(' ', 29) + " 💡 Desk 80%  💡 Hall ", Text(row));
         Assert.Equal(1, row.Pages);
-        Assert.Equal(new HomeSpan(0, 1, HomeTarget.Status), row.Spans[0]);
-        Assert.Equal(new HomeSpan(2, 13, HomeTarget.Chip, 0), row.Spans[1]);
-        Assert.Equal(new HomeSpan(15, 9, HomeTarget.Chip, 1), row.Spans[2]);
-        Assert.Equal(HomeTarget.Chip, HomeBar.HitAt(row.Spans, 5)!.Value.Target);
-        Assert.Equal(0, HomeBar.HitAt(row.Spans, 14)!.Value.Index);   // no gap between the chips (2026-10-12): the first's last blank
-        Assert.Equal(1, HomeBar.HitAt(row.Spans, 15)!.Value.Index);
-        Assert.Null(HomeBar.Render([], HaLiveStatus.Live, 80));
+        Assert.Equal(2, row.Spans.Count);
+        Assert.Equal(new HomeSpan(29, 13, HomeTarget.Chip, 0), row.Spans[0]);
+        Assert.Equal(new HomeSpan(42, 9, HomeTarget.Chip, 1), row.Spans[1]);
+        Assert.Null(HomeBar.HitAt(row.Spans, 28));   // the run ahead is a blank: the toolbar's, /settings on a double-click
+        Assert.Equal(HomeTarget.Chip, HomeBar.HitAt(row.Spans, 32)!.Value.Target);
+        Assert.Equal(0, HomeBar.HitAt(row.Spans, 41)!.Value.Index);   // no gap between the chips (2026-10-12): the first's last blank
+        Assert.Equal(1, HomeBar.HitAt(row.Spans, 42)!.Value.Index);
+        Assert.Null(HomeBar.Render([], 80));
+    }
+
+    /// <summary>The odd cell of the room goes to the right, as the meters' does: 9 cells in 20 is 5 blanks ahead, 6 after.</summary>
+    [Fact]
+    public void TheChips_AreCentred_TheOddCellAtTheRight()
+    {
+        var row = HomeBar.Render([Chip("Desk")], 20)!;
+
+        Assert.Equal("      💡 Desk ", Text(row));
+        Assert.Equal(new HomeSpan(5, 9, HomeTarget.Chip, 0), row.Spans[0]);
+        Assert.Equal(" 💡 Desk ", Text(HomeBar.Render([Chip("Desk")], 9)!));   // a row just wide enough: no run ahead
     }
 
     [Fact]
     public void Render_ShortensTheNames_ThenDropsThem_ThenPages()
     {
         var chips = new[] { Chip("Living Room Lamp", "50%", "Lamp"), Chip("Kitchen Spot", "", "Spot"), Chip("Hallway Ceiling", "", "Ceiling") };
-        Assert.Contains("Living Room Lamp", Text(HomeBar.Render(chips, HaLiveStatus.Live, 80)!), StringComparison.Ordinal);
-        Assert.Equal("⌂  💡 Lamp 50%  💡 Spot  💡 Ceiling ", Text(HomeBar.Render(chips, HaLiveStatus.Live, 40)!));
-        Assert.Equal("⌂  💡 50%  💡  💡 ", Text(HomeBar.Render(chips, HaLiveStatus.Live, 22)!));
+        Assert.Contains("Living Room Lamp", Text(HomeBar.Render(chips, 80)!), StringComparison.Ordinal);
+        Assert.Equal("    💡 Lamp 50%  💡 Spot  💡 Ceiling ", Text(HomeBar.Render(chips, 40)!));
+        Assert.Equal("    💡 50%  💡  💡 ", Text(HomeBar.Render(chips, 22)!));
 
-        var paged = HomeBar.Render(chips, HaLiveStatus.Live, 16)!;
+        var paged = HomeBar.Render(chips, 14)!;
         Assert.True(paged.Pages > 1);
-        Assert.StartsWith("⌂ ‹ ", Text(paged), StringComparison.Ordinal);
+        Assert.StartsWith(" ‹  💡 ", Text(paged), StringComparison.Ordinal);   // centred too: 12 cells in 14
+        Assert.Equal(new HomeSpan(3, 8, HomeTarget.Chip, 0), paged.Spans.Single(s => s.Target == HomeTarget.Chip));
         Assert.EndsWith(" ›", Text(paged), StringComparison.Ordinal);
         Assert.DoesNotContain(paged.Spans, s => s.Target == HomeTarget.Prev);   // the first page: nothing back
         Assert.Contains(paged.Spans, s => s.Target == HomeTarget.Next);
-        var last = HomeBar.Render(chips, HaLiveStatus.Live, 16, page: 99)!;
+        var last = HomeBar.Render(chips, 14, page: 99)!;
         Assert.Contains(last.Spans, s => s.Target == HomeTarget.Prev);
         Assert.DoesNotContain(last.Spans, s => s.Target == HomeTarget.Next);
     }
@@ -364,11 +376,11 @@ public sealed class HomeBarTests
         var wide = Chip("Tv", "▸ A very long title indeed") with { Short = "Tv" };
         foreach (int cells in new[] { 30, 20, 12, 8, 3 })
         {
-            var row = HomeBar.Render([wide, Chip("Desk")], HaLiveStatus.Live, cells)!;
+            var row = HomeBar.Render([wide, Chip("Desk")], cells)!;
             Assert.True(TextCells.Width(Text(row)) <= cells, cells + ": " + Text(row));
         }
 
-        Assert.Equal("⌂ ", Text(HomeBar.Render([wide], HaLiveStatus.Live, 6)!));   // no room for a page: the glyph alone
+        Assert.Equal("", Text(HomeBar.Render([wide], 6)!));   // no room for a page: an empty row (the ⌂ alone until it went), the pane's layout kept
     }
 
     [Fact]
@@ -376,8 +388,8 @@ public sealed class HomeBarTests
     {
         var red = Chip("Desk") with { Style = new Style(Color.White, new Color(255, 0, 0)) };
         var blue = red with { Style = new Style(Color.White, new Color(0, 0, 255)) };
-        var a = HomeBar.Render([red], HaLiveStatus.Live, 40)!;
-        var b = HomeBar.Render([blue], HaLiveStatus.Live, 40)!;
+        var a = HomeBar.Render([red], 40)!;
+        var b = HomeBar.Render([blue], 40)!;
         Assert.Equal(Text(a), Text(b));
         Assert.NotEqual(a.Key, b.Key);
     }
@@ -387,14 +399,6 @@ public sealed class HomeBarTests
     {
         Assert.Equal(" 💡 Desk…", HomeBar.ChipText(Chip("Desk") with { Mark = HomeChipMark.Pending }, HomeBar.Fit.Full));
         Assert.Equal(" 💡 Desk!", HomeBar.ChipText(Chip("Desk") with { Mark = HomeChipMark.Failed }, HomeBar.Fit.Full));
-    }
-
-    [Fact]
-    public void TheStatusGlyph_TakesTheFeedsColour()
-    {
-        Assert.Equal(Theme.Accent, HomeBar.StatusStyle(HaLiveStatus.Live));
-        Assert.Equal(Theme.Warn, HomeBar.StatusStyle(HaLiveStatus.Retrying).Foreground);
-        Assert.Equal(Theme.Bad, HomeBar.StatusStyle(HaLiveStatus.Unauthorized).Foreground);
     }
 
     // ─── keys and the pane ──────────────────────────────────────────────────────

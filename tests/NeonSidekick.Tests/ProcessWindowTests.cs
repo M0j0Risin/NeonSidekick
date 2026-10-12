@@ -375,6 +375,9 @@ public sealed class ProcessWindowTests : IDisposable
         await Exit(session);
 
         Assert.Equal("/process", ProcessWindowText.Word);
+        Assert.Equal("▶ 3", ProcessWindowText.RuleTitle(3));   // the lower rule's count (2026-10-12), the user's mockup
+        Assert.Equal("", ProcessWindowText.RuleTitle(0));      // none running: the bare rule
+        Assert.Equal(1, NeonSidekick.UI.TextCells.Width(ProcessWindowText.RuleGlyph));
         Assert.Equal(session.Id + "  exited 0       0.0 s     cmd        echo one", ProcessWindowText.Row(session));
         Assert.Equal("exited 0 · echo one", ProcessWindowText.CompletionNote(session));
         Assert.Equal("echo one echo two", ProcessWindowText.Label("echo one\r\n  echo two\n"));

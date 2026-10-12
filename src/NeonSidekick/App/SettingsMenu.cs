@@ -1417,7 +1417,9 @@ internal sealed partial class SettingsMenu
     /// its cancel mode, the message history, the typo intercept, the hidden <c>/exit</c>), the transcript (its Markdown, the paste preview,
     /// the thumbnails' switch and size, what <c>/copy</c> takes), the screen (the theme, then top to bottom: the welcome splash, the header
     /// and the working directory in it, the toolbar, the performance bar, the menus' max height), and the outside apps last (the draft
-    /// editor, the image viewer and the themed-viewer switch). Each dependent row stays right under the one it hangs on; LLM
+    /// editor, the image viewer and the themed-viewer switch). Since 2026-10-12 (the user's ask) the bars have a run of their own,
+    /// Tool bars, under the screen's: the toolbar, the performance bar, the home bar and their order, the menus' max height staying
+    /// the screen's last row. Each dependent row stays right under the one it hangs on; LLM
     /// was spelled out too, in five runs (2026-10-01, the user's call, as General's that day), and since 2026-10-10 is two tabs (the
     /// user's call): Common keeps the runs every server reads — the connection (the URL, the model), how it answers (the reasoning
     /// level, the thinking's show), tools and limits (<see cref="SettingsField.LlmOfferTools"/>, the round-trip cap, the two timeouts),
@@ -1442,7 +1444,8 @@ internal sealed partial class SettingsMenu
         [SettingsField.Profile, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.Avatar,
          SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker,
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle,
-         SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder, SettingsField.MenuMaxHeight,
+         SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.MenuMaxHeight,
+         SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder,
          SettingsField.DraftEditor, SettingsField.ImageEditor],
         [SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays,
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
@@ -1799,7 +1802,7 @@ internal sealed partial class SettingsMenu
     public static int LabelWidthOf(IReadOnlyList<SettingsField> fields, string? tabTitle = null)
     {
         ArgumentNullException.ThrowIfNull(fields);
-        return fields.Max(f => (tabTitle is null ? FieldName(f) : RowName(f, tabTitle)).Length) + LabelGap;
+        return fields.Max(f => PaneName(f, tabTitle is null ? FieldName(f) : RowName(f, tabTitle)).Length) + LabelGap;
     }
 
     /// <summary>The first row's label: the loaded profile's name, padded like every other row, its directory dim in parentheses after it. Pinned.</summary>
@@ -2265,10 +2268,10 @@ internal sealed partial class SettingsMenu
         SettingsField.ShowHeader => "Show header",   // the user's name (2026-10-01)
         SettingsField.MenuMaxHeight => "Menus max height",   // the user's name (2026-10-01)
         SettingsField.ShowWorkingDirectory => "Working directory in header",
-        SettingsField.ToolbarItems => "Show toolbar",
-        SettingsField.ShowPerformanceBar => "Show performance bar",
-        SettingsField.ShowHomeBar => "Show home bar",
-        SettingsField.BarOrder => "Toolbar order",
+        SettingsField.ToolbarItems => "Toolbar",   // the three bars "Show toolbar", "Show performance bar" and "Show home bar" until 2026-10-12, the user's names
+        SettingsField.ShowPerformanceBar => "Performance bar",
+        SettingsField.ShowHomeBar => "Home bar",
+        SettingsField.BarOrder => "Toolbar order",   // "Order" on the pane, under Tool bars (PaneName)
         SettingsField.Theme => "Theme",
         SettingsField.ThemedExternalWindows => "Themed external windows",   // the user's name, under "Themed background" (2026-10-03; "Themed image viewer" beside "Image viewer" from later on 2026-09-27)
         SettingsField.ThemedBackground => "Themed background",   // the user's name, under "Theme" (2026-10-03)
@@ -4039,7 +4042,7 @@ internal sealed partial class SettingsMenu
                 rows.Add(SectionRule.Markup(heading));
             }
 
-            rows.Add(f == SettingsField.Profile ? ProfileLabel(profile ?? _settings.ProfileName, _settings.ProfileDirectory, width) : LiveLabel(f, saved, width, located, shortTab is null ? null : RowName(f, shortTab)));
+            rows.Add(f == SettingsField.Profile ? ProfileLabel(profile ?? _settings.ProfileName, _settings.ProfileDirectory, width) : LiveLabel(f, saved, width, located, PaneName(f, shortTab is null ? FieldName(f) : RowName(f, shortTab))));
         }
 
         // The strip's badge (2026-10-07): the rows here whose value is not the default, as each such row reads in the secondary accent.
@@ -6990,8 +6993,9 @@ internal sealed partial class SettingsMenu
         }
         else if (SettingButtonsFor(field) is { } settingButtons && _pane.Enabled)
         {
-            // The File, Print, Screen capture, Obsidian, YouTube and Claude Code advisor pages carry their settings' buttons (2026-10-09,
-            // the user's ask, the offered button's shape): the setting's own editor, then the page again with the values read afresh.
+            // The File, Print, Screen capture, Obsidian, YouTube and Advisors enabled pages carry their settings' buttons (2026-10-09,
+            // the user's ask, the offered button's shape; Advisors' on 2026-10-12): the setting's own editor, then the page again with
+            // the values read afresh.
             var page = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], SettingButtonKeys(settingButtons));
             int cursor = was ? 0 : 1;
             while (true)
@@ -8229,6 +8233,45 @@ internal sealed partial class SettingsMenu
         }
     }
 
+    /// <summary>
+    /// <c>/toolbar edit</c> (2026-10-12, the user's ask: as <c>/homebar edit</c> opens its picker): the <c>Toolbar</c> row's
+    /// checklist (<see cref="EditToolbarItemsAsync"/>) on its own. <paramref name="own"/>: the pane is the checklist's and closes as
+    /// it ends. True when anything changed.
+    /// </summary>
+    public async Task<bool> EditToolbarAsync(bool own, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await EditToolbarItemsAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (own)
+            {
+                _pane.Close();
+            }
+        }
+    }
+
+    /// <summary>
+    /// <c>/perfbar edit</c> (2026-10-12, the user's ask, as <see cref="EditToolbarAsync"/>): the <c>Performance bar</c> row's
+    /// checklist (<see cref="EditPerfBarAsync(CancellationToken)"/>) on its own; <paramref name="own"/> as there. True when anything changed.
+    /// </summary>
+    public async Task<bool> EditPerformanceBarAsync(bool own, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await EditPerfBarAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (own)
+            {
+                _pane.Close();
+            }
+        }
+    }
+
     /// <summary>The queue-mode picker under the settings list (2026-10-09): one <see cref="QueueModeLabel"/> row per <see cref="QueueMode.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickQueueModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
@@ -8347,7 +8390,7 @@ internal sealed partial class SettingsMenu
         {
             var saved = _settings.Current;
             var order = PaneBars.Order(saved.BarOrder);
-            var page = new MenuPage(Crumb(FieldName(SettingsField.BarOrder)), order.Select(id => PaneBars.Label(id, PaneBars.Shown(id, saved))).ToList(), BarOrderKeys);
+            var page = new MenuPage(Crumb(BarOrderPaneName), order.Select(id => PaneBars.Label(id, PaneBars.Shown(id, saved))).ToList(), BarOrderKeys);
             var picked = await PickOrderedChecklistAsync(page, cursor, cancellationToken, BarOrderButtons).ConfigureAwait(false);
             if (picked is not { } pick)
             {

@@ -699,7 +699,7 @@ Under *Home Assistant tools*. They control your own Home Assistant with a long-l
 * **Names, not ids:** "the den", "kitchen and hallway", "Den Corner Lamp" or "all". A room goes to its group light when it has one, else to every light in it. An ambiguous name comes back as a question, so the model never guesses an id.
 * **The action policy:** under `ask`, safe services run and anything else shows on the pane first. A no tells the model not to retry.
 * **States** are read at most every 30 seconds, and again after any change.
-* **The home bar** (*Show home bar*, `/homebar`) is your own hand, not the model's: it needs the URL and the key but not *Home Assistant tools*, the action policy never applies to it, and it keeps its own WebSocket while it shows. See [Home bar](SETTINGS.md#home-bar).
+* **The home bar** (*Home bar*, `/homebar`) is your own hand, not the model's: it needs the URL and the key but not *Home Assistant tools*, the action policy never applies to it, and it keeps its own WebSocket while it shows. See [Home bar](SETTINGS.md#home-bar).
 
 | Tool | Arguments | What it does |
 |---|---|---|

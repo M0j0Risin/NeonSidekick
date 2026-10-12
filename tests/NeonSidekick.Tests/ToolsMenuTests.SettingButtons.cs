@@ -31,6 +31,10 @@ public partial class ToolsMenuTests
         Assert.Equal("v", KeysOf(SettingsField.ObsidianTools));
         Assert.Equal("≡ max (8) · ≡ voice (pause) · ≡ order (relevance) · ≡ safe (moderate)", Titles(SettingsField.YouTubeTools));
         Assert.Equal("mvos", KeysOf(SettingsField.YouTubeTools));
+        Assert.Equal("≡ advisors (none)", Titles(SettingsField.Advisors));   // 2026-10-12, the user's ask: Advisor list from /tools advisors
+        Assert.Equal("a", KeysOf(SettingsField.Advisors));
+        var two = new AppSettingsData { AdvisorList = [new("ada", "critic"), new("bob", "")] };
+        Assert.Equal([new MenuButton("≡ advisors (2)", 'a', true)], SettingsMenu.SettingButtons(SettingsMenu.SettingButtonsFor(SettingsField.Advisors)!, two, dir));   // the count alone
         Assert.Null(SettingsMenu.SettingButtonsFor(SettingsField.DockerTools));
         Assert.Null(SettingsMenu.SettingButtonsFor(SettingsField.AskUser));
 
@@ -54,6 +58,7 @@ public partial class ToolsMenuTests
     [InlineData(SettingsField.ScreenTools)]
     [InlineData(SettingsField.ObsidianTools)]
     [InlineData(SettingsField.YouTubeTools)]
+    [InlineData(SettingsField.Advisors)]
     public async Task ShowSwitch_AGroupWithSettings_HasItsSettingButtons(SettingsField toolSwitch)
     {
         var (menu, pane, _) = PaneMenu();
@@ -142,6 +147,29 @@ public partial class ToolsMenuTests
         Assert.Equal("", openedOn);
         Assert.Equal(vault, _settings.Current.ObsidianVault);
         Assert.Contains("≡ vault (MyVault)", Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// A on the Advisors enabled page (2026-10-12, the user's ask: an advisors button to Advisor list's pane, the toolbar's 🦉 page):
+    /// the list's own pane under its name, ESC there back to the page, the switch as it was.
+    /// </summary>
+    [Fact]
+    public async Task ShowSwitch_Advisors_TheAdvisorsButton_OpensTheAdvisorList()
+    {
+        var (menu, pane, _) = PaneMenu();
+        bool was = _settings.Current.Advisors;
+        Push(Keys.Char('a'), Keys.Escape, Keys.Escape);   // the button, out of the list, out of the page
+
+        await menu.ShowSwitchAsync(SettingsField.Advisors, CancellationToken.None);
+
+        int page = Output.IndexOf(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.Advisors) + " │ ≡ advisors (none) ", StringComparison.Ordinal);
+        int list = Output.IndexOf(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.AdvisorList), StringComparison.Ordinal);
+        Assert.True(page >= 0 && list > page, Output);
+        Assert.Contains(SettingsMenu.AddAdvisorRow, Output);
+        Assert.True(Output.LastIndexOf("≡ advisors (none) ", StringComparison.Ordinal) > list, Output);   // the page again after the list
+        Assert.Equal(was, _settings.Current.Advisors);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }

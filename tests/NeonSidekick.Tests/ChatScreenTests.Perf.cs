@@ -76,6 +76,45 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
+    /// <c>/toolbar edit</c> and <c>/perfbar edit</c> (2026-10-12, the user's ask: "just like there is a /homebar edit path"): each
+    /// opens its row's checklist on the pane, N unchecks every item there and saves at once, and ESC closes it — no turn. Under a
+    /// reply the edit waits on the watcher as a pane does, while the bare word and the others stay quick.
+    /// </summary>
+    [Fact]
+    public async Task ToolbarEdit_AndPerfbarEdit_OpenTheirChecklists()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = ["tools", "usage"]; d.PerformanceBarItems = ["cpu", "ram"]; });
+        _console.Profile.Width = 120;
+        _console.Profile.Height = 60;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/toolbar edit");
+        _console.Input.PushKey(Keys.Char('n'));   // none
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/perfbar EDIT");
+        _console.Input.PushKey(Keys.Char('n'));
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.ToolbarToggleKeys, output);
+        Assert.Contains(" › " + SettingsMenu.FieldName(SettingsField.ToolbarItems) + " ", output);
+        Assert.Contains(" › " + SettingsMenu.FieldName(SettingsField.ShowPerformanceBar) + " ", output);
+        Assert.Empty(ToolbarItems.Resolve(_settings.Current.ToolbarItems));
+        Assert.Empty(PerfBarItems.Resolve(_settings.Current.PerformanceBarItems));
+        Assert.DoesNotContain(ToolbarItems.UsageError, output);
+        Assert.DoesNotContain(PerfText.UsageError, output);
+        Assert.Empty(_chat.Requests);
+
+        Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Toolbar, "edit"));
+        Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Perf, " Edit "));
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Toolbar, ""));
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Perf, "gauge"));
+        Assert.Equal("choose the toolbar's items and their order", ToolbarItems.DescribeWord(ToolbarItems.EditWord));
+        Assert.Equal("choose the bar's meters and their order", PerfBarMode.Describe(PerfBarMode.EditWord));
+    }
+
+    /// <summary>
     /// <c>/toolbar</c> (later on 2026-09-30, the user's ask: "same as how /perf works for the perfbar"): bare it hides the toolbar
     /// and shows it again with the items it had; <c>off</c> and <c>on</c> say which; Ctrl+T (Ctrl+Alt+B until later still on 2026-10-01) is the bare word; anything
     /// else is the usage error. Never a turn.

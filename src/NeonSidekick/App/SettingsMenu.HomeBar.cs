@@ -4,7 +4,7 @@ using Spectre.Console;
 
 namespace NeonSidekick.App;
 
-// ── The home bar's picker: /settings › Client › Chat › Show home bar and /homebar edit (2026-10-12) ──
+// ── The home bar's picker: /settings › Client › Chat › Home bar and /homebar edit (2026-10-12) ──
 
 internal sealed partial class SettingsMenu
 {

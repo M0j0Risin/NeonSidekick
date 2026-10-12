@@ -10,12 +10,12 @@ public enum PaneBar
     /// <summary>The hint row (the busy row while a turn runs): always drawn.</summary>
     Hint,
 
-    /// <summary>The toolbar (<c>Show toolbar</c>).</summary>
+    /// <summary>The toolbar (<c>Toolbar</c>).</summary>
     Toolbar,
 
-    /// <summary>The performance bar (<c>Show performance bar</c>).</summary>
+    /// <summary>The performance bar (<c>Performance bar</c>).</summary>
     Perf,
 
-    /// <summary>The home bar (<c>Show home bar</c>).</summary>
+    /// <summary>The home bar (<c>Home bar</c>).</summary>
     Home,
 }

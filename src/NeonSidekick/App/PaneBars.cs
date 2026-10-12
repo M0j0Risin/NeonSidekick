@@ -9,7 +9,8 @@ namespace NeonSidekick.App;
 /// performance bar and the home bar, the hint bar under the performance bar for one; the home bar picker's move keys again):
 /// the four rows under the pane's lower rule in the user's order, saved in <see cref="AppSettingsData.BarOrder"/>. Null is
 /// <see cref="Names"/>' order, the one the pane always had, and what the page's <c>⊡ default</c> puts back. Only the order:
-/// each bar's own row (<c>Show toolbar</c>, <c>Show performance bar</c>, <c>Show home bar</c>) shows or hides it, and one that
+/// each bar's own row (<c>Toolbar</c>, <c>Performance bar</c>, <c>Home bar</c>; <c>Show …</c> until 2026-10-12, and all four under
+/// Tool bars since, this one <c>Order</c> on the pane) shows or hides it, and one that
 /// is off keeps its place for when it comes back. A short window still drops the home bar first, then the performance bar, then
 /// the toolbar, wherever they sit. <see cref="Order"/> is <see cref="ItemOrder.Resolve"/>, so an unknown word is dropped without a
 /// warning and a missing id goes back beside its neighbour. Pure.
@@ -34,13 +35,16 @@ public static class PaneBars
         _ => id,
     };
 
-    /// <summary>What shows or hides a bar, dim after its name on the page. Pinned.</summary>
+    /// <summary>
+    /// What a bar is, dim after its name on the page. Pinned. Until 2026-10-12 the row that shows or hides it, which read
+    /// <c>Toolbar  Toolbar</c> once the rows took the bars' own names (the user's): what is on it since.
+    /// </summary>
     public static string Describe(string id) => id switch
     {
         Hint => "always shown; the busy row under a reply",
-        Toolbar => "Show toolbar",
-        Perf => "Show performance bar",
-        Home => "Show home bar",
+        Toolbar => "the panes' glyphs and the path",
+        Perf => "the meters",
+        Home => "Home Assistant's chips",
         _ => "",
     };
 

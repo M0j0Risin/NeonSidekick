@@ -19,7 +19,7 @@ public static class PerfText
         name == "off" ? "(" + Glyph + " performance bar off)" : "(" + Glyph + " performance bar on: " + name + ")";
 
     /// <summary><c>/perfbar</c> given something that is not a look. Pinned.</summary>
-    public const string UsageError = "/perfbar takes off, text, gauge or led, or nothing to toggle.";
+    public const string UsageError = "/perfbar takes off, text, gauge, led or edit, or nothing to toggle.";
 
     public const string CpuLabel = "CPU";
     public const string RamLabel = "RAM";
@@ -56,7 +56,7 @@ public static class PerfText
     public const string NetUpNote = "upload rate (bits/s)";
     public const string ProcNote = "background processes";
 
-    /// <summary>The <c>Show performance bar</c> row's value with no meter checked (App.PerfBarItems.Value).</summary>
+    /// <summary>The <c>Performance bar</c> row's value with no meter checked (App.PerfBarItems.Value).</summary>
     public const string NoMeters = "off";
 
     /// <summary>The same row's word for every meter checked.</summary>

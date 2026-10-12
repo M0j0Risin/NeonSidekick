@@ -22,7 +22,7 @@ public class PerfBarTests
     {
         // The look alone since 2026-09-30: whether the bar shows is the checklist's (PerfBarItems).
         Assert.Equal(["text", "gauge", "led"], PerfBarMode.Names);   // spark until 2026-10-12 (the user's call)
-        Assert.Equal(["off", "text", "gauge", "led"], PerfBarMode.Words);
+        Assert.Equal(["off", "text", "gauge", "led", "edit"], PerfBarMode.Words);   // edit since 2026-10-12
         Assert.Equal("led", PerfBarMode.Default);   // text until 2026-10-02 (the user's ask)
         Assert.Equal("led", new AppSettingsData().PerformanceBarLook);
         foreach (string name in PerfBarMode.Names)
@@ -119,7 +119,7 @@ public class PerfBarTests
         Assert.Equal("📈", PerfText.Glyph);
         Assert.Equal("(📈 performance bar on: gauge)", PerfText.BarNotice("gauge"));
         Assert.Equal("(📈 performance bar off)", PerfText.BarNotice("off"));
-        Assert.Equal("/perfbar takes off, text, gauge or led, or nothing to toggle.", PerfText.UsageError);
+        Assert.Equal("/perfbar takes off, text, gauge, led or edit, or nothing to toggle.", PerfText.UsageError);   // edit since 2026-10-12
     }
 
     // ── The network (2026-09-30) ────────────────────────────────────────────

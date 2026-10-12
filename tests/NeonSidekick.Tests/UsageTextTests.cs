@@ -258,13 +258,13 @@ public class UsageTextTests
         Assert.Equal("  Speed                46.0 tok/s", lines[12]);
         Assert.Equal("", lines[13]);
         // One label width for the four sections: the value column stays where the widest label put it.
-        Assert.Equal(Head(UsageText.ConversationHeading, UsageText.SummedNote), lines[14]);
+        Assert.Equal(Head(UsageText.ConversationHeading), lines[14]);
         Assert.Equal("  Total                12,480", lines[15]);
         Assert.Equal("  Reasoning            120", lines[18]);   // the one request that reported a count
         Assert.Equal("  Time to first token  0.5 s", lines[20]);   // per request: 4.8 s over 9
         Assert.Equal("  Speed                40.0 tok/s", lines[21]);
         Assert.Equal("", lines[22]);
-        Assert.Equal(Head(UsageText.SessionHeading, UsageText.SummedNote), lines[23]);
+        Assert.Equal(Head(UsageText.SessionHeading), lines[23]);
         Assert.Equal("  Total                30,112", lines[24]);
         Assert.Equal("  Requests             21", lines[28]);
         Assert.Equal("  Time to first token  0.5 s", lines[29]);   // 9.8 s over 21
@@ -309,7 +309,7 @@ public class UsageTextTests
         // The notes sit on the rules.
         Assert.Equal(Head(UsageText.LastReplyHeading, UsageText.NoReportNote), lines[4]);
         Assert.Equal("", lines[5]);   // no rows under an empty scope
-        Assert.Equal(Head(UsageText.ConversationHeading, "every request summed; 1 reply reported no usage"), lines[6]);
+        Assert.Equal(Head(UsageText.ConversationHeading, "1 reply reported no usage"), lines[6]);
         Assert.Equal("  Total                120", lines[7]);
         Assert.Equal("  Reasoning            —", lines[10]);   // no request counted its thinking: the row stays, with a dash
         Assert.Equal("  Time to first token  0.5 s", lines[12]);

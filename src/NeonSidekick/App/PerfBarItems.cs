@@ -5,7 +5,7 @@ using Spectre.Console;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// The setting <c>Show performance bar</c> as a checklist (2026-09-30, the user's ask: the toolbar's shape — pick the
+/// The setting <c>Performance bar</c> as a checklist (2026-09-30, the user's ask: the toolbar's shape — pick the
 /// meters, none picked is no bar — in place of the one word that was both the switch and the look): one id per meter, in
 /// the bar's order, saved in <see cref="Settings.AppSettingsData.PerformanceBarItems"/>. Null there is <see cref="Defaults"/>
 /// (2026-10-02, the user's ask: the bar shown by default, the toolbar's shape; none until then) and an empty list is none:
@@ -131,7 +131,7 @@ public static class PerfBarItems
     public static List<string>? SaveOrder(IReadOnlyList<string> order) => ItemOrder.Save(order, Names);
 
     /// <summary>
-    /// The <c>Show performance bar</c> row's value: <c>off</c> with nothing checked, else the checked meters and the look —
+    /// The <c>Performance bar</c> row's value: <c>off</c> with nothing checked, else the checked meters and the look —
     /// <c>CPU, RAM, NET↓ · gauge</c>, or <c>all · gauge</c> with every one, in the bar's order (<paramref name="order"/>, the
     /// saved <see cref="Settings.AppSettingsData.PerformanceBarOrder"/>, 2026-10-12). Pinned.
     /// </summary>

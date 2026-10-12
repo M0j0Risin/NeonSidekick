@@ -214,7 +214,7 @@ public static class HomeBarItems
     }
 
     /// <summary>
-    /// The <c>Show home bar</c> row's value: <c>off</c> with nothing on it, else how many items and the first few names
+    /// The <c>Home bar</c> row's value: <c>off</c> with nothing on it, else how many items and the first few names
     /// (an area's or an entity's from <paramref name="catalog"/>, the id made readable without one: the settings list has none). Pure.
     /// </summary>
     public static string Value(IReadOnlyList<string>? saved, HaCatalog? catalog)

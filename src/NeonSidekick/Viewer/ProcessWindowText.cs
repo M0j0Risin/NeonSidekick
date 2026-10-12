@@ -13,6 +13,17 @@ public static class ProcessWindowText
     /// <summary>The command's word. Pinned.</summary>
     public const string Word = "/process";
 
+    /// <summary>The glyph of the count on the lower rule (2026-10-12). Pinned.</summary>
+    public const string RuleGlyph = "▶";
+
+    /// <summary>
+    /// The title at the right of the rule under the input line (2026-10-12, the user's ask and their mockup: <c>▶ 3</c>, where the
+    /// session's name sits on the rule above): the background processes still running, the model's and <c>/cmd --bg</c>'s, the count PROC shows; empty — the
+    /// bare rule — while none run. A double-click on it opens <c>/process</c>. Pinned.
+    /// </summary>
+    public static string RuleTitle(int running) =>
+        running > 0 ? RuleGlyph + " " + running.ToString(CultureInfo.InvariantCulture) : "";
+
     /// <summary>The longest label a title or a list row carries before it is cut with an ellipsis.</summary>
     public const int LabelCells = 80;
 

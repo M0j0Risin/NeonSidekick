@@ -59,11 +59,11 @@ public sealed class ToolbarItemsTests
         Assert.Equal(["tools"], ToolbarItems.Toggle("on", [], ["tools"])!.Value.Items);
         Assert.Null(ToolbarItems.Toggle("sideways", null, null));
 
-        Assert.Equal(["on", "off"], ToolbarItems.Words);
+        Assert.Equal(["on", "off", "edit"], ToolbarItems.Words);   // edit since 2026-10-12
         Assert.Equal("show or hide the toolbar", ToolbarItems.HelpSummary);   // its forms are /help's third column since 2026-10-05
         Assert.Equal("(toolbar off)", ToolbarItems.Notice(false));
         Assert.Equal("(toolbar on)", ToolbarItems.Notice(true));
-        Assert.Equal("/toolbar takes on or off, or nothing to toggle.", ToolbarItems.UsageError);
+        Assert.Equal("/toolbar takes on, off or edit, or nothing to toggle.", ToolbarItems.UsageError);   // edit since 2026-10-12
     }
 
     [Fact]

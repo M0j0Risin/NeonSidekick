@@ -15,7 +15,8 @@ internal sealed partial class SettingsMenu
     /// tab ran the Claude Code server, <c>/claude</c> and the Anthropic API together with nothing saying whose row was whose, and
     /// the rest wanted the same look): Anthropic's Claude Code (the executable both read), Claude Code server, <c>/claude</c>
     /// command and Anthropic API; Embedded, Docker, OpenAI, TTS, STT, Sessions and Advisors in runs of their own, a few rows moved
-    /// to sit under theirs (<see cref="TabFields"/>). Pinned.
+    /// to sit under theirs (<see cref="TabFields"/>). Chat's Tool bars (2026-10-12, the user's ask) holds the four bar rows under
+    /// Screen. Pinned.
     /// </summary>
     public static readonly IReadOnlyDictionary<SettingsTab, IReadOnlyList<(SettingsField First, string Title)>> TabSections =
         new Dictionary<SettingsTab, IReadOnlyList<(SettingsField First, string Title)>>
@@ -26,6 +27,7 @@ internal sealed partial class SettingsMenu
                 (SettingsField.QueueMode, "Input line"),
                 (SettingsField.TranscriptMarkdown, "Transcript"),
                 (SettingsField.Theme, "Screen"),
+                (SettingsField.ToolbarItems, "Tool bars"),
                 (SettingsField.DraftEditor, "Outside apps"),
             ],
             [SettingsTab.Common] =
@@ -228,6 +230,21 @@ internal sealed partial class SettingsMenu
         string rest = name[(tabTitle.Length + 1)..];
         return char.ToUpperInvariant(rest[0]) + rest[1..];
     }
+
+    /// <summary>
+    /// A row's name on the pane where its section says the rest (2026-10-12, the user's names: <c>Toolbar order</c> is
+    /// <c>Order</c> under Tool bars), else <paramref name="name"/>, what the row would be called there otherwise. The full
+    /// <see cref="FieldName"/> stays everywhere else — notices, <c>neon_help</c>, SETTINGS.md — where a bare "Order" would say
+    /// nothing, as <see cref="RowName"/>'s short names do. Pure.
+    /// </summary>
+    public static string PaneName(SettingsField field, string name) => field switch
+    {
+        SettingsField.BarOrder => BarOrderPaneName,
+        _ => name,
+    };
+
+    /// <summary><c>Toolbar order</c>'s name on the pane (2026-10-12). Pinned.</summary>
+    public const string BarOrderPaneName = "Order";
 
     /// <summary>
     /// The <c>/settings</c> tabs whose rows keep their whole names though every one carries the tab's title (2026-10-10, the user's

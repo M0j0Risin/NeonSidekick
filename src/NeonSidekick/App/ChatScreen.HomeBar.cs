@@ -21,13 +21,10 @@ internal sealed partial class ChatScreen
     /// <summary>The domains a room's pane lists, in this order.</summary>
     public static readonly string[] HomeRoomDomains = ["light", "switch", "fan", "input_boolean", "media_player", "cover", "lock", "climate"];
 
-    // The status glyph's pair key: below every chip's index (≥ 0) and DoubleClick's −1.
-    private const int HomeStatusPairKey = -1000;
-
     /// <summary>The home bar's live feed: one WebSocket while the bar is shown.</summary>
     private readonly IHaLive _homeLive;
 
-    /// <summary>The chips' double-clicks (and the status glyph's).</summary>
+    /// <summary>The chips' double-clicks.</summary>
     private readonly DoubleClick _homeClicks;
 
     private readonly object _homeGate = new();
@@ -53,11 +50,11 @@ internal sealed partial class ChatScreen
     private sealed record HomePending(DateTimeOffset Since, IReadOnlyList<HaLiveEntity?> Before, IReadOnlyList<string> Ids, bool Failed);
 
     // The bar as last built, and what it was built from.
-    private sealed record HomeCache(string ItemsKey, HaCatalog? Catalog, long Model, IReadOnlySet<string> Ids, long Live, int Cells, ThemePalette Palette, DateTimeOffset Built, IReadOnlyList<HomeChip> Chips, HomeRow? Row, HaLiveStatus Status);
+    private sealed record HomeCache(string ItemsKey, HaCatalog? Catalog, long Model, IReadOnlySet<string> Ids, long Live, int Cells, ThemePalette Palette, DateTimeOffset Built, IReadOnlyList<HomeChip> Chips, HomeRow? Row);
 
     /// <summary>
     /// The home bar's row for the settings in force (2026-10-12, the user's ask) in <paramref name="cells"/> cells: null — no
-    /// row, the feed told the bar is hidden — while <c>Show home bar</c> has nothing on it; else the chips (<see cref="HomeChips"/>)
+    /// row, the feed told the bar is hidden — while <c>Home bar</c> has nothing on it; else the chips (<see cref="HomeChips"/>)
     /// over the live feed, rendered by <see cref="HomeBar.Render"/>. Asked several times a pane tick, so the row is cached and
     /// rebuilt only when the items, the feed's version, a click, the page, the width or the theme moved — the feed's version at
     /// most every <see cref="HomeRebuildEvery"/> — and a pending chip's wait running out. The feed is told the entities to keep
@@ -110,17 +107,16 @@ internal sealed partial class ChatScreen
             }
 
             UpdateHomePending(live, now);
-            var status = live.Status == HaLiveStatus.Off && live.Error is null ? HaLiveStatus.Connecting : live.Status;
             bool stale = live.Status != HaLiveStatus.Live;
             var chips = items.Select(i => HomeChips.Build(i, live.Entities, live.Catalog, HomeMarkOf(i), stale, aliases)).ToList();
-            row = HomeBar.Render(chips, status, cells, _homePage);
+            row = HomeBar.Render(chips, cells, _homePage);
             if (row is not null && _homePage >= row.Pages)
             {
                 _homePage = row.Pages - 1;
-                row = HomeBar.Render(chips, status, cells, _homePage);
+                row = HomeBar.Render(chips, cells, _homePage);
             }
 
-            _homeCache = new HomeCache(key, live.Catalog, _homeModel, ids, live.Version, cells, Theme.Current, now, chips, row, status);
+            _homeCache = new HomeCache(key, live.Catalog, _homeModel, ids, live.Version, cells, Theme.Current, now, chips, row);
         }
 
         if (want is not null)
@@ -169,7 +165,7 @@ internal sealed partial class ChatScreen
     /// A click on the screen (2026-10-12, <see cref="KeySource.HomeBarClick"/>, on the reading task): not the bar's, or the bar's
     /// — a single click on a chip flashes its note, a second within the pair's interval does what the chip does (a call at once,
     /// marked pending until the state changes; or the line that asks or opens its pane); a right-click opens its pane; ‹ › turn
-    /// the page; the status glyph's note, and a double-click on it the picker. A click on the bar's blanks is not the bar's: it
+    /// the page (the ⌂ status glyph's note and its double-click to the picker went later on 2026-10-12, the user's call). A click on the bar's blanks is not the bar's: it
     /// goes on to the readers as a click on the toolbar's blanks (<see cref="ScreenPane.TryHitToolbar"/>), so a double-click there
     /// opens <c>/settings</c> as on every other bar (2026-10-12, the user's ask; spent until then).
     /// </summary>
@@ -201,16 +197,6 @@ internal sealed partial class ChatScreen
                     _homeModel++;
                 }
 
-                return HomeClick.Spent;
-
-            case HomeTarget.Status:
-                if (click.Button == MouseButton.Right || _homeClicks.Second(HomeStatusPairKey))
-                {
-                    _homeClicks.Reset();
-                    return HomeClick.Run(HomeBarText.Command + " " + HomeBarText.EditWord);
-                }
-
-                _pane.Flash(HomeBarText.StatusNote(cache.Status, _homeLive.Snapshot.Error));
                 return HomeClick.Spent;
         }
 

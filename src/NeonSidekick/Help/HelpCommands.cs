@@ -159,8 +159,8 @@ public static class HelpCommands
         ]),
         new("/homebar",
         [
-            new("/homebar [on|off]", "Show or hide the home bar, the row of Home Assistant chips under the performance bar by default (*Show home bar*; *Toolbar order* moves it). On its own it hides the bar, or shows it again with the items it last had; the first time, with nothing picked, it opens the picker. Works while a reply runs; Ctrl+W runs it too."),
-            new("/homebar edit", "Choose the bar's rooms and devices, and their order: the picker's first tab is the bar in order (Shift+↑/↓ move an item, Shift+Home/End to the top or bottom, Delete removes it, Enter for the same as a list and Rename on the bar…), the other tabs Rooms, Lights, Switches, Sensors, Climate, Media, Scenes, Security, Zones and Other, where Space or Enter adds or removes and typing filters. A double-click on the bar's ⌂ opens it too."),
+            new("/homebar [on|off]", "Show or hide the home bar, the row of Home Assistant chips under the performance bar by default (*Home bar*; *Toolbar order* moves it). On its own it hides the bar, or shows it again with the items it last had; the first time, with nothing picked, it opens the picker. Works while a reply runs; Ctrl+W runs it too."),
+            new("/homebar edit", "Choose the bar's rooms and devices, and their order: the picker's first tab is the bar in order (Shift+↑/↓ move an item, Shift+Home/End to the top or bottom, Delete removes it, Enter for the same as a list and Rename on the bar…), the other tabs Rooms, Lights, Switches, Sensors, Climate, Media, Scenes, Security, Zones and Other, where Space or Enter adds or removes and typing filters."),
             new("/homebar tap <item>", "What a double-click on a chip does, by its item (`entity:light.desk`, `area:kitchen`) or its name: a light, switch or fan toggles, a room's lights go off or on, a scene or script runs, a player plays or pauses. An unlock, opening a garage, gate or door, and disarming an alarm ask Yes or No first."),
             new("/homebar show <item>", "A chip's pane, what a right-click opens: its actions (on, off, brightness, volume, open, close, lock…), or a room's devices to switch one by one."),
             new("/homebar name <item> = <alias>", "Show an item's chip under a name of your own (`/homebar name Den PC Monitor = PC`); the item by its id, name or alias. Nothing after the `=` takes the alias off. The chip's label only: a click's note and its pane keep Home Assistant's name."),
@@ -226,7 +226,8 @@ public static class HelpCommands
         ]),
         new("/perfbar",
         [
-            new("/perfbar [off|text|gauge|led]", "Show or hide the performance bar (*Show performance bar*). On its own it hides the bar, or shows it again with the meters it last had (CPU, RAM, GPU and VRAM the first time); `off` hides it; a look name sets that look and shows the bar. Works while a reply runs; the toolbar's 📈 and Ctrl+F run it too."),
+            new("/perfbar [off|text|gauge|led]", "Show or hide the performance bar (*Performance bar*). On its own it hides the bar, or shows it again with the meters it last had (CPU, RAM, GPU and VRAM the first time); `off` hides it; a look name sets that look and shows the bar. Works while a reply runs; the toolbar's 📈 and Ctrl+F run it too."),
+            new("/perfbar edit", "Choose the bar's meters and their order: the *Performance bar* row's checklist (Enter or Space checks a meter, Shift+↑/↓ moves it, Shift+Home/End to the top or bottom, Delete unchecks; `a`, `n` and `d` all, none and the default)."),
         ]),
         new("/plan",
         [
@@ -247,7 +248,7 @@ public static class HelpCommands
         ]),
         new("/process",
         [
-            new("/process", "List the background processes the model started with `run_command`'s `background` option on a pane: the id, running or how it ended, how long it has run, the shell and the command. Enter or a double-click on a row opens it in the process window; the *kill* button (or `k`) stops the highlighted one after a yes/no. The *running* and *ended* buttons (or `r` and `e`) show only those; the lit one pressed again shows all. The toolbar's ⚡ opens it too."),
+            new("/process", "List the background processes the model started with `run_command`'s `background` option on a pane: the id, running or how it ended, how long it has run, the shell and the command. Enter or a double-click on a row opens it in the process window; the *kill* button (or `k`) stops the highlighted one after a yes/no. The *running* and *ended* buttons (or `r` and `e`) show only those; the lit one pressed again shows all. The toolbar's ⚡ opens it too, and so does a double-click on the ▶ count at the right of the rule under the input line, which shows how many run while any do."),
             new("/process <id>", "Open the process window on one (any unique start of its id; Tab completes it): its output live, following the newest line while at the bottom, stderr in the warning colour, the title its state. Scroll, select and copy as in the log window (`/log`); TAB brings the terminal forward. `/process` with another id switches the window to that process in the same place. Ctrl+K twice within 3 seconds stops the process: the chat says it was stopped by you, and the model hears of it on its next turn."),
         ]),
         new("/profile",
@@ -388,7 +389,8 @@ public static class HelpCommands
         ]),
         new("/toolbar",
         [
-            new("/toolbar [on|off]", "Show or hide the toolbar (*Show toolbar*). On its own it hides the toolbar, or shows it again with the items it last had (the default eleven the first time); `on` and `off` say which. Works while a reply runs; Ctrl+T runs it too."),
+            new("/toolbar [on|off]", "Show or hide the toolbar (*Toolbar*). On its own it hides the toolbar, or shows it again with the items it last had (the default eleven the first time); `on` and `off` say which. Works while a reply runs; Ctrl+T runs it too."),
+            new("/toolbar edit", "Choose the toolbar's items and their order: the *Toolbar* row's checklist (Enter or Space checks an item, Shift+↑/↓ moves it, Shift+Home/End to the top or bottom, the path always last, Delete unchecks; `a`, `n` and `d` all, none and the default)."),
         ]),
         new("/tools",
         [

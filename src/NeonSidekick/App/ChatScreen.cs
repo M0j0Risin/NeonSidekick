@@ -1254,6 +1254,8 @@ internal sealed partial class ChatScreen
             // ask), as Session show name allows; read per draw and on the tick, so the model's title lands
             // from the pool and a flipped setting shows at once. A /botchat shows its cast there instead (2026-09-30).
             RuleTitle = () => UpperRuleTitle(_botChatCast, _sessionTitle, ShowNameDisplay(_effective())),
+            // The running processes' count on the lower rule (2026-10-12, the user's ask): ▶ 3, nothing while none run.
+            LowerRuleTitle = () => ProcessWindowText.RuleTitle(_processes.Running),
             Trailer = () => ModelLabel(_session.Endpoint?.ModelId),
             TrailerMark = () => ModelMark(_session.Endpoint?.ModelId, _effective().LlmReasoning),
             // The queued count after the row's lead in both states (2026-09-18): the pane draws it
@@ -2692,6 +2694,13 @@ internal sealed partial class ChatScreen
                 }
 
                 return _queuedClicks.Second(InputLine.RuleTitlePairKey) ? SessionTitleLine : null;
+            }
+
+            if (_pane.TryHitLowerRuleTitle(click.X, click.Y))
+            {
+                // The running processes' count on the lower rule (2026-10-12, the user's ask): two clicks answer /process,
+                // the list under the reply as at idle.
+                return _queuedClicks.Second(InputLine.LowerRuleTitlePairKey) ? ProcessWindowText.Word : null;
             }
 
             if (_pane.PictureAt(click.X, click.Y) is int picture)
@@ -9843,6 +9852,18 @@ internal sealed partial class ChatScreen
                         }
 
                         break;
+                    case InputResult.LowerRuleTitle:
+                        // A double-click on the running processes' count on the lower rule (2026-10-12, the user's ask): /process
+                        // through the dispatch, its list — no transcript row, the draft back after, as the session's name.
+                        _timers.Acknowledge();
+                        DisarmExit();
+                        await _speech.StopAsync().ConfigureAwait(false);
+                        if (await HandleAsync(ProcessWindowText.Word, [], cancellationToken).ConfigureAwait(false))
+                        {
+                            return 0;
+                        }
+
+                        break;
                     case InputResult.Shortcut shortcut:
                         // A command chord (2026-09-30, the user's ask: Ctrl+Alt+C, N or S, and the pane chords later that day,
                         // Keys.ShortcutLine): its bare command through the dispatch as the typed line — without the transcript row or the history, the draft back after.
@@ -12195,12 +12216,22 @@ internal sealed partial class ChatScreen
                 await ShowKeyCheckAsync(_transcript, cancellationToken).ConfigureAwait(false);
                 return false;
 
+            case SlashCommand.Perf when PerfBarMode.IsEdit(args):
+                // /perfbar edit (2026-10-12, the user's ask, as /homebar edit): the Performance bar row's checklist.
+                await _menu.EditPerformanceBarAsync(own: true, cancellationToken).ConfigureAwait(false);
+                return false;
+
             case SlashCommand.Perf:
                 HandlePerf(args);
                 return false;
 
             case SlashCommand.HomeBar:
                 await HandleHomeBarAsync(args, _transcript, cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.Toolbar when ToolbarItems.IsEdit(args):
+                // /toolbar edit (2026-10-12, the user's ask, as /homebar edit): the Toolbar row's checklist.
+                await _menu.EditToolbarAsync(own: true, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Toolbar:

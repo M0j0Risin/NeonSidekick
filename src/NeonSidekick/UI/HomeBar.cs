@@ -5,10 +5,9 @@ using Spectre.Console;
 
 namespace NeonSidekick.UI;
 
-/// <summary>What a cell of the home bar is: the status glyph, a chip (<see cref="HomeSpan.Index"/> into the chips), or a page arrow.</summary>
+/// <summary>What a cell of the home bar is: a chip (<see cref="HomeSpan.Index"/> into the chips) or a page arrow (the status glyph went on 2026-10-12).</summary>
 public enum HomeTarget
 {
-    Status,
     Chip,
     Prev,
     Next,
@@ -24,12 +23,14 @@ public readonly record struct HomeSpan(int Start, int Cells, HomeTarget Target, 
 public sealed record HomeRow(IReadOnlyList<PerfSegment> Segments, IReadOnlyList<HomeSpan> Spans, int Pages, string Key);
 
 /// <summary>
-/// The home bar's row (2026-10-12, the user's ask: a bar of Home Assistant rooms and devices under the perf bar): the status
-/// glyph <see cref="HomeBarText.StatusGlyph"/> at the left in the feed's colour, then the chips (<see cref="HomeChips"/>) side by side, each
-/// with a blank at either end — <c> 💡 Desk 80% </c> — so two blanks part one name from the next (a third, a gap between
-/// the chips, went on 2026-10-12, the user's call, once the chips lost their fills). Left-aligned (a row of things to press reads from its start, unlike the
-/// meters). Too narrow a window shortens the names (<see cref="HomeChip.Short"/>), then drops them (the glyph and the value),
-/// then splits the chips into pages behind <see cref="HomeBarText.PrevGlyph"/>/<see cref="HomeBarText.NextGlyph"/>. Pure.
+/// The home bar's row (2026-10-12, the user's ask: a bar of Home Assistant rooms and devices under the perf bar): the chips
+/// (<see cref="HomeChips"/>) side by side, each with a blank at either end — <c> 💡 Desk 80% </c> — so two blanks part one
+/// name from the next (a third, a gap between the chips, went on 2026-10-12, the user's call, once the chips lost their fills).
+/// Centred on the row as the meters are (<see cref="PerfBar"/>), the odd cell at the right; left-aligned behind a ⌂ status glyph
+/// until later on 2026-10-12, when the user had the glyph, its note and its double-click to the picker taken off (the chips
+/// still go dim while the feed is down; Enter on <c>Home bar</c> and <c>/homebar edit</c> open the picker). Too narrow a window
+/// shortens the names (<see cref="HomeChip.Short"/>), then drops them (the glyph and the value), then splits the chips into
+/// pages behind <see cref="HomeBarText.PrevGlyph"/>/<see cref="HomeBarText.NextGlyph"/>. Pure.
 /// </summary>
 public static class HomeBar
 {
@@ -45,7 +46,7 @@ public static class HomeBar
     /// The row for <paramref name="chips"/> in <paramref name="cells"/> cells, page <paramref name="page"/> when they need
     /// pages (clamped). Null — no row — with no chips.
     /// </summary>
-    public static HomeRow? Render(IReadOnlyList<HomeChip> chips, HaLiveStatus status, int cells, int page = 0)
+    public static HomeRow? Render(IReadOnlyList<HomeChip> chips, int cells, int page = 0)
     {
         ArgumentNullException.ThrowIfNull(chips);
         if (chips.Count == 0)
@@ -53,34 +54,31 @@ public static class HomeBar
             return null;
         }
 
-        int room = Math.Max(0, cells - StatusCells);
+        int room = Math.Max(0, cells);
         foreach (var fit in new[] { Fit.Full, Fit.Short, Fit.Tight })
         {
             var texts = chips.Select(c => ChipText(c, fit)).ToList();
             if (texts.Sum(t => TextCells.Width(t)) <= room)
             {
-                return Build(chips, texts, status, 0, chips.Count, pages: 1, page: 0);
+                return Build(chips, texts, room, 0, chips.Count, pages: 1, page: 0);
             }
         }
 
         // Pages: the tight chips, as many as fit between the arrows on each; one wider than a page is cut to it (the review's
         // finding, 2026-10-12: a playing title on a narrow window wrapped the row and threw the pane's rows off by one). A
-        // window with no room for a page between the arrows shows the status glyph alone.
+        // window with no room for a page between the arrows gets an empty row (the status glyph alone until the glyph went).
         int pageRoom = room - ArrowCells * 2;
         if (pageRoom < MinPageCells)
         {
-            return Build(chips, [], status, 0, 0, pages: 1, page: 0);
+            return Build(chips, [], room, 0, 0, pages: 1, page: 0);
         }
 
         var tight = chips.Select(c => ChipText(c, Fit.Tight)).Select(t => TextCells.Width(t) > pageRoom ? HomeChips.Clip(t, pageRoom) : t).ToList();
         var starts = Pages(tight, pageRoom);
         int shown = Math.Clamp(page, 0, starts.Count - 1);
         int end = shown + 1 < starts.Count ? starts[shown + 1] : chips.Count;
-        return Build(chips, tight, status, starts[shown], end, starts.Count, shown);
+        return Build(chips, tight, room, starts[shown], end, starts.Count, shown);
     }
-
-    /// <summary>The status glyph and the blank after it.</summary>
-    private const int StatusCells = 2;
 
     /// <summary>An arrow and the blank beside it.</summary>
     private const int ArrowCells = 2;
@@ -140,15 +138,6 @@ public static class HomeBar
         return starts;
     }
 
-    /// <summary>The colour of the status glyph: the accent while live, dim while connecting, warn while retrying, bad when refused or not set up.</summary>
-    public static Style StatusStyle(HaLiveStatus status) => status switch
-    {
-        HaLiveStatus.Live => Theme.Accent,
-        HaLiveStatus.Connecting => Theme.DimText,
-        HaLiveStatus.Retrying => new Style(Theme.Warn),
-        _ => new Style(Theme.Bad),
-    };
-
     /// <summary>The span under column <paramref name="x"/> (0-based in the row), or null for a blank. Pure.</summary>
     public static HomeSpan? HitAt(IReadOnlyList<HomeSpan> spans, int x)
     {
@@ -164,14 +153,26 @@ public static class HomeBar
         return null;
     }
 
-    private static HomeRow Build(IReadOnlyList<HomeChip> chips, IReadOnlyList<string> texts, HaLiveStatus status, int from, int to, int pages, int page)
+    // The row of chips [from, to) in cells, centred (2026-10-12): a blank run ahead of it of half the room left, the odd cell at
+    // the right where the pane's erase blanks the rest, so the spans start where the chips are drawn. An empty row stays empty.
+    private static HomeRow Build(IReadOnlyList<HomeChip> chips, IReadOnlyList<string> texts, int cells, int from, int to, int pages, int page)
     {
         var segments = new List<PerfSegment>();
         var spans = new List<HomeSpan>();
         int column = 0;
 
-        Add(HomeBarText.StatusGlyph, StatusStyle(status), new HomeSpan(0, 1, HomeTarget.Status));
-        Add(" ", Style.Plain, null);
+        int drawn = pages > 1 ? ArrowCells * 2 : 0;
+        for (int i = from; i < to; i++)
+        {
+            drawn += TextCells.Width(texts[i]);
+        }
+
+        int pad = (cells - drawn) / 2;
+        if (to > from && pad > 0)
+        {
+            Add(new string(' ', pad), Style.Plain, null);
+        }
+
         if (pages > 1)
         {
             Add(HomeBarText.PrevGlyph, page > 0 ? Theme.Accent : Theme.DimText, page > 0 ? new HomeSpan(column, 1, HomeTarget.Prev) : null);

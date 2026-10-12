@@ -199,6 +199,49 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(ProcessWindowText.ListHint, output);   // the pane's keys say it now
     }
 
+    /// <summary>
+    /// The running processes' count on the lower rule (2026-10-12, the user's ask): no title before the model starts one, <c>▶ 1</c>
+    /// at the right of the rule under the draft line while it runs, and a double-click there opens <c>/process</c>'s pane.
+    /// </summary>
+    [WindowsFact]
+    public async Task Process_TheCountOnTheLowerRule_ADoubleClickOpensTheList()
+    {
+        _openProcessWindow = (_, _) => { };
+        _settings.Update(d => { d.TtsOutput = false; d.ShellCommandPolicy = "yolo"; });
+        _console.Profile.Width = 80;
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the input row at 100, the lower rule at 101
+        _chat.Enqueue(FakeChatClient.Call("c1", RunCommandTool.ToolName, new Dictionary<string, object?> { ["command"] = "ping -n 30 127.0.0.1 >nul", ["shell"] = "cmd", ["background"] = true }));
+        _chat.EnqueueText("Started.");
+        string counted = ScreenPane.RuleWithTitle(ProcessWindowText.RuleTitle(1), 80);
+        bool bareFirst = false;
+        var steps = new (Func<bool> Ready, Action<ScriptedInput> Act)[]
+        {
+            (() => true, i => { bareFirst = !Output.Contains(" " + ProcessWindowText.RuleGlyph + " ", StringComparison.Ordinal); PushLine(i, "start it"); }),
+            (() => Output.Contains(counted, StringComparison.Ordinal), i => { i.PushClick(76, 101); i.PushClick(76, 101); }),   // ▶ 1 at columns 75–77
+            (() => Output.Contains(ProcessMenu.Title, StringComparison.Ordinal), Key(Keys.Escape)),
+            (() => true, Line("/exit")),
+        };
+        var input = Scripted();
+        int next = 0;
+        input.OnWait = () =>
+        {
+            if (next < steps.Length && steps[next].Ready())
+            {
+                steps[next++].Act(input);
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.True(bareFirst);
+        Assert.Equal(Rule80() + " ▶ 1 ─", counted);
+        Assert.Contains(ProcessMenu.Title, output);
+        Assert.Contains("1 process (1 running)", output);
+
+        static string Rule80() => new('─', 74);
+    }
+
     /// <summary>The Unix twin of <see cref="Process_WithThePane_EnterOpens_TheKillKeyAsks_YesStops"/> (2026-10-06, the macOS build): a zsh child, not cmd.exe.</summary>
     [UnixFact]
     public async Task Process_WithThePane_EnterOpens_TheKillKeyAsks_YesStops_Unix()

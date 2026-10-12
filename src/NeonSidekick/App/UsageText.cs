@@ -125,7 +125,7 @@ public static class UsageText
     /// <summary>
     /// The Statistics tab: a heading per scope over its rows. The heading in the section style, the rows in the label style: two
     /// tiers, not one cyan column. Since 2026-10-10 (the user's ask: the <c>/settings</c> look on every pane) each heading is a
-    /// <see cref="SectionRule"/> with its note (the source, <see cref="SummedNote"/>…) dim on the rule, the <c>/sys</c> tabs' shape,
+    /// <see cref="SectionRule"/> with its note (the source, the replies that reported no usage…) dim on the rule, the <c>/sys</c> tabs' shape,
     /// and its rows <see cref="SystemPromptSummary.BodyIndent"/> cells in under it; one label width for every section
     /// (<see cref="LabelWidth"/>), so the value column sits at the same place under every heading as the one grid kept it until then.
     /// </summary>
@@ -155,8 +155,9 @@ public static class UsageText
         if (!tally.Session.IsEmpty)
         {
             sections.Add((LastReplyHeading, tally.LastReply.IsEmpty ? NoReportNote : "", RowsOf(tally.LastReply, averaged: false)));
-            sections.Add((ConversationHeading, Join(SummedNote, tally.UnreportedReplies > 0 ? Unreported(tally.UnreportedReplies) : ""), RowsOf(tally.Conversation, averaged: true)));
-            sections.Add((SessionHeading, SummedNote, [.. RowsOf(tally.Session, averaged: true), .. extra]));
+            // No SummedNote on the pane's two summed headings since 2026-10-12 (the user's call); the plain lines keep it.
+            sections.Add((ConversationHeading, tally.UnreportedReplies > 0 ? Unreported(tally.UnreportedReplies) : "", RowsOf(tally.Conversation, averaged: true)));
+            sections.Add((SessionHeading, "", [.. RowsOf(tally.Session, averaged: true), .. extra]));
         }
 
         int width = LabelWidth(sections.SelectMany(s => s.Rows).Concat(extra));
@@ -278,12 +279,11 @@ public static class UsageText
     public const string NoReportNote = "no usage reported";
 
     /// <summary>
-    /// Beside the conversation and launch headings: their totals add every request up, the re-sent
-    /// history counted each time — a cost figure, not the context (that is the Context section).
+    /// In the plain lines' conversation and launch totals: they add every request up, the re-sent history counted each time — a
+    /// cost figure, not the context (that is the Context section). Beside the pane's two headings too until 2026-10-12, when the
+    /// user had it taken off there.
     /// </summary>
     public const string SummedNote = "every request summed";
-
-    private static string Join(params string[] notes) => string.Join("; ", notes.Where(n => n.Length > 0));
 
     // ── Plain lines and the hint row ────────────────────────────────────────
 

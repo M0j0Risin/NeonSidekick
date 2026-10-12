@@ -12193,8 +12193,8 @@ public partial class ChatScreenTests : IDisposable
         // After the reply the upper rule names the session (2026-09-18), the pane's title row under it.
         strip = TitledRule("hi") + "\n" + Titled(UsageText.Label) + "\n\n";
         // The Statistics tab after the reply: the Context section (no window from the stub's server), then the three scopes, the last reply's with its timings.
-        Assert.Contains(strip + HeadingRow("── Context ── unknown") + "\n  Window               unknown\n  In use               25\n\n" + HeadingRow("── Last reply") + "\n  Total                25\n  Prompt               10\n  Completion           15\n  Reasoning            —\n  Requests             1\n  Time to first token  0.5 s\n  Speed                3.0 tok/s\n\n" + HeadingRow("── This conversation ── every request summed") + "\n  Total                25\n", output);
-        Assert.Contains("\n" + HeadingRow("── Since launch ── every request summed") + "\n  Total                25\n  Prompt               10\n  Completion           15\n  Reasoning            —\n  Requests             1\n  Time to first token  0.5 s\n  Speed                3.0 tok/s\n", output);
+        Assert.Contains(strip + HeadingRow("── Context ── unknown") + "\n  Window               unknown\n  In use               25\n\n" + HeadingRow("── Last reply") + "\n  Total                25\n  Prompt               10\n  Completion           15\n  Reasoning            —\n  Requests             1\n  Time to first token  0.5 s\n  Speed                3.0 tok/s\n\n" + HeadingRow("── This conversation") + "\n  Total                25\n", output);
+        Assert.Contains("\n" + HeadingRow("── Since launch") + "\n  Total                25\n  Prompt               10\n  Completion           15\n  Reasoning            —\n  Requests             1\n  Time to first token  0.5 s\n  Speed                3.0 tok/s\n", output);
         Assert.Contains(rule + "\n" + Row(InfoPane.SingleTabHintText) + "\n", output);
         // Nothing went to the transcript: the pane held it all.
         Assert.DoesNotContain("  · Tokens —", output);
@@ -12891,8 +12891,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(idle("15 / 100 · 15% · 1 tok/s"), output[compacted..]);
         // /usage: c's reply alone in use; the summariser's request in the conversation and launch totals (25 + 15 + 34 + 24).
         Assert.Contains(HeadingRow("── Context ── loaded_context_length on /api/v0/models") + "\n  Window               100\n  In use               24\n  Used                 24%\n\n" + HeadingRow("── Last reply") + "\n  Total                24\n", output);
-        Assert.Contains(HeadingRow("── This conversation ── every request summed") + "\n  Total                98\n", output);
-        Assert.Contains(HeadingRow("── Since launch ── every request summed") + "\n  Total                98\n", output);
+        Assert.Contains(HeadingRow("── This conversation") + "\n  Total                98\n", output);
+        Assert.Contains(HeadingRow("── Since launch") + "\n  Total                98\n", output);
     }
 
     // ── Commands during a reply ─────────────────────────────────────────────

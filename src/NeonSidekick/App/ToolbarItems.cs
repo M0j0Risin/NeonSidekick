@@ -5,7 +5,7 @@ using Spectre.Console;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// The setting <c>Show toolbar</c> as a checklist (2026-09-29, the user's ask, in place of the on/off switch of
+/// The setting <c>Toolbar</c> as a checklist (2026-09-29, the user's ask, in place of the on/off switch of
 /// 2026-09-21): one id per thing the toolbar can show — each pane glyph in strip order, then the working directory's
 /// path — saved in <see cref="Settings.AppSettingsData.ToolbarItems"/>. Null there is <see cref="Defaults"/> (every item,
 /// a new one too, until later on 2026-09-29, the user's call); an empty list is no toolbar row at all. <see cref="Resolve"/> is the one place the saved list becomes the set: a display
@@ -280,13 +280,20 @@ public static class ToolbarItems
 
     public const string OffWord = "off";
 
-    public static readonly string[] Words = [OnWord, OffWord];
+    /// <summary><c>/toolbar edit</c> (2026-10-12, the user's ask, as <c>/homebar edit</c>): the <c>Toolbar</c> row's checklist. Pinned.</summary>
+    public const string EditWord = "edit";
+
+    public static readonly string[] Words = [OnWord, OffWord, EditWord];
+
+    /// <summary>Whether <c>/toolbar</c>'s argument is <see cref="EditWord"/> (any case, trimmed): the checklist, a pane, not a toggle. Pure.</summary>
+    public static bool IsEdit(string args) => string.Equals(args.Trim(), EditWord, StringComparison.OrdinalIgnoreCase);
 
     /// <summary><c>/toolbar</c>'s completion hint beside a word. Pinned.</summary>
     public static string DescribeWord(string word) => word switch
     {
         OnWord => "show the toolbar with the items it last had",
         OffWord => "hide the toolbar",
+        EditWord => "choose the toolbar's items and their order",
         _ => "",
     };
 
@@ -297,7 +304,7 @@ public static class ToolbarItems
     public static string Notice(bool shown) => shown ? "(toolbar on)" : "(toolbar off)";
 
     /// <summary><c>/toolbar</c> given something that is not on or off. Pinned.</summary>
-    public const string UsageError = "/toolbar takes on or off, or nothing to toggle.";
+    public const string UsageError = "/toolbar takes on, off or edit, or nothing to toggle.";
 
     /// <summary>What <c>/toolbar</c> saves: the toolbar's items, and the ones a later <c>/toolbar</c> brings back.</summary>
     public readonly record struct ToolbarToggle(List<string>? Items, List<string>? LastItems);
@@ -336,7 +343,7 @@ public static class ToolbarItems
         return new(last is null || Resolve(last).Count == 0 ? null : Save(Resolve(last)), last?.ToList());
     }
 
-    /// <summary>The <c>Show toolbar</c> row's value: <c>all</c>, <c>off</c> with nothing checked, else <c>7 of 34</c>. Pinned.</summary>
+    /// <summary>The <c>Toolbar</c> row's value: <c>all</c>, <c>off</c> with nothing checked, else <c>7 of 34</c>. Pinned.</summary>
     public static string Value(IReadOnlyList<string>? saved)
     {
         int count = Resolve(saved).Count;

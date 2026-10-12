@@ -1,5 +1,6 @@
 using NeonSidekick.App;
 using NeonSidekick.Settings;
+using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
@@ -68,7 +69,7 @@ public partial class SettingsMenuTests
         Assert.Equal(["ram", "gpu", "vram"], _settings.Current.PerformanceBarItems);
         Assert.Equal("gauge", _settings.Current.PerformanceBarLook);
         Assert.Contains(SettingsMenu.PerfBarToggleKeys, Output);
-        Assert.Contains("  · Show performance bar: RAM, GPU, VRAM · gauge", Output);   // the look set before the page opened
+        Assert.Contains("  · Performance bar: RAM, GPU, VRAM · gauge", Output);   // the look set before the page opened
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
@@ -111,7 +112,7 @@ public partial class SettingsMenuTests
         Assert.Equal([PaneBars.Toolbar, PaneBars.Perf, PaneBars.Hint, PaneBars.Home], _settings.Current.BarOrder);
         Assert.Contains(SettingsMenu.BarOrderKeys, Output);
         Assert.Contains(SettingsMenu.DefaultsButton, Output);
-        Assert.Contains("Home bar         " + PaneBars.OffMark + "Show home bar", Output);
+        Assert.Contains("Home bar         " + PaneBars.OffMark + PaneBars.Describe(PaneBars.Home), Output);
         Assert.Contains("  · Toolbar order: Toolbar, Performance bar, Hint bar, Home bar", Output);
         pane.Dispose();
 
@@ -126,6 +127,35 @@ public partial class SettingsMenuTests
 
         Assert.Null(_settings.Current.BarOrder);
         Assert.Contains("  · Toolbar order: " + PaneBars.DefaultValue, Output);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// The Tool bars section (2026-10-12, the user's ask): under Screen's rows, the four bars by their new names — Toolbar,
+    /// Performance bar, Home bar and Order, the last <c>Toolbar order</c> everywhere but here — and Order's page under that name.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheToolBarsSection_HoldsTheFourRows_OrderShortOnThePane()
+    {
+        var fields = SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList();
+        Assert.Equal(fields.IndexOf(SettingsField.MenuMaxHeight) + 1, fields.IndexOf(SettingsField.ToolbarItems));
+        Assert.Equal(
+            [SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder],
+            fields.Skip(fields.IndexOf(SettingsField.ToolbarItems)).Take(4));
+
+        var (menu, pane) = PaneMenu();
+        Down(fields.IndexOf(SettingsField.BarOrder));
+        Push(Keys.Enter, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains("  Menus max height             full-screen\n" + MenuLayout.Heading("Tool bars", 120) + "\n  Toolbar                      ", Output);
+        Assert.Contains("\n  Performance bar              ", Output);
+        Assert.Contains("\n  Home bar                     ", Output);
+        Assert.Contains("\n▸ Order                        " + PaneBars.DefaultValue + "\n" + MenuLayout.Heading("Outside apps", 120), Output);
+        Assert.Contains(GroupBreadcrumb(SettingsTab.Chat, SettingsMenu.BarOrderPaneName) + " ", Output);   // its page under the same name (the default button after it)
+        Assert.DoesNotContain("Show toolbar", Output);
+        Assert.DoesNotContain("Toolbar order", Output);   // the pane's own words: nothing saved, no notice
         pane.Dispose();
     }
 }

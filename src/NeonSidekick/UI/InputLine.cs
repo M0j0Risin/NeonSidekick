@@ -73,6 +73,12 @@ public abstract record InputResult
     public sealed record RuleTitle(string Draft) : InputResult;
 
     /// <summary>
+    /// A double-click on the running processes' count at the lower rule's right edge (2026-10-12, the user's ask,
+    /// <see cref="ScreenPane.LowerRuleTitle"/>): the screen opens <c>/process</c>; <see cref="Draft"/> as <see cref="HintRow"/>'s.
+    /// </summary>
+    public sealed record LowerRuleTitle(string Draft) : InputResult;
+
+    /// <summary>
     /// A command chord on the chat line (2026-09-30, the user's ask: <see cref="Keys.ShortcutLine"/>): <see cref="Line"/> is
     /// the command it stands for, run as the typed one; <see cref="Draft"/> as <see cref="HintRow"/>'s.
     /// </summary>
@@ -369,6 +375,9 @@ public sealed partial class InputLine
     /// each, down from −5) and the pictures' (<see cref="PicturePairKey"/>, from −1 000 000 down), so it is no other part's. Pinned.
     /// </summary>
     public const int RuleTitlePairKey = -500_000;
+
+    /// <summary>What two clicks on the lower rule's process count must share to pair (2026-10-12): beside <see cref="RuleTitlePairKey"/>, no other part's. Pinned.</summary>
+    public const int LowerRuleTitlePairKey = -500_001;
 
     /// <summary>
     /// What two clicks on the draft must share to pair into a word's selection (2026-09-30, <see cref="DraftWords"/>): the

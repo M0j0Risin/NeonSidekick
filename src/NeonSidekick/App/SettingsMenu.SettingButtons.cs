@@ -14,7 +14,8 @@ internal readonly record struct SettingButton(SettingsField Target, string Word,
 /// user's ask: actions at the top of each page to reach the group's own settings, the offered button's shape). Each opens its setting
 /// as the tab's row does (its picker, its on/off page, the vault's folder picker or a typed value under a one-row page of its own),
 /// and ESC there comes back to the on/off page, the buttons read again. The Claude Code advisor tool page's model and effort went with the
-/// tool (2026-10-10).
+/// tool (2026-10-10). The Advisors enabled page's advisors button (2026-10-12, the user's ask) opens Advisor list, the panel's own
+/// pane, its value the count.
 /// </summary>
 internal sealed partial class SettingsMenu
 {
@@ -32,6 +33,7 @@ internal sealed partial class SettingsMenu
         SettingsField.PrintTools => [new(SettingsField.PrintDefaultPrinter, "printer", 'p')],
         SettingsField.ScreenTools => [new(SettingsField.ScreenAsk, "ask", 'a'), new(SettingsField.ScreenPreview, "preview", 'p')],
         SettingsField.ObsidianTools => [new(SettingsField.ObsidianVault, "vault", 'v')],
+        SettingsField.Advisors => [new(SettingsField.AdvisorList, "advisors", 'a')],   // 2026-10-12: /tools advisors, the toolbar's 🦉
         SettingsField.YouTubeTools =>
         [
             new(SettingsField.YouTubeSearchMaxResults, "max", 'm'), new(SettingsField.YouTubeVoice, "voice", 'v'),
@@ -45,8 +47,8 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The value a setting button shows, short: the row's own value, except the vault's folder name alone (<c>none</c> while none
-    /// is set), the result count's number, and a printer left to the
-    /// system's default without the row's parentheses. Pinned.
+    /// is set), the result count's number, a printer left to the system's default without the row's parentheses, and the advisors'
+    /// count alone (<c>none</c> with none listed; the row's names would crowd the title row). Pinned.
     /// </summary>
     public static string SettingButtonValue(SettingsField field, AppSettingsData data, string profileDirectory)
     {
@@ -60,6 +62,9 @@ internal sealed partial class SettingsMenu
                 return data.YouTubeSearchMaxResults.ToString(System.Globalization.CultureInfo.InvariantCulture);
             case SettingsField.PrintDefaultPrinter when string.IsNullOrWhiteSpace(data.PrintDefaultPrinter):
                 return WindowsDefaultPrinterLabel.Trim('(', ')');
+            case SettingsField.AdvisorList:
+                int advisors = NeonSidekick.Advisors.AdvisorRoster.Entries(data.AdvisorList).Count;
+                return advisors == 0 ? "none" : advisors.ToString(System.Globalization.CultureInfo.InvariantCulture);
             default:
                 return FieldValue(field, data, profileDirectory);
         }

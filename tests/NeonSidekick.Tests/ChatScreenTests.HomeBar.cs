@@ -79,16 +79,16 @@ public partial class ChatScreenTests
         _settings.Update(d => d.HomeBarItems = ["entity:light.desk"]);
         _console.Profile.Height = 40;
         _console.Profile.Width = 120;
-        _geometry = new ScreenGeometry(() => null, () => 100);   // the hint row at 102, the home bar at 103
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the hint row at 102, the home bar at 103, its chips centred (2026-10-12)
         bool drawn = false;
         bool noted = false;
         var input = Scripted();
         input.OnWait = () =>
         {
             input.OnWait = null;
-            TickUntil(() => Output.Contains("⌂  💡 Desk ", StringComparison.Ordinal) && server.Subscribed.Count > 0);
-            drawn = Output.Contains("⌂  💡 Desk ", StringComparison.Ordinal);
-            input.PushClick(3, 103);
+            TickUntil(() => Output.Contains("  💡 Desk ", StringComparison.Ordinal) && server.Subscribed.Count > 0);
+            drawn = Output.Contains("  💡 Desk ", StringComparison.Ordinal);
+            input.PushClick(58, 103);
             input.OnWait = () =>
             {
                 noted = Output.Contains("Desk: off — double-click to switch on", StringComparison.Ordinal);
@@ -98,7 +98,7 @@ public partial class ChatScreenTests
                     TickUntil(() => server.StateOf("light.desk") == "on");
                     PushLine(input, "/exit");
                 };
-                input.PushClick(3, 103);
+                input.PushClick(58, 103);
             };
         };
 
@@ -122,17 +122,17 @@ public partial class ChatScreenTests
         _settings.Update(d => d.HomeBarItems = ["entity:light.desk"]);
         _console.Profile.Height = 40;
         _console.Profile.Width = 120;
-        _geometry = new ScreenGeometry(() => null, () => 100);   // the hint row at 102, the home bar at 103
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the hint row at 102, the home bar at 103, its chips centred (2026-10-12)
         int mark = -1;
         bool opened = false;
         var input = Scripted();
         input.OnWait = () =>
         {
             input.OnWait = null;
-            TickUntil(() => Output.Contains("⌂  💡 Desk ", StringComparison.Ordinal) && server.Subscribed.Count > 0);
+            TickUntil(() => Output.Contains("  💡 Desk ", StringComparison.Ordinal) && server.Subscribed.Count > 0);
             mark = Output.Length;
-            input.PushClick(60, 103);
-            input.PushClick(60, 103);
+            input.PushClick(20, 103);
+            input.PushClick(20, 103);
             input.OnWait = () =>
             {
                 opened = Output[mark..].Contains(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice", StringComparison.Ordinal);
@@ -163,9 +163,9 @@ public partial class ChatScreenTests
         input.OnWait = () =>
         {
             input.OnWait = null;
-            TickUntil(() => Output.Contains("⌂  🔒 Front Door ", StringComparison.Ordinal) && server.Subscribed.Count > 0);
-            input.PushClick(3, 103);
-            input.PushClick(3, 103);
+            TickUntil(() => Output.Contains("  🔒 Front Door ", StringComparison.Ordinal) && server.Subscribed.Count > 0);
+            input.PushClick(58, 103);
+            input.PushClick(58, 103);
             input.OnWait = () =>
             {
                 asked = Output.Contains("Unlock Front Door?", StringComparison.Ordinal);
@@ -199,7 +199,7 @@ public partial class ChatScreenTests
         input.OnWait = () =>
         {
             input.OnWait = null;
-            TickUntil(() => Output.Contains("⌂  🏠 Den ", StringComparison.Ordinal) && server.Subscribed.Count > 0);
+            TickUntil(() => Output.Contains("  🏠 Den ", StringComparison.Ordinal) && server.Subscribed.Count > 0);
             PushLine(input, "/homebar show den");
             input.OnWait = () =>
             {
@@ -208,7 +208,7 @@ public partial class ChatScreenTests
 
                 // The clock ticks until the bar has it (the pane's watcher sees it on the same ticks), then the read returns
                 // with nothing pushed, so the cancelled wait draws the list again and reads once more.
-                TickUntil(() => Output.Contains("⌂  🏠 Den 1/1", StringComparison.Ordinal));
+                TickUntil(() => Output.Contains("  🏠 Den 1/1", StringComparison.Ordinal));
                 for (int i = 0; i < 3; i++)
                 {
                     _time.Advance(ScreenPane.Tick);

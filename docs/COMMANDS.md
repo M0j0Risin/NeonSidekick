@@ -119,13 +119,14 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/new` | Starts a new conversation without clearing the screen. |
 | `/open <file>` | Opens a file from the working directory in its default app (not a folder). |
 | `/perfbar [off\|text\|gauge\|led]` | Hides the performance bar or shows it again; a look name sets that look. |
+| `/perfbar edit` | The *Performance bar* checklist: the meters and their order. |
 | `/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]` | Prints a file from the working directory (see [Printing](TOOLS.md#printing)); the printer matches by name or part of one. *Print action policy* never applies. On a Mac a PDF prints as it is (no landscape) and Office files are refused. |
 | `/print reply [<options>]` | Prints the last reply as formatted Markdown. |
 | `/print printers` | Lists the printers, marking the system default and *Print default printer*. `/print` alone shows its usage and the list. |
 | `/pdf <file> [to=<path>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF from Markdown, text, code, HTML or a picture, beside the file unless `to=` says (see [Making PDFs](TOOLS.md#making-pdfs)). On a Mac only the browser makes it. |
 | `/pdf <url> [to=<path>] [overwrite]` | Makes a PDF of a web page; *Web browser network mode* still applies. |
 | `/pdf reply [<options>]` | Makes a PDF of the last reply. |
-| `/process` | Lists the model's background processes in a pane. Enter opens one in the [process window](#process-window), `k` stops it (asks), `r` and `e` show only the running or ended ones. |
+| `/process` | Lists the model's background processes in a pane. Enter opens one in the [process window](#process-window), `k` stops it (asks), `r` and `e` show only the running or ended ones. While any run, **▶ n** at the right of the rule under the input line counts them; a double-click there opens this list. |
 | `/process <id>` | Shows one process's output live in the [process window](#process-window) (any unique start of the id; Tab completes it). |
 | `/profile [<name>]` | Switches profiles: a picker, or straight to the one named. See [Profiles](#profiles). |
 | `/profile add\|delete <name>` | Creates a profile (from this profile's settings and memories) or deletes one. |
@@ -190,6 +191,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/timer [<duration> [<name>]]` | Lists timers, or starts one (`10m`, `90s`, `1h30m`). |
 | `/timer stop <name>\|all` | Stops one timer, or every one. |
 | `/toolbar [on\|off]` | Hides the toolbar or shows it again. |
+| `/toolbar edit` | The *Toolbar* checklist: the items and their order. |
 | `/tools` | Switches the model's tools on or off and edits each group's settings, one tab per group. On the Offered tab, typing filters the list. |
 | `/tools <group>` | Opens one group's page: `shell`, `ask`, `files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it; the pages' buttons are under [Pane keys](#pane-keys). |
 | `/tools shell allowed` | Opens *Shell allowed commands*: Enter removes a prefix (asks), `o`/`a`/`y` switch *Shell command policy* to off, ask or yolo, typing filters. The toolbar's lock or Ctrl+Alt+L. |
@@ -603,11 +605,12 @@ In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes
 | `/tools files` | `b` *File browser/tree mode* |
 | `/tools image` | `e` *Image edit mode* |
 | `/tools obsidian` | `v` *Obsidian vault* |
+| `/tools advisors` | `a` *Advisor list* |
 | `/tools print` | `p` *Print default printer* |
 | `/tools camera` | `w` watch · `l` live · `s` snap · `c` screen |
 | The camera pane | Space takes · `r` retake · Enter attaches · ESC drops |
 | `/settings changed` | Enter edits · `r` back to default |
-| `/perfbar` | Enter or Space flips · `a` all · `n` none · `d` default · `t` / `g` / `s` / `l` the look |
+| `/toolbar edit`, `/perfbar edit` | Enter or Space flips · Shift+↑/↓ move · Shift+Home/End top or bottom · Delete unchecks · `a` all · `n` none · `d` default |
 | `/homebar edit`, On the bar | Shift+↑/↓ move · Shift+Home/End top or bottom · Delete removes · Enter the same as a list and Rename on the bar… |
 | `/homebar edit`, the other tabs | Space or Enter adds or removes · type to filter |
 | A room's pane on the home bar | Space switches a device · Enter its actions |
