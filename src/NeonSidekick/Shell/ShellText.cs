@@ -476,6 +476,9 @@ public static class ShellText
     public static string CommandTooLong(int max) => $"Error: the command is longer than {Count(max)} characters; put it in a script file and run that";
     public static string CouldNotStart(string executable, string detail) => $"Error: could not start {executable} ({detail})";
 
+    /// <summary><see cref="CouldNotStart"/>'s detail for a raw argument string on a Mac (2026-10-12, <see cref="GroupChild"/>): only cmd.exe's launch has one. Pinned.</summary>
+    public const string RawArgumentsAreCmds = "a raw argument string is cmd's";
+
     // ── Log lines ────────────────────────────────────────────────────────────
 
     public static string ApprovedLogLine(CommandRequest request, string how)

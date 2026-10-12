@@ -29,6 +29,8 @@ public sealed class ShellRunnerTests : IDisposable
 
     private ProcessLaunch PowerShell(string command) => ShellCommandLine.For(ShellKind.PowerShell, command, _interpreters.Locate(ShellKind.PowerShell)!, _dir);
 
+    private ProcessLaunch Zsh(string command) => ShellCommandLine.For(ShellKind.Zsh, command, _interpreters.Locate(ShellKind.Zsh)!, _dir);
+
     private static async Task<int> ExitAsync(ProcessSession session) => await session.Exited.WaitAsync(TimeSpan.FromSeconds(60));
 
     [WindowsFact]
@@ -224,6 +226,159 @@ public sealed class ShellRunnerTests : IDisposable
 
         Assert.True(await GoneAsync(orphan), "the orphan outlived the kill");
         await ExitAsync(session);
+    }
+
+    /// <summary>
+    /// The Mac's side (2026-10-12): an inner zsh starts a <c>sleep</c> in the background and exits, so launchd adopts it and the tree
+    /// walk no longer finds it; the command's own group (it leads a session of its own) still holds it, and the kill ends it.
+    /// </summary>
+    [UnixFact]
+    public async Task Kill_EndsAGrandchildWhoseParentIsGone_Unix()
+    {
+        File.WriteAllText(Path.Combine(_dir, "orphan1.sh"), "sleep 120 </dev/null >/dev/null 2>&1 &\necho $! > orphan1.pid\n");
+        using var session = _runner.Start(Zsh("zsh ./orphan1.sh; sleep 120"), "run_000012");
+        session.CloseInput();
+        int orphan = await OrphanPidAsync("orphan1");
+        try
+        {
+            Assert.True(session.Kill());
+
+            Assert.True(await GoneAsync(orphan), "the orphan outlived the kill");
+            await ExitAsync(session);
+        }
+        finally
+        {
+            KillIfThere(orphan);
+        }
+    }
+
+    /// <summary>
+    /// The Mac's side of <see cref="ABackgroundCommandsLeftovers_EndWithItsSession_AForegroundsDoNot"/> (2026-10-12, the user's call): a
+    /// background command's group is killed when its session is closed, even after the command itself exited; a foreground one's is not.
+    /// </summary>
+    [UnixFact]
+    public async Task ABackgroundCommandsLeftovers_EndWithItsSession_AForegroundsDoNot_Unix()
+    {
+        const string Leave = "nohup sleep 120 </dev/null >/dev/null 2>&1 &\necho $! > {0}.pid\n";
+        using var registry = new ProcessRegistry(_runner, new Random(3), () => { });
+        File.WriteAllText(Path.Combine(_dir, "orphan2.sh"), string.Format(System.Globalization.CultureInfo.InvariantCulture, Leave, "orphan2"));
+        File.WriteAllText(Path.Combine(_dir, "orphan3.sh"), string.Format(System.Globalization.CultureInfo.InvariantCulture, Leave, "orphan3"));
+        var background = registry.Start(Zsh("zsh ./orphan2.sh"), notify: false);
+        int left = await OrphanPidAsync("orphan2");
+        int opened = 0;
+        try
+        {
+            await ExitAsync(background);
+            Assert.False(await GoneQuicklyAsync(left));   // still running after its parent's exit
+
+            Assert.True(registry.Close(background));
+            Assert.True(await GoneAsync(left), "the background command's leftover outlived its session");
+
+            var foreground = _runner.Start(Zsh("zsh ./orphan3.sh"), "run_000013");
+            foreground.CloseInput();
+            opened = await OrphanPidAsync("orphan3");
+            await ExitAsync(foreground);
+            foreground.Dispose();
+            Assert.False(await GoneQuicklyAsync(opened));   // a foreground command's leftover lives on
+        }
+        finally
+        {
+            KillIfThere(left);
+            if (opened != 0)
+            {
+                KillIfThere(opened);
+            }
+        }
+    }
+
+    /// <summary>The Mac's child leads a session with no terminal (2026-10-12, the user's pick): a <c>/dev/tty</c> read fails at once, never waits.</summary>
+    [UnixFact]
+    public async Task ACommandReadingTheTerminal_FailsAtOnce_Unix()
+    {
+        using var session = _runner.Start(Zsh("cat /dev/tty"), "run_000014");
+        session.CloseInput();
+
+        Assert.NotEqual(0, await session.Exited.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Contains(session.Output.Lines(), l => l.IsError && l.Text.Contains("/dev/tty", StringComparison.Ordinal));
+    }
+
+    /// <summary>The exit codes as .NET reports them on Unix (2026-10-12, <see cref="PosixExit"/>): its own code, 128 plus a signal.</summary>
+    [UnixFact]
+    public async Task ExitCodes_AreTheChildsOwn_OrTheSignalsAsAShellSaysThem_Unix()
+    {
+        using var three = _runner.Start(Zsh("exit 3"), "run_000015");
+        three.CloseInput();
+        Assert.Equal(3, await ExitAsync(three));
+
+        using var terminated = _runner.Start(Zsh("kill -TERM $$"), "run_000016");
+        terminated.CloseInput();
+        Assert.Equal(143, await ExitAsync(terminated));
+
+        using var killed = _runner.Start(Zsh("sleep 30"), "run_000017");
+        killed.CloseInput();
+        Assert.True(killed.Kill());
+        Assert.Equal(137, await ExitAsync(killed));
+        Assert.True(killed.Killed);
+    }
+
+    /// <summary>The smoke's <c>shell:posix-spawn</c> passes here too (2026-10-12): a session leader, ended by its group's kill.</summary>
+    [MacFact]
+    public void TheSmokesProbe_SpawnsASessionLeader_AndKillsItsGroup()
+    {
+        var check = App.SmokeChecks.ProbePosixSpawn();
+
+        Assert.True(check.Passed, check.Detail);
+        Assert.Equal("shell:posix-spawn", check.Name);
+    }
+
+    [Fact]
+    public void PosixExit_IsTheStatus_Or128PlusTheSignal()
+    {
+        Assert.Equal(0, PosixExit.Code(PosixExit.Exited, 0));
+        Assert.Equal(255, PosixExit.Code(PosixExit.Exited, 255));
+        Assert.Equal(137, PosixExit.Code(PosixExit.Killed, 9));
+        Assert.Equal(139, PosixExit.Code(PosixExit.Dumped, 11));
+        Assert.Equal(-1, PosixExit.Code(5, 17));   // stopped: not an exit
+        Assert.False(PosixExit.IsExit(5));
+        Assert.True(PosixExit.IsExit(PosixExit.Killed));
+    }
+
+    /// <summary>A program or a folder that is not there (2026-10-12): libc's reason in the start error, as <c>Process.Start</c>'s was.</summary>
+    [UnixFact]
+    public void AMissingProgramOrFolder_IsAStartError_NamingTheProgram_Unix()
+    {
+        string zsh = _interpreters.Locate(ShellKind.Zsh)!;
+        Assert.StartsWith("Error: could not start nope (", Assert.Throws<ShellStartException>(() => _runner.Start(ShellCommandLine.For(ShellKind.Zsh, "echo hi", Path.Combine(_dir, "nope"), _dir), "run_000018")).Message);
+        Assert.StartsWith("Error: could not start zsh (", Assert.Throws<ShellStartException>(() => _runner.Start(ShellCommandLine.For(ShellKind.Zsh, "echo hi", zsh, Path.Combine(_dir, "gone")), "run_000019")).Message);
+        if (OperatingSystem.IsMacOS())
+        {
+            Assert.Equal("Error: could not start zsh (a raw argument string is cmd's)", Assert.Throws<ShellStartException>(() => _runner.Start(new ProcessLaunch(zsh, null, "-c 'echo hi'", _dir, "echo hi", "zsh"), "run_000021")).Message);
+        }
+    }
+
+    /// <summary>The child's environment (2026-10-12): the app's own, <see cref="ChildEnvironment.Overrides"/> on top, the launch's own last.</summary>
+    [UnixFact]
+    public async Task TheEnvironment_IsTheAppsWithTheOverrides_AndTheLaunchsOwn_Unix()
+    {
+        var launch = Zsh("echo $NO_COLOR $TERM $NS_TEST_OWN; [[ -n $PATH ]] && echo path") with { Environment = new Dictionary<string, string> { ["NS_TEST_OWN"] = "mine" } };
+        using var session = _runner.Start(launch, "run_000020");
+        session.CloseInput();
+
+        Assert.Equal(0, await ExitAsync(session));
+        Assert.Equal(["1 dumb mine", "path"], session.Output.Lines().Where(l => !l.IsError).Select(l => l.Text));
+    }
+
+    private static void KillIfThere(int pid)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(pid);
+            process.Kill();
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            // Already gone.
+        }
     }
 
     /// <summary>

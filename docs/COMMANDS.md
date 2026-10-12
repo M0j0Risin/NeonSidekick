@@ -283,7 +283,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 * **The same checks as the model's.** *Shell command policy* `off` refuses it; the shell police (👮) refuse what they refuse under any policy; under `ask`, a line not on *Shell allowed commands* goes to the approval pane.
 * **The wait** is *Shell timeout (s)*, at most *Shell foreground cap (s)*; ESC kills the line and everything it started. Output past *Shell output max chars* stops being drawn, and the whole of it goes to `.shell\cmd_<id>.log`.
 * **The model sees it:** the line and its output join the conversation, tagged `[I ran in the shell (<shell>)]` and `[shell output]`.
-* **In the background:** `/cmd --bg <command>` passes the same checks, then gives the chat back at once, with no timeout. `/process` lists it, and Ctrl+K twice in its window stops it; closing the app kills it and what it started (on Windows also when the app crashes, and even what it detached). When it ends, its output is shown and joins the conversation. You may run up to 16 at a time, apart from the model's.
+* **In the background:** `/cmd --bg <command>` passes the same checks, then gives the chat back at once, with no timeout. `/process` lists it, and Ctrl+K twice in its window stops it; closing the app kills it and what it started, even what it left running after it ended (on Windows also when the app crashes). When it ends, its output is shown and joins the conversation. You may run up to 16 at a time, apart from the model's.
 * Plan mode does not stop it. Not in headless mode, where the line goes to the model as text.
 
 ### Loops

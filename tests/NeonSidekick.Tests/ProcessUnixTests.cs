@@ -293,14 +293,15 @@ public sealed class ProcessUnixTests : IDisposable
     public async Task StopByUser_AChildGoneWhileItsOutputDrains_IsNotStopped_NorNotified()
     {
         // zsh exits at once while the sleep it left in the background holds the output pipe open (ProcessWindowTests' cmd case).
+        // Its pid stays a zombie while the sleep runs (GroupChild, 2026-10-12), so the child's own exit is asked.
         var session = Start("sleep 4 & exit 3");
         var deadline = DateTime.UtcNow.AddSeconds(30);
-        while (!ParentGone(session.Pid) && DateTime.UtcNow < deadline)
+        while (!session.ChildHasExited && DateTime.UtcNow < deadline)
         {
             await Task.Delay(20);
         }
 
-        Assert.True(ParentGone(session.Pid));
+        Assert.True(session.ChildHasExited);
         Assert.False(session.HasExited);
         Assert.False(_registry.StopByUser(session));
         Assert.False(session.Notify);
@@ -309,19 +310,6 @@ public sealed class ProcessUnixTests : IDisposable
         Assert.False(session.StoppedByUser);
         Assert.Equal(3, session.ExitCode);
         Assert.False(_registry.TryTakeAlert(out _));
-
-        static bool ParentGone(int pid)
-        {
-            try
-            {
-                using var process = System.Diagnostics.Process.GetProcessById(pid);
-                return process.HasExited;
-            }
-            catch (ArgumentException)
-            {
-                return true;
-            }
-        }
     }
 
     // ── The /process pane ───────────────────────────────────────────────────

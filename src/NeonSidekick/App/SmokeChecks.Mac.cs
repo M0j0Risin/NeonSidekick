@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.Versioning;
 using NeonSidekick.UI;
 
@@ -40,6 +41,46 @@ public static partial class SmokeChecks
                 : new SmokeCheck(name, false, "the raw mode of the terminal's attributes does not read as raw");
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
+        {
+            return new SmokeCheck(name, false, ex.GetType().Name + ": " + Diagnostics.LogText.Excerpt(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// <c>shell:posix-spawn</c> (2026-10-12, the Mac's orphans): the shell runner's <c>posix_spawnp</c> and its doors bind on the
+    /// published binary, and a <c>/bin/sleep</c> started the runner's way (<see cref="Shell.GroupChild"/>) leads its own session and
+    /// process group (sid = pgid = pid), then dies by its group's kill with the code .NET would give (137). Skipped off macOS.
+    /// </summary>
+    public static SmokeCheck ProbePosixSpawn()
+    {
+        const string name = "shell:posix-spawn";
+        if (!OperatingSystem.IsMacOS())
+        {
+            return new SmokeCheck(name, true, "skipped: not macOS");
+        }
+
+        try
+        {
+            using var child = Shell.GroupChild.Start(new Shell.ProcessLaunch("/bin/sleep", ["5"], null, Path.GetTempPath(), "sleep 5", "smoke"), tiedToApp: true);
+            int pid = child.Pid;
+            int sid = Shell.PosixSpawnNative.GetSid(pid);
+            int pgid = Shell.PosixSpawnNative.GetPgid(pid);
+            if (sid != pid || pgid != pid)
+            {
+                return new SmokeCheck(name, false, $"pid {pid.ToString(CultureInfo.InvariantCulture)} has sid {sid.ToString(CultureInfo.InvariantCulture)}, pgid {pgid.ToString(CultureInfo.InvariantCulture)}: not a session leader");
+            }
+
+            child.Kill();
+            if (!child.WaitForExit(5000))
+            {
+                return new SmokeCheck(name, false, "the group kill did not end it within 5 s");
+            }
+
+            return child.ExitCode == 137
+                ? new SmokeCheck(name, true, "a session leader (sid = pgid = pid), ended by its group's kill: exit 137")
+                : new SmokeCheck(name, false, "exit " + child.ExitCode.ToString(CultureInfo.InvariantCulture) + " after the group kill, not 137");
+        }
+        catch (Exception ex) when (ex is Shell.ShellStartException or DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
         {
             return new SmokeCheck(name, false, ex.GetType().Name + ": " + Diagnostics.LogText.Excerpt(ex.Message));
         }

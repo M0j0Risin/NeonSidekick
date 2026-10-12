@@ -19,6 +19,10 @@ public sealed class ShellStartException(string message) : Exception(message);
 /// stream to its end before the other deadlocks a child that fills the other pipe), each line
 /// landing in the session's <see cref="OutputBuffer"/> tagged by stream; the session completes
 /// once the process is gone and both pumps have drained.
+///
+/// <para>On a Mac the same site starts the child with libc's <c>posix_spawnp</c> rather than <c>Process.Start</c> (2026-10-12, the
+/// user's call: <see cref="GroupChild"/>), as the leader of a session of its own, so a kill ends its whole process group — a grandchild
+/// launchd adopted too, which the tree walk misses. Elsewhere <see cref="ProcessChild"/>, as before.</para>
 /// </summary>
 public sealed class ShellRunner
 {
@@ -41,13 +45,24 @@ public sealed class ShellRunner
     /// the child goes into a job of its own right after the start (2026-10-12, the shell review, <see cref="EmbeddedLlm.ChildJob.CreateOwn"/>),
     /// so a kill ends everything it started; with <paramref name="tiedToApp"/> (a background command, the user's call) the job is
     /// kill-on-close, so the app's end, a crash too, and the session's dispose end what is left of it. A child the command starts in
-    /// the instant before the assignment runs outside the job; the tree walk still finds it while its parent lives.
+    /// the instant before the assignment runs outside the job; the tree walk still finds it while its parent lives. On a Mac the child
+    /// leads a session of its own instead (<see cref="GroupChild"/>): a kill ends its group, and with <paramref name="tiedToApp"/> the
+    /// session's dispose ends what is left of it; a crash does not.
     /// </summary>
     /// <exception cref="ShellStartException">The program could not be started (missing, refused, not a program).</exception>
     public ProcessSession Start(ProcessLaunch launch, string id, bool tiedToApp = false)
     {
         ArgumentNullException.ThrowIfNull(launch);
         ArgumentNullException.ThrowIfNull(id);
+        ShellChild child = OperatingSystem.IsMacOS() ? GroupChild.Start(launch, tiedToApp) : StartProcess(launch, tiedToApp);
+        var session = new ProcessSession(id, launch, child, _time);
+        DiagnosticLog.Debug(ShellKinds.Category, $"{id}: started pid {child.Pid.ToString(CultureInfo.InvariantCulture)} ({launch.Kind}) {launch.Label}");
+        _ = PumpAndCompleteAsync(session, child);
+        return session;
+    }
+
+    private static ProcessChild StartProcess(ProcessLaunch launch, bool tiedToApp)
+    {
         var start = new ProcessStartInfo(launch.Executable)
         {
             UseShellExecute = false,
@@ -89,23 +104,19 @@ public sealed class ShellRunner
             throw new ShellStartException(ShellText.CouldNotStart(Path.GetFileName(launch.Executable), "no process"));
         }
 
-        var session = new ProcessSession(id, launch, process, _time);
-        session.AttachJob(EmbeddedLlm.ChildJob.CreateOwn(process, killOnClose: tiedToApp));
-        DiagnosticLog.Debug(ShellKinds.Category, $"{id}: started pid {process.Id.ToString(CultureInfo.InvariantCulture)} ({launch.Kind}) {launch.Label}");
-        _ = PumpAndCompleteAsync(session, process);
-        return session;
+        return new ProcessChild(process, killOnClose: tiedToApp);
     }
 
-    private static async Task PumpAndCompleteAsync(ProcessSession session, Process process)
+    private static async Task PumpAndCompleteAsync(ProcessSession session, ShellChild child)
     {
-        var stdout = PumpAsync(process.StandardOutput, session.Output, isError: false);
-        var stderr = PumpAsync(process.StandardError, session.Output, isError: true);
+        var stdout = PumpAsync(child.StandardOutput, session.Output, isError: false);
+        var stderr = PumpAsync(child.StandardError, session.Output, isError: true);
         int code;
         try
         {
-            await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+            await child.WaitForExitAsync().ConfigureAwait(false);
             await Task.WhenAll(stdout, stderr).ConfigureAwait(false);
-            code = process.ExitCode;
+            code = child.ExitCode;
         }
         catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException or System.ComponentModel.Win32Exception)
         {
