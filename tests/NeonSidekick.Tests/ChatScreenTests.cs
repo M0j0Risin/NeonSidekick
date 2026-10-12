@@ -6657,13 +6657,13 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task MidTurn_CtrlAltQ_DropsTheQueue_AndTheReplyRunsOn()
     {
-        MidTurnFixture(i =>
+        MidTurnHeldFixture(async _ =>
         {
-            if (i == 1)
-            {
-                PushLine("later");
-                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.Q));
-            }
+            // Queued, then dropped, before the reply goes on.
+            PushLine("later");
+            await UntilAsync(() => _running!.QueuedCount == 1, CancellationToken.None);
+            _scripted!.Push(Keys.CtrlAlt(ConsoleKey.Q));
+            await UntilAsync(() => _running!.QueuedCount == 0, CancellationToken.None);
         });
 
         string output = await RunAsync();
@@ -6678,13 +6678,13 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task MidTurn_QueueClear_DropsTheQueue_WithTheNotice_AndTheReplyRunsOn()
     {
-        MidTurnFixture(i =>
+        MidTurnHeldFixture(async _ =>
         {
-            if (i == 1)
-            {
-                PushLine("later");
-                PushLine("/queue clear");
-            }
+            // Queued, then dropped, before the reply goes on.
+            PushLine("later");
+            await UntilAsync(() => _running!.QueuedCount == 1, CancellationToken.None);
+            PushLine("/queue clear");
+            await UntilAsync(() => _running!.QueuedCount == 0, CancellationToken.None);
         });
 
         string output = await RunAsync();
@@ -12914,6 +12914,31 @@ public partial class ChatScreenTests : IDisposable
         LinesWhenIdle("hi", "/exit");
     }
 
+    /// <summary>
+    /// <see cref="MidTurnFixture"/> with the reply's second update held on <paramref name="atTheSecondUpdate"/> (the second v0.5.1
+    /// release run, 2026-10-11: a Mac runner's reply ended inside the fixture's 40 ms, the keys met the idle line and a queued
+    /// message was sent). Wait asynchronously in it (<see cref="UntilAsync"/>): a posted act runs on the turn task while the
+    /// update is pending (<c>NextEventAsync</c>), which a thread blocked in the hook never lets it reach.
+    /// </summary>
+    private void MidTurnHeldFixture(Func<CancellationToken, Task> atTheSecondUpdate)
+    {
+        MidTurnFixture(_ => { });
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (_chat.Requests.Count != 1)
+            {
+                return;
+            }
+
+            if (i == 1)
+            {
+                await atTheSecondUpdate(ct);
+            }
+
+            await Task.Delay(40, CancellationToken.None);
+        };
+    }
+
     [Theory]
     [InlineData(SlashCommand.None, false, MidTurnClass.Message)]
     [InlineData(SlashCommand.Help, false, MidTurnClass.Pane)]
@@ -14357,13 +14382,13 @@ public partial class ChatScreenTests : IDisposable
     public async Task MidTurn_New_DropsTheQueue_WhateverTheMode_WithTheNotice()
     {
         _settings.Update(d => d.QueueCancelMode = "drain");
-        MidTurnFixture(i =>
+        MidTurnHeldFixture(async ct =>
         {
-            if (i == 1)
-            {
-                PushLine("later");
-                PushLine("/new");
-            }
+            // Queued, and /new read, before the reply goes on: /new cancels the reply, so the hold ends on its token.
+            PushLine("later");
+            await UntilAsync(() => _running!.QueuedCount == 1, CancellationToken.None);
+            PushLine("/new");
+            await UntilAsync(() => ct.IsCancellationRequested, CancellationToken.None);
         });
 
         string output = await RunAsync();
