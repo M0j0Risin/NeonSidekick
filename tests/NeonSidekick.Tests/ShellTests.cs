@@ -329,6 +329,9 @@ public sealed class ShellTests
         var start = new ProcessStartInfo("x.exe");
         start.Environment["NO_COLOR"] = "0";
         start.Environment["KEEP"] = "yes";
+        start.Environment["NEONSIDEKICK_LLM_API_KEY"] = "secret";
+        start.Environment["NEONSIDEKICK_HA_TOKEN"] = "secret";
+        start.Environment["NEONSIDEKICK_TEST_LLM_URL"] = "http://x";
         var launch = new ProcessLaunch("x.exe", [], null, ".", "x", "cmd", new Dictionary<string, string> { ["TERM"] = "xterm", ["NEONSIDEKICK_BRIDGE_TOKEN"] = "t" });
 
         ChildEnvironment.Apply(start, launch);
@@ -339,6 +342,11 @@ public sealed class ShellTests
         Assert.Equal("t", start.Environment["NEONSIDEKICK_BRIDGE_TOKEN"]);
         Assert.Equal("utf-8", start.Environment["PYTHONIOENCODING"]);
         Assert.Equal("cat", start.Environment["GIT_PAGER"]);
+        // The app's secrets are withheld (2026-10-12); a test's variable is the developer's and goes through.
+        Assert.False(start.Environment.ContainsKey("NEONSIDEKICK_LLM_API_KEY"));
+        Assert.False(start.Environment.ContainsKey("NEONSIDEKICK_HA_TOKEN"));
+        Assert.Equal("http://x", start.Environment["NEONSIDEKICK_TEST_LLM_URL"]);
+        Assert.Equal(["NEONSIDEKICK_LLM_API_KEY", "NEONSIDEKICK_ANTHROPIC_API_KEY", "NEONSIDEKICK_OPENAI_API_KEY", "NEONSIDEKICK_HA_TOKEN", "NEONSIDEKICK_YOUTUBE_API_KEY"], ChildEnvironment.Withheld);
         Assert.Equal(["NO_COLOR", "FORCE_COLOR", "CLICOLOR", "TERM", "PYTHONIOENCODING", "PYTHONUTF8", "PYTHONUNBUFFERED", "GIT_TERMINAL_PROMPT", "GIT_PAGER", "PAGER", "DOTNET_NOLOGO", "DOTNET_CLI_TELEMETRY_OPTOUT"], ChildEnvironment.Overrides.Select(p => p.Key));
     }
 
