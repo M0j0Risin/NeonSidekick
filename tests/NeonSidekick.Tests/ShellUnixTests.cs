@@ -51,6 +51,33 @@ public sealed class ShellUnixTests
         Assert.Equal("python3", CodeLanguages.FileName(CodeLanguage.Python));
     }
 
+    /// <summary>
+    /// The Unix twin of the revalidation half of <c>ShellTests.Interpreters_FindTheTwoWindowsShells_WithoutAPath_AndBashOnlyWhenThere</c>
+    /// (2026-10-12): no walk while every found path is still there; the whole cache forgotten when one is gone, zsh then falling back
+    /// to the system's own and pwsh, found only on the PATH, to none.
+    /// </summary>
+    [UnixFact]
+    public void Interpreters_Revalidate_WalksAgainOnlyWhenAFoundPathIsGone_Unix()
+    {
+        var files = new HashSet<string>(StringComparer.Ordinal) { "/opt/homebrew/bin/zsh", "/bin/zsh", "/opt/pwsh/pwsh" };
+        int walks = 0;
+        var watched = new Interpreters(name => { walks++; return name == "PATH" ? "/opt/homebrew/bin:/opt/pwsh" : null; }, files.Contains);
+        Assert.Equal("/opt/homebrew/bin/zsh", watched.Locate(ShellKind.Zsh));
+        Assert.Equal("/opt/pwsh/pwsh", watched.Locate(ShellKind.PowerShell));
+        int first = walks;
+
+        watched.Revalidate();
+        watched.Locate(ShellKind.Zsh);
+        Assert.Equal(first, walks);
+
+        files.Remove("/opt/pwsh/pwsh");
+        files.Remove("/opt/homebrew/bin/zsh");
+        watched.Revalidate();
+        Assert.Null(watched.Locate(ShellKind.PowerShell));   // uninstalled: walked again, not found
+        Assert.Equal("/bin/zsh", watched.Locate(ShellKind.Zsh));
+        Assert.True(walks > first);
+    }
+
     /// <summary>The Unix side of <c>ShellTests.ShellText_Errors_LogLines_AndThePane_ArePinned</c>' file names (2026-10-06): no <c>.exe</c>.</summary>
     [UnixFact]
     public void TheNotInstalledSentences_NameTheUnixFiles()

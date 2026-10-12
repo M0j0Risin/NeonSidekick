@@ -29,4 +29,4 @@ The `--*-check` modes change nothing (`--sql-check` makes one temporary table in
 
 **Exit codes:** 0 done (a check passed), 1 a check failed, 2 a bad argument or an unknown profile, 3 a headless run in which a shell command was refused ([HEADLESS.md](HEADLESS.md)).
 
-`--mcp-relay` and `--llama-guard` are used when the app starts its own executable (for the Claude Code server, and on a Mac to stop the embedded LLM's server if the app crashes). Don't pass them yourself.
+`--mcp-relay`, `--llama-guard` and `--shell-guard` are used when the app starts its own executable (for the Claude Code server, and on a Mac to stop the embedded LLM's server or the background commands if the app crashes). Don't pass them yourself.

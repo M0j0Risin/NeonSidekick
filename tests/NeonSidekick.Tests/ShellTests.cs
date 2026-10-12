@@ -132,6 +132,22 @@ public sealed class ShellTests
     [InlineData("bash", @"echo \$(rm x)", new[] { "echo" })]   // escaped
     [InlineData("zsh", "echo $(echo $(rm x))", new[] { "echo", "rm" })]
     [InlineData("cmd", "echo $(rm x)", new[] { "echo" })]   // cmd has no substitutions
+    [InlineData("zsh", "diff =(sort a) b", new[] { "diff", "sort" })]   // zsh's =(…): a temp file of the output
+    [InlineData("zsh", "git log =(rm -rf src)", new[] { "git log", "rm" })]
+    [InlineData("zsh", "cat < =(rm x) && cat <=(rm y)", new[] { "cat", "rm" })]   // after a redirection
+    [InlineData("zsh", "x==(rm y) make test", new[] { "make test", "rm" })]   // an assignment's value
+    [InlineData("zsh", "x+==(rm y) make test", new[] { CommandPrefix.Unreadable, "rm" })]   // an append, a subscript: read too (not an assignment
+    [InlineData("zsh", "a[1]==(rm y) make test", new[] { CommandPrefix.Unreadable, "rm" })]   // IsAssignment knows, so the pane always asks)
+    [InlineData("zsh", "export y==(rm z)", new[] { "export", "rm" })]
+    [InlineData("zsh", "echo '=(rm x)' \"=(rm y)\" \\=(rm z)", new[] { "echo" })]   // quoted or escaped: text
+    [InlineData("zsh", "echo x=(rm y)", new[] { "echo" })]   // inside an argument: a glob qualifier
+    [InlineData("zsh", "git log ${:-=(rm -rf src)}", new[] { "git log", "rm" })]   // a parameter expansion's default runs it (the code review)
+    [InlineData("zsh", "echo ${x:+=(rm y)} x${x-=(rm z)}", new[] { "echo", "rm" })]
+    [InlineData("zsh", "echo \"${x:-=(rm y)}\"", new[] { "echo" })]   // in double quotes: text
+    [InlineData("zsh", "echo --opt==(rm z)", new[] { "echo", "rm" })]   // a glob qualifier too, but read: reading more only asks
+    [InlineData("zsh", "files=(rm x) && ls", new[] { "x)", "ls" })]   // an array, not a command: read as bash reads it
+    [InlineData("bash", "files=(rm x) && ls", new[] { "x)", "ls" })]
+    [InlineData("bash", "diff =(sort a) b", new[] { "diff" })]   // bash has no =(…)
     public void CommandPrefix_All_ReadsTheCommandsSubstitutionsRun(string shell, string command, string[] prefixes)
     {
         Assert.True(ShellKinds.TryParse(shell, out var kind));

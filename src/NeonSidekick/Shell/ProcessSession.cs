@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.Shell;
@@ -9,7 +8,7 @@ namespace NeonSidekick.Shell;
 /// (<see cref="Exited"/> completes with the code once the process is gone <em>and</em> both pumps
 /// have drained — a result never misses a trailing line), its stdin (<see cref="WriteAsync"/>,
 /// <see cref="CloseInput"/>) and its kill (<see cref="Kill"/>, the whole tree, parent first as .NET
-/// does it; <see cref="Dispose"/> kills and waits for the exit before the handle goes). Time is the
+/// does it, and on Windows its job, on a Mac its process group: <see cref="ShellChild"/>; <see cref="Dispose"/> kills and waits for the exit before the handle goes). Time is the
 /// <see cref="TimeProvider"/>'s: <see cref="Elapsed"/> freezes at exit, and
 /// <see cref="WaitAsync"/> races the exit against <c>Task.Delay</c> on the same clock, so a manual
 /// clock drives a timeout in tests. A foreground run and a background one are the same object;
@@ -17,7 +16,7 @@ namespace NeonSidekick.Shell;
 /// </summary>
 public sealed class ProcessSession : IDisposable, IAsyncDisposable
 {
-    private readonly Process _process;
+    private readonly ShellChild _child;
     private readonly TimeProvider _time;
     private readonly long _started;
     /// <summary>How long <see cref="Dispose"/> waits for a killed child to be gone before its handle goes; the tools' kill grace.</summary>
@@ -28,16 +27,15 @@ public sealed class ProcessSession : IDisposable, IAsyncDisposable
     private bool _inputClosed;
     private bool _disposed;
     private bool _userStop;
-    private nint _job;
 
-    internal ProcessSession(string id, ProcessLaunch launch, Process process, TimeProvider time)
+    internal ProcessSession(string id, ProcessLaunch launch, ShellChild child, TimeProvider time)
     {
         Id = id ?? throw new ArgumentNullException(nameof(id));
         Launch = launch ?? throw new ArgumentNullException(nameof(launch));
-        _process = process ?? throw new ArgumentNullException(nameof(process));
+        _child = child ?? throw new ArgumentNullException(nameof(child));
         _time = time ?? throw new ArgumentNullException(nameof(time));
         _started = time.GetTimestamp();
-        Pid = process.Id;
+        Pid = child.Pid;
         Output = new OutputBuffer();
     }
 
@@ -83,14 +81,16 @@ public sealed class ProcessSession : IDisposable, IAsyncDisposable
     internal void MarkUserStop() => Volatile.Write(ref _userStop, true);
 
     /// <summary>
-    /// The child's own job (2026-10-12, the shell review; <see cref="EmbeddedLlm.ChildJob.CreateOwn"/>, 0 for none): <see cref="Kill"/> ends
-    /// it whole, and <see cref="Dispose()"/> closes it — which, for a background command's kill-on-close job, ends what is left in it.
-    /// Set by the runner right after the start.
+    /// Whether the child runs in a job of its own (2026-10-12, the shell review; Windows, <see cref="ProcessChild"/>): <see cref="Kill"/>
+    /// ends it whole, and <see cref="Dispose()"/> closes it — which, for a background command's kill-on-close job, ends what is left in it.
     /// </summary>
-    internal void AttachJob(nint job) => _job = job;
+    public bool InJob => _child.InJob;
 
-    /// <summary>Whether the child runs in a job of its own (<see cref="AttachJob"/>).</summary>
-    public bool InJob => _job != 0;
+    /// <summary>
+    /// Whether the child itself has exited, its pumps perhaps still draining (2026-10-12): on a Mac a background command's leader
+    /// stays a zombie while its group has members (<see cref="GroupChild"/>), so its pid is no way to ask.
+    /// </summary>
+    internal bool ChildHasExited => _child.HasExited;
 
     /// <summary>Completes with the exit code once the process is gone and both pumps have drained.</summary>
     public Task<int> Exited => _exited.Task;
@@ -146,8 +146,8 @@ public sealed class ProcessSession : IDisposable, IAsyncDisposable
 
         try
         {
-            await _process.StandardInput.WriteAsync(data.AsMemory(), cancellationToken).ConfigureAwait(false);
-            await _process.StandardInput.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await _child.StandardInput.WriteAsync(data.AsMemory(), cancellationToken).ConfigureAwait(false);
+            await _child.StandardInput.FlushAsync(cancellationToken).ConfigureAwait(false);
             return true;
         }
         catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
@@ -169,7 +169,7 @@ public sealed class ProcessSession : IDisposable, IAsyncDisposable
         _inputClosed = true;
         try
         {
-            _process.StandardInput.Close();
+            _child.StandardInput.Close();
         }
         catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
         {
@@ -186,17 +186,16 @@ public sealed class ProcessSession : IDisposable, IAsyncDisposable
     {
         try
         {
-            if (!_process.HasExited)
+            // On a Mac also after the child's own exit while what it left is still running and its output still drains (the code review,
+            // 2026-10-12: a background `server & exit` could not be stopped): the group kill reaches it.
+            if (!_child.HasExited || (!HasExited && _child.HoldsLeftovers))
             {
                 Killed = true;
-                // The job first (2026-10-12): it holds what the tree walk misses, a grandchild whose parent already exited. The walk
-                // stays for a child that runs outside one; on one already gone it does nothing.
-                EmbeddedLlm.ChildJob.Terminate(_job, -1);
-                _process.Kill(entireProcessTree: true);
+                _child.Kill();
                 return true;
             }
         }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException or AggregateException)
         {
             // Already gone, or not ours to kill: the wait ends either way.
         }
@@ -256,7 +255,7 @@ public sealed class ProcessSession : IDisposable, IAsyncDisposable
         {
             try
             {
-                _process.WaitForExit((int)grace.TotalMilliseconds);
+                _child.WaitForExit((int)grace.TotalMilliseconds);
             }
             catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
             {
@@ -264,9 +263,7 @@ public sealed class ProcessSession : IDisposable, IAsyncDisposable
             }
         }
 
-        _process.Dispose();
-        EmbeddedLlm.ChildJob.Close(_job);
-        _job = 0;
+        _child.Dispose();
         if (!HasExited)
         {
             DiagnosticLog.Debug(ShellKinds.Category, $"{Id}: still running after the kill's grace; completed as -1");   // or its pumps still draining

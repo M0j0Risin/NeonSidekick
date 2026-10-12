@@ -35,8 +35,6 @@ public static class LlamaRecords
     /// <summary>The folder name under <c>&lt;home&gt;/llama</c>. Pinned.</summary>
     public const string FolderName = "running";
 
-    private static readonly TimeSpan StartTolerance = TimeSpan.FromSeconds(1);
-
     /// <summary>The records' folder for <paramref name="llamaDirectory"/>.</summary>
     public static string Folder(string llamaDirectory) => Path.Combine(llamaDirectory, FolderName);
 
@@ -53,7 +51,6 @@ public static class LlamaRecords
     /// <summary>A record read back from <paramref name="text"/>; null for anything that is not one whole record.</summary>
     public static LlamaRecord? Parse(string text)
     {
-        (int Pid, long Ticks)? owner = null, server = null;
         string? executable = null;
         foreach (var raw in (text ?? "").Split('\n'))
         {
@@ -61,26 +58,11 @@ public static class LlamaRecords
             if (line.StartsWith("executable ", StringComparison.Ordinal))
             {
                 executable = line["executable ".Length..];
-                continue;
-            }
-
-            var parts = line.Split(' ');
-            if (parts.Length == 3
-                && int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out int pid)
-                && long.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out long ticks))
-            {
-                if (parts[0] == "owner")
-                {
-                    owner = (pid, ticks);
-                }
-                else if (parts[0] == "server")
-                {
-                    server = (pid, ticks);
-                }
             }
         }
 
-        return owner is { } o && server is { } s && !string.IsNullOrEmpty(executable)
+        var pairs = Files.RecordFiles.Pairs(text);
+        return pairs.TryGetValue("owner", out var o) && pairs.TryGetValue("server", out var s) && !string.IsNullOrEmpty(executable)
             ? new LlamaRecord(o.Pid, o.Ticks, s.Pid, s.Ticks, executable)
             : null;
     }
@@ -113,22 +95,7 @@ public static class LlamaRecords
     }
 
     /// <summary>Removes a record; nothing when it is gone already or <paramref name="path"/> is null.</summary>
-    public static void Remove(string? path)
-    {
-        if (path is null)
-        {
-            return;
-        }
-
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            DiagnosticLog.Debug(Category, "Removing " + path + ": " + ex.Message);
-        }
-    }
+    public static void Remove(string? path) => Files.RecordFiles.Remove(path, Category);
 
     /// <summary>
     /// Kills every server the records under <paramref name="llamaDirectory"/> show was left behind by an app that is gone
@@ -142,49 +109,26 @@ public static class LlamaRecords
         executableOf ??= ExecutableOf;
         kill ??= Kill;
         var killed = new List<int>();
-        string folder = Folder(llamaDirectory);
-        try
+        string root = Resolved(llamaDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        foreach (var (file, record) in Files.RecordFiles.ReadAll(Folder(llamaDirectory), Parse, Category))
         {
-            if (!Directory.Exists(folder))
+            if (record is not null && Files.RecordFiles.SameStart(startTicks(record.OwnerPid), record.OwnerStartTicks))
             {
-                return killed;
+                continue;   // its app is alive: its server, whoever's it is
             }
 
-            string root = Resolved(llamaDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            foreach (var file in Directory.EnumerateFiles(folder, "*.txt"))
+            if (record is not null
+                && Files.RecordFiles.SameStart(startTicks(record.ServerPid), record.ServerStartTicks)
+                && record.Executable.StartsWith(root, StringComparison.Ordinal)
+                && executableOf(record.ServerPid) is { } running
+                && string.Equals(Resolved(running), record.Executable, StringComparison.Ordinal))
             {
-                // One record at a time: the creation's sweep and a start's may meet on a file, and one gone or unreadable
-                // must not end the rest.
-                try
-                {
-                    var record = Parse(File.ReadAllText(file));
-                    if (record is not null && Same(startTicks(record.OwnerPid), record.OwnerStartTicks))
-                    {
-                        continue;   // its app is alive: its server, whoever's it is
-                    }
-
-                    if (record is not null
-                        && Same(startTicks(record.ServerPid), record.ServerStartTicks)
-                        && record.Executable.StartsWith(root, StringComparison.Ordinal)
-                        && executableOf(record.ServerPid) is { } running
-                        && string.Equals(Resolved(running), record.Executable, StringComparison.Ordinal))
-                    {
-                        DiagnosticLog.Warn(Category, EmbeddedLlmText.LeftBehind(record.ServerPid, record.OwnerPid));
-                        kill(record.ServerPid);
-                        killed.Add(record.ServerPid);
-                    }
-
-                    Remove(file);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    DiagnosticLog.Debug(Category, "Sweeping " + file + ": " + ex.Message);
-                }
+                DiagnosticLog.Warn(Category, EmbeddedLlmText.LeftBehind(record.ServerPid, record.OwnerPid));
+                kill(record.ServerPid);
+                killed.Add(record.ServerPid);
             }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            DiagnosticLog.Warn(Category, "Sweeping " + folder + ": " + ex.Message);
+
+            Remove(file);
         }
 
         return killed;
@@ -197,22 +141,8 @@ public static class LlamaRecords
         return Files.RealPath.Of(full) ?? full;
     }
 
-    private static bool Same(long? actual, long recorded) =>
-        actual is { } ticks && Math.Abs(ticks - recorded) <= StartTolerance.Ticks;
-
-    /// <summary>A running process's start time in UTC ticks; null when there is none by that pid or it cannot be read.</summary>
-    public static long? StartTicks(int pid)
-    {
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            return process.HasExited ? null : process.StartTime.ToUniversalTime().Ticks;
-        }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
-        {
-            return null;
-        }
-    }
+    /// <summary>A running process's start time in UTC ticks; null when there is none by that pid or it cannot be read (<see cref="Files.RecordFiles.StartTicks"/>).</summary>
+    public static long? StartTicks(int pid) => Files.RecordFiles.StartTicks(pid);
 
     /// <summary>A running process's executable path; null when there is none by that pid or it cannot be read.</summary>
     public static string? ExecutableOf(int pid)

@@ -138,6 +138,8 @@ public static partial class SmokeChecks
         results.Add(OperatingSystem.IsMacOS() ? ProbeAudioQueueIn() : new SmokeCheck("audio:audioqueue-in", true, "skipped: not macOS"));
         results.Add(OperatingSystem.IsWindows() ? ProbeConsoleInput() : NotWindows("console:input"));
         results.Add(OperatingSystem.IsMacOS() ? ProbeTermios() : new SmokeCheck("console:termios", true, "skipped: not macOS"));
+        results.Add(ProbePosixSpawn());
+        results.Add(ProbeShellRecords());
         results.Add(PicturesHere ? ProbeImageResize() : NotWindows("image:resize"));
         results.Add(PicturesHere ? ProbeImageEdit() : NotWindows("image:edit"));
         results.Add(OperatingSystem.IsMacOS() ? ProbeImageIO() : new SmokeCheck("image:imageio", true, "skipped: not macOS"));

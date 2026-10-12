@@ -17,7 +17,7 @@ namespace NeonSidekick.Shell;
 /// <c>git log</c> allowed, <c>git log $(Remove-Item -Recurse src)</c> ran without the pane — the pane that was to show the whole
 /// line is never shown for an allowed prefix. <see cref="All"/> now takes the shell and adds the prefixes of every command a
 /// substitution runs, nested ones too: <c>$(…)</c> everywhere but in single quotes; in bash and zsh a backtick pair and
-/// <c>&lt;(…)</c>/<c>&gt;(…)</c>; in PowerShell <c>@(…)</c>, a bare <c>(…)</c> and a script block <c>{…}</c> (not <c>${…}</c>, not
+/// <c>&lt;(…)</c>/<c>&gt;(…)</c>; in zsh also <c>=(…)</c> where it opens an argument (the same day, the Mac's twin pass); in PowerShell <c>@(…)</c>, a bare <c>(…)</c> and a script block <c>{…}</c> (not <c>${…}</c>, not
 /// <c>@{…}</c>), where a statement that is only a value (<c>$_.Length -gt 1</c>, <c>"x"</c>, <c>42</c>) runs no command and
 /// <c>$x = Remove-Item y</c> runs its right side. cmd has none. What cannot be read — a substitution left open, nesting past
 /// <see cref="MaxDepth"/>, a command whose name or verb is a substitution's output (bash's <c>$(…) -rf x</c>, PowerShell's
@@ -413,7 +413,7 @@ public static partial class CommandPrefix
 
         if (!powerShell)
         {
-            return (c == '<' || c == '>') && next == '(' ? at + 2 : -1;
+            return ((c == '<' || c == '>') && next == '(') || (shell == ShellKind.Zsh && c == '=' && next == '(' && StartsZshArgument(text, at)) ? at + 2 : -1;
         }
 
         if (c == '@' && next == '(')
@@ -517,6 +517,17 @@ public static partial class CommandPrefix
 
         return false;
     }
+
+    /// <summary>
+    /// Whether zsh's <c>=(…)</c> at <paramref name="at"/> is a substitution (2026-10-12): everywhere outside quotes but straight after a
+    /// name's character or a subscript's close. <c>zshexpn(1)</c> says the start of an argument, but zsh 5.9 on macOS 15 runs it in more
+    /// places: after <c>;</c>, a redirection, an assignment's <c>=</c> (<c>x==(…)</c>, <c>x+==(…)</c>, <c>a[1]==(…)</c>) and a parameter
+    /// expansion's default (<c>${x:-=(…)}</c>, <c>${x:+=(…)}</c>, <c>${x-=(…)}</c>: the code review that day, which got
+    /// <c>git log ${:-=(touch x)}</c> past an allowed <c>git log</c>). Measured not to run, and not read: <c>files=(a b)</c> and
+    /// <c>a[1]=(…)</c>, arrays; <c>x=(…)</c> inside an argument, a glob qualifier. Whatever else is read, reading more only asks.
+    /// </summary>
+    private static bool StartsZshArgument(string text, int at) =>
+        at == 0 || !(char.IsAsciiLetterOrDigit(text[at - 1]) || text[at - 1] is '_' or ']');
 
     /// <summary>PowerShell's call operator on a value (<c>&amp; $x</c>, <c>&amp; (…)</c>): the command it runs is whatever the value holds. Not <c>&amp;&amp;</c>.</summary>
     private static bool CallsAValue(string text, int at)

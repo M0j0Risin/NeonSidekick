@@ -62,6 +62,13 @@ if (NeonSidekick.EmbeddedLlm.LlamaGuard.Asked(args))
     return await NeonSidekick.EmbeddedLlm.LlamaGuard.RunAsync(args);
 }
 
+// The shell's crash watcher on a Mac (2026-10-12): this executable started by ShellGroups at the first background command, killing
+// the app's background command groups when its stdin closes — the app's death, however it comes. It prints nothing.
+if (OperatingSystem.IsMacOS() && NeonSidekick.Shell.ShellGuard.Asked(args))
+{
+    return await NeonSidekick.Shell.ShellGuard.RunAsync(args);
+}
+
 // Force UTF-8 console output. On Windows the NativeAOT build (InvariantGlobalization) falls back
 // to the console's OEM code page (CP437/CP850); the themed UI's box-drawing, bullets and braille
 // spinner frames are not in that code page and print as '?'. Wrapped in try/catch because the
@@ -166,6 +173,15 @@ if (OperatingSystem.IsMacOS())
     _ = Task.Run(mounts.Sweep);
 }
 
+// A Mac's background command groups (2026-10-12, the crash watcher): recorded as they start, killed by the guard should the app die
+// and by OnClosing at the exit signals; what an app that died with its guard left running is swept off the start's path.
+if (OperatingSystem.IsMacOS())
+{
+    var groups = new NeonSidekick.Shell.ShellGroups(NeonSidekick.Shell.ShellRecords.FolderIn(home), NeonSidekick.EmbeddedLlm.LlamaGuard.DefaultExecutable());
+    NeonSidekick.Shell.ShellGroups.Current = groups;
+    _ = Task.Run(groups.Sweep);
+}
+
 // A crash lands in crash.log beside the profiles, stack and all: the terminal window closes with
 // the process, so the runtime's stderr print is never read, and --log carries no stack. The
 // domain handler sees a throw on any thread (an audio pump, a pool continuation); the catch
@@ -252,6 +268,12 @@ void OnClosing(System.Runtime.InteropServices.PosixSignalContext _)
 {
     app.ConsoleClosing();
     NeonSidekick.Unc.UncAccess.Mounts?.UnmountAll();
+    if (OperatingSystem.IsMacOS())
+    {
+        // No finally runs after these signals, so the registries are never disposed: the background command groups go here.
+        NeonSidekick.Shell.ShellGroups.Current?.KillTracked();
+    }
+
     // The debounced save the normal exit flushes below, as the quarter-second rule asks. A failure must not throw here.
     try
     {

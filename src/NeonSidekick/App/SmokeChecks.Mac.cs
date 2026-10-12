@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.Versioning;
 using NeonSidekick.UI;
 
@@ -42,6 +43,81 @@ public static partial class SmokeChecks
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
         {
             return new SmokeCheck(name, false, ex.GetType().Name + ": " + Diagnostics.LogText.Excerpt(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// <c>shell:posix-spawn</c> (2026-10-12, the Mac's orphans): the shell runner's <c>posix_spawnp</c> and its doors bind on the
+    /// published binary, and a <c>/bin/sleep</c> started the runner's way (<see cref="Shell.GroupChild"/>) leads its own session and
+    /// process group (sid = pgid = pid), then dies by its group's kill with the code .NET would give (137). Skipped off macOS.
+    /// </summary>
+    public static SmokeCheck ProbePosixSpawn()
+    {
+        const string name = "shell:posix-spawn";
+        if (!OperatingSystem.IsMacOS())
+        {
+            return new SmokeCheck(name, true, "skipped: not macOS");
+        }
+
+        try
+        {
+            using var child = Shell.GroupChild.Start(new Shell.ProcessLaunch("/bin/sleep", ["5"], null, Path.GetTempPath(), "sleep 5", "smoke"), tiedToApp: false);   // never watched: no guard or record from the smoke
+            int pid = child.Pid;
+            int sid = Shell.PosixSpawnNative.GetSid(pid);
+            int pgid = Shell.PosixSpawnNative.GetPgid(pid);
+            if (sid != pid || pgid != pid)
+            {
+                return new SmokeCheck(name, false, $"pid {pid.ToString(CultureInfo.InvariantCulture)} has sid {sid.ToString(CultureInfo.InvariantCulture)}, pgid {pgid.ToString(CultureInfo.InvariantCulture)}: not a session leader");
+            }
+
+            child.Kill();
+            if (!child.WaitForExit(5000))
+            {
+                return new SmokeCheck(name, false, "the group kill did not end it within 5 s");
+            }
+
+            return child.ExitCode == 137
+                ? new SmokeCheck(name, true, "a session leader (sid = pgid = pid), ended by its group's kill: exit 137")
+                : new SmokeCheck(name, false, "exit " + child.ExitCode.ToString(CultureInfo.InvariantCulture) + " after the group kill, not 137");
+        }
+        catch (Exception ex) when (ex is Shell.ShellStartException or DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
+        {
+            return new SmokeCheck(name, false, ex.GetType().Name + ": " + Diagnostics.LogText.Excerpt(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// <c>shell:records</c> (2026-10-12, the crash watcher): a background command group's record written for this process (as owner and
+    /// leader) reads back, and the start's sweep keeps a live owner's record and kills nothing. Never starts a guard. Skipped off macOS.
+    /// </summary>
+    public static SmokeCheck ProbeShellRecords()
+    {
+        const string name = "shell:records";
+        if (!OperatingSystem.IsMacOS())
+        {
+            return new SmokeCheck(name, true, "skipped: not macOS");
+        }
+
+        string home = Path.Combine(Path.GetTempPath(), "neonsidekick-smoke-shell-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            string folder = Shell.ShellRecords.FolderIn(home);
+            string? record = Shell.ShellRecords.Write(folder, Environment.ProcessId);
+            if (record is null || Shell.ShellRecords.Parse(File.ReadAllText(record)) is not { } parsed || parsed.OwnerPid != Environment.ProcessId)
+            {
+                return new SmokeCheck(name, false, "the record did not read back");
+            }
+
+            var killed = Shell.ShellRecords.Sweep(folder, EmbeddedLlm.LlamaRecords.StartTicks, _ => throw new InvalidOperationException("the sweep killed a live owner's group"), _ => true);
+            return new SmokeCheck(name, killed.Count == 0 && File.Exists(record), "the record read back; a live owner's record kept");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            Files.WorkingDirectory.DeleteDirectoryQuietly(home);
         }
     }
 

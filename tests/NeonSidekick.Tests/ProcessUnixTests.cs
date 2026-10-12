@@ -199,6 +199,74 @@ public sealed class ProcessUnixTests : IDisposable
         }
     }
 
+    /// <summary>The Unix twin of <see cref="ProcessToolTests.Poll_ShowsAPromptWithoutItsNewline"/> (2026-10-12): zsh's <c>printf</c> and <c>read -r</c>.</summary>
+    [UnixFact]
+    public async Task Poll_ShowsAPromptWithoutItsNewline_Unix()
+    {
+        const string Prompt = "printf 'Name? '; read -r name; echo hello $name";
+        var session = Start(Prompt);
+        var until = DateTime.UtcNow.AddSeconds(30);
+        while (session.Output.Unfinished().Count == 0 && DateTime.UtcNow < until)
+        {
+            await Task.Delay(20);
+        }
+
+        Assert.Equal(session.Id + " running for 0.0 s (zsh): " + Prompt + " — 1 new line\nName? ", await Invoke(("action", "poll"), ("session_id", session.Id)));
+        Assert.EndsWith("\nName? ", await Invoke(("action", "log"), ("session_id", session.Id)));
+        Assert.Equal("sent a line to " + session.Id, await Invoke(("action", "submit"), ("session_id", session.Id), ("data", "bob")));
+        Assert.Equal(session.Id + " exited 0 after 0.0 s (zsh): " + Prompt + " — 1 new line\nName? hello bob", await Invoke(("action", "wait"), ("session_id", session.Id), ("timeout", 30)));
+    }
+
+    /// <summary>The Unix twin of <see cref="ProcessToolTests.Dispose_KillsEveryRunningChild_AndWaitsForThemTogether"/> (2026-10-12).</summary>
+    [UnixFact]
+    public void Dispose_KillsEveryRunningChild_AndWaitsForThemTogether_Unix()
+    {
+        var sessions = Enumerable.Range(0, 4).Select(_ => Start("sleep 60")).ToList();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        _registry.Dispose();
+
+        Assert.All(sessions, s => Assert.True(s.HasExited && s.Killed));
+        Assert.True(clock.Elapsed < ProcessSession.DisposeGrace, clock.Elapsed.ToString());
+        Assert.Empty(_registry.List());
+    }
+
+    /// <summary>The Unix twin of <see cref="ProcessToolTests.Wait_Until_ReturnsWhenALineHoldsTheText"/> (2026-10-12): <c>sleep</c> for cmd's <c>ping</c>, <c>read -r</c> for <c>set /p</c>.</summary>
+    [UnixFact]
+    public async Task Wait_Until_ReturnsWhenALineHoldsTheText_Unix()
+    {
+        const string Server = "echo starting; sleep 1; echo Listening on 8080; sleep 60";
+        var session = Start(Server);
+        Assert.Equal(
+            session.Id + " running for 0.0 s, 'LISTENING' seen (zsh): " + Server + " — 2 new lines\nstarting\nListening on 8080",
+            await Invoke(("action", "wait"), ("session_id", session.Id), ("timeout", 60), ("until", "LISTENING")));
+        Assert.False(session.HasExited);
+
+        // Seen, but not polled yet: the next wait for it returns at once; once polled, it is not new.
+        var early = Start("echo ready; sleep 60");
+        while (early.Output.TotalLines == 0)
+        {
+            await Task.Delay(20);
+        }
+
+        Assert.Contains("'ready' seen", await Invoke(("action", "wait"), ("session_id", early.Id), ("until", "ready")));
+        var again = _tool.InvokeAsync(Args(("action", "wait"), ("session_id", early.Id), ("timeout", 5), ("until", "ready")));
+        await Task.Delay(100);
+        Assert.False(again.IsCompleted);
+        _time.Advance(TimeSpan.FromSeconds(6));
+        Assert.StartsWith(early.Id + " still running after 5 s", (string)(await again.AsTask().WaitAsync(TimeSpan.FromSeconds(30)))!);
+
+        // A prompt with no newline is matched too.
+        const string Prompt = "printf 'Your name? '; read -r name; echo hello $name";
+        var prompt = Start(Prompt);
+        Assert.EndsWith("'name?' seen (zsh): " + Prompt + " — 1 new line\nYour name? ", await Invoke(("action", "wait"), ("session_id", prompt.Id), ("timeout", 60), ("until", "name?")));
+        Assert.Equal("Error: timeout must be 1 to 600 for wait", await Invoke(("action", "wait"), ("session_id", prompt.Id), ("timeout", 0), ("until", "x")));
+        foreach (var running in new[] { session, early, prompt })
+        {
+            running.Kill();
+        }
+    }
+
     // ── ProcessRegistry.StopByUser ──────────────────────────────────────────
 
     [UnixFact]
@@ -221,39 +289,34 @@ public sealed class ProcessUnixTests : IDisposable
         Assert.False(foreign.HasExited);
     }
 
+    /// <summary>
+    /// zsh exits at once while the sleep it left in the background holds the output pipe open (ProcessWindowTests' cmd case, where
+    /// Windows refuses the stop). On a Mac the leader is kept unreaped while its group has members (GroupChild), so the user's stop
+    /// still reaches what it left (the code review, 2026-10-12: such a command could not be stopped at all); the exit stays the
+    /// command's own, and the alert says the user stopped it.
+    /// </summary>
     [UnixFact]
-    public async Task StopByUser_AChildGoneWhileItsOutputDrains_IsNotStopped_NorNotified()
+    public async Task StopByUser_AChildGoneWhileItsOutputDrains_StopsWhatItLeft()
     {
-        // zsh exits at once while the sleep it left in the background holds the output pipe open (ProcessWindowTests' cmd case).
-        var session = Start("sleep 4 & exit 3");
+        var session = Start("sleep 60 & echo $!; exit 3");
         var deadline = DateTime.UtcNow.AddSeconds(30);
-        while (!ParentGone(session.Pid) && DateTime.UtcNow < deadline)
+        while ((!session.ChildHasExited || session.Output.TotalLines == 0) && DateTime.UtcNow < deadline)
         {
             await Task.Delay(20);
         }
 
-        Assert.True(ParentGone(session.Pid));
+        int left = int.Parse(session.Output.Lines()[0].Text, System.Globalization.CultureInfo.InvariantCulture);
+        Assert.True(session.ChildHasExited);
         Assert.False(session.HasExited);
-        Assert.False(_registry.StopByUser(session));
-        Assert.False(session.Notify);
+        Assert.True(_registry.StopByUser(session));
+        Assert.True(session.Notify);
 
         await Exit(session);
-        Assert.False(session.StoppedByUser);
+        Assert.True(session.StoppedByUser);
         Assert.Equal(3, session.ExitCode);
-        Assert.False(_registry.TryTakeAlert(out _));
-
-        static bool ParentGone(int pid)
-        {
-            try
-            {
-                using var process = System.Diagnostics.Process.GetProcessById(pid);
-                return process.HasExited;
-            }
-            catch (ArgumentException)
-            {
-                return true;
-            }
-        }
+        Assert.Null(EmbeddedLlm.LlamaRecords.StartTicks(left));
+        Assert.True(_registry.TryTakeAlert(out var alert));
+        Assert.True(alert.ByUser);
     }
 
     // ── The /process pane ───────────────────────────────────────────────────

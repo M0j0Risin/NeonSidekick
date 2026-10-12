@@ -198,6 +198,21 @@ public sealed class RunCommandUnixTests : IDisposable
         Assert.Equal(400, whole.Split('\n').Length);
     }
 
+    /// <summary>The Unix twin of <see cref="RunCommandToolTests.OutputOverTheBuffer_SaysHowManyLinesWereNotKept_InTheResultAndTheSpill"/> (2026-10-12).</summary>
+    [UnixFact]
+    public async Task OutputOverTheBuffer_SaysHowManyLinesWereNotKept_InTheResultAndTheSpill_Unix()
+    {
+        _settings.ShellOutputMaxChars = 2000;
+        string result = await Invoke(("command", "for i in {1..5100}; do echo line $i; done"));
+
+        Assert.Contains("\n" + ShellText.DroppedLine(100) + "\n", result);
+        Assert.EndsWith("\nline 5100", result);
+        Assert.DoesNotContain("the whole output is in", result);
+        Assert.Contains("the output kept is in .shell/run_", result);
+        string whole = File.ReadAllText(Assert.Single(Directory.GetFiles(Path.Combine(_root, ".shell"), "run_*.log")));
+        Assert.StartsWith(ShellText.DroppedLine(100) + "\nline 101\n", whole);
+    }
+
     [UnixFact]
     public async Task Background_AnswersTheIdAtOnce_AndATimeoutOverTheCapPromotesToIt()
     {

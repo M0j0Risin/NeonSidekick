@@ -381,4 +381,4 @@ Flags beat variables; variables beat the profile's saved values. [ENVIRONMENT.md
 `--sqlite-check <database>`, `--postgres-check <connection>`, `--unc-check <share>`, `--docker-check` and `--camera-check` are
 separate modes; with `--headless`, headless wins and they are ignored. `--help` and `--version` print and exit first.
 
-`--mcp-relay <address> <key>` and `--llama-guard …` are the app's own internal modes, not for you to run.
+`--mcp-relay <address> <key>`, `--llama-guard …` and `--shell-guard …` are the app's own internal modes, not for you to run.
