@@ -109,6 +109,26 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.Equal(["execute_code", "ask_user"], ExecuteCodeTool.Excluded);
     }
 
+    /// <summary>The leftovers (2026-10-12, the shell review): run folders older than a day go; a fresh one and anything not a run's stay.</summary>
+    [Fact]
+    public void SweepLeftovers_TakesOnlyOldRunFolders()
+    {
+        string runs = Path.Combine(_dir, "sweep");
+        var now = new DateTime(2026, 10, 12, 12, 0, 0, DateTimeKind.Utc);
+        foreach (var (name, age) in new[] { ("code_000001", 2.0), ("code_000002", 0.1), ("keep_000003", 3.0) })
+        {
+            string folder = Path.Combine(runs, name);
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "script.py"), "print(1)");
+            Directory.SetLastWriteTimeUtc(folder, now.AddDays(-age));
+        }
+
+        ExecuteCodeTool.SweepLeftovers(runs, now);
+
+        Assert.Equal(["code_000002", "keep_000003"], Directory.GetDirectories(runs).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+        ExecuteCodeTool.SweepLeftovers(Path.Combine(_dir, "none"), now);   // no folder: nothing to do
+    }
+
     [Fact]
     public async Task Refusals_ArePinned()
     {

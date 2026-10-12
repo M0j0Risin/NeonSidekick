@@ -55,6 +55,10 @@ public sealed class ExecuteCodeTool : AIFunction
 
     private string _schemaKey = "";
     private JsonElement _schema;
+    private int _swept;
+
+    /// <summary>How old a run folder left behind must be before <see cref="SweepLeftovers"/> takes it.</summary>
+    public static readonly TimeSpan LeftoverAge = TimeSpan.FromDays(1);
 
     /// <param name="tools">The tools the turn offers the model, read at each bridge call (the screen's assistant's list).</param>
     /// <param name="runsFolder">Where run folders are made; the temp directory's <see cref="RunsFolderName"/> by default, a temp folder in tests.</param>
@@ -252,6 +256,11 @@ public sealed class ExecuteCodeTool : AIFunction
             return verdict.Error;
         }
 
+        if (Interlocked.Exchange(ref _swept, 1) == 0)
+        {
+            SweepLeftovers(_runsFolder, DateTime.UtcNow);
+        }
+
         string id = ShellRunner.NewId(_random, IdPrefix);
         string runFolder = Path.Combine(_runsFolder, id);
         // The bridge (Shell tool bridge, later on 2026-09-21): off, no module is written, no server started and no address or token handed down — the script is on its own.
@@ -366,6 +375,35 @@ public sealed class ExecuteCodeTool : AIFunction
         string text => string.Equals(text.Trim(), "true", StringComparison.OrdinalIgnoreCase),
         _ => false,
     };
+
+    /// <summary>
+    /// The run folders a crash, or a child still holding a file, left under <paramref name="runsFolder"/> (2026-10-12, the shell
+    /// review: each run deletes its own, but nothing ever took one that stayed): every <c>code_…</c> folder last written more than
+    /// <see cref="LeftoverAge"/> before <paramref name="now"/>, once a process, at its first run. A running script's folder is minutes old.
+    /// </summary>
+    public static void SweepLeftovers(string runsFolder, DateTime now)
+    {
+        ArgumentNullException.ThrowIfNull(runsFolder);
+        try
+        {
+            if (!Directory.Exists(runsFolder))
+            {
+                return;
+            }
+
+            foreach (string folder in Directory.EnumerateDirectories(runsFolder, IdPrefix + "*"))
+            {
+                if (now - Directory.GetLastWriteTimeUtc(folder) > LeftoverAge)
+                {
+                    TryDelete(folder);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Debug(ShellKinds.Category, $"could not sweep {runsFolder} ({ex.Message})");
+        }
+    }
 
     private static void TryDelete(string folder)
     {
