@@ -126,6 +126,10 @@ public sealed class ShoppingStoreTests : IDisposable
         Assert.Equal(("EGGS", 6, 2), (eggs.Name, eggs.Quantity, eggs.Times));
         Assert.True(_store.ForgetBought(eggs.Id));
         Assert.Equal(["Bread"], _store.Bought().Select(b => b.Name));
+
+        // A remove that removes nothing records nothing (2026-10-11 review: recorded apart and first, a failed delete still counted it).
+        Assert.False(_store.RemoveItem(9999, new ShopItem(9999, "Bread", 1, "", true, DateTimeOffset.UnixEpoch)));
+        Assert.Equal([("Bread", 1)], _store.Bought().Select(b => (b.Name, b.Times)));
     }
 
     [Fact]

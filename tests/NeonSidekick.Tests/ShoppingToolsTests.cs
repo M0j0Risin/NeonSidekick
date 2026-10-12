@@ -56,7 +56,7 @@ public sealed class ShoppingToolsTests : IDisposable
         Assert.Equal("Already on the list; now Soy milk ×3.", await Call(add, ("items", new[] { "Soy Milk" })));
 
         Assert.Equal(
-            "Shopping list (no store set up: lines in the order added): 2 items to get.\nUnplaced\n- Soy milk ×3\n- Bread",
+            "Shopping list (no store set up: lines in the order added): 2 items to get.\nUnplaced\n1. Soy milk ×3\n2. Bread",
             await Call(Tool(ShoppingListTool.ToolName)));
         Assert.Equal(ShoppingText.NoStore, await Call(Tool(ShoppingLocateTool.ToolName), ("term", "bread")));
     }
@@ -93,9 +93,9 @@ public sealed class ShoppingToolsTests : IDisposable
 
         Assert.Equal(
             "Shopping list at H-E-B #372: 3 items to get.\n" +
-            "Aisle 2 · International Foods\n- Goya guava nectar\n" +
-            "Aisle 10 · Beverages\n- Peach nectar\n" +
-            "Deli\n- Babybel (guess)",
+            "Aisle 2 · International Foods\n1. Goya guava nectar\n" +
+            "Aisle 10 · Beverages\n2. Peach nectar\n" +
+            "Deli\n3. Babybel (guess)",
             await Call(Tool(ShoppingListTool.ToolName)));
 
         string located = await Call(Tool(ShoppingLocateTool.ToolName), ("term", "Goya mango nectar"));
@@ -105,7 +105,38 @@ public sealed class ShoppingToolsTests : IDisposable
 
         // The user's correction moves the fact and the line with it, no longer a guess.
         await Call(place, ("term", "Babybel"), ("location", "Dairy"), ("source", "user"));
-        Assert.Contains("Dairy\n- Babybel\n", await Call(Tool(ShoppingListTool.ToolName)) + "\n", StringComparison.Ordinal);
+        Assert.Contains("Dairy\n3. Babybel\n", await Call(Tool(ShoppingListTool.ToolName)) + "\n", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A number is the line's number as the active store's list shows it (2026-10-11 review: it was the order added, which nothing
+    /// showed), every name of one call read before the first act (<c>["1", "2"]</c> removed lines 1 and 3), a line two names reach
+    /// acted on once, and another store's list is bulleted, its walk's numbers not the ones read.
+    /// </summary>
+    [Fact]
+    public async Task Numbers_AreTheActiveStoresWalk_ReadBeforeAnyAct()
+    {
+        var layout = Tool(ShoppingLayoutTool.ToolName);
+        var place = Tool(ShoppingPlaceTool.ToolName);
+        await Call(layout, ("action", "add_store"), ("name", "H-E-B"));
+        await Call(layout, ("action", "add_location"), ("name", "Aisle 1"), ("walk", 1));
+        await Call(layout, ("action", "add_location"), ("name", "Aisle 9"), ("walk", 2));
+        await Call(place, ("term", "Bread"), ("location", "Aisle 9"));
+        await Call(place, ("term", "Eggs"), ("location", "Aisle 1"));
+        await Call(Tool(ShoppingAddTool.ToolName), ("items", new[] { "Bread", "Soap", "Eggs" }));
+        await Call(layout, ("action", "add_store"), ("name", "Costco"));
+
+        Assert.Equal(
+            "Shopping list at H-E-B: 3 items to get.\nAisle 1\n1. Eggs\nAisle 9\n2. Bread\nUnplaced\n3. Soap",
+            await Call(Tool(ShoppingListTool.ToolName)));
+        Assert.Contains("\n- Bread", await Call(Tool(ShoppingListTool.ToolName), ("store", "Costco")), StringComparison.Ordinal);
+
+        Assert.Equal("Ticked Eggs.\nTicked Bread.", await Call(Tool(ShoppingCheckTool.ToolName), ("items", new[] { "1", "2", "eggs" })));
+        Assert.Equal(
+            "Shopping list at H-E-B: 1 item to get, 2 ticked.\nUnplaced\n1. Soap\nTicked\n2. [x] Bread\n3. [x] Eggs",
+            await Call(Tool(ShoppingListTool.ToolName)));
+        Assert.Equal("Removed Soap from the list.\nRemoved Bread from the list.", await Call(Tool(ShoppingRemoveTool.ToolName), ("items", new[] { "1", "2" })));
+        Assert.Equal(["Eggs"], _list.Store.Items().Select(i => i.Name));
     }
 
     [Fact]

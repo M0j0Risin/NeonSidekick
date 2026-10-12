@@ -21,7 +21,7 @@ public sealed class ShoppingCheckTool(ShoppingList list) : ShoppingTool(list)
         {
           "type": "object",
           "properties": {
-            "items": { "type": "array", "items": { "type": "string" }, "description": "The lines to tick, by name or by their number on the list." },
+            "items": { "type": "array", "items": { "type": "string" }, "description": "The lines to tick, by name or by the number shopping_list shows beside them." },
             "checked": { "type": "boolean", "description": "false unticks them; true (the default) ticks them as bought." }
           },
           "required": ["items"]
@@ -52,16 +52,24 @@ public sealed class ShoppingCheckTool(ShoppingList list) : ShoppingTool(list)
 
     /// <summary>
     /// <paramref name="act"/> on every line each of <paramref name="names"/> names: one line, or several folded alike (one product written
-    /// twice); several different lines are refused for that name. One sentence per line; <c>Error: </c> leads a refusal. Shared with
-    /// <c>shopping_remove</c>.
+    /// twice); several different lines are refused for that name. Every name is read against the list as it stood before the first act
+    /// (2026-10-11 review: read after each, <c>["1", "2"]</c> removed lines 1 and 3, the numbers having moved up), and a line two names
+    /// reach is acted on once. One sentence per line; <c>Error: </c> leads a refusal. Shared with <c>shopping_remove</c>.
     /// </summary>
     public static string Apply(ShoppingList list, IReadOnlyList<string> names, Func<ShopItem, string?> act)
     {
         ArgumentNullException.ThrowIfNull(list);
         var sb = new StringBuilder();
-        foreach (string name in names)
+        var done = new HashSet<long>();
+        foreach (var (name, all) in names.Select(n => (n, list.Find(n))).ToList())
         {
-            var found = list.Find(name);
+            var found = all.Where(i => !done.Contains(i.Id)).ToList();
+            if (all.Count > 0 && found.Count == 0)
+            {
+                continue;
+            }
+
+            done.UnionWith(found.Select(i => i.Id));
             string answer;
             if (found.Count == 0)
             {

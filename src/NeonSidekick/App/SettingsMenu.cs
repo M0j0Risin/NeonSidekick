@@ -4226,16 +4226,17 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// <see cref="ModelOrder"/>'s order over things with a name (2026-10-11, the user's ask): the database and UNC panes' checklists,
-    /// password pickers and wizards' first pages list their connections and shares A to Z instead of the files' order (the profile's,
-    /// then the home's). Only the panes sort; the catalogs, and so the tools, keep the files' order. Stable, so equal names keep their
-    /// order. Pure.
+    /// Things with a name A to Z, case folded (2026-10-11, the user's ask): the database and UNC panes' checklists, password pickers and
+    /// wizards' first pages list their connections and shares so instead of the files' order (the profile's, then the home's). Only the
+    /// panes sort; the catalogs, and so the tools, keep the files' order. Stable, so names equal but for case keep their order and the
+    /// profile's lists first (the 2026-10-11 review: <see cref="ModelOrder"/>'s exact-spelling tie-break put the home's <c>Prod</c> above
+    /// the profile's <c>prod</c>). Pure.
     /// </summary>
     public static List<T> ByName<T>(IEnumerable<T> items, Func<T, string> name)
     {
         ArgumentNullException.ThrowIfNull(items);
         ArgumentNullException.ThrowIfNull(name);
-        return items.OrderBy(name, StringComparer.OrdinalIgnoreCase).ThenBy(name, StringComparer.Ordinal).ToList();
+        return items.OrderBy(name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     /// <summary>

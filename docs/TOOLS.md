@@ -724,7 +724,7 @@ Under *Shopping tools*. One shopping list per profile and any number of stores, 
 |---|---|---|
 | `shopping_list` | `store?` | The list walked through the store, grouped, with the ticked lines and likely duplicates. Allowed in plan mode. |
 | `shopping_add` | `items, store?` | Adds lines (`"2 soy milk"`, `"eggs x3"`); a name already there gets the quantity added. Says where each is at the store. |
-| `shopping_check` | `items, checked?` | Ticks lines as bought (or unticks them), by name or number. |
+| `shopping_check` | `items, checked?` | Ticks lines as bought (or unticks them), by name or by the number `shopping_list` shows beside them (the active store's list). |
 | `shopping_remove` | `items` | Takes lines off the list. |
 | `shopping_clear` | `all?` | Removes the ticked lines; `all` empties the whole list, only after your yes on the pane (refused headless). |
 | `shopping_locate` | `term, store?` | Where the list would put a product and by which fact, related facts, and the reference document lines that name it. Allowed in plan mode. |

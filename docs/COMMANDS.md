@@ -157,7 +157,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/settings changed` | Lists the settings that differ from their defaults; Enter edits, `r` puts one back to its default. |
 | `/shopping` | The shopping list in a pane, in the active store's aisle order, ticked items last (see [Shopping list](TOOLS.md#shopping-list)). Without the pane (and headless) it prints. |
 | `/shopping add [<items>]` | Adds comma-separated items (`/shopping add milk, 2 eggs, bread x2`); an item already there gets the quantity added. Alone, opens the add page with past purchases. |
-| `/shopping check\|uncheck\|remove <item>` | Ticks, unticks or removes an item, by name or number. |
+| `/shopping check\|uncheck\|remove <item>` | Ticks, unticks or removes an item, by name or by the number `/shopping list` shows beside it (the active store's list). |
 | `/shopping rename <item> to <new-name>` | Renames an item, keeping its quantity and tick; a name already on the list merges the two. |
 | `/shopping list [<store>]` | Prints the list in the active (or named) store's order. |
 | `/shopping clear [all]` | Removes the ticked items; `all` empties the list after a yes (headless: at once). |

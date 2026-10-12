@@ -9,6 +9,23 @@ public class DockerServerWordsTests
     private static DockerContainer Container(string image, string command = "", IReadOnlyDictionary<string, string>? labels = null) =>
         new("id", "c", image, "sha", "running", "Up", 0, [], labels ?? new Dictionary<string, string>(), [], [], command);
 
+    /// <summary>
+    /// With no match words the checklist keeps every container to choose from, but <c>/docker</c>'s llm button (<c>strict</c>) keeps the
+    /// chosen and the labelled alone (2026-10-11 review: it lit "LLM servers" over the databases too).
+    /// </summary>
+    [Fact]
+    public void Servers_WithNoWords_KeepsEveryContainer_UnlessStrict()
+    {
+        var all = new[]
+        {
+            Container("mysql:8.4") with { Name = "mysql_dev" },
+            Container("vllm/vllm-openai") with { Name = "vllm_a" },
+            Container("acme/runner", labels: new Dictionary<string, string> { [DockerServerWords.LlmLabel] = "true" }) with { Name = "runner" },
+        };
+        Assert.Equal(3, DockerServerWords.Servers(all, [], ["vllm_a"]).Count);
+        Assert.Equal(["vllm_a", "runner"], DockerServerWords.Servers(all, [], ["vllm_a"], strict: true).Select(c => c.Name));
+    }
+
     [Theory]
     [InlineData("vllm/vllm-openai:latest")]
     [InlineData("lmsysorg/sglang:v0.5.2-cu126")]

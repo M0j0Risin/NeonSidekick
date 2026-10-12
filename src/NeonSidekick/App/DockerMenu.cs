@@ -71,7 +71,7 @@ internal sealed class DockerMenu
     private readonly Func<string, bool> _copy;
     private readonly Func<(IReadOnlyList<string> Words, IReadOnlyList<string> Chosen)> _llmRule;
     private readonly bool _closeWhenDone;
-    private readonly Func<string, bool>? _chord;
+    private readonly Func<string, bool?>? _chord;
 
     /// <param name="docker">The door: the list is read when the pane opens and again after every change.</param>
     /// <param name="transcript">Where the lines outside the pane go.</param>
@@ -82,10 +82,12 @@ internal sealed class DockerMenu
     /// <param name="closeWhenDone">Whether ESC closes the pane (the bare <c>/docker</c>'s own); false under a host that drew it, the Docker tools page (2026-10-11), whose page comes back.</param>
     /// <param name="chord">
     /// Under a host (<paramref name="closeWhenDone"/> false): what <c>logs</c> hands its <c>/docker logs</c> line to, the screen's
-    /// <see cref="ScreenPane.Chord"/>, so the whole pane stack backs out and the lines land at the idle line; false from it, the stack is gone.
+    /// <see cref="ScreenPane.Chord"/>, so the whole pane stack backs out and the lines land at the idle line; false from it, the stack is gone,
+    /// true the line was done in place with the stack standing, null the chords are off there (<see cref="ScreenPane.ChordsOff"/>), so the
+    /// lines are run here into the transcript and the host's pane is left up.
     /// </param>
     public DockerMenu(DockerSession docker, INoticeSink transcript, MenuPane pane, Action<string> openUrl, Func<string, bool> copy,
-        Func<(IReadOnlyList<string> Words, IReadOnlyList<string> Chosen)> llmRule, bool closeWhenDone = true, Func<string, bool>? chord = null)
+        Func<(IReadOnlyList<string> Words, IReadOnlyList<string> Chosen)> llmRule, bool closeWhenDone = true, Func<string, bool?>? chord = null)
     {
         _docker = docker ?? throw new ArgumentNullException(nameof(docker));
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
@@ -277,7 +279,7 @@ internal sealed class DockerMenu
                 // The rows under the filters (2026-10-07; the LLM servers alone first since 2026-10-11): indices into the list.
                 var listed = containers;
                 var (words, chosen) = _llmRule();
-                var servers = llmOnly ? DockerServerWords.Servers(listed, words, chosen).Select(c => c.Name).ToHashSet(StringComparer.Ordinal) : null;
+                var servers = llmOnly ? DockerServerWords.Servers(listed, words, chosen, strict: true).Select(c => c.Name).ToHashSet(StringComparer.Ordinal) : null;
                 var shown = Enumerable.Range(0, listed.Count).Where(i => (servers is null || servers.Contains(listed[i].Name)) && Matches(filter, listed[i])).ToList();
                 List<string> rows = shown.Count > 0 ? shown.Select(i => RowMarkup(listed[i], width)).ToList()
                     : servers is { Count: 0 } ? [Theme.DimMarkup(NoLlmServersLine)] : [MenuFilter.NoMatchRow(filter)];
@@ -383,12 +385,24 @@ internal sealed class DockerMenu
             case LogsWord:
             {
                 string count = DockerCommand.DefaultLogLines.ToString(CultureInfo.InvariantCulture);
-                if (!_closeWhenDone && _chord is { } chord && !chord("/docker logs " + container.Id + " " + count))
+                if (!_closeWhenDone && _chord is { } chord)
                 {
-                    return RowOutcome.Close;   // the stack backs out; the screen runs the line at the idle line (2026-10-11)
+                    // 2026-10-11 review: a bare true fell through to closing the host's pane and running the line here as well.
+                    switch (chord("/docker logs " + container.Id + " " + count))
+                    {
+                        case false:
+                            return RowOutcome.Close;   // the stack backs out; the screen runs the line at the idle line (2026-10-11)
+                        case true:
+                            return RowOutcome.Stay;    // done in place, the stack still standing
+                        default:
+                            break;                     // chords are off here: run below, the host's pane left standing
+                    }
+                }
+                else
+                {
+                    _pane.Close();
                 }
 
-                _pane.Close();
                 var result = await DockerCommand.RunAsync(_docker, "logs " + container.Id + " " + count, cancellationToken).ConfigureAwait(false);
                 foreach (string line in result.Lines)
                 {
@@ -402,7 +416,7 @@ internal sealed class DockerMenu
                     }
                 }
 
-                return RowOutcome.Close;
+                return !_closeWhenDone && _chord is not null ? RowOutcome.Stay : RowOutcome.Close;
             }
 
             case CopyIdWord:

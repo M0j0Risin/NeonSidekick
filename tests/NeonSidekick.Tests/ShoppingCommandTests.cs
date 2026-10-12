@@ -109,13 +109,13 @@ public sealed class ShoppingCommandTests : IDisposable
     {
         Assert.Equal(["Added Milk.", "Added Eggs ×2."], await Run("add Milk, 2 Eggs"));
         Assert.Equal(["Ticked Milk."], await Run("check milk"));
-        Assert.Equal(["Unticked Milk."], await Run("uncheck 1"));
+        Assert.Equal(["Unticked Milk."], await Run("uncheck 2"));   // the list shows Eggs first, Milk ticked under it
         Assert.Equal([ShoppingText.NotOnList("butter")], await Run("remove butter"));
 
         Assert.Equal(["Added the store \"Costco\" (the active store); its reference documents go in " + Path.Combine(Path.GetFullPath(_dir), "db", "shopping", "reference", "costco") + "."], await Run("store add Costco"));
         // At a store, an unplaced add says so, but the hint to the model is not the user's.
         Assert.Equal(["Added Bread — not placed at Costco yet."], await Run("add Bread"));
-        Assert.Equal(["Shopping list at Costco: 3 items to get.", "Unplaced", "- Bread", "- Eggs ×2", "- Milk"], await Run(""));
+        Assert.Equal(["Shopping list at Costco: 3 items to get.", "Unplaced", "1. Bread", "2. Eggs ×2", "3. Milk"], await Run(""));
         Assert.Equal(await Run(""), await Run("list"));
 
         await Run("check bread");
@@ -191,9 +191,91 @@ public sealed class ShoppingCommandTests : IDisposable
         Assert.Equal([("Dr Pepper", 2, true), ("Milk", 1, false), ("Eggs", 1, false)], _list.Store.Items().Select(i => (i.Name, i.Quantity, i.Checked)));
 
         // Onto a name already on the list (folded alike): one line, the quantities added, the other's name kept.
-        Assert.Equal(["\"Milk\" is on the list already; merged \"Eggs\" into it: now Milk ×2."], await Run("rename 3 to milks"));
+        Assert.Equal(["\"Milk\" is on the list already; merged \"Eggs\" into it: now Milk ×2."], await Run("rename 2 to milks"));
         Assert.Equal([("Dr Pepper", 2), ("Milk", 2)], _list.Store.Items().Select(i => (i.Name, i.Quantity)));
         Assert.Equal([ShoppingText.NotOnList("butter")], await Run("rename butter to ghee"));
+    }
+
+    /// <summary>
+    /// A merge keeps what was bought apart from what is wanted (2026-10-11 review: it added every quantity and unticked): a wanted line
+    /// onto a ticked one is wanted at its own quantity (<see cref="ShoppingList.Add"/>'s rule); a ticked line onto a wanted one leaves
+    /// that one as it was and is recorded as bought; two ticked lines stay ticked, the quantities added.
+    /// </summary>
+    [Fact]
+    public async Task Rename_AMerge_KeepsTheBoughtApartFromTheWanted()
+    {
+        await Run("add 3 Milk, 2 milk 2%");
+        await Run("check Milk");
+        Assert.Equal(["\"Milk\" is on the list already; merged \"milk 2%\" into it: now Milk ×2."], await Run("rename milk 2% to milk"));
+        Assert.Equal([("Milk", 2, false)], _list.Store.Items().Select(i => (i.Name, i.Quantity, i.Checked)));
+        Assert.Empty(_list.Store.Bought());
+
+        await Run("add 4 Soda");
+        await Run("check soda");
+        await Run("rename soda to MILK");
+        Assert.Equal([("Milk", 2, false)], _list.Store.Items().Select(i => (i.Name, i.Quantity, i.Checked)));
+        Assert.Equal([("Milk", 4, 1)], _list.Store.Bought().Select(b => (b.Name, b.Quantity, b.Times)));
+
+        await Run("add Juice");
+        await Run("check milk");
+        await Run("check juice");
+        await Run("rename juice to milk");
+        Assert.Equal([("Milk", 3, true)], _list.Store.Items().Select(i => (i.Name, i.Quantity, i.Checked)));
+    }
+
+    /// <summary>
+    /// A rename's <c> to </c> may sit in either name (2026-10-11 review: split at the last, <c>soup to ready to eat soup</c> renamed
+    /// "soup to ready"): the split taken is the first whose old name is on the list exactly, else the first found at all.
+    /// </summary>
+    [Fact]
+    public async Task Rename_ATo_InEitherName_SplitsWhereTheOldNameIsOnTheList()
+    {
+        await Run("add Soup, Ready to eat salad");
+        Assert.Equal([ShoppingText.Renamed("item", "Soup", "ready to eat soup")], await Run("rename soup to ready to eat soup"));
+        Assert.Equal([ShoppingText.Renamed("item", "Ready to eat salad", "salad")], await Run("rename ready to eat salad to salad"));
+        Assert.Equal(["ready to eat soup", "salad"], _list.Store.Items().Select(i => i.Name));
+
+        await Run("store add Back to School");
+        Assert.StartsWith(ShoppingText.Renamed("store", "Back to School", "Fall to Winter"), (await Run("store rename back to school to Fall to Winter"))[0], StringComparison.Ordinal);
+        Assert.Equal(new ShoppingCommandLine(ShoppingVerb.Rename, "a", To: "b to c"), ShoppingCommand.Parse("rename a to b to c"));
+    }
+
+    /// <summary>
+    /// A store whose folder carries a number keeps it when renamed to a name making the same base (2026-10-11 review: its own folder
+    /// counted as taken, so <c>target-2</c> moved to <c>target-3</c> for nothing).
+    /// </summary>
+    [Fact]
+    public async Task StoreRename_ToTheSameBase_KeepsANumberedFolder()
+    {
+        await Run("store add Target");
+        await Run("store add Target!");
+        Assert.Equal("target-2", _list.Store.FindStore("Target!")!.Folder);
+
+        Assert.Equal([ShoppingText.Renamed("store", "Target!", "TARGET?")], await Run("store rename Target! to TARGET?"));
+        Assert.Equal("target-2", _list.Store.FindStore("TARGET?")!.Folder);
+        Assert.True(Directory.Exists(Path.Combine(_list.Store.ReferenceRoot, "target-2")));
+        Assert.False(Directory.Exists(Path.Combine(_list.Store.ReferenceRoot, "target-3")));
+    }
+
+    /// <summary>
+    /// The pane's place over an item fact spelled another way (2026-10-11 review: a second fact of the same folded key was written and
+    /// lost the tie, so the line stayed put while the answer said it moved): the fact held is the one moved, any more such forgotten.
+    /// </summary>
+    [Fact]
+    public void PlaceItem_MovesTheFactHeldUnderAnotherSpelling()
+    {
+        _list.AddStore("H-E-B");
+        var shop = _list.Store.ActiveStore()!;
+        Assert.DoesNotContain("Error", _list.Place(shop, "Egg", ShoppingKinds.Item, "Aisle 3", null, ShoppingSources.Guess), StringComparison.Ordinal);
+        _list.Add("eggs", 1, shop);
+        var five = _list.Store.EnsureLocation(shop.Id, "Aisle 5")!;
+        var item = _list.Store.Items()[0];
+        Assert.Equal("Aisle 3", _list.PlaceOf(item.Name, shop).Location?.Label);
+
+        _list.PlaceItem(shop, item, five, null);
+        var place = _list.PlaceOf(item.Name, shop);
+        Assert.Equal(("Aisle 5", false), (place.Location?.Label, place.IsGuess));
+        Assert.Single(_list.Store.Placements(shop.Id));
     }
 
     private (ShoppingMenu Menu, ScreenPane Pane, ScriptedInput Input) PaneWithInput()

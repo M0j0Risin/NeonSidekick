@@ -106,8 +106,7 @@ public static class ShoppingCommand
             "check" or "tick" when rest.Length > 0 => new(ShoppingVerb.Check, rest),
             "uncheck" or "untick" when rest.Length > 0 => new(ShoppingVerb.Uncheck, rest),
             "remove" when rest.Length > 0 => new(ShoppingVerb.Remove, rest),
-            "rename" when rest.LastIndexOf(" to ", StringComparison.OrdinalIgnoreCase) is > 0 and var to && rest[(to + 4)..].Trim().Length > 0
-                => new(ShoppingVerb.Rename, rest[..to].Trim(), To: rest[(to + 4)..].Trim()),
+            "rename" when RenameSplits(rest) is [var (old, to), ..] => new(ShoppingVerb.Rename, old, To: to),
             "clear" when rest.Length == 0 => new(ShoppingVerb.Clear),
             "clear" when rest.Equals("all", StringComparison.OrdinalIgnoreCase) => new(ShoppingVerb.ClearAll),
             "stores" when rest.Length == 0 => new(ShoppingVerb.Stores),
@@ -145,11 +144,33 @@ public static class ShoppingCommand
         {
             "add" when name.Length > 0 => new(ShoppingVerb.AddStore, name),
             "remove" when name.Length > 0 => new(ShoppingVerb.RemoveStore, name),
-            "rename" when name.LastIndexOf(" to ", StringComparison.OrdinalIgnoreCase) is > 0 and var at && name[(at + 4)..].Trim().Length > 0
-                => new(ShoppingVerb.RenameStore, name[..at].Trim(), To: name[(at + 4)..].Trim()),
+            "rename" when RenameSplits(name) is [var (old, to), ..] => new(ShoppingVerb.RenameStore, old, To: to),
             "add" or "remove" or "rename" => Usage(),
             _ => new(ShoppingVerb.UseStore, rest),
         };
+    }
+
+    /// <summary>
+    /// The ways a <c>rename</c>'s <c>&lt;name&gt; to &lt;new-name&gt;</c> splits, at each <c> to </c> (any case) from the first, both sides
+    /// non-blank. <see cref="Parse"/> takes the first; the runner takes the first whose old name is on the list or a store
+    /// (<see cref="ShoppingCommandRunner.PickRename"/>), so either name may hold a <c> to </c> (2026-10-11 review: split at the last,
+    /// <c>soup to ready to eat soup</c> renamed "soup to ready").
+    /// </summary>
+    public static IReadOnlyList<(string Old, string New)> RenameSplits(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var splits = new List<(string Old, string New)>();
+        for (int at = text.IndexOf(" to ", StringComparison.OrdinalIgnoreCase); at >= 0; at = text.IndexOf(" to ", at + 1, StringComparison.OrdinalIgnoreCase))
+        {
+            string old = text[..at].Trim();
+            string to = text[(at + 4)..].Trim();
+            if (old.Length > 0 && to.Length > 0)
+            {
+                splits.Add((old, to));
+            }
+        }
+
+        return splits;
     }
 
     /// <summary>

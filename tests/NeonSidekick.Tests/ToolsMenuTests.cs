@@ -1373,11 +1373,14 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("none of 3", SettingsMenu.SqlOfferedValue([], loaded));
     }
 
-    /// <summary>The database panes' order (2026-10-11, the user's ask): A to Z, case folded, the exact spelling breaking a tie.</summary>
+    /// <summary>
+    /// The database panes' order (2026-10-11, the user's ask): A to Z, case folded, names equal but for case kept in their order, so the
+    /// profile's lists before the home's (the 2026-10-11 review: an exact-spelling tie-break put the home's <c>Mid</c> first).
+    /// </summary>
     [Fact]
-    public void ByName_IsAToZ_CaseFolded_TheSpellingBreakingATie()
+    public void ByName_IsAToZ_CaseFolded_AndStable()
     {
-        Assert.Equal(["Alpha", "beta", "Mid", "mid", "zeta"], SettingsMenu.ByName(["zeta", "mid", "Alpha", "Mid", "beta"], n => n));
+        Assert.Equal(["Alpha", "beta", "mid", "Mid", "zeta"], SettingsMenu.ByName(["zeta", "mid", "Alpha", "Mid", "beta"], n => n));
     }
 
     /// <summary>

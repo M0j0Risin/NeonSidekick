@@ -18,7 +18,7 @@ public sealed class ShoppingRemoveTool(ShoppingList list) : ShoppingTool(list)
         {
           "type": "object",
           "properties": {
-            "items": { "type": "array", "items": { "type": "string" }, "description": "The lines to remove, by name or by their number on the list." }
+            "items": { "type": "array", "items": { "type": "string" }, "description": "The lines to remove, by name or by the number shopping_list shows beside them." }
           },
           "required": ["items"]
         }

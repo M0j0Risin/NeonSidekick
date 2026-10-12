@@ -163,7 +163,7 @@ internal sealed partial class ChatScreen
     private DockerMenu DockerMenuFor(bool closeWhenDone) =>
         new(_docker, _flow, _menuPane, _web.OpenUrl, _copy,
             () => (_effective().DockerServerMatchWords ?? [], _effective().DockerServerContainers ?? []),
-            closeWhenDone, closeWhenDone ? null : _pane.Chord);
+            closeWhenDone, closeWhenDone ? null : line => _pane.ChordsOff ? null : _pane.Chord(line));
 
     /// <summary>
     /// <c>/docker</c> under a reply (2026-10-02, <c>/ha</c>'s way, <see cref="MidTurnPolicy(SlashCommand, bool)"/>): on the watcher, no

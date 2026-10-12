@@ -7,8 +7,16 @@ namespace NeonSidekick.Shopping;
 /// <summary>What <see cref="ShoppingList.Add"/> did to one line: added it, or bumped the quantity of the line already there (unticking it).</summary>
 public sealed record ShopAdded(ShopItem Item, bool Bumped, ShopPlace Place);
 
-/// <summary>The list walked through a store (<paramref name="Store"/> null: none set up, the lines in the order added).</summary>
-public sealed record ShopView(ShopStore? Store, IReadOnlyList<ShopGroup> Groups, IReadOnlyList<ShopItem> Ticked, IReadOnlyList<IReadOnlyList<ShopItem>> Duplicates);
+/// <summary>
+/// The list walked through a store (<paramref name="Store"/> null: none set up, the lines in the order added). <paramref name="Numbered"/>
+/// when it is the active store's walk, whose numbers <see cref="ShoppingList.Find"/> reads (2026-10-11 review: a number named the line's
+/// place in the order added, which no output showed, so a model counting the grouped bullets reached another line).
+/// </summary>
+public sealed record ShopView(ShopStore? Store, IReadOnlyList<ShopGroup> Groups, IReadOnlyList<ShopItem> Ticked, IReadOnlyList<IReadOnlyList<ShopItem>> Duplicates, bool Numbered = false)
+{
+    /// <summary>The lines as shown: the groups' in walk order, then the ticked ones. A line's number is its place here, from 1.</summary>
+    public IReadOnlyList<ShopItem> Shown => [.. Groups.SelectMany(g => g.Items.Select(p => p.Item)), .. Ticked];
+}
 
 /// <summary>What <see cref="ShoppingList.Locate"/> found for a term at a store: where the list would put it, and the store's other facts that share a word with it.</summary>
 public sealed record ShopLocated(string Term, ShopStore Store, ShopPlace Place, IReadOnlyList<ShopPlace> Related, IReadOnlyList<string> ReferenceFiles);
@@ -64,7 +72,7 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
             groups = ShoppingPlacer.Walk(open, store.Placements(shop.Id), store.Locations(shop.Id), store.Sections(shop.Id));
         }
 
-        return new ShopView(shop, groups, ticked, ShoppingPlacer.Duplicates(items));
+        return new ShopView(shop, groups, ticked, ShoppingPlacer.Duplicates(items), shop?.Id == store.ActiveStore()?.Id);
     }
 
     /// <summary>
@@ -113,18 +121,21 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
     }
 
     /// <summary>
-    /// The lines <paramref name="text"/> names: its number on the list (1-based, the order added), else every line with the same folded
-    /// name, else every line whose name holds it at word boundaries. Empty for none.
+    /// The lines <paramref name="text"/> names: its number on the list (1-based, as the active store's list shows it numbered,
+    /// <see cref="ShopView.Shown"/>), else every line with the same folded name, else every line whose name holds it at word boundaries.
+    /// Empty for none.
     /// </summary>
     public IReadOnlyList<ShopItem> Find(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var items = _store().Items();
         string trimmed = text.Trim().TrimStart('#');
         if (int.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out int number))
         {
-            return number >= 1 && number <= items.Count ? [items[number - 1]] : [];
+            var shown = View(_store().ActiveStore()).Shown;
+            return number >= 1 && number <= shown.Count ? [shown[number - 1]] : [];
         }
+
+        var items = _store().Items();
 
         string key = ShoppingPlacer.Key(trimmed);
         if (key.Length == 0)
@@ -164,8 +175,10 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
     /// <summary>
     /// <paramref name="item"/> renamed (2026-10-11, the user's ask: a line fixed without the model): its quantity, note and tick kept; its
     /// place follows the new name, since a line is placed when it is shown. A name another line already has (folded alike,
-    /// <see cref="ShoppingPlacer.Key"/>) merges the two, that line keeping its name and taking the quantities added, so a product is
-    /// one line. The answer as a sentence; <c>Error: </c> leads a refusal.
+    /// <see cref="ShoppingPlacer.Key"/>) merges the two, that line keeping its name, so a product is one line: wanted when either was, with
+    /// the wanted quantity (a ticked line's bought quantity is not wanted again, as <see cref="Add"/> has it, and a ticked line merged away
+    /// into a wanted one is recorded as bought, as <see cref="Remove"/> would); ticked with both quantities when both were (2026-10-11
+    /// review: the merge added every quantity and unticked whatever the ticks). The answer as a sentence; <c>Error: </c> leads a refusal.
     /// </summary>
     public string RenameItem(ShopItem item, string name)
     {
@@ -180,13 +193,17 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
         string key = ShoppingPlacer.Key(trimmed);
         if (store.Items().FirstOrDefault(i => i.Id != item.Id && ShoppingPlacer.Key(i.Name) == key) is { } other)
         {
-            int total = other.Quantity + item.Quantity;
-            if (!store.SetQuantity(other.Id, total) || !store.RemoveItem(item.Id))
+            var current = store.Items().FirstOrDefault(i => i.Id == item.Id) ?? item;
+            bool ticked = current.Checked && other.Checked;
+            int total = current.Checked == other.Checked ? other.Quantity + current.Quantity : current.Checked ? other.Quantity : current.Quantity;
+            bool written = store.SetQuantity(other.Id, total) && (!ticked || store.SetChecked(other.Id, true))
+                && store.RemoveItem(current.Id, current.Checked && !other.Checked ? current with { Name = other.Name } : null);
+            if (!written)
             {
                 return "Error: " + ShoppingText.WriteFailed;
             }
 
-            var merged = other with { Quantity = total };
+            var merged = other with { Quantity = total, Checked = ticked };
             Audit(ShoppingText.AuditItemMerged(item, merged));
             return ShoppingText.ItemMerged(item, merged);
         }
@@ -214,19 +231,15 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
     }
 
     /// <summary>
-    /// Takes <paramref name="item"/> off the list. A ticked line is recorded as bought first (2026-10-11, <see cref="Bought"/>). False when
-    /// the write failed.
+    /// Takes <paramref name="item"/> off the list. A ticked line is recorded as bought with it (2026-10-11, <see cref="Bought"/>; in the
+    /// same transaction since the review: a delete that failed counted it bought all the same). False when the write failed.
     /// </summary>
     public bool Remove(ShopItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
         var store = _store();
-        if (store.Items().FirstOrDefault(i => i.Id == item.Id) is { Checked: true } ticked)
-        {
-            store.RecordBought([ticked]);
-        }
-
-        if (!store.RemoveItem(item.Id))
+        var ticked = store.Items().FirstOrDefault(i => i.Id == item.Id) is { Checked: true } t ? t : null;
+        if (!store.RemoveItem(item.Id, ticked))
         {
             return false;
         }
@@ -237,18 +250,12 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
 
     /// <summary>
     /// Removes the ticked lines (every line with <paramref name="all"/>): how many went, null when the write failed. The ticked ones are
-    /// recorded as bought first (2026-10-11, <see cref="Bought"/>); an unticked line cleared with all was not bought.
+    /// recorded as bought with them, in one transaction (2026-10-11, <see cref="Bought"/>; the same transaction since the review); an
+    /// unticked line cleared with all was not bought.
     /// </summary>
     public int? Clear(bool all)
     {
-        var store = _store();
-        var ticked = store.Items().Where(i => i.Checked).ToList();
-        if (ticked.Count > 0)
-        {
-            store.RecordBought(ticked);
-        }
-
-        int? cleared = store.Clear(all);
+        int? cleared = _store().Clear(all, recordBought: true);
         if (cleared is > 0)
         {
             Audit(ShoppingText.AuditCleared(cleared.Value, all));
@@ -282,12 +289,29 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
 
     /// <summary>
     /// <paramref name="item"/> placed at <paramref name="location"/> (or in <paramref name="section"/> alone): an item fact of its name, the
-    /// user's, so it lands there now and every time. The answer as a sentence.
+    /// user's, so it lands there now and every time. An item fact already held under another spelling of the name (folded alike,
+    /// <see cref="ShoppingPlacer.Key"/>) is the one moved, its note kept, and any more such are forgotten (2026-10-11 review: a second fact
+    /// of the same key lost the tie to the old one, so the line stayed where it was while the answer said it moved). The answer as a sentence.
     /// </summary>
     public string PlaceItem(ShopStore shop, ShopItem item, ShopLocation? location, ShopSection? section)
     {
+        ArgumentNullException.ThrowIfNull(shop);
         ArgumentNullException.ThrowIfNull(item);
-        return Place(shop, item.Name, ShoppingKinds.Item, location?.Label, location is null ? section?.Name : null, ShoppingSources.User);
+        var store = _store();
+        string key = ShoppingPlacer.Key(item.Name);
+        var same = store.Placements(shop.Id).Where(p => p.Kind == ShoppingKinds.Item && ShoppingPlacer.Key(p.Term) == key).ToList();
+        string answer = same.Count > 0
+            ? Place(shop, same[0].Term, ShoppingKinds.Item, location?.Label, location is null ? section?.Name : null, ShoppingSources.User, same[0].Note)
+            : Place(shop, item.Name, ShoppingKinds.Item, location?.Label, location is null ? section?.Name : null, ShoppingSources.User);
+        if (!answer.StartsWith("Error: ", StringComparison.Ordinal))
+        {
+            foreach (var extra in same.Skip(1))
+            {
+                store.RemovePlacement(extra.Id);
+            }
+        }
+
+        return answer;
     }
 
     /// <summary>A fact moved to <paramref name="location"/> (or <paramref name="section"/> alone), its kind and note kept, the user's from then on.</summary>
@@ -623,6 +647,11 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
             folder = wanted + "-" + n.ToString(CultureInfo.InvariantCulture);
         }
 
+        if (string.Equals(folder, shop.Folder, StringComparison.OrdinalIgnoreCase))
+        {
+            return store.RenameStore(shop.Id, trimmed) ? Renamed(shop, trimmed, null, null) : "Error: " + ShoppingText.NameTaken("store", trimmed);
+        }
+
         var moves = new List<(string From, string To)>
         {
             (Path.Combine(store.ReferenceRoot, shop.Folder), Path.Combine(store.ReferenceRoot, folder)),
@@ -669,11 +698,13 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
 
         return Renamed(shop, trimmed, null, why ?? ShoppingText.WriteFailed);
 
-        // A folder name another store has, or one already on disk under reference or cache.
+        // A folder name another store has, or one already on disk under reference or cache; never the store's own (2026-10-11 review:
+        // target-2 renamed to a name making target, with target another store's, counted its own folder taken and moved to target-3).
         bool Taken(string candidate) =>
-            store.Stores().Any(s => s.Id != shop.Id && string.Equals(s.Folder, candidate, StringComparison.OrdinalIgnoreCase))
-            || Directory.Exists(Path.Combine(store.ReferenceRoot, candidate))
-            || Directory.Exists(Path.Combine(cacheRoot, candidate));
+            !string.Equals(candidate, shop.Folder, StringComparison.OrdinalIgnoreCase)
+            && (store.Stores().Any(s => s.Id != shop.Id && string.Equals(s.Folder, candidate, StringComparison.OrdinalIgnoreCase))
+                || Directory.Exists(Path.Combine(store.ReferenceRoot, candidate))
+                || Directory.Exists(Path.Combine(cacheRoot, candidate)));
     }
 
     /// <summary>A rename's answer, audited: the names, then the folder it moved to or why it stayed.</summary>

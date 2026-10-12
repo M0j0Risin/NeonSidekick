@@ -65,14 +65,16 @@ public static class DockerServerWords
     /// <summary>
     /// The LLM servers among <paramref name="all"/>, in its order (2026-10-11, the checklist's rule shared with <c>/docker</c>'s llm button):
     /// a container <see cref="Matches"/> by <paramref name="words"/> (<see cref="Sorted"/> first) or named in <paramref name="ticked"/>
-    /// (the chosen <c>Docker server containers</c>, trimmed); an empty word list keeps every container.
+    /// (the chosen <c>Docker server containers</c>, trimmed); an empty word list keeps every container, unless <paramref name="strict"/>
+    /// (the llm button's, 2026-10-11 review: with no words it lit "LLM servers" over every container, databases and all, and the chosen
+    /// ones were lost among them), which keeps only the chosen then.
     /// </summary>
-    public static IReadOnlyList<DockerContainer> Servers(IReadOnlyList<DockerContainer> all, IReadOnlyList<string> words, IEnumerable<string>? ticked)
+    public static IReadOnlyList<DockerContainer> Servers(IReadOnlyList<DockerContainer> all, IReadOnlyList<string> words, IEnumerable<string>? ticked, bool strict = false)
     {
         ArgumentNullException.ThrowIfNull(all);
         ArgumentNullException.ThrowIfNull(words);
         var sorted = Sorted(words);
-        if (sorted.Count == 0)
+        if (sorted.Count == 0 && !strict)
         {
             return all;
         }

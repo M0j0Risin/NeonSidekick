@@ -500,13 +500,63 @@ public sealed class ShoppingStore : IDisposable
         Execute("UPDATE items SET name = $n, updated_at = $at WHERE id = $id",
             c => { c.Parameters.AddWithValue("$id", itemId); c.Parameters.AddWithValue("$n", name.Trim()); c.Parameters.AddWithValue("$at", Now()); }, "rename a line") is > 0;
 
-    /// <summary>Removes a line. False when nothing was removed.</summary>
-    public bool RemoveItem(long itemId) =>
-        Execute("DELETE FROM items WHERE id = $id", c => c.Parameters.AddWithValue("$id", itemId), "remove a line") is > 0;
+    /// <summary>
+    /// Removes a line, and records <paramref name="bought"/> as bought (<see cref="RecordBought"/>'s row) in the same transaction
+    /// (2026-10-11 review: recorded first and apart, a delete that then failed counted the line bought all the same, and again at every
+    /// retry). False when nothing was removed (nothing recorded then).
+    /// </summary>
+    public bool RemoveItem(long itemId, ShopItem? bought = null) =>
+        InTransaction("remove a line", (connection, transaction) =>
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = "DELETE FROM items WHERE id = $id";
+            command.Parameters.AddWithValue("$id", itemId);
+            if (command.ExecuteNonQuery() == 0)
+            {
+                return null;
+            }
 
-    /// <summary>Removes the ticked lines (every line with <paramref name="all"/>); how many went, null when the write failed.</summary>
-    public int? Clear(bool all) =>
-        Execute(all ? "DELETE FROM items" : "DELETE FROM items WHERE checked <> 0", null, "clear the list");
+            if (bought is not null)
+            {
+                RecordBoughtIn(connection, transaction, bought.Name, bought.Quantity);
+            }
+
+            return 1;
+        }) is > 0;
+
+    /// <summary>
+    /// Removes the ticked lines (every line with <paramref name="all"/>); how many went, null when the write failed. With
+    /// <paramref name="recordBought"/> the ticked lines are recorded as bought (<see cref="RecordBought"/>'s rows) in the same transaction.
+    /// </summary>
+    public int? Clear(bool all, bool recordBought = false) =>
+        InTransaction("clear the list", (connection, transaction) =>
+        {
+            if (recordBought)
+            {
+                var ticked = new List<(string Name, int Quantity)>();
+                using (var read = connection.CreateCommand())
+                {
+                    read.Transaction = transaction;
+                    read.CommandText = "SELECT name, quantity FROM items WHERE checked <> 0 ORDER BY id";
+                    using var reader = read.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        ticked.Add((reader.GetString(0), reader.GetInt32(1)));
+                    }
+                }
+
+                foreach (var (name, quantity) in ticked)
+                {
+                    RecordBoughtIn(connection, transaction, name, quantity);
+                }
+            }
+
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = all ? "DELETE FROM items" : "DELETE FROM items WHERE checked <> 0";
+            return command.ExecuteNonQuery();
+        });
 
     // ---- reference documents (2026-10-11) ----
 
@@ -634,15 +684,7 @@ public sealed class ShoppingStore : IDisposable
             {
                 foreach (var item in items)
                 {
-                    using var command = connection.CreateCommand();
-                    command.Transaction = transaction;
-                    command.CommandText = "INSERT INTO bought(key, name, quantity, times, last_at) VALUES ($k, $n, $q, 1, $at) " +
-                        "ON CONFLICT(key) DO UPDATE SET name = excluded.name, quantity = excluded.quantity, times = times + 1, last_at = excluded.last_at";
-                    command.Parameters.AddWithValue("$k", ShoppingPlacer.Key(item.Name));
-                    command.Parameters.AddWithValue("$n", item.Name);
-                    command.Parameters.AddWithValue("$q", item.Quantity);
-                    command.Parameters.AddWithValue("$at", Now());
-                    command.ExecuteNonQuery();
+                    RecordBoughtIn(connection, transaction, item.Name, item.Quantity);
                 }
 
                 transaction.Commit();
@@ -655,6 +697,20 @@ public sealed class ShoppingStore : IDisposable
                 return false;
             }
         }
+    }
+
+    /// <summary>One line recorded as bought inside <paramref name="transaction"/>: <see cref="RecordBought"/>'s row.</summary>
+    private void RecordBoughtIn(SqliteConnection connection, SqliteTransaction transaction, string name, int quantity)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "INSERT INTO bought(key, name, quantity, times, last_at) VALUES ($k, $n, $q, 1, $at) " +
+            "ON CONFLICT(key) DO UPDATE SET name = excluded.name, quantity = excluded.quantity, times = times + 1, last_at = excluded.last_at";
+        command.Parameters.AddWithValue("$k", ShoppingPlacer.Key(name));
+        command.Parameters.AddWithValue("$n", name);
+        command.Parameters.AddWithValue("$q", quantity);
+        command.Parameters.AddWithValue("$at", Now());
+        command.ExecuteNonQuery();
     }
 
     /// <summary>What was bought before, the most often first, then the most recent.</summary>
@@ -725,6 +781,40 @@ public sealed class ShoppingStore : IDisposable
             }
             catch (SqliteException ex)
             {
+                Fail(what, ex);
+                return null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="work"/> in one transaction: committed with what it returns, rolled back when it returns null or a statement fails
+    /// (logged); null when the file is off.
+    /// </summary>
+    private int? InTransaction(string what, Func<SqliteConnection, SqliteTransaction, int?> work)
+    {
+        lock (_gate)
+        {
+            if (Open() is not { } connection)
+            {
+                return null;
+            }
+
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                if (work(connection, transaction) is not { } done)
+                {
+                    transaction.Rollback();
+                    return null;
+                }
+
+                transaction.Commit();
+                return done;
+            }
+            catch (SqliteException ex)
+            {
+                transaction.Rollback();
                 Fail(what, ex);
                 return null;
             }

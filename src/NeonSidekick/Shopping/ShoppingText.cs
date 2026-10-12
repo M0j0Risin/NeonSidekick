@@ -61,10 +61,13 @@ public static class ShoppingText
 
     /// <summary>
     /// The list as the model reads it: the store, the count, each group under its heading in walk order, a guess marked, the ticked lines,
-    /// and the likely duplicates. Plain text, one line per item.
+    /// and the likely duplicates. Plain text, one line per item, numbered as <see cref="ShoppingList.Find"/> reads a number when the view
+    /// is the active store's (<see cref="ShopView.Numbered"/>; bullets otherwise, since the numbers would name other lines).
     /// </summary>
     public static string List(ShopView view, bool withTicked = true)
     {
+        int number = 0;
+        string Bullet() => view.Numbered ? (++number).ToString(CultureInfo.InvariantCulture) + ". " : "- ";
         ArgumentNullException.ThrowIfNull(view);
         int open = view.Groups.Sum(g => g.Items.Count);
         var sb = new StringBuilder();
@@ -86,7 +89,7 @@ public static class ShoppingText
             sb.Append('\n').Append(Heading(group));
             foreach (var placed in group.Items)
             {
-                sb.Append("\n- ").Append(Line(placed.Item));
+                sb.Append('\n').Append(Bullet()).Append(Line(placed.Item));
                 if (placed.Place.IsGuess)
                 {
                     sb.Append(' ').Append(GuessMark);
@@ -99,7 +102,7 @@ public static class ShoppingText
             sb.Append('\n').Append(TickedHeading);
             foreach (var item in view.Ticked)
             {
-                sb.Append("\n- [x] ").Append(Line(item));
+                sb.Append('\n').Append(Bullet()).Append("[x] ").Append(Line(item));
             }
         }
 

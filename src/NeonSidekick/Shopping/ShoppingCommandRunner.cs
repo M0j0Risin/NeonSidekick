@@ -80,10 +80,11 @@ public static class ShoppingCommandRunner
             case ShoppingVerb.Rename:
             {
                 // One line, or several of one product written alike (the first stands for them); several products refused.
-                var found = list.Find(line.Text);
-                return [found.Count == 0 ? ShoppingText.NotOnList(line.Text)
-                    : found.Select(i => ShoppingPlacer.Key(i.Name)).Distinct(StringComparer.Ordinal).Count() > 1 ? ShoppingText.Ambiguous(line.Text, found)
-                    : list.RenameItem(found[0], line.To)];
+                var (old, to) = PickRename(line, text => list.Find(text) is { Count: > 0 } found ? found.Any(i => ShoppingPlacer.Key(i.Name) == ShoppingPlacer.Key(text)) : null);
+                var found = list.Find(old);
+                return [found.Count == 0 ? ShoppingText.NotOnList(old)
+                    : found.Select(i => ShoppingPlacer.Key(i.Name)).Distinct(StringComparer.Ordinal).Count() > 1 ? ShoppingText.Ambiguous(old, found)
+                    : list.RenameItem(found[0], to)];
             }
 
             case ShoppingVerb.Remove:
@@ -142,7 +143,10 @@ public static class ShoppingCommandRunner
             }
 
             case ShoppingVerb.RenameStore:
-                return [store.FindStore(line.Text) is { } renamed ? list.RenameStore(renamed, line.To) : ShoppingText.NoSuchStore(line.Text, store.Stores())];
+            {
+                var (old, to) = PickRename(line, text => store.FindStore(text) is not null ? true : null);
+                return [store.FindStore(old) is { } renamed ? list.RenameStore(renamed, to) : ShoppingText.NoSuchStore(old, store.Stores())];
+            }
 
             case ShoppingVerb.Export:
             {
@@ -214,5 +218,21 @@ public static class ShoppingCommandRunner
             default:
                 return ["Error: " + ShoppingText.CommandUsage];
         }
+    }
+
+    /// <summary>
+    /// Which of a rename's splits (<see cref="ShoppingCommand.RenameSplits"/>) is meant: the first whose old name <paramref name="names"/>
+    /// exactly (true), else the first it finds at all (false), else the parsed one (null: none found). So <c>soup to ready to eat soup</c>
+    /// renames "soup", and <c>ready to eat soup to soup</c> renames "ready to eat soup" (2026-10-11 review).
+    /// </summary>
+    public static (string Old, string New) PickRename(ShoppingCommandLine line, Func<string, bool?> names)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        ArgumentNullException.ThrowIfNull(names);
+        var splits = ShoppingCommand.RenameSplits(line.Text + " to " + line.To);
+        var found = splits.Select(s => (Split: s, Exact: names(s.Old))).Where(x => x.Exact is not null).ToList();
+        return found.FirstOrDefault(x => x.Exact == true).Split is { Old: not null } exact ? exact
+            : found.Count > 0 ? found[0].Split
+            : (line.Text, line.To);
     }
 }

@@ -539,6 +539,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int _chordsSuppressed;
 
     /// <summary>
+    /// Whether a chord in a pane is nobody's just now: a tool-asked pane is open (<see cref="SuppressChords"/>), or there is no pane
+    /// (2026-10-11 review: <see cref="Chord"/>'s true says this and "done in place" alike, so a host asks first).
+    /// </summary>
+    public bool ChordsOff => Volatile.Read(ref _chordsSuppressed) > 0 || !Enabled;
+
+    /// <summary>
     /// The chords set aside while the returned scope lasts (2026-10-01, the user's call): a pane a tool opened to ask the user
     /// (a command's approval, <c>ask_user</c>, the plan's approval…) ignores them, so a chord can never answer it by accident.
     /// </summary>
@@ -573,7 +579,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     public bool Chord(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
-        if (Volatile.Read(ref _chordsSuppressed) > 0 || !Enabled)
+        if (ChordsOff)
         {
             return true;
         }
