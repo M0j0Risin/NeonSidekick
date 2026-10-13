@@ -149,7 +149,8 @@ public sealed class KeySource : IAnsiConsoleInput
     /// <see cref="HomeClick.NotOurs"/> (the click goes on as read), <see cref="HomeClick.Spent"/> (done, nothing more) or a
     /// line (<see cref="HomeClick.Run"/>), which reads as an <see cref="InputEvent.Command"/>: a command chord's way.
     /// <see cref="KillSwitch"/>'s contract: on the reading task, must not block, never throws. Null (the default, headless):
-    /// every click passes. Since 2026-10-13 the screen's hook answers a right-click on a toolbar glyph the same way (its double-click's line).
+    /// every click passes. Since 2026-10-13 the screen's hook answers a right-click on a toolbar glyph the same way (its double-click's line),
+    /// and one on a bar's open space (the blanks' <c>/settings</c>, later that day).
     /// </summary>
     public Func<InputEvent.Click, HomeClick>? HomeBarClick { get; set; }
 

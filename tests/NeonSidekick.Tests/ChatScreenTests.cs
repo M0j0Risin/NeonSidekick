@@ -24861,10 +24861,11 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>
     /// A right-click on a toolbar glyph (2026-10-13, the user's ask: as a home bar chip's) runs its double-click's line at once — at the
-    /// idle line and under a pane, where it switches as the pair does; on the path and the blanks it is nothing (glyphs only, the user's call).
+    /// idle line and under a pane, where it switches as the pair does; on the path it is nothing (the user's call). The blanks were nothing
+    /// too until later that day (the user's ask: as their double-click), and open the settings since.
     /// </summary>
     [Fact]
-    public async Task ARightClickOnAToolbarGlyph_OpensItsPane_ThePathAndTheBlanksAreNothing()
+    public async Task ARightClickOnAToolbarGlyph_OpensItsPane_ThePathIsNothing_AndTheBlanksOpenTheSettings()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = ["settings", "tools", "path"]; });
         _console.Profile.Height = 40;
@@ -24872,7 +24873,8 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null, () => 100);   // an empty line: row 100, the rule 101, the hint row 102, the toolbar 103
         StepsWhenIdle(
             input => input.PushClick(238, 103, MouseButton.Right),   // the path: nothing
-            input => input.PushClick(120, 103, MouseButton.Right),   // the blanks: nothing
+            input => input.PushClick(120, 103, MouseButton.Right),   // the blanks: the settings
+            Key(Keys.Escape),
             input => input.PushClick(0, 103, MouseButton.Right),     // ⚙️: the settings
             input => { int y = ToolbarUnderPane(); input.PushClick(3, y, MouseButton.Right); },   // 🛠️ under it: the settings closed, the tools opened
             Key(Keys.Escape),
@@ -24882,10 +24884,72 @@ public partial class ChatScreenTests : IDisposable
 
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
         string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ") + "\n";
-        Assert.Equal(1, output.Split(settings).Length - 1);   // the gear's alone: never the blanks'
+        Assert.Equal(2, output.Split(settings).Length - 1);   // the blanks' and the gear's
         Assert.True(output.IndexOf(settings, StringComparison.Ordinal) < output.IndexOf(tools, StringComparison.Ordinal), output);
         Assert.DoesNotContain(FolderText.Title + " │ ", output);
         Assert.DoesNotContain("› /settings", output);
+    }
+
+    /// <summary>
+    /// A right-click on a bar's open space (later on 2026-10-13, the user's ask: "just like double-clicking"): anywhere on the performance
+    /// bar and on the hint row's blank space it opens the settings, and under the open pane it closes them as the double-click's pair does —
+    /// never a paste, never a turn.
+    /// </summary>
+    [Fact]
+    public async Task ARightClickOnThePerfBar_AndTheHintRowsBlanks_OpensTheSettings_AndUnderThePaneClosesThem()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = ["settings", "path"]; d.PerformanceBarItems = ["cpu"]; d.PerformanceBarLook = "text"; });
+        _perfSource.Next = new NeonSidekick.Perf.PerfSnapshot(34, 62, null, 91);
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // row 100, the rule 101, the hint row 102, the toolbar 103, the performance bar 104
+        StepsWhenIdle(
+            input =>
+            {
+                _time.Advance(ScreenPane.Tick);   // the sampler's first reading
+                _time.Advance(ScreenPane.Tick);   // the pane's tick draws the bar
+                input.PushClick(120, 104, MouseButton.Right);   // the performance bar: the settings
+            },
+            input => { int y = ToolbarUnderPane() + 1; input.PushClick(120, y, MouseButton.Right); },   // the bar under the pane: closes them
+            input => input.PushClick(120, 102, MouseButton.Right),   // the hint row's blanks: the settings again
+            Key(Keys.Escape),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
+        Assert.Equal(2, output.Split(settings).Length - 1);   // opened, closed, opened again: a miss under the pane would leave it open, one title
+        Assert.DoesNotContain("› /settings", output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>A right-click on the toolbar's blanks under a reply (later on 2026-10-13, the user's ask): the settings under the busy row, as the double-click's; the reply runs on.</summary>
+    [Fact]
+    public async Task MidTurn_ARightClickOnTheToolbarsBlanks_OpensTheSettings_TheReplyRunsOn()
+    {
+        MidTurnFixture(i =>
+        {
+            if (i == 0)
+            {
+                Scripted().PushClick(200, 103, MouseButton.Right);   // the blanks: the busy row at 102, the toolbar at 103
+            }
+            else if (i == 1)
+            {
+                Scripted().Push(Keys.Escape);
+            }
+        });
+        _settings.Update(d => d.ToolbarItems = ["settings", "tools"]);
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+
+        string output = await RunAsync();
+
+        output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
+        int pane = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n", StringComparison.Ordinal);
+        Assert.True(pane > 0, output);
+        Assert.True(pane < output.LastIndexOf("three.", StringComparison.Ordinal));
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Single(_chat.Requests);
     }
 
     /// <summary>A right-click on a toolbar glyph under a reply (2026-10-13): its pane under the busy row, as the double-click's; the reply runs on.</summary>

@@ -259,14 +259,19 @@ internal sealed partial class ChatScreen
     /// the page (the ⌂ status glyph's note and its double-click to the picker went later on 2026-10-12, the user's call). A click on the bar's blanks is not the bar's: it
     /// goes on to the readers as a click on the toolbar's blanks (<see cref="ScreenPane.TryHitToolbar"/>), so a double-click there
     /// opens <c>/settings</c> as on every other bar (2026-10-12, the user's ask; spent until then). Since 2026-10-13 (the user's ask: as
-    /// on the home bar) a right-click on a toolbar glyph is its double-click's line too (<see cref="ToolbarRightClick"/>).
+    /// on the home bar) a right-click on a toolbar glyph is its double-click's line too (<see cref="ToolbarRightClick"/>), and later that
+    /// day (the user's ask) a right-click on a bar's open space is the blanks' <c>/settings</c>.
     /// </summary>
     /// <summary>
     /// A right-click on a toolbar glyph (2026-10-13, the user's ask: as a home bar chip's): its double-click's line
     /// (<see cref="ToolbarWord"/>), read as a command chord's wherever the click is read — the idle line, a pane, under a reply — and never
-    /// the line's paste. Glyphs only (the user's call): the path, the model's name and its mark, and the blanks are not ours. Under an open
-    /// pane the toolbar is off its hit test, so the click is read as the off-pane pair's (<see cref="ScreenPane.OffPaneHitAt"/>), and the
-    /// line closes the pane it names or switches to another, as that pair does.
+    /// the line's paste. The path, the model's name and its mark are not ours (the user's call). Later on 2026-10-13 (the user's ask: "just
+    /// like double-clicking" there) a bar's open space is <c>/settings</c> too, as its double-click is: the toolbar's blanks and dividers,
+    /// anywhere on the performance bar and the home bar's blanks (<see cref="ScreenPane.ToolbarZone.Row"/>), and the hint row's
+    /// (<see cref="ScreenPane.HintZone.Row"/>: its text and blanks, never a glyph, the name, the path, the timers, the tally or the
+    /// scroll's row) — a right-click anywhere else still pastes. Under an open pane the bars are off their hit tests, so the click is read
+    /// as the off-pane pair's (<see cref="ScreenPane.OffPaneHitAt"/>), and the line closes the pane it names or switches to another, as
+    /// that pair does.
     /// </summary>
     private HomeClick ToolbarRightClick(InputEvent.Click click)
     {
@@ -275,8 +280,15 @@ internal sealed partial class ChatScreen
             return HomeClick.NotOurs;
         }
 
-        ScreenPane.ToolbarHit? tool = _pane.TryHitToolbar(click.X, click.Y, out var hit) ? hit : _pane.OverlayOpen ? _pane.OffPaneHitAt(click.X, click.Y)?.Toolbar : null;
-        return tool is { Zone: ScreenPane.ToolbarZone.Glyph } glyph && ToolbarWord(glyph.Glyph) is { } line ? HomeClick.Run(line) : HomeClick.NotOurs;
+        var off = _pane.OverlayOpen ? _pane.OffPaneHitAt(click.X, click.Y) : null;
+        ScreenPane.ToolbarHit? tool = _pane.TryHitToolbar(click.X, click.Y, out var hit) ? hit : off?.Toolbar;
+        if (tool is { Zone: ScreenPane.ToolbarZone.Glyph } glyph)
+        {
+            return ToolbarWord(glyph.Glyph) is { } line ? HomeClick.Run(line) : HomeClick.NotOurs;
+        }
+
+        ScreenPane.HintHit? hint = tool is null && _pane.TryHitHint(click.X, click.Y, out var row) ? row : off?.Hint;
+        return tool is { Zone: ScreenPane.ToolbarZone.Row } || hint is { Zone: ScreenPane.HintZone.Row } ? HomeClick.Run(SlashCommands.SettingsWord) : HomeClick.NotOurs;
     }
 
     private HomeClick HomeBarClick(InputEvent.Click click)
