@@ -54,6 +54,12 @@ public enum SkillEditOutcome
     /// and its name is not created again until the user enables it; the pane's rename, move and delete still act.
     /// </summary>
     Disabled,
+
+    /// <summary>
+    /// The user said no to a reflection's write (2026-10-12, <c>Reflection confirm mode</c>, <see cref="SkillProposal"/>): nothing was written,
+    /// and the reflection ends there.
+    /// </summary>
+    Declined,
 }
 
 /// <summary>

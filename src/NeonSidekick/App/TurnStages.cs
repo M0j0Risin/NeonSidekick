@@ -120,7 +120,8 @@ internal sealed class TurnStages
             return plain;
         }
 
+        // An empty verbs file (2026-10-12, the list an asset since) draws nothing: the stage's own word then.
         _lastVerb = ThinkingVerbs.Pick(_random, _lastVerb);
-        return _lastVerb;
+        return _lastVerb ?? plain;
     }
 }

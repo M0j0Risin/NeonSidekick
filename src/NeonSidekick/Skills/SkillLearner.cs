@@ -26,6 +26,12 @@ public enum SkillLearnOutcome
 
     /// <summary>Cancelled: a reconnect, a profile switch, the exit.</summary>
     Cancelled,
+
+    /// <summary>
+    /// The user said no to its write (2026-10-12, <c>Reflection confirm mode</c>): nothing written, <see cref="SkillLearnResult.Edit"/> the
+    /// <see cref="SkillEditOutcome.Declined"/> result naming the skill; the pass ends there, as a write ends it.
+    /// </summary>
+    Declined,
 }
 
 /// <summary>The outcome, the edit when there was one, a detail for the log or the notice, and what the requests cost.</summary>
@@ -373,9 +379,11 @@ public static class SkillLearner
     /// as a SKILL.md write does; null keeps the reflection to the SKILL.md.
     /// <paramref name="records"/> (2026-10-02): the skill records the catalog's usage lines come from, whatever <paramref name="sessions"/>
     /// says; null = no usage lines. <paramref name="guard"/> (the same day): what the editor may write (<see cref="ReflectionWriteGuard"/>),
-    /// its <c>load_skill</c> telling it each load; null = no guard.
+    /// its <c>load_skill</c> telling it each load; null = no guard. <paramref name="confirm"/> (2026-10-12, <c>Reflection confirm mode</c>): the
+    /// editor's ask before each write (<see cref="SkillEditorTool"/>); a no ends the pass <see cref="SkillLearnOutcome.Declined"/>.
     /// </summary>
-    public static async Task<SkillLearnResult> RunAsync(Assistant assistant, ReflectionMaterial material, SkillRoots roots, bool external, ReasoningEffort effort, CancellationToken cancellationToken, int maxRequests, SessionEvidence? sessions, SkillFileAccess? files = null, SkillRecords? records = null, ReflectionWriteGuard? guard = null)
+    public static async Task<SkillLearnResult> RunAsync(Assistant assistant, ReflectionMaterial material, SkillRoots roots, bool external, ReasoningEffort effort, CancellationToken cancellationToken, int maxRequests, SessionEvidence? sessions, SkillFileAccess? files = null, SkillRecords? records = null, ReflectionWriteGuard? guard = null,
+        Func<SkillProposal, CancellationToken, Task<bool>>? confirm = null)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(material);
@@ -384,7 +392,7 @@ public static class SkillLearner
 
         var catalog = new SkillCatalog(() => roots);
         catalog.Scan(external);
-        var editor = new SkillEditorTool(() => roots, () => external, files, guard: guard);
+        var editor = new SkillEditorTool(() => roots, () => external, files, guard: guard, confirm: confirm);
         var tools = new List<AIFunction>(3);
         if (catalog.Skills.Count > 0)
         {
@@ -424,6 +432,7 @@ public static class SkillLearner
 
                 var results = new List<FunctionResultContent>(response.Calls.Count);
                 SkillEditResult? edit = null;
+                SkillEditResult? declined = null;
                 foreach (var call in response.Calls)
                 {
                     DiagnosticLog.Debug(SkillCatalog.Category, "Reflection " + Assistant.ToolCallLogLine(call.Name, Assistant.SerializeArguments(call.Arguments)));
@@ -435,9 +444,20 @@ public static class SkillLearner
                     {
                         edit ??= written;
                     }
+                    else if (string.Equals(call.Name, SkillEditorTool.ToolName, StringComparison.Ordinal) && editor.LastResult is { Outcome: SkillEditOutcome.Declined } no)
+                    {
+                        declined ??= no;
+                    }
                 }
 
                 messages.Add(new ChatMessage(ChatRole.Tool, results.Cast<AIContent>().ToList()));
+                if (edit is null && declined is not null)
+                {
+                    // The user said no (2026-10-12): the pass ends, nothing written; a write the same response made first still counts below.
+                    DiagnosticLog.Info(SkillCatalog.Category, "Reflection: " + SkillText.Edited(declined) + ".");
+                    return new SkillLearnResult(SkillLearnOutcome.Declined, declined, SkillText.Edited(declined), usage, requests);
+                }
+
                 if (edit is not null)
                 {
                     DiagnosticLog.Info(SkillCatalog.Category, "Reflection: " + SkillText.Edited(edit) + (edit.Summary.Length > 0 ? " — " + edit.Summary : ""));

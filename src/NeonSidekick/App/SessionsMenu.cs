@@ -183,7 +183,10 @@ internal sealed class SessionsMenu
     /// null when the pane closed any other way.
     /// </summary>
     /// <param name="midTurn">The pane opened while a reply runs: the list shows, a pick is refused.</param>
-    public async Task<long?> ShowAsync(CancellationToken cancellationToken, bool midTurn = false)
+    public Task<long?> ShowAsync(CancellationToken cancellationToken, bool midTurn = false) => ShowAsync(cancellationToken, ReplyRun.Of(midTurn));
+
+    /// <summary>The list under a reply asked live (2026-10-12, <see cref="ReplyRun"/>): its picks open when the reply ends, the pane saying so.</summary>
+    public async Task<long?> ShowAsync(CancellationToken cancellationToken, ReplyRun reply)
     {
         var zone = _time.LocalTimeZone;
         var sessions = _store.List(0);
@@ -229,10 +232,18 @@ internal sealed class SessionsMenu
                     Caption = MenuFilter.CaptionOrNull(filter, shown.Count, sessions.Count),
                     Footer = (_, row) => row < shown.Count ? Footer(sessions[shown[row]], sessions[shown[row]].Id == current, zone) : null,
                 };
-                var picked = await _pane.PickAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken).ConfigureAwait(false);
+                var picked = await _pane.PickAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken, stale: reply.Stale).ConfigureAwait(false);
                 if (picked is not { } pick)
                 {
                     return null;
+                }
+
+                if (pick.Refresh)
+                {
+                    // The reply under the pane ended (2026-10-12): the list again on the same row, every pick open now.
+                    cursor = pick.Row >= 0 && pick.Row < shown.Count ? shown[pick.Row] : cursor;
+                    Sink.Notice(SettingsMenu.ReplyEndedNotice);
+                    continue;
                 }
 
                 if (pick.Filter is { } typed)
@@ -248,7 +259,7 @@ internal sealed class SessionsMenu
                 }
 
                 cursor = shown[pick.Row];
-                if (midTurn)
+                if (reply.Running)
                 {
                     Sink.Notice(SettingsMenu.NotWhileReplyRunsNotice);
                     continue;

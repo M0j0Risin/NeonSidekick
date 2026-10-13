@@ -316,6 +316,25 @@ public class KeysTests
     }
 
     [Fact]
+    public void IsEmojiPicker_IsPlainCtrlJ_NeverCtrlEnter_AndNeverAShortcutLine()
+    {
+        // 2026-10-12 (the user's ask): the console's LF on J and the test factory's '\0' count; Ctrl+Enter's LF rides on Enter and stays
+        // the line break; Alt, Shift and a typed j do not. A chord with no command: never a ShortcutLine.
+        Assert.True(Keys.IsEmojiPicker(Keys.CtrlJ));
+        Assert.True(Keys.IsEmojiPicker(Keys.Ctrl(ConsoleKey.J)));
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlJ));
+        Assert.False(Keys.IsEmojiPicker(Keys.CtrlEnter));
+        Assert.True(Keys.IsLineBreak(Keys.CtrlEnter));
+        Assert.False(Keys.IsLineBreak(Keys.CtrlJ));
+        Assert.False(Keys.IsEmojiPicker(Keys.CtrlAlt(ConsoleKey.J)));
+        Assert.False(Keys.IsEmojiPicker(new ConsoleKeyInfo('\n', ConsoleKey.J, shift: true, alt: false, control: true)));
+        Assert.False(Keys.IsEmojiPicker(new ConsoleKeyInfo('J', ConsoleKey.J, shift: true, alt: false, control: true)));
+        Assert.False(Keys.IsEmojiPicker(new ConsoleKeyInfo('j', ConsoleKey.J, shift: false, alt: false, control: false)));
+        Assert.False(Keys.IsEmojiPicker(Keys.Char('j')));
+        Assert.False(Keys.IsLearnCancel(Keys.CtrlJ));
+    }
+
+    [Fact]
     public void ToolGroupText_IsPinned()
     {
         Assert.Equal(1, TextCells.Width(ToolGroupText.CollapsedGlyph));

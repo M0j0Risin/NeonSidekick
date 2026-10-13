@@ -1266,13 +1266,22 @@ public sealed class AppSettingsData
     public bool ReflectionEditsSupportingFiles { get; set; }
 
     /// <summary>
+    /// Which of a reflection's writes wait for the user (<c>Skills.ReflectionConfirmMode</c>, 2026-10-12, the user's ask and words):
+    /// <c>confirm-none</c> (the default: it never asks), <c>confirm-all</c> (a new skill and an edit), <c>confirm-new</c> (a new skill only),
+    /// <c>confirm-edit</c> (an update or a supporting file only). An ask is a Keep / View / Discard pane at the idle line while the
+    /// reflection waits; without the pane the write is declined. Read when a reflection is decided, no reconnect; the Reflection tab of
+    /// <c>/skills</c>, the first row of What it may change, labelled <c>Reflection confirm mode</c>. No variable.
+    /// </summary>
+    public string ReflectionConfirmMode { get; set; } = Skills.ReflectionConfirmMode.Default;
+
+    /// <summary>
     /// What a reflection may do to a skill installed with <c>/skills add</c> (<c>Skills.ReflectionInstalledSkills</c>, 2026-10-02, the
     /// user's call in the reflection audit): <c>read-only</c> refuses its <c>skill_editor</c> any change to one and asks for a companion skill
     /// instead, so a later update from the same origin stays clean; <c>allow-and-mark</c> (the default since 2026-10-03, the user's call;
     /// <c>read-only</c> before, and a saved profile keeps its word) lets it write, the skill records keep the change, and the install's
     /// update page warns that updating replaces it. The main chat and the Skills pane's revert are
     /// unaffected. Read when a reflection is decided, no reconnect; the Reflection tab of <c>/skills</c>, last row, labelled
-    /// <c>Reflection downloaded skills</c> (<c>Reflection installed skills</c> until later on 2026-10-02, briefly <c>Reflection AgentSkills.io skills</c>
+    /// <c>Reflection edit downloaded skills</c> (<c>Reflection downloaded skills</c> until 2026-10-12, <c>Reflection installed skills</c> until later on 2026-10-02, briefly <c>Reflection AgentSkills.io skills</c>
     /// that day, the user's calls; agentskills.io is the format every skill here follows, not where these come from). No variable.
     /// </summary>
     public string ReflectionInstalledSkills { get; set; } = Skills.ReflectionInstalledSkills.Default;
@@ -1692,7 +1701,7 @@ public sealed class AppSettingsData
     /// Independent of <see cref="FileTools"/> (the user's call): the tools still reach only the working directory (and the profile's
     /// images folder by full path). Without picture codecs (the macOS build's MagicScaler) there are none to offer. Read at each turn,
     /// no reconnect. Off by default, as every tool group (the user's call); no migration, so a profile that had the file tools on
-    /// switches this on once. No variable.
+    /// switches this on once. No variable. <c>set_splash_image</c> joined them on 2026-10-12 (the user's call; <see cref="ComfyTools"/>' until then).
     /// </summary>
     public bool ImageTools { get; set; }
 
@@ -2228,7 +2237,7 @@ public sealed class AppSettingsData
     // exported workflows, splash art, and prompts written for Pony Diffusion XL and the other families, or sent as typed).
 
     /// <summary>
-    /// Whether a turn offers the image tools (<c>generate_image</c>, <c>set_splash_image</c>) over the ComfyUI server
+    /// Whether a turn offers the ComfyUI tool (<c>generate_image</c>; <c>set_splash_image</c> too until 2026-10-12, <see cref="ImageTools"/>' since) over the ComfyUI server
     /// at <see cref="ComfyUrl"/> (2026-09-24); read at each turn like <see cref="SqlTools"/>, no reconnect. On by
     /// default until 2026-09-29 (it offered nothing until a URL was set and a workflow was in a <c>comfy</c> folder);
     /// off since, the user's call. No variable.

@@ -563,8 +563,8 @@ public class SlashCommandsTests
             Row("/profile", Summary("/profile"), "/profile [<name>]", "/profile add|delete <name>", "/profile rename <name> <new-name>", "/profile reset [<name>] [--all]", "/profile push|pull <name>",
                 "/profile push|pull keys <name>", "/profile push|pull servers <name>", "/profile push|pull commands <name> [overwrite]",
                 "/profile push|pull history <name> [overwrite]", "/profile push|pull policestrings <name> [overwrite]",
-                "/profile push|pull persona <name> [overwrite]", "/profile push|pull operata <name> [overwrite]", "/profile push|pull vocalia <name> [overwrite]", "/profile edit|reload"),
-            SlashCommands.HelpText);   // edit and reload 2026-09-21, push and pull 2026-09-28, their sections 2026-10-09, the prompt files 2026-10-10; one form a line since 2026-10-05
+                "/profile push|pull persona <name> [overwrite]", "/profile push|pull operata <name> [overwrite]", "/profile push|pull vocalia <name> [overwrite]", "/profile push|pull avatar user|model <name>", "/profile edit|reload"),
+            SlashCommands.HelpText);   // edit and reload 2026-09-21, push and pull 2026-09-28, their sections 2026-10-09, the prompt files 2026-10-10, the avatars 2026-10-12; one form a line since 2026-10-05
         Assert.Contains(Row("/clear", Summary("/clear")), SlashCommands.HelpText);   // a bare command: no forms column
         Assert.Contains(Row("/timer", Summary("/timer"), "/timer [<duration> [<name>]]", "/timer stop <name>|all"), SlashCommands.HelpText);
         Assert.All(SlashCommands.HelpEntries, e => Assert.Contains(Row(e), SlashCommands.HelpText));

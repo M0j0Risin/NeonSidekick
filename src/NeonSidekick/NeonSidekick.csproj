@@ -252,6 +252,9 @@
     <!-- The default persona (2026-10-03, the user's ask): assets\prompts\persona.md is Assistant.DefaultPersona, what the
          prompt carries without a persona.md and what /sys persona seeds the file with. Edit the asset; the next build has it. -->
     <EmbeddedResource Include="..\..\assets\prompts\persona.md" LogicalName="prompts/persona.md" Visible="false" />
+    <!-- The fun verbs (2026-10-12, the user's ask): assets\verbs\verbs.txt, one verb per line, is App/ThinkingVerbs.All — the words the
+         thinking spinner reads under LLM use fun verbs. Edit the file; the next build has the list. -->
+    <EmbeddedResource Include="..\..\assets\verbs\verbs.txt" LogicalName="verbs/verbs.txt" Visible="false" />
     <!-- The video window's page (2026-10-05): the IFrame Player API host Viewer/VideoPage writes into <home>\webview2\site and
          WebView2 serves from https://player.neonsidekick.example/ (a page with an origin, so YouTube's embeds get a Referer). -->
     <EmbeddedResource Include="..\..\assets\youtube\player.html" LogicalName="youtube/player.html" Visible="false" />

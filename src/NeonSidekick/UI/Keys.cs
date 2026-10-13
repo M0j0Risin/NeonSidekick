@@ -266,6 +266,23 @@ public static class Keys
     /// <summary>Ctrl+L as the console delivers it: the FF character with the key and Control (the background learning's cancel).</summary>
     public static ConsoleKeyInfo CtrlL => new('\x0c', ConsoleKey.L, false, false, true);
 
+    /// <summary>
+    /// Ctrl+J, the emoji picker (2026-10-12, the user's ask): what a click on the draft row's ☺ does, from the keyboard — the chat
+    /// line's read ends as <see cref="InputResult.EmojiButton"/> and the pick lands at the cursor. A chord with no command, so never a
+    /// <see cref="ShortcutLine"/>: the chat line's editor reads it, at the idle line alone, as the button takes clicks (a pane or a
+    /// reply's live row leaves it be). <see cref="IsLearnCancel"/>'s shape: Control held, Alt and Shift not, and no character but the
+    /// console's own LF (<c>'\n'</c>; a test <see cref="Ctrl"/> builds <c>'\0'</c>), on <see cref="ConsoleKey.J"/> — Ctrl+Enter's LF
+    /// rides on <see cref="ConsoleKey.Enter"/>, so the line break is untouched. On a Mac a terminal sends Ctrl+J as the very LF byte
+    /// Ctrl+Enter sends, which <see cref="VtInputParser"/> reads as the line break: there the chord stays the line break.
+    /// </summary>
+    public static bool IsEmojiPicker(ConsoleKeyInfo key) =>
+        key.Key == ConsoleKey.J
+        && key.KeyChar is '\0' or '\n'
+        && (key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt | ConsoleModifiers.Shift)) == ConsoleModifiers.Control;
+
+    /// <summary>Ctrl+J as the console delivers it: the LF character with the J key (never Enter) and Control (the emoji picker).</summary>
+    public static ConsoleKeyInfo CtrlJ => new('\n', ConsoleKey.J, false, false, true);
+
     /// <summary>Ctrl+Alt+C, Ctrl+Alt+N and Ctrl+Alt+S as a US layout delivers them: no character, the key with Control and Alt.</summary>
     public static ConsoleKeyInfo CtrlAltC => new('\0', ConsoleKey.C, false, true, true);
 

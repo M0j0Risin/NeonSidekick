@@ -114,6 +114,7 @@ Under *Image tools* (`/tools` › Files › Image, `/tools image` or the toolbar
 | `view_image` | `path?, paths?` | Attaches images to the next message, up to *File view image max (per call)*, so the model can see them; nothing opens on your screen (`open` does that). On a Mac it also takes HEIC/HEIF, TIFF and AVIF. |
 | `image_info` | `path?, paths?` | A picture's format, size, file size, frames, transparency, orientation and the metadata it carries (EXIF, GPS, XMP…), read from its header, plus the formats `image_edit` can write here. |
 | `image_edit` | `path, to?, overwrite?, format?, quality?, max_kb?, width?, height?, scale?, fit?, anchor?, interpolation?, crop_x/y/width/height?, rotate?, flip?, filter?, brightness?, contrast?, saturation?, hue?, tint?, tint_amount?, blur?, sharpen?, pad?, background?, metadata?, dpi?, chroma?, colors?, dither?, interlace?, view?` | Resizes, crops, turns, recolours and converts a picture in one pass and writes a new file (see [Editing pictures](#editing-pictures)). `metadata: none` alone strips a JPEG, PNG, WebP or GIF losslessly. `view` attaches the result. Not in plan mode. |
+| `set_splash_image` | `path, name?` | Copies a picture (from the working directory, or by full path from the `images` folder) into the profile's `images\splash_images`, so it shows at start and on `/splash`. The first one replaces the bundled set. |
 
 #### Editing pictures
 
@@ -356,7 +357,6 @@ Then "put my face from [Image #2] on the person in [Image #1]" works in chat, or
 | Tool | Arguments | What it does |
 |---|---|---|
 | `generate_image` | `prompt?, workflow?, negative?, negative_extra?, verbatim?, width?, height?, seed?, steps?, cfg?, denoise?, image?, image2?, image3?, count?` | Runs a workflow (the only fitting one when none is named), saving 1 to *ComfyUI max pictures per call* pictures, each with the next seed. The result names the files and seed; the pictures follow in the next message. `prompt` may be left out only for a workflow without `{{prompt}}`. |
-| `set_splash_image` | `path, name?` | Copies a picture (from the working directory, or by full path from the `images` folder) into the profile's `images\splash_images`, so it shows at start and on `/splash`. The first one replaces the bundled set. |
 
 * A refused run names the node and input at fault (a missing checkpoint, a bad value).
 * `image` is a path in the working directory, a saved picture's full path, or a pasted picture's `[Image #N]` (sent at its original size).

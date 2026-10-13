@@ -128,6 +128,10 @@ public sealed class ConversationHistory
     // Kept by Recount after every write that can change it, so a reader on another task (the
     // /sys pane opened mid-turn) gets a number and never walks the list the turn appends to.
     private volatile int _turnCount;
+    // The skills loaded now (2026-10-12, /skills › Offered › loaded), kept the same way as an immutable list a pane on the watcher task
+    // reads whole; Replace holds the recount until its list is in, so no reader sees a half-built one.
+    private volatile IReadOnlyList<LoadedSkill> _loadedSkills = [];
+    private bool _replacing;
 
     public ConversationHistory(string systemPrompt)
     {
@@ -142,6 +146,56 @@ public sealed class ConversationHistory
 
     /// <summary>Number of user turns currently held (a carrier, <see cref="IsImageCarrier"/>, is none). A plain read, safe from any task.</summary>
     public int TurnCount => _turnCount;
+
+    /// <summary>
+    /// The skills whose instructions the conversation holds now (2026-10-12, the user's ask: <c>/skills</c> › Offered › loaded), in the
+    /// order of their first load still held (<see cref="SkillsIn"/>). A plain read, safe from any task: a snapshot replaced whole at each
+    /// write that changes it.
+    /// </summary>
+    public IReadOnlyList<LoadedSkill> LoadedSkills => _loadedSkills;
+
+    /// <summary>
+    /// Raised when <see cref="LoadedSkills"/> changed (2026-10-12): a load answered, a compact, a trim, a rewind or a clear took one out.
+    /// On the writing task (the turn's); a subscriber must not block — the <c>/skills</c> pane cancels a token and reads the list again.
+    /// </summary>
+    public event Action? SkillsChanged;
+
+    /// <summary>
+    /// The skills <paramref name="messages"/> hold loaded (2026-10-12): every tool result whose text opens with a <c>load_skill</c> answer's
+    /// tag (<c>&lt;skill_content name="…"&gt;</c>, <see cref="TurnTrace"/>'s reading; a bundled file's <c>&lt;skill_file&gt;</c> is none, nor an
+    /// error, nor a result a prune cut to its stub), counted by name, in the order each first appears. Pure.
+    /// </summary>
+    public static IReadOnlyList<LoadedSkill> SkillsIn(IEnumerable<ChatMessage> messages)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        var order = new List<string>();
+        foreach (var message in messages)
+        {
+            if (message.Role != ChatRole.Tool)
+            {
+                continue;
+            }
+
+            foreach (var content in message.Contents)
+            {
+                if (content is FunctionResultContent { Result: string text } && TurnTrace.LoadedName(text) is { } name)
+                {
+                    if (counts.TryGetValue(name, out int seen))
+                    {
+                        counts[name] = seen + 1;
+                    }
+                    else
+                    {
+                        counts[name] = 1;
+                        order.Add(name);
+                    }
+                }
+            }
+        }
+
+        return order.Select(name => new LoadedSkill(name, counts[name])).ToList();
+    }
 
     /// <summary>Whether <paramref name="message"/> is a carrier (<see cref="AddToolImages"/>): user-role, tagged <see cref="CarrierKey"/>.</summary>
     public static bool IsImageCarrier(ChatMessage message)
@@ -334,6 +388,7 @@ public sealed class ConversationHistory
         }
 
         _messages.Add(new ChatMessage(ChatRole.Tool, contents));
+        RecountSkills();
     }
 
     /// <summary>
@@ -364,6 +419,7 @@ public sealed class ConversationHistory
                     }
 
                     found.Result = result;
+                    RecountSkills();
                     return true;
                 }
             }
@@ -387,13 +443,23 @@ public sealed class ConversationHistory
     public void Replace(IReadOnlyList<ChatMessage> messages)
     {
         ArgumentNullException.ThrowIfNull(messages);
-        _messages.Clear();
-        foreach (var message in messages)
+        _replacing = true;
+        try
         {
-            AddMessage(message);
+            _messages.Clear();
+            foreach (var message in messages)
+            {
+                AddMessage(message);
+            }
+
+            Trim();
+        }
+        finally
+        {
+            _replacing = false;
         }
 
-        Trim();
+        RecountSkills();
     }
 
     /// <summary>
@@ -507,7 +573,29 @@ public sealed class ConversationHistory
         return request;
     }
 
-    private void Recount() => _turnCount = _messages.Count(IsTurnStart);
+    private void Recount()
+    {
+        _turnCount = _messages.Count(IsTurnStart);
+        RecountSkills();
+    }
+
+    /// <summary><see cref="LoadedSkills"/> read again; <see cref="SkillsChanged"/> raised when it differs. Nothing while <see cref="Replace"/> builds its list.</summary>
+    private void RecountSkills()
+    {
+        if (_replacing)
+        {
+            return;
+        }
+
+        var now = SkillsIn(_messages);
+        if (now.SequenceEqual(_loadedSkills))
+        {
+            return;
+        }
+
+        _loadedSkills = now;
+        SkillsChanged?.Invoke();
+    }
 
     private void Trim()
     {

@@ -117,6 +117,12 @@ public enum ProfileSection
 
     /// <summary><c>vocalia [overwrite]</c> (2026-10-10): <c>vocalia.md</c>, as <see cref="Persona"/>. <c>/sys vocalia copy</c> until then.</summary>
     Vocalia,
+
+    /// <summary><c>avatar user</c> (2026-10-12, the user's ask): the <c>User avatar</c>, the emoji that opens the user's sent lines.</summary>
+    AvatarUser,
+
+    /// <summary><c>avatar model</c> (2026-10-12, the user's ask): the <c>Model avatar</c>, the emoji that opens the profile's replies.</summary>
+    AvatarModel,
 }
 
 /// <summary>
@@ -1125,7 +1131,7 @@ internal sealed partial class ChatScreen
         _print = new PrintService(printSpooler ?? NullPrintSpooler.Instance, _files, _effective, _time);
         _pdf = new PdfConverter(_web.Browser, _web.Fetcher, _print, _files, _effective, _time);
         _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf, _images, OpenPictureForModel);
-        _imageTools = ImageTools(_files, _effective, _images);
+        _imageTools = ImageTools(_files, _effective, _images, () => _settings.ProfileSplashDirectory);
         _timers = new TimerBoard(time, SignalAlert);
         _jobs = new BackgroundJobs(SignalAlert, time);
         _timerTools = TimerTools(_timers);
@@ -1156,7 +1162,7 @@ internal sealed partial class ChatScreen
         // call time — the input line is built below, so the lambda reads the field then, not now. Saved first when it was not
         // sent yet (2026-10-09, PastedForComfy). The pictures go to the profile's images folder (2026-10-09).
         _comfy = new ComfyStudio(ComfyCatalog(settings), _files, _effective, comfyClient, _random, pasted: PastedForComfy, time: _time, images: _images);
-        _comfyTools = ComfyTools(_comfy, _files, () => _settings.ProfileSplashDirectory, _images);
+        _comfyTools = ComfyTools(_comfy);
         // The Home Assistant tools (2026-09-28): the client made for the URL and token in force; an asked call waits on the pane.
         _ha = new HaSession(_effective, haClient, _time);
         _haTools = HomeAssistantTools(_ha, ConfirmHomeAsync);
@@ -1394,7 +1400,8 @@ internal sealed partial class ChatScreen
             HomeCatalog = _homeLive.CatalogAsync,
         };
         // Built once: the roots ride the facts, so a profile switch needs no rebind; the Options rows through the settings menu (2026-09-19).
-        _skillsMenu = new SkillsMenu(SkillsFacts, settings, _menu, _flow, _menuPane, _input, _openFile, name => SkillsMenu.UsageCaption(_skillRecords, _catalog.Find(name), _time.LocalTimeZone), _skillRecords, SkillVersions, RestoreSkill, ForgetSkillVersions);
+        _skillsMenu = new SkillsMenu(SkillsFacts, settings, _menu, _flow, _menuPane, _input, _openFile, name => SkillsMenu.UsageCaption(_skillRecords, _catalog.Find(name), _time.LocalTimeZone), _skillRecords, SkillVersions, RestoreSkill, ForgetSkillVersions,
+            session: _session.History);   // the loaded sub-tab (2026-10-12): the one history the session keeps, watched while the pane is open
         // The /tools pane (2026-09-19): the tool list over the live facts, the Ask / Files / Web rows through the settings menu.
         _toolsMenu = new ToolsMenu(ToolsFacts, settings, _menu, _flow, _menuPane);
         // The /mcp pane (2026-09-20): the servers and their tools over the session's snapshot, the Options rows through the settings menu.
@@ -2423,6 +2430,8 @@ internal sealed partial class ChatScreen
     /// transcript" for the chat area). The labels are unchanged: <c>/keycheck</c> parses them and <c>neon_help</c> finds a key by one.
     /// On a Mac (2026-10-07) Ctrl+], Ctrl+D and Ctrl+Alt+A stand beside Ctrl+., Ctrl+M and Ctrl+Alt+M (<see cref="Keys.ShortcutLine"/>),
     /// and Option+Delete for Ctrl+Backspace, whose BS is Ctrl+H there; Windows' rows are unchanged.
+    /// Ctrl+J (the emoji picker, <see cref="Keys.IsEmojiPicker"/>) on 2026-10-12, the user's ask, in its letter's place, Windows' list
+    /// alone (a Mac terminal sends it as the line break); a chord with no command, as Ctrl+L's.
     /// </summary>
     public static KeyRow[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase) =>
         KeyRows(voiceOn, pushToTalk, wakeReady, wakePhrase, OperatingSystem.IsMacOS());
@@ -2484,6 +2493,12 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+F", "show or hide the performance bar", "/perfbar"));
         rows.Add(new("Ctrl+G", "show or hide the log window", "/log"));   // 2026-10-12, the user's pick (Ctrl+Alt+G until then)
         rows.Add(new("Ctrl+H", "open the help", "/help"));
+        if (!mac)
+        {
+            // 2026-10-12, the user's ask: the draft row's ☺ from the keyboard. A Mac terminal sends it as Ctrl+Enter's LF, the line break.
+            rows.Add(new("Ctrl+J", "open the emoji picker at the cursor"));
+        }
+
         rows.Add(new("Ctrl+L", "cancel a background learning turn"));
         rows.Add(new("Ctrl+M", mac ? "open the model picker (in the app's windows; Ctrl+D in the terminal)" : "open the model picker", "/model"));
         rows.Add(new("Ctrl+O", "expand or collapse tool calls, code, diffs and thinking"));
@@ -3298,6 +3313,7 @@ internal sealed partial class ChatScreen
         return result.Outcome switch
         {
             SkillLearnOutcome.Learned when result.Edit is { } edit => LearnedNotice(edit),
+            SkillLearnOutcome.Declined when result.Edit is { } declined => LearnDeclinedNotice(declined),
             SkillLearnOutcome.Exhausted => LearnExhaustedNotice,
             SkillLearnOutcome.Failed => LearnFailedPrefix + result.Detail + ")",
             _ => null,
@@ -3314,9 +3330,10 @@ internal sealed partial class ChatScreen
     /// of that moment (a profile switch later still writes the old profile, the rule a running
     /// reflection follows too), the external flag, the level, the request cap. The one pending slot holds one of these
     /// while a reflection runs (<see cref="_pendingLearn"/>). <c>Files</c>: the supporting-file actions when
-    /// <c>Reflection edit supporting files</c> was on at the decision (2026-09-27), null otherwise.
+    /// <c>Reflection edit supporting files</c> was on at the decision (2026-09-27), null otherwise. <c>Confirm</c>: <c>Reflection confirm mode</c>
+    /// at the decision (2026-10-12), which of its writes wait for the user (<see cref="LearnConfirm"/>).
     /// </summary>
-    private sealed record PendingLearn(ReflectionMaterial Material, bool Forced, SkillRoots Roots, bool External, ReasoningEffort Effort, int MaxRequests, CancellationToken Token, SessionEvidence? Sessions, SessionStore? Store, long? SessionId, int TurnOrdinal, SkillFileAccess? Files = null, ReflectionInstalledPolicy Installed = ReflectionInstalledPolicy.AllowAndMark)
+    private sealed record PendingLearn(ReflectionMaterial Material, bool Forced, SkillRoots Roots, bool External, ReasoningEffort Effort, int MaxRequests, CancellationToken Token, SessionEvidence? Sessions, SessionStore? Store, long? SessionId, int TurnOrdinal, SkillFileAccess? Files = null, ReflectionInstalledPolicy Installed = ReflectionInstalledPolicy.AllowAndMark, ReflectionConfirmScope Confirm = ReflectionConfirmScope.None)
     {
         /// <summary>The queued line: the turn's or the pass's — the one progress line (a start prints nothing since later still on 2026-09-19).</summary>
         public string QueuedNotice => Material is ReflectionMaterial.Sessions ? LearnSessionsQueuedNotice : LearnQueuedNotice;
@@ -3332,6 +3349,7 @@ internal sealed partial class ChatScreen
             SkillLearnOutcome.Nothing => ReflectionRow.NothingOutcome,
             SkillLearnOutcome.Exhausted => ReflectionRow.Exhausted,
             SkillLearnOutcome.Failed => ReflectionRow.Failed,
+            SkillLearnOutcome.Declined => ReflectionRow.Declined,
             _ => "",
         };
         if (outcome.Length == 0)
@@ -3419,7 +3437,7 @@ internal sealed partial class ChatScreen
         var (query, result) = evidence is null ? (null, null) : SkillLearner.Evidence(evidence, LastUserLine(turn));
         var material = new ReflectionMaterial.Turn(turn, focus, query, result);
         var pending = new PendingLearn(material, forced, _catalog.Roots, effective.ExternalSkills, ReflectionReasoning.Resolve(effective), ReflectionMaxRequests.Resolve(effective), cancellationToken,
-            evidence, effective.SessionLogging ? _sessions : null, _sessionId, _sessionId is { } sessionId ? _sessions.Summary(sessionId)?.Turns ?? 0 : 0, ReflectionFiles(effective), ReflectionInstalledSkills.Resolve(effective));
+            evidence, effective.SessionLogging ? _sessions : null, _sessionId, _sessionId is { } sessionId ? _sessions.Summary(sessionId)?.Turns ?? 0 : 0, ReflectionFiles(effective), ReflectionInstalledSkills.Resolve(effective), ReflectionConfirmMode.Resolve(effective));
         string log = tally + (result is null ? "" : "; with the earlier sessions found for the turn");
         if (QueueOrStart(pending, log))
         {
@@ -3656,7 +3674,9 @@ internal sealed partial class ChatScreen
     {
         // A guard of its own each run (2026-10-02): a paused reflection run again loads afresh before it may rewrite.
         var guard = new ReflectionWriteGuard(() => pending.Roots, pending.External, pending.Installed);
-        var job = _session.StartLearning((a, token) => SkillLearner.RunAsync(a, pending.Material, pending.Roots, pending.External, pending.Effort, token, pending.MaxRequests, pending.Sessions, pending.Files, _skillRecords, guard), pending.Token);
+        // Its ask (2026-10-12, Reflection confirm mode): null under confirm-none, so a reflection writes as it always has.
+        var confirm = LearnConfirm(pending.Confirm);
+        var job = _session.StartLearning((a, token) => SkillLearner.RunAsync(a, pending.Material, pending.Roots, pending.External, pending.Effort, token, pending.MaxRequests, pending.Sessions, pending.Files, _skillRecords, guard, confirm), pending.Token);
         if (job is null)
         {
             return;
@@ -3796,7 +3816,7 @@ internal sealed partial class ChatScreen
         ReconcileSkills();
         var material = new ReflectionMaterial.Sessions(records, action.Query);
         var evidence = new SessionEvidence(_sessions, _effective, _sessionId, _time);
-        var pending = new PendingLearn(material, true, _catalog.Roots, effective.ExternalSkills, ReflectionReasoning.Resolve(effective), ReflectionMaxRequests.Resolve(effective), cancellationToken, evidence, _sessions, null, 0, ReflectionFiles(effective), ReflectionInstalledSkills.Resolve(effective));
+        var pending = new PendingLearn(material, true, _catalog.Roots, effective.ExternalSkills, ReflectionReasoning.Resolve(effective), ReflectionMaxRequests.Resolve(effective), cancellationToken, evidence, _sessions, null, 0, ReflectionFiles(effective), ReflectionInstalledSkills.Resolve(effective), ReflectionConfirmMode.Resolve(effective));
         QueueOrStart(pending, action.Query is null ? "the last " + SessionText.Sessions(records.Count) : SessionText.Sessions(records.Count) + " matching " + LogText.Quoted(action.Query));
     }
 
@@ -3825,6 +3845,7 @@ internal sealed partial class ChatScreen
     /// <summary>Whether a reflection's notice or a queued reflection waits for the loop top (the idle read's arm-time check).</summary>
     private bool LearnPending =>
         !_learnNotices.IsEmpty
+        || !_learnAsks.IsEmpty   // a reflection's write waiting for the user (2026-10-12, Reflection confirm mode)
         || (!_session.IsLearning && !_learnAwaitsQueue && (Volatile.Read(ref _pausedLearn) is not null || _pendingLearn is not null));
 
     /// <summary>
@@ -4381,6 +4402,8 @@ internal sealed partial class ChatScreen
         ProfileSection.Commands => "allowed commands",
         ProfileSection.History => "message history",
         ProfileSection.PoliceStrings => "forbidden strings",
+        ProfileSection.AvatarUser => "user avatar",
+        ProfileSection.AvatarModel => "model avatar",
         _ when IsPromptFileSection(section) => PromptFileOf(section),
         _ => ProfileSettingsSubject,
     };
@@ -4523,8 +4546,18 @@ internal sealed partial class ChatScreen
                 return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(sources.Workflows?.Invoke() ?? [], argText);
 
             case SlashCommand.Avatar:
-                // The one word (2026-10-10); an emoji or a search is typed, nothing to complete.
-                return MentionCompleter.Matches([new(AvatarCommand.ClearWord, AvatarCommand.ClearNote)], argText);
+            {
+                // The words (2026-10-10; user and model since 2026-10-12): first whose avatar or clear, then clear after either; an emoji
+                // or a search is typed, nothing to complete.
+                var (avatarTarget, avatarRest) = AvatarCommand.Target(argText);
+                if (avatarRest.Length < argText.Trim().Length && argText.Contains(' ', StringComparison.Ordinal))
+                {
+                    return MentionCompleter.Matches([new(AvatarCommand.ClearWord, avatarTarget == AvatarTarget.User ? AvatarCommand.UserClearNote : AvatarCommand.ClearNote)], avatarRest);
+                }
+
+                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(
+                    [new(AvatarCommand.UserWord, AvatarCommand.UserNote), new(AvatarCommand.ModelWord, AvatarCommand.ModelNote), new(AvatarCommand.ClearWord, AvatarCommand.ClearNote)], argText);
+            }
 
             case SlashCommand.Settings:
                 // The changed settings (2026-10-04); any other words are a search, nothing to complete.
@@ -5520,12 +5553,27 @@ internal sealed partial class ChatScreen
     /// (headless too), whatever <c>File tools</c> says (the user's call). <paramref name="effective"/> is where they read <c>File view image
     /// max (per call)</c> and <c>Image edit quality</c>, <c>metadata</c>, <c>mode</c> and <c>output folder</c> at every call. None where there
     /// are no picture codecs (2026-10-06, the macOS build: <see cref="ImageCodecs"/>).
+    /// Since 2026-10-12 (the user's call) <c>set_splash_image</c> is the group's fourth, given <paramref name="splashDirectory"/>: it copies a
+    /// picture from anywhere the picture tools reach — a camera shot, a screen capture, an edit, a paste — and sat in the ComfyUI group,
+    /// offered only with a ComfyUI server set up, until then. No codecs, no splash either (the splash draws through them).
     /// </summary>
     /// <param name="images">The profile's images folder (2026-10-09): the tools read (and <c>image_edit</c> writes) a full path there; null = the working directory alone.</param>
-    public static IReadOnlyList<AIFunction> ImageTools(WorkingDirectory files, Func<AppSettingsData> effective, WorkingDirectory? images = null) =>
-        ImageCodecs.Available
-            ? [new ViewImageTool(files, effective, images), new ImageInfoTool(files, effective, images), new ImageEditTool(files, effective, images)]
-            : [];
+    /// <param name="splashDirectory">The loaded profile's splash folder, read at each call (2026-10-12); null leaves <c>set_splash_image</c> out.</param>
+    public static IReadOnlyList<AIFunction> ImageTools(WorkingDirectory files, Func<AppSettingsData> effective, WorkingDirectory? images = null, Func<string>? splashDirectory = null)
+    {
+        if (!ImageCodecs.Available)
+        {
+            return [];
+        }
+
+        var tools = new List<AIFunction> { new ViewImageTool(files, effective, images), new ImageInfoTool(files, effective, images), new ImageEditTool(files, effective, images) };
+        if (splashDirectory is not null)
+        {
+            tools.Add(new SetSplashImageTool(files, splashDirectory, images));
+        }
+
+        return tools;
+    }
 
     /// <summary>
     /// The four web tools, offered on every turn while the setting <c>Web tools</c> is on (headless too:
@@ -5977,14 +6025,13 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The image tools (2026-09-24): <c>generate_image</c> over the ComfyUI server and the workflows, and <c>set_splash_image</c>
-    /// into the loaded profile's splash folder, offered on every turn while <see cref="ComfyOffered"/> says so (headless too).
-    /// <paramref name="images"/> (2026-10-10) lets <c>set_splash_image</c> take a picture in the profile's images folder by its full path.
+    /// The ComfyUI tools (2026-09-24): <c>generate_image</c> over the ComfyUI server and the workflows, offered on every turn while
+    /// <see cref="ComfyOffered"/> says so (headless too). <c>set_splash_image</c> rode here until 2026-10-12, when it went to the picture
+    /// tools (<see cref="ImageTools"/>, the user's call): a splash may be any picture, not only a generated one.
     /// </summary>
-    public static IReadOnlyList<AIFunction> ComfyTools(ComfyStudio studio, WorkingDirectory files, Func<string> splashDirectory, WorkingDirectory? images = null) => new AIFunction[]
+    public static IReadOnlyList<AIFunction> ComfyTools(ComfyStudio studio) => new AIFunction[]
     {
         new GenerateImageTool(studio),
-        new SetSplashImageTool(files, splashDirectory, images),
     };
 
     /// <summary>Whether the image group is offered (2026-09-24): the setting <c>ComfyUI tools</c> on, <c>ComfyUI URL</c> an http(s) URL and at least one workflow in a <c>comfy</c> folder.</summary>
@@ -7516,6 +7563,18 @@ internal sealed partial class ChatScreen
     /// A <c>servers</c> copy done: <c>(copied the server settings into "work": LLM URL http://…, LLM model qwen3)</c> — what the target now
     /// connects to, in the settings pane's words (<c>(scan the local network)</c>, <c>(first listed)</c> when they are empty); a pull says from.
     /// </summary>
+    /// <summary>An avatar section with none to copy (2026-10-12): <c>(nothing to copy: "amanda" has no user avatar)</c>. Pinned.</summary>
+    public static string ProfileAvatarNothingNotice(string subject, string profile, bool pull = false) => $"(nothing to copy: {SourceName(profile, pull)} has no {subject})";
+
+    /// <summary>The question before an avatar copy (2026-10-12). Pinned.</summary>
+    public static string ProfileAvatarPrompt(string subject, string avatar, string profile, bool pull = false) => pull
+        ? $"Copy \"{profile}\"'s {subject} {avatar} into this profile? This profile's {subject} is replaced."
+        : $"Copy this profile's {subject} {avatar} into \"{profile}\"? Its {subject} is replaced.";
+
+    /// <summary>The line after an avatar copy (2026-10-12). Pinned.</summary>
+    public static string ProfileAvatarCopiedNotice(string subject, string avatar, string profile, bool pull = false) =>
+        $"(copied the {subject} {avatar} {(pull ? "from" : "into")} \"{profile}\")";
+
     public static string ProfileServersCopiedNotice(string profile, string url, string model, bool pull = false) =>
         $"(copied the server settings {(pull ? "from" : "into")} \"{profile}\": LLM URL {url}, LLM model {model})";
 
@@ -7590,6 +7649,35 @@ internal sealed partial class ChatScreen
                     ProfilePoliceStringsPrompt(source.Count, profile, overwrite, pull),
                     target => target.ShellPoliceForbiddenStrings = overwrite ? [.. source] : ForbiddenStrings.Sorted([.. target.ShellPoliceForbiddenStrings, .. source]),
                     (_, _) => ProfilePoliceStringsCopiedNotice(source.Count - duplicates, duplicates, profile, overwrite, pull));
+            }
+
+            case ProfileSection.AvatarUser:
+            case ProfileSection.AvatarModel:
+            {
+                // An avatar (2026-10-12, the user's ask): the source's emoji over the target's, a source with none nothing to copy.
+                bool user = section == ProfileSection.AvatarUser;
+                string avatar = Emojis.AvatarRules.Normalize(user ? from.UserAvatar : from.ModelAvatar);
+                string subject = ProfileSectionSubject(section);
+                if (avatar.Length == 0)
+                {
+                    return new(ProfileAvatarNothingNotice(subject, profile, pull), "", _ => { }, (_, _) => "");
+                }
+
+                return new(
+                    null,
+                    ProfileAvatarPrompt(subject, avatar, profile, pull),
+                    target =>
+                    {
+                        if (user)
+                        {
+                            target.UserAvatar = avatar;
+                        }
+                        else
+                        {
+                            target.ModelAvatar = avatar;
+                        }
+                    },
+                    (_, _) => ProfileAvatarCopiedNotice(subject, avatar, profile, pull));
             }
 
             default:
@@ -9314,6 +9402,12 @@ internal sealed partial class ChatScreen
     /// </summary>
     private static ProfileAction ParsePushPull(ProfileActionKind kind, string[] rest)
     {
+        if (rest.Length >= 2 && ProfileSectionOf(rest[0] + " " + rest[1]) is { } twoWords)
+        {
+            // avatar user|model <name> (2026-10-12, the user's ask): a section of two words, its one name after; no overwrite (one value).
+            return rest.Length == 3 ? new(kind, rest[2], Section: twoWords) : new(ProfileActionKind.Invalid, "");
+        }
+
         if (ProfileSectionOf(rest[0]) is not { } section)
         {
             return rest.Length == 1 ? new(kind, rest[0]) : new(ProfileActionKind.Invalid, "");
@@ -9336,6 +9430,9 @@ internal sealed partial class ChatScreen
         ("persona", ProfileSection.Persona, "persona.md, the persona (overwrite replaces the target's)"),
         ("operata", ProfileSection.Operata, "operata.md, the operating rules (overwrite replaces the target's)"),
         ("vocalia", ProfileSection.Vocalia, "vocalia.md, the voice directive (overwrite replaces the target's)"),
+        // The avatars (2026-10-12, the user's ask): two words each, avatar then whose, read together (ParsePushPull).
+        ("avatar user", ProfileSection.AvatarUser, "the user avatar, the emoji that opens your lines"),
+        ("avatar model", ProfileSection.AvatarModel, "the model avatar, the emoji that opens the replies"),
     ];
 
     /// <summary>The word that names <paramref name="section"/> (2026-10-10), as typed in the lines that name the way past a refusal.</summary>
@@ -9952,7 +10049,7 @@ internal sealed partial class ChatScreen
 
                         break;
                     case InputResult.EmojiButton:
-                        // The draft row's ☺ (2026-10-11, the user's ask): the emoji picker, the pick at the draft's cursor — no
+                        // The draft row's ☺ (2026-10-11, the user's ask), or Ctrl+J (2026-10-12): the emoji picker, the pick at the draft's cursor — no
                         // transcript row, no history; the next read draws the draft with it.
                         _timers.Acknowledge();
                         DisarmExit();
@@ -10277,6 +10374,9 @@ internal sealed partial class ChatScreen
     private async Task<bool> AnnounceAlertsAsync(CancellationToken cancellationToken)
     {
         DrainLearn();
+        // A reflection's write waiting for the user (2026-10-12, Reflection confirm mode): asked on the pane before anything else.
+        // The reflection writes (or not) on its own task after the answer; its line comes with its own alert.
+        await AnswerLearnAsksAsync(cancellationToken).ConfigureAwait(false);
         // The /imagine pictures that ended behind the line (2026-10-04).
         DrainImagine();
         PrintProcessAlerts();
@@ -11865,10 +11965,17 @@ internal sealed partial class ChatScreen
     private async Task OpenSettingsAsync(CancellationToken cancellationToken, SettingsField? open = null, string? words = null)
     {
         var changes = await _menu.ShowAsync(cancellationToken, midTurn: false, open, words).ConfigureAwait(false);
+        await ApplyMenuChangesAsync(changes, _menu.TakePendingEmbeddedModel(), cancellationToken).ConfigureAwait(false);
+    }
 
+    /// <summary>
+    /// What the settings menu's changes ask for once it closed (out of <see cref="OpenSettingsAsync"/> on 2026-10-12, for a pane a reply
+    /// ended under too): an embedded model picked installed and connected, a profile switch's reconnects, else each session's own.
+    /// </summary>
+    private async Task ApplyMenuChangesAsync(SettingsChanges changes, EmbeddedLlm.EmbeddedModel? embeddedPick, CancellationToken cancellationToken)
+    {
         // An embedded model used or installed from the catalog (2026-09-29): its own install and connect below stand for
         // the LLM reconnect any other change on the tab asked for.
-        var embeddedPick = _menu.TakePendingEmbeddedModel();
         if (embeddedPick is not null)
         {
             changes &= ~SettingsChanges.Llm;
@@ -12059,15 +12166,18 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Avatar:
             {
-                // The profile's avatar (2026-10-10): set or cleared at once, else the picker, searching for any words given.
-                var (verb, avatarText) = AvatarCommand.Parse(args);
+                // The profile's avatar (2026-10-10): set or cleared at once, else the picker, searching for any words given. A leading
+                // user or model (2026-10-12, the user's ask) names whose: the user's opens their sent lines, the model's its replies.
+                var (target, verb, avatarText) = AvatarCommand.ParseLine(args);
+                string filter = verb == AvatarVerb.Search ? avatarText : "";
                 bool changed = verb switch
                 {
-                    AvatarVerb.Clear => _menu.SetAvatar(""),
-                    AvatarVerb.Set => _menu.SetAvatar(avatarText),
-                    _ => await _menu.PickAvatarAsync(verb == AvatarVerb.Search ? avatarText : "", own: true, cancellationToken).ConfigureAwait(false),
+                    AvatarVerb.Clear => _menu.SetAvatar("", target),
+                    AvatarVerb.Set => _menu.SetAvatar(avatarText, target),
+                    _ when target == AvatarTarget.User => await _menu.PickUserAvatarAsync(filter, own: true, cancellationToken).ConfigureAwait(false),
+                    _ => await _menu.PickAvatarAsync(filter, own: true, cancellationToken).ConfigureAwait(false),
                 };
-                if (changed)
+                if (changed && target == AvatarTarget.Model)
                 {
                     ApplyWindowTitle();
                 }
@@ -14028,6 +14138,9 @@ internal sealed partial class ChatScreen
             // offered workflows, sat beside the bot's own under the same name, and the bots drew with the wrong ones): the
             // Botchat ComfyUI rows alone say (BotImageTool).
             ComfyEnabled = false,
+            // Never set_splash_image (2026-10-12, when it left the ComfyUI group for the picture tools, the user's call): a bot would
+            // write the loaded profile's splash folder; the ComfyUI group's switch above kept it from the bots until then.
+            Images = _imageTools.Where(t => t is not SetSplashImageTool).ToList(),
             // Never the advisors (2026-10-10, found comparing botchat with them): neon_advisor frames the loaded profile as the one
             // asking, reads the main chat's history for its recent lines, keeps its calls-per-turn count across the turns of the
             // main chat alone, and files its threads in the main session; a bot's question fits none of that.
@@ -14731,6 +14844,13 @@ internal sealed partial class ChatScreen
             // A pane opened mid-turn is closed when the keys are needed now (the listen below, the
             // exit) and left to the user otherwise; then the acts and the owed reconnects.
             await EndTurnAsync(closePane: outcome is not (TurnOutcome.Continue or TurnOutcome.Withdrawn), cancellationToken).ConfigureAwait(false);
+            if (TakeHandoverReset())
+            {
+                // A pane the reply ended under switched the profile or replaced the conversation (2026-10-12): the plan's round and the
+                // reflection were about the one that is gone.
+                return outcome == TurnOutcome.Exit;
+            }
+
             // Plan mode after the turn (2026-09-26): an approval given on the pane is carried out below once the reply
             // ended on its own, dropped with a notice otherwise; a cancel on the pane has ended plan mode already.
             bool planApproved = TakePlanApproval(outcome, out bool planFresh);
@@ -15108,6 +15228,7 @@ internal sealed partial class ChatScreen
         // a reply): a pane it opens reads the keys under the app token and the close signal the
         // turn's end may send (EndTurnAsync). The previous turn's pane was awaited before this one.
         _turnRunning = true;
+        BeginReplyRun();
         // The hint row is the turn's again (the usage part); the reading stays remembered for /read.
         _hintReading = null;
         // A first Ctrl+C before the turn is forgotten: mid-turn the key cancels, and the next one at the line is a first again.

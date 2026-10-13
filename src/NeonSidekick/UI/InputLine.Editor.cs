@@ -543,6 +543,15 @@ public sealed partial class InputLine
                 return new EditOutcome.End(new InputResult.Shortcut(_text.ToString(), shortcut));
             }
 
+            if (_o.Shortcuts && !_o.Live && ReferenceEquals(this, _line._chat) && Keys.IsEmojiPicker(k))
+            {
+                // Ctrl+J (2026-10-12, the user's ask): the draft row's ☺ from the keyboard — the read ends for the screen's picker, the
+                // draft and its cursor kept in this editor for the pick to land at, as the click's. Whether the ☺ shows has no say.
+                _anchor = -1;
+                EndRow();
+                return new EditOutcome.End(new InputResult.EmojiButton(_text.ToString()));
+            }
+
             bool shift = (k.Modifiers & ConsoleModifiers.Shift) != 0;
             switch (k.Key)
             {

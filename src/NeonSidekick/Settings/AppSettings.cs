@@ -831,6 +831,7 @@ public sealed class AppSettings : IDisposable
         ReflectionAutoLearn = source.ReflectionAutoLearn,
         ReflectionCooldownMinutes = source.ReflectionCooldownMinutes,
         ReflectionCooldownMode = source.ReflectionCooldownMode,
+        ReflectionConfirmMode = source.ReflectionConfirmMode,
         ReflectionIncludesSessions = source.ReflectionIncludesSessions,
         ReflectionMaxRequests = source.ReflectionMaxRequests,
         ReflectionMinToolCalls = source.ReflectionMinToolCalls,

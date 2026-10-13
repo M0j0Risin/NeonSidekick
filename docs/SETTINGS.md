@@ -47,6 +47,7 @@ Each shortcut runs its command as if typed; a draft on the row stays.
 | Ctrl+G | `/log`: opens or closes the log window | at once |
 | Ctrl+Shift+F | `/find` (find in the transcript; Windows Terminal keeps this chord until you unbind it) | waits for the reply to end |
 | Ctrl+H | `/help` | opens over the reply |
+| Ctrl+J | opens the emoji picker at the cursor (not on a Mac, where it is the line break) | nothing: the idle line only |
 | Ctrl+L | cancels the background learning (🧠) | at once |
 | Ctrl+M | `/model` | waits for the reply |
 | Ctrl+P | `/profile` | waits for the reply |
@@ -96,6 +97,8 @@ Each shortcut runs its command as if typed; a draft on the row stays.
 | Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/camera view`, `/camera thumbs`, `/screen view`, `/screen thumbs`, `/tts`, `/stt`, `/stt wake`, `/stt interrupt`, `/perfbar`, `/homebar`, `/homebar on`, `/homebar off`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/open`, `/terminal`, `/shortcut`, `/log`, `/process <id>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/view <path>`, `/view <path> --thumbs` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind earlier messages (*Queue cancel mode* applies) |
+
+In a pane opened over the reply, the rows that would disturb it (a reconnect, the profile, the working directory, the theme, a session to restore, a skill's page, an MCP server) answer *(not while a reply runs)*. When the reply ends with the pane still open, the pane says *(the reply ended: every row is open now)* and those rows work where you are; what they change is carried out as the pane closes. Under `/botchat` they wait for the pane to close.
 
 ## Hint row, rule and toolbar
 
@@ -179,7 +182,7 @@ The app itself, this side of the connection, in three tabs: Chat, Sessions and B
 | Keep message history | Saves the ↑/↓ history (newest 1,000 lines) in `sessions.db`. Off deletes it at the next profile load; `/msgclear` empties it. | on |
 | Command typo intercept | A command typed without its slash (`clear`) or with extra ones asks *Did you mean /clear?* first. | on |
 | Hide /exit autocomplete | Leaves `/exit` out of the `/` list; typing it in full still works. | on |
-| Emoji picker | Shows a dim ☺ at the right end of the input row; a click opens the emoji picker and inserts the emoji at the cursor. | on |
+| Emoji picker | Shows a dim ☺ at the right end of the input row; a click opens the emoji picker and inserts the emoji at the cursor. Ctrl+J opens it too, shown or not. | on |
 | Transcript markdown | Renders replies as Markdown, with code blocks highlighted for common languages. | on |
 | Paste preview lines | How many lines of a long paste show dimmed under its `[Pasted text #n]` placeholder (0–200). | 25 |
 | Show image thumbnails | Draws a small thumbnail of each picture you send, a tool fetches or makes, or `/botchat` draws. | on |
@@ -308,7 +311,7 @@ Settings every server reads, whatever its kind.
 | LLM tool compact type | What happens when one turn's tool calls fill the context to the auto-compact share: `compact` (prune, then summarise), `prune`, `stop` the turn, or `nothing`. | `compact` |
 | LLM picture keep | The most pictures one request carries (0–500; 0 = no cap). Past it the oldest leave the conversation (`view_image` can show one again). Every picture is resent with every request. | 20 |
 | LLM picture megabytes | The most megabytes of pictures one request carries (0–1000; 0 = no cap); past it the oldest leave. | 24 |
-| LLM use fun verbs | The thinking spinner shows a random verb instead of `thinking` / `writing`. | off |
+| LLM use fun verbs | The thinking spinner shows a random verb instead of `thinking` / `writing`. The verbs are built in from `assets/verbs/verbs.txt` (one per line). | off |
 
 #### Http
 
@@ -582,8 +585,9 @@ The loaded skills with their scope (`profile`, `global` or `external`), version,
 | Reflection cooldown (minutes) | How long automatic reflections wait after one wrote a skill (0–1440; 0 = off). | 5 |
 | Reflection cooldown mode | `last-written-skill`: only turns that used the skill just written wait. `all-skills`: every automatic reflection waits. | `last-written-skill` |
 | Reflection yields to turns | A message sent during a reflection pauses it so the reply gets the server. Turn off if your server handles parallel requests. | on |
+| Reflection confirm mode | Whether a reflection asks before it writes: `confirm-none` never, `confirm-all` before a new skill or an edit, `confirm-new` before a new skill only, `confirm-edit` before an edit only. The ask waits for the idle line: **Keep**, **View** (the whole change) or **Discard** (ESC too). | `confirm-none` |
 | Reflection edit supporting files | Lets a reflection change a skill's supporting files too, not just `SKILL.md`. | off |
-| Reflection downloaded skills | For skills from `/skills add`: `read-only` makes the reflection write a companion skill instead; `allow-and-mark` lets it change the skill, and a later update warns first. | `allow-and-mark` |
+| Reflection edit downloaded skills | For skills from `/skills add`: `read-only` makes the reflection write a companion skill instead; `allow-and-mark` lets it change the skill, and a later update warns first. | `allow-and-mark` |
 
 ### Options
 
@@ -735,7 +739,7 @@ The file tools and the places beyond the working directory they reach, in five t
 
 | Setting | What it does | Default |
 |---|---|---|
-| Image tools | Offers `view_image` (the model looks at pictures), `image_info` and `image_edit`. They reach pictures in the working directory and the profile's `images` folder, whether *File tools* is on or not. | off |
+| Image tools | Offers `view_image` (the model looks at pictures), `image_info`, `image_edit` and `set_splash_image` (a picture as a splash). They reach pictures in the working directory and the profile's `images` folder, whether *File tools* is on or not. | off |
 | Image edit quality | The JPEG (or JPEG XL, HEIF) quality `image_edit` uses when the model gives none (1–100). On a Mac: JPEG and HEIF only. | 90 |
 | Image edit metadata | What metadata `image_edit` keeps: `none`, `basic` (author, date taken, camera…) or `all` (basic plus the GPS position). | `none` |
 | Image edit mode | Where an edited picture goes: `beside-original` writes a new file beside the source, `overwrite-original` replaces the source, with no confirmation. Used by `image_edit` and the picture windows' right-click menu. | `beside-original` |
@@ -790,7 +794,7 @@ The apps and services the tools reach, in three tabs: Docker, ComfyUI and YouTub
 
 | Setting | What it does | Default |
 |---|---|---|
-| ComfyUI tools | Offers `generate_image` and `set_splash_image` once *ComfyUI URL* is set and a workflow is installed. | off |
+| ComfyUI tools | Offers `generate_image` once *ComfyUI URL* is set and a workflow is installed. | off |
 | ComfyUI URL | The ComfyUI server, often on your LAN (`http://gpu-box:8188`). | (not set) |
 | ComfyUI workflows offered | A checklist of the workflows the model is offered; none until ticked. `/imagine <name>` can still use a hidden one. | none |
 | ComfyUI add workflow | A wizard that **builds** a workflow from your server's checkpoints or **imports** a ComfyUI export. See [Adding a workflow](TOOLS.md#adding-a-workflow). | — |

@@ -166,7 +166,7 @@ internal sealed partial class SettingsMenu
                 }
 
                 var field = found[pick.Row].Field;
-                if (_midTurn && RefusedMidTurn(field))
+                if (_reply.Running && RefusedMidTurn(field))
                 {
                     Sink.Notice(NotWhileReplyRunsNotice);
                     continue;
@@ -243,7 +243,7 @@ internal sealed partial class SettingsMenu
                 }
 
                 var field = changed[pick.Row].Field;
-                if (_midTurn && RefusedMidTurn(field))
+                if (_reply.Running && RefusedMidTurn(field))
                 {
                     Sink.Notice(NotWhileReplyRunsNotice);
                     continue;

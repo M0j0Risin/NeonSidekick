@@ -171,4 +171,14 @@ public static class EmojiText
     public const string Cleared = "Model avatar cleared.";
 
     public const string AlreadyNone = "No model avatar to clear.";
+
+    /// <summary>Headless <c>/avatar user</c>'s line (2026-10-12): the user avatar, or how to set one. Pinned.</summary>
+    public static string UserCurrent(string avatar, EmojiCatalog catalog) =>
+        avatar.Length == 0 ? "No user avatar. /avatar user <emoji> sets one; /avatar user clear clears it." : "User avatar: " + Value(avatar, catalog);
+
+    /// <summary>Headless <c>/avatar user clear</c>'s line (2026-10-12). Pinned.</summary>
+    public const string UserCleared = "User avatar cleared.";
+
+    /// <summary>Headless <c>/avatar user clear</c> with none set (2026-10-12). Pinned.</summary>
+    public const string UserAlreadyNone = "No user avatar to clear.";
 }

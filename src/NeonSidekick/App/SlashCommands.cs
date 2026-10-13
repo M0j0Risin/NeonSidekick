@@ -325,6 +325,8 @@ public enum SlashCommand
     /// <summary>
     /// <c>/avatar [&lt;emoji&gt;|&lt;words&gt;|clear]</c> (2026-10-10, the user's pick): the profile's avatar — bare, the emoji picker
     /// (<c>/settings</c> › Client › Chat › Model avatar's); an emoji sets it, <c>clear</c> clears it, words open the picker searching for them.
+    /// A leading <c>user</c> or <c>model</c> (2026-10-12, the user's ask: <c>/avatar user [clear]</c>, <c>/avatar model [clear]</c>) names whose:
+    /// the user's (User avatar, their sent lines) or the model's, the one a bare line means.
     /// </summary>
     Avatar,
 
@@ -365,7 +367,7 @@ public static class SlashCommands
         new HelpEntry[]
         {
             new("/about", "show info about the app and profile"),
-            new("/avatar", "pick the profile's emoji avatar"),
+            new("/avatar", "pick the model's or your emoji avatar"),
             new(Advisors.AdvisorText.Word, Advisors.AdvisorText.HelpSummary),
             new("/botchat", "let the profiles talk to each other"),
             new("/browse", "browse the working directory's files"),

@@ -91,6 +91,7 @@ public sealed class SkillEditorTool : AIFunction
     private readonly SkillFileAccess? _files;
     private readonly Action<SkillRoots, SkillEditResult>? _edited;
     private readonly ReflectionWriteGuard? _guard;
+    private readonly Func<SkillProposal, CancellationToken, Task<bool>>? _confirm;
 
     /// <param name="roots">Read per call: the profile root moves with a profile switch.</param>
     /// <param name="external">Read per call: whether the external folder is in the catalog (<c>Agent skills</c> and <c>Use external skills</c> both on), so a skill there blocks its name.</param>
@@ -100,8 +101,16 @@ public sealed class SkillEditorTool : AIFunction
     /// a refusal is told as well, and the listener keeps only the writes.
     /// </param>
     /// <param name="guard">A reflection's rules on what it may write (2026-10-02, <see cref="ReflectionWriteGuard"/>): a change it refuses never reaches the editor. Null in the main chat.</param>
-    public SkillEditorTool(Func<SkillRoots> roots, Func<bool> external, SkillFileAccess? files = null, Action<SkillRoots, SkillEditResult>? edited = null, ReflectionWriteGuard? guard = null)
+    /// <param name="confirm">
+    /// A reflection's ask (2026-10-12, <c>Reflection confirm mode</c>): told every write the guard let through, before the editor makes it — a
+    /// create for a name no root holds, an update or a file action on a skill that is there — and awaited; false writes nothing and answers
+    /// <see cref="SkillEditOutcome.Declined"/>. The host decides which kinds it asks the user about and says yes to the rest at once. The
+    /// guard's checks come first and its load hash is read again at the write, after the wait. Null in the main chat.
+    /// </param>
+    public SkillEditorTool(Func<SkillRoots> roots, Func<bool> external, SkillFileAccess? files = null, Action<SkillRoots, SkillEditResult>? edited = null, ReflectionWriteGuard? guard = null,
+        Func<SkillProposal, CancellationToken, Task<bool>>? confirm = null)
     {
+        _confirm = confirm;
         _roots = roots ?? throw new ArgumentNullException(nameof(roots));
         _edited = edited;
         _guard = guard;
@@ -135,7 +144,11 @@ public sealed class SkillEditorTool : AIFunction
     public SkillEditResult? LastResult { get; private set; }
 
     /// <summary>The result for the parsed arguments: the sentence for the outcome, or the argument error; <paramref name="summary"/> rides <see cref="LastResult"/> through <see cref="SkillText.CleanSummary"/>.</summary>
-    public string Describe(string action, string scope, string name, string? description, string? instructions, string? summary = null)
+    public string Describe(string action, string scope, string name, string? description, string? instructions, string? summary = null) =>
+        DescribeAsync(action, scope, name, description, instructions, summary, CancellationToken.None).GetAwaiter().GetResult();
+
+    /// <summary><see cref="Describe"/> with the reflection's ask awaited before the write (2026-10-12); without one it completes at once.</summary>
+    public async Task<string> DescribeAsync(string action, string scope, string name, string? description, string? instructions, string? summary, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(action);
         ArgumentNullException.ThrowIfNull(scope);
@@ -163,6 +176,20 @@ public sealed class SkillEditorTool : AIFunction
 
         bool external = _external();
         var roots = _roots();
+        if (_confirm is not null && SkillEditor.Find(roots, name.Trim(), external) is var found && (create ? found is null : found is { } at && at != SkillScope.External))
+        {
+            // The ask (2026-10-12): a create for a free name, an update for a skill that is there; a call the editor would refuse anyway
+            // is refused unasked.
+            var proposal = create
+                ? new SkillProposal(SkillChangeKind.New, CreateAction, name.Trim(), description, instructions, Summary: SkillText.CleanSummary(summary))
+                : new SkillProposal(SkillChangeKind.Edit, UpdateAction, name.Trim(), string.IsNullOrWhiteSpace(description) ? null : description,
+                    string.IsNullOrWhiteSpace(instructions) ? null : instructions, Before: ReadSkillMd(roots, found!.Value, name.Trim()), Summary: SkillText.CleanSummary(summary));
+            if (await Declined(proposal, create ? where : found!.Value, cancellationToken).ConfigureAwait(false) is { } no)
+            {
+                return no;
+            }
+        }
+
         var result = create
             ? SkillEditor.Create(roots, where, name, description ?? "", instructions ?? "", external)
             : SkillEditor.Update(roots, where, name, description, instructions, external);
@@ -173,14 +200,52 @@ public sealed class SkillEditorTool : AIFunction
 
     /// <summary><c>write_file</c>: <paramref name="content"/> as the whole of <paramref name="path"/> in skill <paramref name="name"/> (2026-09-27).</summary>
     public string DescribeWrite(string name, string path, string content, string? summary = null) =>
-        DescribeFile(name, path, files => SkillEditor.WriteFile(_roots(), SkillScope.Profile, name, path, content, _external(), files.Time), summary);
+        DescribeWriteAsync(name, path, content, summary, CancellationToken.None).GetAwaiter().GetResult();
+
+    /// <summary><see cref="DescribeWrite"/> with the reflection's ask awaited before the write (2026-10-12).</summary>
+    public Task<string> DescribeWriteAsync(string name, string path, string content, string? summary, CancellationToken cancellationToken) =>
+        DescribeFileAsync(name, path, files => SkillEditor.WriteFile(_roots(), SkillScope.Profile, name, path, content, _external(), files.Time), summary,
+            new SkillProposal(SkillChangeKind.Edit, WriteFileAction, name.Trim(), Path: path, Content: content, Summary: SkillText.CleanSummary(summary)), cancellationToken);
 
     /// <summary><c>edit_file</c>: <paramref name="oldText"/> → <paramref name="newText"/> in <paramref name="path"/> of skill <paramref name="name"/> (2026-09-27).</summary>
     public string DescribeEdit(string name, string path, string oldText, string newText, bool replaceAll, string? summary = null) =>
-        DescribeFile(name, path, files => SkillEditor.EditFile(_roots(), SkillScope.Profile, name, path, oldText, newText, replaceAll, _external(), files.Time), summary);
+        DescribeEditAsync(name, path, oldText, newText, replaceAll, summary, CancellationToken.None).GetAwaiter().GetResult();
+
+    /// <summary><see cref="DescribeEdit"/> with the reflection's ask awaited before the write (2026-10-12).</summary>
+    public Task<string> DescribeEditAsync(string name, string path, string oldText, string newText, bool replaceAll, string? summary, CancellationToken cancellationToken) =>
+        DescribeFileAsync(name, path, files => SkillEditor.EditFile(_roots(), SkillScope.Profile, name, path, oldText, newText, replaceAll, _external(), files.Time), summary,
+            new SkillProposal(SkillChangeKind.Edit, EditFileAction, name.Trim(), Path: path, OldText: oldText, NewText: newText, Summary: SkillText.CleanSummary(summary)), cancellationToken);
+
+    /// <summary>
+    /// The ask (2026-10-12): null when the host said yes; the declined sentence otherwise, <see cref="LastResult"/> the
+    /// <see cref="SkillEditOutcome.Declined"/> result (its detail the action, for <see cref="SkillText.Declined"/>), nothing written or told.
+    /// </summary>
+    private async Task<string?> Declined(SkillProposal proposal, SkillScope scope, CancellationToken cancellationToken)
+    {
+        if (await _confirm!(proposal, cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        LastResult = new SkillEditResult(SkillEditOutcome.Declined, proposal.Name, scope, Detail: proposal.Action, Summary: proposal.Summary, Path: proposal.Path ?? "");
+        return SkillText.Edited(LastResult);
+    }
+
+    /// <summary>A skill's SKILL.md as it stands, for an update's ask (2026-10-12); null when it cannot be read.</summary>
+    private static string? ReadSkillMd(SkillRoots roots, SkillScope scope, string name)
+    {
+        try
+        {
+            return File.ReadAllText(Path.Combine(roots.Of(scope), name, SkillCatalog.FileName));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>A file action under the tool's rules: refused as an unknown action when files are not offered, and for a blank path; the skill is found where it lives (the profile first).</summary>
-    private string DescribeFile(string name, string path, Func<SkillFileAccess, SkillEditResult> act, string? summary)
+    private async Task<string> DescribeFileAsync(string name, string path, Func<SkillFileAccess, SkillEditResult> act, string? summary, SkillProposal proposal, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(path);
@@ -200,45 +265,54 @@ public sealed class SkillEditorTool : AIFunction
             return refusal;
         }
 
+        if (_confirm is not null && SkillEditor.Find(_roots(), name.Trim(), _external()) is { } at && at != SkillScope.External
+            && await Declined(proposal, at, cancellationToken).ConfigureAwait(false) is { } no)
+        {
+            return no;
+        }
+
         var result = act(_files);
         LastResult = result with { Summary = SkillText.CleanSummary(summary) };
         _edited?.Invoke(_roots(), LastResult);
         return SkillText.Edited(result);
     }
 
-    protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         switch (ToolArguments.ReadString(arguments, ActionArgument).Trim().ToLowerInvariant())
         {
             case WriteFileAction when _files is not null:
-                return new ValueTask<object?>(DescribeWrite(
+                return await DescribeWriteAsync(
                     ToolArguments.ReadString(arguments, NameArgument),
                     ToolArguments.ReadString(arguments, PathArgument),
                     ToolArguments.ReadString(arguments, ContentArgument),
-                    ToolArguments.ReadString(arguments, SummaryArgument)));
+                    ToolArguments.ReadString(arguments, SummaryArgument),
+                    cancellationToken).ConfigureAwait(false);
             case EditFileAction when _files is not null:
                 if (!ToolArguments.TryReadBoolean(arguments, ReplaceAllArgument, out bool? replaceAll, out string raw))
                 {
-                    return new ValueTask<object?>(Files.FileText.BadBoolean(ReplaceAllArgument, raw));
+                    return Files.FileText.BadBoolean(ReplaceAllArgument, raw);
                 }
 
-                return new ValueTask<object?>(DescribeEdit(
+                return await DescribeEditAsync(
                     ToolArguments.ReadString(arguments, NameArgument),
                     ToolArguments.ReadString(arguments, PathArgument),
                     ToolArguments.ReadString(arguments, OldTextArgument),
                     ToolArguments.ReadString(arguments, NewTextArgument),
                     replaceAll ?? false,
-                    ToolArguments.ReadString(arguments, SummaryArgument)));
+                    ToolArguments.ReadString(arguments, SummaryArgument),
+                    cancellationToken).ConfigureAwait(false);
         }
 
-        return new ValueTask<object?>(Describe(
+        return await DescribeAsync(
             ToolArguments.ReadString(arguments, ActionArgument),
             ToolArguments.ReadString(arguments, ScopeArgument),
             ToolArguments.ReadString(arguments, NameArgument),
             ToolArguments.ReadString(arguments, DescriptionArgument),
             ToolArguments.ReadString(arguments, InstructionsArgument),
-            ToolArguments.ReadString(arguments, SummaryArgument)));
+            ToolArguments.ReadString(arguments, SummaryArgument),
+            cancellationToken).ConfigureAwait(false);
     }
 }
 

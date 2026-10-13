@@ -1,3 +1,4 @@
+using NeonSidekick.Llm;
 using NeonSidekick.Sessions;
 using NeonSidekick.Skills;
 using NeonSidekick.UI;
@@ -355,6 +356,95 @@ public static class SkillsText
 
     /// <summary>What a scope sub-tab says with no skill of that root (2026-10-10). Pinned.</summary>
     public static string ScopeNoneLine(SkillScope scope) => $"(no {SkillScopes.Name(scope)} skills)";
+
+    /// <summary>The Offered tab's last sub-tab (2026-10-12, the user's ask): the skills loaded into this session's conversation now. Pinned.</summary>
+    public const string LoadedSubTitle = "loaded";
+
+    /// <summary>The loaded sub-tab's heading (2026-10-12), over its rows as <see cref="CatalogTitle"/> is over the catalog's. Pinned.</summary>
+    public const string LoadedTitle = "Loaded in this session";
+
+    /// <summary>What the loaded sub-tab says with none loaded (2026-10-12, the user's ask: the tab stays and says so). Pinned.</summary>
+    public const string NoneLoadedLine = "(no skills loaded in this session)";
+
+    /// <summary>The note on a loaded skill the catalog no longer lists (2026-10-12): renamed, deleted or switched off since its load. Pinned.</summary>
+    public const string NotInCatalogNote = "(not in the catalog now)";
+
+    /// <summary>A loaded skill's count after its row when the history holds more than one of its loads (2026-10-12): <c>×2</c>. Pinned.</summary>
+    public static string LoadsNote(int loads) => "×" + loads.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>The loaded sub-tab's count in the strip (2026-10-12): the skills loaded, in superscript (<c>loaded²</c>); null for none.</summary>
+    public static string? LoadedBadge(IReadOnlyList<LoadedSkill> loaded)
+    {
+        ArgumentNullException.ThrowIfNull(loaded);
+        return SettingsMenu.ChangedBadge(loaded.Count);
+    }
+
+    /// <summary>
+    /// The loaded sub-tab as menu rows (2026-10-12, the user's ask): <see cref="LoadedTitle"/> with the count, then each skill loaded into the
+    /// conversation now (<see cref="ConversationHistory.LoadedSkills"/>), in the order of its first load, drawn as the catalog draws it — the
+    /// name, the scope, the version, the description — with <see cref="LoadsNote"/> dim after it for a skill loaded more than once, the
+    /// <see cref="Skill"/> beside it so Enter opens its scope page as on any Offered row. A name the catalog no longer lists is a dim row with
+    /// <see cref="NotInCatalogNote"/> and no skill. None loaded is <see cref="NoneLoadedLine"/> alone; the <paramref name="filter"/> keeps the
+    /// skills whose name or description holds it, <see cref="MenuFilter.NoMatchRow"/> alone when none is left.
+    /// </summary>
+    public static IReadOnlyList<(string Markup, Skill? Skill, bool Heading)> LoadedSkillRows(SkillsFacts facts, IReadOnlyList<LoadedSkill> loaded, string filter = "")
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        ArgumentNullException.ThrowIfNull(loaded);
+        ArgumentNullException.ThrowIfNull(filter);
+        if (loaded.Count == 0)
+        {
+            return [(Theme.DimMarkup(NoneLoadedLine), null, false)];
+        }
+
+        int width = Math.Max(NameWidth(facts), loaded.Max(l => l.Name.Length));
+        int versions = VersionWidth(facts);
+        var rows = new List<(string, Skill?, bool)>
+        {
+            (SectionRule.Markup(LoadedTitle, loaded.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), null), null, true),
+        };
+        foreach (var entry in loaded)
+        {
+            var skill = facts.Skills.Concat(facts.Shadowed).FirstOrDefault(s => string.Equals(s.Name, entry.Name, StringComparison.OrdinalIgnoreCase));
+            if (!MenuFilter.Matches(filter, entry.Name, skill?.Description))
+            {
+                continue;
+            }
+
+            string count = entry.Loads > 1 ? " " + Theme.DimMarkup(LoadsNote(entry.Loads)) : "";
+            if (skill is null)
+            {
+                rows.Add((Theme.DimMarkup(entry.Name.PadRight(width) + "  " + NotInCatalogNote) + count, null, false));
+                continue;
+            }
+
+            string rest = "  " + SkillScopes.Name(skill.Scope).PadRight(9) + VersionCell(facts, skill, versions) + ChangedCell(facts, skill) + skill.Description;
+            rows.Add(((skill.Disabled ? Theme.DimMarkup(skill.Name.PadRight(width) + rest) : Styled(Theme.AccentSecondary, skill.Name.PadRight(width)) + Markup.Escape(rest)) + count, skill, false));
+        }
+
+        if (rows.Count == 1)
+        {
+            rows.Add((MenuFilter.NoMatchRow(filter), null, false));
+        }
+
+        return rows;
+    }
+
+    /// <summary>The loaded skills as plain lines (2026-10-12), for a console without the pane: their names and counts, or <see cref="NoneLoadedLine"/>.</summary>
+    public static IEnumerable<string> LoadedSkillLines(IReadOnlyList<LoadedSkill> loaded)
+    {
+        ArgumentNullException.ThrowIfNull(loaded);
+        if (loaded.Count == 0)
+        {
+            yield return NoneLoadedLine;
+            yield break;
+        }
+
+        foreach (var entry in loaded)
+        {
+            yield return entry.Loads > 1 ? entry.Name + "  " + LoadsNote(entry.Loads) : entry.Name;
+        }
+    }
 
     /// <summary>
     /// The root a skipped folder lies under (2026-10-10, the scope sub-tabs): the profile's, the global or the external one by its path,

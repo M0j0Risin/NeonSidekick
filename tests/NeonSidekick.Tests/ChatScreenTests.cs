@@ -4581,6 +4581,49 @@ public partial class ChatScreenTests : IDisposable
         Assert.Single(_chat.Requests);
     }
 
+    /// <summary>
+    /// A pane the reply ends under (2026-10-12, the user's ask): /mcp opened mid-reply refuses a server flip; once the reply ends the same
+    /// pane says so and the same Enter stops the server — no closing and opening again.
+    /// </summary>
+    [Fact]
+    public async Task MidTurn_McpPane_AServerFlipRefused_ThenDoneInTheSamePane_OnceTheReplyEnds()
+    {
+        McpServer();
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/mcp");
+            }
+            else if (i == 2)
+            {
+                Scripted().Push(Keys.Enter);    // pipe: refused while the reply runs
+            }
+        });
+        var input = Scripted();
+        var idle = input.OnWait;
+        bool pushed = false;
+        input.OnWait = () =>
+        {
+            if (!pushed && Output.Contains(SettingsMenu.ReplyEndedNotice, StringComparison.Ordinal))
+            {
+                pushed = true;
+                input.Push(Keys.Enter, Keys.Escape);   // pipe off, in the same pane; then closed
+                return;
+            }
+
+            idle?.Invoke();
+        };
+
+        string output = await RunAsync();
+
+        int refused = output.IndexOf("  · " + SettingsMenu.NotWhileReplyRunsNotice, StringComparison.Ordinal);
+        int ended = output.IndexOf(SettingsMenu.ReplyEndedNotice, StringComparison.Ordinal);
+        Assert.True(refused >= 0 && ended > refused, output);
+        Assert.Contains("  · 🔌 pipe: off", output[ended..]);
+        Assert.Equal(["pipe"], _settings.Current.McpServersDisabled);
+    }
+
     [Fact]
     public async Task ProfileSwitch_ReconnectsTheNewProfilesServers()
     {
@@ -7023,6 +7066,11 @@ public partial class ChatScreenTests : IDisposable
     [InlineData("PULL Operata work Overwrite", ProfileActionKind.Pull, "work", ProfileSection.Operata, true)]
     [InlineData("push vocalia work overwrite", ProfileActionKind.Push, "work", ProfileSection.Vocalia, true)]
     [InlineData("pull vocalia", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
+    [InlineData("push avatar user amanda", ProfileActionKind.Push, "amanda", ProfileSection.AvatarUser, false)]   // the avatars, 2026-10-12
+    [InlineData("PULL Avatar Model amanda", ProfileActionKind.Pull, "amanda", ProfileSection.AvatarModel, false)]
+    [InlineData("push avatar user", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
+    [InlineData("push avatar user amanda overwrite", ProfileActionKind.Invalid, "", ProfileSection.All, false)]   // one value: no overwrite
+    [InlineData("push avatar amanda", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
     [InlineData("push persona work force", ProfileActionKind.Invalid, "", ProfileSection.All, false)]   // /sys's old word
     [InlineData("push keys", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
     [InlineData("pull history", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
@@ -8647,6 +8695,37 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new[] { "RM -RF", "shutdown" }, ReadProfile(Profiles.ProfileFile(_dir, "work")).ShellPoliceForbiddenStrings);
     }
 
+    /// <summary>
+    /// <c>/profile push avatar user &lt;name&gt;</c> and <c>pull avatar model &lt;name&gt;</c> (2026-10-12, the user's ask): one avatar over the
+    /// other profile's, after a yes; a source with none has nothing to copy and asks nothing.
+    /// </summary>
+    [Fact]
+    public async Task ProfilePushPullAvatar_CopiesTheOneAvatar_AfterAYes()
+    {
+        Profiles.Create(_dir, "amanda", new AppSettingsData { ModelAvatar = "🦊" });
+        _settings.Update(d => { d.UserAvatar = "🦉"; d.ModelAvatar = "🐙"; });
+        PushLine("/profile push avatar user amanda");
+        PickYes();
+        PushLine("/profile pull avatar model amanda");
+        PickYes();
+        PushLine("/profile pull avatar user chef");   // no such profile
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileAvatarPrompt("user avatar", "🦉", "amanda"), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfileAvatarCopiedNotice("user avatar", "🦉", "amanda"), output);
+        Assert.Contains("  · " + ChatScreen.ProfileAvatarCopiedNotice("model avatar", "🦊", "amanda", pull: true), output);
+        var theirs = ReadProfile(Profiles.ProfileFile(_dir, "amanda"));
+        Assert.Equal("🦉", theirs.UserAvatar);
+        Assert.Equal("🦊", theirs.ModelAvatar);   // a push of one leaves the other
+        Assert.Equal("🦊", _settings.Current.ModelAvatar);
+        Assert.Equal("🦉", _settings.Current.UserAvatar);
+        Assert.Equal("(nothing to copy: \"amanda\" has no user avatar)", ChatScreen.ProfileAvatarNothingNotice("user avatar", "amanda", pull: true));
+        Assert.Equal("Copy this profile's user avatar 🦉 into \"amanda\"? Its user avatar is replaced.", ChatScreen.ProfileAvatarPrompt("user avatar", "🦉", "amanda"));
+        Assert.Equal("(copied the model avatar 🦊 from \"amanda\")", ChatScreen.ProfileAvatarCopiedNotice("model avatar", "🦊", "amanda", pull: true));
+    }
+
     [Fact]
     public async Task ProfilePullPoliceStrings_AddsToThisProfile()
     {
@@ -10131,7 +10210,7 @@ public partial class ChatScreenTests : IDisposable
         // shown, in that order; the tool stage is the tool; never "thinking" or "writing".
         var draws = new Random(7);
         string? last = null;
-        string Draw() => last = ThinkingVerbs.Pick(draws, last);
+        string Draw() => last = ThinkingVerbs.Pick(draws, last)!;
         string[] reply1 = [Draw(), Draw()];
         last = null;   // a new turn starts afresh: its first verb may repeat the last one shown
         string[] reply2 = [Draw(), GetCurrentTimeTool.ToolName, Draw(), Draw()];
@@ -11518,7 +11597,8 @@ public partial class ChatScreenTests : IDisposable
         var windows = ChatScreen.KeyRows(false, ConsoleKey.F8, false, "", mac: false);
         var mac = ChatScreen.KeyRows(false, ConsoleKey.F8, false, "", mac: true);
 
-        Assert.Equal(windows.Length + 3, mac.Length);
+        Assert.Equal(windows.Length + 3 - 1, mac.Length);   // less Ctrl+J (2026-10-12): a Mac terminal sends it as the line break
+        Assert.DoesNotContain(mac, r => r.Key == "Ctrl+J");
         Assert.Equal(new KeyRow("Option+Delete", "delete the word before the cursor (Ctrl+Delete opens the help: a Mac terminal sends it as Ctrl+H)"), mac[8]);
         string[] keys = mac.Select(r => r.Key).ToArray();
         Assert.Equal(["Ctrl+.", "Ctrl+]", "Ctrl+/", "Ctrl+D", "Ctrl+E"], keys[Array.IndexOf(keys, "Ctrl+.")..(Array.IndexOf(keys, "Ctrl+E") + 1)]);
@@ -11528,14 +11608,14 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new KeyRow("Ctrl+Alt+A", "open the memory pane", "/memory"), mac.Single(r => r.Key == "Ctrl+Alt+A"));
         Assert.Equal("open the model picker (in the app's windows; Ctrl+D in the terminal)", mac.Single(r => r.Key == "Ctrl+M").Meaning);
         Assert.Equal(new KeyRow("Ctrl+V / Alt+V", "paste text or pictures (Cmd+V is the terminal's: text only)"), mac[12]);   // pictures off the pasteboard, 2026-10-07
-        Assert.Equal(windows.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Ctrl+Backspace / Delete" or "Alt+V")),
+        Assert.Equal(windows.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Ctrl+Backspace / Delete" or "Alt+V" or "Ctrl+J")),
             mac.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Option+Delete" or "Ctrl+]" or "Ctrl+D" or "Ctrl+Alt+A" or "Ctrl+V / Alt+V")));
     }
 
     [Theory]
-    [InlineData(false, false, 54)]   // Ctrl+W (the home bar; Ctrl+Alt+W for a few hours) on 2026-10-12; Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G (plain Ctrl+G since 2026-10-12), U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
-    [InlineData(true, false, 55)]
-    [InlineData(true, true, 56)]   // the word moves and deletes joined (2026-10-04)
+    [InlineData(false, false, 55)]   // Ctrl+J (the emoji picker, Windows alone) later still on 2026-10-12; Ctrl+W (the home bar; Ctrl+Alt+W for a few hours) on 2026-10-12; Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G (plain Ctrl+G since 2026-10-12), U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
+    [InlineData(true, false, 56)]
+    [InlineData(true, true, 57)]   // the word moves and deletes joined (2026-10-04)
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon", mac: false);   // Windows' list on any machine (2026-10-07)
@@ -11588,6 +11668,7 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+F", "show or hide the performance bar", "/perfbar"),   // from Ctrl+Alt+E, later still on 2026-10-01
             new("Ctrl+G", "show or hide the log window", "/log"),   // from Ctrl+Alt+G on 2026-10-12, the user's ask
             new("Ctrl+H", "open the help", "/help"),   // from Ctrl+Alt+H, later still on 2026-10-01
+            new("Ctrl+J", "open the emoji picker at the cursor"),   // 2026-10-12, the user's ask (Windows' list alone)
             new("Ctrl+L", "cancel a background learning turn"),   // 2026-10-04, the user's ask
             new("Ctrl+M", "open the model picker", "/model"),   // later still on 2026-10-01
             new("Ctrl+O", "expand or collapse tool calls, code, diffs and thinking"),   // 2026-09-22; diffs 2026-10-04
@@ -11600,7 +11681,7 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+W", "show or hide the home bar", "/homebar"),   // 2026-10-12, the user's pick (Ctrl+Alt+W for a few hours)
             new("Ctrl+Y", "open the system prompt pane", "/sys"),   // from Ctrl+Alt+Y on 2026-10-03, the user's ask
             new("Ctrl+Z", "open the theme picker", "/theme"),   // 2026-10-04, the user's ask
-        ], rows[^38..^18]);
+        ], rows[^39..^18]);
 
         // The command chords after them (2026-09-30), one block A to Z by the letter since the pane chords joined later that day.
         Assert.Equal(
@@ -20882,9 +20963,9 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Matches(@"  · Offered\n  ·   haiku  profile  v1  " + SkillChanged + @"Writes haiku\. Use when asked for one\.\n  · Reflection\n", output);   // Reflection right after Offered since 2026-09-22
+        Assert.Matches(@"  · Offered\n  ·   haiku  profile  v1  " + SkillChanged + @"Writes haiku\. Use when asked for one\.\n  · " + Regex.Escape(SkillsText.LoadedTitle) + @"\n  ·   " + Regex.Escape(SkillsText.NoneLoadedLine) + @"\n  · Reflection\n", output);   // Reflection right after Offered since 2026-09-22; the loaded skills between them since 2026-10-12
         Assert.Contains("  · Options\n  ·   Agent skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n", output);   // the Options section last (2026-09-22; between Offered and Reflection from 2026-09-19), the Project file row among it since 2026-10-01
-        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection includes sessions: off\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection yields to turns: off\n  ·   Reflection edit supporting files: off\n  ·   Reflection downloaded skills: allow-and-mark\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
+        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection includes sessions: off\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection yields to turns: off\n  ·   Reflection confirm mode: confirm-none\n  ·   Reflection edit supporting files: off\n  ·   Reflection edit downloaded skills: allow-and-mark\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
         Assert.DoesNotContain("  · Project\n", output);   // the Project section, the toggle row alone from later on 2026-09-19, went on 2026-10-01
         Assert.DoesNotContain("Roots", output);
         Assert.DoesNotContain("Working directory", output);
@@ -20915,7 +20996,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(SkillsText.Label + " │ Offered · Reflection · Options ", output);
         Assert.DoesNotContain("Roots", output);
         Assert.False(_settings.Current.ProjectFile);
-        Assert.Contains("\n▸ Reflection (auto-learn)           off\n  Reflection reasoning              none\n", output);   // the Reflection tab, padded to its own column (the fixture turns the auto-learn off)
+        Assert.Contains("\n▸ Reflection (auto-learn)            off\n  Reflection reasoning               none\n", output);   // the Reflection tab, padded to its own column (35 since the downloaded skills row's longer name, 2026-10-12) (the fixture turns the auto-learn off)
         Assert.Contains("\n▸ Agent skills                          on\n  " + SettingsMenu.ExternalSkillsName + "  off\n  Project file                          on\n", output);   // the Options tab, the rows padded to its own column
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
         Assert.Matches(@"\n▸ haiku  profile  v1  " + SkillChanged + @"Writes haiku\. Use when asked for one\.\n", output);
@@ -20948,7 +21029,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("│ ↳ all · profile · global \n", output);   // the counts cut by the fixture's Output (TabStrips.Unbadged)
+        Assert.Contains("│ ↳ all · profile · global · " + SkillsText.LoadedSubTitle + " \n", output);   // the counts cut by the fixture's Output (TabStrips.Unbadged); loaded last since 2026-10-12
         Assert.Matches(@"\n▸ csv    global   v1  " + SkillChanged + @"Tidies CSV files\. Use when asked\.\n", output);
         Assert.Contains(SkillsMenu.ScopeTitle("csv"), output);
         Assert.DoesNotContain(SkillsMenu.ScopeTitle("haiku"), output);
@@ -21173,6 +21254,64 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(reflection, m => m.Contents.OfType<FunctionResultContent>().Any(r => r.CallId == Assistant.OpeningClockCallId));
         Assert.Equal(1, _session.Usage.LearningRequests);
         Assert.True(File.Exists(Path.Combine(ProfileSkills, "greeting", SkillCatalog.FileName)));
+    }
+
+    /// <summary>
+    /// Reflection confirm mode (2026-10-12, the user's ask): under <c>confirm-new</c> a reflection's new skill waits for the user — the idle
+    /// read is cut short and the pane asks, Keep / View / Discard. Keep writes it and says learned; Discard writes nothing and says so.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WithGeometry_ConfirmNew_AsksBeforeANewSkill_KeepWritesIt_DiscardWritesNothing(bool keep)
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ReflectionConfirmMode = "confirm-new"; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("Hello.");
+        _chat.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, CreateSkillArgs("greeting")));
+        string title = ChatScreen.LearnAskTitle(new SkillProposal(SkillChangeKind.New, SkillEditorTool.CreateAction, "greeting"));
+        string done = keep ? "(🧠 learned: created skill 'greeting'" : ChatScreen.LearnDeclinedNotice(new SkillEditResult(SkillEditOutcome.Declined, "greeting", SkillScope.Profile, Detail: SkillEditorTool.CreateAction));
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            switch (step)
+            {
+                case 0: step++; PushLine(input, "hi"); break;
+                case 1: step++; PushLine(input, "/learn keep the greeting"); break;
+                case 2:
+                    if (Output.Contains(title, StringComparison.Ordinal))
+                    {
+                        step++;
+                        if (keep)
+                        {
+                            input.Push(Keys.Enter);                                              // Keep
+                        }
+                        else
+                        {
+                            input.Push(Keys.Down, Keys.Down, Keys.Enter);                        // Discard
+                        }
+                    }
+
+                    break;
+                case 3:
+                    if (_session.Learning is { IsCompleted: true } && Output.Contains(done, StringComparison.Ordinal))
+                    {
+                        step++;
+                        PushLine(input, "/exit");
+                    }
+
+                    break;
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.Contains(title, output);
+        Assert.Contains(ChatScreen.LearnAskRows[2], output);
+        Assert.Contains(done, output);
+        Assert.Equal(keep, File.Exists(Path.Combine(ProfileSkills, "greeting", SkillCatalog.FileName)));
     }
 
     /// <summary>The fake gates the request at <paramref name="request"/> (0-based) on <paramref name="gate"/> before its first update: the reflection held open while the test goes on.</summary>
@@ -23835,8 +23974,13 @@ public partial class ChatScreenTests : IDisposable
         // push and pull (2026-09-28): every profile but the loaded one, default included (the user's call); nothing after the name.
         // The section words first (2026-10-09), then after a section the names, and after a list section's name overwrite.
         Assert.Equal(["pull", "push"], Texts(ChatScreen.ArgumentItems("/profile", "pu", sources)));
-        Assert.Equal(["push keys", "push servers", "push commands", "push history", "push policestrings", "push persona", "push operata", "push vocalia", "push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
-        Assert.Equal(["pull keys", "pull servers", "pull commands", "pull history", "pull policestrings", "pull persona", "pull operata", "pull vocalia", "pull chef", "pull neon"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
+        Assert.Equal(["push keys", "push servers", "push commands", "push history", "push policestrings", "push persona", "push operata", "push vocalia", "push avatar user", "push avatar model", "push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
+        Assert.Equal(["pull keys", "pull servers", "pull commands", "pull history", "pull policestrings", "pull persona", "pull operata", "pull vocalia", "pull avatar user", "pull avatar model", "pull chef", "pull neon"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
+        // The avatars (2026-10-12, the user's ask): two words, then the profiles, nothing after the name.
+        Assert.Equal(["push avatar user", "push avatar model"], Texts(ChatScreen.ArgumentItems("/profile", "push avatar ", sources)));
+        Assert.Equal([new CompletionItem("push avatar user chef", "user avatar: neon → chef"), new CompletionItem("push avatar user work", "user avatar: neon → work")], ChatScreen.ArgumentItems("/profile", "push avatar user ", sources));
+        Assert.Equal([new CompletionItem("pull avatar model neon", "model avatar: neon → work")], ChatScreen.ArgumentItems("/profile", "pull avatar model n", Sources(loaded: "work")));
+        Assert.Empty(ChatScreen.ArgumentItems("/profile", "push avatar user work ", sources));
         // The prompt files (2026-10-10, /sys persona copy until then): the profiles, then overwrite with its own note.
         Assert.Equal([new CompletionItem("push persona chef", "persona.md: neon → chef"), new CompletionItem("push persona work", "persona.md: neon → work")], ChatScreen.ArgumentItems("/profile", "push persona ", sources));
         Assert.Equal([new CompletionItem("pull vocalia neon", "vocalia.md: neon → work")], ChatScreen.ArgumentItems("/profile", "pull vocalia n", Sources(loaded: "work")));
@@ -24019,7 +24163,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("switch to it", ChatScreen.SwitchToProfileNote);
         Assert.Equal("settings: neon → gonzo", ChatScreen.ProfileCopyNote(ChatScreen.ProfileSettingsSubject, "neon", "gonzo"));   // 2026-10-10
         Assert.Equal(
-            ["API keys", "server settings", "allowed commands", "message history", "forbidden strings", "persona.md", "operata.md", "vocalia.md"],
+            ["API keys", "server settings", "allowed commands", "message history", "forbidden strings", "persona.md", "operata.md", "vocalia.md", "user avatar", "model avatar"],
             ChatScreen.ProfileSectionWords.Select(item => ChatScreen.ProfileSectionSubject(item.Section)));
         Assert.Equal("delete it", ChatScreen.ProfileDeleteNote);
         Assert.Equal("rename it", ChatScreen.ProfileRenameNote);

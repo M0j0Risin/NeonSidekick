@@ -86,6 +86,31 @@ public class MenuPaneTests : IDisposable
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
     }
 
+    /// <summary>
+    /// A live page (2026-10-12, /skills › Offered › loaded): a stale signal ends the pick with Refresh where the cursor stands, and the
+    /// keys waiting are the next pick's, none lost; the caller's own cancel is still nothing picked.
+    /// </summary>
+    [Fact]
+    public async Task AStaleSignal_EndsThePickWithRefresh_AndLosesNoKey()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Down, Keys.Enter);
+        using var stale = new CancellationTokenSource();
+        stale.Cancel();
+
+        var refreshed = await menu.PickAsync(Page("one", "two", "three"), 2, CancellationToken.None, stale: stale.Token);
+
+        Assert.Equal(new MenuPick(0, 2, Refresh: true), refreshed);
+        Assert.Equal(new MenuPick(0, 0), await menu.PickAsync(Page("one", "two", "three"), 2, CancellationToken.None));   // the Down wraps from the last row
+
+        using var closed = new CancellationTokenSource();
+        closed.Cancel();
+        Assert.Null(await menu.PickAsync(Page("one"), 0, closed.Token, stale: stale.Token));
+        menu.Close();
+    }
+
     [Fact]
     public async Task Esc_ReturnsNull_WithThePaneStillOpen()
     {

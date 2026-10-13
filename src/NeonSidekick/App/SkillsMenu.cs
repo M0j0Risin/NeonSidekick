@@ -79,6 +79,7 @@ internal sealed class SkillsMenu
     private readonly Action<string> _openFile;
     private readonly Func<string, string?> _usage;
     private readonly SkillRecords? _records;
+    private readonly Llm.ConversationHistory? _session;
     private readonly Func<Skill, IReadOnlyList<SkillRevision>>? _versions;
     private readonly Func<Skill, SkillRevision, SkillRevert>? _restore;
     private readonly Func<Skill, SkillRevision?, int>? _forget;
@@ -105,9 +106,11 @@ internal sealed class SkillsMenu
     /// <param name="versions">The <c>revert</c> row's list (2026-10-04, the screen's: a reconcile, then <see cref="SkillRecords.Revisions"/>); null, or no <paramref name="restore"/>, = no row.</param>
     /// <param name="restore">The version picked put back (the screen's <see cref="SkillRecords.Restore"/>).</param>
     /// <param name="forget">A kept version forgotten, or every one for null (the screen's <see cref="SkillRecords.ForgetVersions"/>, 2026-10-07); null = no buttons on the list.</param>
+    /// <param name="session">The session's history (2026-10-12): the loaded sub-tab's skills, read live and watched while the pane is open; null = no loaded sub-tab.</param>
     public SkillsMenu(Func<SkillsFacts> facts, AppSettings settings, SettingsMenu menu, INoticeSink transcript, MenuPane pane, InputLine input, Action<string> openFile, Func<string, string?>? usage = null, SkillRecords? records = null,
-        Func<Skill, IReadOnlyList<SkillRevision>>? versions = null, Func<Skill, SkillRevision, SkillRevert>? restore = null, Func<Skill, SkillRevision?, int>? forget = null)
+        Func<Skill, IReadOnlyList<SkillRevision>>? versions = null, Func<Skill, SkillRevision, SkillRevert>? restore = null, Func<Skill, SkillRevision?, int>? forget = null, Llm.ConversationHistory? session = null)
     {
+        _session = session;
         _records = records;
         _versions = versions;
         _restore = restore;
@@ -341,8 +344,11 @@ internal sealed class SkillsMenu
     /// <see cref="SkillsText.ScopeTabs"/> — all, profile, global, external while one is listed — on the second strip (<see cref="MenuTab.SubTabs"/>,
     /// <c>/tools</c>' groups' shape): <paramref name="loaded"/> holds each one's rows in that order, <paramref name="sub"/> the one on show, and
     /// the one typed filter runs on each; with no scope tabs (the skills off, none installed) it holds the tab's one list, a plain tab.
+    /// <para>The loaded sub-tab (2026-10-12, the user's ask) ends the strip when <paramref name="session"/> is given and the strip is there: the
+    /// skills the conversation holds loaded now (<see cref="SkillsText.LoadedSkillRows"/>), its rows <paramref name="loaded"/>'s last list
+    /// (<see cref="OfferedRows"/> puts it there), its badge their count. The host keeps it current (<see cref="ShowAsync"/>).</para>
     /// </remarks>
-    public static MenuPage Page(SkillsFacts facts, IReadOnlyList<IReadOnlyList<(string Markup, Skill? Skill, bool Heading)>> loaded, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int sub = 0)
+    public static MenuPage Page(SkillsFacts facts, IReadOnlyList<IReadOnlyList<(string Markup, Skill? Skill, bool Heading)>> loaded, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int sub = 0, IReadOnlyList<Llm.LoadedSkill>? session = null)
     {
         ArgumentNullException.ThrowIfNull(facts);
         ArgumentNullException.ThrowIfNull(loaded);
@@ -350,12 +356,27 @@ internal sealed class SkillsMenu
         ArgumentNullException.ThrowIfNull(menu);
         ArgumentNullException.ThrowIfNull(filter);
         var scopes = SkillsText.ScopeTabs(facts);
+        var subTabs = scopes.Select((scope, i) => Offered(SkillsText.ScopeTitle(scope), loaded[i], scope) with { Badge = SkillsText.ScopeBadge(facts, scope) }).ToList();
+        if (scopes.Count > 0 && session is not null && loaded.Count > scopes.Count)
+        {
+            var rows = loaded[scopes.Count];
+            subTabs.Add(new MenuTab(SkillsText.LoadedSubTitle, rows.Select(r => r.Markup).ToList())
+            {
+                Headings = SkillsText.HeadingRows(rows),
+                Hint = MenuFilter.Hint(LoadedKeys, filter),
+                Filter = filter,
+                Caption = MenuFilter.CaptionOrNull(filter, rows.Count(r => r.Skill is not null), session.Count),
+                Footer = row => row >= 0 && row < rows.Count && rows[row].Skill is { } skill ? new MenuFooter(skill.Description, LockedLast(skill)) : null,
+                Badge = SkillsText.LoadedBadge(session),
+            });
+        }
+
         var offered = scopes.Count == 0
             ? Offered(SkillsText.OfferedTabTitle, loaded[0], null)
             : new MenuTab(SkillsText.OfferedTabTitle, [])
             {
-                SubTabs = scopes.Select((scope, i) => Offered(SkillsText.ScopeTitle(scope), loaded[i], scope) with { Badge = SkillsText.ScopeBadge(facts, scope) }).ToList(),
-                Sub = Math.Clamp(sub, 0, scopes.Count - 1),
+                SubTabs = subTabs,
+                Sub = Math.Clamp(sub, 0, subTabs.Count - 1),
             };
         var tabs = new MenuTab[]
         {
@@ -383,21 +404,38 @@ internal sealed class SkillsMenu
         };
     }
 
-    /// <summary>The Offered tab's rows for <paramref name="facts"/> under <paramref name="filter"/>: one list per <see cref="SkillsText.ScopeTabs"/> (2026-10-10), or the one list when there are none.</summary>
-    public static IReadOnlyList<IReadOnlyList<(string Markup, Skill? Skill, bool Heading)>> OfferedRows(SkillsFacts facts, string filter)
+    /// <summary>
+    /// The Offered tab's rows for <paramref name="facts"/> under <paramref name="filter"/>: one list per <see cref="SkillsText.ScopeTabs"/> (2026-10-10), or the one list when there are none;
+    /// with <paramref name="session"/> and the scope tabs, the loaded sub-tab's rows last (2026-10-12, <see cref="SkillsText.LoadedSkillRows"/>).
+    /// </summary>
+    public static IReadOnlyList<IReadOnlyList<(string Markup, Skill? Skill, bool Heading)>> OfferedRows(SkillsFacts facts, string filter, IReadOnlyList<Llm.LoadedSkill>? session = null)
     {
         ArgumentNullException.ThrowIfNull(facts);
         var scopes = SkillsText.ScopeTabs(facts);
-        return scopes.Count == 0 ? [SkillsText.LoadedRows(facts, filter)] : scopes.Select(scope => SkillsText.LoadedRows(facts, filter, scope)).ToList();
+        if (scopes.Count == 0)
+        {
+            return [SkillsText.LoadedRows(facts, filter)];
+        }
+
+        var lists = scopes.Select(scope => SkillsText.LoadedRows(facts, filter, scope)).ToList();
+        if (session is not null)
+        {
+            lists.Add(SkillsText.LoadedSkillRows(facts, session, filter));
+        }
+
+        return lists;
     }
 
     /// <summary>The three tabs as plain lines, for a console without the pane, in the strip's order: <see cref="SkillsText.Lines"/>, then the Reflection rows and the Options rows (<see cref="SettingsMenu.PlainRow"/>), each headed and indented.</summary>
-    public static IEnumerable<string> Lines(SkillsFacts facts, AppSettingsData saved, SettingsMenu menu)
+    public static IEnumerable<string> Lines(SkillsFacts facts, AppSettingsData saved, SettingsMenu menu, IReadOnlyList<Llm.LoadedSkill>? session = null)
     {
         ArgumentNullException.ThrowIfNull(facts);
         ArgumentNullException.ThrowIfNull(saved);
         ArgumentNullException.ThrowIfNull(menu);
+        // The loaded skills after the catalog (2026-10-12) when the history is given: the sub-tab's content, plainly.
+        var loaded = session is null ? [] : new[] { SkillsText.LoadedTitle }.Concat(SkillsText.LoadedSkillLines(session).Select(line => "  " + line));
         foreach (var line in SkillsText.Lines(facts)
+            .Concat(loaded)
             .Concat(Section(ReflectionTab, SkillsText.ReflectionTabTitle))
             .Concat(Section(OptionsTab, SkillsText.OptionsTabTitle)))
         {
@@ -411,12 +449,15 @@ internal sealed class SkillsMenu
     // ── Screen ──────────────────────────────────────────────────────────────
 
     /// <param name="midTurn">The pane opened while a reply runs: the list shows, a scope pick is refused; the Options and Reflection rows edit as on <c>/settings</c> (none is refused there; read at the next turn).</param>
-    public async Task ShowAsync(CancellationToken cancellationToken, bool midTurn = false)
+    public Task ShowAsync(CancellationToken cancellationToken, bool midTurn = false) => ShowAsync(cancellationToken, ReplyRun.Of(midTurn));
+
+    /// <summary>The pane under a reply asked live (2026-10-12, <see cref="ReplyRun"/>): its picks open when the reply ends, the pane saying so.</summary>
+    public async Task ShowAsync(CancellationToken cancellationToken, ReplyRun reply)
     {
         var facts = _facts();
         if (!_pane.Enabled)
         {
-            foreach (var line in Lines(facts, _settings.Current, _menu))
+            foreach (var line in Lines(facts, _settings.Current, _menu, _session?.LoadedSkills))
             {
                 _transcript.Notice(line);
             }
@@ -427,6 +468,7 @@ internal sealed class SkillsMenu
         int tab = 0;
         int cursor = 0;
         int sub = 0;   // the Offered tab's scope on show (2026-10-10): all on every visit
+        bool endedSaid = false;   // the reply's end said once (2026-10-12)
         string filter = "";
         _menu.Root = SkillsText.Label;
         try
@@ -434,10 +476,44 @@ internal sealed class SkillsMenu
             while (true)
             {
                 // The facts are the scan's until an act changes them, so typing into the filter rescans nothing (2026-10-03).
-                var lists = OfferedRows(facts, filter);
+                // The loaded skills are the history's as it stands (2026-10-12), and the pick is a live one: a load answered, a compact or a
+                // rewind under the open pane ends it with Refresh, and the page is built again where it stood — no rescan.
+                var session = _session?.LoadedSkills;
+                var lists = OfferedRows(facts, filter, session);
                 var saved = _settings.Current;
-                var page = Page(facts, lists, saved, _menu, tab, filter, sub);
-                var picked = await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
+                var page = Page(facts, lists, saved, _menu, tab, filter, sub, session);
+                MenuPick? picked;
+                using (var stale = new CancellationTokenSource())
+                {
+                    // Raised on the turn's task; a raise already under way when the pick ends finds the source disposed, and is nothing.
+                    void Changed() => VoiceSession.SafeCancel(stale);
+                    if (_session is { } watched)
+                    {
+                        watched.SkillsChanged += Changed;
+                    }
+
+                    // The reply's end is a change too (2026-10-12): the page again, its picks open.
+                    using var ended = reply.Stale.Register(Changed);
+
+                    try
+                    {
+                        // A change between the read above and the subscription: the next round reads it.
+                        if (_session is not null && !ReferenceEquals(_session.LoadedSkills, session))
+                        {
+                            stale.Cancel();
+                        }
+
+                        picked = await _pane.PickAsync(page, cursor, cancellationToken, stale: stale.Token).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        if (_session is { } watched2)
+                        {
+                            watched2.SkillsChanged -= Changed;
+                        }
+                    }
+                }
+
                 if (picked is not { } pick)
                 {
                     return;
@@ -447,6 +523,17 @@ internal sealed class SkillsMenu
                 cursor = pick.Row;
                 // ←/→ move the scope with no pick, so it is read off the pane (ToolsMenu's shape).
                 sub = _pane.ShownSubs is { Count: > 0 } shownSubs ? shownSubs[0] : 0;
+                if (pick.Refresh)
+                {
+                    if (reply.Ended.CanBeCanceled && !reply.Running && !endedSaid)
+                    {
+                        endedSaid = true;
+                        Sink.Notice(SettingsMenu.ReplyEndedNotice);   // the reply ended under the pane (2026-10-12): every pick open now
+                    }
+
+                    continue;   // the page again, built from the history as it is now; the cursor is clamped by the pane
+                }
+
                 var loaded = lists[Math.Clamp(sub, 0, lists.Count - 1)];
                 if (pick.Filter is { } typed)
                 {
@@ -463,7 +550,7 @@ internal sealed class SkillsMenu
                         continue;   // a heading (2026-10-10) or past the rows
                     }
 
-                    if (midTurn && SettingsMenu.RefusedMidTurn(field))
+                    if (reply.Running && SettingsMenu.RefusedMidTurn(field))
                     {
                         Sink.Notice(SettingsMenu.NotWhileReplyRunsNotice);
                         continue;
@@ -485,7 +572,7 @@ internal sealed class SkillsMenu
                     continue;
                 }
 
-                if (midTurn)
+                if (reply.Running)
                 {
                     Sink.Notice(SettingsMenu.NotWhileReplyRunsNotice);
                     continue;

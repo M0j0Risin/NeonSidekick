@@ -668,7 +668,7 @@ public partial class ChatScreenTests
         string description = Assert.Single(images).Description!;
         Assert.Contains("\n- pony ", description);
         Assert.DoesNotContain("other-t2i", description);   // the profile's offered workflow is the main chat's alone
-        Assert.DoesNotContain(ToolsOf(_chat.Options[0]), t => t.Name == SetSplashImageTool.ToolName);   // nor the rest of its ComfyUI group
+        Assert.DoesNotContain(ToolsOf(_chat.Options[0]), t => t.Name == SetSplashImageTool.ToolName);   // never a bot's: the ComfyUI group's until 2026-10-12, the picture tools' since, kept from the bots by name
     }
 
     /// <summary>Botchat ComfyUI enabled (later on 2026-10-04, the user's ask): the bots get this profile's offered workflows, the limited list unused.</summary>

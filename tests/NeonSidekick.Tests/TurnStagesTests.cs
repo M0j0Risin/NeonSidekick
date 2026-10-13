@@ -89,7 +89,7 @@ public sealed class TurnStagesTests
         var stages = new TurnStages(funVerbs: true, new Random(7));
         var expected = new Random(7);
         string? last = null;
-        string Draw() => last = ThinkingVerbs.Pick(expected, last);
+        string Draw() => last = ThinkingVerbs.Pick(expected, last)!;
 
         Assert.Equal(Draw(), stages.Start());
         Assert.Equal(Draw(), stages.Advance(Text));

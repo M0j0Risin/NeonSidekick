@@ -40,6 +40,8 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/avatar <emoji>` | Sets the avatar to that emoji (typed, or pasted from Win+.). |
 | `/avatar <words>` | Opens the picker searching for the words; headless, sets the best match. |
 | `/avatar clear` | Removes the avatar: replies open with ● again and the window title shows the name alone. |
+| `/avatar model [<emoji>\|<words>\|clear]` | The same, naming the *Model avatar* outright. |
+| `/avatar user [<emoji>\|<words>\|clear]` | Your *User avatar*, the emoji that opens each line you send: bare opens the picker, an emoji sets it, words search, `clear` puts › back. |
 | `/advisor` | Lists the advisors with their roles, server kind and model. See [Advisor](#advisor). |
 | `/advisor <name> <question>` | Asks one advisor (by profile name or a word of its role) on its own profile's server; the answer joins the conversation. |
 | `/claude <message>` | Sends the message to Claude Code and streams its reply. See [Claude Code from the chat](#claude-code-from-the-chat). |
@@ -142,6 +144,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/profile push\|pull persona <name> [overwrite]` | Copies `persona.md` (the personality), after a confirmation; an existing one is replaced only with `overwrite`. |
 | `/profile push\|pull operata <name> [overwrite]` | The same for `operata.md` (the operating rules). |
 | `/profile push\|pull vocalia <name> [overwrite]` | The same for `vocalia.md` (the spoken-reply directive). |
+| `/profile push\|pull avatar user\|model <name>` | Copies the *User avatar* or the *Model avatar*, replacing the target's, after a confirmation. |
 | `/profile edit\|reload` | `edit` opens `profile.json`; `reload` reads it back and reconnects what changed. |
 | `/queue [clear]` | Lists the queued messages: Enter removes one (asks), `c` clears all, and `s` sends the next one now while the queue is held or under *Queue mode* `manual`. `/queue clear` drops them without the pane. |
 | `/read [<file> [<n>]\|<n>]` | Reads a text file aloud; alone it resumes, and a number starts at that sentence. On an empty line Space pauses or plays and ←/→ step a sentence. |
@@ -174,7 +177,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/shopping print [<store>] [verbose]` | Prints the same list with `/print`'s printer and font settings. |
 | `/shopping reindex [<store>]` | Re-reads the store's reference documents (also done whenever a file changes). |
 | `/shortcut [<profile>] [--log]` | Puts a desktop shortcut that starts the app on this profile (or the one named); `--log` adds a log. On a Mac it is a `.command` file. See [Desktop shortcuts](#desktop-shortcuts). |
-| `/skills` | Lists the skills and edits the skill, reflection and project-file settings. The Offered tab shows each skill's version (🔒 [locked](SETTINGS.md#locking-a-skill), ⛔ [disabled](SETTINGS.md#disabling-a-skill)) and when it last changed; a second strip picks the scope, and typing filters. |
+| `/skills` | Lists the skills and edits the skill, reflection and project-file settings. The Offered tab shows each skill's version (🔒 [locked](SETTINGS.md#locking-a-skill), ⛔ [disabled](SETTINGS.md#disabling-a-skill)) and when it last changed; a second strip picks the scope, and typing filters. Its last sub-tab, **loaded**, lists the skills loaded into this conversation now, and keeps up while it is open (a reply loading one, a compact dropping one). |
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. Refused during a reply. See [Installing skills](SETTINGS.md#installing-skills). |
 | `/skills purge list\|commit <age>` | `list` shows the skills unused for that long; `commit` deletes them after a yes/no. See [Skill records and purging unused skills](SETTINGS.md#skill-records-and-purging-unused-skills). |
 | `/splash` | Starts a new conversation and shows the splash screen. |

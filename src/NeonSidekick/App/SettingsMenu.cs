@@ -1044,6 +1044,9 @@ public enum SettingsField
 
     /// <summary>The model avatar's grid picker again, for the user's own (<see cref="Settings.AppSettingsData.UserAvatar"/>): it opens each of the user's lines in the transcript in place of <c>›</c>. The Chat tab, right under <see cref="ModelAvatar"/> (2026-10-12, the user's ask); no reconnect (read at each sent line). Last in the enum, as every newcomer.</summary>
     UserAvatar,
+
+    /// <summary>A picker over <see cref="Skills.ReflectionConfirmMode.Names"/>: which of a reflection's writes wait for the user (<see cref="Settings.AppSettingsData.ReflectionConfirmMode"/>). The Reflection tab of <c>/skills</c>, the first row of What it may change (2026-10-12, the user's ask and place); no reconnect (read when a reflection is decided). Last in the enum, as every newcomer.</summary>
+    ReflectionConfirmMode,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1208,6 +1211,12 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The status line for a settings row that cannot change while a reply runs (a reconnect, the profile, the sandbox, the tools flip). Pinned.</summary>
     public const string NotWhileReplyRunsNotice = "(not while a reply runs)";
+
+    /// <summary>
+    /// The status line when the reply a pane was opened under ends with the pane still open (2026-10-12, the user's ask): the rows
+    /// <see cref="NotWhileReplyRunsNotice"/> held back are open now, in the same pane; what they change is carried out as the pane closes. Pinned.
+    /// </summary>
+    public const string ReplyEndedNotice = "(the reply ended: every row is open now)";
     public const string ModelTitle = "🤖 Model";
 
     /// <summary>The <c>/reasoning</c> picker's label; ESC keeps the level in use. The settings row's level is <see cref="Breadcrumb"/> over <see cref="FieldName"/>.</summary>
@@ -1498,7 +1507,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> SkillsTabFields =
     [
         [SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention],
-        [SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles, SettingsField.ReflectionInstalledSkills],
+        [SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionConfirmMode, SettingsField.ReflectionEditsSupportingFiles, SettingsField.ReflectionInstalledSkills],
     ];
 
     /// <summary>
@@ -1591,7 +1600,8 @@ internal sealed partial class SettingsMenu
     // Set for the visit of a /settings opened while a reply runs (ShowAsync's midTurn): the rows
     // that would reconnect, switch the profile, move the sandbox or reshape the history answer
     // NotWhileReplyRunsNotice instead, and no voice preview plays over the reply's speech.
-    private bool _midTurn;
+    // Since 2026-10-12 (the user's ask) asked live (ReplyRun): a pane the reply ended under opens those rows where it stands.
+    private ReplyRun _reply;
 
     /// <summary>The voice picker's preview chain (see <see cref="TryPickVoiceAsync"/>): one step per highlight, run one after the other.</summary>
     private Task _preview = Task.CompletedTask;
@@ -2267,10 +2277,11 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionMaxRequests => "Reflection max requests",
         SettingsField.ReflectionCooldownMinutes => "Reflection cooldown (minutes)",
         SettingsField.ReflectionCooldownMode => "Reflection cooldown mode",
+        SettingsField.ReflectionConfirmMode => "Reflection confirm mode",   // the user's name (2026-10-12)
         SettingsField.ReflectionIncludesSessions => "Reflection includes sessions",
         SettingsField.ReflectionYieldsToTurns => "Reflection yields to turns",
         SettingsField.ReflectionEditsSupportingFiles => "Reflection edit supporting files",   // the user's name (2026-09-27)
-        SettingsField.ReflectionInstalledSkills => "Reflection downloaded skills",
+        SettingsField.ReflectionInstalledSkills => "Reflection edit downloaded skills",   // the user's name (2026-10-12; "Reflection downloaded skills" until then)
         SettingsField.HideExitAutocomplete => "Hide /exit autocomplete",
         SettingsField.EmojiPicker => "Emoji picker",
         SettingsField.CommandTypoIntercept => "Command typo intercept",
@@ -2619,6 +2630,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ReflectionMaxRequests => Requests(data.ReflectionMaxRequests),
             SettingsField.ReflectionCooldownMinutes => Minutes(data.ReflectionCooldownMinutes),
             SettingsField.ReflectionCooldownMode => data.ReflectionCooldownMode,
+            SettingsField.ReflectionConfirmMode => data.ReflectionConfirmMode,
             SettingsField.ReflectionInstalledSkills => data.ReflectionInstalledSkills,
             SettingsField.ReflectionIncludesSessions => OnOff(data.ReflectionIncludesSessions),
             SettingsField.ReflectionYieldsToTurns => OnOff(data.ReflectionYieldsToTurns),
@@ -3743,7 +3755,15 @@ internal sealed partial class SettingsMenu
     /// <paramref name="open"/> (2026-09-30) starts on that row's tab with the cursor on it and runs its edit at once, as Enter
     /// would: the app's start opens Embedded models so. ESC from the edit leaves the pane on the settings list at that row.
     /// </summary>
-    public async Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, bool midTurn, SettingsField? open = null, string? words = null)
+    public Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, bool midTurn, SettingsField? open = null, string? words = null) =>
+        ShowAsync(cancellationToken, ReplyRun.Of(midTurn), open, words);
+
+    /// <summary>
+    /// <see cref="ShowAsync(CancellationToken, bool, SettingsField?, string?)"/> under a reply asked live (2026-10-12, <see cref="ReplyRun"/>): the
+    /// rows refused while it runs open when it ends, the pane saying so (<see cref="ReplyEndedNotice"/>), and the changes come back for the
+    /// screen to carry out as at the idle line.
+    /// </summary>
+    public async Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, ReplyRun reply, SettingsField? open = null, string? words = null)
     {
         if (!CanShowMenus())
         {
@@ -3757,7 +3777,7 @@ internal sealed partial class SettingsMenu
         var themeBefore = Theme.Current;
         int tab = 0;   // a SettingsTab: SettingsTabs places it on the strip (2026-10-10)
         int cursor = 0;
-        _midTurn = midTurn;
+        _reply = reply;
         _stripSubs = new int[StripTabs.Count];   // every visit finds each group on its first tab
         try
         {
@@ -3798,7 +3818,7 @@ internal sealed partial class SettingsMenu
 
                 tab = TabOf(page);
                 cursor = row;
-                if (midTurn && RefusedMidTurn(field))
+                if (_reply.Running && RefusedMidTurn(field))
                 {
                     Sink.Notice(NotWhileReplyRunsNotice);
                     continue;
@@ -3879,7 +3899,7 @@ internal sealed partial class SettingsMenu
         }
         finally
         {
-            _midTurn = false;
+            _reply = ReplyRun.Idle;
             _pane.Close();
         }
     }
@@ -3928,7 +3948,7 @@ internal sealed partial class SettingsMenu
             while (true)
             {
                 var tabbed = SettingsTabs(saved, _settings.ProfileName, tab);
-                if (await _pane.PickAsync(tabbed, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
+                if (await _pane.PickAsync(tabbed, cursor, cancellationToken, stale: _reply.Stale).ConfigureAwait(false) is not { } pick)
                 {
                     return null;
                 }
@@ -3938,6 +3958,14 @@ internal sealed partial class SettingsMenu
                 for (int s = 0; s < _stripSubs.Length && s < subs.Count; s++)
                 {
                     _stripSubs[s] = subs[s];
+                }
+
+                if (pick.Refresh)
+                {
+                    // The reply under the pane ended (2026-10-12): the page again where it stood, every row open, the status line saying so.
+                    Sink.Notice(ReplyEndedNotice);
+                    (tab, cursor) = ((int)TabAt(pick.Tab, pick.Sub), pick.Row);
+                    continue;
                 }
 
                 // The page on the tab (and the group's sub-tab) the pane ended on, so a typed edit under it keeps that tab's rows.
@@ -4601,7 +4629,7 @@ internal sealed partial class SettingsMenu
 
         if (field == SettingsField.UserAvatar)
         {
-            return await PickUserAvatarAsync(cancellationToken).ConfigureAwait(false);
+            return await PickUserAvatarAsync("", own: false, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.EmbeddedBackend)
@@ -4755,6 +4783,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.ReflectionCooldownMode)
         {
             return await PickReflectionCooldownModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.ReflectionConfirmMode)
+        {
+            return await PickReflectionConfirmModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.ReflectionInstalledSkills)
@@ -6232,7 +6265,7 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>The preview's gate: the toggle, <c>TTS output</c> as saved (a flip in the same visit counts) and the session as of the last connect.</summary>
-    private bool PreviewWanted(AppSettingsData saved) => !_midTurn && saved.TtsVoicePreview && saved.TtsOutput && _speech.IsReady;
+    private bool PreviewWanted(AppSettingsData saved) => !_reply.Running && saved.TtsVoicePreview && saved.TtsOutput && _speech.IsReady;
 
     /// <summary>
     /// The <see cref="SettingsField.TtsVoicePreset"/> picker (2026-09-27, the user's ask): one <see cref="PresetRows"/> row per
@@ -6793,7 +6826,26 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
-    /// <summary>A <c>Reflection downloaded skills</c> choice and its hint (2026-10-02), the cooldown mode's shape. Pinned.</summary>
+    /// <summary>A <c>Reflection confirm mode</c> choice and its hint (2026-10-12), the cooldown mode's shape. Pinned.</summary>
+    public static string ReflectionConfirmModeLabel(string name) =>
+        Markup.Escape(name.PadRight(14)) + Theme.DimMarkup(Skills.ReflectionConfirmMode.Describe(name));
+
+    /// <summary>The confirm-mode picker under the settings list: one <see cref="ReflectionConfirmModeLabel"/> row per <see cref="Skills.ReflectionConfirmMode.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickReflectionConfirmModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var page = new MenuPage(Crumb(FieldName(SettingsField.ReflectionConfirmMode)), Skills.ReflectionConfirmMode.Names.Select(ReflectionConfirmModeLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(Skills.ReflectionConfirmMode.Names, saved.ReflectionConfirmMode)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = Skills.ReflectionConfirmMode.Names[index];
+        Apply(SettingsField.ReflectionConfirmMode, d => d.ReflectionConfirmMode = name);
+        return true;
+    }
+
+    /// <summary>A <c>Reflection edit downloaded skills</c> choice and its hint (2026-10-02), the cooldown mode's shape. Pinned.</summary>
     public static string ReflectionInstalledSkillsLabel(string name) =>
         Markup.Escape(name.PadRight(20)) + Theme.DimMarkup(Skills.ReflectionInstalledSkills.Describe(name));
 
@@ -7583,7 +7635,7 @@ internal sealed partial class SettingsMenu
     {
         var saved = _settings.Current;
         bool named = NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(saved.LlmUrl) && string.Equals(saved.LlmModel.Trim(), model.Id, StringComparison.OrdinalIgnoreCase);
-        if (_midTurn && (named || string.Equals(embedded.Running?.ModelId, model.Id, StringComparison.Ordinal)
+        if (_reply.Running && (named || string.Equals(embedded.Running?.ModelId, model.Id, StringComparison.Ordinal)
             || embedded.Extras.Any(e => string.Equals(e.ModelId, model.Id, StringComparison.OrdinalIgnoreCase))))   // an extra server's too (later on 2026-09-29)
         {
             Sink.Notice(NotWhileReplyRunsNotice);

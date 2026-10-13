@@ -71,13 +71,13 @@ public static class PlanTools
     public static readonly IReadOnlySet<string> Mutating = new HashSet<string>(StringComparer.Ordinal)
     {
         "start_timer", "stop_timer",
-        "write_file", "patch_file", "create_directory", "move", "copy", "delete", "zip", "unzip", "open", "convert_to_pdf", "image_edit",
+        "write_file", "patch_file", "create_directory", "move", "copy", "delete", "zip", "unzip", "open", "convert_to_pdf", "image_edit", "set_splash_image",
         "gitlib_stage", "gitlib_commit", "gitlib_stash", "gitlib_discard", "gitlib_delete", "gitlib_branch",
         "run_command", "process", "execute_code",
         "download_file", "open_url",
         "vault_write", "vault_properties", "vault_move", "vault_delete", "vault_daily",
         "save_memory", "skill_editor",
-        "generate_image", "set_splash_image",
+        "generate_image",
         "ha_lights", "ha_scene", "ha_media", "ha_todo", "ha_call_service", "ha_assist",
         "print_file",
         "unc_fetch", "unc_write", "unc_patch", "unc_create_directory", "unc_move", "unc_copy", "unc_delete", "unc_put",

@@ -63,6 +63,30 @@ internal sealed partial class ChatScreen
     // True from a turn's start until its pane phase (if any) closed and its acts were drained.
     private volatile bool _turnRunning;
 
+    // Fired when the reply ends with a pane still open on it (2026-10-12, the user's ask): the pane's ReplyRun, so the rows the reply
+    // held back open where the pane stands. A fresh one per reply (BeginReplyRun); never fired under /botchat or a load, whose end is
+    // no idle line (the next bot, the connect).
+    private CancellationTokenSource _replyEnded = new();
+
+    // What a pane the reply ended under handed back (2026-10-12), carried out as the pane closes (ApplyPaneHandoverAsync): the settings
+    // changes, an embedded model picked, a session to restore. Written on the watcher task, read on the turn task after the pane's await.
+    private SettingsChanges _handoverChanges;
+    private EmbeddedLlm.EmbeddedModel? _handoverEmbedded;
+    private long? _handoverSession;
+
+    // Set when the hand-over switched the profile or replaced the conversation: the turn's tail (the plan, the reflection) is about one gone.
+    private bool _handoverReset;
+
+    /// <summary>The reply under a pane opened now, asked live (2026-10-12, <see cref="ReplyRun"/>).</summary>
+    private ReplyRun Reply => new(_replyEnded.Token);
+
+    /// <summary>A reply starts (2026-10-12): a fresh end signal for the panes opened under it.</summary>
+    private void BeginReplyRun()
+    {
+        var previous = Interlocked.Exchange(ref _replyEnded, new CancellationTokenSource());
+        previous.Dispose();
+    }
+
     // Whether the turn's stage is a tool's (2026-10-04): the busy row's step clock (ScreenPane.StepClockShown).
     private volatile bool _toolStage;
 
@@ -449,7 +473,7 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Skills:
                 // A bare /skills: the list shows; a scope pick is refused under the reply (a move could race load_skill).
-                await _skillsMenu.ShowAsync(cancellationToken, midTurn: true).ConfigureAwait(false);
+                await _skillsMenu.ShowAsync(cancellationToken, Reply).ConfigureAwait(false);
                 break;
             case SlashCommand.Tools when args.Trim().Length > 0:
                 // /tools <group> (2026-10-03, the toolbar's tool switches): the switch alone, which /tools edits under a reply already;
@@ -472,7 +496,11 @@ internal sealed partial class ChatScreen
             case SlashCommand.Tools:
                 // /tools (2026-09-19): a flip saves and is read at the next turn; the settings rows edit as on /settings mid-turn (a
                 // reconnect row is refused there, so nothing comes back to apply; the Anthropic API's were on /tools 2026-09-29 to 2026-10-03).
-                await _toolsMenu.ShowAsync(cancellationToken, midTurn: true).ConfigureAwait(false);
+                {
+                    var reply = Reply;
+                    HandOver(reply, await _toolsMenu.ShowAsync(cancellationToken, reply).ConfigureAwait(false));
+                }
+
                 break;
             case SlashCommand.Sampling:
                 // /sampling (2026-09-28): an edit saves and is read at the next turn; nothing reconnects.
@@ -480,12 +508,22 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Mcp:
                 // /mcp (2026-09-20): a tool flip saves for the next turn and the edit rows open the files; a server flip, a retry, a reload and the master switch are refused under the reply.
-                await _mcpMenu.ShowAsync(cancellationToken, midTurn: true).ConfigureAwait(false);
+                {
+                    var reply = Reply;
+                    HandOver(reply, await _mcpMenu.ShowAsync(cancellationToken, reply).ConfigureAwait(false));
+                }
+
                 break;
             case SlashCommand.Settings:
                 // The rows that would reconnect, switch the profile, move the sandbox or reshape
-                // the history are refused on the pane, so the flags come back empty.
-                await _menu.ShowAsync(cancellationToken, midTurn: true, words: args).ConfigureAwait(false);
+                // the history are refused while the reply runs. Since 2026-10-12 (the user's ask) a reply that
+                // ends under the pane opens them, and their changes are carried out at its close (HandOver).
+                {
+                    var reply = Reply;
+                    var changes = await _menu.ShowAsync(cancellationToken, reply, words: args).ConfigureAwait(false);
+                    HandOver(reply, changes, reply.Running ? null : _menu.TakePendingEmbeddedModel());
+                }
+
                 break;
             case SlashCommand.Memory:
                 // /memory (2026-09-22): the list pane, or forget's or copy's confirmation — the panes
@@ -510,7 +548,15 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Session:
                 // The list alone: every pick is refused there, so nothing comes back to restore.
-                await _sessionsMenu.ShowAsync(cancellationToken, midTurn: true).ConfigureAwait(false);
+                {
+                    // Since 2026-10-12: a pick after the reply ended restores at the pane's close, as at the idle line.
+                    var reply = Reply;
+                    if (await _sessionsMenu.ShowAsync(cancellationToken, reply).ConfigureAwait(false) is { } picked && !reply.Running)
+                    {
+                        _handoverSession = picked;
+                    }
+                }
+
                 break;
             case SlashCommand.MsgClear:
                 // /msgclear (2026-09-25): the confirmation is a pane; the wipe is posted to the turn task.
@@ -804,6 +850,7 @@ internal sealed partial class ChatScreen
     private Task<Interrupt> StartReplyWatch(CancellationTokenSource cts, CancellationToken stop, CancellationToken cancellationToken, Func<bool>? softCancel = null, Func<ConsoleKeyInfo, bool>? cancel = null, Func<InputEvent, bool>? spend = null)
     {
         _turnRunning = true;
+        BeginReplyRun();
         _paneClose?.Dispose();
         _paneClose = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var paneToken = _paneClose.Token;
@@ -857,7 +904,58 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        // What a pane the reply ended under handed back (2026-10-12): carried out first, as the idle line would after that pane.
+        _handoverReset = await ApplyPaneHandoverAsync(cancellationToken).ConfigureAwait(false);
         await ApplyDeferredAsync(reconnectLlm: true, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The hand-over (2026-10-12, the user's ask): what a pane the reply ended under handed back, through the idle line's own code —
+    /// <see cref="ApplyMenuChangesAsync"/> for the settings changes and an embedded model picked, <see cref="RestoreSession"/> for a session.
+    /// True when the profile switched or the conversation was replaced (the turn's tail is about one that is gone). Nothing when nothing was handed.
+    /// </summary>
+    private async Task<bool> ApplyPaneHandoverAsync(CancellationToken cancellationToken)
+    {
+        var changes = _handoverChanges;
+        var embedded = _handoverEmbedded;
+        long? session = _handoverSession;
+        (_handoverChanges, _handoverEmbedded, _handoverSession) = (SettingsChanges.None, null, null);
+        bool reset = changes.HasFlag(SettingsChanges.Profile) || changes.HasFlag(SettingsChanges.Conversation) || changes.HasFlag(SettingsChanges.Theme);
+        if (changes != SettingsChanges.None || embedded is not null)
+        {
+            await ApplyMenuChangesAsync(changes, embedded, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (session is { } id)
+        {
+            RestoreSession(id);
+            reset = true;
+        }
+
+        return reset;
+    }
+
+    /// <summary>Whether the last turn's hand-over replaced the conversation (2026-10-12); cleared as it is read.</summary>
+    private bool TakeHandoverReset()
+    {
+        bool reset = _handoverReset;
+        _handoverReset = false;
+        return reset;
+    }
+
+    /// <summary>
+    /// What a pane run under the reply returned (2026-10-12), kept for the hand-over when the reply had ended by the pane's close
+    /// (<paramref name="reply"/> no longer running); while it runs the pane refused whatever would need carrying out, so there is nothing.
+    /// </summary>
+    private void HandOver(ReplyRun reply, SettingsChanges changes, EmbeddedLlm.EmbeddedModel? embedded = null)
+    {
+        if (reply.Running)
+        {
+            return;
+        }
+
+        _handoverChanges |= changes;
+        _handoverEmbedded = embedded ?? _handoverEmbedded;
     }
 
     /// <summary>
@@ -869,6 +967,12 @@ internal sealed partial class ChatScreen
         if (closePane && _paneClose is { } close)
         {
             VoiceSession.SafeCancel(close);
+        }
+        else if (!_botChatRunning && !LoadRunning)
+        {
+            // The reply is over (2026-10-12, the user's ask): a pane still open on it opens the rows it held back, where it stands, and
+            // says so. Not under /botchat or a load, whose end is the next bot or the connect, never the idle line.
+            VoiceSession.SafeCancel(_replyEnded);
         }
 
         var pending = _keys.PendingLine;

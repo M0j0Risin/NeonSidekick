@@ -158,4 +158,52 @@ public partial class ChatScreenTests
         Assert.Equal("hi " + cat, _chat.Requests[0].Last(m => m.Role == Microsoft.Extensions.AI.ChatRole.User).Text);
         Assert.Equal(cat, EmojiPrefs.Load(_settings.StorageDirectory).Recent[0]);
     }
+
+    /// <summary>
+    /// Ctrl+J (2026-10-12, the user's ask): the ☺'s picker from the keyboard, the pick at the draft's cursor — with the button hidden
+    /// too (<c>Emoji picker</c> off is the ☺'s alone).
+    /// </summary>
+    [Fact]
+    public async Task CtrlJ_OpensThePicker_AndThePickLandsAtTheCursor_WithTheButtonHidden()
+    {
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        _settings.Update(d => d.EmojiPicker = false);
+        _chat.EnqueueText("Purr.");
+        string cat = EmojiSearch.Rank("cat", EmojiCatalog.Shipped.Entries).First().Emoji;
+        StepsWhenIdle(
+            input => input.Push(Keys.Char('h'), Keys.Char('i'), Keys.Char(' '), Keys.Char('!'), Keys.Key(ConsoleKey.LeftArrow), Keys.CtrlJ),
+            input => input.Push(Keys.Char('c'), Keys.Char('a'), Keys.Char('t'), Keys.Enter),   // a search, its first emoji
+            Key(Keys.Enter),                                                                   // the line, sent
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(EmojiText.PickerTitle, output);
+        Assert.Equal("hi " + cat + "!", _chat.Requests[0].Last(m => m.Role == Microsoft.Extensions.AI.ChatRole.User).Text);
+    }
+
+    /// <summary>
+    /// <c>/avatar user</c> (2026-10-12, the user's ask): a pick sets the user avatar, a sent line opens with it, <c>clear</c> puts › back;
+    /// the model's avatar and the window title are untouched.
+    /// </summary>
+    [Fact]
+    public async Task AvatarUser_SetsAndClearsTheUserAvatar_LeavingTheModels()
+    {
+        _settings.Update(d => d.ModelAvatar = "🐙");
+        _chat.EnqueueText("Hello.");
+        PushLine("/avatar user");
+        PushLine("owl");                      // without the pane the picker is a typed word: the best of a search
+        PushLine("hi there");
+        PushLine("/avatar user clear");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("🦉 hi there", output);
+        Assert.Null(_settings.Current.UserAvatar);
+        Assert.Equal("🐙", _settings.Current.ModelAvatar);
+        Assert.Equal(["🐙 neon"], _titles);   // a user avatar never touches the title
+    }
 }

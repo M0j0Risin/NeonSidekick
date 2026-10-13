@@ -49,6 +49,9 @@ public sealed record ReflectionRow(long? SessionId, int TurnOrdinal, bool Forced
     public const string NothingOutcome = "nothing";
     public const string Exhausted = "exhausted";
     public const string Failed = "failed";
+
+    /// <summary>The user said no to the reflection's write (2026-10-12, <c>Reflection confirm mode</c>); the skill names what it would have written.</summary>
+    public const string Declined = "declined";
     public const string Created = "created";
     public const string Updated = "updated";
 }

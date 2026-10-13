@@ -261,4 +261,21 @@ public static class ImageText
     private static string N(long value) => value.ToString(CultureInfo.InvariantCulture);
 
     private static string N(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    // set_splash_image's sentences (2026-10-12, the user's call: the tool left the ComfyUI group for the picture tools', so its
+    // words left ComfyText with it, unchanged).
+
+    /// <summary>The line after <c>set_splash_image</c> copied a picture. Pinned.</summary>
+    public static string SplashSet(string relative, string target, bool onlyOne) =>
+        $"copied {relative} to {target}; the splash shows it from the next /splash or start"
+        + (onlyOne ? " — it is the only picture in the profile's splash folder, so it stands in for the bundled set until more are added" : "");
+
+    /// <summary>A splash source that is no picture. Pinned.</summary>
+    public static string SplashNotAnImage(string relative) => $"Error: '{relative}' is not a picture the splash can show (png, jpg, gif, webp or bmp)";
+
+    /// <summary>A splash source already in the splash folder (2026-10-10, once a full path in the images folder could name one): copied, it would land beside itself. Pinned.</summary>
+    public static string SplashAlready(string relative) => $"Error: '{relative}' is already in the splash folder";
+
+    /// <summary>A splash copy that failed on disk. Pinned.</summary>
+    public static string SplashFailed(string target, string detail) => $"Error: could not copy into {target}: {Diagnostics.LogText.Excerpt(detail)}";
 }

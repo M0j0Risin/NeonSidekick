@@ -177,7 +177,7 @@ public static class SkillText
     public static string Disabled(string name) =>
         $"Error: skill '{name}' is disabled by the user: it is not offered and cannot be changed until they enable it on /skills. Do not write another skill for the same topic";
 
-    /// <summary>A reflection's write refused for an installed skill under <c>Reflection downloaded skills</c> = <c>read-only</c> (2026-10-02). Pinned.</summary>
+    /// <summary>A reflection's write refused for an installed skill under <c>Reflection edit downloaded skills</c> = <c>read-only</c> (2026-10-02). Pinned.</summary>
     public static string InstalledReadOnly(string name, string origin) =>
         $"Error: skill '{name}' was installed from {(string.IsNullOrWhiteSpace(origin) ? "a skill source" : origin)}, and a reflection leaves an installed skill as it is; to keep what these turns taught, create a companion skill (a new name) instead";
 
@@ -291,6 +291,15 @@ public static class SkillText
     }
 
     /// <summary><c>created skill 'x' (profile, 1,234 bytes)</c> / <c>updated skill 'x' (global, 1,234 bytes)</c>.</summary>
+    /// <summary>A reflection's write the user said no to (2026-10-12, <c>Reflection confirm mode</c>): nothing written; the reflection ends. Pinned.</summary>
+    public static string Declined(string name, SkillChangeKind kind) => kind == SkillChangeKind.New
+        ? $"the user declined the new skill '{name}'; nothing was written"
+        : $"the user declined the change to skill '{name}'; nothing was written";
+
+    /// <summary>A declined result's kind: its <see cref="SkillEditResult.Detail"/> is the action it was (<c>create</c> for a new skill).</summary>
+    private static SkillChangeKind DeclinedKind(SkillEditResult result) =>
+        string.Equals(result.Detail, Llm.Tools.SkillEditorTool.CreateAction, StringComparison.Ordinal) ? SkillChangeKind.New : SkillChangeKind.Edit;
+
     public static string Edited(SkillEditResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
@@ -315,6 +324,7 @@ public static class SkillText
             SkillEditOutcome.ProtectedFile => ProtectedFile(result.Name, result.Path),
             SkillEditOutcome.Locked => Locked(result.Name),
             SkillEditOutcome.Disabled => Disabled(result.Name),
+            SkillEditOutcome.Declined => Declined(result.Name, DeclinedKind(result)),
             _ => CouldNot("write", result.Name, result.Detail),
         };
     }

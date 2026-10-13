@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Comfy;
 using NeonSidekick.Files;
+using NeonSidekick.Images;
 
 namespace NeonSidekick.Llm.Tools;
 
@@ -17,6 +18,9 @@ namespace NeonSidekick.Llm.Tools;
 /// call, when the splash folder moved under the profile's images folder as <c>splash_images</c>) the picture may also be a full
 /// path in the images folder, as the picture tools take it: <c>generate_image</c> has saved there since 2026-10-09, so "make that
 /// my splash" read nothing until then. A picture already in the splash folder is refused (the copy would land beside itself).
+/// Since 2026-10-12 (the user's call) it is one of the picture tools (<c>ChatScreen.ImageTools</c>, switch <c>Image tools</c>), its
+/// sentences <see cref="ImageText"/>'s: it sat in the ComfyUI group until then, offered only with a ComfyUI server set up, though a
+/// camera shot, a screen capture or an edit makes as good a splash as a generated picture. Never a <c>/botchat</c> bot's.
 /// </summary>
 public sealed class SetSplashImageTool : AIFunction
 {
@@ -82,20 +86,20 @@ public sealed class SetSplashImageTool : AIFunction
         var read = files.ReadImage(path);
         if (read.Outcome != FileOutcome.Ok)
         {
-            return read.Outcome is FileOutcome.NotAnImage or FileOutcome.ImageTooBig ? ComfyText.SplashNotAnImage(read.Relative) : FileText.Error(read.Outcome, read.Relative, "read", read.Detail);
+            return read.Outcome is FileOutcome.NotAnImage or FileOutcome.ImageTooBig ? ImageText.SplashNotAnImage(read.Relative) : FileText.Error(read.Outcome, read.Relative, "read", read.Detail);
         }
 
         files.Resolve(path, forWrite: false, out string source);
         string extension = Path.GetExtension(source).ToLowerInvariant();
         if (!ImageFile.IsImagePath(source))
         {
-            return ComfyText.SplashNotAnImage(read.Relative);
+            return ImageText.SplashNotAnImage(read.Relative);
         }
 
         string folder = _splashDirectory();
         if (string.Equals(Path.GetDirectoryName(source), Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)), StringComparison.OrdinalIgnoreCase))
         {
-            return ComfyText.SplashAlready(read.Relative);
+            return ImageText.SplashAlready(read.Relative);
         }
 
         string stem = ComfyStudio.SafeName(string.IsNullOrWhiteSpace(name) ? Path.GetFileNameWithoutExtension(source) : Path.GetFileNameWithoutExtension(name.Trim()));
@@ -110,11 +114,11 @@ public sealed class SetSplashImageTool : AIFunction
 
             File.Copy(source, target, overwrite: false);
             bool only = Directory.EnumerateFiles(folder).Count(ImageFile.IsImagePath) == 1;
-            return ComfyText.SplashSet(read.Relative, target, only);
+            return ImageText.SplashSet(read.Relative, target, only);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return ComfyText.SplashFailed(folder, ex.Message);
+            return ImageText.SplashFailed(folder, ex.Message);
         }
     }
 

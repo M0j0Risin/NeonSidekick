@@ -141,7 +141,10 @@ internal sealed class McpMenu
 
     /// <param name="midTurn">The pane opened while a reply runs: the tool flips and the edit rows work, the rest is refused.</param>
     /// <returns><see cref="SettingsChanges.Mcp"/> when the master switch was saved on the Options tab (the screen reconnects), else <see cref="SettingsChanges.None"/>.</returns>
-    public async Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, bool midTurn = false)
+    public Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, bool midTurn = false) => ShowAsync(cancellationToken, ReplyRun.Of(midTurn));
+
+    /// <summary>The pane under a reply asked live (2026-10-12, <see cref="ReplyRun"/>): what it refused opens when the reply ends, the pane saying so.</summary>
+    public async Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, ReplyRun reply)
     {
         if (!_pane.Enabled)
         {
@@ -177,13 +180,20 @@ internal sealed class McpMenu
                     cursor = tab == 1 ? ToolsText.FirstToolRow(tools) : McpRows.FirstServerRow(servers);
                 }
 
-                if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
+                if (await _pane.PickAsync(page, cursor, cancellationToken, stale: reply.Stale).ConfigureAwait(false) is not { } pick)
                 {
                     return changes;
                 }
 
                 tab = pick.Tab;
                 cursor = pick.Row;
+                if (pick.Refresh)
+                {
+                    Sink.Notice(SettingsMenu.ReplyEndedNotice);   // the reply ended under the pane (2026-10-12): every row open now
+                    shownServer = _pane.ShownSubs is { Count: > 1 } refreshed && byServer.Count > 0 ? toolTabs[Math.Clamp(refreshed[1], 0, byServer.Count - 1)] : shownServer;
+                    continue;
+                }
+
                 // ←/→ move the server with no pick, so it is read off the pane (ToolsMenu's shape), and the tools picked from are its.
                 if (byServer.Count > 0 && _pane.ShownSubs is { Count: > 1 } shownSubs)
                 {
@@ -206,7 +216,7 @@ internal sealed class McpMenu
                         continue;   // a heading, the off lines, a problem
                     }
 
-                    await ActAsync(row, facts, midTurn, cancellationToken).ConfigureAwait(false);
+                    await ActAsync(row, facts, reply.Running, cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
@@ -228,7 +238,7 @@ internal sealed class McpMenu
                     continue;   // the heading (2026-10-10) or past the rows
                 }
 
-                if (midTurn && SettingsMenu.RefusedMidTurn(field))
+                if (reply.Running && SettingsMenu.RefusedMidTurn(field))
                 {
                     Sink.Notice(SettingsMenu.NotWhileReplyRunsNotice);
                     continue;

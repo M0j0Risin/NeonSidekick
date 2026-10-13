@@ -76,7 +76,8 @@ public partial class ChatScreenTests
     {
         BotChatFixture();
         ComfyServer();   // pony offered to the main chat
-        _settings.Update(d => { d.BotChatTools = toolsEnabled; d.BotChatLimitedTools = [GetCurrentTimeTool.ToolName, GenerateImageTool.ToolName, SetSplashImageTool.ToolName]; });
+        // The picture tools on too (2026-10-12): set_splash_image is theirs since, and still never a bot's.
+        _settings.Update(d => { d.BotChatTools = toolsEnabled; d.ImageTools = true; d.BotChatLimitedTools = [GetCurrentTimeTool.ToolName, GenerateImageTool.ToolName, SetSplashImageTool.ToolName]; });
         _chat.EnqueueText("Hello from Neon.");
         _chat.EnqueueText("Ada ", "answers.");
         EscDuringRequest(2);

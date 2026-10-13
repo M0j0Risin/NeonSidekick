@@ -716,7 +716,7 @@ public sealed class SidekickApp
         files.ImagesFolder = () => images.Root;
         var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings, unc, pdf, images);
         // The picture tools (2026-10-10): their own group, Image tools the switch.
-        var imageTools = ChatScreen.ImageTools(files, () => EffectiveSettings, images);
+        var imageTools = ChatScreen.ImageTools(files, () => EffectiveSettings, images, () => _settings.ProfileSplashDirectory);
         // The app's own manual beside the clock (2026-10-02): it reads documentation only, so headless offers it too.
         IReadOnlyList<AIFunction> standingTools = [.. clockTools, .. ChatScreen.HelpTools()];
         // The skills need no console either (2026-09-16); the two settings decide per turn. The skill records (2026-09-30) are the home's.
@@ -749,7 +749,7 @@ public sealed class SidekickApp
         var uncTools = ChatScreen.UncTools(unc, files, () => EffectiveSettings);
         // The image tools (2026-09-24): no console needed, so headless has them too.
         using var comfy = new Comfy.ComfyStudio(ChatScreen.ComfyCatalog(_settings), files, () => EffectiveSettings, _comfyClient, images: images);
-        var comfyTools = ChatScreen.ComfyTools(comfy, files, () => _settings.ProfileSplashDirectory, images);
+        var comfyTools = ChatScreen.ComfyTools(comfy);
         // The Home Assistant tools (2026-09-28): no pane to ask on, so an asked call is refused; the policy's safe list runs.
         using var ha = new HomeAssistant.HaSession(() => EffectiveSettings, _haClient, _time);
         var haTools = ChatScreen.HomeAssistantTools(ha, confirm: null);
@@ -2116,13 +2116,15 @@ public sealed class SidekickApp
     /// </summary>
     /// <summary>
     /// <c>/avatar</c> headless (2026-10-10): bare, the avatar said; <c>clear</c> clears it; an emoji sets it; words set the best of a
-    /// search, as there is no picker to show its results. The line to print, <c>[error] </c> leading a refusal.
+    /// search, as there is no picker to show its results. The line to print, <c>[error] </c> leading a refusal. A leading <c>user</c> or
+    /// <c>model</c> (2026-10-12, the user's ask) names whose: the user's in its own words (<see cref="Emojis.EmojiText.UserCurrent"/>).
     /// </summary>
     private string HeadlessAvatar(string args)
     {
         var catalog = Emojis.EmojiCatalog.Shipped;
-        string current = Emojis.AvatarRules.Normalize(_settings.Current.ModelAvatar);
-        var (verb, text) = Emojis.AvatarCommand.Parse(args);
+        var (target, verb, text) = Emojis.AvatarCommand.ParseLine(args);
+        bool user = target == Emojis.AvatarTarget.User;
+        string current = Emojis.AvatarRules.Normalize(user ? _settings.Current.UserAvatar : _settings.Current.ModelAvatar);
         string? chosen = verb switch
         {
             Emojis.AvatarVerb.Clear => "",
@@ -2135,18 +2137,29 @@ public sealed class SidekickApp
             return "[error] " + Emojis.EmojiText.NoEmojiFor(text);
         }
 
+        string Said(string avatar) => user ? Emojis.EmojiText.UserCurrent(avatar, catalog) : Emojis.EmojiText.Current(avatar, catalog);
         if (verb == Emojis.AvatarVerb.Show || chosen == current)
         {
-            return chosen.Length == 0 && verb == Emojis.AvatarVerb.Clear ? Emojis.EmojiText.AlreadyNone : Emojis.EmojiText.Current(current, catalog);
+            return chosen.Length == 0 && verb == Emojis.AvatarVerb.Clear ? (user ? Emojis.EmojiText.UserAlreadyNone : Emojis.EmojiText.AlreadyNone) : Said(current);
         }
 
-        _settings.Update(d => d.ModelAvatar = chosen);
+        _settings.Update(d =>
+        {
+            if (user)
+            {
+                d.UserAvatar = chosen.Length == 0 ? null : chosen;
+            }
+            else
+            {
+                d.ModelAvatar = chosen;
+            }
+        });
         if (chosen.Length > 0)
         {
             Emojis.EmojiPrefs.Load(_settings.StorageDirectory).Picked(chosen);
         }
 
-        return chosen.Length == 0 ? Emojis.EmojiText.Cleared : Emojis.EmojiText.Current(chosen, catalog);
+        return chosen.Length == 0 ? (user ? Emojis.EmojiText.UserCleared : Emojis.EmojiText.Cleared) : Said(chosen);
     }
 
     private async Task<string> HeadlessYouTubeAsync(YouTube.YouTubeCommandLine line, string key, CancellationToken cancellationToken)

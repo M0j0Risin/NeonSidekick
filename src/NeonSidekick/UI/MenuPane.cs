@@ -332,9 +332,11 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
 /// page) and the cursor's row within it. A press on one of the page's <see cref="MenuPage.Buttons"/>
 /// (2026-09-21) is <see cref="Button"/> at its index, the row still the cursor's; −1 otherwise. A key that edits the page's
 /// <see cref="MenuPage.Filter"/> (2026-10-03) is <see cref="Filter"/>, the text it leaves; null otherwise. <see cref="Sub"/> is the sub-tab
-/// on show on a tab that holds them (2026-10-10, <see cref="MenuTab.SubTabs"/>), −1 on one that does not.
+/// on show on a tab that holds them (2026-10-10, <see cref="MenuTab.SubTabs"/>), −1 on one that does not. <see cref="Refresh"/>
+/// (2026-10-12): nothing picked — the page's facts changed under it (<see cref="MenuPane.PickAsync"/>'s <c>stale</c>), so the host builds it
+/// again and shows it with the same tab, sub-tab and cursor.
 /// </summary>
-public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, int Button = -1, string? Filter = null, int Sub = -1, int Move = 0, bool Remove = false);
+public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, int Button = -1, string? Filter = null, int Sub = -1, int Move = 0, bool Remove = false, bool Refresh = false);
 
 /// <summary>
 /// A menu in the bottom pane: the <see cref="InfoPane"/> shape for a list — a title, a status line
@@ -695,8 +697,11 @@ public sealed class MenuPane : INoticeSink
     /// between hands it back with its line). <paramref name="highlighted"/>, when given, hears
     /// the cursor's new row after every move that changed it — the arrow, Home / End and page
     /// keys, a click on another shown row — never the opening row, Enter, ESC or a tab switch.
+    /// <paramref name="stale"/> (2026-10-12, the user's ask: <c>/skills</c> › Offered › loaded keeping up with the skills a reply loads) makes
+    /// the page a live one: when it fires before a pick, the read ends with no key lost and a <see cref="MenuPick.Refresh"/> comes back
+    /// with the tab, sub-tab and cursor on show, for the host to build the page again and show it; the same tab keeps its viewport.
     /// </summary>
-    public async Task<MenuPick?> PickAsync(MenuPage page, int cursor, CancellationToken cancellationToken, Action<int>? highlighted = null)
+    public async Task<MenuPick?> PickAsync(MenuPage page, int cursor, CancellationToken cancellationToken, Action<int>? highlighted = null, CancellationToken stale = default)
     {
         ArgumentNullException.ThrowIfNull(page);
         Require();
@@ -721,6 +726,7 @@ public sealed class MenuPane : INoticeSink
         _clicks.Reset();
         _mouse?.Invoke(true);
         Show();
+        using var live = stale.CanBeCanceled ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, stale) : null;
         try
         {
             while (true)
@@ -728,7 +734,13 @@ public sealed class MenuPane : INoticeSink
                 page = _page!;
                 // A command chord (2026-10-01, the user's ask: as everywhere else) is done in place, ignored under a tool's
                 // question, or every level backs out as on ESC and the screen runs it (KeySource.ReadPaneInputAsync).
-                var input = await _keys.ReadPaneInputAsync(_pane, cancellationToken).ConfigureAwait(false);
+                var input = await _keys.ReadPaneInputAsync(_pane, live?.Token ?? cancellationToken).ConfigureAwait(false);
+                if (input is null && stale.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                {
+                    // The page went stale (2026-10-12): the host shows it again, built afresh, where it stood.
+                    return new MenuPick(page.Tab, _cursor, Sub: page.Sub, Refresh: true);
+                }
+
                 if (input is InputEvent.Click click)
                 {
                     // A left click on a shown row is the arrow keys' move, a second on the same row

@@ -371,4 +371,76 @@ public class ConversationHistoryTests
         Assert.True(ConversationHistory.IsImageCarrier(carrier));
         Assert.Equal(1, ConversationHistory.TurnOrdinal(carrier));
     }
+
+    // ── the loaded skills (2026-10-12, /skills › Offered › loaded) ──────────
+
+    private static int s_calls;
+
+    /// <summary>A turn that loads <paramref name="skill"/>: the user's line, the call, its answer (tagged as the turn loop tags it).</summary>
+    private static void Load(ConversationHistory history, string skill, string? answer = null)
+    {
+        string id = "c" + Interlocked.Increment(ref s_calls).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var call = new FunctionCallContent(id, NeonSidekick.Llm.Tools.LoadSkillTool.ToolName, new Dictionary<string, object?> { ["name"] = skill });
+        history.AddUser("use " + skill);
+        history.AddMessage(new ChatMessage(ChatRole.Assistant, [call]));
+        history.AddToolResults([Assistant.ResultContent(call, answer ?? NeonSidekick.Skills.SkillText.Content(skill, "Do it.", Path.Combine(Path.GetTempPath(), "skills", skill), [], more: false, truncated: false))]);
+        history.AddAssistant("done");
+    }
+
+    [Fact]
+    public void LoadedSkills_FollowTheLoads_InFirstLoadOrder_CountingRepeats()
+    {
+        var history = new ConversationHistory("s");
+        int raised = 0;
+        history.SkillsChanged += () => raised++;
+        Assert.Empty(history.LoadedSkills);
+
+        Load(history, "haiku");
+        Load(history, "deploy");
+        Load(history, "haiku");
+
+        Assert.Equal([new LoadedSkill("haiku", 2), new LoadedSkill("deploy", 1)], history.LoadedSkills);
+        Assert.Equal(3, raised);   // once per real change
+        history.AddUser("thanks");
+        history.AddAssistant("any time");
+        Assert.Equal(3, raised);   // an unrelated message changes nothing
+    }
+
+    [Fact]
+    public void LoadedSkills_SkipErrorsAndBundledFiles()
+    {
+        var history = new ConversationHistory("s");
+        Load(history, "haiku", "Error: no skill named 'haiku'");
+        Load(history, "deploy", "<skill_file skill=\"deploy\" path=\"notes.md\">\nhi\n</skill_file>");
+        Assert.Empty(history.LoadedSkills);
+        Assert.Empty(ConversationHistory.SkillsIn([]));
+    }
+
+    [Fact]
+    public void LoadedSkills_GoWithWhatTakesThemOut_TrimRewindReplaceAndClear()
+    {
+        var history = new ConversationHistory("s");
+        Load(history, "haiku");
+        Load(history, "deploy");
+
+        history.TruncateAt(history.TurnStarts()[1]);   // a rewind to the second turn
+        Assert.Equal([new LoadedSkill("haiku", 1)], history.LoadedSkills);
+
+        int raised = 0;
+        history.SkillsChanged += () => raised++;
+        var kept = history.Messages.ToList();
+        history.Replace([new ChatMessage(ChatRole.User, "summary"), new ChatMessage(ChatRole.Assistant, "ok")]);   // a summary compact
+        Assert.Empty(history.LoadedSkills);
+        Assert.Equal(1, raised);   // one change, however many messages the replace walked
+        history.Replace(kept);
+        Assert.Equal([new LoadedSkill("haiku", 1)], history.LoadedSkills);
+        Assert.Equal(2, raised);
+
+        history.MaxTurns = 1;
+        Load(history, "deploy");   // the cap drops the haiku turn
+        Assert.Equal([new LoadedSkill("deploy", 1)], history.LoadedSkills);
+
+        history.Clear();
+        Assert.Empty(history.LoadedSkills);
+    }
 }

@@ -184,7 +184,10 @@ internal sealed class ToolsMenu
 
     /// <param name="midTurn">The pane opened while a reply runs: the flips save and the rows edit as on <c>/settings</c>; a row refused there is refused here (none today).</param>
     /// <returns><see cref="SettingsChanges.Llm"/> when a reconnect row saved (none on the pane since 2026-10-03), else none.</returns>
-    public async Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, bool midTurn = false)
+    public Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, bool midTurn = false) => ShowAsync(cancellationToken, ReplyRun.Of(midTurn));
+
+    /// <summary>The pane under a reply asked live (2026-10-12, <see cref="ReplyRun"/>): the rows it held back open when it ends, the pane saying so.</summary>
+    public async Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, ReplyRun reply)
     {
         var changes = SettingsChanges.None;
         if (!_pane.Enabled)
@@ -215,7 +218,7 @@ internal sealed class ToolsMenu
                     cursor = ToolsText.FirstToolRow(offered);
                 }
 
-                if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
+                if (await _pane.PickAsync(page, cursor, cancellationToken, stale: reply.Stale).ConfigureAwait(false) is not { } pick)
                 {
                     return changes;
                 }
@@ -223,6 +226,12 @@ internal sealed class ToolsMenu
                 tab = pick.Tab;
                 cursor = pick.Row;
                 subs = _pane.ShownSubs;
+                if (pick.Refresh)
+                {
+                    Sink.Notice(SettingsMenu.ReplyEndedNotice);   // the reply ended under the pane (2026-10-12): every row open now
+                    continue;
+                }
+
                 if (pick.Filter is { } typed)
                 {
                     // The Offered tab's filter (later on 2026-10-03): the rows again under it, the cursor on the first tool left.
@@ -255,7 +264,7 @@ internal sealed class ToolsMenu
                 _menu.Root = group ? GroupCrumb(tab) : ToolsText.Label;   // a group's pickers titled Tools › Databases › … (2026-10-09)
                 try
                 {
-                    changes |= await RowAsync(field, pick.Toggle, saved, shown, cursor, midTurn, cancellationToken).ConfigureAwait(false);
+                    changes |= await RowAsync(field, pick.Toggle, saved, shown, cursor, reply.Running, cancellationToken).ConfigureAwait(false);
                 }
                 finally
                 {

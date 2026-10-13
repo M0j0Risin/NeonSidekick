@@ -5,7 +5,8 @@ using System.Text.Json;
 namespace NeonSidekick.Comfy;
 
 /// <summary>
-/// The image tools' words (2026-09-24): the result sentences of <c>generate_image</c>, <c>set_splash_image</c> and
+/// The image tools' words (2026-09-24): the result sentences of <c>generate_image</c> (<c>set_splash_image</c>'s moved to
+/// <see cref="Images.ImageText"/> on 2026-10-12, with the tool) and
 /// <c>/imagine</c>, the failures, the <c>/comfy</c> lines and the tool description's parts. Pure; pinned by tests.
 /// </summary>
 public static class ComfyText
@@ -350,20 +351,6 @@ public static class ComfyText
         "--image" or "--image2" or "--image3" => "a path",
         _ => "a whole number",
     };
-
-    /// <summary>The line after <c>set_splash_image</c> copied a picture. Pinned.</summary>
-    public static string SplashSet(string relative, string target, bool onlyOne) =>
-        $"copied {relative} to {target}; the splash shows it from the next /splash or start"
-        + (onlyOne ? " — it is the only picture in the profile's splash folder, so it stands in for the bundled set until more are added" : "");
-
-    /// <summary>A splash source that is no picture. Pinned.</summary>
-    public static string SplashNotAnImage(string relative) => $"Error: '{relative}' is not a picture the splash can show (png, jpg, gif, webp or bmp)";
-
-    /// <summary>A splash source already in the splash folder (2026-10-10, once a full path in the images folder could name one): copied, it would land beside itself. Pinned.</summary>
-    public static string SplashAlready(string relative) => $"Error: '{relative}' is already in the splash folder";
-
-    /// <summary>A splash copy that failed on disk. Pinned.</summary>
-    public static string SplashFailed(string target, string detail) => $"Error: could not copy into {target}: {Diagnostics.LogText.Excerpt(detail)}";
 
     /// <summary>The warning for a workflow file the catalog skips. Pinned.</summary>
     public static string SkippedWorkflow(string file, string problem) => $"Skipped the ComfyUI workflow {file}: it {problem}.";

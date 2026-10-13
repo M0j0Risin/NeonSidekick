@@ -38,6 +38,10 @@ public static class HelpCommands
             new("/avatar <emoji>", "Set the avatar to that emoji at once (one emoji, typed or pasted)."),
             new("/avatar <words>", "Open the picker searching for the words (headless: set the best match)."),
             new("/avatar clear", "No avatar: replies open with ● again and the window title shows the name alone."),
+            new("/avatar model [<emoji>|<words>|clear]", "The same, naming the *Model avatar* outright."),
+            new("/avatar user", "Open the emoji picker for your *User avatar*, the emoji that opens each line you send in place of ›."),
+            new("/avatar user <emoji>|<words>", "Set your avatar to that emoji, or open the picker searching for the words (headless: set the best match)."),
+            new("/avatar user clear", "No user avatar: your lines open with › again."),
         ]),
         new("/botchat",
         [
@@ -267,6 +271,7 @@ public static class HelpCommands
             new("/profile push|pull persona <name> [overwrite]", "Copy this profile's `persona.md` (the personality) to another profile, or another's into this one, after you confirm. A `persona.md` already in the target is replaced only with `overwrite`."),
             new("/profile push|pull operata <name> [overwrite]", "Copy this profile's `operata.md` (the operating rules) to another profile, or another's into this one, after you confirm. A `operata.md` already in the target is replaced only with `overwrite`."),
             new("/profile push|pull vocalia <name> [overwrite]", "Copy this profile's `vocalia.md` (the spoken-reply directive) to another profile, or another's into this one, after you confirm. A `vocalia.md` already in the target is replaced only with `overwrite`."),
+            new("/profile push|pull avatar user|model <name>", "Copy this profile's *User avatar* (the emoji that opens your lines) or *Model avatar* (the one that opens the replies) to another profile, or another's into this one, after you confirm; the target's is replaced. A profile with none has nothing to copy."),
             new("/profile edit|reload", "`edit` opens `profile.json` in your editor; `reload` reads it back and reconnects only what changed."),
         ]),
         new("/queue",

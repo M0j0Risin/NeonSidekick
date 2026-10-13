@@ -1,5 +1,6 @@
 using NeonSidekick.App;
 using NeonSidekick.Llm;
+using NeonSidekick.Llm.Tools;
 using NeonSidekick.Settings;
 using NeonSidekick.Skills;
 using NeonSidekick.Speech;
@@ -109,6 +110,30 @@ public class SkillsMenuTests : IDisposable
         return (menu, pane, settings);
     }
 
+    /// <summary>The menu over a pane with geometry, a scripted source and the session's history (2026-10-12: the loaded sub-tab).</summary>
+    private (SkillsMenu Menu, ScreenPane Pane, ScriptedInput Input) LiveMenu(ConversationHistory session)
+    {
+        var pane = new ScreenPane(_console, new ScreenGeometry(() => null), _time) { Hint = () => "idle" };
+        var input = new ScriptedInput();
+        var keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
+        var menuPane = new MenuPane(pane, keys);
+        var menu = new SkillsMenu(Facts, _settings, Settings(pane, keys, menuPane), new TranscriptRenderer(pane), menuPane, new InputLine(pane, keys), OpenFile, session: session);
+        pane.Show();
+        return (menu, pane, input);
+    }
+
+    private static int s_loads;
+
+    /// <summary>A turn of <paramref name="session"/> that loads <paramref name="skill"/>, as the turn loop writes it.</summary>
+    private static void Load(ConversationHistory session, string skill)
+    {
+        string id = "load-" + Interlocked.Increment(ref s_loads).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var call = new Microsoft.Extensions.AI.FunctionCallContent(id, LoadSkillTool.ToolName, new Dictionary<string, object?> { ["name"] = skill });
+        session.AddUser("use " + skill);
+        session.AddMessage(new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.Assistant, [call]));
+        session.AddToolResults([Assistant.ResultContent(call, SkillText.Content(skill, "Do it.", Path.Combine(Path.GetTempPath(), skill), [], more: false, truncated: false))]);
+    }
+
     /// <summary>The menu over a pane whose cursor row the geometry reports (the click's frame) and a scripted source that carries clicks.</summary>
     private (SkillsMenu Menu, ScreenPane Pane, ScriptedInput Input) ClickablePaneMenu(int cursorTop)
     {
@@ -153,8 +178,8 @@ public class SkillsMenuTests : IDisposable
     /// <summary>The Options tab's five rows at their defaults, padded to the tab's own column (38: the external-skills label), as the pane prints them; Project file third since 2026-10-01. Pinned.</summary>
     private static readonly string OptionsRows = Head("Sources") + "\n▸ Agent skills                          on\n  " + SettingsMenu.ExternalSkillsName + "  off\n  Project file                          on\n" + Head("Prompt and mentions") + "\n  Skill compact mode                    protected\n  #-mention enabled                     on\n";   // under its two headings since 2026-10-10   // Allow skill delete, the fifth, went on 2026-09-23 (delete always offered)
 
-    /// <summary>The Reflection tab's nine rows at their defaults (later on 2026-09-19), padded to its own column (31: the cooldown minutes label). Pinned.</summary>
-    private static readonly string ReflectionRows = Head("Learning") + "\n▸ Reflection (auto-learn)           on\n  Reflection reasoning              none\n" + Head("What it reads") + "\n  Reflection window                 3 turns\n  Reflection min tool calls         4 tool calls\n  Reflection max requests           4 requests\n  Reflection includes sessions      on\n" + Head("Pace") + "\n  Reflection cooldown (minutes)     5 minutes\n  Reflection cooldown mode          last-written-skill\n  Reflection yields to turns        on\n" + Head("What it may change") + "\n  Reflection edit supporting files  off\n  Reflection downloaded skills      allow-and-mark\n";   // under its four headings since 2026-10-10, the sessions switch under What it reads
+    /// <summary>The Reflection tab's rows at their defaults (the confirm mode since 2026-10-12) (later on 2026-09-19), padded to its own column (33: the downloaded skills label since 2026-10-12). Pinned.</summary>
+    private static readonly string ReflectionRows = Head("Learning") + "\n▸ Reflection (auto-learn)            on\n  Reflection reasoning               none\n" + Head("What it reads") + "\n  Reflection window                  3 turns\n  Reflection min tool calls          4 tool calls\n  Reflection max requests            4 requests\n  Reflection includes sessions       on\n" + Head("Pace") + "\n  Reflection cooldown (minutes)      5 minutes\n  Reflection cooldown mode           last-written-skill\n  Reflection yields to turns         on\n" + Head("What it may change") + "\n  Reflection confirm mode            confirm-none\n  Reflection edit supporting files   off\n  Reflection edit downloaded skills  allow-and-mark\n";   // under its four headings since 2026-10-10, the sessions switch under What it reads
 
     /// <summary>A row as the menu prints it at width 100: whole when it fits, else cut to 99 cells and an ellipsis (FittedMarkup; the temp roots are long).</summary>
     private static string Fitted(string row) => row.Length <= 100 ? row : row[..99] + "…";
@@ -367,6 +392,101 @@ public class SkillsMenuTests : IDisposable
         Assert.Equal(flow, pane.FlowRow);
         Assert.True(Exists(SkillScope.Profile, "haiku") && Exists(SkillScope.Global, "haiku"));
         pane.Dispose();
+    }
+
+    /// <summary>
+    /// The loaded sub-tab (2026-10-12, the user's ask): last on the Offered strip when the host gives the session; with nothing loaded it
+    /// stays and says so, and a load answered while the pane is open shows at once, with no key pressed — the page built again where it stood.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheLoadedSubTab_SaysNoneLoaded_ThenKeepsUpWithALoad()
+    {
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        var session = new ConversationHistory("s");
+        var (menu, pane, input) = LiveMenu(session);
+        input.Push(Keys.Right, Keys.Right, Keys.Right);   // all → profile → global → loaded
+        int waits = 0;
+        input.OnWait = () =>
+        {
+            waits++;
+            if (waits == 1)
+            {
+                Load(session, "haiku");   // the reply's load_skill lands under the open pane
+            }
+            else if (waits == 2)
+            {
+                input.Push(Keys.Escape);
+            }
+        };
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(Markup.Remove(InfoPane.SubStripRows(SkillsText.Label, ["all", "profile", "global", SkillsText.LoadedSubTitle], 3, 100)[0]), Output);
+        int none = Output.IndexOf(SkillsText.NoneLoadedLine, StringComparison.Ordinal);
+        Assert.True(none >= 0, Output);
+        int heading = Output.IndexOf(SkillsText.LoadedTitle + SectionRule.CountSeparator + "1", none, StringComparison.Ordinal);
+        Assert.True(heading > none, Output);
+        Assert.Contains("\n▸ haiku  profile  Writes haiku.\n", Output[heading..]);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// A pane opened under a reply (2026-10-12, the user's ask): a skill's page is refused while it runs; when it ends the pane shows again
+    /// where it stood, saying so, and the same Enter opens the page — no closing and opening again.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_UnderAReply_ThePickOpensWhenTheReplyEnds_InTheSamePane()
+    {
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        using var reply = new CancellationTokenSource();
+        var (menu, pane, input) = LiveMenu(new ConversationHistory("s"));
+        input.Push(Keys.Down, Keys.Enter);   // the haiku row (under its heading): refused while the reply runs
+        int waits = 0;
+        input.OnWait = () =>
+        {
+            waits++;
+            if (waits == 1)
+            {
+                reply.Cancel();   // the reply ends under the open pane
+            }
+            else if (waits == 2)
+            {
+                input.Push(Keys.Enter);    // the same row: its page now
+            }
+            else if (waits == 3)
+            {
+                input.Push(Keys.Escape, Keys.Escape);
+            }
+        };
+
+        await menu.ShowAsync(CancellationToken.None, new ReplyRun(reply.Token));
+
+        int refused = Output.IndexOf(SettingsMenu.NotWhileReplyRunsNotice, StringComparison.Ordinal);
+        int ended = Output.IndexOf(SettingsMenu.ReplyEndedNotice, StringComparison.Ordinal);
+        int page = Output.IndexOf(SkillsMenu.ScopeTitle("haiku"), StringComparison.Ordinal);
+        Assert.True(refused >= 0 && ended > refused && page > ended, Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public void LoadedSkillRows_CountRepeats_NameTheOnesTheCatalogLost_AndFilter()
+    {
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        var facts = Facts();
+        var rows = SkillsText.LoadedSkillRows(facts, [new("haiku", 2), new("gone", 1)]);
+        Assert.True(rows[0].Heading);
+        Assert.Equal("haiku", rows[1].Skill?.Name);
+        Assert.Contains(SkillsText.LoadsNote(2), rows[1].Markup);
+        Assert.Null(rows[2].Skill);
+        Assert.Contains(SkillsText.NotInCatalogNote, rows[2].Markup);
+        Assert.Equal([(Theme.DimMarkup(SkillsText.NoneLoadedLine), (Skill?)null, false)], SkillsText.LoadedSkillRows(facts, []));
+        var filtered = SkillsText.LoadedSkillRows(facts, [new("haiku", 1)], "zzz");
+        Assert.Equal(MenuFilter.NoMatchRow("zzz"), filtered[^1].Markup);
+        Assert.Equal("×2", SkillsText.LoadsNote(2));
+        Assert.Equal(["haiku  ×2", "gone"], SkillsText.LoadedSkillLines([new("haiku", 2), new("gone", 1)]));
+        Assert.Equal([SkillsText.NoneLoadedLine], SkillsText.LoadedSkillLines([]));
     }
 
     /// <summary>Typing filters the Offered tab (2026-10-03, the user's ask): Enter acts on the skill shown; ESC clears, then closes.</summary>
@@ -806,7 +926,7 @@ public class SkillsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         // In the strip's order: Offered, Reflection, Options last (2026-09-22; Options second from 2026-09-19, Reflection later that day), every row as `label: value`; the Project file row among the Options since 2026-10-01 (a Project section of its own until then), no Roots section.
-        Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku.\n  · Reflection\n  ·   Reflection (auto-learn): on\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection includes sessions: on\n  ·   Reflection cooldown (minutes): 5 minutes\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection yields to turns: on\n  ·   Reflection edit supporting files: off\n  ·   Reflection downloaded skills: allow-and-mark\n  · Options\n  ·   Agent skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n  ·   Skill compact mode: protected\n  ·   #-mention enabled: on\n", Output);
+        Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku.\n  · Reflection\n  ·   Reflection (auto-learn): on\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection includes sessions: on\n  ·   Reflection cooldown (minutes): 5 minutes\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection yields to turns: on\n  ·   Reflection confirm mode: confirm-none\n  ·   Reflection edit supporting files: off\n  ·   Reflection edit downloaded skills: allow-and-mark\n  · Options\n  ·   Agent skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n  ·   Skill compact mode: protected\n  ·   #-mention enabled: on\n", Output);
         Assert.DoesNotContain("Roots", Output);
     }
 

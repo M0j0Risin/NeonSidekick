@@ -171,7 +171,7 @@ Everything is set from panes inside the app, and each explains itself: the highl
 * **↑/↓** bring back earlier messages.
 * **`/`** lists commands, **`@`** files and folders, **`#`** skills and **`$`** tools.
 * **Ctrl+O** opens or folds tool calls, code and thinking.
-* **☺** at the line's right end opens an emoji picker (*Emoji picker* under `/settings › Client › Chat` hides it).
+* **☺** at the line's right end, or Ctrl+J, opens an emoji picker (*Emoji picker* under `/settings › Client › Chat` hides the ☺).
 
 ### Handy shortcuts
 

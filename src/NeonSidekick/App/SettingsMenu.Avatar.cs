@@ -84,28 +84,44 @@ internal sealed partial class SettingsMenu
     /// The user avatar's picker (2026-10-12, the user's ask: <see cref="SettingsField.UserAvatar"/>, the user's own emoji opening their
     /// lines in place of <c>›</c>): the model avatar's grid, tabs, search and skin tones without what is a profile's — no For you, no
     /// other profiles' slabs — its 🚫 back to <c>›</c> (stored as null, the default), its preview a sent line. Without the pane, typed
-    /// (<see cref="TypeAvatarAsync"/>). True when it saved.
+    /// (<see cref="TypeAvatarAsync"/>). True when it saved. <c>/avatar user [words]</c> (2026-10-12, the user's ask) opens it as
+    /// <c>/avatar</c> opens the model's: <paramref name="filter"/> the search, <paramref name="own"/> the pane closed as it ends.
     /// </summary>
-    private async Task<bool> PickUserAvatarAsync(CancellationToken cancellationToken)
+    public async Task<bool> PickUserAvatarAsync(string filter, bool own, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(filter);
         string saved = AvatarRules.Normalize(_settings.Current.UserAvatar);
-        static void Set(AppSettingsData d, string avatar) => d.UserAvatar = avatar.Length == 0 ? null : avatar;
         if (!_pane.Enabled)
         {
-            return await TypeAvatarAsync(SettingsField.UserAvatar, saved, Set, cancellationToken).ConfigureAwait(false);
+            return await TypeAvatarAsync(SettingsField.UserAvatar, saved, SetUser, cancellationToken).ConfigureAwait(false);
         }
 
         var context = new AvatarContext(EmojiCatalog.Shipped, EmojiPrefs.Load(_settings.StorageDirectory), saved, _settings.ProfileName,
             new Dictionary<string, List<string>>(StringComparer.Ordinal), [], ForUser: true);
-        string? chosen = await ChooseEmojiAsync(context, Crumb(FieldName(SettingsField.UserAvatar)), "", cancellationToken).ConfigureAwait(false);
+        string? chosen;
+        try
+        {
+            chosen = await ChooseEmojiAsync(context, Crumb(FieldName(SettingsField.UserAvatar)), filter, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (own)
+            {
+                _pane.Close();
+            }
+        }
+
         if (chosen is null || chosen == saved)
         {
             return Unchanged();
         }
 
-        Apply(SettingsField.UserAvatar, d => Set(d, chosen));
+        Apply(SettingsField.UserAvatar, d => SetUser(d, chosen));
         return true;
     }
+
+    /// <summary>The user avatar saved: null for none, the default (2026-10-12).</summary>
+    private static void SetUser(AppSettingsData d, string avatar) => d.UserAvatar = avatar.Length == 0 ? null : avatar;
 
     /// <summary>
     /// The draft line's emoji picker (2026-10-11, the user's ask: the <c>Emoji picker</c> setting's button at the draft row's end): the
@@ -249,10 +265,14 @@ internal sealed partial class SettingsMenu
     /// the caller has it from <see cref="AvatarCommand.Parse"/>, so it is one emoji), the notice the settings row's, the emoji first in
     /// the picker's Recent. True when it changed.
     /// </summary>
-    public bool SetAvatar(string avatar)
+    public bool SetAvatar(string avatar) => SetAvatar(avatar, AvatarTarget.Model);
+
+    /// <summary><see cref="SetAvatar(string)"/> for either avatar (2026-10-12, <c>/avatar user &lt;emoji&gt;|clear</c>).</summary>
+    public bool SetAvatar(string avatar, AvatarTarget target)
     {
         ArgumentNullException.ThrowIfNull(avatar);
-        if (avatar == AvatarRules.Normalize(_settings.Current.ModelAvatar))
+        bool user = target == AvatarTarget.User;
+        if (avatar == AvatarRules.Normalize(user ? _settings.Current.UserAvatar : _settings.Current.ModelAvatar))
         {
             return Unchanged();
         }
@@ -262,7 +282,15 @@ internal sealed partial class SettingsMenu
             EmojiPrefs.Load(_settings.StorageDirectory).Picked(avatar);
         }
 
-        Apply(SettingsField.ModelAvatar, d => d.ModelAvatar = avatar);
+        if (user)
+        {
+            Apply(SettingsField.UserAvatar, d => SetUser(d, avatar));
+        }
+        else
+        {
+            Apply(SettingsField.ModelAvatar, d => d.ModelAvatar = avatar);
+        }
+
         return true;
     }
 

@@ -1291,6 +1291,37 @@ public class InputLineTests : IDisposable
         Assert.Equal("ask", Assert.IsType<InputResult.Submitted>(await line.ReadAsync(initialText: "ask")).Text);
     }
 
+    /// <summary>
+    /// Ctrl+J (2026-10-12, the user's ask) ends the chat editor's read as EmojiButton with the draft, the cursor kept, as the ☺'s
+    /// click does, the button shown or not; a read without the chords, or another editor's, types nothing and ends nothing.
+    /// </summary>
+    [Fact]
+    public async Task CtrlJ_EndsTheChatRead_AsTheEmojiButton_OnTheChatEditorAlone()
+    {
+        _console.Profile.Height = 10;
+        _console.Profile.Width = 40;
+        var time = new ManualTimeProvider();
+        using var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100), time);
+        pane.Show();
+        var scripted = new ScriptedInput();
+        var line = new InputLine(pane, new KeySource(scripted, TimeSpan.FromMilliseconds(1)));
+        scripted.Push(Chars("hi there"));
+        scripted.Push(Keys.Left, Keys.Left, Keys.Left, Keys.CtrlJ);
+
+        var emoji = Assert.IsType<InputResult.EmojiButton>(await line.ReadAsync(editor: line.Chat, shortcuts: true));
+        Assert.Equal("hi there", emoji.Draft);
+        line.Chat.InsertAtCursor("🐱");
+        Assert.Equal("hi th🐱ere", line.Chat.Text);
+
+        // Without the chords (a settings slot's read): nothing typed, nothing ended; Enter sends the line as it was.
+        scripted.Push(Keys.CtrlJ, Keys.Ctrl(ConsoleKey.J), Keys.Enter);
+        Assert.Equal("ask", Assert.IsType<InputResult.Submitted>(await line.ReadAsync(initialText: "ask")).Text);
+
+        // Another editor with the chords on: not the chat line, so not the picker.
+        scripted.Push(Keys.CtrlJ, Keys.Enter);
+        Assert.Equal("ask", Assert.IsType<InputResult.Submitted>(await line.ReadAsync(initialText: "ask", shortcuts: true)).Text);
+    }
+
     /// <summary>Two left clicks on a toolbar glyph or on the path within DoubleClick.Interval end the read as ToolbarRow with the draft (2026-09-21); the blanks between them, or one click on each of two parts, are nothing.</summary>
     [Fact]
     public async Task OnThePane_ADoubleClickOnTheToolbar_EndsTheRead_WithTheDraft_AndItsPart()

@@ -178,4 +178,19 @@ public partial class SettingsMenuTests
         Assert.Equal((AvatarVerb.Search, "red heart"), AvatarCommand.Parse("red heart"));
         Assert.Equal((AvatarVerb.Search, "🦊🐙"), AvatarCommand.Parse("🦊🐙"));
     }
+
+    /// <summary><c>/avatar user|model</c> (2026-10-12, the user's ask): a leading word names whose avatar; none is the model's, as it was.</summary>
+    [Fact]
+    public void AvatarCommand_ReadsTheTargetWord()
+    {
+        Assert.Equal((AvatarTarget.Model, AvatarVerb.Show, ""), AvatarCommand.ParseLine(""));
+        Assert.Equal((AvatarTarget.User, AvatarVerb.Show, ""), AvatarCommand.ParseLine(" User "));
+        Assert.Equal((AvatarTarget.User, AvatarVerb.Clear, ""), AvatarCommand.ParseLine("user clear"));
+        Assert.Equal((AvatarTarget.Model, AvatarVerb.Clear, ""), AvatarCommand.ParseLine("MODEL clear"));
+        Assert.Equal((AvatarTarget.User, AvatarVerb.Set, "🦉"), AvatarCommand.ParseLine("user 🦉"));
+        Assert.Equal((AvatarTarget.User, AvatarVerb.Search, "red heart"), AvatarCommand.ParseLine("user red heart"));
+        Assert.Equal((AvatarTarget.Model, AvatarVerb.Set, "🦊"), AvatarCommand.ParseLine("🦊"));
+        Assert.Equal((AvatarTarget.Model, AvatarVerb.Search, "users guide"), AvatarCommand.ParseLine("users guide"));   // a word that only starts like one
+        Assert.Equal((AvatarTarget.Model, AvatarVerb.Clear, ""), AvatarCommand.ParseLine("clear"));
+    }
 }

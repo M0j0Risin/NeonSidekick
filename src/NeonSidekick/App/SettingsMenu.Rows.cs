@@ -141,7 +141,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<(SettingsField First, string Title)>> SkillsMenuSections =
     [
         [(SettingsField.AgentSkills, "Sources"), (SettingsField.SkillCompactMode, "Prompt and mentions")],
-        [(SettingsField.ReflectionAutoLearn, "Learning"), (SettingsField.ReflectionWindow, "What it reads"), (SettingsField.ReflectionCooldownMinutes, "Pace"), (SettingsField.ReflectionEditsSupportingFiles, "What it may change")],
+        [(SettingsField.ReflectionAutoLearn, "Learning"), (SettingsField.ReflectionWindow, "What it reads"), (SettingsField.ReflectionCooldownMinutes, "Pace"), (SettingsField.ReflectionConfirmMode, "What it may change")],   // its first row the confirm mode since 2026-10-12 (the user's place)
     ];
 
     /// <summary>The section headings of <c>/mcp</c>' Options tab, indexed like <see cref="McpTabFields"/> (2026-10-10, the user's ask). Pinned.</summary>
