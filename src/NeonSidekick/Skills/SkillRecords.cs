@@ -592,6 +592,18 @@ public sealed class SkillRecords
         DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.MovedLogLine(skill.Scope, to, skill.FolderName));
     }
 
+    /// <summary>
+    /// The pane moved a profile skill into <paramref name="profile"/>'s skills (2026-10-13, the user's ask): the row goes over to that
+    /// profile, keeping its moments and history, as <see cref="Moved"/> keeps them between the roots.
+    /// </summary>
+    public void MovedToProfile(Skill skill, string profile)
+    {
+        ArgumentNullException.ThrowIfNull(skill);
+        ArgumentException.ThrowIfNullOrWhiteSpace(profile);
+        _store.Move(skill.Scope, CurrentProfile, skill.FolderName, SkillScope.Profile, profile, skill.FolderName, skill.Name);
+        DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.MovedToProfileLogLine(skill.FolderName, profile));
+    }
+
     /// <summary>The pane renamed <paramref name="skill"/>'s folder and name to <paramref name="name"/>: the row follows, keeping its moments.</summary>
     public void Renamed(Skill skill, string name)
     {

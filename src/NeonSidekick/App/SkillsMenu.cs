@@ -25,7 +25,11 @@ namespace NeonSidekick.App;
 /// over from <c>/skills edit &lt;name&gt;</c>, which went), <c>revert</c> (2026-10-02; since 2026-10-04, the user's call, always offered and
 /// the only way in, <c>/skills revert</c> gone: it lists every kept version, newest first, and the one picked is put back, the current
 /// text kept first so nothing is lost, <see cref="SkillRecords.Restore"/>) and <c>delete</c> (always, since 2026-09-23, the user's call;
-/// behind the <c>Allow skill delete</c> setting from 2026-09-18 until then, which went), the cursor on the scope it is in. Picking the other root moves the folder
+/// behind the <c>Allow skill delete</c> setting from 2026-09-18 until then, which went), the cursor on the scope it is in. Since 2026-10-13
+/// (the user's ask) a profile skill's page has <c>move</c> after the two roots: the other profiles listed under it, and the one picked
+/// takes the folder into its own skills after a yes (<see cref="SkillEditor.MoveToProfile"/>), the record going with it
+/// (<see cref="SkillRecords.MovedToProfile"/>); a profile that holds the folder's name already is refused ahead of the question
+/// (<see cref="ProfileExistsError"/>), and with no other profile the row only says so (<see cref="NoOtherProfileNotice"/>). Picking the other root moves the folder
 /// (<see cref="SkillEditor.Move"/>) after a yes/no confirmation kept under the list; picking
 /// <c>delete</c> removes it (<see cref="SkillEditor.Delete"/>) after one; the scope it is in already
 /// is <see cref="SettingsMenu.UnchangedNotice"/>. Picking <c>rename</c> opens the typed slot under the
@@ -159,6 +163,36 @@ internal sealed class SkillsMenu
 
     /// <summary>The rename row (2026-09-21): the word padded to nine, what it does dim after it.</summary>
     public static string RenameRow => Markup.Escape(RenameWord.PadRight(9)) + Theme.DimMarkup("give it a new name (letters, digits and hyphens)");
+
+    /// <summary>The move row's word (2026-10-13, the user's ask): a profile skill sent to another profile. Pinned.</summary>
+    public const string MoveWord = "move";
+
+    /// <summary>The move row, after the two roots on a profile skill's page alone (2026-10-13): the word padded to nine, what it does dim after it.</summary>
+    public static string MoveRow => Markup.Escape(MoveWord.PadRight(9)) + Theme.DimMarkup("send it to another profile's skills");
+
+    /// <summary>The profile list's title: <c>Skills › haiku › move</c> (2026-10-13).</summary>
+    public static string MoveToTitle(string name) => ScopeTitle(name) + " › " + MoveWord;
+
+    /// <summary>A profile on the move's list (2026-10-13): its name padded to two past <paramref name="width"/>, its skills folder dim after it. Pinned.</summary>
+    public static string ProfileRow(string profile, string root, int width)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(root);
+        return Markup.Escape(profile.PadRight(width + 2)) + Theme.DimMarkup(root);
+    }
+
+    /// <summary>The skills folder of profile <paramref name="profile"/> under <paramref name="home"/>: <c>&lt;home&gt;\profiles\&lt;name&gt;\skills</c>.</summary>
+    public static string ProfileSkillsRoot(string home, string profile) => Path.Combine(Profiles.Directory(home, profile), SkillRoots.DirectoryName);
+
+    public static string MoveToPrompt(string name, string profile) => $"Move skill '{name}' from this profile to profile '{profile}'?";
+
+    public static string MovedToNotice(string name, string profile) => $"({NoticeGlyphs.Skill}moved: {name} → profile {profile})";
+
+    /// <summary>The other profile already holds the folder's name (2026-10-13), the scope move's <see cref="ExistsError"/> in a profile's words.</summary>
+    public static string ProfileExistsError(string name, string folder, string profile) => $"Could not move skill '{name}': the skills of profile '{profile}' already hold '{folder}'";
+
+    /// <summary>The move row with no other profile to list (2026-10-13). Pinned.</summary>
+    public const string NoOtherProfileNotice = "(" + NoticeGlyphs.Skill + "no other profile to move it to; /profile add makes one)";
 
     /// <summary>The edit row (2026-09-23): the word padded to nine, what it does dim after it.</summary>
     public static string EditRow => Markup.Escape(EditWord.PadRight(9)) + Theme.DimMarkup("open its SKILL.md in your editor");
@@ -599,12 +633,21 @@ internal sealed class SkillsMenu
         }
     }
 
-    /// <summary>The scope page under the list — the two roots, rename, edit, delete —, the confirmation or the typed slot under that, then the act; true when the folder changed (the facts are stale).</summary>
+    /// <summary>The scope page under the list — the two roots, move (a profile skill's, 2026-10-13), rename, edit, delete —, the confirmation or the typed slot under that, then the act; true when the folder changed (the facts are stale).</summary>
     private async Task<bool> PickScopeAsync(Skill skill, SkillsFacts facts, CancellationToken cancellationToken)
     {
         var roots = facts.Roots;
         var rows = ScopeRows.Select(scope => ScopeRow(scope, roots)).ToList();
+        // The move to another profile (2026-10-13, the user's ask): a profile skill's alone, after the two roots; every row its own index since.
+        int moveRow = skill.Scope == SkillScope.Profile ? rows.Count : -1;
+        if (moveRow >= 0)
+        {
+            rows.Add(MoveRow);
+        }
+
+        int renameRow = rows.Count;
         rows.Add(RenameRow);
+        int editRow = rows.Count;
         rows.Add(EditRow);
         // The revert row (2026-10-02): always since 2026-10-04 (the user's call), a skill with nothing kept saying so when picked.
         int revertRow = _versions is not null && _restore is not null ? rows.Count : -1;
@@ -641,19 +684,24 @@ internal sealed class SkillsMenu
 
         // A locked skill (2026-10-07): rename, move and delete refused before any question; edit (the user's own editor) and the
         // revert list (its d and c) still open.
-        bool changes = row == ScopeRows.Count || row == deleteRow || (row < ScopeRows.Count && ScopeRows[row] != skill.Scope);
+        bool changes = row == renameRow || row == moveRow || row == deleteRow || (row < ScopeRows.Count && ScopeRows[row] != skill.Scope);
         if (changes && skill.Locked)
         {
             Sink.Notice(SkillRecordText.LockedNotice(skill.Name));
             return false;
         }
 
-        if (row == ScopeRows.Count)
+        if (row == moveRow)
+        {
+            return await MoveToProfileAsync(skill, roots, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (row == renameRow)
         {
             return await RenameAsync(skill, facts, page, row, cancellationToken).ConfigureAwait(false);
         }
 
-        if (row == ScopeRows.Count + 1)
+        if (row == editRow)
         {
             Edit(skill);
             return false;
@@ -722,6 +770,66 @@ internal sealed class SkillsMenu
             case SkillEditOutcome.Missing:
                 Sink.Error(MissingError(skill.Name));
                 return true;
+            default:
+                Sink.Error(MoveFailedError(moved.Detail));
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// The move row's list and act (2026-10-13, the user's ask): every profile but the loaded one, the cursor on the first; the one picked
+    /// checked for the folder's name, then a yes (No on the cursor), then the folder moved into its skills and the record after it. ESC goes
+    /// back to the list. True when the folder moved (the facts are stale).
+    /// </summary>
+    private async Task<bool> MoveToProfileAsync(Skill skill, SkillRoots roots, CancellationToken cancellationToken)
+    {
+        string home = _settings.StorageDirectory;
+        var others = Profiles.List(home).Where(name => !Profiles.NameEquals(name, _settings.ProfileName)).ToList();
+        if (others.Count == 0)
+        {
+            Sink.Notice(NoOtherProfileNotice);
+            return false;
+        }
+
+        int width = others.Max(name => name.Length);
+        var page = new MenuPage(MoveToTitle(skill.Name), others.Select(name => ProfileRow(name, ProfileSkillsRoot(home, name), width)).ToList(), ScopeKeys);
+        if (await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { Row: var row } || row >= others.Count)
+        {
+            return false;
+        }
+
+        string profile = others[row];
+        string root = ProfileSkillsRoot(home, profile);
+        // Refused ahead of the question, as the scope move is.
+        string destination = Path.Combine(root, skill.FolderName);
+        if (Directory.Exists(destination) || File.Exists(destination))
+        {
+            Sink.Error(ProfileExistsError(skill.Name, skill.FolderName, profile));
+            return false;
+        }
+
+        if (!await ConfirmAsync(MoveToPrompt(skill.Name, profile), cancellationToken).ConfigureAwait(false))
+        {
+            Sink.Notice(KeptNotice);
+            return false;
+        }
+
+        var moved = SkillEditor.MoveToProfile(roots, skill, root);
+        switch (moved.Outcome)
+        {
+            case SkillEditOutcome.Moved:
+                _records?.MovedToProfile(skill, profile);
+                Sink.Notice(MovedToNotice(skill.Name, profile));
+                return true;
+            case SkillEditOutcome.Exists:
+                Sink.Error(ProfileExistsError(skill.Name, skill.FolderName, profile));
+                return false;
+            case SkillEditOutcome.Missing:
+                Sink.Error(MissingError(skill.Name));
+                return true;
+            case SkillEditOutcome.Locked:
+                Sink.Notice(SkillRecordText.LockedNotice(skill.Name));
+                return false;
             default:
                 Sink.Error(MoveFailedError(moved.Detail));
                 return false;

@@ -298,6 +298,33 @@ public class SkillEditorTests : IDisposable
         Assert.Equal(SkillEditOutcome.Missing, SkillEditor.Move(_roots, new Skill("gone", "d", SkillScope.Profile, Path.Combine(_roots.Profile, "gone")), SkillScope.Global).Outcome);
     }
 
+    /// <summary>
+    /// The pane's move to another profile (2026-10-13, the user's ask): a profile skill's folder under the other profile's skills root, made
+    /// on the way, its files with it; a global or external skill, the skill's own root, a root holding the folder already and a stray record refused.
+    /// </summary>
+    [Fact]
+    public void MoveToProfile_MovesAProfileSkill_IntoTheOtherRoot_AndRefusesTheRest()
+    {
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        File.WriteAllText(Path.Combine(_roots.Profile, "haiku", "notes.txt"), "n");
+        Put(SkillScope.Profile, "pdf");
+        Put(SkillScope.Global, "verse");
+        string work = Path.Combine(_dir, "profiles", "work", "skills");
+        var haiku = Scanned(SkillScope.Profile, "haiku");
+
+        Assert.Equal(SkillEditOutcome.NothingToChange, SkillEditor.MoveToProfile(_roots, haiku, _roots.Profile + Path.DirectorySeparatorChar).Outcome);
+        Assert.Equal(SkillEditOutcome.ExternalReadOnly, SkillEditor.MoveToProfile(_roots, Scanned(SkillScope.Global, "verse"), work).Outcome);
+        var moved = SkillEditor.MoveToProfile(_roots, haiku, work);
+        Assert.Equal((SkillEditOutcome.Moved, SkillScope.Profile), (moved.Outcome, moved.Scope));
+        Assert.False(Directory.Exists(haiku.Directory));
+        Assert.Equal("n", File.ReadAllText(Path.Combine(work, "haiku", "notes.txt")));
+
+        Directory.CreateDirectory(Path.Combine(work, "pdf"));
+        Assert.Equal(SkillEditOutcome.Exists, SkillEditor.MoveToProfile(_roots, Scanned(SkillScope.Profile, "pdf"), work).Outcome);
+        Assert.True(File.Exists(FileOf(SkillScope.Profile, "pdf")));
+        Assert.Equal(SkillEditOutcome.Missing, SkillEditor.MoveToProfile(_roots, new Skill("gone", "d", SkillScope.Profile, Path.Combine(_roots.Profile, "gone")), work).Outcome);
+    }
+
     /// <summary>The pane's rename (2026-09-21): the folder under its own root and the frontmatter's name line, the other lines and the files carried; the catalog follows.</summary>
     [Fact]
     public void Rename_MovesTheFolder_RewritesTheNameLine_KeepsTheRest_AndTheCatalogFollows()

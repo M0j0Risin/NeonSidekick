@@ -22968,9 +22968,9 @@ public partial class ChatScreenTests : IDisposable
                         step++;
                         PushLine(input, "/skills");
                         input.Push(Keys.Enter);   // clock-check's page
-                        for (int i = 0; i < 4; i++)
+                        for (int i = 0; i < 5; i++)
                         {
-                            input.Push(Keys.Down);   // profile, global, rename, edit, revert
+                            input.Push(Keys.Down);   // profile, global, move (2026-10-13), rename, edit, revert
                         }
 
                         input.Push(Keys.Enter);   // the version list
@@ -22985,7 +22985,7 @@ public partial class ChatScreenTests : IDisposable
                     {
                         step++;
                         input.Push(Keys.Enter);   // the page again
-                        for (int i = 0; i < 4; i++)
+                        for (int i = 0; i < 5; i++)
                         {
                             input.Push(Keys.Down);
                         }

@@ -569,7 +569,7 @@ Voice input sets up in the background (🎙️ on the hint row).
 
 The loaded skills with their scope (`profile`, `global` or `external`), version, last change (`yyyy-MM-dd HH:mm`, local time: the later of the app's record and the SKILL.md's own write) and description, then any shadowed duplicates and skipped folders (with the reason). The second strip narrows the list to one scope. Enter on a skill can:
 
-* move it between the profile and global folders, or rename it;
+* move it between the profile and global folders, or a profile skill into another profile's skills (`move`: pick the profile, then confirm), or rename it;
 * edit its `SKILL.md` in your editor;
 * revert it to a kept version (see [Skill history](#skill-history));
 * lock or unlock it (see [Locking a skill](#locking-a-skill)), shown as `🔒 v4`;

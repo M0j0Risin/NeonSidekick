@@ -593,7 +593,7 @@ In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes
 | `/rewind` | Enter rewinds to before the message |
 | `/sessions` | Enter opens · type to filter |
 | `/process` | Enter opens the window · `k` kills (asks) · `r` / `e` running / ended only |
-| `/skills` › a skill | Enter on a row: move, rename, edit, revert, lock/unlock, disable/enable, delete (asks) |
+| `/skills` › a skill | Enter on a row: move (between the profile and global skills, or a profile skill to another profile, asks), rename, edit, revert, lock/unlock, disable/enable, delete (asks) |
 | `/skills` › a skill › `revert` | Enter puts the version back · `d` removes it (asks) · `c` clear all (asks) |
 | `/docker` | Enter opens · `r` refresh · `l` LLM servers only (*Docker server containers*) · type to filter |
 | `/shopping` | Enter / Space tick or untick · `i` add · `p` place at an aisle or section · `n` rename · `r` remove · `a` tick all · `c` clear ticked · `s` stores · `+` / `-` quantity |

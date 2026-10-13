@@ -72,6 +72,7 @@ public class SkillLockTests : IDisposable
         Assert.Equal(SkillEditOutcome.Locked, SkillEditor.EditFile(_roots, SkillScope.Profile, "haiku", "notes.md", "old", "new", false, false, time).Outcome);
         Assert.Equal(SkillEditOutcome.Locked, SkillEditor.Restore(_roots, SkillScope.Profile, skill.Directory, "haiku", SkillCatalog.FileName, "x").Outcome);
         Assert.Equal(SkillEditOutcome.Locked, SkillEditor.Move(_roots, skill, SkillScope.Global).Outcome);
+        Assert.Equal(SkillEditOutcome.Locked, SkillEditor.MoveToProfile(_roots, skill, Path.Combine(Path.GetTempPath(), "elsewhere", "skills")).Outcome);   // 2026-10-13
         Assert.Equal(SkillEditOutcome.Locked, SkillEditor.Rename(_roots, skill, "verse").Outcome);
         Assert.Equal(SkillEditOutcome.Locked, SkillEditor.Delete(_roots, skill).Outcome);
         Assert.Equal(before, File.ReadAllText(skill.FilePath));

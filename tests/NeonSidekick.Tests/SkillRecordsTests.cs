@@ -213,6 +213,23 @@ public class SkillRecordsTests : IDisposable
         Assert.Empty(_store.All());   // external: never recorded
     }
 
+    /// <summary>The pane's move to another profile (2026-10-13, the user's ask): the row goes over to that profile with its moments, out of this one's view.</summary>
+    [Fact]
+    public void MovedToProfile_TheRowGoesOverToTheOtherProfile_KeepingItsMoments()
+    {
+        string dir = Write(_roots.Profile, "pdf");
+        _records.Installed(SkillScope.Profile, dir, updated: false);
+        var created = Assert.Single(_store.All()).Created;
+
+        _records.MovedToProfile(new Skill("pdf", "", SkillScope.Profile, dir), "work");
+
+        var row = Assert.Single(_store.All());
+        Assert.Equal((SkillScope.Profile, "work", "pdf", created), (row.Scope, row.Profile, row.Folder, row.Created));
+        Assert.Empty(_store.List("neon"));
+        Assert.Single(_store.List("work"));
+        Assert.Equal("Skill record: profile/pdf moved to profile work", SkillRecordText.MovedToProfileLogLine("pdf", "work"));
+    }
+
     // ── The skills' history (2026-10-02, the reflection audit) ──────────────
 
     private Skill SkillOf(string folder)

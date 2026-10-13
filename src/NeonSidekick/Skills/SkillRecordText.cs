@@ -181,6 +181,8 @@ public static class SkillRecordText
 
     public static string MovedLogLine(SkillScope from, SkillScope to, string folder) => "Skill record: " + Key(from, folder) + " moved to " + SkillScopes.Name(to);
 
+    public static string MovedToProfileLogLine(string folder, string profile) => "Skill record: " + Key(SkillScope.Profile, folder) + " moved to profile " + profile;
+
     public static string RenamedLogLine(SkillScope scope, string from, string to) => "Skill record: " + Key(scope, from) + " renamed to " + to;
 
     public static string DeletedLogLine(SkillScope scope, string folder) => "Skill record: " + Key(scope, folder) + " deleted";

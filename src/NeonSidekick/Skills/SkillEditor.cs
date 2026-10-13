@@ -511,7 +511,49 @@ public static class SkillEditor
             return new SkillEditResult(SkillEditOutcome.Missing, skill.Name, skill.Scope);
         }
 
-        string destination = Path.Combine(roots.Of(to), skill.FolderName);
+        return MoveInto(skill, roots.Of(to), to);
+    }
+
+    /// <summary>
+    /// The Skills pane's move to another profile (2026-10-13, the user's ask): a profile skill's folder renamed under
+    /// <paramref name="profileSkillsRoot"/>, another profile's <c>skills</c> folder, made when it is not there yet. <see cref="Move"/>'s
+    /// refusals: <see cref="SkillEditOutcome.ExternalReadOnly"/> for anything but a profile skill, <see cref="SkillEditOutcome.Locked"/>,
+    /// <see cref="SkillEditOutcome.NothingToChange"/> for the skill's own root, <see cref="SkillEditOutcome.Missing"/> and
+    /// <see cref="SkillEditOutcome.Exists"/> (by the folder's name); a file failure is <see cref="SkillEditOutcome.Failed"/>.
+    /// </summary>
+    public static SkillEditResult MoveToProfile(SkillRoots roots, Skill skill, string profileSkillsRoot)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(skill);
+        ArgumentException.ThrowIfNullOrWhiteSpace(profileSkillsRoot);
+        if (skill.Scope != SkillScope.Profile)
+        {
+            return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, skill.Name, skill.Scope);
+        }
+
+        if (SkillLock.IsLocked(skill.Directory))
+        {
+            return new SkillEditResult(SkillEditOutcome.Locked, skill.Name, skill.Scope);
+        }
+
+        string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(profileSkillsRoot));
+        if (string.Equals(root, Path.TrimEndingDirectorySeparator(Path.GetFullPath(roots.Profile)), StringComparison.OrdinalIgnoreCase))
+        {
+            return new SkillEditResult(SkillEditOutcome.NothingToChange, skill.Name, skill.Scope);
+        }
+
+        if (!IsUnderItsRoot(roots, skill))
+        {
+            return new SkillEditResult(SkillEditOutcome.Missing, skill.Name, skill.Scope);
+        }
+
+        return MoveInto(skill, root, SkillScope.Profile);
+    }
+
+    // The folder renamed under root (made when missing): Exists when root holds the folder's name already, Failed on a file failure.
+    private static SkillEditResult MoveInto(Skill skill, string root, SkillScope to)
+    {
+        string destination = Path.Combine(root, skill.FolderName);
         if (Directory.Exists(destination) || File.Exists(destination))
         {
             return new SkillEditResult(SkillEditOutcome.Exists, skill.Name, to);
@@ -519,7 +561,7 @@ public static class SkillEditor
 
         try
         {
-            Directory.CreateDirectory(roots.Of(to));
+            Directory.CreateDirectory(root);
             Directory.Move(skill.Directory, destination);
             return new SkillEditResult(SkillEditOutcome.Moved, skill.Name, to);
         }
