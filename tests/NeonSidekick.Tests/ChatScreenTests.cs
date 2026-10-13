@@ -154,6 +154,9 @@ public partial class ChatScreenTests : IDisposable
         // The default order holds two dividers since 2026-10-13 (the user's ask): the toolbar tests pin their glyphs' columns as laid
         // without them, so the fixture saves the order bare; the divider tests opt back in (ToolbarOrder null).
         _settings.Update(d => d.ToolbarOrder = [.. ToolbarItems.Names]);
+        // Status leads the hint bar by default since later on 2026-10-13 (the user's ask), the spinner after it: the busy-row tests pin
+        // their columns with the spinner first, so the fixture saves that order; the default's test opts back in (HintBarOrder null).
+        _settings.Update(d => d.HintBarOrder = [HintBarItems.Spinner, .. HintBarItems.Names.Where(id => id != HintBarItems.Spinner)]);
         // The performance bar shows by default since 2026-10-02 (the user's ask): the same row-counting reason, the same opt-out; the
         // bar's tests opt in.
         _settings.Update(d => d.PerformanceBarItems = []);
@@ -10372,6 +10375,26 @@ public partial class ChatScreenTests : IDisposable
         // The info pane's hint keeps it too, and the idle line has it as before.
         AssertPaneEnds(output, rule + "\n" + Row(InfoPane.HintText, strip: strip));
         Assert.Contains(rule + "\n" + Row(ChatScreen.HintLine(null), strip: strip), output);
+    }
+
+    /// <summary>
+    /// The Hint bar's default order (later on 2026-10-13, the user's ask): Status first, the spinner after it, so under a reply the
+    /// speech strip leads the busy row and the spinner, its label and the stop hint follow.
+    /// </summary>
+    [Fact]
+    public async Task WithGeometry_TheDefaultHintBar_PutsTheStatusAheadOfTheSpinner()
+    {
+        _settings.Update(d => d.HintBarOrder = null);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("Hello there.");
+        PushLine("hi");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string strip = ChatScreen.SpeechGlyphs(true, false, false, false);
+        Assert.Contains(Row(strip + ScreenPane.HintSeparator + Theme.SpinnerFrames[0] + " " + ScreenPane.BusyText(ChatScreen.ThinkingLabel, TimeSpan.Zero) + ScreenPane.HintSeparator + ScreenPane.StopHint), output);
     }
 
     [Fact]

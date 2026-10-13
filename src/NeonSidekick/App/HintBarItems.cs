@@ -14,7 +14,7 @@ namespace NeonSidekick.App;
 /// side (<see cref="Sides"/> over <see cref="Settings.AppSettingsData.HintBarRight"/>; <see cref="RightDefaults"/> the model and the
 /// working directory, the row as it was), and the busy row follows the sides too. Later that day (the user's ask: "could the
 /// spinner in the hint row also be one of the moveable options? … mandatory and can't be disabled, but it can be moved") the busy
-/// row's spinner, its label and clock and the stop hint after them are the <see cref="Spinner"/> section: first by default, always
+/// row's spinner, its label and clock and the stop hint after them are the <see cref="Spinner"/> section: after Status by default (first until later that day, the user's ask), always
 /// on (<see cref="Fixed"/>), on either side in any place, drawn under a reply alone. The whole-row prompts (the drag, an alert, the
 /// armed exit, rewind and splash delete) are no sections: they show whatever is checked. Under a reply the checks hold (no strip,
 /// queued count, tally or model while off). A display setting, so an unknown word is dropped without a warning. Pure.
@@ -31,11 +31,14 @@ public static class HintBarItems
     public const string Model = "model";
     public const string WorkingDirectory = "cwd";   // later on 2026-10-12, the user's ask
 
-    /// <summary>Every section in the row's own order, the one it always had, the working directory after the model; the spinner first (2026-10-13), where the busy row always had it. Pinned.</summary>
-    public static readonly string[] Names = [Spinner, Status, Queued, Keys, Timers, Reading, Usage, Model, WorkingDirectory];
+    /// <summary>
+    /// Every section in the row's own order, the one it always had, the working directory after the model; the spinner second
+    /// (2026-10-13; first until later that day, the user's ask: Status first by default, the spinner after it). Pinned.
+    /// </summary>
+    public static readonly string[] Names = [Status, Spinner, Queued, Keys, Timers, Reading, Usage, Model, WorkingDirectory];
 
     /// <summary>What a profile that never chose shows: every section but the working directory (the user's pick), the row as it was. Pinned.</summary>
-    public static readonly string[] Defaults = [Spinner, Status, Queued, Keys, Timers, Reading, Usage, Model];
+    public static readonly string[] Defaults = [Status, Spinner, Queued, Keys, Timers, Reading, Usage, Model];
 
     /// <summary>The sections that are always on (2026-10-13, the user's ask): the spinner, which moves but never goes. Pinned.</summary>
     public static readonly IReadOnlySet<string> Fixed = new HashSet<string>(StringComparer.Ordinal) { Spinner };
@@ -126,7 +129,7 @@ public static class HintBarItems
     /// The <c>Hint bar</c> row's value: <see cref="DefaultValue"/> for the defaults in the default order and sides, <see cref="AllValue"/>
     /// for every section in them, <see cref="NoneValue"/> with none but the always-on spinner, else the checked names in order — since
     /// 2026-10-13 the left group's, then <see cref="SidesSeparator"/> and the right group's while any is checked there; the spinner
-    /// named only away from the left group's lead, its own place (later that day). Pinned.
+    /// named only away from its own place (later that day): on the left, right after Status or leading the group. Pinned.
     /// </summary>
     public static string Value(IReadOnlyList<string>? saved, IReadOnlyList<string>? order, IReadOnlyList<string>? right = null)
     {
@@ -148,8 +151,9 @@ public static class HintBarItems
             return AllValue;
         }
 
-        bool spinnerLeads = sides.Left.Count > 0 && sides.Left[0] == Spinner;
-        string left = string.Join(", ", sides.Left.Where((id, i) => on.Contains(id) && !(i == 0 && spinnerLeads)).Select(Title));
+        int spinnerAt = sides.Left.ToList().IndexOf(Spinner);
+        bool spinnerHome = spinnerAt == 0 || (spinnerAt == 1 && sides.Left[0] == Status);
+        string left = string.Join(", ", sides.Left.Where(id => on.Contains(id) && !(id == Spinner && spinnerHome)).Select(Title));
         string pinned = string.Join(", ", sides.Right.Where(on.Contains).Select(Title));
         return pinned.Length == 0 ? left : left.Length == 0 ? SidesSeparator.TrimStart() + pinned : left + SidesSeparator + pinned;
     }

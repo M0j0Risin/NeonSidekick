@@ -172,8 +172,7 @@ public partial class SettingsMenuTests
     {
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.HintBarItems));
-        Push(Keys.Enter);                       // the checklist, on Spinner (the left group's first; its heading above is no stop)
-        Push(Keys.Down);                        // Status (the spinner first since 2026-10-13)
+        Push(Keys.Enter);                       // the checklist, on Status (the left group's first; its heading above is no stop)
         Push(ShiftEnd);                         // Status to the bottom of its group, the cursor with it
         Push(Keys.Char(' '));                   // and off
         Push(Keys.Escape, Keys.Escape);
@@ -245,7 +244,7 @@ public partial class SettingsMenuTests
     {
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.HintBarItems));
-        Push(Keys.Enter);                       // on Spinner
+        Push(Keys.Enter, Keys.Down);            // on Spinner, after Status
         Push(Keys.Char(' '), Keys.Enter, DeleteKey);   // off, thrice: it stays
         Push(Keys.Char('n'));                   // select none: every section but the spinner
         Push(ShiftRight);                       // the spinner pinned right, the right group's first
