@@ -16,40 +16,52 @@ public static class ItemOrder
     /// item a later version adds lands beside its neighbours, not at the end), <paramref name="pinnedLast"/> always last (the
     /// toolbar's path, drawn at the row's right whatever its place). Null is <paramref name="names"/> as they are.
     /// </summary>
-    public static List<string> Resolve(IReadOnlyList<string>? saved, IReadOnlyList<string> names, string? pinnedLast = null)
+    public static List<string> Resolve(IReadOnlyList<string>? saved, IReadOnlyList<string> names, string? pinnedLast = null) =>
+        Resolve(saved, names, pinnedLast, []);
+
+    /// <summary>
+    /// <see cref="Resolve(IReadOnlyList{string}?, IReadOnlyList{string}, string?)"/> with <paramref name="passers"/> (2026-10-12, the
+    /// user's ask: the toolbar's Model name moves freely, after the path by default): ids that may stand after
+    /// <paramref name="pinned"/>, every other id kept ahead of it; the passers after it keep their order there. An order saved
+    /// before a passer existed puts it after its neighbour as any new id, so one after the pinned id in <paramref name="names"/> lands after it.
+    /// </summary>
+    public static List<string> Resolve(IReadOnlyList<string>? saved, IReadOnlyList<string> names, string? pinned, IReadOnlyCollection<string> passers)
     {
         ArgumentNullException.ThrowIfNull(names);
-        var known = names.Where(n => n != pinnedLast).ToList();
+        ArgumentNullException.ThrowIfNull(passers);
         var order = new List<string>(names.Count);
         if (saved is not null)
         {
             // A null in a hand-edited list is skipped: this runs on the pane's tick, where a throw repeats.
             foreach (string word in saved.OfType<string>().Select(w => w.Trim().ToLowerInvariant()))
             {
-                if (known.Contains(word, StringComparer.Ordinal) && !order.Contains(word, StringComparer.Ordinal))
+                if (names.Contains(word, StringComparer.Ordinal) && !order.Contains(word, StringComparer.Ordinal))
                 {
                     order.Add(word);
                 }
             }
         }
 
-        for (int i = 0; i < known.Count; i++)
+        for (int i = 0; i < names.Count; i++)
         {
-            if (order.Contains(known[i], StringComparer.Ordinal))
+            if (order.Contains(names[i], StringComparer.Ordinal))
             {
                 continue;
             }
 
-            int after = i == 0 ? -1 : order.IndexOf(known[i - 1]);
-            order.Insert(after + 1, known[i]);
+            int after = i == 0 ? -1 : order.IndexOf(names[i - 1]);
+            order.Insert(after + 1, names[i]);
         }
 
-        if (pinnedLast is not null && names.Contains(pinnedLast, StringComparer.Ordinal))
+        int at = pinned is null ? -1 : order.IndexOf(pinned);
+        if (at < 0)
         {
-            order.Add(pinnedLast);
+            return order;
         }
 
-        return order;
+        // Only the passers stand after the pinned id: anything else saved after it goes back ahead of it, in its order.
+        var behind = order.Skip(at + 1).ToList();
+        return [.. order.Take(at), .. behind.Where(id => !passers.Contains(id)), pinned!, .. behind.Where(passers.Contains)];
     }
 
     /// <summary>What saves for <paramref name="order"/>: null when it is <paramref name="names"/>' own order (so it follows a later default), else the list.</summary>
@@ -65,22 +77,44 @@ public static class ItemOrder
     /// <see cref="HomeBarItems.Bottom"/> or a step, <see cref="HomeBarItems.Move"/>'s), and where it landed; <paramref name="pinnedLast"/>
     /// never moves and nothing moves past it.
     /// </summary>
-    public static (List<string> Order, int Index) Move(IReadOnlyList<string> order, int index, int delta, string? pinnedLast = null)
+    public static (List<string> Order, int Index) Move(IReadOnlyList<string> order, int index, int delta, string? pinnedLast = null) =>
+        Move(order, index, delta, pinnedLast, []);
+
+    /// <summary>
+    /// <see cref="Move(IReadOnlyList{string}, int, int, string?)"/> with <paramref name="passers"/> (2026-10-12): a passer moves over
+    /// the whole list, stepping over <paramref name="pinned"/> as over any item; anything else moves among the ids ahead of the pinned
+    /// one alone; the pinned id itself never moves.
+    /// </summary>
+    public static (List<string> Order, int Index) Move(IReadOnlyList<string> order, int index, int delta, string? pinned, IReadOnlyCollection<string> passers)
     {
         ArgumentNullException.ThrowIfNull(order);
-        bool pinned = pinnedLast is not null && order.Count > 0 && order[^1] == pinnedLast;
-        if (!pinned)
+        ArgumentNullException.ThrowIfNull(passers);
+        int at = pinned is null ? -1 : IndexOf(order, pinned);
+        if (at < 0 || (index >= 0 && index < order.Count && passers.Contains(order[index])))
         {
             return HomeBarItems.Move(order, index, delta);
         }
 
-        if (index == order.Count - 1)
+        if (index >= at)
         {
-            return (order.ToList(), index);
+            return (order.ToList(), index);   // the pinned id, or a passer's place: nothing ahead of the pin to move
         }
 
-        var (moved, at) = HomeBarItems.Move(order.Take(order.Count - 1).ToList(), index, delta);
-        moved.Add(pinnedLast!);
-        return (moved, at);
+        var (moved, landed) = HomeBarItems.Move(order.Take(at).ToList(), index, delta);
+        moved.AddRange(order.Skip(at));
+        return (moved, landed);
+    }
+
+    private static int IndexOf(IReadOnlyList<string> order, string id)
+    {
+        for (int i = 0; i < order.Count; i++)
+        {
+            if (order[i] == id)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 }

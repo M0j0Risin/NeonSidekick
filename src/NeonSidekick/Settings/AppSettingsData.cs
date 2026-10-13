@@ -349,6 +349,22 @@ public sealed class AppSettingsData
     public List<string>? ToolbarItems { get; set; }
 
     /// <summary>
+    /// The hint bar's sections (2026-10-12, the user's ask: the other bars' checklist for the hint bar): the ids of
+    /// <see cref="App.HintBarItems.Names"/> — status, queued, keys, timers, reading, usage and model — that the standing hint row
+    /// draws. Null (the default) is every one, the row as it always was; an empty list leaves the row to the alerts and the busy
+    /// row's spinner. Read on every pane draw and on its tick. No variable.
+    /// </summary>
+    public List<string>? HintBarItems { get; set; }
+
+    /// <summary>
+    /// The hint bar's order (2026-10-12, the user's ask: its sections in any order): every id of <see cref="App.HintBarItems.Names"/>,
+    /// checked or not, in the order the standing row draws them (<see cref="App.HintBarItems.Order"/>); the model keeps the right
+    /// edge while it is the last checked one. Null (the default) is the row's own order, which the checklist's <c>⊡ default</c> puts
+    /// back with the checks. No settings row of its own, no variable.
+    /// </summary>
+    public List<string>? HintBarOrder { get; set; }
+
+    /// <summary>
     /// The items a bare <c>/toolbar</c> (or Ctrl+T, or <c>/toolbar on</c>) brings back after it hid the toolbar (later on 2026-09-30,
     /// the user's ask: "same as how /perf works for the perfbar"): what showed when it hid it, as <see cref="ToolbarItems"/>
     /// saves it; null until then, or when that was <see cref="App.ToolbarItems.Defaults"/>, which come back. No settings row,

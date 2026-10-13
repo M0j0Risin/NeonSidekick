@@ -32,7 +32,7 @@ public partial class SettingsMenuTests
 
         var order = _settings.Current.ToolbarOrder!;
         Assert.Equal(ToolbarItems.Profile, order[0]);
-        Assert.Equal([ToolbarItems.Settings, ToolbarItems.Path], order[^2..]);
+        Assert.Equal([ToolbarItems.Settings, ToolbarItems.Path, ToolbarItems.Model], order[^3..]);   // the model's name after the path (2026-10-12)
         Assert.DoesNotContain(ToolbarItems.Settings, _settings.Current.ToolbarItems!);
         Assert.Contains(ToolbarItems.Tools, _settings.Current.ToolbarItems!);
         Assert.Contains(SettingsMenu.ToolbarToggleKeys, Output);
@@ -113,7 +113,7 @@ public partial class SettingsMenuTests
         Assert.Contains(SettingsMenu.BarOrderKeys, Output);
         Assert.Contains(SettingsMenu.DefaultsButton, Output);
         Assert.Contains("Home bar         " + PaneBars.OffMark + PaneBars.Describe(PaneBars.Home), Output);
-        Assert.Contains("  · Toolbar order: Toolbar, Performance bar, Hint bar, Home bar", Output);
+        Assert.Contains("  · Toolbar order: Tool bar, Performance bar, Hint bar, Home bar", Output);   // "Toolbar" until later on 2026-10-12
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
@@ -131,17 +131,18 @@ public partial class SettingsMenuTests
     }
 
     /// <summary>
-    /// The Tool bars section (2026-10-12, the user's ask): under Screen's rows, the four bars by their new names — Toolbar,
-    /// Performance bar, Home bar and Order, the last <c>Toolbar order</c> everywhere but here — and Order's page under that name.
+    /// The Tool bars section (2026-10-12, the user's ask): under Screen's rows, the bars by their new names — Hint bar (later that day),
+    /// Tool bar ("Toolbar" until later that day), Performance bar, Home bar and Order, the last <c>Toolbar order</c> everywhere but
+    /// here — and Order's page under that name.
     /// </summary>
     [Fact]
     public async Task OnThePane_TheToolBarsSection_HoldsTheFourRows_OrderShortOnThePane()
     {
         var fields = SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList();
-        Assert.Equal(fields.IndexOf(SettingsField.MenuMaxHeight) + 1, fields.IndexOf(SettingsField.ToolbarItems));
+        Assert.Equal(fields.IndexOf(SettingsField.MenuMaxHeight) + 1, fields.IndexOf(SettingsField.HintBarItems));
         Assert.Equal(
-            [SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder],
-            fields.Skip(fields.IndexOf(SettingsField.ToolbarItems)).Take(4));
+            [SettingsField.HintBarItems, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder],
+            fields.Skip(fields.IndexOf(SettingsField.HintBarItems)).Take(5));
 
         var (menu, pane) = PaneMenu();
         Down(fields.IndexOf(SettingsField.BarOrder));
@@ -149,13 +150,55 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("  Menus max height             full-screen\n" + MenuLayout.Heading("Tool bars", 120) + "\n  Toolbar                      ", Output);
+        Assert.Contains("  Menus max height             full-screen\n" + MenuLayout.Heading("Tool bars", 120) + "\n  Hint bar                     " + HintBarItems.AllValue + "\n  Tool bar                     ", Output);
         Assert.Contains("\n  Performance bar              ", Output);
         Assert.Contains("\n  Home bar                     ", Output);
         Assert.Contains("\n▸ Order                        " + PaneBars.DefaultValue + "\n" + MenuLayout.Heading("Outside apps", 120), Output);
         Assert.Contains(GroupBreadcrumb(SettingsTab.Chat, SettingsMenu.BarOrderPaneName) + " ", Output);   // its page under the same name (the default button after it)
         Assert.DoesNotContain("Show toolbar", Output);
         Assert.DoesNotContain("Toolbar order", Output);   // the pane's own words: nothing saved, no notice
+        pane.Dispose();
+    }
+
+
+    /// <summary>
+    /// Hint bar (2026-10-12, the user's ask: the other bars' checklist for the hint bar): its sections in the row's order, Shift+End
+    /// moves one to the bottom with the cursor, Space unchecks it there, each saved at once; <c>d</c> puts every section and the
+    /// order back (null both), a second <c>d</c> saves nothing.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_HintBar_ChecksAndMovesItsSections_DefaultPutsThemBack()
+    {
+        var (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.HintBarItems));
+        Push(Keys.Enter);                       // the checklist, on Status
+        Push(ShiftEnd);                         // Status to the bottom, the cursor with it
+        Push(Keys.Char(' '));                   // and off
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["queued", "keys", "timers", "reading", "usage", "model", "status"], _settings.Current.HintBarOrder);
+        Assert.Equal(["queued", "keys", "timers", "reading", "usage", "model"], _settings.Current.HintBarItems);
+        Assert.Contains("[x] Status    ", Output);
+        Assert.Contains("[ ] Status    ", Output);
+        Assert.Contains(SettingsMenu.HintBarToggleKeys, Output);
+        Assert.Contains(GroupBreadcrumb(SettingsTab.Chat, "Hint bar") + " ", Output);
+        Assert.Contains("  · Hint bar: Queued, Keys, Timers, Reading, Usage, Model", Output);
+        pane.Dispose();
+
+        (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.HintBarItems));
+        Push(Keys.Enter);
+        Push(Keys.Char('d'));                   // every section, the row's own order
+        Push(Keys.Char('d'));                   // again: nothing to save
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Null(_settings.Current.HintBarItems);
+        Assert.Null(_settings.Current.HintBarOrder);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(Output, "  · Hint bar: all"));
         pane.Dispose();
     }
 }

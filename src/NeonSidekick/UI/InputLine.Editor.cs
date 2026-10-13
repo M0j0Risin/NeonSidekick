@@ -1053,9 +1053,9 @@ public sealed partial class InputLine
                     return new EditOutcome.End(new InputResult.ToolbarRow(_text.ToString(), tool));
                 }
 
-                if (tool.Zone == ScreenPane.ToolbarZone.Glyph)
+                if (tool.Zone is ScreenPane.ToolbarZone.Glyph or ScreenPane.ToolbarZone.Model)
                 {
-                    // One click says what the glyph is (2026-10-04, the UI review): its note on the hint row.
+                    // One click says what the glyph is (2026-10-04, the UI review): its note on the hint row; the model's name too (2026-10-12).
                     _line.ToolbarNote?.Invoke(tool);
                 }
             }

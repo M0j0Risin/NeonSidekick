@@ -72,6 +72,7 @@ public static class ToolbarItems
     public const string YouTube = "youtube";         // 2026-10-08, the user's ask: 📺, /youtube list (a pane; after 🪟 later that day)
     public const string ShoppingList = "shoppinglist"; // 2026-10-11, the user's ask: 🛒, /shopping's list (a pane), after 📺; the Shopping tools switch (id shopping, after Print) until later that day
     public const string Path = "path";
+    public const string Model = "model";   // 2026-10-12, the user's ask: the model's name, no reasoning glyph; after the path by default, and free to move past it
 
     /// <summary>
     /// Every item in strip order, the path last (it sits at the row's right). The order is the user's (2026-10-03): the panes,
@@ -85,7 +86,7 @@ public static class ToolbarItems
     [
         Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Ask, CmdList, Police,
         Shell, Files, Image, Web, Advisors, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
-        Log, Process, ComfyView, ComfyThumbs, YouTube, ShoppingList, Perf, Path,
+        Log, Process, ComfyView, ComfyThumbs, YouTube, ShoppingList, Perf, Path, Model,
     ];
 
     /// <summary>
@@ -186,6 +187,7 @@ public static class ToolbarItems
         YouTube => "YouTube",
         ShoppingList => "Shopping list",
         Path => "Working directory path",
+        Model => "Model name",
         _ => id,
     };
 
@@ -215,6 +217,7 @@ public static class ToolbarItems
         YouTube => ChatScreen.YouTubeToolLine,
         ShoppingList => ChatScreen.ShoppingToolLine,
         Path => "/cwd browse",
+        Model => SlashCommands.ServerWord,
         _ => ToolsText.SwitchField(id) is null ? "" : ToolsText.SwitchLine(id),
     };
 
@@ -228,6 +231,9 @@ public static class ToolbarItems
     /// </summary>
     public static string Note(string glyph, string id, string? state) =>
         glyph + " " + Title(id) + (state is null ? "" : ": " + state) + " · " + DoubleClickNote;
+
+    /// <summary>One click on the model's name on the toolbar (2026-10-12): <c>Model name: Qwen3-30B · double-click to open</c>. Pinned.</summary>
+    public static string ModelNote(string name) => Title(Model) + ": " + name + " · " + DoubleClickNote;
 
     /// <summary>The checklist's name column: "Working directory path" (22) plus two.</summary>
     public const int TitleWidth = 24;
@@ -270,7 +276,10 @@ public static class ToolbarItems
     /// The checklist's and the strip's order for <paramref name="saved"/> (<see cref="Settings.AppSettingsData.ToolbarOrder"/>,
     /// 2026-10-12): every item, <see cref="Names"/>' order for null, the path last whatever was saved (<see cref="ItemOrder.Resolve"/>).
     /// </summary>
-    public static List<string> Order(IReadOnlyList<string>? saved) => ItemOrder.Resolve(saved, Names, Path);
+    public static List<string> Order(IReadOnlyList<string>? saved) => ItemOrder.Resolve(saved, Names, Path, Passers);
+
+    /// <summary>The items that may stand after the path (2026-10-12): the model's name, whose default place that is. Pinned.</summary>
+    public static readonly string[] Passers = [Model];
 
     /// <summary>What saves for <paramref name="order"/>: null for <see cref="Names"/>' own order (<see cref="ItemOrder.Save"/>).</summary>
     public static List<string>? SaveOrder(IReadOnlyList<string> order) => ItemOrder.Save(order, Names);

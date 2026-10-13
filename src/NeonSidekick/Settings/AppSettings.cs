@@ -756,6 +756,8 @@ public sealed class AppSettings : IDisposable
         ShowWorkingDirectory = source.ShowWorkingDirectory,
         ShowHeader = source.ShowHeader,
         ToolbarItems = source.ToolbarItems is null ? null : [.. source.ToolbarItems],
+        HintBarItems = source.HintBarItems is null ? null : [.. source.HintBarItems],
+        HintBarOrder = source.HintBarOrder is null ? null : [.. source.HintBarOrder],
         ToolbarLastItems = source.ToolbarLastItems is null ? null : [.. source.ToolbarLastItems],
         PerformanceBarItems = source.PerformanceBarItems is null ? null : [.. source.PerformanceBarItems],
         PerformanceBarLastItems = source.PerformanceBarLastItems is null ? null : [.. source.PerformanceBarLastItems],

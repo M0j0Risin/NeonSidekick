@@ -29,7 +29,7 @@ public static class PaneBars
     public static string Title(string id) => id switch
     {
         Hint => "Hint bar",
-        Toolbar => "Toolbar",
+        Toolbar => "Tool bar",   // "Toolbar" until 2026-10-12, the user's name for its row and here
         Perf => "Performance bar",
         Home => "Home bar",
         _ => id,

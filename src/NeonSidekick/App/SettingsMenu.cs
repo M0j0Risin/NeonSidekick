@@ -578,6 +578,13 @@ public enum SettingsField
     BarOrder,
 
     /// <summary>
+    /// The hint bar's sections and their order (<see cref="Settings.AppSettingsData.HintBarItems"/>, <see cref="Settings.AppSettingsData.HintBarOrder"/>;
+    /// 2026-10-12, the user's ask): a checklist with the move keys (<see cref="EditHintBarAsync"/>). The first row under Tool bars; no
+    /// reconnect (read at each pane draw).
+    /// </summary>
+    HintBarItems,
+
+    /// <summary>
     /// Typed: off or 50 to 99 % of the biggest GPU's dedicated memory for the embedded server
     /// (<see cref="Settings.AppSettingsData.EmbeddedVramBudget"/>, later on 2026-09-29, the user's ask); a reconnect. The
     /// Embedded tab's row after Embedded GPU layers.
@@ -1445,7 +1452,7 @@ internal sealed partial class SettingsMenu
          SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker,
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle,
          SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.MenuMaxHeight,
-         SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder,
+         SettingsField.HintBarItems, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder,
          SettingsField.DraftEditor, SettingsField.ImageEditor],
         [SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays,
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
@@ -2268,7 +2275,8 @@ internal sealed partial class SettingsMenu
         SettingsField.ShowHeader => "Show header",   // the user's name (2026-10-01)
         SettingsField.MenuMaxHeight => "Menus max height",   // the user's name (2026-10-01)
         SettingsField.ShowWorkingDirectory => "Working directory in header",
-        SettingsField.ToolbarItems => "Toolbar",   // the three bars "Show toolbar", "Show performance bar" and "Show home bar" until 2026-10-12, the user's names
+        SettingsField.HintBarItems => "Hint bar",   // 2026-10-12, the user's name
+        SettingsField.ToolbarItems => "Tool bar",   // the user's names (2026-10-12): "Show toolbar", "Show performance bar" and "Show home bar" until then, this one "Toolbar" for a few hours
         SettingsField.ShowPerformanceBar => "Performance bar",
         SettingsField.ShowHomeBar => "Home bar",
         SettingsField.BarOrder => "Toolbar order",   // "Order" on the pane, under Tool bars (PaneName)
@@ -2625,6 +2633,7 @@ internal sealed partial class SettingsMenu
             SettingsField.SessionTool => OnOff(data.SessionTool),
             SettingsField.ShowHeader => OnOff(data.ShowHeader),
             SettingsField.ShowWorkingDirectory => OnOff(data.ShowWorkingDirectory),
+            SettingsField.HintBarItems => App.HintBarItems.Value(data.HintBarItems, data.HintBarOrder),
             SettingsField.ToolbarItems => App.ToolbarItems.Value(data.ToolbarItems),
             SettingsField.ShowPerformanceBar => PerfBarItems.Value(data.PerformanceBarItems, data.PerformanceBarLook, data.PerformanceBarOrder),
             SettingsField.ShowHomeBar => HomeBarItems.Value(data.HomeBarItems, null),
@@ -3097,6 +3106,9 @@ internal sealed partial class SettingsMenu
     /// default); they went the same day, and <c>/perfbar &lt;look&gt;</c> is the one way to pick it. Pinned.
     /// </summary>
     public const string PerfBarToggleKeys = ToolbarToggleKeys;
+
+    /// <summary>The Hint bar checklist's hint (2026-10-12): the toolbar's keys, the same string. Pinned.</summary>
+    public const string HintBarToggleKeys = ToolbarToggleKeys;
 
     /// <summary>The Toolbar order page's hint (2026-10-12): the move keys and default, nothing to check. Pinned.</summary>
     public const string BarOrderKeys = "Shift+↑↓ = move · Shift+Home/End = top or bottom · d = default · ESC = back";
@@ -4778,6 +4790,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.ToolbarItems)
         {
             return await EditToolbarItemsAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.HintBarItems)
+        {
+            return await EditHintBarAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.SessionNamingMode)
@@ -8195,7 +8212,7 @@ internal sealed partial class SettingsMenu
             cursor = pick.Row;
             if (pick.Move != 0)
             {
-                var (moved, at) = ItemOrder.Move(order, pick.Row, pick.Move, App.ToolbarItems.Path);
+                var (moved, at) = ItemOrder.Move(order, pick.Row, pick.Move, App.ToolbarItems.Path, App.ToolbarItems.Passers);
                 cursor = at;
                 if (at != pick.Row)
                 {
@@ -8229,6 +8246,76 @@ internal sealed partial class SettingsMenu
             }
 
             Apply(SettingsField.ToolbarItems, d => d.ToolbarItems = App.ToolbarItems.Save(next));
+            changed = true;
+        }
+    }
+
+    /// <summary>
+    /// The hint bar's checklist under the settings list (2026-10-12, the user's ask: the other bars' checklist for the hint bar):
+    /// one <see cref="App.HintBarItems.Label"/> row per section in the row's order (<see cref="App.HintBarItems.Order"/>), Enter or
+    /// Space flipping it and saving at once; Shift+↑↓ moves the cursor's section a place, Shift+Home/End to the top or the bottom,
+    /// Delete unchecks it; select all, select none and default (every section, the row's own order) on the title row. The list is
+    /// re-shown until ESC, the row redrawing under it. True when anything changed.
+    /// </summary>
+    private async Task<bool> EditHintBarAsync(CancellationToken cancellationToken)
+    {
+        bool changed = false;
+        int cursor = 0;
+        var names = App.HintBarItems.Names;
+        while (true)
+        {
+            var saved = _settings.Current;
+            var on = App.HintBarItems.Resolve(saved.HintBarItems);
+            var order = App.HintBarItems.Order(saved.HintBarOrder);
+            var page = new MenuPage(Crumb(FieldName(SettingsField.HintBarItems)), order.Select(id => App.HintBarItems.Label(id, on.Contains(id))).ToList(), HintBarToggleKeys) { SpaceToggles = true };
+            var picked = await PickOrderedChecklistAsync(page, cursor, cancellationToken, DefaultChecklistButtons).ConfigureAwait(false);
+            if (picked is not { } pick)
+            {
+                if (!changed)
+                {
+                    Sink.Notice(UnchangedNotice);
+                }
+
+                return changed;
+            }
+
+            cursor = pick.Row;
+            if (pick.Move != 0)
+            {
+                var (moved, at) = ItemOrder.Move(order, pick.Row, pick.Move);
+                cursor = at;
+                if (at != pick.Row)
+                {
+                    Apply(SettingsField.HintBarItems, d => d.HintBarOrder = App.HintBarItems.SaveOrder(moved));
+                    changed = true;
+                }
+
+                continue;
+            }
+
+            if (pick.Button == DefaultsIndex)
+            {
+                if (on.Count == names.Length && App.HintBarItems.SaveOrder(order) is null)
+                {
+                    continue;   // every section in the default order: nothing to save
+                }
+
+                Apply(SettingsField.HintBarItems, d => { d.HintBarItems = null; d.HintBarOrder = null; });
+                changed = true;
+                continue;
+            }
+
+            string row = order[Math.Clamp(pick.Row, 0, order.Count - 1)];
+            var next = pick.Button == SelectAllIndex ? names.ToHashSet(StringComparer.Ordinal)
+                : pick.Button == SelectNoneIndex ? new HashSet<string>(StringComparer.Ordinal)
+                : pick.Remove ? names.Where(n => on.Contains(n) && n != row).ToHashSet(StringComparer.Ordinal)
+                : names.Where(n => on.Contains(n) != (n == row)).ToHashSet(StringComparer.Ordinal);
+            if (next.SetEquals(on))
+            {
+                continue;   // select all with every section on, none with none, Delete on an unchecked row: nothing to save
+            }
+
+            Apply(SettingsField.HintBarItems, d => d.HintBarItems = App.HintBarItems.Save(next));
             changed = true;
         }
     }

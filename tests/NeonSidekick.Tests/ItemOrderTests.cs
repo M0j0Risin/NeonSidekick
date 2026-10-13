@@ -56,8 +56,43 @@ public class ItemOrderTests
         Assert.Equal(ToolbarItems.Names, ToolbarItems.Order(null));
         var order = ToolbarItems.Order(["path", "perf", "settings"]);
         Assert.Equal(["perf", "settings"], order.Take(2));
-        Assert.Equal(ToolbarItems.Path, order[^1]);
+        Assert.Equal([ToolbarItems.Path, ToolbarItems.Model], order[^2..]);   // the model's name after the path, its default place (2026-10-12)
         Assert.Equal(ToolbarItems.Names.Length, order.Count);
+    }
+
+    /// <summary>
+    /// The toolbar's Model name (2026-10-12, the user's ask: free to move, after the path by default): an order saved before it puts it
+    /// after the path; saved ahead of the path it stays there; anything else saved after the path goes back ahead of it.
+    /// </summary>
+    [Fact]
+    public void TheToolbarsOrder_TheModelAlonePassesThePath()
+    {
+        List<string> old = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)];
+        Assert.Equal([ToolbarItems.Path, ToolbarItems.Model], ToolbarItems.Order(old)[^2..]);
+        var ahead = ToolbarItems.Order(["model", "settings"]);
+        Assert.Equal(["model", "settings"], ahead.Take(2));
+        Assert.Equal(ToolbarItems.Path, ahead[^1]);
+        var mended = ToolbarItems.Order(["settings", "path", "tools", "model"]);
+        Assert.Equal([ToolbarItems.Path, ToolbarItems.Model], mended[^2..]);
+        Assert.True(mended.IndexOf("tools") < mended.IndexOf("path"));
+    }
+
+    [Fact]
+    public void Move_TheModelStepsOverThePath_TheGlyphsStopAtIt()
+    {
+        var order = ToolbarItems.Order(null);
+        int path = order.IndexOf(ToolbarItems.Path);
+        int model = order.IndexOf(ToolbarItems.Model);
+        var up = ItemOrder.Move(order, model, -1, ToolbarItems.Path, ToolbarItems.Passers);
+        Assert.Equal([ToolbarItems.Model, ToolbarItems.Path], up.Order[^2..]);
+        Assert.Equal(path, up.Index);
+        var top = ItemOrder.Move(order, model, HomeBarItems.Top, ToolbarItems.Path, ToolbarItems.Passers);
+        Assert.Equal((ToolbarItems.Model, 0), (top.Order[0], top.Index));
+        var down = ItemOrder.Move(up.Order, up.Index, 1, ToolbarItems.Path, ToolbarItems.Passers);
+        Assert.Equal(order, down.Order);   // and back past it
+        var glyph = ItemOrder.Move(order, path - 1, HomeBarItems.Bottom, ToolbarItems.Path, ToolbarItems.Passers);
+        Assert.Equal(path - 1, glyph.Index);   // a glyph stops ahead of the path
+        Assert.Equal(order, ItemOrder.Move(order, path, -1, ToolbarItems.Path, ToolbarItems.Passers).Order);   // the path never moves
     }
 
     [Fact]
@@ -109,7 +144,7 @@ public class ItemOrderTests
         Assert.Null(PaneBars.SaveOrder(PaneBars.Order(null)));
         Assert.Equal(PaneBars.DefaultValue, PaneBars.Value(null));
         Assert.Equal(PaneBars.DefaultValue, PaneBars.Value(["hint", "toolbar"]));
-        Assert.Equal("Toolbar, Performance bar, Hint bar, Home bar", PaneBars.Value(["toolbar", "perf", "hint", "home"]));
+        Assert.Equal("Tool bar, Performance bar, Hint bar, Home bar", PaneBars.Value(["toolbar", "perf", "hint", "home"]));   // "Toolbar" until later on 2026-10-12
         Assert.Equal([PaneBar.Toolbar, PaneBar.Perf, PaneBar.Hint, PaneBar.Home], PaneBars.Bars(["toolbar", "perf", "hint", "home"]));
         Assert.Equal(ScreenPane.DefaultBarOrder, PaneBars.Bars(null));
 

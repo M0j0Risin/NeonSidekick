@@ -361,6 +361,7 @@ public sealed partial class InputLine
     {
         ScreenPane.ToolbarZone.Path => -3,
         ScreenPane.ToolbarZone.Row => -4,
+        ScreenPane.ToolbarZone.Model => ScreenPane.ToolbarModelKey,   // 2026-10-12
         _ => -5 - hit.Column,
     };
 

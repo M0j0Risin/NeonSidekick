@@ -27,7 +27,7 @@ internal sealed partial class SettingsMenu
                 (SettingsField.QueueMode, "Input line"),
                 (SettingsField.TranscriptMarkdown, "Transcript"),
                 (SettingsField.Theme, "Screen"),
-                (SettingsField.ToolbarItems, "Tool bars"),
+                (SettingsField.HintBarItems, "Tool bars"),   // the Hint bar its first row since later on 2026-10-12
                 (SettingsField.DraftEditor, "Outside apps"),
             ],
             [SettingsTab.Common] =

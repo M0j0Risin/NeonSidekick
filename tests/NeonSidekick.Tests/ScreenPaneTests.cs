@@ -5400,4 +5400,161 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(@"D:\Repo", ScreenPane.HomeTilde(@"D:\Repo", null));
         Assert.Equal(@"D:\Repo", ScreenPane.HomeTilde(@"D:\Repo", ""));
     }
+
+    // ── The Hint bar's order and the toolbar's model name (2026-10-12) ─────
+
+    /// <summary>
+    /// <see cref="ScreenPane.HintLayout"/> (2026-10-12, the user's ask: the Hint bar's sections in any order): the row is its parts in
+    /// order behind the separator, the screen's own hint left out; the strip, the queued part, the tally and a model in the flow each
+    /// a zone where they landed, the mark its own; nothing at the right edge.
+    /// </summary>
+    [Fact]
+    public void HintLayout_DrawsThePartsInOrder_EachZoneWhereItLanded()
+    {
+        _cursorTop = 100;
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Strip = () => "🔊";
+        pane.Queued = () => "📤 2 queued";
+        pane.Usage = () => "1k";
+        pane.Trailer = () => "llama";
+        pane.TrailerMark = () => "◕";
+        pane.HintLayout = () => [ScreenPane.HintSlot.Of("1k"), ScreenPane.HintSlot.Strip, ScreenPane.HintSlot.Model, ScreenPane.HintSlot.Queued];
+        pane.Show();
+        pane.ShowInput("abc", 3);
+
+        // "1k" 0–1, " · ", 🔊 5–6, " · ", "llama ◕" 10–16 (the mark at 16), " · ", "📤 2 queued" from 20.
+        Assert.Contains("\n1k · 🔊 · llama ◕ · 📤 2 queued", Output);
+        Assert.DoesNotContain("idle", Output);
+        Assert.True(pane.TryHitHint(0, 102, out var hit));
+        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Usage, "", 0), hit);
+        Assert.True(pane.TryHitHint(6, 102, out hit));
+        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "🔊", 5), hit);
+        Assert.True(pane.TryHitHint(10, 102, out hit));
+        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Trailer, "", 10), hit);
+        Assert.True(pane.TryHitHint(16, 102, out hit));
+        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Mark, "", 16), hit);
+        Assert.True(pane.TryHitHint(18, 102, out hit));   // the separator after the mark
+        Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
+        Assert.True(pane.TryHitHint(21, 102, out hit));
+        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Queued, "", 20), hit);
+        Assert.True(pane.TryHitHint(38, 102, out hit));   // the right edge: blank, no model there
+        Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
+
+        // No model slot: the model keeps the right edge as always, the parts in their order ahead of it.
+        pane.HintLayout = () => [ScreenPane.HintSlot.Of("1k"), ScreenPane.HintSlot.Strip];
+        int mark = Output.Length;
+        pane.RefreshHint();
+        Assert.Contains(ScreenPane.PinRight("1k · 🔊", "llama", "◕", 39), Output[mark..]);
+        Assert.True(pane.TryHitHint(38, 102, out hit));
+        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Mark, "", 38), hit);
+        Assert.True(pane.TryHitHint(5, 102, out hit));
+        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "🔊", 5), hit);
+    }
+
+    /// <summary>The model in the flow keeps its mark's own colour (2026-10-12), as at the right edge.</summary>
+    [Fact]
+    public void HintLayout_TheModelInTheFlow_KeepsTheMarksStyle()
+    {
+        _console.EmitAnsiSequences();
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Trailer = () => "llama";
+        pane.TrailerMark = () => "◕";
+        pane.HintLayout = () => [ScreenPane.HintSlot.Model, ScreenPane.HintSlot.Of("idle")];
+        pane.Show();
+
+        Assert.Contains(Sgr(Theme.Tertiary) + "◕", Output);
+        Assert.DoesNotContain(Sgr(Theme.Tertiary) + "llama", Output);
+        Assert.Contains("llama ", Output);
+    }
+
+    /// <summary>
+    /// The toolbar's model name at the right edge (2026-10-12, the user's ask: Model name after the path by default): the path ahead of
+    /// it behind the separator, the name alone without a path, the name cut to half the row; a zone of its own.
+    /// </summary>
+    [Fact]
+    public void TheToolbarsModelName_AtTheRight_AfterThePath()
+    {
+        Assert.Equal("🔧" + new string(' ', 25) + @"D:\x · llama", ScreenPane.ToolbarRow("🔧", @"D:\x", "llama", 39));
+        Assert.Equal("🔧" + new string(' ', 32) + "llama", ScreenPane.ToolbarRow("🔧", "", "llama", 39));
+        Assert.Equal(ScreenPane.ToolbarRow("🔧", @"D:\x", 39), ScreenPane.ToolbarRow("🔧", @"D:\x", "", 39));
+        Assert.Equal("🔧" + new string(' ', 8) + new string('m', 9) + "…", ScreenPane.ToolbarRow("🔧", @"D:\x", new string('m', 30), 20));   // cut to half the row; no room left for the path
+
+        _cursorTop = 100;
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Toolbar = () => new ScreenPane.ToolbarParts("🔧", @"D:\x", null, "llama");
+        pane.Show();
+        pane.ShowInput("abc", 3);
+        Assert.Contains("\n" + ScreenPane.ToolbarRow("🔧", @"D:\x", "llama", 39), Output);
+        Assert.True(pane.TryHitToolbar(34, 103, out var tool));
+        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Model, "", 34), tool);
+        Assert.True(pane.TryHitToolbar(38, 103, out tool));
+        Assert.Equal(ScreenPane.ToolbarZone.Model, tool.Zone);
+        Assert.True(pane.TryHitToolbar(27, 103, out tool));
+        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Path, "", 27), tool);
+        Assert.True(pane.TryHitToolbar(32, 103, out tool));   // the separator
+        Assert.Equal(ScreenPane.ToolbarZone.Row, tool.Zone);
+        Assert.Equal(ScreenPane.ToolbarModelKey, ScreenPane.OutsideKeyOf(new ScreenPane.OffPaneHit(null, tool with { Zone = ScreenPane.ToolbarZone.Model })));
+        Assert.Equal(ScreenPane.ToolbarModelKey, InputLine.ToolbarPairKey(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Model, "", 34)));
+    }
+
+    /// <summary>
+    /// The model's name moved among the toolbar's glyphs (2026-10-12, the user's ask: it moves freely): drawn before the glyph it
+    /// stands ahead of, a blank either side; the glyphs after it keep their zones and their slabs, counted on past it.
+    /// </summary>
+    [Fact]
+    public void TheToolbarsModelName_AmongTheGlyphs_TheGlyphsAfterItKeepTheirZones()
+    {
+        _cursorTop = 100;
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Toolbar = () => new ScreenPane.ToolbarParts("🔧 🎓 🌐", @"D:\x", null, "llama", 1);
+        pane.Show();
+        pane.ShowInput("abc", 3);
+
+        // "🔧" 0–1, " llama" 3–7, " 🎓" 9–10, " 🌐" 12–13, the path on the last four cells.
+        Assert.Contains("\n🔧 llama 🎓 🌐" + new string(' ', 21) + @"D:\x", Output);
+        Assert.True(pane.TryHitToolbar(0, 103, out var tool));
+        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🔧", 0), tool);
+        Assert.True(pane.TryHitToolbar(3, 103, out tool));
+        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Model, "", 3), tool);
+        Assert.True(pane.TryHitToolbar(7, 103, out tool));
+        Assert.Equal(ScreenPane.ToolbarZone.Model, tool.Zone);
+        Assert.True(pane.TryHitToolbar(8, 103, out tool));
+        Assert.Equal(ScreenPane.ToolbarZone.Row, tool.Zone);
+        Assert.True(pane.TryHitToolbar(10, 103, out tool));
+        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🎓", 9), tool);
+        Assert.True(pane.TryHitToolbar(12, 103, out tool));
+        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🌐", 12), tool);
+        Assert.True(pane.TryHitToolbar(36, 103, out tool));
+        Assert.Equal(ScreenPane.ToolbarZone.Path, tool.Zone);
+
+        // At the strip's start: the name first, every glyph after it.
+        pane.Toolbar = () => new ScreenPane.ToolbarParts("🔧 🎓", "", null, "llama", 0);
+        int mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.StartsWith("llama 🔧 🎓", Output[mark..]);
+        Assert.True(pane.TryHitToolbar(0, 103, out tool));
+        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Model, "", 0), tool);
+        Assert.True(pane.TryHitToolbar(6, 103, out tool));
+        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🔧", 6), tool);
+    }
+
+    [Fact]
+    public void TheToolbarsModelName_AmongTheGlyphs_AnOffGlyphAfterItIsStillOnTheSlab()
+    {
+        _console.EmitAnsiSequences();
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Toolbar = () => new ScreenPane.ToolbarParts("🔧 🎓 🌐", "", [2], "llama", 1);
+        pane.Show();
+
+        var fill = Theme.ToolbarOff.Background;
+        string slab = $"48;2;{fill.R};{fill.G};{fill.B}m";
+        Assert.Contains(slab + "🌐", Output);
+        Assert.DoesNotContain(slab + "🎓", Output);
+        Assert.Contains("llama", Output);
+    }
 }

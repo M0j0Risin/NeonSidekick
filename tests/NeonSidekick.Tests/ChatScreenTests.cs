@@ -9562,7 +9562,7 @@ public partial class ChatScreenTests : IDisposable
     [WindowsFact]
     public async Task TheToolbarLock_FollowsTheShellCommandPolicy_NoneUnderOff_OpenUnderYolo()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; d.ShellCommandPolicy = "off"; d.MemoryMode = "disabled"; d.ShellPolice = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)]; d.ShellCommandPolicy = "off"; d.MemoryMode = "disabled"; d.ShellPolice = false; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -9591,7 +9591,7 @@ public partial class ChatScreenTests : IDisposable
     [UnixFact]
     public async Task TheToolbarLock_FollowsTheShellCommandPolicy_NoneUnderOff_OpenUnderYolo_Unix()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; d.ShellCommandPolicy = "off"; d.MemoryMode = "disabled"; d.ShellPolice = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)]; d.ShellCommandPolicy = "off"; d.MemoryMode = "disabled"; d.ShellPolice = false; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -9629,7 +9629,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task TheToolbarDisk_AndTheOfficer_FollowMemory_AndShellPolice_AndTheOfficersPairIsThePolicePage()
     {
         _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });   // Memory, ask and the police: the defaults
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)]; });   // Memory, ask and the police: the defaults
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -9681,7 +9681,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(output.IndexOf(ninjaRow, StringComparison.Ordinal) < output.LastIndexOf(police, StringComparison.Ordinal), output);   // the ninja's pair: the page again
         Assert.True(output.LastIndexOf(settings, StringComparison.Ordinal) < output.LastIndexOf(police, StringComparison.Ordinal), output);   // the click no longer lands on the blanks (/settings until 2026-10-02)
         Assert.All(new[] { "/memory" }, word => Assert.DoesNotContain("› " + word, output));
-        Assert.Equal(ToolbarItems.Names, _settings.Current.ToolbarItems);   // untouched: every item, as the test set it
+        Assert.Equal(ToolbarItems.Names.Where(id => id != ToolbarItems.Model), _settings.Current.ToolbarItems);   // untouched: every item but the model's name, as the test set it
         Assert.Equal("hi!", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
     }
 
@@ -10748,7 +10748,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task ADoubleClickOnAToolbarGlyph_OpensItsPane_OnThePath_TheBrowser_AndTheDraftComesBack()
     {
         _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);   // an empty line: row 100, the rule 101, the hint row 102, the toolbar 103
@@ -10823,7 +10823,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task ADoubleClickOnAToolbarGlyph_OpensItsPane_OnThePath_TheBrowser_AndTheDraftComesBack_Unix()
     {
         _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);   // an empty line: row 100, the rule 101, the hint row 102, the toolbar 103
@@ -11110,7 +11110,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task UnderAPane_ADoubleClickOnTheModelName_TheMark_ThePath_OrTheBlanks_ClosesOrSwitches()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);   // the hint row 102 ("llama ○" ends at 238), the toolbar 103
@@ -24428,7 +24428,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ToolbarItems.CmdList, ChatScreen.ToolbarItemOf(ChatScreen.CmdYoloToolGlyph));
         Assert.Equal(ToolbarItems.Police, ChatScreen.ToolbarItemOf(ChatScreen.NinjaToolGlyph));
         Assert.Null(ChatScreen.ToolbarGlyphNote("+", shown));
-        Assert.All(ToolbarItems.Names.Where(id => id != ToolbarItems.Path), id => Assert.Equal(id, ChatScreen.ToolbarItemOf(ToolbarItems.Glyph(id))));
+        Assert.All(ToolbarItems.Names.Where(id => id is not (ToolbarItems.Path or ToolbarItems.Model)), id => Assert.Equal(id, ChatScreen.ToolbarItemOf(ToolbarItems.Glyph(id))));   // the model's name has no glyph (2026-10-12)
     }
 
     /// <summary>One click on a glyph at the idle line flashes its note; the pair's second click opens the pane as before (2026-10-04).</summary>

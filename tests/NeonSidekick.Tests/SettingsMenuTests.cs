@@ -879,6 +879,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.ShowPerformanceBar,   // later on 2026-09-29, the performance bar
                 SettingsField.ShowHomeBar,   // 2026-10-12, the home bar
                 SettingsField.BarOrder,   // 2026-10-12, Toolbar order: the bars' order
+                SettingsField.HintBarItems,   // later on 2026-10-12, the hint bar's sections
                 SettingsField.EmbeddedVramBudget,   // later still on 2026-09-29, the VRAM budget (and the model lists' filter type, gone 2026-10-02)
                 SettingsField.EmbeddedHfDownloadType,   // 2026-09-30, single or parallel Hugging Face downloads
                 SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill,   // and the botchat's embedded bots
@@ -1141,7 +1142,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(22, SettingsMenu.ToolsTabFields.Count);   // Shopping 2026-10-11; ClaudeCode gone later on 2026-10-10; Image 2026-10-10; YouTube 2026-10-05; Screen, SQLite and Postgres 2026-10-04; Camera and Docker 2026-10-02; UNC later still on 2026-09-30; MySQL and Oracle since 2026-09-30; Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
         Assert.Equal(2, SettingsMenu.SkillsTabFields.Count);   // Options and Reflection, since later on 2026-09-19 (one list of 11, then 14, before)
         Assert.Equal(16, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 15 until Reflection downloaded skills (then Reflection installed skills) came on 2026-10-02; 14 until Project file came off the Project tab on 2026-10-01; 13 until Reflection edit supporting files came on 2026-09-27; 12 until Reflection yields to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
-        Assert.Equal(new[] { SettingsField.Profile, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.Avatar, SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle, SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.MenuMaxHeight, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder, SettingsField.DraftEditor, SettingsField.ImageEditor }, SettingsMenu.TabFields[(int)SettingsTab.Chat]);   // the four bars a run of their own after Menus max height, Tool bars, later on 2026-10-12; Toolbar order under Show home bar and Show home bar under Show performance bar, 2026-10-12; Themed external windows under Themed background (the last row before), later on 2026-10-03; Themed background under Theme, 2026-10-03; five runs since 2026-10-01 (the user's call): who and where, the input line, the transcript, the screen, the outside apps; before that: Menus max height under Theme, 2026-10-01; Image editor under Draft editor, later on 2026-09-24; Keep message history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27; Show performance bar under Show toolbar, 2026-09-29
+        Assert.Equal(new[] { SettingsField.Profile, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.Avatar, SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle, SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.MenuMaxHeight, SettingsField.HintBarItems, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder, SettingsField.DraftEditor, SettingsField.ImageEditor }, SettingsMenu.TabFields[(int)SettingsTab.Chat]);   // the four bars a run of their own after Menus max height, Tool bars, later on 2026-10-12; Toolbar order under Show home bar and Show home bar under Show performance bar, 2026-10-12; Themed external windows under Themed background (the last row before), later on 2026-10-03; Themed background under Theme, 2026-10-03; five runs since 2026-10-01 (the user's call): who and where, the input line, the transcript, the screen, the outside apps; before that: Menus max height under Theme, 2026-10-01; Image editor under Draft editor, later on 2026-09-24; Keep message history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27; Show performance bar under Show toolbar, 2026-09-29
         // Show performance bar (2026-09-29): a picker of five looks, off by default, no reconnect; the four in led by default since 2026-10-02 (the user's ask).
         Assert.False(SettingsMenu.IsToggle(SettingsField.ShowPerformanceBar));
         Assert.Equal("Performance bar", SettingsMenu.FieldName(SettingsField.ShowPerformanceBar));   // "Show performance bar" until 2026-10-12, the user's name
@@ -1211,10 +1212,11 @@ public partial class SettingsMenuTests : IDisposable
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.DiffCollapseCount) || SettingsMenu.IsLlmField(SettingsField.DiffCollapseCount));
         // Show toolbar (2026-09-21): the General row after it, a toggle, no reconnect (the pane reads it at each draw).
         Assert.False(SettingsMenu.IsToggle(SettingsField.ToolbarItems));   // a checklist since 2026-09-29, the user's ask
-        Assert.Equal("Toolbar", SettingsMenu.FieldName(SettingsField.ToolbarItems));   // "Show toolbar" until 2026-10-12, the user's name
-        Assert.Equal("11 of 38", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults (🌄 since 2026-10-10): 5 of 13 from later on 2026-09-29, 3 from 2026-10-02; of 30 and 7 from 2026-10-03; 10 since 2026-10-05
+        Assert.Equal("Tool bar", SettingsMenu.FieldName(SettingsField.ToolbarItems));   // "Show toolbar" until 2026-10-12, then "Toolbar" for a few hours: the user's names
+        Assert.Equal("Hint bar", SettingsMenu.FieldName(SettingsField.HintBarItems));   // later on 2026-10-12, the user's name
+        Assert.Equal("11 of 39", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults (🌄 since 2026-10-10): 5 of 13 from later on 2026-09-29, 3 from 2026-10-02; of 30 and 7 from 2026-10-03; 10 since 2026-10-05; of 39 with Model name, 2026-10-12
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [] }, _settings.ProfileDirectory));
-        Assert.Equal("3 of 38", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = ["usage", "PATH", " tools ", "nonsense"] }, _settings.ProfileDirectory));
+        Assert.Equal("3 of 39", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = ["usage", "PATH", " tools ", "nonsense"] }, _settings.ProfileDirectory));
         Assert.Equal("all", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [.. ToolbarItems.Names] }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ToolbarItems) || SettingsMenu.IsLlmField(SettingsField.ToolbarItems) || SettingsMenu.IsTtsField(SettingsField.ToolbarItems) || SettingsMenu.IsVoiceField(SettingsField.ToolbarItems));
         // Welcome splash (2026-09-18): the General tab's row before Show working directory (the user's order), no reconnect; a picker since 2026-09-24.
@@ -3182,7 +3184,7 @@ public partial class SettingsMenuTests : IDisposable
     /// <param name="browseFolder">The folder picker the Working directory (cwd) row opens (2026-09-22); null leaves the row asking for a typed path, as it did before the picker.</param>
     private (SettingsMenu Menu, ScreenPane Pane) PaneMenu(Func<CancellationToken, Task<string?>>? browseFolder = null, Func<IReadOnlyList<Skill>>? botChatSkills = null, Func<IReadOnlyList<ToolGroup>>? botChatTools = null)
     {
-        _console.Profile.Height = 48;   // 47 until the Tool bars heading (later on 2026-10-12), 46 until the Toolbar order row, 45 until the Show home bar row (2026-10-12); 44 until the Client group's second strip over Chat and Botchat (later still on 2026-10-10); 43 until the Avatar row (later on 2026-10-10); 42 until 2026-10-10 (the footer grew to five rows), 41 until 2026-10-07 (to four), 40 until 2026-10-05, when the footer's rule took a row and the LLM tab no longer fit
+        _console.Profile.Height = 49;   // 48 until the Hint bar row, 47 until the Tool bars heading (later on 2026-10-12), 46 until the Toolbar order row, 45 until the Show home bar row (2026-10-12); 44 until the Client group's second strip over Chat and Botchat (later still on 2026-10-10); 43 until the Avatar row (later on 2026-10-10); 42 until 2026-10-10 (the footer grew to five rows), 41 until 2026-10-07 (to four), 40 until 2026-10-05, when the footer's rule took a row and the LLM tab no longer fit
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null), new ManualTimeProvider()) { Hint = () => "idle" };
         var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
         var menu = new SettingsMenu(new ConsoleWithInput(pane, keys), _settings, f => _overrides.GetValueOrDefault(f), new InputLine(pane, keys), new TranscriptRenderer(pane), _speech, new MenuPane(pane, keys), _ => FakeBrowserPath, browseFolder: browseFolder, botChatSkills: botChatSkills, botChatTools: botChatTools);
@@ -3295,7 +3297,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\neon\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Avatar                       🤖 robot\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full-screen\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Toolbar                      11 of 38\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
+        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Avatar                       🤖 robot\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full-screen\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hint bar                     all\n  Tool bar                     11 of 39\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
         Assert.DoesNotContain("File /tree max length", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -3319,7 +3321,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"/profiles/neon/files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Avatar                       🤖 robot\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full-screen\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Toolbar                      11 of 38\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
+        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Avatar                       🤖 robot\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full-screen\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hint bar                     all\n  Tool bar                     11 of 39\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
         Assert.DoesNotContain("File /tree max length", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -4710,8 +4712,8 @@ public partial class SettingsMenuTests : IDisposable
         Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);                       // the checklist, on Settings
         Push(Keys.Char(' '));                   // Settings off (a default since 2026-10-05; on until then)
-        Down(ToolbarItems.Names.Length - 1);
-        Push(Keys.Enter);                       // the path off (the last: the thirteenth since the ID card and the rising chart, later on 2026-09-29; the thirtieth since 2026-10-03)
+        Down(ToolbarItems.Names.Length - 2);
+        Push(Keys.Enter);                       // the path off (the last but the model's name since 2026-10-12: the thirteenth since the ID card and the rising chart, later on 2026-09-29; the thirtieth since 2026-10-03)
         Push(Keys.Escape, Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
@@ -4724,8 +4726,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("[ ] 🔌  MCP", Output);
         Assert.Contains("[ ] 🪪  Profile", Output);
         Assert.Contains("[ ] 📈  Performance", Output);
-        Assert.Contains("  · Toolbar: 10 of 38", Output);
-        Assert.Contains("  · Toolbar: 9 of 38", Output);
+        Assert.Contains("  · Tool bar: 10 of 39", Output);   // "Toolbar" until later on 2026-10-12
+        Assert.Contains("  · Tool bar: 9 of 39", Output);
         pane.Dispose();
     }
 
@@ -4750,7 +4752,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains(SettingsMenu.SelectNoneButton, Output);
         Assert.Contains(SettingsMenu.DefaultsButton, Output);
         Assert.Contains(SettingsMenu.ToolbarToggleKeys, Output);
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(Output, "  · Toolbar: all"));
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(Output, "  · Tool bar: all"));
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
@@ -4785,7 +4787,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Null(_settings.Current.ToolbarItems);
         Assert.Equal(ToolbarItems.Defaults.ToHashSet(StringComparer.Ordinal), ToolbarItems.Resolve(_settings.Current.ToolbarItems));
         Assert.Contains(SettingsMenu.DefaultsButton, Output);
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(Output, "  · Toolbar: " + System.Text.RegularExpressions.Regex.Escape(ToolbarItems.Value(null))));
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(Output, "  · Tool bar: " + System.Text.RegularExpressions.Regex.Escape(ToolbarItems.Value(null))));
         pane.Dispose();
     }
 
@@ -4877,7 +4879,7 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal([], _settings.Current.ToolbarItems);
-        Assert.Contains("  · Toolbar: off", Output);
+        Assert.Contains("  · Tool bar: off", Output);
         pane.Dispose();
     }
 
@@ -5101,14 +5103,14 @@ public partial class SettingsMenuTests : IDisposable
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
-        Down(ToolbarItems.Names.Length - 1);
-        Push(Keys.Char(' '));                   // the path back: the defaults
+        Down(ToolbarItems.Names.Length - 2);
+        Push(Keys.Char(' '));                   // the path back (the last but the model's name since 2026-10-12): the defaults
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Null(_settings.Current.ToolbarItems);
-        Assert.Contains("  · Toolbar: 11 of 38", Output);
+        Assert.Contains("  · Tool bar: 11 of 39", Output);
         pane.Dispose();
     }
 

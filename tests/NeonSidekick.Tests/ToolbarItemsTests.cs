@@ -16,13 +16,18 @@ public sealed class ToolbarItemsTests
         [
             "settings", "profile", "themes", "tools", "mcp", "skills", "sys", "sessions", "usage", "memory", "ask", "cmdlist", "police",
             "shell", "files", "image", "web", "advisors", "docker", "obsidian", "sql", "oracle", "mysql", "sqlite", "postgres", "unc", "ha", "comfy", "camera", "print",
-            "log", "process", "comfyview", "comfythumbs", "youtube", "shoppinglist", "perf", "path",
-        ], ToolbarItems.Names);
-        Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 💾 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 🛒 📈 📂", string.Join(" ", ToolbarItems.Names.Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
-        Assert.Equal(ChatScreen.ToolbarStrip, string.Join(" ", ToolbarItems.Names.Where(id => id is not ("cmdlist" or "police" or "path")).Select(ToolbarItems.Glyph)));   // one source for the glyphs
+            "log", "process", "comfyview", "comfythumbs", "youtube", "shoppinglist", "perf", "path", "model",
+        ], ToolbarItems.Names);   // the model's name after the path (2026-10-12, the user's ask)
+        Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 💾 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 🛒 📈 📂", string.Join(" ", ToolbarItems.Names.SkipLast(1).Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
+        Assert.Equal("", ToolbarItems.Glyph(ToolbarItems.Model));   // no glyph: the name itself
+        Assert.Equal(ChatScreen.ToolbarStrip, string.Join(" ", ToolbarItems.Names.Where(id => id is not ("cmdlist" or "police" or "path" or "model")).Select(ToolbarItems.Glyph)));   // one source for the glyphs
         Assert.Equal(FolderText.FolderGlyph, ToolbarItems.Glyph(ToolbarItems.Path));   // the Folders pane's, one source
-        Assert.All(ToolbarItems.Names.SkipLast(1), id => Assert.Equal(ChatScreen.ToolbarWord(ToolbarItems.Glyph(id)), ToolbarItems.Describe(id)));   // the note is the line the glyph runs
+        Assert.All(ToolbarItems.Names.SkipLast(2), id => Assert.Equal(ChatScreen.ToolbarWord(ToolbarItems.Glyph(id)), ToolbarItems.Describe(id)));   // the note is the line the glyph runs
         Assert.Equal(ChatScreen.CwdBrowseLine, ToolbarItems.Describe(ToolbarItems.Path));
+        Assert.Equal("/server", ToolbarItems.Describe(ToolbarItems.Model));
+        Assert.Equal("Model name", ToolbarItems.Title(ToolbarItems.Model));
+        Assert.Equal("Model name: Qwen3-30B · double-click to open", ToolbarItems.ModelNote("Qwen3-30B"));
+        Assert.DoesNotContain(ToolbarItems.Model, ToolbarItems.Defaults);
         Assert.Equal(ToolsText.SwitchWords.Where(w => w != ToolsText.ShoppingSwitchWord), ToolbarItems.Names.Where(id => ToolsText.SwitchField(id) is not null));
         Assert.Equal([ToolbarItems.Files, ToolbarItems.ShoppingList], ToolbarItems.Resolve(["files", "Shopping"]).Order(StringComparer.Ordinal));   // a saved "shopping" (🛒's id for a few hours) is the list's item   // each switch's id is its /tools word; shopping's 🛒 opens the list instead (2026-10-11)
     }
@@ -78,10 +83,10 @@ public sealed class ToolbarItemsTests
     [Fact]
     public void Value_AndLabels_ArePinned()
     {
-        Assert.Equal("11 of 38", ToolbarItems.Value(null));   // the defaults (🌄 2026-10-10; 2026-10-05; 7 from 2026-10-03, 3 from 2026-10-02, of 13 until 2026-10-03; of 37 since 🙋, 2026-10-09)
+        Assert.Equal("11 of 39", ToolbarItems.Value(null));   // the defaults (🌄 2026-10-10; 2026-10-05; 7 from 2026-10-03, 3 from 2026-10-02, of 13 until 2026-10-03; of 37 since 🙋, 2026-10-09; of 39 since Model name, 2026-10-12)
         Assert.Equal("all", ToolbarItems.Value([.. ToolbarItems.Names]));
         Assert.Equal("off", ToolbarItems.Value([]));
-        Assert.Equal("2 of 38", ToolbarItems.Value(["usage", "path"]));
+        Assert.Equal("2 of 39", ToolbarItems.Value(["usage", "path"]));
         Assert.Equal("[[x]] ⚙️  Settings                " + Theme.DimMarkup("/settings"), ToolbarItems.Label("settings", true));
         Assert.Equal("[[ ]] 📂  Working directory path  " + Theme.DimMarkup("/cwd browse"), ToolbarItems.Label("path", false));
         Assert.Equal("[[x]] 💾  Memory                  " + Theme.DimMarkup("/memory"), ToolbarItems.Label("memory", true));

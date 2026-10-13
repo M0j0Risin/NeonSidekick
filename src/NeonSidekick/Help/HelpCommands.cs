@@ -389,8 +389,8 @@ public static class HelpCommands
         ]),
         new("/toolbar",
         [
-            new("/toolbar [on|off]", "Show or hide the toolbar (*Toolbar*). On its own it hides the toolbar, or shows it again with the items it last had (the default eleven the first time); `on` and `off` say which. Works while a reply runs; Ctrl+T runs it too."),
-            new("/toolbar edit", "Choose the toolbar's items and their order: the *Toolbar* row's checklist (Enter or Space checks an item, Shift+↑/↓ moves it, Shift+Home/End to the top or bottom, the path always last, Delete unchecks; `a`, `n` and `d` all, none and the default)."),
+            new("/toolbar [on|off]", "Show or hide the toolbar (*Tool bar*). On its own it hides the toolbar, or shows it again with the items it last had (the default eleven the first time); `on` and `off` say which. Works while a reply runs; Ctrl+T runs it too."),
+            new("/toolbar edit", "Choose the toolbar's items and their order: the *Tool bar* row's checklist (Enter or Space checks an item, Shift+↑/↓ moves it, Shift+Home/End to the top or bottom, the path always last, Delete unchecks; `a`, `n` and `d` all, none and the default)."),
         ]),
         new("/tools",
         [
