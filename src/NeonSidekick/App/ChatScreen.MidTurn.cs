@@ -162,8 +162,8 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// What a line does while a reply runs, by command (the user's lists, 2026-09-15): the info
     /// panes, <c>/settings</c>, <c>/memory</c> every way (2026-09-22: <c>forget</c>'s confirmation
-    /// is a pane as the list is, and so is <c>copy &lt;profile&gt;</c>'s — it writes another
-    /// profile's file, nothing the turn holds —, so the word never changes the class; the standalone
+    /// is a pane as the list is, and so was <c>copy &lt;profile&gt;</c>'s until it became <c>/profile push|pull memory</c>
+    /// on 2026-10-13 — so the word never changes the class; the standalone
     /// <c>/forget</c> was a pane too, and <c>/memcopy</c> was refused until the word folded in),
     /// <c>/msgclear</c>'s (2026-09-25) confirmation (<c>/emptytrash</c>'s too until 2026-10-01) and the <c>/reasoning</c>
     /// picker and <c>/queue</c> (2026-09-18) are <see cref="MidTurnClass.Pane"/> (<c>/expand</c> and <c>/collapse</c>, 2026-09-22 — <c>/tools expand|collapse</c> until later that day — quick like <c>/queue clear</c>), as were <c>/cmdlist</c> (2026-09-21: the <c>Shell allowed commands</c> row, which <c>/tools</c> edits under a reply too) and <c>/police</c> (2026-09-22, its <c>Shell police</c> row the same way) until they became <c>/tools shell allowed|police</c> (2026-10-09), panes with <c>/tools</c>; the four speech switches, <c>/reasoning</c>
@@ -526,8 +526,8 @@ internal sealed partial class ChatScreen
 
                 break;
             case SlashCommand.Memory:
-                // /memory (2026-09-22): the list pane, or forget's or copy's confirmation — the panes
-                // /forget opened and /memcopy was refused for, so all three forms are panes under a reply;
+                // /memory (2026-09-22): the list pane, or forget's confirmation — the panes /forget opened
+                // (and copy's, /memcopy's fold, until 2026-10-13: /profile push|pull memory since), so both are panes under a reply;
                 // edit (2026-09-23) opens the editor and a notice, safe under a reply too.
                 await HandleMemoryAsync(args, cancellationToken).ConfigureAwait(false);
                 break;

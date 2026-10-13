@@ -46,11 +46,11 @@ public static class Profiles
 
     /// <summary>
     /// The <c>/profile</c> subcommand words (<c>edit</c> and <c>reload</c> since 2026-09-21, <c>push</c> and <c>pull</c> since 2026-09-28,
-    /// and push and pull's section words since 2026-10-09, the prompt files' among them since 2026-10-10 — <c>ChatScreen.ProfileSectionWords</c> — so <c>/profile push keys work</c> never
+    /// and push and pull's section words since 2026-10-09, the prompt files' among them since 2026-10-10 and <c>memory</c> since 2026-10-13 — <c>ChatScreen.ProfileSectionWords</c> — so <c>/profile push keys work</c> never
     /// reads as a profile called keys); a profile cannot be called any of them, so <c>/profile add</c> is never a switch and
     /// <c>/profile reset</c> is always the loaded one.
     /// </summary>
-    public static readonly string[] ReservedNames = { "add", "allowed", "delete", "edit", "history", "keys", "operata", "persona", "policestrings", "pull", "push", "reload", "rename", "reset", "servers", "vocalia" };
+    public static readonly string[] ReservedNames = { "add", "allowed", "delete", "edit", "history", "keys", "memory", "operata", "persona", "policestrings", "pull", "push", "reload", "rename", "reset", "servers", "vocalia" };
 
     /// <summary>The wording for a name <see cref="IsValidName"/> refuses. Pinned.</summary>
     public const string NameError = "must be 1 to 32 letters, digits, - or _ (and not add, delete, edit, pull, push, reload, rename or reset)";
@@ -375,7 +375,7 @@ public static class Profiles
     /// user's ask): <paramref name="from"/>'s <c>profile.json</c> written as <paramref name="to"/>'s, every setting but
     /// <see cref="AppSettingsData.WorkingDirectory"/> and <see cref="AppSettingsData.ModelAvatar"/> (2026-10-10), which the target keeps (the user's call: a sandbox is the
     /// sidekick's own, as <c>/profile add</c> already says by clearing it). The settings alone — the memories, the prompt
-    /// files and <c>mcp.json</c> stay as they are, <c>/memory copy</c> and the prompt files' <c>copy</c> being the way to
+    /// files and <c>mcp.json</c> stay as they are, <c>/profile push|pull memory</c> (<c>/memory copy</c> until 2026-10-13) and <c>persona</c>/<c>operata</c>/<c>vocalia</c> being the way to
     /// move those. The keys go as stored, protected or not (<see cref="KeepOnReset"/>'s reasoning). A missing source is the
     /// compiled defaults, as loading it would give; a corrupt one <b>throws</b> <see cref="JsonException"/> before anything
     /// is written (<see cref="ReadProfileFile"/>). A corrupt target is what the copy cures: nothing kept from it, logged.

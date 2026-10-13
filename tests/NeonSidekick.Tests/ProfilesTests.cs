@@ -68,7 +68,7 @@ public class ProfilesTests : IDisposable
         Assert.False(Profiles.IsValidName("edit"));
         Assert.False(Profiles.IsValidName("Reload"));
         Assert.False(Profiles.IsValidName("push"));   // 2026-09-28
-        Assert.All(new[] { "keys", "SERVERS", "allowed", "history", "policestrings" }, word => Assert.False(Profiles.IsValidName(word)));   // push and pull's sections, 2026-10-09
+        Assert.All(new[] { "keys", "SERVERS", "allowed", "history", "memory", "policestrings" }, word => Assert.False(Profiles.IsValidName(word)));   // push and pull's sections, 2026-10-09
         Assert.True(Profiles.IsValidName("keys2"));
         Assert.False(Profiles.IsValidName("PULL"));
         Assert.Equal("\"work\" is the current profile; switch to another (/profile <name>) before deleting it.", Profiles.CurrentUndeletable("work"));

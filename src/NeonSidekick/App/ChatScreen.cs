@@ -106,6 +106,12 @@ public enum ProfileSection
     /// <summary><c>history [overwrite]</c>: the message history in <c>sessions.db</c>, appended or replaced. <c>/cmdcopy --history</c> until 2026-10-09.</summary>
     History,
 
+    /// <summary>
+    /// <c>memory [overwrite]</c> (2026-10-13, the user's ask): the memories in <c>memory.json</c>, appended (duplicates skipped) or replaced
+    /// (<c>MemoryStore.Import</c>). <c>/memory copy &lt;profile&gt; [overwrite]</c>, push alone, until then.
+    /// </summary>
+    Memory,
+
     /// <summary><c>policestrings [overwrite]</c> (2026-10-09, the user's ask): <c>Shell police forbidden strings</c>, added or replaced.</summary>
     PoliceStrings,
 
@@ -254,8 +260,8 @@ public readonly record struct QueueCommand(QueueAction Action, Queueing Mode = Q
 /// <summary>
 /// What a <c>/memory</c> line asks for (2026-09-22, the user's ask, twice: <c>/forget</c> folded
 /// into <c>/memory</c> as a word that morning, <c>/memcopy</c> as <c>copy &lt;profile&gt;
-/// [overwrite]</c> later that day, and both standalone commands went). The <see cref="QueueAction"/>
-/// shape until the copy brought a target with it; <see cref="ProfileActionKind"/>'s since.
+/// [overwrite]</c> later that day, and both standalone commands went; the copy retired on 2026-10-13, the user's ask, once
+/// <c>/profile push|pull memory</c> took it over with a pull).
 /// </summary>
 public enum MemoryActionKind
 {
@@ -264,9 +270,6 @@ public enum MemoryActionKind
 
     /// <summary><c>forget</c>: every memory erased, after the confirmation <c>/forget</c> asked.</summary>
     Forget,
-
-    /// <summary><c>copy &lt;profile&gt; [overwrite]</c>: every memory into another profile's, after the confirmation <c>/memcopy</c> asked.</summary>
-    Copy,
 
     /// <summary><c>edit</c> (2026-09-23): <c>memory.json</c> in the editor, created first when it is not there; the store reads the edit back on its next use.</summary>
     Edit,
@@ -281,8 +284,8 @@ public enum MemoryActionKind
     Invalid,
 }
 
-/// <summary>The parsed <c>/memory</c> argument; <paramref name="Profile"/> and <paramref name="Overwrite"/> are set by <see cref="MemoryActionKind.Copy"/> alone, <paramref name="Mode"/> by <see cref="MemoryActionKind.Mode"/>.</summary>
-public readonly record struct MemoryAction(MemoryActionKind Kind, string Profile = "", bool Overwrite = false, MemoryAccess Mode = MemoryAccess.ReadWrite);
+/// <summary>The parsed <c>/memory</c> argument; <paramref name="Mode"/> is set by <see cref="MemoryActionKind.Mode"/> alone.</summary>
+public readonly record struct MemoryAction(MemoryActionKind Kind, MemoryAccess Mode = MemoryAccess.ReadWrite);
 
 /// <summary>
 /// The interactive chat: connect, read a line, dispatch a command or run a turn, repeat. Owns the
@@ -410,7 +413,7 @@ internal sealed partial class ChatScreen
 
     /// <summary><c>/find</c> without the screen to scroll (2026-10-07). Pinned.</summary>
     public const string FindNeedsPaneNotice = "/find needs the interactive screen.";
-    public const string ProfileUsageError = "/profile takes nothing (pick), a name, add <name>, delete <name>, rename <name> <new-name>, reset [name], push|pull [keys|servers|commands|history|policestrings|persona|operata|vocalia] <name> [overwrite], edit or reload.";
+    public const string ProfileUsageError = "/profile takes nothing (pick), a name, add <name>, delete <name>, rename <name> <new-name>, reset [name], push|pull [keys|servers|allowed|history|memory|policestrings|persona|operata|vocalia] <name> [overwrite], edit or reload.";
 
     // The /loop words and lines (2026-09-21, the user's ask). Pinned.
     public const string LoopInfiniteWord = "infinite";
@@ -533,8 +536,7 @@ internal sealed partial class ChatScreen
 
     // The /memory grammar's words, their notes on the argument list and the usage error (2026-09-22,
     // the user's ask: the wipe was the standalone /forget, and the copy the standalone /memcopy, until
-    // that day). The /queue trio's shape; the copy's words are CopyWord and OverwriteWord, shared with
-    // the prompt files and /profile push|pull's list sections. Pinned.
+    // that day; the copy /profile push|pull memory's since 2026-10-13). The /queue trio's shape. Pinned.
     /// <summary>The completion note of <c>/settings changed</c> (2026-10-04). Pinned.</summary>
     public const string SettingsChangedNote = "the settings that are not their defaults";
 
@@ -547,7 +549,7 @@ internal sealed partial class ChatScreen
     public const string MemoryReadWriteNote = "the model reads and saves memories";   // 2026-10-04, the user's ask: Memory mode's three words
     public const string MemoryReadOnlyNote = "the model reads memories, never saves one";
     public const string MemoryDisabledNote = "no memory (what is remembered stays)";
-    public const string MemoryUsageError = "/memory lists the memories; read-write, read-only or disabled sets Memory mode; forget forgets them all; edit opens memory.json in your editor; copy <profile> [overwrite] copies them into another profile.";
+    public const string MemoryUsageError = "/memory lists the memories; read-write, read-only or disabled sets Memory mode; forget forgets them all; edit opens memory.json in your editor.";
 
     /// <summary>The <c>/copy</c> word for every exchange.</summary>
     public const string CopyAllWord = "all";
@@ -3225,10 +3227,9 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The <c>/memory</c> grammar, pure (2026-09-22): nothing ⇒ the pane; <c>forget</c> ⇒ the wipe,
-    /// after its confirmation; <c>copy &lt;profile&gt;</c>, and <c>overwrite</c> after it, ⇒ the copy
-    /// into that profile, after its own (later that day, the user's ask: what <c>/memcopy</c> did);
-    /// <c>edit</c> ⇒ <c>memory.json</c> in the editor (2026-09-23). Every word folds case, and the profile is passed on as typed — <see cref="Profiles.Resolve"/>
-    /// is the one that judges a name. Anything else ⇒ invalid.
+    /// after its confirmation; <c>edit</c> ⇒ <c>memory.json</c> in the editor (2026-09-23); a mode word ⇒ <c>Memory mode</c>. Every word
+    /// folds case. Anything else ⇒ invalid, <c>copy &lt;profile&gt; [overwrite]</c> among it since 2026-10-13 (what <c>/memcopy</c> did from
+    /// later on 2026-09-22 until then; <c>/profile push|pull memory</c> now).
     /// </summary>
     public static MemoryAction ParseMemoryArgs(string args)
     {
@@ -3261,15 +3262,6 @@ internal sealed partial class ChatScreen
         if (words.Length == 1 && words[0].Equals(MemoryOffWord, StringComparison.OrdinalIgnoreCase))
         {
             return new(MemoryActionKind.Mode, Mode: MemoryAccess.Disabled);
-        }
-
-        if (words[0].Equals(CopyWord, StringComparison.OrdinalIgnoreCase) && words.Length is 2 or 3)
-        {
-            bool overwrite = words.Length == 3 && words[2].Equals(OverwriteWord, StringComparison.OrdinalIgnoreCase);
-            if (words.Length == 2 || overwrite)
-            {
-                return new(MemoryActionKind.Copy, words[1], overwrite);
-            }
         }
 
         return new(MemoryActionKind.Invalid);
@@ -4556,6 +4548,7 @@ internal sealed partial class ChatScreen
         ProfileSection.Servers => "server settings",
         ProfileSection.Commands => "allowed commands",
         ProfileSection.History => "message history",
+        ProfileSection.Memory => "memory",
         ProfileSection.PoliceStrings => "forbidden strings",
         ProfileSection.AvatarUser => "user avatar",
         ProfileSection.AvatarModel => "model avatar",
@@ -4593,11 +4586,6 @@ internal sealed partial class ChatScreen
     private IReadOnlyList<CompletionItem> SessionChoices() =>
         _sessions.List(0).Select(session => new CompletionItem(SessionText.Id(session.Id), SessionNote(session, _sessionId))).ToList();
     public const string LoadedProfileNote = "the loaded profile";
-
-    /// <summary>The <c>/memory copy</c> list's notes: the word, then a target profile, then <c>copy &lt;name&gt; overwrite</c>. Pinned.</summary>
-    public const string MemoryCopyNote = "copy every memory into another profile";
-    public const string MemoryCopyTargetNote = "copy this profile's memory into it";
-    public const string MemoryCopyOverwriteNote = "replace its memory instead of adding to it";
 
     /// <summary>The <c>/timer</c> list's entries. Pinned.</summary>
     public const string TimerStopNote = "stop a timer: /timer stop <name> | all";
@@ -4898,24 +4886,8 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Memory:
             {
-                // forget or copy; after "copy " every profile but the loaded one; after "copy <name> " the
-                // overwrite word (2026-09-22, the prompt files' branch below, which /memcopy's fold follows).
-                if (argText.StartsWith(CopyWord + " ", StringComparison.OrdinalIgnoreCase))
-                {
-                    string rest = argText[(CopyWord.Length + 1)..].TrimStart();
-                    var targets = sources.Profiles().Where(name => !Profiles.NameEquals(name, sources.LoadedProfile)).ToList();
-                    foreach (var name in targets)
-                    {
-                        if (rest.StartsWith(name + " ", StringComparison.OrdinalIgnoreCase))
-                        {
-                            return MentionCompleter.Matches([new(CopyWord + " " + name + " " + OverwriteWord, MemoryCopyOverwriteNote)], argText);
-                        }
-                    }
-
-                    return MentionCompleter.Matches(targets.Select(name => new CompletionItem(CopyWord + " " + name, MemoryCopyTargetNote)).ToList(), argText);
-                }
-
-                return MentionCompleter.Matches([new(MemoryMode.ReadWrite, MemoryReadWriteNote), new(MemoryMode.ReadOnly, MemoryReadOnlyNote), new(MemoryMode.Disabled, MemoryDisabledNote), new(MemoryForgetWord, MemoryForgetNote), new(CopyWord, MemoryCopyNote), new(MemoryEditWord, MemoryEditNote)], argText);
+                // The modes, forget and edit (copy and its profiles until 2026-10-13: /profile push|pull memory since).
+                return MentionCompleter.Matches([new(MemoryMode.ReadWrite, MemoryReadWriteNote), new(MemoryMode.ReadOnly, MemoryReadOnlyNote), new(MemoryMode.Disabled, MemoryDisabledNote), new(MemoryForgetWord, MemoryForgetNote), new(MemoryEditWord, MemoryEditNote)], argText);
             }
 
             case SlashCommand.Sys:
@@ -6529,7 +6501,7 @@ internal sealed partial class ChatScreen
         // The memories last (2026-09-17): the freshest context before the first reply, where a
         // first-turn question finds them — a list far back in the system prompt went unread. The
         // result is kept current the cwd way, so a save_memory, /remember, /memory, /memory forget or
-        // /memory copy since the first message is in the next request. Memory switched on
+        // /profile pull memory since the first message is in the next request. Memory switched on
         // mid-conversation seeds nothing (as File tools does); the model has the tool.
         var recall = set.Recall;
         if (recall is not null)
@@ -6723,9 +6695,6 @@ internal sealed partial class ChatScreen
     /// <summary>The word after <c>/sys persona</c>, <c>/sys operata</c> or <c>/sys vocalia</c> (the bare words until 2026-10-09) that removes the file (2026-09-16).</summary>
     public const string ResetWord = "reset";
 
-    /// <summary>The word of <c>/memory copy &lt;profile&gt; [overwrite]</c>; <c>/sys persona copy &lt;profile&gt; [force]</c> and its siblings' too from 2026-09-21 until 2026-10-10, when those became <c>/profile push|pull persona</c> and its siblings.</summary>
-    public const string CopyWord = "copy";
-
     /// <summary>The usage line for a prompt-file command with words other than <see cref="ResetWord"/> (<c>copy &lt;profile&gt; [force]</c> until 2026-10-10). Pinned.</summary>
     public static string PromptFileUsageError(string command, string fileName) => $"{command} takes nothing (open {fileName} in your editor) or {ResetWord}.";
 
@@ -6829,7 +6798,7 @@ internal sealed partial class ChatScreen
     /// folder (<see cref="PromptFile.CopyTo"/>) or <paramref name="other"/>'s over the loaded one's (<see cref="PromptFile.CopyFrom"/>, read
     /// again at the next turn). <see cref="CopyProfileSectionAsync"/> has already resolved the name and refused the loaded one. No file in
     /// the source is a notice (nothing to copy); a file already in the target is an error unless <see cref="OverwriteWord"/> (the user's
-    /// rule: a hand-written text, no trash; a pull held to it too); either way the copy asks first (like <c>/memory copy</c>).
+    /// rule: a hand-written text, no trash; a pull held to it too); either way the copy asks first (like every section).
     /// <c>overwrite</c> on a target without the file is a plain copy, and reads as one.
     /// </summary>
     private async Task CopyPromptFileSectionAsync(PromptFile file, string word, string home, string other, bool overwrite, bool pull, CancellationToken cancellationToken)
@@ -7019,41 +6988,8 @@ internal sealed partial class ChatScreen
         _draftReplay = DraftFile.Events(normalized);
     }
 
-    // ── /memory copy (2026-09-17 as /memcopy, the word folded in 2026-09-22) ─
-
-    /// <summary>The last word of <c>/memory copy</c> and <c>/profile push|pull</c>'s list sections (<c>/cmdcopy</c>'s until 2026-10-09) that replaces the target's list instead of adding to it.</summary>
+    /// <summary>The last word of <c>/profile push|pull</c>'s list sections (<c>/cmdcopy</c>'s until 2026-10-09, and <c>/memory copy</c>'s until 2026-10-13) that replaces the target's list instead of adding to it.</summary>
     public const string OverwriteWord = "overwrite";
-
-    public const string MemoryCopySelfError = "/memory copy copies into another profile; that one is loaded.";
-
-    public const string MemoryCopyNothingNotice = "(" + NoticeGlyphs.Memory + "nothing to copy: this profile has no memory)";
-
-    /// <summary>The question before a copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open). Pinned.</summary>
-    public static string MemoryCopyPrompt(int count, string profile, bool overwrite) =>
-        NoticeGlyphs.Memory + (overwrite ? $"Replace \"{profile}\"'s memory with these {Memories(count)}?" : $"Copy {Memories(count)} into \"{profile}\"?");
-
-    /// <summary>
-    /// <c>(12 memories copied into "work")</c>; <c>(9 memories copied into "work", 3 already there, 2 dropped: its memory is full)</c>;
-    /// an overwrite reads <c>replaced "work"'s memory with 12 memories</c>. Pinned.
-    /// </summary>
-    public static string MemoryCopiedNotice(MemoryImportResult result, string profile, bool overwrite)
-    {
-        var sb = new StringBuilder("(" + NoticeGlyphs.Memory);
-        sb.Append(overwrite ? $"replaced \"{profile}\"'s memory with {Memories(result.Added)}" : $"{Memories(result.Added)} copied into \"{profile}\"");
-        if (result.Duplicates > 0)
-        {
-            sb.Append(", ").Append(result.Duplicates.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(" already there");
-        }
-
-        if (result.Dropped > 0)
-        {
-            sb.Append(", ").Append(result.Dropped.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(" dropped: its memory is full");
-        }
-
-        return sb.Append(')').ToString();
-    }
-
-    public static string MemoryCopyFailedError(string detail) => $"Could not write the profile's memory: {detail}";
 
     // ── /sessions (2026-09-18) ──────────────────────────────────────────────
 
@@ -7405,63 +7341,6 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>
-    /// <c>/memory copy &lt;profile&gt; [overwrite]</c> (<c>/memcopy</c>, its own command, from
-    /// 2026-09-17 until the word folded in on 2026-09-22): this profile's memory into another's,
-    /// after a confirmation either way (the user's call). The target is named as <c>/profile</c>
-    /// resolves it; <c>default</c> is an ordinary target, so any profile can push into it and it
-    /// into any. Appending skips what the target already holds (<see cref="MemoryStore.Import"/>);
-    /// the <c>Memory</c> switch has no say (a file operation, like <c>/memory forget</c>). Asked
-    /// under a reply the copy runs there (the fold's call: every <c>/memory</c> form is a pane
-    /// mid-turn, and this one only writes another profile's file), so the lines go through
-    /// <see cref="_flow"/> and the write lands on the turn task, as <see cref="ForgetAsync"/>'s does.
-    /// </summary>
-    private async Task CopyMemoryAsync(string typed, bool overwrite, CancellationToken cancellationToken)
-    {
-        string home = _settings.StorageDirectory;
-        if (Profiles.Resolve(home, typed) is not { } target)
-        {
-            _flow.Error(ProfileMissingError(typed));
-            return;
-        }
-
-        if (Profiles.NameEquals(target, _settings.ProfileName))
-        {
-            _flow.Error(MemoryCopySelfError);
-            return;
-        }
-
-        var entries = _memory.EntriesSnapshot();
-        if (entries.Count == 0)
-        {
-            _flow.Notice(MemoryCopyNothingNotice);
-            return;
-        }
-
-        if (!await ConfirmAsync(MemoryCopyPrompt(entries.Count, target, overwrite), cancellationToken).ConfigureAwait(false))
-        {
-            _flow.Notice(KeptNotice);
-            return;
-        }
-
-        RunOrPost(() =>
-        {
-            try
-            {
-                var result = new MemoryStore(Profiles.Directory(home, target)).Import(entries, overwrite);
-                _transcript.Notice(MemoryCopiedNotice(result, target, overwrite));
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                _transcript.Error(MemoryCopyFailedError(ex.Message));
-            }
-            finally
-            {
-                DrainDiagnostics();
-            }
-        });
-    }
-
     private static string Memories(int count) => count == 1 ? "1 memory" : $"{count.ToString(System.Globalization.CultureInfo.InvariantCulture)} memories";
 
     // ── /profile push|pull's sections (2026-10-09) ──────────────────────────
@@ -7544,6 +7423,58 @@ internal sealed partial class ChatScreen
     /// <summary>A <c>policestrings</c> copy done (<see cref="ListSectionNotice"/>).</summary>
     public static string ProfilePoliceStringsCopiedNotice(int added, int duplicates, string profile, bool overwrite, bool pull = false) =>
         ListSectionNotice(ForbiddenStringCount(added), duplicates, "forbidden strings", profile, overwrite, pull);
+
+    // The memories (/memcopy 2026-09-17, /memory copy from 2026-09-22, a section with a pull since 2026-10-13). The 💾 lead the
+    // memory's lines carry.
+
+    /// <summary><c>memory</c> with nothing to copy: <c>(💾 nothing to copy: this profile has no memory)</c>, or <c>"work"</c> on a pull.</summary>
+    public static string ProfileMemoryNothingNotice(string profile, bool pull = false) =>
+        $"({NoticeGlyphs.Memory}nothing to copy: {SourceName(profile, pull)} has no memory)";
+
+    /// <summary>
+    /// The question before a <c>memory</c> copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open):
+    /// <c>💾 Copy 12 memories into "work"?</c>, <c>💾 Replace "work"'s memory with these 12 memories?</c>, and on a pull
+    /// <c>💾 Copy 12 memories from "work" into this profile?</c>, <c>💾 Replace this profile's memory with "work"'s 12 memories?</c>.
+    /// </summary>
+    public static string ProfileMemoryPrompt(int count, string profile, bool overwrite, bool pull = false) => NoticeGlyphs.Memory + (pull, overwrite) switch
+    {
+        (false, false) => $"Copy {Memories(count)} into \"{profile}\"?",
+        (false, true) => $"Replace \"{profile}\"'s memory with these {Memories(count)}?",
+        (true, false) => $"Copy {Memories(count)} from \"{profile}\" into this profile?",
+        (true, true) => $"Replace this profile's memory with \"{profile}\"'s {Memories(count)}?",
+    };
+
+    /// <summary>
+    /// A <c>memory</c> copy done: <c>(💾 12 memories copied into "work")</c>; <c>(💾 9 memories copied into "work", 3 already there, 2 dropped:
+    /// its memory is full)</c>; an overwrite reads <c>(💾 replaced "work"'s memory with 12 memories)</c>. A pull says <c>copied from "work"</c>,
+    /// <c>replaced this profile's memory with 12 memories from "work"</c>, and <c>this profile's memory is full</c>.
+    /// </summary>
+    public static string ProfileMemoryCopiedNotice(MemoryImportResult result, string profile, bool overwrite, bool pull = false)
+    {
+        var sb = new StringBuilder("(" + NoticeGlyphs.Memory);
+        sb.Append((pull, overwrite) switch
+        {
+            (false, false) => $"{Memories(result.Added)} copied into \"{profile}\"",
+            (false, true) => $"replaced \"{profile}\"'s memory with {Memories(result.Added)}",
+            (true, false) => $"{Memories(result.Added)} copied from \"{profile}\"",
+            (true, true) => $"replaced this profile's memory with {Memories(result.Added)} from \"{profile}\"",
+        });
+        if (result.Duplicates > 0)
+        {
+            sb.Append(", ").Append(result.Duplicates.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(" already there");
+        }
+
+        if (result.Dropped > 0)
+        {
+            sb.Append(", ").Append(result.Dropped.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(pull ? " dropped: this profile's memory is full" : " dropped: its memory is full");
+        }
+
+        return sb.Append(')').ToString();
+    }
+
+    /// <summary>The target's <c>memory.json</c> would not write: the other profile's on a push, this one's on a pull. Nothing changed.</summary>
+    public static string ProfileMemoryFailedError(string profile, string detail, bool pull = false) =>
+        $"Could not write {(pull ? "this profile" : $"\"{profile}\"")}'s memory: {detail}";
 
     // The message history (/cmdcopy --history, 2026-09-25).
 
@@ -7885,6 +7816,10 @@ internal sealed partial class ChatScreen
         {
             await CopyCommandHistoryAsync(home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
         }
+        else if (action.Section == ProfileSection.Memory)
+        {
+            await CopyMemorySectionAsync(home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
+        }
         else if (IsPromptFileSection(action.Section))
         {
             var file = action.Section switch
@@ -8009,6 +7944,41 @@ internal sealed partial class ChatScreen
         }
 
         _flow.Notice(ProfileHistoryCopiedNotice(added, other, overwrite, pull));
+    }
+
+    /// <summary>
+    /// <c>memory [overwrite]</c> (2026-10-13, the user's ask; <c>/memory copy &lt;profile&gt; [overwrite]</c>, push alone, from 2026-09-22 and
+    /// <c>/memcopy</c> from 2026-09-17 until then): the source's memories into the target's <c>memory.json</c> — appended, what it already
+    /// holds skipped, past the cap dropped, or in place of it (<see cref="MemoryStore.Import"/>, dates and disabled marks kept) — after a
+    /// confirmation. A push reads the loaded store and writes the other profile's; a pull reads the other's and imports into the loaded
+    /// store itself, so the next request's memories and the <c>/memory</c> pane have them at once. <c>Memory mode</c> has no say either way
+    /// (a file operation, like <c>/memory forget</c>). A write that fails changes nothing.
+    /// </summary>
+    private async Task CopyMemorySectionAsync(string home, string other, bool overwrite, bool pull, CancellationToken cancellationToken)
+    {
+        var theirs = new MemoryStore(Profiles.Directory(home, other));
+        var entries = (pull ? theirs : _memory).EntriesSnapshot();
+        if (entries.Count == 0)
+        {
+            _flow.Notice(ProfileMemoryNothingNotice(other, pull));
+            return;
+        }
+
+        if (!await ConfirmAsync(ProfileMemoryPrompt(entries.Count, other, overwrite, pull), cancellationToken).ConfigureAwait(false))
+        {
+            _flow.Notice(KeptNotice);
+            return;
+        }
+
+        try
+        {
+            var result = (pull ? _memory : theirs).Import(entries, overwrite);
+            _flow.Notice(ProfileMemoryCopiedNotice(result, other, overwrite, pull));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _flow.Error(ProfileMemoryFailedError(other, ex.Message, pull));
+        }
     }
 
     /// <summary>
@@ -9600,6 +9570,7 @@ internal sealed partial class ChatScreen
         ("servers", ProfileSection.Servers, "the server settings: Common, Http, Embedded, Docker, Anthropic and OpenAI"),
         ("allowed", ProfileSection.Commands, "Shell allowed commands, added (or replaced with overwrite)"),
         ("history", ProfileSection.History, "the message history, added (or replaced with overwrite)"),
+        ("memory", ProfileSection.Memory, "the memories, added (or replaced with overwrite)"),   // 2026-10-13, /memory copy's
         ("policestrings", ProfileSection.PoliceStrings, "Shell police forbidden strings, added (or replaced with overwrite)"),
         ("persona", ProfileSection.Persona, "persona.md, the persona (overwrite replaces the target's)"),
         ("operata", ProfileSection.Operata, "operata.md, the operating rules (overwrite replaces the target's)"),
@@ -9631,7 +9602,7 @@ internal sealed partial class ChatScreen
     /// copy refuses to replace one already there without it. Keys and servers are mirrored, so replacing is all they do.
     /// </summary>
     public static bool SectionTakesOverwrite(ProfileSection section) =>
-        section is ProfileSection.Commands or ProfileSection.History or ProfileSection.PoliceStrings || IsPromptFileSection(section);
+        section is ProfileSection.Commands or ProfileSection.History or ProfileSection.Memory or ProfileSection.PoliceStrings || IsPromptFileSection(section);
 
     /// <summary>Whether a section is one of the prompt files (2026-10-10): persona, operata, vocalia.</summary>
     public static bool IsPromptFileSection(ProfileSection section) =>
@@ -13351,8 +13322,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/memory</c> (2026-09-22, the user's ask, twice): bare, the list pane; <c>forget</c>, the
-    /// wipe the standalone <c>/forget</c> did, confirmation and all; <c>copy &lt;profile&gt;
-    /// [overwrite]</c>, the copy the standalone <c>/memcopy</c> did, confirmation and all; <c>edit</c>
+    /// wipe the standalone <c>/forget</c> did, confirmation and all (<c>copy &lt;profile&gt;
+    /// [overwrite]</c>, the standalone <c>/memcopy</c>'s copy, until 2026-10-13); <c>edit</c>
     /// (2026-09-23), <c>memory.json</c> in the editor; anything else <see cref="MemoryUsageError"/>. The one method both dispatches call — the idle line's
     /// and the mid-turn pane phase's — so every word behaves the same under a reply; the error goes
     /// through <see cref="_flow"/> for that reason.
@@ -13368,10 +13339,6 @@ internal sealed partial class ChatScreen
 
             case { Kind: MemoryActionKind.Forget }:
                 await ForgetAsync(cancellationToken).ConfigureAwait(false);
-                break;
-
-            case { Kind: MemoryActionKind.Copy } copy:
-                await CopyMemoryAsync(copy.Profile, copy.Overwrite, cancellationToken).ConfigureAwait(false);
                 break;
 
             case { Kind: MemoryActionKind.Mode } set:

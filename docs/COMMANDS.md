@@ -116,7 +116,6 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/memory` | Lists memories in a pane. Enter (or a double-click) on one offers **edit** (change its text on the input row), **disable** (keep it, greyed out, but don't offer it to the model; **enable** offers it again) and **forget** (asks). `a` (*+ add*) types a new memory. `w`, `o` and `x` set *Memory mode* to read-write, read-only or disabled. |
 | `/memory read-write\|read-only\|disabled\|on\|off` | Sets *Memory mode* (`on` is read-write, `off` disabled). |
 | `/memory forget\|edit` | `forget` forgets all, after a confirmation; `edit` opens `memory.json` in your editor. |
-| `/memory copy <profile> [overwrite]` | Adds them to another profile's memory (or replaces it with `overwrite`), after a confirmation. |
 | `/model [<id>]` | Picks or sets the model; type to filter the list. On the embedded LLM, lists the installed models. |
 | `/msgclear` | Clears the profile's message history (the ↑/↓ recall), after a confirmation. |
 | `/new` | Starts a new conversation without clearing the screen. |
@@ -140,6 +139,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/profile push\|pull servers <name>` | Copies the server settings (URL, model, reasoning, sampling, and the embedded, Docker, Anthropic, OpenAI, Claude Code and `/claude` rows), replacing the target's, after a confirmation. Saved values only. |
 | `/profile push\|pull allowed <name> [overwrite]` | Copies *Shell allowed commands* (added, or replacing with `overwrite`). |
 | `/profile push\|pull history <name> [overwrite]` | Copies the message history; refused when the target has *Keep message history* off. |
+| `/profile push\|pull memory <name> [overwrite]` | Copies the memories, after a confirmation: added (duplicates skipped), or replacing the target's with `overwrite`. |
 | `/profile push\|pull policestrings <name> [overwrite]` | Copies *Shell police forbidden strings* (added, or replacing with `overwrite`). |
 | `/profile push\|pull persona <name> [overwrite]` | Copies `persona.md` (the personality), after a confirmation; an existing one is replaced only with `overwrite`. |
 | `/profile push\|pull operata <name> [overwrite]` | The same for `operata.md` (the operating rules). |

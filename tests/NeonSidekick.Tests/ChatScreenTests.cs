@@ -5644,7 +5644,6 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void PromptFileCopyText_IsPinned()
     {
-        Assert.Equal("copy", ChatScreen.CopyWord);
         Assert.Equal("force", ChatScreen.ForceWord);
         Assert.Equal(ChatScreen.ForceWord, ChatScreen.GitForceWord);
         Assert.Equal("(📋 operata.md is not there; the default operating rules is in use, so there is nothing to copy)", ChatScreen.PromptFileNothingToCopyNotice("operata.md", "the default operating rules"));
@@ -6849,7 +6848,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys), output);
     }
 
-    /// <summary>The /memory grammar (2026-09-22) and its completion: nothing, forget (any case), copy &lt;profile&gt; [overwrite] (the fold of /memcopy later that day), anything else invalid.</summary>
+    /// <summary>The /memory grammar (2026-09-22) and its completion: nothing, forget (any case), edit, the modes, anything else invalid (copy &lt;profile&gt; [overwrite] among it since 2026-10-13: /profile push|pull memory).</summary>
     [Fact]
     public void ParseMemoryArgs_IsPinned_AndTheWordsComplete()
     {
@@ -6857,10 +6856,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new MemoryAction(MemoryActionKind.List), ChatScreen.ParseMemoryArgs("  "));
         Assert.Equal(new MemoryAction(MemoryActionKind.Forget), ChatScreen.ParseMemoryArgs("forget"));
         Assert.Equal(new MemoryAction(MemoryActionKind.Forget), ChatScreen.ParseMemoryArgs(" Forget "));
-        Assert.Equal(new MemoryAction(MemoryActionKind.Copy, "work"), ChatScreen.ParseMemoryArgs("copy work"));
-        Assert.Equal(new MemoryAction(MemoryActionKind.Copy, "WORK"), ChatScreen.ParseMemoryArgs(" Copy  WORK "));   // the name goes on as typed; Profiles.Resolve folds the case
-        Assert.Equal(new MemoryAction(MemoryActionKind.Copy, "work", Overwrite: true), ChatScreen.ParseMemoryArgs("copy work overwrite"));
-        Assert.Equal(new MemoryAction(MemoryActionKind.Copy, "work", Overwrite: true), ChatScreen.ParseMemoryArgs("COPY work Overwrite"));
+        Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("copy work"));   // retired 2026-10-13
+        Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("copy work overwrite"));
         Assert.Equal(new MemoryAction(MemoryActionKind.Edit), ChatScreen.ParseMemoryArgs("edit"));   // 2026-09-23
         Assert.Equal(new MemoryAction(MemoryActionKind.Edit), ChatScreen.ParseMemoryArgs(" Edit "));
         Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("edit now"));
@@ -6880,10 +6877,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("on off"));
         Assert.Equal("on", ChatScreen.MemoryOnWord);
         Assert.Equal("off", ChatScreen.MemoryOffWord);
-        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote), new CompletionItem("disabled", ChatScreen.MemoryDisabledNote), new CompletionItem("forget", ChatScreen.MemoryForgetNote), new CompletionItem("copy", ChatScreen.MemoryCopyNote), new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "", Sources()));
+        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote), new CompletionItem("disabled", ChatScreen.MemoryDisabledNote), new CompletionItem("forget", ChatScreen.MemoryForgetNote), new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "", Sources()));
         Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote)], ChatScreen.ArgumentItems("/memory", "r", Sources()));
         Assert.Equal([new CompletionItem("forget", ChatScreen.MemoryForgetNote)], ChatScreen.ArgumentItems("/memory", "fo", Sources()));
-        Assert.Equal([new CompletionItem("copy", ChatScreen.MemoryCopyNote)], ChatScreen.ArgumentItems("/memory", "co", Sources()));
+        Assert.Empty(ChatScreen.ArgumentItems("/memory", "co", Sources()));   // copy retired 2026-10-13
         Assert.Equal([new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "ED", Sources()));
         Assert.Empty(ChatScreen.ArgumentItems("/memory", "x", Sources()));
     }
@@ -7156,6 +7153,10 @@ public partial class ChatScreenTests : IDisposable
     [InlineData("push allowed work", ProfileActionKind.Push, "work", ProfileSection.Commands, false)]
     [InlineData("pull allowed work OVERWRITE", ProfileActionKind.Pull, "work", ProfileSection.Commands, true)]
     [InlineData("push history default overwrite", ProfileActionKind.Push, "default", ProfileSection.History, true)]
+    [InlineData("push memory work", ProfileActionKind.Push, "work", ProfileSection.Memory, false)]   // 2026-10-13
+    [InlineData("PULL Memory work Overwrite", ProfileActionKind.Pull, "work", ProfileSection.Memory, true)]
+    [InlineData("push memory", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
+    [InlineData("pull memory work now", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
     [InlineData("pull\tpolicestrings  work", ProfileActionKind.Pull, "work", ProfileSection.PoliceStrings, false)]
     [InlineData("push policestrings work overwrite", ProfileActionKind.Push, "work", ProfileSection.PoliceStrings, true)]
     [InlineData("push persona work", ProfileActionKind.Push, "work", ProfileSection.Persona, false)]   // the prompt files, 2026-10-10
@@ -8456,15 +8457,15 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(defaults.ToolbarItems, _settings.Current.ToolbarItems);
     }
 
-    // ── /memory copy (2026-09-17 as /memcopy, the word folded in 2026-09-22) ─
+    // ── /profile push|pull memory (2026-10-13; /memory copy from 2026-09-22, /memcopy from 2026-09-17) ─
 
     [Fact]
-    public async Task MemoryCopy_Yes_AppendsIntoTheOtherProfile_SkippingWhatItHolds()
+    public async Task ProfilePushMemory_Yes_AppendsIntoTheOtherProfile_SkippingWhatItHolds()
     {
         WorkProfile();   // work holds "They like tea."
         _memory.Add("Their name is Chris.");
         _memory.Add("they LIKE tea.");
-        PushLine("/memory copy work");
+        PushLine("/profile push memory work");
         PickYes();
         PushLine("/exit");
 
@@ -8479,11 +8480,11 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task MemoryCopy_Overwrite_Yes_ReplacesTheOtherProfilesMemory()
+    public async Task ProfilePushMemory_Overwrite_Yes_ReplacesTheOtherProfilesMemory()
     {
         WorkProfile();
         _memory.Add("Their name is Chris.");
-        PushLine("/memory copy WORK Overwrite");
+        PushLine("/profile push memory WORK Overwrite");
         PickYes();
         PushLine("/exit");
 
@@ -8495,12 +8496,12 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task MemoryCopy_IntoTheDefault_FromAnotherProfile()
+    public async Task ProfilePushMemory_IntoTheDefault_FromAnotherProfile()
     {
         WorkProfile();
         _memory.Add("Their name is Chris.");
         PushLine("/profile work");
-        PushLine("/memory copy neon");
+        PushLine("/profile push memory neon");
         PickYes();
         PushLine("/exit");
 
@@ -8511,13 +8512,48 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task MemoryCopy_No_Keeps()
+    public async Task ProfilePullMemory_AddsToThisProfile_AndTheLoadedStoreHasItAtOnce()
+    {
+        WorkProfile();   // work holds "They like tea."
+        _memory.Add("Their name is Chris.");
+        PushLine("/profile pull memory work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle("💾 Copy 1 memory from \"work\" into this profile?", SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · (💾 1 memory copied from \"work\")", output);
+        Assert.Equal(new[] { "Their name is Chris.", "They like tea." }, _memory.Snapshot());
+        Assert.Equal(new[] { "Their name is Chris.", "They like tea." }, new MemoryStore(ProfileDir(Profiles.DefaultName)).Snapshot());   // written, not only held
+        Assert.Equal(new[] { "They like tea." }, new MemoryStore(ProfileDir("work")).Snapshot());   // the source untouched
+        Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
+    }
+
+    [Fact]
+    public async Task ProfilePullMemory_Overwrite_ReplacesThisProfilesMemory()
     {
         WorkProfile();
         _memory.Add("Their name is Chris.");
-        PushLine("/memory copy work");
+        PushLine("/profile pull memory work overwrite");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle("💾 Replace this profile's memory with \"work\"'s 1 memory?", SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · (💾 replaced this profile's memory with 1 memory from \"work\")", output);
+        Assert.Equal(new[] { "They like tea." }, _memory.Snapshot());
+    }
+
+    [Fact]
+    public async Task ProfilePushMemory_No_Keeps()
+    {
+        WorkProfile();
+        _memory.Add("Their name is Chris.");
+        PushLine("/profile push memory work");
         _console.Input.PushKey(Keys.Enter);   // No is on the cursor
-        PushLine("/memory copy work overwrite");
+        PushLine("/profile pull memory work overwrite");
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
 
@@ -8525,41 +8561,48 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(2, output.Split("  · " + ChatScreen.KeptNotice).Length - 1);
         Assert.Equal(new[] { "They like tea." }, new MemoryStore(ProfileDir("work")).Snapshot());
+        Assert.Equal(new[] { "Their name is Chris." }, _memory.Snapshot());
     }
 
     [Fact]
-    public async Task MemoryCopy_Refusals_AreOneLineEach_AndAskNothing()
+    public async Task ProfileMemory_Refusals_AreOneLineEach_AndAskNothing()
     {
         WorkProfile();
-        PushLine("/memory copy");
-        PushLine("/memory copy work now");
-        PushLine("/memory copy work overwrite please");
-        PushLine("/memory copy ghost");
-        PushLine("/memory copy neon");
-        PushLine("/memory copy work");   // nothing stored here yet
+        PushLine("/profile push memory");
+        PushLine("/profile push memory work now");
+        PushLine("/profile push memory ghost");
+        PushLine("/profile push memory neon");
+        PushLine("/profile push memory work");   // nothing stored here yet
+        PushLine("/memory copy work");   // retired 2026-10-13: the /memory usage line
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Equal(3, output.Split("  ✗ " + ChatScreen.MemoryUsageError).Length - 1);   // the three malformed lines are the /memory usage line since the fold
+        Assert.Equal(2, output.Split("  ✗ " + ChatScreen.ProfileUsageError).Length - 1);
         Assert.Contains("  ✗ " + ChatScreen.ProfileMissingError("ghost"), output);
-        Assert.Contains("  ✗ " + ChatScreen.MemoryCopySelfError, output);
-        Assert.Contains("  · " + ChatScreen.MemoryCopyNothingNotice, output);
+        Assert.Contains("  ✗ " + ChatScreen.ProfilePushSelfError(Profiles.DefaultName), output);
+        Assert.Contains("  · " + ChatScreen.ProfileMemoryNothingNotice("work"), output);
+        Assert.Contains("  ✗ " + ChatScreen.MemoryUsageError, output);
         Assert.DoesNotContain("Copy ", output);
         Assert.Equal(new[] { "They like tea." }, new MemoryStore(ProfileDir("work")).Snapshot());
     }
 
     [Fact]
-    public void MemoryCopyText_IsPinned()
+    public void ProfileMemoryText_IsPinned()
     {
-        Assert.Equal("/memory copy copies into another profile; that one is loaded.", ChatScreen.MemoryCopySelfError);
-        Assert.Equal("(💾 nothing to copy: this profile has no memory)", ChatScreen.MemoryCopyNothingNotice);
-        Assert.Equal("💾 Copy 12 memories into \"work\"?", ChatScreen.MemoryCopyPrompt(12, "work", overwrite: false));
-        Assert.Equal("💾 Replace \"work\"'s memory with these 12 memories?", ChatScreen.MemoryCopyPrompt(12, "work", overwrite: true));
-        Assert.Equal("(💾 12 memories copied into \"work\")", ChatScreen.MemoryCopiedNotice(new MemoryImportResult(12, 0, 0), "work", overwrite: false));
-        Assert.Equal("(💾 9 memories copied into \"work\", 3 already there, 2 dropped: its memory is full)", ChatScreen.MemoryCopiedNotice(new MemoryImportResult(9, 3, 2), "work", overwrite: false));
-        Assert.Equal("(💾 replaced \"work\"'s memory with 12 memories)", ChatScreen.MemoryCopiedNotice(new MemoryImportResult(12, 0, 0), "work", overwrite: true));
-        Assert.Equal("Could not write the profile's memory: x", ChatScreen.MemoryCopyFailedError("x"));
+        Assert.Equal("(💾 nothing to copy: this profile has no memory)", ChatScreen.ProfileMemoryNothingNotice("work"));
+        Assert.Equal("(💾 nothing to copy: \"work\" has no memory)", ChatScreen.ProfileMemoryNothingNotice("work", pull: true));
+        Assert.Equal("💾 Copy 12 memories into \"work\"?", ChatScreen.ProfileMemoryPrompt(12, "work", overwrite: false));
+        Assert.Equal("💾 Replace \"work\"'s memory with these 12 memories?", ChatScreen.ProfileMemoryPrompt(12, "work", overwrite: true));
+        Assert.Equal("💾 Copy 12 memories from \"work\" into this profile?", ChatScreen.ProfileMemoryPrompt(12, "work", overwrite: false, pull: true));
+        Assert.Equal("💾 Replace this profile's memory with \"work\"'s 12 memories?", ChatScreen.ProfileMemoryPrompt(12, "work", overwrite: true, pull: true));
+        Assert.Equal("(💾 12 memories copied into \"work\")", ChatScreen.ProfileMemoryCopiedNotice(new MemoryImportResult(12, 0, 0), "work", overwrite: false));
+        Assert.Equal("(💾 9 memories copied into \"work\", 3 already there, 2 dropped: its memory is full)", ChatScreen.ProfileMemoryCopiedNotice(new MemoryImportResult(9, 3, 2), "work", overwrite: false));
+        Assert.Equal("(💾 replaced \"work\"'s memory with 12 memories)", ChatScreen.ProfileMemoryCopiedNotice(new MemoryImportResult(12, 0, 0), "work", overwrite: true));
+        Assert.Equal("(💾 9 memories copied from \"work\", 3 already there, 2 dropped: this profile's memory is full)", ChatScreen.ProfileMemoryCopiedNotice(new MemoryImportResult(9, 3, 2), "work", overwrite: false, pull: true));
+        Assert.Equal("(💾 replaced this profile's memory with 1 memory from \"work\")", ChatScreen.ProfileMemoryCopiedNotice(new MemoryImportResult(1, 0, 0), "work", overwrite: true, pull: true));
+        Assert.Equal("Could not write \"work\"'s memory: x", ChatScreen.ProfileMemoryFailedError("work", "x"));
+        Assert.Equal("Could not write this profile's memory: x", ChatScreen.ProfileMemoryFailedError("work", "x", pull: true));
         Assert.Equal("overwrite", ChatScreen.OverwriteWord);
     }
 
@@ -14966,37 +15009,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + Titled("💾 Forget 2 memories?") + "\n \n▸ No\n  Yes\n", output);
         Assert.Contains("  · " + ChatScreen.ForgotNotice(2), output);
         Assert.Equal(0, _memory.Count);
-        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
-        Assert.Single(_chat.Requests);
-    }
-
-    /// <summary>
-    /// /memory copy under a reply (2026-09-22, the fold's call): a pane like /memory forget's, where
-    /// the standalone /memcopy was refused — the copy writes another profile's file, nothing the turn holds.
-    /// </summary>
-    [Fact]
-    public async Task MidTurn_MemoryCopy_AsksOnThePane_YesCopiesAfterTheAnswer()
-    {
-        WorkProfile();   // work holds "They like tea."
-        _memory.Add("Their name is Chris.");
-        MidTurnFixture(i =>
-        {
-            if (i == 1)
-            {
-                PushLine("/memory copy work");
-            }
-            else if (i == 2)
-            {
-                Scripted().Push(Keys.Down, Keys.Enter);
-            }
-        });
-
-        string output = await RunAsync();
-
-        Assert.Contains("\n" + Titled("💾 Copy 1 memory into \"work\"?") + "\n \n▸ No\n  Yes\n", output);
-        Assert.Contains("  · " + ChatScreen.MemoryCopiedNotice(new MemoryImportResult(1, 0, 0), "work", overwrite: false), output);
-        Assert.Equal(new[] { "They like tea.", "Their name is Chris." }, new MemoryStore(ProfileDir("work")).Snapshot());
-        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/memory"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
     }
@@ -24236,8 +24248,8 @@ public partial class ChatScreenTests : IDisposable
         // push and pull (2026-09-28): every profile but the loaded one, default included (the user's call); nothing after the name.
         // The section words first (2026-10-09), then after a section the names, and after a list section's name overwrite.
         Assert.Equal(["pull", "push"], Texts(ChatScreen.ArgumentItems("/profile", "pu", sources)));
-        Assert.Equal(["push keys", "push servers", "push allowed", "push history", "push policestrings", "push persona", "push operata", "push vocalia", "push avatar user", "push avatar model", "push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
-        Assert.Equal(["pull keys", "pull servers", "pull allowed", "pull history", "pull policestrings", "pull persona", "pull operata", "pull vocalia", "pull avatar user", "pull avatar model", "pull chef", "pull neon"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
+        Assert.Equal(["push keys", "push servers", "push allowed", "push history", "push memory", "push policestrings", "push persona", "push operata", "push vocalia", "push avatar user", "push avatar model", "push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
+        Assert.Equal(["pull keys", "pull servers", "pull allowed", "pull history", "pull memory", "pull policestrings", "pull persona", "pull operata", "pull vocalia", "pull avatar user", "pull avatar model", "pull chef", "pull neon"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
         // The avatars (2026-10-12, the user's ask): two words, then the profiles, nothing after the name.
         Assert.Equal(["push avatar user", "push avatar model"], Texts(ChatScreen.ArgumentItems("/profile", "push avatar ", sources)));
         Assert.Equal([new CompletionItem("push avatar user chef", "user avatar: neon → chef"), new CompletionItem("push avatar user work", "user avatar: neon → work")], ChatScreen.ArgumentItems("/profile", "push avatar user ", sources));
@@ -24267,15 +24279,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal([new CompletionItem("reset chef", ChatScreen.ProfileResetNote)], ChatScreen.ArgumentItems("/profile", "reset c", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "work", sources));
 
-        // /memory copy: every profile but the loaded one (the source), then copy <name> overwrite (2026-09-17 as /memcopy, the word folded in 2026-09-22).
-        Assert.Equal([new CompletionItem("copy chef", ChatScreen.MemoryCopyTargetNote), new CompletionItem("copy work", ChatScreen.MemoryCopyTargetNote)], ChatScreen.ArgumentItems("/memory", "copy ", sources));
-        Assert.Equal(["copy work"], Texts(ChatScreen.ArgumentItems("/memory", "copy w", sources)));
-        Assert.Empty(ChatScreen.ArgumentItems("/memory", "copy work", sources));   // typed in full: Enter sends
-        Assert.Equal([new CompletionItem("copy work overwrite", ChatScreen.MemoryCopyOverwriteNote)], ChatScreen.ArgumentItems("/memory", "copy work ", sources));
-        Assert.Equal(["copy work overwrite"], Texts(ChatScreen.ArgumentItems("/memory", "COPY WORK ov", sources)));
-        Assert.Empty(ChatScreen.ArgumentItems("/memory", "copy work overwrite", sources));
-        Assert.Empty(ChatScreen.ArgumentItems("/memory", "copy neon ", sources));   // not a target: the source
-        Assert.Equal(["copy chef", "copy neon", "copy work"], Texts(ChatScreen.ArgumentItems("/memory", "copy ", Sources(loaded: "other"))));
+        // memory (2026-10-13; /memory copy until then): every profile but the loaded one, then overwrite with the list sections' note.
+        Assert.Equal([new CompletionItem("push memory chef", "memory: neon → chef"), new CompletionItem("push memory work", "memory: neon → work")], ChatScreen.ArgumentItems("/profile", "push memory ", sources));
+        Assert.Equal([new CompletionItem("pull memory neon", "memory: neon → work")], ChatScreen.ArgumentItems("/profile", "pull memory n", Sources(loaded: "work")));
+        Assert.Equal([new CompletionItem("push memory work overwrite", ChatScreen.ProfileSectionOverwriteNote)], ChatScreen.ArgumentItems("/profile", "push memory work ", sources));
+        Assert.Equal(["pull memory work overwrite"], Texts(ChatScreen.ArgumentItems("/profile", "PULL MEMORY WORK ov", sources)));
+        Assert.Empty(ChatScreen.ArgumentItems("/memory", "copy ", sources));
 
         // /timer: stop, then stop all | <name> with the names whole.
         Assert.Equal([new CompletionItem("stop", ChatScreen.TimerStopNote)], ChatScreen.ArgumentItems("/timer", "", sources));
@@ -24425,15 +24434,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("switch to it", ChatScreen.SwitchToProfileNote);
         Assert.Equal("settings: neon → gonzo", ChatScreen.ProfileCopyNote(ChatScreen.ProfileSettingsSubject, "neon", "gonzo"));   // 2026-10-10
         Assert.Equal(
-            ["API keys", "server settings", "allowed commands", "message history", "forbidden strings", "persona.md", "operata.md", "vocalia.md", "user avatar", "model avatar"],
+            ["API keys", "server settings", "allowed commands", "message history", "memory", "forbidden strings", "persona.md", "operata.md", "vocalia.md", "user avatar", "model avatar"],
             ChatScreen.ProfileSectionWords.Select(item => ChatScreen.ProfileSectionSubject(item.Section)));
         Assert.Equal("delete it", ChatScreen.ProfileDeleteNote);
         Assert.Equal("rename it", ChatScreen.ProfileRenameNote);
         Assert.Equal("reset it to the defaults", ChatScreen.ProfileResetNote);
         Assert.Equal("the loaded profile", ChatScreen.LoadedProfileNote);
-        Assert.Equal("copy every memory into another profile", ChatScreen.MemoryCopyNote);   // 2026-09-22
-        Assert.Equal("copy this profile's memory into it", ChatScreen.MemoryCopyTargetNote);
-        Assert.Equal("replace its memory instead of adding to it", ChatScreen.MemoryCopyOverwriteNote);
         Assert.Equal("remove persona.md and go back to the default", ChatScreen.PromptFileResetNote("persona.md"));
         Assert.Equal("replace the target's file if it has one", ChatScreen.ProfilePromptFileOverwriteNote);   // 2026-10-10 (/sys persona copy's notes until then)
         Assert.Equal(["add", "delete", "edit", "pull", "push", "reload", "rename", "reset"], ChatScreen.ProfileVerbs.Select(v => v.Text));
