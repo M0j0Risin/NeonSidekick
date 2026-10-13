@@ -42,9 +42,19 @@ public sealed class AppSettingsData
     /// <c>◆</c>, and goes before the profile's name in the window title. 🤖 by default (<see cref="Emojis.AvatarRules.DefaultAvatar"/>,
     /// later on 2026-10-10, the user's call; none until then); empty for none; anything that is not one two-cell emoji
     /// (<see cref="Emojis.AvatarRules"/>) reads as none. Kept by <c>/profile reset</c>, the default in a profile <c>/profile add</c>
-    /// makes, never carried by <c>/profile push|pull</c>. No variable.
+    /// makes, never carried by <c>/profile push|pull</c>. No variable. <c>Avatar</c> until 2026-10-12 (the user's call, once
+    /// <see cref="UserAvatar"/> came beside it: the row "Model avatar" and the key with it, no migration — an old key is skipped and 🤖 stands).
     /// </summary>
-    public string Avatar { get; set; } = Emojis.AvatarRules.DefaultAvatar;
+    public string ModelAvatar { get; set; } = Emojis.AvatarRules.DefaultAvatar;
+
+    /// <summary>
+    /// The user's avatar (2026-10-12, the user's ask): one emoji, picked on <c>/settings</c> › Client › Chat's grid picker right under
+    /// <see cref="ModelAvatar"/>. It opens each of the user's lines in the transcript, the main chat's and <c>/botchat</c>'s alike, in
+    /// place of <c>›</c> (<see cref="UI.InputLine.UserGlyph"/>); the input row keeps <c>›</c> while it is typed. Null by default (the
+    /// <c>›</c>); anything that is not one two-cell emoji (<see cref="Emojis.AvatarRules"/>) reads as none. An ordinary setting
+    /// otherwise: <c>/profile add</c> and <c>push|pull</c> carry it, a plain <c>/profile reset</c> keeps it as it keeps the model's. No variable.
+    /// </summary>
+    public string? UserAvatar { get; set; }
 
     /// <summary>
     /// Whether a sent line that is exactly a command's name without its slash (<c>clear</c>) is

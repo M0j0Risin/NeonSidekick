@@ -172,7 +172,8 @@ The app itself, this side of the connection, in three tabs: Chat, Sessions and B
 | Profile | Switches profile (each has its own settings, persona, memory, skills and sessions). | `neon` |
 | Working directory (cwd) | The folder the file and GitLib tools work in; empty is the profile's `files\` folder. The row opens the folder picker; `/cwd <path>` sets one by hand. | profile's `files\` |
 | Memory mode | `read-write`: the model can save and recall memories, and every conversation opens with them. `read-only`: it can recall but not save (your `/remember` still can). `disabled`: no memory, and `/remember` is refused. | read-write |
-| Avatar | The profile's emoji, shown at the start of its replies, its `/botchat` lines and the window title. Enter (or `/avatar`) opens the [picker](#the-avatar-picker); 🚫 or `/avatar clear` leaves none. `/profile push`/`pull` never copy it. | 🤖 |
+| Model avatar | The profile's emoji, shown at the start of its replies, its `/botchat` lines and the window title. Enter (or `/avatar`) opens the [picker](#the-avatar-picker); 🚫 or `/avatar clear` leaves none. `/profile push`/`pull` never copy it. Saved as `ModelAvatar` (`Avatar` before 2026-10-12; an old profile shows 🤖 again until you pick one). | 🤖 |
+| User avatar | Your own emoji, shown at the start of each of your lines in the transcript (the main chat and `/botchat`) in place of `›`. The input line keeps `›` while you type. Enter opens the same [picker](#the-avatar-picker), without the For you tab; 🚫 clears it. | (none: `›`) |
 | Queue mode | `automatic`: messages sent during a reply wait in `/queue` and go when it ends. `manual`: every message is queued, even at the idle line, and goes only when you press `➤ send` (`s`) on `/queue`, one per press. `disabled`: no list, but a line sent during a reply still goes when it ends. | `automatic` |
 | Queue cancel mode | What a cancelled reply does with the queue: `hold` keeps it until your next message, `drain` sends the next one at once, `empty` drops them all. | `empty` |
 | Keep message history | Saves the ↑/↓ history (newest 1,000 lines) in `sessions.db`. Off deletes it at the next profile load; `/msgclear` empties it. | on |
@@ -202,7 +203,7 @@ The app itself, this side of the connection, in three tabs: Chat, Sessions and B
 
 ##### The avatar picker
 
-* Enter on *Avatar* (or `/avatar`) opens a grid of every emoji Windows Terminal draws (Unicode Emoji 15.1, no flags).
+* Enter on *Model avatar* (or `/avatar`) opens a grid of every emoji Windows Terminal draws (Unicode Emoji 15.1, no flags). *User avatar* opens the same grid for your own lines, without For you or the other profiles' marks; its band shows how your line will read.
 * Tabs: **⭐ For you** (emoji matching the profile's name and persona), **🕘 Recent** (avatars in use and your last picks), then one per Unicode group. Tab and Shift+Tab step the tabs; the arrows move in the grid; a double-click takes a cell.
 * Type to search by name and keyword (`fox`, `red heart`); you can also paste an emoji. ESC clears the search.
 * 🎲 picks one at random; 🚫 clears the avatar.

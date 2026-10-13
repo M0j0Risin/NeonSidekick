@@ -17,7 +17,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task AReply_OpensWithTheAvatar_InPlaceOfTheDot()
     {
-        _settings.Update(d => d.Avatar = "🦊");
+        _settings.Update(d => d.ModelAvatar = "🦊");
         _chat.EnqueueText("Hello.");
         PushLine("hi");
         PushLine("/exit");
@@ -33,7 +33,7 @@ public partial class ChatScreenTests
     public async Task AvatarCommand_WithoutThePane_TakesAWord_ClearsIt_AndTheTitleFollows()
     {
         // The test console types no emoji, so the avatar starts as one; without the pane /avatar reads a typed emoji or word.
-        _settings.Update(d => d.Avatar = "🐙");
+        _settings.Update(d => d.ModelAvatar = "🐙");
         PushLine("/avatar");
         PushLine("fox");                      // the best of a search: the fox
         PushLine("/avatar clear");
@@ -43,10 +43,40 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Equal(["🐙 neon", "🦊 neon", "neon"], _titles);
-        Assert.Equal("", _settings.Current.Avatar);
-        Assert.Contains("Avatar: 🦊 fox", output);
-        Assert.Contains("Avatar: " + SettingsMenu.NoAvatarLabel, output);
+        Assert.Equal("", _settings.Current.ModelAvatar);
+        Assert.Contains("Model avatar: 🦊 fox", output);
+        Assert.Contains("Model avatar: " + SettingsMenu.NoAvatarLabel, output);
         Assert.Contains(SettingsMenu.UnchangedNotice, output);   // the second clear
+    }
+
+    /// <summary>
+    /// The user avatar (2026-10-12, the user's ask): a sent line opens with it in place of ›, its second line indented under the
+    /// words; none (the default) keeps ›.
+    /// </summary>
+    [Fact]
+    public async Task ASentLine_OpensWithTheUserAvatar_InPlaceOfThePrompt()
+    {
+        Assert.Null(new AppSettingsData().UserAvatar);
+        _settings.Update(d => d.UserAvatar = "🦉");
+        _chat.EnqueueText("Hello.");
+        PushLine("hi there");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("🦉 hi there", output);
+        Assert.DoesNotContain(InputLine.PromptGlyph + "hi there", output);
+    }
+
+    [Fact]
+    public void TheUserGlyph_IsTheAvatarAndASpace_OrThePrompt_AndASecondLineSitsUnderTheWords()
+    {
+        Assert.Equal("🦉 ", InputLine.UserGlyph("🦉"));
+        Assert.Equal(InputLine.PromptGlyph, InputLine.UserGlyph(null));
+        Assert.Equal(InputLine.PromptGlyph, InputLine.UserGlyph(""));
+        Assert.Equal(InputLine.PromptGlyph, InputLine.UserGlyph("owl"));   // not an emoji: none
+        Assert.Equal("🦉 one\n   two", Markup.Remove(InputLine.SubmittedMarkup("one\ntwo", UserLineStyle.Bold, "🦉 ")));
+        Assert.Equal(InputLine.PromptGlyph + "one\n" + InputLine.ContinuationIndent + "two", Markup.Remove(InputLine.SubmittedMarkup("one\ntwo", UserLineStyle.Bold)));
     }
 
     [Theory]

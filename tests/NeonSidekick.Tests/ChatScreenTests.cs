@@ -167,7 +167,7 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(PreFlipDefaults.Apply);
         // The avatar is 🤖 by default since later on 2026-10-10 (the user's call; none until then): the renders here pin a reply's ●,
         // so the fixture wears none, the synthwave shape (ModuleInit); the avatar tests set their own.
-        _settings.Update(d => d.Avatar = "");
+        _settings.Update(d => d.ModelAvatar = "");
         _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("llama"));
         _session = new LlmSession(new LlmEndpointProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)), new ContextLengthProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)), (endpoint, _) => { _endpoints.Add(endpoint); return _chat; }, _time);
         _speech = new SpeechSession(_ => _synth, _ => _playback, new ModelStore(Path.Combine(_dir, "models"), new HttpClient(_http)));

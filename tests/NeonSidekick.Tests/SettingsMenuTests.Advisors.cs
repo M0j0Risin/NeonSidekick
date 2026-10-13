@@ -135,7 +135,7 @@ public partial class SettingsMenuTests
     public async Task OnThePane_TheAdvisorListsBand_AndItsEditor_NameEachAdvisorsServerAndModel()
     {
         Profiles.Create(_dir, "doug", new AppSettingsData { LlmUrl = "docker:vllm", LlmModel = "Qwen3.8-27B-NVFP4-RTX5090" });
-        Profiles.Create(_dir, "einstein", new AppSettingsData { LlmUrl = "claude-code", Avatar = "🦉" });
+        Profiles.Create(_dir, "einstein", new AppSettingsData { LlmUrl = "claude-code", ModelAvatar = "🦉" });
         _settings.Update(d => d.AdvisorList = [new AdvisorEntry("doug", "expert .NET solution architect"), new AdvisorEntry("einstein", "UX designer")]);
         var doug = new AdvisorServerFacts(AdvisorServer.Docker, "Qwen3.8-27B-NVFP4-RTX5090");
         var einstein = new AdvisorServerFacts(AdvisorServer.ClaudeCode, "sonnet");

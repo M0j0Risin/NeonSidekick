@@ -2121,7 +2121,7 @@ public sealed class SidekickApp
     private string HeadlessAvatar(string args)
     {
         var catalog = Emojis.EmojiCatalog.Shipped;
-        string current = Emojis.AvatarRules.Normalize(_settings.Current.Avatar);
+        string current = Emojis.AvatarRules.Normalize(_settings.Current.ModelAvatar);
         var (verb, text) = Emojis.AvatarCommand.Parse(args);
         string? chosen = verb switch
         {
@@ -2140,7 +2140,7 @@ public sealed class SidekickApp
             return chosen.Length == 0 && verb == Emojis.AvatarVerb.Clear ? Emojis.EmojiText.AlreadyNone : Emojis.EmojiText.Current(current, catalog);
         }
 
-        _settings.Update(d => d.Avatar = chosen);
+        _settings.Update(d => d.ModelAvatar = chosen);
         if (chosen.Length > 0)
         {
             Emojis.EmojiPrefs.Load(_settings.StorageDirectory).Picked(chosen);

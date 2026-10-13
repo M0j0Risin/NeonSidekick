@@ -443,19 +443,30 @@ public sealed partial class InputLine
     /// The sent line as the transcript keeps it, in <paramref name="style"/> (<see cref="UserLineStyle"/>) (2026-10-04, the UI review: always bold in the
     /// secondary colour until then, whatever a theme's <c>user</c> style said): <c>quiet</c> the glyph in <see cref="Theme.User"/> and the
     /// words in <see cref="Theme.Body"/>, <c>slab</c> the whole on <see cref="Theme.MenuHighlight"/>'s fill, <c>bold</c> the whole in
-    /// <see cref="Theme.User"/>. A second line starts under the first's words.
+    /// <see cref="Theme.User"/>. A second line starts under the first's words. <paramref name="glyph"/> (2026-10-12) opens it,
+    /// <see cref="UserGlyph"/>'s, <see cref="PromptGlyph"/> when null; the second line's indent is its width in spaces.
     /// </summary>
-    public static string SubmittedMarkup(string text, string? style = null)
+    public static string SubmittedMarkup(string text, string? style = null, string? glyph = null)
     {
         ArgumentNullException.ThrowIfNull(text);
-        string words = text.Replace("\n", "\n" + ContinuationIndent, StringComparison.Ordinal);
+        glyph ??= PromptGlyph;
+        string indent = glyph == PromptGlyph ? ContinuationIndent : new string(' ', TextCells.Width(glyph));
+        string words = text.Replace("\n", "\n" + indent, StringComparison.Ordinal);
         return UserLineStyle.Resolve(style) switch
         {
-            UserLineStyle.Bold => Theme.StyleMarkup(Theme.User, PromptGlyph + words),
-            UserLineStyle.Slab => Theme.StyleMarkup(Theme.MenuHighlight, PromptGlyph + words),
-            _ => Theme.StyleMarkup(Theme.User, PromptGlyph) + Theme.StyleMarkup(Theme.Body, words),
+            UserLineStyle.Bold => Theme.StyleMarkup(Theme.User, glyph + words),
+            UserLineStyle.Slab => Theme.StyleMarkup(Theme.MenuHighlight, glyph + words),
+            _ => Theme.StyleMarkup(Theme.User, glyph) + Theme.StyleMarkup(Theme.Body, words),
         };
     }
+
+    /// <summary>
+    /// What a sent line opens with in the transcript (2026-10-12, the user's ask): the user avatar and a space when there is one
+    /// (<see cref="Settings.AppSettingsData.UserAvatar"/>, <see cref="Emojis.AvatarRules"/>; three cells), else <see cref="PromptGlyph"/>.
+    /// The input row itself keeps <see cref="PromptGlyph"/>. Pure.
+    /// </summary>
+    public static string UserGlyph(string? avatar) =>
+        Emojis.AvatarRules.Normalize(avatar) is { Length: > 0 } face ? face + " " : PromptGlyph;
 
     /// <summary>
     /// The previews of a sent line's collapsed pastes (<see cref="PasteBlocks.Previews"/>) as one

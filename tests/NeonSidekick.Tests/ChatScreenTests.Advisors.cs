@@ -22,7 +22,7 @@ public partial class ChatScreenTests
     // The dba wears no avatar unless one is given (a fresh AppSettingsData wears 🤖), so its lines keep 🛠️.
     private void AdvisorProfiles(bool on = true, bool confirm = false, string avatar = "")
     {
-        Profiles.Create(_settings.StorageDirectory, "dba", new AppSettingsData { Avatar = avatar });
+        Profiles.Create(_settings.StorageDirectory, "dba", new AppSettingsData { ModelAvatar = avatar });
         _settings.Update(d =>
         {
             d.TtsOutput = false;

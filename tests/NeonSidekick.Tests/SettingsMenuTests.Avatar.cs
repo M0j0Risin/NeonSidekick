@@ -14,16 +14,49 @@ public partial class SettingsMenuTests
     [Fact]
     public void TheAvatarRow_IsUnderMemoryMode_OnChat_ItsValueTheEmojiAndItsName_TheRobotByDefault()
     {
-        Assert.Equal(SettingsField.Avatar, SettingsMenu.TabFields[(int)SettingsTab.Chat][3]);   // Profile, Working directory, Memory mode, Avatar (the user's order, 2026-10-11)
-        Assert.Equal("Avatar", SettingsMenu.FieldName(SettingsField.Avatar));
-        Assert.False(SettingsMenu.IsToggle(SettingsField.Avatar));
-        Assert.False(SettingsMenu.IsLlmField(SettingsField.Avatar));
+        Assert.Equal(SettingsField.ModelAvatar, SettingsMenu.TabFields[(int)SettingsTab.Chat][3]);   // Profile, Working directory, Memory mode, Avatar (the user's order, 2026-10-11)
+        Assert.Equal("Model avatar", SettingsMenu.FieldName(SettingsField.ModelAvatar));   // "Avatar" until 2026-10-12
+        Assert.False(SettingsMenu.IsToggle(SettingsField.ModelAvatar));
+        Assert.False(SettingsMenu.IsLlmField(SettingsField.ModelAvatar));
         Assert.Equal("🤖", Emojis.AvatarRules.DefaultAvatar);   // the user's call, later on 2026-10-10 (none until then)
-        Assert.Equal("🤖 robot", SettingsMenu.FieldValue(SettingsField.Avatar, new AppSettingsData(), "C:\\p"));
-        Assert.Equal(SettingsMenu.NoAvatarLabel, SettingsMenu.FieldValue(SettingsField.Avatar, new AppSettingsData { Avatar = "" }, "C:\\p"));   // cleared: none
-        Assert.Equal("🦊 fox", SettingsMenu.FieldValue(SettingsField.Avatar, new AppSettingsData { Avatar = "🦊" }, "C:\\p"));
-        Assert.Equal("👍🏽 thumbs up: medium skin tone", SettingsMenu.FieldValue(SettingsField.Avatar, new AppSettingsData { Avatar = "👍🏽" }, "C:\\p"));
-        Assert.Equal(SettingsMenu.NoAvatarLabel, SettingsMenu.FieldValue(SettingsField.Avatar, new AppSettingsData { Avatar = "fox" }, "C:\\p"));   // not an emoji: none
+        Assert.Equal("🤖 robot", SettingsMenu.FieldValue(SettingsField.ModelAvatar, new AppSettingsData(), "C:\\p"));
+        Assert.Equal(SettingsMenu.NoAvatarLabel, SettingsMenu.FieldValue(SettingsField.ModelAvatar, new AppSettingsData { ModelAvatar = "" }, "C:\\p"));   // cleared: none
+        Assert.Equal("🦊 fox", SettingsMenu.FieldValue(SettingsField.ModelAvatar, new AppSettingsData { ModelAvatar = "🦊" }, "C:\\p"));
+        Assert.Equal("👍🏽 thumbs up: medium skin tone", SettingsMenu.FieldValue(SettingsField.ModelAvatar, new AppSettingsData { ModelAvatar = "👍🏽" }, "C:\\p"));
+        Assert.Equal(SettingsMenu.NoAvatarLabel, SettingsMenu.FieldValue(SettingsField.ModelAvatar, new AppSettingsData { ModelAvatar = "fox" }, "C:\\p"));   // not an emoji: none
+    }
+
+    [Fact]
+    public void TheUserAvatarRow_IsUnderModelAvatar_NoneByDefault()
+    {
+        Assert.Equal(SettingsField.UserAvatar, SettingsMenu.TabFields[(int)SettingsTab.Chat][4]);   // right under Model avatar (2026-10-12, the user's ask)
+        Assert.Equal("User avatar", SettingsMenu.FieldName(SettingsField.UserAvatar));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.UserAvatar));
+        Assert.Null(new AppSettingsData().UserAvatar);
+        Assert.Equal(SettingsMenu.NoAvatarLabel, SettingsMenu.FieldValue(SettingsField.UserAvatar, new AppSettingsData(), "C:\\p"));
+        Assert.Equal("🦊 fox", SettingsMenu.FieldValue(SettingsField.UserAvatar, new AppSettingsData { UserAvatar = "🦊" }, "C:\\p"));
+    }
+
+    [Fact]
+    public async Task OnThePane_TheUserAvatarPicker_SavesTheUsersOwn_AndTheNoneActionClearsIt()
+    {
+        _console.Profile.Width = 120;
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // User avatar, under Model avatar: the picker
+        _console.Input.PushText("fox");
+        Push(Keys.Enter);                                                // 🦊
+        Push(Keys.Enter);                                                // the picker again, the cursor on 🦊
+        Push(Keys.Home, Keys.Right, Keys.Enter, Keys.Escape);           // 🎲, then 🚫
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Null(_settings.Current.UserAvatar);
+        Assert.Equal(Emojis.AvatarRules.DefaultAvatar, _settings.Current.ModelAvatar);   // the model's untouched
+        Assert.Contains("  · User avatar: 🦊 fox", Output);
+        Assert.Contains("  · User avatar: " + SettingsMenu.NoAvatarLabel, Output);
+        Assert.Contains(EmojiText.UserPreviewLine("🦊"), Output);
+        Assert.DoesNotContain(EmojiText.ForYouTab, Output);
+        pane.Dispose();
     }
 
     [Fact]
@@ -37,8 +70,8 @@ public partial class SettingsMenuTests
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Equal("🦊", _settings.Current.Avatar);
-        Assert.Contains("  · Avatar: 🦊 fox", Output);
+        Assert.Equal("🦊", _settings.Current.ModelAvatar);
+        Assert.Contains("  · Model avatar: 🦊 fox", Output);
         Assert.Contains(EmojiText.Caption("fox", EmojiSearch.Rank("fox", EmojiCatalog.Shipped.Entries).Count, EmojiCatalog.Shipped.Entries.Count), Output);
         Assert.Contains(EmojiText.PreviewLine("🦊", "neon"), Output);
         Assert.Equal(["🦊"], EmojiPrefs.Load(_dir).Recent);
@@ -57,7 +90,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal("👍🏽", _settings.Current.Avatar);
+        Assert.Equal("👍🏽", _settings.Current.ModelAvatar);
         Assert.Contains(EmojiText.ToneTitle, Output);
         Assert.Equal(3, EmojiPrefs.Load(_dir).Tone);
         pane.Dispose();
@@ -67,15 +100,15 @@ public partial class SettingsMenuTests
     public async Task OnThePane_TheNoneAction_ClearsTheAvatar()
     {
         _console.Profile.Width = 120;
-        _settings.Update(d => d.Avatar = "🦊");
+        _settings.Update(d => d.ModelAvatar = "🦊");
         var (menu, pane) = PaneMenu();
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the picker opens on Animals, the cursor on 🦊
         Push(Keys.Home, Keys.Right, Keys.Enter, Keys.Escape);   // 🎲, then 🚫
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal("", _settings.Current.Avatar);
-        Assert.Contains("  · Avatar: " + SettingsMenu.NoAvatarLabel, Output);
+        Assert.Equal("", _settings.Current.ModelAvatar);
+        Assert.Contains("  · Model avatar: " + SettingsMenu.NoAvatarLabel, Output);
         Assert.Contains(EmojiText.GroupTab("Animals & Nature"), Output);
         pane.Dispose();
     }
@@ -92,7 +125,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        var found = EmojiCatalog.Shipped.Find(_settings.Current.Avatar);
+        var found = EmojiCatalog.Shipped.Find(_settings.Current.ModelAvatar);
         Assert.NotNull(found);
         Assert.Contains(found.Value.Entry, EmojiSearch.Rank("animal", EmojiCatalog.Shipped.Entries));
         Assert.All(EmojiSearch.Rank("animal", EmojiCatalog.Shipped.Entries), e => Assert.False(e.HasTones, e.Emoji));
@@ -103,7 +136,7 @@ public partial class SettingsMenuTests
     public async Task OnThePane_AnotherProfilesAvatar_IsMarked_AndSaidUnderTheGrid()
     {
         _console.Profile.Width = 160;
-        Profiles.Create(_dir, "ada", new AppSettingsData { Avatar = "🐙" });
+        Profiles.Create(_dir, "ada", new AppSettingsData { ModelAvatar = "🐙" });
         var (menu, pane) = PaneMenu();
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
         _console.Input.PushText("octopus");
@@ -111,7 +144,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(Emojis.AvatarRules.DefaultAvatar, _settings.Current.Avatar);   // unchanged: the default 🤖
+        Assert.Equal(Emojis.AvatarRules.DefaultAvatar, _settings.Current.ModelAvatar);   // unchanged: the default 🤖
         Assert.Contains("used by ada", Output);
         Assert.Contains(SettingsMenu.UnchangedNotice, Output);
         pane.Dispose();
@@ -121,7 +154,7 @@ public partial class SettingsMenuTests
     public async Task OnThePane_TheRecentTab_HoldsTheAvatarsInUse_AndThePicks()
     {
         _console.Profile.Width = 160;
-        Profiles.Create(_dir, "ada", new AppSettingsData { Avatar = "🐙" });
+        Profiles.Create(_dir, "ada", new AppSettingsData { ModelAvatar = "🐙" });
         EmojiPrefs.Load(_dir).Picked("🦊");
         var (menu, pane) = PaneMenu();
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);

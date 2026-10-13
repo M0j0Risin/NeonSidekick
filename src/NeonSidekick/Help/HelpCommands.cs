@@ -34,7 +34,7 @@ public static class HelpCommands
         ]),
         new("/avatar",
         [
-            new("/avatar", "Open the emoji picker for the profile's *Avatar*: a grid of every emoji Windows Terminal draws, in tabs (For you, from the profile's name and persona; Recent; then each Unicode group). Type to search names and keywords, Enter on a hand or a person for its skin tones, 🎲 for one at random."),
+            new("/avatar", "Open the emoji picker for the profile's *Model avatar*: a grid of every emoji Windows Terminal draws, in tabs (For you, from the profile's name and persona; Recent; then each Unicode group). Type to search names and keywords, Enter on a hand or a person for its skin tones, 🎲 for one at random."),
             new("/avatar <emoji>", "Set the avatar to that emoji at once (one emoji, typed or pasted)."),
             new("/avatar <words>", "Open the picker searching for the words (headless: set the best match)."),
             new("/avatar clear", "No avatar: replies open with ● again and the window title shows the name alone."),

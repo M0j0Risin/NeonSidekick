@@ -1278,6 +1278,8 @@ internal sealed partial class ChatScreen
             StopHintShown = () => _turnRunning,
             // How a sent line is kept (2026-10-04, the UI review: User line style).
             UserLineStyle = () => _effective().UserLineStyle,
+            // What a sent line opens with: the user avatar, else › (2026-10-12, the user's ask).
+            UserGlyph = () => InputLine.UserGlyph(_effective().UserAvatar),
             // A running tool's own clock beside the turn's (2026-10-04, the UI review).
             StepClockShown = () => _turnRunning && _toolStage,
             // The embedded model's load (2026-10-01, the review's finding): its spinner and label are their own zone, so a
@@ -5343,7 +5345,7 @@ internal sealed partial class ChatScreen
     /// <summary>The terminal's tab names the loaded profile (<see cref="WindowTitle"/>); at launch and after every switch, like <see cref="BindProfile"/>.</summary>
     private void ApplyWindowTitle()
     {
-        _windowTitle = WindowTitle(_settings.ProfileName, _effective().Avatar);
+        _windowTitle = WindowTitle(_settings.ProfileName, _effective().ModelAvatar);
         _setTitle?.Invoke(_windowTitle);
     }
 
@@ -8531,7 +8533,7 @@ internal sealed partial class ChatScreen
         var speaker = effective.TtsOutput && _speech.IsReady ? _speech.BeginTurn(cancellationToken) : null;
         if (print)
         {
-            _transcript.BeginAssistant(StyledReply(effective.TranscriptMarkdown, _pane.Enabled), TranscriptRenderer.GlyphFor(effective.Avatar));
+            _transcript.BeginAssistant(StyledReply(effective.TranscriptMarkdown, _pane.Enabled), TranscriptRenderer.GlyphFor(effective.ModelAvatar));
             _transcript.AppendDelta(reading.Text[reading.Sentences[from - 1].Offset..]);
             _transcript.EndAssistant();
             if (reading.Cut)
@@ -8750,7 +8752,7 @@ internal sealed partial class ChatScreen
         if (echo.Count == 0)
         {
             var effective = _effective();
-            _transcript.BeginAssistant(StyledReply(effective.TranscriptMarkdown, _pane.Enabled), TranscriptRenderer.GlyphFor(effective.Avatar));
+            _transcript.BeginAssistant(StyledReply(effective.TranscriptMarkdown, _pane.Enabled), TranscriptRenderer.GlyphFor(effective.ModelAvatar));
             _transcript.AppendDelta(args);
             _transcript.EndAssistant();
             return;
@@ -11897,7 +11899,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task ApplySettingsChangesAsync(SettingsChanges changes, CancellationToken cancellationToken)
     {
-        if (_windowTitle is not null && WindowTitle(_settings.ProfileName, _effective().Avatar) != _windowTitle)
+        if (_windowTitle is not null && WindowTitle(_settings.ProfileName, _effective().ModelAvatar) != _windowTitle)
         {
             // The avatar changed (2026-10-10): the title wears the new one at once.
             ApplyWindowTitle();
@@ -12686,7 +12688,7 @@ internal sealed partial class ChatScreen
                     // stay behind since 2026-10-10 (New profile mode retired, the user's call: /profile push|pull copies them).
                     var seed = AppSettings.Copy(_settings.Current);
                     seed.WorkingDirectory = "";
-                    seed.Avatar = Emojis.AvatarRules.DefaultAvatar;   // 2026-10-10: a picked face is the profile's own, as its sandbox, so a new one starts on the default (none until later that day)
+                    seed.ModelAvatar = Emojis.AvatarRules.DefaultAvatar;   // 2026-10-10: a picked face is the profile's own, as its sandbox, so a new one starts on the default (none until later that day)
                     Profiles.Create(home, action.Name, seed);
                     IReadOnlyList<string> copied = Profiles.CopySidekickFiles(
                         _settings.ProfileDirectory, home, action.Name, Profiles.BasicSidekickFiles);
@@ -13922,7 +13924,7 @@ internal sealed partial class ChatScreen
             if (Profiles.NameEquals(name, starter))
             {
                 // The starter is the loaded profile: its files as bound, its voice as the session holds it.
-                cast.Add(new BotParticipant(name, _persona.Read(), _vocalia.Read(), _speech.VoiceSpec, _speech.Speed, cast.Count, BotChat.GenderOf(effective.TtsVoice), Avatar: effective.Avatar));
+                cast.Add(new BotParticipant(name, _persona.Read(), _vocalia.Read(), _speech.VoiceSpec, _speech.Speed, cast.Count, BotChat.GenderOf(effective.TtsVoice), Avatar: effective.ModelAvatar));
                 continue;
             }
 
@@ -13941,7 +13943,7 @@ internal sealed partial class ChatScreen
             // The persona, the spoken-reply directive and the voice are read; the LLM settings ride along in the profile,
             // read only under Botchat LLM mode multi (later on 2026-09-25, LinkBotsAsync).
             string voice = VoiceMix.Spec(data.TtsVoice, data.TtsVoice2, data.TtsVoiceMix);
-            cast.Add(new BotParticipant(name, new PersonaFile(directory).Read(), new VocaliaFile(directory).Read(), voice, data.TtsSpeed, cast.Count, BotChat.GenderOf(data.TtsVoice), data, data.Avatar));
+            cast.Add(new BotParticipant(name, new PersonaFile(directory).Read(), new VocaliaFile(directory).Read(), voice, data.TtsSpeed, cast.Count, BotChat.GenderOf(data.TtsVoice), data, data.ModelAvatar));
         }
 
         return cast;
@@ -15170,7 +15172,7 @@ internal sealed partial class ChatScreen
         bool markdown = MarkdownTurn(effective.TranscriptMarkdown, _pane.Enabled, speaker is not null);
         bool styled = StyledReply(effective.TranscriptMarkdown, _pane.Enabled);
         // The reply's glyph (2026-10-10): the profile's avatar, or the dot for a /botchat bot, whose speaker line says who it is.
-        string glyph = bot is null ? TranscriptRenderer.GlyphFor(effective.Avatar) : TranscriptRenderer.AssistantGlyph;
+        string glyph = bot is null ? TranscriptRenderer.GlyphFor(effective.ModelAvatar) : TranscriptRenderer.AssistantGlyph;
         // The shells found are checked per turn (2026-09-21), so the schema and the run agree: since 2026-10-12 the cache is revalidated, not
         // walked again (Interpreters.Revalidate); /tools opening walks the PATH afresh, so an install during the session still shows.
         // The picture budget (2026-10-03), a bot's turn too: read at each turn, so an edit lands at the next request.

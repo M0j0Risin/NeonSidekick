@@ -6,7 +6,7 @@ using Spectre.Console;
 
 namespace NeonSidekick.App;
 
-// ── The avatar picker: /settings › Client › Chat › Avatar and /avatar (2026-10-10) ──
+// ── The avatar picker: /settings › Client › Chat › Model avatar and /avatar (2026-10-10), User avatar (2026-10-12) ──
 
 internal sealed partial class SettingsMenu
 {
@@ -35,7 +35,8 @@ internal sealed partial class SettingsMenu
     // What one visit of the picker reads once: the catalog, the prefs, the avatar, whose avatars are whose, the suggestions.
     // ForDraft (2026-10-11): the draft line's emoji picker, not the avatar's — no avatar, owners, suggestions or preview. HomeDefault
     // (later on 2026-10-12): a home bar item's emoji, Current its own one, 🚫 back to this glyph, no preview and no avatar words.
-    private sealed record AvatarContext(EmojiCatalog Catalog, EmojiPrefs Prefs, string Current, string Profile, IReadOnlyDictionary<string, List<string>> UsedBy, IReadOnlyList<EmojiEntry> Suggested, bool ForDraft = false, string? HomeDefault = null);
+    // ForUser (2026-10-12): the user avatar's, Current the user's own, no owners or suggestions, 🚫 back to ›, a sent line's preview.
+    private sealed record AvatarContext(EmojiCatalog Catalog, EmojiPrefs Prefs, string Current, string Profile, IReadOnlyDictionary<string, List<string>> UsedBy, IReadOnlyList<EmojiEntry> Suggested, bool ForDraft = false, string? HomeDefault = null, bool ForUser = false);
 
     /// <summary>
     /// The avatar picker (2026-10-10, the user's ask: "an intuitive picker … searching by name, a category filter, and any other way
@@ -53,13 +54,13 @@ internal sealed partial class SettingsMenu
         ArgumentNullException.ThrowIfNull(filter);
         if (!_pane.Enabled)
         {
-            return await TypeAvatarAsync(cancellationToken).ConfigureAwait(false);
+            return await TypeAvatarAsync(SettingsField.ModelAvatar, AvatarRules.Normalize(_settings.Current.ModelAvatar), (d, avatar) => d.ModelAvatar = avatar, cancellationToken).ConfigureAwait(false);
         }
 
         string? chosen;
         try
         {
-            chosen = await ChooseEmojiAsync(AvatarContextNow(), Crumb(FieldName(SettingsField.Avatar)), filter, cancellationToken).ConfigureAwait(false);
+            chosen = await ChooseEmojiAsync(AvatarContextNow(), Crumb(FieldName(SettingsField.ModelAvatar)), filter, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -70,12 +71,39 @@ internal sealed partial class SettingsMenu
             }
         }
 
-        if (chosen is null || chosen == AvatarRules.Normalize(_settings.Current.Avatar))
+        if (chosen is null || chosen == AvatarRules.Normalize(_settings.Current.ModelAvatar))
         {
             return Unchanged();
         }
 
-        Apply(SettingsField.Avatar, d => d.Avatar = chosen);
+        Apply(SettingsField.ModelAvatar, d => d.ModelAvatar = chosen);
+        return true;
+    }
+
+    /// <summary>
+    /// The user avatar's picker (2026-10-12, the user's ask: <see cref="SettingsField.UserAvatar"/>, the user's own emoji opening their
+    /// lines in place of <c>›</c>): the model avatar's grid, tabs, search and skin tones without what is a profile's — no For you, no
+    /// other profiles' slabs — its 🚫 back to <c>›</c> (stored as null, the default), its preview a sent line. Without the pane, typed
+    /// (<see cref="TypeAvatarAsync"/>). True when it saved.
+    /// </summary>
+    private async Task<bool> PickUserAvatarAsync(CancellationToken cancellationToken)
+    {
+        string saved = AvatarRules.Normalize(_settings.Current.UserAvatar);
+        static void Set(AppSettingsData d, string avatar) => d.UserAvatar = avatar.Length == 0 ? null : avatar;
+        if (!_pane.Enabled)
+        {
+            return await TypeAvatarAsync(SettingsField.UserAvatar, saved, Set, cancellationToken).ConfigureAwait(false);
+        }
+
+        var context = new AvatarContext(EmojiCatalog.Shipped, EmojiPrefs.Load(_settings.StorageDirectory), saved, _settings.ProfileName,
+            new Dictionary<string, List<string>>(StringComparer.Ordinal), [], ForUser: true);
+        string? chosen = await ChooseEmojiAsync(context, Crumb(FieldName(SettingsField.UserAvatar)), "", cancellationToken).ConfigureAwait(false);
+        if (chosen is null || chosen == saved)
+        {
+            return Unchanged();
+        }
+
+        Apply(SettingsField.UserAvatar, d => Set(d, chosen));
         return true;
     }
 
@@ -224,7 +252,7 @@ internal sealed partial class SettingsMenu
     public bool SetAvatar(string avatar)
     {
         ArgumentNullException.ThrowIfNull(avatar);
-        if (avatar == AvatarRules.Normalize(_settings.Current.Avatar))
+        if (avatar == AvatarRules.Normalize(_settings.Current.ModelAvatar))
         {
             return Unchanged();
         }
@@ -234,7 +262,7 @@ internal sealed partial class SettingsMenu
             EmojiPrefs.Load(_settings.StorageDirectory).Picked(avatar);
         }
 
-        Apply(SettingsField.Avatar, d => d.Avatar = avatar);
+        Apply(SettingsField.ModelAvatar, d => d.ModelAvatar = avatar);
         return true;
     }
 
@@ -259,20 +287,20 @@ internal sealed partial class SettingsMenu
             Grid = new MenuGrid(AvatarCellWidth),
             Marks = marks,
             Footer = (_, row) => row >= 0 && row < forms.Count
-                ? new MenuFooter(string.Join('\n', new[] { EmojiText.NameLine(forms[row], entry) + " · " + EmojiText.ToneNames[row], EmojiText.CodeLine(forms[row], entry, forms[row] == context.Current, UsersOf(context, forms[row])), context.ForDraft ? "" : EmojiText.PreviewLine(forms[row], context.Profile) }.Where(l => l.Length > 0))) { KeepLines = true }
+                ? new MenuFooter(string.Join('\n', new[] { EmojiText.NameLine(forms[row], entry) + " · " + EmojiText.ToneNames[row], EmojiText.CodeLine(forms[row], entry, forms[row] == context.Current, UsersOf(context, forms[row])), AvatarPreview(context, forms[row]) }.Where(l => l.Length > 0))) { KeepLines = true }
                 : null,
         };
         return await _pane.PickAsync(page, Math.Clamp(context.Prefs.Tone, 0, EmojiCatalog.ToneCount), cancellationToken).ConfigureAwait(false) is { } pick ? pick.Row : null;
     }
 
     /// <summary>
-    /// The avatar typed where no pane can show the grid: an emoji is taken as it is, a word or two as the best of a search
-    /// (<see cref="EmojiSearch.Rank"/>), an empty line as none. True when it saved.
+    /// An avatar typed where no pane can show the grid (<paramref name="field"/>'s, <paramref name="saved"/> now, <paramref name="set"/>
+    /// storing it): an emoji is taken as it is, a word or two as the best of a search (<see cref="EmojiSearch.Rank"/>), an empty line
+    /// as none. True when it saved.
     /// </summary>
-    private async Task<bool> TypeAvatarAsync(CancellationToken cancellationToken)
+    private async Task<bool> TypeAvatarAsync(SettingsField field, string saved, Action<AppSettingsData, string> set, CancellationToken cancellationToken)
     {
-        string saved = AvatarRules.Normalize(_settings.Current.Avatar);
-        var result = await EditTextAsync(SettingsField.Avatar, new MenuPage(Crumb(FieldName(SettingsField.Avatar)), [], EditKeys), 0, saved, allowEmpty: true, cancellationToken).ConfigureAwait(false);
+        var result = await EditTextAsync(field, new MenuPage(Crumb(FieldName(field)), [], EditKeys), 0, saved, allowEmpty: true, cancellationToken).ConfigureAwait(false);
         if (result is not InputResult.Submitted submitted)
         {
             return Unchanged();
@@ -291,7 +319,7 @@ internal sealed partial class SettingsMenu
             return Unchanged();
         }
 
-        Apply(SettingsField.Avatar, d => d.Avatar = chosen);
+        Apply(field, d => set(d, chosen));
         return true;
     }
 
@@ -325,7 +353,7 @@ internal sealed partial class SettingsMenu
         }
 
         var catalog = EmojiCatalog.Shipped;
-        return new AvatarContext(catalog, EmojiPrefs.Load(home), AvatarRules.Normalize(_settings.Current.Avatar), profile, usedBy,
+        return new AvatarContext(catalog, EmojiPrefs.Load(home), AvatarRules.Normalize(_settings.Current.ModelAvatar), profile, usedBy,
             EmojiSuggest.For(profile, persona, catalog.Entries));
     }
 
@@ -338,7 +366,7 @@ internal sealed partial class SettingsMenu
     {
         try
         {
-            return AvatarRules.Normalize(Profiles.ReadProfileFile(Profiles.ProfileFile(home, name)).Avatar);
+            return AvatarRules.Normalize(Profiles.ReadProfileFile(Profiles.ProfileFile(home, name)).ModelAvatar);
         }
         catch (Exception e) when (e is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
         {
@@ -348,7 +376,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>Profile <paramref name="name"/>'s avatar for a picker: the loaded one's from the store, another's from its file (<see cref="SavedAvatar"/>).</summary>
     private string ProfileAvatar(string name) =>
-        Profiles.NameEquals(name, _settings.ProfileName) ? AvatarRules.Normalize(_settings.Current.Avatar) : SavedAvatar(_settings.StorageDirectory, name);
+        Profiles.NameEquals(name, _settings.ProfileName) ? AvatarRules.Normalize(_settings.Current.ModelAvatar) : SavedAvatar(_settings.StorageDirectory, name);
 
     /// <summary>
     /// A row of a profile picker (2026-10-10, the user's ask: <c>/profile</c>'s list and the advisor's): the profile's avatar, a space,
@@ -515,7 +543,7 @@ internal sealed partial class SettingsMenu
 
         if (cell.Kind == AvatarCellKind.None)
         {
-            return new MenuFooter(context.HomeDefault is { } own ? HomeAssistant.HomeBarText.DefaultGlyphFooter(own) : EmojiText.NoneFooter);
+            return new MenuFooter(context.HomeDefault is { } own ? HomeAssistant.HomeBarText.DefaultGlyphFooter(own) : context.ForUser ? EmojiText.UserNoneFooter : EmojiText.NoneFooter);
         }
 
         var lines = new List<string>
@@ -523,7 +551,7 @@ internal sealed partial class SettingsMenu
             EmojiText.NameLine(cell.Emoji, cell.Entry),
             EmojiText.KeywordLine(cell.Entry),
             EmojiText.CodeLine(cell.Emoji, cell.Entry, context.HomeDefault is null && cell.Emoji == context.Current, UsersOf(context, cell.Emoji)),
-            context.ForDraft || context.HomeDefault is not null ? "" : EmojiText.PreviewLine(cell.Emoji, context.Profile),
+            AvatarPreview(context, cell.Emoji),
         };
         if (cell.Entry is { HasTones: true })
         {
@@ -532,6 +560,10 @@ internal sealed partial class SettingsMenu
 
         return new MenuFooter(string.Join('\n', lines.Where(l => l.Length > 0))) { KeepLines = true };
     }
+
+    // The footer's preview of emoji: the title and a reply for the model avatar, a sent line for the user's, none for the draft or a home bar item.
+    private static string AvatarPreview(AvatarContext context, string emoji) =>
+        context.ForDraft || context.HomeDefault is not null ? "" : context.ForUser ? EmojiText.UserPreviewLine(emoji) : EmojiText.PreviewLine(emoji, context.Profile);
 
     private static IReadOnlyList<string> UsersOf(AvatarContext context, string emoji) =>
         context.UsedBy.TryGetValue(emoji, out var names) ? names : [];

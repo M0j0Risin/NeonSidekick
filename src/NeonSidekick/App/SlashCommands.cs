@@ -324,7 +324,7 @@ public enum SlashCommand
 
     /// <summary>
     /// <c>/avatar [&lt;emoji&gt;|&lt;words&gt;|clear]</c> (2026-10-10, the user's pick): the profile's avatar — bare, the emoji picker
-    /// (<c>/settings</c> › Client › Chat › Avatar's); an emoji sets it, <c>clear</c> clears it, words open the picker searching for them.
+    /// (<c>/settings</c> › Client › Chat › Model avatar's); an emoji sets it, <c>clear</c> clears it, words open the picker searching for them.
     /// </summary>
     Avatar,
 

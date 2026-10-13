@@ -75,6 +75,9 @@ public static class EmojiText
     public const string RandomFooter = "🎲  Random: an emoji at random from this tab, or from the results of what is typed.";
     public const string NoneFooter = "🚫  No avatar: replies open with ● again and the window title shows the name alone.";
 
+    /// <summary>The user avatar's 🚫 band (2026-10-12): the sent lines' own glyph back. Pinned.</summary>
+    public const string UserNoneFooter = "🚫  No avatar: your lines open with › again.";
+
     /// <summary>The picker's hint row while nothing is typed (<see cref="UI.MenuFilter.Hint"/> swaps its end while a search is). Pinned.</summary>
     public const string Keys = "arrows = move · Tab = category · Enter = pick · " + UI.MenuFilter.TypeAndKeepKeys;
 
@@ -129,6 +132,9 @@ public static class EmojiText
     /// <summary>The footer's preview: the window title and a reply as they would read (<c>Title: 🦊 neon   Reply: 🦊 Hello…</c>).</summary>
     public static string PreviewLine(string emoji, string profile) => "Title: " + emoji + " " + profile + "   Reply: " + emoji + " Hello…";
 
+    /// <summary>The user avatar's preview (2026-10-12): a sent line as it would read (<c>You: 🦊 Hello…</c>).</summary>
+    public static string UserPreviewLine(string emoji) => "You: " + emoji + " Hello…";
+
     /// <summary>The footer's tone line for an emoji that takes one.</summary>
     public const string ToneLine = "Enter opens its skin tones.";
 
@@ -155,14 +161,14 @@ public static class EmojiText
     public static string NotAnEmoji(string text) =>
         "Not one emoji: \"" + text + "\". An avatar is a single emoji, two cells wide; /avatar opens the picker.";
 
-    /// <summary>A bare <c>/avatar</c> where no picker can open (headless).</summary>
+    /// <summary>A bare <c>/avatar</c> where no picker can open (headless). "Model avatar" since 2026-10-12, the setting's new name.</summary>
     public static string Current(string avatar, EmojiCatalog catalog) =>
-        avatar.Length == 0 ? "No avatar. /avatar <emoji> sets one; /avatar clear clears it." : "Avatar: " + Value(avatar, catalog);
+        avatar.Length == 0 ? "No model avatar. /avatar <emoji> sets one; /avatar clear clears it." : "Model avatar: " + Value(avatar, catalog);
 
     /// <summary>Headless <c>/avatar &lt;words&gt;</c> when nothing matches them.</summary>
     public static string NoEmojiFor(string words) => "No emoji matches \"" + words + "\"; try other words, or paste the emoji.";
 
-    public const string Cleared = "Avatar cleared.";
+    public const string Cleared = "Model avatar cleared.";
 
-    public const string AlreadyNone = "No avatar to clear.";
+    public const string AlreadyNone = "No model avatar to clear.";
 }

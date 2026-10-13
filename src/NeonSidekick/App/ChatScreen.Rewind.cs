@@ -232,7 +232,7 @@ internal sealed partial class ChatScreen
             }
 
             // The profile's avatar (2026-10-10): a session is its profile's, so its replies wear today's face; Claude's keep the dot.
-            _transcript.BeginAssistant(styled, claude ? null : UI.TranscriptRenderer.GlyphFor(_effective().Avatar));
+            _transcript.BeginAssistant(styled, claude ? null : UI.TranscriptRenderer.GlyphFor(_effective().ModelAvatar));
             _transcript.AppendDelta(replyText);
             _transcript.EndAssistant();
         }

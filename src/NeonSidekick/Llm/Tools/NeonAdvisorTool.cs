@@ -181,7 +181,7 @@ public sealed class NeonAdvisorTool : AIFunction
             return AdvisorText.MissingProfileError(advisor.Profile);
         }
 
-        string avatar = AvatarRules.Normalize(profile.Settings.Avatar);
+        string avatar = AvatarRules.Normalize(profile.Settings.ModelAvatar);
         _view?.Began(advisor, question, avatar);
         var (link, problem) = await _host.LinkAsync(profile, cancellationToken).ConfigureAwait(false);
         if (link is null)

@@ -1021,11 +1021,11 @@ public enum SettingsField
     /// <summary>A toggle: whether each advisor call asks first (<see cref="Settings.AppSettingsData.AdvisorConfirm"/>). The Advisors tab's row under the tool iterations, last of the Each call run (later on 2026-10-10, the user's ask; the tab's last row earlier that day). Last in the enum until <see cref="DockerServerMatchWords"/>.</summary>
     AdvisorConfirm,
 
-    /// <summary>A list the user types into: the words that make a container an LLM server in <see cref="DockerServerContainers"/>' checklist (<see cref="Settings.AppSettingsData.DockerServerMatchWords"/>), its top row adding one, Enter on one removing it, a button restoring the defaults. The Docker tab, under the containers (2026-10-10, the user's ask); no reconnect. Last in the enum until <see cref="Avatar"/>.</summary>
+    /// <summary>A list the user types into: the words that make a container an LLM server in <see cref="DockerServerContainers"/>' checklist (<see cref="Settings.AppSettingsData.DockerServerMatchWords"/>), its top row adding one, Enter on one removing it, a button restoring the defaults. The Docker tab, under the containers (2026-10-10, the user's ask); no reconnect. Last in the enum until <see cref="ModelAvatar"/>.</summary>
     DockerServerMatchWords,
 
-    /// <summary>A grid picker over the emoji catalog: the profile's avatar (<see cref="Settings.AppSettingsData.Avatar"/>), opening its replies, its /botchat speaker line and the window title (2026-10-10, the user's ask). The Chat tab, right under Profile; no reconnect. Last in the enum until <see cref="BotChatRecentContext"/>.</summary>
-    Avatar,
+    /// <summary>A grid picker over the emoji catalog: the profile's avatar (<see cref="Settings.AppSettingsData.ModelAvatar"/>), opening its replies, its /botchat speaker line and the window title (2026-10-10, the user's ask). The Chat tab, right under Profile; no reconnect. "Avatar" until 2026-10-12 (the user's call, once <see cref="UserAvatar"/> came beside it: the row, the field and the key renamed, no migration). Last in the enum until <see cref="BotChatRecentContext"/>.</summary>
+    ModelAvatar,
 
     /// <summary>A toggle: whether the <c>/botchat</c> bots are told the main chat's last messages (<see cref="Settings.AppSettingsData.BotChatRecentContext"/>). The Botchat tab's last row (2026-10-10, the advisors' lesson); no reconnect (read when a chat starts). Last in the enum, as every newcomer.</summary>
     BotChatRecentContext,
@@ -1041,6 +1041,9 @@ public enum SettingsField
 
     /// <summary>An action row: Enter opens the shopping list's pane, the bare <c>/shopping</c>'s (<see cref="ManageShoppingListAsync"/>). The Shopping menu's second row, above Shopping stores (2026-10-11, the user's ask). Last in the enum, as every newcomer.</summary>
     ShoppingList,
+
+    /// <summary>The model avatar's grid picker again, for the user's own (<see cref="Settings.AppSettingsData.UserAvatar"/>): it opens each of the user's lines in the transcript in place of <c>›</c>. The Chat tab, right under <see cref="ModelAvatar"/> (2026-10-12, the user's ask); no reconnect (read at each sent line). Last in the enum, as every newcomer.</summary>
+    UserAvatar,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1175,7 +1178,7 @@ internal sealed partial class SettingsMenu
     public const string SettingsTabKeys = "Enter = edit · Space = flip · type = search · ←/→ tabs · ESC = close";
     public const string EditKeys = "Enter = save · ESC = back";
 
-    /// <summary>The Avatar row's value while the profile has none (2026-10-10). Pinned.</summary>
+    /// <summary>The Model avatar and User avatar rows' value while there is none (2026-10-10). Pinned.</summary>
     public const string NoAvatarLabel = "(none)";
     public const string PickKeys = "Enter = choose · ESC = back";
 
@@ -1448,7 +1451,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
-        [SettingsField.Profile, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.Avatar,
+        [SettingsField.Profile, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.ModelAvatar, SettingsField.UserAvatar,
          SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker,
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle,
          SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.MenuMaxHeight,
@@ -1967,7 +1970,8 @@ internal sealed partial class SettingsMenu
     public static string FieldName(SettingsField field) => field switch
     {
         SettingsField.Profile => "Profile",
-        SettingsField.Avatar => "Avatar",
+        SettingsField.ModelAvatar => "Model avatar",
+        SettingsField.UserAvatar => "User avatar",
         SettingsField.LlmUrl => "LLM URL",
         SettingsField.LlmModel => "LLM model",
         SettingsField.LlmApiKey => "LLM API key",
@@ -2643,7 +2647,8 @@ internal sealed partial class SettingsMenu
             SettingsField.Theme => data.Theme,
             SettingsField.QueueMode => data.QueueMode,
             SettingsField.QueueCancelMode => data.QueueCancelMode,
-            SettingsField.Avatar => AvatarRules.Normalize(data.Avatar) is { Length: > 0 } avatar ? EmojiText.Value(avatar, EmojiCatalog.Shipped) : NoAvatarLabel,
+            SettingsField.ModelAvatar => AvatarRules.Normalize(data.ModelAvatar) is { Length: > 0 } avatar ? EmojiText.Value(avatar, EmojiCatalog.Shipped) : NoAvatarLabel,
+            SettingsField.UserAvatar => AvatarRules.Normalize(data.UserAvatar) is { Length: > 0 } face ? EmojiText.Value(face, EmojiCatalog.Shipped) : NoAvatarLabel,
             _ => "",
         };
     }
@@ -3205,9 +3210,9 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The yes/no asked before <c>Shell police</c> goes from on to off (2026-10-02, the user's ask), on its
     /// on/off page wherever that opens — <c>/tools shell police</c> (<c>/police</c> until 2026-10-09) and the picker's P button, Ctrl+Alt+O, the toolbar's officer, the Tools pane's Shell tab; a move
-    /// to on never asks. Pinned.
+    /// to on never asks; "commands and scripts" since 2026-10-12 (the user's ask: the police check run_command's lines too). Pinned.
     /// </summary>
-    public const string PoliceOffConfirmQuestion = "Disable shell police (scripts run unchecked)?";
+    public const string PoliceOffConfirmQuestion = "Disable shell police (commands and scripts run unchecked)?";
 
     /// <summary>The forbidden-strings list's first row, always there (2026-10-03): Enter on it opens the slot to type one into. Pinned.</summary>
     public const string AddForbiddenRow = "+ Add a string…";
@@ -4589,9 +4594,14 @@ internal sealed partial class SettingsMenu
             return await PickEmbeddedModelAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        if (field == SettingsField.Avatar)
+        if (field == SettingsField.ModelAvatar)
         {
             return await PickAvatarAsync("", own: false, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.UserAvatar)
+        {
+            return await PickUserAvatarAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.EmbeddedBackend)

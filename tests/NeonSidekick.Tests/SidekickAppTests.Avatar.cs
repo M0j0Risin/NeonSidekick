@@ -16,7 +16,7 @@ public partial class SidekickAppTests
         Assert.Contains("[error] " + EmojiText.NoEmojiFor("zzqqxx"), output);
         Assert.Contains(EmojiText.Cleared, output);
         Assert.Contains(EmojiText.AlreadyNone, output);
-        Assert.Equal("", _settings.Current.Avatar);
+        Assert.Equal("", _settings.Current.ModelAvatar);
         Assert.Equal(["🐙"], EmojiPrefs.Load(_dir).Recent);
     }
 }

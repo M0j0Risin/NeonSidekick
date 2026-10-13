@@ -234,6 +234,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private Func<bool> _stepClockShown = () => false;
 
     private Func<string> _userLineStyle = () => UI.UserLineStyle.Default;
+    private Func<string> _userGlyph = () => InputLine.PromptGlyph;
     private long _alertUntil;
     private Func<string> _queued = () => "";
     private Func<string> _usage = () => "";
@@ -3223,6 +3224,16 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         set => _userLineStyle = value ?? throw new ArgumentNullException(nameof(value));
     }
 
+    /// <summary>
+    /// What a sent line opens with in the transcript (2026-10-12, the setting <c>User avatar</c>, <see cref="InputLine.UserGlyph"/>):
+    /// read at each <see cref="CommitInput"/> and each voiced or replayed line. <see cref="InputLine.PromptGlyph"/> by default.
+    /// </summary>
+    public Func<string> UserGlyph
+    {
+        get => _userGlyph;
+        set => _userGlyph = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
     public Func<bool> StepClockShown
     {
         get => _stepClockShown;
@@ -3536,9 +3547,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         string under = preview.Length == 0 ? "" : InputLine.PreviewMarkup(preview) + Environment.NewLine;
         if (!Enabled)
         {
+            // The row was typed behind the prompt glyph; the sent line may open with the user avatar, a cell wider.
+            string glyph = _userGlyph();
             _inner.Cursor.Move(CursorDirection.Left, TextCells.Width(InputLine.PromptGlyph) + _cursorCell);
-            _inner.Write(new Markup(InputLine.SubmittedMarkup(submitted, _userLineStyle())));
-            int stale = _renderedCells - TextCells.Width(submitted);
+            _inner.Write(new Markup(InputLine.SubmittedMarkup(submitted, _userLineStyle(), glyph)));
+            int stale = _renderedCells - TextCells.Width(submitted) - (TextCells.Width(glyph) - TextCells.Width(InputLine.PromptGlyph));
             if (stale > 0)
             {
                 _inner.Write(new RawText(new string(' ', stale)));
@@ -3572,7 +3585,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
 
         // The preview folds past its first lines once the next thing is said (2026-10-04, SentLineView).
-        Write(new SentLineView(InputLine.SubmittedMarkup(submitted, _userLineStyle()), preview.Length == 0 ? "" : InputLine.PreviewMarkup(preview)));
+        Write(new SentLineView(InputLine.SubmittedMarkup(submitted, _userLineStyle(), _userGlyph()), preview.Length == 0 ? "" : InputLine.PreviewMarkup(preview)));
     }
 
     /// <summary>

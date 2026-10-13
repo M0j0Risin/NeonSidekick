@@ -67,7 +67,7 @@ public sealed class TranscriptFind
         void Search()
         {
             var rows = _pane.TranscriptRows();
-            int own = OwnLine(rows);
+            int own = OwnLine(rows, _pane.UserGlyph());
             hits = TextFind.Matches(rows, find);
             hits.RemoveAll(found => found.Line >= own);
             hit = hits.Count - 1;
@@ -189,9 +189,10 @@ public sealed class TranscriptFind
 
     /// <summary>
     /// Where the typed <c>/find</c> line that opened the find starts — the last row with text, when it is one — else the row
-    /// count: the rows from there on are not searched. Ctrl+Shift+F writes no line, so nothing is left out then.
+    /// count: the rows from there on are not searched. Ctrl+Shift+F writes no line, so nothing is left out then. <paramref name="glyph"/>
+    /// is what a sent line opens with (<see cref="ScreenPane.UserGlyph"/>, the user avatar since 2026-10-12).
     /// </summary>
-    internal static int OwnLine(IReadOnlyList<IReadOnlyList<Spectre.Console.Rendering.Segment>> rows)
+    internal static int OwnLine(IReadOnlyList<IReadOnlyList<Spectre.Console.Rendering.Segment>> rows, string glyph = InputLine.PromptGlyph)
     {
         for (int i = rows.Count - 1; i >= 0; i--)
         {
@@ -201,7 +202,7 @@ public sealed class TranscriptFind
                 continue;
             }
 
-            return text.StartsWith(InputLine.PromptGlyph + "/find", StringComparison.Ordinal) ? i : rows.Count;
+            return text.StartsWith(glyph + "/find", StringComparison.Ordinal) ? i : rows.Count;
         }
 
         return rows.Count;

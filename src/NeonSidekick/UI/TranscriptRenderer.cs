@@ -272,12 +272,12 @@ public sealed class TranscriptRenderer : INoticeSink
 
     // ── Lines ───────────────────────────────────────────────────────────────
 
-    /// <summary>What the user said, in the same shape the input line leaves behind. Voice input uses this.</summary>
+    /// <summary>What the user said, in the same shape the input line leaves behind (the user avatar too, <see cref="ScreenPane.UserGlyph"/>). Voice input uses this.</summary>
     public void User(string text)
     {
         EndRun();
         BreakIfMidText();
-        _console.MarkupLine(InputLine.SubmittedMarkup(text, _pane?.UserLineStyle()));
+        _console.MarkupLine(InputLine.SubmittedMarkup(text, _pane?.UserLineStyle(), _pane?.UserGlyph()));
         _state = LineState.AtLineStart;
     }
 

@@ -127,8 +127,8 @@ public partial class NeonAdvisorToolTests
     [Fact]
     public async Task TheView_IsHandedTheAdvisorsAvatar_OrNoneWithoutOne()
     {
-        _host.Add("dba", settings: new AppSettingsData { Avatar = "🦉" }).EnqueueText("one");
-        _host.Add("ux", settings: new AppSettingsData { Avatar = "" }).EnqueueText("two");
+        _host.Add("dba", settings: new AppSettingsData { ModelAvatar = "🦉" }).EnqueueText("one");
+        _host.Add("ux", settings: new AppSettingsData { ModelAvatar = "" }).EnqueueText("two");
         var tool = Tool();
 
         await Ask(tool, "dba", "q1");

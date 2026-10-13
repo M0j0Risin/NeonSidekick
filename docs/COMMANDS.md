@@ -36,7 +36,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | Command | What it does |
 |---|---|
 | `/about` | Shows the version, repository, runtime, folders, components, the embedded models (with Hugging Face links) and licence. |
-| `/avatar` | Opens the emoji picker for the profile's *Avatar* (see [The avatar picker](SETTINGS.md#the-avatar-picker)). |
+| `/avatar` | Opens the emoji picker for the profile's *Model avatar* (see [The avatar picker](SETTINGS.md#the-avatar-picker)). |
 | `/avatar <emoji>` | Sets the avatar to that emoji (typed, or pasted from Win+.). |
 | `/avatar <words>` | Opens the picker searching for the words; headless, sets the best match. |
 | `/avatar clear` | Removes the avatar: replies open with ● again and the window title shows the name alone. |
