@@ -8,7 +8,7 @@ using NeonSidekick.Tests.Fakes;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// <c>Memory mode</c> (2026-10-04, the user's ask: the Memory switch became read-write / read-only / disabled): the parse, the
+/// <c>Memory mode</c> (2026-10-04, the user's ask: the Memory switch became read-write / read-only / off): the parse, the
 /// pinned words, the turn's tools and prompt per mode, and the summaries that say so.
 /// </summary>
 public class MemoryModeTests : IDisposable
@@ -23,12 +23,12 @@ public class MemoryModeTests : IDisposable
     [Fact]
     public void Names_Default_AndTheParse_ArePinned()
     {
-        Assert.Equal(["read-write", "read-only", "disabled"], MemoryMode.Names);
+        Assert.Equal(["read-write", "read-only", "off"], MemoryMode.Names);
         Assert.Equal("read-write", MemoryMode.Default);
         Assert.Equal("read-write", new AppSettingsData().MemoryMode);
         Assert.True(MemoryMode.TryParse(" Read-Only ", out var mode));
         Assert.Equal(MemoryAccess.ReadOnly, mode);
-        Assert.True(MemoryMode.TryParse("disabled", out mode));
+        Assert.True(MemoryMode.TryParse("off", out mode));
         Assert.Equal(MemoryAccess.Disabled, mode);
         Assert.False(MemoryMode.TryParse("on", out mode));   // /memory's alias, not a saved value
         Assert.Equal(MemoryAccess.ReadWrite, mode);
@@ -36,7 +36,7 @@ public class MemoryModeTests : IDisposable
         Assert.All(MemoryMode.Names, name => Assert.Equal(name, MemoryMode.Name(MemoryMode.TryParse(name, out var m) ? m : throw new InvalidOperationException(name))));
         Assert.Equal("the model reads and saves memories", MemoryMode.Describe("read-write"));
         Assert.Equal("the model reads memories, never saves one", MemoryMode.Describe("read-only"));
-        Assert.Equal("no memory: nothing read, nothing saved", MemoryMode.Describe("disabled"));
+        Assert.Equal("no memory: nothing read, nothing saved", MemoryMode.Describe("off"));
         Assert.Equal("", MemoryMode.Describe("nope"));
     }
 
@@ -49,8 +49,8 @@ public class MemoryModeTests : IDisposable
         Assert.True(MemoryMode.Saves(new AppSettingsData()));
         Assert.True(MemoryMode.Enabled(new AppSettingsData { MemoryMode = "read-only" }));
         Assert.False(MemoryMode.Saves(new AppSettingsData { MemoryMode = "read-only" }));
-        Assert.False(MemoryMode.Enabled(new AppSettingsData { MemoryMode = "disabled" }));
-        Assert.False(MemoryMode.Saves(new AppSettingsData { MemoryMode = "disabled" }));
+        Assert.False(MemoryMode.Enabled(new AppSettingsData { MemoryMode = "off" }));
+        Assert.False(MemoryMode.Saves(new AppSettingsData { MemoryMode = "off" }));
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public class MemoryModeTests : IDisposable
         Assert.False(group.Offers(SaveMemoryTool.ToolName));
         Assert.True(group.Offers(RecallMemoryTool.ToolName));
         Assert.Equal(SystemPromptSummary.NotOffered("memory mode is read-only"), group.ToolNotes[SaveMemoryTool.ToolName]);
-        Assert.Equal("memory mode is disabled", SystemPromptSummary.MemoryOffSuffix);
+        Assert.Equal("memory mode is off", SystemPromptSummary.MemoryOffSuffix);
         Assert.Equal(SettingsField.MemoryMode, group.Switch);
     }
 

@@ -68,7 +68,7 @@ public class AppSettingsTests : IDisposable
         ShowImageThumbnails = false,
         TranscriptMarkdown = false,
         WelcomeSplashMode = "tiled",
-        MenuMaxHeight = "half-screen",
+        MenuMaxHeight = "half",
         ShowWorkingDirectory = false,
         ShowHeader = false,
         ToolbarItems = ["usage", "path"],
@@ -142,7 +142,7 @@ public class AppSettingsTests : IDisposable
         AskMaxQuestions = 3,
         AskUser = false,
         FileTools = true,   // off by default since 2026-09-29
-        FileMentionFolderMode = "folder-apply",
+        FileMentionFolderMode = "apply",
         FileTreeMaxLength = 750,
         FileTreeShowSizes = false,
         FileViewImageMaxPerCall = 25,
@@ -151,7 +151,7 @@ public class AppSettingsTests : IDisposable
         ImageEditOutputFolder = "thumbs",
         PastedImagesFolder = "clips",
         WebSearxngUrl = "http://localhost:8080",
-        WebBrowserMode = "chromium",
+        WebBrowserMode = "browser",
         WebBrowserNetworkMode = "both",
         WebBrowserPath = @"C:\tools\chrome.exe",
         WebBrowserBotcheckWindow = "automatic",   // ask by default since 2026-10-13
@@ -1558,9 +1558,9 @@ public class AppSettingsTests : IDisposable
         Assert.False(s.LlmPreserveThinking);
         Assert.Null(s.LlmSampling);
         Assert.False(s.LlmSamplingFromHuggingFace);
-        Assert.Equal("disabled", s.LlmScanMode);   // "local" until 2026-09-29 (the user's call: a fresh profile scans nothing)
+        Assert.Equal("off", s.LlmScanMode);   // "local" until 2026-09-29 (the user's call: a fresh profile scans nothing)
         Assert.False(s.WebTools);   // on until 2026-09-29 (the user's call: every tool group off in a fresh profile)
-        Assert.Equal("default", s.WebBrowserMode);
+        Assert.Equal("auto", s.WebBrowserMode);
         Assert.Equal("", s.WebBrowserPath);
         Assert.Equal("internet", s.WebBrowserNetworkMode);
         Assert.Equal("", s.WebSearxngUrl);
@@ -1580,14 +1580,14 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(10, s.AskMaxChoices);
         Assert.Equal("in-process", s.TtsSource);
         Assert.Equal("vosk-model-small-en-us-0.15", s.SttVoskModel);
-        Assert.Equal("folder-remain", s.FileMentionFolderMode);
+        Assert.Equal("remain", s.FileMentionFolderMode);
         Assert.True(s.AgentSkills);
         Assert.False(s.ExternalSkills);
         Assert.True(s.ProjectFile);   // later on 2026-09-19: the notes read unless the toggle (the Options tab of /skills since 2026-10-01) says not
         Assert.Equal("protected", s.SkillCompactMode);
         Assert.True(s.TranscriptMarkdown);
         Assert.Equal("fullsize", s.WelcomeSplashMode);   // 2026-09-18; a pick since 2026-09-24 (on was fullsize)
-        Assert.Equal("full-screen", s.MenuMaxHeight);   // 2026-10-01; three-quarters until later that day
+        Assert.Equal("full", s.MenuMaxHeight);   // 2026-10-01; three-quarters until later that day
         Assert.False(s.ShowWorkingDirectory);   // 2026-09-18; off by default since 2026-09-21
         Assert.True(s.ShowHeader);   // 2026-10-01, the user's ask
         Assert.Null(s.ToolbarItems);   // 2026-09-21 as a switch, on; every item since the checklist, 2026-09-29
@@ -1612,7 +1612,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("model-written", s.SessionNamingMode);
         Assert.Equal(0, s.SessionRetentionDays);
         Assert.Equal(10, s.SessionSearchMaxResults);
-        Assert.Equal("all-names", s.SessionShowName);   // the rule above the input row names the session (later on 2026-09-18)
+        Assert.Equal("all", s.SessionShowName);   // the rule above the input row names the session (later on 2026-09-18)
         Assert.True(s.SessionTool);
         Assert.False(s.SessionSaveThinking);
         // The message queue (2026-09-18): automatic (Queue messages on until 2026-10-09), a cancelled reply empties it.

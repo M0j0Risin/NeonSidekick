@@ -9,14 +9,14 @@ public class MentionFolderModeTests
     [Fact]
     public void Names_ArePinned_InMenuOrder()
     {
-        Assert.Equal(new[] { "folder-apply", "folder-remain" }, MentionFolderMode.Names);
-        Assert.Equal("folder-remain", MentionFolderMode.Default);
+        Assert.Equal(new[] { "apply", "remain" }, MentionFolderMode.Names);
+        Assert.Equal("remain", MentionFolderMode.Default);
         Assert.Equal(MentionFolderMode.Default, new AppSettingsData().FileMentionFolderMode);
     }
 
     [Theory]
-    [InlineData("folder-apply", MentionFolderAction.Apply)]
-    [InlineData("folder-remain", MentionFolderAction.Remain)]
+    [InlineData("apply", MentionFolderAction.Apply)]
+    [InlineData("remain", MentionFolderAction.Remain)]
     [InlineData("  Folder-Remain ", MentionFolderAction.Remain)]
     public void TryParse_TrimsAndIgnoresCase(string text, MentionFolderAction expected)
     {
@@ -27,7 +27,7 @@ public class MentionFolderModeTests
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("apply")]
+    [InlineData("open")]
     [InlineData("folder")]
     public void TryParse_RejectsAnythingElse(string? text)
     {
@@ -46,16 +46,16 @@ public class MentionFolderModeTests
         }
 
         // The user's wording (2026-09-16).
-        Assert.Equal("insert @folder/ and close the list", MentionFolderMode.Describe("folder-apply"));
-        Assert.Equal("insert @folder/ and keep listing inside it", MentionFolderMode.Describe("folder-remain"));
-        Assert.Equal("", MentionFolderMode.Describe("apply"));
+        Assert.Equal("insert @folder/ and close the list", MentionFolderMode.Describe("apply"));
+        Assert.Equal("insert @folder/ and keep listing inside it", MentionFolderMode.Describe("remain"));
+        Assert.Equal("", MentionFolderMode.Describe("open"));
     }
 
     [Fact]
     public void Resolve_MapsTheSavedMode()
     {
-        Assert.Equal(MentionFolderAction.Remain, MentionFolderMode.Resolve(new AppSettingsData { FileMentionFolderMode = "folder-remain" }));
-        Assert.Equal(MentionFolderAction.Apply, MentionFolderMode.Resolve(new AppSettingsData { FileMentionFolderMode = "folder-apply" }));
+        Assert.Equal(MentionFolderAction.Remain, MentionFolderMode.Resolve(new AppSettingsData { FileMentionFolderMode = "remain" }));
+        Assert.Equal(MentionFolderAction.Apply, MentionFolderMode.Resolve(new AppSettingsData { FileMentionFolderMode = "apply" }));
         Assert.Equal(MentionFolderAction.Remain, MentionFolderMode.Resolve(new AppSettingsData()));
     }
 
@@ -75,6 +75,6 @@ public class MentionFolderModeTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains("FileMentionFolderMode='descend' is not one of folder-apply, folder-remain. Using folder-remain.", warning.Message);
+        Assert.Contains("FileMentionFolderMode='descend' is not one of apply, remain. Using remain.", warning.Message);
     }
 }

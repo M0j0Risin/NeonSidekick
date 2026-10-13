@@ -62,7 +62,7 @@ public class BotChatTests
         Assert.Equal("--kill", BotChat.KillSwitch);
         Assert.Equal("stop the extra embedded servers of multi-server botchats", BotChat.KillNote);
         Assert.Equal("Usage: /botchat --kill, alone: it stops the extra embedded servers a multi-server botchat left running.", BotChat.KillUsageError);
-        Assert.Equal("(botchat: bob wanted Gemma 4 E4B QAT, but one embedded server runs Gemma 4 E2B, so bob uses it; Botchat multi-embedded multi-server gives it its own)",
+        Assert.Equal("(botchat: bob wanted Gemma 4 E4B QAT, but one embedded server runs Gemma 4 E2B, so bob uses it; Botchat embedded mode multi-server gives it its own)",
             BotChat.SharedEmbeddedWarning("bob", "Gemma 4 E4B QAT", "Gemma 4 E2B"));
         Assert.Equal("(botchat: stopped 1 extra embedded server: Gemma 4 E2B)", BotChat.ExtrasStoppedNotice(["Gemma 4 E2B"]));
         Assert.Equal("(botchat: stopped 2 extra embedded servers: Gemma 4 E2B and Gemma 4 E4B QAT)", BotChat.ExtrasStoppedNotice(["Gemma 4 E2B", "Gemma 4 E4B QAT"]));

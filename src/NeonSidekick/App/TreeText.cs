@@ -26,7 +26,7 @@ public static class TreeText
 
     /// <summary>The tail line when the walk stopped at the cap.</summary>
     public static string CutLine(int cap) =>
-        "… only the first " + cap.ToString(CultureInfo.InvariantCulture) + " entries are shown (File /tree max length)";
+        "… only the first " + cap.ToString(CultureInfo.InvariantCulture) + " entries are shown (File /tree max entries)";
 
     /// <summary>
     /// The info pane's label and tab title for <c>/tree</c> or <c>/vault</c> under a reply (later on 2026-09-27): the command

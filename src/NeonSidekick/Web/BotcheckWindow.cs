@@ -18,7 +18,7 @@ public enum BotcheckKind
 
 /// <summary>
 /// The setting <c>Web browser botcheck window</c> (2026-10-13, the user's ask and name): the three words the operator picks from
-/// (<c>ask</c>, <c>automatic</c>, <c>disabled</c>) and their mapping to <see cref="BotcheckKind"/>, the <see cref="BrowserMode"/> shape.
+/// (<c>ask</c>, <c>automatic</c>, <c>off</c>) and their mapping to <see cref="BotcheckKind"/>, the <see cref="BrowserMode"/> shape.
 /// When <c>web_fetch</c>, <c>web_search</c>, <c>download_file</c> or <c>convert_to_pdf</c> meets a bot check that wants a person (a
 /// Cloudflare click, a captcha), the Browser window (<c>Viewer.BrowserWindow</c>) can show it to the user, who solves it there;
 /// the page and its cookies then come back to the tool (<see cref="BotCheck"/>). <see cref="Resolve"/> is the one place the saved
@@ -30,18 +30,24 @@ public static class BotcheckWindow
     public const string Default = "ask";
 
     /// <summary>The modes in menu order.</summary>
-    public static readonly string[] Names = { "ask", "automatic", "disabled" };
+    public static readonly string[] Names = { "ask", "automatic", "off" };
+
+    /// <summary>The words retired on 2026-10-13 (the settings verbiage pass, the user's call), still read: old → new (<see cref="RetiredWords"/>).</summary>
+    internal static readonly IReadOnlyDictionary<string, string> Retired = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["disabled"] = "off",
+    };
 
     private const string Category = "Web";
 
     /// <summary>Trims and ignores case; false (and <see cref="BotcheckKind.Ask"/>) for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out BotcheckKind kind)
     {
-        switch (text?.Trim().ToLowerInvariant())
+        switch (RetiredWords.Current(text, Retired))
         {
             case "ask": kind = BotcheckKind.Ask; return true;
             case "automatic": kind = BotcheckKind.Automatic; return true;
-            case "disabled": kind = BotcheckKind.Disabled; return true;
+            case "off": kind = BotcheckKind.Disabled; return true;
             default: kind = BotcheckKind.Ask; return false;
         }
     }
@@ -50,7 +56,7 @@ public static class BotcheckWindow
     public static string Name(BotcheckKind kind) => kind switch
     {
         BotcheckKind.Automatic => "automatic",
-        BotcheckKind.Disabled => "disabled",
+        BotcheckKind.Disabled => "off",
         _ => "ask",
     };
 
@@ -59,7 +65,7 @@ public static class BotcheckWindow
     {
         "ask" => "asks before opening the Browser window on a bot check",
         "automatic" => "opens the Browser window on a bot check at once",
-        "disabled" => "never opens it; the tool reports the refusal",
+        "off" => "never opens it; the tool reports the refusal",
         _ => "",
     };
 

@@ -19,7 +19,7 @@ public enum SplashStyle
 /// <summary>
 /// The setting <c>Welcome splash</c> (2026-09-24, the user's ask: an on/off became three words): <c>fullsize</c>
 /// (the one picture it always was, the default — the user's name for it over "normal"), <c>tiled</c> (a page of
-/// thumbnails, paged by the arrows) and <c>disabled</c>, and their mapping to <see cref="SplashStyle"/> — the
+/// thumbnails, paged by the arrows) and <c>off</c>, and their mapping to <see cref="SplashStyle"/> — the
 /// <see cref="App.QueueCancelMode"/> shape. <see cref="Resolve"/> is the one place the saved string becomes the
 /// enum: a hand-edited value that is none of them falls back to <see cref="Default"/> with a warning. The word
 /// <c>fullsize</c> is spelled as <see cref="ThumbnailSize.FullSize"/> but is this setting's own.
@@ -30,18 +30,24 @@ public static class SplashMode
     public const string Default = "fullsize";
 
     /// <summary>The modes in menu order.</summary>
-    public static readonly string[] Names = { "fullsize", "tiled", "disabled" };
+    public static readonly string[] Names = { "fullsize", "tiled", "off" };
+
+    /// <summary>The words retired on 2026-10-13 (the settings verbiage pass, the user's call), still read: old → new (<see cref="RetiredWords"/>).</summary>
+    internal static readonly IReadOnlyDictionary<string, string> Retired = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["disabled"] = "off",
+    };
 
     private const string Category = "Splash";
 
     /// <summary>Trims and ignores case; false (and <see cref="SplashStyle.FullSize"/>) for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out SplashStyle style)
     {
-        switch (text?.Trim().ToLowerInvariant())
+        switch (RetiredWords.Current(text, Retired))
         {
             case "fullsize": style = SplashStyle.FullSize; return true;
             case "tiled": style = SplashStyle.Tiled; return true;
-            case "disabled": style = SplashStyle.Disabled; return true;
+            case "off": style = SplashStyle.Disabled; return true;
             default: style = SplashStyle.FullSize; return false;
         }
     }
@@ -50,7 +56,7 @@ public static class SplashMode
     public static string Name(SplashStyle style) => style switch
     {
         SplashStyle.Tiled => "tiled",
-        SplashStyle.Disabled => "disabled",
+        SplashStyle.Disabled => "off",
         _ => "fullsize",
     };
 
@@ -59,7 +65,7 @@ public static class SplashMode
     {
         "fullsize" => "one picture fills the screen under the banner at startup; ← → walk them",
         "tiled" => "the pictures as thumbnails at the image thumbnail size, a screenful at a time; ← → page",
-        "disabled" => "the banner alone at startup",
+        "off" => "the banner alone at startup",
         _ => "",
     };
 

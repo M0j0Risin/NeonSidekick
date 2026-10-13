@@ -302,7 +302,7 @@ public class ClaudeTests
             [SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodeServer, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort],
             anthropic.Take(5));
         Assert.Equal(
-            ["Claude Code executable", "Claude Code server", "Claude Code command permissions", "Claude Code command model", "Claude Code command effort"],
+            ["Claude Code executable", "Claude Code server enabled", "Claude Code command permissions", "Claude Code command model", "Claude Code command effort"],
             anthropic.Take(5).Select(SettingsMenu.FieldName));
         Assert.DoesNotContain(SettingsMenu.ToolsTabFields, menu => menu.Contains(SettingsField.ClaudeCodeExecutable));
         Assert.Equal("(looked up)", SettingsMenu.FieldValue(SettingsField.ClaudeCodeExecutable, data, "C:\\p"));

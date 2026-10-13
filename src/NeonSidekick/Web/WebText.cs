@@ -88,7 +88,7 @@ public static class WebText
 
     public static string NotHttp(string url) => $"Error: '{url}' is not an http or https URL";
     public static string LanRefused(string host) => $"Error: '{host}' is on this machine or the local network, which Web browser network mode 'internet' keeps off limits";
-    public static string InternetRefused(string host) => $"Error: '{host}' is on the internet, which Web browser network mode 'local_area_network' keeps off limits";
+    public static string InternetRefused(string host) => $"Error: '{host}' is on the internet, which Web browser network mode 'lan' keeps off limits";
     public static string Timeout(string url, TimeSpan after) => $"Error: '{url}' did not answer within {Llm.LlmTimeouts.Format(after)}";
     public static string Blocked(string url, string detail) => $"Error: '{url}' refused the request ({detail})";
     public static string Binary(string url, string mediaType, long bytes) => $"Error: '{url}' is {mediaType} ({Size(bytes)}); only web pages and text are readable";

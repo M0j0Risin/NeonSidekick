@@ -17,7 +17,7 @@ public partial class SettingsMenuTests
         Assert.Equal("TTS", SettingsMenu.TabTitles[tab + 1]);
         Assert.Equal((2, 0), SettingsMenu.PlaceOf(SettingsTab.Advisors));
         // The confirm under the iterations, in the Each call run, since later on 2026-10-10 (the user's ask; last until then).
-        Assert.Equal(["Advisors enabled", "Advisor list", "Advisor context", "Advisor calls per turn", "Advisor tool iterations", "Advisor confirm", "Advisor thread length", "Advisor embedded mode"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
+        Assert.Equal(["Advisors enabled", "Advisor list", "Advisor context", "Advisor max calls per turn", "Advisor max tool iterations", "Advisor confirm", "Advisor thread length", "Advisor embedded mode"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
         Assert.Equal(["The panel", "Each call", "Threads and servers"], SettingsMenu.TabSections[SettingsTab.Advisors].Select(s => s.Title));
         Assert.Equal([SettingsField.Advisors, SettingsField.AdvisorContext, SettingsField.AdvisorThreadPairs], SettingsMenu.TabSections[SettingsTab.Advisors].Select(s => s.First));
         Assert.Equal("Enabled", SettingsMenu.RowName(SettingsField.Advisors, "Advisors"));
@@ -193,7 +193,7 @@ public partial class SettingsMenuTests
         Assert.Equal(2, _settings.Current.AdvisorCallsPerTurn);
         Assert.Equal(0, _settings.Current.AdvisorMaxToolIterations);
         Assert.Equal("multi-server", _settings.Current.AdvisorEmbedded);
-        Assert.Contains("Advisor calls per turn " + SettingsMenu.AdvisorCallsRangeError + "; keeping 2.", Output);
+        Assert.Contains("Advisor max calls per turn " + SettingsMenu.AdvisorCallsRangeError + "; keeping 2.", Output);
         pane.Dispose();
     }
 }

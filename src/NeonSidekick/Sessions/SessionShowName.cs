@@ -17,7 +17,7 @@ public enum SessionNameDisplay
 }
 
 /// <summary>
-/// The show-name setting: the three words the operator picks from (<c>all-names</c>,
+/// The show-name setting: the three words the operator picks from (<c>all</c>,
 /// <c>model-written</c>, <c>none</c>) and their mapping to <see cref="SessionNameDisplay"/>, the
 /// <see cref="SessionNamingMode"/> shape. <see cref="Resolve"/> is the one place the saved string
 /// becomes the enum: a hand-edited value that is none of them falls back to <see cref="Default"/> with a warning.
@@ -25,19 +25,25 @@ public enum SessionNameDisplay
 public static class SessionShowName
 {
     /// <summary>Every name. The compiled default (the user's call, 2026-09-18), pinned by <c>AppSettingsTests</c>.</summary>
-    public const string Default = "all-names";
+    public const string Default = "all";
 
     /// <summary>The choices in menu order.</summary>
-    public static readonly string[] Names = { "all-names", "model-written", "none" };
+    public static readonly string[] Names = { "all", "model-written", "none" };
+
+    /// <summary>The words retired on 2026-10-13 (the settings verbiage pass, the user's call), still read: old → new (<see cref="RetiredWords"/>).</summary>
+    internal static readonly IReadOnlyDictionary<string, string> Retired = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["all-names"] = "all",
+    };
 
     private const string Category = "Sessions";
 
     /// <summary>Trims and ignores case; false for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out SessionNameDisplay display)
     {
-        switch (text?.Trim().ToLowerInvariant())
+        switch (RetiredWords.Current(text, Retired))
         {
-            case "all-names": display = SessionNameDisplay.AllNames; return true;
+            case "all": display = SessionNameDisplay.AllNames; return true;
             case "model-written": display = SessionNameDisplay.ModelWritten; return true;
             case "none": display = SessionNameDisplay.None; return true;
             default: display = SessionNameDisplay.AllNames; return false;
@@ -49,13 +55,13 @@ public static class SessionShowName
     {
         SessionNameDisplay.ModelWritten => "model-written",
         SessionNameDisplay.None => "none",
-        _ => "all-names",
+        _ => "all",
     };
 
     /// <summary>The menu hint next to a choice. Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "all-names" => "every session name shows on the rule above the input row",
+        "all" => "every session name shows on the rule above the input row",
         "model-written" => "only a model-written or typed name shows; the first line never does",
         "none" => "the rule stays bare",
         _ => "",

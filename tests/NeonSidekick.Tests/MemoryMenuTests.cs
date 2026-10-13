@@ -327,7 +327,7 @@ public class MemoryMenuTests : IDisposable
         Assert.Equal("Enter = choose · a = add · w = read-write · o = read-only · x = disabled · ESC = close", MemoryMenu.SwitchKeys);   // 2026-10-03; Memory mode's three since 2026-10-04
         Assert.Equal("a = add · w = read-write · o = read-only · x = disabled · ESC = close", MemoryMenu.EmptySwitchKeys);
         Assert.Equal("Enter = choose · w = read-write · o = read-only · x = disabled · ESC = close", MemoryMenu.WithoutAdd(MemoryMenu.SwitchKeys));
-        Assert.Equal(["● read-write", "○ read-only", "○ disabled", "+ add"], MemoryMenu.Buttons(MemoryAccess.ReadWrite, add: true).Select(b => b.Title));
+        Assert.Equal(["● read-write", "○ read-only", "○ off", "+ add"], MemoryMenu.Buttons(MemoryAccess.ReadWrite, add: true).Select(b => b.Title));
         Assert.Equal('a', MemoryMenu.Buttons(MemoryAccess.ReadWrite, add: true)[^1].Key);
         Assert.Equal("💾 \"x\"", MemoryMenu.ActionTitle("x"));
         Assert.Equal("Enter = choose · ESC = back", MemoryMenu.ActionKeys);
@@ -337,8 +337,8 @@ public class MemoryMenuTests : IDisposable
         Assert.Equal("Another memory already says that: x", MemoryMenu.DuplicateError("x"));
         Assert.Equal("disabled: not offered to the model", MemoryMenu.DisabledFooter);
         Assert.Equal("[#9A8BB8]2026-09-11  x [[y]][/]", MemoryMenu.RowMarkup(new MemoryEntry { Text = "x [y]", SavedAt = dated.SavedAt, Disabled = true }));   // the whole line greyed
-        Assert.Equal(["● read-write", "○ read-only", "○ disabled"], MemoryMenu.Buttons(MemoryAccess.ReadWrite).Select(b => b.Title));
-        Assert.Equal(["○ read-write", "● read-only", "○ disabled"], MemoryMenu.Buttons(MemoryAccess.ReadOnly).Select(b => b.Title));
+        Assert.Equal(["● read-write", "○ read-only", "○ off"], MemoryMenu.Buttons(MemoryAccess.ReadWrite).Select(b => b.Title));
+        Assert.Equal(["○ read-write", "● read-only", "○ off"], MemoryMenu.Buttons(MemoryAccess.ReadOnly).Select(b => b.Title));
         Assert.Equal([true, false, false], MemoryMenu.Buttons(MemoryAccess.ReadWrite).Select(b => b.On));
         Assert.Equal([false, false, true], MemoryMenu.Buttons(MemoryAccess.Disabled).Select(b => b.On));
         Assert.Equal(['w', 'o', 'x'], MemoryMenu.Buttons(MemoryAccess.Disabled).Select(b => b.Key!.Value));

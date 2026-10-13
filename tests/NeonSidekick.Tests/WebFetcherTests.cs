@@ -1014,7 +1014,7 @@ public class WebFetcherTests
     public void RefusalLogLines_ArePinned()
     {
         Assert.Equal("Refused 10.0.0.5: a LAN address under internet", WebFetcher.RefusedLogLine("10.0.0.5", FetchOutcome.LanRefused, NetworkReach.Internet));
-        Assert.Equal("Refused example.com: a public address under local_area_network", WebFetcher.RefusedLogLine("example.com", FetchOutcome.InternetRefused, NetworkReach.LocalAreaNetwork));
+        Assert.Equal("Refused example.com: a public address under lan", WebFetcher.RefusedLogLine("example.com", FetchOutcome.InternetRefused, NetworkReach.LocalAreaNetwork));
         Assert.Equal("GET http://twofaced.example/: refused at the socket, twofaced.example is a LAN address", WebFetcher.SocketRefusedLogLine(new Uri("http://twofaced.example/"), "twofaced.example", FetchOutcome.LanRefused));
         Assert.Equal("Web", WebFetcher.Category);
     }

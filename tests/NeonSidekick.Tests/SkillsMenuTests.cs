@@ -176,10 +176,10 @@ public class SkillsMenuTests : IDisposable
     private static string ShadowedHead(int count) => "  \n" + Head(SkillsText.ShadowedTitle + " · " + count + " ── " + SkillsText.ShadowedNote);
 
     /// <summary>The Options tab's five rows at their defaults, padded to the tab's own column (38: the external-skills label), as the pane prints them; Project file third since 2026-10-01. Pinned.</summary>
-    private static readonly string OptionsRows = Head("Sources") + "\n▸ Agent skills                          on\n  " + SettingsMenu.ExternalSkillsName + "  off\n  Project file                          on\n" + Head("Prompt and mentions") + "\n  Skill compact mode                    protected\n  #-mention enabled                     on\n";   // under its two headings since 2026-10-10   // Allow skill delete, the fifth, went on 2026-09-23 (delete always offered)
+    private static readonly string OptionsRows = Head("Sources") + "\n▸ Agent skills                      on\n  " + SettingsMenu.ExternalSkillsName + "  off\n  Project file                      on\n" + Head("Prompt and mentions") + "\n  Skill compact mode                protected\n  #-mention enabled                 on\n";   // under its two headings since 2026-10-10   // Allow skill delete, the fifth, went on 2026-09-23 (delete always offered)
 
     /// <summary>The Reflection tab's rows at their defaults (the confirm mode since 2026-10-12) (later on 2026-09-19), padded to its own column (33: the downloaded skills label since 2026-10-12). Pinned.</summary>
-    private static readonly string ReflectionRows = Head("Learning") + "\n▸ Reflection (auto-learn)            on\n  Reflection reasoning               none\n" + Head("What it reads") + "\n  Reflection window                  3 turns\n  Reflection min tool calls          4 tool calls\n  Reflection max requests            4 requests\n  Reflection includes sessions       on\n" + Head("Pace") + "\n  Reflection cooldown (minutes)      5 minutes\n  Reflection cooldown mode           last-written-skill\n  Reflection yields to turns         on\n" + Head("What it may change") + "\n  Reflection confirm mode            confirm-none\n  Reflection edit supporting files   off\n  Reflection edit downloaded skills  allow-and-mark\n";   // under its four headings since 2026-10-10, the sessions switch under What it reads
+    private static readonly string ReflectionRows = Head("Learning") + "\n▸ Reflection (auto-learn)            on\n  Reflection reasoning               none\n" + Head("What it reads") + "\n  Reflection window                  3 turns\n  Reflection min tool calls          4 tool calls\n  Reflection max requests            4 requests\n  Reflection include sessions        on\n" + Head("Pace") + "\n  Reflection cooldown (min)          5 minutes\n  Reflection cooldown mode           last-written-skill\n  Reflection yield to turns          on\n" + Head("What it may change") + "\n  Reflection confirm mode            none\n  Reflection edit supporting files   off\n  Reflection edit downloaded skills  allow-and-mark\n";   // under its four headings since 2026-10-10, the sessions switch under What it reads
 
     /// <summary>A row as the menu prints it at width 100: whole when it fits, else cut to 99 cells and an ellipsis (FittedMarkup; the temp roots are long).</summary>
     private static string Fitted(string row) => row.Length <= 100 ? row : row[..99] + "…";
@@ -392,7 +392,7 @@ public class SkillsMenuTests : IDisposable
 
         AssertPadded("\n" + Titled(Strip) + "\n" + Scopes + "\n \n" + SkillsHead(1) + "\n▸ haiku  profile  Writes haiku.\n" + ShadowedHead(1) + "\n  haiku  global   shadowed by the profile skills\n", Rule(100) + "\n" + SkillsMenu.LoadedKeys + "\n");
         Assert.DoesNotContain("\n" + Titled(SkillsText.Label + " › Project file") + "\n", Output);   // no page: Space saved at once
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Project file: off\n" + Head("Sources") + "\n  Agent skills                          on\n  " + SettingsMenu.ExternalSkillsName + "  off\n▸ Project file                          off\n", Output);   // the flip on the status line, the row re-read, the cursor kept
+        Assert.Contains("\n" + Titled(Strip) + "\n  · Project file: off\n" + Head("Sources") + "\n  Agent skills                      on\n  " + SettingsMenu.ExternalSkillsName + "  off\n▸ Project file                      off\n", Output);   // the flip on the status line, the row re-read, the cursor kept
         Assert.False(_settings.Current.ProjectFile);
         Assert.DoesNotContain("Project    ", Output);   // no Project tab in the strip
         Assert.DoesNotContain("Roots", Output);
@@ -1024,7 +1024,7 @@ public class SkillsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         // In the strip's order: Offered, Reflection, Options last (2026-09-22; Options second from 2026-09-19, Reflection later that day), every row as `label: value`; the Project file row among the Options since 2026-10-01 (a Project section of its own until then), no Roots section.
-        Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku.\n  · Reflection\n  ·   Reflection (auto-learn): on\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection includes sessions: on\n  ·   Reflection cooldown (minutes): 5 minutes\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection yields to turns: on\n  ·   Reflection confirm mode: confirm-none\n  ·   Reflection edit supporting files: off\n  ·   Reflection edit downloaded skills: allow-and-mark\n  · Options\n  ·   Agent skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n  ·   Skill compact mode: protected\n  ·   #-mention enabled: on\n", Output);
+        Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku.\n  · Reflection\n  ·   Reflection (auto-learn): on\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection include sessions: on\n  ·   Reflection cooldown (min): 5 minutes\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection yield to turns: on\n  ·   Reflection confirm mode: none\n  ·   Reflection edit supporting files: off\n  ·   Reflection edit downloaded skills: allow-and-mark\n  · Options\n  ·   Agent skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n  ·   Skill compact mode: protected\n  ·   #-mention enabled: on\n", Output);
         Assert.DoesNotContain("Roots", Output);
     }
 
@@ -1039,7 +1039,7 @@ public class SkillsMenuTests : IDisposable
         Push(Keys.Left);                                        // the strip wraps: Offered → Options
         Push(Keys.Enter, Keys.Down, Keys.Enter);                // Agent skills: the page, off picked
         Push(Keys.Left);                                        // Reflection
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // Reflection includes sessions (under the max requests since 2026-10-10) (the last row until Reflection yields to turns on 2026-09-24; Reflection verbose there until later still on 2026-09-19): the page (the cursor on the saved on row), off picked under it
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // Reflection include sessions (under the max requests since 2026-10-10) (the last row until Reflection yield to turns on 2026-09-24; Reflection verbose there until later still on 2026-09-19): the page (the cursor on the saved on row), off picked under it
         Push(Keys.Left);                                        // Offered (the off line now)
         Push(Keys.Escape);
 
@@ -1050,9 +1050,9 @@ public class SkillsMenuTests : IDisposable
         AssertPadded("\n" + Titled(Strip) + "\n \n" + OptionsRows, Rule(100) + "\n" + SettingsMenu.TabKeys + "\n");
         AssertPadded("\n" + Titled(Strip) + "\n \n" + ReflectionRows, Rule(100) + "\n" + SettingsMenu.TabKeys + "\n");   // the flip's notice dropped by the tab switch (2026-09-20)
         Assert.DoesNotContain("\n  · Agent skills: off\n" + ReflectionRows, Output);
-        Assert.Contains("\n" + Titled(SkillsText.Label + " › Reflection includes sessions") + "\n", Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Reflection includes sessions: off\n", Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Agent skills: off\n" + Head("Sources") + "\n▸ Agent skills                          off\n", Output);
+        Assert.Contains("\n" + Titled(SkillsText.Label + " › Reflection include sessions") + "\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · Reflection include sessions: off\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · Agent skills: off\n" + Head("Sources") + "\n▸ Agent skills                      off\n", Output);
         Assert.Contains("\n" + Fitted("▸ " + SkillsText.OffLine) + "\n", Output);   // the tabs re-read after the flip
         Assert.False(pane.OverlayOpen);
         pane.Dispose();

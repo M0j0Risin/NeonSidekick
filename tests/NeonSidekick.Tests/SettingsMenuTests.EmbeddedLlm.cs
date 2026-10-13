@@ -44,7 +44,7 @@ public partial class SettingsMenuTests
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.EmbeddedHfDownloadType));
         Assert.True(SettingsMenu.IsToggle(SettingsField.EmbeddedVision) && SettingsMenu.IsToggle(SettingsField.EmbeddedLlmServer) && SettingsMenu.IsToggle(SettingsField.EmbeddedDrafter) && SettingsMenu.IsToggle(SettingsField.EmbeddedVramOnly));
         Assert.False(SettingsMenu.IsToggle(SettingsField.EmbeddedBackend));
-        Assert.Equal(["Embedded servers enabled", "Embedded models", "Embedded HF download type", "Embedded backend", "Embedded context size", "Embedded GPU layers", "Embedded VRAM budget", "Embedded VRAM only", "Embedded vision", "Embedded drafter"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
+        Assert.Equal(["Embedded servers enabled", "Embedded models", "Embedded download mode", "Embedded backend", "Embedded context length", "Embedded GPU layers", "Embedded VRAM budget (%)", "Embedded VRAM only", "Embedded vision", "Embedded drafter"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
         var data = new AppSettingsData();
         Assert.True(data.EmbeddedLlmServer && data.EmbeddedDrafter);   // both on by default
         Assert.Equal(("on", "on"), (SettingsMenu.FieldValue(SettingsField.EmbeddedLlmServer, data, "C:\\p"), SettingsMenu.FieldValue(SettingsField.EmbeddedDrafter, data, "C:\\p")));
@@ -455,7 +455,7 @@ public partial class SettingsMenuTests
     {
         var (menu, pane, _) = EmbeddedPane();
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // Embedded context size (the switch first since 2026-09-29, the HF download type above since 2026-09-30; the filter type from later on 2026-09-29 to 2026-10-02)
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // Embedded context length (the switch first since 2026-09-29, the HF download type above since 2026-09-30; the filter type from later on 2026-09-29 to 2026-10-02)
         Backspace(10);
         _console.Input.PushText("100");
         Push(Keys.Enter);                       // refused
@@ -467,7 +467,7 @@ public partial class SettingsMenuTests
         Backspace(10);
         _console.Input.PushText("ALL");
         Push(Keys.Enter);
-        Push(Keys.Down, Keys.Enter);            // Embedded VRAM budget (later on 2026-09-29)
+        Push(Keys.Down, Keys.Enter);            // Embedded VRAM budget (%) (later on 2026-09-29)
         Backspace(10);
         _console.Input.PushText("49");
         Push(Keys.Enter);                       // refused
@@ -482,8 +482,8 @@ public partial class SettingsMenuTests
         Assert.Equal(16_384, _settings.Current.EmbeddedContextSize);
         Assert.Equal("all", _settings.Current.EmbeddedGpuLayers);
         Assert.Equal(92, _settings.Current.EmbeddedVramBudget);
-        Assert.Contains("Embedded context size " + EmbeddedContextSize.Error + "; keeping 0.", Output);   // fit, the default since later on 2026-09-29
-        Assert.Contains("Embedded VRAM budget " + EmbeddedVramBudget.Error + "; keeping 91.", Output);   // the default since 2026-09-30
+        Assert.Contains("Embedded context length " + EmbeddedContextSize.Error + "; keeping 0.", Output);   // fit, the default since later on 2026-09-29
+        Assert.Contains("Embedded VRAM budget (%) " + EmbeddedVramBudget.Error + "; keeping 91.", Output);   // the default since 2026-09-30
         pane.Dispose();
     }
 
@@ -509,7 +509,7 @@ public partial class SettingsMenuTests
         // 2026-09-30 (the user's ask): single or parallel, under the catalog (under the filter type until it went, 2026-10-02); read as each download starts.
         var (menu, pane, _) = EmbeddedPane();
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Down, Keys.Down, Keys.Enter); // Embedded HF download type: the page opens on parallel
+        Push(Keys.Down, Keys.Down, Keys.Enter); // Embedded download mode: the page opens on parallel
         Push(Keys.Up, Keys.Enter);              // single
         Push(Keys.Escape);
 
@@ -540,7 +540,7 @@ public partial class SettingsMenuTests
     {
         var (menu, pane, _) = EmbeddedPane();
         Push(Keys.Escape);                      // out of the catalog: the settings list, on Embedded models
-        Push(Keys.Down, Keys.Enter);            // Embedded HF download type, the row under it (the filter type's until 2026-10-02)
+        Push(Keys.Down, Keys.Enter);            // Embedded download mode, the row under it (the filter type's until 2026-10-02)
         Push(Keys.Up, Keys.Enter);              // single
         Push(Keys.Escape);
 

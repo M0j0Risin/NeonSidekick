@@ -19,7 +19,7 @@ public partial class ToolsMenuTests
         Assert.Equal(ToolsText.MenuIndex(ToolsText.PrintTabTitle) + 2, tab);   // the user's order since 2026-10-03 (after Ask from 2026-10-02); after Print on Media since 2026-10-09
         Assert.Equal(ToolsText.DevicesTabTitle, ToolsText.TabTitles[TabIndex(ToolsText.CameraTabTitle)]);
         Assert.Equal(
-            ["Camera tool", "Camera shutter", "Camera preview", "Camera device", "Camera resolution", "Camera output folder", "Camera keep in sessions", "Camera watch interval (s)", "Camera watch change (%)", "Camera watch speaks up", "Camera watch min gap (s)"],
+            ["Camera tool", "Camera shutter", "Camera preview", "Camera device", "Camera resolution", "Camera output folder", "Camera keep in sessions", "Camera watch interval (s)", "Camera watch change (%)", "Camera watch unprompted", "Camera watch min gap (s)"],
             SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
         Assert.Equal([SettingsField.CameraTools, SettingsField.CameraKeepInSessions, SettingsField.CameraWatchUnprompted], SettingsMenu.ToolsTabFields[tab - 1].Where(SettingsMenu.IsToggle));
         Assert.DoesNotContain(SettingsMenu.ToolsTabFields[tab - 1], SettingsMenu.RefusedMidTurn);
@@ -50,7 +50,7 @@ public partial class ToolsMenuTests
         Assert.Equal("post", _settings.Current.CameraPreview);
         Assert.Equal("640x480", _settings.Current.CameraResolution);
         Assert.Contains("model    " + CameraShutterMode.Describe("model"), Output);
-        Assert.Contains("disabled " + CameraPreviewMode.Describe("disabled"), Output);
+        Assert.Contains("off      " + CameraPreviewMode.Describe("off"), Output);
         pane.Dispose();
     }
 

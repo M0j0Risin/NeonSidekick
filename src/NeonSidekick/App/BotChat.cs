@@ -1170,7 +1170,7 @@ public static partial class BotChat
     /// <c>parent-server</c>, later on 2026-09-29, the user's ask): it talks through the running one. Pinned.
     /// </summary>
     public static string SharedEmbeddedWarning(string name, string wanted, string running) =>
-        $"(botchat: {name} wanted {wanted}, but one embedded server runs {running}, so {name} uses it; Botchat multi-embedded multi-server gives it its own)";
+        $"(botchat: {name} wanted {wanted}, but one embedded server runs {running}, so {name} uses it; Botchat embedded mode multi-server gives it its own)";
 
     /// <summary>The first word that stops a multi-server botchat's extra embedded servers (later on 2026-09-29, the user's ask). A whole word, as <see cref="ResumeSwitch"/>. Pinned.</summary>
     public const string KillSwitch = "--kill";

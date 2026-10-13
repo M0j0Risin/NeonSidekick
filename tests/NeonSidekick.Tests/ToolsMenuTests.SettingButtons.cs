@@ -19,7 +19,7 @@ public partial class ToolsMenuTests
         string Titles(SettingsField toolSwitch) => string.Join(" · ", SettingsMenu.SettingButtons(SettingsMenu.SettingButtonsFor(toolSwitch)!, data, dir).Select(b => b.Title));
         string KeysOf(SettingsField toolSwitch) => string.Concat(SettingsMenu.SettingButtonsFor(toolSwitch)!.Select(b => b.Key));
 
-        Assert.Equal("≡ browser (default)", Titles(SettingsField.FileTools));
+        Assert.Equal("≡ browser (hide-hidden)", Titles(SettingsField.FileTools));
         Assert.Equal("b", KeysOf(SettingsField.FileTools));
         Assert.Equal("≡ edit mode (beside-original)", Titles(SettingsField.ImageTools));   // File tools' until 2026-10-10, with the picture tools
         Assert.Equal("e", KeysOf(SettingsField.ImageTools));
@@ -86,7 +86,7 @@ public partial class ToolsMenuTests
         await menu.ShowSwitchAsync(SettingsField.FileTools, CancellationToken.None);
 
         Assert.Equal("show-hidden", _settings.Current.FileBrowserMode);
-        string before = "\n" + Titled(ToolsText.Label + " › File tools │ ≡ browser (default) ") + "\n";
+        string before = "\n" + Titled(ToolsText.Label + " › File tools │ ≡ browser (hide-hidden) ") + "\n";
         string picker = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.FileBrowserMode);
         string after = "\n" + Titled(ToolsText.Label + " › File tools │ ≡ browser (show-hidden) ") + "\n";
         Assert.True(Output.IndexOf(before, StringComparison.Ordinal) < Output.IndexOf(picker, StringComparison.Ordinal), Output);

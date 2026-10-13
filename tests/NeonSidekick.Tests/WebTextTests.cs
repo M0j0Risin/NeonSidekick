@@ -29,7 +29,7 @@ public class WebTextTests
     {
         Assert.Equal("Error: 'ftp://x/' is not an http or https URL", WebText.NotHttp("ftp://x/"));
         Assert.Equal("Error: '192.168.1.1' is on this machine or the local network, which Web browser network mode 'internet' keeps off limits", WebText.LanRefused("192.168.1.1"));   // "the setting Browser allow LAN" until 2026-09-18
-        Assert.Equal("Error: 'example.com' is on the internet, which Web browser network mode 'local_area_network' keeps off limits", WebText.InternetRefused("example.com"));
+        Assert.Equal("Error: 'example.com' is on the internet, which Web browser network mode 'lan' keeps off limits", WebText.InternetRefused("example.com"));
         Assert.Equal("Error: 'https://a/' did not answer within 30s", WebText.Timeout("https://a/", TimeSpan.FromSeconds(30)));
         Assert.Equal("Error: 'https://a/' refused the request (HTTP 403 Forbidden)", WebText.Blocked("https://a/", "HTTP 403 Forbidden"));
         Assert.Equal("Error: 'https://a/x.pdf' is application/pdf (1.2 MB); only web pages and text are readable", WebText.Binary("https://a/x.pdf", "application/pdf", 1_234_567));

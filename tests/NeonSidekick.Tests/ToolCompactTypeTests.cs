@@ -9,7 +9,7 @@ public class ToolCompactTypeTests
     [Fact]
     public void Names_ArePinned_InMenuOrder()
     {
-        Assert.Equal(new[] { "compact", "prune", "stop", "nothing" }, ToolCompactType.Names);
+        Assert.Equal(new[] { "compact", "prune", "stop", "off" }, ToolCompactType.Names);
         Assert.Equal("compact", ToolCompactType.Default);
         Assert.Equal(ToolCompactType.Default, new AppSettingsData().LlmToolCompactType);
     }
@@ -19,7 +19,7 @@ public class ToolCompactTypeTests
     [InlineData("prune", ToolCompactMode.Prune)]
     [InlineData("stop", ToolCompactMode.Stop)]
     [InlineData(" COMPACT", ToolCompactMode.Compact)]
-    [InlineData("nothing", ToolCompactMode.Nothing)]
+    [InlineData("off", ToolCompactMode.Nothing)]
     [InlineData("  Stop ", ToolCompactMode.Stop)]
     public void TryParse_TrimsAndIgnoresCase(string text, ToolCompactMode expected)
     {
@@ -50,7 +50,7 @@ public class ToolCompactTypeTests
         Assert.Equal("prune, then summarise if the turn is still over the share", ToolCompactType.Describe("compact"));
         Assert.Equal("stub this turn's older tool results and carry on", ToolCompactType.Describe("prune"));
         Assert.Equal("end the turn with a notice; /compact or /clear first", ToolCompactType.Describe("stop"));
-        Assert.Equal("no check; the server's own limit answers", ToolCompactType.Describe("nothing"));
+        Assert.Equal("no check; the server's own limit answers", ToolCompactType.Describe("off"));
         Assert.Equal("", ToolCompactType.Describe("eager"));
     }
 
@@ -58,7 +58,7 @@ public class ToolCompactTypeTests
     public void Resolve_MapsTheSavedType()
     {
         Assert.Equal(ToolCompactMode.Stop, ToolCompactType.Resolve(new AppSettingsData { LlmToolCompactType = "stop" }));
-        Assert.Equal(ToolCompactMode.Nothing, ToolCompactType.Resolve(new AppSettingsData { LlmToolCompactType = "nothing" }));
+        Assert.Equal(ToolCompactMode.Nothing, ToolCompactType.Resolve(new AppSettingsData { LlmToolCompactType = "off" }));
         Assert.Equal(ToolCompactMode.Prune, ToolCompactType.Resolve(new AppSettingsData { LlmToolCompactType = "prune" }));
         Assert.Equal(ToolCompactMode.Compact, ToolCompactType.Resolve(new AppSettingsData()));
     }
@@ -79,6 +79,6 @@ public class ToolCompactTypeTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains("LlmToolCompactType='eager' is not one of compact, prune, stop, nothing. Using compact.", warning.Message);
+        Assert.Contains("LlmToolCompactType='eager' is not one of compact, prune, stop, off. Using compact.", warning.Message);
     }
 }

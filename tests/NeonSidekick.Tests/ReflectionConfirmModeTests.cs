@@ -37,21 +37,21 @@ public sealed class ReflectionConfirmModeTests : IDisposable
     [Fact]
     public void Names_Default_AndDescriptions_ArePinned()
     {
-        Assert.Equal(["confirm-none", "confirm-all", "confirm-new", "confirm-edit"], ReflectionConfirmMode.Names);
-        Assert.Equal("confirm-none", ReflectionConfirmMode.Default);
+        Assert.Equal(["none", "all", "new", "edit"], ReflectionConfirmMode.Names);
+        Assert.Equal("none", ReflectionConfirmMode.Default);
         Assert.Equal(ReflectionConfirmMode.Default, new AppSettingsData().ReflectionConfirmMode);
-        Assert.Equal("a reflection never asks", ReflectionConfirmMode.Describe("confirm-none"));
-        Assert.Equal("a reflection asks before a new skill and before an edit", ReflectionConfirmMode.Describe("confirm-all"));
-        Assert.Equal("a reflection asks before a new skill, not before an edit", ReflectionConfirmMode.Describe("confirm-new"));
-        Assert.Equal("a reflection asks before an edit, not before a new skill", ReflectionConfirmMode.Describe("confirm-edit"));
+        Assert.Equal("a reflection never asks", ReflectionConfirmMode.Describe("none"));
+        Assert.Equal("a reflection asks before a new skill and before an edit", ReflectionConfirmMode.Describe("all"));
+        Assert.Equal("a reflection asks before a new skill, not before an edit", ReflectionConfirmMode.Describe("new"));
+        Assert.Equal("a reflection asks before an edit, not before a new skill", ReflectionConfirmMode.Describe("edit"));
         Assert.Equal("", ReflectionConfirmMode.Describe("x"));
     }
 
     [Theory]
-    [InlineData("confirm-none", ReflectionConfirmScope.None, true)]
+    [InlineData("none", ReflectionConfirmScope.None, true)]
     [InlineData(" Confirm-All ", ReflectionConfirmScope.All, true)]
-    [InlineData("confirm-new", ReflectionConfirmScope.New, true)]
-    [InlineData("confirm-edit", ReflectionConfirmScope.Edit, true)]
+    [InlineData("new", ReflectionConfirmScope.New, true)]
+    [InlineData("edit", ReflectionConfirmScope.Edit, true)]
     [InlineData("always", ReflectionConfirmScope.None, false)]
     [InlineData(null, ReflectionConfirmScope.None, false)]
     public void TryParse_TrimsAndIgnoresCase(string? text, ReflectionConfirmScope expected, bool parsed)
@@ -76,7 +76,7 @@ public sealed class ReflectionConfirmModeTests : IDisposable
     [Fact]
     public void Resolve_ReadsTheSavedWord_AndAnUnknownOne_WarnsAndUsesTheDefault()
     {
-        Assert.Equal(ReflectionConfirmScope.New, ReflectionConfirmMode.Resolve(new AppSettingsData { ReflectionConfirmMode = "confirm-new" }));
+        Assert.Equal(ReflectionConfirmScope.New, ReflectionConfirmMode.Resolve(new AppSettingsData { ReflectionConfirmMode = "new" }));
         var warnings = new List<DiagnosticEvent>();
         Action<DiagnosticEvent> capture = e => { if (e.Category == SkillCatalog.Category && e.Level == DiagnosticLevel.Warning) warnings.Add(e); };
         DiagnosticLog.Emitted += capture;
@@ -89,7 +89,7 @@ public sealed class ReflectionConfirmModeTests : IDisposable
             DiagnosticLog.Emitted -= capture;
         }
 
-        Assert.Equal("ReflectionConfirmMode='always' is not one of confirm-none, confirm-all, confirm-new, confirm-edit. Using confirm-none.", Assert.Single(warnings).Message);
+        Assert.Equal("ReflectionConfirmMode='always' is not one of none, all, new, edit. Using none.", Assert.Single(warnings).Message);
     }
 
     /// <summary>A create the user says no to writes nothing and answers Declined; yes writes it as ever. The ask carries what it would write.</summary>

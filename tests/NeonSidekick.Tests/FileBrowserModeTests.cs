@@ -9,13 +9,13 @@ public class FileBrowserModeTests
     [Fact]
     public void Names_ArePinned_InMenuOrder()
     {
-        Assert.Equal(new[] { "default", "show-hidden" }, FileBrowserMode.Names);
-        Assert.Equal("default", FileBrowserMode.Default);
+        Assert.Equal(new[] { "hide-hidden", "show-hidden" }, FileBrowserMode.Names);
+        Assert.Equal("hide-hidden", FileBrowserMode.Default);
         Assert.Equal(FileBrowserMode.Default, new AppSettingsData().FileBrowserMode);
     }
 
     [Theory]
-    [InlineData("default", FileBrowserVisibility.Default)]
+    [InlineData("hide-hidden", FileBrowserVisibility.Default)]
     [InlineData("show-hidden", FileBrowserVisibility.ShowHidden)]
     [InlineData("  Show-Hidden ", FileBrowserVisibility.ShowHidden)]
     public void TryParse_TrimsAndIgnoresCase(string text, FileBrowserVisibility expected)
@@ -45,7 +45,7 @@ public class FileBrowserModeTests
             Assert.NotEqual("", FileBrowserMode.Describe(name));
         }
 
-        Assert.Equal("hide hidden, system and dot entries", FileBrowserMode.Describe("default"));   // since 2026-09-23, when /tree came to follow the mode
+        Assert.Equal("hide hidden, system and dot entries", FileBrowserMode.Describe("hide-hidden"));   // since 2026-09-23, when /tree came to follow the mode
         Assert.Equal("list hidden, system and dot entries too", FileBrowserMode.Describe("show-hidden"));
         Assert.Equal("", FileBrowserMode.Describe("hidden"));
     }
@@ -54,7 +54,7 @@ public class FileBrowserModeTests
     public void Resolve_MapsTheSavedMode()
     {
         Assert.Equal(FileBrowserVisibility.ShowHidden, FileBrowserMode.Resolve(new AppSettingsData { FileBrowserMode = "show-hidden" }));
-        Assert.Equal(FileBrowserVisibility.Default, FileBrowserMode.Resolve(new AppSettingsData { FileBrowserMode = "default" }));
+        Assert.Equal(FileBrowserVisibility.Default, FileBrowserMode.Resolve(new AppSettingsData { FileBrowserMode = "hide-hidden" }));
         Assert.Equal(FileBrowserVisibility.Default, FileBrowserMode.Resolve(new AppSettingsData()));
     }
 
@@ -74,7 +74,7 @@ public class FileBrowserModeTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains("FileBrowserMode='all' is not one of default, show-hidden. Using default.", warning.Message);
+        Assert.Contains("FileBrowserMode='all' is not one of hide-hidden, show-hidden. Using hide-hidden.", warning.Message);
     }
 
     // ── The disks behind the tree ───────────────────────────────────────────

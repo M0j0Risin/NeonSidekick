@@ -9,14 +9,14 @@ public class NetworkModeTests
     [Fact]
     public void Names_ArePinned_InMenuOrder()
     {
-        Assert.Equal(new[] { "internet", "local_area_network", "both" }, NetworkMode.Names);
+        Assert.Equal(new[] { "internet", "lan", "both" }, NetworkMode.Names);
         Assert.Equal("internet", NetworkMode.Default);
         Assert.Equal(NetworkMode.Default, new AppSettingsData().WebBrowserNetworkMode);
     }
 
     [Theory]
     [InlineData("internet", NetworkReach.Internet)]
-    [InlineData("local_area_network", NetworkReach.LocalAreaNetwork)]
+    [InlineData("lan", NetworkReach.LocalAreaNetwork)]
     [InlineData("both", NetworkReach.Both)]
     [InlineData("  Both ", NetworkReach.Both)]
     public void TryParse_TrimsAndIgnoresCase(string text, NetworkReach expected)
@@ -28,7 +28,7 @@ public class NetworkModeTests
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("lan")]
+    [InlineData("local")]
     [InlineData("on")]
     public void TryParse_RejectsAnythingElse_AsInternet(string? text)
     {
@@ -47,9 +47,9 @@ public class NetworkModeTests
         }
 
         Assert.Equal("public addresses alone; this machine and the local network refused", NetworkMode.Describe("internet"));
-        Assert.Equal("this machine and the local network alone; the internet refused", NetworkMode.Describe("local_area_network"));
+        Assert.Equal("this machine and the local network alone; the internet refused", NetworkMode.Describe("lan"));
         Assert.Equal("every address", NetworkMode.Describe("both"));
-        Assert.Equal("", NetworkMode.Describe("lan"));
+        Assert.Equal("", NetworkMode.Describe("local"));
     }
 
     [Fact]
@@ -76,6 +76,6 @@ public class NetworkModeTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains("WebBrowserNetworkMode='on' is not one of internet, local_area_network, both. Using internet.", warning.Message);
+        Assert.Contains("WebBrowserNetworkMode='on' is not one of internet, lan, both. Using internet.", warning.Message);
     }
 }

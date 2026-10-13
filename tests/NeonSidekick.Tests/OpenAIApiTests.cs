@@ -575,7 +575,7 @@ public class OpenAIApiTests
         var tab = SettingsMenu.TabFields[(int)SettingsTab.OpenAI];
         Assert.Equal(SettingsMenu.OpenAITabTitle, SettingsMenu.TabTitles[(int)SettingsTab.OpenAI]);
         Assert.Equal([SettingsField.OpenAIApi, SettingsField.OpenAIApiKey, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject], tab);
-        Assert.Equal(["OpenAI API", "OpenAI API key", "OpenAI API max tokens", "OpenAI API organization", "OpenAI API project"], tab.Select(SettingsMenu.FieldName));
+        Assert.Equal(["OpenAI API enabled", "OpenAI API key", "OpenAI API max tokens", "OpenAI API organization", "OpenAI API project"], tab.Select(SettingsMenu.FieldName));
         Assert.All(tab, f => Assert.True(SettingsMenu.IsLlmField(f) && SettingsMenu.RefusedMidTurn(f)));
         Assert.True(SettingsMenu.IsToggle(SettingsField.OpenAIApi));
 

@@ -136,7 +136,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(5, sections.Count);
         Assert.DoesNotContain(sections, s => s.Heading.StartsWith("Voice directive", StringComparison.Ordinal));
 
-        Assert.Equal("Memory — disabled, not included", Headings(Facts(memoryEnabled: false))[3]);
+        Assert.Equal("Memory — off, not included", Headings(Facts(memoryEnabled: false))[3]);
         Assert.Equal("", SystemPromptSummary.PromptSections(Facts(memoryEnabled: false))[3].Body);
         // The voice directive only while it is included (2026-09-26): no heading on a silent turn, nor while TTS is not ready.
         Assert.DoesNotContain(Headings(Facts(speechOutput: true, speechReady: false)), h => h.StartsWith("Voice directive", StringComparison.Ordinal));
@@ -606,7 +606,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal([SaveMemoryTool.ToolName, RecallMemoryTool.ToolName], on[2].Tools.Select(t => t.Name));
 
         var off = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: false);
-        Assert.Equal("Memory (2) — not offered: memory mode is disabled", off[2].Title);
+        Assert.Equal("Memory (2) — not offered: memory mode is off", off[2].Title);
         // The title is the name and the note joined: the pane draws the two apart (2026-09-16).
         Assert.Equal("Memory (2)", off[2].Name);
         Assert.Equal(SystemPromptSummary.NotOffered(SystemPromptSummary.MemoryOffSuffix), off[2].Note);
@@ -621,7 +621,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.All(none, g => Assert.False(g.Offered));
         Assert.Equal(on.Select(g => g.Tools), none.Select(g => g.Tools));
         var neither = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: false, toolsEnabled: false);
-        Assert.Equal("Memory (2) — not offered: memory mode is disabled", neither[2].Title);
+        Assert.Equal("Memory (2) — not offered: memory mode is off", neither[2].Title);
         Assert.Equal(none.Where(g => g.Label != "Memory").Select(g => g.Title), neither.Where(g => g.Label != "Memory").Select(g => g.Title));
 
         // The web group (2026-09-15): after the files, before memory, marked when the setting Web tools is off; nothing when no list is given.
@@ -731,7 +731,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal([SaveMemoryTool.ToolName, RecallMemoryTool.ToolName], on[2].Tools.Select(t => t.Name));
 
         var off = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: false);
-        Assert.Equal("Memory (2) — not offered: memory mode is disabled", off[2].Title);
+        Assert.Equal("Memory (2) — not offered: memory mode is off", off[2].Title);
         // The title is the name and the note joined: the pane draws the two apart (2026-09-16).
         Assert.Equal("Memory (2)", off[2].Name);
         Assert.Equal(SystemPromptSummary.NotOffered(SystemPromptSummary.MemoryOffSuffix), off[2].Note);
@@ -746,7 +746,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.All(none, g => Assert.False(g.Offered));
         Assert.Equal(on.Select(g => g.Tools), none.Select(g => g.Tools));
         var neither = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: false, toolsEnabled: false);
-        Assert.Equal("Memory (2) — not offered: memory mode is disabled", neither[2].Title);
+        Assert.Equal("Memory (2) — not offered: memory mode is off", neither[2].Title);
         Assert.Equal(none.Where(g => g.Label != "Memory").Select(g => g.Title), neither.Where(g => g.Label != "Memory").Select(g => g.Title));
 
         // The web group (2026-09-15): after the files, before memory, marked when the setting Web tools is off; nothing when no list is given.

@@ -20,8 +20,8 @@ public enum ScanScope
 }
 
 /// <summary>
-/// The scan-mode setting: the four words the operator picks from (<c>local</c>, <c>remote</c>,
-/// <c>both</c>, <c>disabled</c>) and their mapping to <see cref="ScanScope"/>, the way
+/// The scan-mode setting: the four words the operator picks from (<c>local</c>, <c>lan</c>,
+/// <c>both</c>, <c>off</c>) and their mapping to <see cref="ScanScope"/>, the way
 /// <see cref="CompactType"/> maps the compact words. <see cref="Resolve"/> is the one place the
 /// saved string becomes the enum: a hand-edited value that is none of them falls back to
 /// <see cref="Default"/> with a warning.
@@ -32,22 +32,29 @@ public static class LlmScanMode
     /// No scan. The compiled default, pinned by <c>AppSettingsTests</c>: since 2026-09-29 (the user's call; <c>local</c>, this
     /// machine alone, until then) a fresh profile asks no port until a server is picked or a mode is.
     /// </summary>
-    public const string Default = "disabled";
+    public const string Default = "off";
 
-    /// <summary>The modes in menu order; <c>disabled</c> last (2026-09-15).</summary>
-    public static readonly string[] Names = { "local", "remote", "both", "disabled" };
+    /// <summary>The modes in menu order; <c>off</c> last (2026-09-15).</summary>
+    public static readonly string[] Names = { "local", "lan", "both", "off" };
+
+    /// <summary>The words retired on 2026-10-13 (the settings verbiage pass, the user's call), still read: old → new (<see cref="RetiredWords"/>).</summary>
+    internal static readonly IReadOnlyDictionary<string, string> Retired = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["remote"] = "lan",
+        ["disabled"] = "off",
+    };
 
     private const string Category = "Llm";
 
     /// <summary>Trims and ignores case; false (and <see cref="Default"/>'s <see cref="ScanScope.Disabled"/>, so a display of a bad value agrees with <see cref="Resolve"/>) for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out ScanScope scope)
     {
-        switch (text?.Trim().ToLowerInvariant())
+        switch (RetiredWords.Current(text, Retired))
         {
             case "local": scope = ScanScope.Local; return true;
-            case "remote": scope = ScanScope.Remote; return true;
+            case "lan": scope = ScanScope.Remote; return true;
             case "both": scope = ScanScope.Both; return true;
-            case "disabled": scope = ScanScope.Disabled; return true;
+            case "off": scope = ScanScope.Disabled; return true;
             default: scope = ScanScope.Disabled; return false;
         }
     }
@@ -55,9 +62,9 @@ public static class LlmScanMode
     /// <summary>The saved word for <paramref name="scope"/>.</summary>
     public static string Name(ScanScope scope) => scope switch
     {
-        ScanScope.Remote => "remote",
+        ScanScope.Remote => "lan",
         ScanScope.Both => "both",
-        ScanScope.Disabled => "disabled",
+        ScanScope.Disabled => "off",
         _ => "local",
     };
 
@@ -65,9 +72,9 @@ public static class LlmScanMode
     public static string Describe(string name) => name switch
     {
         "local" => "the usual ports on this machine (127.0.0.1)",
-        "remote" => "the usual ports on every other machine on the local network",
+        "lan" => "the usual ports on every other machine on the local network",
         "both" => "this machine first, then the local network",
-        "disabled" => "no scan; set LLM URL by hand",
+        "off" => "no scan; set LLM URL by hand",
         _ => "",
     };
 

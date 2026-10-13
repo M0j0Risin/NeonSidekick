@@ -218,7 +218,7 @@ public sealed record SystemPromptFacts(
     public bool Recall => Memory && !Off(RecallMemoryTool.ToolName);
 
     /// <summary>The <c>Memory mode</c> word for the Prompt tab's memory status (2026-10-04): read-write, read-only or disabled.</summary>
-    public string MemoryModeName => !Memory ? MemoryMode.Disabled : MemorySave ? MemoryMode.ReadWrite : MemoryMode.ReadOnly;
+    public string MemoryModeName => !Memory ? MemoryMode.Off : MemorySave ? MemoryMode.ReadWrite : MemoryMode.ReadOnly;
 
     /// <summary>Whether the rules carry <see cref="Assistant.TimerRule"/>: any of the three timer tools not switched off on <c>/tools</c> (2026-09-20; the emptied group drops its sentence).</summary>
     public bool Timers => !(Off(StartTimerTool.ToolName) && Off(StopTimerTool.ToolName) && Off(ListTimersTool.ToolName));
@@ -302,7 +302,7 @@ public static class SystemPromptSummary
     public const string ToolsTabTitle = "Tools";
 
     /// <summary>The tail of the Memory group while the setting <c>Memory mode</c> is disabled (2026-10-04; <c>memory is off</c> until then). Pinned.</summary>
-    public const string MemoryOffSuffix = "memory mode is disabled";
+    public const string MemoryOffSuffix = "memory mode is off";
 
     /// <summary>Why <c>save_memory</c> is not offered while <c>Memory mode</c> is read-only (2026-10-04). Pinned.</summary>
     public const string MemoryReadOnlySuffix = "memory mode is read-only";
@@ -380,7 +380,7 @@ public static class SystemPromptSummary
     public const string CameraOffSuffix = "Camera tool is off, there is no pane or camera support, or the model reads no pictures";
 
     /// <summary>After the Screen heading while the screen tools are not offered (2026-10-04). Pinned.</summary>
-    public const string ScreenOffSuffix = "Screen capture tool is off, there is no pane or screen capture support, or the model reads no pictures";
+    public const string ScreenOffSuffix = "Screen tools is off, there is no pane or screen capture support, or the model reads no pictures";
 
     /// <summary>After the YouTube heading while its tools are not offered (2026-10-05). Pinned.</summary>
     public const string YouTubeOffSuffix = "YouTube tools is off, or there is neither a YouTube API key nor a video window";
@@ -467,7 +467,7 @@ public static class SystemPromptSummary
         }
         else
         {
-            sections.Add(new(MemoryLabel, MemoryMode.Disabled + ", not included", ""));
+            sections.Add(new(MemoryLabel, MemoryMode.Off + ", not included", ""));
         }
 
         // The skills block (2026-09-16): after the memory section, only with tools to load one.

@@ -68,21 +68,27 @@ public static class CameraShutterMode
     }
 }
 
-/// <summary>The setting <c>Camera preview</c> (2026-10-02, the user's call): <c>live</c>, <c>post</c> or <c>disabled</c>.</summary>
+/// <summary>The setting <c>Camera preview</c> (2026-10-02, the user's call): <c>live</c>, <c>post</c> or <c>off</c> (<c>disabled</c> until 2026-10-13).</summary>
 public static class CameraPreviewMode
 {
     public const string Default = "live";
 
     /// <summary>The modes in menu order.</summary>
-    public static readonly string[] Names = ["live", "post", "disabled"];
+    public static readonly string[] Names = ["live", "post", "off"];
+
+    /// <summary>The words retired on 2026-10-13 (the settings verbiage pass, the user's call), still read: old → new (<see cref="RetiredWords"/>).</summary>
+    internal static readonly IReadOnlyDictionary<string, string> Retired = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["disabled"] = "off",
+    };
 
     public static bool TryParse(string? text, out CameraPreview preview)
     {
-        switch (text?.Trim().ToLowerInvariant())
+        switch (RetiredWords.Current(text, Retired))
         {
             case "live": preview = CameraPreview.Live; return true;
             case "post": preview = CameraPreview.Post; return true;
-            case "disabled": preview = CameraPreview.Disabled; return true;
+            case "off": preview = CameraPreview.Disabled; return true;
             default: preview = CameraPreview.Live; return false;
         }
     }
@@ -92,7 +98,7 @@ public static class CameraPreviewMode
     {
         "live" => "a camera window shows the camera live while you frame the shot",
         "post" => "the picture viewer opens on the shot once it is taken",
-        "disabled" => "no preview window",
+        "off" => "no preview window",
         _ => "",
     };
 

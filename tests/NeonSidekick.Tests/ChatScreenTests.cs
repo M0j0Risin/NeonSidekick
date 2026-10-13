@@ -1941,7 +1941,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Startup_ScanDisabled_ConnectsNothing_AndSaysSo_AndServerRefuses()
     {
         // The fixture's server on :1234 is up; with the scan disabled and no URL it is never asked — not at launch, not by a bare /server.
-        _settings.Update(d => { d.LlmScanMode = "disabled"; d.LlmUrl = ""; });
+        _settings.Update(d => { d.LlmScanMode = "off"; d.LlmUrl = ""; });
         PushLine("hello");
         PushLine("/server");
         PushLine("/exit");
@@ -1963,7 +1963,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Server_WithUrl_StillWorks_UnderScanDisabled()
     {
         // /server <url> probes one URL, no scan: the way in when the scan is off.
-        _settings.Update(d => { d.LlmScanMode = "disabled"; d.LlmUrl = ""; });
+        _settings.Update(d => { d.LlmScanMode = "off"; d.LlmUrl = ""; });
         PushLine("/server http://127.0.0.1:1234");
         _console.Input.PushKey(Keys.Enter);     // llama, the one listed
         _console.Input.PushKey(Keys.Escape);    // keep the reasoning
@@ -1982,7 +1982,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Settings_UrlBlanked_UnderScanDisabled_DropsTheEndpoint_AndSaysSo()
     {
         // Connected through a saved URL; the URL blanked in /settings under the disabled scan drops the endpoint with no probe.
-        _settings.Update(d => { d.LlmUrl = "http://127.0.0.1:1234"; d.LlmModel = "llama"; d.LlmScanMode = "disabled"; });
+        _settings.Update(d => { d.LlmUrl = "http://127.0.0.1:1234"; d.LlmModel = "llama"; d.LlmScanMode = "off"; });
         _geometry = new ScreenGeometry(() => null);  // the pane, so the list is tabbed
         PushLine("/settings");
         _console.Input.PushKey(Keys.Tab);   // the Common tab, Servers' first, past the Client group (Right until later on 2026-10-10) (the LLM tab until 2026-10-10; second since 2026-10-04, the user's order; sixth from 2026-10-03, Claude and OpenAI before it; fourth from 2026-10-02, Docker before it; third from 2026-09-19; fourth from 2026-09-18 until then): LLM URL, its first row (under the scan mode until 2026-10-10)
@@ -1997,7 +1997,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(1, ModelProbes);                                                          // the configured connect at launch only
         Assert.Null(_session.Endpoint);
-        Assert.Contains("  · 🖥️ LLM URL: (not set; scan disabled)", output);
+        Assert.Contains("  · 🖥️ LLM URL: (not set; scan off)", output);
         Assert.Contains("✗ " + LlmSession.NoServerLine(ScanScope.Disabled), output);
     }
 
@@ -3808,7 +3808,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Remember_WithMemoryOff_SavesNothing_AndSaysSo()
     {
-        _settings.Update(d => d.MemoryMode = "disabled");
+        _settings.Update(d => d.MemoryMode = "off");
         PushLine("/remember my name is Chris");
         PushLine("/exit");
 
@@ -4002,7 +4002,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task WithGeometry_SysPromptWithAskOff_SaysSo_OnTheToolsTab()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.AskUser = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
+        _settings.Update(d => { d.TtsOutput = false; d.AskUser = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 120;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; image_edit's and image_info's lossless-strip lines (2026-10-05) a few more
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
@@ -4024,7 +4024,7 @@ public partial class ChatScreenTests : IDisposable
     [UnixFact]
     public async Task WithGeometry_SysPromptWithAskOff_SaysSo_OnTheToolsTab_Unix()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.AskUser = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
+        _settings.Update(d => { d.TtsOutput = false; d.AskUser = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 120;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; image_edit's and image_info's lossless-strip lines (2026-10-05) a few more
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
@@ -4536,8 +4536,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n▸ pipe        on   connected · 2 tools  stdio: pipe-server\n", output);
         Assert.Contains("  · 🔌 pipe: off\n  · 🔌 pipe: stopped\n" + HeadingRow("── " + McpText.ServersHeading + " · 1") + "\n▸ pipe        off  off  stdio: pipe-server\n", output);   // under its heading (2026-10-10)
         Assert.Contains(McpText.NoToolsLine, output);   // the Tools tab after the stop
-        Assert.Contains("\n" + HeadingRow("── Servers") + "\n▸ MCP servers              on\n", output);
-        Assert.Contains("  · MCP servers: off\n", output);
+        Assert.Contains("\n" + HeadingRow("── Servers") + "\n▸ MCP servers enabled      on\n", output);
+        Assert.Contains("  · MCP servers enabled: off\n", output);
         Assert.Equal(["pipe"], _settings.Current.McpServersDisabled);
         Assert.False(_settings.Current.McpServers);
         Assert.Empty(_chat.Requests);
@@ -4568,7 +4568,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · Servers\n  ·   pipe        on   connected · 2 tools  stdio: pipe-server\n  · Tools\n  ·   pipe (2)\n  ·     pipe__echo  on   Echoes the text back.\n  ·     pipe__fail  on   Always fails.\n  · Options\n  ·   MCP servers: on\n  ·   MCP connect timeout (s): 30\n", output);
+        Assert.Contains("  · Servers\n  ·   pipe        on   connected · 2 tools  stdio: pipe-server\n  · Tools\n  ·   pipe (2)\n  ·     pipe__echo  on   Echoes the text back.\n  ·     pipe__fail  on   Always fails.\n  · Options\n  ·   MCP servers enabled: on\n  ·   MCP connect timeout (s): 30\n", output);
         Assert.Empty(_chat.Requests);
     }
 
@@ -4730,10 +4730,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ToolsText.OfferedKeys, output);
         Assert.Contains("\n▸ $-mention enabled    on\n" + HeadingRow("── Folding") + "\n  Tool collapse count  off\n  Code collapse count  off\n", output);   // the fixture's 0s (2026-09-22)
         Assert.Contains("\n▸ Ask user                      on\n", output);
-        Assert.Contains("\n▸ File tools                      on\n", output);
+        Assert.Contains("\n▸ File tools                  on\n", output);
         Assert.Contains("\n▸ Image tools               off\n  Image edit quality        90\n", output);   // the Image menu (2026-10-10), its switch first, padded to its own column
-        Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n" + HeadingRow("── Identity") + "\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
-        Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n" + HeadingRow("── Guards") + "\n  Shell police                    on\n  Shell police forbidden strings  none\n" + HeadingRow("── Commands") + "\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n" + HeadingRow("── Scripts") + "\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
+        Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n" + HeadingRow("── Identity") + "\n  GitLib user email       (not set)\n  GitLib user name        (not set)\n", output);
+        Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n" + HeadingRow("── Guards") + "\n  Shell police                    on\n  Shell police forbidden strings  none\n" + HeadingRow("── Commands") + "\n  Shell prefer native tools       on\n  Shell default shell             powershell\n  Shell default timeout (s)       180\n  Shell max timeout (s)           600\n  Shell output max chars          30,000 chars\n" + HeadingRow("── Scripts") + "\n  Shell code languages            powershell, python, node\n  Shell code default timeout (s)  300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
         Assert.Contains("\n▸ Web tools                    on\n", output);
         Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.SqlTools) + " ", output);   // a menu on Database since 2026-10-09 (its own tab from 2026-09-23), a sub-tab since 2026-10-10
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
@@ -4788,8 +4788,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n▸ Ask user                      on\n", output);
         Assert.Contains("\n▸ File tools                      on\n", output);
         Assert.Contains("\n▸ Image tools               off\n  Image edit quality        90\n", output);   // the Image menu (2026-10-10), its switch first, padded to its own column
-        Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n" + HeadingRow("── Identity") + "\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
-        Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n" + HeadingRow("── Guards") + "\n  Shell police                    on\n  Shell police forbidden strings  none\n" + HeadingRow("── Commands") + "\n  Shell prefer native tools       on\n  Shell default                   zsh\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n" + HeadingRow("── Scripts") + "\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
+        Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n" + HeadingRow("── Identity") + "\n  GitLib user email            (not set)\n  GitLib user name             (not set)\n", output);
+        Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n" + HeadingRow("── Guards") + "\n  Shell police                    on\n  Shell police forbidden strings  none\n" + HeadingRow("── Commands") + "\n  Shell prefer native tools       on\n  Shell default                   zsh\n  Shell default timeout (s)               180\n  Shell max timeout (s)        600\n  Shell output max chars          30,000 chars\n" + HeadingRow("── Scripts") + "\n  Shell code languages            powershell, python, node\n  Shell code default timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
         Assert.Contains("\n▸ Web tools                    on\n", output);
         Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.SqlTools) + " ", output);   // a menu on Database since 2026-10-09 (its own tab from 2026-09-23), a sub-tab since 2026-10-10
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
@@ -5292,7 +5292,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Turn_MemoryOff_OffersTheStandingToolsOnly_AndTheOldPrompt()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.MemoryMode = "disabled"; });
+        _settings.Update(d => { d.TtsOutput = false; d.MemoryMode = "off"; });
         _memory.Add("Their name is Chris.");
         _chat.EnqueueText("Hello.");
         PushLine("hi");
@@ -6682,7 +6682,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(QueueMode.Names.Select(name => new CompletionItem("mode " + name, QueueMode.Describe(name))), ChatScreen.ArgumentItems("/queue", "mode ", Sources()));
         Assert.Equal([new CompletionItem("mode manual", QueueMode.Describe("manual"))], ChatScreen.ArgumentItems("/queue", "mode ma", Sources()));
         Assert.Equal(QueueCancelMode.Names.Select(name => new CompletionItem("cancel " + name, QueueCancelMode.Describe(name))), ChatScreen.ArgumentItems("/queue", "cancel ", Sources()));
-        Assert.Contains("/queue mode automatic|manual|disabled", ChatScreen.QueueUsageError);
+        Assert.Contains("/queue mode automatic|manual|off", ChatScreen.QueueUsageError);
         Assert.Contains("/queue cancel hold|drain|empty", ChatScreen.QueueUsageError);
     }
 
@@ -6715,7 +6715,7 @@ public partial class ChatScreenTests : IDisposable
         MidTurnHeldFixture(async _ =>
         {
             PushLine("/queue mode disabled");
-            await UntilAsync(() => _settings.Current.QueueMode == "disabled", CancellationToken.None);
+            await UntilAsync(() => _settings.Current.QueueMode == "off", CancellationToken.None);
             PushLine("/queue cancel hold");
             await UntilAsync(() => _settings.Current.QueueCancelMode == "hold", CancellationToken.None);
         });
@@ -6724,7 +6724,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Single(_chat.Requests);
         Assert.Contains("three.", output);
-        Assert.Equal("disabled", _settings.Current.QueueMode);
+        Assert.Equal("off", _settings.Current.QueueMode);
         Assert.Equal("hold", _settings.Current.QueueCancelMode);
     }
 
@@ -6872,12 +6872,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.Disabled), ChatScreen.ParseMemoryArgs(" OFF "));
         Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.ReadOnly), ChatScreen.ParseMemoryArgs("Read-Only"));   // 2026-10-04, the user's ask
         Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.ReadWrite), ChatScreen.ParseMemoryArgs("read-write"));
-        Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.Disabled), ChatScreen.ParseMemoryArgs("disabled"));
+        Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.Disabled), ChatScreen.ParseMemoryArgs("off"));
         Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("read-only now"));
         Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("on off"));
         Assert.Equal("on", ChatScreen.MemoryOnWord);
         Assert.Equal("off", ChatScreen.MemoryOffWord);
-        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote), new CompletionItem("disabled", ChatScreen.MemoryDisabledNote), new CompletionItem("forget", ChatScreen.MemoryForgetNote), new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "", Sources()));
+        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote), new CompletionItem("off", ChatScreen.MemoryDisabledNote), new CompletionItem("forget", ChatScreen.MemoryForgetNote), new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "", Sources()));
         Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote)], ChatScreen.ArgumentItems("/memory", "r", Sources()));
         Assert.Equal([new CompletionItem("forget", ChatScreen.MemoryForgetNote)], ChatScreen.ArgumentItems("/memory", "fo", Sources()));
         Assert.Empty(ChatScreen.ArgumentItems("/memory", "co", Sources()));   // copy retired 2026-10-13
@@ -6944,7 +6944,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Equal("read-write", _settings.Current.MemoryMode);
-        int off = output.IndexOf(Saved("disabled"), StringComparison.Ordinal);
+        int off = output.IndexOf(Saved("off"), StringComparison.Ordinal);
         int unchanged = output.IndexOf("  · " + SettingsMenu.UnchangedNotice, off, StringComparison.Ordinal);
         int readOnly = output.IndexOf(Saved("read-only"), unchanged, StringComparison.Ordinal);
         int on = output.IndexOf(Saved("read-write"), readOnly, StringComparison.Ordinal);
@@ -6979,7 +6979,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n \n▸ " + MemoryMenu.EmptyNotice + "\n", output);
         Assert.Contains("\n" + Titled(MemoryPaneTitle(MemoryAccess.Disabled)) + "\n", output);
         Assert.Contains(Row(MemoryMenu.EmptySwitchKeys), output);
-        int off = output.IndexOf(Saved("disabled"), StringComparison.Ordinal);
+        int off = output.IndexOf(Saved("off"), StringComparison.Ordinal);
         int readOnly = output.IndexOf(Saved("read-only"), off, StringComparison.Ordinal);
         Assert.True(off > 0 && readOnly > off && output.IndexOf(Saved("read-write"), readOnly, StringComparison.Ordinal) > readOnly, output);
         Assert.DoesNotContain("  · " + MemoryMenu.EmptyNotice, output);   // no transcript line: the pane said it
@@ -7004,7 +7004,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void MemoryLabels_ArePinned()
     {
-        Assert.Equal("💾 Memory mode is disabled; set it in /settings (the Memory mode row) or with /memory read-write.", ChatScreen.MemoryOffNotice);
+        Assert.Equal("💾 Memory mode is off; set it in /settings (the Memory mode row) or with /memory read-write.", ChatScreen.MemoryOffNotice);
         Assert.Equal("Memory is full (200 entries); /memory forget clears it.", ChatScreen.MemoryFullError);
         Assert.Equal("(💾 nothing to forget)", ChatScreen.NothingToForgetNotice);
         Assert.Equal("(💾 remembered: x)", ChatScreen.RememberedNotice("x"));
@@ -7219,9 +7219,9 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void GitLabels_ArePinned()
     {
-        Assert.Equal("GitLib email and GitLib name are not set; set them on the GitLib tab of /tools.", ChatScreen.GitIdentityUnsetError(true, true));
-        Assert.Equal("GitLib email is not set; set it on the GitLib tab of /tools.", ChatScreen.GitIdentityUnsetError(true, false));
-        Assert.Equal("GitLib name is not set; set it on the GitLib tab of /tools.", ChatScreen.GitIdentityUnsetError(false, true));
+        Assert.Equal("GitLib user email and GitLib user name are not set; set them on the GitLib tab of /tools.", ChatScreen.GitIdentityUnsetError(true, true));
+        Assert.Equal("GitLib user email is not set; set it on the GitLib tab of /tools.", ChatScreen.GitIdentityUnsetError(true, false));
+        Assert.Equal("GitLib user name is not set; set it on the GitLib tab of /tools.", ChatScreen.GitIdentityUnsetError(false, true));
         Assert.Equal("GitLib tools is off; /gituser does nothing until it is on (the GitLib tab of /tools).", ChatScreen.GitLibToolsOffError);
         Assert.Equal("(🛠️ git user set for this repository: Some User <user@email.com>)", ChatScreen.GitIdentityWrittenNotice("Some User", "user@email.com"));   // the tools' glyph since 2026-09-22
         Assert.Equal("Git repository already has a [user] section: Old <old@x>; /gituser force replaces it.", ChatScreen.GitIdentityPresentError("Old", "old@x"));   // an error since 2026-09-22
@@ -9156,7 +9156,7 @@ public partial class ChatScreenTests : IDisposable
 
         var from = new AppSettingsData
         {
-            LlmScanMode = "remote", LlmUrl = "http://10.0.0.5:8000/v1", LlmModel = "qwen3",
+            LlmScanMode = "lan", LlmUrl = "http://10.0.0.5:8000/v1", LlmModel = "qwen3",
             LlmReasoning = "high", LlmReasoningEstimate = "tokenize", LlmSamplingFromHuggingFace = true,
             LlmSampling = new() { ["*"] = new() { Temperature = 0.6 }, ["qwen3"] = new() { TopK = 20 } },
             EmbeddedLlmServer = false, EmbeddedBackend = "vulkan", EmbeddedContextSize = 16384, EmbeddedGpuLayers = "20",
@@ -9740,12 +9740,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(strip, ChatScreen.ToolbarStripFor(items, CommandPolicyMode.Ask, shown.ShellPolice));   // the same text either way
         Assert.True(ChatScreen.ToolbarItemOff("advisors", new AppSettingsData { Advisors = false }));
         Assert.False(ChatScreen.ToolbarItemOff("advisors", new AppSettingsData { Advisors = true }));
-        Assert.All(new[] { "settings", "themes", "cmdlist", "police", "log", "comfyview", "comfythumbs", "youtube", "shoppinglist", "perf", "path" }, id => Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { MemoryMode = "disabled", ShellCommandPolicy = "off" })));
+        Assert.All(new[] { "settings", "themes", "cmdlist", "police", "log", "comfyview", "comfythumbs", "youtube", "shoppinglist", "perf", "path" }, id => Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { MemoryMode = "off", ShellCommandPolicy = "off" })));
         // The disk on the slab while Memory is off (later on 2026-10-03, the user's ask: always drawn, telling which).
-        Assert.True(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { MemoryMode = "disabled" }));
+        Assert.True(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { MemoryMode = "off" }));
         Assert.False(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { MemoryMode = "read-only" }));   // 2026-10-04: read-only is still memory
         Assert.False(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { MemoryMode = "read-write" }));
-        (strip, off) = ChatScreen.ToolbarStripFor(ToolbarItems.Resolve(["usage", "memory"]), new AppSettingsData { MemoryMode = "disabled" });
+        (strip, off) = ChatScreen.ToolbarStripFor(ToolbarItems.Resolve(["usage", "memory"]), new AppSettingsData { MemoryMode = "off" });
         Assert.Equal("📊 💾", strip);
         Assert.Equal([1], off);
         Assert.All(ToolsText.SwitchWords.Where(w => w is not ("shell" or "ask")), word => Assert.True(ChatScreen.ToolbarItemOff(word, new AppSettingsData())));   // every group off by default
@@ -9781,7 +9781,7 @@ public partial class ChatScreenTests : IDisposable
     [WindowsFact]
     public async Task TheToolbarLock_FollowsTheShellCommandPolicy_NoneUnderOff_OpenUnderYolo()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)]; d.ShellCommandPolicy = "off"; d.MemoryMode = "disabled"; d.ShellPolice = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)]; d.ShellCommandPolicy = "off"; d.MemoryMode = "off"; d.ShellPolice = false; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -9810,7 +9810,7 @@ public partial class ChatScreenTests : IDisposable
     [UnixFact]
     public async Task TheToolbarLock_FollowsTheShellCommandPolicy_NoneUnderOff_OpenUnderYolo_Unix()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)]; d.ShellCommandPolicy = "off"; d.MemoryMode = "disabled"; d.ShellPolice = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)]; d.ShellCommandPolicy = "off"; d.MemoryMode = "off"; d.ShellPolice = false; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -9879,7 +9879,7 @@ public partial class ChatScreenTests : IDisposable
         string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);   // the disk there with Memory on and off alike
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, false), cwd, 239), output);
-        Assert.Equal("disabled", _settings.Current.MemoryMode);
+        Assert.Equal("off", _settings.Current.MemoryMode);
         Assert.False(_settings.Current.ShellPolice);
         string memory = "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
@@ -10475,7 +10475,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab
         _console.Profile.Height = 121;   // /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
@@ -10578,7 +10578,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 130;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more; the picture tools' saved-picture paths (2026-10-09) more; the images folder's path in search_files, file_info and view_image (later on 2026-10-09) more again
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
@@ -10619,7 +10619,7 @@ public partial class ChatScreenTests : IDisposable
     [UnixFact]
     public async Task WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt_Unix()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 130;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more; the picture tools' saved-picture paths (2026-10-09) more; the images folder's path in search_files, file_info and view_image (later on 2026-10-09) more again
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
@@ -10689,7 +10689,7 @@ public partial class ChatScreenTests : IDisposable
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName), "You are Rex, a [pirate].\n");
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, VocaliaFile.FileName), "Speak like a pirate.");
         _memory.Add("Their name is Chris.");
-        _settings.Update(d => d.MenuMaxHeight = "full-screen");   // the 12-row window's pages as they were (2026-10-01)
+        _settings.Update(d => d.MenuMaxHeight = "full");   // the 12-row window's pages as they were (2026-10-01)
         _console.Profile.Height = 12;
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
@@ -10719,7 +10719,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task WithGeometry_SysPromptWithMemoryOff_SaysSo_InBothTabs()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.MemoryMode = "disabled"; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
+        _settings.Update(d => { d.TtsOutput = false; d.MemoryMode = "off"; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 110;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
@@ -10729,7 +10729,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + HeadingRow("── Memory ── disabled, not included") + "\n \n" + HeadingRow("── Skills ── on, none installed") + "\n", output);
+        Assert.Contains("\n" + HeadingRow("── Memory ── off, not included") + "\n \n" + HeadingRow("── Skills ── on, none installed") + "\n", output);
         Assert.DoesNotContain("Opening memory call", output);   // 2026-09-26
         Assert.DoesNotContain(MemoryPrompt.Directive, output);
         Assert.DoesNotContain(RecallMemoryTool.ToolName + " →", output);
@@ -11758,8 +11758,8 @@ public partial class ChatScreenTests : IDisposable
         var windows = ChatScreen.KeyRows(false, ConsoleKey.F8, false, "", mac: false);
         var mac = ChatScreen.KeyRows(false, ConsoleKey.F8, false, "", mac: true);
 
-        Assert.Equal(windows.Length + 3 - 1, mac.Length);   // less Ctrl+J (2026-10-12): a Mac terminal sends it as the line break
-        Assert.DoesNotContain(mac, r => r.Key == "Ctrl+J");
+        Assert.Equal(windows.Length + 3 - 2, mac.Length);   // less Ctrl+J (2026-10-12): a Mac terminal sends it as the line break; less Ctrl+Shift+F (2026-10-13), which arrives as Ctrl+F
+        Assert.DoesNotContain(mac, r => r.Key is "Ctrl+J" or "Ctrl+Shift+F");
         Assert.Equal(new KeyRow("Option+Delete", "delete the word before the cursor (Ctrl+Delete opens the help: a Mac terminal sends it as Ctrl+H)"), mac[8]);
         string[] keys = mac.Select(r => r.Key).ToArray();
         Assert.Equal(["Ctrl+.", "Ctrl+]", "Ctrl+/", "Ctrl+D", "Ctrl+E"], keys[Array.IndexOf(keys, "Ctrl+.")..(Array.IndexOf(keys, "Ctrl+E") + 1)]);
@@ -11769,14 +11769,14 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new KeyRow("Ctrl+Alt+A", "open the memory pane", "/memory"), mac.Single(r => r.Key == "Ctrl+Alt+A"));
         Assert.Equal("open the model picker (in the app's windows; Ctrl+D in the terminal)", mac.Single(r => r.Key == "Ctrl+M").Meaning);
         Assert.Equal(new KeyRow("Ctrl+V / Alt+V", "paste text or pictures (Cmd+V is the terminal's: text only)"), mac[12]);   // pictures off the pasteboard, 2026-10-07
-        Assert.Equal(windows.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Ctrl+Backspace / Delete" or "Alt+V" or "Ctrl+J")),
+        Assert.Equal(windows.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Ctrl+Backspace / Delete" or "Alt+V" or "Ctrl+J" or "Ctrl+Shift+F")),
             mac.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Option+Delete" or "Ctrl+]" or "Ctrl+D" or "Ctrl+Alt+A" or "Ctrl+V / Alt+V")));
     }
 
     [Theory]
-    [InlineData(false, false, 55)]   // Ctrl+J (the emoji picker, Windows alone) later still on 2026-10-12; Ctrl+W (the home bar; Ctrl+Alt+W for a few hours) on 2026-10-12; Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G (plain Ctrl+G since 2026-10-12), U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
-    [InlineData(true, false, 56)]
-    [InlineData(true, true, 57)]   // the word moves and deletes joined (2026-10-04)
+    [InlineData(false, false, 56)]   // Ctrl+Shift+F (/find) on 2026-10-13; Ctrl+J (the emoji picker, Windows alone) later still on 2026-10-12; Ctrl+W (the home bar; Ctrl+Alt+W for a few hours) on 2026-10-12; Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G (plain Ctrl+G since 2026-10-12), U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
+    [InlineData(true, false, 57)]
+    [InlineData(true, true, 58)]   // the word moves and deletes joined (2026-10-04)
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon", mac: false);   // Windows' list on any machine (2026-10-07)
@@ -11827,6 +11827,7 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+/", "open the settings", "/settings"),   // later still on 2026-10-01
             new("Ctrl+E", "open the working directory in the file browser", "/explore"),   // later on 2026-10-01
             new("Ctrl+F", "show or hide the performance bar", "/perfbar"),   // from Ctrl+Alt+E, later still on 2026-10-01
+            new("Ctrl+Shift+F", "find words in the transcript", "/find"),   // 2026-10-13: the chord was missing from the list
             new("Ctrl+G", "show or hide the log window", "/log"),   // from Ctrl+Alt+G on 2026-10-12, the user's ask
             new("Ctrl+H", "open the help", "/help"),   // from Ctrl+Alt+H, later still on 2026-10-01
             new("Ctrl+J", "open the emoji picker at the cursor"),   // 2026-10-12, the user's ask (Windows' list alone)
@@ -11842,7 +11843,7 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+W", "show or hide the home bar", "/homebar"),   // 2026-10-12, the user's pick (Ctrl+Alt+W for a few hours)
             new("Ctrl+Y", "open the system prompt pane", "/sys"),   // from Ctrl+Alt+Y on 2026-10-03, the user's ask
             new("Ctrl+Z", "open the theme picker", "/theme"),   // 2026-10-04, the user's ask
-        ], rows[^39..^18]);
+        ], rows[^40..^18]);
 
         // The command chords after them (2026-09-30), one block A to Z by the letter since the pane chords joined later that day.
         Assert.Equal(
@@ -11877,6 +11878,7 @@ public partial class ChatScreenTests : IDisposable
             ["Ctrl+/"] = Keys.CtrlSlash,
             ["Ctrl+E"] = Keys.CtrlE,
             ["Ctrl+F"] = Keys.CtrlF,
+            ["Ctrl+Shift+F"] = new('\x06', ConsoleKey.F, true, false, true),   // 2026-10-13
             ["Ctrl+G"] = Keys.Ctrl(ConsoleKey.G),
             ["Ctrl+H"] = Keys.CtrlH,
             ["Ctrl+L"] = Keys.CtrlL,
@@ -12002,7 +12004,7 @@ public partial class ChatScreenTests : IDisposable
     private static Regex GroupHeading(string label) =>
         new("\n── " + Regex.Escape(label) + @" · \d+( of \d+)?");
 
-    /// <summary>A heading rule as the pane prints it (2026-10-03): <paramref name="text"/> (<c>── Memory ── disabled, not included</c>), a space, the rule to the fixture's 240 columns.</summary>
+    /// <summary>A heading rule as the pane prints it (2026-10-03): <paramref name="text"/> (<c>── Memory ── off, not included</c>), a space, the rule to the fixture's 240 columns.</summary>
     private static string HeadingRow(string text, int width = 240) => text + " " + new string(ScreenPane.RuleGlyph, width - TextCells.Width(text) - 1);
 
     /// <summary>Text under a Prompt-tab heading as the pane prints it (2026-10-03): every line two cells in.</summary>
@@ -12984,7 +12986,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ 🛑 Stopped at 45% of the context window (LLM tool compact type is stop); /compact or /clear before continuing.\n", output);
+        Assert.Contains("  ✗ 🛑 Stopped at 45% of the context window (LLM tool compact mode is stop); /compact or /clear before continuing.\n", output);
         Assert.Equal(3, _chat.Requests.Count);                                   // a's two, b's one: no third request for a
         Assert.DoesNotContain("● read twice", output);
         Assert.Equal("b", _chat.Requests[2][^1].Text);
@@ -12996,7 +12998,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task ToolCompact_Nothing_LeavesTheLoopAlone()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.LlmAutoCompactPercent = 20; d.LlmToolCompactType = "nothing"; });
+        _settings.Update(d => { d.TtsOutput = false; d.LlmAutoCompactPercent = 20; d.LlmToolCompactType = "off"; });
         LmStudioWindow();
         TwoReadsInOneTurn();
         _chat.EnqueueText("read twice");
@@ -13014,7 +13016,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task AutoCompact_TheLastTurnIsTheBulk_PrunesItsOlderResults_NoSummariser()
     {
         // The guard off, so the turn ends at 35 %; the next message's automatic compact has nothing older (one turn, two kept) and stubs the turn's older results instead.
-        _settings.Update(d => { d.TtsOutput = false; d.LlmAutoCompactPercent = 20; d.LlmToolCompactType = "nothing"; });
+        _settings.Update(d => { d.TtsOutput = false; d.LlmAutoCompactPercent = 20; d.LlmToolCompactType = "off"; });
         LmStudioWindow();
         TwoReadsInOneTurn();
         _chat.EnqueueText("read twice");
@@ -13036,7 +13038,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task AutoCompact_Summary_PrunesTheKeptTurnsToo_AndTheNoticeSaysSo()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.LlmCompactKeepRecent = 1; d.LlmAutoCompactPercent = 20; d.LlmToolCompactType = "nothing"; });
+        _settings.Update(d => { d.TtsOutput = false; d.LlmCompactKeepRecent = 1; d.LlmAutoCompactPercent = 20; d.LlmToolCompactType = "off"; });
         LmStudioWindow();
         ReplyWithUsage();                                                        // a → 25 tokens in use
         TwoReadsInOneTurn();                                                     // b: two reads, the second's report 35 tokens; the guard is off
@@ -13062,7 +13064,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Compact_ByHand_KeepsTheRecentTurnsVerbatim_StillLater()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.LlmAutoCompactPercent = 0; d.LlmToolCompactType = "nothing"; });
+        _settings.Update(d => { d.TtsOutput = false; d.LlmAutoCompactPercent = 0; d.LlmToolCompactType = "off"; });
         LmStudioWindow();
         TwoReadsInOneTurn();
         _chat.EnqueueText("read twice");
@@ -13749,7 +13751,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task MidTurn_AWaitingCommand_WithTheQueueOff_RunsAtTheIdleLine()
     {
-        _settings.Update(d => d.QueueMode = "disabled");
+        _settings.Update(d => d.QueueMode = "off");
         WorkProfile();
         MidTurnFixture(i =>
         {
@@ -14319,7 +14321,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task MidTurn_AMessage_WithTheQueueOff_WaitsForTheIdleLine_AndIsSentAfterTheReply()
     {
         // The switch off: the line waits for the idle line (type-ahead until the live row, 2026-09-25) and is sent there; no count.
-        _settings.Update(d => d.QueueMode = "disabled");
+        _settings.Update(d => d.QueueMode = "off");
         MidTurnFixture(i =>
         {
             if (i == 1)
@@ -14910,7 +14912,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task MidTurn_APastedLine_WithTheQueueOff_StaysTypeAhead()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.QueueMode = "disabled"; });
+        _settings.Update(d => { d.TtsOutput = false; d.QueueMode = "off"; });
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText("One ", "two ", "three.");
@@ -15400,7 +15402,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task CtrlPeriod_InThePane_OpensATerminal_WithThePaneLeftOpen()
     {
         // In place, as Ctrl+E: the pane stays, so the "x" after the chord is the pane's (nothing).
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
@@ -17638,7 +17640,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Startup_WelcomeSplashOff_OrNoPane_DrawsNothing_AndNeverAsksForAPicture()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "disabled"; });
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "off"; });
         PaneOf40Rows();
         SplashOf(2380, 100);
         PushLine("hi");
@@ -17892,7 +17894,7 @@ public partial class ChatScreenTests : IDisposable
         // shorter, then the line the connect wrote under it, once.
         PaneOf40Rows();
         SplashOf(100, 4000);   // height-bound: the rows left over the line count
-        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "disabled"; d.LlmUrl = ""; });
+        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "off"; d.LlmUrl = ""; });
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -17917,7 +17919,7 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => d.TtsOutput = false);
         PaneOf40Rows();
         SplashOf(100, 4000);
-        WorkProfile(more: d => d.LlmScanMode = "disabled");
+        WorkProfile(more: d => d.LlmScanMode = "off");
         StepsWhenIdle(Line("/profile work"), Line("/exit"));
 
         string output = await RunAsync();
@@ -18022,7 +18024,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Startup_WelcomeSplash_TheSettingOff_ShowsNoPictureAndNoSlideshowHint()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "disabled"; });
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "off"; });
         PaneOf40Rows();
         SplashOf((2380, 100), (2380, 200));
         StepsWhenIdle(Line("/exit"));
@@ -18245,7 +18247,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Splash_Command_ShowsTheTiledPages_WhenTheModeIsTiled_AndOnePictureWhenDisabled()
     {
         TiledSplashOfTen();
-        _settings.Update(d => d.WelcomeSplashMode = "disabled");
+        _settings.Update(d => d.WelcomeSplashMode = "off");
         _random = new Random(7);
         StepsWhenIdle(Line("/splash"),
             input => { _settings.Update(d => d.WelcomeSplashMode = "tiled"); PushLine(input, "/splash"); },
@@ -18314,7 +18316,7 @@ public partial class ChatScreenTests : IDisposable
             input =>
             {
                 hintsBefore = Count(Output, ChatScreen.SplashHint);
-                _settings.Update(d => d.WelcomeSplashMode = "disabled");
+                _settings.Update(d => d.WelcomeSplashMode = "off");
                 int mark = Output.Length;
                 _time.Advance(ScreenPane.Tick);   // the tick re-reads the hint: the row again without it
                 Assert.Equal(Row(ChatScreen.HintLine(null)), Output[mark..]);
@@ -18368,7 +18370,7 @@ public partial class ChatScreenTests : IDisposable
     {
         // The setting gates the startup picture alone: /splash draws one whatever it says, and Left /
         // Right walk the set as they do at startup (the user's ask).
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "disabled"; });
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "off"; });
         PaneOf40Rows();
         _random = new Random(7);
         SplashOf((2380, 100), (2380, 200));
@@ -18398,7 +18400,7 @@ public partial class ChatScreenTests : IDisposable
     [WindowsFact]
     public async Task MidTurn_Splash_CancelsTheReply_AndRunsAtTheIdleLine()
     {
-        _settings.Update(d => d.WelcomeSplashMode = "disabled");
+        _settings.Update(d => d.WelcomeSplashMode = "off");
         SplashOf(2380, 100);
         MidTurnFixture(i =>
         {
@@ -18475,7 +18477,7 @@ public partial class ChatScreenTests : IDisposable
     [WindowsFact]
     public async Task MidTurn_CtrlAltP_CancelsTheReply_AndRunsAtTheIdleLine()
     {
-        _settings.Update(d => d.WelcomeSplashMode = "disabled");
+        _settings.Update(d => d.WelcomeSplashMode = "off");
         SplashOf(2380, 100);
         MidTurnFixture(i =>
         {
@@ -18498,7 +18500,7 @@ public partial class ChatScreenTests : IDisposable
     {
         // The pane chords (later on 2026-09-30, the user's ask): the bare command through the dispatch, no transcript row,
         // the draft back on the row after ESC.
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText("one");
@@ -18520,7 +18522,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task CtrlAltS_OpensTheSkillsPane_AsSlashSkills()
     {
         // Later still on 2026-10-01 (the user's ask): /skills moved from Ctrl+Alt+K, which is gone.
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle(Key(Keys.CtrlAltS), Key(Keys.Escape), Line("/exit"));
@@ -18583,7 +18585,7 @@ public partial class ChatScreenTests : IDisposable
     {
         // Later still on 2026-10-01 (the user's ask): the bare command through the dispatch, no transcript row, the draft back
         // on the row after ESC.
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText("one");
@@ -18604,7 +18606,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task CtrlY_OpensTheSystemPromptPane_AsSlashSys()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle(Key(Keys.Ctrl(ConsoleKey.Y)), Key(Keys.Escape), Line("/exit"));   // Ctrl+Alt+Y until 2026-10-03
@@ -18619,7 +18621,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task CtrlH_OpensTheHelpPane_AsSlashHelp()
     {
         // 2026-10-01 (the user's ask): Ctrl+Alt+H was /help, plain Ctrl+H since later that day; the pane on its first tab.
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle(Key(Keys.CtrlH), Key(Keys.Escape), Line("/exit"));
@@ -18730,7 +18732,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task CtrlY_InTheHelpPane_ClosesIt_AndOpensTheSystemPromptPane()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle(
@@ -18750,7 +18752,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task CtrlH_InTheHelpPane_ClosesIt_ItsOwnChord()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText("one");
@@ -18767,7 +18769,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task CtrlAltC_InASettingsPane_ClosesEveryLevel_AndClears()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText("one").EnqueueText("two");
@@ -18790,7 +18792,7 @@ public partial class ChatScreenTests : IDisposable
     {
         // In place (2026-10-01, the user's call): the pane stays, so the "x" after the chord is the pane's (nothing),
         // never a draft on the idle line that the Enter after the ESC would send.
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle(
@@ -18830,7 +18832,7 @@ public partial class ChatScreenTests : IDisposable
     {
         // In place, as Ctrl+F (Ctrl+Alt+E until later still on 2026-10-01): the pane stays, so the "x" after the chord is the pane's (nothing),
         // never a draft on the idle line that the Enter after the ESC would send.
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
@@ -18850,7 +18852,7 @@ public partial class ChatScreenTests : IDisposable
     {
         // 2026-10-02 (the user's ask): /log as typed at the idle line, the draft kept; in a pane in place, as Ctrl+E, so the "x" after
         // the chord is the pane's (nothing), never a draft the Enter after the ESC would send.
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         int opened = 0;
@@ -18877,7 +18879,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task ChordsOpenTheirWindowsBehindTheTerminal_TypedCommandsInFront()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         var log = new List<string>();
@@ -18907,7 +18909,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task CtrlG_ClosesTheLogWindow_WhenItIsOpen_AtTheIdleLineAndInAPane_TheTypedLogOnlyOpens()
     {
         // Later on 2026-10-02 (the user's ask): the chord toggles its window; the typed /log still opens it or brings it forward.
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         bool open = false;
@@ -19106,7 +19108,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task CtrlR_InTheHelpPane_ClosesIt_AndOpensTheReasoningPicker()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle(
@@ -19318,7 +19320,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Theme_Named_SplashDisabled_SavesIt_PutsItInForce_AndStartsOverLikeClear()
     {
         using var theme = new ThemeScope();
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "disabled"; });
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "off"; });
         PaneOf40Rows();
         SplashOf(2380, 100);
         LinesWhenIdle("hi", "/theme CyberPunk", "again", "/exit");
@@ -19634,7 +19636,7 @@ public partial class ChatScreenTests : IDisposable
     {
         // 2026-09-23, the user's call: a theme change waits for the reply to end, as its Settings row does.
         using var theme = new ThemeScope();
-        _settings.Update(d => d.WelcomeSplashMode = "disabled");
+        _settings.Update(d => d.WelcomeSplashMode = "off");
         SplashOf(2380, 100);
         MidTurnFixture(i =>
         {
@@ -21004,7 +21006,7 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => d.TtsOutput = false);
         string directory = PutSkill(ProfileSkills, "haiku");
         PutSkill(GlobalSkills, "haiku", "The global one, shadowed.");
-        PutSkill(ExternalSkills, "deploy", "Not read: Use external skills is off.");
+        PutSkill(ExternalSkills, "deploy", "Not read: External skills is off.");
         _chat.EnqueueText("Hi.");
         PushLine("hi");
         PushLine("/exit");
@@ -21192,7 +21194,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Matches(@"  · Offered\n  ·   haiku  profile  v1  " + SkillChanged + @"Writes haiku\. Use when asked for one\.\n  · " + Regex.Escape(SkillsText.LoadedTitle) + @"\n  ·   " + Regex.Escape(SkillsText.NoneLoadedLine) + @"\n  · Reflection\n", output);   // Reflection right after Offered since 2026-09-22; the loaded skills between them since 2026-10-12
         Assert.Contains("  · Options\n  ·   Agent skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n", output);   // the Options section last (2026-09-22; between Offered and Reflection from 2026-09-19), the Project file row among it since 2026-10-01
-        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection includes sessions: off\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection yields to turns: off\n  ·   Reflection confirm mode: confirm-none\n  ·   Reflection edit supporting files: off\n  ·   Reflection edit downloaded skills: allow-and-mark\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
+        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection include sessions: off\n  ·   Reflection cooldown (min): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection yield to turns: off\n  ·   Reflection confirm mode: none\n  ·   Reflection edit supporting files: off\n  ·   Reflection edit downloaded skills: allow-and-mark\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
         Assert.DoesNotContain("  · Project\n", output);   // the Project section, the toggle row alone from later on 2026-09-19, went on 2026-10-01
         Assert.DoesNotContain("Roots", output);
         Assert.DoesNotContain("Working directory", output);
@@ -21224,13 +21226,13 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("Roots", output);
         Assert.False(_settings.Current.ProjectFile);
         Assert.Contains("\n▸ Reflection (auto-learn)            off\n  Reflection reasoning               none\n", output);   // the Reflection tab, padded to its own column (35 since the downloaded skills row's longer name, 2026-10-12) (the fixture turns the auto-learn off)
-        Assert.Contains("\n▸ Agent skills                          on\n  " + SettingsMenu.ExternalSkillsName + "  off\n  Project file                          on\n", output);   // the Options tab, the rows padded to its own column
+        Assert.Contains("\n▸ Agent skills                      on\n  " + SettingsMenu.ExternalSkillsName + "  off\n  Project file                      on\n", output);   // the Options tab, the rows padded to its own column
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
         Assert.Matches(@"\n▸ haiku  profile  v1  " + SkillChanged + @"Writes haiku\. Use when asked for one\.\n", output);
         Assert.Contains("\n" + SkillsMenu.LoadedKeys, output);   // the trailer follows on the hint row
         // The Options tab's Project file row, the flip on the status line and the row re-read.
         Assert.Contains("\n  · Project file: off\n", output);
-        Assert.Contains("\n▸ Project file                          off\n", output);
+        Assert.Contains("\n▸ Project file                      off\n", output);
         Assert.DoesNotContain("Working directory", output);
     }
 
@@ -21492,7 +21494,7 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(false)]
     public async Task WithGeometry_ConfirmNew_AsksBeforeANewSkill_KeepWritesIt_DiscardWritesNothing(bool keep)
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ReflectionConfirmMode = "confirm-new"; });
+        _settings.Update(d => { d.TtsOutput = false; d.ReflectionConfirmMode = "new"; });
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText("Hello.");
@@ -21548,7 +21550,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task WithGeometry_TheAsksPane_ClosesWhenItsReflectionIsCancelled()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ReflectionConfirmMode = "confirm-new"; });
+        _settings.Update(d => { d.TtsOutput = false; d.ReflectionConfirmMode = "new"; });
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText("Hello.");
@@ -23381,7 +23383,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Line_ASlashWord_HidesQueue_WhenTheQueueIsOff_AndListsIt_WhenOn()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.QueueMode = "disabled"; });
+        _settings.Update(d => { d.TtsOutput = false; d.QueueMode = "off"; });
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle([.. Typed("/qu"), Key(Keys.Escape), Key(Keys.Escape), Line("/exit")]);
         string off = await RunAsync();
@@ -24773,7 +24775,7 @@ public partial class ChatScreenTests : IDisposable
     [WindowsFact]
     public async Task APictureWithNoFile_IsWrittenToTemp_AndAGoneFileIsAnError()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "disabled"; });
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "off"; });
         PaneOf40Rows();
         SplashOf((4, 4));
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
@@ -24841,7 +24843,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("⏳ Queue: manual · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.QueueToolGlyph, new AppSettingsData { QueueMode = "manual" }));
         Assert.Equal(SlashCommands.QueueWord, ChatScreen.ToolbarWord(ChatScreen.QueueToolGlyph));
         Assert.False(ChatScreen.ToolbarItemOff(ToolbarItems.Queue, shown));
-        Assert.True(ChatScreen.ToolbarItemOff(ToolbarItems.Queue, new AppSettingsData { QueueMode = "disabled" }));   // the slab, as the disk's under Memory disabled
+        Assert.True(ChatScreen.ToolbarItemOff(ToolbarItems.Queue, new AppSettingsData { QueueMode = "off" }));   // the slab, as the disk's under Memory disabled
         Assert.Equal(ToolbarItems.CmdList, ChatScreen.ToolbarItemOf(ChatScreen.CmdYoloToolGlyph));
         Assert.Equal(ToolbarItems.Police, ChatScreen.ToolbarItemOf(ChatScreen.NinjaToolGlyph));
         Assert.Null(ChatScreen.ToolbarGlyphNote("+", shown));

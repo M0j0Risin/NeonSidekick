@@ -898,7 +898,7 @@ public sealed class Assistant
 
     /// <summary>The error line when the guard stopped the turn: <c>🛑 Stopped at 85% …</c>. Pinned.</summary>
     public static string TurnStoppedNotice(int percent) =>
-        StopGlyph + "Stopped at " + percent.ToString(CultureInfo.InvariantCulture) + "% of the context window (LLM tool compact type is stop); /compact or /clear before continuing.";
+        StopGlyph + "Stopped at " + percent.ToString(CultureInfo.InvariantCulture) + "% of the context window (LLM tool compact mode is stop); /compact or /clear before continuing.";
 
     /// <summary>
     /// One summary the mid-turn guard may make (2026-09-28): what the summariser reads, its prompt and closing line,
@@ -1103,7 +1103,7 @@ public sealed class Assistant
     /// </summary>
     public static string OversizedRequestHint(long bytes, int pictures) =>
         " — the request was " + PictureBudget.FormatMegabytes(bytes) + " with " + pictures.ToString(CultureInfo.InvariantCulture) + (pictures == 1 ? " picture" : " pictures")
-        + "; /compact prune takes older pictures out, and LLM picture keep (/settings › Servers › Common) caps them";
+        + "; /compact prune takes older pictures out, and LLM max images (/settings › Servers › Common) caps them";
 
     /// <summary>
     /// Whether a failure's explanation is a chat template rejecting the <c>tool</c> role:
@@ -1652,7 +1652,7 @@ public sealed class Assistant
                 int percent = guard.PercentOf(projected);
                 if (guard.Mode == ToolCompactMode.Stop)
                 {
-                    DiagnosticLog.Info(Category, $"Context at {percent}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s); stopping the turn (LLM tool compact type is stop).");
+                    DiagnosticLog.Info(Category, $"Context at {percent}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s); stopping the turn (LLM tool compact mode is stop).");
                     log.Ending = TurnStopped;
                     yield return new TurnEvent.Notice(TurnStoppedNotice(percent), IsError: true);
                     yield break;

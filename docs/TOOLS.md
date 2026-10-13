@@ -72,7 +72,7 @@ When a site refuses `web_fetch`, shows a bot check, or needs scripts to fill in,
 A bot check that wants a person (a Cloudflare click, a captcha) can be solved by you, in the **Browser window**: a browser of the app's own (WebView2, Windows only), apart from the video window.
 
 * **When:** `web_fetch`, `web_search` (DuckDuckGo's "bots use DuckDuckGo too"), `download_file` and `convert_to_pdf` offer it when a site refuses them with a 403, a 503 that names no wait, or a check's page, whatever *Web browser mode* says. A rate limit never opens it.
-* ***Web browser botcheck window*** decides: `ask` (the default) asks on the pane first (deny, allow once, allow for this session; a site you deny isn't asked about again that turn), `automatic` opens it at once, `disabled` never does. Headless, and on a Mac, it never opens.
+* ***Web browser botcheck window*** decides: `ask` (the default) asks on the pane first (deny, allow once, allow for this session; a site you deny isn't asked about again that turn), `automatic` opens it at once, `off` never does. Headless, and on a Mac, it never opens.
 * **Solving:** the window comes to the front on the page while the pane says what it waits for; ESC or *Give up* there (or closing the window) gives up, and after 5 minutes it gives up by itself. Once the page has loaded with no check showing, the window closes and the tool goes on: `web_fetch` reads the page it let through (its header says `browser window`), `web_search` reads its results, `convert_to_pdf` gets the window's own print of the page, and `download_file` asks for the file again.
 * **Cookies:** the window's cookies for the site go to the web tools' HTTP client, which then claims to be Edge there, so the next fetch from that site usually goes through without the window (in memory, for this run). A site that ties its clearance to the browser's own connection may still refuse a download, which the result says.
 * **Profile:** kept between runs in `<home>\webview2-browser`, so a solved check, and any site you sign in to there, are remembered. A second copy of the app can't open the window while the first has it.
@@ -122,7 +122,7 @@ Under *Image tools* (`/tools` › Files › Image, `/tools image` or the toolbar
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `view_image` | `path?, paths?` | Attaches images to the next message, up to *File view image max (per call)*, so the model can see them; nothing opens on your screen (`open` does that). On a Mac it also takes HEIC/HEIF, TIFF and AVIF. |
+| `view_image` | `path?, paths?` | Attaches images to the next message, up to *File view image max images*, so the model can see them; nothing opens on your screen (`open` does that). On a Mac it also takes HEIC/HEIF, TIFF and AVIF. |
 | `image_info` | `path?, paths?` | A picture's format, size, file size, frames, transparency, orientation and the metadata it carries (EXIF, GPS, XMP…), read from its header, plus the formats `image_edit` can write here. |
 | `image_edit` | `path, to?, overwrite?, format?, quality?, max_kb?, width?, height?, scale?, fit?, anchor?, interpolation?, crop_x/y/width/height?, rotate?, flip?, filter?, brightness?, contrast?, saturation?, hue?, tint?, tint_amount?, blur?, sharpen?, pad?, background?, metadata?, dpi?, chroma?, colors?, dither?, interlace?, view?` | Resizes, crops, turns, recolours and converts a picture in one pass and writes a new file (see [Editing pictures](#editing-pictures)). `metadata: none` alone strips a JPEG, PNG, WebP or GIF losslessly. `view` attaches the result. Not in plan mode. |
 | `set_splash_image` | `path, name?` | Copies a picture (from the working directory, or by full path from the `images` folder) into the profile's `images\splash_images`, so it shows at start and on `/splash`. The first one replaces the bundled set. |
@@ -199,7 +199,7 @@ Under *GitLib tools*: git inside the app, for when the shell is off or the model
 * Local only: no `fetch`, `pull`, `push` or `clone`.
 * The repository must be the working directory or under it. Every tool takes an optional `path`, which also picks the repository.
 * `gitlib_delete` starts off; switch it on in the Offered tab.
-* Commits need *GitLib email* and *GitLib name*, written into the repository by `/gituser`.
+* Commits need *GitLib user email* and *GitLib user name*, written into the repository by `/gituser`.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -367,7 +367,7 @@ Then "put my face from [Image #2] on the person in [Image #1]" works in chat, or
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `generate_image` | `prompt?, workflow?, negative?, negative_extra?, verbatim?, width?, height?, seed?, steps?, cfg?, denoise?, image?, image2?, image3?, count?` | Runs a workflow (the only fitting one when none is named), saving 1 to *ComfyUI max pictures per call* pictures, each with the next seed. The result names the files and seed; the pictures follow in the next message. `prompt` may be left out only for a workflow without `{{prompt}}`. |
+| `generate_image` | `prompt?, workflow?, negative?, negative_extra?, verbatim?, width?, height?, seed?, steps?, cfg?, denoise?, image?, image2?, image3?, count?` | Runs a workflow (the only fitting one when none is named), saving 1 to *ComfyUI max images per call* pictures, each with the next seed. The result names the files and seed; the pictures follow in the next message. `prompt` may be left out only for a workflow without `{{prompt}}`. |
 
 * A refused run names the node and input at fault (a missing checkpoint, a bad value).
 * `image` is a path in the working directory, a saved picture's full path, or a pasted picture's `[Image #N]` (sent at its original size).
@@ -678,7 +678,7 @@ Under *Print tools*. `/print` and the print tools send work to any printer Windo
 * **Pages:** US Letter by default (`paper=` A4 or Legal), portrait unless landscape, with the title and *page N of M* at the top.
 * **The engine** (*PDF engine*): Edge, Chrome, Brave or (on a Mac) Chromium (*Web browser path*, else the first found). Without one, or when it fails under `auto`, Windows' **Microsoft Print to PDF** draws Markdown, text and pictures in black and white. HTML and web pages need the browser. On a Mac only the browser works.
 * **Output:** beside the source with `.pdf` (a web page or Markdown text gets a name like `example.com-intro.pdf`), or where `to` says. An existing PDF is replaced only with `overwrite`.
-* **A web page behind a bot check:** with someone to ask (*Web browser botcheck window* not `disabled`), the page is fetched first as `web_fetch` would; a check there goes to [the Browser window](#the-browser-window), which prints the page you let through itself ("with the Browser window"; WebView2's default print settings, so no backgrounds). Any other ending prints as before.
+* **A web page behind a bot check:** with someone to ask (*Web browser botcheck window* not `off`), the page is fetched first as `web_fetch` would; a check there goes to [the Browser window](#the-browser-window), which prints the page you let through itself ("with the Browser window"; WebView2's default print settings, so no backgrounds). Any other ending prints as before.
 * `convert_to_pdf` needs *File tools* (a `url` needs *Web tools* too). `/pdf` needs neither.
 
 ### Camera
@@ -693,11 +693,11 @@ On a Mac (macOS 14 or later) it can use the built-in camera, a USB webcam or an 
 
 ### Screen
 
-Under *Screen capture tool*.
+Under *Screen tools*.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `screen_capture` | `target?, prompt` | Captures a monitor, every monitor or one window (see [Screen capture](COMMANDS.md#screen-capture)), after your yes under *Screen capture ask* `ask`. Saved in *Screen capture output folder* under the profile's `images` folder and attached after the result; a denial isn't retried that turn. Allowed in plan mode. |
+| `screen_capture` | `target?, prompt` | Captures a monitor, every monitor or one window (see [Screen capture](COMMANDS.md#screen-capture)), after your yes under *Screen policy* `ask`. Saved in *Screen output folder* under the profile's `images` folder and attached after the result; a denial isn't retried that turn. Allowed in plan mode. |
 | `screen_list` | (none) | Lists the monitors and windows with the target that names each. Titles and sizes only. Allowed in plan mode. |
 
 On a Mac (macOS 14 or later) your terminal needs Screen Recording (System Settings › Privacy & Security › Screen & System Audio Recording, then reopen the terminal). Without it no picture is sent, only how to turn it on, and `screen_list` gives monitors without windows.
@@ -783,7 +783,7 @@ Under *Advisors enabled*. Advisors are other profiles of this home, each in a ro
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `neon_advisor` | `advisor, question, context?` | Asks one advisor, by profile or role, for its view. It answers on its own server and model, under its own persona and role, and may call this chat's read-only tools for up to *Advisor tool iterations* round trips. The transcript shows the question, its tools, the answer and its model and tokens. Each advisor keeps a thread for the session. Offered while an advisor is listed; plan mode keeps it, and there the model is asked to consult advisors whose role fits before presenting a plan. An advisor on the Claude Code server answers text-only unless it is the first listed there and this chat is on another server. |
+| `neon_advisor` | `advisor, question, context?` | Asks one advisor, by profile or role, for its view. It answers on its own server and model, under its own persona and role, and may call this chat's read-only tools for up to *Advisor max tool iterations* round trips. The transcript shows the question, its tools, the answer and its model and tokens. Each advisor keeps a thread for the session. Offered while an advisor is listed; plan mode keeps it, and there the model is asked to consult advisors whose role fits before presenting a plan. An advisor on the Claude Code server answers text-only unless it is the first listed there and this chat is on another server. |
 
 ### Plan
 
@@ -795,4 +795,4 @@ Offered in [plan mode](COMMANDS.md#plan-mode).
 
 ## MCP servers
 
-Under *MCP servers*. Each connected server is its own tool group, its tools named `<server>__<tool>` (`gateway__get_current_time`) with the server's descriptions. Servers connect in the background (🔌 and a count on the hint row); a reply started meanwhile gets the ones already connected. The Servers tab of `/mcp` switches whole servers, the Tools tab single tools.
+Under *MCP servers enabled*. Each connected server is its own tool group, its tools named `<server>__<tool>` (`gateway__get_current_time`) with the server's descriptions. Servers connect in the background (🔌 and a count on the hint row); a reply started meanwhile gets the ones already connected. The Servers tab of `/mcp` switches whole servers, the Tools tab single tools.

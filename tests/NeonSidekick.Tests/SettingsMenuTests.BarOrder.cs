@@ -151,7 +151,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("  Menus max height             full-screen\n" + MenuLayout.Heading("Tool bars", 120) + "\n  Hint bar                     " + HintBarItems.DefaultValue + "\n  Tool bar                     ", Output);
+        Assert.Contains("  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 120) + "\n  Hint bar                     " + HintBarItems.DefaultValue + "\n  Tool bar                     ", Output);
         Assert.Contains("\n  Performance bar              ", Output);
         Assert.Contains("\n  Home bar                     ", Output);
         Assert.Contains("\n▸ Order                        " + PaneBars.DefaultValue + "\n" + MenuLayout.Heading("Outside apps", 120), Output);

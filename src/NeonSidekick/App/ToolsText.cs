@@ -306,7 +306,7 @@ public static class ToolsText
     public const string CameraOffSuffix = "(off: Camera tool is off, there is no camera support, or the model reads no pictures)";
 
     /// <summary>After the Screen heading while the screen tools are not offered: the switch is off, there is no screen capture support, or the model reads no pictures (2026-10-04). Pinned.</summary>
-    public const string ScreenOffSuffix = "(off: Screen capture tool is off, there is no screen capture support, or the model reads no pictures)";
+    public const string ScreenOffSuffix = "(off: Screen tools is off, there is no screen capture support, or the model reads no pictures)";
 
     /// <summary>After the ComfyUI heading while the group is not offered: the switch is off, no ComfyUI URL is set or no workflow is offered (2026-09-24). Pinned.</summary>
     public const string ComfyOffSuffix = "(off: ComfyUI tools is off, no ComfyUI URL is set or no workflow is offered)";

@@ -18,7 +18,7 @@ public enum MenuHeightStyle
 
 /// <summary>
 /// The setting <c>Menus max height</c> (2026-10-01, the user's ask, with the tabs held at their tallest tab's height so
-/// the pane no longer jumps as one tabs through it): <c>half-screen</c>, <c>three-quarters</c> and <c>full-screen</c> (the
+/// the pane no longer jumps as one tabs through it): <c>half</c>, <c>three-quarters</c> and <c>full</c> (the
 /// default; <c>three-quarters</c> until later that day, the user's call), and the rows they leave a menu's content — the <see cref="SplashMode"/> shape. It caps the whole
 /// pane of the <see cref="MenuPane"/>, the <see cref="InfoPane"/> and the <see cref="FolderPane"/> (the user's answer:
 /// the pane, not only its padding): a list longer than the cap scrolls behind the viewport as it did at the window's edge.
@@ -30,10 +30,17 @@ public enum MenuHeightStyle
 public static class MenuHeight
 {
     /// <summary>The compiled default, pinned by <c>AppSettingsTests</c>.</summary>
-    public const string Default = "full-screen";
+    public const string Default = "full";
 
     /// <summary>The heights in menu order.</summary>
-    public static readonly string[] Names = { "half-screen", "three-quarters", "full-screen" };
+    public static readonly string[] Names = { "half", "three-quarters", "full" };
+
+    /// <summary>The words retired on 2026-10-13 (the settings verbiage pass, the user's call), still read: old → new (<see cref="RetiredWords"/>).</summary>
+    internal static readonly IReadOnlyDictionary<string, string> Retired = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["half-screen"] = "half",
+        ["full-screen"] = "full",
+    };
 
     /// <summary>The fewest content rows a capped pane keeps when the window has them: a strip, the spacer and a few rows of a list.</summary>
     public const int MinRows = 6;
@@ -49,11 +56,11 @@ public static class MenuHeight
     /// <summary>Trims and ignores case; false (and <see cref="MenuHeightStyle.Full"/>, the default) for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out MenuHeightStyle style)
     {
-        switch (text?.Trim().ToLowerInvariant())
+        switch (RetiredWords.Current(text, Retired))
         {
-            case "half-screen": style = MenuHeightStyle.Half; return true;
+            case "half": style = MenuHeightStyle.Half; return true;
             case "three-quarters": style = MenuHeightStyle.ThreeQuarters; return true;
-            case "full-screen": style = MenuHeightStyle.Full; return true;
+            case "full": style = MenuHeightStyle.Full; return true;
             default: style = MenuHeightStyle.Full; return false;
         }
     }
@@ -61,17 +68,17 @@ public static class MenuHeight
     /// <summary>The saved word for <paramref name="style"/>.</summary>
     public static string Name(MenuHeightStyle style) => style switch
     {
-        MenuHeightStyle.Half => "half-screen",
-        MenuHeightStyle.Full => "full-screen",
+        MenuHeightStyle.Half => "half",
+        MenuHeightStyle.Full => "full",
         _ => "three-quarters",
     };
 
     /// <summary>The menu hint next to a height. Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "half-screen" => "a menu takes at most half the window",
+        "half" => "a menu takes at most half the window",
         "three-quarters" => "a menu takes at most three quarters of the window",
-        "full-screen" => "a menu grows to all but one row of the window",
+        "full" => "a menu grows to all but one row of the window",
         _ => "",
     };
 

@@ -10,7 +10,7 @@ public class SplashModeTests
     public void Names_ArePinned_InMenuOrder_FullsizeTheDefault()
     {
         // 2026-09-24: the on/off Welcome splash became three words; on was fullsize (the user's name over "normal").
-        Assert.Equal(new[] { "fullsize", "tiled", "disabled" }, SplashMode.Names);
+        Assert.Equal(new[] { "fullsize", "tiled", "off" }, SplashMode.Names);
         Assert.Equal("fullsize", SplashMode.Default);
         Assert.Equal(SplashMode.Default, new AppSettingsData().WelcomeSplashMode);
     }
@@ -18,7 +18,7 @@ public class SplashModeTests
     [Theory]
     [InlineData("fullsize", SplashStyle.FullSize)]
     [InlineData("tiled", SplashStyle.Tiled)]
-    [InlineData("disabled", SplashStyle.Disabled)]
+    [InlineData("off", SplashStyle.Disabled)]
     [InlineData("  Tiled ", SplashStyle.Tiled)]
     public void TryParse_TrimsAndIgnoresCase_AndNameRoundTrips(string text, SplashStyle expected)
     {
@@ -32,7 +32,7 @@ public class SplashModeTests
     [InlineData("")]
     [InlineData("normal")]
     [InlineData("on")]
-    [InlineData("off")]
+    [InlineData("never")]
     public void TryParse_RejectsAnythingElse_AndHandsBackFullSize(string? text)
     {
         Assert.False(SplashMode.TryParse(text, out var style));
@@ -44,7 +44,7 @@ public class SplashModeTests
     {
         Assert.Equal("one picture fills the screen under the banner at startup; ← → walk them", SplashMode.Describe("fullsize"));
         Assert.Equal("the pictures as thumbnails at the image thumbnail size, a screenful at a time; ← → page", SplashMode.Describe("tiled"));
-        Assert.Equal("the banner alone at startup", SplashMode.Describe("disabled"));
+        Assert.Equal("the banner alone at startup", SplashMode.Describe("off"));
         Assert.Equal("", SplashMode.Describe("other"));
     }
 
@@ -53,7 +53,7 @@ public class SplashModeTests
     {
         Assert.Equal(SplashStyle.FullSize, SplashMode.Resolve(new AppSettingsData()));
         Assert.Equal(SplashStyle.Tiled, SplashMode.Resolve(new AppSettingsData { WelcomeSplashMode = "TILED" }));
-        Assert.Equal(SplashStyle.Disabled, SplashMode.Resolve(new AppSettingsData { WelcomeSplashMode = "disabled" }));
+        Assert.Equal(SplashStyle.Disabled, SplashMode.Resolve(new AppSettingsData { WelcomeSplashMode = "off" }));
     }
 
     [Fact]
@@ -72,6 +72,6 @@ public class SplashModeTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains("WelcomeSplashMode='normal' is not one of fullsize, tiled, disabled. Using fullsize.", warning.Message);
+        Assert.Contains("WelcomeSplashMode='normal' is not one of fullsize, tiled, off. Using fullsize.", warning.Message);
     }
 }

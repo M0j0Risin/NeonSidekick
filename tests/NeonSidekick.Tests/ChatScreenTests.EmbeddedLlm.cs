@@ -448,7 +448,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task Startup_ScanDisabled_NoModelDownloaded_OpensTheCatalog_WhoseInstallStartsIt()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "disabled"; d.LlmUrl = ""; });
+        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "off"; d.LlmUrl = ""; });
         UsePane();
         var embedded = UseEmbedded(new FakeEmbeddedLlm());
         var model = EmbeddedModelCatalog.Models[0];
@@ -472,7 +472,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task Startup_ScanDisabled_NoModelDownloaded_EscapeTwice_LeavesTheLine_AndServerSaysTheSame()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "disabled"; d.LlmUrl = ""; });
+        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "off"; d.LlmUrl = ""; });
         UsePane();
         var embedded = UseEmbedded(new FakeEmbeddedLlm());
         var input = new ScriptedInput();
@@ -499,7 +499,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task Startup_TheDockerRow_OpensTheContainerChecklist_AndSwitchesDockerServersOn()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "disabled"; d.LlmUrl = ""; d.DockerServers = false; d.DockerServerContainers = ["vllm_b"]; });
+        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "off"; d.LlmUrl = ""; d.DockerServers = false; d.DockerServerContainers = ["vllm_b"]; });
         UsePane();
         UseEmbedded(new FakeEmbeddedLlm());
         var input = new ScriptedInput();
@@ -519,7 +519,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task Startup_ScanDisabled_AModelDownloaded_OffersThePicker_NotTheCatalog()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "disabled"; d.LlmUrl = ""; });
+        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "off"; d.LlmUrl = ""; });
         var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
         _console.Input.PushKey(Keys.Escape);              // the startup picker, its one embedded row: ESC never starts it
         PushLine("/exit");
@@ -538,7 +538,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task Startup_EmbeddedSwitchedOff_KeepsTheOldLines()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "disabled"; d.LlmUrl = ""; d.EmbeddedLlmServer = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "off"; d.LlmUrl = ""; d.EmbeddedLlmServer = false; });
         UsePane();
         UseEmbedded(new FakeEmbeddedLlm());
         PushLine("/exit");

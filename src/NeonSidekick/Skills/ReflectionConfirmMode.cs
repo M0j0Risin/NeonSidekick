@@ -20,28 +20,37 @@ public enum ReflectionConfirmScope
 }
 
 /// <summary>
-/// The confirm-mode setting (2026-10-12, the user's ask and words): <c>confirm-none</c> (the default), <c>confirm-all</c>, <c>confirm-new</c>,
-/// <c>confirm-edit</c>, and their mapping to <see cref="ReflectionConfirmScope"/> — <see cref="ReflectionCooldownMode"/>'s shape.
+/// The confirm-mode setting (2026-10-12, the user's ask and words): <c>none</c> (the default), <c>all</c>, <c>new</c>,
+/// <c>edit</c>, and their mapping to <see cref="ReflectionConfirmScope"/> — <see cref="ReflectionCooldownMode"/>'s shape.
 /// <see cref="Resolve"/> is the one place the saved string becomes the enum: a hand-edited value that is none of them falls back to
 /// <see cref="Default"/> with a warning. A confirmed write is <c>ChatScreen</c>'s pane at the idle line (<see cref="SkillProposal"/>).
 /// </summary>
 public static class ReflectionConfirmMode
 {
     /// <summary>The compiled default (the user's call), pinned by <c>AppSettingsTests</c>.</summary>
-    public const string Default = "confirm-none";
+    public const string Default = "none";
 
     /// <summary>The choices in menu order (the user's).</summary>
-    public static readonly string[] Names = { "confirm-none", "confirm-all", "confirm-new", "confirm-edit" };
+    public static readonly string[] Names = { "none", "all", "new", "edit" };
+
+    /// <summary>The words retired on 2026-10-13 (the settings verbiage pass, the user's call), still read: old → new (<see cref="RetiredWords"/>).</summary>
+    internal static readonly IReadOnlyDictionary<string, string> Retired = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["confirm-none"] = "none",
+        ["confirm-all"] = "all",
+        ["confirm-new"] = "new",
+        ["confirm-edit"] = "edit",
+    };
 
     /// <summary>Trims and ignores case; false for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out ReflectionConfirmScope scope)
     {
-        switch (text?.Trim().ToLowerInvariant())
+        switch (RetiredWords.Current(text, Retired))
         {
-            case "confirm-none": scope = ReflectionConfirmScope.None; return true;
-            case "confirm-all": scope = ReflectionConfirmScope.All; return true;
-            case "confirm-new": scope = ReflectionConfirmScope.New; return true;
-            case "confirm-edit": scope = ReflectionConfirmScope.Edit; return true;
+            case "none": scope = ReflectionConfirmScope.None; return true;
+            case "all": scope = ReflectionConfirmScope.All; return true;
+            case "new": scope = ReflectionConfirmScope.New; return true;
+            case "edit": scope = ReflectionConfirmScope.Edit; return true;
             default: scope = ReflectionConfirmScope.None; return false;
         }
     }
@@ -49,10 +58,10 @@ public static class ReflectionConfirmMode
     /// <summary>The menu hint next to a choice (the user's words). Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "confirm-none" => "a reflection never asks",
-        "confirm-all" => "a reflection asks before a new skill and before an edit",
-        "confirm-new" => "a reflection asks before a new skill, not before an edit",
-        "confirm-edit" => "a reflection asks before an edit, not before a new skill",
+        "none" => "a reflection never asks",
+        "all" => "a reflection asks before a new skill and before an edit",
+        "new" => "a reflection asks before a new skill, not before an edit",
+        "edit" => "a reflection asks before an edit, not before a new skill",
         _ => "",
     };
 

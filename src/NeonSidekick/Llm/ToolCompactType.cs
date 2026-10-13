@@ -29,7 +29,7 @@ public enum ToolCompactMode
 
 /// <summary>
 /// The tool-compact-type setting: the four words the operator picks from (<c>compact</c>, <c>prune</c>, <c>stop</c>,
-/// <c>nothing</c>) and their mapping to <see cref="ToolCompactMode"/>, the <see cref="CompactType"/>
+/// <c>off</c>) and their mapping to <see cref="ToolCompactMode"/>, the <see cref="CompactType"/>
 /// shape. <see cref="Resolve"/> is the one place the saved string becomes the enum: a hand-edited
 /// value that is none of them falls back to <see cref="Default"/> with a warning.
 /// </summary>
@@ -43,19 +43,25 @@ public static class ToolCompactType
     public const string Default = "compact";
 
     /// <summary>The types in menu order.</summary>
-    public static readonly string[] Names = { "compact", "prune", "stop", "nothing" };
+    public static readonly string[] Names = { "compact", "prune", "stop", "off" };
+
+    /// <summary>The words retired on 2026-10-13 (the settings verbiage pass, the user's call), still read: old → new (<see cref="RetiredWords"/>).</summary>
+    internal static readonly IReadOnlyDictionary<string, string> Retired = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["nothing"] = "off",
+    };
 
     private const string Category = "Llm";
 
     /// <summary>Trims and ignores case; false for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out ToolCompactMode mode)
     {
-        switch (text?.Trim().ToLowerInvariant())
+        switch (RetiredWords.Current(text, Retired))
         {
             case "compact": mode = ToolCompactMode.Compact; return true;
             case "prune": mode = ToolCompactMode.Prune; return true;
             case "stop": mode = ToolCompactMode.Stop; return true;
-            case "nothing": mode = ToolCompactMode.Nothing; return true;
+            case "off": mode = ToolCompactMode.Nothing; return true;
             default: mode = ToolCompactMode.Compact; return false;
         }
     }
@@ -65,7 +71,7 @@ public static class ToolCompactType
     {
         ToolCompactMode.Prune => "prune",
         ToolCompactMode.Stop => "stop",
-        ToolCompactMode.Nothing => "nothing",
+        ToolCompactMode.Nothing => "off",
         _ => "compact",
     };
 
@@ -75,7 +81,7 @@ public static class ToolCompactType
         "compact" => "prune, then summarise if the turn is still over the share",
         "prune" => "stub this turn's older tool results and carry on",
         "stop" => "end the turn with a notice; /compact or /clear first",
-        "nothing" => "no check; the server's own limit answers",
+        "off" => "no check; the server's own limit answers",
         _ => "",
     };
 

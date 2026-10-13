@@ -124,8 +124,8 @@ public class QueueMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(["manual", "disabled", "automatic", "hold"], modes);
-        Assert.Contains("mode: disabled", _console.Output);
+        Assert.Equal(["manual", "off", "automatic", "hold"], modes);
+        Assert.Contains("mode: off", _console.Output);
         Assert.Contains("cancel: hold", _console.Output);
         Assert.Contains(QueueMenu.Keys, _console.Output);
         Assert.Equal(new[] { "one", "two" }, Labels());

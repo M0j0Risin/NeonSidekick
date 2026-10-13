@@ -1866,7 +1866,7 @@ public class AssistantTests
     {
         Assert.Equal("The server dropped the request as it was sent (118 MB, 54 pictures); the 27 oldest pictures are now their file names. Trying again.", Assistant.DroppedRequestNotice(118_000_000, 54, 27));
         Assert.Equal("The server dropped the request as it was sent (3 MB, 2 pictures); the oldest picture is now its file name. Trying again.", Assistant.DroppedRequestNotice(3_000_000, 2, 1));
-        Assert.Equal(" — the request was 118 MB with 54 pictures; /compact prune takes older pictures out, and LLM picture keep (/settings › Servers › Common) caps them", Assistant.OversizedRequestHint(118_000_000, 54));
+        Assert.Equal(" — the request was 118 MB with 54 pictures; /compact prune takes older pictures out, and LLM max images (/settings › Servers › Common) caps them", Assistant.OversizedRequestHint(118_000_000, 54));
     }
 
     [Fact]
@@ -2079,7 +2079,7 @@ public class AssistantTests
         Assert.Empty(Deltas(events));
         var notice = Assert.IsType<TurnEvent.Notice>(events[^1]);
         Assert.True(notice.IsError);
-        Assert.Equal("🛑 Stopped at 97% of the context window (LLM tool compact type is stop); /compact or /clear before continuing.", notice.Text);
+        Assert.Equal("🛑 Stopped at 97% of the context window (LLM tool compact mode is stop); /compact or /clear before continuing.", notice.Text);
         Assert.Equal(2, client.Requests.Count);
         // No call left unanswered: the history ends with the second iteration's result, verbatim.
         Assert.Equal(new[] { ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, history.Messages.Select(m => m.Role));
@@ -2145,7 +2145,7 @@ public class AssistantTests
         Assert.False(new Assistant.TurnContextGuard(151_427, 80, ToolCompactMode.Nothing).Tripped(chef));
         Assert.Equal("(✂️ context at 85%: pruned 23 tool results from this turn)", Assistant.TurnPrunedNotice(85, 23));
         Assert.Equal("(✂️ context at 85%: pruned 1 tool result from this turn)", Assistant.TurnPrunedNotice(85, 1));
-        Assert.Equal("🛑 Stopped at 85% of the context window (LLM tool compact type is stop); /compact or /clear before continuing.", Assistant.TurnStoppedNotice(85));
+        Assert.Equal("🛑 Stopped at 85% of the context window (LLM tool compact mode is stop); /compact or /clear before continuing.", Assistant.TurnStoppedNotice(85));
     }
 
     // ── The mid-turn compact (LLM tool compact type: compact, 2026-09-28) ───
@@ -2163,7 +2163,7 @@ public class AssistantTests
 
         var events = await Run(assistant, "go");
 
-        Assert.Equal("🛑 Stopped at 120% of the context window (LLM tool compact type is stop); /compact or /clear before continuing.", Assert.IsType<TurnEvent.Notice>(events[^1]).Text);
+        Assert.Equal("🛑 Stopped at 120% of the context window (LLM tool compact mode is stop); /compact or /clear before continuing.", Assert.IsType<TurnEvent.Notice>(events[^1]).Text);
         Assert.Single(client.Requests);
     }
 

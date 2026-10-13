@@ -694,7 +694,7 @@ public class EmbeddedLlmCoreTests
         Assert.Equal("🦙 loading Gemma 4 E2B", EmbeddedLlmText.LoadingLabel(e2b));
 
         // Embedded VRAM only's refusals (2026-10-01): what spilled, then what to lower.
-        const string Advice = "set Embedded context size to 0 (fit) or lower it, lower Embedded VRAM budget, close what else uses the GPU, or pick a smaller model";
+        const string Advice = "set Embedded context length to 0 (fit) or lower it, lower Embedded VRAM budget (%), close what else uses the GPU, or pick a smaller model";
         Assert.Equal("it spilled about 527 MiB of shared GPU memory into system RAM, and Embedded VRAM only is on; " + Advice, EmbeddedLlmText.VramSpilled(new VramSpill(0, 66, 527)));
         Assert.Equal("it spilled 15 of 66 layers and about 40 MiB of shared GPU memory into system RAM, and Embedded VRAM only is on; " + Advice, EmbeddedLlmText.VramSpilled(new VramSpill(15, 66, 40)));
         Assert.Equal("it does not fit in VRAM with every layer on the GPU, and Embedded VRAM only is on; " + Advice, EmbeddedLlmText.VramDidNotFit);

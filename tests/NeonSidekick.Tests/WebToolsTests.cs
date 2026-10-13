@@ -359,7 +359,7 @@ public sealed class WebToolsTests : IDisposable
     {
         // 2026-09-18: the third mode; the sentence names the host and the mode, the request is never made.
         _settings.WebBrowserMode = "httpclient";
-        _settings.WebBrowserNetworkMode = "local_area_network";
+        _settings.WebBrowserNetworkMode = "lan";
         _http.Map("https://example.com/", HttpStatusCode.OK, "<p>hi</p>", "text/html");
 
         Assert.Equal(WebText.InternetRefused("example.com"), await _fetch.InvokeAsync(Args(("url", "https://example.com/")), CancellationToken.None));
@@ -385,7 +385,7 @@ public sealed class WebToolsTests : IDisposable
 
         Assert.Equal(new FetchOptions(FetchEngine.Chromium, @"C:\x.exe", NetworkReach.Both), options);
         Assert.Equal(new FetchOptions(FetchEngine.Default, "", NetworkReach.Internet), WebAccess.Options(new AppSettingsData()));
-        Assert.Equal(NetworkReach.LocalAreaNetwork, WebAccess.Options(new AppSettingsData { WebBrowserNetworkMode = "local_area_network" }).Reach);
+        Assert.Equal(NetworkReach.LocalAreaNetwork, WebAccess.Options(new AppSettingsData { WebBrowserNetworkMode = "lan" }).Reach);
     }
 
     // ── download_file ───────────────────────────────────────────────────────
@@ -517,7 +517,7 @@ public sealed class WebToolsTests : IDisposable
     [Fact]
     public async Task Download_AFailedFetch_IsItsSentence_AndNothingIsWritten()
     {
-        _settings.WebBrowserNetworkMode = "local_area_network";
+        _settings.WebBrowserNetworkMode = "lan";
         _http.Map("https://example.com/cat.png", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, Png, "image/png")));
 
         Assert.Equal(WebText.InternetRefused("example.com"), await _download.DownloadAsync("https://example.com/cat.png", null, false, CancellationToken.None));

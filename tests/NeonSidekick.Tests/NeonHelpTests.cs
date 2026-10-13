@@ -74,7 +74,7 @@ public class NeonHelpTests
         Assert.Equal("/settings › Client › Botchat › Botchat camera", HelpLocation.Of(SettingsField.BotChatCamera).Path);
         Assert.Equal("/settings › Advisors › Advisor list", HelpLocation.Of(SettingsField.AdvisorList).Path);   // a plain tab names no menu
         Assert.Equal("/skills › Reflection", HelpLocation.Of(SettingsField.ReflectionAutoLearn).Pane + HelpText.PathSeparator + HelpLocation.Of(SettingsField.ReflectionAutoLearn).Tab);
-        Assert.Equal("/mcp › Options › MCP servers", HelpLocation.Of(SettingsField.McpServers).Path);
+        Assert.Equal("/mcp › Options › MCP servers enabled", HelpLocation.Of(SettingsField.McpServers).Path);
         Assert.Equal("10", HelpLocation.Default(SettingsField.CameraWatchSeconds));   // the unit is the label's, (s)
         Assert.Equal(HelpText.WorkingDirectoryDefault, HelpLocation.Default(SettingsField.WorkingDirectory));
     }

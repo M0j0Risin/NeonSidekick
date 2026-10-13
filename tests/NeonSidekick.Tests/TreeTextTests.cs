@@ -95,8 +95,8 @@ public sealed class TreeTextTests
         Assert.Equal([@"D:\home\profiles\default\files\", "(empty)"], TreeText.Lines(Ok(), showSizes: true, cap: 500));
 
         var cut = new FileTreeResult(FileOutcome.Ok, "", @"D:\x\", [new FileTreeEntry("a.txt", 1, false, 1, false)], Truncated: true);
-        Assert.Equal([@"D:\x\", "├── a.txt  1 B", "… only the first 5 entries are shown (File /tree max length)"], TreeText.Lines(cut, showSizes: true, cap: 5));
-        Assert.Equal("… only the first 500 entries are shown (File /tree max length)", TreeText.CutLine(500));
+        Assert.Equal([@"D:\x\", "├── a.txt  1 B", "… only the first 5 entries are shown (File /tree max entries)"], TreeText.Lines(cut, showSizes: true, cap: 5));
+        Assert.Equal("… only the first 500 entries are shown (File /tree max entries)", TreeText.CutLine(500));
     }
 
     [Fact]

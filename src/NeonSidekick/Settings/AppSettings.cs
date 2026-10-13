@@ -620,6 +620,9 @@ public sealed class AppSettings : IDisposable
                 var loaded = JsonSerializer.Deserialize(json, ReadInfo);
                 if (loaded is not null)
                 {
+                    // A setting word retired on 2026-10-13 (the settings verbiage pass) reads as its successor; the file follows at the next save.
+                    RetiredWords.Upgrade(loaded);
+
                     // The interrupt needs the wake word (2026-09-13); a profile saved before that
                     // rule loads with it off, and the file follows at the next save.
                     if (loaded.SttInterrupt && !loaded.SttWake)

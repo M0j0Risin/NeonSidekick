@@ -19,7 +19,7 @@ public enum Queueing
 /// <summary>
 /// The setting <c>Queue mode</c> (2026-10-09, the user's call: the on/off <c>Queue messages</c> became three words, its key
 /// <c>QueueMessages</c> retired with no migration, so an old profile reads <see cref="Default"/>): <c>automatic</c>,
-/// <c>manual</c> and <c>disabled</c>, and their mapping to <see cref="Queueing"/> — the <see cref="QueueCancelMode"/> shape.
+/// <c>manual</c> and <c>off</c>, and their mapping to <see cref="Queueing"/> — the <see cref="QueueCancelMode"/> shape.
 /// <see cref="Resolve"/> is the one place the saved string becomes the enum: a hand-edited value that is none of them falls
 /// back to <see cref="Default"/> with a warning.
 /// </summary>
@@ -29,18 +29,24 @@ public static class QueueMode
     public const string Default = "automatic";
 
     /// <summary>The modes in menu order.</summary>
-    public static readonly string[] Names = { "automatic", "manual", "disabled" };
+    public static readonly string[] Names = { "automatic", "manual", "off" };
+
+    /// <summary>The words retired on 2026-10-13 (the settings verbiage pass, the user's call), still read: old → new (<see cref="RetiredWords"/>).</summary>
+    internal static readonly IReadOnlyDictionary<string, string> Retired = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["disabled"] = "off",
+    };
 
     private const string Category = "Screen";
 
     /// <summary>Trims and ignores case; false (and <see cref="Queueing.Automatic"/>) for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out Queueing mode)
     {
-        switch (text?.Trim().ToLowerInvariant())
+        switch (RetiredWords.Current(text, Retired))
         {
             case "automatic": mode = Queueing.Automatic; return true;
             case "manual": mode = Queueing.Manual; return true;
-            case "disabled": mode = Queueing.Disabled; return true;
+            case "off": mode = Queueing.Disabled; return true;
             default: mode = Queueing.Automatic; return false;
         }
     }
@@ -49,7 +55,7 @@ public static class QueueMode
     public static string Name(Queueing mode) => mode switch
     {
         Queueing.Manual => "manual",
-        Queueing.Disabled => "disabled",
+        Queueing.Disabled => "off",
         _ => "automatic",
     };
 
@@ -58,7 +64,7 @@ public static class QueueMode
     {
         "automatic" => "messages sent during a reply are queued and sent when it ends",
         "manual" => "messages are always queued and sent one at a time with ➤ send on /queue",
-        "disabled" => "no queue: a line sent during a reply goes when it ends, unlisted",
+        "off" => "no queue: a line sent during a reply goes when it ends, unlisted",
         _ => "",
     };
 

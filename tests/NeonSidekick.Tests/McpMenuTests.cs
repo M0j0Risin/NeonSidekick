@@ -363,10 +363,10 @@ public class McpMenuTests : IAsyncDisposable
 
         Assert.False(_settings.Current.McpServers);
         Assert.Equal(45, _settings.Current.McpConnectTimeoutSeconds);
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n" + Heading("── Servers") + "\n▸ MCP servers              on\n  MCP connect timeout (s)  30\n", 100);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n" + Heading("── Servers") + "\n▸ MCP servers enabled      on\n  MCP connect timeout (s)  30\n", 100);
         Assert.Contains(McpText.Label + " › MCP servers", Output);
         Assert.Contains("no MCP server is started; the pane still lists the config", Output);
-        Assert.Contains("  · MCP servers: off\n", Output);
+        Assert.Contains("  · MCP servers enabled: off\n", Output);
         Assert.Contains("  · MCP connect timeout (s): 45\n", Output);
         pane.Dispose();
     }
@@ -427,7 +427,7 @@ public class McpMenuTests : IAsyncDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Contains("  · Servers\n  ·   docker      on   connected · 2 tools  stdio: docker mcp gateway run\n  ·   chrome      on   connected · 1 tool  http: http://localhost:9/mcp\n  · Tools\n  ·   docker (1 of 2)\n  ·     docker__echo      on   Echoes the text back.\n  ·     docker__fail      off  Always fails.\n  ·   chrome (1)\n  ·     chrome__navigate  on   Opens a page.\n  · Options\n  ·   MCP servers: on\n  ·   MCP connect timeout (s): 30\n", Output);
+        Assert.Contains("  · Servers\n  ·   docker      on   connected · 2 tools  stdio: docker mcp gateway run\n  ·   chrome      on   connected · 1 tool  http: http://localhost:9/mcp\n  · Tools\n  ·   docker (1 of 2)\n  ·     docker__echo      on   Echoes the text back.\n  ·     docker__fail      off  Always fails.\n  ·   chrome (1)\n  ·     chrome__navigate  on   Opens a page.\n  · Options\n  ·   MCP servers enabled: on\n  ·   MCP connect timeout (s): 30\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }

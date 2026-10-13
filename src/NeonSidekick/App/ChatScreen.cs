@@ -405,7 +405,7 @@ internal sealed partial class ChatScreen
     public const string InterruptedNotice = "(" + NoticeGlyphs.Interrupt + "interrupted)";
     public const string InterruptDisabledReason = "switched off after two interruptions heard nothing";
     public const string RememberUsageError = "/remember takes the text to keep: /remember <text>";
-    public const string MemoryOffNotice = NoticeGlyphs.Memory + "Memory mode is disabled; set it in /settings (the Memory mode row) or with /memory read-write.";
+    public const string MemoryOffNotice = NoticeGlyphs.Memory + "Memory mode is off; set it in /settings (the Memory mode row) or with /memory read-write.";
     public const string MemoryFullError = "Memory is full (" + MaxMemoriesText + " entries); /memory forget clears it.";
     public const string MemoryFailedError = "Could not save the memory; the log has the reason.";
     public const string NothingToForgetNotice = "(" + NoticeGlyphs.Memory + "nothing to forget)";
@@ -525,13 +525,13 @@ internal sealed partial class ChatScreen
 
     /// <summary>The <c>/queue</c> word that sets <c>Queue mode</c> (2026-10-13, the user's ask); case folded.</summary>
     public const string QueueModeWord = "mode";
-    public const string QueueModeNote = "set Queue mode: automatic, manual or disabled";
+    public const string QueueModeNote = "set Queue mode: automatic, manual or off";
 
     /// <summary>The <c>/queue</c> word that sets <c>Queue cancel mode</c> (2026-10-13, the user's ask); case folded.</summary>
     public const string QueueCancelWord = "cancel";
     public const string QueueCancelNote = "set Queue cancel mode: hold, drain or empty";
 
-    public const string QueueUsageError = "/queue lists the queued messages; /queue clear drops them all; /queue mode automatic|manual|disabled sets Queue mode; /queue cancel hold|drain|empty sets Queue cancel mode.";
+    public const string QueueUsageError = "/queue lists the queued messages; /queue clear drops them all; /queue mode automatic|manual|off sets Queue mode; /queue cancel hold|drain|empty sets Queue cancel mode.";
 
 
     // The /memory grammar's words, their notes on the argument list and the usage error (2026-09-22,
@@ -549,7 +549,7 @@ internal sealed partial class ChatScreen
     public const string MemoryReadWriteNote = "the model reads and saves memories";   // 2026-10-04, the user's ask: Memory mode's three words
     public const string MemoryReadOnlyNote = "the model reads memories, never saves one";
     public const string MemoryDisabledNote = "no memory (what is remembered stays)";
-    public const string MemoryUsageError = "/memory lists the memories; read-write, read-only or disabled sets Memory mode; forget forgets them all; edit opens memory.json in your editor.";
+    public const string MemoryUsageError = "/memory lists the memories; read-write, read-only or off sets Memory mode; forget forgets them all; edit opens memory.json in your editor.";
 
     /// <summary>The <c>/copy</c> word for every exchange.</summary>
     public const string CopyAllWord = "all";
@@ -2593,6 +2593,12 @@ internal sealed partial class ChatScreen
 
         rows.Add(new("Ctrl+E", "open the working directory in the file browser", "/explore"));
         rows.Add(new("Ctrl+F", "show or hide the performance bar", "/perfbar"));
+        if (!mac)
+        {
+            // 2026-10-13, the neon_help copy edit: the chord was missing from the list (a Mac terminal sends it as Ctrl+F, so type /find there).
+            rows.Add(new("Ctrl+Shift+F", "find words in the transcript", "/find"));
+        }
+
         rows.Add(new("Ctrl+G", "show or hide the log window", "/log"));   // 2026-10-12, the user's pick (Ctrl+Alt+G until then)
         rows.Add(new("Ctrl+H", "open the help", "/help"));
         if (!mac)
@@ -4891,7 +4897,7 @@ internal sealed partial class ChatScreen
             case SlashCommand.Memory:
             {
                 // The modes, forget and edit (copy and its profiles until 2026-10-13: /profile push|pull memory since).
-                return MentionCompleter.Matches([new(MemoryMode.ReadWrite, MemoryReadWriteNote), new(MemoryMode.ReadOnly, MemoryReadOnlyNote), new(MemoryMode.Disabled, MemoryDisabledNote), new(MemoryForgetWord, MemoryForgetNote), new(MemoryEditWord, MemoryEditNote)], argText);
+                return MentionCompleter.Matches([new(MemoryMode.ReadWrite, MemoryReadWriteNote), new(MemoryMode.ReadOnly, MemoryReadOnlyNote), new(MemoryMode.Off, MemoryDisabledNote), new(MemoryForgetWord, MemoryForgetNote), new(MemoryEditWord, MemoryEditNote)], argText);
             }
 
             case SlashCommand.Sys:
@@ -8429,7 +8435,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>Which of the two settings is empty: <c>GitLib email and GitLib name are not set; set them on the GitLib tab of /tools.</c>, or the one. Pinned.</summary>
     public static string GitIdentityUnsetError(bool email, bool name) =>
-        (email && name ? "GitLib email and GitLib name are" : email ? "GitLib email is" : "GitLib name is") + " not set; set " + (email && name ? "them" : "it") + " on the GitLib tab of /tools.";
+        (email && name ? "GitLib user email and GitLib user name are" : email ? "GitLib user email is" : "GitLib user name is") + " not set; set " + (email && name ? "them" : "it") + " on the GitLib tab of /tools.";
 
     /// <summary>The setting <c>GitLib tools</c> is off (later on 2026-09-21, the user's call; <c>Git native tools</c> until 2026-09-30): <c>/gituser</c> writes nothing and says why. Pinned.</summary>
     public const string GitLibToolsOffError = "GitLib tools is off; /gituser does nothing until it is on (the GitLib tab of /tools).";

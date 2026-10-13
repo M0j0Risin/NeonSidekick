@@ -9,17 +9,17 @@ public class LlmScanModeTests
     [Fact]
     public void Names_ArePinned_InMenuOrder()
     {
-        // disabled last (2026-09-15), so the picker's saved-row arithmetic for the three scans is unchanged.
-        Assert.Equal(new[] { "local", "remote", "both", "disabled" }, LlmScanMode.Names);
-        Assert.Equal("disabled", LlmScanMode.Default);   // "local" until 2026-09-29 (the user's call)
+        // off last (2026-09-15), so the picker's saved-row arithmetic for the three scans is unchanged.
+        Assert.Equal(new[] { "local", "lan", "both", "off" }, LlmScanMode.Names);
+        Assert.Equal("off", LlmScanMode.Default);   // "local" until 2026-09-29 (the user's call)
         Assert.Equal(LlmScanMode.Default, new AppSettingsData().LlmScanMode);
     }
 
     [Theory]
     [InlineData("local", ScanScope.Local)]
-    [InlineData("remote", ScanScope.Remote)]
+    [InlineData("lan", ScanScope.Remote)]
     [InlineData("both", ScanScope.Both)]
-    [InlineData("disabled", ScanScope.Disabled)]
+    [InlineData("off", ScanScope.Disabled)]
     [InlineData("  Remote ", ScanScope.Remote)]
     [InlineData("DISABLED", ScanScope.Disabled)]
     public void TryParse_TrimsAndIgnoresCase(string text, ScanScope expected)
@@ -31,9 +31,9 @@ public class LlmScanModeTests
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("lan")]
+    [InlineData("network")]
     [InlineData("all")]
-    [InlineData("off")]
+    [InlineData("never")]
     [InlineData("none")]
     public void TryParse_RejectsAnythingElse_AsTheDefault(string? text)
     {
@@ -52,10 +52,10 @@ public class LlmScanModeTests
         }
 
         Assert.Equal("the usual ports on this machine (127.0.0.1)", LlmScanMode.Describe("local"));
-        Assert.Equal("the usual ports on every other machine on the local network", LlmScanMode.Describe("remote"));
+        Assert.Equal("the usual ports on every other machine on the local network", LlmScanMode.Describe("lan"));
         Assert.Equal("this machine first, then the local network", LlmScanMode.Describe("both"));
-        Assert.Equal("no scan; set LLM URL by hand", LlmScanMode.Describe("disabled"));
-        Assert.Equal("", LlmScanMode.Describe("lan"));
+        Assert.Equal("no scan; set LLM URL by hand", LlmScanMode.Describe("off"));
+        Assert.Equal("", LlmScanMode.Describe("network"));
     }
 
     [Fact]
@@ -79,9 +79,9 @@ public class LlmScanModeTests
     [Fact]
     public void Resolve_MapsTheSavedMode()
     {
-        Assert.Equal(ScanScope.Remote, LlmScanMode.Resolve(new AppSettingsData { LlmScanMode = "remote" }));
+        Assert.Equal(ScanScope.Remote, LlmScanMode.Resolve(new AppSettingsData { LlmScanMode = "lan" }));
         Assert.Equal(ScanScope.Both, LlmScanMode.Resolve(new AppSettingsData { LlmScanMode = "Both" }));
-        Assert.Equal(ScanScope.Disabled, LlmScanMode.Resolve(new AppSettingsData { LlmScanMode = "disabled" }));
+        Assert.Equal(ScanScope.Disabled, LlmScanMode.Resolve(new AppSettingsData { LlmScanMode = "off" }));
         Assert.Equal(ScanScope.Disabled, LlmScanMode.Resolve(new AppSettingsData()));
     }
 
@@ -93,7 +93,7 @@ public class LlmScanModeTests
         DiagnosticLog.Emitted += capture;
         try
         {
-            Assert.Equal(ScanScope.Disabled, LlmScanMode.Resolve(new AppSettingsData { LlmScanMode = "lan" }));
+            Assert.Equal(ScanScope.Disabled, LlmScanMode.Resolve(new AppSettingsData { LlmScanMode = "network" }));
         }
         finally
         {
@@ -101,6 +101,6 @@ public class LlmScanModeTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains("LlmScanMode='lan' is not one of local, remote, both, disabled. Using disabled.", warning.Message);
+        Assert.Contains("LlmScanMode='network' is not one of local, lan, both, off. Using off.", warning.Message);
     }
 }

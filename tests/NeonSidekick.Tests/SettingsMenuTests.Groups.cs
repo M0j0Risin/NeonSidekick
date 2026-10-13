@@ -91,7 +91,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal("remote", _settings.Current.LlmScanMode);
+        Assert.Equal("lan", _settings.Current.LlmScanMode);
         Assert.Contains("\n" + Titled(GroupBreadcrumb(SettingsTab.Http, "LLM server scan mode")) + "\n", Output);
         Assert.DoesNotContain(Breadcrumb("LLM server scan mode"), Output.Replace(GroupBreadcrumb(SettingsTab.Http, "LLM server scan mode"), ""));
         Assert.Equal(SettingsMenu.Title, menu.Root);   // put back after the edit
@@ -106,7 +106,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None, midTurn: false, open: SettingsField.OpenAIApi);
 
-        Assert.Contains("\n" + Titled(GroupBreadcrumb(SettingsTab.OpenAI, "OpenAI API")) + "\n", Output);
+        Assert.Contains("\n" + Titled(GroupBreadcrumb(SettingsTab.OpenAI, "OpenAI API enabled")) + "\n", Output);
         Assert.Contains("\n" + Head(SettingsTab.OpenAI) + "\n", Output);   // the list under it, on OpenAI's rows (the status line says the page kept the value)
         Assert.Contains("\n▸ OpenAI API ", Output);
         pane.Dispose();

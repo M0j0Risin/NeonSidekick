@@ -77,11 +77,11 @@ public sealed class BotCheckTests : IDisposable
     {
         Assert.Equal(kind, BotcheckWindow.Resolve(new AppSettingsData { WebBrowserBotcheckWindow = saved }));
         Assert.Equal("ask", new AppSettingsData().WebBrowserBotcheckWindow);   // the user's default (2026-10-13)
-        Assert.Equal(["ask", "automatic", "disabled"], BotcheckWindow.Names);
+        Assert.Equal(["ask", "automatic", "off"], BotcheckWindow.Names);
         Assert.Equal("automatic", BotcheckWindow.Name(BotcheckKind.Automatic));
         Assert.Equal("asks before opening the Browser window on a bot check", BotcheckWindow.Describe("ask"));
         Assert.Equal("opens the Browser window on a bot check at once", BotcheckWindow.Describe("automatic"));
-        Assert.Equal("never opens it; the tool reports the refusal", BotcheckWindow.Describe("disabled"));
+        Assert.Equal("never opens it; the tool reports the refusal", BotcheckWindow.Describe("off"));
         Assert.Equal("", BotcheckWindow.Describe("nope"));
     }
 

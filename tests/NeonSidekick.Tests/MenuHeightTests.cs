@@ -9,17 +9,17 @@ public class MenuHeightTests
     [Fact]
     public void Names_ArePinned_InMenuOrder_FullScreenTheDefault()
     {
-        // 2026-10-01, the user's ask: three heights, full-screen by default (three-quarters until later that day).
-        Assert.Equal(new[] { "half-screen", "three-quarters", "full-screen" }, MenuHeight.Names);
-        Assert.Equal("full-screen", MenuHeight.Default);
+        // 2026-10-01, the user's ask: three heights, full by default (three-quarters until later that day).
+        Assert.Equal(new[] { "half", "three-quarters", "full" }, MenuHeight.Names);
+        Assert.Equal("full", MenuHeight.Default);
         Assert.Equal(MenuHeight.Default, new AppSettingsData().MenuMaxHeight);
     }
 
     [Theory]
-    [InlineData("half-screen", MenuHeightStyle.Half)]
+    [InlineData("half", MenuHeightStyle.Half)]
     [InlineData("three-quarters", MenuHeightStyle.ThreeQuarters)]
-    [InlineData("full-screen", MenuHeightStyle.Full)]
-    [InlineData("  Full-Screen ", MenuHeightStyle.Full)]
+    [InlineData("full", MenuHeightStyle.Full)]
+    [InlineData("  Full ", MenuHeightStyle.Full)]
     public void TryParse_TrimsAndIgnoresCase_AndNameRoundTrips(string text, MenuHeightStyle expected)
     {
         Assert.True(MenuHeight.TryParse(text, out var style));
@@ -30,8 +30,8 @@ public class MenuHeightTests
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("half")]
-    [InlineData("full")]
+    [InlineData("half-height")]
+    [InlineData("whole")]
     public void TryParse_RejectsAnythingElse_AndHandsBackFullScreen(string? text)
     {
         Assert.False(MenuHeight.TryParse(text, out var style));
@@ -41,9 +41,9 @@ public class MenuHeightTests
     [Fact]
     public void Describe_IsPinned()
     {
-        Assert.Equal("a menu takes at most half the window", MenuHeight.Describe("half-screen"));
+        Assert.Equal("a menu takes at most half the window", MenuHeight.Describe("half"));
         Assert.Equal("a menu takes at most three quarters of the window", MenuHeight.Describe("three-quarters"));
-        Assert.Equal("a menu grows to all but one row of the window", MenuHeight.Describe("full-screen"));
+        Assert.Equal("a menu grows to all but one row of the window", MenuHeight.Describe("full"));
         Assert.Equal("", MenuHeight.Describe("other"));
     }
 
@@ -66,7 +66,7 @@ public class MenuHeightTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains("MenuMaxHeight='most-of-it' is not one of half-screen, three-quarters, full-screen. Using full-screen.", warning.Message);
+        Assert.Contains("MenuMaxHeight='most-of-it' is not one of half, three-quarters, full. Using full.", warning.Message);
     }
 
     [Theory]

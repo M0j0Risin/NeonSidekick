@@ -47,7 +47,7 @@ Every variable Neon Sidekick reads. Each starts with `NEONSIDEKICK_`, overrides 
 | Variable | Overrides | Accepts |
 |---|---|---|
 | `NEONSIDEKICK_EMBEDDED_BACKEND` | Embedded backend | `auto`, `cuda`, `vulkan`, `cpu`; on a Mac `auto`, `metal`. |
-| `NEONSIDEKICK_EMBEDDED_CONTEXT` | Embedded context size | Tokens: 0 (fit) or 512–262144. |
+| `NEONSIDEKICK_EMBEDDED_CONTEXT` | Embedded context length | Tokens: 0 (fit) or 512–262144. |
 
 ## Shell
 
@@ -64,15 +64,15 @@ Every variable Neon Sidekick reads. Each starts with `NEONSIDEKICK_`, overrides 
 | `NEONSIDEKICK_CLAUDE_CODE_EXE` | Claude Code executable | The Claude Code CLI's full path. |
 | `NEONSIDEKICK_CLAUDE_CODE_PERMISSIONS` | Claude Code command permissions | `read-only`, `read-write`. |
 | `NEONSIDEKICK_ADVISORS` | Advisors enabled (the profile advisors' `neon_advisor`) | on/off |
-| `NEONSIDEKICK_ANTHROPIC_API` | Anthropic API | on/off |
+| `NEONSIDEKICK_ANTHROPIC_API` | Anthropic API enabled | on/off |
 | `NEONSIDEKICK_ANTHROPIC_API_KEY` | Anthropic API key | The key as issued. Never logged. |
-| `NEONSIDEKICK_CLAUDE_CODE_SERVER` | Claude Code server | on/off |
+| `NEONSIDEKICK_CLAUDE_CODE_SERVER` | Claude Code server enabled | on/off |
 
 ## OpenAI
 
 | Variable | Overrides | Accepts |
 |---|---|---|
-| `NEONSIDEKICK_OPENAI_API` | OpenAI API | on/off |
+| `NEONSIDEKICK_OPENAI_API` | OpenAI API enabled | on/off |
 | `NEONSIDEKICK_OPENAI_API_KEY` | OpenAI API key | The key as issued. Never logged. |
 
 ## Speech
@@ -82,11 +82,11 @@ Every variable Neon Sidekick reads. Each starts with `NEONSIDEKICK_`, overrides 
 | `NEONSIDEKICK_TTS_URL` | TTS HTTP URL | A Kokoro HTTP server's URL. |
 | `NEONSIDEKICK_TTS_VOICE` | TTS voice | A voice name (`af_heart`). |
 | `NEONSIDEKICK_TTS_VOICE2` | TTS voice 2 | A voice name. It can't clear a saved second voice; `NEONSIDEKICK_TTS_MIX=100` plays the first alone. |
-| `NEONSIDEKICK_TTS_MIX` | TTS voice mix | 0–100. |
+| `NEONSIDEKICK_TTS_MIX` | TTS voice mix (%) | 0–100. |
 | `NEONSIDEKICK_TTS_SPEED` | TTS speed | 0.5–2.0. |
-| `NEONSIDEKICK_WHISPER_MODEL` | STT whisper model | A model name or a ggml file's path. |
-| `NEONSIDEKICK_INTERRUPT_ECHO` | STT interrupt echo guard | 50–100. |
-| `NEONSIDEKICK_INTERRUPT_CONFIRM` | STT interrupt confirm | Milliseconds, 0–2000. |
+| `NEONSIDEKICK_WHISPER_MODEL` | STT Whisper model | A model name or a ggml file's path. |
+| `NEONSIDEKICK_INTERRUPT_ECHO` | STT interrupt echo guard (%) | 50–100. |
+| `NEONSIDEKICK_INTERRUPT_CONFIRM` | STT interrupt hold (ms) | Milliseconds, 0–2000. |
 
 ## Integrations
 

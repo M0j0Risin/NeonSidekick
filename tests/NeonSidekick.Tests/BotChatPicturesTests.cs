@@ -283,9 +283,9 @@ public class BotChatPicturesTests
     public void ImageMentionMode_ResolvesTheSavedWord(string saved, BotImageMention mode)
     {
         Assert.Equal(mode, BotChatImageMentionMode.Resolve(new AppSettingsData { BotChatImageMentionMode = saved }));
-        Assert.Equal("disabled", new AppSettingsData().BotChatImageMentionMode);   // the user's default (2026-10-13)
-        Assert.Equal(["disabled", "generate"], BotChatImageMentionMode.Names);
-        Assert.Equal("mentioned images are ignored", BotChatImageMentionMode.Describe("disabled"));
+        Assert.Equal("off", new AppSettingsData().BotChatImageMentionMode);   // the user's default (2026-10-13)
+        Assert.Equal(["off", "generate"], BotChatImageMentionMode.Names);
+        Assert.Equal("mentioned images are ignored", BotChatImageMentionMode.Describe("off"));
         Assert.Equal("mentioned images are generated for the bots", BotChatImageMentionMode.Describe("generate"));
         Assert.Equal("generate", BotChatImageMentionMode.Name(BotImageMention.Generate));
     }
@@ -416,7 +416,7 @@ public class BotChatPicturesTests
         Assert.Equal(2, (int)SettingsTab.BotChat);   // third, under Client after Chat and Sessions, since later on 2026-10-10 (the user's order); before the Advisors tab from 2026-10-10; last again from later on 2026-09-27 (the Claude tab moved to /tools)
         Assert.Equal((0, 2), SettingsMenu.PlaceOf(SettingsTab.BotChat));
         Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
-        Assert.Equal(["Botchat LLM mode", "Botchat multi-embedded", "Botchat multi-embedded kill", "Botchat ComfyUI enabled", "Botchat ComfyUI limited workflows", "Botchat image mode", "Botchat img2img mode", "Botchat image mention mode", "Botchat image async", "Botchat non-TTS delay", "Botchat tools enabled", "Botchat limited tools", "Botchat skills enabled", "Botchat limited skills", "Botchat memory enabled", "Botchat memory mode", "Botchat vision enabled", "Botchat camera", "Botchat recent context"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
+        Assert.Equal(["Botchat LLM mode", "Botchat embedded mode", "Botchat stop extra servers", "Botchat ComfyUI enabled", "Botchat ComfyUI limited workflows", "Botchat image mode", "Botchat rework source", "Botchat image mention mode", "Botchat image async", "Botchat reading pause (s)", "Botchat tools enabled", "Botchat limited tools", "Botchat skills enabled", "Botchat limited skills", "Botchat memory enabled", "Botchat memory mode", "Botchat vision enabled", "Botchat camera", "Botchat recent context"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
         // Botchat recent context (later still on 2026-10-10): a toggle, off, saying what the bots are told.
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatRecentContext));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatRecentContext, data, "."));
@@ -447,7 +447,7 @@ public class BotChatPicturesTests
         Assert.Equal("latest", SettingsMenu.FieldValue(SettingsField.BotChatImg2ImgMode, data, "."));
         // Botchat image mention mode (2026-10-13, the user's ask): a picker, disabled by default, shown as "Image mention mode" on its tab.
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatImageMentionMode));
-        Assert.Equal("disabled", SettingsMenu.FieldValue(SettingsField.BotChatImageMentionMode, data, "."));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatImageMentionMode, data, "."));
         Assert.Equal("Image mention mode", SettingsMenu.RowName(SettingsField.BotChatImageMentionMode, "Botchat"));
         Assert.Equal("generate  " + NeonSidekick.UI.Theme.DimMarkup("mentioned images are generated for the bots"), SettingsMenu.BotChatImageMentionModeLabel("generate"));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.BotChatImageAsync, data, "."));

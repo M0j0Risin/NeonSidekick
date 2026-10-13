@@ -195,7 +195,7 @@ public enum SettingsField
     /// <summary>Typed: the model requests one reflection may make before it is given up, 1 to 20 (<see cref="Settings.AppSettingsData.ReflectionMaxRequests"/>, <c>Skills.ReflectionMaxRequests</c>). The Options tab of <c>/skills</c>' tenth row (2026-09-17; the verbose switch under it until later still on 2026-09-19); no reconnect (read when a reflection starts).</summary>
     ReflectionMaxRequests,
 
-    /// <summary>A toggle: whether the <c>/</c> completion list leaves <c>/exit</c> out (<see cref="Settings.AppSettingsData.HideExitAutocomplete"/>). The Chat tab's input-line run's last row, under Command typo intercept (2026-10-01; after Paste preview lines from 2026-09-18); no reconnect (read at each keystroke).</summary>
+    /// <summary>A toggle: whether the <c>/</c> completion list shows <c>/exit</c>, the inverse of <see cref="Settings.AppSettingsData.HideExitAutocomplete"/> ("Hide /exit autocomplete" until 2026-10-13, the settings verbiage pass: a row reads on for what it shows). The Chat tab's input-line run's last row, under Command typo intercept (2026-10-01; after Paste preview lines from 2026-09-18); no reconnect (read at each keystroke).</summary>
     HideExitAutocomplete,
 
     /// <summary>A toggle: whether a sent line that is a command's bare name offers the command first (<see cref="Settings.AppSettingsData.CommandTypoIntercept"/>). The Chat tab's row under Keep message history (2026-10-01; before Welcome splash from 2026-09-18); no reconnect (read at each Enter).</summary>
@@ -2008,14 +2008,14 @@ internal sealed partial class SettingsMenu
         SettingsField.CameraResolution => "Camera resolution",
         SettingsField.CameraKeepInSessions => "Camera keep in sessions",
         SettingsField.CameraOutputFolder => "Camera output folder",
-        SettingsField.ScreenTools => "Screen capture tool",
-        SettingsField.ScreenAsk => "Screen capture ask",
-        SettingsField.ScreenPreview => "Screen capture preview",
-        SettingsField.ScreenOutputFolder => "Screen capture output folder",
-        SettingsField.ScreenKeepInSessions => "Screen capture keep in sessions",
+        SettingsField.ScreenTools => "Screen tools",
+        SettingsField.ScreenAsk => "Screen policy",
+        SettingsField.ScreenPreview => "Screen preview",
+        SettingsField.ScreenOutputFolder => "Screen output folder",
+        SettingsField.ScreenKeepInSessions => "Screen keep in sessions",
         SettingsField.CameraWatchSeconds => "Camera watch interval (s)",
         SettingsField.CameraWatchThreshold => "Camera watch change (%)",
-        SettingsField.CameraWatchUnprompted => "Camera watch speaks up",
+        SettingsField.CameraWatchUnprompted => "Camera watch unprompted",
         SettingsField.CameraWatchMinGapSeconds => "Camera watch min gap (s)",
         SettingsField.BotChatCamera => "Botchat camera",
         SettingsField.BotChatRecentContext => "Botchat recent context",
@@ -2023,44 +2023,44 @@ internal sealed partial class SettingsMenu
         SettingsField.SttWakePhrase => "STT wake phrase",
         SettingsField.SttPushToTalkKey => "STT push-to-talk key",
         SettingsField.TtsSpeed => "TTS speed",
-        SettingsField.SttWhisperModel => "STT whisper model",
-        SettingsField.SttVoskModel => "STT vosk model",
+        SettingsField.SttWhisperModel => "STT Whisper model",
+        SettingsField.SttVoskModel => "STT Vosk model",
         SettingsField.SttInterrupt => "STT interrupt",
-        SettingsField.SttInterruptEchoGuard => "STT interrupt echo guard",
-        SettingsField.SttInterruptConfirmMs => "STT interrupt confirm",
+        SettingsField.SttInterruptEchoGuard => "STT interrupt echo guard (%)",
+        SettingsField.SttInterruptConfirmMs => "STT interrupt hold (ms)",
         SettingsField.LlmReasoning => "LLM reasoning",
         SettingsField.TtsVoice2 => "TTS voice 2",
-        SettingsField.TtsVoiceMix => "TTS voice mix",
+        SettingsField.TtsVoiceMix => "TTS voice mix (%)",
         SettingsField.MemoryMode => "Memory mode",
         SettingsField.WorkingDirectory => "Working directory (cwd)",
         SettingsField.CopyUserPrompt => "Copy user prompt",
         SettingsField.UserLineStyle => "User line style",
         SettingsField.DraftEditor => "Draft editor",
         SettingsField.ImageEditor => "Image viewer",   // "Image editor" until later still on 2026-09-24 (the user's call); the field and the setting keep the old name
-        SettingsField.FileViewImageMaxPerCall => "File view image max (per call)",
+        SettingsField.FileViewImageMaxPerCall => "File view image max images",
         SettingsField.FileSearchMaxResults => "File search max results",
         SettingsField.ImageEditQuality => "Image edit quality",
         SettingsField.ImageEditMetadata => "Image edit metadata",
         SettingsField.ImageEditMode => "Image edit mode",
         SettingsField.ImageEditOutputFolder => "Image edit output folder",
         SettingsField.PastedImagesFolder => "Pasted images folder",
-        SettingsField.McpServers => "MCP servers",
+        SettingsField.McpServers => "MCP servers enabled",
         SettingsField.McpConnectTimeoutSeconds => "MCP connect timeout (s)",
         SettingsField.ShowImageThumbnails => "Show image thumbnails",
-        SettingsField.LlmCompactType => "LLM compact type",
+        SettingsField.LlmCompactType => "LLM compact mode",
         SettingsField.LlmCompactKeepRecent => "LLM compact keep recent",
         SettingsField.LlmCompactShowSummary => "LLM compact show summary",
         SettingsField.LlmAutoCompactPercent => "LLM auto compact (%)",
         SettingsField.LlmMaxTurns => "LLM max turns",
-        SettingsField.LlmToolCompactType => "LLM tool compact type",
-        SettingsField.LlmPictureKeep => "LLM picture keep",
-        SettingsField.LlmPictureMegabytes => "LLM picture megabytes",
+        SettingsField.LlmToolCompactType => "LLM tool compact mode",
+        SettingsField.LlmPictureKeep => "LLM max images",
+        SettingsField.LlmPictureMegabytes => "LLM max images (MB)",
         SettingsField.LlmMaxToolIterations => "LLM max tool iterations",
         SettingsField.ImageThumbnailSize => "Image thumbnail size",
-        SettingsField.FileTreeMaxLength => "File /tree max length",
+        SettingsField.FileTreeMaxLength => "File /tree max entries",
         SettingsField.FileTreeShowSizes => "File /tree show sizes",
         SettingsField.LlmOfferTools => "LLM offer tools",
-        SettingsField.LlmUseFunVerbs => "LLM use fun verbs",
+        SettingsField.LlmUseFunVerbs => "LLM fun verbs",
         SettingsField.LlmShowThinking => "LLM show thinking",
         SettingsField.LlmPreserveThinking => "LLM preserve thinking",
         SettingsField.LlmReasoningEstimate => "LLM reasoning estimate",
@@ -2074,8 +2074,8 @@ internal sealed partial class SettingsMenu
         SettingsField.Advisors => "Advisors enabled",
         SettingsField.AdvisorList => "Advisor list",
         SettingsField.AdvisorContext => "Advisor context",
-        SettingsField.AdvisorCallsPerTurn => "Advisor calls per turn",
-        SettingsField.AdvisorMaxToolIterations => "Advisor tool iterations",
+        SettingsField.AdvisorCallsPerTurn => "Advisor max calls per turn",
+        SettingsField.AdvisorMaxToolIterations => "Advisor max tool iterations",
         SettingsField.AdvisorThreadPairs => "Advisor thread length",
         SettingsField.AdvisorEmbedded => "Advisor embedded mode",
         SettingsField.AdvisorConfirm => "Advisor confirm",
@@ -2088,17 +2088,17 @@ internal sealed partial class SettingsMenu
         SettingsField.ShellPolice => "Shell police",
         SettingsField.ShellPoliceForbiddenStrings => "Shell police forbidden strings",
         SettingsField.ShellPreferNative => "Shell prefer native tools",
-        SettingsField.ShellDefault => "Shell default",
-        SettingsField.ShellTimeoutSeconds => "Shell timeout (s)",
-        SettingsField.ShellForegroundCapSeconds => "Shell foreground cap (s)",
+        SettingsField.ShellDefault => "Shell default shell",
+        SettingsField.ShellTimeoutSeconds => "Shell default timeout (s)",
+        SettingsField.ShellForegroundCapSeconds => "Shell max timeout (s)",
         SettingsField.ShellOutputMaxChars => "Shell output max chars",
         SettingsField.ShellCodeLanguages => "Shell code languages",
-        SettingsField.ShellCodeTimeoutSeconds => "Shell code timeout (s)",
+        SettingsField.ShellCodeTimeoutSeconds => "Shell code default timeout (s)",
         SettingsField.ShellToolBridge => "Shell tool bridge",
         SettingsField.ShellCodeMaxToolCalls => "Shell tool bridge max calls",   // the bridge's cap, named after the switch above it (later on 2026-09-21, the user's ask; "Shell code max tool calls" before)
         SettingsField.GitLibLogMaxCommits => "GitLib log max commits",
-        SettingsField.GitLibEmail => "GitLib email",
-        SettingsField.GitLibName => "GitLib name",
+        SettingsField.GitLibEmail => "GitLib user email",
+        SettingsField.GitLibName => "GitLib user name",
         SettingsField.ObsidianTools => "Obsidian tools",
         SettingsField.ObsidianVault => "Obsidian vault",
         SettingsField.SqlTools => "SQL tools",
@@ -2128,22 +2128,22 @@ internal sealed partial class SettingsMenu
         SettingsField.PdfEngine => "PDF engine",
         SettingsField.ComfyUrl => "ComfyUI URL",
         SettingsField.ComfyTimeoutSeconds => "ComfyUI timeout (s)",
-        SettingsField.ComfyMaxPicturesPerCall => "ComfyUI max pictures per call",
+        SettingsField.ComfyMaxPicturesPerCall => "ComfyUI max images per call",
         SettingsField.ComfyReinforceNegatives => "ComfyUI reinforce negatives",
         SettingsField.ComfyShowPrompts => "ComfyUI show prompts",
         SettingsField.ComfyCaretMention => "ComfyUI ^-mention enabled",
         SettingsField.ComfyPictureStrip => "ComfyUI picture strip",
         SettingsField.BotChatLlmMode => "Botchat LLM mode",
-        SettingsField.BotChatMultiEmbedded => "Botchat multi-embedded",
-        SettingsField.BotChatMultiEmbeddedKill => "Botchat multi-embedded kill",
+        SettingsField.BotChatMultiEmbedded => "Botchat embedded mode",
+        SettingsField.BotChatMultiEmbeddedKill => "Botchat stop extra servers",
         SettingsField.LlmMidTurnUsage => "LLM mid-turn usage",
         SettingsField.BotChatComfy => "Botchat ComfyUI enabled",
         SettingsField.BotChatLimitedComfyWorkflows => "Botchat ComfyUI limited workflows",
         SettingsField.BotChatImageMode => "Botchat image mode",
-        SettingsField.BotChatImg2ImgMode => "Botchat img2img mode",
+        SettingsField.BotChatImg2ImgMode => "Botchat rework source",
         SettingsField.BotChatImageMentionMode => "Botchat image mention mode",   // "Image mention mode" on the Botchat tab (RowName)
         SettingsField.BotChatImageAsync => "Botchat image async",
-        SettingsField.BotChatNonTtsDelaySeconds => "Botchat non-TTS delay",
+        SettingsField.BotChatNonTtsDelaySeconds => "Botchat reading pause (s)",
         SettingsField.BotChatTools => "Botchat tools enabled",
         SettingsField.BotChatLimitedTools => "Botchat limited tools",
         SettingsField.BotChatSkills => "Botchat skills enabled",
@@ -2240,23 +2240,23 @@ internal sealed partial class SettingsMenu
         SettingsField.ShoppingStores => "Shopping stores",
         SettingsField.ShoppingList => "Shopping list",
         SettingsField.WebSearchMethod => "Web search method",
-        SettingsField.AnthropicApi => "Anthropic API",
+        SettingsField.AnthropicApi => "Anthropic API enabled",
         SettingsField.AnthropicApiKey => "Anthropic API key",
         SettingsField.AnthropicApiMaxTokens => "Anthropic API max tokens",
         SettingsField.AnthropicApiPromptCaching => "Anthropic API prompt caching",
-        SettingsField.ClaudeCodeServer => "Claude Code server",
-        SettingsField.OpenAIApi => "OpenAI API",
+        SettingsField.ClaudeCodeServer => "Claude Code server enabled",
+        SettingsField.OpenAIApi => "OpenAI API enabled",
         SettingsField.OpenAIApiKey => "OpenAI API key",
         SettingsField.OpenAIApiMaxTokens => "OpenAI API max tokens",
         SettingsField.OpenAIApiOrganization => "OpenAI API organization",
         SettingsField.OpenAIApiProject => "OpenAI API project",
         SettingsField.EmbeddedModels => "Embedded models",
         SettingsField.EmbeddedBackend => "Embedded backend",
-        SettingsField.EmbeddedContextSize => "Embedded context size",
+        SettingsField.EmbeddedContextSize => "Embedded context length",
         SettingsField.EmbeddedGpuLayers => "Embedded GPU layers",
-        SettingsField.EmbeddedVramBudget => "Embedded VRAM budget",
+        SettingsField.EmbeddedVramBudget => "Embedded VRAM budget (%)",
         SettingsField.EmbeddedVramOnly => "Embedded VRAM only",
-        SettingsField.EmbeddedHfDownloadType => "Embedded HF download type",
+        SettingsField.EmbeddedHfDownloadType => "Embedded download mode",
         SettingsField.EmbeddedVision => "Embedded vision",
         SettingsField.EmbeddedLlmServer => "Embedded servers enabled",
         SettingsField.EmbeddedDrafter => "Embedded drafter",
@@ -2283,14 +2283,14 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionWindow => "Reflection window",
         SettingsField.ReflectionMinToolCalls => "Reflection min tool calls",
         SettingsField.ReflectionMaxRequests => "Reflection max requests",
-        SettingsField.ReflectionCooldownMinutes => "Reflection cooldown (minutes)",
+        SettingsField.ReflectionCooldownMinutes => "Reflection cooldown (min)",
         SettingsField.ReflectionCooldownMode => "Reflection cooldown mode",
         SettingsField.ReflectionConfirmMode => "Reflection confirm mode",   // the user's name (2026-10-12)
-        SettingsField.ReflectionIncludesSessions => "Reflection includes sessions",
-        SettingsField.ReflectionYieldsToTurns => "Reflection yields to turns",
+        SettingsField.ReflectionIncludesSessions => "Reflection include sessions",
+        SettingsField.ReflectionYieldsToTurns => "Reflection yield to turns",
         SettingsField.ReflectionEditsSupportingFiles => "Reflection edit supporting files",   // the user's name (2026-09-27)
         SettingsField.ReflectionInstalledSkills => "Reflection edit downloaded skills",   // the user's name (2026-10-12; "Reflection downloaded skills" until then)
-        SettingsField.HideExitAutocomplete => "Hide /exit autocomplete",
+        SettingsField.HideExitAutocomplete => "Show /exit in autocomplete",
         SettingsField.EmojiPicker => "Emoji picker",
         SettingsField.CommandTypoIntercept => "Command typo intercept",
         SettingsField.KeepMessageHistory => "Keep message history",
@@ -2323,7 +2323,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static string BlankUrlLabel(ScanScope scope) => scope switch
     {
-        ScanScope.Disabled => "(not set; scan disabled)",
+        ScanScope.Disabled => "(not set; scan off)",
         ScanScope.Remote => "(scan the local network)",
         ScanScope.Both => "(probe local ports and the network)",
         _ => "(probe local ports)",
@@ -2645,7 +2645,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ReflectionIncludesSessions => OnOff(data.ReflectionIncludesSessions),
             SettingsField.ReflectionYieldsToTurns => OnOff(data.ReflectionYieldsToTurns),
             SettingsField.ReflectionEditsSupportingFiles => OnOff(data.ReflectionEditsSupportingFiles),
-            SettingsField.HideExitAutocomplete => OnOff(data.HideExitAutocomplete),
+            SettingsField.HideExitAutocomplete => OnOff(!data.HideExitAutocomplete),   // the row asks the other way round since 2026-10-13 ("Show /exit in autocomplete"); the saved key stays
             SettingsField.EmojiPicker => OnOff(data.EmojiPicker),
             SettingsField.CommandTypoIntercept => OnOff(data.CommandTypoIntercept),
             SettingsField.KeepMessageHistory => OnOff(data.KeepMessageHistory),
@@ -2676,7 +2676,7 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>The label of <see cref="SettingsField.ExternalSkills"/>, naming the folder it reads (the user's wording, 2026-09-16); the longest label there is, so it sets <see cref="LabelWidth"/>. Pinned.</summary>
-    public static string ExternalSkillsName => OperatingSystem.IsMacOS() ? "Use external skills (.agents/skills)" : "Use external skills (.agents\\skills)";   // a Mac's separator, 2026-10-06
+    public static string ExternalSkillsName => OperatingSystem.IsMacOS() ? "External skills (.agents/skills)" : "External skills (.agents\\skills)";   // a Mac's separator, 2026-10-06
 
     /// <summary>
     /// How the menu shows an empty <see cref="AppSettingsData.WebBrowserPath"/>: the browser
@@ -3410,15 +3410,15 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static string WebModeButtonTitle(string name) => name switch
     {
-        "default" => "⇄ default",
-        "httpclient" => "↓ httpclient",
-        "chromium" => "◎ chromium",
+        "auto" => "⇄ auto",
+        "http" => "↓ http",
+        "browser" => "◎ browser",
         _ => name,
     };
 
     /// <summary>
-    /// The Web tools page's buttons (2026-10-04, the user's ask): one per <see cref="Web.BrowserMode.Names"/>, keys D, H and C
-    /// (each word's first letter, as the perf bar's looks), the saved <c>Web browser mode</c> lit — a radio group, as
+    /// The Web tools page's buttons (2026-10-04, the user's ask): one per <see cref="Web.BrowserMode.Names"/>, keys A, H and B
+    /// (each word's first letter, as the perf bar's looks; D, H and C until the words changed on 2026-10-13), the saved <c>Web browser mode</c> lit — a radio group, as
     /// <see cref="CommandPolicyButtons"/>; a hand-edited value that is none of them lights none. Pinned.
     /// </summary>
     public static IReadOnlyList<MenuButton> WebModeButtons(string mode)
@@ -3428,7 +3428,7 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>The Web tools page's hint: <see cref="PickKeys"/> with the browser-mode buttons' keys (2026-10-04). Pinned.</summary>
-    public const string WebToggleKeys = "Enter = choose · d / h / c = browser mode · ESC = back";
+    public const string WebToggleKeys = "Enter = choose · a / h / b = browser mode · ESC = back";
 
     /// <summary>The notice after a prefix is removed from the allowed list: <c>Shell allowed commands: git push removed</c>. Pinned.</summary>
     public static string PrefixRemovedNotice(string prefix) => FieldName(SettingsField.ShellCommandAllowed) + ": " + prefix + " removed";
@@ -3453,17 +3453,17 @@ internal sealed partial class SettingsMenu
     public static readonly string AskMaxChoicesRangeError =
         "must be " + AppSettingsData.MinAskMaxChoices.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxAskMaxChoices.ToString(CultureInfo.InvariantCulture) + " choices";
 
-    /// <summary>One row of the browser-mode picker: the mode and its hint (padded to eleven: <c>httpclient</c> is ten). Pinned.</summary>
+    /// <summary>One row of the browser-mode picker: the mode and its hint (padded to eight: <c>browser</c> is seven, since the words changed on 2026-10-13). Pinned.</summary>
     public static string BrowserModeLabel(string name) =>
-        Markup.Escape(name.PadRight(11)) + Theme.DimMarkup(Web.BrowserMode.Describe(name));
+        Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(Web.BrowserMode.Describe(name));
 
     /// <summary>One row of the botcheck-window picker (2026-10-13): the mode and its hint (padded to ten: <c>automatic</c> is nine). Pinned.</summary>
     public static string BotcheckWindowLabel(string name) =>
         Markup.Escape(name.PadRight(10)) + Theme.DimMarkup(Web.BotcheckWindow.Describe(name));
 
-    /// <summary>One row of the network-mode picker: the mode and its hint (padded to nineteen: <c>local_area_network</c> is eighteen). Pinned.</summary>
+    /// <summary>One row of the network-mode picker: the mode and its hint (padded to nine: <c>internet</c> is eight, since <c>local_area_network</c> became <c>lan</c> on 2026-10-13). Pinned.</summary>
     public static string NetworkModeLabel(string name) =>
-        Markup.Escape(name.PadRight(19)) + Theme.DimMarkup(Web.NetworkMode.Describe(name));
+        Markup.Escape(name.PadRight(9)) + Theme.DimMarkup(Web.NetworkMode.Describe(name));
 
     /// <summary>One row of the queue-mode picker (2026-10-09): the mode and its hint (padded to ten: <c>automatic</c> is nine). Pinned.</summary>
     public static string QueueModeLabel(string name) =>
@@ -3564,17 +3564,17 @@ internal sealed partial class SettingsMenu
     public static string ReflectionCooldownModeLabel(string name) =>
         Markup.Escape(name.PadRight(20)) + Theme.DimMarkup(Skills.ReflectionCooldownMode.Describe(name));
 
-    /// <summary>One row of the @-mention-folder-mode picker: the mode and its hint, padded to fourteen (<c>folder-remain</c> is thirteen). Pinned.</summary>
+    /// <summary>One row of the @-mention-folder-mode picker: the mode and its hint, padded to seven (<c>remain</c> is six, since 2026-10-13). Pinned.</summary>
     public static string MentionFolderModeLabel(string name) =>
-        Markup.Escape(name.PadRight(14)) + Theme.DimMarkup(Files.MentionFolderMode.Describe(name));
+        Markup.Escape(name.PadRight(7)) + Theme.DimMarkup(Files.MentionFolderMode.Describe(name));
 
     /// <summary>One row of the file-browser-mode picker: the mode and its hint, padded to twelve (<c>show-hidden</c> is eleven). Pinned.</summary>
     public static string FileBrowserModeLabel(string name) =>
         Markup.Escape(name.PadRight(12)) + Theme.DimMarkup(Files.FileBrowserMode.Describe(name));
 
-    /// <summary>One row of the scan-mode picker: the mode and its hint, padded to nine (<c>disabled</c> is eight). Pinned.</summary>
+    /// <summary>One row of the scan-mode picker: the mode and its hint, padded to six (<c>local</c> is five, since 2026-10-13). Pinned.</summary>
     public static string LlmScanModeLabel(string name) =>
-        Markup.Escape(name.PadRight(9)) + Theme.DimMarkup(Llm.LlmScanMode.Describe(name));
+        Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(Llm.LlmScanMode.Describe(name));
 
     /// <summary>One row of the TTS-source picker: the source and its hint, padded to eleven (<c>in-process</c> is ten). Pinned.</summary>
     public static string TtsSourceLabel(string name) =>
@@ -6868,7 +6868,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>A <c>Reflection confirm mode</c> choice and its hint (2026-10-12), the cooldown mode's shape. Pinned.</summary>
     public static string ReflectionConfirmModeLabel(string name) =>
-        Markup.Escape(name.PadRight(14)) + Theme.DimMarkup(Skills.ReflectionConfirmMode.Describe(name));
+        Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(Skills.ReflectionConfirmMode.Describe(name));   // fourteen until the confirm- prefix went (2026-10-13)
 
     /// <summary>The confirm-mode picker under the settings list: one <see cref="ReflectionConfirmModeLabel"/> row per <see cref="Skills.ReflectionConfirmMode.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickReflectionConfirmModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
@@ -7325,7 +7325,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ReflectionIncludesSessions => data.ReflectionIncludesSessions,
             SettingsField.ReflectionYieldsToTurns => data.ReflectionYieldsToTurns,
             SettingsField.ReflectionEditsSupportingFiles => data.ReflectionEditsSupportingFiles,
-            SettingsField.HideExitAutocomplete => data.HideExitAutocomplete,
+            SettingsField.HideExitAutocomplete => !data.HideExitAutocomplete,   // shown as "Show /exit in autocomplete" since 2026-10-13
             SettingsField.EmojiPicker => data.EmojiPicker,
             SettingsField.CommandTypoIntercept => data.CommandTypoIntercept,
             SettingsField.KeepMessageHistory => data.KeepMessageHistory,
@@ -7434,7 +7434,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ReflectionIncludesSessions: data.ReflectionIncludesSessions = on; break;
             case SettingsField.ReflectionYieldsToTurns: data.ReflectionYieldsToTurns = on; break;
             case SettingsField.ReflectionEditsSupportingFiles: data.ReflectionEditsSupportingFiles = on; break;
-            case SettingsField.HideExitAutocomplete: data.HideExitAutocomplete = on; break;
+            case SettingsField.HideExitAutocomplete: data.HideExitAutocomplete = !on; break;   // on shows /exit (2026-10-13)
             case SettingsField.EmojiPicker: data.EmojiPicker = on; break;
             case SettingsField.CommandTypoIntercept: data.CommandTypoIntercept = on; break;
             case SettingsField.KeepMessageHistory: data.KeepMessageHistory = on; break;
@@ -7549,7 +7549,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionIncludesSessions => on ? "a reflection can read past sessions for insights" : "a reflection reads the conversation on screen alone",
         SettingsField.ReflectionYieldsToTurns => on ? "a turn pauses a running reflection which may resume after the turn" : "reflections run asynchronously (when the model allows)",
         SettingsField.ReflectionEditsSupportingFiles => on ? "a reflection may write a skill's supporting files" : "a reflection writes a skill's SKILL.md alone",
-        SettingsField.HideExitAutocomplete => on ? "hide '/exit' from the autocomplete list" : "show '/exit' in the autocomplete list",
+        SettingsField.HideExitAutocomplete => on ? "show '/exit' in the autocomplete list" : "hide '/exit' from the autocomplete list",
         SettingsField.EmojiPicker => on ? "the draft row's ☺ opens the emoji picker" : "no emoji button on the draft row",
         SettingsField.CommandTypoIntercept => on ? "a command typed without its slash or with extra ones offers the command" : "a command typed without its slash or with extra ones is sent as typed",
         SettingsField.KeepMessageHistory => on ? "message history enabled" : "message history disabled",

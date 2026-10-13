@@ -9,15 +9,15 @@ public class BrowserModeTests
     [Fact]
     public void Names_ArePinned_InMenuOrder()
     {
-        Assert.Equal(new[] { "default", "httpclient", "chromium" }, BrowserMode.Names);
-        Assert.Equal("default", BrowserMode.Default);
+        Assert.Equal(new[] { "auto", "http", "browser" }, BrowserMode.Names);
+        Assert.Equal("auto", BrowserMode.Default);
         Assert.Equal(BrowserMode.Default, new AppSettingsData().WebBrowserMode);
     }
 
     [Theory]
-    [InlineData("default", FetchEngine.Default)]
-    [InlineData("httpclient", FetchEngine.HttpClient)]
-    [InlineData("chromium", FetchEngine.Chromium)]
+    [InlineData("auto", FetchEngine.Default)]
+    [InlineData("http", FetchEngine.HttpClient)]
+    [InlineData("browser", FetchEngine.Chromium)]
     [InlineData("  Chromium ", FetchEngine.Chromium)]
     public void TryParse_TrimsAndIgnoresCase(string text, FetchEngine expected)
     {
@@ -28,7 +28,7 @@ public class BrowserModeTests
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("browser")]
+    [InlineData("firefox")]
     [InlineData("edge")]
     public void TryParse_RejectsAnythingElse_AsDefault(string? text)
     {
@@ -46,16 +46,16 @@ public class BrowserModeTests
             Assert.NotEqual("", BrowserMode.Describe(name));
         }
 
-        Assert.Equal("HttpClient, then a headless browser when a page is blocked or empty", BrowserMode.Describe("default"));
-        Assert.Equal("HttpClient alone, with browser-like headers", BrowserMode.Describe("httpclient"));
-        Assert.Equal("a headless Edge, Chrome or Brave for every page", BrowserMode.Describe("chromium"));
+        Assert.Equal("the HTTP client, then a headless browser when a page is blocked or empty", BrowserMode.Describe("auto"));
+        Assert.Equal("the HTTP client alone, with browser-like headers", BrowserMode.Describe("http"));
+        Assert.Equal("a headless Edge, Chrome or Brave for every page", BrowserMode.Describe("browser"));
         Assert.Equal("", BrowserMode.Describe("edge"));
     }
 
     [Fact]
     public void Resolve_MapsTheSavedMode()
     {
-        Assert.Equal(FetchEngine.Chromium, BrowserMode.Resolve(new AppSettingsData { WebBrowserMode = "chromium" }));
+        Assert.Equal(FetchEngine.Chromium, BrowserMode.Resolve(new AppSettingsData { WebBrowserMode = "browser" }));
         Assert.Equal(FetchEngine.HttpClient, BrowserMode.Resolve(new AppSettingsData { WebBrowserMode = "HttpClient" }));
         Assert.Equal(FetchEngine.Default, BrowserMode.Resolve(new AppSettingsData()));
     }
@@ -76,6 +76,6 @@ public class BrowserModeTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains("WebBrowserMode='edge' is not one of default, httpclient, chromium. Using default.", warning.Message);
+        Assert.Contains("WebBrowserMode='edge' is not one of auto, http, browser. Using auto.", warning.Message);
     }
 }

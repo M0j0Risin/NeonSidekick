@@ -17,8 +17,8 @@ public enum FetchEngine
 }
 
 /// <summary>
-/// The setting <c>Web browser mode</c>: the three words the operator picks from (<c>default</c>,
-/// <c>httpclient</c>, <c>chromium</c>) and their mapping to <see cref="FetchEngine"/>, the
+/// The setting <c>Web browser mode</c>: the three words the operator picks from (<c>auto</c>,
+/// <c>http</c>, <c>browser</c>) and their mapping to <see cref="FetchEngine"/>, the
 /// <see cref="Llm.LlmScanMode"/> shape. <see cref="Resolve"/> is the one place the saved string
 /// becomes the enum: a hand-edited value that is none of them falls back to <see cref="Default"/>
 /// with a warning.
@@ -26,21 +26,29 @@ public enum FetchEngine
 public static class BrowserMode
 {
     /// <summary>The client, then the browser when needed. The compiled default, pinned by <c>AppSettingsTests</c>.</summary>
-    public const string Default = "default";
+    public const string Default = "auto";
 
     /// <summary>The modes in menu order.</summary>
-    public static readonly string[] Names = { "default", "httpclient", "chromium" };
+    public static readonly string[] Names = { "auto", "http", "browser" };
+
+    /// <summary>The words retired on 2026-10-13 (the settings verbiage pass, the user's call), still read: old → new (<see cref="RetiredWords"/>).</summary>
+    internal static readonly IReadOnlyDictionary<string, string> Retired = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["default"] = "auto",
+        ["httpclient"] = "http",
+        ["chromium"] = "browser",
+    };
 
     private const string Category = "Web";
 
     /// <summary>Trims and ignores case; false (and <see cref="FetchEngine.Default"/>) for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out FetchEngine engine)
     {
-        switch (text?.Trim().ToLowerInvariant())
+        switch (RetiredWords.Current(text, Retired))
         {
-            case "default": engine = FetchEngine.Default; return true;
-            case "httpclient": engine = FetchEngine.HttpClient; return true;
-            case "chromium": engine = FetchEngine.Chromium; return true;
+            case "auto": engine = FetchEngine.Default; return true;
+            case "http": engine = FetchEngine.HttpClient; return true;
+            case "browser": engine = FetchEngine.Chromium; return true;
             default: engine = FetchEngine.Default; return false;
         }
     }
@@ -48,17 +56,17 @@ public static class BrowserMode
     /// <summary>The saved word for <paramref name="engine"/>.</summary>
     public static string Name(FetchEngine engine) => engine switch
     {
-        FetchEngine.HttpClient => "httpclient",
-        FetchEngine.Chromium => "chromium",
-        _ => "default",
+        FetchEngine.HttpClient => "http",
+        FetchEngine.Chromium => "browser",
+        _ => "auto",
     };
 
     /// <summary>The menu hint next to a mode. Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "default" => "HttpClient, then a headless browser when a page is blocked or empty",
-        "httpclient" => "HttpClient alone, with browser-like headers",
-        "chromium" => "a headless Edge, Chrome or Brave for every page",
+        "auto" => "the HTTP client, then a headless browser when a page is blocked or empty",
+        "http" => "the HTTP client alone, with browser-like headers",
+        "browser" => "a headless Edge, Chrome or Brave for every page",
         _ => "",
     };
 

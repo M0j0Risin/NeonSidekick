@@ -192,7 +192,7 @@ public static class SkillInstallText
         $"Skill '{name}' is locked: unlock it on /skills (its page's unlock row) to update it";
 
     public static string ExternalReadOnlyError(string name) =>
-        $"A skill named '{name}' is in the external folder, which the app never writes; switch Use external skills off or remove it there first";
+        $"A skill named '{name}' is in the external folder, which the app never writes; switch External skills off or remove it there first";
 
     public static string FailedError(string name, string detail) => $"Could not install '{name}': {detail}";
 

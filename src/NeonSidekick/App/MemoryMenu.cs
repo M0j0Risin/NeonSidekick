@@ -112,7 +112,7 @@ internal sealed class MemoryMenu
     public const char ReadWriteKey = 'w';
     public const string ReadOnlyButton = "read-only";
     public const char ReadOnlyKey = 'o';   // r until 2026-10-07: r is refresh elsewhere (/docker)
-    public const string DisabledButton = "disabled";
+    public const string DisabledButton = "off";   // "disabled" until 2026-10-13, as Memory mode's word
     public const char DisabledKey = 'x';   // d until 2026-10-07: d is remove elsewhere (/youtube list)
 
     /// <summary>The button of each mode, in <see cref="MemoryAccess"/>'s order: its index is the enum's value.</summary>

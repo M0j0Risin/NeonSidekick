@@ -56,7 +56,7 @@ public partial class SettingsMenuTests
         Assert.Equal(SettingsChanges.Llm, await menu.ShowAsync(CancellationToken.None));
 
         Assert.True(_settings.Current.AnthropicApi);
-        Assert.Contains("  · Anthropic API: on", Output);
+        Assert.Contains("  · Anthropic API enabled: on", Output);
         pane.Dispose();
     }
 

@@ -8,7 +8,7 @@ executable is on `PATH`; from a checkout, use `dotnet run --project src/NeonSide
 ## Before you start
 
 - **A fresh profile does nothing useful headless.** It offers the model no tools (*Shell command policy* `off`, every tool
-  group off) and looks for no server (*LLM server scan mode* `disabled`). Set the profile up first in the TUI (`/tools`,
+  group off) and looks for no server (*LLM server scan mode* `off`). Set the profile up first in the TUI (`/tools`,
   `/settings`) or in its `profile.json`: save a server (or pass `--url`) and switch on the tool groups the job needs.
 - **Tick the "… offered" lists beforehand.** The SQL, Oracle, MySQL, PostgreSQL, SQLite, UNC and ComfyUI tools offer nothing
   until entries are ticked in their *… offered* lists (on `/tools`, or `SqlConnectionsOffered`, `OracleConnectionsOffered`,
@@ -75,7 +75,7 @@ You:
   line (`/new please` goes to the model as text).
 - With no server, the commands marked "no server needed" (and `/shopping`) still work; `/compact`, `/plan` and messages get
   a "no assistant" reply.
-- Automatic compaction (*LLM auto compact (%)*) and the mid-reply guard (*LLM tool compact type*) run headless too, each
+- Automatic compaction (*LLM auto compact (%)*) and the mid-reply guard (*LLM tool compact mode*) run headless too, each
   reported as `[notice]` lines.
 
 ### Everything else goes to the model as text

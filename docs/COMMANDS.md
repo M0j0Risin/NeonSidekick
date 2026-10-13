@@ -47,7 +47,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/claude <message>` | Sends the message to Claude Code and streams its reply. See [Claude Code from the chat](#claude-code-from-the-chat). |
 | `/claude new` | Starts a new Claude conversation. |
 | `/clear` | Starts a new conversation and clears the screen. |
-| `/cmd <command>` | Runs a shell line yourself in the working directory, in *Shell default*'s shell, under the same checks as the model's. See [Your own shell line](#your-own-shell-line). |
+| `/cmd <command>` | Runs a shell line yourself in the working directory, in the *Shell default shell*, under the same checks as the model's. See [Your own shell line](#your-own-shell-line). |
 | `/cmd --shell <shell> <command>` | The same in another shell (`powershell`, `cmd` or `bash`; on a Mac `zsh`, `bash` or `powershell`). |
 | `/cmd --bg <command>` | The same, run in the background while you chat; its output is reported when it ends. |
 | `/keycheck` | Lists the app's key chords and whether another program holds each as a global hotkey (a held chord never reaches the app). On a Mac it also names macOS shortcuts and a terminal whose Option key types characters. `/help`'s Keys tab shows the same list with its *⌨ key check* button (`k`). |
@@ -69,8 +69,8 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/screen window:<id>\|<title-words>` | Captures one window, even when another covers it: by id, or words of its title or program. |
 | `/screen behind` | Captures the window right behind the app's own (the one you were just in). |
 | `/screen list` | Lists the monitors and windows, front to back, with the target that names each. |
-| `/screen view` | Opens the picture viewer on *Screen capture output folder*. |
-| `/screen thumbs` | Opens the thumbnail browser on *Screen capture output folder*. |
+| `/screen view` | Opens the picture viewer on *Screen output folder*. |
+| `/screen thumbs` | Opens the thumbnail browser on *Screen output folder*. |
 | `/docker` | Lists the containers in a pane; Enter offers stop, restart or pause (asking first), start, logs and more, and `l` shows only the LLM servers. On a Mac: Docker Desktop, OrbStack, Colima or Rancher Desktop. |
 | `/docker ps [<filter>]` | Lists the containers, or those whose name or image holds the filter. |
 | `/docker status` | Docker Desktop's and the engine's versions, with container counts. |
@@ -83,7 +83,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/explore [<folder>]` | Opens the working directory in your file browser. |
 | `/browse [<folder>]` | Browses the working directory as a tree in a pane; Enter on a file opens it in its default app. See [File browser](#file-browser). |
 | `/browser [<url>]` | Opens the page (or a blank one) in the Browser window, for you to sign in to a site or get past its bot check; when you close it, its cookies go to the web tools. Windows only. See [The Browser window](TOOLS.md#the-browser-window). |
-| `/gituser [force]` | Writes *GitLib email* and *GitLib name* into the repository's config; an existing `[user]` stays unless `force`. Needs *GitLib tools* on. |
+| `/gituser [force]` | Writes *GitLib user email* and *GitLib user name* into the repository's config; an existing `[user]` stays unless `force`. Needs *GitLib tools* on. |
 | `/ha` | Home Assistant at a glance: lights on per room, the TV, temperatures, motion, low batteries and to-do lists. |
 | `/ha on\|off\|toggle <name> [<brightness>]` | Switches a room, light, switch or the TV (`/ha on den 40%`, `/ha off kitchen and hallway`). |
 | `/ha scene <name>` | Activates a scene (`/ha scene den relax`). |
@@ -114,8 +114,8 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/collapse` | Folds them again. |
 | `/find [<words>]` | Finds words in the transcript, every match marked (keys under [Pane keys](#pane-keys)). Ctrl+Shift+F runs it too once Windows Terminal's own find is unbound. |
 | `/mcp` | Connects MCP servers and switches their tools. On the Tools tab typing filters the list, and with two or more servers a second strip picks one server's tools. |
-| `/memory` | Lists memories in a pane. Enter (or a double-click) on one offers **edit** (change its text on the input row), **disable** (keep it, greyed out, but don't offer it to the model; **enable** offers it again) and **forget** (asks). `a` (*+ add*) types a new memory. `w`, `o` and `x` set *Memory mode* to read-write, read-only or disabled. |
-| `/memory read-write\|read-only\|disabled\|on\|off` | Sets *Memory mode* (`on` is read-write, `off` disabled). |
+| `/memory` | Lists memories in a pane. Enter (or a double-click) on one offers **edit** (change its text on the input row), **disable** (keep it, greyed out, but don't offer it to the model; **enable** offers it again) and **forget** (asks). `a` (*+ add*) types a new memory. `w`, `o` and `x` set *Memory mode* to read-write, read-only or off. |
+| `/memory read-write\|read-only\|off\|on` | Sets *Memory mode* (`on` is read-write). |
 | `/memory forget\|edit` | `forget` forgets all, after a confirmation; `edit` opens `memory.json` in your editor. |
 | `/model [<id>]` | Picks or sets the model; type to filter the list. On the embedded LLM, lists the installed models. |
 | `/msgclear` | Clears the profile's message history (the ↑/↓ recall), after a confirmation. |
@@ -129,7 +129,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/pdf <file> [to=<path>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF from Markdown, text, code, HTML or a picture, beside the file unless `to=` says (see [Making PDFs](TOOLS.md#making-pdfs)). On a Mac only the browser makes it. |
 | `/pdf <url> [to=<path>] [overwrite]` | Makes a PDF of a web page; *Web browser network mode* still applies. |
 | `/pdf reply [<options>]` | Makes a PDF of the last reply. |
-| `/process` | Lists the model's background processes in a pane. Enter opens one in the [process window](#process-window), `k` stops it (asks), `r` and `e` show only the running or ended ones. While any run, **▶ n** at the right of the rule under the input line counts them; a double-click there opens this list. |
+| `/process` | Lists the background processes, the model's and your `/cmd --bg` ones, in a pane. Enter opens one in the [process window](#process-window), `k` stops it (asks), `r` and `e` show only the running or ended ones. While any run, **▶ n** at the right of the rule under the input line counts them; a double-click there opens this list. |
 | `/process <id>` | Shows one process's output live in the [process window](#process-window) (any unique start of the id; Tab completes it). |
 | `/profile [<name>]` | Switches profiles: a picker, or straight to the one named. See [Profiles](#profiles). |
 | `/profile add\|delete <name>` | Creates a profile (from this profile's settings and memories) or deletes one. |
@@ -198,7 +198,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/toolbar [on\|off]` | Hides the toolbar or shows it again. |
 | `/toolbar edit` | The *Tool bar* checklist: the items, the side each is pinned to (left or right), and their order. |
 | `/tools` | Switches the model's tools on or off and edits each group's settings, one tab per group. On the Offered tab, typing filters the list. |
-| `/tools <group>` | Opens one group's page: `shell`, `ask`, `files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it; the pages' buttons are under [Pane keys](#pane-keys). |
+| `/tools <group>` | Opens one group's page: `shell`, `ask`, `files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` or `shopping`. The toolbar's tool items run it; the pages' buttons are under [Pane keys](#pane-keys). |
 | `/tools shell allowed` | Opens *Shell allowed commands*: Enter removes a prefix (asks), `o`/`a`/`y` switch *Shell command policy* to off, ask or yolo, typing filters. The toolbar's lock or Ctrl+Alt+L. |
 | `/tools shell police` | Opens *Shell police*; `s` opens its forbidden strings. The toolbar's officer or Ctrl+Alt+O. |
 | `/tree [<path>]` | Shows a tree of the working directory in a pane (hidden entries per *File browser/tree mode*; `.git` only when named). |
@@ -264,7 +264,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 * **Joining in:** a line you type joins before the next reply. With *STT input* on, push-to-talk cuts in and listens (with TTS off, the wake phrase does too).
 * **Stopping:** ESC stops the voice, then cuts the current bot short, then ends the chat. Ctrl+Alt+B ends it at once; `/exit`, `/clear` and `/new` end it first.
 * **Resume:** `/botchat --resume [<line>]`, Ctrl+Alt+B or a double-click on 👥 continues the last chat.
-* **Embedded bots:** see *Botchat multi-embedded*. `/botchat --kill`, Ctrl+Alt+K or a double-click on 🧟 stops the leftover extra servers.
+* **Embedded bots:** see *Botchat embedded mode*. `/botchat --kill`, Ctrl+Alt+K or a double-click on 🧟 stops the leftover extra servers.
 * Pronouns come from each profile's first TTS voice (`am_`, `bm_`… male, else female). The chat is saved as its own session under *Session logging*, and its tokens are a *Botchat* row on `/usage`.
 
 ### Claude Code from the chat
@@ -281,7 +281,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 
 `/advisor <name> <question>` asks one of the profiles set up under `/settings` › Advisors ([SETTINGS.md](SETTINGS.md#advisors)), as the model's `neon_advisor` does.
 
-* It answers on its own profile's server and model, with its persona and role, and may use the read-only tools (the ones plan mode keeps) for up to *Advisor tool iterations* rounds.
+* It answers on its own profile's server and model, with its persona and role, and may use the read-only tools (the ones plan mode keeps) for up to *Advisor max tool iterations* rounds.
 * Your question goes with the conversation's last 10 messages, whatever *Advisor context* says (that setting is for the model's calls).
 * The transcript shows the question, its tool calls, its answer and a footer with its model and tokens. The pair joins the conversation tagged `[to dba]` and `[dba]`, and the advisor remembers it for next time.
 * Works whether *Advisors enabled* is on or off, never asking first. ESC stops it. Headless, the answer prints as `dba: …`.
@@ -292,7 +292,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 `/cmd <command>` runs a line you type in the working directory, as the model's `run_command` would, and draws its output as it prints.
 
 * **The same checks as the model's.** *Shell command policy* `off` refuses it; the shell police (👮) refuse what they refuse under any policy; under `ask`, a line not on *Shell allowed commands* goes to the approval pane.
-* **The wait** is *Shell timeout (s)*, at most *Shell foreground cap (s)*; ESC kills the line and everything it started. Output past *Shell output max chars* stops being drawn, and the whole of it goes to `.shell\cmd_<id>.log`.
+* **The wait** is *Shell default timeout (s)*, at most *Shell max timeout (s)*; ESC kills the line and everything it started. Output past *Shell output max chars* stops being drawn, and the whole of it goes to `.shell\cmd_<id>.log`.
 * **The model sees it:** the line and its output join the conversation, tagged `[I ran in the shell (<shell>)]` and `[shell output]`.
 * **In the background:** `/cmd --bg <command>` passes the same checks, then gives the chat back at once, with no timeout. `/process` lists it, and Ctrl+K twice in its window stops it; closing the app kills it and what it started, even what it left running after it ended, and so does a crash or a force quit. When it ends, its output is shown and joins the conversation. You may run up to 16 at a time, apart from the model's.
 * Plan mode does not stop it. Not in headless mode, where the line goes to the model as text.
@@ -329,7 +329,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 * The picture is drawn in the transcript, saved in *ComfyUI output folder*, and sent to the model with your next message.
 * The first word names the workflow when it matches one; otherwise an offered workflow is used.
 * `-- <negative>` sets the negative prompt; `--no-negative` sends none, not even the workflow's default.
-* `--count` is capped by *ComfyUI max pictures per call*. `--image2` and `--image3` feed multi-picture workflows (`/imagine faceswap --image a.png --image2 b.png`).
+* `--count` is capped by *ComfyUI max images per call*. `--image2` and `--image3` feed multi-picture workflows (`/imagine faceswap --image a.png --image2 b.png`).
 * `/loop 10 30s /imagine …` repeats it in the foreground; ESC ends the loop.
 
 ### Folder picker
@@ -446,9 +446,9 @@ A monitor, every monitor or one window, through Windows' GDI or, on a Mac (macOS
 
 * **Targets:** `screen` (the monitor the app is on, the default), `all`, `monitor:N`, `window:<id or title words>` (or its process name) and `behind` (the window right behind the app's).
 * **A window** comes out whole even when covered; a minimized one must be restored first. Protected video comes out black.
-* **Screenshots** are JPEGs in *Screen capture output folder* under the profile's `images` folder (`screen_images` by default), at most 2048 pixels on the longer side.
-* **Asking:** under *Screen capture ask* `ask` the pane shows what would be captured and why; *Allow for this session* lasts until the session ends.
-* **Stored sessions** keep a line instead of the picture unless *Screen capture keep in sessions* is on: a screenshot can hold anything on the screen.
+* **Screenshots** are JPEGs in *Screen output folder* under the profile's `images` folder (`screen_images` by default), at most 2048 pixels on the longer side.
+* **Asking:** under *Screen policy* `ask` the pane shows what would be captured and why; *Allow for this session* lasts until the session ends.
+* **Stored sessions** keep a line instead of the picture unless *Screen keep in sessions* is on: a screenshot can hold anything on the screen.
 * **On a Mac** the terminal needs the *Screen Recording* permission (System Settings › Privacy & Security › Screen & System Audio Recording; quit and reopen the terminal after). Without it nothing is captured and `/screen list` shows only the monitors. Windows on another desktop or minimized aren't listed; `behind` is the window behind the terminal.
 
 ### Pasting a picture
@@ -589,7 +589,7 @@ In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes
 
 | Pane | Keys |
 |---|---|
-| `/memory` | Enter: edit · disable/enable · forget (asks) · `a` add · `w` read-write · `o` read-only · `x` disabled |
+| `/memory` | Enter: edit · disable/enable · forget (asks) · `a` add · `w` read-write · `o` read-only · `x` off |
 | `/queue` | Enter removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) · `m` Queue mode · `k` Queue cancel mode |
 | `/rewind` | Enter rewinds to before the message |
 | `/sessions` | Enter opens · type to filter |
@@ -607,7 +607,7 @@ In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes
 | `/tools shell allowed` (*Shell allowed commands*) | Enter removes (asks) · `o` off · `a` ask · `y` yolo · type to filter |
 | *Shell police forbidden strings* | the top row adds · Enter removes (asks) · `r` restore defaults (asks) |
 | `/tools shell police` | `s` the forbidden strings |
-| `/tools web` | `d` default · `h` httpclient · `c` chromium (*Web browser mode*) |
+| `/tools web` | `a` auto · `h` http · `b` browser (*Web browser mode*) |
 | `/tools files` | `b` *File browser/tree mode* |
 | `/tools image` | `e` *Image edit mode* |
 | `/tools obsidian` | `v` *Obsidian vault* |

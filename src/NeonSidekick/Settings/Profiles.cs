@@ -286,8 +286,10 @@ public static class Profiles
             return new AppSettingsData();
         }
 
-        return JsonSerializer.Deserialize(File.ReadAllText(path), AppSettings.ReadInfo)
+        var data = JsonSerializer.Deserialize(File.ReadAllText(path), AppSettings.ReadInfo)
             ?? throw new JsonException("The settings file parsed to null.");
+        RetiredWords.Upgrade(data);   // 2026-10-13: a retired setting word reads as its successor, as AppSettings.Load does
+        return data;
     }
 
     /// <summary>Writes <paramref name="data"/> to <paramref name="path"/> atomically. Throws; the temp file is removed on failure.</summary>

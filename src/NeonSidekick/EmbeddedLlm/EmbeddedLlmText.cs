@@ -259,7 +259,7 @@ public static class EmbeddedLlmText
     public const string VramDidNotFit = "it does not fit in VRAM with every layer on the GPU, and Embedded VRAM only is on; " + VramAdvice;
 
     /// <summary>What to lower when a VRAM-only load does not fit.</summary>
-    private const string VramAdvice = "set Embedded context size to 0 (fit) or lower it, lower Embedded VRAM budget, close what else uses the GPU, or pick a smaller model";
+    private const string VramAdvice = "set Embedded context length to 0 (fit) or lower it, lower Embedded VRAM budget (%), close what else uses the GPU, or pick a smaller model";
 
     /// <summary>Embedded VRAM only's refusal on the CPU backend, which has no VRAM to stay in (2026-10-01). Pinned.</summary>
     public const string VramOnlyOnCpu = "Embedded VRAM only is on, but the backend is the CPU; choose CUDA or Vulkan in Embedded backend, or turn Embedded VRAM only off";

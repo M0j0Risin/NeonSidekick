@@ -182,7 +182,7 @@ public sealed class MacTidyUpTests : IDisposable
         Assert.Contains("or a folder in Finder, on their screen", description);
         Assert.DoesNotContain("Explorer", description);
         Assert.Equal(" in Finder", FileText.FolderBrowser);
-        Assert.Equal("Use external skills (.agents/skills)", SettingsMenu.ExternalSkillsName);
+        Assert.Equal("External skills (.agents/skills)", SettingsMenu.ExternalSkillsName);
         Assert.Equal("~/.agents/skills is read too", SettingsMenu.ToggleDescribe(SettingsField.ExternalSkills, true));
         Assert.Equal(Claude.ClaudeText.MacNotFound, Claude.ClaudeText.NotFound);
         Assert.DoesNotContain("USERPROFILE", Claude.ClaudeText.NotFound);

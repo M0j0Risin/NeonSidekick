@@ -14,28 +14,35 @@ public enum MentionFolderAction
 }
 
 /// <summary>
-/// The @-mention-folder-mode setting: the two words the operator picks from (<c>folder-apply</c>,
-/// <c>folder-remain</c>) and their mapping to <see cref="MentionFolderAction"/>, the
+/// The @-mention-folder-mode setting: the two words the operator picks from (<c>apply</c>,
+/// <c>remain</c>) and their mapping to <see cref="MentionFolderAction"/>, the
 /// <c>CompactType</c> shape. <see cref="Resolve"/> is the one place the saved string becomes the
 /// enum: a hand-edited value that is neither falls back to <see cref="Default"/> with a warning.
 /// </summary>
 public static class MentionFolderMode
 {
-    /// <summary>A folder is a step down. The compiled default (since 2026-09-19, the user's call; <c>folder-apply</c> before), pinned by <c>MentionFolderModeTests</c>.</summary>
-    public const string Default = "folder-remain";
+    /// <summary>A folder is a step down. The compiled default (since 2026-09-19, the user's call; <c>apply</c> before), pinned by <c>MentionFolderModeTests</c>.</summary>
+    public const string Default = "remain";
 
     /// <summary>The modes in menu order.</summary>
-    public static readonly string[] Names = { "folder-apply", "folder-remain" };
+    public static readonly string[] Names = { "apply", "remain" };
+
+    /// <summary>The words retired on 2026-10-13 (the settings verbiage pass, the user's call), still read: old → new (<see cref="RetiredWords"/>).</summary>
+    internal static readonly IReadOnlyDictionary<string, string> Retired = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["folder-apply"] = "apply",
+        ["folder-remain"] = "remain",
+    };
 
     private const string Category = "Files";
 
     /// <summary>Trims and ignores case; false for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out MentionFolderAction action)
     {
-        switch (text?.Trim().ToLowerInvariant())
+        switch (RetiredWords.Current(text, Retired))
         {
-            case "folder-apply": action = MentionFolderAction.Apply; return true;
-            case "folder-remain": action = MentionFolderAction.Remain; return true;
+            case "apply": action = MentionFolderAction.Apply; return true;
+            case "remain": action = MentionFolderAction.Remain; return true;
             default: action = MentionFolderAction.Apply; return false;
         }
     }
@@ -43,15 +50,15 @@ public static class MentionFolderMode
     /// <summary>The saved word for <paramref name="action"/>.</summary>
     public static string Name(MentionFolderAction action) => action switch
     {
-        MentionFolderAction.Remain => "folder-remain",
-        _ => "folder-apply",
+        MentionFolderAction.Remain => "remain",
+        _ => "apply",
     };
 
     /// <summary>The menu hint next to a mode. The user's wording (2026-09-16), pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "folder-apply" => "insert @folder/ and close the list",
-        "folder-remain" => "insert @folder/ and keep listing inside it",
+        "apply" => "insert @folder/ and close the list",
+        "remain" => "insert @folder/ and keep listing inside it",
         _ => "",
     };
 

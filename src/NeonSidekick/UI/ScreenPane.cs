@@ -345,7 +345,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     // The menus' height cap (2026-10-01): the saved word of Menus max height, read at every menu draw; full-screen (the
     // pane as it grew before the setting) until the screen sets it.
-    private Func<string> _menuHeight = static () => "full-screen";
+    private Func<string> _menuHeight = static () => UI.MenuHeight.Default;
 
     // The picture strip (later still on 2026-09-24): the provider, the rows the last draw gave it (0 or
     // PictureStrip.Rows — Draw is the only writer), the strip's version and highlight as drawn (the tick's

@@ -24,10 +24,10 @@ public static class HelpText
     public const int MaxMatches = 8;
 
     // The panes' one-liners: README's Available Panes, kept short.
-    public const string SettingsPaneSummary = "the app's settings: the profile and screen (Chat), sessions (Sessions) and /botchat (Botchat), a tab each under Client; the LLM settings every server reads (Common) and those only an OpenAI-compatible HTTP server reads (Http), the embedded model, Docker servers, the Anthropic and OpenAI APIs, the Claude Code server and /claude (Servers, a tab each on a second strip); the profile advisors (Advisors); speech output and voice input (Voice: TTS and STT)";
-    public const string ToolsPaneSummary = "the model's tools: Offered lists every tool, on or off (Enter flips one); Core, Files, Apps, Databases, Devices and Home hold each tool group's settings, a menu per group on a second strip (←/→ walk every menu, Tab skips past a group), the pane's own Options last under Core";
-    public const string SkillsPaneSummary = "agent skills (SKILL.md folders) and the model's self-reflection";
-    public const string McpPaneSummary = "external MCP servers: Servers lists and edits them, Tools shows what each offers, Options holds the switch and timeout";
+    public const string SettingsPaneSummary = "the app's settings, in four tabs with a second strip under three: Client (Chat: the profile and the screen; Sessions; Botchat), Servers (Common: what every LLM server reads; Http: what only an OpenAI-compatible HTTP server reads; Embedded, Docker, Anthropic with the Claude Code server and /claude, OpenAI), Advisors (the profile advisors) and Voice (TTS: speech output; STT: voice input)";
+    public const string ToolsPaneSummary = "the model's tools: Offered lists every tool, on or off (Enter flips one); Core, Files, Apps, Databases, Devices and Home hold each tool group's settings, one menu per group on a second strip (←/→ walk every menu, Tab jumps a whole tab), with the pane's own options under Core › Options";
+    public const string SkillsPaneSummary = "agent skills (SKILL.md folders): Offered lists and manages the installed skills, Reflection sets how the model writes and improves skills on its own, Options holds the skill switches and the project file";
+    public const string McpPaneSummary = "external MCP servers: Servers lists and edits them, Tools shows what each offers, Options holds the master switch and the timeout";
 
     /// <summary>The working directory's default, the profile's own folder (<see cref="HelpLocation.Default"/>).</summary>
     public const string WorkingDirectoryDefault = @"(the profile's files folder: <home>\profiles\<profile>\files)";
@@ -52,7 +52,7 @@ public static class HelpText
     public const string OverviewHeading = "NeonSidekick help: the panes, their tabs, and every slash command.";
 
     /// <summary>The overview's last line: how to ask for more. Pinned.</summary>
-    public const string OverviewTail = "Ask neon_help about one command (/camera), a setting by name, a pane or tab (/tools camera), keys, or in plain words; kind command with no query lists every command with a line on each.";
+    public const string OverviewTail = "Ask neon_help about one command (/camera), a setting by name, a pane or tab (/tools camera), keys, or in plain words; kind command with no query lists every command, a line on each.";
 
     /// <summary>The command list's heading (<c>kind: command</c>, no query). Pinned.</summary>
     public const string CommandListHeading = "Slash commands (type / to list them; ask about one for every form):";
@@ -61,7 +61,7 @@ public static class HelpText
     public const string KeysHeading = "Keys (also under /help › Keys):";
 
     /// <summary>The line after the keys: the voice keys depend on settings. Pinned.</summary>
-    public const string KeysTail = "With voice input on, the STT push-to-talk key talks; with the wake word on, saying the wake phrase does.";
+    public const string KeysTail = "With STT input on, the STT push-to-talk key records a message; with STT wake on, saying the wake phrase starts listening.";
 
     /// <summary>The free-word answer's heading. Pinned.</summary>
     public static string MatchesHeading(string query) => $"Best matches for '{query}':";

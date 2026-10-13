@@ -643,7 +643,7 @@ public class ClaudeCliServerTests
     [Fact]
     public void Setting_TheSwitchRow_AndItsVariable()
     {
-        Assert.Equal("Claude Code server", SettingsMenu.FieldName(SettingsField.ClaudeCodeServer));
+        Assert.Equal("Claude Code server enabled", SettingsMenu.FieldName(SettingsField.ClaudeCodeServer));
         Assert.True(SettingsMenu.IsToggle(SettingsField.ClaudeCodeServer));
         Assert.True(SettingsMenu.IsLlmField(SettingsField.ClaudeCodeServer));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeCodeServer, new AppSettingsData(), @"C:\p"));
