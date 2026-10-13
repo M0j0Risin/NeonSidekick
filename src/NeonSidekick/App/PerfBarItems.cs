@@ -16,7 +16,8 @@ namespace NeonSidekick.App;
 /// <see cref="Resolve"/> is the one place the saved list becomes the set: a display setting, so an unknown word is dropped
 /// without a warning. The bar's order is the user's to change since 2026-10-12 (the user's ask, the home bar picker's move keys on
 /// this checklist): <see cref="Order"/> over <see cref="Settings.AppSettingsData.PerformanceBarOrder"/>; <see cref="Names"/> is the
-/// default order, which <c>⊡ default</c> puts back with the checks.
+/// default order, which <c>⊡ default</c> puts back with the checks. Later on 2026-10-13 (the user's ask: the home bar's pinning) each
+/// meter is pinned left, center or right (<see cref="Sides"/>), center by default, so a bar never pinned is centred as it always was.
 /// </summary>
 public static class PerfBarItems
 {
@@ -131,11 +132,31 @@ public static class PerfBarItems
     public static List<string>? SaveOrder(IReadOnlyList<string> order) => ItemOrder.Save(order, Names);
 
     /// <summary>
+    /// The bar in its three groups (later on 2026-10-13, the user's ask): <see cref="Order"/> of <paramref name="order"/> split by
+    /// <paramref name="left"/> and <paramref name="right"/> (<see cref="Settings.AppSettingsData.PerformanceBarLeft"/>,
+    /// <see cref="Settings.AppSettingsData.PerformanceBarRight"/>; known ids, trimmed, any case); every other meter is center. Pure.
+    /// </summary>
+    public static ItemOrder.Sided Sides(IReadOnlyList<string>? order, IReadOnlyList<string>? left, IReadOnlyList<string>? right) =>
+        ItemOrder.SplitCentered(Order(order), Known(left), Known(right));
+
+    /// <summary>What saves for a side's meters: null for none, else the ids in the group's order. Pure.</summary>
+    public static List<string>? SaveSide(IReadOnlyList<string> side)
+    {
+        ArgumentNullException.ThrowIfNull(side);
+        return side.Count > 0 ? [.. side] : null;
+    }
+
+    // The known ids a saved side names; none for null.
+    private static HashSet<string> Known(IReadOnlyList<string>? saved) =>
+        saved is null ? new HashSet<string>(StringComparer.Ordinal) : Resolve(saved).ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>
     /// The <c>Performance bar</c> row's value: <c>off</c> with nothing checked, else the checked meters and the look —
     /// <c>CPU, RAM, NET↓ · gauge</c>, or <c>all · gauge</c> with every one, in the bar's order (<paramref name="order"/>, the
-    /// saved <see cref="Settings.AppSettingsData.PerformanceBarOrder"/>, 2026-10-12). Pinned.
+    /// saved <see cref="Settings.AppSettingsData.PerformanceBarOrder"/>, 2026-10-12; left, center, then right since later on 2026-10-13,
+    /// <paramref name="left"/> and <paramref name="right"/>). Pinned.
     /// </summary>
-    public static string Value(IReadOnlyList<string>? saved, string? look, IReadOnlyList<string>? order = null)
+    public static string Value(IReadOnlyList<string>? saved, string? look, IReadOnlyList<string>? order = null, IReadOnlyList<string>? left = null, IReadOnlyList<string>? right = null)
     {
         var on = Resolve(saved);
         if (on.Count == 0)
@@ -143,7 +164,7 @@ public static class PerfBarItems
             return PerfText.NoMeters;
         }
 
-        string meters = on.Count == Names.Length ? PerfText.AllMeters : string.Join(", ", Order(order).Where(on.Contains).Select(Title));
+        string meters = on.Count == Names.Length ? PerfText.AllMeters : string.Join(", ", Sides(order, left, right).All.Where(on.Contains).Select(Title));
         return meters + " · " + PerfBarMode.Name(PerfBarMode.Parse(look));
     }
 }

@@ -40,6 +40,34 @@ public partial class ChatScreenTests
         Assert.Equal(samples, _perfSource.Samples);
     }
 
+    /// <summary>The bar's groups on the screen (later on 2026-10-13, the user's ask): CPU pinned left starts the row, VRAM pinned right ends it.</summary>
+    [Fact]
+    public async Task ShowPerformanceBar_DrawsThePinnedGroups_LeftAndRight()
+    {
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        _settings.Update(d => { d.PerformanceBarItems = ["cpu", "ram", "vram"]; d.PerformanceBarLook = "text"; d.PerformanceBarLeft = ["cpu"]; d.PerformanceBarRight = ["vram"]; });
+        _perfSource.Next = new PerfSnapshot(34, 62, null, 91);
+        var input = Scripted();
+        string drawn = "";
+        input.OnWait = () =>
+        {
+            input.OnWait = null;
+            _time.Advance(ScreenPane.Tick);   // the sampler's first reading
+            _time.Advance(ScreenPane.Tick);   // the pane's tick draws it
+            drawn = Output;
+            PushLine(input, "/exit");
+        };
+
+        await RunAsync();
+
+        string vram = Perf.PerfText.VramLabel;
+        string plain = System.Text.RegularExpressions.Regex.Replace(drawn, "\\x1b\\[[0-9;?]*[A-Za-z]", "");
+        Assert.Matches("CPU  34% {20,}RAM  62% {20,}" + vram + "  91%", plain);
+        Assert.DoesNotContain("34% · RAM", plain);   // groups, not one run
+    }
+
     /// <summary>
     /// <c>/perfbar</c> (later on 2026-09-29, the user's ask; the checklist's since 2026-09-30): bare it shows the bar (CPU, RAM,
     /// GPU and VRAM the first time) and hides it again, keeping its meters for the next show; a look sets it; anything else is

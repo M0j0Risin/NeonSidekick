@@ -241,8 +241,12 @@ public class ItemOrderTests
     [Fact]
     public void ACopy_KeepsBothOrders_ApartFromTheSource()
     {
-        var source = new AppSettingsData { ToolbarOrder = ["perf"], PerformanceBarOrder = ["ram"], ToolbarRight = ["perf"], HintBarRight = ["usage"], HomeBarLeft = ["area:den"], HomeBarRight = ["shopping:list"] };
+        var source = new AppSettingsData { ToolbarOrder = ["perf"], PerformanceBarOrder = ["ram"], ToolbarRight = ["perf"], HintBarRight = ["usage"], HomeBarLeft = ["area:den"], HomeBarRight = ["shopping:list"], PerformanceBarLeft = ["cpu"], PerformanceBarRight = ["proc"] };
         var copy = AppSettings.Copy(source);
+        Assert.Equal(["cpu"], copy.PerformanceBarLeft);
+        Assert.Equal(["proc"], copy.PerformanceBarRight);
+        Assert.NotSame(source.PerformanceBarLeft, copy.PerformanceBarLeft);
+        Assert.NotSame(source.PerformanceBarRight, copy.PerformanceBarRight);
         Assert.Equal(["area:den"], copy.HomeBarLeft);
         Assert.Equal(["shopping:list"], copy.HomeBarRight);
         Assert.NotSame(source.HomeBarLeft, copy.HomeBarLeft);

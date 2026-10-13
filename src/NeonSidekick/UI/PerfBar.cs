@@ -29,7 +29,10 @@ public sealed record PerfRow(IReadOnlyList<PerfSegment> Segments)
 /// few hours before), and the text look's values keep four cells as the drawn looks' do (<c>  8%</c>, <c>100%</c>), so
 /// nothing shifts as a value gains a digit; a cut row stays at the left. PROC (2026-10-05, the user's ask and pick) is a count, the
 /// model's background processes running, passed in: every look writes its label and number alone (no gauge or LEDs —
-/// a count has no share to fill), dim at none and <see cref="Theme.Good"/> while any run. Pure: the tests drive it.
+/// a count has no share to fill), dim at none and <see cref="Theme.Good"/> while any run. Later on 2026-10-13 (the user's ask: the home
+/// bar's pinning on this bar too) the meters sit in three groups, pinned left, center or right (<see cref="PerfBarItems.Sides"/>): the left
+/// from the row's start, the right ending on its last cell, the center centred between and pushed aside by them, center the default so a
+/// bar never pinned is the centred row it was. Pure: the tests drive it.
 /// </summary>
 public static class PerfBar
 {
@@ -49,9 +52,14 @@ public static class PerfBar
     /// in <paramref name="cells"/> cells; null — no row — with none checked. A checked meter the machine cannot read is left
     /// out, so a row may be empty (GPU alone on a machine without one): the row stays, and the pane's layout with it.
     /// <paramref name="processes"/> is PROC's count, the background processes running. The meters go in <paramref name="order"/>
-    /// (the user's, 2026-10-12, <see cref="PerfBarItems.Order"/>; <see cref="PerfBarItems.Names"/> when null).
+    /// (the user's, 2026-10-12, <see cref="PerfBarItems.Order"/>; <see cref="PerfBarItems.Names"/> when null), the ones in
+    /// <paramref name="left"/> pinned left and those in <paramref name="right"/> pinned right (later on 2026-10-13), the rest center.
+    /// Too narrow a row (the home bar's order, the user's call): every meter shrinks together, then the row falls back to the text
+    /// look; then the right group's meters go, from its inner end, then the left's, from theirs; then the center (the left group, or the
+    /// right, with no center) is cut at the row's left. A meter that goes leaves nothing behind.
     /// </summary>
-    public static PerfRow? Render(PerfBarStyle style, IReadOnlySet<string> items, PerfSnapshot latest, int cells, int processes = 0, IReadOnlyList<string>? order = null)
+    public static PerfRow? Render(PerfBarStyle style, IReadOnlySet<string> items, PerfSnapshot latest, int cells, int processes = 0, IReadOnlyList<string>? order = null,
+        IReadOnlySet<string>? left = null, IReadOnlySet<string>? right = null)
     {
         ArgumentNullException.ThrowIfNull(items);
         if (items.Count == 0)
@@ -59,22 +67,49 @@ public static class PerfBar
             return null;
         }
 
-        var meters = Meters(items, latest, processes, order ?? PerfBarItems.Names);
+        var none = new HashSet<string>(StringComparer.Ordinal);
+        var sides = ItemOrder.SplitCentered(order ?? PerfBarItems.Names, left ?? none, right ?? none);
+        var groups = new[] { sides.Left, sides.Center!, sides.Right }.Select(g => Meters(items, latest, processes, g)).ToArray();
         if (style != PerfBarStyle.Text)
         {
             foreach (int width in MeterWidths)
             {
-                var drawn = Drawn(style, meters, width);
+                var drawn = groups.Select(g => Drawn(style, g, width)).ToArray();
                 if (Width(drawn) <= cells)
                 {
-                    return Centered(drawn, cells);
+                    return Lay(drawn, cells);
                 }
             }
         }
 
-        var text = Text(meters);
-        return Width(text) <= cells ? Centered(text, cells) : new PerfRow(Cut(text, cells));
+        var text = groups.Select(Text).ToArray();
+        if (Width(text) <= cells)
+        {
+            return Lay(text, cells);
+        }
+
+        // Room for the center (later on 2026-10-13): the text look, the right group giving way from its inner end, then the left.
+        var kept = groups.Select(g => g.ToList()).ToArray();
+        foreach (int side in (int[])[2, 0])
+        {
+            while (kept[side].Count > 0 && Width(kept.Select(Text).ToArray()) > cells)
+            {
+                kept[side].RemoveAt(side == 2 ? 0 : kept[side].Count - 1);
+            }
+        }
+
+        var squeezed = kept.Select(Text).ToArray();
+        if (squeezed.Any(g => g.Count > 0) && Width(squeezed) <= cells)
+        {
+            return Lay(squeezed, cells);
+        }
+
+        var alone = new[] { text[1], text[0], text[2] }.FirstOrDefault(g => g.Count > 0) ?? [];
+        return new PerfRow(Cut(alone, cells));
     }
+
+    /// <summary>The least blank between two groups that draw (later on 2026-10-13): a drawn look's separator.</summary>
+    public static readonly int GroupGap = TextCells.Width(PerfText.MeterSeparator);
 
     /// <summary>The load's colour: <see cref="Theme.Good"/> under <see cref="GoodBelow"/>, <see cref="Theme.Warn"/> under <see cref="WarnBelow"/>, else <see cref="Theme.Bad"/>.</summary>
     public static Color LoadColor(double percent) => percent < GoodBelow ? Theme.Good : percent < WarnBelow ? Theme.Warn : Theme.Bad;
@@ -203,18 +238,49 @@ public static class PerfBar
     }
 
     /// <summary>
-    /// The row centred in <paramref name="cells"/> by a blank run ahead of it — half the room, the odd cell at the right, where
-    /// the pane's erase blanks the rest; an empty row stays empty.
+    /// The three groups (left, center, right) on one row of <paramref name="cells"/> (later on 2026-10-13): the left from column 0, the
+    /// right ending on the last cell, the center centred on the row — half the room, the odd cell at its right — and pushed aside by them,
+    /// <see cref="GroupGap"/> at least between two. The center alone is the centred row the bar always drew; an empty row stays empty.
     /// </summary>
-    private static PerfRow Centered(List<PerfSegment> row, int cells)
+    private static PerfRow Lay(IReadOnlyList<List<PerfSegment>> groups, int cells)
     {
-        int pad = (cells - Width(row)) / 2;
-        if (row.Count > 0 && pad > 0)
+        var (left, center, right) = (groups[0], groups[1], groups[2]);
+        int rightStart = cells - Width(right);
+        int centerStart = 0;
+        if (center.Count > 0)
         {
-            row.Insert(0, new PerfSegment(new string(' ', pad), Style.Plain));
+            int min = left.Count > 0 ? Width(left) + GroupGap : 0;
+            int max = (right.Count > 0 ? rightStart - GroupGap : cells) - Width(center);
+            centerStart = Math.Clamp((cells - Width(center)) / 2, min, Math.Max(min, max));
+        }
+
+        var row = new List<PerfSegment>();
+        int at = 0;
+        foreach (var (group, start) in new[] { (left, 0), (center, centerStart), (right, rightStart) })
+        {
+            if (group.Count == 0)
+            {
+                continue;
+            }
+
+            if (start > at)
+            {
+                row.Add(new PerfSegment(new string(' ', start - at), Style.Plain));
+                at = start;
+            }
+
+            row.AddRange(group);
+            at += Width(group);
         }
 
         return new PerfRow(row);
+    }
+
+    // The groups' cells together, GroupGap between two that draw.
+    private static int Width(IReadOnlyList<List<PerfSegment>> groups)
+    {
+        var drawn = groups.Where(g => g.Count > 0).ToList();
+        return drawn.Sum(Width) + GroupGap * Math.Max(0, drawn.Count - 1);
     }
 
     private static int Width(IEnumerable<PerfSegment> row) => row.Sum(s => TextCells.Width(s.Text));

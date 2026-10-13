@@ -10,7 +10,8 @@ namespace NeonSidekick.App;
 /// to the other side (to the right group's start, the left group's end: next to the gap); Shift+↑↓ moves it within its group,
 /// crossing into the other at the group's edge; Shift+Home/End to the top or the bottom of its group. The checks, Delete and the
 /// title row's buttons are the checklists' as before; <c>⊡ default</c> puts back the sides with the checks and the order. The rows'
-/// helpers also lay out an order in three groups (later on 2026-10-13, the home bar's On the bar tab, <see cref="PinnedCenterHeading"/>).
+/// helpers also lay out an order in three groups (later on 2026-10-13, the home bar's On the bar tab, <see cref="PinnedCenterHeading"/>),
+/// and the Performance bar's checklist is one in three (later still that day, <see cref="PerfBarChecklist"/>): Shift+←/→ a group over.
 /// </summary>
 internal sealed partial class SettingsMenu
 {
@@ -156,7 +157,26 @@ internal sealed partial class SettingsMenu
         App.HintBarItems.SpinnerFixedNotice);
 
     /// <summary>
-    /// A checklist in two groups under the settings list (2026-10-13): Enter or Space flips the cursor's item and saves at once, the
+    /// The Performance bar's checklist (<see cref="EditPerfBarAsync"/>; later on 2026-10-13, in three groups, center the default):
+    /// <c>⊡ default</c> checks the default meters (saved, as the page always did), and puts the order and the sides back.
+    /// </summary>
+    private static readonly SidedChecklist PerfBarChecklist = new(
+        SettingsField.ShowPerformanceBar,
+        PerfBarToggleKeys,
+        PerfBarItems.Names,
+        PerfBarItems.Defaults,
+        d => PerfBarItems.Resolve(d.PerformanceBarItems),
+        d => PerfBarItems.Sides(d.PerformanceBarOrder, d.PerformanceBarLeft, d.PerformanceBarRight),
+        PerfBarItems.Label,
+        (d, on) => d.PerformanceBarItems = PerfBarItems.Save(on),
+        (d, sides) => { d.PerformanceBarOrder = PerfBarItems.SaveOrder(sides.All); d.PerformanceBarLeft = PerfBarItems.SaveSide(sides.Left); d.PerformanceBarRight = PerfBarItems.SaveSide(sides.Right); },
+        d => { d.PerformanceBarItems = PerfBarItems.Save(PerfBarItems.Defaults.ToHashSet(StringComparer.Ordinal)); d.PerformanceBarOrder = null; d.PerformanceBarLeft = null; d.PerformanceBarRight = null; },
+        d => PerfBarItems.Resolve(d.PerformanceBarItems).SetEquals(PerfBarItems.Defaults)
+            && PerfBarItems.Sides(d.PerformanceBarOrder, d.PerformanceBarLeft, d.PerformanceBarRight) is var sides
+            && sides.Left.Count == 0 && sides.Right.Count == 0 && PerfBarItems.SaveOrder(sides.All) is null);
+
+    /// <summary>
+    /// A checklist in two groups (or three, the performance bar's) under the settings list (2026-10-13): Enter or Space flips the cursor's item and saves at once, the
     /// move keys and Shift+←/→ (<see cref="MenuPage.Sides"/>) reorder it and save, Delete unchecks it, the title row's select all,
     /// select none and default; re-shown until ESC, the bar redrawing under it. True when anything changed.
     /// </summary>

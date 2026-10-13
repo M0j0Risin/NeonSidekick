@@ -766,6 +766,8 @@ public sealed class AppSettings : IDisposable
         PerformanceBarLastItems = source.PerformanceBarLastItems is null ? null : [.. source.PerformanceBarLastItems],
         ToolbarOrder = source.ToolbarOrder is null ? null : [.. source.ToolbarOrder],
         PerformanceBarOrder = source.PerformanceBarOrder is null ? null : [.. source.PerformanceBarOrder],
+        PerformanceBarLeft = source.PerformanceBarLeft is null ? null : [.. source.PerformanceBarLeft],
+        PerformanceBarRight = source.PerformanceBarRight is null ? null : [.. source.PerformanceBarRight],
         HomeBarItems = source.HomeBarItems is null ? null : [.. source.HomeBarItems],
         HomeBarLastItems = source.HomeBarLastItems is null ? null : [.. source.HomeBarLastItems],
         HomeBarLeft = source.HomeBarLeft is null ? null : [.. source.HomeBarLeft],

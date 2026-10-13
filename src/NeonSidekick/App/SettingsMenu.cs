@@ -2656,7 +2656,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ShowWorkingDirectory => OnOff(data.ShowWorkingDirectory),
             SettingsField.HintBarItems => App.HintBarItems.Value(data.HintBarItems, data.HintBarOrder, data.HintBarRight),
             SettingsField.ToolbarItems => App.ToolbarItems.Value(data.ToolbarItems),
-            SettingsField.ShowPerformanceBar => PerfBarItems.Value(data.PerformanceBarItems, data.PerformanceBarLook, data.PerformanceBarOrder),
+            SettingsField.ShowPerformanceBar => PerfBarItems.Value(data.PerformanceBarItems, data.PerformanceBarLook, data.PerformanceBarOrder, data.PerformanceBarLeft, data.PerformanceBarRight),
             SettingsField.ShowHomeBar => HomeBarItems.Value(data.HomeBarItems, null),
             SettingsField.BarOrder => PaneBars.Value(data.BarOrder),
             SettingsField.ThemedExternalWindows => OnOff(data.ThemedExternalWindows),
@@ -3139,7 +3139,7 @@ internal sealed partial class SettingsMenu
     /// 2026-09-30 the page's title row also held the looks (<c>t / g / l = look</c> in the hint, a radio button per look after
     /// default); they went the same day, and <c>/perfbar &lt;look&gt;</c> is the one way to pick it. Pinned.
     /// </summary>
-    public const string PerfBarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · a = all · n = none · d = default · ESC = back";
+    public const string PerfBarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · Shift+←→ = side · a = all · n = none · d = default · ESC = back";   // the side since later on 2026-10-13 (the user's ask: pinned left, center or right)
 
     /// <summary>The Hint bar checklist's hint (2026-10-12): the toolbar's keys, the same string until the tool bar's dividers (2026-10-13). Pinned.</summary>
     public const string HintBarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · Shift+←→ = side · a = all · n = none · d = default · ESC = back";
@@ -8402,70 +8402,12 @@ internal sealed partial class SettingsMenu
     /// VRAM). The looks were radio buttons after default until 2026-10-12 (the user's call); <c>/perfbar &lt;look&gt;</c> sets
     /// the look. The list is re-shown until ESC, the bar redrawing under it. Since 2026-10-12 (the user's ask, the home bar picker's move keys) the rows are the bar's order
     /// (<see cref="PerfBarItems.Order"/>): Shift+↑↓ moves the cursor's meter a place, Shift+Home/End to the top or the bottom;
-    /// Delete unchecks it; default puts the order back with the checks (the look stays). True when anything changed.
+    /// Delete unchecks it; default puts the order back with the checks (the look stays). Later on 2026-10-13 (the user's ask: the home
+    /// bar's pinning) the rows are in three groups, <see cref="PinnedLeftHeading"/>, <see cref="PinnedCenterHeading"/> and
+    /// <see cref="PinnedRightHeading"/>, Shift+←/→ moving the cursor's meter a group over (<see cref="EditSidedChecklistAsync"/>, the tool
+    /// bar's and the hint bar's), every meter center by default; default puts the sides back too. True when anything changed.
     /// </summary>
-    private async Task<bool> EditPerfBarAsync(CancellationToken cancellationToken)
-    {
-        bool changed = false;
-        int cursor = 0;
-        var names = PerfBarItems.Names;
-        while (true)
-        {
-            var saved = _settings.Current;
-            var on = PerfBarItems.Resolve(saved.PerformanceBarItems);
-            var order = PerfBarItems.Order(saved.PerformanceBarOrder);
-            var page = new MenuPage(Crumb(FieldName(SettingsField.ShowPerformanceBar)), order.Select(id => PerfBarItems.Label(id, on.Contains(id))).ToList(), PerfBarToggleKeys) { SpaceToggles = true };
-            var picked = await PickOrderedChecklistAsync(page, cursor, cancellationToken, DefaultChecklistButtons).ConfigureAwait(false);
-            if (picked is not { } pick)
-            {
-                if (!changed)
-                {
-                    Sink.Notice(UnchangedNotice);
-                }
-
-                return changed;
-            }
-
-            cursor = pick.Row;
-            if (pick.Move != 0)
-            {
-                var (moved, at) = ItemOrder.Move(order, pick.Row, pick.Move);
-                cursor = at;
-                if (at != pick.Row)
-                {
-                    Apply(SettingsField.ShowPerformanceBar, d => d.PerformanceBarOrder = PerfBarItems.SaveOrder(moved));
-                    changed = true;
-                }
-
-                continue;
-            }
-
-            if (pick.Button == DefaultsIndex)
-            {
-                if (on.SetEquals(PerfBarItems.Defaults) && PerfBarItems.SaveOrder(order) is null)
-                {
-                    continue;   // the default meters in the default order: nothing to save
-                }
-
-                Apply(SettingsField.ShowPerformanceBar, d => { d.PerformanceBarItems = PerfBarItems.Save(PerfBarItems.Defaults.ToHashSet(StringComparer.Ordinal)); d.PerformanceBarOrder = null; });
-                changed = true;
-                continue;
-            }
-
-            string row = order[Math.Clamp(pick.Row, 0, order.Count - 1)];
-            var next = pick.Button == SelectAllIndex ? names.ToHashSet(StringComparer.Ordinal)
-                : pick.Button == SelectNoneIndex ? new HashSet<string>(StringComparer.Ordinal)
-                : pick.Remove ? names.Where(n => on.Contains(n) && n != row).ToHashSet(StringComparer.Ordinal)
-                : names.Where(n => on.Contains(n) != (n == row)).ToHashSet(StringComparer.Ordinal);
-            if (next.SetEquals(on))
-            {
-                continue;   // select all with every meter on, none with none, Delete on an unchecked row: nothing to save
-            }
-
-            Apply(SettingsField.ShowPerformanceBar, d => d.PerformanceBarItems = PerfBarItems.Save(next));
-            changed = true;
-        }
-    }
+    private Task<bool> EditPerfBarAsync(CancellationToken cancellationToken) => EditSidedChecklistAsync(PerfBarChecklist, cancellationToken);
 
     /// <summary>
     /// The Toolbar order page under the settings list (2026-10-12, the user's ask: the hint bar, the toolbar, the performance bar

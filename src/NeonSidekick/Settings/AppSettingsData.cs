@@ -450,6 +450,20 @@ public sealed class AppSettingsData
     public List<string>? PerformanceBarOrder { get; set; }
 
     /// <summary>
+    /// The performance bar's meters pinned left (later on 2026-10-13, the user's ask: "the same thing with the perfbar", the home bar's
+    /// three groups): ids of <see cref="App.PerfBarItems.Names"/>; every meter in neither this nor <see cref="PerformanceBarRight"/> is
+    /// center, as the whole bar was until then. The left group leads the row, the right group ends it, the center is centred between;
+    /// each in <see cref="PerformanceBarOrder"/>'s order. When the row is short the meters shrink first, every one together, then fall
+    /// back to the text look; then the right group's meters go, then the left's: the center wins. Set on the <c>Show performance
+    /// bar</c> checklist (Shift+←/→); its <c>⊡ default</c> puts every meter back in the center. Null or empty is none. No settings
+    /// row of its own, no variable.
+    /// </summary>
+    public List<string>? PerformanceBarLeft { get; set; }
+
+    /// <summary>The performance bar's meters pinned right (later on 2026-10-13): <see cref="PerformanceBarLeft"/>'s twin, the group that gives way first. Null or empty is none. No settings row, no variable.</summary>
+    public List<string>? PerformanceBarRight { get; set; }
+
+    /// <summary>
     /// The performance bar's look (later on 2026-09-29, the user's ask: "the last look used"; the look itself since
     /// 2026-09-30): one of <see cref="App.PerfBarMode.Names"/> — <c>text</c>, <c>gauge</c> or <c>led</c> (<c>spark</c> until 2026-10-12, now read as <c>led</c>; the
     /// default since 2026-10-02, the user's ask; <c>text</c> until then, which a profile that saved it keeps) — picked by

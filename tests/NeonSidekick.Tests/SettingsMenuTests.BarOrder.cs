@@ -318,6 +318,48 @@ public partial class SettingsMenuTests
     }
 
     /// <summary>
+    /// The performance bar's checklist in three groups (later on 2026-10-13, the user's ask: the home bar's pinning): every meter
+    /// center by default; Shift+→ pins one a group right, Shift+← a group left, one group a press; the row's value lists left, center,
+    /// right; default puts the sides back with the order.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_PerformanceBar_ThreeGroups_ShiftArrowsPinAGroupOver_DefaultPutsTheSidesBack()
+    {
+        var shiftLeft = new ConsoleKeyInfo('\0', ConsoleKey.LeftArrow, shift: true, alt: false, control: false);
+        var (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        Push(Keys.Enter);                       // on CPU, the center's first
+        Push(ShiftRight);                       // CPU pinned right
+        Push(shiftLeft, shiftLeft);             // back to the center's end, then to the left
+        Push(Keys.Down, ShiftRight);            // past the center's heading to RAM, pinned right
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["cpu"], _settings.Current.PerformanceBarLeft);
+        Assert.Equal(["ram"], _settings.Current.PerformanceBarRight);
+        Assert.Equal(["cpu", "gpu", "vram", "net", "netdown", "netup", "proc", "ram"], _settings.Current.PerformanceBarOrder);
+        Assert.Contains(SettingsMenu.PinnedLeftHeading, Output);
+        Assert.Contains(SettingsMenu.PinnedCenterHeading, Output);
+        Assert.Contains(SettingsMenu.PinnedRightHeading, Output);
+        Assert.Contains("  · Performance bar: CPU, GPU, " + Perf.PerfText.VramLabel + ", RAM · ", Output);
+        pane.Dispose();
+
+        (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        Push(Keys.Enter);
+        Push(Keys.Char('d'));
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Null(_settings.Current.PerformanceBarLeft);
+        Assert.Null(_settings.Current.PerformanceBarRight);
+        Assert.Null(_settings.Current.PerformanceBarOrder);
+        pane.Dispose();
+    }
+
+    /// <summary>
     /// The tool bar's dividers on the checklist (2026-10-13, the user's ask): <c>+</c> puts one after the cursor's item, Delete on it
     /// takes it out, Shift+→ pins it right like any item, and <c>d</c> puts the default order (with its three) back.
     /// </summary>

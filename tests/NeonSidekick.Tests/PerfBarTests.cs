@@ -635,6 +635,61 @@ public class PerfBarTests
         Assert.Equal("CPU 100%", PerfBar.Render(PerfBarStyle.Text, Four, new PerfSnapshot(100, null, null, null), 8)!.Text);
     }
 
+    /// <summary>
+    /// Pinned left, center or right (later on 2026-10-13, the user's ask: the home bar's groups on this bar): the left group from
+    /// column 0, the right ending on the last cell, the center centred and pushed aside by them, <see cref="PerfBar.GroupGap"/> at least
+    /// between two; each group in the order's order.
+    /// </summary>
+    [Fact]
+    public void PinnedGroups_LeftStartsTheRow_RightEndsIt_TheCenterCentredBetween()
+    {
+        var row = PerfBar.Render(PerfBarStyle.Text, Four, Reading, 120, order: ["vram", "cpu", "ram", "gpu"], left: Only("cpu"), right: Only("vram", "gpu"))!;
+        string vram = Perf.PerfText.VramLabel;
+        string right = vram + "  91% · GPU  18%";
+        Assert.StartsWith("CPU  34%", row.Text);
+        Assert.EndsWith(right, row.Text);
+        Assert.Equal(120, TextCells.Width(row.Text));
+        int ram = row.Text.IndexOf("RAM", StringComparison.Ordinal);
+        Assert.Equal((120 - TextCells.Width("RAM  62%")) / 2, ram);   // room to spare: the center sits centred on the row
+        Assert.Equal(Style.Plain, row.Segments[2].Style);             // a blank run between groups, no separator
+
+        // A long left group pushes the center aside, GroupGap beyond it.
+        var pushed = PerfBar.Render(PerfBarStyle.Text, Four, Reading, 42, left: Only("cpu", "ram", "gpu"))!;
+        Assert.Equal("CPU  34% · RAM  62% · GPU  18%" + new string(' ', PerfBar.GroupGap) + vram + "  91%", pushed.Text.TrimEnd());
+
+        // Nothing pinned: the centred row it always was.
+        Assert.Equal(PerfBar.Render(PerfBarStyle.Gauge, Four, Reading, 120)!.Text, PerfBar.Render(PerfBarStyle.Gauge, Four, Reading, 120, left: Only(), right: Only())!.Text);
+    }
+
+    /// <summary>
+    /// Too narrow a row with groups (later on 2026-10-13, the home bar's order, the user's call): every meter shrinks first, then the
+    /// text look; then the right group's meters go from its inner end, then the left's from theirs; then the center alone is cut.
+    /// </summary>
+    [Fact]
+    public void PinnedGroups_ANarrowRow_ShrinksFirst_ThenTheRightGivesWay_ThenTheLeft_TheCenterWins()
+    {
+        // Shrinks before anything goes: four LEDs a meter, every group still there.
+        var led = PerfBar.Render(PerfBarStyle.Led, Four, Reading, 62, left: Only("cpu"), right: Only("gpu", "vram"))!;
+        Assert.Equal(16, led.Text.Count(c => c is '▰' or '▱'));
+        Assert.StartsWith("CPU ", led.Text);
+        Assert.EndsWith(" 91%", led.Text);
+
+        // The text look's four need 36 cells and two gaps more: the right's inner meter (GPU) goes first.
+        string vram = Perf.PerfText.VramLabel;
+        var right = PerfBar.Render(PerfBarStyle.Text, Four, Reading, 35, left: Only("cpu"), right: Only("gpu", "vram"))!;
+        Assert.StartsWith("CPU  34%", right.Text);
+        Assert.Contains("RAM  62%", right.Text);
+        Assert.EndsWith(vram + "  91%", right.Text);
+        Assert.DoesNotContain("GPU", right.Text);
+
+        var left = PerfBar.Render(PerfBarStyle.Text, Four, Reading, 18, left: Only("cpu"), right: Only("gpu", "vram"))!;
+        Assert.Equal(Centered("RAM  62%", 18), left.Text);   // then the left's: the center alone, centred
+
+        // The center alone too wide: cut at the row's left, as the bar always was.
+        var cut = PerfBar.Render(PerfBarStyle.Text, Four, Reading, 12, left: Only("vram"))!;
+        Assert.Equal("CPU  34% · R", cut.Text);
+    }
+
     [Theory]
     [InlineData(34.0, " 34%")]
     [InlineData(7.49, "  7%")]
