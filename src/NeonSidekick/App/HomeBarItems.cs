@@ -1,3 +1,4 @@
+using NeonSidekick.Emojis;
 using NeonSidekick.HomeAssistant;
 
 namespace NeonSidekick.App;
@@ -259,6 +260,39 @@ public static class HomeBarItems
         {
             string text = alias?.Trim() ?? "";
             if (text.Length == 0 || string.Equals(text, name.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                next.Remove(r);
+            }
+            else
+            {
+                next[r] = text;
+            }
+        }
+
+        return next.Count > 0 ? next : null;
+    }
+
+    /// <summary>
+    /// The emoji of the user's own the chip of <paramref name="reference"/> shows in place of its glyph (later on 2026-10-12, the
+    /// user's ask; <see cref="Settings.AppSettingsData.HomeBarGlyphs"/>): one emoji (<see cref="AvatarRules.Normalize"/>, a
+    /// hand-edited word ignored); null for none. Pure.
+    /// </summary>
+    public static string? GlyphOf(IReadOnlyDictionary<string, string>? glyphs, string reference) =>
+        glyphs is not null && Normalize(reference) is { } r && glyphs.TryGetValue(r, out string? glyph) && AvatarRules.Normalize(glyph) is { Length: > 0 } emoji ? emoji : null;
+
+    /// <summary>
+    /// <paramref name="glyphs"/> with <paramref name="reference"/>'s emoji set to <paramref name="emoji"/>, or taken out when it is
+    /// blank, not one emoji, or the item's own <paramref name="defaultGlyph"/>; null when none is left, as the setting's default
+    /// (<see cref="Rename"/>'s shape). A malformed reference changes nothing. Pure.
+    /// </summary>
+    public static Dictionary<string, string>? SetGlyph(IReadOnlyDictionary<string, string>? glyphs, string reference, string? emoji, string defaultGlyph)
+    {
+        ArgumentNullException.ThrowIfNull(defaultGlyph);
+        var next = glyphs is null ? new Dictionary<string, string>(StringComparer.Ordinal) : new Dictionary<string, string>(glyphs, StringComparer.Ordinal);
+        if (Normalize(reference) is { } r)
+        {
+            string text = AvatarRules.Normalize(emoji);
+            if (text.Length == 0 || string.Equals(text, defaultGlyph.Trim(), StringComparison.Ordinal))
             {
                 next.Remove(r);
             }

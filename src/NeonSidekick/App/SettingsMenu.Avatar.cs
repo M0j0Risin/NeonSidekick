@@ -33,8 +33,9 @@ internal sealed partial class SettingsMenu
     }
 
     // What one visit of the picker reads once: the catalog, the prefs, the avatar, whose avatars are whose, the suggestions.
-    // ForDraft (2026-10-11): the draft line's emoji picker, not the avatar's — no avatar, owners, suggestions or preview.
-    private sealed record AvatarContext(EmojiCatalog Catalog, EmojiPrefs Prefs, string Current, string Profile, IReadOnlyDictionary<string, List<string>> UsedBy, IReadOnlyList<EmojiEntry> Suggested, bool ForDraft = false);
+    // ForDraft (2026-10-11): the draft line's emoji picker, not the avatar's — no avatar, owners, suggestions or preview. HomeDefault
+    // (later on 2026-10-12): a home bar item's emoji, Current its own one, 🚫 back to this glyph, no preview and no avatar words.
+    private sealed record AvatarContext(EmojiCatalog Catalog, EmojiPrefs Prefs, string Current, string Profile, IReadOnlyDictionary<string, List<string>> UsedBy, IReadOnlyList<EmojiEntry> Suggested, bool ForDraft = false, string? HomeDefault = null);
 
     /// <summary>
     /// The avatar picker (2026-10-10, the user's ask: "an intuitive picker … searching by name, a category filter, and any other way
@@ -514,15 +515,15 @@ internal sealed partial class SettingsMenu
 
         if (cell.Kind == AvatarCellKind.None)
         {
-            return new MenuFooter(EmojiText.NoneFooter);
+            return new MenuFooter(context.HomeDefault is { } own ? HomeAssistant.HomeBarText.DefaultGlyphFooter(own) : EmojiText.NoneFooter);
         }
 
         var lines = new List<string>
         {
             EmojiText.NameLine(cell.Emoji, cell.Entry),
             EmojiText.KeywordLine(cell.Entry),
-            EmojiText.CodeLine(cell.Emoji, cell.Entry, cell.Emoji == context.Current, UsersOf(context, cell.Emoji)),
-            context.ForDraft ? "" : EmojiText.PreviewLine(cell.Emoji, context.Profile),
+            EmojiText.CodeLine(cell.Emoji, cell.Entry, context.HomeDefault is null && cell.Emoji == context.Current, UsersOf(context, cell.Emoji)),
+            context.ForDraft || context.HomeDefault is not null ? "" : EmojiText.PreviewLine(cell.Emoji, context.Profile),
         };
         if (cell.Entry is { HasTones: true })
         {

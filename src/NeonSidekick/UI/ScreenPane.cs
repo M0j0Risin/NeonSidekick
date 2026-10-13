@@ -5366,13 +5366,25 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The lower rule with <see cref="LowerRuleTitle"/> at its right edge (2026-10-12; the bare rule until then, and while none is
-    /// answered): the title remembered for the tick and where it landed for <see cref="TryHitLowerRuleTitle"/>.
+    /// answered): the title remembered for the tick and where it landed for <see cref="TryHitLowerRuleTitle"/>. The title is in
+    /// the upper rule's ⤡ style, <see cref="Theme.AccentSecondary"/> (later on 2026-10-12, the user's ask), the rule around it
+    /// in <see cref="Theme.PaneRule"/>.
     /// </summary>
     private void WriteLowerRule(int width)
     {
         _drawnLowerRuleTitle = _lowerRuleTitle();
         (_lowerTitleColumn, _lowerTitleCells) = TitleSpan(_drawnLowerRuleTitle, width, 0);
-        _inner.Write(new RawText(RuleWithTitle(_drawnLowerRuleTitle, width), Theme.PaneRule));
+        if (FitRuleTitle(_drawnLowerRuleTitle, width) is var (fitted, left))
+        {
+            _inner.Write(new RawText(new string(RuleGlyph, left) + " ", Theme.PaneRule));
+            _inner.Write(new RawText(fitted, Theme.AccentSecondary));
+            _inner.Write(new RawText(" " + RuleGlyph, Theme.PaneRule));
+        }
+        else
+        {
+            _inner.Write(new RawText(new string(RuleGlyph, Math.Max(0, width)), Theme.PaneRule));
+        }
+
         _inner.WriteLine();
     }
 

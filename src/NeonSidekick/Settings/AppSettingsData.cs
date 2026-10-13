@@ -448,6 +448,17 @@ public sealed class AppSettingsData
     public Dictionary<string, string>? HomeBarAliases { get; set; }
 
     /// <summary>
+    /// The home bar's emoji of the user's own (later on 2026-10-12, the user's ask: as an item takes an alias, it takes an emoji
+    /// too): an item's reference, as <see cref="HomeBarAliases"/> keys them, to the one emoji its chip shows in place of the glyph
+    /// its kind of device gets. Fixed: a lock's 🔒/🔓 no longer follows its state while one is set (the chip's words and colour
+    /// still do). Set on the picker's actions page (<c>Change emoji…</c>, the emoji grid; <c>Default emoji</c> or the grid's 🚫
+    /// takes it off) or with <c>/homebar emoji &lt;item&gt; = &lt;emoji&gt;</c>; it stays when its item leaves the bar, as an
+    /// alias does. A value that is not one emoji is ignored (<see cref="App.HomeBarItems.GlyphOf"/>). Null or empty is none. No
+    /// settings row, no variable.
+    /// </summary>
+    public Dictionary<string, string>? HomeBarGlyphs { get; set; }
+
+    /// <summary>
     /// The order of the four rows under the pane's lower rule (2026-10-12, the user's ask: "freely arrange the order" of the hint
     /// bar, the toolbar, the performance bar and the home bar, the hint bar under the performance bar for one): every id of
     /// <see cref="App.PaneBars.Names"/> (<c>hint</c>, <c>toolbar</c>, <c>perf</c>, <c>home</c>) top to bottom

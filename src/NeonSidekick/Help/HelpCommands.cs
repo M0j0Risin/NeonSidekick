@@ -160,10 +160,11 @@ public static class HelpCommands
         new("/homebar",
         [
             new("/homebar [on|off]", "Show or hide the home bar, the row of Home Assistant chips under the performance bar by default (*Home bar*; *Toolbar order* moves it). On its own it hides the bar, or shows it again with the items it last had; the first time, with nothing picked, it opens the picker. Works while a reply runs; Ctrl+W runs it too."),
-            new("/homebar edit", "Choose the bar's rooms and devices, and their order: the picker's first tab is the bar in order (Shift+↑/↓ move an item, Shift+Home/End to the top or bottom, Delete removes it, Enter for the same as a list and Rename on the bar…), the other tabs Rooms, Lights, Switches, Sensors, Climate, Media, Scenes, Security, Zones and Other, where Space or Enter adds or removes and typing filters."),
+            new("/homebar edit", "Choose the bar's rooms and devices, and their order: the picker's first tab is the bar in order (Shift+↑/↓ move an item, Shift+Home/End to the top or bottom, Delete removes it, Enter for the same as a list, Rename on the bar…, Change emoji… and Default emoji), the other tabs Rooms, Lights, Switches, Sensors, Climate, Media, Scenes, Security, Zones and Other, where Space or Enter adds or removes and typing filters."),
             new("/homebar tap <item>", "What a double-click on a chip does, by its item (`entity:light.desk`, `area:kitchen`) or its name: a light, switch or fan toggles, a room's lights go off or on, a scene or script runs, a player plays or pauses. An unlock, opening a garage, gate or door, and disarming an alarm ask Yes or No first."),
             new("/homebar show <item>", "A chip's pane, what a right-click opens: its actions (on, off, brightness, volume, open, close, lock…), or a room's devices to switch one by one."),
             new("/homebar name <item> = <alias>", "Show an item's chip under a name of your own (`/homebar name Den PC Monitor = PC`); the item by its id, name or alias. Nothing after the `=` takes the alias off. The chip's label only: a click's note and its pane keep Home Assistant's name."),
+            new("/homebar emoji <item> = <emoji>", "Show an item's chip with an emoji of your own in place of its glyph (`/homebar emoji Den Lamp = 🛋️`); the item by its id, name or alias. Nothing after the `=`, or `default`, puts its own glyph back. One emoji only; it stays fixed, so a lock's 🔒/🔓 no longer follows its state."),
         ]),
         new("/imagine",
         [

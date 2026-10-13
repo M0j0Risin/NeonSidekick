@@ -111,9 +111,11 @@ public static class HomeChips
     /// <summary>
     /// The chip for <paramref name="reference"/> from the live entities and the registries; <paramref name="stale"/> while the
     /// feed is not live. An item whose entity has not arrived yet is a dim chip with its catalog name and no action. An alias in
-    /// <paramref name="aliases"/> (<see cref="HomeBarItems.AliasOf"/>) is the chip's <see cref="HomeChip.Label"/> and its short name.
+    /// <paramref name="aliases"/> (<see cref="HomeBarItems.AliasOf"/>) is the chip's <see cref="HomeChip.Label"/> and its short name;
+    /// an emoji in <paramref name="glyphs"/> (<see cref="HomeBarItems.GlyphOf"/>, later on 2026-10-12) its <see cref="HomeChip.Glyph"/>,
+    /// whatever the state.
     /// </summary>
-    public static HomeChip Build(string reference, IReadOnlyDictionary<string, HaLiveEntity> entities, HaCatalog? catalog, HomeChipMark mark, bool stale, IReadOnlyDictionary<string, string>? aliases = null)
+    public static HomeChip Build(string reference, IReadOnlyDictionary<string, HaLiveEntity> entities, HaCatalog? catalog, HomeChipMark mark, bool stale, IReadOnlyDictionary<string, string>? aliases = null, IReadOnlyDictionary<string, string>? glyphs = null)
     {
         ArgumentNullException.ThrowIfNull(reference);
         ArgumentNullException.ThrowIfNull(entities);
@@ -131,7 +133,27 @@ public static class HomeChips
             chip = chip with { Label = alias, Short = Clip(alias, ShortCells) };
         }
 
+        if (HomeBarItems.GlyphOf(glyphs, reference) is { } glyph)
+        {
+            chip = chip with { Glyph = glyph };
+        }
+
         return stale ? chip with { Style = Theme.DimText } : chip;
+    }
+
+    /// <summary>
+    /// The glyph <paramref name="reference"/>'s chip gets without an emoji of the user's own (later on 2026-10-12): a room's
+    /// <see cref="AreaGlyph"/>, else its kind's (<see cref="GlyphFor"/>) from <paramref name="entity"/>'s state (a TV's 📺 is in its
+    /// device class), or from the catalog's state when none is given. Pure.
+    /// </summary>
+    public static string DefaultGlyph(string reference, HaCatalog? catalog, HaLiveEntity? entity = null)
+    {
+        if (!HomeBarItems.TryParse(reference, out var kind, out string id))
+        {
+            return ToggleGlyph;
+        }
+
+        return kind == HomeItemKind.Area ? AreaGlyph : GlyphFor(id, entity ?? (catalog?.State(id) is { } state ? HaLiveEntity.From(state) : null));
     }
 
     private static HomeChip Waiting(string reference, string glyph, string name, HomeChipMark mark) =>

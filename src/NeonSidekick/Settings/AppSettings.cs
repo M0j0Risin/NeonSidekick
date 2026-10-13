@@ -766,6 +766,7 @@ public sealed class AppSettings : IDisposable
         HomeBarItems = source.HomeBarItems is null ? null : [.. source.HomeBarItems],
         HomeBarLastItems = source.HomeBarLastItems is null ? null : [.. source.HomeBarLastItems],
         HomeBarAliases = source.HomeBarAliases is null ? null : new Dictionary<string, string>(source.HomeBarAliases, StringComparer.Ordinal),
+        HomeBarGlyphs = source.HomeBarGlyphs is null ? null : new Dictionary<string, string>(source.HomeBarGlyphs, StringComparer.Ordinal),
         BarOrder = source.BarOrder is null ? null : [.. source.BarOrder],
         PerformanceBarLook = source.PerformanceBarLook,
         Theme = source.Theme,

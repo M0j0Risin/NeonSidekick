@@ -201,6 +201,21 @@ public class ScreenPaneTests : IDisposable
         Assert.False(pane.TryHitLowerRuleTitle(36, 101));
     }
 
+    /// <summary>The lower rule's title in ⤡'s colour, the rule around it in the rule's own (later on 2026-10-12, the user's ask).</summary>
+    [Fact]
+    public void LowerRuleTitle_IsDrawnInTheFoldButtonsColour()
+    {
+        _console.EmitAnsiSequences();
+        using var pane = Pane();
+        pane.LowerRuleTitle = () => NeonSidekick.Viewer.ProcessWindowText.RuleTitle(3);
+        pane.Show();
+
+        Color secondary = Theme.AccentSecondary.Foreground;
+        Assert.Equal(Theme.Secondary, secondary);
+        Assert.Matches(@"38;2;" + secondary.R + ";" + secondary.G + ";" + secondary.B + "m▶ 3\e", Output);
+        Assert.DoesNotMatch(@"38;2;" + secondary.R + ";" + secondary.G + ";" + secondary.B + "m─", Output);
+    }
+
     /// <summary>
     /// The upper rule's ⤡ (2026-09-29, the user's glyph, in place of the ↘️↖️ pair): after the rule's first glyph with a
     /// space either side, then the titled rule over the rest; without folds, or too narrow to keep the title's least rule

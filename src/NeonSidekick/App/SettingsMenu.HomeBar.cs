@@ -1,3 +1,4 @@
+using NeonSidekick.Emojis;
 using NeonSidekick.HomeAssistant;
 using NeonSidekick.UI;
 using Spectre.Console;
@@ -73,7 +74,7 @@ internal sealed partial class SettingsMenu
             while (true)
             {
                 var items = HomeBarItems.Resolve(_settings.Current.HomeBarItems);
-                var built = HomePickerTabs(catalog, items, filter, _settings.Current.HomeBarAliases);
+                var built = HomePickerTabs(catalog, items, filter, _settings.Current.HomeBarAliases, _settings.Current.HomeBarGlyphs);
                 var page = MenuPage.Tabbed(Crumb(FieldName(SettingsField.ShowHomeBar)), built.Select(b => b.Tab).ToList(), tab, built[Math.Clamp(tab, 0, built.Count - 1)].Tab.Hint ?? "");
                 var picked = await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
                 if (picked is not { } pick)
@@ -105,16 +106,23 @@ internal sealed partial class SettingsMenu
                     int move = pick.Remove ? 0 : pick.Move;
                     if (!pick.Remove && pick.Move == 0)
                     {
-                        // Enter: the actions page, for a terminal that keeps the move keys to itself, and the rename.
+                        // Enter: the actions page, for a terminal that keeps the move keys to itself, the rename and the emoji.
                         if (await HomeItemActionAsync(items[pick.Row], catalog, cancellationToken).ConfigureAwait(false) is not { } chosen)
                         {
                             continue;
                         }
 
-                        if (chosen.Rename)
+                        switch (chosen.Do)
                         {
-                            changed |= await RenameHomeItemAsync(items[pick.Row], catalog, cancellationToken).ConfigureAwait(false);
-                            continue;
+                            case HomeItemDo.Rename:
+                                changed |= await RenameHomeItemAsync(items[pick.Row], catalog, cancellationToken).ConfigureAwait(false);
+                                continue;
+                            case HomeItemDo.Emoji:
+                                changed |= await ChangeHomeItemEmojiAsync(items[pick.Row], catalog, cancellationToken).ConfigureAwait(false);
+                                continue;
+                            case HomeItemDo.DefaultEmoji:
+                                changed |= SetHomeItemGlyph(items[pick.Row], catalog, null);
+                                continue;
                         }
 
                         move = chosen.Move;
@@ -157,15 +165,64 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    // The bar item's actions page: a move (Top/−1/+1/Bottom), 0 for remove, the rename (its alias dim beside it), or null on ESC.
-    private async Task<(int Move, bool Rename)?> HomeItemActionAsync(string reference, HaCatalog catalog, CancellationToken cancellationToken)
+    // What the bar item's actions page chose beside a move: the rename, the emoji grid, the emoji taken off (later on 2026-10-12).
+    private enum HomeItemDo
+    {
+        Move,
+        Rename,
+        Emoji,
+        DefaultEmoji,
+    }
+
+    // The bar item's actions page: a move (Top/−1/+1/Bottom), 0 for remove, the rename (its alias dim beside it), the emoji (its
+    // own dim beside it; later on 2026-10-12, the user's ask) and, while it has one, the default emoji again; null on ESC.
+    private async Task<(int Move, HomeItemDo Do)?> HomeItemActionAsync(string reference, HaCatalog catalog, CancellationToken cancellationToken)
     {
         string? alias = HomeBarItems.AliasOf(_settings.Current.HomeBarAliases, reference);
-        string[] rows = [HomeBarText.MoveTop, HomeBarText.MoveUp, HomeBarText.MoveDown, HomeBarText.MoveBottom, HomeBarText.RenameItem, HomeBarText.RemoveItem];
-        (int, bool)[] actions = [(HomeBarItems.Top, false), (-1, false), (1, false), (HomeBarItems.Bottom, false), (0, true), (0, false)];
-        var marked = rows.Select(r => Markup.Escape(r) + (r == HomeBarText.RenameItem && alias is not null ? Theme.DimMarkup("  " + alias) : "")).ToList();
-        var page = new MenuPage(Crumb(FieldName(SettingsField.ShowHomeBar)) + " › " + HomeBarItems.NameOf(reference, catalog), marked, PickKeys);
-        return await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is { } pick && pick.Row >= 0 && pick.Row < actions.Length ? actions[pick.Row] : null;
+        string? glyph = HomeBarItems.GlyphOf(_settings.Current.HomeBarGlyphs, reference);
+        var rows = new List<(string Row, (int, HomeItemDo) Action)>
+        {
+            (Markup.Escape(HomeBarText.MoveTop), (HomeBarItems.Top, HomeItemDo.Move)),
+            (Markup.Escape(HomeBarText.MoveUp), (-1, HomeItemDo.Move)),
+            (Markup.Escape(HomeBarText.MoveDown), (1, HomeItemDo.Move)),
+            (Markup.Escape(HomeBarText.MoveBottom), (HomeBarItems.Bottom, HomeItemDo.Move)),
+            (Markup.Escape(HomeBarText.RenameItem) + (alias is not null ? Theme.DimMarkup("  " + alias) : ""), (0, HomeItemDo.Rename)),
+            (Markup.Escape(HomeBarText.EmojiItem) + (glyph is not null ? Theme.DimMarkup("  " + glyph) : ""), (0, HomeItemDo.Emoji)),
+        };
+        if (glyph is not null)
+        {
+            rows.Add((Markup.Escape(HomeBarText.DefaultEmojiItem) + Theme.DimMarkup("  " + HomeChips.DefaultGlyph(reference, catalog)), (0, HomeItemDo.DefaultEmoji)));
+        }
+
+        rows.Add((Markup.Escape(HomeBarText.RemoveItem), (0, HomeItemDo.Move)));
+        var page = new MenuPage(Crumb(FieldName(SettingsField.ShowHomeBar)) + " › " + HomeBarItems.NameOf(reference, catalog), rows.Select(r => r.Row).ToList(), PickKeys);
+        return await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is { } pick && pick.Row >= 0 && pick.Row < rows.Count ? rows[pick.Row].Action : null;
+    }
+
+    // Change emoji (later on 2026-10-12, the user's ask): the avatar's emoji grid for the item, opening on its emoji's group, 🚫
+    // (while it has one) its own glyph again; ESC keeps it. True when it changed.
+    private async Task<bool> ChangeHomeItemEmojiAsync(string reference, HaCatalog catalog, CancellationToken cancellationToken)
+    {
+        string name = HomeBarItems.NameOf(reference, catalog);
+        string current = HomeBarItems.GlyphOf(_settings.Current.HomeBarGlyphs, reference) ?? "";
+        var context = new AvatarContext(EmojiCatalog.Shipped, EmojiPrefs.Load(_settings.StorageDirectory), current, _settings.ProfileName,
+            new Dictionary<string, List<string>>(StringComparer.Ordinal), [], HomeDefault: HomeChips.DefaultGlyph(reference, catalog));
+        string title = Crumb(FieldName(SettingsField.ShowHomeBar)) + " › " + name + " › " + HomeBarText.EmojiTitle;
+        return await ChooseEmojiAsync(context, title, "", cancellationToken).ConfigureAwait(false) is { } chosen && SetHomeItemGlyph(reference, catalog, chosen);
+    }
+
+    // The item's emoji saved (null or "" for its own glyph again) through Apply, so the row's notice tells; true when it changed.
+    private bool SetHomeItemGlyph(string reference, HaCatalog catalog, string? emoji)
+    {
+        var glyphs = _settings.Current.HomeBarGlyphs;
+        var next = HomeBarItems.SetGlyph(glyphs, reference, emoji, HomeChips.DefaultGlyph(reference, catalog));
+        if (HomeBarItems.GlyphOf(next, reference) == HomeBarItems.GlyphOf(glyphs, reference))
+        {
+            return false;
+        }
+
+        Apply(SettingsField.ShowHomeBar, d => d.HomeBarGlyphs = next);
+        return true;
     }
 
     // Rename on the bar (2026-10-12, the user's ask): the input row under the crumb, from the alias or else the name; blank or the
@@ -194,11 +251,11 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The picker's tabs over <paramref name="catalog"/> for the bar's <paramref name="items"/>, the kinds' tabs under
     /// <paramref name="filter"/>; an item with an alias (<paramref name="aliases"/>) shows it, quoted on the kinds' and rooms' tabs
-    /// and matched by the filter. Pure over its data.
+    /// and matched by the filter; one with an emoji of its own (<paramref name="glyphs"/>) shows it on the bar's tab. Pure over its data.
     /// </summary>
-    private static List<HomeTab> HomePickerTabs(HaCatalog catalog, IReadOnlyList<string> items, string filter, IReadOnlyDictionary<string, string>? aliases)
+    private static List<HomeTab> HomePickerTabs(HaCatalog catalog, IReadOnlyList<string> items, string filter, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs)
     {
-        var tabs = new List<HomeTab> { BarTab(catalog, items, aliases), RoomsTab(catalog, items, filter, aliases) };
+        var tabs = new List<HomeTab> { BarTab(catalog, items, aliases, glyphs), RoomsTab(catalog, items, filter, aliases) };
         var named = HomeDomainTabs.SelectMany(t => t.Domains).ToHashSet(StringComparer.Ordinal);
         foreach (var (title, domains) in HomeDomainTabs)
         {
@@ -212,7 +269,7 @@ internal sealed partial class SettingsMenu
         return tabs;
     }
 
-    private static HomeTab BarTab(HaCatalog catalog, IReadOnlyList<string> items, IReadOnlyDictionary<string, string>? aliases)
+    private static HomeTab BarTab(HaCatalog catalog, IReadOnlyList<string> items, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs)
     {
         var rows = new List<string>();
         var refs = new List<string?>();
@@ -220,13 +277,16 @@ internal sealed partial class SettingsMenu
         foreach (string item in items)
         {
             HomeBarItems.TryParse(item, out var kind, out string id);
-            // The entity's own glyph, as its chip has (2026-10-12: a TV's 📺 is in its device class, which a bare id lacks).
-            string glyph = kind == HomeItemKind.Area ? HomeChips.AreaGlyph : HomeChips.GlyphFor(id, catalog.State(id) is { } state ? HaLiveEntity.From(state) : null);
+            // The entity's own glyph, as its chip has (2026-10-12: a TV's 📺 is in its device class, which a bare id lacks), or the
+            // emoji of the user's own (later that day), the own one dim at the end.
+            string own = HomeChips.DefaultGlyph(item, catalog);
+            string? custom = HomeBarItems.GlyphOf(glyphs, item);
             string where = kind == HomeItemKind.Area ? HomeBarText.RoomsTab.ToLowerInvariant() : catalog.AreaOf(id) is { } area ? catalog.Area(area)?.Name ?? id : id;
             // An alias first, as the bar shows it, and the item's own name dim beside it.
             string name = HomeBarItems.NameOf(item, catalog);
             string? alias = HomeBarItems.AliasOf(aliases, item);
-            rows.Add(Markup.Escape($"{number++.ToString(System.Globalization.CultureInfo.InvariantCulture),2}. {glyph} {alias ?? name}") + Theme.DimMarkup("  " + (alias is null ? where : name + " · " + where)));
+            string note = (alias is null ? where : name + " · " + where) + (custom is null ? "" : " · " + HomeBarText.DefaultGlyphNote(own));
+            rows.Add(Markup.Escape($"{number++.ToString(System.Globalization.CultureInfo.InvariantCulture),2}. {custom ?? own} {alias ?? name}") + Theme.DimMarkup("  " + note));
             refs.Add(item);
         }
 

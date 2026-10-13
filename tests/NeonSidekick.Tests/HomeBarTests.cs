@@ -467,7 +467,11 @@ public sealed class HomeBarTests
         Assert.Equal("2/5", HomeBarText.Count(2, 5));
         Assert.Equal("19→21°", HomeBarText.ClimateValue("19", "21"));
         Assert.Equal("home", HomeBarText.AlarmWord("armed_home"));
-        Assert.Equal("Usage: /homebar [on|off|edit|name <item> = <alias>] — show or hide the home bar, choose what is on it, or rename an item on it", HomeBarText.Usage);
+        Assert.Equal("Usage: /homebar [on|off|edit|name <item> = <alias>|emoji <item> = <emoji>] — show or hide the home bar, choose what is on it, or rename an item on it or change its emoji", HomeBarText.Usage);
+        Assert.Equal("The home bar shows Den Lamp as 🦊", HomeBarText.GlyphSet("Den Lamp", "🦊"));
+        Assert.Equal("The home bar shows Den Lamp with its own emoji again, 💡", HomeBarText.GlyphReset("Den Lamp", "💡"));
+        Assert.Equal("'abc' is not one emoji: /homebar emoji <item> = <emoji>, or = default for the item's own", HomeBarText.NotEmoji("abc"));
+        Assert.Equal(["on", "off", "edit", "name", "emoji"], HomeBarText.Words);
         Assert.Equal("The home bar shows Den PC Monitor as \"PC\"", HomeBarText.Renamed("Den PC Monitor", "PC"));
         Assert.Equal("The home bar shows Den PC Monitor by its own name again", HomeBarText.Unnamed("Den PC Monitor"));
     }
@@ -523,5 +527,45 @@ public sealed class HomeBarTests
         var plain = HomeChips.Build("entity:light.den_pc_monitor", Entities(monitor), Catalog(), HomeChipMark.None, stale: false);
         Assert.Null(plain.Label);
         Assert.Contains("Den PC Monitor", HomeBar.ChipText(plain, HomeBar.Fit.Full), StringComparison.Ordinal);
+    }
+
+    // ─── emoji of the user's own (later on 2026-10-12) ──────────────────────────
+
+    [Fact]
+    public void SetGlyph_SetsReplacesAndClears_OnABlankTheOwnGlyphOrAWord()
+    {
+        var one = HomeBarItems.SetGlyph(null, "entity:Light.Den_Lamp", " 🦊 ", "💡")!;
+        Assert.Equal("🦊", one["entity:light.den_lamp"]);
+        Assert.Equal("🦊", HomeBarItems.GlyphOf(one, "ENTITY:light.den_lamp"));
+
+        var two = HomeBarItems.SetGlyph(one, "area:den", "🛋️", HomeChips.AreaGlyph)!;
+        Assert.Equal(2, two.Count);
+        Assert.Equal("🐙", HomeBarItems.SetGlyph(two, "entity:light.den_lamp", "🐙", "💡")!["entity:light.den_lamp"]);
+
+        Assert.Null(HomeBarItems.GlyphOf(HomeBarItems.SetGlyph(two, "entity:light.den_lamp", "  ", "💡"), "entity:light.den_lamp"));
+        Assert.Null(HomeBarItems.SetGlyph(one, "entity:light.den_lamp", "💡", "💡"));   // the own glyph: none left
+        Assert.Null(HomeBarItems.SetGlyph(one, "entity:light.den_lamp", "fox", "💡"));   // not an emoji: taken off
+        Assert.Null(HomeBarItems.SetGlyph(one, "entity:light.den_lamp", "🦊🦊", "💡"));
+        Assert.Equal(one, HomeBarItems.SetGlyph(one, "bogus", "🐙", "💡"));
+        Assert.Null(HomeBarItems.GlyphOf(null, "entity:light.den_lamp"));
+        Assert.Null(HomeBarItems.GlyphOf(new Dictionary<string, string> { ["entity:light.den_lamp"] = "fox" }, "entity:light.den_lamp"));   // hand-edited: ignored
+    }
+
+    [Fact]
+    public void AnEmoji_IsTheChipsGlyph_WhateverTheState_AndTheDefaultIsItsKinds()
+    {
+        var glyphs = new Dictionary<string, string> { ["entity:lock.front"] = "🚪", ["area:den"] = "🛋️" };
+        var locked = HomeChips.Build("entity:lock.front", Entities(Entity("lock.front", "locked")), null, HomeChipMark.None, false, null, glyphs);
+        var unlocked = HomeChips.Build("entity:lock.front", Entities(Entity("lock.front", "unlocked")), null, HomeChipMark.None, false, null, glyphs);
+        Assert.Equal("🚪", locked.Glyph);
+        Assert.Equal("🚪", unlocked.Glyph);
+        Assert.Equal(HomeChipAction.Confirm, locked.Action);   // what it does is unchanged
+        Assert.Equal("🛋️", HomeChips.Build("area:den", Entities(), Catalog(), HomeChipMark.None, false, null, glyphs).Glyph);
+        Assert.Equal(HomeChips.LockedGlyph, HomeChips.Build("entity:lock.front", Entities(Entity("lock.front", "locked")), null, HomeChipMark.None, false).Glyph);
+
+        Assert.Equal(HomeChips.AreaGlyph, HomeChips.DefaultGlyph("area:den", null));
+        Assert.Equal(HomeChips.LockedGlyph, HomeChips.DefaultGlyph("entity:lock.front", null, Entity("lock.front", "locked")));
+        Assert.Equal(HomeChips.GlyphFor("light.x", null), HomeChips.DefaultGlyph("entity:light.x", null));
+        Assert.Equal(HomeChips.ToggleGlyph, HomeChips.DefaultGlyph("bogus", null));
     }
 }

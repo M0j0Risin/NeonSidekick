@@ -270,4 +270,43 @@ public partial class ChatScreenTests
         Assert.NotEqual(drawn, ChatScreen.HomeRoomKey(members, new Dictionary<string, HaLiveEntity> { ["light.a"] = Light("light.a", "off"), ["light.b"] = Light("light.b", "off") }, "1/2"));
         Assert.Equal(drawn, ChatScreen.HomeRoomKey(members, new Dictionary<string, HaLiveEntity> { ["light.a"] = Light("light.a", "off"), ["light.b"] = Light("light.b", "off"), ["switch.x"] = Light("switch.x", "on") }, "0/2"));
     }
+
+    /// <summary><c>/homebar emoji</c> (later on 2026-10-12, the user's ask): sets an item's emoji, the bar draws it, default or a blank takes it off, a word is refused.</summary>
+    [Fact]
+    public async Task HomeBar_Emoji_SetsAChipsEmoji_TakesItOff_AndRefusesAWord()
+    {
+        HomeServer();
+        _settings.Update(d => d.HomeBarItems = ["entity:light.desk"]);
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        string? afterSet = null;
+        bool drawn = false;
+        StepsWhenIdle(
+            Line("/homebar emoji entity:light.desk = 🦊"),
+            input =>
+            {
+                afterSet = _settings.Current.HomeBarGlyphs?.GetValueOrDefault("entity:light.desk");
+                TickUntil(() => Output.Contains("  🦊 Desk ", StringComparison.Ordinal));
+                drawn = Output.Contains("  🦊 Desk ", StringComparison.Ordinal);
+                PushLine(input, "/homebar emoji Desk = default");
+            },
+            Line("/homebar emoji Desk = 🐙"),
+            Line("/homebar emoji Desk ="),
+            Line("/homebar emoji Desk = fox"),
+            Line("/homebar emoji Kettle = 🦊"),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal("🦊", afterSet);
+        Assert.True(drawn);   // the bar drew it
+        Assert.Null(_settings.Current.HomeBarGlyphs);
+        Assert.Contains(" as 🦊", output);
+        Assert.Contains(HomeBarText.GlyphSet("Desk", "🐙"), output);   // by its friendly name, which only its chip has
+        Assert.Contains(HomeBarText.GlyphReset("Desk", HomeChips.LightGlyph), output);
+        Assert.Contains(HomeBarText.NotEmoji("fox"), output);
+        Assert.Contains(HomeBarText.NotOnBar("Kettle"), output);
+        Assert.Empty(_chat.Requests);
+    }
 }

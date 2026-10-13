@@ -95,6 +95,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/homebar edit` | The home bar's picker: the bar's order (Shift+↑↓, Shift+Home/End, Delete) and the rooms and devices to add. |
 | `/homebar tap\|show <item>` | What a double-click and a right-click on a chip do, by its item (`entity:light.desk`, `area:kitchen`) or its name. |
 | `/homebar name <item> = <alias>` | Shows an item's chip under a name of your own (`/homebar name Den PC Monitor = PC`); nothing after `=` takes it off. The chip's label only. |
+| `/homebar emoji <item> = <emoji>` | Shows an item's chip with an emoji of your own in place of its glyph (`/homebar emoji Den Lamp = 🛋️`); nothing after `=`, or `default`, puts its own back. One emoji only. It stays fixed, so a lock's 🔒/🔓 no longer follows its state. |
 | `/learn [<note>]` | Writes or improves a skill in the background from the last turn. |
 | `/learn sessions [<n>\|<search>]` | The same from stored sessions: the newest 5, the newest n (up to 20), or those a search finds. |
 | `/log` | Opens the [log window](#log-window). Works without `--log`. |
@@ -611,7 +612,7 @@ In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes
 | The camera pane | Space takes · `r` retake · Enter attaches · ESC drops |
 | `/settings changed` | Enter edits · `r` back to default |
 | `/toolbar edit`, `/perfbar edit` | Enter or Space flips · Shift+↑/↓ move · Shift+Home/End top or bottom · Delete unchecks · `a` all · `n` none · `d` default |
-| `/homebar edit`, On the bar | Shift+↑/↓ move · Shift+Home/End top or bottom · Delete removes · Enter the same as a list and Rename on the bar… |
+| `/homebar edit`, On the bar | Shift+↑/↓ move · Shift+Home/End top or bottom · Delete removes · Enter the same as a list, Rename on the bar…, Change emoji… and Default emoji |
 | `/homebar edit`, the other tabs | Space or Enter adds or removes · type to filter |
 | A room's pane on the home bar | Space switches a device · Enter its actions |
 | *Embedded models* | `1` / `2` size · `i` / `u` installed or not · `d` drafter · `s` sort · `x` uncensored |

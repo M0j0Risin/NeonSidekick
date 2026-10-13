@@ -1,4 +1,5 @@
 using NeonSidekick.App;
+using NeonSidekick.Emojis;
 using NeonSidekick.HomeAssistant;
 using NeonSidekick.Settings;
 using NeonSidekick.UI;
@@ -143,6 +144,69 @@ public partial class SettingsMenuTests
         Assert.False(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
 
         Assert.Contains(HomeBarText.NotConfigured, Output);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// Change emoji (later on 2026-10-12, the user's ask): the actions page opens the emoji grid for the item, a pick shows on the bar's
+    /// tab with the own glyph dim beside it, Default emoji puts the own one back, and so does the grid's 🚫 (its band says so).
+    /// </summary>
+    [Fact]
+    public async Task ThePicker_ChangesAnItemsEmoji_AndDefaultEmojiOrTheGridsNoneTakesItOff()
+    {
+        _console.Profile.Width = 160;
+        _settings.Update(d =>
+        {
+            d.HomeAssistantUrl = "http://ha.test:8123";
+            d.HomeAssistantToken = "secret";
+            d.HomeBarItems = ["entity:light.den_lamp"];
+        });
+        var (menu, pane) = PaneMenu();
+        menu.HomeCatalog = _ => Task.FromResult<(HaCatalog?, string?)>((HomeCatalog(), null));
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // its actions › Change emoji…
+        _console.Input.PushText("fox");
+        Push(Keys.Enter);                                                                     // 🦊, saved
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // its actions › Default emoji
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
+        _console.Input.PushText("fox");
+        Push(Keys.Enter);                                                                     // 🦊 again
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
+        _console.Input.PushText("fox");
+        Push(Keys.Left, Keys.Enter);                                                          // the grid's 🚫, before the first result
+        Push(Keys.Escape);
+
+        Assert.True(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+        string afterPick = Output;
+
+        Assert.Contains(HomeBarText.EmojiItem, afterPick);
+        Assert.Contains(HomeBarText.DefaultEmojiItem, afterPick);
+        Assert.Contains(" 1. 🦊 Den Lamp", afterPick);
+        Assert.Contains(HomeBarText.DefaultGlyphNote(HomeChips.LightGlyph), afterPick);
+        Assert.Contains(HomeBarText.DefaultGlyphFooter(HomeChips.LightGlyph).Split("  ", 2)[1], afterPick);   // the cursor on 🚫: its band
+        Assert.DoesNotContain(EmojiText.PreviewLine("🦊", "neon"), afterPick);   // not the avatar's
+        Assert.DoesNotContain("this profile's avatar", afterPick);
+        Assert.Null(_settings.Current.HomeBarGlyphs);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task ThePicker_EscOnTheEmojiGrid_KeepsTheEmoji()
+    {
+        _settings.Update(d =>
+        {
+            d.HomeAssistantUrl = "http://ha.test:8123";
+            d.HomeAssistantToken = "secret";
+            d.HomeBarItems = ["entity:light.den_lamp"];
+            d.HomeBarGlyphs = new() { ["entity:light.den_lamp"] = "🦊" };
+        });
+        var (menu, pane) = PaneMenu();
+        menu.HomeCatalog = _ => Task.FromResult<(HaCatalog?, string?)>((HomeCatalog(), null));
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Escape, Keys.Escape);
+
+        Assert.False(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+
+        Assert.Equal("🦊", _settings.Current.HomeBarGlyphs?["entity:light.den_lamp"]);
+        Assert.Contains(" 1. 🦊 Den Lamp", Output);
         pane.Dispose();
     }
 }

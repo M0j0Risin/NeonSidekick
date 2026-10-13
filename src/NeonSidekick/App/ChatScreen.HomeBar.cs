@@ -87,9 +87,10 @@ internal sealed partial class ChatScreen
         HomeRow? row;
         lock (_homeGate)
         {
-            // The items with their aliases (2026-10-12): a rename redraws at once, as an added item does.
+            // The items with their aliases (2026-10-12) and emoji (later that day): a rename redraws at once, as an added item does.
             var aliases = effective.HomeBarAliases;
-            string key = string.Join('\n', items.Select(i => HomeBarItems.AliasOf(aliases, i) is { } alias ? i + "=" + alias : i));
+            var glyphs = effective.HomeBarGlyphs;
+            string key = string.Join('\n', items.Select(i => (HomeBarItems.AliasOf(aliases, i) is { } alias ? i + "=" + alias : i) + (HomeBarItems.GlyphOf(glyphs, i) is { } glyph ? "#" + glyph : "")));
             var cache = _homeCache;
             bool sameItems = cache is not null && string.Equals(cache.ItemsKey, key, StringComparison.Ordinal) && cache.Model == _homeModel;
             var ids = sameItems && ReferenceEquals(cache!.Catalog, live.Catalog) ? cache.Ids : HomeIds(items, live.Catalog);
@@ -108,7 +109,7 @@ internal sealed partial class ChatScreen
 
             UpdateHomePending(live, now);
             bool stale = live.Status != HaLiveStatus.Live;
-            var chips = items.Select(i => HomeChips.Build(i, live.Entities, live.Catalog, HomeMarkOf(i), stale, aliases)).ToList();
+            var chips = items.Select(i => HomeChips.Build(i, live.Entities, live.Catalog, HomeMarkOf(i), stale, aliases, glyphs)).ToList();
             row = HomeBar.Render(chips, cells, _homePage);
             if (row is not null && _homePage >= row.Pages)
             {
@@ -322,7 +323,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// <c>/homebar …</c> where a pane may open (the idle line; under a reply on the watcher): a toggle (the picker when nothing
     /// was ever picked), <c>edit</c> the picker, <c>tap</c> a chip's double-click that asks first, <c>show</c> its pane, <c>name</c>
-    /// an item's alias (<see cref="HomeRename"/>).
+    /// an item's alias (<see cref="HomeRename"/>), <c>emoji</c> its emoji (<see cref="HomeEmoji"/>).
     /// </summary>
     private async Task HandleHomeBarAsync(string args, INoticeSink sink, CancellationToken cancellationToken)
     {
@@ -353,6 +354,9 @@ internal sealed partial class ChatScreen
             case HomeBarText.NameWord when rest.Contains('=', StringComparison.Ordinal):
                 HomeRename(rest, sink);
                 break;
+            case HomeBarText.EmojiWord when rest.Contains('=', StringComparison.Ordinal):
+                HomeEmoji(rest, sink);
+                break;
             default:
                 sink.Error(HomeBarText.Usage);
                 break;
@@ -380,6 +384,22 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// The item on the bar <paramref name="item"/> names for <c>name</c> and <c>emoji</c> (<see cref="HomeBarItems.Find"/>), else the
+    /// drawn chip it names (<see cref="FindHomeChip"/>, later on 2026-10-12: the live feed reads the registries without the states,
+    /// so an entity's friendly name, "Desk", is only on its chip), and the item's name as its chip has it; null when none is.
+    /// </summary>
+    private (string Reference, string Name)? FindHomeItem(string item, Settings.AppSettingsData saved)
+    {
+        var catalog = _homeLive.Snapshot.Catalog;
+        if ((HomeBarItems.Find(HomeBarItems.Resolve(saved.HomeBarItems), item, catalog, saved.HomeBarAliases) ?? FindHomeChip(item)?.Reference) is not { } reference)
+        {
+            return null;
+        }
+
+        return (reference, FindHomeChip(reference)?.Name ?? HomeBarItems.NameOf(reference, catalog));
+    }
+
+    /// <summary>
     /// <c>/homebar name &lt;item&gt; = &lt;alias&gt;</c> (2026-10-12, the user's ask): the chip of an item on the bar (its reference,
     /// alias, name or id, <see cref="HomeBarItems.Find"/>) labelled <c>alias</c>; blank, or the item's own name, takes the alias off.
     /// </summary>
@@ -389,17 +409,54 @@ internal sealed partial class ChatScreen
         string item = rest[..equals].Trim();
         string alias = rest[(equals + 1)..].Trim();
         var saved = _settings.Current;
-        var catalog = _homeLive.Snapshot.Catalog;
-        if (HomeBarItems.Find(HomeBarItems.Resolve(saved.HomeBarItems), item, catalog, saved.HomeBarAliases) is not { } reference)
+        if (FindHomeItem(item, saved) is not { } found)
         {
             sink.Error(HomeBarText.NotOnBar(item));
             return;
         }
 
-        string name = HomeBarItems.NameOf(reference, catalog);
+        var (reference, name) = found;
         var next = HomeBarItems.Rename(saved.HomeBarAliases, reference, alias, name);
         _settings.Update(d => d.HomeBarAliases = next);
         sink.Notice(HomeBarItems.AliasOf(next, reference) is { } shown ? HomeBarText.Renamed(name, shown) : HomeBarText.Unnamed(name));
+    }
+
+    /// <summary>
+    /// <c>/homebar emoji &lt;item&gt; = &lt;emoji&gt;</c> (later on 2026-10-12, the user's ask): the chip of an item on the bar
+    /// (<see cref="HomeBarItems.Find"/>) drawn with <c>emoji</c>; blank, <c>default</c> or the item's own glyph takes it off. Anything
+    /// but one emoji (<see cref="Emojis.AvatarRules.IsEmoji"/>) is refused, so the chip keeps its width.
+    /// </summary>
+    private void HomeEmoji(string rest, INoticeSink sink)
+    {
+        int equals = rest.IndexOf('=', StringComparison.Ordinal);
+        string item = rest[..equals].Trim();
+        string emoji = rest[(equals + 1)..].Trim();
+        var saved = _settings.Current;
+        var live = _homeLive.Snapshot;
+        if (FindHomeItem(item, saved) is not { } found)
+        {
+            sink.Error(HomeBarText.NotOnBar(item));
+            return;
+        }
+
+        var (reference, name) = found;
+
+        bool reset = emoji.Length == 0 || string.Equals(emoji, HomeBarText.DefaultWord, StringComparison.OrdinalIgnoreCase);
+        if (!reset && !Emojis.AvatarRules.IsEmoji(emoji))
+        {
+            sink.Error(HomeBarText.NotEmoji(emoji));
+            return;
+        }
+
+        HomeBarItems.TryParse(reference, out _, out string id);
+        string own = HomeChips.DefaultGlyph(reference, live.Catalog, live.Entities.GetValueOrDefault(id));
+        var next = HomeBarItems.SetGlyph(saved.HomeBarGlyphs, reference, reset ? null : emoji, own);
+        _settings.Update(d => d.HomeBarGlyphs = next);
+        sink.Notice(HomeBarItems.GlyphOf(next, reference) is { } shown ? HomeBarText.GlyphSet(name, shown) : HomeBarText.GlyphReset(name, own));
+        if (!reset && HomeBarItems.GlyphOf(next, reference) is { } picked)
+        {
+            Emojis.EmojiPrefs.Load(_settings.StorageDirectory).Picked(picked);
+        }
     }
 
     /// <summary><c>/homebar tap &lt;item&gt;</c>: the chip's double-click — a call, or the Yes/No first for an unlock, a guarded opening, a disarm.</summary>
