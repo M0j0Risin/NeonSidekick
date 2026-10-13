@@ -101,6 +101,18 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task HandleShoppingAsync(string args, INoticeSink sink, bool spinner, CancellationToken cancellationToken)
     {
+        try
+        {
+            await RunShoppingAsync(args, sink, spinner, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            HomeShoppingChanged();   // the home bar's 🛒 counts again at once (later on 2026-10-12)
+        }
+    }
+
+    private async Task RunShoppingAsync(string args, INoticeSink sink, bool spinner, CancellationToken cancellationToken)
+    {
         var line = ShoppingCommand.Parse(args);
         if (line.Verb == ShoppingVerb.Pane && line.Error is null && _pane.Enabled && _shopping.Store.Available)
         {

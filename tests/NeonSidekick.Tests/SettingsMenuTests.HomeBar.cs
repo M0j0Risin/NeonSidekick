@@ -108,7 +108,7 @@ public partial class SettingsMenuTests
     }
 
     [Fact]
-    public async Task ThePicker_RenamesAnItemOnTheBar_ShowsTheAlias_AndABlankTakesItOff()
+    public async Task ThePicker_RenamesAnItemOnTheBar_ShowsTheAlias_ABlankIsTheEmojiAlone_AndDefaultNameTakesItOff()
     {
         _settings.Update(d =>
         {
@@ -122,7 +122,8 @@ public partial class SettingsMenuTests
         _console.Input.PushText("Lamp");
         Push(Keys.Enter);
         Push(Keys.Right, Keys.Right, Keys.Left, Keys.Left);   // Lights shows it quoted; back on the bar
-        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Ctrl(ConsoleKey.A), Keys.Backspace, Keys.Enter);   // blank: off
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Ctrl(ConsoleKey.A), Keys.Backspace, Keys.Enter);   // blank: the emoji alone
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // its actions › Default name
         Push(Keys.Escape);
 
         Assert.True(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
@@ -131,19 +132,52 @@ public partial class SettingsMenuTests
         Assert.Contains(HomeBarText.RenameKeys, Output);
         Assert.Contains(" 1. 💡 Lamp  Den Lamp · Den", Output);
         Assert.Contains("\"Lamp\" · light.den_lamp", Output);
+        Assert.Contains(" 1. 💡   " + HomeBarText.EmojiAlone + " · Den Lamp · Den", Output);   // later on 2026-10-12: a blank is the emoji alone
+        Assert.Contains(HomeBarText.DefaultNameItem + "  Den Lamp", Output);
         Assert.Null(_settings.Current.HomeBarAliases);
         pane.Dispose();
     }
 
     [Fact]
-    public async Task ThePicker_WithoutHomeAssistant_SaysWhereToSetItUp()
+    public async Task ThePicker_WithoutHomeAssistant_OpensOnTheBarAndShopping_AndTheCartHasNoRename()
     {
+        // Until later on 2026-10-12 it only said where to set Home Assistant up; the 🛒 chip needs none (the user's call).
+        _console.Profile.Width = 120;
         var (menu, pane) = PaneMenu();
         menu.HomeCatalog = _ => throw new InvalidOperationException("never read");
+        Push(Keys.Right, Keys.Char(' '));           // Shopping: Space puts the cart on the bar
+        Push(Keys.Left, Keys.Enter, Keys.Escape);    // its actions, then back
+        Push(Keys.Escape);
 
-        Assert.False(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+        Assert.True(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
 
-        Assert.Contains(HomeBarText.NotConfigured, Output);
+        Assert.Equal([HomeBarItems.Shopping], _settings.Current.HomeBarItems);
+        Assert.Contains(HomeBarText.ShoppingTab, Output);
+        Assert.DoesNotContain(HomeBarText.RoomsTab, Output);
+        Assert.Contains("[x] " + HomeChips.ShoppingGlyph + " " + HomeBarText.ShoppingName, Output);
+        Assert.Contains(" 1. " + HomeChips.ShoppingGlyph + " " + HomeBarText.ShoppingName + "  " + HomeBarText.ShoppingWhere, Output);
+        Assert.Contains(HomeBarText.EmojiItem, Output);
+        Assert.DoesNotContain(HomeBarText.RenameItem, Output);   // no name to change
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task ThePicker_WithHomeAssistant_PutsShoppingLast()
+    {
+        _console.Profile.Width = 200;
+        _settings.Update(d =>
+        {
+            d.HomeAssistantUrl = "http://ha.test:8123";
+            d.HomeAssistantToken = "secret";
+        });
+        var (menu, pane) = PaneMenu();
+        menu.HomeCatalog = _ => Task.FromResult<(HaCatalog?, string?)>((HomeCatalog(), null));
+        Push(Keys.Escape);
+
+        await menu.EditHomeBarAsync(own: true, CancellationToken.None);
+
+        string strip = Output.Split('\n').First(l => l.Contains(HomeBarText.RoomsTab, StringComparison.Ordinal));
+        Assert.True(strip.IndexOf(HomeBarText.OtherTab, StringComparison.Ordinal) < strip.IndexOf(HomeBarText.ShoppingTab, StringComparison.Ordinal), strip);
         pane.Dispose();
     }
 

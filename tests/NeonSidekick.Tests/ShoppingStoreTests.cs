@@ -219,4 +219,16 @@ public sealed class ShoppingStoreTests : IDisposable
 
         Assert.Equal([ShoppingStore.SchemaMismatchWarning(99)], warnings);
     }
+
+    /// <summary>The home bar's 🛒 count (later on 2026-10-12): the unticked lines.</summary>
+    [Fact]
+    public void OpenCount_IsTheUntickedLines()
+    {
+        Assert.Equal(0, _store.OpenCount());
+        var milk = _store.AddItem("milk", 1)!;
+        _store.AddItem("eggs", 12);
+        Assert.Equal(2, _store.OpenCount());
+        _store.SetChecked(milk.Id, true);
+        Assert.Equal(1, _store.OpenCount());
+    }
 }

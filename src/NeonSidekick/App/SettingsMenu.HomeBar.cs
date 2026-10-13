@@ -52,18 +52,20 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        if (HomeCatalog is null || !HaSession.Configured(EffectiveNow()))
+        // Without Home Assistant, or with its registries out of reach, the picker still opens (later on 2026-10-12, the user's call):
+        // the bar's tab and Shopping, the 🛒 chip being the app's own list.
+        HaCatalog? catalog = null;
+        if (HomeCatalog is not null && HaSession.Configured(EffectiveNow()))
         {
-            Sink.Warning(HomeBarText.NotConfigured);
-            return false;
+            (catalog, string? error) = await HomeCatalog(cancellationToken).ConfigureAwait(false);
+            if (catalog is null)
+            {
+                Sink.Warning(HomeBarText.NoCatalog(error ?? HaText.NotConfigured));
+            }
         }
 
-        var (catalog, error) = await HomeCatalog(cancellationToken).ConfigureAwait(false);
-        if (catalog is null)
-        {
-            Sink.Error(HomeBarText.NoCatalog(error ?? HaText.NotConfigured));
-            return false;
-        }
+        bool home = catalog is not null;
+        catalog ??= new HaCatalog([], [], [], [], [], []);
 
         bool changed = false;
         int tab = 0;
@@ -74,7 +76,7 @@ internal sealed partial class SettingsMenu
             while (true)
             {
                 var items = HomeBarItems.Resolve(_settings.Current.HomeBarItems);
-                var built = HomePickerTabs(catalog, items, filter, _settings.Current.HomeBarAliases, _settings.Current.HomeBarGlyphs);
+                var built = HomePickerTabs(catalog, items, filter, _settings.Current.HomeBarAliases, _settings.Current.HomeBarGlyphs, home);
                 var page = MenuPage.Tabbed(Crumb(FieldName(SettingsField.ShowHomeBar)), built.Select(b => b.Tab).ToList(), tab, built[Math.Clamp(tab, 0, built.Count - 1)].Tab.Hint ?? "");
                 var picked = await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
                 if (picked is not { } pick)
@@ -122,6 +124,10 @@ internal sealed partial class SettingsMenu
                                 continue;
                             case HomeItemDo.DefaultEmoji:
                                 changed |= SetHomeItemGlyph(items[pick.Row], catalog, null);
+                                continue;
+                            case HomeItemDo.DefaultName:
+                                Apply(SettingsField.ShowHomeBar, d => d.HomeBarAliases = HomeBarItems.Rename(d.HomeBarAliases, items[pick.Row], null, HomeBarItems.NameOf(items[pick.Row], catalog)));
+                                changed = true;
                                 continue;
                         }
 
@@ -172,6 +178,7 @@ internal sealed partial class SettingsMenu
         Rename,
         Emoji,
         DefaultEmoji,
+        DefaultName,
     }
 
     // The bar item's actions page: a move (Top/−1/+1/Bottom), 0 for remove, the rename (its alias dim beside it), the emoji (its
@@ -186,9 +193,19 @@ internal sealed partial class SettingsMenu
             (Markup.Escape(HomeBarText.MoveUp), (-1, HomeItemDo.Move)),
             (Markup.Escape(HomeBarText.MoveDown), (1, HomeItemDo.Move)),
             (Markup.Escape(HomeBarText.MoveBottom), (HomeBarItems.Bottom, HomeItemDo.Move)),
-            (Markup.Escape(HomeBarText.RenameItem) + (alias is not null ? Theme.DimMarkup("  " + alias) : ""), (0, HomeItemDo.Rename)),
-            (Markup.Escape(HomeBarText.EmojiItem) + (glyph is not null ? Theme.DimMarkup("  " + glyph) : ""), (0, HomeItemDo.Emoji)),
         };
+        if (!HomeBarItems.IsNameless(reference))
+        {
+            // The 🛒 chip shows no name to change (later on 2026-10-12, the user's call); its emoji still can be.
+            rows.Add((Markup.Escape(HomeBarText.RenameItem) + (alias is not null ? Theme.DimMarkup("  " + (alias.Length == 0 ? HomeBarText.EmojiAlone : alias)) : ""), (0, HomeItemDo.Rename)));
+            if (alias is not null)
+            {
+                // The way back from an alias, now that a blank is the emoji alone (later on 2026-10-12).
+                rows.Add((Markup.Escape(HomeBarText.DefaultNameItem) + Theme.DimMarkup("  " + HomeBarItems.NameOf(reference, catalog)), (0, HomeItemDo.DefaultName)));
+            }
+        }
+
+        rows.Add((Markup.Escape(HomeBarText.EmojiItem) + (glyph is not null ? Theme.DimMarkup("  " + glyph) : ""), (0, HomeItemDo.Emoji)));
         if (glyph is not null)
         {
             rows.Add((Markup.Escape(HomeBarText.DefaultEmojiItem) + Theme.DimMarkup("  " + HomeChips.DefaultGlyph(reference, catalog)), (0, HomeItemDo.DefaultEmoji)));
@@ -225,8 +242,8 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
-    // Rename on the bar (2026-10-12, the user's ask): the input row under the crumb, from the alias or else the name; blank or the
-    // name takes the alias off, ESC keeps it. True when it changed.
+    // Rename on the bar (2026-10-12, the user's ask): the input row under the crumb, from the alias or else the name; the name takes
+    // the alias off, blank is the emoji alone (later that day; Default name takes it off now), ESC keeps it. True when it changed.
     private async Task<bool> RenameHomeItemAsync(string reference, HaCatalog catalog, CancellationToken cancellationToken)
     {
         string name = HomeBarItems.NameOf(reference, catalog);
@@ -251,10 +268,16 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The picker's tabs over <paramref name="catalog"/> for the bar's <paramref name="items"/>, the kinds' tabs under
     /// <paramref name="filter"/>; an item with an alias (<paramref name="aliases"/>) shows it, quoted on the kinds' and rooms' tabs
-    /// and matched by the filter; one with an emoji of its own (<paramref name="glyphs"/>) shows it on the bar's tab. Pure over its data.
+    /// and matched by the filter; one with an emoji of its own (<paramref name="glyphs"/>) shows it on the bar's tab. Shopping last
+    /// (later on 2026-10-12), and the bar's tab and it alone without <paramref name="home"/> (no Home Assistant). Pure over its data.
     /// </summary>
-    private static List<HomeTab> HomePickerTabs(HaCatalog catalog, IReadOnlyList<string> items, string filter, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs)
+    private static List<HomeTab> HomePickerTabs(HaCatalog catalog, IReadOnlyList<string> items, string filter, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs, bool home = true)
     {
+        if (!home)
+        {
+            return [BarTab(catalog, items, aliases, glyphs), ShoppingTab(items, filter, glyphs)];
+        }
+
         var tabs = new List<HomeTab> { BarTab(catalog, items, aliases, glyphs), RoomsTab(catalog, items, filter, aliases) };
         var named = HomeDomainTabs.SelectMany(t => t.Domains).ToHashSet(StringComparer.Ordinal);
         foreach (var (title, domains) in HomeDomainTabs)
@@ -266,7 +289,18 @@ internal sealed partial class SettingsMenu
             tabs.Add(DomainTab(title, catalog, items, entities, filter, aliases));
         }
 
+        tabs.Add(ShoppingTab(items, filter, glyphs));
         return tabs;
+    }
+
+    // The app's own items (later on 2026-10-12): the shopping list's 🛒, its emoji as the bar draws it.
+    private static HomeTab ShoppingTab(IReadOnlyList<string> items, string filter, IReadOnlyDictionary<string, string>? glyphs)
+    {
+        string glyph = HomeBarItems.GlyphOf(glyphs, HomeBarItems.Shopping) ?? HomeChips.ShoppingGlyph;
+        var rows = MenuFilter.Matches(filter, HomeBarText.ShoppingName, HomeBarItems.Shopping + " cart")
+            ? new List<(string Ref, string Name, string Note)> { (HomeBarItems.Shopping, glyph + " " + HomeBarText.ShoppingName, HomeBarText.ShoppingRowNote) }
+            : [];
+        return Sectioned(HomeBarText.ShoppingTab, [("", null, rows)], items, filter);
     }
 
     private static HomeTab BarTab(HaCatalog catalog, IReadOnlyList<string> items, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs)
@@ -281,11 +315,11 @@ internal sealed partial class SettingsMenu
             // emoji of the user's own (later that day), the own one dim at the end.
             string own = HomeChips.DefaultGlyph(item, catalog);
             string? custom = HomeBarItems.GlyphOf(glyphs, item);
-            string where = kind == HomeItemKind.Area ? HomeBarText.RoomsTab.ToLowerInvariant() : catalog.AreaOf(id) is { } area ? catalog.Area(area)?.Name ?? id : id;
+            string where = kind == HomeItemKind.Area ? HomeBarText.RoomsTab.ToLowerInvariant() : kind == HomeItemKind.Shopping ? HomeBarText.ShoppingWhere : catalog.AreaOf(id) is { } area ? catalog.Area(area)?.Name ?? id : id;
             // An alias first, as the bar shows it, and the item's own name dim beside it.
             string name = HomeBarItems.NameOf(item, catalog);
             string? alias = HomeBarItems.AliasOf(aliases, item);
-            string note = (alias is null ? where : name + " · " + where) + (custom is null ? "" : " · " + HomeBarText.DefaultGlyphNote(own));
+            string note = (alias is null ? where : (alias.Length == 0 ? HomeBarText.EmojiAlone + " · " : "") + name + " · " + where) + (custom is null ? "" : " · " + HomeBarText.DefaultGlyphNote(own));
             rows.Add(Markup.Escape($"{number++.ToString(System.Globalization.CultureInfo.InvariantCulture),2}. {custom ?? own} {alias ?? name}") + Theme.DimMarkup("  " + note));
             refs.Add(item);
         }

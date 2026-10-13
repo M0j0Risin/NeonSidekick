@@ -242,8 +242,9 @@ public partial class ChatScreenTests
             input =>
             {
                 afterSet = _settings.Current.HomeBarAliases?.GetValueOrDefault("entity:light.desk");
-                PushLine(input, "/homebar name D =");
+                PushLine(input, "/homebar name D =");   // the emoji alone (later on 2026-10-12)
             },
+            Line("/homebar name Desk = default"),
             Line("/homebar name Kettle = K"),
             Line("/homebar name Desk"),
             Line("/exit"));
@@ -253,6 +254,7 @@ public partial class ChatScreenTests
         Assert.Equal("D", afterSet);
         Assert.Null(_settings.Current.HomeBarAliases);
         Assert.Contains("as \"D\"", output);
+        Assert.Contains("as its emoji alone", output);
         Assert.Contains("by its own name again", output);
         Assert.Contains(HomeBarText.NotOnBar("Kettle"), output);
         Assert.Contains(HomeBarText.Usage, output);   // no "="
@@ -307,6 +309,61 @@ public partial class ChatScreenTests
         Assert.Contains(HomeBarText.GlyphReset("Desk", HomeChips.LightGlyph), output);
         Assert.Contains(HomeBarText.NotEmoji("fox"), output);
         Assert.Contains(HomeBarText.NotOnBar("Kettle"), output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>
+    /// The shopping list's 🛒 (later on 2026-10-12, the user's ask): no Home Assistant, the lines to get counted as /shopping changes
+    /// them, 🛒 0 still on the bar; a double-click on it opens the /shopping pane, as /homebar show (a right-click's line) does; it has no
+    /// name for /homebar name.
+    /// </summary>
+    [Fact]
+    public async Task HomeBar_TheShoppingChip_CountsTheLinesToGet_AndOpensTheList()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.HomeBarItems = [HomeBarItems.Shopping]; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the home bar at 103, " 🛒 0 " centred
+        bool one = false;
+        bool none = false;
+        int mark = -1;
+        bool clicked = false;
+        StepsWhenIdle(
+            Line("/shopping add milk"),
+            Line("/shopping add eggs"),
+            Line("/shopping tick milk"),
+            input =>
+            {
+                TickUntil(() => Output.Contains(" 🛒 1 ", StringComparison.Ordinal));
+                one = Output.Contains(" 🛒 1 ", StringComparison.Ordinal);
+                PushLine(input, "/shopping tick eggs");
+            },
+            input =>
+            {
+                TickUntil(() => Output.Contains(" 🛒 0 ", StringComparison.Ordinal));
+                none = Output.Contains(" 🛒 0 ", StringComparison.Ordinal);
+                mark = Output.Length;
+                input.PushClick(59, 103);
+                input.PushClick(59, 103);
+                input.Push(Keys.Escape);
+            },
+            input =>
+            {
+                clicked = Output[mark..].Contains(Shopping.ShoppingText.PaneCaption(0, 2), StringComparison.Ordinal);
+                PushLine(input, "/homebar show " + HomeBarItems.Shopping);
+                input.Push(Keys.Escape);
+            },
+            Line("/homebar name Shopping list = Cart"),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.True(one);
+        Assert.True(none);
+        Assert.True(clicked);   // the double-click: the list's own pane
+        Assert.Contains(Shopping.ShoppingText.PaneCaption(0, 2), output[mark..]);
+        Assert.Contains(HomeBarText.Nameless(HomeBarText.ShoppingName), output);
+        Assert.Null(_settings.Current.HomeBarAliases);
         Assert.Empty(_chat.Requests);
     }
 }

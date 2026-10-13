@@ -46,7 +46,8 @@ public sealed record HomeChip(
     HaServiceCall? Call,
     string Note,
     HomeChipMark Mark = HomeChipMark.None,
-    string? Label = null);
+    string? Label = null,
+    bool Bare = false);
 
 /// <summary>
 /// The home bar's chips, kind by kind (2026-10-12, the user's ask; the looks and the clicks agreed in the plan): what each
@@ -91,12 +92,15 @@ public static class HomeChips
     public const string AlarmGlyph = "🚨";
     public const string ZoneGlyph = "📍";
 
+    /// <summary>The shopping list's chip (later on 2026-10-12): the toolbar's cart.</summary>
+    public const string ShoppingGlyph = ChatScreen.ShoppingToolGlyph;
+
     /// <summary>Every glyph, for the width test.</summary>
     public static readonly string[] Glyphs =
     [
         AreaGlyph, LightGlyph, SwitchGlyph, ToggleGlyph, FanGlyph, SensorGlyph, HumidityGlyph, BatteryGlyph, PowerGlyph, LightLevelGlyph,
         DoorGlyph, WindowGlyph, GarageGlyph, GateGlyph, MotionGlyph, SmokeGlyph, CoolGlyph, IdleGlyph, TvGlyph, SpeakerGlyph,
-        MediaGlyph, SceneGlyph, ScriptGlyph, LockedGlyph, UnlockedGlyph, AlarmGlyph, ZoneGlyph,
+        MediaGlyph, SceneGlyph, ScriptGlyph, LockedGlyph, UnlockedGlyph, AlarmGlyph, ZoneGlyph, ShoppingGlyph,
     ];
 
     /// <summary>The short name's widest, in cells.</summary>
@@ -113,9 +117,10 @@ public static class HomeChips
     /// feed is not live. An item whose entity has not arrived yet is a dim chip with its catalog name and no action. An alias in
     /// <paramref name="aliases"/> (<see cref="HomeBarItems.AliasOf"/>) is the chip's <see cref="HomeChip.Label"/> and its short name;
     /// an emoji in <paramref name="glyphs"/> (<see cref="HomeBarItems.GlyphOf"/>, later on 2026-10-12) its <see cref="HomeChip.Glyph"/>,
-    /// whatever the state.
+    /// whatever the state. The shopping list's (<see cref="HomeBarItems.Shopping"/>) counts <paramref name="shoppingOpen"/>
+    /// (<see cref="ShoppingChip"/>) and is never stale: Home Assistant's feed is not its own.
     /// </summary>
-    public static HomeChip Build(string reference, IReadOnlyDictionary<string, HaLiveEntity> entities, HaCatalog? catalog, HomeChipMark mark, bool stale, IReadOnlyDictionary<string, string>? aliases = null, IReadOnlyDictionary<string, string>? glyphs = null)
+    public static HomeChip Build(string reference, IReadOnlyDictionary<string, HaLiveEntity> entities, HaCatalog? catalog, HomeChipMark mark, bool stale, IReadOnlyDictionary<string, string>? aliases = null, IReadOnlyDictionary<string, string>? glyphs = null, int? shoppingOpen = null)
     {
         ArgumentNullException.ThrowIfNull(reference);
         ArgumentNullException.ThrowIfNull(entities);
@@ -124,13 +129,20 @@ public static class HomeChips
             return Waiting(reference, ToggleGlyph, reference, mark);
         }
 
+        if (kind == HomeItemKind.Shopping)
+        {
+            var cart = ShoppingChip(HomeBarItems.Shopping, shoppingOpen) with { Mark = mark };
+            return HomeBarItems.GlyphOf(glyphs, reference) is { } own ? cart with { Glyph = own } : cart;
+        }
+
         var chip = kind == HomeItemKind.Area
             ? AreaChip(reference, id, entities, catalog)
             : entities.TryGetValue(id, out var entity) ? EntityChip(reference, entity, catalog) : Waiting(reference, GlyphFor(id, null), catalog?.NameOf(id) ?? id, mark);
         chip = chip with { Mark = mark };
         if (HomeBarItems.AliasOf(aliases, reference) is { } alias)
         {
-            chip = chip with { Label = alias, Short = Clip(alias, ShortCells) };
+            // An empty alias (later on 2026-10-12, the user's ask): the emoji alone, no name and no value.
+            chip = alias.Length == 0 ? chip with { Label = "", Short = "", Bare = true } : chip with { Label = alias, Short = Clip(alias, ShortCells) };
         }
 
         if (HomeBarItems.GlyphOf(glyphs, reference) is { } glyph)
@@ -153,7 +165,25 @@ public static class HomeChips
             return ToggleGlyph;
         }
 
-        return kind == HomeItemKind.Area ? AreaGlyph : GlyphFor(id, entity ?? (catalog?.State(id) is { } state ? HaLiveEntity.From(state) : null));
+        return kind == HomeItemKind.Area ? AreaGlyph : kind == HomeItemKind.Shopping ? ShoppingGlyph : GlyphFor(id, entity ?? (catalog?.State(id) is { } state ? HaLiveEntity.From(state) : null));
+    }
+
+    /// <summary>
+    /// The shopping list's chip (later on 2026-10-12, the user's ask): <c>🛒 3</c>, no name (an empty <see cref="HomeChip.Label"/> and
+    /// short name, so <see cref="UI.HomeBar.ChipText"/> draws none), lit while anything is left to get and <see cref="Off"/> at
+    /// <c>🛒 0</c>, which stays on the bar; <c>?</c> and dim while the list is off (<paramref name="open"/> null). A double-click or a
+    /// right-click opens the list's pane (<see cref="HomeChipAction.Detail"/>). Pure.
+    /// </summary>
+    public static HomeChip ShoppingChip(string reference, int? open)
+    {
+        string name = HomeBarText.ShoppingName;
+        if (open is not { } count)
+        {
+            return new HomeChip(reference, ShoppingGlyph, name, "", "?", Theme.DimText, HomeChipAction.Detail, null, HomeBarText.ShoppingNote(null), Label: "");
+        }
+
+        return new HomeChip(reference, ShoppingGlyph, name, "", count.ToString(CultureInfo.InvariantCulture), count > 0 ? Lit(Theme.Secondary) : Off,
+            HomeChipAction.Detail, null, HomeBarText.ShoppingNote(count), Label: "");
     }
 
     private static HomeChip Waiting(string reference, string glyph, string name, HomeChipMark mark) =>

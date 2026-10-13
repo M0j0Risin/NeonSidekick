@@ -453,6 +453,13 @@ public sealed class ShoppingStore : IDisposable
             r => new ShopItem(r.GetInt64(0), r.GetString(1), r.GetInt32(2), r.GetString(3), r.GetInt64(4) != 0, Parse(r.GetString(5))),
             "read the list");
 
+    /// <summary>
+    /// The lines still to get, the unticked ones (later on 2026-10-12, the home bar's 🛒 chip: the pane caption's "items to get"); null
+    /// when the store is off or the read failed.
+    /// </summary>
+    public int? OpenCount() =>
+        Query("SELECT COUNT(*) FROM items WHERE checked = 0", null, r => r.GetInt64(0), "count the list") is [var count] ? (int)count : null;
+
     /// <summary>A new line; null when the write failed.</summary>
     public ShopItem? AddItem(string name, int quantity, string note = "")
     {

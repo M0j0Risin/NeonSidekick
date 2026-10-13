@@ -472,6 +472,9 @@ public sealed class HomeBarTests
         Assert.Equal("The home bar shows Den Lamp with its own emoji again, 💡", HomeBarText.GlyphReset("Den Lamp", "💡"));
         Assert.Equal("'abc' is not one emoji: /homebar emoji <item> = <emoji>, or = default for the item's own", HomeBarText.NotEmoji("abc"));
         Assert.Equal(["on", "off", "edit", "name", "emoji"], HomeBarText.Words);
+        Assert.Equal("Shopping list: 3 to get — double-click or right-click for the list", HomeBarText.ShoppingNote(3));
+        Assert.Equal("Shopping list: the list is off — /shopping says why", HomeBarText.ShoppingNote(null));
+        Assert.Equal("The Shopping list's chip shows no name to change: /homebar emoji changes its emoji", HomeBarText.Nameless("Shopping list"));
         Assert.Equal("The home bar shows Den PC Monitor as \"PC\"", HomeBarText.Renamed("Den PC Monitor", "PC"));
         Assert.Equal("The home bar shows Den PC Monitor by its own name again", HomeBarText.Unnamed("Den PC Monitor"));
     }
@@ -479,7 +482,7 @@ public sealed class HomeBarTests
     // ─── aliases ────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Rename_SetsReplacesAndClears_OnABlankOrTheOwnName()
+    public void Rename_SetsReplacesAndClears_OnNullOrTheOwnName_ABlankIsTheEmojiAlone()
     {
         var one = HomeBarItems.Rename(null, "entity:Light.Den_PC", " PC ", "Den PC Monitor")!;
         Assert.Equal("PC", one["entity:light.den_pc"]);
@@ -489,10 +492,30 @@ public sealed class HomeBarTests
         Assert.Equal(2, two.Count);
         Assert.Equal("Screen", HomeBarItems.Rename(two, "entity:light.den_pc", "Screen", "Den PC Monitor")!["entity:light.den_pc"]);
 
-        Assert.Null(HomeBarItems.AliasOf(HomeBarItems.Rename(two, "entity:light.den_pc", "  ", "Den PC Monitor"), "entity:light.den_pc"));
+        Assert.Equal("", HomeBarItems.AliasOf(HomeBarItems.Rename(two, "entity:light.den_pc", "  ", "Den PC Monitor"), "entity:light.den_pc"));   // the emoji alone (later on 2026-10-12)
+        Assert.Null(HomeBarItems.AliasOf(HomeBarItems.Rename(two, "entity:light.den_pc", null, "Den PC Monitor"), "entity:light.den_pc"));
+        Assert.Equal("area:den", HomeBarItems.Find(["area:den"], "den", null, new Dictionary<string, string> { ["area:den"] = "" }));   // an empty alias names nothing
         Assert.Null(HomeBarItems.Rename(one, "entity:light.den_pc", "den pc monitor", "Den PC Monitor"));   // the own name, any case: none left
         Assert.Null(HomeBarItems.AliasOf(null, "entity:light.den_pc"));
         Assert.Equal(one, HomeBarItems.Rename(one, "bogus", "X", "Y"));
+    }
+
+    /// <summary>An empty alias (later on 2026-10-12, the user's ask): the chip's emoji alone, a room's count and a sensor's value gone too.</summary>
+    [Fact]
+    public void AnEmptyAlias_IsTheEmojiAlone_NoNameAndNoValue()
+    {
+        var aliases = new Dictionary<string, string> { ["area:den"] = "", ["entity:sensor.t"] = " " };
+        var room = HomeChips.Build("area:den", Entities(Entity("light.den_lamp", "on"), Entity("light.den_spot", "off")), Catalog(), HomeChipMark.None, false, aliases);
+        Assert.True(room.Bare);
+        Assert.Equal(" " + HomeChips.AreaGlyph + " ", HomeBar.ChipText(room, HomeBar.Fit.Full));
+        Assert.Equal(" " + HomeChips.AreaGlyph + " ", HomeBar.ChipText(room, HomeBar.Fit.Short));
+        Assert.StartsWith("Den: ", room.Note, StringComparison.Ordinal);   // the click's note keeps the name and the count
+
+        var sensor = HomeChips.Build("entity:sensor.t", Entities(Entity("sensor.t", "21.47")), null, HomeChipMark.Pending, false, aliases);
+        Assert.Equal(" " + sensor.Glyph + HomeBarText.PendingMark, HomeBar.ChipText(sensor, HomeBar.Fit.Full));   // the mark still shows
+
+        Assert.Equal("emoji alone · light.den", HomeBarText.AliasNote("", "light.den"));
+        Assert.Equal("The home bar shows Den as its emoji alone", HomeBarText.Bared("Den"));
     }
 
     [Fact]
@@ -567,5 +590,51 @@ public sealed class HomeBarTests
         Assert.Equal(HomeChips.LockedGlyph, HomeChips.DefaultGlyph("entity:lock.front", null, Entity("lock.front", "locked")));
         Assert.Equal(HomeChips.GlyphFor("light.x", null), HomeChips.DefaultGlyph("entity:light.x", null));
         Assert.Equal(HomeChips.ToggleGlyph, HomeChips.DefaultGlyph("bogus", null));
+    }
+
+    // ─── the shopping list's 🛒 (later on 2026-10-12) ───────────────────────────
+
+    [Fact]
+    public void TheShoppingList_IsAnItem_WithNoNameToChange_AndNoEntities()
+    {
+        Assert.Equal("shopping:list", HomeBarItems.Shopping);
+        Assert.Equal(HomeBarItems.Shopping, HomeBarItems.Normalize(" SHOPPING:List "));
+        Assert.Null(HomeBarItems.Normalize("shopping:other"));
+        Assert.True(HomeBarItems.TryParse("shopping:list", out var kind, out _));
+        Assert.Equal(HomeItemKind.Shopping, kind);
+        Assert.Equal([HomeBarItems.Shopping, "area:den"], HomeBarItems.Resolve(["shopping:list", "Shopping:LIST", "area:den"]));
+        Assert.Equal(HomeBarText.ShoppingName, HomeBarItems.NameOf(HomeBarItems.Shopping, null));
+        Assert.Equal("1 · Shopping list", HomeBarItems.Value([HomeBarItems.Shopping], null));
+        Assert.Empty(HomeBarItems.EntityIds([HomeBarItems.Shopping], Catalog()));
+        Assert.Equal(HomeBarItems.Shopping, HomeBarItems.Find([HomeBarItems.Shopping], "shopping list", null, null));
+
+        Assert.True(HomeBarItems.IsNameless(HomeBarItems.Shopping));
+        Assert.False(HomeBarItems.IsNameless("area:den"));
+        Assert.Null(HomeBarItems.Rename(null, HomeBarItems.Shopping, "Cart", HomeBarText.ShoppingName));
+        Assert.Null(HomeBarItems.AliasOf(new Dictionary<string, string> { [HomeBarItems.Shopping] = "Cart" }, HomeBarItems.Shopping));   // hand-edited: ignored
+        Assert.Equal(HomeChips.ShoppingGlyph, HomeChips.DefaultGlyph(HomeBarItems.Shopping, null));
+    }
+
+    [Fact]
+    public void TheShoppingChip_IsTheCartAndItsCount_LitWhileAnythingIsLeft_NeverStale()
+    {
+        var three = HomeChips.Build(HomeBarItems.Shopping, Entities(), null, HomeChipMark.None, stale: true, shoppingOpen: 3);
+        Assert.Equal(" 🛒 3 ", HomeBar.ChipText(three, HomeBar.Fit.Full));
+        Assert.Equal(" 🛒 3 ", HomeBar.ChipText(three, HomeBar.Fit.Short));
+        Assert.Equal(HomeChips.Lit(Theme.Secondary), three.Style);   // not dimmed though Home Assistant's feed is down
+        Assert.Equal(HomeChipAction.Detail, three.Action);
+        Assert.Equal(HomeBarText.ShoppingNote(3), three.Note);
+
+        var none = HomeChips.Build(HomeBarItems.Shopping, Entities(), null, HomeChipMark.None, stale: false, shoppingOpen: 0);
+        Assert.Equal(" 🛒 0 ", HomeBar.ChipText(none, HomeBar.Fit.Full));
+        Assert.Equal(HomeChips.Off, none.Style);
+
+        var off = HomeChips.Build(HomeBarItems.Shopping, Entities(), null, HomeChipMark.None, stale: false);
+        Assert.Equal(" 🛒 ? ", HomeBar.ChipText(off, HomeBar.Fit.Full));
+        Assert.Equal(Theme.DimText, off.Style);
+
+        var aliases = new Dictionary<string, string> { [HomeBarItems.Shopping] = "Cart" };
+        var glyphs = new Dictionary<string, string> { [HomeBarItems.Shopping] = "🧺" };
+        Assert.Equal(" 🧺 2 ", HomeBar.ChipText(HomeChips.Build(HomeBarItems.Shopping, Entities(), null, HomeChipMark.None, false, aliases, glyphs, 2), HomeBar.Fit.Full));
     }
 }

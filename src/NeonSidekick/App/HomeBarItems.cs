@@ -3,11 +3,12 @@ using NeonSidekick.HomeAssistant;
 
 namespace NeonSidekick.App;
 
-/// <summary>What one home bar item names: a whole area (room), or one entity.</summary>
+/// <summary>What one home bar item names: a whole area (room), one entity, or the app's own shopping list (later on 2026-10-12).</summary>
 public enum HomeItemKind
 {
     Area,
     Entity,
+    Shopping,
 }
 
 /// <summary>What <c>/homebar</c> saves (<see cref="HomeBarItems.Toggle"/>): the items shown (empty: hidden), the ones a later show brings back, and whether there is nothing to show yet (the picker opens instead).</summary>
@@ -26,6 +27,14 @@ public static class HomeBarItems
     public const string AreaPrefix = "area:";
 
     public const string EntityPrefix = "entity:";
+
+    public const string ShoppingPrefix = "shopping:";
+
+    /// <summary>
+    /// The shopping list's item (later on 2026-10-12, the user's ask): 🛒 and the lines still to get, the app's own list rather than
+    /// Home Assistant's, so it needs no Home Assistant. It has no name to change (<see cref="IsNameless"/>); its emoji can be.
+    /// </summary>
+    public const string Shopping = ShoppingPrefix + "list";
 
     /// <summary>The domains an area chip counts and switches: its lights.</summary>
     public static readonly string[] AreaDomains = ["light"];
@@ -52,6 +61,13 @@ public static class HomeBarItems
             return id.Length > 0;
         }
 
+        if (text.StartsWith(ShoppingPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            kind = HomeItemKind.Shopping;
+            id = text[ShoppingPrefix.Length..].Trim().ToLowerInvariant();
+            return id == "list";
+        }
+
         if (text.StartsWith(EntityPrefix, StringComparison.OrdinalIgnoreCase))
         {
             id = text[EntityPrefix.Length..].Trim().ToLowerInvariant();
@@ -63,7 +79,10 @@ public static class HomeBarItems
 
     /// <summary>A reference in its one spelling (the prefix lower case, an entity id lower case), or null when it is none. Pure.</summary>
     public static string? Normalize(string? reference) =>
-        TryParse(reference, out var kind, out string id) ? (kind == HomeItemKind.Area ? Area(id) : Entity(id)) : null;
+        TryParse(reference, out var kind, out string id) ? kind switch { HomeItemKind.Area => Area(id), HomeItemKind.Shopping => Shopping, _ => Entity(id) } : null;
+
+    /// <summary>An item with no name to change (later on 2026-10-12, the user's call): the shopping list's 🛒 shows its count alone. Pure.</summary>
+    public static bool IsNameless(string reference) => TryParse(reference, out var kind, out _) && kind == HomeItemKind.Shopping;
 
     /// <summary>The items <paramref name="saved"/> names, in its order, each once; malformed ones and nulls skipped. Pure.</summary>
     public static IReadOnlyList<string> Resolve(IReadOnlyList<string>? saved)
@@ -205,7 +224,7 @@ public static class HomeBarItems
             {
                 ids.Add(id);
             }
-            else if (catalog is not null)
+            else if (kind == HomeItemKind.Area && catalog is not null)
             {
                 ids.UnionWith(catalog.MembersOf(id, AreaDomains));
             }
@@ -237,29 +256,36 @@ public static class HomeBarItems
             return catalog?.Area(id)?.Name ?? Readable(id);
         }
 
+        if (kind == HomeItemKind.Shopping)
+        {
+            return HomeBarText.ShoppingName;
+        }
+
         return catalog is null ? Readable(id) : catalog.NameOf(id);
     }
 
     /// <summary>
     /// The alias the chip of <paramref name="reference"/> shows instead of its name (2026-10-12, the user's ask: "Den PC Monitor"
-    /// as "PC"; <see cref="Settings.AppSettingsData.HomeBarAliases"/>), trimmed; null for none. Pure.
+    /// as "PC"; <see cref="Settings.AppSettingsData.HomeBarAliases"/>), trimmed; empty for the emoji alone (later on 2026-10-12, the
+    /// user's ask: no name and no value, a room's 🏠 without its 2/5); null for none. Pure.
     /// </summary>
     public static string? AliasOf(IReadOnlyDictionary<string, string>? aliases, string reference) =>
-        aliases is not null && Normalize(reference) is { } r && aliases.TryGetValue(r, out string? alias) && alias?.Trim() is { Length: > 0 } trimmed ? trimmed : null;
+        aliases is not null && !IsNameless(reference) && Normalize(reference) is { } r && aliases.TryGetValue(r, out string? alias) && alias is not null ? alias.Trim() : null;
 
     /// <summary>
-    /// <paramref name="aliases"/> with <paramref name="reference"/>'s alias set to <paramref name="alias"/>, or taken out when it is
-    /// blank or the item's own <paramref name="name"/> (any case); null when none is left, as the setting's default. A malformed
-    /// reference changes nothing. Pure.
+    /// <paramref name="aliases"/> with <paramref name="reference"/>'s alias set to <paramref name="alias"/> (blank: the emoji alone,
+    /// later on 2026-10-12; until then blank took it off), or taken out when it is null or the item's own <paramref name="name"/>
+    /// (any case); null when none is left, as the setting's default. A malformed reference, or a nameless one
+    /// (<see cref="IsNameless"/>), changes nothing. Pure.
     /// </summary>
     public static Dictionary<string, string>? Rename(IReadOnlyDictionary<string, string>? aliases, string reference, string? alias, string name)
     {
         ArgumentNullException.ThrowIfNull(name);
         var next = aliases is null ? new Dictionary<string, string>(StringComparer.Ordinal) : new Dictionary<string, string>(aliases, StringComparer.Ordinal);
-        if (Normalize(reference) is { } r)
+        if (!IsNameless(reference) && Normalize(reference) is { } r)
         {
-            string text = alias?.Trim() ?? "";
-            if (text.Length == 0 || string.Equals(text, name.Trim(), StringComparison.OrdinalIgnoreCase))
+            string? text = alias?.Trim();
+            if (text is null || string.Equals(text, name.Trim(), StringComparison.OrdinalIgnoreCase))
             {
                 next.Remove(r);
             }
@@ -324,7 +350,7 @@ public static class HomeBarItems
             return reference;
         }
 
-        return items.FirstOrDefault(i => string.Equals(AliasOf(aliases, i), text, StringComparison.OrdinalIgnoreCase))
+        return items.FirstOrDefault(i => AliasOf(aliases, i) is { Length: > 0 } alias && string.Equals(alias, text, StringComparison.OrdinalIgnoreCase))
             ?? items.FirstOrDefault(i => string.Equals(NameOf(i, catalog), text, StringComparison.OrdinalIgnoreCase))
             ?? items.FirstOrDefault(i => TryParse(i, out _, out string id) && string.Equals(id, text, StringComparison.OrdinalIgnoreCase));
     }

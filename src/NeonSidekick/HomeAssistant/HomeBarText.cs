@@ -33,7 +33,7 @@ public static class HomeBarText
         OnWord => "show the home bar",
         OffWord => "hide the home bar",
         EditWord => "choose the home bar's rooms and devices, and their order",
-        NameWord => "show an item on the bar under a name of your own: name <item> = <alias>",
+        NameWord => "show an item on the bar under a name of your own: name <item> = <alias>; nothing after = for its emoji alone, = default for its own",
         EmojiWord => "show an item on the bar with an emoji of your own: emoji <item> = <emoji>, or = default",
         _ => "",
     };
@@ -55,6 +55,9 @@ public static class HomeBarText
     /// <summary><c>/homebar name</c> or the picker's rename: the alias set (2026-10-12). Pinned.</summary>
     public static string Renamed(string name, string alias) => $"The home bar shows {name} as \"{alias}\"";
 
+    /// <summary>An empty alias (later on 2026-10-12): the chip is its emoji alone. Pinned.</summary>
+    public static string Bared(string name) => $"The home bar shows {name} as its emoji alone";
+
     /// <summary>The alias taken off: the chip reads the item's own name again. Pinned.</summary>
     public static string Unnamed(string name) => $"The home bar shows {name} by its own name again";
 
@@ -67,11 +70,29 @@ public static class HomeBarText
     /// <summary><c>/homebar emoji</c> given something that is not one emoji. Pinned.</summary>
     public static string NotEmoji(string text) => $"'{text}' is not one emoji: /homebar emoji <item> = <emoji>, or = default for the item's own";
 
+    /// <summary>The shopping list's item (later on 2026-10-12): its name, where the note, the picker and <c>/homebar</c> need one.</summary>
+    public const string ShoppingName = "Shopping list";
+
+    /// <summary>The picker's tab for it, last.</summary>
+    public const string ShoppingTab = "Shopping";
+
+    /// <summary>Its row's dim note on that tab.</summary>
+    public const string ShoppingRowNote = "🛒 and the lines still to get; no Home Assistant needed";
+
+    /// <summary>Its place on the bar's tab, where a device's room goes.</summary>
+    public const string ShoppingWhere = "shopping";
+
+    /// <summary>The 🛒 chip's click note: the lines to get, or the list off. Pinned.</summary>
+    public static string ShoppingNote(int? open) => open is { } count
+        ? ShoppingName + ": " + count.ToString(CultureInfo.InvariantCulture) + " to get — double-click or right-click for the list"
+        : ShoppingName + ": the list is off — /shopping says why";
+
+    /// <summary><c>/homebar name</c> on the 🛒 chip, which shows no name. Pinned.</summary>
+    public static string Nameless(string name) => $"The {name}'s chip shows no name to change: /homebar emoji changes its emoji";
+
     /// <summary>Headless has no bar.</summary>
     public const string Headless = "The home bar is part of the interactive screen; use /ha here";
 
-    /// <summary>Home Assistant is not set up: the bar has nothing to show. Pinned.</summary>
-    public const string NotConfigured = "Set Home Assistant URL and Home Assistant API key first (/tools › Home › HomeAssistant)";
 
     /// <summary>The picker could not read the registries.</summary>
     public static string NoCatalog(string error) => "The home bar's rooms and devices could not be read: " + Strip(error);
@@ -283,12 +304,16 @@ public static class HomeBarText
     public const string RenameItem = "Rename on the bar…";
     public const string EmojiItem = "Change emoji…";
     public const string DefaultEmojiItem = "Default emoji";
+    public const string DefaultNameItem = "Default name";
+
+    /// <summary>An empty alias where a row shows the alias: the chip's emoji alone (later on 2026-10-12).</summary>
+    public const string EmojiAlone = "emoji alone";
     public const string RemoveItem = "Remove from the bar";
 
     /// <summary>The rename's input row: its crumb's last step and its keys (2026-10-12).</summary>
     public const string RenameTitle = "Rename on the bar";
 
-    public const string RenameKeys = "Enter = save · blank = the Home Assistant name · ESC = keep";
+    public const string RenameKeys = "Enter = save · blank = the emoji alone · ESC = keep";
 
     /// <summary>The emoji grid's crumb's last step (later on 2026-10-12).</summary>
     public const string EmojiTitle = "Emoji";
@@ -300,7 +325,7 @@ public static class HomeBarText
     public static string DefaultGlyphNote(string glyph) => "default " + glyph;
 
     /// <summary>A kind's or a room's row note for an item with an alias: the alias quoted ahead of the id or the lights.</summary>
-    public static string AliasNote(string alias, string note) => "\"" + alias + "\" · " + note;
+    public static string AliasNote(string alias, string note) => (alias.Length == 0 ? EmojiAlone : "\"" + alias + "\"") + " · " + note;
 
     /// <summary>The detail pane's actions.</summary>
     public const string ToggleAction = "Toggle";

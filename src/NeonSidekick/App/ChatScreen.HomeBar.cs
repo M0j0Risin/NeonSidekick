@@ -18,6 +18,9 @@ internal sealed partial class ChatScreen
     /// <summary>The least time between two rebuilds from the feed alone: a sensor reporting every second redraws no faster.</summary>
     public static readonly TimeSpan HomeRebuildEvery = TimeSpan.FromMilliseconds(250);
 
+    /// <summary>How often the 🛒 chip reads the list's count (later on 2026-10-12): the model's tools change it on their own threads.</summary>
+    public static readonly TimeSpan HomeShoppingEvery = TimeSpan.FromSeconds(1);
+
     /// <summary>The domains a room's pane lists, in this order.</summary>
     public static readonly string[] HomeRoomDomains = ["light", "switch", "fan", "input_boolean", "media_player", "cover", "lock", "climate"];
 
@@ -41,6 +44,12 @@ internal sealed partial class ChatScreen
     private long _homeModel;
 
     private HomeCache? _homeCache;
+
+    // The 🛒 chip's count: the lines to get as last read (-1 the list off, -2 not read yet), when the last read began, and whether one
+    // runs. Read on a pool thread so a tool holding the store's lock never stalls the pane.
+    private int _homeShoppingOpen = -2;
+    private DateTimeOffset _homeShoppingAt = DateTimeOffset.MinValue;
+    private int _homeShoppingReading;
 
     // The Home Assistant URL and token as stored, as the bar last saw them: a change wakes the feed (the review's finding,
     // 2026-10-12: a key fixed in /settings, or a profile switch, waited for a wake that never came).
@@ -90,7 +99,9 @@ internal sealed partial class ChatScreen
             // The items with their aliases (2026-10-12) and emoji (later that day): a rename redraws at once, as an added item does.
             var aliases = effective.HomeBarAliases;
             var glyphs = effective.HomeBarGlyphs;
-            string key = string.Join('\n', items.Select(i => (HomeBarItems.AliasOf(aliases, i) is { } alias ? i + "=" + alias : i) + (HomeBarItems.GlyphOf(glyphs, i) is { } glyph ? "#" + glyph : "")));
+            int? shopping = items.Contains(HomeBarItems.Shopping, StringComparer.Ordinal) ? HomeShoppingOpen(now) : null;
+            string key = string.Join('\n', items.Select(i => (HomeBarItems.AliasOf(aliases, i) is { } alias ? i + "=" + alias : i) + (HomeBarItems.GlyphOf(glyphs, i) is { } glyph ? "#" + glyph : "")))
+                + "\n🛒" + (shopping?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "?");
             var cache = _homeCache;
             bool sameItems = cache is not null && string.Equals(cache.ItemsKey, key, StringComparison.Ordinal) && cache.Model == _homeModel;
             var ids = sameItems && ReferenceEquals(cache!.Catalog, live.Catalog) ? cache.Ids : HomeIds(items, live.Catalog);
@@ -109,7 +120,7 @@ internal sealed partial class ChatScreen
 
             UpdateHomePending(live, now);
             bool stale = live.Status != HaLiveStatus.Live;
-            var chips = items.Select(i => HomeChips.Build(i, live.Entities, live.Catalog, HomeMarkOf(i), stale, aliases, glyphs)).ToList();
+            var chips = items.Select(i => HomeChips.Build(i, live.Entities, live.Catalog, HomeMarkOf(i), stale, aliases, glyphs, shopping)).ToList();
             row = HomeBar.Render(chips, cells, _homePage);
             if (row is not null && _homePage >= row.Pages)
             {
@@ -127,6 +138,41 @@ internal sealed partial class ChatScreen
 
         return row;
     }
+
+    /// <summary>
+    /// The 🛒 chip's count (later on 2026-10-12): the lines to get as last read, a new read started on a pool thread at most every
+    /// <see cref="HomeShoppingEvery"/> (<see cref="Shopping.ShoppingStore.OpenCount"/>); the first read is made here, so the chip never
+    /// shows a count it has not read. Null while the list is off.
+    /// </summary>
+    private int? HomeShoppingOpen(DateTimeOffset now)
+    {
+        if (Volatile.Read(ref _homeShoppingOpen) == -2)
+        {
+            _homeShoppingAt = now;
+            Volatile.Write(ref _homeShoppingOpen, _shopping.Store.OpenCount() ?? -1);
+        }
+        else if (now - _homeShoppingAt >= HomeShoppingEvery && Interlocked.Exchange(ref _homeShoppingReading, 1) == 0)
+        {
+            _homeShoppingAt = now;
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    Volatile.Write(ref _homeShoppingOpen, _shopping.Store.OpenCount() ?? -1);
+                }
+                finally
+                {
+                    Volatile.Write(ref _homeShoppingReading, 0);
+                }
+            });
+        }
+
+        int open = Volatile.Read(ref _homeShoppingOpen);
+        return open >= 0 ? open : null;
+    }
+
+    /// <summary>The 🛒 chip reads its count again at the next draw: <c>/shopping</c> or its pane just ran.</summary>
+    private void HomeShoppingChanged() => _homeShoppingAt = DateTimeOffset.MinValue;
 
     // The entities the bar keeps current: its items' (an area's lights) and an open room pane's devices.
     private IReadOnlySet<string> HomeIds(IReadOnlyList<string> items, HaCatalog? catalog)
@@ -401,7 +447,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/homebar name &lt;item&gt; = &lt;alias&gt;</c> (2026-10-12, the user's ask): the chip of an item on the bar (its reference,
-    /// alias, name or id, <see cref="HomeBarItems.Find"/>) labelled <c>alias</c>; blank, or the item's own name, takes the alias off.
+    /// alias, name or id, <see cref="HomeBarItems.Find"/>) labelled <c>alias</c>; blank the emoji alone (later that day), <c>default</c>
+    /// or the item's own name takes the alias off.
     /// </summary>
     private void HomeRename(string rest, INoticeSink sink)
     {
@@ -416,9 +463,22 @@ internal sealed partial class ChatScreen
         }
 
         var (reference, name) = found;
-        var next = HomeBarItems.Rename(saved.HomeBarAliases, reference, alias, name);
+        if (HomeBarItems.IsNameless(reference))
+        {
+            sink.Error(HomeBarText.Nameless(name));
+            return;
+        }
+
+        // Nothing after the = is the emoji alone, default the item's own name again (later on 2026-10-12; until then nothing took it off).
+        bool reset = string.Equals(alias, HomeBarText.DefaultWord, StringComparison.OrdinalIgnoreCase);
+        var next = HomeBarItems.Rename(saved.HomeBarAliases, reference, reset ? null : alias, name);
         _settings.Update(d => d.HomeBarAliases = next);
-        sink.Notice(HomeBarItems.AliasOf(next, reference) is { } shown ? HomeBarText.Renamed(name, shown) : HomeBarText.Unnamed(name));
+        sink.Notice(HomeBarItems.AliasOf(next, reference) switch
+        {
+            null => HomeBarText.Unnamed(name),
+            "" => HomeBarText.Bared(name),
+            var shown => HomeBarText.Renamed(name, shown),
+        });
     }
 
     /// <summary>
@@ -514,7 +574,12 @@ internal sealed partial class ChatScreen
 
         try
         {
-            if (kind == HomeItemKind.Area)
+            if (kind == HomeItemKind.Shopping)
+            {
+                // The 🛒 chip (later on 2026-10-12): the list's own pane, as /shopping opens it.
+                await HandleShoppingAsync("", sink, spinner: false, cancellationToken).ConfigureAwait(false);
+            }
+            else if (kind == HomeItemKind.Area)
             {
                 await HomeRoomAsync(chip, id, cancellationToken).ConfigureAwait(false);
             }

@@ -86,11 +86,17 @@ public static class HomeBar
     /// <summary>The narrowest page worth drawing: a glyph chip's blank, glyph and blank, and a cell to spare.</summary>
     private const int MinPageCells = 5;
 
-    /// <summary>A chip's text: <c> glyph name value </c>, the name per <paramref name="fit"/>, the mark after. Pure.</summary>
+    /// <summary>A chip's text: <c> glyph name value </c>, the name per <paramref name="fit"/>, the mark after; a bare chip's glyph alone (<see cref="HomeChip.Bare"/>). Pure.</summary>
     public static string ChipText(HomeChip chip, Fit fit)
     {
         ArgumentNullException.ThrowIfNull(chip);
         var text = new StringBuilder(" ").Append(chip.Glyph);
+        if (chip.Bare)
+        {
+            fit = Fit.Tight;
+            chip = chip with { Value = "" };
+        }
+
         string name = fit switch
         {
             Fit.Full => chip.Label ?? chip.Name,
