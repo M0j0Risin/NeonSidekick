@@ -54,11 +54,11 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// Model name on the toolbar (2026-10-12, the user's ask): after the path at the right edge by default, no reasoning mark; a
-    /// double-click there is /server, as the hint row's model.
+    /// Model name on the toolbar (2026-10-12, the user's ask): after the path at the right edge by default, its reasoning mark after it
+    /// (later that day, the user's ask); a double-click on the name is /server and one on the mark /reasoning, as on the hint row.
     /// </summary>
     [WindowsFact]
-    public async Task Toolbar_TheModelName_EndsTheRow_WithoutItsMark_AndADoubleClickRunsTheServerFlow()
+    public async Task Toolbar_TheModelName_EndsTheRow_WithItsMark_AndADoubleClickRunsTheServerFlow()
     {
         _settings.Update(d => { d.TtsOutput = false; d.LlmUrl = "http://127.0.0.1:1234/v1"; d.LlmModel = "llama"; d.ToolbarItems = ["settings", "path", "model"]; });
         _console.Profile.Height = 40;
@@ -68,17 +68,21 @@ public partial class ChatScreenTests
             input =>
             {
                 _time.Advance(ScreenPane.Tick);   // the toolbar follows the connect on the tick
-                input.PushClick(236, 103);
-                input.PushClick(236, 103);
+                input.PushClick(234, 103);   // "llama ○" on 232–238: the name
+                input.PushClick(234, 103);
                 input.Push(Keys.Enter, Keys.Escape, Keys.Escape);
             },
+            input => { input.PushClick(238, 103); input.PushClick(238, 103); },   // the mark: the reasoning picker
+            Key(Keys.Escape),
             Line("/exit"));
 
         string output = await RunAsync();
 
         string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
-        Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.SettingsToolGlyph, cwd, "llama", 239), output);
-        Assert.DoesNotContain(ScreenPane.ToolbarModelSeparator + ScreenPane.TrailerText("llama", ChatScreen.ModelMark("llama", _settings.Current.LlmReasoning)), output);   // no reasoning mark
+        string mark = ChatScreen.ModelMark("llama", _settings.Current.LlmReasoning);
+        Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.SettingsToolGlyph, cwd, "llama", mark, 239), output);
+        Assert.Contains(ScreenPane.ToolbarModelSeparator + ScreenPane.TrailerText("llama", mark), output);
+        Assert.Contains(Titled(SettingsMenu.ReasoningTitle), output);
         Assert.Contains(Titled(SettingsMenu.ServerTitle), output);
         Assert.DoesNotContain("› /server", output);
     }
@@ -97,13 +101,39 @@ public partial class ChatScreenTests
         _console.Profile.Width = 120;
         _geometry = new ScreenGeometry(() => null, () => 100);
         StepsWhenIdle(
-            input => { _time.Advance(ScreenPane.Tick); input.PushClick(10, 103); input.PushClick(10, 103); },   // 🛠️ after "⚙️ llama " (drawn on the tick after the connect): /tools
+            input => { _time.Advance(ScreenPane.Tick); input.PushClick(12, 103); input.PushClick(12, 103); },   // 🛠️ after "⚙️ llama ○ " (drawn on the tick after the connect): /tools
             Key(Keys.Escape),
             Line("/exit"));
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + ChatScreen.SettingsToolGlyph + " llama " + ChatScreen.ToolsToolGlyph, output);
+        Assert.Contains("\n" + ChatScreen.SettingsToolGlyph + " " + ScreenPane.TrailerText("llama", ChatScreen.ModelMark("llama", _settings.Current.LlmReasoning)) + " " + ChatScreen.ToolsToolGlyph, output);
         Assert.Contains(ToolsText.Label + " │ ", output);
+    }
+
+
+    /// <summary>
+    /// Hint bar's Working directory (later on 2026-10-12, the user's ask, off by default): checked, it shares the right edge with the
+    /// model, after it, and a double-click on it is /cwd browse, as the tool bar's path.
+    /// </summary>
+    [WindowsFact]
+    public async Task HintBar_TheWorkingDirectory_SharesTheRightEdge_AndADoubleClickBrowses()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.HintBarItems = [.. HintBarItems.Names]; d.ToolbarItems = []; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        StepsWhenIdle(
+            input => { input.PushClick(237, 102); input.PushClick(237, 102); },   // the path ends on the last cell
+            Key(Keys.Escape),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
+        string model = ScreenPane.TrailerText("llama", ChatScreen.ModelMark("llama", _settings.Current.LlmReasoning));
+        Assert.Contains(model + ScreenPane.ToolbarModelSeparator + cwd, output);
+        Assert.Contains(Titled(FolderText.Title + " │ " + FolderText.CollapseAllButton + " "), output);
+        Assert.Null(HintBarItems.Save(HintBarItems.Resolve(null).ToHashSet()));   // off by default
     }
 }

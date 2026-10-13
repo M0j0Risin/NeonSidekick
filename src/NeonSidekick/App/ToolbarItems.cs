@@ -72,7 +72,7 @@ public static class ToolbarItems
     public const string YouTube = "youtube";         // 2026-10-08, the user's ask: 📺, /youtube list (a pane; after 🪟 later that day)
     public const string ShoppingList = "shoppinglist"; // 2026-10-11, the user's ask: 🛒, /shopping's list (a pane), after 📺; the Shopping tools switch (id shopping, after Print) until later that day
     public const string Path = "path";
-    public const string Model = "model";   // 2026-10-12, the user's ask: the model's name, no reasoning glyph; after the path by default, and free to move past it
+    public const string Model = "model";   // 2026-10-12, the user's ask: the model's name (its reasoning glyph after it since later that day); after the path by default, and free to move past it
 
     /// <summary>
     /// Every item in strip order, the path last (it sits at the row's right). The order is the user's (2026-10-03): the panes,

@@ -346,7 +346,12 @@ public sealed partial class InputLine
     /// for a strip glyph its column past every zone's number (2026-09-18; <c>2 + column</c> until the
     /// queued zone, when the first glyph's key was the trailer's). Pinned.
     /// </summary>
-    public static int HintPairKey(ScreenPane.HintHit hit) => hit.Zone == ScreenPane.HintZone.Strip ? 8 + hit.Column : (int)hit.Zone;
+    public static int HintPairKey(ScreenPane.HintHit hit) => hit.Zone switch
+    {
+        ScreenPane.HintZone.Strip => 8 + hit.Column,
+        ScreenPane.HintZone.Path => ScreenPane.HintPathKey,   // later on 2026-10-12: its number would be the strip's first column's
+        _ => (int)hit.Zone,
+    };
 
     /// <summary>The hint-pair key of a click off an open pane under a typed value (later on 2026-09-18): below every zone's number, and never the pairing's own −1.</summary>
     public const int OutsidePairKey = -2;
@@ -362,6 +367,7 @@ public sealed partial class InputLine
         ScreenPane.ToolbarZone.Path => -3,
         ScreenPane.ToolbarZone.Row => -4,
         ScreenPane.ToolbarZone.Model => ScreenPane.ToolbarModelKey,   // 2026-10-12
+        ScreenPane.ToolbarZone.Mark => ScreenPane.ToolbarMarkKey,     // later on 2026-10-12
         _ => -5 - hit.Column,
     };
 

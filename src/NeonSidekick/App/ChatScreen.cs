@@ -1342,7 +1342,7 @@ internal sealed partial class ChatScreen
         _input.ReopenStrip = ReopenPictureStrip;
         _input.ToolbarNote = tool =>
         {
-            if (tool.Zone == ScreenPane.ToolbarZone.Model)
+            if (tool.Zone is ScreenPane.ToolbarZone.Model or ScreenPane.ToolbarZone.Mark)
             {
                 _pane.Flash(ToolbarItems.ModelNote(ModelLabel(_session.Endpoint?.ModelId)));   // the model's name (2026-10-12)
                 return;
@@ -1974,11 +1974,17 @@ internal sealed partial class ChatScreen
         var items = ToolbarItems.Resolve(shown.ToolbarItems);
         var (strip, off) = ToolbarStripFor(items, shown);
         // The profile folder as ~ (2026-10-04, the UI review).
-        string path = items.Contains(ToolbarItems.Path) ? ScreenPane.HomeTilde(WorkingDirectory.Resolve(shown.WorkingDirectory, _settings.ProfileDirectory), UserProfileFolder) : "";
-        // The model's name (2026-10-12, the user's ask: Model name, no reasoning glyph) among the glyphs at its place, or at the right after the path.
+        string path = items.Contains(ToolbarItems.Path) ? WorkingDirectoryLabel(shown) : "";
+        // The model's name (2026-10-12, the user's ask: Model name) among the glyphs at its place, or at the right after the path; its
+        // reasoning glyph after it since later that day (the user's ask), as on the hint row.
         string model = items.Contains(ToolbarItems.Model) ? ModelLabel(_session.Endpoint?.ModelId) : "";
-        return strip.Length == 0 && path.Length == 0 && model.Length == 0 ? null : new ScreenPane.ToolbarParts(strip, path, off, model, ToolbarModelAt(items, shown));
+        string mark = model.Length == 0 ? "" : ModelMark(_session.Endpoint?.ModelId, shown.LlmReasoning);
+        return strip.Length == 0 && path.Length == 0 && model.Length == 0 ? null : new ScreenPane.ToolbarParts(strip, path, off, model, ToolbarModelAt(items, shown), mark);
     }
+
+    /// <summary>The working directory as the tool bar and the hint row show it (the profile folder as <c>~</c>, 2026-10-04; shared later on 2026-10-12).</summary>
+    private string WorkingDirectoryLabel(AppSettingsData shown) =>
+        ScreenPane.HomeTilde(WorkingDirectory.Resolve(shown.WorkingDirectory, _settings.ProfileDirectory), UserProfileFolder);
 
     /// <summary>
     /// Where the toolbar draws the model's name for the items <paramref name="items"/> checks (2026-10-12): the count of glyphs drawn ahead
@@ -2023,6 +2029,7 @@ internal sealed partial class ChatScreen
         {
             ScreenPane.ToolbarZone.Path => CwdBrowseLine,
             ScreenPane.ToolbarZone.Model => SlashCommands.ServerWord,   // 2026-10-12: as the hint row's model name
+            ScreenPane.ToolbarZone.Mark => SlashCommands.ReasoningWord,   // later on 2026-10-12: as the hint row's mark
             ScreenPane.ToolbarZone.Row => SlashCommands.SettingsWord,
             _ => ToolbarWord(tool.Glyph),
         },
@@ -2030,6 +2037,7 @@ internal sealed partial class ChatScreen
         {
             ScreenPane.HintZone.Trailer => SlashCommands.ServerWord,
             ScreenPane.HintZone.Mark => SlashCommands.ReasoningWord,
+            ScreenPane.HintZone.Path => CwdBrowseLine,
             ScreenPane.HintZone.Row or ScreenPane.HintZone.Scrolled => SlashCommands.SettingsWord,
             _ => null,
         },
@@ -2280,8 +2288,8 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The standing hint row's parts in the Hint bar's order (2026-10-12, the user's ask: its sections on or off and in any order;
     /// <see cref="ScreenPane.HintLayout"/>): the strip, the queued part, the keys' lead, the timers, the reading, the tally — which, as
-    /// always, stands aside while a timer or a reading shows — and the model, in the flow unless it is the last checked section, where
-    /// it keeps the right edge. An armed exit, rewind or splash delete takes every text section's place, after the strip and the queued
+    /// always, stands aside while a timer or a reading shows — the model and (later that day) the working directory, each in the flow
+    /// unless the two end the checked sections, where they share the right edge in their order (<see cref="HintBarItems.RightEdge"/>). An armed exit, rewind or splash delete takes every text section's place, after the strip and the queued
     /// part in their order. Each section unchecked is left out.
     /// </summary>
     private IReadOnlyList<ScreenPane.HintSlot> HintSlots()
@@ -2293,7 +2301,7 @@ internal sealed partial class ChatScreen
         string? armed = ArmedHint();
         string? timers = armed is null && on.Contains(HintBarItems.Timers) ? TimerText.StatusLine(_timers.Snapshot()) : null;
         string? reading = armed is null && on.Contains(HintBarItems.Reading) ? ReadingHintPart() : null;
-        bool modelPinned = HintBarItems.ModelPinned(order, on);
+        var right = HintBarItems.RightEdge(order, on);
         foreach (string id in order)
         {
             if (!on.Contains(id))
@@ -2310,8 +2318,13 @@ internal sealed partial class ChatScreen
                 case HintBarItems.Queued:
                     slots.Add(ScreenPane.HintSlot.Queued);
                     break;
-                case HintBarItems.Model when armed is null && !modelPinned:
-                    slots.Add(ScreenPane.HintSlot.Model);
+                case HintBarItems.Model when armed is null:
+                    // At the right edge while it ends the row (later on 2026-10-12, with the working directory after it), else in its place.
+                    slots.Add(right.Contains(id) ? ScreenPane.HintSlot.Model.AtRight() : ScreenPane.HintSlot.Model);
+                    break;
+                case HintBarItems.WorkingDirectory when armed is null:
+                    var path = ScreenPane.HintSlot.Path(WorkingDirectoryLabel(shown));
+                    slots.Add(right.Contains(id) ? path.AtRight() : path);
                     break;
                 case HintBarItems.Keys when armed is null:
                     text = KeysLead();
@@ -9895,6 +9908,7 @@ internal sealed partial class ChatScreen
                             {
                                 ScreenPane.HintZone.Trailer => SlashCommands.ServerWord,
                                 ScreenPane.HintZone.Mark => SlashCommands.ReasoningWord,
+                                ScreenPane.HintZone.Path => CwdBrowseLine,   // the working directory (later on 2026-10-12), as the tool bar's path
                                 ScreenPane.HintZone.Queued => SlashCommands.QueueWord,   // the held count (2026-09-18): /queue, as the typed command
                                 ScreenPane.HintZone.Usage => SlashCommands.UsageWord,
                                 _ => SlashCommands.SettingsWord,
@@ -9919,6 +9933,7 @@ internal sealed partial class ChatScreen
                         {
                             ScreenPane.ToolbarZone.Path => CwdBrowseLine,
                             ScreenPane.ToolbarZone.Model => SlashCommands.ServerWord,   // the model's name (2026-10-12), as the hint row's
+                            ScreenPane.ToolbarZone.Mark => SlashCommands.ReasoningWord,   // its reasoning glyph (later on 2026-10-12)
                             ScreenPane.ToolbarZone.Row => SlashCommands.SettingsWord,
                             _ => ToolbarWord(tool.Hit.Glyph),
                         };

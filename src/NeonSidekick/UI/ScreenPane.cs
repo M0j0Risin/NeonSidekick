@@ -272,6 +272,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int _hintStripColumn;
     private int _trailerEnd = int.MaxValue;
     private int _markEnd = int.MaxValue;
+    // The working directory on the hint row (later on 2026-10-12, Hint bar's Working directory): its first column and cells, −1 / 0 for none drawn whole.
+    private int _hintPathColumn = -1;
+    private int _hintPathCells;
 
     // The queued part (Queued) as last drawn, in either row: its first column and its width in
     // cells, −1 / 0 when none was drawn (nothing queued, cut by a narrow window, or under an
@@ -317,6 +320,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     // glyphs after it when it stands among them — their text, first column, and their first glyph's place in the strip.
     private int _toolbarModelColumn = -1;
     private int _toolbarModelCells;
+    private int _toolbarMarkColumn = -1;   // the reasoning mark's first column within the name's cells (later on 2026-10-12); −1 for none
     private string _toolbarTail = "";
     private int _toolbarTailColumn = -1;
 
@@ -416,6 +420,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         /// spinner's frame, its blank and the label in their usual place, ahead of the tally, which stays <see cref="Usage"/>.
         /// </summary>
         Label,
+
+        /// <summary>
+        /// The working directory on the standing row (later on 2026-10-12, the user's ask: Hint bar's Working directory): a double-click
+        /// there opens <c>/cwd browse</c>, as the tool bar's path does. Last, for the same reason; its pairing key is <see cref="HintPathKey"/>,
+        /// since its number would be the strip's first column's.
+        /// </summary>
+        Path,
     }
 
     /// <summary>Where on the hint row a click landed: the zone, the strip glyph under it (<c>""</c> elsewhere) and the zone's first column (−1 for the row).</summary>
@@ -431,11 +442,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// (<see cref="Theme.ToolbarOff"/>) by their place among its glyphs, from 0: a tool switch that is off. Null or empty, none.
     /// </summary>
     /// <remarks>
-    /// <paramref name="Model"/> (2026-10-12, the user's ask: the Tool bar's <c>Model name</c>) is the model's name without its reasoning
-    /// mark, empty for none; <paramref name="ModelAt"/> the place among the strip's glyphs it is drawn before (its own text, a blank
-    /// either side), or −1 for the right edge after the path, its default place (<see cref="ToolbarModelSeparator"/> between).
+    /// <paramref name="Model"/> (2026-10-12, the user's ask: the Tool bar's <c>Model name</c>) is the model's name, empty for none;
+    /// <paramref name="ModelAt"/> the place among the strip's glyphs it is drawn before (its own text, a blank either side), or −1 for
+    /// the right edge after the path, its default place (<see cref="ToolbarModelSeparator"/> between); <paramref name="ModelMark"/>
+    /// (later that day, the user's ask) its reasoning mark after it, in the mark's colour and a zone of its own, as on the hint row.
     /// </remarks>
-    public readonly record struct ToolbarParts(string Strip, string Path, IReadOnlyList<int>? Off = null, string Model = "", int ModelAt = -1);
+    public readonly record struct ToolbarParts(string Strip, string Path, IReadOnlyList<int>? Off = null, string Model = "", int ModelAt = -1, string ModelMark = "");
 
     /// <summary>The part of the toolbar a click landed on (<see cref="TryHitToolbar"/>).</summary>
     public enum ToolbarZone
@@ -454,6 +466,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         /// <summary>The model's name, wherever it is drawn (2026-10-12) — the screen opens <c>/server</c> on a pair there, as the hint row's.</summary>
         Model,
+
+        /// <summary>The model's reasoning mark after it (later on 2026-10-12) — the screen opens <c>/reasoning</c> on a pair there, as the hint row's.</summary>
+        Mark,
     }
 
     /// <summary>Where on the toolbar a click landed: the zone, the strip glyph under it (<c>""</c> elsewhere) and the zone's first column (−1 for the row).</summary>
@@ -684,7 +699,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
             if (_busyLabel is null && y == top + HintRowBelowCursor)
             {
-                return new OffPaneHit(HintHitAt(_hintStrip, _hintStripColumn, _trailerColumn, _trailerEnd, _markColumn, _markEnd, -1, 0, -1, 0, -1, 0, x), null);
+                return new OffPaneHit(HintHitAt(_hintStrip, _hintStripColumn, _trailerColumn, _trailerEnd, _markColumn, _markEnd, _hintPathColumn, _hintPathCells, -1, 0, -1, 0, -1, 0, x), null);
             }
 
             return null;
@@ -708,14 +723,19 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             ToolbarZone.Path => -3,
             ToolbarZone.Row => -4,
             ToolbarZone.Model => ToolbarModelKey,
+            ToolbarZone.Mark => ToolbarMarkKey,
             _ => -5 - tool.Column,
         },
+        { Hint: { Zone: HintZone.Path } } => HintPathKey,
         { Hint: { } row } => row.Zone == HintZone.Strip ? -200 - row.Column : -100 - (int)row.Zone,
         _ => MenuPane.OutsideRow,
     };
 
     /// <summary>The toolbar's model name in the off-pane and pairing keys (2026-10-12): far from every column's key. Pinned.</summary>
     public const int ToolbarModelKey = -500_002;
+
+    /// <summary>The toolbar's reasoning mark in the off-pane and pairing keys (later on 2026-10-12). Pinned.</summary>
+    public const int ToolbarMarkKey = -500_004;
 
     /// <summary>The clock the tick and the busy row run on; the overlays share it (a menu's double-click).</summary>
     public TimeProvider Time => _time;
@@ -734,22 +754,35 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         Queued,
         Model,
         Text,
+        Path,   // later on 2026-10-12: the working directory, its text the slot's
     }
 
-    /// <summary>One part of the standing hint row in <see cref="HintLayout"/>'s order (2026-10-12): a kind, and for <see cref="HintSlotKind.Text"/> its text.</summary>
-    public readonly record struct HintSlot(HintSlotKind Kind, string Text = "")
+    /// <summary>
+    /// One part of the standing hint row in <see cref="HintLayout"/>'s order (2026-10-12): a kind, for <see cref="HintSlotKind.Text"/>
+    /// and <see cref="HintSlotKind.Path"/> its text, and (later that day) whether it stands at the right edge rather than in the flow.
+    /// </summary>
+    public readonly record struct HintSlot(HintSlotKind Kind, string Text = "", bool Right = false)
     {
         public static HintSlot Strip { get; } = new(HintSlotKind.Strip);
         public static HintSlot Queued { get; } = new(HintSlotKind.Queued);
         public static HintSlot Model { get; } = new(HintSlotKind.Model);
         public static HintSlot Of(string text) => new(HintSlotKind.Text, text);
+        public static HintSlot Path(string text) => new(HintSlotKind.Path, text);
+
+        /// <summary>This slot at the right edge (later on 2026-10-12): the model and the working directory, while they end the row.</summary>
+        public HintSlot AtRight() => this with { Right = true };
     }
+
+    /// <summary>The working directory on the hint row in the off-pane and pairing keys (later on 2026-10-12): far from every column's key. Pinned.</summary>
+    public const int HintPathKey = -500_003;
 
     /// <summary>
     /// The standing hint row's parts in order (2026-10-12, the user's ask: the Hint bar setting, its sections in any order), each
     /// non-empty one behind <see cref="HintSeparator"/>: <see cref="HintSlot.Strip"/> is <see cref="Strip"/>, <see cref="HintSlot.Queued"/>
     /// <see cref="Queued"/>, a text slot its text; <see cref="HintSlot.Model"/> puts <see cref="Trailer"/> and its mark in the flow there
-    /// in place of the right edge, which keeps them while no slot names the model. Null (the default) is the row as it always was:
+    /// in place of the right edge, which keeps them while no slot names the model. Slots marked <see cref="HintSlot.AtRight"/> (later
+    /// that day: the model and the working directory while they end the row) stand at the right edge in their order, the model's text
+    /// cut as ever, a path from the front, <see cref="ToolbarModelSeparator"/> between. Null (the default) is the row as it always was:
     /// the strip, the queued part and <see cref="Hint"/>. Under an overlay the row is the strip and the overlay's hint either way, and
     /// the busy row keeps its own order. Read on every draw and on the tick.
     /// </summary>
@@ -1465,10 +1498,28 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// the path ahead of it behind <see cref="ToolbarModelSeparator"/>, cut from the front to what is left; the name alone without a
     /// path. Pinned.
     /// </summary>
-    public static string ToolbarRow(string strip, string path, string model, int cells)
+    public static string ToolbarRow(string strip, string path, string model, int cells) => ToolbarRow(strip, path, model, "", cells);
+
+    /// <summary><see cref="ToolbarRow(string, string, string, int)"/> with the model's reasoning <paramref name="mark"/> after its name (later on 2026-10-12), never cut while the name has a cell. Pinned.</summary>
+    public static string ToolbarRow(string strip, string path, string model, string mark, int cells)
     {
         ArgumentNullException.ThrowIfNull(strip);
-        return LayToolbar(new ToolbarParts(strip, path, null, model), cells, spaced: true).Row(cells);
+        return LayToolbar(new ToolbarParts(strip, path, null, model, -1, mark), cells, spaced: true).Row(cells);
+    }
+
+    /// <summary>
+    /// The model's name and its <paramref name="mark"/> in <paramref name="room"/> cells (later on 2026-10-12): the name cut ahead of the
+    /// mark, as <see cref="Trail"/> cuts the hint row's; the name alone where the mark leaves it no cell; empty for no room or no name.
+    /// </summary>
+    private static string NameAndMark(string model, string mark, int room)
+    {
+        if (room < 1 || model.Length == 0)
+        {
+            return "";
+        }
+
+        int markCells = mark.Length == 0 ? 0 : TextCells.Width(mark) + MarkSeparator.Length;
+        return markCells == 0 || room - markCells < 1 ? Fit(model, room) : TrailerText(Fit(model, room - markCells), mark);
     }
 
     /// <summary>Between the toolbar's path and the model's name after it (2026-10-12). Pinned.</summary>
@@ -1511,6 +1562,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     {
         string Space(string s) => spaced ? s : TextCells.SpaceSelectorSequences(s, TextCells.NarrowSelectorSequences);
         string model = toolbar.Model ?? "";
+        string mark = toolbar.ModelMark ?? "";
         string path = toolbar.Path ?? "";
         string lead;
         string inline = "";
@@ -1526,7 +1578,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             int column = TextCells.Width(lead) + (lead.Length == 0 ? 0 : 1);
             if (lead == ahead && column < cells)
             {
-                inline = Fit(model, cells - column);
+                inline = NameAndMark(model, mark, cells - column);
                 int tailColumn = column + TextCells.Width(inline) + 1;
                 if (inline.Length > 0 && behind.Length > 0 && tailColumn < cells)
                 {
@@ -1543,7 +1595,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
 
         int room = cells - TextCells.Width(new ToolbarLaid(lead, inline, tail, tailFirst, "", "").Left) - ToolbarGap;
-        string name = model.Length == 0 || room < 1 ? "" : Fit(model, Math.Min(Math.Max(1, cells / 2), room));
+        string name = NameAndMark(model, mark, Math.Min(Math.Max(1, cells / 2), room));
         int pathRoom = name.Length == 0 ? room : room - TextCells.Width(name) - ToolbarModelSeparator.Length;
         string shown = path.Length == 0 || pathRoom < ToolbarPathMinCells ? "" : FitTail(path, pathRoom);
         return new ToolbarLaid(lead, inline, tail, tailFirst, shown, name);
@@ -3939,7 +3991,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return false;
             }
 
-            hit = HintHitAt(_hintStrip, _hintStripColumn, _trailerColumn, _trailerEnd, _markColumn, _markEnd, _busyLabel is null ? _queuedColumn : -1, _queuedCells, _usageColumn, _usageCells, _labelColumn, _labelCells, x);
+            hit = HintHitAt(_hintStrip, _hintStripColumn, _trailerColumn, _trailerEnd, _markColumn, _markEnd, _hintPathColumn, _hintPathCells, _busyLabel is null ? _queuedColumn : -1, _queuedCells, _usageColumn, _usageCells, _labelColumn, _labelCells, x);
             return true;
         }
     }
@@ -4015,7 +4067,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// the model's name and its mark ending before <paramref name="trailerEnd"/> and <paramref name="markEnd"/> (2026-10-12, Hint bar's
     /// order: the strip and the model anywhere on the row; 0 and open ends are the row as it always was). Pinned.
     /// </summary>
-    public static HintHit HintHitAt(string strip, int stripColumn, int trailerColumn, int trailerEnd, int markColumn, int markEnd, int queuedColumn, int queuedCells, int usageColumn, int usageCells, int labelColumn, int labelCells, int x)
+    public static HintHit HintHitAt(string strip, int stripColumn, int trailerColumn, int trailerEnd, int markColumn, int markEnd, int queuedColumn, int queuedCells, int usageColumn, int usageCells, int labelColumn, int labelCells, int x) =>
+        HintHitAt(strip, stripColumn, trailerColumn, trailerEnd, markColumn, markEnd, -1, 0, queuedColumn, queuedCells, usageColumn, usageCells, labelColumn, labelCells, x);
+
+    /// <summary>
+    /// <see cref="HintHitAt(string, int, int, int, int, int, int, int, int, int, int, int, int)"/> with the working directory's
+    /// <paramref name="pathCells"/> from <paramref name="pathColumn"/> (−1 for none; later on 2026-10-12): <see cref="HintZone.Path"/>. Pinned.
+    /// </summary>
+    public static HintHit HintHitAt(string strip, int stripColumn, int trailerColumn, int trailerEnd, int markColumn, int markEnd, int pathColumn, int pathCells, int queuedColumn, int queuedCells, int usageColumn, int usageCells, int labelColumn, int labelCells, int x)
     {
         ArgumentNullException.ThrowIfNull(strip);
         if (markColumn >= 0 && x >= markColumn && x < markEnd)
@@ -4026,6 +4085,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         if (trailerColumn >= 0 && x >= trailerColumn && x < trailerEnd)
         {
             return new HintHit(HintZone.Trailer, "", trailerColumn);
+        }
+
+        if (pathColumn >= 0 && x >= pathColumn && x < pathColumn + pathCells)
+        {
+            return new HintHit(HintZone.Path, "", pathColumn);
         }
 
         if (queuedColumn >= 0 && x >= queuedColumn && x < queuedColumn + queuedCells)
@@ -4149,6 +4213,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// </summary>
     private ToolbarHit ToolbarHitNow(int x)
     {
+        if (_toolbarMarkColumn >= 0 && x >= _toolbarMarkColumn && x < _toolbarModelColumn + _toolbarModelCells)
+        {
+            return new ToolbarHit(ToolbarZone.Mark, "", _toolbarMarkColumn);
+        }
+
         if (_toolbarModelColumn >= 0 && x >= _toolbarModelColumn && x < _toolbarModelColumn + _toolbarModelCells)
         {
             return new ToolbarHit(ToolbarZone.Model, "", _toolbarModelColumn);
@@ -5534,6 +5603,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _markColumn = -1;
             _trailerEnd = int.MaxValue;
             _markEnd = int.MaxValue;
+            _hintPathColumn = -1;
+            _hintPathCells = 0;
             _queuedColumn = -1;
             _queuedCells = 0;
             _usageColumn = -1;
@@ -5580,6 +5651,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             // The strip's place (2026-09-24): column 0, as on the standing row — when the fit left it whole, a cut glyph being no button.
             _hintStrip = prefix == strip ? glyphs : "";
             _hintStripColumn = 0;
+            _hintPathColumn = -1;   // the working directory is the standing row's alone
+            _hintPathCells = 0;
             // The queued part's place: after the prefix, the frame, the blank, the label, the tally and a separator — when the fit left it whole.
             RecordQueued(queued, TextCells.Width(prefix) + TextCells.Width(frame), TextCells.Width(labelled + HintSeparator), unfitted, restMax);
             // The usage zone: the frame, the label and the tally after the prefix — when the fit kept them
@@ -5602,39 +5675,22 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
         else
         {
-            var laid = LayHint();
+            var placed = PlaceStanding(max, mark);
+            var laid = placed.Laid;
             string row = laid.Row;
-            // The model in the flow (2026-10-12, Hint bar's order) leaves the right edge empty; else it keeps it, as always.
-            string trailer = laid.ModelInFlow ? "" : _trailer();
-            if (laid.ModelInFlow)
-            {
-                mark = "";
-            }
-
-            string right = Trail(trailer, mark, max, TextCells.Width(row));
-            string hint = PinRight(row, trailer, mark, max);
-            int cells = right.Length == 0 ? max : max - TextCells.Width(right) - TrailerGap;
-            bool modelWhole = laid.ModelInFlow && laid.Model.Length > 0 && Whole(laid.ModelAhead, laid.Model, row, cells);
-            WriteStanding(hint, mark, modelWhole ? laid.ModelIndex + laid.Model.Length - laid.Mark.Length : -1, laid.Mark);
-            _shownHint = hint;
+            int cells = placed.Cells;
+            WriteStanding(placed.Text, placed.MarkIndex, placed.Mark);
+            _shownHint = placed.Text;
             // The strip's place: column 0 as always, or behind the parts ahead of it — there only when the fit left it whole.
             _hintStrip = laid.StripAhead <= 0 || Whole(laid.StripAhead, laid.Strip, row, cells) ? laid.Strip : "";
             _hintStripColumn = Math.Max(0, laid.StripAhead);
-            if (laid.ModelInFlow)
-            {
-                _trailerColumn = modelWhole ? laid.ModelAhead : -1;
-                _trailerEnd = modelWhole ? laid.ModelAhead + TextCells.Width(laid.Model) : int.MaxValue;
-                _markColumn = modelWhole && laid.Mark.Length > 0 ? _trailerEnd - TextCells.Width(laid.Mark) : -1;
-                _markEnd = _trailerEnd;
-            }
-            else
-            {
-                _trailerColumn = right.Length == 0 ? -1 : max - TextCells.Width(right);
-                // The mark's place (2026-09-21): the row's last cells, since Trail never cuts it.
-                _markColumn = right.Length == 0 || mark.Length == 0 ? -1 : max - TextCells.Width(mark);
-                _trailerEnd = int.MaxValue;
-                _markEnd = int.MaxValue;
-            }
+            // The model, its mark and the working directory where PlaceStanding put them (2026-10-12): in the flow or at the right edge.
+            _trailerColumn = placed.TrailerColumn;
+            _trailerEnd = placed.TrailerEnd;
+            _markColumn = placed.MarkColumn;
+            _markEnd = placed.MarkEnd;
+            _hintPathColumn = placed.PathColumn;
+            _hintPathCells = placed.PathCells;
 
             // The queued part's place: after what stands ahead of it — when the fit left it whole.
             RecordQueued(laid.Queued, 0, laid.QueuedAhead, row, cells);
@@ -5697,9 +5753,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
 
         // The model's name among the glyphs (2026-10-12) in the hint's style, and the glyphs after it with their slabs counted on.
+        string mark = toolbar.ModelMark ?? "";
         if (laid.Inline.Length > 0)
         {
-            _inner.Write(new RawText((laid.Lead.Length == 0 ? "" : " ") + laid.Inline, Theme.Hint));
+            _inner.Write(new RawText(laid.Lead.Length == 0 ? "" : " ", Theme.Hint));
+            WriteNamed(laid.Inline, mark);
         }
 
         if (laid.Tail.Length > 0)
@@ -5719,7 +5777,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         _inner.Write(new RawText(blanks + laid.Path + (laid.Path.Length > 0 && laid.Model.Length > 0 ? ToolbarModelSeparator : ""), Theme.DimText));
         if (laid.Model.Length > 0)
         {
-            _inner.Write(new RawText(laid.Model, Theme.Hint));
+            WriteNamed(laid.Model, mark);
         }
 
         _inner.Write(EraseLineEnd);
@@ -5731,8 +5789,24 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         int rightColumn = cells - TextCells.Width(right);
         _toolbarPathCells = TextCells.Width(laid.Path);
         _toolbarPathColumn = laid.Path.Length == 0 ? -1 : rightColumn;
-        _toolbarModelCells = TextCells.Width(laid.Inline.Length > 0 ? laid.Inline : laid.Model);
+        string named = laid.Inline.Length > 0 ? laid.Inline : laid.Model;
+        _toolbarModelCells = TextCells.Width(named);
         _toolbarModelColumn = laid.Inline.Length > 0 ? laid.InlineColumn : laid.Model.Length > 0 ? cells - _toolbarModelCells : -1;
+        _toolbarMarkColumn = _toolbarModelColumn >= 0 && mark.Length > 0 && named.EndsWith(mark, StringComparison.Ordinal)
+            ? _toolbarModelColumn + _toolbarModelCells - TextCells.Width(mark) : -1;
+    }
+
+    /// <summary>The model's name on the toolbar in the hint's style, its reasoning <paramref name="mark"/> at its end in the mark's own (later on 2026-10-12).</summary>
+    private void WriteNamed(string named, string mark)
+    {
+        if (mark.Length == 0 || !named.EndsWith(mark, StringComparison.Ordinal))
+        {
+            _inner.Write(new RawText(named, Theme.Hint));
+            return;
+        }
+
+        _inner.Write(new RawText(named[..^mark.Length], Theme.Hint));
+        _inner.Write(new RawText(mark, Theme.TrailerMark));
     }
 
     /// <summary>
@@ -5810,6 +5884,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         _toolbarPathCells = 0;
         _toolbarModelColumn = -1;
         _toolbarModelCells = 0;
+        _toolbarMarkColumn = -1;
         _toolbarTail = "";
         _toolbarTailColumn = -1;
     }
@@ -5924,7 +5999,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         if (_overlay is not null || _hintLayout is not { } layout)
         {
             string queued = StandingQueued();
-            return new HintLaid(HintRow(HintRow(strip, queued), StandingHint()), strip, strip.Length == 0 ? -1 : 0, queued, strip.Length == 0 ? 0 : TextCells.Width(strip) + HintSeparator.Length, false, "", "", -1, -1);
+            return new HintLaid(HintRow(HintRow(strip, queued), StandingHint()), strip, strip.Length == 0 ? -1 : 0, queued, strip.Length == 0 ? 0 : TextCells.Width(strip) + HintSeparator.Length, false, "", "", -1, -1, "", -1, [HintSlot.Model.AtRight()]);
         }
 
         string row = "";
@@ -5936,13 +6011,25 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         string mark = "";
         int modelAhead = -1;
         int modelIndex = -1;
+        string path = "";
+        int pathAhead = -1;
+        var right = new List<HintSlot>();
+        bool modelSlot = false;
         foreach (var slot in layout())
         {
+            modelSlot |= slot.Kind == HintSlotKind.Model;
+            if (slot.Right)
+            {
+                right.Add(slot);   // the right edge's, in order (later on 2026-10-12)
+                continue;
+            }
+
             string text = slot.Kind switch
             {
                 HintSlotKind.Strip => strip,
                 HintSlotKind.Queued => _queued(),
                 HintSlotKind.Model => TrailerText(_trailer(), _trailerMark()),
+                HintSlotKind.Path => slot.Text ?? "",
                 _ => Spaced(slot.Text ?? ""),
             };
             inFlow |= slot.Kind == HintSlotKind.Model;
@@ -5972,47 +6059,149 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                     modelAhead = ahead;
                     modelIndex = row.Length;
                     break;
+                case HintSlotKind.Path:
+                    path = text;
+                    pathAhead = ahead;
+                    break;
             }
 
             row += text;
         }
 
-        return new HintLaid(row, stripAhead < 0 ? "" : strip, stripAhead, queuedText, queuedAhead, inFlow, model, mark, modelAhead, modelIndex);
+        // No slot names the model: it keeps the right edge, ahead of anything else there, as it always had.
+        if (!modelSlot)
+        {
+            right.Insert(0, HintSlot.Model.AtRight());
+        }
+
+        return new HintLaid(row, stripAhead < 0 ? "" : strip, stripAhead, queuedText, queuedAhead, inFlow, model, mark, modelAhead, modelIndex, path, pathAhead, right);
     }
 
-    /// <summary>The standing row as <see cref="LayHint"/> laid it out.</summary>
-    private readonly record struct HintLaid(string Row, string Strip, int StripAhead, string Queued, int QueuedAhead, bool ModelInFlow, string Model, string Mark, int ModelAhead, int ModelIndex);
+    /// <summary>The standing row as <see cref="LayHint"/> laid it out: the flow, its parts' places, and the right edge's slots in order.</summary>
+    private readonly record struct HintLaid(string Row, string Strip, int StripAhead, string Queued, int QueuedAhead, bool ModelInFlow, string Model, string Mark, int ModelAhead, int ModelIndex, string Path, int PathAhead, IReadOnlyList<HintSlot> Right);
+
+    /// <summary>
+    /// The standing row placed in <paramref name="max"/> cells: its text, the cells the flow keeps (<see cref="Cells"/>), and the model's,
+    /// its mark's and the working directory's places wherever they stand; the mark's char index for its colour (−1: none drawn).
+    /// </summary>
+    private readonly record struct HintPlaced(HintLaid Laid, string Text, int Cells, int TrailerColumn, int TrailerEnd, int MarkColumn, int MarkEnd, int MarkIndex, string Mark, int PathColumn, int PathCells);
+
+    /// <summary>
+    /// The standing row in <paramref name="max"/> cells (later on 2026-10-12, Hint bar's Working directory): the flow on the left and the
+    /// right edge's slots in their order behind <see cref="ToolbarModelSeparator"/> — the model's text as <see cref="Trail"/> cuts it
+    /// (giving way to the flow, never under <see cref="TrailerMinCells"/>), the working directory from the front into what the flow and
+    /// the model leave, none under <see cref="ToolbarPathMinCells"/>; the flow cut ahead of them as <see cref="PinRight(string, string, string, int)"/>
+    /// cuts it. The model alone at the right is the row as it always was. <paramref name="mark"/> is <see cref="TrailerMark"/>'s answer.
+    /// </summary>
+    private HintPlaced PlaceStanding(int max, string mark)
+    {
+        var laid = LayHint();
+        string row = laid.Row;
+        int leftCells = TextCells.Width(row);
+        string trailer = _trailer();
+        string modelText = laid.Right.Any(s => s.Kind == HintSlotKind.Model) ? Trail(trailer, mark, max, leftCells) : "";
+        var path = laid.Right.FirstOrDefault(s => s.Kind == HintSlotKind.Path);
+        string pathText = "";
+        if (path.Kind == HintSlotKind.Path && !string.IsNullOrEmpty(path.Text))
+        {
+            int room = max - leftCells - TrailerGap - (modelText.Length == 0 ? 0 : TextCells.Width(modelText) + ToolbarModelSeparator.Length);
+            pathText = room < ToolbarPathMinCells ? "" : FitTail(path.Text, room);
+        }
+
+        var parts = laid.Right
+            .Select(s => (s.Kind, Text: s.Kind == HintSlotKind.Model ? modelText : s.Kind == HintSlotKind.Path ? pathText : ""))
+            .Where(p => p.Text.Length > 0)
+            .ToList();
+        string right = string.Join(ToolbarModelSeparator, parts.Select(p => p.Text));
+        int trailerColumn = -1, trailerEnd = int.MaxValue, markColumn = -1, markEnd = int.MaxValue, markIndex = -1, pathColumn = -1, pathCells = 0;
+        string shownMark = "";
+        string text;
+        int cells;
+        if (right.Length == 0)
+        {
+            text = Fit(row, max);
+            cells = max;
+        }
+        else
+        {
+            int rightCells = TextCells.Width(right);
+            cells = max - rightCells - TrailerGap;
+            string fitted = Fit(row, cells);
+            text = fitted + new string(' ', Math.Max(0, max - TextCells.Width(fitted) - rightCells)) + right;
+            int column = max - rightCells;
+            int index = text.Length - right.Length;
+            for (int i = 0; i < parts.Count; i++)
+            {
+                var (kind, partText) = parts[i];
+                int width = TextCells.Width(partText);
+                bool last = i == parts.Count - 1;
+                if (kind == HintSlotKind.Model)
+                {
+                    // The last part runs to the edge (the row's last cell is never drawn), as the trailer always did.
+                    trailerColumn = column;
+                    trailerEnd = last ? int.MaxValue : column + width;
+                    if (mark.Length > 0 && partText.EndsWith(mark, StringComparison.Ordinal))
+                    {
+                        markColumn = column + width - TextCells.Width(mark);
+                        markEnd = trailerEnd;
+                        markIndex = index + partText.Length - mark.Length;
+                        shownMark = mark;
+                    }
+                }
+                else
+                {
+                    pathColumn = column;
+                    pathCells = last ? Math.Max(width, max - column) : width;
+                }
+
+                column += width + TextCells.Width(ToolbarModelSeparator);
+                index += partText.Length + ToolbarModelSeparator.Length;
+            }
+        }
+
+        // The model and the working directory in the flow, where the fit left them whole.
+        if (laid.ModelInFlow && laid.Model.Length > 0 && Whole(laid.ModelAhead, laid.Model, row, cells))
+        {
+            trailerColumn = laid.ModelAhead;
+            trailerEnd = laid.ModelAhead + TextCells.Width(laid.Model);
+            markColumn = laid.Mark.Length > 0 ? trailerEnd - TextCells.Width(laid.Mark) : -1;
+            markEnd = trailerEnd;
+            markIndex = laid.Mark.Length > 0 ? laid.ModelIndex + laid.Model.Length - laid.Mark.Length : -1;
+            shownMark = laid.Mark;
+        }
+
+        if (laid.Path.Length > 0 && Whole(laid.PathAhead, laid.Path, row, cells))
+        {
+            pathColumn = laid.PathAhead;
+            pathCells = TextCells.Width(laid.Path);
+        }
+
+        return new HintPlaced(laid, text, cells, trailerColumn, trailerEnd, markColumn, markEnd, markIndex, shownMark, pathColumn, pathCells);
+    }
 
     /// <summary>Whether <paramref name="text"/>, <paramref name="ahead"/> cells into <paramref name="row"/>, is whole once the row is cut to <paramref name="cells"/> (<see cref="RecordQueued"/>'s rule).</summary>
     private static bool Whole(int ahead, string text, string row, int cells) =>
         ahead >= 0 && (TextCells.Width(row) <= cells || ahead + TextCells.Width(text) < cells);
 
     /// <summary>
-    /// The standing row in the hint style: a trailing <paramref name="mark"/> in its own (<see cref="WriteTrailed"/>), or, with the model in
-    /// the flow (2026-10-12), its <paramref name="flowMark"/> at char <paramref name="flowMarkIndex"/> in the mark's style (−1: none).
+    /// The standing row in the hint style, its <paramref name="mark"/> at char <paramref name="markIndex"/> in the mark's own (2026-10-12:
+    /// at the right edge or in the flow, the working directory maybe after it; −1 or a mark the fit cut, none).
     /// </summary>
-    private void WriteStanding(string text, string mark, int flowMarkIndex, string flowMark)
+    private void WriteStanding(string text, int markIndex, string mark)
     {
-        if (flowMarkIndex < 0 || flowMark.Length == 0 || flowMarkIndex + flowMark.Length > text.Length
-            || !string.Equals(text.Substring(flowMarkIndex, flowMark.Length), flowMark, StringComparison.Ordinal))
+        if (markIndex < 0 || mark.Length == 0 || markIndex + mark.Length > text.Length
+            || !string.Equals(text.Substring(markIndex, mark.Length), mark, StringComparison.Ordinal))
         {
-            WriteTrailed(text, mark);
+            _inner.Write(new RawText(text, Theme.Hint));
             return;
         }
 
-        _inner.Write(new RawText(text[..flowMarkIndex], Theme.Hint));
-        _inner.Write(new RawText(flowMark, Theme.TrailerMark));
-        if (flowMarkIndex + flowMark.Length < text.Length)
+        _inner.Write(new RawText(text[..markIndex], Theme.Hint));
+        _inner.Write(new RawText(mark, Theme.TrailerMark));
+        if (markIndex + mark.Length < text.Length)
         {
-            _inner.Write(new RawText(text[(flowMarkIndex + flowMark.Length)..], Theme.Hint));
+            _inner.Write(new RawText(text[(markIndex + mark.Length)..], Theme.Hint));
         }
-    }
-
-    /// <summary>The standing row as the hint row shows it in <paramref name="max"/> cells: the model at the right edge, or in the flow (2026-10-12) with none there.</summary>
-    private string StandingShown(int max)
-    {
-        var laid = LayHint();
-        return laid.ModelInFlow ? PinRight(laid.Row, "", "", max) : PinRight(laid.Row, _trailer(), _trailerMark(), max);
     }
 
     /// <summary>
@@ -6285,7 +6474,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>The standing hint (the overlay's while one is open) with the trailer is not what the hint row shows.</summary>
     private bool HintChanged() =>
-        !string.Equals((_dragHint ?? _alertHint) is { } whole ? Fit(Spaced(whole), Math.Max(1, Width - 1)) : StandingShown(Math.Max(1, Width - 1)), _shownHint, StringComparison.Ordinal);
+        !string.Equals((_dragHint ?? _alertHint) is { } whole ? Fit(Spaced(whole), Math.Max(1, Width - 1)) : PlaceStanding(Math.Max(1, Width - 1), _trailerMark()).Text, _shownHint, StringComparison.Ordinal);
 
     private void ColumnZero() => _inner.Cursor.Move(CursorDirection.Left, Width);
 

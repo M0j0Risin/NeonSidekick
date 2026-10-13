@@ -8254,7 +8254,7 @@ internal sealed partial class SettingsMenu
     /// The hint bar's checklist under the settings list (2026-10-12, the user's ask: the other bars' checklist for the hint bar):
     /// one <see cref="App.HintBarItems.Label"/> row per section in the row's order (<see cref="App.HintBarItems.Order"/>), Enter or
     /// Space flipping it and saving at once; Shift+↑↓ moves the cursor's section a place, Shift+Home/End to the top or the bottom,
-    /// Delete unchecks it; select all, select none and default (every section, the row's own order) on the title row. The list is
+    /// Delete unchecks it; select all, select none and default (every section but the working directory, the row's own order) on the title row. The list is
     /// re-shown until ESC, the row redrawing under it. True when anything changed.
     /// </summary>
     private async Task<bool> EditHintBarAsync(CancellationToken cancellationToken)
@@ -8295,9 +8295,9 @@ internal sealed partial class SettingsMenu
 
             if (pick.Button == DefaultsIndex)
             {
-                if (on.Count == names.Length && App.HintBarItems.SaveOrder(order) is null)
+                if (on.SetEquals(App.HintBarItems.Defaults) && App.HintBarItems.SaveOrder(order) is null)
                 {
-                    continue;   // every section in the default order: nothing to save
+                    continue;   // the default sections in the default order: nothing to save
                 }
 
                 Apply(SettingsField.HintBarItems, d => { d.HintBarItems = null; d.HintBarOrder = null; });

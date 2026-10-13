@@ -150,7 +150,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("  Menus max height             full-screen\n" + MenuLayout.Heading("Tool bars", 120) + "\n  Hint bar                     " + HintBarItems.AllValue + "\n  Tool bar                     ", Output);
+        Assert.Contains("  Menus max height             full-screen\n" + MenuLayout.Heading("Tool bars", 120) + "\n  Hint bar                     " + HintBarItems.DefaultValue + "\n  Tool bar                     ", Output);
         Assert.Contains("\n  Performance bar              ", Output);
         Assert.Contains("\n  Home bar                     ", Output);
         Assert.Contains("\n▸ Order                        " + PaneBars.DefaultValue + "\n" + MenuLayout.Heading("Outside apps", 120), Output);
@@ -178,7 +178,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(["queued", "keys", "timers", "reading", "usage", "model", "status"], _settings.Current.HintBarOrder);
+        Assert.Equal(["queued", "keys", "timers", "reading", "usage", "model", "cwd", "status"], _settings.Current.HintBarOrder);   // the working directory after the model (later on 2026-10-12)
         Assert.Equal(["queued", "keys", "timers", "reading", "usage", "model"], _settings.Current.HintBarItems);
         Assert.Contains("[x] Status    ", Output);
         Assert.Contains("[ ] Status    ", Output);
@@ -190,7 +190,7 @@ public partial class SettingsMenuTests
         (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.HintBarItems));
         Push(Keys.Enter);
-        Push(Keys.Char('d'));                   // every section, the row's own order
+        Push(Keys.Char('d'));                   // the default sections, the row's own order
         Push(Keys.Char('d'));                   // again: nothing to save
         Push(Keys.Escape, Keys.Escape);
 
@@ -198,7 +198,7 @@ public partial class SettingsMenuTests
 
         Assert.Null(_settings.Current.HintBarItems);
         Assert.Null(_settings.Current.HintBarOrder);
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(Output, "  · Hint bar: all"));
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(Output, "  · Hint bar: " + HintBarItems.DefaultValue));
         pane.Dispose();
     }
 }

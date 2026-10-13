@@ -13171,7 +13171,7 @@ public partial class ChatScreenTests : IDisposable
                     break;
             }
         }, "One ", "two ", "three ", "four ", "five ", "six ", "seven ", "eight.");
-        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Names]);
+        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)]);   // the path on the last cells, not the model's name (2026-10-12)
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
         SeedSession();
@@ -13231,7 +13231,7 @@ public partial class ChatScreenTests : IDisposable
                     break;
             }
         }, "One ", "two ", "three ", "four ", "five ", "six ", "seven ", "eight.");
-        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Names]);
+        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)]);   // the path on the last cells, not the model's name (2026-10-12)
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
         SeedSession();
