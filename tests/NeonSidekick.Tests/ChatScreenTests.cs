@@ -153,7 +153,7 @@ public partial class ChatScreenTests : IDisposable
         // The toolbar under the hint row is on by default (2026-09-21) and takes a row of every pane drawn here — the scroll
         // tests count rows at height 10, the menu tests their tab's rows — so the fixture opts out and the toolbar tests opt in.
         _settings.Update(d => d.ToolbarItems = []);
-        // The default order holds two dividers since 2026-10-13 (the user's ask): the toolbar tests pin their glyphs' columns as laid
+        // The default order holds dividers since 2026-10-13 (the user's ask; three later that day): the toolbar tests pin their glyphs' columns as laid
         // without them, so the fixture saves the order bare; the divider tests opt back in (ToolbarOrder null).
         _settings.Update(d => d.ToolbarOrder = [.. ToolbarItems.Names]);
         // Status leads the hint bar by default since later on 2026-10-13 (the user's ask), the spinner after it: the busy-row tests pin

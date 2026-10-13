@@ -4738,7 +4738,7 @@ public partial class SettingsMenuTests : IDisposable
         Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);                       // the checklist, on Settings
         Push(Keys.Char(' '));                   // Settings off (a default since 2026-10-05; on until then)
-        Down(ToolbarItems.DefaultOrder.Length - 2);   // the default order's two dividers rows too (2026-10-13)
+        Down(ToolbarItems.DefaultOrder.Length - 2);   // the default order's divider rows too (2026-10-13)
         Push(Keys.Enter);                       // the path off (the last but the model's name since 2026-10-12: the thirteenth since the ID card and the rising chart, later on 2026-09-29; the thirtieth since 2026-10-03)
         Push(Keys.Escape, Keys.Escape);
 

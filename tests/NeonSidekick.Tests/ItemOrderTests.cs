@@ -127,10 +127,11 @@ public class ItemOrderTests
         Assert.Equal(["a", "divider:1", "b"], added.Left);
         Assert.Equal(1, at);
 
+        Assert.Equal([ToolbarItems.Usage, "divider:1", ToolbarItems.Memory], ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Usage).Take(3));   // ahead of 💾 (later still on 2026-10-13)
         string[] memoryOn = [.. ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Memory).Take(4)];
-        Assert.Equal([ToolbarItems.Memory, ToolbarItems.Queue, "divider:1", ToolbarItems.Ask], memoryOn);   // ⏳ ahead of the divider since 2026-10-13
-        Assert.Equal([ToolbarItems.Shell, "divider:2", ToolbarItems.Files], ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Shell).Take(3));
-        Assert.Equal(ToolbarItems.Names.Length + 2, ToolbarItems.DefaultOrder.Length);
+        Assert.Equal([ToolbarItems.Memory, ToolbarItems.Queue, "divider:2", ToolbarItems.Ask], memoryOn);   // ⏳ ahead of the divider since 2026-10-13
+        Assert.Equal([ToolbarItems.Shell, "divider:3", ToolbarItems.Files], ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Shell).Take(3));
+        Assert.Equal(ToolbarItems.Names.Length + 3, ToolbarItems.DefaultOrder.Length);
         Assert.Null(ToolbarItems.SaveOrder(ToolbarItems.DefaultOrder));
         Assert.Equal(ToolbarItems.Names, ToolbarItems.Order([.. ToolbarItems.Names]));   // a saved order without them stays without
     }
@@ -139,7 +140,7 @@ public class ItemOrderTests
     [Fact]
     public void TheToolbarsOrder_IsEveryItemFree_ThePathAndTheNameRightByDefault()
     {
-        Assert.Equal(ToolbarItems.DefaultOrder, ToolbarItems.Order(null));   // with its two dividers since 2026-10-13
+        Assert.Equal(ToolbarItems.DefaultOrder, ToolbarItems.Order(null));   // with its dividers since 2026-10-13 (three later that day)
         var order = ToolbarItems.Order(["path", "perf", "settings"]);
         Assert.Equal(["path", "model", "perf", "settings"], order.Take(4));   // the model after the path, its neighbour
         Assert.Equal(ToolbarItems.Names.Length, order.Count);

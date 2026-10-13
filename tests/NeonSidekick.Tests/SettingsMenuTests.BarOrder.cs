@@ -319,7 +319,7 @@ public partial class SettingsMenuTests
 
     /// <summary>
     /// The tool bar's dividers on the checklist (2026-10-13, the user's ask): <c>+</c> puts one after the cursor's item, Delete on it
-    /// takes it out, Shift+→ pins it right like any item, and <c>d</c> puts the default order (with its two) back.
+    /// takes it out, Shift+→ pins it right like any item, and <c>d</c> puts the default order (with its three) back.
     /// </summary>
     [Fact]
     public async Task OnThePane_ToolBar_AddsMovesAndDeletesDividers()
@@ -332,7 +332,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(["settings", "divider:3", "profile"], _settings.Current.ToolbarOrder!.Take(3));   // 1 and 2 are the default's
+        Assert.Equal(["settings", "divider:4", "profile"], _settings.Current.ToolbarOrder!.Take(3));   // 1 to 3 are the default's (1 and 2 until later still on 2026-10-13)
         Assert.Contains(SettingsMenu.DividerButton, Output);
         Assert.Contains("    │   Divider", Output);
         pane.Dispose();
@@ -357,7 +357,7 @@ public partial class SettingsMenuTests
     {
         var shown = new AppSettingsData { ToolbarRight = ["tools", "path"], WebTools = false };
         var parts = ChatScreen.ToolbarPartsFor(ToolbarItems.Resolve(["settings", "tools", "web", "path", "model"]), shown, @"D:\x", "llama", "");
-        // The default order's two dividers lie between ⚙️ and 🌐 with nothing drawn between them: one │ (2026-10-13).
+        // The default order's dividers lie between ⚙️ and 🌐 (three since later still that day) with nothing drawn between them: one │ (2026-10-13).
         Assert.Equal([ChatScreen.SettingsToolGlyph, ScreenPane.DividerGlyph, ChatScreen.WebToolGlyph, "llama"], parts.Left.Select(i => i.Text));
         Assert.Equal(ScreenPane.ToolbarItemKind.Divider, parts.Left[1].Kind);
         Assert.True(parts.Left[2].Off);

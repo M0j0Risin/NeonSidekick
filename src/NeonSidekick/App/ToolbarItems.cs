@@ -295,12 +295,18 @@ public static class ToolbarItems
     }
 
     /// <summary>
-    /// The default order (2026-10-13, the user's ask: <c>⚙️ 🛠️ 🎓 💾 ⏳ | 🔓 👮 🐚 | 📁 🌄 🌐</c>): <see cref="Names"/> with a divider after
-    /// Queue (ahead of Ask, unchecked by default; after Memory until Queue came later that day) and another after Shell. A divider whose neighbours are hidden is not drawn
-    /// (<see cref="ItemOrder.ShownDividers"/>). Pinned.
+    /// The default order (2026-10-13, the user's ask: <c>⚙️ 🛠️ 🎓 | 💾 ⏳ | 🔒 👮 🐚 | 📁 🌄 🌐</c>): <see cref="Names"/> with a divider ahead of
+    /// Memory (later still that day, the user's ask; after Usage, so 💾 ⏳ stay together when System prompt, Sessions or Usage is checked), one after
+    /// Queue (ahead of Ask, unchecked by default; after Memory until Queue came later that day) and one after Shell, numbered from the left. A
+    /// divider whose neighbours are hidden is not drawn (<see cref="ItemOrder.ShownDividers"/>). Pinned.
     /// </summary>
     public static readonly string[] DefaultOrder =
-        [.. Names.TakeWhile(id => id != Ask), ItemOrder.DividerPrefix + "1", .. Names.SkipWhile(id => id != Ask).TakeWhile(id => id != Files), ItemOrder.DividerPrefix + "2", .. Names.SkipWhile(id => id != Files)];
+    [
+        .. Names.TakeWhile(id => id != Memory), ItemOrder.DividerPrefix + "1",
+        .. Names.SkipWhile(id => id != Memory).TakeWhile(id => id != Ask), ItemOrder.DividerPrefix + "2",
+        .. Names.SkipWhile(id => id != Ask).TakeWhile(id => id != Files), ItemOrder.DividerPrefix + "3",
+        .. Names.SkipWhile(id => id != Files),
+    ];
 
     /// <summary>
     /// The checklist's and the strip's order for <paramref name="saved"/> (<see cref="Settings.AppSettingsData.ToolbarOrder"/>,

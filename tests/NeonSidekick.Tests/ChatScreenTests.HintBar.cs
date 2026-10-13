@@ -197,11 +197,11 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// The tool bar's default order (2026-10-13, the user's ask): a dim │ after 💾 (after ⏳ later that day) and another after 🐚, each between two drawn glyphs
+    /// The tool bar's default order (2026-10-13, the user's ask): a dim │ ahead of 💾 (later still that day), one after ⏳ (after 💾 until it came) and one after 🐚, each between two drawn glyphs
     /// (the fixture saves a bare order for the column pins; this test takes the default again).
     /// </summary>
     [WindowsFact]
-    public async Task Toolbar_TheDefaultOrder_DrawsItsTwoDividers()
+    public async Task Toolbar_TheDefaultOrder_DrawsItsThreeDividers()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = null; d.ToolbarOrder = null; });
         _console.Profile.Height = 40;
@@ -211,7 +211,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(ChatScreen.MemoryToolGlyph + " " + ChatScreen.QueueToolGlyph + " " + ScreenPane.DividerGlyph + " ", output);   // ⏳ ahead of it since 2026-10-13
+        Assert.Contains(ChatScreen.SkillsToolGlyph + " " + ScreenPane.DividerGlyph + " " + ChatScreen.MemoryToolGlyph + " " + ChatScreen.QueueToolGlyph + " " + ScreenPane.DividerGlyph + " ", output);   // 🎓 │ 💾 ⏳ │ (later still on 2026-10-13)
         Assert.Contains(ChatScreen.ShellToolGlyph + " " + ScreenPane.DividerGlyph + " " + ChatScreen.FilesToolGlyph, output);
     }
 
