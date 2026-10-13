@@ -406,6 +406,31 @@ public class ConversationHistoryTests
         Assert.Equal(3, raised);   // an unrelated message changes nothing
     }
 
+    /// <summary>
+    /// The loaded skills kept as the history grows (2026-10-13, the code review: no whole-history walk per tool call): a plain tool result
+    /// and a plain result replaced change nothing, and the kept list is always the one a walk would give.
+    /// </summary>
+    [Fact]
+    public void LoadedSkills_KeptAsTheHistoryGrows_AreTheWalksOwn()
+    {
+        var history = new ConversationHistory("s");
+        int raised = 0;
+        history.SkillsChanged += () => raised++;
+        Load(history, "haiku");
+        var call = new FunctionCallContent("t1", "get_current_time", new Dictionary<string, object?>());
+        history.AddMessage(new ChatMessage(ChatRole.Assistant, [call]));
+        history.AddToolResults([Assistant.ResultContent(call, "12:00")]);
+        Assert.Equal(1, raised);
+        Assert.True(history.TryReplaceToolResult("t1", "12:05"));
+        Assert.Equal(1, raised);
+        Load(history, "deploy");
+        Load(history, "haiku");
+
+        Assert.Equal(ConversationHistory.SkillsIn(history.Messages), history.LoadedSkills);
+        Assert.Equal([new LoadedSkill("haiku", 2), new LoadedSkill("deploy", 1)], history.LoadedSkills);
+        Assert.Equal(3, raised);
+    }
+
     [Fact]
     public void LoadedSkills_SkipErrorsAndBundledFiles()
     {

@@ -14350,6 +14350,50 @@ public partial class ChatScreenTests : IDisposable
         };
     }
 
+    /// <summary>
+    /// A /sessions pane the reply ended under, closed without replacing the conversation (2026-10-13, the code review: the session on
+    /// screen restored again is the pane's own notice, and a hand-over of a missing or unreadable one no longer counts as a reset): the
+    /// turn's tail still runs — the reply's normal end releases the queue a cancel held, and the held line drains.
+    /// </summary>
+    [Fact]
+    public async Task MidTurn_TheCurrentSessionPickedOnAPaneTheReplyEndedUnder_KeepsTheTurnsTail()
+    {
+        CancelledWithAQueuedLineFixture("hold");
+        _chat.EnqueueText("Again ", "and ", "more.");
+        _chat.EnqueueText("Later.");
+        var held = _chat.BeforeUpdate!;
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            await held(i, ct);
+            if (_chat.Requests.Count == 2 && i == 1)
+            {
+                PushLine("/sessions");   // the pane over the reply
+                await UntilAsync(() => Output.Contains(SessionsMenu.Title, StringComparison.Ordinal), ct);
+            }
+        };
+        LinesWhenIdle("hi", "again", "/exit");
+        var input = Scripted();
+        var idle = input.OnWait;
+        bool pushed = false;
+        input.OnWait = () =>
+        {
+            if (!pushed && Output.Contains(SettingsMenu.ReplyEndedNotice, StringComparison.Ordinal))
+            {
+                pushed = true;
+                input.Push(Keys.Enter, Keys.Enter, Keys.Escape);   // the first row, the session on screen: Restore, said by the pane; then closed
+                return;
+            }
+
+            idle?.Invoke();
+        };
+
+        string output = await RunAsync();
+
+        Assert.Contains(SessionsMenu.CurrentNotice, output);
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Equal("later", _chat.Requests[2][^1].Text);   // the hold released by the reply's normal end
+    }
+
     [Fact]
     public async Task MidTurn_Esc_UnderHold_HoldsTheQueue_TheNextTypedMessageRunsFirst_ThenTheDrain()
     {
@@ -21467,6 +21511,52 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(ChatScreen.LearnAskRows[2], output);
         Assert.Contains(done, output);
         Assert.Equal(keep, File.Exists(Path.Combine(ProfileSkills, "greeting", SkillCatalog.FileName)));
+    }
+
+    /// <summary>
+    /// The ask's pane goes with its reflection (2026-10-13, the code review): Ctrl+L while Keep / View / Discard is shown cancels the
+    /// reflection, the pane closes and says nothing was written, and no skill is.
+    /// </summary>
+    [Fact]
+    public async Task WithGeometry_TheAsksPane_ClosesWhenItsReflectionIsCancelled()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ReflectionConfirmMode = "confirm-new"; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("Hello.");
+        _chat.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, CreateSkillArgs("greeting")));
+        string title = ChatScreen.LearnAskTitle(new SkillProposal(SkillChangeKind.New, SkillEditorTool.CreateAction, "greeting"));
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            switch (step)
+            {
+                case 0: step++; PushLine(input, "hi"); break;
+                case 1: step++; PushLine(input, "/learn keep the greeting"); break;
+                case 2:
+                    if (Output.Contains(title, StringComparison.Ordinal))
+                    {
+                        step++;
+                        input.Push(Keys.Ctrl(ConsoleKey.L));   // the reflection's cancel, the pane still asking
+                    }
+
+                    break;
+                case 3:
+                    if (_session.Learning is not { IsCompleted: false } && Output.Contains(ChatScreen.LearnAskWithdrawnNotice, StringComparison.Ordinal))
+                    {
+                        step++;
+                        PushLine(input, "/exit");
+                    }
+
+                    break;
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.LearnAskWithdrawnNotice, output);
+        Assert.False(File.Exists(Path.Combine(ProfileSkills, "greeting", SkillCatalog.FileName)));
     }
 
     /// <summary>The fake gates the request at <paramref name="request"/> (0-based) on <paramref name="gate"/> before its first update: the reflection held open while the test goes on.</summary>

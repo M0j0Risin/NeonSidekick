@@ -188,6 +188,13 @@ public sealed class SkillEditorTool : AIFunction
             {
                 return no;
             }
+
+            // The guard again after the wait (2026-10-13, the code review): the ask may wait through a whole reply, and a change made
+            // meanwhile (the main chat's skill_editor, the user's editor) must not be overwritten by the reflection's stale copy.
+            if (!create && _guard?.Refusal(name, !string.IsNullOrWhiteSpace(instructions)) is { } late)
+            {
+                return late;
+            }
         }
 
         var result = create
@@ -265,10 +272,18 @@ public sealed class SkillEditorTool : AIFunction
             return refusal;
         }
 
-        if (_confirm is not null && SkillEditor.Find(_roots(), name.Trim(), _external()) is { } at && at != SkillScope.External
-            && await Declined(proposal, at, cancellationToken).ConfigureAwait(false) is { } no)
+        if (_confirm is not null && SkillEditor.Find(_roots(), name.Trim(), _external()) is { } at && at != SkillScope.External)
         {
-            return no;
+            if (await Declined(proposal, at, cancellationToken).ConfigureAwait(false) is { } no)
+            {
+                return no;
+            }
+
+            // The guard again after the wait (2026-10-13, the code review), as DescribeAsync's.
+            if (_guard?.Refusal(name, rewrite: true) is { } late)
+            {
+                return late;
+            }
         }
 
         var result = act(_files);

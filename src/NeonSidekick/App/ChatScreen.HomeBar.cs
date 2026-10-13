@@ -45,11 +45,17 @@ internal sealed partial class ChatScreen
 
     private HomeCache? _homeCache;
 
-    // The 🛒 chip's count: the lines to get as last read (-1 the list off, -2 not read yet), when the last read began, and whether one
-    // runs. Read on a pool thread so a tool holding the store's lock never stalls the pane.
+    // The 🛒 chip's count: the lines to get as last read (-1 the list off, -2 not read yet), when the last read began (UTC ticks, read and
+    // written whole: the drawing thread and the turn task both touch it), whether one runs, and the profile's generation (a read begun
+    // before a switch never lands after it). Read on a pool thread so a tool holding the store's lock never stalls the pane; the first
+    // read waits a moment for the lock at most (2026-10-13, the code review), and every read is made outside _homeGate.
     private int _homeShoppingOpen = -2;
-    private DateTimeOffset _homeShoppingAt = DateTimeOffset.MinValue;
+    private long _homeShoppingAt;
     private int _homeShoppingReading;
+    private int _homeShoppingGeneration;
+
+    /// <summary>How long the 🛒 chip's first count waits for the store's lock on the drawing thread before it reads on the pool instead.</summary>
+    private static readonly TimeSpan HomeShoppingFirstWait = TimeSpan.FromMilliseconds(20);
 
     // The Home Assistant URL and token as stored, as the bar last saw them: a change wakes the feed (the review's finding,
     // 2026-10-12: a key fixed in /settings, or a profile switch, waited for a wake that never came).
@@ -94,12 +100,13 @@ internal sealed partial class ChatScreen
         var now = _time.GetUtcNow();
         IReadOnlySet<string>? want = null;
         HomeRow? row;
+        // The 🛒 count before the gate (2026-10-13, the code review): a read never holds the bar's lock.
+        int? shopping = items.Contains(HomeBarItems.Shopping, StringComparer.Ordinal) ? HomeShoppingOpen(now) : null;
         lock (_homeGate)
         {
             // The items with their aliases (2026-10-12) and emoji (later that day): a rename redraws at once, as an added item does.
             var aliases = effective.HomeBarAliases;
             var glyphs = effective.HomeBarGlyphs;
-            int? shopping = items.Contains(HomeBarItems.Shopping, StringComparer.Ordinal) ? HomeShoppingOpen(now) : null;
             string key = string.Join('\n', items.Select(i => (HomeBarItems.AliasOf(aliases, i) is { } alias ? i + "=" + alias : i) + (HomeBarItems.GlyphOf(glyphs, i) is { } glyph ? "#" + glyph : "")))
                 + "\n🛒" + (shopping?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "?");
             var cache = _homeCache;
@@ -146,33 +153,64 @@ internal sealed partial class ChatScreen
     /// </summary>
     private int? HomeShoppingOpen(DateTimeOffset now)
     {
-        if (Volatile.Read(ref _homeShoppingOpen) == -2)
+        long ticks = now.UtcTicks;
+        int generation = Volatile.Read(ref _homeShoppingGeneration);
+        var store = _shopping.Store;
+        if (Volatile.Read(ref _homeShoppingOpen) == -2 && Interlocked.CompareExchange(ref _homeShoppingReading, 1, 0) == 0)
         {
-            _homeShoppingAt = now;
-            Volatile.Write(ref _homeShoppingOpen, _shopping.Store.OpenCount() ?? -1);
-        }
-        else if (now - _homeShoppingAt >= HomeShoppingEvery && Interlocked.Exchange(ref _homeShoppingReading, 1) == 0)
-        {
-            _homeShoppingAt = now;
-            _ = Task.Run(() =>
+            // The first read here, unless a write holds the store (then on the pool, the chip ? until it lands).
+            Interlocked.Exchange(ref _homeShoppingAt, ticks);
+            if (store.TryOpenCount(HomeShoppingFirstWait, out int? first))
             {
-                try
-                {
-                    Volatile.Write(ref _homeShoppingOpen, _shopping.Store.OpenCount() ?? -1);
-                }
-                finally
-                {
-                    Volatile.Write(ref _homeShoppingReading, 0);
-                }
-            });
+                Land(first);
+                Volatile.Write(ref _homeShoppingReading, 0);
+            }
+            else
+            {
+                _ = Task.Run(ReadAndLand);
+            }
+        }
+        else if (ticks - Interlocked.Read(ref _homeShoppingAt) >= HomeShoppingEvery.Ticks && Interlocked.CompareExchange(ref _homeShoppingReading, 1, 0) == 0)
+        {
+            Interlocked.Exchange(ref _homeShoppingAt, ticks);
+            _ = Task.Run(ReadAndLand);
         }
 
         int open = Volatile.Read(ref _homeShoppingOpen);
         return open >= 0 ? open : null;
+
+        void ReadAndLand()
+        {
+            try
+            {
+                Land(store.OpenCount());
+            }
+            finally
+            {
+                Volatile.Write(ref _homeShoppingReading, 0);
+            }
+        }
+
+        // A read begun under another profile is dropped: the new profile's store reads afresh.
+        void Land(int? count)
+        {
+            if (Volatile.Read(ref _homeShoppingGeneration) == generation)
+            {
+                Volatile.Write(ref _homeShoppingOpen, count ?? -1);
+            }
+        }
     }
 
     /// <summary>The 🛒 chip reads its count again at the next draw: <c>/shopping</c> or its pane just ran.</summary>
-    private void HomeShoppingChanged() => _homeShoppingAt = DateTimeOffset.MinValue;
+    private void HomeShoppingChanged() => Interlocked.Exchange(ref _homeShoppingAt, 0);
+
+    /// <summary>The 🛒 chip forgets the last profile's count (2026-10-13, the code review): read afresh from the loaded one's store.</summary>
+    private void HomeShoppingForget()
+    {
+        Interlocked.Increment(ref _homeShoppingGeneration);
+        Volatile.Write(ref _homeShoppingOpen, -2);
+        Interlocked.Exchange(ref _homeShoppingAt, 0);
+    }
 
     // The entities the bar keeps current: its items' (an area's lights) and an open room pane's devices.
     private IReadOnlySet<string> HomeIds(IReadOnlyList<string> items, HaCatalog? catalog)

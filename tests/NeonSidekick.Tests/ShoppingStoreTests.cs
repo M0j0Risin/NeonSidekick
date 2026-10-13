@@ -231,4 +231,29 @@ public sealed class ShoppingStoreTests : IDisposable
         _store.SetChecked(milk.Id, true);
         Assert.Equal(1, _store.OpenCount());
     }
+
+    /// <summary>The home bar's first count (2026-10-13, the code review): read when the store is free, refused rather than waited for while a write holds it.</summary>
+    [Fact]
+    public async Task TryOpenCount_ReadsWhenFree_AndGivesUpWhileTheStoreIsHeld()
+    {
+        _store.AddItem("milk", 1);
+        Assert.True(_store.TryOpenCount(TimeSpan.FromMilliseconds(20), out int? count));
+        Assert.Equal(1, count);
+
+        using var held = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var holder = Task.Run(() =>
+        {
+            lock (_store.Gate)
+            {
+                held.Set();
+                release.Wait();
+            }
+        });
+        held.Wait();
+        Assert.False(_store.TryOpenCount(TimeSpan.FromMilliseconds(20), out count));
+        Assert.Null(count);
+        release.Set();
+        await holder;
+    }
 }

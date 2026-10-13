@@ -93,6 +93,43 @@ public class MemoryStoreTests : IDisposable
         Assert.Equal(MemoryStore.MaxEntries, new MemoryStore(_dir).Count);
     }
 
+    /// <summary>
+    /// A disabled memory's text added again (2026-10-13, the code review): the model's add is told so and changes nothing — never
+    /// "already remembered" of a fact it cannot see —, the user's own add enables it again.
+    /// </summary>
+    [Fact]
+    public void Add_OfADisabledMemory_IsDisabledForTheModel_EnabledForTheUser()
+    {
+        var store = new MemoryStore(_dir);
+        store.Add("Prefers metric units.");
+        Assert.True(store.SetDisabled("Prefers metric units.", disabled: true));
+
+        Assert.Equal(new MemoryAddResult(MemoryAddOutcome.Disabled, "Prefers metric units."), store.Add("prefers  metric units."));
+        Assert.Empty(store.Snapshot());
+        Assert.StartsWith("not saved: the user has disabled this memory", NeonSidekick.Llm.Tools.SaveMemoryTool.Describe(store.Add("Prefers metric units.")), StringComparison.Ordinal);
+
+        Assert.Equal(new MemoryAddResult(MemoryAddOutcome.Enabled, "Prefers metric units."), store.Add("Prefers metric units.", enableDisabled: true));
+        Assert.Equal(["Prefers metric units."], new MemoryStore(_dir).Snapshot());
+        Assert.Equal(1, store.Count);
+    }
+
+    /// <summary>The cap is the prompt's (2026-10-13, the code review): a disabled memory does not count toward it.</summary>
+    [Fact]
+    public void Add_TheCap_CountsTheEnabledAlone()
+    {
+        var store = new MemoryStore(_dir);
+        for (int i = 0; i < MemoryStore.MaxEntries; i++)
+        {
+            store.Add("fact " + i);
+        }
+
+        Assert.True(store.SetDisabled("fact 0", disabled: true));
+
+        Assert.Equal(MemoryAddOutcome.Added, store.Add("one more").Outcome);
+        Assert.Equal(MemoryStore.MaxEntries, store.Snapshot().Count);
+        Assert.Equal(MemoryAddOutcome.Full, store.Add("fact 0", enableDisabled: true).Outcome);   // enabling it again would pass the cap
+    }
+
     [Fact]
     public void Normalize_IsPinned()
     {

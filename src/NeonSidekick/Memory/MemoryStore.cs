@@ -46,6 +46,15 @@ public enum MemoryAddOutcome
 
     /// <summary>The file could not be written; the store is as it was and the failure is in the log.</summary>
     Failed,
+
+    /// <summary>
+    /// The same text is stored but disabled (2026-10-13, the code review): kept, not offered to the model; nothing changed. What the
+    /// model's <c>save_memory</c> gets, so it is never told "already remembered" of a fact it cannot see.
+    /// </summary>
+    Disabled,
+
+    /// <summary>The same text was stored disabled and is enabled again (2026-10-13): the user's own add (<c>/remember</c>, the pane's + add).</summary>
+    Enabled,
 }
 
 /// <summary>What <see cref="MemoryStore.Edit"/> did (2026-10-13, the <c>/memory</c> pane's edit).</summary>
@@ -225,7 +234,8 @@ public sealed class MemoryStore
         string normalized = Normalize(text);
         lock (_gate)
         {
-            var entry = Entries().FirstOrDefault(e => string.Equals(e.Text, normalized, StringComparison.OrdinalIgnoreCase));
+            var entries = Entries();
+            var entry = entries.FirstOrDefault(e => string.Equals(e.Text, normalized, StringComparison.OrdinalIgnoreCase));
             if (entry is null || entry.Disabled == disabled)
             {
                 return false;
@@ -234,7 +244,7 @@ public sealed class MemoryStore
             entry.Disabled = disabled;
             try
             {
-                Save(Entries());
+                Save(entries);   // the list the entry is in: a second Entries() could read the file again and save it without the change (2026-10-13, the code review)
             }
             catch
             {
@@ -327,8 +337,13 @@ public sealed class MemoryStore
         return sb.ToString();
     }
 
-    /// <summary>Saves one memory. Never throws; the result says what happened and carries the normalised text.</summary>
-    public MemoryAddResult Add(string? text)
+    /// <summary>
+    /// Saves one memory. Never throws; the result says what happened and carries the normalised text. The same text stored but disabled
+    /// (2026-10-13, the code review) is <see cref="MemoryAddOutcome.Disabled"/>, nothing changed — or, with <paramref name="enableDisabled"/>
+    /// (the user's own add), enabled again, <see cref="MemoryAddOutcome.Enabled"/>. <see cref="MaxEntries"/> counts the enabled ones: the
+    /// ceiling is the prompt's.
+    /// </summary>
+    public MemoryAddResult Add(string? text, bool enableDisabled = false)
     {
         string normalized = Normalize(text);
         if (normalized.Length == 0)
@@ -340,12 +355,35 @@ public sealed class MemoryStore
         {
             var entries = Entries();
             var existing = entries.FirstOrDefault(e => string.Equals(e.Text, normalized, StringComparison.OrdinalIgnoreCase));
+            if (existing is { Disabled: true })
+            {
+                if (!enableDisabled)
+                {
+                    return new(MemoryAddOutcome.Disabled, existing.Text);
+                }
+
+                if (entries.Count(e => !e.Disabled) >= MaxEntries)
+                {
+                    return new(MemoryAddOutcome.Full, existing.Text);
+                }
+
+                existing.Disabled = false;
+                if (!TrySave(entries))
+                {
+                    existing.Disabled = true;
+                    return new(MemoryAddOutcome.Failed, existing.Text);
+                }
+
+                DiagnosticLog.Info(Category, $"Enabled: {existing.Text}");
+                return new(MemoryAddOutcome.Enabled, existing.Text);
+            }
+
             if (existing is not null)
             {
                 return new(MemoryAddOutcome.Duplicate, existing.Text);
             }
 
-            if (entries.Count >= MaxEntries)
+            if (entries.Count(e => !e.Disabled) >= MaxEntries)
             {
                 return new(MemoryAddOutcome.Full, normalized);
             }

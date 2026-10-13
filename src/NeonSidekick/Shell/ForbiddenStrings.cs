@@ -23,13 +23,7 @@ public static class ForbiddenStrings
     /// <summary>The file's three sections, read once.</summary>
     private static readonly (string[] Shared, string[] Windows, string[] Mac) Embedded = ReadEmbedded();
 
-    private static (string[] Shared, string[] Windows, string[] Mac) ReadEmbedded()
-    {
-        using var stream = typeof(ForbiddenStrings).Assembly.GetManifestResourceStream(ResourceName)
-            ?? throw new InvalidOperationException("The forbidden strings " + ResourceName + " are not embedded.");
-        using var reader = new StreamReader(stream, Encoding.UTF8);
-        return Parse(reader.ReadToEnd());
-    }
+    private static (string[] Shared, string[] Windows, string[] Mac) ReadEmbedded() => Parse(App.EmbeddedText.Read(ResourceName, "The forbidden strings"));
 
     /// <summary>
     /// The sections <paramref name="text"/> holds (2026-10-13): one string per line (CRLF or LF), each trimmed, blank lines skipped,
@@ -44,10 +38,9 @@ public static class ForbiddenStrings
         var windows = new List<string>();
         var mac = new List<string>();
         List<string>? into = shared;
-        foreach (string raw in text.Split('\n'))
+        foreach (string line in App.EmbeddedText.Lines(text))
         {
-            string line = raw.Trim();
-            if (line.Length == 0 || line[0] == '#')
+            if (line[0] == '#')
             {
                 continue;
             }

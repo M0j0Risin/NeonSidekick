@@ -374,7 +374,8 @@ public sealed class ConversationHistory
         }
 
         _messages.Add(message);
-        Recount();
+        RecountTurns();
+        AddSkillsFrom(message);
     }
 
     /// <summary>One <see cref="ChatRole.Tool"/> message carrying every result of an iteration.</summary>
@@ -387,8 +388,9 @@ public sealed class ConversationHistory
             return;
         }
 
-        _messages.Add(new ChatMessage(ChatRole.Tool, contents));
-        RecountSkills();
+        var message = new ChatMessage(ChatRole.Tool, contents);
+        _messages.Add(message);
+        AddSkillsFrom(message);   // this message alone (2026-10-13, the code review): no walk of the whole history per tool call
     }
 
     /// <summary>
@@ -418,8 +420,14 @@ public sealed class ConversationHistory
                         return false;
                     }
 
+                    // A skill's load replaced, or one made, is the one edit that can change the loaded skills (2026-10-13, the code review).
+                    bool skills = found.Result is string before && TurnTrace.LoadedName(before) is not null || TurnTrace.LoadedName(result) is not null;
                     found.Result = result;
-                    RecountSkills();
+                    if (skills)
+                    {
+                        RecountSkills();
+                    }
+
                     return true;
                 }
             }
@@ -575,8 +583,47 @@ public sealed class ConversationHistory
 
     private void Recount()
     {
-        _turnCount = _messages.Count(IsTurnStart);
+        RecountTurns();
         RecountSkills();
+    }
+
+    private void RecountTurns() => _turnCount = _messages.Count(IsTurnStart);
+
+    /// <summary>
+    /// <see cref="LoadedSkills"/> with the loads <paramref name="message"/> answered, appended (2026-10-13, the code review: an append only
+    /// adds, so the whole history is not walked again); <see cref="SkillsChanged"/> raised when there were any. Nothing while
+    /// <see cref="Replace"/> builds its list. The same as <see cref="SkillsIn"/> over the messages, kept so by every other write's recount.
+    /// </summary>
+    private void AddSkillsFrom(ChatMessage message)
+    {
+        if (_replacing || message.Role != ChatRole.Tool)
+        {
+            return;
+        }
+
+        List<LoadedSkill>? next = null;
+        foreach (var content in message.Contents)
+        {
+            if (content is FunctionResultContent { Result: string text } && TurnTrace.LoadedName(text) is { } name)
+            {
+                next ??= [.. _loadedSkills];
+                int at = next.FindIndex(skill => string.Equals(skill.Name, name, StringComparison.Ordinal));
+                if (at >= 0)
+                {
+                    next[at] = next[at] with { Loads = next[at].Loads + 1 };
+                }
+                else
+                {
+                    next.Add(new LoadedSkill(name, 1));
+                }
+            }
+        }
+
+        if (next is not null)
+        {
+            _loadedSkills = next;
+            SkillsChanged?.Invoke();
+        }
     }
 
     /// <summary><see cref="LoadedSkills"/> read again; <see cref="SkillsChanged"/> raised when it differs. Nothing while <see cref="Replace"/> builds its list.</summary>
@@ -599,7 +646,7 @@ public sealed class ConversationHistory
 
     private void Trim()
     {
-        Recount();
+        RecountTurns();   // a trim that takes nothing out leaves the loaded skills as they were (2026-10-13, the code review)
         if (MaxTurns is not { } cap)
         {
             return;
@@ -622,7 +669,10 @@ public sealed class ConversationHistory
             turns--;
         }
 
-        Recount();
+        if (turns != before)
+        {
+            Recount();   // a turn went: a load it held may have gone with it
+        }
         // One turn per message is the steady state at the cap; more at once means the cap just
         // came down (the window lost on a reconnect, the setting lowered), worth a line in the log.
         if (before - TurnCount > 1)

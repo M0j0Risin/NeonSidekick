@@ -926,10 +926,9 @@ internal sealed partial class ChatScreen
             await ApplyMenuChangesAsync(changes, embedded, cancellationToken).ConfigureAwait(false);
         }
 
-        if (session is { } id)
+        if (session is { } id && RestoreSession(id))
         {
-            RestoreSession(id);
-            reset = true;
+            reset = true;   // only when the conversation was replaced (2026-10-13, the code review): the one on screen picked again keeps the tail
         }
 
         return reset;

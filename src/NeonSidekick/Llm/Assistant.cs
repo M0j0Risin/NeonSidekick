@@ -53,13 +53,7 @@ public sealed class Assistant
     /// <summary>The manifest name <c>assets/prompts/persona.md</c> is embedded under.</summary>
     public const string DefaultPersonaResourceName = "prompts/persona.md";
 
-    private static string ReadDefaultPersona()
-    {
-        using var stream = typeof(Assistant).Assembly.GetManifestResourceStream(DefaultPersonaResourceName)
-            ?? throw new InvalidOperationException("The default persona " + DefaultPersonaResourceName + " is not embedded.");
-        using var reader = new StreamReader(stream, Encoding.UTF8);
-        return PersonaFile.Normalize(reader.ReadToEnd());
-    }
+    private static string ReadDefaultPersona() => PersonaFile.Normalize(App.EmbeddedText.Read(DefaultPersonaResourceName, "The default persona"));
 
     /// <summary>
     /// The one operating rule that names no tool: the whole of the default rules while the

@@ -209,10 +209,16 @@ internal sealed class MemoryMenu
 
     // ── Screen ──────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Whether the pane has something to offer with nothing remembered: Memory's switch on the title row, or (2026-10-13, the code review)
+    /// + add where the pane has its input row — so an empty store opens it, and forgetting the last memory leaves it open.
+    /// </summary>
+    private bool OpensEmpty => HasSwitch || (_pane.Enabled && Line is not null);
+
     public async Task ShowAsync(CancellationToken cancellationToken)
     {
         var entries = _store.EntriesSnapshot();
-        if (entries.Count == 0 && !(HasSwitch && CanShowMenus()))
+        if (entries.Count == 0 && !(CanShowMenus() && OpensEmpty))
         {
             _transcript.Notice(EmptyNotice);
             return;
@@ -355,7 +361,7 @@ internal sealed class MemoryMenu
                 }
 
                 entries = _store.EntriesSnapshot();
-                if (entries.Count == 0 && !HasSwitch)
+                if (entries.Count == 0 && !OpensEmpty)
                 {
                     closingNotice = EmptyNotice;
                     return;
@@ -439,12 +445,15 @@ internal sealed class MemoryMenu
             return null;
         }
 
-        var result = _store.Add(typed);
+        var result = _store.Add(typed, enableDisabled: true);   // the user's own add enables a disabled one again (2026-10-13)
         switch (result.Outcome)
         {
             case MemoryAddOutcome.Added:
                 Sink.Notice(ChatScreen.RememberedNotice(result.Text));
                 return _store.EntriesSnapshot().Count - 1;
+            case MemoryAddOutcome.Enabled:
+                Sink.Notice(ChatScreen.RememberEnabledNotice(result.Text));
+                return _store.EntriesSnapshot().ToList().FindIndex(e => string.Equals(e.Text, result.Text, StringComparison.Ordinal));
             case MemoryAddOutcome.Duplicate:
                 Sink.Notice(ChatScreen.AlreadyRememberedNotice(result.Text));
                 return null;

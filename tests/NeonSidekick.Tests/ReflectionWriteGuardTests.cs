@@ -70,6 +70,33 @@ public class ReflectionWriteGuardTests : IDisposable
         Assert.StartsWith("updated skill 'haiku'", editor.Describe("update", "", "haiku", null, "Built on the new text."), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Under Reflection confirm mode the ask may wait through a whole reply (2026-10-13, the code review): a change made to the skill
+    /// meanwhile is caught after the user's Keep, so the reflection's stale copy never overwrites it — the update's and a file write's.
+    /// </summary>
+    [Fact]
+    public async Task AChangeMadeWhileTheAskWaits_IsRefusedAfterKeep()
+    {
+        var guard = new ReflectionWriteGuard(() => _roots, false, ReflectionInstalledPolicy.ReadOnly);
+        var editor = new SkillEditorTool(() => _roots, () => false, new SkillFileAccess(new ManualTimeProvider()), guard: guard,
+            confirm: (_, _) =>
+            {
+                Put("haiku", "Changed while the ask waited.");   // the main chat, or the user, meanwhile
+                return Task.FromResult(true);                     // then Keep
+            });
+        var loader = new LoadSkillTool(_catalog, used: guard.Loaded);
+        loader.Describe("haiku", null);
+
+        Assert.Equal(SkillText.ChangedSinceLoad("haiku"), await editor.DescribeAsync("update", "", "haiku", null, "Stale.", null, CancellationToken.None));
+        Assert.Contains("Changed while the ask waited.", File.ReadAllText(Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName)), StringComparison.Ordinal);
+        _catalog.Scan(external: false);
+        loader.Describe("haiku", null);   // read again, so only the change during the next wait stands in the way
+        Put("haiku", "Read again.");
+        loader.Describe("haiku", null);
+        Assert.Equal(SkillText.ChangedSinceLoad("haiku"), await editor.DescribeWriteAsync("haiku", "data.txt", "x", null, CancellationToken.None));
+        Assert.False(File.Exists(Path.Combine(_roots.Profile, "haiku", "data.txt")));
+    }
+
     [Fact]
     public void AnInstalledSkill_IsReadOnly_OrWritable_ByTheSetting()
     {

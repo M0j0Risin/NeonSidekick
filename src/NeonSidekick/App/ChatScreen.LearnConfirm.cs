@@ -125,6 +125,9 @@ internal sealed partial class ChatScreen
             return await ask.Answer.Task.ConfigureAwait(false);
         };
 
+    /// <summary>The ask's pane closed under the user because the reflection was cancelled meanwhile (2026-10-13, the code review). Pinned.</summary>
+    public const string LearnAskWithdrawnNotice = "(" + LearnGlyph + "the reflection was cancelled: nothing was written)";
+
     /// <summary>
     /// The loop top's turn for the asks (2026-10-12): each waiting one on the pane — its title, the summary as caption, Keep / View / Discard;
     /// View shows the proposal whole on the info pane and comes back; ESC is Discard. One the reflection withdrew meanwhile is skipped.
@@ -139,16 +142,30 @@ internal sealed partial class ChatScreen
             }
 
             bool keep = false;
+            // The pane goes with the ask (2026-10-13, the code review): a reflection cancelled while it waits (a reconnect, Ctrl+L) closes it
+            // and says nothing was written, rather than leave a Keep that would be dropped.
+            using var withdrawn = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _ = ask.Answer.Task.ContinueWith(static (_, state) =>
+            {
+                try
+                {
+                    ((CancellationTokenSource)state!).Cancel();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // answered here: the source is gone with the pane
+                }
+            }, withdrawn, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             try
             {
                 while (!ask.Answer.Task.IsCompleted)
                 {
                     var page = new MenuPage(LearnAskTitle(ask.Proposal), LearnAskRows, LearnAskKeys) { Caption = LearnAskCaption(ask.Proposal) };
-                    int? picked = await _menu.ChooseAsync(page, cancellationToken).ConfigureAwait(false);
+                    int? picked = await _menu.ChooseAsync(page, withdrawn.Token).ConfigureAwait(false);
                     if (picked == 1)
                     {
                         string detail = LearnAskDetail(ask.Proposal);
-                        await _info.ShowAsync(LearnAskTitle(ask.Proposal), [new InfoTab(LearnAskRows[1], () => new Spectre.Console.Text(detail))], 0, cancellationToken).ConfigureAwait(false);
+                        await _info.ShowAsync(LearnAskTitle(ask.Proposal), [new InfoTab(LearnAskRows[1], () => new Spectre.Console.Text(detail))], 0, withdrawn.Token).ConfigureAwait(false);
                         continue;
                     }
 
@@ -156,10 +173,17 @@ internal sealed partial class ChatScreen
                     break;
                 }
             }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // Withdrawn while it was shown.
+            }
             finally
             {
                 _menuPane.Close();
-                ask.Answer.TrySetResult(keep);
+                if (!ask.Answer.TrySetResult(keep) && ask.Answer.Task.IsCanceled && !cancellationToken.IsCancellationRequested)
+                {
+                    _transcript.Notice(LearnAskWithdrawnNotice);
+                }
             }
         }
     }

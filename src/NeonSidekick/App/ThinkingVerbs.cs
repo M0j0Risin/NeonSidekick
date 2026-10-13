@@ -17,13 +17,7 @@ internal static class ThinkingVerbs
 
     public static readonly string[] All = ReadEmbedded();
 
-    private static string[] ReadEmbedded()
-    {
-        using var stream = typeof(ThinkingVerbs).Assembly.GetManifestResourceStream(ResourceName)
-            ?? throw new InvalidOperationException("The fun verbs " + ResourceName + " are not embedded.");
-        using var reader = new StreamReader(stream, System.Text.Encoding.UTF8);
-        return Parse(reader.ReadToEnd());
-    }
+    private static string[] ReadEmbedded() => Parse(EmbeddedText.Read(ResourceName, "The fun verbs"));
 
     /// <summary>
     /// The verbs <paramref name="text"/> holds: one per line (CRLF or LF), each trimmed, blank lines skipped, a repeat dropped
@@ -32,18 +26,7 @@ internal static class ThinkingVerbs
     public static string[] Parse(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var verbs = new List<string>();
-        foreach (string line in text.Split('\n'))
-        {
-            string verb = line.Trim();
-            if (verb.Length > 0 && seen.Add(verb))
-            {
-                verbs.Add(verb);
-            }
-        }
-
-        return verbs.ToArray();
+        return EmbeddedText.Lines(text).Distinct(StringComparer.Ordinal).ToArray();   // Distinct keeps the first of a repeat, in order
     }
 
     /// <summary>One of <see cref="All"/>, drawn from <paramref name="random"/>; null when the list is empty (the stage's own word then).</summary>

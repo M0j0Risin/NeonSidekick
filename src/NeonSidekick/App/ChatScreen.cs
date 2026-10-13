@@ -1122,6 +1122,9 @@ internal sealed partial class ChatScreen
         ArgumentNullException.ThrowIfNull(console);
         _renderScreen = renderScreen ?? throw new ArgumentNullException(nameof(renderScreen));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        // The Hint bar resolved once a change (2026-10-13, the code review): the row's funcs read it every frame.
+        _hintBar = HintBarStateOf(_settings.Current);
+        _settings.Changed += saved => Volatile.Write(ref _hintBar, HintBarStateOf(saved));
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
         _overriddenBy = overriddenBy ?? throw new ArgumentNullException(nameof(overriddenBy));
         _session = session ?? throw new ArgumentNullException(nameof(session));
@@ -2362,8 +2365,20 @@ internal sealed partial class ChatScreen
             : arrows + HintJoin + keys;
     }
 
+    /// <summary>
+    /// The Hint bar as saved, resolved (2026-10-13, the code review: the hint row's funcs and <see cref="HintSlots"/> read it on every
+    /// frame, and the effective settings are a deep copy each read): the checked sections and the two groups, made again by
+    /// <see cref="AppSettings.Changed"/>. No variable or flag overrides these settings, so the saved ones are the ones in force.
+    /// </summary>
+    private sealed record HintBarState(IReadOnlySet<string> On, ItemOrder.Sided Sides);
+
+    private HintBarState _hintBar;
+
+    private static HintBarState HintBarStateOf(AppSettingsData saved) =>
+        new(HintBarItems.Resolve(saved.HintBarItems), HintBarItems.Sides(saved.HintBarOrder, saved.HintBarRight));
+
     /// <summary>Whether the Hint bar's section <paramref name="id"/> is checked in the settings in force (2026-10-12).</summary>
-    private bool HintOn(string id) => HintBarItems.Resolve(_effective().HintBarItems).Contains(id);
+    private bool HintOn(string id) => Volatile.Read(ref _hintBar).On.Contains(id);
 
     /// <summary>
     /// The standing hint row's parts in the Hint bar's order (2026-10-12, the user's ask: its sections on or off and in any order;
@@ -2376,9 +2391,9 @@ internal sealed partial class ChatScreen
     /// </summary>
     private IReadOnlyList<ScreenPane.HintSlot> HintSlots()
     {
-        var shown = _effective();
-        var on = HintBarItems.Resolve(shown.HintBarItems);
-        var sides = HintBarItems.Sides(shown.HintBarOrder, shown.HintBarRight);
+        var bar = Volatile.Read(ref _hintBar);
+        var on = bar.On;
+        var sides = bar.Sides;
         var slots = new List<ScreenPane.HintSlot>(sides.Left.Count + sides.Right.Count + 1);
         string? armed = ArmedHint();
         string? timers = armed is null && on.Contains(HintBarItems.Timers) ? TimerText.StatusLine(_timers.Snapshot()) : null;
@@ -2414,7 +2429,7 @@ internal sealed partial class ChatScreen
                 HintBarItems.Queued => ScreenPane.HintSlot.Queued,
                 // An armed hint takes the text sections' place; the model and the working directory pinned right keep theirs (2026-10-13).
                 HintBarItems.Model when armed is null || right => ScreenPane.HintSlot.Model,
-                HintBarItems.WorkingDirectory when armed is null || right => ScreenPane.HintSlot.Path(WorkingDirectoryLabel(shown)),
+                HintBarItems.WorkingDirectory when armed is null || right => ScreenPane.HintSlot.Path(WorkingDirectoryLabel(_effective())),   // --cwd may override it
                 HintBarItems.Keys when armed is null && KeysLead() is { Length: > 0 } keys => ScreenPane.HintSlot.Of(keys),
                 HintBarItems.Timers when !string.IsNullOrEmpty(timers) => ScreenPane.HintSlot.Of(timers),
                 HintBarItems.Reading when !string.IsNullOrEmpty(reading) => ScreenPane.HintSlot.Of(reading),
@@ -5390,6 +5405,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void BindProfile()
     {
+        HomeShoppingForget();   // the 🛒 count is the profile's (2026-10-13)
         _memory = new MemoryStore(_settings.ProfileDirectory);
         _persona = new PersonaFile(_settings.ProfileDirectory);
         _operata = new OperataFile(_settings.ProfileDirectory);
@@ -6848,6 +6864,9 @@ internal sealed partial class ChatScreen
 
     public static string AlreadyRememberedNotice(string text) => $"({NoticeGlyphs.Memory}already remembered: {text})";
 
+    /// <summary>A <c>/remember</c> (or the pane's + add) of a disabled memory, enabled again (2026-10-13, the code review). Pinned.</summary>
+    public static string RememberEnabledNotice(string text) => $"({NoticeGlyphs.Memory}enabled again: {text})";
+
     /// <summary>The question before a <c>/memory forget</c> (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open, the answer typed — <c>y</c> or <c>yes</c> clears, anything else keeps). Pinned.</summary>
     public static string ForgetPrompt(int count) => $"{NoticeGlyphs.Memory}Forget {Memories(count)}?";
 
@@ -7163,20 +7182,21 @@ internal sealed partial class ChatScreen
     /// pictures come back too (2026-10-10, the user's ask; until then they were not redrawn): the ComfyUI ones into the strip
     /// and, with <c>Show image thumbnails</c> on, every kept one into its turn (<see cref="RestoredPictures"/>,
     /// <see cref="ReplayPictures"/>). New turns append to the restored row. The one on screen
-    /// already is <see cref="SessionsMenu.CurrentNotice"/>.
+    /// already is <see cref="SessionsMenu.CurrentNotice"/>. True when the conversation was replaced (2026-10-13, the code review: the
+    /// hand-over skips the turn's tail only then); false for the one already on screen, a missing or unreadable session.
     /// </summary>
-    private void RestoreSession(long id)
+    private bool RestoreSession(long id)
     {
         if (_sessionId == id)
         {
             _transcript.Notice(SessionsMenu.CurrentNotice);
-            return;
+            return false;
         }
 
         if (_sessions.Load(id) is not { } record)
         {
             _transcript.Error(SessionMissingError(id));
-            return;
+            return false;
         }
 
         List<ChatMessage> messages;
@@ -7191,7 +7211,7 @@ internal sealed partial class ChatScreen
         catch (Exception ex) when (ex is System.Text.Json.JsonException or FormatException)
         {
             _transcript.Error(SessionRestoreFailedError(id, ex.Message));
-            return;
+            return false;
         }
 
         var effective = _effective();
@@ -7227,6 +7247,8 @@ internal sealed partial class ChatScreen
                 ReplayTurn(turn.UserText, turn.ReplyText, turn.ToolCalls, styled, byRow.GetValueOrDefault(turn.Ordinal), box);
             }
         }
+
+        return true;
     }
 
     /// <summary><c>/sessions purge &lt;id&gt;</c>: the row and its turns, after a yes/no; the one on screen forgets its row (the next turn starts a new one).</summary>
@@ -13257,11 +13279,14 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var result = _memory.Add(args);
+        var result = _memory.Add(args, enableDisabled: true);   // the user's own add enables a disabled one again (2026-10-13)
         switch (result.Outcome)
         {
             case MemoryAddOutcome.Added:
                 _transcript.Notice(RememberedNotice(result.Text));
+                break;
+            case MemoryAddOutcome.Enabled:
+                _transcript.Notice(RememberEnabledNotice(result.Text));
                 break;
             case MemoryAddOutcome.Duplicate:
                 _transcript.Notice(AlreadyRememberedNotice(result.Text));

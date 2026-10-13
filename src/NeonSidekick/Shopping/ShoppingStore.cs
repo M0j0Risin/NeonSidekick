@@ -460,6 +460,32 @@ public sealed class ShoppingStore : IDisposable
     public int? OpenCount() =>
         Query("SELECT COUNT(*) FROM items WHERE checked = 0", null, r => r.GetInt64(0), "count the list") is [var count] ? (int)count : null;
 
+    /// <summary>The store's lock, for a test to hold as a long write would (<see cref="TryOpenCount"/>).</summary>
+    internal object Gate => _gate;
+
+    /// <summary>
+    /// <see cref="OpenCount"/> without waiting longer than <paramref name="wait"/> for the store's lock (2026-10-13, the code review: the
+    /// home bar's first count is read on the drawing thread): false, <paramref name="count"/> null, when a write held it that long.
+    /// </summary>
+    public bool TryOpenCount(TimeSpan wait, out int? count)
+    {
+        count = null;
+        if (!Monitor.TryEnter(_gate, wait))
+        {
+            return false;
+        }
+
+        try
+        {
+            count = OpenCount();   // the lock is re-entered there
+            return true;
+        }
+        finally
+        {
+            Monitor.Exit(_gate);
+        }
+    }
+
     /// <summary>A new line; null when the write failed.</summary>
     public ShopItem? AddItem(string name, int quantity, string note = "")
     {

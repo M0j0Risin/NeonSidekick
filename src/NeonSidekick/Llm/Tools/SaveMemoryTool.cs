@@ -55,6 +55,7 @@ public sealed class SaveMemoryTool : AIFunction
     {
         MemoryAddOutcome.Added => "remembered: " + result.Text,
         MemoryAddOutcome.Duplicate => "already remembered: " + result.Text,
+        MemoryAddOutcome.Disabled => "not saved: the user has disabled this memory (it is kept but not offered to you); do not save it again: " + result.Text,   // 2026-10-13, the code review
         MemoryAddOutcome.Full => $"memory is full ({MemoryStore.MaxEntries.ToString(CultureInfo.InvariantCulture)} entries); the user can clear it with /memory forget",
         MemoryAddOutcome.Empty => "nothing to remember: the text was empty",
         _ => "could not save the memory (the file could not be written); tell the user",

@@ -466,4 +466,29 @@ public class MemoryMenuTests : IDisposable
         Assert.Equal(["likes tea"], new MemoryStore(_dir).Snapshot());
         pane.Dispose();
     }
+
+    /// <summary>
+    /// The pane with its input row but no Memory switch (2026-10-13, the code review): an empty store opens it, + add the way in — it
+    /// was unreachable, the empty store saying so and closing.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_WithoutTheSwitch_AnEmptyStoreOpens_ForAdd()
+    {
+        _console.Profile.Height = 40;
+        var pane = new ScreenPane(_console, new ScreenGeometry(() => null), new ManualTimeProvider()) { Hint = () => "idle" };
+        var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
+        var line = new InputLine(pane, keys);
+        var menu = new MemoryMenu(new ConsoleWithInput(pane, keys), _store, new TranscriptRenderer(pane), new MenuPane(pane, keys), input: () => line);
+        pane.Show();
+        Push(Keys.Char('a'));
+        Type("likes tea");
+        Push(Keys.Enter, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(MemoryMenu.AddButton, _console.Output);
+        Assert.Contains(ChatScreen.RememberedNotice("likes tea"), _console.Output);
+        Assert.Equal(["likes tea"], new MemoryStore(_dir).Snapshot());
+        pane.Dispose();
+    }
 }
