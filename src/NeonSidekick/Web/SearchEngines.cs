@@ -297,13 +297,25 @@ public sealed class SearxngSearch : ISearchEngine
     {
         ArgumentNullException.ThrowIfNull(baseUrl);
         ArgumentNullException.ThrowIfNull(query);
-        string root = baseUrl.GetLeftPart(UriPartial.Path).TrimEnd('/');
-        if (root.EndsWith("/search", StringComparison.OrdinalIgnoreCase))
-        {
-            root = root[..^"/search".Length];
-        }
+        return new Uri(Root(baseUrl) + "/search?q=" + Uri.EscapeDataString(query.Trim()) + "&format=json&language=en");
+    }
 
-        return new Uri(root + "/search?q=" + Uri.EscapeDataString(query.Trim()) + "&format=json&language=en");
+    /// <summary>
+    /// The instance's own results page for <paramref name="query"/>, the one a person reads: <see cref="QueryUrl"/> without the JSON
+    /// format (2026-10-13, the Browser window's address box searching words). Pinned.
+    /// </summary>
+    public static Uri PageUrl(Uri baseUrl, string query)
+    {
+        ArgumentNullException.ThrowIfNull(baseUrl);
+        ArgumentNullException.ThrowIfNull(query);
+        return new Uri(Root(baseUrl) + "/search?q=" + Uri.EscapeDataString(query.Trim()));
+    }
+
+    // The base without its query, a trailing slash or a /search of its own.
+    private static string Root(Uri baseUrl)
+    {
+        string root = baseUrl.GetLeftPart(UriPartial.Path).TrimEnd('/');
+        return root.EndsWith("/search", StringComparison.OrdinalIgnoreCase) ? root[..^"/search".Length] : root;
     }
 
     /// <summary>The hits out of the JSON body: <c>results[].title / url / content</c>. Pure; pinned.</summary>

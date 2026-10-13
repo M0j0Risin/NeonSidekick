@@ -20,11 +20,10 @@ namespace NeonSidekick.App;
 /// until the word folded in here). A console that cannot show menus gets the numbered list instead, and removes nothing.</para>
 ///
 /// <para>On the pane the title row carries Memory's switch (2026-10-03, the user's ask: "actions at the top, similar to ...
-/// Tools › Shell allowed commands' ask and yolo"): since 2026-10-04 <c>Memory mode</c>'s three buttons, <see cref="ReadWriteButton"/>,
-/// <see cref="ReadOnlyButton"/> and <see cref="DisabledButton"/> (w, o, x since 2026-10-07, off d and r, which are remove and refresh
-/// on the other lists; W, R, D until then, and the old on was N, which meant none and No on other panes), the
-/// lit one the mode in force, a press of another setting it (<see cref="SettingsMenu.SetMemoryMode"/>, the Memory mode row's own save and
-/// notice) and showing the list again. So the switch is always in reach, the pane opens with nothing remembered too, on one dim row, and
+/// Tools › Shell allowed commands' ask and yolo"): from 2026-10-04 <c>Memory mode</c>'s three buttons (read-write, read-only, off; w, o, x
+/// from 2026-10-07), the lit one the mode in force; since later on 2026-10-13 (the user's call, <c>/queue</c>'s shape) one button,
+/// <see cref="ModeButton"/>, key m, showing the mode in force and stepping to the next (<see cref="NextMode"/>) at each press — the
+/// Memory mode row's own save and notice (<see cref="SettingsMenu.SetMemoryMode"/>) — the list shown again. So the switch is always in reach, the pane opens with nothing remembered too, on one dim row, and
 /// stays open when the last row goes.</para>
 ///
 /// <para>Under the list (2026-10-07, the user's ask: one cut line said little of a long memory), the highlighted memory in full: the
@@ -48,11 +47,11 @@ internal sealed class MemoryMenu
     public const string PlainKeys = "Enter = choose · ESC = close";
     public const string EmptyNotice = "(" + NoticeGlyphs.Memory + "nothing remembered)";   // the disk since 2026-09-22
 
-    /// <summary>The pane's hints with Memory mode's buttons on the title row (2026-10-03; three modes since 2026-10-04): the rows, then with nothing remembered. Pinned.</summary>
-    public const string SwitchKeys = "Enter = choose · a = add · w = read-write · o = read-only · x = disabled · ESC = close";
-    public const string EmptySwitchKeys = "a = add · w = read-write · o = read-only · x = disabled · ESC = close";
+    /// <summary>The pane's hints with Memory mode's button on the title row (2026-10-03; one cycling button since later on 2026-10-13): the rows, then with nothing remembered. Pinned.</summary>
+    public const string SwitchKeys = "Enter = choose · a = add · m = memory mode · ESC = close";
+    public const string EmptySwitchKeys = "a = add · m = memory mode · ESC = close";
 
-    /// <summary>The title row's add button (2026-10-13, the user's ask: a new memory from the pane): after Memory mode's three. Pinned.</summary>
+    /// <summary>The title row's add button (2026-10-13, the user's ask: a new memory from the pane): after Memory mode's. Pinned.</summary>
     public const string AddButton = "+ add";
     public const char AddKey = 'a';
 
@@ -107,23 +106,27 @@ internal sealed class MemoryMenu
     /// <summary>The footer's last line under a disabled memory (2026-10-13). Pinned.</summary>
     public const string DisabledFooter = "disabled: not offered to the model";
 
-    /// <summary>Memory mode's buttons on the pane's title row (2026-10-04, the user's ask; on and off since 2026-10-03): the ask/yolo pair's shape, the lit one in force. Pinned.</summary>
-    public const string ReadWriteButton = "read-write";
-    public const char ReadWriteKey = 'w';
-    public const string ReadOnlyButton = "read-only";
-    public const char ReadOnlyKey = 'o';   // r until 2026-10-07: r is refresh elsewhere (/docker)
-    public const string DisabledButton = "off";   // "disabled" until 2026-10-13, as Memory mode's word
-    public const char DisabledKey = 'x';   // d until 2026-10-07: d is remove elsewhere (/youtube list)
+    /// <summary>The key of Memory mode's button (later on 2026-10-13; w, o and x for the three before).</summary>
+    public const char ModeKey = 'm';
 
-    /// <summary>The button of each mode, in <see cref="MemoryAccess"/>'s order: its index is the enum's value.</summary>
-    private static readonly (string Title, char Key)[] ModeButtons = [(ReadWriteButton, ReadWriteKey), (ReadOnlyButton, ReadOnlyKey), (DisabledButton, DisabledKey)];
+    /// <summary>Memory mode's button (later on 2026-10-13, the user's call, <c>/queue</c>'s shape): the mode in force, <c>mode: read-write</c>, never lit; a press steps to the next. Pinned.</summary>
+    public static string ModeButton(MemoryAccess mode) => "mode: " + MemoryMode.Name(mode);
 
-    /// <summary>The add button's index among <see cref="Buttons(MemoryAccess)"/>: after the modes.</summary>
-    private static readonly int AddIndex = ModeButtons.Length;
+    /// <summary>The Memory mode after <paramref name="mode"/> in <see cref="MemoryMode.Names"/>' order (read-write, read-only, off), the last wrapping to the first. Pure.</summary>
+    public static MemoryAccess NextMode(MemoryAccess mode)
+    {
+        int at = Array.IndexOf(MemoryMode.Names, MemoryMode.Name(mode));
+        MemoryMode.TryParse(MemoryMode.Names[(at + 1) % MemoryMode.Names.Length], out var next);
+        return next;
+    }
 
-    /// <summary>The title row's buttons with <paramref name="mode"/> in force: that one lit (●), the others ○; then <see cref="AddButton"/> when <paramref name="add"/> (2026-10-13: an input row to type on).</summary>
+    /// <summary>The mode button's index among <see cref="Buttons(MemoryAccess, bool)"/>, and the add button's after it.</summary>
+    private const int ModeIndex = 0;
+    private const int AddIndex = 1;
+
+    /// <summary>The title row's buttons with <paramref name="mode"/> in force: <see cref="ModeButton"/>, then <see cref="AddButton"/> when <paramref name="add"/> (2026-10-13: an input row to type on).</summary>
     public static IReadOnlyList<MenuButton> Buttons(MemoryAccess mode, bool add = false) =>
-        [.. ModeButtons.Select((b, i) => new MenuButton((i == (int)mode ? "● " : "○ ") + b.Title, b.Key, i == (int)mode)), .. add ? new[] { new MenuButton(AddButton, AddKey) } : []];
+        [new MenuButton(ModeButton(mode), ModeKey), .. add ? new[] { new MenuButton(AddButton, AddKey) } : []];
 
     /// <summary>A hint without the add key (2026-10-13): no input row to type a new memory on. Pure.</summary>
     public static string WithoutAdd(string keys) => keys.Replace("a = add · ", "", StringComparison.Ordinal);
@@ -257,15 +260,10 @@ internal sealed class MemoryMenu
                         : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], add ? hint : WithoutAdd(hint));
                     list = list with { Buttons = Buttons(mode, add) };
                     pick = await _pane.PickAsync(list, cursor, cancellationToken).ConfigureAwait(false);
-                    if (pick is { Button: >= 0 } pressed && pressed.Button < AddIndex)
+                    if (pick is { Button: ModeIndex } pressed)
                     {
                         cursor = pressed.Row;
-                        var wanted = (MemoryAccess)pressed.Button;
-                        if (wanted != mode)
-                        {
-                            _setMemoryMode!(wanted);
-                        }
-
+                        _setMemoryMode!(NextMode(mode));
                         continue;
                     }
                 }

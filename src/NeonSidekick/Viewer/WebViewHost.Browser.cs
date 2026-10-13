@@ -29,8 +29,10 @@ internal sealed unsafe partial class WebViewHost
     /// the second arguments interface), its address read, its DOM read as the window reads a page, a cookie set and read back over the
     /// DevTools protocol with the DevTools window off (the window's cookie read, parsed as the web tools parse the headless browser's),
     /// the page printed by WebView2 (PrintToPdf, the fourth handler shape), a navigation to <c>file:</c> refused, and a download started
-    /// and cancelled. No network: every step stays on the blank page. Skipped (and passed) where no WebView2 Runtime is installed; a
-    /// missing loader fails.
+    /// and cancelled. Since the navigation bar (later the same day): the bar's address box (a stock EDIT child) and a tooltip made in the
+    /// probe's window, the box's text set and read back, and a history entry (<c>location.hash</c>) seen through <c>HistoryChanged</c>,
+    /// gone back from, and the way forward seen. No network: every step stays on the blank page. Skipped (and passed) where no WebView2
+    /// Runtime is installed; a missing loader fails.
     /// </summary>
     public static (bool Ok, string Detail) ProbeBrowser(TimeSpan timeout)
     {
@@ -83,10 +85,16 @@ internal sealed unsafe partial class WebViewHost
                 return (false, $"CreateWindowExW failed ({Marshal.GetLastPInvokeError()})");
             }
 
+            if (ProbeBar(hwnd, instance) is { } barFailure)
+            {
+                return (false, barFailure);
+            }
+
             Directory.CreateDirectory(root);
             run.Host = new WebViewHost(hwnd)
             {
                 NavigationDone = run.OnNavigationDone,
+                HistoryChanged = run.OnHistoryChanged,
                 Refused = run.OnRefused,
                 DownloadStarting = run.OnDownloadStarting,
                 Failed = (step, hr) => run.Finish(false, $"failed at {step} (0x{hr.ToString("X8", CultureInfo.InvariantCulture)})"),
@@ -125,6 +133,35 @@ internal sealed unsafe partial class WebViewHost
         }
     }
 
+    // The bar's own natives in the probe's window: the address box made, its text set and read back, and a tooltip given a tool. Null when
+    // all went well, else what did not.
+    private static string? ProbeBar(IntPtr hwnd, IntPtr instance)
+    {
+        const string Text = "neon probe";
+        IntPtr edit = BrowserBarNative.CreateWindowExW(0, "EDIT", null, BrowserBarNative.WsChild | WsVisible | BrowserBarNative.EsAutoHScroll, 0, 0, 200, 24, hwnd, (IntPtr)BrowserBarNative.AddressId, instance, IntPtr.Zero);
+        if (edit == IntPtr.Zero)
+        {
+            return $"the address box (EDIT) was not made ({Marshal.GetLastPInvokeError()})";
+        }
+
+        SetWindowTextW(edit, Text);
+        string read = BrowserBarNative.TextOf(edit);
+        if (read != Text)
+        {
+            return $"the address box read back '{read}'";
+        }
+
+        IntPtr tooltip = BrowserBarNative.MakeTooltip(hwnd, instance);
+        if (tooltip == IntPtr.Zero || !BrowserBarNative.AddTool(tooltip, hwnd, 1, new Rect { Right = 32, Bottom = 32 }, BrowserText.BackName))
+        {
+            return "the bar's tooltip (comctl32's tooltips_class32) was not made";
+        }
+
+        DestroyWindow(tooltip);
+        DestroyWindow(edit);
+        return null;
+    }
+
     // The thread's messages pumped until done; the probe class's timer ticks the video probe's run, so this one's ticks are its own.
     private static void PumpBrowserProbe(Func<bool> done)
     {
@@ -148,6 +185,9 @@ internal sealed unsafe partial class WebViewHost
         private Stopwatch? _exitClock;
         private string _step = "the blank page's navigation";
         private bool _navigated;
+        private bool _historyAsked;
+        private bool _wentBack;
+        private bool _cookieStarted;
         private bool _refused;
         private int _cookies;
         private long _pdfBytes;
@@ -191,8 +231,47 @@ internal sealed unsafe partial class WebViewHost
                     return;
                 }
 
-                SetCookie();
+                MakeHistory();
             });
+        }
+
+        // A same-page history entry (no network, no new document): HistoryChanged says it can go back, back it goes, and then forward.
+        private void MakeHistory()
+        {
+            _step = "the history";
+            _historyAsked = true;
+            Host!.RunScript("location.hash = 'neon'; 'sent'", (hr, _) =>
+            {
+                if (hr < 0)
+                {
+                    Finish(false, $"the history entry's script failed (0x{hr.ToString("X8", CultureInfo.InvariantCulture)})");
+                }
+            });
+        }
+
+        public void OnHistoryChanged()
+        {
+            if (!_historyAsked || Done || _cookieStarted)
+            {
+                return;
+            }
+
+            if (!_wentBack)
+            {
+                if (Host!.CanGoBack)
+                {
+                    _wentBack = true;
+                    Host.GoBack();
+                }
+
+                return;
+            }
+
+            if (Host!.CanGoForward)
+            {
+                _cookieStarted = true;
+                SetCookie();
+            }
         }
 
         private void SetCookie()
@@ -272,7 +351,7 @@ internal sealed unsafe partial class WebViewHost
 
         public bool OnDownloadStarting(string? source)
         {
-            Finish(true, $"runtime {version}; the blank page's navigation and address, its DOM, {_cookies.ToString(CultureInfo.InvariantCulture)} cookie set and read over DevTools, a PDF of {_pdfBytes.ToString(CultureInfo.InvariantCulture)} B, a file: navigation refused, a download cancelled");
+            Finish(true, $"runtime {version}; the bar's address box and a tooltip; the blank page's navigation and address, its DOM, a history entry gone back from, {_cookies.ToString(CultureInfo.InvariantCulture)} cookie set and read over DevTools, a PDF of {_pdfBytes.ToString(CultureInfo.InvariantCulture)} B, a file: navigation refused, a download cancelled");
             return true;
         }
 

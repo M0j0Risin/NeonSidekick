@@ -952,6 +952,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.ReflectionConfirmMode,   // later on 2026-10-12, /skills › Reflection, What it may change's first row
                 SettingsField.BotChatImageMentionMode,   // 2026-10-13, the Botchat tab under the img2img mode
                 SettingsField.WebBrowserBotcheckWindow,   // later on 2026-10-13, /tools › Core › Web under the browser path
+                SettingsField.WebBrowserHomePage,   // later still on 2026-10-13, under the botcheck window: the Browser window's home
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1294,7 +1295,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.DoesNotContain(ToolsMenuTests.TabFields(ToolsText.FileMenuTitle), f => SettingsMenu.FieldName(f).Contains("safe edits", StringComparison.OrdinalIgnoreCase));   // gone 2026-10-01
         Assert.Equal(ToolsMenuTests.TabFields(ToolsText.FileMenuTitle).Max(f => SettingsMenu.FieldName(f).Length) + 2, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.FileMenuTitle)));
         // The web rows (2026-09-15): the Web tab (titled Browser until later that day; /tools' last from 2026-09-19, third since later on 2026-09-21), in this order, none a reconnect — one toggle, three pickers (the network mode in the LAN switch's slot since 2026-09-18; the search method above the URL it governs), two typed rows that may be empty, a typed count.
-        Assert.Equal(new[] { SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes }, ToolsMenuTests.TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01)
+        Assert.Equal(new[] { SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes }, ToolsMenuTests.TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01)
         // The shell rows (2026-09-21): the Shell tab (between Git and Web that day, between Files and Ask since later on) — the policy (the group's switch, a picker), the allowed list, the default shell (a picker), then the three typed caps,
         // the languages, their timeout, the tool bridge (the tab's one toggle, later that day) above the tool-call cap it governs; none a reconnect. The outside-paths police (2026-09-22) sits third, under the list it guards beside.
         // Shell prefer native tools (2026-09-26) sits under the police, the other guard in front of the gate; the forbidden strings (2026-10-03) between them, the police's own list.
@@ -1357,13 +1358,15 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("bash       [#9A8BB8]Git Bash, when bash.exe is found — not found[/]", SettingsMenu.ShellLabel("bash", installed: false));
         Assert.Equal("cmd        [#9A8BB8]cmd.exe: batch syntax[/]", SettingsMenu.ShellLabel("cmd", installed: true));
         Assert.Equal("Shell allowed commands: git push removed", SettingsMenu.PrefixRemovedNotice("git push"));
-        // The allowed list's policy buttons (2026-10-02): off (first since 2026-10-12), ask then yolo, keys O, A and Y, the saved policy lit.
-        Assert.Equal(["⊘ off", "✓ ask", "⚠  yolo"], SettingsMenu.CommandPolicyButtons("ask").Select(b => b.Title));   // the glyphs since 2026-10-03; two spaces after ⚠, which Windows Terminal draws two cells wide
-        Assert.Equal(['o', 'a', 'y'], SettingsMenu.CommandPolicyButtons("ask").Select(b => b.Key!.Value));
-        Assert.Equal(["✓ ask"], SettingsMenu.CommandPolicyButtons("ask").Where(b => b.On).Select(b => b.Title));
-        Assert.Equal(["⚠  yolo"], SettingsMenu.CommandPolicyButtons("yolo").Where(b => b.On).Select(b => b.Title));
-        Assert.Equal(["⊘ off"], SettingsMenu.CommandPolicyButtons("off").Where(b => b.On).Select(b => b.Title));
-        Assert.DoesNotContain(SettingsMenu.CommandPolicyButtons("never"), b => b.On);   // a hand-edited value lights none
+        // The allowed list's policy button (2026-10-02 as three, off first since 2026-10-12; one cycling button on P since later on 2026-10-13):
+        // the policy's own glyph title, never lit, a hand-edited value after a ?; the press steps off → ask → yolo → off.
+        Assert.Equal(["⊘ off", "✓ ask", "⚠  yolo", "? never"], new[] { "off", "ask", " YOLO ", " never " }.Select(p => SettingsMenu.CommandPolicyButtons(p).Single().Title));   // the glyphs since 2026-10-03; two spaces after ⚠, which Windows Terminal draws two cells wide
+        Assert.Equal('p', SettingsMenu.CommandPolicyButtons("ask").Single().Key);
+        Assert.All(new[] { "off", "ask", "yolo" }, p => Assert.False(SettingsMenu.CommandPolicyButtons(p).Single().On));
+        Assert.Equal(["ask", "yolo", "off", "off"], new[] { "off", "ask", "yolo", "never" }.Select(SettingsMenu.NextPolicy));
+        Assert.Equal("Enter = remove · p = policy · ESC = back", SettingsMenu.AllowedCommandsKeys);
+        Assert.Equal("p = policy · ESC = back", SettingsMenu.AllowedCommandsEmptyKeys);
+        Assert.Equal("Yolo declined: Shell command policy: off", SettingsMenu.YoloDeclinedNotice);
         // The git rows (2026-09-20): the Git tab (Git (native), the last, since later on 2026-09-21) — the switch, then the two caps alphabetically; typed, none a reconnect.
         Assert.Equal(new[] { SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName }, ToolsMenuTests.TabFields(ToolsText.GitTabTitle));
         // The identity pair (2026-09-21): typed, empty allowed and shown as (not set), no validation.
@@ -2875,13 +2878,13 @@ public partial class SettingsMenuTests : IDisposable
         var network = new[] { Server(1234, "LM Studio", "lm"), Server(8000, "vLLM", "v") };
         Push(Keys.Enter);
         Assert.Same(network[0], await menu.PickServerAsync(network, null, SettingsMenu.ServerTitle, CancellationToken.None));
-        Assert.DoesNotContain("16GB", Output);
+        Assert.DoesNotContain("size: ", Output);
 
         var servers = new[] { Server(1234, "LM Studio", "lm"), Embedded("gemma-4-31b"), Embedded("gemma-4-e2b") };
-        Push(Keys.Char('1'));                   // 8GB: the 31B goes, LM Studio stays
+        Push(Keys.Char('s'));                   // 8GB (S since later on 2026-10-13): the 31B goes, LM Studio stays
         Push(Keys.Down, Keys.Enter);            // the second row left: E2B
         Assert.Same(servers[2], await menu.PickServerAsync(servers, null, SettingsMenu.StartupServerTitle, CancellationToken.None));
-        Assert.Contains(" 8GB · 16GB · ⇉ drafter · ⇅ sort (name) · ◌ uncensored ", Output);   // uncensored last (later on 2026-09-30); the glyphs since 2026-10-03; 32GB gone since 2026-10-05
+        Assert.Contains(" size: 8GB · ⇉ drafter · ⇅ sort (name) · ◌ uncensored ", Output);   // uncensored last (later on 2026-09-30); the glyphs since 2026-10-03; 32GB gone since 2026-10-05
         Assert.Contains("ESC = the first listed", Output);
 
         Push(Keys.Char('x'), Keys.Enter);       // uncensored (X since later on 2026-09-30): no embedded row passes, LM Studio is still there to pick

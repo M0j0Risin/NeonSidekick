@@ -55,7 +55,7 @@ public static class HelpCommands
         ]),
         new("/browser",
         [
-            new("/browser [<url>]", "Open the page, or a blank one, in the Browser window, the app's own browser, to sign in to a site or get past its bot check. When you close it, its cookies for the sites it visited go to the web tools for this run, so `web_fetch` and `download_file` reach those sites as you did; the window keeps its own cookies between runs in the home folder's `webview2-browser` folder. Ctrl+W closes it, F5 reloads, Alt+← goes back. The web tools open the same window on a bot check they cannot get past, per *Web browser botcheck window*. Works while a reply runs. Windows only. Not headless."),
+            new("/browser [<url>]", "Open the page, or *Web browser home page* (a blank page when that is empty), in the Browser window, the app's own browser, to sign in to a site or get past its bot check. When you close it, its cookies for the sites it visited go to the web tools for this run, so `web_fetch` and `download_file` reach those sites as you did; the window keeps its own cookies between runs in the home folder's `webview2-browser` folder. Its bar has back, forward, reload, home, an address box (words search with *Web search method*) and a button that opens the page in your default browser. Ctrl+W closes it, F5 reloads, Alt+← and Alt+→ go back and forward, Ctrl+L goes to the address box. The web tools open the same window on a bot check they cannot get past, per *Web browser botcheck window*. Works while a reply runs. Windows only. Not headless."),
         ]),
         new("/camera",
         [
@@ -206,7 +206,7 @@ public static class HelpCommands
         ]),
         new("/memory",
         [
-            new("/memory", "List the memories on a pane. Enter on one offers **edit** (its text on the input row), **disable** (kept and grayed out, but never offered to the model; **enable** undoes it) and **forget** (after a yes); **+ add** (`a`) types a new one. **read-write** (`w`), **read-only** (`o`) and **off** (`x`) on the title row set *Memory mode*."),
+            new("/memory", "List the memories on a pane. Enter on one offers **edit** (its text on the input row), **disable** (kept and grayed out, but never offered to the model; **enable** undoes it) and **forget** (after a yes); **+ add** (`a`) types a new one. **mode: …** (`m`) on the title row steps *Memory mode*: read-write, read-only, off."),
             new("/memory read-write|read-only|off|on", "Set *Memory mode* (`on` is read-write)."),
             new("/memory forget|edit", "Forget every memory, after a yes (`forget`), or open `memory.json` in your editor (`edit`; invalid JSON is ignored with a warning)."),
         ]),
@@ -256,7 +256,7 @@ public static class HelpCommands
         ]),
         new("/process",
         [
-            new("/process", "List the background processes on a pane, the model's (`run_command` with `background`) and your `/cmd --bg` ones: the id, running or how it ended, how long it has run, the shell and the command. Enter or a double-click opens one in the process window; **kill** (`k`) stops the highlighted one after a yes; **running** and **ended** (`r`, `e`) show only those, the lit one pressed again shows all. The toolbar's ⚡ opens it too, as does a double-click on the ▶ count on the rule under the input line."),
+            new("/process", "List the background processes on a pane, the model's (`run_command` with `background`) and your `/cmd --bg` ones: the id, running or how it ended, how long it has run, the shell and the command. Enter or a double-click opens one in the process window; **kill** (`k`) stops the highlighted one after a yes; the filter button (`f`) steps from all to the running ones, the ended ones and back. The toolbar's ⚡ opens it too, as does a double-click on the ▶ count on the rule under the input line."),
             new("/process <id>", "Open the process window on one process (any unique start of its id; Tab completes it). It shows the output live, following the newest line while at the bottom, stderr in the warning color, its state in the title. Scroll, select and copy as in the log window; TAB brings the terminal forward, and `/process` with another id switches the window to that process. Ctrl+K twice within 3 seconds stops it: the chat says you stopped it, and the model hears so on its next turn."),
         ]),
         new("/profile",
@@ -408,7 +408,7 @@ public static class HelpCommands
         [
             new("/tools", "Open the tools pane: switch the model's tools on or off on Offered, and edit each tool group's settings on its own tab. On Offered, typing narrows the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, a second ESC closes."),
             new("/tools <group>", "Open a group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` or `shopping`. `shell` opens the *Shell command policy* picker (yolo asks first). Buttons at the top open related settings, and ESC comes back: `shell`'s allowed commands and police (`c`, `p`), `web`'s browser modes (`a`, `h`, `b`), `files`' browser mode (`b`), `image`'s edit mode (`e`), `advisors`' list (`a`), `obsidian`'s vault (`v`), `print`'s printer (`p`), `camera`'s watch, live, snap and screen (`w`, `l`, `s`, `c`), and the offered list of the database, UNC and ComfyUI groups. The toolbar's tool glyphs run it."),
-            new("/tools shell allowed", "Open the *Shell allowed commands* list; Enter removes a prefix after a yes. The **off**, **ask** and **yolo** buttons (`o`, `a`, `y`) switch *Shell command policy*, yolo after a yes; ESC closes it. The toolbar's lock and Ctrl+Alt+L run it."),
+            new("/tools shell allowed", "Open the *Shell allowed commands* list; Enter removes a prefix after a yes. The policy button (`p`) steps *Shell command policy* from off to ask to yolo, yolo after a yes (a no goes on to off); ESC closes it. The toolbar's lock and Ctrl+Alt+L run it."),
             new("/tools shell police", "Open the *Shell police* on/off page; turning it off asks first, and **strings** (`s`) opens *Shell police forbidden strings*. The toolbar's officer and Ctrl+Alt+O run it."),
         ]),
         new("/tree",

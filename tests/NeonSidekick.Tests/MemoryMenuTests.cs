@@ -264,19 +264,20 @@ public class MemoryMenuTests : IDisposable
     private static string SwitchTitle(MemoryAccess mode) => MemoryMenu.Title + " │ " + string.Join(" · ", MemoryMenu.Buttons(mode).Select(b => b.Title)) + " ";
 
     /// <summary>
-    /// Memory mode's buttons on the title row (2026-10-03, the user's ask: ask/yolo's shape; three since 2026-10-04): D sets disabled
-    /// and the list comes back, D again (the lit one) does nothing, R read-only, W read-write; the hint names the keys; the rows are untouched.
+    /// Memory mode's button on the title row (2026-10-03, the user's ask: ask/yolo's shape; three buttons from 2026-10-04, one cycling
+    /// button since later on 2026-10-13): M steps read-write → read-only → off → read-write, the list back after each; the hint names the
+    /// key; the rows are untouched.
     /// </summary>
     [Fact]
-    public async Task OnThePane_TheTitleButtonsSetMemoryMode_TheLitOneDoesNothing()
+    public async Task OnThePane_TheModeButtonStepsMemoryMode()
     {
         Seed("one");
         var (menu, pane, switched) = SwitchMenu(MemoryAccess.ReadWrite);
-        Push(Keys.Char('x'), Keys.Char('x'), Keys.Char('o'), Keys.Char('w'), Keys.Escape);   // x and o since 2026-10-07 (d and r before)
+        Push(Keys.Char('m'), Keys.Char('m'), Keys.Char('m'), Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal([MemoryAccess.Disabled, MemoryAccess.ReadOnly, MemoryAccess.ReadWrite], switched);
+        Assert.Equal([MemoryAccess.ReadOnly, MemoryAccess.Disabled, MemoryAccess.ReadWrite], switched);
         Assert.Contains("\n" + Titled(SwitchTitle(MemoryAccess.ReadWrite)) + "\n", _console.Output);
         Assert.Contains("\n" + Titled(SwitchTitle(MemoryAccess.ReadOnly)) + "\n", _console.Output);
         Assert.Contains("\n" + MemoryMenu.WithoutAdd(MemoryMenu.SwitchKeys) + "\n", _console.Output);   // no input row: no add
@@ -292,7 +293,7 @@ public class MemoryMenuTests : IDisposable
         Seed("only");
         var (menu, pane, switched) = SwitchMenu(MemoryAccess.Disabled);
         int flow = pane.FlowRow;
-        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Enter, Keys.Char('w'), Keys.Escape);   // forget it (Yes), Enter on the empty row, read-write, close
+        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Enter, Keys.Char('m'), Keys.Escape);   // forget it (Yes), Enter on the empty row, off → read-write, close
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -324,10 +325,10 @@ public class MemoryMenuTests : IDisposable
         Assert.Equal("💾 Memory", MemoryMenu.Title);
         Assert.Equal(MemoryMenu.Title + "   Enter = choose · a = add · ESC = close", SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys));   // choose and add since 2026-10-13
         Assert.Equal("(💾 nothing remembered)", MemoryMenu.EmptyNotice);
-        Assert.Equal("Enter = choose · a = add · w = read-write · o = read-only · x = disabled · ESC = close", MemoryMenu.SwitchKeys);   // 2026-10-03; Memory mode's three since 2026-10-04
-        Assert.Equal("a = add · w = read-write · o = read-only · x = disabled · ESC = close", MemoryMenu.EmptySwitchKeys);
-        Assert.Equal("Enter = choose · w = read-write · o = read-only · x = disabled · ESC = close", MemoryMenu.WithoutAdd(MemoryMenu.SwitchKeys));
-        Assert.Equal(["● read-write", "○ read-only", "○ off", "+ add"], MemoryMenu.Buttons(MemoryAccess.ReadWrite, add: true).Select(b => b.Title));
+        Assert.Equal("Enter = choose · a = add · m = memory mode · ESC = close", MemoryMenu.SwitchKeys);   // 2026-10-03; one cycling button since later on 2026-10-13
+        Assert.Equal("a = add · m = memory mode · ESC = close", MemoryMenu.EmptySwitchKeys);
+        Assert.Equal("Enter = choose · m = memory mode · ESC = close", MemoryMenu.WithoutAdd(MemoryMenu.SwitchKeys));
+        Assert.Equal(["mode: read-write", "+ add"], MemoryMenu.Buttons(MemoryAccess.ReadWrite, add: true).Select(b => b.Title));
         Assert.Equal('a', MemoryMenu.Buttons(MemoryAccess.ReadWrite, add: true)[^1].Key);
         Assert.Equal("💾 \"x\"", MemoryMenu.ActionTitle("x"));
         Assert.Equal("Enter = choose · ESC = back", MemoryMenu.ActionKeys);
@@ -337,11 +338,12 @@ public class MemoryMenuTests : IDisposable
         Assert.Equal("Another memory already says that: x", MemoryMenu.DuplicateError("x"));
         Assert.Equal("disabled: not offered to the model", MemoryMenu.DisabledFooter);
         Assert.Equal("[#9A8BB8]2026-09-11  x [[y]][/]", MemoryMenu.RowMarkup(new MemoryEntry { Text = "x [y]", SavedAt = dated.SavedAt, Disabled = true }));   // the whole line greyed
-        Assert.Equal(["● read-write", "○ read-only", "○ off"], MemoryMenu.Buttons(MemoryAccess.ReadWrite).Select(b => b.Title));
-        Assert.Equal(["○ read-write", "● read-only", "○ off"], MemoryMenu.Buttons(MemoryAccess.ReadOnly).Select(b => b.Title));
-        Assert.Equal([true, false, false], MemoryMenu.Buttons(MemoryAccess.ReadWrite).Select(b => b.On));
-        Assert.Equal([false, false, true], MemoryMenu.Buttons(MemoryAccess.Disabled).Select(b => b.On));
-        Assert.Equal(['w', 'o', 'x'], MemoryMenu.Buttons(MemoryAccess.Disabled).Select(b => b.Key!.Value));
+        Assert.Equal(["mode: read-write"], MemoryMenu.Buttons(MemoryAccess.ReadWrite).Select(b => b.Title));
+        Assert.Equal(["mode: read-only"], MemoryMenu.Buttons(MemoryAccess.ReadOnly).Select(b => b.Title));
+        Assert.Equal(["mode: off"], MemoryMenu.Buttons(MemoryAccess.Disabled).Select(b => b.Title));
+        Assert.All(MemoryMenu.Buttons(MemoryAccess.ReadOnly, add: true), b => Assert.False(b.On));   // never lit, as /queue's
+        Assert.Equal(['m'], MemoryMenu.Buttons(MemoryAccess.Disabled).Select(b => b.Key!.Value));
+        Assert.Equal([MemoryAccess.ReadOnly, MemoryAccess.Disabled, MemoryAccess.ReadWrite], new[] { MemoryAccess.ReadWrite, MemoryAccess.ReadOnly, MemoryAccess.Disabled }.Select(MemoryMenu.NextMode));
         Assert.Equal("(💾 removed: x)", MemoryMenu.RemovedNotice("x"));
         Assert.Equal("Could not remove the memory: locked", MemoryMenu.RemoveFailedError("locked"));
         Assert.Equal("2026-09-11", MemoryMenu.DateLabel(dated));

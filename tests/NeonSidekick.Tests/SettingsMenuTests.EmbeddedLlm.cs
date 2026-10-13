@@ -155,12 +155,12 @@ public partial class SettingsMenuTests
     [Fact]
     public async Task OnThePane_TheCatalogsFilters_ThinTheRows_ASizeAndUncensoredTogether()
     {
-        // Later on 2026-09-29 (the user's ask): 8GB (key 1) and uncensored (X since later on 2026-09-30) lit, the first row is
-        // the first catalog model at most 8 GB that is uncensored.
+        // Later on 2026-09-29 (the user's ask): 8GB (the size button's first step, S since later on 2026-10-13; 1 before) and
+        // uncensored (X since later on 2026-09-30) lit, the first row is the first catalog model at most 8 GB that is uncensored.
         var (menu, pane, _) = EmbeddedPane();
         GoTo(SettingsTab.Embedded);
         Push(Keys.Down, Keys.Enter);            // the catalog
-        Push(Keys.Char('1'), Keys.Char('X'));
+        Push(Keys.Char('s'), Keys.Char('X'));
         Push(Keys.Enter);                       // the first row left: its page
         Push(Keys.Enter);                       // Install
 
@@ -170,7 +170,8 @@ public partial class SettingsMenuTests
         var first = EmbeddedModelCatalog.Models.First(m => filter.Matches(m));
         Assert.True(first.Uncensored);
         Assert.Equal(first.Id, menu.TakePendingEmbeddedModel()!.Id);
-        Assert.Contains(" 8GB · 16GB · ✓ installed · ⤓ uninstalled · ⇉ drafter · ⇅ sort (name) · ◌ uncensored ", Output);   // the catalog's pair after the sizes (later on 2026-09-29), uncensored last (later on 2026-09-30)
+        Assert.Contains(" size: any · show: all · ⇉ drafter · ⇅ sort (name) · ◌ uncensored ", Output);   // the catalog's show button after the size (one button each since later on 2026-10-13), uncensored last (later on 2026-09-30)
+        Assert.Contains(" size: 8GB · show: all · ", Output);
         Assert.Contains(EmbeddedModelFilter.CatalogKeys, Output);
         pane.Dispose();
     }
@@ -178,16 +179,16 @@ public partial class SettingsMenuTests
     [Fact]
     public async Task OnThePane_SortSize_PutsTheSmallestModelFirst_AndPressedAgain_TheCatalogsOrder()
     {
-        // 2026-09-30 (the user's ask): S sorts by size, the smallest model on top, and the button reads sort (size) (2026-10-02:
-        // the order shown); S again, the catalog's order, and it reads sort (name).
+        // 2026-09-30 (the user's ask): S sorts by size (O since later on 2026-10-13), the smallest model on top, and the button reads
+        // sort (size) (2026-10-02: the order shown); again, the catalog's order, and it reads sort (name).
         var big = EmbeddedModelCatalog.Find("gemma-4-31b")!;
         var small = EmbeddedModelCatalog.Find("gemma-4-e2b")!;
         var (menu, pane, _) = EmbeddedPane(new FakeEmbeddedLlm { Catalog = [big, small] });
         GoTo(SettingsTab.Embedded);
         Push(Keys.Down, Keys.Enter);            // the catalog: 31B, then E2B
-        Push(Keys.Char('s'), Keys.Home);        // sort size: E2B, then 31B; the top row
+        Push(Keys.Char('o'), Keys.Home);        // sort size: E2B, then 31B; the top row
         Push(Keys.Enter, Keys.Escape);          // E2B's page, closed
-        Push(Keys.Char('s'), Keys.Home);        // dark again: 31B on top
+        Push(Keys.Char('o'), Keys.Home);        // dark again: 31B on top
         Push(Keys.Enter);                       // 31B's page
         Push(Keys.Enter);                       // Install
 
@@ -224,13 +225,13 @@ public partial class SettingsMenuTests
     [Fact]
     public async Task OnThePane_InstalledAndUninstalled_AreARadioPair_OnTheDisksState()
     {
-        // Later on 2026-09-29 (the user's ask): I keeps the installed models, U the others (N until later on 2026-09-30).
+        // Later on 2026-09-29 (the user's ask): installed keeps the installed models, uninstalled the others; one show button on I since later on 2026-10-13 (I and U before).
         var (menu, pane, _) = EmbeddedPane(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
         GoTo(SettingsTab.Embedded);
         Push(Keys.Down, Keys.Enter);            // the catalog
         Push(Keys.Char('i'));                   // installed: E2B alone, the cursor on it
         Push(Keys.Enter, Keys.Escape);          // its page (Use now, Remove, Back), closed
-        Push(Keys.Char('u'));                   // uninstalled: E2B gone, the first row the catalog's first
+        Push(Keys.Char('i'));                   // uninstalled: E2B gone, the first row the catalog's first
         Push(Keys.Enter);                       // Gemma 4 12B's page
         Push(Keys.Enter);                       // Install
 
@@ -310,8 +311,8 @@ public partial class SettingsMenuTests
         var (menu, pane, _) = EmbeddedPane(new FakeEmbeddedLlm { Catalog = [big, small] });
         GoTo(SettingsTab.Embedded);
         Push(Keys.Down, Keys.Enter);            // the catalog: 31B, then E2B
-        Push(Keys.Char('1'));                   // 8GB: E2B alone, the cursor on it
-        Push(Keys.Char('1'));                   // again: every model, the cursor kept on E2B
+        Push(Keys.Char('s'));                   // 8GB: E2B alone, the cursor on it
+        Push(Keys.Char('s'), Keys.Char('s'));   // 16GB, then any: every model, the cursor kept on E2B
         Push(Keys.Char('x'));                   // uncensored: neither is
         Push(Keys.Enter);                       // the no-match row: nothing opens
         Push(Keys.Char('x'));                   // dark again: both, the cursor still on E2B

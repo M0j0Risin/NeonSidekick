@@ -304,6 +304,14 @@ NeonSidekick.Viewer.PictureMenu.Settings = () => NeonSidekick.Images.PictureEdit
 NeonSidekick.Viewer.PictureMenu.Attach = app.AttachPicture;
 NeonSidekick.Viewer.PictureMenu.Print = app.PrintPicture;
 NeonSidekick.Viewer.PictureMenu.Reported = app.PictureReported;
+// The Browser window's address box searches words with the Web search method in force, and its home button and a bare /browser
+// go to Web browser home page (2026-10-13, the navigation bar), both read from the effective settings when used.
+if (OperatingSystem.IsWindows())
+{
+    NeonSidekick.Viewer.BrowserWindow.SearchUrl = words => NeonSidekick.Viewer.BrowserAddress.SearchUrl(app.EffectiveSettings, words);
+    NeonSidekick.Viewer.BrowserWindow.HomePage = () => app.EffectiveSettings.WebBrowserHomePage;
+}
+
 // The app's own windows hand back what they have no use for (2026-10-03): TAB brings the terminal forward, found now, while
 // it is still the window in front, and a Ctrl or Alt chord is queued on the console input as though typed there.
 // On a Mac (2026-10-07) the terminal app is found from this process's parents and TERM_PROGRAM, and a chord goes to the termios reader.

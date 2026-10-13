@@ -2611,6 +2611,13 @@ public sealed class AppSettingsData
     public string WebBrowserBotcheckWindow { get; set; } = Web.BotcheckWindow.Default;
 
     /// <summary>
+    /// The Browser window's home page (2026-10-13, the user's ask, with its navigation bar): where its home button and a bare
+    /// <c>/browser</c> go — a web address as the address box reads one (<c>example.com</c> is https, <c>localhost:3000</c> http), or
+    /// empty (the default) for the blank page. A hand-edited value that is no address reads as the blank page. No variable.
+    /// </summary>
+    public string WebBrowserHomePage { get; set; } = "";
+
+    /// <summary>
     /// How many hits a <c>web_search</c> without <c>max_results</c> returns:
     /// <see cref="MinWebSearchMaxResults"/> to <see cref="MaxWebSearchMaxResults"/>; the argument overrides
     /// it up to the same cap, and a hand-edited value is clamped. No variable.

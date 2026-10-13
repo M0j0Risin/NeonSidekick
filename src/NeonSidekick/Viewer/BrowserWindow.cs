@@ -20,6 +20,10 @@ namespace NeonSidekick.Viewer;
 /// user's to browse — sign in somewhere, say — and when they close it, the cookies for every host it went to go to the web tools.
 /// A check met while <c>/browser</c>'s window is open is solved in it, and it stays open.</para>
 ///
+/// <para>Its navigation bar (later the same day, the user's ask): back, forward, reload or stop, home, the address box with its padlock
+/// and Go, and open in the default browser (<see cref="BrowserToolbar"/>, <c>BrowserWindow.Bar.cs</c>), in both uses. Typed words
+/// search with the app's <c>Web search method</c> (<see cref="SearchUrl"/>); home is <c>Web browser home page</c> (<see cref="HomePage"/>).</para>
+///
 /// <para>One window per process. No process-start site: WebView2's runtime starts its own <c>msedgewebview2.exe</c> processes, as
 /// for the video window. Windows-only, so <c>Program</c> reaches it behind <c>OperatingSystem.IsWindows()</c> and passes null
 /// elsewhere.</para>
@@ -39,6 +43,24 @@ public static class BrowserWindow
 
     /// <summary>The app's home (<c>Program</c>): the window's WebView2 profile lives in <c>&lt;home&gt;\webview2-browser</c>.</summary>
     public static string? Home { get; set; }
+
+    /// <summary>
+    /// The results page for words typed in the address box (<c>Program</c>: <see cref="BrowserAddress.SearchUrl"/> over the settings in
+    /// force, so a <c>Web search method</c> change counts at once); DuckDuckGo's until it is set. Called on the window's thread.
+    /// </summary>
+    public static Func<string, Uri> SearchUrl { get; set; } = BrowserAddress.DuckDuckGo;
+
+    /// <summary>The setting <c>Web browser home page</c> as it is now (<c>Program</c>); null or empty is the blank page.</summary>
+    public static Func<string?>? HomePage { get; set; }
+
+    /// <summary>
+    /// What the bar's open button hands the page to: the user's default browser (<see cref="Llm.PersonaFile.OpenInBrowser"/>, the
+    /// counted process-start site, as <see cref="VideoWindow.OpenLink"/>), web addresses only. Called on the window's thread.
+    /// </summary>
+    public static Action<string> OpenLink { get; set; } = Llm.PersonaFile.OpenInBrowser;
+
+    /// <summary>The home page's address now (<see cref="BrowserAddress.Home"/>): the setting's page, else the blank page.</summary>
+    public static string HomeAddress() => BrowserAddress.Home(HomePage?.Invoke())?.AbsoluteUri ?? BrowserPage.Blank;
 
     /// <summary>The window as an <see cref="IBrowserWindow"/> (<c>Program</c> hands it to the app on Windows).</summary>
     public static IBrowserWindow Window { get; } = new WindowsBrowserWindow();
@@ -140,7 +162,7 @@ public static class BrowserWindow
 
 /// <summary>The Browser window and the thread that pumps its messages and owns its WebView2 (<see cref="BrowserWindow"/>).</summary>
 [SupportedOSPlatform("windows")]
-internal sealed unsafe class BrowserWindowThread
+internal sealed unsafe partial class BrowserWindowThread
 {
     private const uint RunMessage = WmApp + 1;
     private static readonly IntPtr PollTimer = 1;
@@ -383,7 +405,7 @@ internal sealed unsafe class BrowserWindowThread
                 return;
             }
 
-            _hwnd = CreateWindowExW(0, s_className, IntPtr.Zero, WsOverlappedWindow, CwUseDefault, CwUseDefault, CwUseDefault, CwUseDefault, IntPtr.Zero, IntPtr.Zero, instance, GCHandle.ToIntPtr(self));
+            _hwnd = CreateWindowExW(0, s_className, IntPtr.Zero, WsOverlappedWindow | BrowserBarNative.WsClipChildren, CwUseDefault, CwUseDefault, CwUseDefault, CwUseDefault, IntPtr.Zero, IntPtr.Zero, instance, GCHandle.ToIntPtr(self));
             if (_hwnd == IntPtr.Zero)
             {
                 _failure = $"CreateWindowExW failed ({Marshal.GetLastPInvokeError()})";
@@ -394,6 +416,7 @@ internal sealed unsafe class BrowserWindowThread
             _chrome.Window = _hwnd;
             _chrome.RestorePosition(BrowserWindow.Position);
             _chrome.SizeForDpi(BrowserPage.DefaultWidth, BrowserPage.DefaultHeight);
+            MakeBar(instance);
             ApplyStyle();   // before it is shown: the bar is never light first
             ShowTitle();
 
@@ -407,6 +430,9 @@ internal sealed unsafe class BrowserWindowThread
                 TitleChanged = OnTitleChanged,
                 SourceChanged = OnSourceChanged,
                 DownloadStarting = OnDownloadStarting,
+                HistoryChanged = ReadHistory,
+                NavigationBegan = OnNavigationBegan,
+                TopInset = _layout?.Height ?? 0,
             };
             _host.Start(_userDataFolder, null, BrowserPage.Blank, WebViewProfile.Browser);
             DiagnosticLog.Info("Browser", "Browser window opened.");
@@ -418,6 +444,11 @@ internal sealed unsafe class BrowserWindowThread
             Msg msg;
             while (GetMessageW(&msg, IntPtr.Zero, 0, 0) > 0)
             {
+                if (PreKey(&msg))
+                {
+                    continue;
+                }
+
                 TranslateMessage(&msg);
                 DispatchMessageW(&msg);
             }
@@ -436,6 +467,7 @@ internal sealed unsafe class BrowserWindowThread
                 DestroyWindow(_hwnd);
             }
 
+            FreeBar();
             if (_ole)
             {
                 OleUninitialize();
@@ -474,6 +506,11 @@ internal sealed unsafe class BrowserWindowThread
 
     private IntPtr Handle(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam)
     {
+        if (HandleBar(hwnd, message, wParam, lParam, out IntPtr answered))
+        {
+            return answered;
+        }
+
         switch (message)
         {
             case RunMessage:
@@ -495,6 +532,7 @@ internal sealed unsafe class BrowserWindowThread
 
                 return IntPtr.Zero;
             case WmSize:
+                LayOutBar();
                 _host?.Resize();
                 return IntPtr.Zero;
             case WmMove:
@@ -502,14 +540,6 @@ internal sealed unsafe class BrowserWindowThread
                 break;
             case WmActivate:
                 ApplyStyle();   // a /theme change reaches the window the next time it is focused
-                break;
-            case WmKeyDown:
-            case WmSysKeyDown:
-                if (OnKey((int)wParam))
-                {
-                    return IntPtr.Zero;
-                }
-
                 break;
             case WmClose:
                 if (StartHarvest())
@@ -801,8 +831,9 @@ internal sealed unsafe class BrowserWindowThread
             Finish(job, BotCheckResult.Ended(BotCheckEnd.GaveUp, job.Request.Url.AbsoluteUri), close: false);
         }
 
-        DiagnosticLog.Info("Browser", $"The Browser window on {url?.AbsoluteUri ?? BrowserPage.Blank} for the user (/browser).");
-        Go(url?.AbsoluteUri ?? BrowserPage.Blank);
+        string address = url?.AbsoluteUri ?? BrowserWindow.HomeAddress();
+        DiagnosticLog.Info("Browser", $"The Browser window on {address} for the user (/browser).");
+        Go(address);
         Show();
     }
 
@@ -850,6 +881,8 @@ internal sealed unsafe class BrowserWindowThread
     // A check's page completed. The blank page the view starts on is no answer: it may complete after the check began.
     private void OnNavigationDone(bool ok, int status)
     {
+        SetBarState(_barState with { Loading = false });
+        ReadHistory();
         if (_job is { } job && BrowserPage.HostOf(_host?.Source) is not null)
         {
             job.Watch.Navigated(ok, status);
@@ -862,8 +895,12 @@ internal sealed unsafe class BrowserWindowThread
         ShowTitle();
     }
 
+    private void OnNavigationBegan(string uri) => SetBarState(_barState with { Loading = true });
+
     private void OnSourceChanged(string source)
     {
+        SetBarState(_barState with { Source = source });
+        ShowAddress(source);
         if (_visited is not null && BrowserPage.HostOf(source) is { } host)
         {
             _visited.Add(host);
@@ -902,12 +939,13 @@ internal sealed unsafe class BrowserWindowThread
         PostMessageW(_hwnd, WmClose, IntPtr.Zero, IntPtr.Zero);
     }
 
-    // A key the window has: Ctrl+W closes, F5 reloads, Alt+← goes back; everything else is the page's (Ctrl+C, Ctrl+V, Esc).
+    // A key the window has (BrowserKeys): Ctrl+W closes, F5 or Ctrl+R reloads, Alt+← and Alt+→ move through the history, Ctrl+L,
+    // Alt+D or F6 goes to the address box, Esc stops a load; everything else is the page's (Ctrl+C, Ctrl+V, Esc for its dialog).
     private bool OnKey(int virtualKey)
     {
         bool control = GetKeyState(VkControl) < 0;
         bool alt = GetKeyState(VkMenu) < 0;
-        switch (BrowserKeys.ActionFor(virtualKey, control, alt))
+        switch (BrowserKeys.ActionFor(virtualKey, control, alt, _barState.Loading))
         {
             case BrowserKeyAction.Close:
                 PostMessageW(_hwnd, WmClose, IntPtr.Zero, IntPtr.Zero);
@@ -917,6 +955,15 @@ internal sealed unsafe class BrowserWindowThread
                 return true;
             case BrowserKeyAction.Back:
                 _host?.GoBack();
+                return true;
+            case BrowserKeyAction.Forward:
+                _host?.GoForward();
+                return true;
+            case BrowserKeyAction.Address:
+                FocusAddress();
+                return true;
+            case BrowserKeyAction.Stop:
+                _host?.Stop();
                 return true;
             default:
                 return false;
@@ -937,7 +984,9 @@ internal sealed unsafe class BrowserWindowThread
     {
         if (_hwnd != IntPtr.Zero)
         {
-            _chrome.ApplyCaption(ViewerStyle.For(NeonSidekick.UI.Theme.Current, _chrome.Themed()));
+            var style = ViewerStyle.For(NeonSidekick.UI.Theme.Current, _chrome.Themed());
+            _chrome.ApplyCaption(style);
+            ApplyBarStyle(style);
         }
     }
 }

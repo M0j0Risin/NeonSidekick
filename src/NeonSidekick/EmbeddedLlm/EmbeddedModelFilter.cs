@@ -24,6 +24,9 @@ namespace NeonSidekick.EmbeddedLlm;
 /// visit starts with the normal ones alone; lit, the list is the uncensored builds alone, dark the normal ones alone — two
 /// halves, never both. It moved last, after sort size, on the key X; uninstalled took U, and N went. A pane whose model in
 /// use is uncensored starts with it lit (<see cref="For"/>, the user's pick), so that row shows.</para>
+/// <para>Two cycling buttons since later on 2026-10-13 (the user's call, <c>/queue</c>'s shape): the sizes are one button,
+/// <c>size: any|8GB|16GB</c> on S (<see cref="NextSize"/>), and the catalog's installed and uninstalled one more,
+/// <c>show: all|installed|uninstalled</c> on I (<see cref="NextInstalled"/>), each lit while it thins the list; sort moved to O.</para>
 /// Pure: the tests drive it.
 /// </summary>
 public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Installed = null, bool SortSize = false, bool Drafter = false)
@@ -37,18 +40,48 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// </summary>
     public static EmbeddedModelFilter For(EmbeddedModel? inUse) => inUse is { Uncensored: true } ? None with { Uncensored = true } : None;
 
-    /// <summary>The installed and uninstalled buttons' titles (the catalog's, later on 2026-09-29; a glyph to the left of each since 2026-10-03, the user's ask, as of every filter button but the sizes). Pinned.</summary>
-    public const string InstalledButton = "✓ installed";
+    /// <summary>
+    /// The catalog's show button (later on 2026-10-13; the installed and uninstalled radio pair from later on 2026-09-29): what it keeps,
+    /// <c>show: all</c>, <c>show: installed</c> or <c>show: uninstalled</c>. Pinned.
+    /// </summary>
+    public static string ShowButton(bool? installed) => "show: " + installed switch
+    {
+        true => "installed",
+        false => "uninstalled",
+        _ => "all",
+    };
 
-    public const string UninstalledButton = "⤓ uninstalled";
+    /// <summary>The show button's key: I (installed and uninstalled were I and U until later on 2026-10-13).</summary>
+    public const char ShowKey = 'i';
 
-    /// <summary>Their keys: I and U (N for not installed until later on 2026-09-30, when uncensored gave U up).</summary>
-    public const char InstalledKey = 'i';
+    /// <summary>What the show button keeps after <paramref name="installed"/>: all, installed, uninstalled, all again. Pure.</summary>
+    public static bool? NextInstalled(bool? installed) => installed switch
+    {
+        null => true,
+        true => false,
+        false => null,
+    };
 
-    public const char UninstalledKey = 'u';
-
-    /// <summary>The size buttons' gigabytes, in button order (32 went on 2026-10-05: every catalog model is under it). Pinned.</summary>
+    /// <summary>The sizes' gigabytes, in the size button's order after <c>any</c> (32 went on 2026-10-05: every catalog model is under it). Pinned.</summary>
     public static readonly int[] Sizes = [8, 16];
+
+    /// <summary>The size button (later on 2026-10-13; one button per size from later on 2026-09-29): <c>size: any</c>, <c>size: 8GB</c>, <c>size: 16GB</c>. Pinned.</summary>
+    public static string SizeTitle(int? maxGb) => "size: " + (maxGb is { } gb ? SizeButton(gb) : "any");
+
+    /// <summary>The size button's key: S (the sizes were 1 and 2, and S sort, until later on 2026-10-13).</summary>
+    public const char SizeKey = 's';
+
+    /// <summary>The size after <paramref name="maxGb"/>: any, then each of <see cref="Sizes"/>, then any again; a size not among them goes to any. Pure.</summary>
+    public static int? NextSize(int? maxGb)
+    {
+        if (maxGb is not { } gb)
+        {
+            return Sizes[0];
+        }
+
+        int at = Array.IndexOf(Sizes, gb);
+        return at < 0 || at + 1 >= Sizes.Length ? null : Sizes[at + 1];
+    }
 
     /// <summary>The uncensored button's title. Pinned.</summary>
     public const string UncensoredButton = "◌ uncensored";
@@ -68,8 +101,8 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// <summary>The sort button's title in the catalog's (name) order: the order shown (2026-10-02, the user's ask). Pinned.</summary>
     public const string SortNameButton = "⇅ sort (name)";
 
-    /// <summary>The sort size button's key.</summary>
-    public const char SortSizeKey = 's';
+    /// <summary>The sort button's key: O (S until later on 2026-10-13, when the size button took it).</summary>
+    public const char SortSizeKey = 'o';
 
     /// <summary>The drafter button's title (later on 2026-09-30). Pinned.</summary>
     public const string DrafterButton = "⇉ drafter";
@@ -77,21 +110,26 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// <summary>The drafter button's key.</summary>
     public const char DrafterKey = 'd';
 
-    /// <summary>The drafter button's index: after the sizes, and after installed and uninstalled <paramref name="withInstalled"/>.</summary>
-    public static int DrafterIndex(bool withInstalled = false) => Sizes.Length + (withInstalled ? 2 : 0);
+    /// <summary>The size button's index: first.</summary>
+    public const int SizeIndex = 0;
+
+    /// <summary>The catalog's show button's index: after the size.</summary>
+    public const int ShowIndex = 1;
+
+    /// <summary>The drafter button's index: after the size, and after the show button <paramref name="withInstalled"/>.</summary>
+    public static int DrafterIndex(bool withInstalled = false) => withInstalled ? ShowIndex + 1 : SizeIndex + 1;
 
     /// <summary>The sort size button's index: after drafter.</summary>
     public static int SortSizeIndex(bool withInstalled = false) => DrafterIndex(withInstalled) + 1;
 
     /// <summary>
-    /// The filters' part of <c>/server</c>'s hint row. Pinned. Shortened later on 2026-09-30 (the user's ask): the sizes are
-    /// on their buttons, so <c>1 / 2 = GB</c> (<c>1 / 2 / 3</c> until the 32GB button went on 2026-10-05), and sort size is
-    /// <c>S = sort</c>; uncensored, last on X, is <c>X = unc</c>.
+    /// The filters' part of <c>/server</c>'s hint row. Pinned. Shortened later on 2026-09-30 (the user's ask): <c>1 / 2 = GB</c> for the
+    /// size buttons, <c>s = sort</c>, <c>x = unc</c>; since later on 2026-10-13 the one size button is <c>s = size</c> and sort <c>o = sort</c>.
     /// </summary>
-    public const string Keys = "1 / 2 = GB · d = drafter · s = sort · x = unc";
+    public const string Keys = "s = size · d = drafter · o = sort · x = unc";
 
-    /// <summary>The filters' part of the catalog's hint row, with installed and uninstalled (later on 2026-09-29; <c>i / u = inst / uninst</c> later on 2026-09-30, lowercase since 2026-10-07). Pinned.</summary>
-    public const string CatalogKeys = "1 / 2 = GB · i / u = inst / uninst · d = drafter · s = sort · x = unc";
+    /// <summary>The filters' part of the catalog's hint row, with the show button (later on 2026-09-29 as <c>i / u = inst / uninst</c>; <c>i = show</c> since later on 2026-10-13). Pinned.</summary>
+    public const string CatalogKeys = "s = size · i = show · d = drafter · o = sort · x = unc";
 
     /// <summary>A size button's title: <c>8GB</c>. Pinned.</summary>
     public static string SizeButton(int gb) => gb.ToString(System.Globalization.CultureInfo.InvariantCulture) + "GB";
@@ -100,22 +138,20 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     public bool Active => MaxGb is not null || Uncensored || Installed is not null || Drafter;
 
     /// <summary>
-    /// The buttons, the lit ones <see cref="MenuButton.On"/>: the sizes on the keys 1 and 2, then — <paramref name="withInstalled"/>,
-    /// the catalog's — installed on I and uninstalled on U, then drafter on D, sort size on S, and uncensored on X last
+    /// The buttons, the lit ones <see cref="MenuButton.On"/>: the size on S, then — <paramref name="withInstalled"/>, the catalog's — the
+    /// show button on I, each lit while it thins the list (later on 2026-10-13), then drafter on D, sort on O, and uncensored on X last
     /// (later on 2026-09-30). <see cref="Press"/> reads the same layout.
     /// </summary>
     public IReadOnlyList<MenuButton> Buttons(bool withInstalled = false)
     {
-        var buttons = new List<MenuButton>(Sizes.Length + 5);
-        for (int i = 0; i < Sizes.Length; i++)
+        var buttons = new List<MenuButton>(5)
         {
-            buttons.Add(new MenuButton(SizeButton(Sizes[i]), (char)('1' + i), MaxGb == Sizes[i]));
-        }
+            new(SizeTitle(MaxGb), SizeKey, MaxGb is not null),
+        };
 
         if (withInstalled)
         {
-            buttons.Add(new MenuButton(InstalledButton, InstalledKey, Installed == true));
-            buttons.Add(new MenuButton(UninstalledButton, UninstalledKey, Installed == false));
+            buttons.Add(new MenuButton(ShowButton(Installed), ShowKey, Installed is not null));
         }
 
         buttons.Add(new MenuButton(DrafterButton, DrafterKey, Drafter));
@@ -125,21 +161,20 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     }
 
     /// <summary>
-    /// The filter after the button at <paramref name="index"/> of <see cref="Buttons"/> is pressed: a size lights alone, or goes
-    /// dark when it was the lit one; installed and uninstalled the same between themselves; drafter, sort size and uncensored flip. Each
-    /// group leaves the others be; any other index changes nothing.
+    /// The filter after the button at <paramref name="index"/> of <see cref="Buttons"/> is pressed: the size steps to the next
+    /// (<see cref="NextSize"/>), the show button likewise (<see cref="NextInstalled"/>); drafter, sort size and uncensored flip. Each
+    /// leaves the others be; any other index changes nothing.
     /// </summary>
     public EmbeddedModelFilter Press(int index, bool withInstalled = false)
     {
-        if (index >= 0 && index < Sizes.Length)
+        if (index == SizeIndex)
         {
-            return this with { MaxGb = MaxGb == Sizes[index] ? null : Sizes[index] };
+            return this with { MaxGb = NextSize(MaxGb) };
         }
 
-        if (withInstalled && (index == Sizes.Length || index == Sizes.Length + 1))
+        if (withInstalled && index == ShowIndex)
         {
-            bool wanted = index == Sizes.Length;
-            return this with { Installed = Installed == wanted ? null : wanted };
+            return this with { Installed = NextInstalled(Installed) };
         }
 
         if (index == DrafterIndex(withInstalled))

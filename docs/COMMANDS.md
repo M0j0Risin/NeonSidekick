@@ -82,7 +82,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/exit` | Exits the app. |
 | `/explore [<folder>]` | Opens the working directory in your file browser. |
 | `/browse [<folder>]` | Browses the working directory as a tree in a pane; Enter on a file opens it in its default app. See [File browser](#file-browser). |
-| `/browser [<url>]` | Opens the page (or a blank one) in the Browser window, for you to sign in to a site or get past its bot check; when you close it, its cookies go to the web tools. Windows only. See [The Browser window](TOOLS.md#the-browser-window). |
+| `/browser [<url>]` | Opens the page (or *Web browser home page*) in the Browser window, for you to sign in to a site or get past its bot check; when you close it, its cookies go to the web tools. Windows only. See [The Browser window](TOOLS.md#the-browser-window). |
 | `/gituser [force]` | Writes *GitLib user email* and *GitLib user name* into the repository's config; an existing `[user]` stays unless `force`. Needs *GitLib tools* on. |
 | `/ha` | Home Assistant at a glance: lights on per room, the TV, temperatures, motion, low batteries and to-do lists. |
 | `/ha on\|off\|toggle <name> [<brightness>]` | Switches a room, light, switch or the TV (`/ha on den 40%`, `/ha off kitchen and hallway`). |
@@ -114,7 +114,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/collapse` | Folds them again. |
 | `/find [<words>]` | Finds words in the transcript, every match marked (keys under [Pane keys](#pane-keys)). Ctrl+Shift+F runs it too once Windows Terminal's own find is unbound. |
 | `/mcp` | Connects MCP servers and switches their tools. On the Tools tab typing filters the list, and with two or more servers a second strip picks one server's tools. |
-| `/memory` | Lists memories in a pane. Enter (or a double-click) on one offers **edit** (change its text on the input row), **disable** (keep it, greyed out, but don't offer it to the model; **enable** offers it again) and **forget** (asks). `a` (*+ add*) types a new memory. `w`, `o` and `x` set *Memory mode* to read-write, read-only or off. |
+| `/memory` | Lists memories in a pane. Enter (or a double-click) on one offers **edit** (change its text on the input row), **disable** (keep it, greyed out, but don't offer it to the model; **enable** offers it again) and **forget** (asks). `a` (*+ add*) types a new memory. **mode: …** (`m`) steps *Memory mode*: read-write, read-only, off. |
 | `/memory read-write\|read-only\|off\|on` | Sets *Memory mode* (`on` is read-write). |
 | `/memory forget\|edit` | `forget` forgets all, after a confirmation; `edit` opens `memory.json` in your editor. |
 | `/model [<id>]` | Picks or sets the model; type to filter the list. On the embedded LLM, lists the installed models. |
@@ -129,7 +129,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/pdf <file> [to=<path>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF from Markdown, text, code, HTML or a picture, beside the file unless `to=` says (see [Making PDFs](TOOLS.md#making-pdfs)). On a Mac only the browser makes it. |
 | `/pdf <url> [to=<path>] [overwrite]` | Makes a PDF of a web page; *Web browser network mode* still applies. |
 | `/pdf reply [<options>]` | Makes a PDF of the last reply. |
-| `/process` | Lists the background processes, the model's and your `/cmd --bg` ones, in a pane. Enter opens one in the [process window](#process-window), `k` stops it (asks), `r` and `e` show only the running or ended ones. While any run, **▶ n** at the right of the rule under the input line counts them; a double-click there opens this list. |
+| `/process` | Lists the background processes, the model's and your `/cmd --bg` ones, in a pane. Enter opens one in the [process window](#process-window), `k` stops it (asks), `f` steps the filter: all, running only, ended only. While any run, **▶ n** at the right of the rule under the input line counts them; a double-click there opens this list. |
 | `/process <id>` | Shows one process's output live in the [process window](#process-window) (any unique start of the id; Tab completes it). |
 | `/profile [<name>]` | Switches profiles: a picker, or straight to the one named. See [Profiles](#profiles). |
 | `/profile add\|delete <name>` | Creates a profile (from this profile's settings and memories) or deletes one. |
@@ -589,11 +589,11 @@ In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes
 
 | Pane | Keys |
 |---|---|
-| `/memory` | Enter: edit · disable/enable · forget (asks) · `a` add · `w` read-write · `o` read-only · `x` off |
+| `/memory` | Enter: edit · disable/enable · forget (asks) · `a` add · `m` steps *Memory mode* |
 | `/queue` | Enter removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) · `m` Queue mode · `k` Queue cancel mode |
 | `/rewind` | Enter rewinds to before the message |
 | `/sessions` | Enter opens · type to filter |
-| `/process` | Enter opens the window · `k` kills (asks) · `r` / `e` running / ended only |
+| `/process` | Enter opens the window · `k` kills (asks) · `f` steps the filter: all, running, ended |
 | `/skills` › a skill | Enter on a row: move (between the profile and global skills, or a profile skill to another profile, asks), rename, edit, revert, lock/unlock, disable/enable, delete (asks) |
 | `/skills` › a skill › `revert` | Enter puts the version back · `d` removes it (asks) · `c` clear all (asks) |
 | `/docker` | Enter opens · `r` refresh · `l` LLM servers only (*Docker server containers*) · type to filter |
@@ -604,10 +604,10 @@ In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes
 | `/youtube list` | Enter plays · `d` remove (asks) · `c` clear all (asks) · type to filter |
 | `/youtube <words>`, `/youtube playlist` | Enter plays · `s` save the highlighted video |
 | `/tools shell` (*Shell command policy*) | `c` the allowed commands · `p` the police |
-| `/tools shell allowed` (*Shell allowed commands*) | Enter removes (asks) · `o` off · `a` ask · `y` yolo · type to filter |
+| `/tools shell allowed` (*Shell allowed commands*) | Enter removes (asks) · `p` steps *Shell command policy*: off, ask, yolo (asks; a no goes on to off) · type to filter |
 | *Shell police forbidden strings* | the top row adds · Enter removes (asks) · `r` restore defaults (asks) |
 | `/tools shell police` | `s` the forbidden strings |
-| `/tools web` | `a` auto · `h` http · `b` browser (*Web browser mode*) |
+| `/tools web` | `m` steps *Web browser mode*: auto, http, browser · `o` opens the Browser window (Windows) |
 | `/tools files` | `b` *File browser/tree mode* |
 | `/tools image` | `e` *Image edit mode* |
 | `/tools obsidian` | `v` *Obsidian vault* |
@@ -621,7 +621,7 @@ In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes
 | `/homebar edit`, On the bar | Shift+↑/↓ move · Shift+Home/End top or bottom · Delete removes · Enter the same as a list, Rename on the bar…, Default name, Change emoji… and Default emoji |
 | `/homebar edit`, the other tabs | Space or Enter adds or removes · type to filter |
 | A room's pane on the home bar | Space switches a device · Enter its actions |
-| *Embedded models* | `1` / `2` size · `i` / `u` installed or not · `d` drafter · `s` sort · `x` uncensored |
+| *Embedded models* | `s` size: any, 8GB, 16GB · `i` show: all, installed, uninstalled · `d` drafter · `o` sort · `x` uncensored |
 | `/server`, `/model` | Enter chooses · type to filter |
 | The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · ESC denies |
 | A database write's approval | `d` deny · `o` once · `s` session · `v` the whole statement · ESC denies |

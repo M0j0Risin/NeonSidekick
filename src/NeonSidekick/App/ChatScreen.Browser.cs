@@ -8,8 +8,8 @@ namespace NeonSidekick.App;
 internal sealed partial class ChatScreen
 {
     /// <summary>
-    /// <c>/browser [url]</c> (2026-10-13, the user's ask, with the bot checks): the Browser window on the page (the blank page without
-    /// one) for the user to browse — sign in to a site, get past its check — and when they close it, its cookies for every host it went
+    /// <c>/browser [url]</c> (2026-10-13, the user's ask, with the bot checks): the Browser window on the page (without one, the
+    /// setting <c>Web browser home page</c>, the blank page when that is empty) for the user to browse — sign in to a site, get past its check — and when they close it, its cookies for every host it went
     /// to go to the web tools' HTTP client (<see cref="WebFetcher.Adopt(IReadOnlyList{BrowserCookie}?, BrowserIdentity, Uri)"/>), the
     /// notice saying for which. The window is its own thread, so this returns at once and is safe under a reply; the close's notice
     /// comes through the flow sink. Any thread.
@@ -22,8 +22,9 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        // A bare /browser goes to Web browser home page (later on 2026-10-13, with the window's navigation bar), the blank page without one.
         string text = args.Trim();
-        Uri? url = null;
+        Uri? url = text.Length == 0 ? Viewer.BrowserAddress.Home(_effective().WebBrowserHomePage) : null;
         if (text.Length > 0 && (url = WebFetcher.ParseUrl(text)) is null)
         {
             _flow.Error(BotCheckText.NotAUrl(text));

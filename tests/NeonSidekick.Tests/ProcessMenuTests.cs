@@ -60,13 +60,13 @@ public sealed class ProcessMenuTests : IDisposable
     public void Strings_ArePinned()
     {
         Assert.Equal("⚡ Process", ProcessMenu.Title);
-        Assert.Equal("Enter = open window · k = kill · r / e = running / ended · ESC = close", ProcessMenu.Keys);
+        Assert.Equal("Enter = open window · k = kill · f = filter · ESC = close", ProcessMenu.Keys);   // f since later on 2026-10-13
         Assert.Equal("✖  kill", ProcessMenu.KillButton);
         Assert.Equal('k', ProcessMenu.KillKey);
+        Assert.Equal("show: all", ProcessMenu.AllButton);
         Assert.Equal("● running", ProcessMenu.RunningButton);
-        Assert.Equal('r', ProcessMenu.RunningKey);
         Assert.Equal("○ ended", ProcessMenu.EndedButton);
-        Assert.Equal('e', ProcessMenu.EndedKey);
+        Assert.Equal('f', ProcessMenu.FilterKey);
         Assert.Equal("No running processes.", ProcessMenu.NoMatchLine(running: true));
         Assert.Equal("No ended processes.", ProcessMenu.NoMatchLine(running: false));
         Assert.Equal(ChatScreen.KeptNotice, ProcessMenu.KeptNotice);
@@ -88,20 +88,20 @@ public sealed class ProcessMenuTests : IDisposable
     }
 
     [Fact]
-    public void TheFilterButtons_AreARadioPair_AfterKill()
+    public void TheFilterButton_StepsAllRunningEnded_AfterKill()
     {
-        // 2026-10-11, the user's ask: running and ended, one lit at a time, the lit one pressed again goes dark.
-        Assert.Equal([ProcessMenu.KillButton, ProcessMenu.RunningButton, ProcessMenu.EndedButton], ProcessMenu.ButtonsFor(null).Select(b => b.Title));
+        // 2026-10-11, the user's ask, as a radio pair; one cycling button since later on 2026-10-13 (the user's call), lit while it filters.
+        Assert.Equal([ProcessMenu.KillButton, "show: all"], ProcessMenu.ButtonsFor(null).Select(b => b.Title));
+        Assert.Equal([ProcessMenu.KillButton, "● running"], ProcessMenu.ButtonsFor(true).Select(b => b.Title));
+        Assert.Equal([ProcessMenu.KillButton, "○ ended"], ProcessMenu.ButtonsFor(false).Select(b => b.Title));
         Assert.DoesNotContain(ProcessMenu.ButtonsFor(null), b => b.On);
-        Assert.Equal([false, true, false], ProcessMenu.ButtonsFor(true).Select(b => b.On));
-        Assert.Equal([false, false, true], ProcessMenu.ButtonsFor(false).Select(b => b.On));
+        Assert.Equal([false, true], ProcessMenu.ButtonsFor(true).Select(b => b.On));
+        Assert.Equal([false, true], ProcessMenu.ButtonsFor(false).Select(b => b.On));
+        Assert.Equal(['k', 'f'], ProcessMenu.ButtonsFor(null).Select(b => b.Key!.Value));
 
-        Assert.True(ProcessMenu.Press(null, ProcessMenu.RunningIndex));
-        Assert.Null(ProcessMenu.Press(true, ProcessMenu.RunningIndex));
-        Assert.False(ProcessMenu.Press(true, ProcessMenu.EndedIndex));
-        Assert.Null(ProcessMenu.Press(false, ProcessMenu.EndedIndex));
-        Assert.True(ProcessMenu.Press(false, ProcessMenu.RunningIndex));
-        Assert.True(ProcessMenu.Press(true, 0));   // kill is no filter
+        Assert.True(ProcessMenu.Next(null));
+        Assert.False(ProcessMenu.Next(true));
+        Assert.Null(ProcessMenu.Next(false));
     }
 
     [WindowsFact]
@@ -120,18 +120,18 @@ public sealed class ProcessMenuTests : IDisposable
     }
 
     [WindowsFact]
-    public async Task TheFilterKeys_ThinTheRows_AndTheLitOnePressedAgainShowsAll()
+    public async Task TheFilterKey_ThinsTheRows_AndAThirdPressShowsAll()
     {
         var done = Start("exit 0");
         await done.Exited.WaitAsync(TimeSpan.FromSeconds(60));
         await Task.Delay(50);   // the registry's watcher runs after the exit
         var running = Start("ping -n 30 127.0.0.1 >nul");
         var (menu, pane, input) = PaneMenu();
-        input.Push(Keys.Char('r'));
+        input.Push(Keys.Char('f'));
         input.Push(Keys.Enter);          // the one running row
-        input.Push(Keys.Char('e'));
+        input.Push(Keys.Char('f'));
         input.Push(Keys.Enter);          // the one ended row
-        input.Push(Keys.Char('e'));
+        input.Push(Keys.Char('f'));
         input.Push(Keys.Down);
         input.Push(Keys.Enter);          // every row again: the second is the running one
         input.Push(Keys.Escape);
@@ -151,11 +151,11 @@ public sealed class ProcessMenuTests : IDisposable
         await done.Exited.WaitAsync(TimeSpan.FromSeconds(60));
         await Task.Delay(50);
         var (menu, pane, input) = PaneMenu();
-        input.Push(Keys.Char('r'));
-        input.Push(Keys.Enter);          // the no-match row
+        input.Push(Keys.Char('f'));
+        input.Push(Keys.Enter);          // the no-match row (running)
         input.Push(Keys.Char('k'));      // nothing to stop
-        input.Push(Keys.Char('r'));
-        input.Push(Keys.Enter);          // every row again
+        input.Push(Keys.Char('f'), Keys.Char('f'));
+        input.Push(Keys.Enter);          // ended, then every row again
         input.Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);

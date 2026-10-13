@@ -436,7 +436,8 @@ internal sealed class ToolsMenu
     /// Tools pane around it, so ESC closes the pane. The strip follows the switch at each draw, so the item leaves or takes
     /// its off slab as the pane closes. Without the pane the value prints (<see cref="ToolsText.SwitchStateLine"/>). Mid-turn
     /// as at idle: none of these rows is refused under a reply, and each is read at the next turn. The Web page's title row
-    /// switches <c>Web browser mode</c> (2026-10-04, the user's ask: <see cref="SettingsMenu.WebModeButtons"/>, D / H / C).
+    /// switches <c>Web browser mode</c> (2026-10-04, the user's ask: <see cref="SettingsMenu.WebModeButtons"/>, M steps it since later on
+    /// 2026-10-13) and opens the Browser window (O).
     /// </summary>
     public async Task ShowSwitchAsync(SettingsField field, CancellationToken cancellationToken)
     {

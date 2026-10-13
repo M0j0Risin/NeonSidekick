@@ -23,6 +23,12 @@ internal sealed partial class SettingsMenu
     public Func<bool>? CameraWatching { get; set; }
 
     /// <summary>
+    /// The Web tools page's open-browser button (later on 2026-10-13, the user's ask): the screen's <c>/browser</c> with no address, the
+    /// Browser window on the home page. Null where there is no Browser window (headless, off Windows, a test without one): no button.
+    /// </summary>
+    public Action? OpenBrowser { get; set; }
+
+    /// <summary>
     /// Watch mode started (true, at <c>Camera watch every</c>) or stopped (false) for the Camera tool page's button (2026-10-04):
     /// the screen's own start and stop, with the line <c>/camera watch</c> would say and whether it failed.
     /// </summary>

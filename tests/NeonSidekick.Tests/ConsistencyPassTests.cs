@@ -31,7 +31,7 @@ public class ConsistencyPassTests
         MemoryMenu.Keys, MemoryMenu.SwitchKeys, MemoryMenu.EmptySwitchKeys, QueueMenu.Keys, QueueMenu.KeysWithSend, RewindText.Keys,
         SettingsMenu.SwitchKeys, SettingsMenu.ToggleKeys, SettingsMenu.DefaultToggleKeys, SettingsMenu.ToolbarToggleKeys, SettingsMenu.PerfBarToggleKeys,
         SettingsMenu.AllowedCommandsKeys, SettingsMenu.AllowedCommandsEmptyKeys, SettingsMenu.PoliceToggleKeys, SettingsMenu.OfferedToggleKeys,
-        SettingsMenu.WebToggleKeys, SettingsMenu.CameraToggleKeys, SettingsMenu.ChangedKeys, SettingsMenu.ProfileKeys,
+        SettingsMenu.WebToggleKeys, SettingsMenu.WebToggleOpenKeys, SettingsMenu.CameraToggleKeys, SettingsMenu.ChangedKeys, SettingsMenu.ProfileKeys,
         SettingsMenu.ThemeKeepKeys, SettingsMenu.ThemePickKeys, EmbeddedModelFilter.Keys, EmbeddedModelFilter.CatalogKeys,
         CameraText.AllowHint, CameraMenu.AllowHintWithView, YouTubeText.SavedKeys, MenuPane.EmptyKeys,
         .. new[] { SettingsField.FileTools, SettingsField.ImageTools, SettingsField.PrintTools, SettingsField.ScreenTools, SettingsField.ObsidianTools, SettingsField.YouTubeTools }

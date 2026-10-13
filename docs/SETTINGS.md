@@ -131,13 +131,13 @@ In a pane opened over the reply, the rows that would disturb it (a reconnect, th
 | Toolbar item | Shown | Opens |
 |---|---|---|
 | ⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 | always | `/settings`, `/profile` (the profile picker), `/theme` (the theme picker), `/tools`, `/mcp`, `/skills`, `/sys`, `/sessions`, `/usage` |
-| 💾 | always; on the slab while *Memory mode* is `off` | `/memory`, with **read-write** (`w`), **read-only** (`o`), **off** (`x`) and **+ add** (`a`) on its title row; Enter on a memory offers edit, disable/enable and forget |
+| 💾 | always; on the slab while *Memory mode* is `off` | `/memory`, with **mode: …** (`m`, stepping *Memory mode*) and **+ add** (`a`) on its title row; Enter on a memory offers edit, disable/enable and forget |
 | ⏳ | always; on the slab while *Queue mode* is `off` | `/queue`, with **mode: …** (`m`, steps *Queue mode*) and **cancel: …** (`k`, steps *Queue cancel mode*) on its title row, on the empty queue too |
 | 🙋 | always; on the slab while *Ask user* is off | `/tools ask`: the *Ask user* on/off page |
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/tools shell allowed` |
 | 👮 / 🥷 | *Shell police* is on / off, and the policy isn't `off` | `/tools shell police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (`c` the allowed commands, `p` the police) |
-| 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page, with its own buttons at the top (an **offered** checklist for the database, UNC and ComfyUI groups; **watch**, **live**, **snap** and **screen** for the camera) |
+| 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page, with its own buttons at the top (an **offered** checklist for the database, UNC and ComfyUI groups; **watch**, **live**, **snap** and **screen** for the camera; the browser mode, `m` stepping it, and **Open browser** for the web) |
 | 📄 | always | `/log`, the log window (Ctrl+G) |
 | ⚡ | always | `/process`, the background processes' list |
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
@@ -432,10 +432,10 @@ A model the app downloads and runs itself on llama.cpp's `llama-server`, for whe
 | Embedded drafter | Speeds up replies by drafting tokens ahead and checking them; the text is the same. Turn it off if a model misbehaves with it. | on |
 
 **Catalog buttons** (on the *Embedded models* title row; they combine):
-* **8GB**, **16GB** (`1`, `2`): models up to that size.
-* **installed** (`i`) / **uninstalled** (`u`): one at a time.
+* **size** (`s`): any, then models up to 8GB, then up to 16GB.
+* **show** (`i`): all, then the installed ones, then the uninstalled ones.
 * **drafter** (`d`): models with a drafter.
-* **sort** (`s`): name or size order.
+* **sort** (`o`): name or size order.
 * **uncensored** (`x`): shows only the uncensored builds, which are hidden otherwise.
 
 **Notes**
@@ -669,10 +669,11 @@ The tools most profiles use and the pane's own options, in four tabs: Ask, Web, 
 
 | Setting | What it does | Default |
 |---|---|---|
-| Web tools | Offers `web_search`, `web_fetch`, `open_url` and `download_file`. | off |
+| Web tools | Offers `web_search`, `web_fetch`, `open_url` and `download_file`. Its page's title row steps *Web browser mode* (`m`) and, on Windows, opens the Browser window (`o`). | off |
 | Web browser mode | `auto` uses HTTP and falls back to a headless browser for a blocked or empty page; `http` never falls back; `browser` uses the browser for every page. | `auto` |
 | Web browser path | The Chromium-based browser for headless fetches and making PDFs; empty finds Edge, Chrome or Brave. | empty (found) |
 | Web browser botcheck window | What a bot check the web tools can't get past does: `ask` asks on the pane, then opens the page in the Browser window for you to solve; `automatic` opens it without asking; `off` never does. See [The Browser window](TOOLS.md#the-browser-window). Windows only. | `ask` |
+| Web browser home page | Where the Browser window's home button and a bare `/browser` go: a web address (`example.com`, `localhost:3000`), or empty for the blank page. Windows only. | empty |
 | Web browser network mode | Where a fetch may reach: `internet` (public addresses), `lan` (this machine and the LAN) or `both`. | `internet` |
 | Web search method | `duckduckgo` (built in) or `searxng`. | `duckduckgo` |
 | Web SearXNG URL | The SearXNG instance, for `searxng`. | empty |

@@ -146,6 +146,45 @@ public partial class ChatScreenTests
         Assert.Contains("'not a url' is not an http or https address.", output);
     }
 
+    /// <summary>A bare <c>/browser</c> opens <c>Web browser home page</c> (later on 2026-10-13, the navigation bar).</summary>
+    [Fact]
+    public async Task BrowserCommand_Bare_OpensTheHomePage()
+    {
+        _browserWindow = new FakeBrowserWindow();
+        _settings.Update(d => d.WebBrowserHomePage = "start.example");
+        PushLine("/browser");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal([new Uri("https://start.example/")], _browserWindow.Browses);
+        Assert.Contains(BotCheckText.Opened("https://start.example/"), output);
+    }
+
+    /// <summary>The Web tools page's open-browser button (later on 2026-10-13, the user's ask): O opens the window on the home page, the page staying.</summary>
+    [Fact]
+    public async Task WebToolsPage_OpenBrowser_OpensTheWindowOnTheHomePage_AndThePageStays()
+    {
+        _browserWindow = new FakeBrowserWindow();
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(
+            Line("/tools web"),
+            input => input.Push(Keys.Char('o')),
+            input => input.Push(Keys.Escape),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal([null], _browserWindow.Browses);
+        Assert.Contains(SettingsMenu.OpenBrowserButton, output);
+        Assert.Contains(SettingsMenu.WebToggleOpenKeys, output);
+        Assert.Contains(SettingsMenu.OpenedBrowserNotice, output);
+        Assert.Contains(BotCheckText.Opened(BrowserPage.Blank), output);
+        Assert.Equal("auto", _settings.Current.WebBrowserMode);
+    }
+
     [Fact]
     public async Task BrowserCommand_WithNoWindow_SaysItNeedsWindows()
     {

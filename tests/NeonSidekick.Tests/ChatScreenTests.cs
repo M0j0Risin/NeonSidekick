@@ -2894,7 +2894,7 @@ public partial class ChatScreenTests : IDisposable
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The allowed-commands list's title (later still on 2026-09-21): the Tools crumb over the row's name, straight from /tools shell allowed (/cmdlist until 2026-10-09) or the toolbar's lock as from the Shell tab; the policy buttons after it since 2026-10-02.</summary>
-    private static readonly string AllowedCommandsTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandAllowed) + " │ " + SettingsMenu.PolicyOffButton + " · " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ";
+    private string AllowedCommandsTitle => ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandAllowed) + " │ " + SettingsMenu.PolicyButtonTitle(_settings.Current.ShellCommandPolicy) + " ";   // one cycling button since later on 2026-10-13, the policy in force
     /// <summary>The Memory mode row's saved notice for <paramref name="mode"/> (2026-10-04).</summary>
     private string Saved(string mode) => SettingsMenu.SavedNotice(SettingsField.MemoryMode, new AppSettingsData { MemoryMode = mode }, _settings.ProfileDirectory);
 
@@ -6954,9 +6954,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>
-    /// The 💾 pane's buttons (2026-10-03, the user's ask: ask/yolo's shape; Memory mode's three since 2026-10-04): D sets disabled and
-    /// the list comes back with it lit, R read-only, W read-write again; the pane opens with nothing remembered too, on its one dim
-    /// row, Enter there removing nothing.
+    /// The 💾 pane's mode button (2026-10-03, the user's ask: ask/yolo's shape; Memory mode's three buttons from 2026-10-04, one cycling
+    /// button since later on 2026-10-13): M steps to read-only, off and read-write again, the list back each time; the pane opens with
+    /// nothing remembered too, on its one dim row, Enter there removing nothing.
     /// </summary>
     [Fact]
     public async Task Memory_OnThePane_TheTitleButtonsSetMemoryMode_AndAnEmptyStoreStillOpens()
@@ -6966,10 +6966,10 @@ public partial class ChatScreenTests : IDisposable
         _console.Profile.Width = 120;
         _geometry = new ScreenGeometry(() => null);
         PushLine("/memory");
-        _console.Input.PushKey(Keys.Char('x'));    // disabled (x and o since 2026-10-07, d and r before)
+        _console.Input.PushKey(Keys.Char('m'));    // read-only
         _console.Input.PushKey(Keys.Enter);        // the empty row: nothing
-        _console.Input.PushKey(Keys.Char('o'));    // read-only
-        _console.Input.PushKey(Keys.Char('w'));    // read-write again
+        _console.Input.PushKey(Keys.Char('m'));    // off
+        _console.Input.PushKey(Keys.Char('m'));    // read-write again
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
 
@@ -6979,9 +6979,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n \n▸ " + MemoryMenu.EmptyNotice + "\n", output);
         Assert.Contains("\n" + Titled(MemoryPaneTitle(MemoryAccess.Disabled)) + "\n", output);
         Assert.Contains(Row(MemoryMenu.EmptySwitchKeys), output);
-        int off = output.IndexOf(Saved("off"), StringComparison.Ordinal);
-        int readOnly = output.IndexOf(Saved("read-only"), off, StringComparison.Ordinal);
-        Assert.True(off > 0 && readOnly > off && output.IndexOf(Saved("read-write"), readOnly, StringComparison.Ordinal) > readOnly, output);
+        int readOnly = output.IndexOf(Saved("read-only"), StringComparison.Ordinal);
+        int off = output.IndexOf(Saved("off"), readOnly, StringComparison.Ordinal);
+        Assert.True(readOnly > 0 && off > readOnly && output.IndexOf(Saved("read-write"), off, StringComparison.Ordinal) > off, output);
         Assert.DoesNotContain("  · " + MemoryMenu.EmptyNotice, output);   // no transcript line: the pane said it
         Assert.Empty(_chat.Requests);
     }
@@ -9689,7 +9689,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(_settings.Current.WebTools);
         Assert.Equal("yolo", _settings.Current.ShellCommandPolicy);
         // The Web page carries the browser-mode buttons on its title row since 2026-10-04 (the user's ask).
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.WebTools) + " │ " + string.Join(" · ", BrowserMode.Names.Select(SettingsMenu.WebModeButtonTitle)) + " ") + "\n", output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.WebTools) + " │ " + SettingsMenu.WebModeButtonTitle("auto") + " ") + "\n", output);   // one cycling button since later on 2026-10-13
         Assert.Contains("\n" + ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandPolicy) + " │ " + SettingsMenu.PolicyAllowedButton, output);   // the allowed and police buttons after it since 2026-10-09
         Assert.Contains("\n" + Titled(SettingsMenu.YoloConfirmQuestion) + "\n", output);
         Assert.DoesNotContain(ToolsText.Label + " │ Offered", output);   // the crumb, never the tabs

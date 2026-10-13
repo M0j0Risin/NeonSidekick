@@ -54,6 +54,8 @@ neon-*.log
 
 # temp notes folder
 .notes/
+# local design notes (mac_build_notes.md and the like)
+.docs/
 
 # agents
 AGENTS.md

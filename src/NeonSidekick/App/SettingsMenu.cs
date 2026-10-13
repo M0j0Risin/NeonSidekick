@@ -1053,6 +1053,9 @@ public enum SettingsField
 
     /// <summary>A picker over <see cref="Web.BotcheckWindow.Names"/>: what a bot check the web tools cannot get past does — <c>ask</c> / <c>automatic</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.WebBrowserBotcheckWindow"/>). The Web tab, right under <see cref="WebBrowserPath"/> (2026-10-13, the user's ask and name); no reconnect (read at each bot check). Last in the enum, as every newcomer.</summary>
     WebBrowserBotcheckWindow,
+
+    /// <summary>The Browser window's home page, a web address or empty for the blank page (<see cref="Settings.AppSettingsData.WebBrowserHomePage"/>). Typed; the Web tab, right under <see cref="WebBrowserBotcheckWindow"/> (2026-10-13, the navigation bar); no reconnect (read at each home). Last in the enum, as every newcomer.</summary>
+    WebBrowserHomePage,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1545,7 +1548,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
     [
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
-        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
+        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
         [SettingsField.ImageTools, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
@@ -2229,6 +2232,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebBrowserMode => "Web browser mode",
         SettingsField.WebBrowserPath => "Web browser path",
         SettingsField.WebBrowserBotcheckWindow => "Web browser botcheck window",
+        SettingsField.WebBrowserHomePage => "Web browser home page",
         SettingsField.WebBrowserNetworkMode => "Web browser network mode",
         SettingsField.WebSearxngUrl => "Web SearXNG URL",
         SettingsField.WebSearchMaxResults => "Web search max results",
@@ -2592,6 +2596,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ObsidianVault => string.IsNullOrWhiteSpace(data.ObsidianVault) ? NoObsidianVaultLabel : data.ObsidianVault,
             SettingsField.WebBrowserMode => data.WebBrowserMode,
             SettingsField.WebBrowserBotcheckWindow => data.WebBrowserBotcheckWindow,
+            SettingsField.WebBrowserHomePage => string.IsNullOrWhiteSpace(data.WebBrowserHomePage) ? BlankHomePageLabel : data.WebBrowserHomePage,
             SettingsField.WebBrowserPath => string.IsNullOrWhiteSpace(data.WebBrowserPath) ? AutoBrowserLabel(locatedBrowser) : data.WebBrowserPath,
             SettingsField.DraftEditor => string.IsNullOrWhiteSpace(data.DraftEditor) ? DefaultDraftEditorLabel : data.DraftEditor,
             SettingsField.ImageEditor => string.IsNullOrWhiteSpace(data.ImageEditor) ? DefaultImageEditorLabel : data.ImageEditor,
@@ -2867,6 +2872,12 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.WebSearxngUrl"/>. Pinned.</summary>
     public const string SearxngUrlError = "must be an http or https URL, or empty";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.WebBrowserHomePage"/> (2026-10-13). Pinned.</summary>
+    public const string HomePageError = "must be a web address, or empty for the blank page";
+
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.WebBrowserHomePage"/>: the blank page. Pinned.</summary>
+    public const string BlankHomePageLabel = "(blank page)";
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.ClaudeCodeExecutable"/> (2026-09-27): looked for on the PATH and in the installer's folder. Pinned.</summary>
     public const string ClaudeLookedUpLabel = "(looked up)";
@@ -3174,8 +3185,8 @@ internal sealed partial class SettingsMenu
     /// <summary>The one row of the allowed-commands list while nothing is allowed for good; the bare word since 2026-09-23 (the user's call, the hint on how to add one dropped). Pinned.</summary>
     public const string NoAllowedCommandsRow = "(none)";
 
-    /// <summary>The allowed-commands list's hint: Enter removes, O, A and Y are the policy buttons (<see cref="CommandPolicyButtons"/>, 2026-10-02; O since 2026-10-12). Pinned.</summary>
-    public const string AllowedCommandsKeys = "Enter = remove · o = off · a = ask · y = yolo · ESC = back";
+    /// <summary>The allowed-commands list's hint: Enter removes, P steps the policy (<see cref="CommandPolicyButtons"/>, 2026-10-02 as O, A and Y; P since later on 2026-10-13). Pinned.</summary>
+    public const string AllowedCommandsKeys = "Enter = remove · p = policy · ESC = back";
 
     /// <summary>The question before an allowed prefix goes (2026-10-07, every list's remove asks). Pinned.</summary>
     public static string RemovePrefixQuestion(string prefix) => $"Remove \"{prefix}\" from the allowed commands? It will ask again.";
@@ -3189,8 +3200,8 @@ internal sealed partial class SettingsMenu
     /// <summary>The forbidden strings' footer's last line under a string (2026-10-07). Pinned.</summary>
     public const string ForbiddenStringNote = "a command that holds this is refused, whatever the policy says";
 
-    /// <summary>The allowed-commands list's hint while nothing is allowed for good: no prefix to remove, the policy buttons still there (2026-10-02). Pinned.</summary>
-    public const string AllowedCommandsEmptyKeys = "o = off · a = ask · y = yolo · ESC = back";
+    /// <summary>The allowed-commands list's hint while nothing is allowed for good: no prefix to remove, the policy button still there (2026-10-02). Pinned.</summary>
+    public const string AllowedCommandsEmptyKeys = "p = policy · ESC = back";
 
     /// <summary>
     /// The allowed-commands list's first title-row button (2026-10-12, the user's ask: the third policy beside ask and yolo, first):
@@ -3199,8 +3210,6 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public const string PolicyOffButton = "⊘ off";
 
-    /// <summary>The key that is <see cref="PolicyOffButton"/>.</summary>
-    public const char PolicyOffKey = 'o';
 
     /// <summary>
     /// The allowed-commands list's ask button, the first until 2026-10-12 (2026-10-02, the user's ask: switch <c>Shell command policy</c> from the
@@ -3210,30 +3219,42 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public const string PolicyAskButton = "✓ ask";
 
-    /// <summary>The key that is <see cref="PolicyAskButton"/>.</summary>
-    public const char PolicyAskKey = 'a';
 
     /// <summary>The allowed-commands list's last button (2026-10-02): the policy to <c>yolo</c>, after a yes to <see cref="YoloConfirmQuestion"/>; the warning sign before it since 2026-10-03, two spaces after it (later that day, the user's ask: Windows Terminal gives ⚠ one cell, as <see cref="UI.TextCells"/> counts it, but draws it from the colour emoji font two cells wide over the space after it, so the second space is the one that shows). Pinned.</summary>
     public const string PolicyYoloButton = "⚠  yolo";
 
-    /// <summary>The key that is <see cref="PolicyYoloButton"/>.</summary>
-    public const char PolicyYoloKey = 'y';
+    /// <summary>The key of the allowed-commands list's policy button (later on 2026-10-13; o, a and y for the three before).</summary>
+    public const char PolicyKey = 'p';
 
-    private const int PolicyOffIndex = 0;
-    private const int PolicyAskIndex = 1;
-    private const int PolicyYoloIndex = 2;
+    private const int PolicyIndex = 0;
+
+    /// <summary>The policy button's title for <paramref name="policy"/>: its own glyph title (<see cref="PolicyOffButton"/>, <see cref="PolicyAskButton"/>, <see cref="PolicyYoloButton"/>), a hand-edited value as <c>? word</c>. Pinned.</summary>
+    public static string PolicyButtonTitle(string? policy) => Shell.CommandPolicy.TryParse(policy, out var mode)
+        ? Shell.CommandPolicy.Name(mode) switch { "off" => PolicyOffButton, "ask" => PolicyAskButton, _ => PolicyYoloButton }
+        : "? " + (policy ?? "").Trim();
+
+    /// <summary>The policy after <paramref name="policy"/>: off, ask, yolo, off again; a hand-edited value goes to off. Pure; pinned.</summary>
+    public static string NextPolicy(string? policy)
+    {
+        if (!Shell.CommandPolicy.TryParse(policy, out var mode))
+        {
+            return Shell.CommandPolicy.Names[0];
+        }
+
+        int at = Array.IndexOf(Shell.CommandPolicy.Names, Shell.CommandPolicy.Name(mode));
+        return Shell.CommandPolicy.Names[(at + 1) % Shell.CommandPolicy.Names.Length];
+    }
 
     /// <summary>
-    /// The allowed-commands list's buttons (2026-10-02): <see cref="PolicyOffButton"/> (index 0, since 2026-10-12), <see cref="PolicyAskButton"/>
-    /// (index 1) and <see cref="PolicyYoloButton"/> (index 2), the saved <paramref name="policy"/> lit — a radio group, as the Web
-    /// tools page's modes are (a pair, neither lit under <c>off</c>, until 2026-10-12); a hand-edited value lights none. Pinned.
+    /// The allowed-commands list's button: from 2026-10-02 the policies as a radio group (<see cref="PolicyOffButton"/> first since
+    /// 2026-10-12, then <see cref="PolicyAskButton"/> and <see cref="PolicyYoloButton"/>, the saved one lit); since later on 2026-10-13
+    /// (the user's call, <c>/queue</c>'s shape) one button, key P, showing the policy in force (<see cref="PolicyButtonTitle"/>), never
+    /// lit, a press stepping to the next (<see cref="NextPolicy"/>). Pinned.
     /// </summary>
-    public static IReadOnlyList<MenuButton> CommandPolicyButtons(string policy) =>
-    [
-        new(PolicyOffButton, PolicyOffKey, string.Equals(policy, "off", StringComparison.Ordinal)),
-        new(PolicyAskButton, PolicyAskKey, string.Equals(policy, "ask", StringComparison.Ordinal)),
-        new(PolicyYoloButton, PolicyYoloKey, string.Equals(policy, "yolo", StringComparison.Ordinal)),
-    ];
+    public static IReadOnlyList<MenuButton> CommandPolicyButtons(string policy) => [new(PolicyButtonTitle(policy), PolicyKey)];
+
+    /// <summary>The status line when the press that came to yolo was answered no (later on 2026-10-13): the cycle moves on to off. Pinned.</summary>
+    public const string YoloDeclinedNotice = "Yolo declined: Shell command policy: off";
 
     /// <summary>
     /// The yes/no asked before <see cref="PolicyYoloButton"/> saves (2026-10-02, the user's call: a move into <c>yolo</c> asks
@@ -3416,19 +3437,36 @@ internal sealed partial class SettingsMenu
         _ => name,
     };
 
+    /// <summary>The key of the Web tools page's browser-mode button (later on 2026-10-13: one cycling button, A / H / B before).</summary>
+    public const char WebModeKey = 'm';
+
+    /// <summary>The key of the Web tools page's open-browser button (later on 2026-10-13).</summary>
+    public const char OpenBrowserKey = 'o';
+
+    /// <summary>The Web tools page's open-browser button (later on 2026-10-13, the user's place and name): an action, never lit. Pinned.</summary>
+    public const string OpenBrowserButton = "↗ Open browser";
+
+    /// <summary>The status line after the open-browser button. Pinned.</summary>
+    public const string OpenedBrowserNotice = "Opened the Browser window";
+
     /// <summary>
-    /// The Web tools page's buttons (2026-10-04, the user's ask): one per <see cref="Web.BrowserMode.Names"/>, keys A, H and B
-    /// (each word's first letter, as the perf bar's looks; D, H and C until the words changed on 2026-10-13), the saved <c>Web browser mode</c> lit — a radio group, as
-    /// <see cref="CommandPolicyButtons"/>; a hand-edited value that is none of them lights none. Pinned.
+    /// The Web tools page's buttons. Until later on 2026-10-13 one per <see cref="Web.BrowserMode.Names"/> (2026-10-04, the user's ask),
+    /// a radio group; since then (the user's call, to make room) one button, key M, showing the mode in force with its glyph
+    /// (<see cref="WebModeButtonTitle"/>) and always drawn lit, a press stepping to the next (<see cref="Web.BrowserMode.Next"/>); a
+    /// hand-edited value that is none of them shows as <c>? word</c>. With <paramref name="openBrowser"/> (the screen has a Browser
+    /// window) <see cref="OpenBrowserButton"/>, key O, follows. Pinned.
     /// </summary>
-    public static IReadOnlyList<MenuButton> WebModeButtons(string mode)
+    public static IReadOnlyList<MenuButton> WebModeButtons(string mode, bool openBrowser = false)
     {
-        string? lit = Web.BrowserMode.TryParse(mode, out var engine) ? Web.BrowserMode.Name(engine) : null;
-        return Web.BrowserMode.Names.Select(name => new MenuButton(WebModeButtonTitle(name), name[0], string.Equals(name, lit, StringComparison.Ordinal))).ToList();
+        string title = Web.BrowserMode.TryParse(mode, out var engine) ? WebModeButtonTitle(Web.BrowserMode.Name(engine)) : "? " + (mode ?? "").Trim();
+        return [new MenuButton(title, WebModeKey, On: true), .. openBrowser ? new[] { new MenuButton(OpenBrowserButton, OpenBrowserKey) } : []];
     }
 
-    /// <summary>The Web tools page's hint: <see cref="PickKeys"/> with the browser-mode buttons' keys (2026-10-04). Pinned.</summary>
-    public const string WebToggleKeys = "Enter = choose · a / h / b = browser mode · ESC = back";
+    /// <summary>The Web tools page's hint: <see cref="PickKeys"/> with the browser-mode button's key (2026-10-04; M since later on 2026-10-13). Pinned.</summary>
+    public const string WebToggleKeys = "Enter = choose · m = browser mode · ESC = back";
+
+    /// <summary><see cref="WebToggleKeys"/> with the open-browser button's key, where the screen has a Browser window (later on 2026-10-13). Pinned.</summary>
+    public const string WebToggleOpenKeys = "Enter = choose · m = browser mode · o = open browser · ESC = back";
 
     /// <summary>The notice after a prefix is removed from the allowed list: <c>Shell allowed commands: git push removed</c>. Pinned.</summary>
     public static string PrefixRemovedNotice(string prefix) => FieldName(SettingsField.ShellCommandAllowed) + ": " + prefix + " removed";
@@ -3658,6 +3696,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WorkingDirectory => data.WorkingDirectory,
         SettingsField.WebBrowserPath => data.WebBrowserPath,
         SettingsField.WebSearxngUrl => data.WebSearxngUrl,
+        SettingsField.WebBrowserHomePage => data.WebBrowserHomePage,
         SettingsField.ComfyUrl => data.ComfyUrl,
         SettingsField.ClaudeCodeExecutable => data.ClaudeCodeExecutable,
         SettingsField.ClaudeCodeModel => data.ClaudeCodeModel,
@@ -5257,7 +5296,7 @@ internal sealed partial class SettingsMenu
             return await PickVoskModelAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
-        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsHttpUrl or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitLibEmail or SettingsField.GitLibName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeCodeExecutable or SettingsField.ClaudeCodeModel
+        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsHttpUrl or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.WebBrowserHomePage or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitLibEmail or SettingsField.GitLibName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeCodeExecutable or SettingsField.ClaudeCodeModel
             or SettingsField.OpenAIApiOrganization or SettingsField.OpenAIApiProject
             or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent or SettingsField.DockerEnginePipe or SettingsField.CameraOutputFolder or SettingsField.ScreenOutputFolder or SettingsField.ImageEditOutputFolder or SettingsField.PastedImagesFolder
             or SettingsField.YouTubeRegion or SettingsField.YouTubeLanguage;
@@ -5928,6 +5967,16 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.WebSearxngUrl = text);
+                return true;
+
+            case SettingsField.WebBrowserHomePage:
+                if (text.Length > 0 && Viewer.BrowserAddress.Home(text) is null)
+                {
+                    Sink.Error($"{FieldName(field)} {HomePageError}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.WebBrowserHomePage = text);
                 return true;
 
             case SettingsField.HomeAssistantUrl:
@@ -6933,7 +6982,7 @@ internal sealed partial class SettingsMenu
     /// <c>/tools shell police</c>, the toolbar's officer) — the page its row's Enter opens, under whatever <see cref="Root"/> the caller set.
     /// Police going off asks <see cref="PoliceOffConfirmQuestion"/> on the same pane first (2026-10-02). The police's page carries
     /// <see cref="PoliceButtons"/> (2026-10-03): S opens the forbidden-strings list, ESC there comes back here. The Web tools page
-    /// carries <see cref="WebModeButtons"/> (2026-10-04, the user's ask): D, H and C switch <c>Web browser mode</c> at once, wherever
+    /// carries <see cref="WebModeButtons"/> (2026-10-04, the user's ask): M steps <c>Web browser mode</c> at once (later on 2026-10-13), and O opens the Browser window, wherever
     /// the page opens — the toolbar's 🌐, <c>/tools web</c>, the Web tab's row. True when the value (or the browser mode) changed.
     /// </summary>
     internal Task<bool> EditToggleAsync(SettingsField field, CancellationToken cancellationToken) =>
@@ -7043,24 +7092,30 @@ internal sealed partial class SettingsMenu
         }
         else if (field == SettingsField.WebTools)
         {
-            // The Web page carries the browser-mode buttons (2026-10-04, the user's ask): a press saves the mode at once, the
-            // picker's own save and notice on the status line, and the page comes back with it lit; the lit one saves nothing.
-            var web = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], _pane.Enabled ? WebToggleKeys : PickKeys);
+            // The Web page carries the browser-mode button (2026-10-04, the user's ask; one cycling button since later on 2026-10-13):
+            // a press saves the next mode at once, the picker's own save and notice on the status line, and the page comes back with
+            // it shown. The open-browser button (later on 2026-10-13, where the screen has a Browser window) opens it on the home page,
+            // the page staying and nothing saved.
+            var open = OpenBrowser;
+            var web = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], !_pane.Enabled ? PickKeys : open is null ? WebToggleKeys : WebToggleOpenKeys);
             int cursor = was ? 0 : 1;
             while (true)
             {
-                var buttons = WebModeButtons(_settings.Current.WebBrowserMode);
+                var buttons = WebModeButtons(_settings.Current.WebBrowserMode, open is not null);
                 var pressed = await PickChecklistAsync(web, cursor, cancellationToken, buttons).ConfigureAwait(false);
                 if (pressed is { Button: >= 0 } button)
                 {
                     cursor = button.Row;
-                    if (!buttons[button.Button].On)
+                    if (buttons[button.Button].Key == OpenBrowserKey && open is not null)
                     {
-                        string name = Web.BrowserMode.Names[button.Button];
-                        Apply(SettingsField.WebBrowserMode, d => d.WebBrowserMode = name);
-                        modeChanged = true;
+                        open();
+                        Sink.Notice(OpenedBrowserNotice);
+                        continue;
                     }
 
+                    string name = Web.BrowserMode.Next(_settings.Current.WebBrowserMode);
+                    Apply(SettingsField.WebBrowserMode, d => d.WebBrowserMode = name);
+                    modeChanged = true;
                     continue;
                 }
 
@@ -8078,9 +8133,10 @@ internal sealed partial class SettingsMenu
     /// while it is empty. The session's own allows are not here: they live in the process, not the file.
     /// True when anything was removed. Internal since later on 2026-09-21 for <see cref="ToolsMenu.ShowAllowedCommandsAsync"/>,
     /// which opens it straight under the Tools crumb (<c>/tools shell allowed</c>, <c>/cmdlist</c> until 2026-10-09; the toolbar lock). Since 2026-10-02 (the user's ask) its
-    /// title row carries <see cref="CommandPolicyButtons"/>, the saved <c>Shell command policy</c> lit: <c>off</c> (since 2026-10-12) and <c>ask</c> save at once,
-    /// <c>yolo</c> after a yes to <see cref="YoloConfirmQuestion"/> asked on the same pane (not <see cref="ConfirmAsync"/>, which
-    /// closes it), so the save shows on the list's status line; the lit one saves nothing. They work on the empty list too.
+    /// title row carries <see cref="CommandPolicyButtons"/>: since later on 2026-10-13 one button stepping <c>Shell command policy</c> off → ask →
+    /// yolo → off, <c>off</c> and <c>ask</c> saved at once, <c>yolo</c> after a yes to <see cref="YoloConfirmQuestion"/> asked on the same pane
+    /// (not <see cref="ConfirmAsync"/>, which closes it), a no moving on to <c>off</c> (<see cref="YoloDeclinedNotice"/>) so the cycle never
+    /// sticks; the save shows on the list's status line. It works on the empty list too.
     /// </summary>
     internal async Task<bool> EditAllowedCommandsAsync(CancellationToken cancellationToken)
     {
@@ -8114,21 +8170,24 @@ internal sealed partial class SettingsMenu
             }
 
             (int Row, int Button)? picked = pick is { } p ? (p.Row >= 0 && p.Row < shown.Count ? shown[p.Row] : -1, p.Button) : null;
-            if (picked is { Button: PolicyOffIndex or PolicyAskIndex or PolicyYoloIndex } pressed)
+            if (picked is { Button: PolicyIndex } pressed)
             {
                 cursor = pressed.Row;
-                string next = pressed.Button switch { PolicyOffIndex => "off", PolicyAskIndex => "ask", _ => "yolo" };
-                if (string.Equals(policy, next, StringComparison.Ordinal))
-                {
-                    continue;   // the lit one: nothing to save
-                }
-
+                string next = NextPolicy(policy);
                 if (next == "yolo")
                 {
                     var question = new MenuPage(YoloConfirmQuestion, ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
                     if (await PickAsync(question, 0, cancellationToken).ConfigureAwait(false) != 1)
                     {
-                        Sink.Notice(UnchangedNotice);
+                        // A no moves on to off, the next in the cycle (later on 2026-10-13): ask → off is one press and a no, never stuck.
+                        _settings.Update(d => d.ShellCommandPolicy = "off");
+                        Sink.Notice(YoloDeclinedNotice);
+                        if (_overriddenBy(SettingsField.ShellCommandPolicy) is { } overriddenBy)
+                        {
+                            Sink.Warning(OverrideNotice(overriddenBy));
+                        }
+
+                        changed = true;
                         continue;
                     }
                 }

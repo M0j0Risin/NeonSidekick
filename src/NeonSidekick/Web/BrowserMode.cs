@@ -61,6 +61,21 @@ public static class BrowserMode
         _ => "auto",
     };
 
+    /// <summary>
+    /// The mode after <paramref name="mode"/> in <see cref="Names"/>' order, the last wrapping to the first (later on 2026-10-13, the Web
+    /// tools page's one cycling button); a value that is none of them goes to the first, <see cref="Default"/>. Pure; pinned.
+    /// </summary>
+    public static string Next(string? mode)
+    {
+        if (!TryParse(mode, out var engine))
+        {
+            return Names[0];
+        }
+
+        int at = Array.IndexOf(Names, Name(engine));
+        return Names[(at + 1) % Names.Length];
+    }
+
     /// <summary>The menu hint next to a mode. Pinned.</summary>
     public static string Describe(string name) => name switch
     {

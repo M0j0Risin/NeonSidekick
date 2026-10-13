@@ -11,23 +11,44 @@ public enum BrowserKeyAction
     Close,
     Reload,
     Back,
+    Forward,
+
+    /// <summary>The address box focused, all of it selected (Ctrl+L, Alt+D, F6).</summary>
+    Address,
+
+    /// <summary>The page's load stopped (Esc while one loads; otherwise Esc is the page's).</summary>
+    Stop,
 }
 
 /// <summary>
-/// The Browser window's keys (2026-10-13): Ctrl+W closes it, F5 reloads, Alt+← goes back; nothing else is taken — unlike the video
-/// window, no chord goes to the chat (<c>TerminalHandoff.Take</c>), since a page's form wants Ctrl+C, Ctrl+V and the rest. Pure; pinned.
+/// The Browser window's keys (2026-10-13): Ctrl+W closes it, F5 or Ctrl+R reloads, Alt+← goes back and Alt+→ forward, Ctrl+L, Alt+D
+/// or F6 goes to the address box, Esc stops a page that is loading (later the same day, with the navigation bar); nothing else is
+/// taken — unlike the video window, no chord goes to the chat (<c>TerminalHandoff.Take</c>), since a page's form wants Ctrl+C, Ctrl+V
+/// and the rest, and a page's own dialog Esc. Pure; pinned.
 /// </summary>
 public static class BrowserKeys
 {
     public const int VkW = 0x57;
+    public const int VkR = 0x52;
+    public const int VkL = 0x4C;
+    public const int VkD = 0x44;
     public const int VkF5 = 0x74;
+    public const int VkF6 = 0x75;
     public const int VkLeft = 0x25;
+    public const int VkRight = 0x27;
+    public const int VkEscape = 0x1B;
 
-    public static BrowserKeyAction ActionFor(int virtualKey, bool control, bool alt) => virtualKey switch
+    public static BrowserKeyAction ActionFor(int virtualKey, bool control, bool alt, bool loading = false) => virtualKey switch
     {
         VkW when control && !alt => BrowserKeyAction.Close,
         VkF5 when !control && !alt => BrowserKeyAction.Reload,
+        VkR when control && !alt => BrowserKeyAction.Reload,
         VkLeft when alt && !control => BrowserKeyAction.Back,
+        VkRight when alt && !control => BrowserKeyAction.Forward,
+        VkL when control && !alt => BrowserKeyAction.Address,
+        VkD when alt && !control => BrowserKeyAction.Address,
+        VkF6 when !control && !alt => BrowserKeyAction.Address,
+        VkEscape when loading && !control && !alt => BrowserKeyAction.Stop,
         _ => BrowserKeyAction.None,
     };
 }

@@ -1041,6 +1041,7 @@ public sealed class AppSettings : IDisposable
         WebBrowserNetworkMode = source.WebBrowserNetworkMode,
         WebBrowserPath = source.WebBrowserPath,
         WebBrowserBotcheckWindow = source.WebBrowserBotcheckWindow,
+        WebBrowserHomePage = source.WebBrowserHomePage,
         WebSearchMaxResults = source.WebSearchMaxResults,
         WebDownloadMaxMegabytes = source.WebDownloadMaxMegabytes,
         WebSearchMethod = source.WebSearchMethod,

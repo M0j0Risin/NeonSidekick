@@ -15,9 +15,9 @@ namespace NeonSidekick.App;
 /// and a seeded poll, as there. The <see cref="QueueMenu"/> shape: it opens under a reply too (a <c>Pane</c>-class command),
 /// where both acts are safe — the window is its own thread and the stop writes nothing to the screen. The list is read again
 /// after every act. Without the pane the screen prints the lines instead (<c>ChatScreen.ListProcessesAsync</c>).
-/// <para>The state filter (2026-10-11, the user's ask: the running ones were lost among the finished): <see cref="RunningButton"/>
-/// and <see cref="EndedButton"/> after the kill button, a radio pair as the embedded catalog's installed and uninstalled — one lit
-/// at a time, the lit one pressed again goes dark, none lit every process. Nothing is saved: every visit starts with none lit. The
+/// <para>The state filter (2026-10-11, the user's ask: the running ones were lost among the finished): after the kill button, a radio
+/// pair (running, ended) until later on 2026-10-13, since then one button (<see cref="FilterButton"/>, key f) stepping all → running →
+/// ended, lit while it filters. Nothing is saved: every visit starts on all. The
 /// count over the rows stays the whole list's; a filter that leaves nothing shows <see cref="NoMatchLine"/> and keeps the pane
 /// open (it closes only once the registry is empty).</para>
 /// </summary>
@@ -25,7 +25,7 @@ internal sealed class ProcessMenu
 {
     // The label and the key hints. Pinned.
     public const string Title = ChatScreen.ProcessToolGlyph + " Process";
-    public const string Keys = "Enter = open window · k = kill · r / e = running / ended · ESC = close";
+    public const string Keys = "Enter = open window · k = kill · f = filter · ESC = close";   // f since later on 2026-10-13 (r / e before)
 
     /// <summary>
     /// The title row's button: the highlighted process stopped, after a yes/no. Two spaces after the glyph (2026-10-05, the user's
@@ -37,34 +37,43 @@ internal sealed class ProcessMenu
     /// <summary>The key that is the button.</summary>
     public const char KillKey = 'k';
 
-    /// <summary>The filter buttons' titles (2026-10-11): the running processes alone, the ended ones alone. Pinned.</summary>
+    /// <summary>
+    /// The filter button's titles: every process, the running ones alone, the ended ones alone (2026-10-11 as a radio pair, running and
+    /// ended; one cycling button since later on 2026-10-13, the user's call, <c>/queue</c>'s shape, keeping the pair's glyph titles). Pinned.
+    /// </summary>
+    public const string AllButton = "show: all";
+
     public const string RunningButton = "● running";
 
     public const string EndedButton = "○ ended";
 
-    /// <summary>Their keys.</summary>
-    public const char RunningKey = 'r';
+    /// <summary>The filter button's key (r and e for the pair until later on 2026-10-13).</summary>
+    public const char FilterKey = 'f';
 
-    public const char EndedKey = 'e';
+    /// <summary>The filter button's index on the title row: after the kill button, which stays first.</summary>
+    public const int FilterIndex = 1;
 
-    /// <summary>The filter buttons' indices on the title row: after the kill button, which stays first.</summary>
-    public const int RunningIndex = 1;
-
-    public const int EndedIndex = 2;
+    /// <summary>The filter button's title under <paramref name="running"/> (null = no filter, true = the running ones, false = the ended ones). Pinned.</summary>
+    public static string FilterButton(bool? running) => running switch
+    {
+        true => RunningButton,
+        false => EndedButton,
+        _ => AllButton,
+    };
 
     /// <summary>
-    /// The page's buttons under <paramref name="running"/> (null = no filter, true = the running ones, false = the ended ones):
-    /// kill, then running and ended, the lit one <see cref="MenuButton.On"/>.
+    /// The page's buttons under <paramref name="running"/>: kill, then the filter button showing the filter in force, lit while it
+    /// filters (<see cref="MenuButton.On"/>).
     /// </summary>
     public static IReadOnlyList<MenuButton> ButtonsFor(bool? running) =>
-        [new(KillButton, KillKey), new(RunningButton, RunningKey, running == true), new(EndedButton, EndedKey, running == false)];
+        [new(KillButton, KillKey), new(FilterButton(running), FilterKey, running is not null)];
 
-    /// <summary>The filter after the button at <paramref name="index"/> is pressed: a radio pair, the lit one pressed again goes dark; any other index changes nothing.</summary>
-    public static bool? Press(bool? running, int index) => index switch
+    /// <summary>The filter after <paramref name="running"/>: all, running, ended, all again. Pure.</summary>
+    public static bool? Next(bool? running) => running switch
     {
-        RunningIndex => running == true ? null : true,
-        EndedIndex => running == false ? null : false,
-        _ => running,
+        null => true,
+        true => false,
+        false => null,
     };
 
     /// <summary>Whether <paramref name="session"/> stays under <paramref name="running"/>.</summary>
@@ -185,11 +194,11 @@ internal sealed class ProcessMenu
                     return;
                 }
 
-                if (pick.Button is RunningIndex or EndedIndex)
+                if (pick.Button == FilterIndex)
                 {
                     // The cursor stays on its process while the new filter still shows it, else the first row.
                     var under = pick.Row >= 0 && pick.Row < shown.Count ? shown[pick.Row] : null;
-                    running = Press(running, pick.Button);
+                    running = Next(running);
                     sessions = _processes.List();
                     if (sessions.Count == 0)
                     {

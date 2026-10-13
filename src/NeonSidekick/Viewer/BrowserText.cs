@@ -34,6 +34,20 @@ public static class BrowserText
     /// <summary>The window closed while a page it was asked for still waited (the app's exit, a failure). Pinned.</summary>
     public const string Closed = "the Browser window closed";
 
+    /// <summary>The bar's names (2026-10-13, the navigation bar), its tooltips' words. Pinned.</summary>
+    public const string BackName = "Back";
+    public const string ForwardName = "Forward";
+    public const string ReloadName = "Reload";
+    public const string StopName = "Stop";
+    public const string HomeName = "Home";
+    public const string GoName = "Go";
+    public const string OpenName = "Open in your browser";
+    public const string SecureName = "Secure";
+    public const string NotSecureName = "Not secure";
+
+    /// <summary>The log line for an address the box would not go to (a refused scheme, a path on this machine). Pinned.</summary>
+    public static string Refused(string text) => $"the Browser window goes to web pages only, not {text}";
+
     /// <summary>A page that did not load at all (no name, no answer): the detail of a <see cref="Web.BotCheckEnd.Refused"/> with no status. Pinned.</summary>
     public const string DidNotLoad = "the page did not load";
 }

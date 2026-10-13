@@ -244,7 +244,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount], TabFields(ToolsText.OptionsTabTitle));
         Assert.Equal([SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds], TabFields(ToolsText.HomeAssistantTabTitle));   // the switch, the server and its token, the test, the policy, Assist's agent, the timeout (2026-09-28)   // the fold's count under the switch (2026-09-22, the user's place), the code fold's under it
         Assert.Equal([SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine], TabFields(ToolsText.PrintTabTitle));   // the switch, the policy, the printer, the size (later on 2026-09-28); the PDF engine (2026-10-03)
-        Assert.Equal([SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes], TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01); the botcheck window under the path (2026-10-13)
+        Assert.Equal([SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes], TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01); the botcheck window under the path (2026-10-13), the home page under it (later that day)
         Assert.Equal([SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults], TabFields(ToolsText.FileMenuTitle));   // the five picture rows on the Image menu since 2026-10-10; the pasted pictures' folder last (2026-10-09); image_edit's three before it (2026-10-04); the search cap (2026-10-01), the view_image cap before it (2026-09-19); the browser mode under the folder mode, 2026-09-21
         Assert.Equal([SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls], TabFields(ToolsText.ShellTabTitle));   // the policy (the switch) first, then the list, the shell, the caps, then execute_code's four (2026-09-21; the bridge switch later that day; the police toggle third, 2026-09-22; prefer native under it, 2026-09-26; the forbidden strings under the police, 2026-10-03)
         Assert.Equal([SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], TabFields(ToolsText.AskTabTitle));
@@ -1500,7 +1500,7 @@ public partial class ToolsMenuTests : IDisposable
         AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.ShellTabTitle, "▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default shell             powershell\n  Shell default timeout (s)       180\n  Shell max timeout (s)           600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code default timeout (s)  300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n"), 100);
         Assert.Contains("\n" + Titled(CoreCrumb + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(2, police: true).Select(b => b.Title)) + " ") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
         Assert.Contains("  · Shell command policy: yolo\n", Output);
-        Assert.Contains("\n" + Titled(CoreCrumb + " › Shell allowed commands │ " + SettingsMenu.PolicyOffButton + " · " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
+        Assert.Contains("\n" + Titled(CoreCrumb + " › Shell allowed commands │ " + SettingsMenu.PolicyButtonTitle(_settings.Current.ShellCommandPolicy) + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
         Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", Output);
         Assert.Contains("\n" + Titled(CoreCrumb + " › Shell default shell") + "\n \n▸ powershell pwsh when installed, else Windows PowerShell 5.1\n  cmd        cmd.exe: batch syntax\n  bash       Git Bash, when bash.exe is found\n", Output);
         Assert.Contains("  · Shell default shell: cmd\n", Output);
@@ -1533,7 +1533,7 @@ public partial class ToolsMenuTests : IDisposable
         AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.ShellTabTitle, "▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   zsh\n  Shell default timeout (s)               180\n  Shell max timeout (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code default timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n"), 100);
         Assert.Contains("\n" + Titled(CoreCrumb + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(2, police: true).Select(b => b.Title)) + " ") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
         Assert.Contains("  · Shell command policy: yolo\n", Output);
-        Assert.Contains("\n" + Titled(CoreCrumb + " › Shell allowed commands │ " + SettingsMenu.PolicyOffButton + " · " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
+        Assert.Contains("\n" + Titled(CoreCrumb + " › Shell allowed commands │ " + SettingsMenu.PolicyButtonTitle(_settings.Current.ShellCommandPolicy) + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
         Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", Output);
         Assert.Contains("\n" + Titled(CoreCrumb + " › Shell default shell") + "\n \n▸ zsh        the macOS shell\n  bash       bash from the PATH, else /bin/bash\n  powershell pwsh, when installed\n", Output);
         Assert.Contains("  · Shell default shell: bash\n", Output);
@@ -1674,57 +1674,93 @@ public partial class ToolsMenuTests : IDisposable
     }
 
     /// <summary>
-    /// The Web page's browser-mode buttons (2026-10-04, the user's ask): B saves browser at once (C and chromium until 2026-10-13) with the picker's own notice,
-    /// the page comes back, ESC leaves with no "unchanged" over it, the switch untouched.
+    /// The Web page's browser-mode button (2026-10-04, the user's ask; one cycling button since later on 2026-10-13, the user's call):
+    /// M steps auto → http → browser, each press saved at once with the picker's own notice and the page back with the new mode shown;
+    /// ESC leaves with no "unchanged" over it, the switch untouched. No open-browser button without a Browser window.
     /// </summary>
     [Fact]
-    public async Task ShowSwitch_Web_TheModeButtons_SwitchTheBrowserMode()
+    public async Task ShowSwitch_Web_TheModeButton_StepsTheBrowserMode()
     {
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Char('b'), Keys.Escape);
+        Push(Keys.Char('m'), Keys.Char('m'), Keys.Escape);
 
         await menu.ShowSwitchAsync(SettingsField.WebTools, CancellationToken.None);
 
         Assert.Equal("browser", _settings.Current.WebBrowserMode);
         Assert.True(_settings.Current.WebTools);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Web tools │ ⇄ auto · ↓ http · ◎ browser ") + "\n", Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Web tools │ ⇄ auto ") + "\n", Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Web tools │ ↓ http ") + "\n", Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Web tools │ ◎ browser ") + "\n", Output);
+        Assert.DoesNotContain(SettingsMenu.OpenBrowserButton, Output);
 
         Assert.Contains(SettingsMenu.WebToggleKeys, Output);
+        Assert.Contains("  · Web browser mode: http\n", Output);
         Assert.Contains("  · Web browser mode: browser\n", Output);
         Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice + "\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
 
-    /// <summary>The lit button saves nothing; a mode and the switch both change in one visit (2026-10-04).</summary>
+    /// <summary>A mode and the switch both change in one visit (2026-10-04); browser steps back round to auto (later on 2026-10-13).</summary>
     [Fact]
-    public async Task ShowSwitch_Web_TheLitButtonSavesNothing_AndTheSwitchStillWorks()
+    public async Task ShowSwitch_Web_TheModeButtonWraps_AndTheSwitchStillWorks()
     {
+        _settings.Update(d => d.WebBrowserMode = "browser");
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Char('a'));                         // auto, already lit
-        Push(Keys.Char('h'), Keys.Down, Keys.Enter);  // http, then off
+        Push(Keys.Char('m'), Keys.Down, Keys.Enter);  // auto, then off
 
         await menu.ShowSwitchAsync(SettingsField.WebTools, CancellationToken.None);
 
-        Assert.Equal("http", _settings.Current.WebBrowserMode);
+        Assert.Equal("auto", _settings.Current.WebBrowserMode);
         Assert.False(_settings.Current.WebTools);
-        Assert.DoesNotContain("Web browser mode: auto", Output);
-        Assert.Contains("  · Web browser mode: http\n", Output);
+        Assert.Contains("  · Web browser mode: auto\n", Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// The open-browser button (later on 2026-10-13, the user's ask): with a Browser window to open, O runs the hook once, the status
+    /// line says so, nothing is saved and the page stays; the hint names the key.
+    /// </summary>
+    [Fact]
+    public async Task ShowSwitch_Web_TheOpenBrowserButton_OpensTheWindow_AndThePageStays()
+    {
+        var (menu, pane, settings) = PaneMenu();
+        int opened = 0;
+        settings.OpenBrowser = () => opened++;
+        Push(Keys.Char('o'), Keys.Escape);
+
+        await menu.ShowSwitchAsync(SettingsField.WebTools, CancellationToken.None);
+
+        Assert.Equal(1, opened);
+        Assert.Equal("auto", _settings.Current.WebBrowserMode);
+        Assert.True(_settings.Current.WebTools);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Web tools │ ⇄ auto · ↗ Open browser ") + "\n", Output);
+        Assert.Contains("Enter = choose · m = browser mode · o = open browser · ESC = back", Output);
+        Assert.Contains("  · " + SettingsMenu.OpenedBrowserNotice + "\n", Output);
+        Assert.DoesNotContain("Web browser mode:", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
 
     [Fact]
-    public void WebModeButtons_LightTheSavedMode()
+    public void WebModeButtons_ShowTheModeInForce_OneLitButton_ThenOpenBrowser()
     {
-        // 2026-10-04: a radio group over BrowserMode.Names, keys A, H, B since 2026-10-13 (D, H, C before); a hand-edited case or a retired word still lights, an unknown word none.
-        Assert.Equal(["⇄ auto", "↓ http", "◎ browser"], SettingsMenu.WebModeButtons("auto").Select(b => b.Title));
-        Assert.Equal(['a', 'h', 'b'], SettingsMenu.WebModeButtons("auto").Select(b => b.Key!.Value));
-        Assert.Equal([false, false, true], SettingsMenu.WebModeButtons("browser").Select(b => b.On));
-        Assert.Equal([false, true, false], SettingsMenu.WebModeButtons(" HttpClient ").Select(b => b.On));
-        Assert.All(SettingsMenu.WebModeButtons("firefox"), b => Assert.False(b.On));
-        Assert.All(SettingsMenu.WebModeButtons("default"), b => Assert.Equal(1, TextCells.Width(b.Title[..1])));
-        Assert.Equal("Enter = choose · a / h / b = browser mode · ESC = back", SettingsMenu.WebToggleKeys);
+        // 2026-10-04 a radio group; later on 2026-10-13 (the user's call) one button showing the mode, key M, always lit; a hand-edited case
+        // or a retired word shows its mode, an unknown word itself after a ?.
+        Assert.Equal(["⇄ auto"], SettingsMenu.WebModeButtons("auto").Select(b => b.Title));
+        Assert.Equal(['m'], SettingsMenu.WebModeButtons("auto").Select(b => b.Key!.Value));
+        Assert.Equal(["◎ browser"], SettingsMenu.WebModeButtons("browser").Select(b => b.Title));
+        Assert.Equal(["↓ http"], SettingsMenu.WebModeButtons(" HttpClient ").Select(b => b.Title));
+        Assert.Equal(["? firefox"], SettingsMenu.WebModeButtons(" firefox ").Select(b => b.Title));
+        Assert.All(SettingsMenu.WebModeButtons("firefox"), b => Assert.True(b.On));
+        Assert.All(new[] { "auto", "http", "browser" }, mode => Assert.Equal(1, TextCells.Width(SettingsMenu.WebModeButtons(mode)[0].Title[..1])));
+        Assert.Equal([("⇄ auto", 'm', true), ("↗ Open browser", 'o', false)], SettingsMenu.WebModeButtons("auto", openBrowser: true).Select(b => (b.Title, b.Key!.Value, b.On)));
+        Assert.Equal("Enter = choose · m = browser mode · ESC = back", SettingsMenu.WebToggleKeys);
+        Assert.Equal("Enter = choose · m = browser mode · o = open browser · ESC = back", SettingsMenu.WebToggleOpenKeys);
+        Assert.Equal("Opened the Browser window", SettingsMenu.OpenedBrowserNotice);
+
+        Assert.Equal(["http", "browser", "auto", "auto", "auto", "browser"], new[] { "auto", "http", "browser", "firefox", "", "HttpClient" }.Select(BrowserMode.Next));
     }
 
     /// <summary>The shell's is the policy picker (2026-10-03): a move into yolo asks first, No keeps the policy; off asks nothing.</summary>
@@ -1810,8 +1846,8 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));   // read at the next turn: nothing to reconnect
 
         Assert.False(_settings.Current.WebTools);
-        // The nine rows padded to the tab's own column (29 since the botcheck window's row, 2026-10-13), the toggle's notice on the status line under the strip.
-        AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.WebTabTitle, "▸ Web tools                    on\n  Web browser mode             auto\n  Web browser path             (auto: msedge.exe)\n  Web browser botcheck window  ask\n  Web browser network mode     internet\n  Web search method            duckduckgo\n  Web SearXNG URL              (not set)\n  Web search max results       20 results\n  Web download max (MB)        50 MB\n"), 100);
+        // The ten rows padded to the tab's own column (29 since the botcheck window's row, 2026-10-13), the toggle's notice on the status line under the strip.
+        AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.WebTabTitle, "▸ Web tools                    on\n  Web browser mode             auto\n  Web browser path             (auto: msedge.exe)\n  Web browser botcheck window  ask\n  Web browser home page        (blank page)\n  Web browser network mode     internet\n  Web search method            duckduckgo\n  Web SearXNG URL              (not set)\n  Web search max results       20 results\n  Web download max (MB)        50 MB\n"), 100);
         Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.CoreTabTitle) + "\n  · Web tools: off\n" + Heading("── Browser") + "\n▸ Web tools                    off\n", Output);
         pane.Dispose();
     }
@@ -2068,12 +2104,38 @@ public partial class ToolsMenuTests : IDisposable
     }
 
     [Fact]
+    public async Task OnThePane_WebBrowserHomePage_IsUnderTheBotcheckWindow_Typed_NoAddressRefused_EmptyTheBlankPage()
+    {
+        // Later on 2026-10-13, with the Browser window's navigation bar: a web address as the address box reads one, or empty.
+        var (menu, pane, _) = PaneMenu();
+        Push(ToTab(ToolsText.WebTabTitle));
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the fifth row: the typed slot, empty
+        Push("my start page".Select(Keys.Char).ToArray());
+        Push(Keys.Enter);                                                // refused: words, not an address
+        Push(Keys.Enter);
+        Push("example.com".Select(Keys.Char).ToArray());
+        Push(Keys.Enter);                                                // kept as typed
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal("example.com", _settings.Current.WebBrowserHomePage);
+        Assert.Contains("Web browser home page " + SettingsMenu.HomePageError + "; keeping " + SettingsMenu.BlankHomePageLabel + ".", Output);
+        Assert.Contains("  · Web browser home page: example.com\n", Output);
+        Assert.Equal("must be a web address, or empty for the blank page", SettingsMenu.HomePageError);
+        Assert.Equal("(blank page)", SettingsMenu.FieldValue(SettingsField.WebBrowserHomePage, new AppSettingsData(), ""));
+        Assert.Equal("", SettingsMenu.EditableValue(SettingsField.WebBrowserHomePage, new AppSettingsData()));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.WebBrowserHomePage));
+        pane.Dispose();
+    }
+
+    [Fact]
     public async Task OnThePane_WebDownloadMax_IsTheWebTabsLastRow_Typed_OutOfRangeRefused()
     {
         // 2026-10-01, the user's ask: 1 to 102400 MB, 50 by default (the constant until then).
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.WebTabTitle));   // Web
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the ninth row (the botcheck window's since 2026-10-13), after the search count: the typed slot with "50"
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the tenth row (the botcheck window's and the home page's since 2026-10-13), after the search count: the typed slot with "50"
         Push(Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);   // refused: 0
         Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Char('2'), Keys.Char('0'), Keys.Char('0'), Keys.Char('0'), Keys.Enter);   // 2000
         Push(Keys.Escape);
@@ -2239,7 +2301,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
         Assert.Equal(["git push"], _settings.Current.ShellCommandAllowed);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + SettingsMenu.PolicyOffButton + " · " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + SettingsMenu.PolicyButtonTitle(_settings.Current.ShellCommandPolicy) + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
         Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", Output);
         Assert.DoesNotContain(Strip, Output);
         Assert.Equal(SettingsMenu.Title, settings.Root);
@@ -2248,15 +2310,15 @@ public partial class ToolsMenuTests : IDisposable
     }
 
     /// <summary>
-    /// The list's policy buttons (2026-10-02, the user's ask): Y asks on the same pane before yolo saves, the save on the
-    /// list's status line.
+    /// The list's policy button (2026-10-02, the user's ask, as three buttons; one cycling button on P since later on 2026-10-13): from
+    /// ask the press is yolo, which asks on the same pane before it saves, the save on the list's status line.
     /// </summary>
     [Fact]
     public async Task ShowAllowedCommands_YoloAsksFirst()
     {
         _settings.Update(d => d.ShellCommandAllowed = ["git push"]);
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Char('y'), Keys.Char('y'), Keys.Enter, Keys.Escape);   // yolo, yes; close
+        Push(Keys.Char('p'), Keys.Char('y'), Keys.Enter, Keys.Escape);   // ask → yolo, yes; close
 
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
@@ -2269,13 +2331,13 @@ public partial class ToolsMenuTests : IDisposable
         pane.Dispose();
     }
 
-    /// <summary>From ask, O turns the shell tools off at once with nothing asked (2026-10-12, the user's ask: off first on the list).</summary>
+    /// <summary>From yolo the press is off, at once with nothing asked (2026-10-12 as its own button, the user's ask; the cycle since later on 2026-10-13).</summary>
     [Fact]
-    public async Task ShowAllowedCommands_OffSavesAtOnce()
+    public async Task ShowAllowedCommands_FromYolo_OffSavesAtOnce()
     {
-        _settings.Update(d => d.ShellCommandPolicy = "ask");
+        _settings.Update(d => d.ShellCommandPolicy = "yolo");
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Char('o'), Keys.Escape);
+        Push(Keys.Char('p'), Keys.Escape);
 
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
@@ -2286,13 +2348,13 @@ public partial class ToolsMenuTests : IDisposable
         pane.Dispose();
     }
 
-    /// <summary>From yolo, A goes back to ask at once with nothing asked (2026-10-02).</summary>
+    /// <summary>From off the press is ask, at once with nothing asked (2026-10-02; the cycle since later on 2026-10-13).</summary>
     [Fact]
-    public async Task ShowAllowedCommands_AskSavesAtOnce()
+    public async Task ShowAllowedCommands_FromOff_AskSavesAtOnce()
     {
-        _settings.Update(d => d.ShellCommandPolicy = "yolo");
+        _settings.Update(d => d.ShellCommandPolicy = "off");
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Char('a'), Keys.Escape);
+        Push(Keys.Char('p'), Keys.Escape);
 
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
@@ -2303,18 +2365,22 @@ public partial class ToolsMenuTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>A no to yolo moves on to off, the next in the cycle (later on 2026-10-13): ask → off is a press and a no, never stuck.</summary>
     [Fact]
-    public async Task ShowAllowedCommands_YoloRefused_KeepsAsk()
+    public async Task ShowAllowedCommands_YoloRefused_MovesOnToOff()
     {
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Char('y'), Keys.Escape, Keys.Char('y'), Keys.Enter, Keys.Escape);   // yolo, ESC; yolo, Enter on No; close
+        Push(Keys.Char('p'), Keys.Escape);                       // ask → yolo, ESC: off
+        Push(Keys.Char('p'), Keys.Char('p'), Keys.Enter);        // off → ask, ask → yolo, Enter on No: off
+        Push(Keys.Escape);                                       // close
 
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
-        Assert.Equal("ask", _settings.Current.ShellCommandPolicy);
-        Assert.Contains(SettingsMenu.AllowedCommandsEmptyKeys, Output);   // the buttons work on the empty list
+        Assert.Equal("off", _settings.Current.ShellCommandPolicy);
+        Assert.Contains(SettingsMenu.AllowedCommandsEmptyKeys, Output);   // the button works on the empty list
         Assert.Contains(SettingsMenu.YoloConfirmQuestion, Output);
-        Assert.Contains("  · " + SettingsMenu.UnchangedNotice + "\n", Output);
+        Assert.Equal(2, Output.Split("  · " + SettingsMenu.YoloDeclinedNotice + "\n").Length - 1);
+        Assert.Contains("  · Shell command policy: ask\n", Output);
         Assert.DoesNotContain("Shell command policy: yolo", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
@@ -2325,7 +2391,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         _settings.Update(d => d.ShellCommandPolicy = "off");
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Char('y'), Keys.Char('y'), Keys.Enter, Keys.Escape);   // yolo, yes; close
+        Push(Keys.Char('p'), Keys.Char('p'), Keys.Char('y'), Keys.Enter, Keys.Escape);   // off → ask, ask → yolo, yes; close
 
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
@@ -2335,18 +2401,20 @@ public partial class ToolsMenuTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>A hand-edited policy shows as itself after a ?, and the press goes to off (later on 2026-10-13).</summary>
     [Fact]
-    public async Task ShowAllowedCommands_TheLitButtonSavesNothing()
+    public async Task ShowAllowedCommands_AHandEditedPolicy_GoesToOff()
     {
-        _settings.Update(d => d.ShellCommandPolicy = "yolo");
+        _settings.Update(d => d.ShellCommandPolicy = "never");
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Char('y'), Keys.Escape);   // yolo again (lit): nothing asked, nothing saved; close
+        Push(Keys.Char('p'), Keys.Escape);
 
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
-        Assert.Equal("yolo", _settings.Current.ShellCommandPolicy);
+        Assert.Equal("off", _settings.Current.ShellCommandPolicy);
+        Assert.Contains(" │ ? never ", Output);
         Assert.DoesNotContain(SettingsMenu.YoloConfirmQuestion, Output);
-        Assert.DoesNotContain("Shell command policy: yolo", Output);
+        Assert.Contains("  · Shell command policy: off\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -2433,7 +2501,7 @@ public partial class ToolsMenuTests : IDisposable
         string picker(bool police) => Titled(ToolsText.Label + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(1, police).Select(b => b.Title)) + " ");
         Assert.True(Output.Split(picker(police: true)).Length - 1 >= 2, Output);   // before the list and after it
         Assert.Contains(picker(police: false), Output);                         // after the police went off
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + SettingsMenu.PolicyOffButton + " · " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n", Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + SettingsMenu.PolicyButtonTitle(_settings.Current.ShellCommandPolicy) + " ") + "\n", Output);
         Assert.Contains("\n" + ToolsText.Label + " › Shell police │ ", Output);
         Assert.Contains(SettingsMenu.CommandPolicyPageKeys, Output);
         Assert.False(_settings.Current.ShellPolice);

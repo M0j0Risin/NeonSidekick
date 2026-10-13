@@ -122,6 +122,18 @@ internal sealed unsafe partial class WebViewHost
     /// <summary>A browsing profile's page would download a file, its address: true cancels it (the download UI kept away too).</summary>
     public Func<string?, bool>? DownloadStarting { get; set; }
 
+    /// <summary>A browsing profile's back and forward list changed (<see cref="CanGoBack"/>, <see cref="CanGoForward"/>).</summary>
+    public Action? HistoryChanged { get; set; }
+
+    /// <summary>A browsing profile's top-level navigation was let through, its address: the page loads until <see cref="NavigationDone"/>.</summary>
+    public Action<string>? NavigationBegan { get; set; }
+
+    /// <summary>
+    /// The pixels at the top of the window the view leaves alone (2026-10-13, the Browser window's navigation bar); 0, the whole
+    /// client area, for the video window. <see cref="Resize"/> applies it.
+    /// </summary>
+    public int TopInset { get; set; }
+
     public bool IsCreated => _webView != 0;
 
     /// <summary>
@@ -166,6 +178,7 @@ internal sealed unsafe partial class WebViewHost
         {
             Rect client;
             GetClientRect(_parent, &client);
+            client.Top = Math.Min(client.Bottom, client.Top + TopInset);
             PutBounds(_controller, client);
         }
     }
@@ -251,6 +264,56 @@ internal sealed unsafe partial class WebViewHost
         if (_webView != 0)
         {
             WebViewNative.GoBack(_webView);
+        }
+    }
+
+    /// <summary>Forward a page (the Browser window's Alt+→).</summary>
+    public void GoForward()
+    {
+        OnThread();
+        if (_webView != 0)
+        {
+            WebViewNative.GoForward(_webView);
+        }
+    }
+
+    /// <summary>The page's load stopped (the Browser window's ✕, Esc while it loads).</summary>
+    public void Stop()
+    {
+        OnThread();
+        if (_webView != 0)
+        {
+            WebViewNative.Stop(_webView);
+        }
+    }
+
+    /// <summary>The keyboard to the page (the Browser window's address box done with: Enter, Esc).</summary>
+    public void Focus()
+    {
+        OnThread();
+        if (_controller != 0)
+        {
+            MoveFocus(_controller);
+        }
+    }
+
+    /// <summary>Whether there is a page to go back to; false before the view is made.</summary>
+    public bool CanGoBack
+    {
+        get
+        {
+            OnThread();
+            return _webView != 0 && WebViewNative.CanGoBack(_webView);
+        }
+    }
+
+    /// <summary>Whether there is a page to go forward to; false before the view is made.</summary>
+    public bool CanGoForward
+    {
+        get
+        {
+            OnThread();
+            return _webView != 0 && WebViewNative.CanGoForward(_webView);
         }
     }
 
@@ -452,6 +515,7 @@ internal sealed unsafe partial class WebViewHost
             step = Subscribe(_webView, IidNavigationCompleted, OnNavigationCompleted, AddNavigationCompleted);
             step = step < 0 ? step : Subscribe(_webView, IidDocumentTitleChanged, OnTitleChanged, AddDocumentTitleChanged);
             step = step < 0 ? step : Subscribe(_webView, IidSourceChanged, OnSourceChanged, AddSourceChanged);
+            step = step < 0 ? step : Subscribe(_webView, IidHistoryChanged, OnHistoryChanged, AddHistoryChanged);
             step = step < 0 ? step : QueryInterface(_webView, IidWebView2_4, out _webView4);
             step = step < 0 ? step : Subscribe(_webView4, IidDownloadStarting, OnDownloadStarting, AddDownloadStarting);
         }
@@ -498,6 +562,18 @@ internal sealed unsafe partial class WebViewHost
             {
                 Refused?.Invoke(uri ?? "");
             }
+        }
+        else if (!_closed && _profile.Browsing)
+        {
+            NavigationBegan?.Invoke(uri ?? "");
+        }
+    }
+
+    private void OnHistoryChanged(nint sender, nint args)
+    {
+        if (!_closed)
+        {
+            HistoryChanged?.Invoke();
         }
     }
 

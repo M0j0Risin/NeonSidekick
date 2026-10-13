@@ -1467,6 +1467,7 @@ internal sealed partial class ChatScreen
         // The Camera tool page's watch button (2026-10-04, the user's ask), only where there is a camera layer to watch with.
         _menu.CameraWatching = _camera.Available ? () => _cameraWatch.Running : null;
         _menu.SetCameraWatch = _camera.Available ? SetWatchFromPane : null;
+        _menu.OpenBrowser = _browserWindow is not null ? () => HandleBrowser("") : null;   // the Web tools page's open-browser button (2026-10-13)
         // Its live, snap and screen buttons (2026-10-05, the user's ask): each line run as its chord is in a pane — /camera live
         // toggled in place, /camera snap and /screen with the pane closed first, so the picture attaches at the idle line.
         _menu.CameraLive = _camera.Available && _liveView is not null ? () => _liveLease is not null : null;

@@ -29,7 +29,9 @@ namespace NeonSidekick.Viewer;
 /// <para>The Browser window's (2026-10-13, the bot checks, checked against the same header): ICoreWebView2 4 get_Source,
 /// 11 add_SourceChanged, 15 add_NavigationCompleted, 31 Reload, 36 CallDevToolsProtocolMethod, 40 GoBack, 46 add_DocumentTitleChanged,
 /// 48 get_DocumentTitle; ICoreWebView2_4 75 add_DownloadStarting; ICoreWebView2_7 80 PrintToPdf; the navigation-completed arguments
-/// 3 get_IsSuccess, and their second interface's 6 get_HttpStatusCode; the download-starting arguments 5 put_Cancel, 9 put_Handled.</para>
+/// 3 get_IsSuccess, and their second interface's 6 get_HttpStatusCode; the download-starting arguments 5 put_Cancel, 9 put_Handled.
+/// Its navigation bar's (later the same day, the same header): ICoreWebView2 13 add_HistoryChanged, 38 get_CanGoBack,
+/// 39 get_CanGoForward, 41 GoForward, 43 Stop; ICoreWebView2Controller 12 MoveFocus.</para>
 ///
 /// <para>The <c>add_*</c> calls' registration tokens are not kept: <see cref="ControllerClose"/> drops every handler with the
 /// view, and nothing is ever unsubscribed earlier. Every string WebView2 hands out is <c>CoTaskMemAlloc</c>'d and freed here
@@ -77,6 +79,7 @@ internal static unsafe partial class WebViewNative
     internal static readonly Guid IidDownloadStarting = new("EFEDC989-C396-41CA-83F7-07F845A55724");
     internal static readonly Guid IidWebView2_7 = new("79C24D83-09A3-45AE-9418-487F32A58740");
     internal static readonly Guid IidPrintToPdfCompleted = new("CCF1EF04-FD8E-4D5F-B2DE-0983E41B8C36");
+    internal static readonly Guid IidHistoryChanged = new("C79A420C-EFD9-4058-9295-3E8B4BCAB645");
 
     /// <summary><c>COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY</c>: the virtual host's files are the top-level page's alone.</summary>
     internal const int HostAccessDeny = 0;
@@ -91,6 +94,7 @@ internal static unsafe partial class WebViewNative
     private const int PutBoundsSlot = 6;
     private const int NotifyParentWindowPositionChangedSlot = 23;
     private const int ControllerCloseSlot = 24;
+    private const int MoveFocusSlot = 12;
     private const int GetCoreWebView2Slot = 25;
     private const int GetSettingsSlot = 3;
     private const int NavigateSlot = 5;
@@ -128,6 +132,11 @@ internal static unsafe partial class WebViewNative
     private const int ReloadSlot = 31;
     private const int CallDevToolsProtocolMethodSlot = 36;
     private const int GoBackSlot = 40;
+    private const int AddHistoryChangedSlot = 13;
+    private const int GetCanGoBackSlot = 38;
+    private const int GetCanGoForwardSlot = 39;
+    private const int GoForwardSlot = 41;
+    private const int StopSlot = 43;
     private const int AddDocumentTitleChangedSlot = 46;
     private const int GetDocumentTitleSlot = 48;
     private const int AddDownloadStartingSlot = 75;
@@ -217,6 +226,10 @@ internal static unsafe partial class WebViewNative
     /// </summary>
     internal static int AddAcceleratorKeyPressed(nint controller, nint handler) => Subscribe(controller, AddAcceleratorKeyPressedSlot, handler);
 
+    /// <summary>The keyboard to the page (<c>MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)</c>): the address box's Esc and Enter.</summary>
+    internal static int MoveFocus(nint controller) =>
+        ((delegate* unmanaged<nint, int, int>)Slot(controller, MoveFocusSlot))(controller, 0);
+
     internal static int ControllerClose(nint controller) =>
         ((delegate* unmanaged<nint, int>)Slot(controller, ControllerCloseSlot))(controller);
 
@@ -305,6 +318,26 @@ internal static unsafe partial class WebViewNative
 
     internal static int GoBack(nint webView) =>
         ((delegate* unmanaged<nint, int>)Slot(webView, GoBackSlot))(webView);
+
+    internal static int GoForward(nint webView) =>
+        ((delegate* unmanaged<nint, int>)Slot(webView, GoForwardSlot))(webView);
+
+    /// <summary>The page's load stopped (<c>Stop</c>): what a browser's ✕ does.</summary>
+    internal static int Stop(nint webView) =>
+        ((delegate* unmanaged<nint, int>)Slot(webView, StopSlot))(webView);
+
+    /// <summary><c>add_HistoryChanged</c>: the back and forward list changed, so <see cref="CanGoBack"/> and <see cref="CanGoForward"/> may have.</summary>
+    internal static int AddHistoryChanged(nint webView, nint handler) => Subscribe(webView, AddHistoryChangedSlot, handler);
+
+    internal static bool CanGoBack(nint webView) => GetFlag(webView, GetCanGoBackSlot);
+
+    internal static bool CanGoForward(nint webView) => GetFlag(webView, GetCanGoForwardSlot);
+
+    private static bool GetFlag(nint instance, int slot)
+    {
+        int value;
+        return ((delegate* unmanaged<nint, int*, int>)Slot(instance, slot))(instance, &value) >= 0 && value != 0;
+    }
 
     /// <summary>
     /// A DevTools protocol command on the view's page (<c>CallDevToolsProtocolMethod</c>), its answer as JSON to

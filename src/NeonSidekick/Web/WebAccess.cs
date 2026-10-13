@@ -54,10 +54,17 @@ public sealed class WebAccess
     public ISearchEngine Engine(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
+        return SearxngBase(effective) is { } url ? new SearxngSearch(Http, url) : DuckDuckGo;
+    }
+
+    /// <summary>The SearXNG instance <see cref="Engine"/> would ask under <paramref name="effective"/>; null when that is DuckDuckGo.</summary>
+    public static Uri? SearxngBase(AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
         return SearchMethod.Resolve(effective) == SearchProvider.Searxng
             && Uri.TryCreate(effective.WebSearxngUrl?.Trim(), UriKind.Absolute, out var url) && WebFetcher.IsHttp(url)
-            ? new SearxngSearch(Http, url)
-            : DuckDuckGo;
+            ? url
+            : null;
     }
 
     /// <summary>How a tool's fetch runs under <paramref name="effective"/>: the mode, the browser path and the network mode.</summary>
