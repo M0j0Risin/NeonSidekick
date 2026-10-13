@@ -59,6 +59,63 @@ public class ItemOrderTests
         AssertSides(["a", "b", "d"], ["c"], 3, ItemOrder.ToSide(sides, 3, toRight: true));    // already right
     }
 
+    /// <summary>
+    /// Three groups (later on 2026-10-13, the user's ask: the home bar pinned left, center or right): the split keeps the order within
+    /// each, the left wins an id named twice; a step off a group's edge crosses into the next one, the center between the two.
+    /// </summary>
+    [Fact]
+    public void ThreeGroups_SplitInOrder_AndAStepOffAnEdge_CrossesIntoTheNextGroup()
+    {
+        var sides = ItemOrder.SplitCentered(Names, new HashSet<string> { "a", "d" }, new HashSet<string> { "d", "c" });
+        Assert.Equal(["a", "d"], sides.Left);
+        Assert.Equal(["b"], sides.Center);
+        Assert.Equal(["c"], sides.Right);
+        Assert.Equal(["a", "d", "b", "c"], sides.All);
+        Assert.True(sides.HasCenter);
+        Assert.True(sides.IsCenter("b"));
+        Assert.False(ItemOrder.Split(Names, new HashSet<string>()).HasCenter);
+
+        AssertThree(["a"], ["d", "b"], ["c"], 1, ItemOrder.MoveInGroups(sides, 1, 1));        // off the left's end: the center's first
+        AssertThree(["a", "d"], [], ["b", "c"], 2, ItemOrder.MoveInGroups(sides, 2, 1));      // off the center's end: the right's first
+        AssertThree(["a", "d", "b"], [], ["c"], 2, ItemOrder.MoveInGroups(sides, 2, -1));     // off the center's start: the left's last
+        AssertThree(["a", "d"], ["b", "c"], [], 3, ItemOrder.MoveInGroups(sides, 3, -1));     // off the right's start: the center's last
+        AssertThree(["a", "d"], ["b"], ["c"], 3, ItemOrder.MoveInGroups(sides, 3, 1));        // the right's last stays
+
+        // An empty center is still a group to cross: the left's last down lands there, and down again on the right.
+        var empty = new ItemOrder.Sided(["a", "b"], ["c"], []);
+        var (once, at) = ItemOrder.MoveInGroups(empty, 1, 1);
+        AssertThree(["a"], ["b"], ["c"], 1, (once, at));
+        AssertThree(["a"], [], ["b", "c"], 1, ItemOrder.MoveInGroups(once, at, 1));
+        Assert.True(once.SameAs(new ItemOrder.Sided(["a"], ["c"], ["b"])));
+        Assert.False(once.SameAs(empty));
+    }
+
+    /// <summary>Shift+←/→ with a center (later on 2026-10-13): one group a press, next to the gap; the outermost group that way stays.</summary>
+    [Fact]
+    public void ToSide_WithACenter_MovesOneGroupAPress()
+    {
+        var sides = new ItemOrder.Sided(["a"], ["d"], ["b", "c"]);
+        AssertThree([], ["a", "b", "c"], ["d"], 0, ItemOrder.ToSide(sides, 0, toRight: true));    // left → the center's start
+        AssertThree(["a"], ["b"], ["c", "d"], 2, ItemOrder.ToSide(sides, 2, toRight: true));     // center → the right's start
+        AssertThree(["a", "b"], ["c"], ["d"], 1, ItemOrder.ToSide(sides, 1, toRight: false));    // center → the left's end
+        AssertThree(["a"], ["b", "c", "d"], [], 3, ItemOrder.ToSide(sides, 3, toRight: false));  // right → the center's end
+        AssertThree(["a"], ["b", "c"], ["d"], 3, ItemOrder.ToSide(sides, 3, toRight: true));     // already right
+        AssertThree(["a"], ["b", "c"], ["d"], 0, ItemOrder.ToSide(sides, 0, toRight: false));    // already left
+
+        var (added, landed) = ItemOrder.AddDivider(sides, -1);   // no item: the center's end
+        AssertThree(["a"], ["b", "c", "divider:1"], ["d"], 3, (added, landed));
+        (added, landed) = ItemOrder.AddDivider(sides, 1);
+        AssertThree(["a"], ["b", "divider:1", "c"], ["d"], 2, (added, landed));
+    }
+
+    private static void AssertThree(string[] left, string[] center, string[] right, int index, (ItemOrder.Sided Groups, int Index) moved)
+    {
+        Assert.Equal(left, moved.Groups.Left);
+        Assert.Equal(center, moved.Groups.Center);
+        Assert.Equal(right, moved.Groups.Right);
+        Assert.Equal(index, moved.Index);
+    }
+
     [Fact]
     public void TheRightGroup_ResolvesAndSaves_NullForTheDefaults()
     {
@@ -184,8 +241,12 @@ public class ItemOrderTests
     [Fact]
     public void ACopy_KeepsBothOrders_ApartFromTheSource()
     {
-        var source = new AppSettingsData { ToolbarOrder = ["perf"], PerformanceBarOrder = ["ram"], ToolbarRight = ["perf"], HintBarRight = ["usage"] };
+        var source = new AppSettingsData { ToolbarOrder = ["perf"], PerformanceBarOrder = ["ram"], ToolbarRight = ["perf"], HintBarRight = ["usage"], HomeBarLeft = ["area:den"], HomeBarRight = ["shopping:list"] };
         var copy = AppSettings.Copy(source);
+        Assert.Equal(["area:den"], copy.HomeBarLeft);
+        Assert.Equal(["shopping:list"], copy.HomeBarRight);
+        Assert.NotSame(source.HomeBarLeft, copy.HomeBarLeft);
+        Assert.NotSame(source.HomeBarRight, copy.HomeBarRight);
         Assert.Equal(["perf"], copy.ToolbarOrder);
         Assert.Equal(["perf"], copy.ToolbarRight);
         Assert.Equal(["usage"], copy.HintBarRight);

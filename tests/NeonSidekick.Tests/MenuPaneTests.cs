@@ -455,6 +455,27 @@ public class MenuPaneTests : IDisposable
         menu.Close();
     }
 
+    /// <summary>
+    /// A tab that pins (later on 2026-10-13, the home bar's On the bar tab, <see cref="MenuTab.Sides"/>): Shift+→ there is a pick with
+    /// <see cref="MenuPick.Side"/>, while the bare → still steps the tabs; a tab that does not pin steps the tabs with Shift+→ too.
+    /// </summary>
+    [Fact]
+    public async Task ATabThatPins_TakesShiftArrows_TheBareArrowsStillStepTheTabs()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        var shiftRight = new ConsoleKeyInfo('\0', ConsoleKey.RightArrow, shift: true, alt: false, control: false);
+        var page = MenuPage.Tabbed("Bar", [new MenuTab("On", ["a", "b"]) { Sides = true }, new MenuTab("Other", ["c"])], 0, "h");
+        Assert.True(page.Sides);
+        Push(Keys.Down, shiftRight);
+        Assert.Equal(new MenuPick(0, 1, Side: 1), await menu.PickAsync(page, 0, CancellationToken.None));
+
+        Push(Keys.Right, shiftRight, Keys.Enter);   // to Other, where Shift+→ steps on (wrapping to On) as → does
+        Assert.Equal(new MenuPick(0, 0), await menu.PickAsync(page, 0, CancellationToken.None));
+        menu.Close();
+    }
+
     [Fact]
     public void TabBodyRows_IsTheTallestTabsCaptionAndRows_NoneForAOneListPage()
     {

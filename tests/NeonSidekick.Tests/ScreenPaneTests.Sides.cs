@@ -38,7 +38,7 @@ public partial class ScreenPaneTests
 
     /// <summary>
     /// A narrow toolbar, in the user's order: the model's name shrinks before any glyph goes; then the right group gives way from its
-    /// inner end (its outer glyphs kept behind +N), the left group whole.
+    /// inner end (its outer glyphs kept, the rest gone without a +N since later on 2026-10-13), the left group whole.
     /// </summary>
     [Fact]
     public void TheToolbar_TheNameGivesWayFirst_ThenTheRightGroup_TheLeftKeptWhole()
@@ -56,7 +56,8 @@ public partial class ScreenPaneTests
         pane.Toolbar = () => new ScreenPane.ToolbarParts(leftItems, "🎨 🎲 🎯 🎮".Split(' ').Select(Glyph).ToList());
         int mark = Output.Length;
         _time.Advance(ScreenPane.Tick);   // the toolbar follows on the tick
-        Assert.Contains(left + "  +2 🎯 🎮", Output[mark..]);
+        Assert.Contains(left + "  🎲 🎯 🎮", Output[mark..]);
+        Assert.DoesNotContain("+1", Output[mark..], StringComparison.Ordinal);
         Assert.True(pane.TryHitToolbar(34, 103, out var tool));
         Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🎯", 34), tool);
         Assert.True(pane.TryHitToolbar(0, 103, out tool));

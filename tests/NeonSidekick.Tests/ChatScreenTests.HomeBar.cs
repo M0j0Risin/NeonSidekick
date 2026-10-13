@@ -112,6 +112,51 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
+    /// The groups on the screen (later on 2026-10-13, the user's ask): a chip pinned left starts the row, one pinned right ends it,
+    /// and a click finds each where it is drawn.
+    /// </summary>
+    [Fact]
+    public async Task HomeBar_PinnedLeftAndRight_DrawsAtTheRowsEnds_AndAClickFindsEach()
+    {
+        HomeServer();
+        _settings.Update(d =>
+        {
+            d.HomeBarItems = ["entity:light.desk", "entity:lock.front"];
+            d.HomeBarLeft = ["entity:light.desk"];
+            d.HomeBarRight = ["entity:lock.front"];
+        });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the home bar at 103: 119 cells, the lock's 15 from 104
+        bool desk = false;
+        bool front = false;
+        var input = Scripted();
+        input.OnWait = () =>
+        {
+            input.OnWait = null;
+            TickUntil(() => Output.Contains(" 🔒 Front Door ", StringComparison.Ordinal));
+            input.PushClick(1, 103);
+            input.OnWait = () =>
+            {
+                desk = Output.Contains("Desk: off — double-click to switch on", StringComparison.Ordinal);
+                input.OnWait = () =>
+                {
+                    front = Output.Contains("Front Door: locked", StringComparison.Ordinal);
+                    input.OnWait = null;
+                    PushLine(input, "/exit");
+                };
+                input.PushClick(117, 103);
+            };
+        };
+
+        await RunAsync();
+
+        Assert.True(desk);
+        Assert.True(front);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>
     /// A double-click on the home bar's blank space opens <c>/settings</c> (2026-10-12, the user's ask: as on the other bars; a
     /// spent click until then), and switches nothing.
     /// </summary>

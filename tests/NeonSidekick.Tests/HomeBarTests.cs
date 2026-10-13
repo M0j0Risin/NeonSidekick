@@ -69,13 +69,46 @@ public sealed class HomeBarTests
         Assert.Equal(landed, at);
     }
 
+    /// <summary>
+    /// The groups (later on 2026-10-13, the user's ask: pinned left, center or right): the two side lists split the bar's order, the rest
+    /// is center; a side's id that is not on the bar is ignored; an empty side saves as null.
+    /// </summary>
     [Fact]
-    public void Flip_AddsAtTheEnd_OrTakesOut_AndRemoveTakesAnIndex()
+    public void Sides_SplitTheOrder_TheRestIsCenter_AndAnEmptySideSavesAsNull()
     {
-        Assert.Equal(["area:den", "entity:light.x"], HomeBarItems.Flip(["area:den"], "entity:Light.X"));
-        Assert.Equal(["area:den"], HomeBarItems.Flip(["area:den", "entity:light.x"], "entity:light.x"));
-        Assert.Equal(["a"], HomeBarItems.Remove(["a", "b"], 1));
-        Assert.Equal(["a", "b"], HomeBarItems.Remove(["a", "b"], 5));
+        var sides = HomeBarItems.Sides(["area:den", "entity:light.desk", "shopping:list", "divider:1"], [" AREA:den ", "entity:light.gone"], ["shopping:list"]);
+        Assert.Equal(["area:den"], sides.Left);
+        Assert.Equal(["entity:light.desk", "divider:1"], sides.Center);
+        Assert.Equal(["shopping:list"], sides.Right);
+
+        var (items, left, right) = HomeBarItems.SaveSides(sides);
+        Assert.Equal(["area:den", "entity:light.desk", "divider:1", "shopping:list"], items);
+        Assert.Equal(["area:den"], left);
+        Assert.Equal(["shopping:list"], right);
+        var center = HomeBarItems.SaveSides(HomeBarItems.Sides(["area:den"], null, null));
+        Assert.Equal(["area:den"], center.Items);
+        Assert.Null(center.Left);
+        Assert.Null(center.Right);
+        Assert.Equal(["area:den"], HomeBarItems.Sides(["area:den"], null, null).Center);   // the bar as it always was: all center
+    }
+
+    /// <summary>An item added lands at the center's end, whatever is pinned; one taken off leaves its side too; a new divider joins the center.</summary>
+    [Fact]
+    public void Flip_AddsAtTheCentersEnd_OrTakesOutOfItsGroup()
+    {
+        var sides = HomeBarItems.Sides(["area:den", "entity:light.desk"], ["area:den"], null);
+        var added = HomeBarItems.Flip(sides, "entity:Light.X");
+        Assert.Equal(["area:den"], added.Left);
+        Assert.Equal(["entity:light.desk", "entity:light.x"], added.Center);
+        var taken = HomeBarItems.Flip(added, "area:den");
+        Assert.Empty(taken.Left);
+        Assert.Equal(["entity:light.desk", "entity:light.x"], taken.All);
+        Assert.Equal(["entity:light.desk"], HomeBarItems.Without(added, "entity:light.x").Center);
+        Assert.Equal(["area:den"], HomeBarItems.Without(added, "entity:light.x").Left);
+
+        var (divided, at) = HomeBarItems.AddDivider(HomeBarItems.Sides(["area:den", "shopping:list"], null, ["shopping:list"]));
+        Assert.Equal(["area:den", "divider:1"], divided.Center);
+        Assert.Equal(1, at);
     }
 
     [Fact]
@@ -377,7 +410,7 @@ public sealed class HomeBarTests
         Assert.True(HomeBarItems.IsNameless("divider:1"));
         Assert.True(HomeBarItems.IsDivider("divider:1"));
         Assert.Equal(["area:den", "divider:1", "divider:2"], HomeBarItems.Resolve(["area:den", "divider:1", "divider:2", "divider:1"]));
-        Assert.Equal(["area:den", "divider:1"], HomeBarItems.AddDivider(["area:den"]));
+        Assert.Equal(["area:den", "divider:1"], HomeBarItems.AddDivider(HomeBarItems.Sides(["area:den"], null, null)).Sides.All);
         Assert.Equal("Divider", HomeBarItems.NameOf("divider:1", null));
         Assert.Null(HomeBarItems.Find(["divider:1", "area:den"], "Divider", null, null));
         Assert.Null(HomeBarItems.Find(["divider:1"], "divider:1", null, null));
@@ -414,6 +447,56 @@ public sealed class HomeBarTests
         var last = HomeBar.Render(chips, 14, page: 99)!;
         Assert.Contains(last.Spans, s => s.Target == HomeTarget.Prev);
         Assert.DoesNotContain(last.Spans, s => s.Target == HomeTarget.Next);
+    }
+
+    /// <summary>
+    /// Three groups (later on 2026-10-13, the user's ask): the left from the row's start, the right ending on its last cell, the center
+    /// centred on the row; the spans count left, center, right.
+    /// </summary>
+    [Fact]
+    public void Render_TheGroups_LeftAtTheStart_RightAtTheEnd_TheCenterCentred()
+    {
+        var row = HomeBar.Render([Chip("Desk")], [Chip("Hall")], [Chip("Lamp")], 40)!;
+
+        Assert.Equal(" 💡 Desk " + new string(' ', 6) + " 💡 Hall " + new string(' ', 7) + " 💡 Lamp ", Text(row));
+        Assert.Equal([new HomeSpan(0, 9, HomeTarget.Chip, 0), new HomeSpan(15, 9, HomeTarget.Chip, 1), new HomeSpan(31, 9, HomeTarget.Chip, 2)], row.Spans);
+        Assert.Equal(Text(HomeBar.Render([Chip("Hall")], 40)!), Text(HomeBar.Render([], [Chip("Hall")], [], 40)!));   // the center alone: as the bar always was
+
+        // A wide left group pushes the center off the row's middle, GroupGap after it; the right alone ends on the last cell.
+        var pushed = HomeBar.Render([Chip("Living Room Lamp")], [Chip("Desk")], [], 40)!;
+        Assert.Equal(" 💡 Living Room Lamp " + new string(' ', HomeBar.GroupGap) + " 💡 Desk ", Text(pushed));
+        Assert.Equal(new string(' ', 31) + " 💡 Lamp ", Text(HomeBar.Render([], [], [Chip("Lamp")], 40)!));
+    }
+
+    /// <summary>
+    /// Too narrow (later on 2026-10-13, the user's calls): every name shrinks first; then the right group goes from its inner end, then
+    /// the left from its; then the center pages alone. What goes leaves nothing behind, and a divider left at a group's cut edge goes too.
+    /// </summary>
+    [Fact]
+    public void Render_TheNamesShrinkFirst_ThenTheRightGoes_ThenTheLeft_ThenTheCenterPages()
+    {
+        HomeChip[] left = [Chip("Left Lamp", "", "LL")];
+        HomeChip[] center = [Chip("Center", "", "C")];
+        HomeChip[] right = [Chip("Right Lamp", "", "RL")];
+        Assert.Contains("Right Lamp", Text(HomeBar.Render(left, center, right, 44)!), StringComparison.Ordinal);
+        Assert.Equal(" 💡 LL " + new string(' ', 5) + " 💡 C " + new string(' ', 6) + " 💡 RL ", Text(HomeBar.Render(left, center, right, 31)!));
+        Assert.Equal(3, HomeBar.Render(left, center, right, 16)!.Spans.Count);   // the glyphs alone, all three
+        Assert.Equal([0, 1], HomeBar.Render(left, center, right, 15)!.Spans.Select(s => s.Index));   // the right gone first
+        Assert.Equal([1], HomeBar.Render(left, center, right, 9)!.Spans.Select(s => s.Index));       // then the left
+
+        // The right group goes from its inner end (its outer chip kept), the left from its; a divider at the cut edge goes with them.
+        var wide = HomeBar.Render([Chip("A"), Chip("B")], [Chip("C")], [Chip("D"), Divider(1), Chip("E")], 22)!;
+        Assert.Equal([0, 1, 2, 5], wide.Spans.Select(s => s.Index));
+        Assert.DoesNotContain("│", Text(wide), StringComparison.Ordinal);
+        Assert.Equal([0, 2], HomeBar.Render([Chip("A"), Chip("B")], [Chip("C")], [], 10)!.Spans.Select(s => s.Index));
+
+        // The center alone pages, the groups gone; its spans still count from the left group's.
+        var paged = HomeBar.Render([Chip("L")], [Chip("C1"), Chip("C2"), Chip("C3")], [Chip("R")], 10)!;
+        Assert.Equal(3, paged.Pages);
+        Assert.Equal(1, paged.Spans.Single(s => s.Target == HomeTarget.Chip).Index);
+        Assert.Equal(3, HomeBar.Render([Chip("L")], [Chip("C1"), Chip("C2"), Chip("C3")], [Chip("R")], 10, page: 2)!.Spans.Single(s => s.Target == HomeTarget.Chip).Index);
+        var tv = Chip("Tv", "▸ A very long title indeed") with { Short = "Tv" };
+        Assert.Equal(0, HomeBar.Render([tv], [], [], 12)!.Spans.Single().Index);   // no center: the left pages in its place, cut to the page
     }
 
     [Fact]

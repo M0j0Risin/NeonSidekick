@@ -1629,16 +1629,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     public const string ToolbarModelSeparator = " · ";
 
     /// <summary>
-    /// A run of the laid toolbar (2026-10-13): glyphs side by side (<paramref name="Off"/> their places on the slab, from 0;
-    /// <paramref name="Lead"/> the <c>+N</c> ahead of them where the right group gave way), the path, or the model's name and mark.
+    /// A run of the laid toolbar (2026-10-13): glyphs side by side (<paramref name="Off"/> their places on the slab, from 0), the path,
+    /// or the model's name and mark. (A right group's glyphs cut short had a <c>+N</c> lead until later that day, when the user had the
+    /// glyphs a narrow row leaves off simply go, as the home bar's chips do.)
     /// </summary>
-    private readonly record struct ToolbarRun(ToolbarItemKind Kind, string Text, IReadOnlyList<int> Off, string Mark = "", string Lead = "")
-    {
-        /// <summary>What the run draws: the lead, then the text.</summary>
-        public string Shown => Lead + Text;
-    }
+    private readonly record struct ToolbarRun(ToolbarItemKind Kind, string Text, IReadOnlyList<int> Off, string Mark = "");
 
-    /// <summary>A run where it was drawn (2026-10-13): its text's first column (after its lead) and its cells.</summary>
+    /// <summary>A run where it was drawn (2026-10-13): its text's first column and its cells.</summary>
     private readonly record struct ToolbarPlaced(ToolbarItemKind Kind, string Text, int Column, int Cells, string Mark);
 
     /// <summary>
@@ -1661,7 +1658,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             return right.Length == 0 ? left : left + new string(' ', Math.Max(0, cells - TextCells.Width(left) - TextCells.Width(right))) + right;
         }
 
-        /// <summary>Each run with its first column (its lead's) in a row of <paramref name="cells"/>, the left group's then the right's.</summary>
+        /// <summary>Each run with its first column in a row of <paramref name="cells"/>, the left group's then the right's.</summary>
         public IEnumerable<(ToolbarRun Run, int Column, string Before)> Placed(int cells)
         {
             int column = 0;
@@ -1670,7 +1667,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 string before = i == 0 ? "" : RunSeparator(Left[i - 1], Left[i]);
                 column += TextCells.Width(before);
                 yield return (Left[i], column, before);
-                column += TextCells.Width(Left[i].Shown);
+                column += TextCells.Width(Left[i].Text);
             }
 
             string right = RightText;
@@ -1680,7 +1677,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 string before = i == 0 ? new string(' ', start - column) : RunSeparator(Right[i - 1], Right[i]);
                 column += TextCells.Width(before);
                 yield return (Right[i], column, before);
-                column += TextCells.Width(Right[i].Shown);
+                column += TextCells.Width(Right[i].Text);
             }
         }
     }
@@ -1719,7 +1716,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         var text = new System.Text.StringBuilder();
         for (int i = 0; i < runs.Count; i++)
         {
-            text.Append(i == 0 ? "" : RunSeparator(runs[i - 1], runs[i])).Append(runs[i].Shown);
+            text.Append(i == 0 ? "" : RunSeparator(runs[i - 1], runs[i])).Append(runs[i].Text);
         }
 
         return text.ToString();
@@ -1730,7 +1727,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// gives way when the row is too narrow, in the user's order: the model's name and the path first, wherever they are pinned — the
     /// name fitted (<see cref="NameAndMark"/>, half the row at most at the right) to what everything but the path leaves, then the path
     /// (<see cref="FitPath"/>) to what is left, each collapsing under eight cells; then the right group, from its inner end (whole runs
-    /// go, a glyph run keeping its outer glyphs behind <c>+N</c>); then the left group from its inner end (<see cref="FitStrip"/>).
+    /// go, a glyph run keeping its outer glyphs); then the left group from its inner end (<see cref="FitStrip"/>). What gives way leaves
+    /// nothing behind (later on 2026-10-13, the user's call: no <c>+N</c>).
     /// <paramref name="spaced"/>: the glyphs already carry <see cref="TextCells.SpaceSelectorSequences"/>' blanks.
     /// </summary>
     private static ToolbarLaid LayToolbar(ToolbarParts toolbar, int cells, bool spaced = false)
@@ -1840,7 +1838,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The right group in <paramref name="room"/> cells (2026-10-13): whole runs kept from its outer (right) end; the first that does not
-    /// fit is a glyph run's outer glyphs behind <c>+N</c>, a path cut from the front, or gone — and everything before it goes.
+    /// fit is a glyph run's outer glyphs, a path cut from the front, or gone — and everything before it goes.
     /// </summary>
     private static List<ToolbarRun> FitRight(List<ToolbarRun> runs, int room)
     {
@@ -1878,7 +1876,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         return kept;
     }
 
-    /// <summary>The left group alone in <paramref name="cells"/> (2026-10-13): whole runs from column 0; the first that does not fit a glyph run's first glyphs and <c>+N</c> (<see cref="FitStrip"/>), a path or a name cut, or gone; nothing after it.</summary>
+    /// <summary>The left group alone in <paramref name="cells"/> (2026-10-13): whole runs from column 0; the first that does not fit a glyph run's first glyphs (<see cref="FitStrip"/>), a path or a name cut, or gone; nothing after it.</summary>
     private static List<ToolbarRun> FitLeft(List<ToolbarRun> runs, int cells)
     {
         var kept = new List<ToolbarRun>();
@@ -1911,20 +1909,19 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// A glyph run of the right group in <paramref name="cells"/> (2026-10-13): its last glyphs behind <c>+N</c> for the N left off, the
-    /// slabs counted on from the first kept; null when not even one glyph and its count fit.
+    /// A glyph run of the right group in <paramref name="cells"/> (2026-10-13): its last glyphs, the ones left off gone (behind a <c>+N</c>
+    /// until later that day, the user's call), the slabs counted on from the first kept; null when not even one glyph fits.
     /// </summary>
     private static ToolbarRun? FitStripTail(ToolbarRun run, int cells)
     {
         string[] glyphs = run.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         for (int keep = glyphs.Length - 1; keep > 0; keep--)
         {
-            string lead = "+" + (glyphs.Length - keep).ToString(System.Globalization.CultureInfo.InvariantCulture) + " ";
             string text = string.Join(' ', glyphs, glyphs.Length - keep, keep);
-            if (TextCells.Width(lead + text) <= cells)
+            if (TextCells.Width(text) <= cells)
             {
                 int dropped = glyphs.Length - keep;
-                return run with { Text = text, Lead = lead, Off = run.Off.Where(i => i >= dropped).Select(i => i - dropped).ToList() };
+                return run with { Text = text, Off = run.Off.Where(i => i >= dropped).Select(i => i - dropped).ToList() };
             }
         }
 
@@ -6134,12 +6131,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         {
             // The separators and the blanks between the groups dim, as the path's were (2026-10-13: either group may hold anything).
             _inner.Write(new RawText(before, Theme.DimText));
-            int textColumn = column + TextCells.Width(run.Lead);
-            if (run.Lead.Length > 0)
-            {
-                _inner.Write(new RawText(run.Lead, Theme.Hint));
-            }
-
+            int textColumn = column;
             switch (run.Kind)
             {
                 case ToolbarItemKind.Glyph:
@@ -7220,9 +7212,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// The toolbar's strip in <paramref name="cells"/> (2026-10-04, the UI review: a cut strip ended on <c>…</c>, which said nothing of
-    /// how many were left off): whole when it fits, else as many glyphs as fit and <c>+N</c> after them for the N left off;
-    /// <see cref="Fit"/> where not even one glyph and its count fit. The glyphs are the strip's, one blank between. Pinned.
+    /// The toolbar's strip in <paramref name="cells"/>: whole when it fits, else as many whole glyphs as fit and nothing after them; empty
+    /// where not even one fits. The glyphs are the strip's, one blank between. (A cut strip ended on <c>…</c> until 2026-10-04, then on a
+    /// <c>+N</c> for the N left off until later on 2026-10-13, when the user had the glyphs a narrow row leaves off simply go, as the home
+    /// bar's chips do.) Pinned.
     /// </summary>
     public static string FitStrip(string strip, int cells)
     {
@@ -7235,14 +7228,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         string[] glyphs = strip.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         for (int keep = glyphs.Length - 1; keep > 0; keep--)
         {
-            string shown = string.Join(' ', glyphs, 0, keep) + " +" + (glyphs.Length - keep).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            string shown = string.Join(' ', glyphs, 0, keep);
             if (TextCells.Width(shown) <= cells)
             {
                 return shown;
             }
         }
 
-        return Fit(strip, cells);
+        return "";
     }
 
     /// <summary>

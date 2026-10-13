@@ -88,7 +88,7 @@ public static class HomeBarText
     /// <summary>A divider's dim note on the bar tab (2026-10-13). Pinned.</summary>
     public const string DividerWhere = "between the chips around it";
 
-    /// <summary>The bar tab's last row (2026-10-13, the user's pick): Enter or Space puts a new divider at the bar's end. Pinned.</summary>
+    /// <summary>The bar tab's last row (2026-10-13, the user's pick): Enter or Space puts a new divider at the bar's end (the center's since later that day). Pinned.</summary>
     public const string AddDividerRow = "+ Add divider";
 
     /// <summary>The 🛒 chip's click note: the lines to get, or the list off. Pinned.</summary>
@@ -285,7 +285,7 @@ public static class HomeBarText
     public const string OtherTab = "Other";
 
     /// <summary>The bar tab's hint: the move keys.</summary>
-    public const string BarHint = "Shift+↑↓ = move · Shift+Home/End = top/bottom · Del = remove · Enter = more · ESC = close";
+    public const string BarHint = "Shift+↑↓ = move · Shift+←→ = side · Shift+Home/End = top/bottom · Del = remove · Enter = more · ESC = close";
 
     /// <summary>The other tabs' hint, before the filter's keys.</summary>
     public const string PickHint = "Space / Enter = add or remove";
@@ -310,6 +310,11 @@ public static class HomeBarText
     public const string MoveUp = "Move up";
     public const string MoveDown = "Move down";
     public const string MoveBottom = "Move to the bottom";
+
+    /// <summary>The actions page's pins (later on 2026-10-13, the user's ask: the home bar pinned left, center or right), for a terminal that keeps Shift+←/→.</summary>
+    public const string PinLeftItem = "Pin left";
+    public const string PinCenterItem = "Pin center";
+    public const string PinRightItem = "Pin right";
     public const string RenameItem = "Rename on the bar…";
     public const string EmojiItem = "Change emoji…";
     public const string DefaultEmojiItem = "Default emoji";

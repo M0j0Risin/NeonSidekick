@@ -94,7 +94,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/header [on\|off]` | Shows or hides the banner (*Show header*) from the next clear; alone, flips it. |
 | `/help` | The commands (Basic and Advanced tabs) and the keys. The Keys tab's *⌨ key check* button (`k`) swaps in `/keycheck`'s list, and pressed again shows the keys. |
 | `/homebar [on\|off]` | Hides the home bar or shows it again with the items it had (Ctrl+W); the first time, with nothing picked, opens the picker. See [Home bar](SETTINGS.md#home-bar). |
-| `/homebar edit` | The home bar's picker: the bar's order (Shift+↑↓, Shift+Home/End, Delete) and the rooms and devices to add, and the shopping list's 🛒 (its Shopping tab, open without Home Assistant too). |
+| `/homebar edit` | The home bar's picker: the bar's order in three groups, pinned left, center or right (Shift+←/→ pins, Shift+↑↓, Shift+Home/End, Delete) and the rooms and devices to add, and the shopping list's 🛒 (its Shopping tab, open without Home Assistant too). |
 | `/homebar tap\|show <item>` | What a double-click and a right-click on a chip do, by its item (`entity:light.desk`, `area:kitchen`) or its name. |
 | `/homebar name <item> = <alias>` | Shows an item's chip under a name of your own (`/homebar name Den PC Monitor = PC`); nothing after `=` shows the chip's emoji alone (no name, no value: a room's 🏠 without its count), and `default` puts its own name back. The chip's label only. |
 | `/homebar emoji <item> = <emoji>` | Shows an item's chip with an emoji of your own in place of its glyph (`/homebar emoji Den Lamp = 🛋️`); nothing after `=`, or `default`, puts its own back. One emoji only. It stays fixed, so a lock's 🔒/🔓 no longer follows its state. |

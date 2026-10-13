@@ -30,7 +30,9 @@ public sealed record HomeRow(IReadOnlyList<PerfSegment> Segments, IReadOnlyList<
 /// until later on 2026-10-12, when the user had the glyph, its note and its double-click to the picker taken off (the chips
 /// still go dim while the feed is down; Enter on <c>Home bar</c> and <c>/homebar edit</c> open the picker). Too narrow a window
 /// shortens the names (<see cref="HomeChip.Short"/>), then drops them (the glyph and the value), then splits the chips into
-/// pages behind <see cref="HomeBarText.PrevGlyph"/>/<see cref="HomeBarText.NextGlyph"/>. Pure.
+/// pages behind <see cref="HomeBarText.PrevGlyph"/>/<see cref="HomeBarText.NextGlyph"/>. Since later on 2026-10-13 (the user's ask: the
+/// home bar pinned as the tool bar and the hint bar are, with a third group) the chips are in three groups, left, center and right, the
+/// center winning the room (<see cref="Render(IReadOnlyList{HomeChip}, IReadOnlyList{HomeChip}, IReadOnlyList{HomeChip}, int, int)"/>). Pure.
 /// </summary>
 public static class HomeBar
 {
@@ -44,40 +46,146 @@ public static class HomeBar
 
     /// <summary>
     /// The row for <paramref name="chips"/> in <paramref name="cells"/> cells, page <paramref name="page"/> when they need
-    /// pages (clamped). Null — no row — with no chips.
+    /// pages (clamped). Null — no row — with no chips. Every chip in the center, as the whole bar was until later on 2026-10-13.
     /// </summary>
-    public static HomeRow? Render(IReadOnlyList<HomeChip> chips, int cells, int page = 0)
+    public static HomeRow? Render(IReadOnlyList<HomeChip> chips, int cells, int page = 0) => Render([], chips, [], cells, page);
+
+    /// <summary>
+    /// The row for chips pinned <paramref name="left"/>, <paramref name="center"/> and <paramref name="right"/> (later on 2026-10-13, the
+    /// user's ask) in <paramref name="cells"/> cells: the left group from the row's start, the right group ending on its last cell, the
+    /// center centred on the row and pushed aside by them, <see cref="GroupGap"/> at least between two groups. Too narrow a row (the
+    /// user's calls): the names shrink first, every chip's together (<see cref="Fit"/>); then the right group's chips go, from its inner
+    /// end, then the left group's, from its; then the center pages behind the arrows alone (the left group, or the right, when there is
+    /// no center). A chip that goes leaves nothing behind (no count). A span's <see cref="HomeSpan.Index"/> is into the three in that
+    /// order. Null — no row — with no chips. Pure.
+    /// </summary>
+    public static HomeRow? Render(IReadOnlyList<HomeChip> left, IReadOnlyList<HomeChip> center, IReadOnlyList<HomeChip> right, int cells, int page = 0)
     {
-        ArgumentNullException.ThrowIfNull(chips);
+        ArgumentNullException.ThrowIfNull(left);
+        ArgumentNullException.ThrowIfNull(center);
+        ArgumentNullException.ThrowIfNull(right);
+        var chips = new List<HomeChip>(left.Count + center.Count + right.Count);
+        chips.AddRange(left);
+        chips.AddRange(center);
+        chips.AddRange(right);
         if (chips.Count == 0)
         {
             return null;
         }
 
         int room = Math.Max(0, cells);
+        var whole = new[] { Trim(chips, 0, left.Count), Trim(chips, left.Count, center.Count), Trim(chips, left.Count + center.Count, right.Count) };
         foreach (var fit in new[] { Fit.Full, Fit.Short, Fit.Tight })
         {
             var texts = chips.Select(c => ChipText(c, fit)).ToList();
-            if (texts.Sum(t => TextCells.Width(t)) <= room)
+            if (Width(texts, whole) <= room)
             {
-                return Build(chips, texts, room, 0, chips.Count, pages: 1, page: 0);
+                return Lay(chips, texts, whole, room);
             }
+        }
+
+        // Room for the center (later on 2026-10-13): the tight chips, the right group giving way from its inner end, then the left.
+        var tight = chips.Select(c => ChipText(c, Fit.Tight)).ToList();
+        var groups = whole.Select(g => g.ToList()).ToArray();
+        foreach (int side in (int[])[2, 0])
+        {
+            while (groups[side].Count > 0 && Width(tight, groups) > room)
+            {
+                groups[side].RemoveAt(side == 2 ? 0 : groups[side].Count - 1);
+                groups[side] = Trim(chips, groups[side]);
+            }
+        }
+
+        if (groups.Any(g => g.Count > 0) && Width(tight, groups) <= room)
+        {
+            return Lay(chips, tight, groups, room);
         }
 
         // Pages: the tight chips, as many as fit between the arrows on each; one wider than a page is cut to it (the review's
         // finding, 2026-10-12: a playing title on a narrow window wrapped the row and threw the pane's rows off by one). A
         // window with no room for a page between the arrows gets an empty row (the status glyph alone until the glyph went).
+        // Since the groups (later on 2026-10-13) the center alone pages; the left group, or else the right, with no center.
         int pageRoom = room - ArrowCells * 2;
-        if (pageRoom < MinPageCells)
+        var pager = new[] { whole[1], whole[0], whole[2] }.FirstOrDefault(g => g.Count > 0);
+        if (pageRoom < MinPageCells || pager is null)
         {
             return Build(chips, [], room, 0, 0, pages: 1, page: 0);
         }
 
-        var tight = chips.Select(c => ChipText(c, Fit.Tight)).Select(t => TextCells.Width(t) > pageRoom ? HomeChips.Clip(t, pageRoom) : t).ToList();
-        var starts = Pages(tight, pageRoom);
+        int from = pager[0];
+        int to = pager[^1] + 1;
+        var cut = tight.Select(t => TextCells.Width(t) > pageRoom ? HomeChips.Clip(t, pageRoom) : t).ToList();
+        var starts = Pages(cut.GetRange(from, to - from), pageRoom).Select(s => s + from).ToList();
         int shown = Math.Clamp(page, 0, starts.Count - 1);
-        int end = shown + 1 < starts.Count ? starts[shown + 1] : chips.Count;
-        return Build(chips, tight, room, starts[shown], end, starts.Count, shown);
+        int end = shown + 1 < starts.Count ? starts[shown + 1] : to;
+        return Build(chips, cut, room, starts[shown], end, starts.Count, shown);
+    }
+
+    /// <summary>The least blank between two groups beyond the chips' own blanks (later on 2026-10-13).</summary>
+    public const int GroupGap = 2;
+
+    // The indices [from, from + count) of a group, without a divider at either end or beside another.
+    private static List<int> Trim(IReadOnlyList<HomeChip> chips, int from, int count) => Trim(chips, Enumerable.Range(from, count).ToList());
+
+    private static List<int> Trim(IReadOnlyList<HomeChip> chips, List<int> group)
+    {
+        var kept = new List<int>(group.Count);
+        foreach (int i in group)
+        {
+            if (chips[i].Divider && (kept.Count == 0 || chips[kept[^1]].Divider))
+            {
+                continue;
+            }
+
+            kept.Add(i);
+        }
+
+        while (kept.Count > 0 && chips[kept[^1]].Divider)
+        {
+            kept.RemoveAt(kept.Count - 1);
+        }
+
+        return kept;
+    }
+
+    // The groups' cells together, GroupGap between two that draw.
+    private static int Width(IReadOnlyList<string> texts, IReadOnlyList<List<int>> groups)
+    {
+        var drawn = groups.Where(g => g.Count > 0).ToList();
+        return drawn.Sum(g => g.Sum(i => TextCells.Width(texts[i]))) + GroupGap * Math.Max(0, drawn.Count - 1);
+    }
+
+    // The three groups on one row of cells (later on 2026-10-13): the left from column 0, the right ending on the last cell, the center
+    // centred between them, the odd cell at its right; the center alone is exactly the row Build draws for one page.
+    private static HomeRow Lay(IReadOnlyList<HomeChip> chips, IReadOnlyList<string> texts, IReadOnlyList<List<int>> groups, int cells)
+    {
+        int Cells(List<int> group) => group.Sum(i => TextCells.Width(texts[i]));
+        var (left, center, right) = (groups[0], groups[1], groups[2]);
+        int rightStart = cells - Cells(right);
+        int centerStart = 0;
+        if (center.Count > 0)
+        {
+            int min = left.Count > 0 ? Cells(left) + GroupGap : 0;
+            int max = (right.Count > 0 ? rightStart - GroupGap : cells) - Cells(center);
+            centerStart = Math.Clamp((cells - Cells(center)) / 2, min, Math.Max(min, max));
+        }
+
+        var row = new Writer();
+        foreach (var (group, start) in new[] { (left, 0), (center, centerStart), (right, rightStart) })
+        {
+            if (group.Count == 0)
+            {
+                continue;
+            }
+
+            row.PadTo(start);
+            foreach (int i in group)
+            {
+                row.Chip(chips[i], texts[i], i);
+            }
+        }
+
+        return row.Done(pages: 1);
     }
 
     /// <summary>An arrow and the blank beside it.</summary>
@@ -194,10 +302,6 @@ public static class HomeBar
     // the right where the pane's erase blanks the rest, so the spans start where the chips are drawn. An empty row stays empty.
     private static HomeRow Build(IReadOnlyList<HomeChip> chips, IReadOnlyList<string> texts, int cells, int from, int to, int pages, int page)
     {
-        var segments = new List<PerfSegment>();
-        var spans = new List<HomeSpan>();
-        int column = 0;
-
         // A divider at a page's edge shows nothing between (2026-10-13): left off the page.
         while (from < to && chips[from].Divider)
         {
@@ -215,48 +319,72 @@ public static class HomeBar
             drawn += TextCells.Width(texts[i]);
         }
 
-        int pad = (cells - drawn) / 2;
-        if (to > from && pad > 0)
+        var row = new Writer();
+        if (to > from)
         {
-            Add(new string(' ', pad), Style.Plain, null);
+            row.PadTo((cells - drawn) / 2);
         }
 
         if (pages > 1)
         {
-            Add(HomeBarText.PrevGlyph, page > 0 ? Theme.Accent : Theme.DimText, page > 0 ? new HomeSpan(column, 1, HomeTarget.Prev) : null);
-            Add(" ", Style.Plain, null);
+            row.Add(HomeBarText.PrevGlyph, page > 0 ? Theme.Accent : Theme.DimText, page > 0 ? new HomeSpan(0, 1, HomeTarget.Prev) : null);
+            row.Add(" ", Style.Plain, null);
         }
 
         for (int i = from; i < to; i++)
         {
-            var chip = chips[i];
-            int width = TextCells.Width(texts[i]);
-            Add(texts[i], chip.Style, chip.Divider ? null : new HomeSpan(column, width, HomeTarget.Chip, i));   // a divider is a blank to a click (2026-10-13)
+            row.Chip(chips[i], texts[i], i);
         }
 
         if (pages > 1)
         {
-            Add(" ", Style.Plain, null);
-            Add(HomeBarText.NextGlyph, page < pages - 1 ? Theme.Accent : Theme.DimText, page < pages - 1 ? new HomeSpan(column, 1, HomeTarget.Next) : null);
+            row.Add(" ", Style.Plain, null);
+            row.Add(HomeBarText.NextGlyph, page < pages - 1 ? Theme.Accent : Theme.DimText, page < pages - 1 ? new HomeSpan(0, 1, HomeTarget.Next) : null);
         }
 
-        var key = new StringBuilder();
-        foreach (var segment in segments)
+        return row.Done(pages);
+    }
+
+    // The row as it is written: the styled runs, the spans where they start, and the column the next run starts at.
+    private sealed class Writer
+    {
+        private readonly List<PerfSegment> _segments = [];
+        private readonly List<HomeSpan> _spans = [];
+        private int _column;
+
+        // Blanks up to column (none when the row is there already).
+        public void PadTo(int column)
         {
-            key.Append(segment.Text).Append('\u0001').Append(segment.Style.ToMarkup()).Append('\u0002');
+            if (column > _column)
+            {
+                Add(new string(' ', column - _column), Style.Plain, null);
+            }
         }
 
-        return new HomeRow(segments, spans, pages, key.ToString());
+        // A chip's text in its style; a divider is a blank to a click (2026-10-13).
+        public void Chip(HomeChip chip, string text, int index) =>
+            Add(text, chip.Style, chip.Divider ? null : new HomeSpan(0, TextCells.Width(text), HomeTarget.Chip, index));
 
-        void Add(string text, Style style, HomeSpan? span)
+        public void Add(string text, Style style, HomeSpan? span)
         {
             if (span is { } s)
             {
-                spans.Add(s with { Start = column });
+                _spans.Add(s with { Start = _column });
             }
 
-            segments.Add(new PerfSegment(text, style));
-            column += TextCells.Width(text);
+            _segments.Add(new PerfSegment(text, style));
+            _column += TextCells.Width(text);
+        }
+
+        public HomeRow Done(int pages)
+        {
+            var key = new StringBuilder();
+            foreach (var segment in _segments)
+            {
+                key.Append(segment.Text).Append('\u0001').Append(segment.Style.ToMarkup()).Append('\u0002');
+            }
+
+            return new HomeRow(_segments, _spans, pages, key.ToString());
         }
     }
 }

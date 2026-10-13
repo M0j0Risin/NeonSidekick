@@ -107,8 +107,11 @@ internal sealed partial class ChatScreen
             // The items with their aliases (2026-10-12) and emoji (later that day): a rename redraws at once, as an added item does.
             var aliases = effective.HomeBarAliases;
             var glyphs = effective.HomeBarGlyphs;
+            // The groups too (later on 2026-10-13, the user's ask: pinned left, center or right): a pin redraws at once.
+            var sides = HomeBarItems.Sides(items, effective.HomeBarLeft, effective.HomeBarRight);
             string key = string.Join('\n', items.Select(i => (HomeBarItems.AliasOf(aliases, i) is { } alias ? i + "=" + alias : i) + (HomeBarItems.GlyphOf(glyphs, i) is { } glyph ? "#" + glyph : "")))
-                + "\n🛒" + (shopping?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "?");
+                + "\n🛒" + (shopping?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "?")
+                + "\n<" + string.Join(' ', sides.Left) + "\n>" + string.Join(' ', sides.Right);
             var cache = _homeCache;
             bool sameItems = cache is not null && string.Equals(cache.ItemsKey, key, StringComparison.Ordinal) && cache.Model == _homeModel;
             var ids = sameItems && ReferenceEquals(cache!.Catalog, live.Catalog) ? cache.Ids : HomeIds(items, live.Catalog);
@@ -127,12 +130,15 @@ internal sealed partial class ChatScreen
 
             UpdateHomePending(live, now);
             bool stale = live.Status != HaLiveStatus.Live;
-            var chips = HomeBar.ShownDividers(items.Select(i => HomeChips.Build(i, live.Entities, live.Catalog, HomeMarkOf(i), stale, aliases, glyphs, shopping)).ToList());   // a divider only between two chips (2026-10-13)
-            row = HomeBar.Render(chips, cells, _homePage);
+            // Each group's chips, a divider only between two of them (2026-10-13); the cache keeps them left, center, right, as the spans count them.
+            List<HomeChip> Chips(IReadOnlyList<string> group) => HomeBar.ShownDividers(group.Select(i => HomeChips.Build(i, live.Entities, live.Catalog, HomeMarkOf(i), stale, aliases, glyphs, shopping)).ToList());
+            var (left, center, right) = (Chips(sides.Left), Chips(sides.Center ?? []), Chips(sides.Right));
+            List<HomeChip> chips = [.. left, .. center, .. right];
+            row = HomeBar.Render(left, center, right, cells, _homePage);
             if (row is not null && _homePage >= row.Pages)
             {
                 _homePage = row.Pages - 1;
-                row = HomeBar.Render(chips, cells, _homePage);
+                row = HomeBar.Render(left, center, right, cells, _homePage);
             }
 
             _homeCache = new HomeCache(key, live.Catalog, _homeModel, ids, live.Version, cells, Theme.Current, now, chips, row);

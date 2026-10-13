@@ -21,7 +21,9 @@ public sealed record HomeToggle(List<string> Items, List<string>? LastItems, boo
 /// <c>entity:&lt;entity_id&gt;</c>, saved in <see cref="Settings.AppSettingsData.HomeBarItems"/>. The perf bar's shape with one
 /// difference: <b>the saved order is the bar's order</b>, which the picker's move keys change (<see cref="Move"/>). Null or
 /// empty is no bar: there is no default, a home is the user's own. <see cref="Resolve"/> is the one place the saved list
-/// becomes the items; a display setting, so a malformed reference is dropped without a warning (the pane's tick reads it).
+/// becomes the items; a display setting, so a malformed reference is dropped without a warning (the pane's tick reads it). Since
+/// later on 2026-10-13 (the user's ask) the order is in three groups, pinned left, center or right (<see cref="Sides"/>), the
+/// saved list holding them in that order and the two side lists naming the left and the right ones.
 /// </summary>
 public static class HomeBarItems
 {
@@ -95,14 +97,46 @@ public static class HomeBarItems
     /// <summary>Whether <paramref name="reference"/> is a divider's (2026-10-13): a dim │, no chip, no name, no emoji. Pure.</summary>
     public static bool IsDivider(string reference) => TryParse(reference, out var kind, out _) && kind == HomeItemKind.Divider;
 
-    /// <summary><paramref name="items"/> with a new divider at the end (2026-10-13, the bar tab's <c>+ Add divider</c>; <see cref="ItemOrder.NextDivider"/>). Pure.</summary>
-    public static List<string> AddDivider(IReadOnlyList<string> items)
+    /// <summary>
+    /// <paramref name="sides"/> with a new divider at the center's end (2026-10-13, the bar tab's <c>+ Add divider</c>; at the bar's end
+    /// until the groups came later that day; <see cref="ItemOrder.NextDivider"/>), and where it landed in <see cref="ItemOrder.Sided.All"/>. Pure.
+    /// </summary>
+    public static (ItemOrder.Sided Sides, int Index) AddDivider(ItemOrder.Sided sides) => ItemOrder.AddDivider(Centered(sides), -1);
+
+    /// <summary>
+    /// The bar in its three groups (later on 2026-10-13, the user's ask: any item pinned left, center or right, and center the one that
+    /// wins the room): <paramref name="items"/>' order (<see cref="Resolve"/>) split by <paramref name="left"/> and <paramref name="right"/>
+    /// (<see cref="Settings.AppSettingsData.HomeBarLeft"/>, <see cref="Settings.AppSettingsData.HomeBarRight"/>, spelt as <see cref="Normalize"/>
+    /// spells them); every other item is center, as the whole bar was until then. A side's id that is not on the bar is ignored. Pure.
+    /// </summary>
+    public static ItemOrder.Sided Sides(IReadOnlyList<string>? items, IReadOnlyList<string>? left, IReadOnlyList<string>? right) =>
+        ItemOrder.SplitCentered(Resolve(items), Resolve(left).ToHashSet(StringComparer.Ordinal), Resolve(right).ToHashSet(StringComparer.Ordinal));
+
+    /// <summary>What saves for <paramref name="sides"/>: the whole order (left, center, right) and each side's items, null for an empty side. Pure.</summary>
+    public static (List<string> Items, List<string>? Left, List<string>? Right) SaveSides(ItemOrder.Sided sides) =>
+        (sides.All, sides.Left.Count > 0 ? [.. sides.Left] : null, sides.Right.Count > 0 ? [.. sides.Right] : null);
+
+    /// <summary><paramref name="sides"/> with <paramref name="reference"/> added at the center's end, or taken out of whichever group holds it. Pure.</summary>
+    public static ItemOrder.Sided Flip(ItemOrder.Sided sides, string reference)
     {
-        ArgumentNullException.ThrowIfNull(items);
-        var list = Resolve(items).ToList();
-        list.Add(ItemOrder.NextDivider(list));
-        return list;
+        sides = Centered(sides);
+        if (Normalize(reference) is not { } r)
+        {
+            return sides;
+        }
+
+        return sides.All.Contains(r, StringComparer.Ordinal) ? Without(sides, r) : sides with { Center = [.. sides.Center!, r] };
     }
+
+    /// <summary><paramref name="sides"/> without <paramref name="reference"/>, from whichever group holds it (Delete, a flip off): its side goes with it. Pure.</summary>
+    public static ItemOrder.Sided Without(ItemOrder.Sided sides, string reference)
+    {
+        bool Keep(string id) => !string.Equals(id, reference, StringComparison.Ordinal);
+        return new ItemOrder.Sided(sides.Left.Where(Keep).ToList(), sides.Right.Where(Keep).ToList(), (sides.Center ?? []).Where(Keep).ToList());
+    }
+
+    // An order with a center group, an empty one when it had none.
+    private static ItemOrder.Sided Centered(ItemOrder.Sided sides) => sides.HasCenter ? sides : sides with { Center = [] };
 
     /// <summary>The items <paramref name="saved"/> names, in its order, each once; malformed ones and nulls skipped. Pure.</summary>
     public static IReadOnlyList<string> Resolve(IReadOnlyList<string>? saved)
@@ -127,24 +161,6 @@ public static class HomeBarItems
 
     /// <summary>Whether <paramref name="items"/> holds <paramref name="reference"/>.</summary>
     public static bool Contains(IReadOnlyList<string> items, string reference) => Normalize(reference) is { } r && items.Contains(r, StringComparer.Ordinal);
-
-    /// <summary><paramref name="items"/> with <paramref name="reference"/> added at the end, or taken out when it is there. Pure.</summary>
-    public static List<string> Flip(IReadOnlyList<string> items, string reference)
-    {
-        ArgumentNullException.ThrowIfNull(items);
-        var list = Resolve(items).ToList();
-        if (Normalize(reference) is not { } r)
-        {
-            return list;
-        }
-
-        if (!list.Remove(r))
-        {
-            list.Add(r);
-        }
-
-        return list;
-    }
 
     /// <summary>To the top (<see cref="int.MinValue"/>), to the bottom (<see cref="int.MaxValue"/>), or so many places down (positive) or up (negative).</summary>
     public const int Top = int.MinValue;
@@ -174,19 +190,6 @@ public static class HomeBarItems
         list.RemoveAt(index);
         list.Insert(target, moved);
         return (list, target);
-    }
-
-    /// <summary><paramref name="items"/> without the one at <paramref name="index"/> (out of range: unchanged). Pure.</summary>
-    public static List<string> Remove(IReadOnlyList<string> items, int index)
-    {
-        ArgumentNullException.ThrowIfNull(items);
-        var list = items.ToList();
-        if (index >= 0 && index < list.Count)
-        {
-            list.RemoveAt(index);
-        }
-
-        return list;
     }
 
     /// <summary>

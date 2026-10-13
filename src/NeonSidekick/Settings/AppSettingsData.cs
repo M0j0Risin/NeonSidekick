@@ -475,6 +475,20 @@ public sealed class AppSettingsData
     public List<string>? HomeBarLastItems { get; set; }
 
     /// <summary>
+    /// The home bar's items pinned left (later on 2026-10-13, the user's ask: the home bar pinned as the tool bar and the hint bar
+    /// are, with a third group, center): references of <see cref="HomeBarItems"/> (and its dividers), as <see cref="App.HomeBarItems"/>
+    /// spells them; every item in neither this nor <see cref="HomeBarRight"/> is center, as the whole bar was until then. The left group
+    /// leads the row, the right group ends it, the center is centred between; each in <see cref="HomeBarItems"/>' order. When the row is
+    /// short the names shrink first, then the right group's chips go, then the left's: the center wins (the user's call). Set on the
+    /// picker's On the bar tab (Shift+←/→, or Enter's Pin rows); an item taken off the bar there leaves its side too, while
+    /// <c>/homebar off</c> keeps the sides for the show that brings the items back. Null or empty is none. No settings row, no variable.
+    /// </summary>
+    public List<string>? HomeBarLeft { get; set; }
+
+    /// <summary>The home bar's items pinned right (later on 2026-10-13): <see cref="HomeBarLeft"/>'s twin, the group that gives way first. Null or empty is none. No settings row, no variable.</summary>
+    public List<string>? HomeBarRight { get; set; }
+
+    /// <summary>
     /// The home bar's aliases (2026-10-12, the user's ask: "Den PC Monitor" read as "PC" on the bar): an item's reference
     /// (<c>area:den</c>, <c>entity:light.den_pc_monitor</c>, as <see cref="App.HomeBarItems"/> spells them) to the label its chip shows
     /// instead of Home Assistant's name. The chip's label only, the user's call: a click's note, the chip's pane and the

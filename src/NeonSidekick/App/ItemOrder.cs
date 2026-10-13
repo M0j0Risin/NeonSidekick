@@ -98,17 +98,32 @@ public static class ItemOrder
     public static (List<string> Order, int Index) Move(IReadOnlyList<string> order, int index, int delta) => HomeBarItems.Move(order, index, delta);
 
     /// <summary>
-    /// An order in its two groups (2026-10-13, the user's ask): the items pinned left in their order, then the ones pinned right in theirs.
-    /// <see cref="All"/> is the order that saves (the left group, then the right one), so each group's order is the saved list's; an index
-    /// into it is the one the checklist's rows hand back (its headings aside).
+    /// An order in its groups (2026-10-13, the user's ask): the items pinned left in their order, then the ones pinned right in theirs.
+    /// Later that day (the user's ask: the home bar pinned left, center or right) a third group between the two where a list asks for
+    /// one, <see cref="Center"/>; null is none, the hint bar's and the tool bar's. <see cref="All"/> is the order that saves (the left
+    /// group, the center, the right one), so each group's order is the saved list's; an index into it is the one the checklist's rows
+    /// hand back (its headings aside).
     /// </summary>
-    public readonly record struct Sided(IReadOnlyList<string> Left, IReadOnlyList<string> Right)
+    public readonly record struct Sided(IReadOnlyList<string> Left, IReadOnlyList<string> Right, IReadOnlyList<string>? Center = null)
     {
-        /// <summary>The left group, then the right one: the order that saves.</summary>
-        public List<string> All => [.. Left, .. Right];
+        /// <summary>Whether the order has a center group (the home bar's, later on 2026-10-13).</summary>
+        public bool HasCenter => Center is not null;
+
+        /// <summary>The left group, the center, then the right one: the order that saves.</summary>
+        public List<string> All => [.. Left, .. Center ?? [], .. Right];
+
+        /// <summary>The groups left to right: two, or three with a center.</summary>
+        public IReadOnlyList<IReadOnlyList<string>> Groups => Center is { } center ? [Left, center, Right] : [Left, Right];
 
         /// <summary>Whether <paramref name="id"/> is pinned right.</summary>
         public bool IsRight(string id) => Right.Contains(id, StringComparer.Ordinal);
+
+        /// <summary>Whether <paramref name="id"/> is pinned center.</summary>
+        public bool IsCenter(string id) => Center?.Contains(id, StringComparer.Ordinal) == true;
+
+        /// <summary>Whether <paramref name="other"/> holds the same groups, each in the same order.</summary>
+        public bool SameAs(Sided other) =>
+            Groups.Count == other.Groups.Count && Groups.Zip(other.Groups).All(pair => pair.First.SequenceEqual(pair.Second, StringComparer.Ordinal));
     }
 
     /// <summary><paramref name="order"/> split by side: the ids in <paramref name="right"/> make the right group, the rest the left, each in <paramref name="order"/>'s order.</summary>
@@ -120,71 +135,84 @@ public static class ItemOrder
     }
 
     /// <summary>
-    /// <paramref name="groups"/> with the item at <paramref name="index"/> (into <see cref="Sided.All"/>) moved by <paramref name="delta"/>
-    /// within its group (2026-10-13): a step past the group's edge crosses into the other group — a step down off the left group's last
-    /// item makes it the right group's first, a step up off the right group's first makes it the left group's last, the item keeping
-    /// its index; <see cref="HomeBarItems.Top"/> and <see cref="HomeBarItems.Bottom"/> go to the top or the bottom of its own group.
-    /// An index out of range moves nothing.
+    /// <paramref name="order"/> split in three (later on 2026-10-13, the home bar): the ids in <paramref name="left"/> the left group, the
+    /// ids in <paramref name="right"/> (and not in <paramref name="left"/>) the right one, the rest the center, each in <paramref name="order"/>'s order.
     /// </summary>
-    public static (Sided Groups, int Index) MoveInGroups(Sided groups, int index, int delta)
+    public static Sided SplitCentered(IReadOnlyList<string> order, IReadOnlySet<string> left, IReadOnlySet<string> right)
     {
-        var left = groups.Left.ToList();
-        var right = groups.Right.ToList();
-        if (index < 0 || index >= left.Count + right.Count || delta == 0)
-        {
-            return (new Sided(left, right), index);
-        }
-
-        if (index < left.Count)
-        {
-            if (index == left.Count - 1 && delta == 1)
-            {
-                right.Insert(0, left[index]);
-                left.RemoveAt(index);
-                return (new Sided(left, right), index);
-            }
-
-            var (moved, at) = HomeBarItems.Move(left, index, delta);
-            return (new Sided(moved, right), at);
-        }
-
-        int inRight = index - left.Count;
-        if (inRight == 0 && delta == -1)
-        {
-            left.Add(right[0]);
-            right.RemoveAt(0);
-            return (new Sided(left, right), index);
-        }
-
-        var (movedRight, atRight) = HomeBarItems.Move(right, inRight, delta);
-        return (new Sided(left, movedRight), left.Count + atRight);
+        ArgumentNullException.ThrowIfNull(order);
+        ArgumentNullException.ThrowIfNull(left);
+        ArgumentNullException.ThrowIfNull(right);
+        return new Sided(
+            order.Where(left.Contains).ToList(),
+            order.Where(id => !left.Contains(id) && right.Contains(id)).ToList(),
+            order.Where(id => !left.Contains(id) && !right.Contains(id)).ToList());
     }
 
     /// <summary>
-    /// <paramref name="groups"/> with the item at <paramref name="index"/> pinned to the other side (2026-10-13, Shift+←/→): to the right
-    /// group's start, or to the left group's end — next to the gap either way — and where it landed. An item already on that side, or
-    /// an index out of range, stays.
+    /// <paramref name="groups"/> with the item at <paramref name="index"/> (into <see cref="Sided.All"/>) moved by <paramref name="delta"/>
+    /// within its group (2026-10-13): a step past the group's edge crosses into the next group — a step down off a group's last item
+    /// makes it the next group's first, a step up off a group's first makes it the one before's last, the item keeping its index (left,
+    /// center, right, later that day); <see cref="HomeBarItems.Top"/> and <see cref="HomeBarItems.Bottom"/> go to the top or the bottom
+    /// of its own group. An index out of range moves nothing.
+    /// </summary>
+    public static (Sided Groups, int Index) MoveInGroups(Sided groups, int index, int delta)
+    {
+        var lists = Lists(groups);
+        if (delta == 0 || !Locate(lists, index, out int group, out int at))
+        {
+            return (Of(lists), index);
+        }
+
+        var list = lists[group];
+        if (at == list.Count - 1 && delta == 1 && group < lists.Count - 1)
+        {
+            lists[group + 1].Insert(0, list[at]);
+            list.RemoveAt(at);
+            return (Of(lists), index);
+        }
+
+        if (at == 0 && delta == -1 && group > 0)
+        {
+            lists[group - 1].Add(list[0]);
+            list.RemoveAt(0);
+            return (Of(lists), index);
+        }
+
+        var (moved, landed) = HomeBarItems.Move(list, at, delta);
+        lists[group] = moved;
+        return (Of(lists), Before(lists, group) + landed);
+    }
+
+    /// <summary>
+    /// <paramref name="groups"/> with the item at <paramref name="index"/> pinned one group over (2026-10-13, Shift+←/→): to the next
+    /// group's start, or to the group before's end — next to the gap either way — and where it landed. With a center (later that day)
+    /// left goes to center and center to right, and back. An item already in the outermost group that way, or an index out of range, stays.
     /// </summary>
     public static (Sided Groups, int Index) ToSide(Sided groups, int index, bool toRight)
     {
-        var left = groups.Left.ToList();
-        var right = groups.Right.ToList();
-        if (index < 0 || index >= left.Count + right.Count || (index < left.Count) != toRight)
+        var lists = Lists(groups);
+        if (!Locate(lists, index, out int group, out int at))
         {
-            return (new Sided(left, right), index);
+            return (Of(lists), index);
         }
 
+        int target = group + (toRight ? 1 : -1);
+        if (target < 0 || target >= lists.Count)
+        {
+            return (Of(lists), index);
+        }
+
+        string id = lists[group][at];
+        lists[group].RemoveAt(at);
         if (toRight)
         {
-            right.Insert(0, left[index]);
-            left.RemoveAt(index);
-            return (new Sided(left, right), left.Count);
+            lists[target].Insert(0, id);
+            return (Of(lists), Before(lists, target));
         }
 
-        int at = index - left.Count;
-        left.Add(right[at]);
-        right.RemoveAt(at);
-        return (new Sided(left, right), left.Count - 1);
+        lists[target].Add(id);
+        return (Of(lists), Before(lists, target) + lists[target].Count - 1);
     }
 
     /// <summary>
@@ -227,23 +255,55 @@ public static class ItemOrder
 
     /// <summary>
     /// <paramref name="groups"/> with a new divider (<see cref="NextDivider"/>) right after the item at <paramref name="index"/> (into
-    /// <see cref="Sided.All"/>), on its side (2026-10-13, the checklist's <c>+ divider</c>); at the left group's end with no items. Where it landed.
+    /// <see cref="Sided.All"/>), in its group (2026-10-13, the checklist's <c>+ divider</c>); with no item there, at the end of the center
+    /// where there is one (later that day), else of the left group. Where it landed.
     /// </summary>
     public static (Sided Groups, int Index) AddDivider(Sided groups, int index)
     {
-        var left = groups.Left.ToList();
-        var right = groups.Right.ToList();
-        string divider = NextDivider([.. left, .. right]);
-        if (index >= left.Count && index < left.Count + right.Count)
+        var lists = Lists(groups);
+        string divider = NextDivider(groups.All);
+        if (Locate(lists, index, out int group, out int at))
         {
-            right.Insert(index - left.Count + 1, divider);
-            return (new Sided(left, right), index + 1);
+            lists[group].Insert(at + 1, divider);
+            return (Of(lists), index + 1);
         }
 
-        int at = index < 0 || index >= left.Count ? left.Count : index + 1;
-        left.Insert(at, divider);
-        return (new Sided(left, right), at);
+        int home = groups.HasCenter ? 1 : 0;
+        lists[home].Add(divider);
+        return (Of(lists), Before(lists, home) + lists[home].Count - 1);
     }
+
+    // The groups as lists to change, left to right.
+    private static List<List<string>> Lists(Sided groups) => groups.Groups.Select(g => g.ToList()).ToList();
+
+    // The groups back as a Sided: three lists are left, center, right.
+    private static Sided Of(List<List<string>> lists) => lists.Count == 3 ? new Sided(lists[0], lists[2], lists[1]) : new Sided(lists[0], lists[1]);
+
+    // The group an index into the whole order falls in, and its place there; false out of range.
+    private static bool Locate(List<List<string>> lists, int index, out int group, out int at)
+    {
+        at = index;
+        group = 0;
+        if (index < 0)
+        {
+            return false;
+        }
+
+        for (; group < lists.Count; group++)
+        {
+            if (at < lists[group].Count)
+            {
+                return true;
+            }
+
+            at -= lists[group].Count;
+        }
+
+        return false;
+    }
+
+    // How many items the groups before group hold.
+    private static int Before(List<List<string>> lists, int group) => lists.Take(group).Sum(l => l.Count);
 
     /// <summary>
     /// The items of one drawn run with the dividers the user can see (2026-10-13, the shared rule): a divider stands only between two

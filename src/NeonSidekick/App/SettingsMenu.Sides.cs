@@ -9,7 +9,8 @@ namespace NeonSidekick.App;
 /// left in their order, a heading, the items pinned right in theirs (<see cref="ItemOrder.Sided"/>). Shift+←/→ pins the cursor's item
 /// to the other side (to the right group's start, the left group's end: next to the gap); Shift+↑↓ moves it within its group,
 /// crossing into the other at the group's edge; Shift+Home/End to the top or the bottom of its group. The checks, Delete and the
-/// title row's buttons are the checklists' as before; <c>⊡ default</c> puts back the sides with the checks and the order.
+/// title row's buttons are the checklists' as before; <c>⊡ default</c> puts back the sides with the checks and the order. The rows'
+/// helpers also lay out an order in three groups (later on 2026-10-13, the home bar's On the bar tab, <see cref="PinnedCenterHeading"/>).
 /// </summary>
 internal sealed partial class SettingsMenu
 {
@@ -19,40 +20,85 @@ internal sealed partial class SettingsMenu
     /// <summary>The checklist's second heading (2026-10-13). Pinned.</summary>
     public const string PinnedRightHeading = "Pinned right";
 
+    /// <summary>The middle heading of an order in three groups (later on 2026-10-13, the home bar's picker). Pinned.</summary>
+    public const string PinnedCenterHeading = "Pinned center";
+
     /// <summary>The note on a group's heading while nothing is pinned there (2026-10-13). Pinned.</summary>
     public static string EmptySideNote(bool right) => "none: Shift+" + (right ? "→" : "←") + " pins the item under the cursor here";
 
+    /// <summary>The note on the center's heading while nothing is pinned there (later on 2026-10-13). Pinned.</summary>
+    public const string EmptyCenterNote = "none: Shift+← or Shift+→ moves the item under the cursor here";
+
     /// <summary>
-    /// The rows of a checklist in two groups: <see cref="PinnedLeftHeading"/>'s rule, a <paramref name="label"/> row per left item, then
-    /// <see cref="PinnedRightHeading"/>'s and the right items'; the two headings' indices. Each heading counts its group, and an empty
-    /// group's says so (<see cref="EmptySideNote"/>). Pure.
+    /// The rows of a checklist in groups: <see cref="PinnedLeftHeading"/>'s rule, a <paramref name="label"/> row per left item, then
+    /// <see cref="PinnedCenterHeading"/>'s and the center's where there is one (later on 2026-10-13), then <see cref="PinnedRightHeading"/>'s
+    /// and the right items'; the headings' indices. Each heading counts its group, and an empty group's says so (<see cref="EmptySideNote"/>,
+    /// <see cref="EmptyCenterNote"/>). Pure.
     /// </summary>
     public static (List<string> Rows, HashSet<int> Headings) SidedRows(ItemOrder.Sided groups, Func<string, string> label)
     {
         ArgumentNullException.ThrowIfNull(label);
-        var rows = new List<string>(groups.Left.Count + groups.Right.Count + 2);
+        var rows = new List<string>(groups.All.Count + 3);
         var headings = new HashSet<int>();
-        foreach (var (title, items, right) in new[] { (PinnedLeftHeading, groups.Left, false), (PinnedRightHeading, groups.Right, true) })
+        foreach (var (title, items, empty) in SidedHeadings(groups))
         {
             headings.Add(rows.Count);
-            rows.Add(SectionRule.Markup(title, items.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), items.Count == 0 ? EmptySideNote(right) : null));
+            rows.Add(SectionRule.Markup(title, items.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), items.Count == 0 ? empty : null));
             rows.AddRange(items.Select(label));
         }
 
         return (rows, headings);
     }
 
+    /// <summary>Each group's heading, items and empty note, left to right (the center's only where there is one). Pure.</summary>
+    public static IEnumerable<(string Title, IReadOnlyList<string> Items, string EmptyNote)> SidedHeadings(ItemOrder.Sided groups)
+    {
+        yield return (PinnedLeftHeading, groups.Left, EmptySideNote(right: false));
+        if (groups.Center is { } center)
+        {
+            yield return (PinnedCenterHeading, center, EmptyCenterNote);
+        }
+
+        yield return (PinnedRightHeading, groups.Right, EmptySideNote(right: true));
+    }
+
     /// <summary>The item (an index into <see cref="ItemOrder.Sided.All"/>) on page row <paramref name="row"/> of <see cref="SidedRows"/>; −1 on a heading. Pure.</summary>
     public static int SidedItemAt(ItemOrder.Sided groups, int row)
     {
-        int left = groups.Left.Count;
-        return row >= 1 && row <= left ? row - 1
-            : row >= left + 2 && row < left + 2 + groups.Right.Count ? row - 2
-            : -1;
+        int before = 0;
+        int top = 0;
+        foreach (var items in groups.Groups)
+        {
+            if (row > top && row <= top + items.Count)
+            {
+                return before + row - top - 1;
+            }
+
+            top += items.Count + 1;
+            before += items.Count;
+        }
+
+        return -1;
     }
 
     /// <summary>The page row of <see cref="SidedRows"/> that shows item <paramref name="index"/> (into <see cref="ItemOrder.Sided.All"/>). Pure.</summary>
-    public static int SidedRowOf(ItemOrder.Sided groups, int index) => index < groups.Left.Count ? index + 1 : index + 2;
+    public static int SidedRowOf(ItemOrder.Sided groups, int index)
+    {
+        int headings = 1;
+        int before = 0;
+        foreach (var items in groups.Groups)
+        {
+            if (index < before + items.Count)
+            {
+                break;
+            }
+
+            before += items.Count;
+            headings++;
+        }
+
+        return index + Math.Min(headings, groups.Groups.Count);
+    }
 
     /// <summary>
     /// What a sided checklist reads and writes: the field it saves under, its ids and labels, and its three saved lists; the ids that
@@ -169,7 +215,7 @@ internal sealed partial class SettingsMenu
             {
                 var (moved, landed) = pick.Side != 0 ? ItemOrder.ToSide(sides, at, toRight: pick.Side > 0) : ItemOrder.MoveInGroups(sides, at, pick.Move);
                 index = landed;
-                if (!moved.All.SequenceEqual(all, StringComparer.Ordinal) || moved.Left.Count != sides.Left.Count)
+                if (!moved.SameAs(sides))
                 {
                     Apply(list.Field, d => list.SaveSides(d, moved));
                     changed = true;
@@ -184,7 +230,7 @@ internal sealed partial class SettingsMenu
                 // A divider (2026-10-13) has no check: Delete takes it out, Enter and Space do nothing.
                 if (pick.Remove)
                 {
-                    var without = new ItemOrder.Sided(sides.Left.Where(id => id != row).ToList(), sides.Right.Where(id => id != row).ToList());
+                    var without = new ItemOrder.Sided(sides.Left.Where(id => id != row).ToList(), sides.Right.Where(id => id != row).ToList(), sides.Center?.Where(id => id != row).ToList());
                     Apply(list.Field, d => list.SaveSides(d, without));
                     index = Math.Min(index, Math.Max(0, without.All.Count - 1));
                     changed = true;

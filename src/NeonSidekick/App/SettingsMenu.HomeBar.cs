@@ -78,8 +78,10 @@ internal sealed partial class SettingsMenu
         {
             while (true)
             {
-                var items = HomeBarItems.Resolve(_settings.Current.HomeBarItems);
-                var built = HomePickerTabs(catalog, items, filter, _settings.Current.HomeBarAliases, _settings.Current.HomeBarGlyphs, home);
+                var saved = _settings.Current;
+                var sides = HomeBarItems.Sides(saved.HomeBarItems, saved.HomeBarLeft, saved.HomeBarRight);
+                var items = sides.All;
+                var built = HomePickerTabs(catalog, sides, filter, saved.HomeBarAliases, saved.HomeBarGlyphs, home);
                 var page = MenuPage.Tabbed(Crumb(FieldName(SettingsField.ShowHomeBar)), built.Select(b => b.Tab).ToList(), tab, built[Math.Clamp(tab, 0, built.Count - 1)].Tab.Hint ?? "");
                 var picked = await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
                 if (picked is not { } pick)
@@ -103,29 +105,34 @@ internal sealed partial class SettingsMenu
 
                 if (tab == 0)
                 {
-                    if (pick.Row >= 0 && pick.Row < built[0].Refs.Count && built[0].Refs[pick.Row] == AddDividerRef)
+                    string? row = pick.Row >= 0 && pick.Row < built[0].Refs.Count ? built[0].Refs[pick.Row] : null;
+                    if (row == AddDividerRef)
                     {
-                        // + Add divider (2026-10-13, the user's ask): a new one at the bar's end, the cursor on it to move it up.
-                        if (!pick.Remove && pick.Move == 0)
+                        // + Add divider (2026-10-13, the user's ask): a new one at the center's end (the bar's until the groups, later
+                        // that day), the cursor on it to move it.
+                        if (!pick.Remove && pick.Move == 0 && pick.Side == 0)
                         {
-                            Apply(SettingsField.ShowHomeBar, d => d.HomeBarItems = HomeBarItems.AddDivider(items));
-                            cursor = items.Count;
+                            var (added, landed) = HomeBarItems.AddDivider(sides);
+                            SaveHomeSides(added);
+                            cursor = SidedRowOf(added, landed);
                             changed = true;
                         }
 
                         continue;
                     }
 
-                    if (items.Count == 0 || pick.Row >= items.Count)
+                    if (row is null || items.IndexOf(row) is not (>= 0 and int index))
                     {
-                        continue;
+                        continue;   // a heading, or the empty bar's line
                     }
 
                     int move = pick.Remove ? 0 : pick.Move;
-                    if (!pick.Remove && pick.Move == 0)
+                    int side = pick.Remove ? 0 : pick.Side;
+                    int? pin = null;
+                    if (!pick.Remove && pick.Move == 0 && pick.Side == 0)
                     {
-                        // Enter: the actions page, for a terminal that keeps the move keys to itself, the rename and the emoji.
-                        if (await HomeItemActionAsync(items[pick.Row], catalog, cancellationToken).ConfigureAwait(false) is not { } chosen)
+                        // Enter: the actions page, for a terminal that keeps the move and pin keys to itself, the rename and the emoji.
+                        if (await HomeItemActionAsync(row, catalog, GroupOf(sides, index), cancellationToken).ConfigureAwait(false) is not { } chosen)
                         {
                             continue;
                         }
@@ -133,48 +140,66 @@ internal sealed partial class SettingsMenu
                         switch (chosen.Do)
                         {
                             case HomeItemDo.Rename:
-                                changed |= await RenameHomeItemAsync(items[pick.Row], catalog, cancellationToken).ConfigureAwait(false);
+                                changed |= await RenameHomeItemAsync(row, catalog, cancellationToken).ConfigureAwait(false);
                                 continue;
                             case HomeItemDo.Emoji:
-                                changed |= await ChangeHomeItemEmojiAsync(items[pick.Row], catalog, cancellationToken).ConfigureAwait(false);
+                                changed |= await ChangeHomeItemEmojiAsync(row, catalog, cancellationToken).ConfigureAwait(false);
                                 continue;
                             case HomeItemDo.DefaultEmoji:
-                                changed |= SetHomeItemGlyph(items[pick.Row], catalog, null);
+                                changed |= SetHomeItemGlyph(row, catalog, null);
                                 continue;
                             case HomeItemDo.DefaultName:
-                                Apply(SettingsField.ShowHomeBar, d => d.HomeBarAliases = HomeBarItems.Rename(d.HomeBarAliases, items[pick.Row], null, HomeBarItems.NameOf(items[pick.Row], catalog)));
+                                Apply(SettingsField.ShowHomeBar, d => d.HomeBarAliases = HomeBarItems.Rename(d.HomeBarAliases, row, null, HomeBarItems.NameOf(row, catalog)));
                                 changed = true;
                                 continue;
+                            case HomeItemDo.Pin:
+                                pin = chosen.Move;
+                                break;
                         }
 
                         move = chosen.Move;
                     }
 
-                    if (move == 0)
+                    if (pin is null && side == 0 && move == 0)
                     {
-                        Apply(SettingsField.ShowHomeBar, d => d.HomeBarItems = HomeBarItems.Remove(items, pick.Row));
-                        cursor = Math.Min(pick.Row, Math.Max(0, items.Count - 2));
+                        // Off the bar, its side with it (later on 2026-10-13): added again, it lands in the center.
+                        var without = HomeBarItems.Without(sides, row);
+                        SaveHomeSides(without);
+                        cursor = without.All.Count == 0 ? 0 : SidedRowOf(without, Math.Min(index, without.All.Count - 1));
                         changed = true;
                         continue;
                     }
 
-                    var (moved, at) = HomeBarItems.Move(items, pick.Row, move);
-                    if (at != pick.Row)
+                    // Shift+←/→ one group over; a Pin row to its group, a group at a time; else a move within the group, crossing at its edge.
+                    var (moved, at) = (sides, index);
+                    if (pin is { } group)
                     {
-                        Apply(SettingsField.ShowHomeBar, d => d.HomeBarItems = moved);
+                        for (int step = GroupOf(sides, index); step != group && at >= 0; step += Math.Sign(group - step))
+                        {
+                            (moved, at) = ItemOrder.ToSide(moved, at, toRight: group > step);
+                        }
+                    }
+                    else
+                    {
+                        (moved, at) = side != 0 ? ItemOrder.ToSide(sides, index, toRight: side > 0) : ItemOrder.MoveInGroups(sides, index, move);
+                    }
+
+                    if (!moved.SameAs(sides))
+                    {
+                        SaveHomeSides(moved);
                         changed = true;
                     }
 
-                    cursor = at;
+                    cursor = SidedRowOf(moved, at);
                     continue;
                 }
 
-                if (pick.Move != 0 || pick.Remove || tab >= built.Count || pick.Row >= built[tab].Refs.Count || built[tab].Refs[pick.Row] is not { } reference)
+                if (pick.Move != 0 || pick.Remove || pick.Side != 0 || tab >= built.Count || pick.Row >= built[tab].Refs.Count || built[tab].Refs[pick.Row] is not { } reference)
                 {
                     continue;
                 }
 
-                Apply(SettingsField.ShowHomeBar, d => d.HomeBarItems = HomeBarItems.Flip(items, reference));
+                SaveHomeSides(HomeBarItems.Flip(sides, reference));
                 changed = true;
             }
         }
@@ -187,7 +212,16 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    // What the bar item's actions page chose beside a move: the rename, the emoji grid, the emoji taken off (later on 2026-10-12).
+    // The bar's groups and order saved together (later on 2026-10-13): the whole order, then each side.
+    private void SaveHomeSides(ItemOrder.Sided sides) =>
+        Apply(SettingsField.ShowHomeBar, d => (d.HomeBarItems, d.HomeBarLeft, d.HomeBarRight) = HomeBarItems.SaveSides(sides));
+
+    // The group of the item at index of sides.All: 0 left, 1 center, 2 right.
+    private static int GroupOf(ItemOrder.Sided sides, int index) =>
+        index < sides.Left.Count ? 0 : index < sides.Left.Count + (sides.Center?.Count ?? 0) ? 1 : 2;
+
+    // What the bar item's actions page chose beside a move: the rename, the emoji grid, the emoji taken off (later on 2026-10-12), a
+    // pin (later on 2026-10-13: its Move the group, 0 left, 1 center, 2 right).
     private enum HomeItemDo
     {
         Move,
@@ -195,11 +229,13 @@ internal sealed partial class SettingsMenu
         Emoji,
         DefaultEmoji,
         DefaultName,
+        Pin,
     }
 
-    // The bar item's actions page: a move (Top/−1/+1/Bottom), 0 for remove, the rename (its alias dim beside it), the emoji (its
-    // own dim beside it; later on 2026-10-12, the user's ask) and, while it has one, the default emoji again; null on ESC.
-    private async Task<(int Move, HomeItemDo Do)?> HomeItemActionAsync(string reference, HaCatalog catalog, CancellationToken cancellationToken)
+    // The bar item's actions page: a move (Top/−1/+1/Bottom), the two groups it is not in (later on 2026-10-13; it is in group), 0 for
+    // remove, the rename (its alias dim beside it), the emoji (its own dim beside it; later on 2026-10-12, the user's ask) and, while it
+    // has one, the default emoji again; null on ESC.
+    private async Task<(int Move, HomeItemDo Do)?> HomeItemActionAsync(string reference, HaCatalog catalog, int group, CancellationToken cancellationToken)
     {
         string? alias = HomeBarItems.AliasOf(_settings.Current.HomeBarAliases, reference);
         string? glyph = HomeBarItems.GlyphOf(_settings.Current.HomeBarGlyphs, reference);
@@ -210,6 +246,13 @@ internal sealed partial class SettingsMenu
             (Markup.Escape(HomeBarText.MoveDown), (1, HomeItemDo.Move)),
             (Markup.Escape(HomeBarText.MoveBottom), (HomeBarItems.Bottom, HomeItemDo.Move)),
         };
+        foreach (var (pin, label) in new[] { (0, HomeBarText.PinLeftItem), (1, HomeBarText.PinCenterItem), (2, HomeBarText.PinRightItem) })
+        {
+            if (pin != group)
+            {
+                rows.Add((Markup.Escape(label), (pin, HomeItemDo.Pin)));
+            }
+        }
         if (!HomeBarItems.IsNameless(reference))
         {
             // The 🛒 chip shows no name to change (later on 2026-10-12, the user's call); its emoji still can be.
@@ -286,19 +329,20 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// The picker's tabs over <paramref name="catalog"/> for the bar's <paramref name="items"/>, the kinds' tabs under
+    /// The picker's tabs over <paramref name="catalog"/> for the bar's items in their groups (<paramref name="sides"/>), the kinds' tabs under
     /// <paramref name="filter"/>; an item with an alias (<paramref name="aliases"/>) shows it, quoted on the kinds' and rooms' tabs
     /// and matched by the filter; one with an emoji of its own (<paramref name="glyphs"/>) shows it on the bar's tab. Shopping last
     /// (later on 2026-10-12), and the bar's tab and it alone without <paramref name="home"/> (no Home Assistant). Pure over its data.
     /// </summary>
-    private static List<HomeTab> HomePickerTabs(HaCatalog catalog, IReadOnlyList<string> items, string filter, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs, bool home = true)
+    private static List<HomeTab> HomePickerTabs(HaCatalog catalog, ItemOrder.Sided sides, string filter, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs, bool home = true)
     {
+        var items = sides.All;
         if (!home)
         {
-            return [BarTab(catalog, items, aliases, glyphs), ShoppingTab(items, filter, glyphs)];
+            return [BarTab(catalog, sides, aliases, glyphs), ShoppingTab(items, filter, glyphs)];
         }
 
-        var tabs = new List<HomeTab> { BarTab(catalog, items, aliases, glyphs), RoomsTab(catalog, items, filter, aliases) };
+        var tabs = new List<HomeTab> { BarTab(catalog, sides, aliases, glyphs), RoomsTab(catalog, items, filter, aliases) };
         var named = HomeDomainTabs.SelectMany(t => t.Domains).ToHashSet(StringComparer.Ordinal);
         foreach (var (title, domains) in HomeDomainTabs)
         {
@@ -323,32 +367,25 @@ internal sealed partial class SettingsMenu
         return Sectioned(HomeBarText.ShoppingTab, [("", null, rows)], items, filter);
     }
 
-    private static HomeTab BarTab(HaCatalog catalog, IReadOnlyList<string> items, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs)
+    // The bar's tab (later on 2026-10-13, the user's ask: pinned left, center or right): the groups as the sided checklists draw them — a
+    // heading each with its count (SidedRows' rows, so SidedRowOf finds an item's row), the items numbered across all three — then
+    // + Add divider; with nothing on the bar, its one dim line instead of the headings.
+    private static HomeTab BarTab(HaCatalog catalog, ItemOrder.Sided sides, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs)
     {
         var rows = new List<string>();
         var refs = new List<string?>();
+        var headings = new HashSet<int>();
         int number = 1;
-        foreach (string item in items)
+        foreach (var (title, group, empty) in sides.All.Count > 0 ? SidedHeadings(sides) : [])
         {
-            HomeBarItems.TryParse(item, out var kind, out string id);
-            if (kind == HomeItemKind.Divider)
+            headings.Add(rows.Count);
+            rows.Add(SectionRule.Markup(title, group.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), group.Count == 0 ? empty : null));
+            refs.Add(null);
+            foreach (string item in group)
             {
-                rows.Add(Markup.Escape($"{number++.ToString(System.Globalization.CultureInfo.InvariantCulture),2}. {ScreenPane.DividerGlyph} {HomeBarText.DividerName}") + Theme.DimMarkup("  " + HomeBarText.DividerWhere));
+                rows.Add(BarRow(catalog, item, number++, aliases, glyphs));
                 refs.Add(item);
-                continue;
             }
-
-            // The entity's own glyph, as its chip has (2026-10-12: a TV's 📺 is in its device class, which a bare id lacks), or the
-            // emoji of the user's own (later that day), the own one dim at the end.
-            string own = HomeChips.DefaultGlyph(item, catalog);
-            string? custom = HomeBarItems.GlyphOf(glyphs, item);
-            string where = kind == HomeItemKind.Area ? HomeBarText.RoomsTab.ToLowerInvariant() : kind == HomeItemKind.Shopping ? HomeBarText.ShoppingWhere : catalog.AreaOf(id) is { } area ? catalog.Area(area)?.Name ?? id : id;
-            // An alias first, as the bar shows it, and the item's own name dim beside it.
-            string name = HomeBarItems.NameOf(item, catalog);
-            string? alias = HomeBarItems.AliasOf(aliases, item);
-            string note = (alias is null ? where : (alias.Length == 0 ? HomeBarText.EmojiAlone + " · " : "") + name + " · " + where) + (custom is null ? "" : " · " + HomeBarText.DefaultGlyphNote(own));
-            rows.Add(Markup.Escape($"{number++.ToString(System.Globalization.CultureInfo.InvariantCulture),2}. {custom ?? own} {alias ?? name}") + Theme.DimMarkup("  " + note));
-            refs.Add(item);
         }
 
         if (rows.Count == 0)
@@ -359,7 +396,29 @@ internal sealed partial class SettingsMenu
 
         rows.Add(Markup.Escape(HomeBarText.AddDividerRow));
         refs.Add(AddDividerRef);
-        return new HomeTab(new MenuTab(HomeBarText.BarTab, rows) { Moves = true, Hint = HomeBarText.BarHint }, refs);
+        return new HomeTab(new MenuTab(HomeBarText.BarTab, rows) { Moves = true, Sides = true, Headings = headings.Count > 0 ? headings : null, Hint = HomeBarText.BarHint }, refs);
+    }
+
+    // One item's row on the bar's tab: its number, its glyph and its name as the chip has them, and where it is, dim.
+    private static string BarRow(HaCatalog catalog, string item, int number, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs)
+    {
+        string at = number.ToString(System.Globalization.CultureInfo.InvariantCulture).PadLeft(2) + ". ";
+        HomeBarItems.TryParse(item, out var kind, out string id);
+        if (kind == HomeItemKind.Divider)
+        {
+            return Markup.Escape($"{at}{ScreenPane.DividerGlyph} {HomeBarText.DividerName}") + Theme.DimMarkup("  " + HomeBarText.DividerWhere);
+        }
+
+        // The entity's own glyph, as its chip has (2026-10-12: a TV's 📺 is in its device class, which a bare id lacks), or the
+        // emoji of the user's own (later that day), the own one dim at the end.
+        string own = HomeChips.DefaultGlyph(item, catalog);
+        string? custom = HomeBarItems.GlyphOf(glyphs, item);
+        string where = kind == HomeItemKind.Area ? HomeBarText.RoomsTab.ToLowerInvariant() : kind == HomeItemKind.Shopping ? HomeBarText.ShoppingWhere : catalog.AreaOf(id) is { } area ? catalog.Area(area)?.Name ?? id : id;
+        // An alias first, as the bar shows it, and the item's own name dim beside it.
+        string name = HomeBarItems.NameOf(item, catalog);
+        string? alias = HomeBarItems.AliasOf(aliases, item);
+        string note = (alias is null ? where : (alias.Length == 0 ? HomeBarText.EmojiAlone + " · " : "") + name + " · " + where) + (custom is null ? "" : " · " + HomeBarText.DefaultGlyphNote(own));
+        return Markup.Escape($"{at}{custom ?? own} {alias ?? name}") + Theme.DimMarkup("  " + note);
     }
 
     private static HomeTab RoomsTab(HaCatalog catalog, IReadOnlyList<string> items, string filter, IReadOnlyDictionary<string, string>? aliases)

@@ -4705,7 +4705,7 @@ public partial class ScreenPaneTests : IDisposable
 
     // ── The toolbar (2026-09-21) ────────────────────────────────────────────
 
-    /// <summary>The toolbar's text: the strip at column 0, the path ending on the last cell and cut from the front to the room between, gone under eight cells; the strip alone without one, cut to the row.</summary>
+    /// <summary>The toolbar's text: the strip at column 0, the path ending on the last cell and cut from the front to the room between, gone under eight cells; the strip alone without one, the glyphs that fit the row.</summary>
     [Fact]
     public void ToolbarRow_IsPinned()
     {
@@ -4720,8 +4720,8 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Equal(strip, ScreenPane.ToolbarRow(strip, path, 14));                        // seven: no path
         Assert.Equal(strip, ScreenPane.ToolbarRow(strip, "", 39));
         Assert.Equal(new string(' ', 19) + path, ScreenPane.ToolbarRow("", path, 39));
-        Assert.Equal(ScreenPane.Fit(strip, 4), ScreenPane.ToolbarRow(strip, path, 4));      // the strip cut to the row
-        Assert.Equal("…", ScreenPane.ToolbarRow(strip, path, 1));
+        Assert.Equal("🔧", ScreenPane.ToolbarRow(strip, path, 4));      // the glyphs that fit, the rest gone (a … cut until later on 2026-10-13)
+        Assert.Equal("", ScreenPane.ToolbarRow(strip, path, 1));
         Assert.Equal("", ScreenPane.ToolbarRow(strip, path, 0));
     }
 
@@ -5406,15 +5406,19 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Equal(TimeSpan.FromSeconds(2), ScreenPane.FlashLasts);
     }
 
-    /// <summary>A cut toolbar strip (2026-10-04, the UI review): as many glyphs as fit and +N for the rest; whole when it fits; Fit's cut where not one glyph and its count fit.</summary>
+    /// <summary>
+    /// A cut toolbar strip: as many whole glyphs as fit and nothing after them (a +N for the rest from 2026-10-04 until later on
+    /// 2026-10-13, the user's call: what a narrow row leaves off simply goes); whole when it fits; empty where not one fits.
+    /// </summary>
     [Fact]
-    public void FitStrip_CountsWhatItLeavesOff()
+    public void FitStrip_KeepsTheGlyphsThatFit_TheRestGo()
     {
         const string strip = "⚙️ 🌐 🐳 🐚 📁";   // five glyphs, fourteen cells
         Assert.Equal(strip, ScreenPane.FitStrip(strip, 14));
-        Assert.Equal("⚙️ 🌐 🐳 +2", ScreenPane.FitStrip(strip, 13));
-        Assert.Equal("⚙️ +4", ScreenPane.FitStrip(strip, 5));
-        Assert.Equal(ScreenPane.Fit(strip, 4), ScreenPane.FitStrip(strip, 4));
+        Assert.Equal("⚙️ 🌐 🐳 🐚", ScreenPane.FitStrip(strip, 13));
+        Assert.Equal("⚙️ 🌐", ScreenPane.FitStrip(strip, 5));
+        Assert.Equal("⚙️", ScreenPane.FitStrip(strip, 4));
+        Assert.Equal("", ScreenPane.FitStrip(strip, 1));
         Assert.Equal("", ScreenPane.FitStrip(strip, 0));
     }
 

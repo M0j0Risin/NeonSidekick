@@ -68,6 +68,12 @@ public sealed record MenuTab(string Title, IReadOnlyList<string> Rows)
     /// <summary>The tab's <see cref="MenuPage.Moves"/> (2026-10-12): its rows are an order the move keys change.</summary>
     public bool Moves { get; init; }
 
+    /// <summary>
+    /// The tab's <see cref="MenuPage.Sides"/> (later on 2026-10-13, the home bar's On the bar tab pinned left, center or right): Shift/Alt+←/→
+    /// pin the cursor's row there, while the bare arrows still step the tabs.
+    /// </summary>
+    public bool Sides { get; init; }
+
     /// <summary>The tab whose rows show: the sub-tab on show, or this one when it holds none (2026-10-10).</summary>
     public MenuTab Shown => SubTabs is { Count: > 0 } subs ? subs[Math.Clamp(Sub, 0, subs.Count - 1)] : this;
 }
@@ -241,7 +247,8 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     /// <summary>
     /// The rows are an order in two groups, pinned left and pinned right (2026-10-13, the user's ask: the hint bar's and the tool
     /// bar's items on either side): Shift+←/→ and Alt+←/→ return a <see cref="MenuPick"/> with <see cref="MenuPick.Side"/> −1 or +1
-    /// for the cursor's row (<see cref="MenuPane.SideOf"/>). Only on an untabbed page, where ←/→ walk nothing. False: the keys are what they were.
+    /// for the cursor's row (<see cref="MenuPane.SideOf"/>). On an untabbed page, and since later on 2026-10-13 on a tab that asks
+    /// (<see cref="MenuTab.Sides"/>, taken from it), where the bare ←/→ still walk the tabs. False: the keys are what they were.
     /// </summary>
     public bool Sides { get; init; }
 
@@ -261,7 +268,7 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
 
         tab = Math.Clamp(tab, 0, tabs.Count - 1);
         var shown = tabs[tab].Shown;
-        return new MenuPage(title, shown.Rows, shown.Hint ?? hint) { Tabs = tabs, Tab = tab, Caption = shown.Caption, BaseHint = hint, Headings = shown.Headings, Filter = shown.Filter, Marks = shown.Marks, Moves = shown.Moves };
+        return new MenuPage(title, shown.Rows, shown.Hint ?? hint) { Tabs = tabs, Tab = tab, Caption = shown.Caption, BaseHint = hint, Headings = shown.Headings, Filter = shown.Filter, Marks = shown.Marks, Moves = shown.Moves, Sides = shown.Sides };
     }
 
     /// <summary>Whether the cursor may rest on <paramref name="row"/>: any row of a page without <see cref="Headings"/>; on one with them, a row neither a heading nor empty. Pure.</summary>
@@ -942,9 +949,10 @@ public sealed class MenuPane : INoticeSink
                         : new MenuPick(page.Tab, _cursor, Sub: page.Sub, Move: move);
                 }
 
-                if (page.Sides && page.Tabs is null && count > 0 && SideOf(k) is { } side)
+                if (page.Sides && count > 0 && SideOf(k) is { } side)
                 {
-                    // Pinned left or right (2026-10-13): the host moves the row to that group and shows the page again.
+                    // Pinned left or right (2026-10-13; a tab's too since later that day, ahead of the tab step): the host moves the row
+                    // to that group and shows the page again.
                     _status.Clear();
                     return new MenuPick(page.Tab, _cursor, Sub: page.Sub, Side: side);
                 }
@@ -1113,7 +1121,7 @@ public sealed class MenuPane : INoticeSink
 
         // A `with`, never Tabbed() again: the hotkeys, the toggle and the cursors would go with a rebuild.
         var shown = tabs[tab].Shown;
-        _page = page with { Tabs = tabs, Rows = shown.Rows, Tab = tab, Caption = shown.Caption, Hint = shown.Hint ?? page.BaseHint ?? page.Hint, Headings = shown.Headings, Filter = shown.Filter, Marks = shown.Marks, Moves = shown.Moves };
+        _page = page with { Tabs = tabs, Rows = shown.Rows, Tab = tab, Caption = shown.Caption, Hint = shown.Hint ?? page.BaseHint ?? page.Hint, Headings = shown.Headings, Filter = shown.Filter, Marks = shown.Marks, Moves = shown.Moves, Sides = shown.Sides };
         int count = _page.Rows.Count;
         _cursor = _page.StopFrom(page.TabCursors is { } cursors && tab < cursors.Count && count > 0 ? cursors[tab] : 0, +1);
         _first = 0;

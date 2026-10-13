@@ -768,6 +768,8 @@ public sealed class AppSettings : IDisposable
         PerformanceBarOrder = source.PerformanceBarOrder is null ? null : [.. source.PerformanceBarOrder],
         HomeBarItems = source.HomeBarItems is null ? null : [.. source.HomeBarItems],
         HomeBarLastItems = source.HomeBarLastItems is null ? null : [.. source.HomeBarLastItems],
+        HomeBarLeft = source.HomeBarLeft is null ? null : [.. source.HomeBarLeft],
+        HomeBarRight = source.HomeBarRight is null ? null : [.. source.HomeBarRight],
         HomeBarAliases = source.HomeBarAliases is null ? null : new Dictionary<string, string>(source.HomeBarAliases, StringComparer.Ordinal),
         HomeBarGlyphs = source.HomeBarGlyphs is null ? null : new Dictionary<string, string>(source.HomeBarGlyphs, StringComparer.Ordinal),
         BarOrder = source.BarOrder is null ? null : [.. source.BarOrder],
