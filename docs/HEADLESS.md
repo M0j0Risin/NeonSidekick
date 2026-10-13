@@ -28,7 +28,7 @@ executable is on `PATH`; from a checkout, use `dotnet run --project src/NeonSide
 ## What the output looks like
 
 ```
-NeonSidekick 0.5.1
+NeonSidekick 0.5.2
 Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name]); /skills add <source> [--global] [--yes] installs a skill; /claude <message> asks Claude Code; /rewind [n] goes back n messages; /exit or EOF exits.
 LLM: http://127.0.0.1:1234/v1 model=qwen3-30b-a3b (configured)
 You: Neon: Here is what I found…
