@@ -1472,11 +1472,27 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     public const string MarkSeparator = " ";
 
     /// <summary>
-    /// The least cells the trailer's text gives way to (2026-09-28, the user's call): below the
-    /// half-row cap the model name shrinks for the text on its left, down to this, and only then is
-    /// the left cut — sixteen keeps <c>Qwen3.8-27B-Unc…</c> readable and a target for the click.
+    /// The least cells the model's name is cut to (2026-09-28, the user's call, sixteen; eight since later on 2026-10-12, the user's
+    /// ask: the model's name and the working directory collapse to make room for anything else on the hint row and the toolbar): a
+    /// name that does not fit is cut down to this, and with less room it goes, its reasoning mark with it (<see cref="FitName"/>).
+    /// Until then the name kept sixteen and the text on its left was cut instead.
     /// </summary>
-    public const int TrailerMinCells = 16;
+    public const int TrailerMinCells = 8;
+
+    /// <summary>
+    /// <paramref name="name"/> in <paramref name="room"/> cells (later on 2026-10-12): whole when it fits, cut (<see cref="Fit"/>) when
+    /// the room is <see cref="TrailerMinCells"/> or more, else nothing — it collapses for what stands beside it. Pure.
+    /// </summary>
+    public static string FitName(string name, int room) =>
+        TextCells.Width(name) <= room ? name : room >= TrailerMinCells ? Fit(name, room) : "";
+
+    /// <summary>
+    /// <paramref name="path"/> in <paramref name="room"/> cells (later on 2026-10-12, <see cref="FitName"/>'s rule): whole when it fits
+    /// (a short one too, under <see cref="ToolbarPathMinCells"/>), cut from the front (<see cref="FitTail"/>) when the room is
+    /// <see cref="ToolbarPathMinCells"/> or more, else nothing. Pure.
+    /// </summary>
+    public static string FitPath(string path, int room) =>
+        path.Length == 0 || room < 1 ? "" : TextCells.Width(path) <= room ? path : room >= ToolbarPathMinCells ? FitTail(path, room) : "";
 
     /// <summary>The least blanks between the toolbar's strip and its path.</summary>
     public const int ToolbarGap = 2;
@@ -1508,8 +1524,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// The model's name and its <paramref name="mark"/> in <paramref name="room"/> cells (later on 2026-10-12): the name cut ahead of the
-    /// mark, as <see cref="Trail"/> cuts the hint row's; the name alone where the mark leaves it no cell; empty for no room or no name.
+    /// The model's name and its <paramref name="mark"/> in <paramref name="room"/> cells (later on 2026-10-12): the name fitted ahead of
+    /// the mark as <see cref="FitName"/> fits it, as <see cref="Trail"/> fits the hint row's; empty — the mark gone too — when the name
+    /// collapses, or for no name.
     /// </summary>
     private static string NameAndMark(string model, string mark, int room)
     {
@@ -1519,7 +1536,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
 
         int markCells = mark.Length == 0 ? 0 : TextCells.Width(mark) + MarkSeparator.Length;
-        return markCells == 0 || room - markCells < 1 ? Fit(model, room) : TrailerText(Fit(model, room - markCells), mark);
+        string name = FitName(model, room - markCells);
+        return name.Length == 0 ? "" : TrailerText(name, mark);
     }
 
     /// <summary>Between the toolbar's path and the model's name after it (2026-10-12). Pinned.</summary>
@@ -1554,8 +1572,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// <paramref name="toolbar"/> laid out in <paramref name="cells"/> (2026-10-12): with the name among the glyphs, the glyphs ahead of
-    /// it whole or none of it, the name cut to the room after them and the glyphs after it fitted (<see cref="FitStrip"/>) to what is
-    /// left; otherwise the strip fitted alone. The right edge as <see cref="ToolbarRow(string, string, string, int)"/> says.
+    /// and after it whole and the name fitted (<see cref="NameAndMark"/>) to the room they leave between them; when they do not all fit,
+    /// or the name collapses there (later on 2026-10-12, the user's ask: the glyphs first), the strip fitted alone with no name. The
+    /// right edge as <see cref="ToolbarRow(string, string, string, int)"/> says: the name and the path in what the glyphs leave, each
+    /// collapsing (<see cref="FitName"/>, <see cref="FitPath"/>), the path first.
     /// <paramref name="spaced"/>: the strip already carries <see cref="TextCells.SpaceSelectorSequences"/>' blanks.
     /// </summary>
     private static ToolbarLaid LayToolbar(ToolbarParts toolbar, int cells, bool spaced = false)
@@ -1574,17 +1594,19 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             int at = Math.Min(toolbar.ModelAt, glyphs.Length);
             string ahead = Space(string.Join(' ', glyphs, 0, at));
             string behind = Space(string.Join(' ', glyphs, at, glyphs.Length - at));
-            lead = FitStrip(ahead, cells);
-            int column = TextCells.Width(lead) + (lead.Length == 0 ? 0 : 1);
-            if (lead == ahead && column < cells)
+            int column = TextCells.Width(ahead) + (ahead.Length == 0 ? 0 : 1);
+            int behindCells = behind.Length == 0 ? 0 : TextCells.Width(behind) + 1;
+            // The glyphs keep their cells; the name has what is left between them, or goes (later on 2026-10-12).
+            inline = NameAndMark(model, mark, cells - column - behindCells);
+            if (inline.Length > 0)
             {
-                inline = NameAndMark(model, mark, cells - column);
-                int tailColumn = column + TextCells.Width(inline) + 1;
-                if (inline.Length > 0 && behind.Length > 0 && tailColumn < cells)
-                {
-                    tail = FitStrip(behind, cells - tailColumn);
-                    tailFirst = at;
-                }
+                lead = ahead;
+                tail = behind;
+                tailFirst = behind.Length == 0 ? 0 : at;
+            }
+            else
+            {
+                lead = FitStrip(Space(toolbar.Strip), cells);
             }
 
             model = "";
@@ -1597,7 +1619,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         int room = cells - TextCells.Width(new ToolbarLaid(lead, inline, tail, tailFirst, "", "").Left) - ToolbarGap;
         string name = NameAndMark(model, mark, Math.Min(Math.Max(1, cells / 2), room));
         int pathRoom = name.Length == 0 ? room : room - TextCells.Width(name) - ToolbarModelSeparator.Length;
-        string shown = path.Length == 0 || pathRoom < ToolbarPathMinCells ? "" : FitTail(path, pathRoom);
+        string shown = FitPath(path, pathRoom);
         return new ToolbarLaid(lead, inline, tail, tailFirst, shown, name);
     }
 
@@ -1627,22 +1649,26 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// The right part of a hint row of <paramref name="cells"/>: <paramref name="trailer"/> cut to
-    /// half the row at most; with a <paramref name="mark"/>, the text cut to what the mark and its
-    /// separator leave of that half and the mark whole behind it — at an absurd width the text
-    /// goes to an ellipsis, then to nothing, and the mark stands alone. Since 2026-09-28 (the user's
-    /// picture: an overlay's hint cut while a long model name kept its half) the text also gives way
-    /// to <paramref name="leftCells"/>, the uncut width of what stands on its left: it takes what that
-    /// and <see cref="TrailerGap"/> leave, never under <see cref="TrailerMinCells"/> nor over the half.
-    /// None on the left (the default) is the half as before. Pinned.
+    /// The right part of a hint row of <paramref name="cells"/>: <paramref name="trailer"/> and its <paramref name="mark"/> in half the
+    /// row at most, giving way to <paramref name="leftCells"/>, the uncut width of what stands on its left (2026-09-28, the user's
+    /// picture: an overlay's hint cut while a long model name kept its half), and <see cref="TrailerGap"/>. The name is fitted ahead of
+    /// the mark as <see cref="FitName"/> fits it: whole, cut to <see cref="TrailerMinCells"/> at least, or gone with its mark — since
+    /// later on 2026-10-12 (the user's ask) it collapses for the left rather than cutting it. None on the left (the default) is the
+    /// half alone. Pinned.
     /// </summary>
     public static string Trail(string trailer, string mark, int cells, int leftCells = 0)
     {
         ArgumentNullException.ThrowIfNull(trailer);
         ArgumentNullException.ThrowIfNull(mark);
         int markCells = mark.Length == 0 ? 0 : TextCells.Width(mark) + MarkSeparator.Length;
-        int room = Math.Min(cells / 2 - markCells, Math.Max(TrailerMinCells, cells - leftCells - TrailerGap - markCells));
-        return mark.Length == 0 ? Fit(trailer, room) : TrailerText(Fit(trailer, room), mark);
+        int room = Math.Min(cells / 2, cells - leftCells - TrailerGap);
+        if (trailer.Length == 0)
+        {
+            return TextCells.Width(mark) <= room ? mark : "";   // a mark with no name, where it fits
+        }
+
+        string name = FitName(trailer, room - markCells);
+        return name.Length == 0 ? "" : TrailerText(name, mark);
     }
 
     /// <summary>
@@ -6005,7 +6031,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// stand in it (cells ahead, −1 for none; the model's char index too, for its mark's colour). <see cref="HintLayout"/>'s parts in
     /// order, or under an overlay or with no layout the strip, the queued part and the hint, as the row always was.
     /// </summary>
-    private HintLaid LayHint()
+    private HintLaid LayHint(bool dropPath = false, bool dropModel = false)
     {
         string strip = _strip();
         if (_overlay is not null || _hintLayout is not { } layout)
@@ -6030,6 +6056,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         foreach (var slot in layout())
         {
             modelSlot |= slot.Kind == HintSlotKind.Model;
+            if (!slot.Right && ((dropPath && slot.Kind == HintSlotKind.Path) || (dropModel && slot.Kind == HintSlotKind.Model)))
+            {
+                continue;   // collapsed for the rest of the flow (PlaceStanding)
+            }
+
             if (slot.Right)
             {
                 right.Add(slot);   // the right edge's, in order (later on 2026-10-12)
@@ -6105,9 +6136,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// the model leave, none under <see cref="ToolbarPathMinCells"/>; the flow cut ahead of them as <see cref="PinRight(string, string, string, int)"/>
     /// cuts it. The model alone at the right is the row as it always was. <paramref name="mark"/> is <see cref="TrailerMark"/>'s answer.
     /// </summary>
-    private HintPlaced PlaceStanding(int max, string mark)
+    private HintPlaced PlaceStanding(int max, string mark) => PlaceStanding(max, mark, dropPath: false, dropModel: false);
+
+    // The flow's working directory and model collapse for the rest of it (later on 2026-10-12, the user's ask): a flow too wide for
+    // its cells is laid again without the path, then without the model too, ahead of any cut.
+    private HintPlaced PlaceStanding(int max, string mark, bool dropPath, bool dropModel)
     {
-        var laid = LayHint();
+        var laid = LayHint(dropPath, dropModel);
         string row = laid.Row;
         int leftCells = TextCells.Width(row);
         string trailer = _trailer();
@@ -6117,7 +6152,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         if (path.Kind == HintSlotKind.Path && !string.IsNullOrEmpty(path.Text))
         {
             int room = max - leftCells - TrailerGap - (modelText.Length == 0 ? 0 : TextCells.Width(modelText) + ToolbarModelSeparator.Length);
-            pathText = room < ToolbarPathMinCells ? "" : FitTail(path.Text, room);
+            pathText = FitPath(path.Text, room);
         }
 
         var parts = laid.Right
@@ -6169,6 +6204,16 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 column += width + TextCells.Width(ToolbarModelSeparator);
                 index += partText.Length + ToolbarModelSeparator.Length;
             }
+        }
+
+        if (TextCells.Width(row) > cells && laid.Path.Length > 0 && !dropPath)
+        {
+            return PlaceStanding(max, mark, dropPath: true, dropModel);
+        }
+
+        if (TextCells.Width(row) > cells && laid.ModelInFlow && laid.Model.Length > 0 && !dropModel)
+        {
+            return PlaceStanding(max, mark, dropPath, dropModel: true);
         }
 
         // The model and the working directory in the flow, where the fit left them whole.

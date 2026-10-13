@@ -1523,7 +1523,7 @@ public class ScreenPaneTests : IDisposable
         Assert.False(pane.TryHitQueued(11, 102));
     }
 
-    /// <summary>A part the width cut is no button (2026-09-18): the trailer takes half the row and the fit cuts the left from the right — the count leads, so it survives a long hint but not a row too narrow for it.</summary>
+    /// <summary>A part the width cut is no button (2026-09-18): the fit cuts the left from the right — the count leads, so it survives a long hint but not a row too narrow for it; the trailer collapses for it (later on 2026-10-12).</summary>
     [Fact]
     public void Queued_CutByANarrowRow_HasNoZone()
     {
@@ -1536,17 +1536,17 @@ public class ScreenPaneTests : IDisposable
         pane.Show();
         pane.ShowInput("abc", 3);
 
-        // 19 cells, "llama" (5) pinned right with a gap of 2: 12 cells for the left, "📤 12 queued" is 12 — cut to 11 + the ellipsis.
-        Assert.False(pane.TryHitQueued(0, 102));
-        Assert.True(pane.TryHitHint(0, 102, out var hit));
-        Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
-
-        // Without the trailer the 19 cells hold it whole ahead of the cut hint.
-        pane.Trailer = () => "";
-        pane.RefreshHint();
+        // 19 cells: "llama" collapses for the left, and the 19 cells hold the count whole ahead of the cut hint.
         Assert.True(pane.TryHitQueued(0, 102));
         Assert.True(pane.TryHitQueued(11, 102));
         Assert.False(pane.TryHitQueued(12, 102));
+
+        // 11 cells: "📤 12 queued" is 12 — cut to 10 + the ellipsis, no button.
+        _console.Profile.Width = 12;
+        pane.RefreshHint();
+        Assert.False(pane.TryHitQueued(0, 102));
+        Assert.True(pane.TryHitHint(0, 102, out var hit));
+        Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
     }
 
     [Fact]
@@ -1716,13 +1716,14 @@ public class ScreenPaneTests : IDisposable
     [InlineData("idle", "llama", 20, "idle           llama")]              // 20 cells: the trailer on the last
     [InlineData("", "llama", 10, "     llama")]
     [InlineData("work · idle", "llama", 20, "work · idle    llama")]
-    [InlineData("work · a longer hint", "llama", 20, "work · a lon…  llama")] // the left cut ahead of the gap
+    [InlineData("work · a longer hint", "llama", 20, "work · a longer hint")] // no room left: the trailer collapses (later on 2026-10-12), the left whole
     [InlineData("idle", "qwen3-30b-a3b-instruct", 20, "idle      qwen3-30b…")] // the trailer at most half the row
     [InlineData("🔊 🎤", "llama", 12, "🔊 🎤  llama")]                        // two-cell glyphs counted as such
     [InlineData("idle", "llama", 1, "…")]
     [InlineData("idle", "qwen3-30b-a3b-instruct-q8", 40, "idle                qwen3-30b-a3b-instr…")] // a short left: the half, as before
     [InlineData("work · a longer hint", "qwen3-30b-a3b-instruct-q8", 40, "work · a longer hint  qwen3-30b-a3b-ins…")] // the name gives way to a left that fits
-    [InlineData("Enter = edit · ESC = close", "qwen3-30b-a3b-instruct-q8", 40, "Enter = edit · ESC = …  qwen3-30b-a3b-i…")] // TrailerMinCells, then the left is cut
+    [InlineData("Enter = edit · ESC = close", "qwen3-30b-a3b-instruct-q8", 40, "Enter = edit · ESC = close  qwen3-30b-a…")] // the name in what the left leaves, the left whole
+    [InlineData("Enter = edit · ESC = close · more", "qwen3-30b-a3b-instruct-q8", 40, "Enter = edit · ESC = close · more")] // under TrailerMinCells: the name gone
     public void PinRight_IsPinned(string left, string trailer, int cells, string expected) =>
         Assert.Equal(expected, ScreenPane.PinRight(left, trailer, cells));
 
@@ -1731,9 +1732,10 @@ public class ScreenPaneTests : IDisposable
     [InlineData("idle", "llama", "◕", 20, "idle         llama ◕")]           // the mark on the last cell, a blank ahead of it
     [InlineData("idle", "qwen3-30b-a3b-instruct", "◕", 20, "idle      qwen3-3… ◕")] // half the row = 10: the text cut to 8, the mark whole
     [InlineData("", "", "◕", 10, "         ◕")]                              // a mark alone
-    [InlineData("idle", "llama", "◕", 5, "i…  ◕")]                           // half = 2: the text gone, the mark stands
+    [InlineData("idle", "llama", "◕", 5, "idle")]                            // no room: the name and its mark gone, the left whole
     [InlineData("work · a longer hint", "qwen3-30b-a3b-instruct-q8", "◕", 40, "work · a longer hint  qwen3-30b-a3b-i… ◕")] // the name gives way, the left whole
-    [InlineData("Enter = edit · ESC = close", "qwen3-30b-a3b-instruct-q8", "◕", 40, "Enter = edit · ESC …  qwen3-30b-a3b-i… ◕")] // the name at its floor, then the left is cut
+    [InlineData("Enter = edit · ESC = close", "qwen3-30b-a3b-instruct-q8", "◕", 40, "Enter = edit · ESC = close  qwen3-30b… ◕")] // the name in what the left and the mark leave
+    [InlineData("Enter = edit · ESC = close · more", "qwen3-30b-a3b-instruct-q8", "◕", 40, "Enter = edit · ESC = close · more")] // the name collapses, its mark with it
     public void PinRight_WithAMark_IsPinned(string left, string trailer, string mark, int cells, string expected) =>
         Assert.Equal(expected, ScreenPane.PinRight(left, trailer, mark, cells));
 
@@ -1742,8 +1744,9 @@ public class ScreenPaneTests : IDisposable
     [InlineData("llama", "◕", 20, "llama ◕")]
     [InlineData("qwen3-30b-a3b-instruct", "", 20, "qwen3-30b…")]
     [InlineData("qwen3-30b-a3b-instruct", "◕", 20, "qwen3-3… ◕")]
-    [InlineData("qwen3-30b-a3b-instruct", "◕", 6, "… ◕")]                    // half = 3: one cell for the text
-    [InlineData("qwen3-30b-a3b-instruct", "◕", 5, "◕")]                      // half = 2: nothing left for the text
+    [InlineData("qwen3-30b-a3b-instruct", "◕", 6, "")]                       // half = 3: under TrailerMinCells, the name and its mark gone
+    [InlineData("qwen3-30b-a3b-instruct", "◕", 5, "")]
+    [InlineData("llama", "◕", 16, "llama ◕")]                                // half = 8: a short name fits whole
     [InlineData("", "◕", 20, "◕")]
     [InlineData("", "", 20, "")]
     public void Trail_IsPinned(string trailer, string mark, int cells, string expected) =>
@@ -1753,11 +1756,13 @@ public class ScreenPaneTests : IDisposable
     [InlineData("qwen3-30b-a3b-instruct-q8", "", 40, 0, "qwen3-30b-a3b-instr…")]    // nothing on the left: the half
     [InlineData("qwen3-30b-a3b-instruct-q8", "", 40, 4, "qwen3-30b-a3b-instr…")]    // a short left: still the half
     [InlineData("qwen3-30b-a3b-instruct-q8", "", 40, 20, "qwen3-30b-a3b-ins…")]     // 40 − 20 − the gap = 18: the name gives way
-    [InlineData("qwen3-30b-a3b-instruct-q8", "", 40, 30, "qwen3-30b-a3b-i…")]       // no further than TrailerMinCells
+    [InlineData("qwen3-30b-a3b-instruct-q8", "", 40, 30, "qwen3-3…")]               // 40 − 30 − the gap = 8: TrailerMinCells
+    [InlineData("qwen3-30b-a3b-instruct-q8", "", 40, 31, "")]                       // 7: the name collapses (later on 2026-10-12)
     [InlineData("qwen3-30b-a3b-instruct-q8", "◕", 40, 20, "qwen3-30b-a3b-i… ◕")]   // the mark and its blank come off too
-    [InlineData("llama", "", 40, 38, "llama")]                                       // a short name is never cut for the left
-    [InlineData("qwen3-30b-a3b-instruct", "", 20, 30, "qwen3-30b…")]               // the half wins over the floor on a narrow row
-    [InlineData("qwen3-30b-a3b-instruct", "◕", 20, 30, "qwen3-3… ◕")]
+    [InlineData("llama", "", 40, 33, "llama")]                                       // a short name fits whole in 5
+    [InlineData("llama", "", 40, 38, "")]                                            // and goes with no room
+    [InlineData("qwen3-30b-a3b-instruct", "", 20, 30, "")]                          // a left wider than the row: nothing
+    [InlineData("qwen3-30b-a3b-instruct", "◕", 20, 30, "")]
     public void Trail_GivesWayToTheLeft_IsPinned(string trailer, string mark, int cells, int leftCells, string expected) =>
         Assert.Equal(expected, ScreenPane.Trail(trailer, mark, cells, leftCells));
 
@@ -1872,7 +1877,7 @@ public class ScreenPaneTests : IDisposable
     }
 
     [Fact]
-    public void TheTrailerMark_SurvivesTheCut_TheTextAheadOfIt()
+    public void TheTrailerAndItsMark_CollapseForTheHint_OnANarrowRow()
     {
         _console.Profile.Width = 12;
         using var pane = Pane();
@@ -1881,13 +1886,18 @@ public class ScreenPaneTests : IDisposable
         pane.TrailerMark = () => "◕";
         pane.Show();
 
-        // 11 cells: the trailer at most 5 — the mark and its blank take 2, the text the 3 left.
-        Assert.EndsWith("a v…  qw… ◕", Output);
+        // 11 cells and a 16-cell hint (later on 2026-10-12): the name collapses with its mark, the hint cut alone.
+        Assert.EndsWith("a very lon…", Output);
 
         using (pane.BeginBusy("thinking"))
         {
-            Assert.EndsWith(Theme.SpinnerFrames[0] + " t…  qw… ◕", Output);
+            Assert.EndsWith(Theme.SpinnerFrames[0] + " thinking…", Output);   // " thinking 00:00" cut alone, no name beside it
         }
+
+        // Room for both: the name whole and its mark.
+        _console.Profile.Width = 40;
+        pane.RefreshHint();
+        Assert.EndsWith("a very long hint" + new string(' ', 8) + "qwen3-30b-a3b ◕", Output);
     }
 
     [Fact]
@@ -1916,7 +1926,7 @@ public class ScreenPaneTests : IDisposable
     }
 
     [Fact]
-    public void TheTrailer_IsCutToHalfTheRow_AndTheHintAheadOfIt()
+    public void TheTrailer_IsCutToHalfTheRow_AndCollapsesForTheHint()
     {
         _console.Profile.Width = 12;
         using var pane = Pane();
@@ -1924,13 +1934,18 @@ public class ScreenPaneTests : IDisposable
         pane.Trailer = () => "qwen3-30b-a3b (high)";
         pane.Show();
 
-        // 11 cells: the trailer at most 5, the gap 2, the hint the 4 left.
-        Assert.EndsWith("a v…  qwen…", Output);
+        // 11 cells (later on 2026-10-12): no room for the name after the hint, so it goes, and the hint is cut alone.
+        Assert.EndsWith("a very lon…", Output);
 
         using (pane.BeginBusy("thinking"))
         {
-            Assert.EndsWith(Theme.SpinnerFrames[0] + " t…  qwen…", Output);
+            Assert.EndsWith(Theme.SpinnerFrames[0] + " thinking…", Output);   // " thinking 00:00" cut alone, no name beside it
         }
+
+        // 39 cells: the name at most half, 19.
+        _console.Profile.Width = 40;
+        pane.RefreshHint();
+        Assert.EndsWith("a very long hint" + new string(' ', 4) + "qwen3-30b-a3b (high)"[..18] + "…", Output);
     }
 
     // ── Resize ──────────────────────────────────────────────────────────────
@@ -5682,5 +5697,83 @@ public class ScreenPaneTests : IDisposable
 
         Assert.Contains(Sgr(Theme.Tertiary) + "◕", Output);
         Assert.DoesNotContain(Sgr(Theme.Tertiary) + "llama", Output);
+    }
+
+    /// <summary>
+    /// The toolbar's model name and working directory collapse for its glyphs (later on 2026-10-12, the user's ask): whole when they
+    /// fit, cut to their least cells, else gone — the name with its mark, the path first — and a short path stays whole in less.
+    /// </summary>
+    [Fact]
+    public void TheToolbarsModelAndPath_CollapseForTheGlyphs()
+    {
+        string strip = string.Join(' ', Enumerable.Repeat("🔧", 10));   // 29 cells
+        // 39 cells: 8 left after the strip and the gap — the long name's 6 after its mark are too few, the path takes the 8.
+        Assert.Equal(strip + new string(' ', 6) + @"D:\x", ScreenPane.ToolbarRow(strip, @"D:\x", "qwen3-30b-a3b", "◕", 39));
+        Assert.Equal(strip + new string(' ', 3) + "llama ◕", ScreenPane.ToolbarRow(strip, "", "llama", "◕", 39));   // a short one fits whole
+        // 34 cells: 3 left — the name gone, a one-cell path whole.
+        Assert.Equal(strip + new string(' ', 4) + "~", ScreenPane.ToolbarRow(strip, "~", "llama", "◕", 34));
+        Assert.Equal(strip, ScreenPane.ToolbarRow(strip, @"D:\Repo\NeonCompanion", "llama", "◕", 34));   // a long path in 3: gone
+        Assert.Equal("qwen3-3…", ScreenPane.FitName("qwen3-30b-a3b", ScreenPane.TrailerMinCells));
+        Assert.Equal("", ScreenPane.FitName("qwen3-30b-a3b", ScreenPane.TrailerMinCells - 1));
+        Assert.Equal("…Companion", ScreenPane.FitPath(@"D:\Repo\NeonCompanion", 10));
+        Assert.Equal("", ScreenPane.FitPath(@"D:\Repo\NeonCompanion", ScreenPane.ToolbarPathMinCells - 1));
+    }
+
+    /// <summary>The model's name among the glyphs gives way to the glyphs after it (later on 2026-10-12): with no room between them it goes, and every glyph stays.</summary>
+    [Fact]
+    public void TheToolbarsModelAmongTheGlyphs_CollapsesForTheGlyphsAfterIt()
+    {
+        _cursorTop = 100;
+        string strip = string.Join(' ', Enumerable.Repeat("🔧", 10));
+        _console.Profile.Width = 30;   // 29 cells: the strip alone
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Toolbar = () => new ScreenPane.ToolbarParts(strip, "", null, "qwen3-30b-a3b", 5, "◕");
+        pane.Show();
+        pane.ShowInput("abc", 3);
+        Assert.Contains(strip, Output);
+        Assert.DoesNotContain("qwen", Output);
+        Assert.False(pane.TryHitToolbar(12, 103, out var tool) && tool.Zone == ScreenPane.ToolbarZone.Model);
+
+        // 49 cells: 14 + 1 ahead, 1 + 14 after, 19 between — the name whole between the fifth glyph and the sixth.
+        _console.Profile.Width = 50;
+        int mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        string half = string.Join(' ', Enumerable.Repeat("🔧", 5));
+        Assert.Contains(half + " qwen3-30b-a3b ◕ " + half, Output[mark..]);
+    }
+
+    /// <summary>The hint row's working directory and model in the flow collapse for the rest of it (later on 2026-10-12): the path first, then the model.</summary>
+    [Fact]
+    public void TheHintRowsPathAndModelInTheFlow_CollapseForTheRest()
+    {
+        _cursorTop = 100;
+        _console.Profile.Width = 30;   // 29 cells
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Trailer = () => "qwen3-30b-a3b";
+        pane.TrailerMark = () => "◕";
+        IReadOnlyList<ScreenPane.HintSlot> layout = [ScreenPane.HintSlot.Model, ScreenPane.HintSlot.Of("usage 1,234 tokens"), ScreenPane.HintSlot.Path(@"D:\Repo\NeonCompanion")];
+        pane.HintLayout = () => layout;
+        pane.Show();
+        pane.ShowInput("abc", 3);
+
+        // 15 + 3 + 18 + 3 + 21 cells: the path goes, then the model, and the tally stands whole.
+        Assert.Contains("\nusage 1,234 tokens", Output);
+        Assert.DoesNotContain("qwen", Output);
+        Assert.DoesNotContain("NeonCompanion", Output);
+
+        // 61 cells: all of it.
+        _console.Profile.Width = 62;
+        int mark = Output.Length;
+        pane.RefreshHint();
+        Assert.Contains(@"qwen3-30b-a3b ◕ · usage 1,234 tokens · D:\Repo\NeonCompanion", Output[mark..]);
+
+        // 45 cells: the path alone goes.
+        _console.Profile.Width = 46;
+        mark = Output.Length;
+        pane.RefreshHint();
+        Assert.Contains("qwen3-30b-a3b ◕ · usage 1,234 tokens", Output[mark..]);
+        Assert.DoesNotContain("NeonCompanion", Output[mark..]);
     }
 }
