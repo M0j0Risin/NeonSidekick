@@ -18,6 +18,12 @@ namespace NeonSidekick.Llm.Tools;
 /// (<see cref="FileNameFor"/>); no <c>path</c> is the top of the working directory. Offered while
 /// <c>Web tools</c> and <c>File tools</c> are both on: it reaches the web and writes the sandbox.
 /// Nothing is read or opened; <c>view_image</c> and <c>read_file</c> look at the result.
+/// <para>
+/// Since 2026-10-13 a refusal that may be a bot check (<see cref="BotCheck.Offers(OpenedDownload)"/>) can be shown to the user in the
+/// Browser window (<see cref="BotCheckSolver"/>, per <c>Web browser botcheck window</c>): once they are through it, the window's cookies
+/// go to the HTTP client and the download is asked for once more. A site that ties its clearance to the browser's own connection
+/// refuses that too, which the result says.
+/// </para>
 /// </summary>
 public sealed class DownloadFileTool : AIFunction
 {
@@ -42,12 +48,15 @@ public sealed class DownloadFileTool : AIFunction
     private readonly WebAccess _web;
     private readonly WorkingDirectory _files;
     private readonly Func<AppSettingsData> _effective;
+    private readonly BotCheckSolver? _botCheck;
 
-    public DownloadFileTool(WebAccess web, WorkingDirectory files, Func<AppSettingsData> effective)
+    /// <param name="botCheck">Who shows a bot check to the user (2026-10-13); null where nobody can be asked (headless).</param>
+    public DownloadFileTool(WebAccess web, WorkingDirectory files, Func<AppSettingsData> effective, BotCheckSolver? botCheck = null)
     {
         _web = web ?? throw new ArgumentNullException(nameof(web));
         _files = files ?? throw new ArgumentNullException(nameof(files));
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
+        _botCheck = botCheck;
     }
 
     public override string Name => ToolName;
@@ -144,7 +153,45 @@ public sealed class DownloadFileTool : AIFunction
 
         var effective = _effective();
         long maxBytes = MaxBytesOf(effective);
-        using var opened = await _web.Fetcher.OpenDownloadAsync(parsed, WebAccess.Options(effective), maxBytes, cancellationToken).ConfigureAwait(false);
+        var options = WebAccess.Options(effective);
+        var opened = await _web.Fetcher.OpenDownloadAsync(parsed, options, maxBytes, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!opened.Ok && _botCheck is not null && BotCheck.Offers(opened))
+            {
+                var solved = await _botCheck(new BotCheckRequest(parsed, BotCheckUse.Download, BotCheck.WhyOf(opened.Detail)), cancellationToken).ConfigureAwait(false);
+                if (solved is { Cleared: true })
+                {
+                    if (await _web.Fetcher.LeftTheReachAsync(parsed, solved.FinalUrl, options, cancellationToken).ConfigureAwait(false))
+                    {
+                        return WebText.Error(opened.Outcome, opened.Url, opened.Detail + BotCheckText.LeftTheReach(solved.FinalUrl));
+                    }
+
+                    _web.Fetcher.Adopt(solved.Cookies, solved.Identity, parsed);
+                    opened.Dispose();
+                    opened = await _web.Fetcher.OpenDownloadAsync(parsed, options, maxBytes, cancellationToken).ConfigureAwait(false);
+                    if (!opened.Ok)
+                    {
+                        return opened.Outcome == FetchOutcome.Blocked ? WebText.Error(opened.Outcome, opened.Url, opened.Detail + BotCheckText.ClearedButClientRefused) : opened.Error;
+                    }
+                }
+                else if (solved is not null)
+                {
+                    return WebText.Error(opened.Outcome, opened.Url, opened.Detail + BotCheckText.For(solved));
+                }
+            }
+
+            return await SaveAsync(opened, path, overwrite, maxBytes, parsed, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            opened.Dispose();
+        }
+    }
+
+    // The opened download saved under the sandbox, or why not.
+    private async Task<string> SaveAsync(OpenedDownload opened, string? path, bool overwrite, long maxBytes, Uri parsed, CancellationToken cancellationToken)
+    {
         if (!opened.Ok)
         {
             return opened.Error;

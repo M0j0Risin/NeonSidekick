@@ -277,6 +277,39 @@ public unsafe class WebViewTests : IDisposable
         Assert.True(File.Exists(Path.Combine(AppContext.BaseDirectory, VideoPage.LoaderFileName)), "the csproj copies the loader beside the binary");
     }
 
+    /// <summary>
+    /// The Browser window's chain under the JIT (2026-10-13, <c>browser:webview2</c>; the published exe's run is the AOT proof): the
+    /// blank page, its DOM, a cookie over DevTools with the DevTools window off, a PDF printed, a <c>file:</c> navigation refused and a
+    /// download cancelled; skipped and passed where no runtime is installed.
+    /// </summary>
+    [WindowsFact]
+    public void ProbeBrowser_RunsTheChain_OrSkipsWithoutARuntime()
+    {
+        var check = SmokeChecks.ProbeBrowserWebView2();
+
+        Assert.Equal("browser:webview2", check.Name);
+        Assert.True(check.Passed, check.Detail);
+        if (!check.Detail.StartsWith("skipped: ", StringComparison.Ordinal))
+        {
+            Assert.Matches("^runtime \\d+\\.\\d+\\.\\d+\\.\\d+; the blank page's navigation and address, its DOM, 1 cookie set and read over DevTools, a PDF of \\d+ B, a file: navigation refused, a download cancelled$", check.Detail);
+        }
+    }
+
+    // ── The Flag handler (2026-10-13, PrintToPdf's) ──────────────────────────
+
+    [Fact]
+    public void Flag_InvokesWithTheResultAsABool()
+    {
+        var seen = new List<(int Hr, bool Result)>();
+        nint handler = WebViewHandler.Flag(SomeIid, (hr, result) => seen.Add((hr, result)));
+        var invoke = (delegate* unmanaged<nint, int, int, int>)(*(nint**)handler)[3];
+
+        Assert.Equal(WebViewHandler.SOk, invoke(handler, 0, 1));
+        Assert.Equal(WebViewHandler.SOk, invoke(handler, unchecked((int)0x80004005), 0));
+        Assert.Equal([(0, true), (unchecked((int)0x80004005), false)], seen);
+        Assert.Equal(0u, WebViewHandler.Release(handler));
+    }
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static (nint Handler, WeakReference Callback) MakeHandler()
     {

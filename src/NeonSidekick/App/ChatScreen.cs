@@ -808,6 +808,7 @@ internal sealed partial class ChatScreen
         _claudeServerSessionId = null;
         _cameraAllowed = false;
         _screenAllowed = false;
+        _botCheckAllowed = false;
         _sqliteAllowed.Clear();
         _databaseAllowed.Clear();
     }
@@ -1106,9 +1107,12 @@ internal sealed partial class ChatScreen
         Action<string>? showInViewer = null,
         Func<bool>? closeThumbs = null,
         Action<ProcessSession, Action<ProcessSession>>? openProcessWindow = null,
-        Viewer.IVideoPlayer? videoPlayer = null)
+        Viewer.IVideoPlayer? videoPlayer = null,
+        Viewer.IBrowserWindow? browserWindow = null)
     {
         _logFile = logFile;
+        // The Browser window (2026-10-13): a web tool's bot check shown to the user, and /browser; none in headless or off Windows.
+        _browserWindow = browserWindow;
         _openProcessWindow = openProcessWindow;
         _openTerminal = openTerminal;
         _openLogWindow = openLogWindow;
@@ -1169,13 +1173,13 @@ internal sealed partial class ChatScreen
         _web = web ?? WebAccess.Create(() => Web.NetworkMode.Resolve(_effective()), time);
         // The print tools and /print (2026-09-28): the spooler the composition root hands in (none in tests); a model's print waits on the pane under ask.
         _print = new PrintService(printSpooler ?? NullPrintSpooler.Instance, _files, _effective, _time);
-        _pdf = new PdfConverter(_web.Browser, _web.Fetcher, _print, _files, _effective, _time);
+        _pdf = new PdfConverter(_web.Browser, _web.Fetcher, _print, _files, _effective, _time, botCheck: SolveBotCheckAsync);
         _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf, _images, OpenPictureForModel);
         _imageTools = ImageTools(_files, _effective, _images, () => _settings.ProfileSplashDirectory);
         _timers = new TimerBoard(time, SignalAlert);
         _jobs = new BackgroundJobs(SignalAlert, time);
         _timerTools = TimerTools(_timers);
-        _webTools = WebTools(_web, _files, _effective);
+        _webTools = WebTools(_web, _files, _effective, SolveBotCheckAsync);
         // The git tools (2026-09-20) sit on the same sandbox: the repository is looked for from a sandbox path, never above the root.
         _git = new GitAccess(_files, time);
         _gitTools = GitTools(_git, _effective);
@@ -5720,14 +5724,15 @@ internal sealed partial class ChatScreen
     /// they need no console) — the last, <c>download_file</c> (2026-09-18), only with <c>File tools</c>
     /// on as well, since it writes the sandbox (<see cref="WebToolsFor"/>). Each reads the settings in
     /// force at the call, so a mode, a browser path, the network mode or a SearXNG URL typed in
-    /// <c>/settings</c> applies at the next call.
+    /// <c>/settings</c> applies at the next call. <paramref name="botCheck"/> (2026-10-13) shows a bot check the tools cannot get past
+    /// to the user in the Browser window; null in headless, where nobody can be asked.
     /// </summary>
-    public static IReadOnlyList<AIFunction> WebTools(WebAccess web, WorkingDirectory files, Func<AppSettingsData> effective) => new AIFunction[]
+    public static IReadOnlyList<AIFunction> WebTools(WebAccess web, WorkingDirectory files, Func<AppSettingsData> effective, BotCheckSolver? botCheck = null) => new AIFunction[]
     {
-        new WebSearchTool(web, effective),
-        new WebFetchTool(web, effective),
+        new WebSearchTool(web, effective, botCheck),
+        new WebFetchTool(web, effective, botCheck),
         new OpenUrlTool(web),
-        new DownloadFileTool(web, files, effective),
+        new DownloadFileTool(web, files, effective, botCheck),
     };
 
     /// <summary>
@@ -12451,6 +12456,10 @@ internal sealed partial class ChatScreen
                 await HandleBrowseAsync(args, _transcript, cancellationToken).ConfigureAwait(false);
                 return false;
 
+            case SlashCommand.Browser:
+                HandleBrowser(args);
+                return false;
+
             case SlashCommand.Terminal:
                 HandleTerminal(args);
                 return false;
@@ -13902,6 +13911,7 @@ internal sealed partial class ChatScreen
                     general.Shell?.BeginTurn(assistant.Tools.Select(t => t.Name));
                     _cameraDeclined = false;
                     _screenDeclined = false;
+                    ForgetBotCheckDeclines();
                     assistant.ContextGuard = links.Count > 0 && links[next] is not null ? null : ContextGuardFor(effective, _session.ContextLength);
                 }
 
@@ -15452,9 +15462,10 @@ internal sealed partial class ChatScreen
         if (bot is null)
         {
             _interpreters.Revalidate();
-            // A photo declined in the last turn may be asked for again in this one (2026-10-02); a screenshot too (2026-10-04).
+            // A photo declined in the last turn may be asked for again in this one (2026-10-02); a screenshot too (2026-10-04), and a bot check (2026-10-13).
             _cameraDeclined = false;
             _screenDeclined = false;
+            ForgetBotCheckDeclines();
             PrepareTurn(assistant, TurnInputs(effective), _memory, _persona, _operata, _vocalia, speaker is not null, effective.LlmMaxToolIterations, ContextGuardFor(effective, _session.ContextLength), SkillsFor(effective), markdown, _processes, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId));
 
             // The Claude Code server (2026-09-30) keeps the conversation itself: the turn names its session, and no guard

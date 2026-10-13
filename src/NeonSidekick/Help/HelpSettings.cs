@@ -65,6 +65,7 @@ public static class HelpSettings
         SettingsField.WebTools => "Offers `web_search`, `web_fetch`, `open_url` and `download_file`.",
         SettingsField.WebBrowserMode => "How pages are fetched. `default` uses the HTTP client and falls back to a headless browser when a page is blocked or empty. `httpclient` never falls back. `chromium` uses the browser for every page. The buttons at the top of the *Web tools* on/off page (`d`, `h`, `c`; the toolbar's 🌐 opens it) switch it too.",
         SettingsField.WebBrowserPath => "The Chromium-based browser used for headless fetches and for making PDFs (`convert_to_pdf`, `/pdf`). Empty finds Edge, Chrome or Brave in their standard folders.",
+        SettingsField.WebBrowserBotcheckWindow => "What a bot check the web tools cannot get past (a Cloudflare click, a captcha) does. `ask` asks on the pane, then opens the page in the Browser window for you to solve; `automatic` opens it without asking; `disabled` never does, and the tool reports the refusal. Once the check clears, the window closes and the page and its cookies go back to `web_fetch`, `web_search`, `download_file` or `convert_to_pdf`. Windows only; never headless.",
         SettingsField.WebBrowserNetworkMode => "Where a fetch may reach: `internet` (public addresses only), `local_area_network` (this machine and the LAN only) or `both`.",
         SettingsField.WebSearxngUrl => "A SearXNG instance's base URL, used while the method is `searxng`.",
         SettingsField.WebSearchMaxResults => "How many hits a search returns (1–20).",

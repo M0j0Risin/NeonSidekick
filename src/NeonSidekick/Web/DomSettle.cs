@@ -24,6 +24,13 @@ public sealed class DomSettle
     /// <summary>The longest a bot check is waited on to clear: one that runs by itself takes a few seconds; one wanting a click never clears.</summary>
     public static readonly TimeSpan MostChallenge = TimeSpan.FromSeconds(15);
 
+    /// <summary>
+    /// How long this watch waits on a bot check before taking the page as it is: <see cref="MostChallenge"/> for the headless browser;
+    /// <see cref="Timeout.InfiniteTimeSpan"/> for the Browser window (2026-10-13, <see cref="BotCheck"/>), where a person is solving it
+    /// and the caller's own clock (<see cref="BotCheck.SolveTimeout"/>) ends the wait.
+    /// </summary>
+    public TimeSpan ChallengeLimit { get; init; } = MostChallenge;
+
     private TimeSpan? _loadedAt;
     private TimeSpan? _gatedAt;
     private TimeSpan _changedAt;
@@ -44,7 +51,7 @@ public sealed class DomSettle
         {
             _loadedAt = null;
             _gatedAt ??= now;
-            return now - _gatedAt.Value >= MostChallenge;
+            return ChallengeLimit != Timeout.InfiniteTimeSpan && now - _gatedAt.Value >= ChallengeLimit;
         }
 
         _gatedAt = null;

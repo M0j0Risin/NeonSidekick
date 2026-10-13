@@ -13,10 +13,11 @@ namespace NeonSidekick.Viewer;
 /// <para>An object is a native block — vtable pointer, reference count, a <see cref="GCHandle"/> to the managed callback, the
 /// IID it answers to — that WebView2 may hold past any managed lifetime. QueryInterface answers IUnknown and that IID;
 /// the last Release frees the handle and the block. A new object starts at one reference, the caller's: hand it to WebView2
-/// (which takes its own) and <see cref="Release"/> it. The three Invoke signatures are three vtables, built once for the
+/// (which takes its own) and <see cref="Release"/> it. The Invoke signatures are a vtable each, built once for the
 /// process, never freed: an event handler's <c>(sender, args)</c> pointers, a completion's <c>(HRESULT, result)</c> where the
-/// HRESULT is 32 bits (read as a pointer it would carry the register's garbage upper half), and ExecuteScript's
-/// <c>(HRESULT, LPCWSTR json)</c>, whose string is WebView2's and is copied, never freed.</para>
+/// HRESULT is 32 bits (read as a pointer it would carry the register's garbage upper half), ExecuteScript's
+/// <c>(HRESULT, LPCWSTR json)</c>, whose string is WebView2's and is copied, never freed, and since 2026-10-13 PrintToPdf's
+/// <c>(HRESULT, BOOL)</c> (<see cref="Flag"/>).</para>
 ///
 /// <para>A callback that throws is logged and answered S_OK, the window procedures' rule: nothing may unwind into native
 /// code, which would take the process down.</para>
@@ -39,6 +40,7 @@ internal static unsafe class WebViewHandler
     private static readonly nint* s_event = Table((nint)(delegate* unmanaged<Block*, nint, nint, int>)&InvokeEvent);
     private static readonly nint* s_completed = Table((nint)(delegate* unmanaged<Block*, int, nint, int>)&InvokeCompleted);
     private static readonly nint* s_script = Table((nint)(delegate* unmanaged<Block*, int, char*, int>)&InvokeScript);
+    private static readonly nint* s_flag = Table((nint)(delegate* unmanaged<Block*, int, int, int>)&InvokeFlag);
 
     /// <summary>An event handler (<c>Invoke(sender, args)</c>) answering <paramref name="iid"/>.</summary>
     public static nint Event(Guid iid, Action<nint, nint> invoke) => Create(s_event, iid, invoke);
@@ -48,6 +50,12 @@ internal static unsafe class WebViewHandler
 
     /// <summary>ExecuteScript's completion handler (<c>Invoke(HRESULT, json)</c>), the result copied (null when there is none).</summary>
     public static nint Script(Guid iid, Action<int, string?> invoke) => Create(s_script, iid, invoke);
+
+    /// <summary>
+    /// A completion handler whose result is a BOOL (<c>Invoke(HRESULT, BOOL)</c>, 2026-10-13: PrintToPdf's), both 32 bits — read as a
+    /// pointer, the BOOL would carry the register's garbage upper half, the completion shape's own reason.
+    /// </summary>
+    public static nint Flag(Guid iid, Action<int, bool> invoke) => Create(s_flag, iid, invoke);
 
     /// <summary>Drops one reference, the caller's after handing the object over.</summary>
     public static uint Release(nint handler) => handler == 0 ? 0 : ReleaseCore((Block*)handler);
@@ -127,6 +135,21 @@ internal static unsafe class WebViewHandler
         try
         {
             Target<Action<int, nint>>(self)(hr, result);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Error("Video", "A WebView2 completion handler failed.", ex);
+        }
+
+        return SOk;
+    }
+
+    [UnmanagedCallersOnly]
+    private static int InvokeFlag(Block* self, int hr, int result)
+    {
+        try
+        {
+            Target<Action<int, bool>>(self)(hr, result != 0);
         }
         catch (Exception ex)
         {

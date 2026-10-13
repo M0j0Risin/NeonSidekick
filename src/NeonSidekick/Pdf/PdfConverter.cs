@@ -30,6 +30,13 @@ public sealed record PdfRequest(string? Path = null, Uri? Url = null, string? Ma
 /// <see cref="WorkingDirectory.BeginWrite"/> (outside the sandbox, a folder in the way, a file there without overwrite). The
 /// engine writes a temp file; the finished PDF is copied into the sandbox and the temp files go. Pictures a page shows are
 /// inlined from the sandbox only, <see cref="MaxInlineBytes"/> at most. Every failure is an <c>Error:</c> sentence, never a throw.
+/// <para>
+/// Since 2026-10-13 a web page behind a bot check that wants a person can be printed by the Browser window itself
+/// (<see cref="BotCheckSolver"/>, per <c>Web browser botcheck window</c>): with someone to ask, the page is first fetched as
+/// <c>web_fetch</c> would (<see cref="WebFetcher.FetchAsync"/>), and when that answer offers the window
+/// (<see cref="BotCheck.Offers(FetchResult)"/>) the user solves the check there and WebView2 prints the page it let through. Any other
+/// ending goes on as before: the headless browser prints what it gets.
+/// </para>
 /// </summary>
 public sealed class PdfConverter
 {
@@ -47,12 +54,15 @@ public sealed class PdfConverter
     private readonly TimeProvider _time;
     private readonly string _tempFolder;
     private readonly TimeSpan _printerWait;
+    private readonly BotCheckSolver? _botCheck;
 
     /// <param name="tempFolder">Where the engines' files go while they work; <c>%TEMP%\NeonSidekick\pdf</c> by default.</param>
     /// <param name="printerWait">How long the printer's file is waited for; <see cref="PrinterWait"/> by default, less in tests.</param>
-    public PdfConverter(IHeadlessBrowser browser, WebFetcher fetcher, PrintService print, WorkingDirectory files, Func<AppSettingsData> effective, TimeProvider? time = null, string? tempFolder = null, TimeSpan? printerWait = null)
+    /// <param name="botCheck">Who shows a web page's bot check to the user (2026-10-13); null where nobody can be asked (headless).</param>
+    public PdfConverter(IHeadlessBrowser browser, WebFetcher fetcher, PrintService print, WorkingDirectory files, Func<AppSettingsData> effective, TimeProvider? time = null, string? tempFolder = null, TimeSpan? printerWait = null, BotCheckSolver? botCheck = null)
     {
         _printerWait = printerWait ?? PrinterWait;
+        _botCheck = botCheck;
         _browser = browser ?? throw new ArgumentNullException(nameof(browser));
         _fetcher = fetcher ?? throw new ArgumentNullException(nameof(fetcher));
         _print = print ?? throw new ArgumentNullException(nameof(print));
@@ -62,8 +72,11 @@ public sealed class PdfConverter
         _tempFolder = tempFolder ?? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "NeonSidekick", "pdf");
     }
 
-    /// <summary>The source loaded: its kind, how results name it, the sandbox file (null for text and pages) and its content.</summary>
-    private sealed record Source(PdfSourceKind Kind, string Display, string? Full, string? Text, byte[]? Bytes);
+    /// <summary>
+    /// The source loaded: its kind, how results name it, the sandbox file (null for text and pages) and its content; a web page behind
+    /// a bot check a person may solve carries the check (<paramref name="Gate"/>, 2026-10-13).
+    /// </summary>
+    private sealed record Source(PdfSourceKind Kind, string Display, string? Full, string? Text, byte[]? Bytes, BotCheckRequest? Gate = null);
 
     public async Task<string> ConvertAsync(PdfRequest request, CancellationToken cancellationToken)
     {
@@ -112,40 +125,47 @@ public sealed class PdfConverter
                 Directory.CreateDirectory(_tempFolder);
                 string? fallbackReason = null;
                 string madeWith;
-                if (route == PdfRoute.Browser)
+                if (source.Gate is { } gate && await WindowAsync(gate with { PdfPath = pdfPath }, request.Url!, effective, cancellationToken).ConfigureAwait(false))
                 {
-                    var (ok, detail) = await BrowserAsync(executable!, source, request, htmlPath, pdfPath, cancellationToken).ConfigureAwait(false);
-                    if (!ok && detail.StartsWith("Error:", StringComparison.Ordinal))
-                    {
-                        return detail;
-                    }
-
-                    if (!ok)
-                    {
-                        if (engine != PdfEngine.Auto || PdfPlan.NeedsBrowser(source.Kind) || !PrinterInstalled())
-                        {
-                            return PdfText.BrowserFailed(PdfText.BrowserName(executable!), detail);
-                        }
-
-                        DiagnosticLog.Warn(PdfText.Category, $"{PdfText.BrowserName(executable!)} could not make a PDF of {source.Display} ({detail}); trying {PrintText.PrintToPdfPrinter}.");
-                        fallbackReason = detail;
-                        route = PdfRoute.Printer;
-                    }
-                }
-
-                if (route == PdfRoute.Printer)
-                {
-                    string? printed = await PrinterAsync(source, request, pdfPath, cancellationToken).ConfigureAwait(false);
-                    if (printed is not null)
-                    {
-                        return printed;
-                    }
-
-                    madeWith = PrintText.PrintToPdfPrinter;
+                    madeWith = BotCheckText.WindowName;
                 }
                 else
                 {
-                    madeWith = PdfText.BrowserName(executable!);
+                    if (route == PdfRoute.Browser)
+                    {
+                        var (ok, detail) = await BrowserAsync(executable!, source, request, htmlPath, pdfPath, cancellationToken).ConfigureAwait(false);
+                        if (!ok && detail.StartsWith("Error:", StringComparison.Ordinal))
+                        {
+                            return detail;
+                        }
+
+                        if (!ok)
+                        {
+                            if (engine != PdfEngine.Auto || PdfPlan.NeedsBrowser(source.Kind) || !PrinterInstalled())
+                            {
+                                return PdfText.BrowserFailed(PdfText.BrowserName(executable!), detail);
+                            }
+
+                            DiagnosticLog.Warn(PdfText.Category, $"{PdfText.BrowserName(executable!)} could not make a PDF of {source.Display} ({detail}); trying {PrintText.PrintToPdfPrinter}.");
+                            fallbackReason = detail;
+                            route = PdfRoute.Printer;
+                        }
+                    }
+
+                    if (route == PdfRoute.Printer)
+                    {
+                        string? printed = await PrinterAsync(source, request, pdfPath, cancellationToken).ConfigureAwait(false);
+                        if (printed is not null)
+                        {
+                            return printed;
+                        }
+
+                        madeWith = PrintText.PrintToPdfPrinter;
+                    }
+                    else
+                    {
+                        madeWith = PdfText.BrowserName(executable!);
+                    }
                 }
 
                 await using (var made = new FileStream(pdfPath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, useAsync: true))
@@ -189,12 +209,48 @@ public sealed class PdfConverter
             return (null, PdfText.PageLayoutFixed);
         }
 
-        if (await _fetcher.PreflightAsync(url.Host, WebAccess.Options(effective), cancellationToken).ConfigureAwait(false) is { } refused)
+        var options = WebAccess.Options(effective);
+        if (await _fetcher.PreflightAsync(url.Host, options, cancellationToken).ConfigureAwait(false) is { } refused)
         {
             return (null, WebText.Error(refused, url.AbsoluteUri, url.Host));
         }
 
-        return (new Source(PdfSourceKind.Url, url.AbsoluteUri, null, null, null), null);
+        // With someone to ask (2026-10-13), the page as web_fetch gets it first: a bot check a person may solve is the window's to print.
+        BotCheckRequest? gate = null;
+        if (_botCheck is not null && BotcheckWindow.Resolve(effective) != BotcheckKind.Disabled)
+        {
+            var probe = await _fetcher.FetchAsync(url, options, cancellationToken).ConfigureAwait(false);
+            if (BotCheck.Offers(probe))
+            {
+                gate = new BotCheckRequest(url, BotCheckUse.Pdf, BotCheck.WhyOf(probe.Detail));
+            }
+        }
+
+        return (new Source(PdfSourceKind.Url, url.AbsoluteUri, null, null, null, gate), null);
+    }
+
+    /// <summary>
+    /// The Browser window's print of a page behind a bot check (2026-10-13): true with the PDF at the request's path once the user has the
+    /// page through and the window printed it, its cookies kept for the web tools; false for any other ending, which the caller follows
+    /// with the headless browser's print.
+    /// </summary>
+    private async Task<bool> WindowAsync(BotCheckRequest gate, Uri url, AppSettingsData effective, CancellationToken cancellationToken)
+    {
+        var solved = await _botCheck!(gate, cancellationToken).ConfigureAwait(false);
+        if (solved is not { Cleared: true, PdfWritten: true })
+        {
+            DiagnosticLog.Info(PdfText.Category, $"The Browser window made no PDF of {url}{(solved is null ? "" : BotCheckText.For(solved))}; the headless browser prints it instead.");
+            return false;
+        }
+
+        if (await _fetcher.LeftTheReachAsync(url, solved.FinalUrl, WebAccess.Options(effective), cancellationToken).ConfigureAwait(false))
+        {
+            DiagnosticLog.Info(PdfText.Category, $"The Browser window's page for {url} ended on {solved.FinalUrl}, off the network mode's reach; its PDF is not used.");
+            return false;
+        }
+
+        _fetcher.Adopt(solved.Cookies, solved.Identity, url);
+        return true;
     }
 
     private (Source?, string?) FileSource(string path)

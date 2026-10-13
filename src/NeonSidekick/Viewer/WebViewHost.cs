@@ -24,6 +24,22 @@ internal enum WebViewStep
 }
 
 /// <summary>
+/// What a <see cref="WebViewHost"/> is for (2026-10-13, when the Browser window came beside the video window): the browser's
+/// arguments, the virtual host its own page is served from (null: none), which top-level navigations may go ahead, whether the
+/// settings are locked down to a player's (<see cref="WebViewNative.LockDown"/>) or left as a browser's
+/// (<see cref="WebViewNative.AllowBrowsing"/>), whether it browses — a new window the page asks for opens in place, and the
+/// navigation, title, address and download events are subscribed — and the log category its lines go under.
+/// </summary>
+internal sealed record WebViewProfile(string BrowserArguments, string? HostName, Func<string?, bool> Allows, bool LockedDown, bool Browsing, string Category)
+{
+    /// <summary>The video window's: the player page on its virtual host and nothing else, as it was from 2026-10-05.</summary>
+    public static WebViewProfile Video { get; } = new(WebViewOptions.BrowserArguments, VideoPage.HostName, VideoPage.IsOurs, LockedDown: true, Browsing: false, "Video");
+
+    /// <summary>The Browser window's: any web page (<see cref="BrowserPage.Allows"/>), no page of its own, a browser's settings.</summary>
+    public static WebViewProfile Browser { get; } = new("", null, BrowserPage.Allows, LockedDown: false, Browsing: true, "Browser");
+}
+
+/// <summary>
 /// One WebView2 inside a window of ours (2026-10-05, the video window): the asynchronous chain WebView2 is built by —
 /// environment, then a controller parented to the window, then the view, its settings locked down
 /// (<see cref="WebViewNative.LockDown"/>), the page's folder mapped to <see cref="VideoPage.HostName"/>, the three events
@@ -44,18 +60,27 @@ internal enum WebViewStep
 ///
 /// <para>Focus: nothing here moves focus (no <c>MoveFocus</c>); the window shows without activation, and the keyboard stays
 /// with the terminal until the user clicks into the video (Phase 0: the foreground stayed on Windows Terminal throughout).</para>
+///
+/// <para>Since 2026-10-13 a <see cref="WebViewProfile"/> says what the host is for: the video window's as above, or the Browser
+/// window's (the bot checks), which goes to any web page, keeps a browser's settings, opens a new window in place, and reports its
+/// navigations, title, address and downloads (<see cref="NavigationDone"/>, <see cref="TitleChanged"/>, <see cref="SourceChanged"/>,
+/// <see cref="DownloadStarting"/>); it reads its cookies over the DevTools protocol (<see cref="CallDevTools"/>) and prints itself to
+/// PDF (<see cref="PrintToPdf"/>).</para>
 /// </summary>
 [SupportedOSPlatform("windows")]
-internal sealed unsafe class WebViewHost
+internal sealed unsafe partial class WebViewHost
 {
     private readonly nint _parent;
     private readonly int _thread = Environment.CurrentManagedThreadId;
-    private string _siteFolder = "";
+    private WebViewProfile _profile = WebViewProfile.Video;
+    private string? _siteFolder;
     private string _url = "";
     private nint _environment;
     private nint _controller;
     private nint _webView;
     private nint _webView3;
+    private nint _webView4;
+    private nint _webView7;
     private bool _closed;
 
     public WebViewHost(nint parent) => _parent = parent;
@@ -85,19 +110,38 @@ internal sealed unsafe class WebViewHost
     /// <summary>A step of the chain failed with its HRESULT; the host is closed.</summary>
     public Action<WebViewStep, int>? Failed { get; set; }
 
+    /// <summary>A browsing profile's top-level navigation completed: whether without a network error, and its HTTP status (0 when none).</summary>
+    public Action<bool, int>? NavigationDone { get; set; }
+
+    /// <summary>A browsing profile's page title changed.</summary>
+    public Action<string>? TitleChanged { get; set; }
+
+    /// <summary>A browsing profile's address changed (a navigation, a redirect, a history move).</summary>
+    public Action<string>? SourceChanged { get; set; }
+
+    /// <summary>A browsing profile's page would download a file, its address: true cancels it (the download UI kept away too).</summary>
+    public Func<string?, bool>? DownloadStarting { get; set; }
+
     public bool IsCreated => _webView != 0;
 
     /// <summary>
     /// Starts the chain: the environment over <paramref name="userDataFolder"/>, then everything else as WebView2 answers,
     /// ending on <see cref="Created"/> or <see cref="Failed"/>. Returns false when it failed at once (no loader, no runtime).
     /// </summary>
-    public bool Start(string userDataFolder, string siteFolder, string url)
+    public bool Start(string userDataFolder, string siteFolder, string url) => Start(userDataFolder, siteFolder, url, WebViewProfile.Video);
+
+    /// <summary>
+    /// <see cref="Start(string, string, string)"/> for <paramref name="profile"/> (2026-10-13): its arguments, its virtual host over
+    /// <paramref name="siteFolder"/> when it has one, its navigation rule and settings.
+    /// </summary>
+    public bool Start(string userDataFolder, string? siteFolder, string url, WebViewProfile profile)
     {
         OnThread();
+        _profile = profile ?? throw new ArgumentNullException(nameof(profile));
         _siteFolder = siteFolder;
         _url = url;
         nint done = WebViewHandler.Completed(IidEnvironmentCompleted, OnEnvironment);
-        nint options = WebViewOptions.Create(WebViewOptions.BrowserArguments);
+        nint options = WebViewOptions.Create(profile.BrowserArguments);
         try
         {
             int hr = CreateCoreWebView2EnvironmentWithOptions(null, userDataFolder, options, done);
@@ -163,6 +207,101 @@ internal sealed unsafe class WebViewHost
         }
     }
 
+    /// <summary>A top-level navigation to <paramref name="url"/> (a browsing profile's next page); false before the view is made.</summary>
+    public bool Navigate(string url)
+    {
+        OnThread();
+        return _webView != 0 && WebViewNative.Navigate(_webView, url) >= 0;
+    }
+
+    /// <summary>The address the view is on; null before it is made.</summary>
+    public string? Source
+    {
+        get
+        {
+            OnThread();
+            return _webView == 0 ? null : WebViewNative.Source(_webView);
+        }
+    }
+
+    /// <summary>The page's title; null before the view is made.</summary>
+    public string? Title
+    {
+        get
+        {
+            OnThread();
+            return _webView == 0 ? null : DocumentTitle(_webView);
+        }
+    }
+
+    /// <summary>Reloads the page (the Browser window's F5).</summary>
+    public void Reload()
+    {
+        OnThread();
+        if (_webView != 0)
+        {
+            WebViewNative.Reload(_webView);
+        }
+    }
+
+    /// <summary>Back a page (the Browser window's Alt+←).</summary>
+    public void GoBack()
+    {
+        OnThread();
+        if (_webView != 0)
+        {
+            WebViewNative.GoBack(_webView);
+        }
+    }
+
+    /// <summary>
+    /// A DevTools protocol command on the page (<paramref name="method"/>, its parameters as a JSON object), its answer as JSON to
+    /// <paramref name="done"/>; false before the view is made. The DevTools window stays off: the protocol is the app's alone.
+    /// </summary>
+    public bool CallDevTools(string method, string parametersJson, Action<int, string?> done)
+    {
+        OnThread();
+        if (_webView == 0)
+        {
+            return false;
+        }
+
+        nint handler = WebViewHandler.Script(IidCallDevToolsProtocolMethodCompleted, done);
+        try
+        {
+            return CallDevToolsProtocolMethod(_webView, method, parametersJson, handler) >= 0;
+        }
+        finally
+        {
+            WebViewHandler.Release(handler);
+        }
+    }
+
+    /// <summary>The page printed to a PDF at <paramref name="path"/> with the default print settings; <paramref name="done"/> gets the HRESULT and whether it was written. False when it could not start.</summary>
+    public bool PrintToPdf(string path, Action<int, bool> done)
+    {
+        OnThread();
+        if (_webView == 0)
+        {
+            return false;
+        }
+
+        if (_webView7 == 0 && QueryInterface(_webView, IidWebView2_7, out _webView7) < 0)
+        {
+            return false;
+        }
+
+        nint handler = WebViewHandler.Flag(IidPrintToPdfCompleted, done);
+        try
+        {
+            return WebViewNative.PrintToPdf(_webView7, path, handler) >= 0;
+        }
+        finally
+        {
+            WebViewHandler.Release(handler);
+        }
+    }
+
     /// <summary>
     /// Closes the view and lets every interface go; a completion still on its way finds the host closed. With
     /// <paramref name="browserExited"/>, the environment is held through <c>ICoreWebView2Environment5</c> until the browser's
@@ -213,11 +352,13 @@ internal sealed unsafe class WebViewHost
             ControllerClose(_controller);
         }
 
+        WebViewNative.Release(_webView7);
+        WebViewNative.Release(_webView4);
         WebViewNative.Release(_webView3);
         WebViewNative.Release(_webView);
         WebViewNative.Release(_controller);
         WebViewNative.Release(_environment);
-        _webView3 = _webView = _controller = _environment = 0;
+        _webView7 = _webView4 = _webView3 = _webView = _controller = _environment = 0;
         if (browserExited is not null && environment5 == 0)
         {
             browserExited();
@@ -280,7 +421,7 @@ internal sealed unsafe class WebViewHost
         step = GetSettings(_webView, out nint settings);
         if (step >= 0)
         {
-            step = LockDown(settings);
+            step = _profile.LockedDown ? LockDown(settings) : AllowBrowsing(settings);
             WebViewNative.Release(settings);
         }
 
@@ -290,12 +431,15 @@ internal sealed unsafe class WebViewHost
             return;
         }
 
-        step = QueryInterface(_webView, IidWebView2_3, out _webView3);
-        step = step < 0 ? step : SetVirtualHostNameToFolderMapping(_webView3, VideoPage.HostName, _siteFolder, HostAccessDeny);
-        if (step < 0)
+        if (_profile.HostName is { } hostName && _siteFolder is { } siteFolder)
         {
-            Fail(WebViewStep.VirtualHost, step);
-            return;
+            step = QueryInterface(_webView, IidWebView2_3, out _webView3);
+            step = step < 0 ? step : SetVirtualHostNameToFolderMapping(_webView3, hostName, siteFolder, HostAccessDeny);
+            if (step < 0)
+            {
+                Fail(WebViewStep.VirtualHost, step);
+                return;
+            }
         }
 
         step = Subscribe(_webView, IidNavigationStarting, OnNavigationStarting, AddNavigationStarting);
@@ -303,13 +447,22 @@ internal sealed unsafe class WebViewHost
         step = step < 0 ? step : Subscribe(_webView, IidNewWindowRequested, OnNewWindow, AddNewWindowRequested);
         step = step < 0 ? step : Subscribe(_webView, IidContainsFullScreenElementChanged, OnFullScreen, AddContainsFullScreenElementChanged);
         step = step < 0 ? step : Subscribe(controller, IidAcceleratorKeyPressed, OnKey, AddAcceleratorKeyPressed);
+        if (step >= 0 && _profile.Browsing)
+        {
+            step = Subscribe(_webView, IidNavigationCompleted, OnNavigationCompleted, AddNavigationCompleted);
+            step = step < 0 ? step : Subscribe(_webView, IidDocumentTitleChanged, OnTitleChanged, AddDocumentTitleChanged);
+            step = step < 0 ? step : Subscribe(_webView, IidSourceChanged, OnSourceChanged, AddSourceChanged);
+            step = step < 0 ? step : QueryInterface(_webView, IidWebView2_4, out _webView4);
+            step = step < 0 ? step : Subscribe(_webView4, IidDownloadStarting, OnDownloadStarting, AddDownloadStarting);
+        }
+
         if (step < 0)
         {
             Fail(WebViewStep.Subscribe, step);
             return;
         }
 
-        step = Navigate(_webView, _url);
+        step = WebViewNative.Navigate(_webView, _url);
         if (step < 0)
         {
             Fail(WebViewStep.Navigate, step);
@@ -335,10 +488,12 @@ internal sealed unsafe class WebViewHost
     private void OnNavigationStarting(nint sender, nint args)
     {
         string? uri = NavigationUri(args);
-        if (!VideoPage.IsOurs(uri))
+        if (!_profile.Allows(uri))
         {
             CancelNavigation(args);
-            DiagnosticLog.Info("Video", $"A navigation to {uri} was refused: the video window shows its own page only.");
+            DiagnosticLog.Info(_profile.Category, _profile.Browsing
+                ? $"A navigation to {uri} was refused: the Browser window goes to web pages only."
+                : $"A navigation to {uri} was refused: the video window shows its own page only.");
             if (!_closed)
             {
                 Refused?.Invoke(uri ?? "");
@@ -378,15 +533,60 @@ internal sealed unsafe class WebViewHost
     {
         string? uri = NewWindowUri(args);
         HandleNewWindow(args);
-        if (!_closed && !string.IsNullOrEmpty(uri))
+        if (_closed || string.IsNullOrEmpty(uri))
         {
-            Popup?.Invoke(uri);
+            return;
+        }
+
+        if (_profile.Browsing)
+        {
+            // A browser's new window opens in place: one window, the check's or the user's (a window.opener flow loses its opener).
+            if (_profile.Allows(uri) && _webView != 0)
+            {
+                WebViewNative.Navigate(_webView, uri);
+            }
+
+            return;
+        }
+
+        Popup?.Invoke(uri);
+    }
+
+    private void OnNavigationCompleted(nint sender, nint args)
+    {
+        if (!_closed)
+        {
+            NavigationDone?.Invoke(NavigationSucceeded(args), NavigationStatus(args));
+        }
+    }
+
+    private void OnTitleChanged(nint sender, nint args)
+    {
+        if (!_closed && _webView != 0 && DocumentTitle(_webView) is { } title)
+        {
+            TitleChanged?.Invoke(title);
+        }
+    }
+
+    private void OnSourceChanged(nint sender, nint args)
+    {
+        if (!_closed && _webView != 0 && WebViewNative.Source(_webView) is { } source)
+        {
+            SourceChanged?.Invoke(source);
+        }
+    }
+
+    private void OnDownloadStarting(nint sender, nint args)
+    {
+        if (!_closed && DownloadStarting?.Invoke(WebViewNative.Source(_webView)) == true)
+        {
+            CancelDownload(args);
         }
     }
 
     private bool Fail(WebViewStep step, int hr)
     {
-        DiagnosticLog.Warn("Video", $"WebView2 failed at {step} (0x{hr.ToString("X8", CultureInfo.InvariantCulture)}){(hr == EInvalidState ? ": its user data folder is in use by a browser started with other options" : "")}.");
+        DiagnosticLog.Warn(_profile.Category, $"WebView2 failed at {step} (0x{hr.ToString("X8", CultureInfo.InvariantCulture)}){(hr == EInvalidState ? ": its user data folder is in use by a browser started with other options" : "")}.");
         Close();
         Failed?.Invoke(step, hr);
         return false;

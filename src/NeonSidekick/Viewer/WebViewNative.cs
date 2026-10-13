@@ -26,6 +26,11 @@ namespace NeonSidekick.Viewer;
 /// the navigation-starting arguments 3 get_Uri, 8 put_Cancel; the web message's 5 TryGetWebMessageAsString; the new window's
 /// 3 get_Uri, 6 put_Handled.</para>
 ///
+/// <para>The Browser window's (2026-10-13, the bot checks, checked against the same header): ICoreWebView2 4 get_Source,
+/// 11 add_SourceChanged, 15 add_NavigationCompleted, 31 Reload, 36 CallDevToolsProtocolMethod, 40 GoBack, 46 add_DocumentTitleChanged,
+/// 48 get_DocumentTitle; ICoreWebView2_4 75 add_DownloadStarting; ICoreWebView2_7 80 PrintToPdf; the navigation-completed arguments
+/// 3 get_IsSuccess, and their second interface's 6 get_HttpStatusCode; the download-starting arguments 5 put_Cancel, 9 put_Handled.</para>
+///
 /// <para>The <c>add_*</c> calls' registration tokens are not kept: <see cref="ControllerClose"/> drops every handler with the
 /// view, and nothing is ever unsubscribed earlier. Every string WebView2 hands out is <c>CoTaskMemAlloc</c>'d and freed here
 /// (<see cref="TakeString"/>). The environment gets an options object of ours (<see cref="WebViewOptions"/>) for the autoplay
@@ -63,6 +68,15 @@ internal static unsafe partial class WebViewNative
     internal static readonly Guid IidContainsFullScreenElementChanged = new("E45D98B1-AFEF-45BE-8BAF-6C7728867F73");
     internal static readonly Guid IidEnvironment5 = new("319E423D-E0D7-4B8D-9254-AE9475DE9B17");
     internal static readonly Guid IidBrowserProcessExited = new("FA504257-A216-4911-A860-FE8825712861");
+    internal static readonly Guid IidNavigationCompleted = new("D33A35BF-1C49-4F98-93AB-006E0533FE1C");
+    internal static readonly Guid IidNavigationCompletedArgs2 = new("FDF8B738-EE1E-4DB2-A329-8D7D7B74D792");
+    internal static readonly Guid IidCallDevToolsProtocolMethodCompleted = new("5C4889F0-5EF6-4C5A-952C-D8F1B92D0574");
+    internal static readonly Guid IidDocumentTitleChanged = new("F5F2B923-953E-4042-9F95-F3A118E1AFD4");
+    internal static readonly Guid IidSourceChanged = new("3C067F9F-5388-4772-8B48-79F7EF1AB37C");
+    internal static readonly Guid IidWebView2_4 = new("20D02D59-6DF2-42DC-BD06-F98A694B1302");
+    internal static readonly Guid IidDownloadStarting = new("EFEDC989-C396-41CA-83F7-07F845A55724");
+    internal static readonly Guid IidWebView2_7 = new("79C24D83-09A3-45AE-9418-487F32A58740");
+    internal static readonly Guid IidPrintToPdfCompleted = new("CCF1EF04-FD8E-4D5F-B2DE-0983E41B8C36");
 
     /// <summary><c>COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY</c>: the virtual host's files are the top-level page's alone.</summary>
     internal const int HostAccessDeny = 0;
@@ -108,6 +122,20 @@ internal static unsafe partial class WebViewNative
     private const int TryGetWebMessageAsStringSlot = 5;
     private const int NewWindowGetUriSlot = 3;
     private const int NewWindowPutHandledSlot = 6;
+    private const int GetSourceSlot = 4;
+    private const int AddSourceChangedSlot = 11;
+    private const int AddNavigationCompletedSlot = 15;
+    private const int ReloadSlot = 31;
+    private const int CallDevToolsProtocolMethodSlot = 36;
+    private const int GoBackSlot = 40;
+    private const int AddDocumentTitleChangedSlot = 46;
+    private const int GetDocumentTitleSlot = 48;
+    private const int AddDownloadStartingSlot = 75;
+    private const int PrintToPdfSlot = 80;
+    private const int NavigationCompletedGetIsSuccessSlot = 3;
+    private const int NavigationCompletedGetHttpStatusCodeSlot = 6;
+    private const int DownloadPutCancelSlot = 5;
+    private const int DownloadPutHandledSlot = 9;
 
     // ── Imports ──────────────────────────────────────────────────────────────
 
@@ -258,6 +286,85 @@ internal static unsafe partial class WebViewNative
         }
     }
 
+    // ── The Browser window's (2026-10-13) ────────────────────────────────────
+
+    /// <summary>The address the view is on (<c>get_Source</c>), null when it cannot say.</summary>
+    internal static string? Source(nint webView) => GetString(webView, GetSourceSlot);
+
+    /// <summary>The page's title (<c>get_DocumentTitle</c>), null when it cannot say.</summary>
+    internal static string? DocumentTitle(nint webView) => GetString(webView, GetDocumentTitleSlot);
+
+    internal static int AddSourceChanged(nint webView, nint handler) => Subscribe(webView, AddSourceChangedSlot, handler);
+
+    internal static int AddNavigationCompleted(nint webView, nint handler) => Subscribe(webView, AddNavigationCompletedSlot, handler);
+
+    internal static int AddDocumentTitleChanged(nint webView, nint handler) => Subscribe(webView, AddDocumentTitleChangedSlot, handler);
+
+    internal static int Reload(nint webView) =>
+        ((delegate* unmanaged<nint, int>)Slot(webView, ReloadSlot))(webView);
+
+    internal static int GoBack(nint webView) =>
+        ((delegate* unmanaged<nint, int>)Slot(webView, GoBackSlot))(webView);
+
+    /// <summary>
+    /// A DevTools protocol command on the view's page (<c>CallDevToolsProtocolMethod</c>), its answer as JSON to
+    /// <paramref name="handler"/> (the ExecuteScript shape, <see cref="WebViewHandler.Script"/>): how the Browser window reads its cookies
+    /// (<c>Network.getCookies</c>, the answer <see cref="Web.BrowserCookie.Parse"/> already reads off the headless browser).
+    /// </summary>
+    internal static int CallDevToolsProtocolMethod(nint webView, string method, string parametersJson, nint handler)
+    {
+        fixed (char* name = method)
+        fixed (char* json = parametersJson)
+        {
+            return ((delegate* unmanaged<nint, char*, char*, nint, int>)Slot(webView, CallDevToolsProtocolMethodSlot))(webView, name, json, handler);
+        }
+    }
+
+    /// <summary><c>ICoreWebView2_4.add_DownloadStarting</c>: a file the page would download, which the window may cancel.</summary>
+    internal static int AddDownloadStarting(nint webView4, nint handler) => Subscribe(webView4, AddDownloadStartingSlot, handler);
+
+    /// <summary>A download cancelled and its UI kept away (<c>put_Cancel</c>, <c>put_Handled</c>).</summary>
+    internal static int CancelDownload(nint args)
+    {
+        int hr = ((delegate* unmanaged<nint, int, int>)Slot(args, DownloadPutCancelSlot))(args, 1);
+        return hr < 0 ? hr : ((delegate* unmanaged<nint, int, int>)Slot(args, DownloadPutHandledSlot))(args, 1);
+    }
+
+    /// <summary><c>ICoreWebView2_7.PrintToPdf</c> with the default print settings; <paramref name="handler"/> gets <c>(HRESULT, BOOL)</c> (<see cref="WebViewHandler.Flag"/>).</summary>
+    internal static int PrintToPdf(nint webView7, string path, nint handler)
+    {
+        fixed (char* file = path)
+        {
+            return ((delegate* unmanaged<nint, char*, nint, nint, int>)Slot(webView7, PrintToPdfSlot))(webView7, file, 0, handler);
+        }
+    }
+
+    /// <summary>Whether a navigation completed without a network error (<c>get_IsSuccess</c>; an HTTP error status still succeeds).</summary>
+    internal static bool NavigationSucceeded(nint args)
+    {
+        int value;
+        return ((delegate* unmanaged<nint, int*, int>)Slot(args, NavigationCompletedGetIsSuccessSlot))(args, &value) >= 0 && value != 0;
+    }
+
+    /// <summary>The completed navigation's HTTP status (<c>ICoreWebView2NavigationCompletedEventArgs2.get_HttpStatusCode</c>); 0 when it has none.</summary>
+    internal static int NavigationStatus(nint args)
+    {
+        if (QueryInterface(args, IidNavigationCompletedArgs2, out nint args2) < 0)
+        {
+            return 0;
+        }
+
+        try
+        {
+            int status;
+            return ((delegate* unmanaged<nint, int*, int>)Slot(args2, NavigationCompletedGetHttpStatusCodeSlot))(args2, &status) >= 0 ? status : 0;
+        }
+        finally
+        {
+            Release(args2);
+        }
+    }
+
     // ── ICoreWebView2Settings ────────────────────────────────────────────────
 
     /// <summary>
@@ -272,6 +379,16 @@ internal static unsafe partial class WebViewNative
         hr = hr < 0 ? hr : PutFalse(settings, PutAreDefaultContextMenusEnabledSlot);
         hr = hr < 0 ? hr : PutFalse(settings, PutAreHostObjectsAllowedSlot);
         return hr < 0 ? hr : PutFalse(settings, PutIsZoomControlEnabledSlot);
+    }
+
+    /// <summary>
+    /// What the Browser window needs (2026-10-13): a page that works as in a browser — its dialogs, context menu (paste into a
+    /// form), status bar and zoom left on — with the DevTools window and host objects off. Returns the first failure.
+    /// </summary>
+    internal static int AllowBrowsing(nint settings)
+    {
+        int hr = PutFalse(settings, PutAreDevToolsEnabledSlot);
+        return hr < 0 ? hr : PutFalse(settings, PutAreHostObjectsAllowedSlot);
     }
 
     // ── Event arguments ──────────────────────────────────────────────────────

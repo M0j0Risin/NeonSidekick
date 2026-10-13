@@ -200,7 +200,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Skills => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Cwd => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Quick,
         SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Copy
-            or SlashCommand.Remember or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Log or SlashCommand.Timer or SlashCommand.Expand or SlashCommand.Collapse or SlashCommand.Window
+            or SlashCommand.Remember or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browser or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Log or SlashCommand.Timer or SlashCommand.Expand or SlashCommand.Collapse or SlashCommand.Window
             or SlashCommand.Perf or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Unknown or SlashCommand.Overloaded => MidTurnClass.Quick,
         SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Rewind or SlashCommand.Exit => MidTurnClass.Cancel,
         _ => MidTurnClass.Deferred,
@@ -669,6 +669,10 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Open:
                 HandleOpen(args);
+                break;
+            case SlashCommand.Browser:
+                // /browser (2026-10-13): the Browser window is its own thread, as the log window's.
+                HandleBrowser(args);
                 break;
             case SlashCommand.Terminal:
                 HandleTerminal(args);

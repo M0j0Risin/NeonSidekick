@@ -1050,6 +1050,9 @@ public enum SettingsField
 
     /// <summary>A picker: what a <c>/botchat</c> bot's mention of a picture it never drew does — <c>disabled</c> / <c>generate</c> (<see cref="Settings.AppSettingsData.BotChatImageMentionMode"/>). The Botchat tab, right under <see cref="BotChatImg2ImgMode"/> (2026-10-13, the user's ask and place); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
     BotChatImageMentionMode,
+
+    /// <summary>A picker over <see cref="Web.BotcheckWindow.Names"/>: what a bot check the web tools cannot get past does — <c>ask</c> / <c>automatic</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.WebBrowserBotcheckWindow"/>). The Web tab, right under <see cref="WebBrowserPath"/> (2026-10-13, the user's ask and name); no reconnect (read at each bot check). Last in the enum, as every newcomer.</summary>
+    WebBrowserBotcheckWindow,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1542,7 +1545,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
     [
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
-        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
+        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
         [SettingsField.ImageTools, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
@@ -2225,6 +2228,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ObsidianAllowDelete => "Obsidian allow delete (.trash)",   // "Obsidian allow delete" until 2026-09-23 (the user's call: the row says where a delete goes)
         SettingsField.WebBrowserMode => "Web browser mode",
         SettingsField.WebBrowserPath => "Web browser path",
+        SettingsField.WebBrowserBotcheckWindow => "Web browser botcheck window",
         SettingsField.WebBrowserNetworkMode => "Web browser network mode",
         SettingsField.WebSearxngUrl => "Web SearXNG URL",
         SettingsField.WebSearchMaxResults => "Web search max results",
@@ -2587,6 +2591,7 @@ internal sealed partial class SettingsMenu
             SettingsField.DockerServerStopOnExit => OnOff(data.DockerServerStopOnExit),
             SettingsField.ObsidianVault => string.IsNullOrWhiteSpace(data.ObsidianVault) ? NoObsidianVaultLabel : data.ObsidianVault,
             SettingsField.WebBrowserMode => data.WebBrowserMode,
+            SettingsField.WebBrowserBotcheckWindow => data.WebBrowserBotcheckWindow,
             SettingsField.WebBrowserPath => string.IsNullOrWhiteSpace(data.WebBrowserPath) ? AutoBrowserLabel(locatedBrowser) : data.WebBrowserPath,
             SettingsField.DraftEditor => string.IsNullOrWhiteSpace(data.DraftEditor) ? DefaultDraftEditorLabel : data.DraftEditor,
             SettingsField.ImageEditor => string.IsNullOrWhiteSpace(data.ImageEditor) ? DefaultImageEditorLabel : data.ImageEditor,
@@ -3451,6 +3456,10 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the browser-mode picker: the mode and its hint (padded to eleven: <c>httpclient</c> is ten). Pinned.</summary>
     public static string BrowserModeLabel(string name) =>
         Markup.Escape(name.PadRight(11)) + Theme.DimMarkup(Web.BrowserMode.Describe(name));
+
+    /// <summary>One row of the botcheck-window picker (2026-10-13): the mode and its hint (padded to ten: <c>automatic</c> is nine). Pinned.</summary>
+    public static string BotcheckWindowLabel(string name) =>
+        Markup.Escape(name.PadRight(10)) + Theme.DimMarkup(Web.BotcheckWindow.Describe(name));
 
     /// <summary>One row of the network-mode picker: the mode and its hint (padded to nineteen: <c>local_area_network</c> is eighteen). Pinned.</summary>
     public static string NetworkModeLabel(string name) =>
@@ -4819,6 +4828,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.WebBrowserMode)
         {
             return await PickBrowserModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.WebBrowserBotcheckWindow)
+        {
+            return await PickBotcheckWindowAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.WebBrowserNetworkMode)
@@ -7811,6 +7825,22 @@ internal sealed partial class SettingsMenu
 
         string name = Web.BrowserMode.Names[index];
         Apply(SettingsField.WebBrowserMode, d => d.WebBrowserMode = name);
+        return true;
+    }
+
+    /// <summary>The botcheck-window picker under the settings list (2026-10-13): one <see cref="BotcheckWindowLabel"/> row per <see cref="Web.BotcheckWindow.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickBotcheckWindowAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = Web.BotcheckWindow.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.WebBrowserBotcheckWindow)), names.Select(BotcheckWindowLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, saved.WebBrowserBotcheckWindow)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.WebBrowserBotcheckWindow, d => d.WebBrowserBotcheckWindow = name);
         return true;
     }
 

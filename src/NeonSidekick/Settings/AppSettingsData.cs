@@ -187,6 +187,16 @@ public sealed class AppSettingsData
     public int? VideoWindowTop { get; set; }
 
     /// <summary>
+    /// The Browser window's top-left corner as it last closed (2026-10-13, the bot checks' window): the <see cref="VideoWindowLeft"/>
+    /// pair's twin, set by the window itself (<see cref="Viewer.BrowserWindow.Placed"/>). No menu row, so no help line; null opens it
+    /// where Windows puts it.
+    /// </summary>
+    public int? BrowserWindowLeft { get; set; }
+
+    /// <summary>The top of that corner; see <see cref="BrowserWindowLeft"/>.</summary>
+    public int? BrowserWindowTop { get; set; }
+
+    /// <summary>
     /// Whether a turn offers the YouTube tools (2026-10-05, the YouTube plan): <c>youtube_search</c> over the Data API with
     /// <see cref="YouTubeApiKey"/>, and <c>youtube_play</c>, <c>youtube_control</c> and <c>youtube_status</c> over the video window
     /// (a Windows window with WebView2; headless offers the search alone). Off by default, as every tool group that reaches
@@ -2589,6 +2599,16 @@ public sealed class AppSettingsData
     /// standard folders (<see cref="Web.HeadlessBrowser.Candidates"/>). No variable.
     /// </summary>
     public string WebBrowserPath { get; set; } = "";
+
+    /// <summary>
+    /// What a bot check the web tools cannot get past does (2026-10-13, the user's ask and name): one of
+    /// <see cref="Web.BotcheckWindow.Names"/> — <c>ask</c> (the default: the pane asks before the Browser window opens on it, the user
+    /// solves it there, and the page and its cookies come back to the tool), <c>automatic</c> (the window opens without asking) or
+    /// <c>disabled</c> (never; the tool reports the refusal). Read by <c>web_fetch</c>, <c>web_search</c>'s DuckDuckGo,
+    /// <c>download_file</c> and <c>convert_to_pdf</c>; under every <see cref="WebBrowserMode"/>. Headless, and off Windows, never opens
+    /// it. Anything else reads as <see cref="Web.BotcheckWindow.Default"/>. No variable.
+    /// </summary>
+    public string WebBrowserBotcheckWindow { get; set; } = Web.BotcheckWindow.Default;
 
     /// <summary>
     /// How many hits a <c>web_search</c> without <c>max_results</c> returns:

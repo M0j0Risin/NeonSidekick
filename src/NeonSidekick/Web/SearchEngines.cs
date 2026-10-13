@@ -13,6 +13,13 @@ public sealed record SearchOutcome(IReadOnlyList<SearchResult> Results, string E
 {
     public bool Ok => Error.Length == 0;
 
+    /// <summary>
+    /// The results page a person could open in the Browser window to get the search past a bot check (2026-10-13, <see cref="BotCheck"/>),
+    /// with why it was refused: DuckDuckGo's own, when it answered with its "bots use DuckDuckGo too" page or a refusal that names no
+    /// wait; null otherwise.
+    /// </summary>
+    public BotCheckRequest? Gate { get; init; }
+
     public static SearchOutcome Failed(string error) => new([], error);
 }
 
@@ -199,7 +206,8 @@ public sealed class DuckDuckGoSearch : ISearchEngine
         ArgumentNullException.ThrowIfNull(options);
         await PaceAsync(cancellationToken).ConfigureAwait(false);
         // Judged like any fetch (2026-09-18): under local_area_network the public endpoint is refused — the user's call.
-        var page = await _fetcher.FetchAsync(QueryUrl(query), options with { Referer = Endpoint }, cancellationToken).ConfigureAwait(false);
+        var url = QueryUrl(query);
+        var page = await _fetcher.FetchAsync(url, options with { Referer = Endpoint }, cancellationToken).ConfigureAwait(false);
         if (!page.Ok)
         {
             return SearchOutcome.Failed(page.Outcome switch
@@ -208,18 +216,32 @@ public sealed class DuckDuckGoSearch : ISearchEngine
                 // The network mode's own sentence names the host and the mode; nothing to add.
                 FetchOutcome.LanRefused or FetchOutcome.InternetRefused => page.Error,
                 _ => WebText.SearchFailed(Name, page.Detail.Length > 0 ? page.Detail : page.Error),
-            });
+            }) with { Gate = BotCheck.Offers(page) ? new BotCheckRequest(url, BotCheckUse.Search, BotCheck.WhyOf(page.Detail)) : null };
         }
 
         if (LooksRefused(page.Text))
         {
             DiagnosticLog.Info(Category, "DuckDuckGo answered with its bot page.");
-            return SearchOutcome.Failed(WebText.SearchRefused(Name, "a bot check"));
+            return SearchOutcome.Failed(WebText.SearchRefused(Name, BotCheckDetail)) with { Gate = new BotCheckRequest(url, BotCheckUse.Search, BotCheckDetail) };
         }
 
-        var results = Parse(page.Text);
-        DiagnosticLog.Info(Category, $"DuckDuckGo \"{query}\": {results.Count.ToString(CultureInfo.InvariantCulture)} results ({page.Engine}, HTTP {page.Status.ToString(CultureInfo.InvariantCulture)}, {page.Text.Length.ToString(CultureInfo.InvariantCulture)} chars).");
-        if (results.Count == 0 && page.Status == (int)HttpStatusCode.Accepted)
+        return Outcome(query, max, page.Text, page.Engine, page.Status);
+    }
+
+    /// <summary>The refusal's detail for DuckDuckGo's "bots use DuckDuckGo too" page. Pinned.</summary>
+    public const string BotCheckDetail = "a bot check";
+
+    /// <summary>
+    /// The hits on <paramref name="html"/>, a results page the endpoint answered (or, since 2026-10-13, the one a person let through
+    /// its bot check in the Browser window), at most <paramref name="max"/>; a 202 with none is the rate limit's refusal.
+    /// </summary>
+    public SearchOutcome Outcome(string query, int max, string html, string engine, int status)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(html);
+        var results = Parse(html);
+        DiagnosticLog.Info(Category, $"DuckDuckGo \"{query}\": {results.Count.ToString(CultureInfo.InvariantCulture)} results ({engine}, HTTP {status.ToString(CultureInfo.InvariantCulture)}, {html.Length.ToString(CultureInfo.InvariantCulture)} chars).");
+        if (results.Count == 0 && status == (int)HttpStatusCode.Accepted)
         {
             return SearchOutcome.Failed(WebText.SearchRefused(Name, RateLimitDetail));
         }

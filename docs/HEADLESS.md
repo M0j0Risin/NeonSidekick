@@ -65,6 +65,7 @@ You:
 | `/camera list` | Lists the cameras, the chosen one marked. Every other `/camera` form is an `[error]`: a photo needs the panes. |
 | `/youtube <words>` | Searches YouTube (needs a *YouTube API key*) and prints numbered results with ids. The search switches, `/youtube playlist <id\|link>`, `save <id\|link>`, `unsave` and `list [--clear]` work too; playing a video is an `[error]` (no video window). |
 | `/screen list` | Lists the monitors and windows with their targets. Every other `/screen` form is an `[error]`. |
+| `/browser` | An `[error]`: the Browser window is the screen's. A web tool's bot check is never shown either; the tool reports the refusal. |
 | `/print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape] \| reply \| printers` | Prints a file or the last reply, or lists the printers (see [Printing](TOOLS.md#printing)); *Print action policy* doesn't apply. On a Mac it prints through CUPS. No server needed. |
 | `/pdf <file> \| https://… \| reply [to=<out.pdf>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF in the working directory (see [Making PDFs](TOOLS.md#making-pdfs)); *Web browser network mode* still judges a web page. On a Mac only the `browser` engine works. No server needed. |
 | `/test [id \| reasoning \| structured \| long \| all \| history]` | Runs the [benchmark tests](COMMANDS.md#benchmark-tests): a `[notice]` per test, then the results table. Alone it lists the tests; `history` prints saved runs. The listing and `history` need no server; a run does. |

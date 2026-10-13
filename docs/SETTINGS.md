@@ -672,6 +672,7 @@ The tools most profiles use and the pane's own options, in four tabs: Ask, Web, 
 | Web tools | Offers `web_search`, `web_fetch`, `open_url` and `download_file`. | off |
 | Web browser mode | `default` uses HTTP and falls back to a headless browser for a blocked or empty page; `httpclient` never falls back; `chromium` uses the browser for every page. | `default` |
 | Web browser path | The Chromium-based browser for headless fetches and making PDFs; empty finds Edge, Chrome or Brave. | (auto) |
+| Web browser botcheck window | What a bot check the web tools can't get past does: `ask` asks on the pane, then opens the page in the Browser window for you to solve; `automatic` opens it without asking; `disabled` never does. See [The Browser window](TOOLS.md#the-browser-window). Windows only. | `ask` |
 | Web browser network mode | Where a fetch may reach: `internet` (public addresses), `local_area_network` (this machine and the LAN) or `both`. | `internet` |
 | Web search method | `duckduckgo` (built in) or `searxng`. | `duckduckgo` |
 | Web SearXNG URL | The SearXNG instance, for `searxng`. | (not set) |

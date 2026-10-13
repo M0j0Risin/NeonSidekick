@@ -53,6 +53,10 @@ public static class HelpCommands
         [
             new("/browse [<folder>]", "Browse the working directory's folders and files as a tree in a pane, from its root or a folder in it (Tab completes the folder). Space, → and ← open and close folders, `-` collapses all, Enter on a folder opens or closes it, and Enter on a file opens it in its default app, the pane staying open for another. Hidden, system and dot entries appear only when *File browser/tree mode* is `show-hidden`; `.git` folders are left out. Works while a reply runs."),
         ]),
+        new("/browser",
+        [
+            new("/browser [<url>]", "Open the page (or a blank one) in the Browser window, a browser of the app's own (WebView2, Windows only) whose cookies are kept between runs in the home's `webview2-browser` folder. Browse as in any browser: sign in to a site, or get past its bot check. When you close the window, its cookies for every site it went to go to the web tools, so `web_fetch` and `download_file` reach those sites as you did (in memory, for this run). Ctrl+W closes it, F5 reloads, Alt+← goes back. The web tools open the same window on a bot check they cannot get past, per *Web browser botcheck window*. Works while a reply runs; not headless."),
+        ]),
         new("/camera",
         [
             new("/camera", "Open the camera pane: frame the shot (live in a camera window of its own under *Camera preview* `live`), Space takes it, `r` takes it again, Enter puts it on the input line as `[Image #N]`, ESC drops it. The photo is saved in the *Camera output folder* under the profile's `images` folder (`camera_images` by default). Without the pane it takes one at once. See Camera."),

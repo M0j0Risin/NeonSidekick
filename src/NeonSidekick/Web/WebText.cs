@@ -60,6 +60,9 @@ public static class WebText
     public const string HttpEngine = "http";
     public const string BrowserEngine = "headless browser";
 
+    /// <summary>The page the user let through a bot check in the Browser window (2026-10-13, <see cref="BotCheck"/>).</summary>
+    public const string WindowEngine = "browser window";
+
     /// <summary>The search engine names on a search header.</summary>
     public const string DuckDuckGoName = "DuckDuckGo";
     public const string SearxngName = "SearXNG";

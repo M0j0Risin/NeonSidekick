@@ -84,6 +84,9 @@ public sealed class OpenedDownload : IDisposable
     public long Declared { get; }
     public string Detail { get; }
 
+    /// <summary>How long a 429 or 503 refusal asked the client to wait (its <c>Retry-After</c>), null without one (2026-10-13: a rate limit is no bot check, <see cref="BotCheck.Offers(OpenedDownload)"/>).</summary>
+    public TimeSpan? RetryAfter { get; init; }
+
     public bool Ok => Outcome == FetchOutcome.Ok;
 
     /// <summary>The tool's sentence for a failed download.</summary>
@@ -766,7 +769,8 @@ public sealed class WebFetcher
                     string detail = $"HTTP {status.ToString(CultureInfo.InvariantCulture)} {response.ReasonPhrase}".TrimEnd();
                     DiagnosticLog.Info(Category, $"GET {current} → {detail}.");
                     var outcome = IsBlockedStatus(status) ? FetchOutcome.Blocked : FetchOutcome.Failed;
-                    return new OpenedDownload(outcome, url.AbsoluteUri, current.AbsoluteUri, status, mediaType, fileName, 0, detail);
+                    var retryAfter = status is 429 or 503 ? RetryAfterOf(response.Headers.RetryAfter, _time.GetUtcNow()) : null;
+                    return new OpenedDownload(outcome, url.AbsoluteUri, current.AbsoluteUri, status, mediaType, fileName, 0, detail) { RetryAfter = retryAfter };
                 }
 
                 long declared = response.Content.Headers.ContentLength ?? 0;
@@ -914,18 +918,33 @@ public sealed class WebFetcher
     /// </summary>
     private void Adopt(BrowserDump dump, Uri url, FetchOptions options)
     {
-        if (_cookies is null || dump.Cookies is not { Count: > 0 } cookies)
+        if (_cookies is not null && dump.Cookies is { Count: > 0 } cookies)
         {
-            return;
+            Adopt(cookies, _browser.Identify(options.BrowserPath), url);
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="cookies"/> a browser earned on <paramref name="url"/> put into the client's jar, each scope the jar took one for
+    /// marked with <paramref name="identity"/>, the browser that earned it (<see cref="ClaimFor"/>): the headless browser's
+    /// (<see cref="BrowserAsync"/>), or since 2026-10-13 the Browser window's after a person solved a bot check there, or after
+    /// <c>/browser</c> closed (<see cref="BotCheck"/>). Returns how many the jar took; none without a jar.
+    /// </summary>
+    public int Adopt(IReadOnlyList<BrowserCookie>? cookies, BrowserIdentity identity, Uri url)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        ArgumentNullException.ThrowIfNull(url);
+        if (_cookies is null || cookies is not { Count: > 0 })
+        {
+            return 0;
         }
 
         var taken = cookies.Where(c => c.AddTo(_cookies)).ToList();
         if (taken.Count == 0)
         {
-            return;
+            return 0;
         }
 
-        var identity = _browser.Identify(options.BrowserPath);
         var scopes = taken.GroupBy(c => c.Domain.ToLowerInvariant()).ToList();
         foreach (var scope in scopes)
         {
@@ -934,6 +953,66 @@ public sealed class WebFetcher
         }
 
         DiagnosticLog.Info(Category, $"{url}: {taken.Count.ToString(CultureInfo.InvariantCulture)} of the browser's cookies handed to the HTTP client, which claims {identity.BrandName} {identity.Major.ToString(CultureInfo.InvariantCulture)} on {string.Join(", ", scopes.Select(s => s.Key))} while they last.");
+        return taken.Count;
+    }
+
+    /// <summary>
+    /// The page a person let through a bot check in the Browser window (2026-10-13, <see cref="BotCheck"/>) as a fetch's answer: its
+    /// cookies adopted (<see cref="Adopt(IReadOnlyList{BrowserCookie}?, BrowserIdentity, Uri)"/>), so the next fetch from that site goes
+    /// through the HTTP client, and its DOM converted as the headless browser's is, engine <see cref="WebText.WindowEngine"/>.
+    /// </summary>
+    public FetchResult FromWindow(Uri url, BotCheckResult solved)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        ArgumentNullException.ThrowIfNull(solved);
+        string html = solved.Html ?? "";
+        var final = Uri.TryCreate(solved.FinalUrl, UriKind.Absolute, out var ended) && IsHttp(ended) ? ended : url;
+        Adopt(solved.Cookies, solved.Identity, final);
+        var page = HtmlToMarkdown.Convert(html, final);
+        DiagnosticLog.Info(Category, $"{url}: {html.Length.ToString(CultureInfo.InvariantCulture)} chars of DOM from the Browser window, past its bot check.");
+        return new FetchResult(FetchOutcome.Ok, url.AbsoluteUri, final.AbsoluteUri, solved.Status > 0 ? solved.Status : 200, "text/html", page, html, WebText.WindowEngine, "", solved.Truncated);
+    }
+
+    /// <summary>
+    /// A refused fetch shown to a person (2026-10-13, <see cref="BotCheck"/>): <paramref name="solver"/> asked to have
+    /// <paramref name="url"/> through its bot check in the Browser window. Cleared, and the address it ended on still within the network
+    /// mode (<see cref="PreflightAsync"/>), the window's page is the answer (<see cref="FromWindow"/>); any other ending is
+    /// <paramref name="refused"/> with what happened added to its detail (<see cref="BotCheckText.For"/>); no one to ask (null) leaves
+    /// it as it was.
+    /// </summary>
+    public async Task<FetchResult> PastBotCheckAsync(Uri url, FetchResult refused, FetchOptions options, BotCheckSolver solver, BotCheckUse use, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        ArgumentNullException.ThrowIfNull(refused);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(solver);
+        var solved = await solver(new BotCheckRequest(url, use, BotCheck.WhyOf(refused.Detail)), cancellationToken).ConfigureAwait(false);
+        if (solved is null)
+        {
+            return refused;
+        }
+
+        if (!solved.Cleared)
+        {
+            return refused with { Detail = refused.Detail + BotCheckText.For(solved) };
+        }
+
+        if (await LeftTheReachAsync(url, solved.FinalUrl, options, cancellationToken).ConfigureAwait(false))
+        {
+            return refused with { Detail = refused.Detail + BotCheckText.LeftTheReach(solved.FinalUrl) };
+        }
+
+        return FromWindow(url, solved);
+    }
+
+    /// <summary>Whether the address a bot check ended on is off a host the network mode lets the fetch reach (a redirect onto the LAN under <c>internet</c>, say).</summary>
+    public async Task<bool> LeftTheReachAsync(Uri url, string finalUrl, FetchOptions options, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        ArgumentNullException.ThrowIfNull(options);
+        return Uri.TryCreate(finalUrl, UriKind.Absolute, out var final) && IsHttp(final)
+            && !string.Equals(final.Host, url.Host, StringComparison.OrdinalIgnoreCase)
+            && await PreflightAsync(final.Host, options, cancellationToken).ConfigureAwait(false) is not null;
     }
 
     /// <summary>A scope the browser's cookies were taken for (one of them, for <see cref="BrowserCookie.AppliesTo"/>), the browser, and when the last of them expires (null: a session cookie).</summary>

@@ -12,6 +12,11 @@ namespace NeonSidekick.Llm.Tools;
 /// CSV come back as they are; a PDF or a picture is an error. The result starts with a header line
 /// naming the title, the final URL, the window and the engine, so the transcript's one-line note
 /// reads <c>Example Domain — https://example.com/ (chars 1–2,100 of 2,100, http)</c>.
+/// <para>
+/// Since 2026-10-13 a page refused by a bot check that wants a person (<see cref="BotCheck.Offers(FetchResult)"/>) can be shown to the
+/// user in the Browser window (<see cref="BotCheckSolver"/>, per <c>Web browser botcheck window</c>); the page they let through is the
+/// answer, its engine <see cref="WebText.WindowEngine"/>.
+/// </para>
 /// </summary>
 public sealed class WebFetchTool : AIFunction
 {
@@ -36,11 +41,14 @@ public sealed class WebFetchTool : AIFunction
 
     private readonly WebAccess _web;
     private readonly Func<AppSettingsData> _effective;
+    private readonly BotCheckSolver? _botCheck;
 
-    public WebFetchTool(WebAccess web, Func<AppSettingsData> effective)
+    /// <param name="botCheck">Who shows a bot check to the user (2026-10-13); null where nobody can be asked (headless).</param>
+    public WebFetchTool(WebAccess web, Func<AppSettingsData> effective, BotCheckSolver? botCheck = null)
     {
         _web = web ?? throw new ArgumentNullException(nameof(web));
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
+        _botCheck = botCheck;
     }
 
     public override string Name => ToolName;
@@ -111,6 +119,11 @@ public sealed class WebFetchTool : AIFunction
             // A hit web_search listed goes as a click from its results page would (2026-10-11).
             var options = WebAccess.Options(_effective()) with { Referer = _web.Referers.For(parsed) };
             page = await _web.Fetcher.FetchAsync(parsed, options, cancellationToken).ConfigureAwait(false);
+            if (_botCheck is not null && BotCheck.Offers(page))
+            {
+                page = await _web.Fetcher.PastBotCheckAsync(parsed, page, options, _botCheck, BotCheckUse.Fetch, cancellationToken).ConfigureAwait(false);
+            }
+
             _web.Pages.Put(key, page);
         }
 

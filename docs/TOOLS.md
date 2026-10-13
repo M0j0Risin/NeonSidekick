@@ -65,7 +65,18 @@ Under *Web tools*.
 | `open_url` | `url?, urls?` | Opens a link, or up to five, in your browser. |
 | `download_file` | `url, path?, overwrite?` | Downloads a file into the working directory, up to *Web download max (MB)*. Needs *File tools* too. |
 
-When a site refuses `web_fetch`, shows a bot check, or needs scripts to fill in, it tries again in your installed Edge, Chrome or Brave, run headless (*Web browser mode*). A bot check that clears by itself is waited on for up to 15 seconds; one that wants a click is reported as blocked. The browser keeps its cookies in its own folder (`%TEMP%\NeonSidekick\browser`; `$TMPDIR/NeonSidekick/browser` on a Mac); if another browser holds that folder, the fetch says so. A rate-limited site is waited out when it asks for 10 seconds or less, and requests to one site are at least a second apart.
+When a site refuses `web_fetch`, shows a bot check, or needs scripts to fill in, it tries again in your installed Edge, Chrome or Brave, run headless (*Web browser mode*). A bot check that clears by itself is waited on for up to 15 seconds; one that wants a click goes to the Browser window (below) or is reported as blocked. The browser keeps its cookies in its own folder (`%TEMP%\NeonSidekick\browser`; `$TMPDIR/NeonSidekick/browser` on a Mac); if another browser holds that folder, the fetch says so. A rate-limited site is waited out when it asks for 10 seconds or less, and requests to one site are at least a second apart.
+
+#### The Browser window
+
+A bot check that wants a person (a Cloudflare click, a captcha) can be solved by you, in the **Browser window**: a browser of the app's own (WebView2, Windows only), apart from the video window.
+
+* **When:** `web_fetch`, `web_search` (DuckDuckGo's "bots use DuckDuckGo too"), `download_file` and `convert_to_pdf` offer it when a site refuses them with a 403, a 503 that names no wait, or a check's page, whatever *Web browser mode* says. A rate limit never opens it.
+* ***Web browser botcheck window*** decides: `ask` (the default) asks on the pane first (deny, allow once, allow for this session; a site you deny isn't asked about again that turn), `automatic` opens it at once, `disabled` never does. Headless, and on a Mac, it never opens.
+* **Solving:** the window comes to the front on the page while the pane says what it waits for; ESC or *Give up* there (or closing the window) gives up, and after 5 minutes it gives up by itself. Once the page has loaded with no check showing, the window closes and the tool goes on: `web_fetch` reads the page it let through (its header says `browser window`), `web_search` reads its results, `convert_to_pdf` gets the window's own print of the page, and `download_file` asks for the file again.
+* **Cookies:** the window's cookies for the site go to the web tools' HTTP client, which then claims to be Edge there, so the next fetch from that site usually goes through without the window (in memory, for this run). A site that ties its clearance to the browser's own connection may still refuse a download, which the result says.
+* **Profile:** kept between runs in `<home>\webview2-browser`, so a solved check, and any site you sign in to there, are remembered. A second copy of the app can't open the window while the first has it.
+* **`/browser [url]`** opens the same window for you to browse yourself (sign in to a site, say); when you close it, its cookies for every site it went to go to the web tools. Ctrl+W closes it, F5 reloads, Alt+← goes back.
 
 ### Shell
 
@@ -667,6 +678,7 @@ Under *Print tools*. `/print` and the print tools send work to any printer Windo
 * **Pages:** US Letter by default (`paper=` A4 or Legal), portrait unless landscape, with the title and *page N of M* at the top.
 * **The engine** (*PDF engine*): Edge, Chrome, Brave or (on a Mac) Chromium (*Web browser path*, else the first found). Without one, or when it fails under `auto`, Windows' **Microsoft Print to PDF** draws Markdown, text and pictures in black and white. HTML and web pages need the browser. On a Mac only the browser works.
 * **Output:** beside the source with `.pdf` (a web page or Markdown text gets a name like `example.com-intro.pdf`), or where `to` says. An existing PDF is replaced only with `overwrite`.
+* **A web page behind a bot check:** with someone to ask (*Web browser botcheck window* not `disabled`), the page is fetched first as `web_fetch` would; a check there goes to [the Browser window](#the-browser-window), which prints the page you let through itself ("with the Browser window"; WebView2's default print settings, so no backgrounds). Any other ending prints as before.
 * `convert_to_pdf` needs *File tools* (a `url` needs *Web tools* too). `/pdf` needs neither.
 
 ### Camera

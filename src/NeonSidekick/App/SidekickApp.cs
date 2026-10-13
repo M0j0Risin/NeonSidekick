@@ -89,6 +89,9 @@ public sealed class SidekickApp
     private readonly Screen.IScreenSystem? _screenSystem;
     private readonly Viewer.IVideoPlayer? _videoPlayer;
 
+    /// <summary>The Browser window for bot checks and <c>/browser</c> (2026-10-13): <see cref="Viewer.BrowserWindow.Window"/> on Windows, null elsewhere and in headless.</summary>
+    private readonly Viewer.IBrowserWindow? _browserWindow;
+
     /// <summary>The <c>/keycheck</c> probe (2026-10-04): <see cref="Hotkeys.WindowsHotkeyProbe"/> on Windows, null elsewhere.</summary>
     private readonly Hotkeys.IHotkeyProbe? _hotkeyProbe;
 
@@ -229,9 +232,11 @@ public sealed class SidekickApp
         Action<string>? showInViewer = null,
         Func<bool>? closeThumbs = null,
         Action<Shell.ProcessSession, Action<Shell.ProcessSession>>? openProcessWindow = null,
-        Viewer.IVideoPlayer? videoPlayer = null)
+        Viewer.IVideoPlayer? videoPlayer = null,
+        Viewer.IBrowserWindow? browserWindow = null)
     {
         _openProcessWindow = openProcessWindow;
+        _browserWindow = browserWindow;
         // The video window (2026-10-05): VideoWindow.Player in the app on Windows, a fake in tests, none elsewhere.
         _videoPlayer = videoPlayer;
         // The thumbnail browser (2026-10-04): ThumbsWindow and PictureWindow.ShowQuietly in the app on Windows, null in tests and
@@ -1010,6 +1015,13 @@ public sealed class SidekickApp
                         await HeadlessLineAsync((haResult.Failed ? "[error] " : "") + haLine).ConfigureAwait(false);
                     }
 
+                    continue;
+                }
+
+                // /browser (2026-10-13): the Browser window is the screen's; headless says so, ahead of the server check.
+                if (SlashCommands.Parse(text) is (SlashCommand.Browser, _))
+                {
+                    await HeadlessLineAsync("[error] " + Web.BotCheckText.BrowserNeedsScreen).ConfigureAwait(false);
                     continue;
                 }
 
@@ -2283,7 +2295,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as IMouseInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

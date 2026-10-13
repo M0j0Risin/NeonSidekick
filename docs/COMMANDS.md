@@ -82,6 +82,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/exit` | Exits the app. |
 | `/explore [<folder>]` | Opens the working directory in your file browser. |
 | `/browse [<folder>]` | Browses the working directory as a tree in a pane; Enter on a file opens it in its default app. See [File browser](#file-browser). |
+| `/browser [<url>]` | Opens the page (or a blank one) in the Browser window, for you to sign in to a site or get past its bot check; when you close it, its cookies go to the web tools. Windows only. See [The Browser window](TOOLS.md#the-browser-window). |
 | `/gituser [force]` | Writes *GitLib email* and *GitLib name* into the repository's config; an existing `[user]` stays unless `force`. Needs *GitLib tools* on. |
 | `/ha` | Home Assistant at a glance: lights on per room, the TV, temperatures, motion, low batteries and to-do lists. |
 | `/ha on\|off\|toggle <name> [<brightness>]` | Switches a room, light, switch or the TV (`/ha on den 40%`, `/ha off kitchen and hallway`). |

@@ -154,6 +154,7 @@ public class AppSettingsTests : IDisposable
         WebBrowserMode = "chromium",
         WebBrowserNetworkMode = "both",
         WebBrowserPath = @"C:\tools\chrome.exe",
+        WebBrowserBotcheckWindow = "automatic",   // ask by default since 2026-10-13
         WebSearchMaxResults = 5,
         WebSearchMethod = "searxng",
         WebTools = true,   // off by default since 2026-09-29

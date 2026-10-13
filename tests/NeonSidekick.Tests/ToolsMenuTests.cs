@@ -244,7 +244,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount], TabFields(ToolsText.OptionsTabTitle));
         Assert.Equal([SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds], TabFields(ToolsText.HomeAssistantTabTitle));   // the switch, the server and its token, the test, the policy, Assist's agent, the timeout (2026-09-28)   // the fold's count under the switch (2026-09-22, the user's place), the code fold's under it
         Assert.Equal([SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine], TabFields(ToolsText.PrintTabTitle));   // the switch, the policy, the printer, the size (later on 2026-09-28); the PDF engine (2026-10-03)
-        Assert.Equal([SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes], TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01)
+        Assert.Equal([SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes], TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01); the botcheck window under the path (2026-10-13)
         Assert.Equal([SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults], TabFields(ToolsText.FileMenuTitle));   // the five picture rows on the Image menu since 2026-10-10; the pasted pictures' folder last (2026-10-09); image_edit's three before it (2026-10-04); the search cap (2026-10-01), the view_image cap before it (2026-09-19); the browser mode under the folder mode, 2026-09-21
         Assert.Equal([SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls], TabFields(ToolsText.ShellTabTitle));   // the policy (the switch) first, then the list, the shell, the caps, then execute_code's four (2026-09-21; the bridge switch later that day; the police toggle third, 2026-09-22; prefer native under it, 2026-09-26; the forbidden strings under the police, 2026-10-03)
         Assert.Equal([SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], TabFields(ToolsText.AskTabTitle));
@@ -258,7 +258,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(OperatingSystem.IsMacOS() ? 22 : 20, SettingsMenu.LabelWidthOf(TabFields(ToolsText.DockerTabTitle)));   // "Docker engine pipe"; a Mac's "Docker engine socket" (2026-10-11)
         Assert.Equal(Enum.GetValues<SettingsField>().Order(), SettingsMenu.TabFields.Concat(SettingsMenu.SkillsTabFields).Concat(SettingsMenu.ToolsTabFields).Concat(SettingsMenu.McpTabFields).SelectMany(t => t).Order());
         Assert.Equal(21, SettingsMenu.LabelWidthOf(TabFields(ToolsText.OptionsTabTitle)));   // "Tool collapse count" (2026-09-22; "$-mention enabled", 19, before)
-        Assert.Equal(26, SettingsMenu.LabelWidthOf(TabFields(ToolsText.WebTabTitle)));   // "Web browser network mode" (the Web-prefixed labels, later still on 2026-09-19; "Web search max results", 24, before)
+        Assert.Equal(29, SettingsMenu.LabelWidthOf(TabFields(ToolsText.WebTabTitle)));   // "Web browser botcheck window" (2026-10-13; "Web browser network mode", 26, from later still on 2026-09-19, the Web-prefixed labels; "Web search max results", 24, before)
         Assert.Equal([SettingsField.ImageTools, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder], TabFields(ToolsText.ImageMenuTitle));   // the switch first (2026-10-10, the picture tools' own group)   // the File menu's last five until 2026-10-10 (the user's ask), after File
         Assert.Equal(26, SettingsMenu.LabelWidthOf(TabFields(ToolsText.ImageMenuTitle)));   // "Image edit output folder"
         Assert.Equal(32, SettingsMenu.LabelWidthOf(TabFields(ToolsText.FileMenuTitle)));   // "File view image max (per call)" (later still on 2026-09-19; "Stale line number guard", 25, that morning; "Always return line numbers", 28, before)
@@ -1810,9 +1810,9 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));   // read at the next turn: nothing to reconnect
 
         Assert.False(_settings.Current.WebTools);
-        // The seven rows padded to the tab's own column (26), the toggle's notice on the status line under the strip.
-        AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.WebTabTitle, "▸ Web tools                 on\n  Web browser mode          default\n  Web browser path          (auto: msedge.exe)\n  Web browser network mode  internet\n  Web search method         duckduckgo\n  Web SearXNG URL           (not set)\n  Web search max results    20 results\n  Web download max (MB)     50 MB\n"), 100);
-        Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.CoreTabTitle) + "\n  · Web tools: off\n" + Heading("── Browser") + "\n▸ Web tools                 off\n", Output);
+        // The nine rows padded to the tab's own column (29 since the botcheck window's row, 2026-10-13), the toggle's notice on the status line under the strip.
+        AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.WebTabTitle, "▸ Web tools                    on\n  Web browser mode             default\n  Web browser path             (auto: msedge.exe)\n  Web browser botcheck window  ask\n  Web browser network mode     internet\n  Web search method            duckduckgo\n  Web SearXNG URL              (not set)\n  Web search max results       20 results\n  Web download max (MB)        50 MB\n"), 100);
+        Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.CoreTabTitle) + "\n  · Web tools: off\n" + Heading("── Browser") + "\n▸ Web tools                    off\n", Output);
         pane.Dispose();
     }
 
@@ -1829,9 +1829,9 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));   // read at the next turn: nothing to reconnect
 
         Assert.False(_settings.Current.WebTools);
-        // The seven rows padded to the tab's own column (26), the toggle's notice on the status line under the strip.
-        AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.WebTabTitle, "▸ Web tools                 on\n  Web browser mode          default\n  Web browser path          " + SettingsMenu.AutoBrowserLabel(FakeBrowserPath) + "\n  Web browser network mode  internet\n  Web search method         duckduckgo\n  Web SearXNG URL           (not set)\n  Web search max results    20 results\n  Web download max (MB)     50 MB\n"), 100);
-        Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.CoreTabTitle) + "\n  · Web tools: off\n" + Heading("── Browser") + "\n▸ Web tools                 off\n", Output);
+        // The nine rows padded to the tab's own column (29 since the botcheck window's row, 2026-10-13), the toggle's notice on the status line under the strip.
+        AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.WebTabTitle, "▸ Web tools                    on\n  Web browser mode             default\n  Web browser path             " + SettingsMenu.AutoBrowserLabel(FakeBrowserPath) + "\n  Web browser botcheck window  ask\n  Web browser network mode     internet\n  Web search method            duckduckgo\n  Web SearXNG URL              (not set)\n  Web search max results       20 results\n  Web download max (MB)        50 MB\n"), 100);
+        Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.CoreTabTitle) + "\n  · Web tools: off\n" + Heading("── Browser") + "\n▸ Web tools                    off\n", Output);
         pane.Dispose();
     }
 
@@ -2073,7 +2073,7 @@ public partial class ToolsMenuTests : IDisposable
         // 2026-10-01, the user's ask: 1 to 102400 MB, 50 by default (the constant until then).
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.WebTabTitle));   // Web
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the eighth row, after the search count: the typed slot with "50"
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the ninth row (the botcheck window's since 2026-10-13), after the search count: the typed slot with "50"
         Push(Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);   // refused: 0
         Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Char('2'), Keys.Char('0'), Keys.Char('0'), Keys.Char('0'), Keys.Enter);   // 2000
         Push(Keys.Escape);
