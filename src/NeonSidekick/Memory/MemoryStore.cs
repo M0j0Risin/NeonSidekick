@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.Memory;
@@ -10,6 +11,14 @@ public sealed class MemoryEntry
     public string Text { get; set; } = "";
 
     public DateTimeOffset SavedAt { get; set; }
+
+    /// <summary>
+    /// Kept but not offered to the model (2026-10-13, the user's ask: the <c>/memory</c> pane's disable): left out of
+    /// <see cref="MemoryStore.Snapshot"/> — the system prompt, <c>recall_memory</c>, a bot's memories — while the pane still lists it,
+    /// greyed, to edit, enable or forget. Written only when true, so a file without disabled memories reads as it always did.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Disabled { get; set; }
 }
 
 /// <summary>The on-disk shape of <c>memory.json</c>: a version and the entries, oldest first.</summary>
@@ -38,6 +47,27 @@ public enum MemoryAddOutcome
     /// <summary>The file could not be written; the store is as it was and the failure is in the log.</summary>
     Failed,
 }
+
+/// <summary>What <see cref="MemoryStore.Edit"/> did (2026-10-13, the <c>/memory</c> pane's edit).</summary>
+public enum MemoryEditOutcome
+{
+    Edited,
+
+    /// <summary>The new text is the old one (ignoring nothing but the normalising); nothing changed.</summary>
+    Unchanged,
+
+    /// <summary>Another memory already holds the new text (ignoring case and whitespace); nothing changed.</summary>
+    Duplicate,
+
+    /// <summary>Nothing but whitespace was offered; nothing changed.</summary>
+    Empty,
+
+    /// <summary>No memory holds the old text any more (changed on disk meanwhile); nothing changed.</summary>
+    Missing,
+}
+
+/// <summary>The outcome of an edit and the text as stored (or the other memory's, for a duplicate).</summary>
+public readonly record struct MemoryEditResult(MemoryEditOutcome Outcome, string Text);
 
 /// <summary>The outcome of an add and the text as it was (or would have been) stored.</summary>
 public readonly record struct MemoryAddResult(MemoryAddOutcome Outcome, string Text);
@@ -117,21 +147,103 @@ public sealed class MemoryStore
         }
     }
 
-    /// <summary>The stored texts, oldest first, as a copy.</summary>
+    /// <summary>The texts the model is offered, oldest first, as a copy: every stored one but the disabled (2026-10-13).</summary>
     public IReadOnlyList<string> Snapshot()
     {
         lock (_gate)
         {
-            return Entries().Select(e => e.Text).ToArray();
+            return Entries().Where(e => !e.Disabled).Select(e => e.Text).ToArray();
         }
     }
 
-    /// <summary>The stored entries with their dates, oldest first, as copies; the <c>/memory</c> menu's view.</summary>
+    /// <summary>The stored entries with their dates, oldest first, as copies, the disabled too; the <c>/memory</c> menu's view.</summary>
     public IReadOnlyList<MemoryEntry> EntriesSnapshot()
     {
         lock (_gate)
         {
-            return Entries().Select(e => new MemoryEntry { Text = e.Text, SavedAt = e.SavedAt }).ToArray();
+            return Entries().Select(e => new MemoryEntry { Text = e.Text, SavedAt = e.SavedAt, Disabled = e.Disabled }).ToArray();
+        }
+    }
+
+    /// <summary>
+    /// One memory's text changed (2026-10-13, the user's ask: the <c>/memory</c> pane's edit): <paramref name="oldText"/> matched as
+    /// <see cref="Remove"/> matches, <paramref name="newText"/> normalised as <see cref="Add"/> stores it, its date and its disabled mark
+    /// kept. A text another memory holds is a duplicate and nothing changes. A rewrite that fails
+    /// puts the old text back and throws, as <see cref="Remove"/> does.
+    /// </summary>
+    public MemoryEditResult Edit(string? oldText, string? newText)
+    {
+        string normalized = Normalize(newText);
+        string old = Normalize(oldText);
+        if (normalized.Length == 0)
+        {
+            return new(MemoryEditOutcome.Empty, normalized);
+        }
+
+        lock (_gate)
+        {
+            var entries = Entries();
+            var entry = entries.FirstOrDefault(e => string.Equals(e.Text, old, StringComparison.OrdinalIgnoreCase));
+            if (entry is null)
+            {
+                return new(MemoryEditOutcome.Missing, normalized);
+            }
+
+            if (string.Equals(entry.Text, normalized, StringComparison.Ordinal))
+            {
+                return new(MemoryEditOutcome.Unchanged, normalized);
+            }
+
+            if (entries.FirstOrDefault(e => !ReferenceEquals(e, entry) && string.Equals(e.Text, normalized, StringComparison.OrdinalIgnoreCase)) is { } other)
+            {
+                return new(MemoryEditOutcome.Duplicate, other.Text);
+            }
+
+            string before = entry.Text;
+            entry.Text = normalized;
+            try
+            {
+                Save(entries);
+            }
+            catch
+            {
+                entry.Text = before;
+                throw;
+            }
+
+            DiagnosticLog.Info(Category, $"Edited: {before} → {normalized}");
+            return new(MemoryEditOutcome.Edited, normalized);
+        }
+    }
+
+    /// <summary>
+    /// One memory disabled or enabled again (2026-10-13, the user's ask): matched as <see cref="Remove"/> matches. False when nothing
+    /// matched or it already was so, and nothing was written. A rewrite that fails puts the mark back and throws, as <see cref="Remove"/> does.
+    /// </summary>
+    public bool SetDisabled(string? text, bool disabled)
+    {
+        string normalized = Normalize(text);
+        lock (_gate)
+        {
+            var entry = Entries().FirstOrDefault(e => string.Equals(e.Text, normalized, StringComparison.OrdinalIgnoreCase));
+            if (entry is null || entry.Disabled == disabled)
+            {
+                return false;
+            }
+
+            entry.Disabled = disabled;
+            try
+            {
+                Save(Entries());
+            }
+            catch
+            {
+                entry.Disabled = !disabled;
+                throw;
+            }
+
+            DiagnosticLog.Info(Category, $"{(disabled ? "Disabled" : "Enabled")}: {entry.Text}");
+            return true;
         }
     }
 
@@ -289,7 +401,7 @@ public sealed class MemoryStore
                     continue;
                 }
 
-                merged.Add(new MemoryEntry { Text = normalized, SavedAt = entry.SavedAt });
+                merged.Add(new MemoryEntry { Text = normalized, SavedAt = entry.SavedAt, Disabled = entry.Disabled });   // a disabled one stays so (2026-10-13)
                 added++;
             }
 

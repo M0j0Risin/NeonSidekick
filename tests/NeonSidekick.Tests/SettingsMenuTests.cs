@@ -4842,7 +4842,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("  · Performance bar: CPU, RAM · text", Output);
         Assert.DoesNotContain("◔ gauge", Output);
         Assert.DoesNotContain("t / g / l", Output);
-        Assert.Equal(SettingsMenu.ToolbarToggleKeys, SettingsMenu.PerfBarToggleKeys);
+        Assert.Equal(SettingsMenu.PerfBarToggleKeys, SettingsMenu.ToolbarToggleKeys.Replace(" · Shift+←→ = side", "", StringComparison.Ordinal));   // no sides: the bar stays centred (2026-10-13)
         pane.Dispose();
 
         (menu, pane) = PaneMenu();

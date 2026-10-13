@@ -24,7 +24,9 @@ namespace NeonSidekick.App;
 /// user's ask) 📺 moved behind 🪟, the two viewers together again. 🙋 Ask on 2026-10-09 (the user's ask): the <c>Ask user</c> switch
 /// between the disk and the lock, <c>/tools ask</c>. The order is the user's to change since 2026-10-12 (the user's ask, the home bar
 /// picker's move keys on this checklist): <see cref="Order"/> over <see cref="Settings.AppSettingsData.ToolbarOrder"/>, the path
-/// always last; <see cref="Names"/> is the default order, which <c>⊡ default</c> puts back with the checks.
+/// always last until 2026-10-13; <see cref="Names"/> is the default order, which <c>⊡ default</c> puts back with the checks. Since
+/// 2026-10-13 (the user's ask) every item is pinned left or right (<see cref="Sides"/> over <see cref="Settings.AppSettingsData.ToolbarRight"/>,
+/// <see cref="RightDefaults"/> the path and the model's name, the row as it was), each side in the order's own order.
 /// </summary>
 public static class ToolbarItems
 {
@@ -274,12 +276,25 @@ public static class ToolbarItems
 
     /// <summary>
     /// The checklist's and the strip's order for <paramref name="saved"/> (<see cref="Settings.AppSettingsData.ToolbarOrder"/>,
-    /// 2026-10-12): every item, <see cref="Names"/>' order for null, the path last whatever was saved (<see cref="ItemOrder.Resolve"/>).
+    /// 2026-10-12): every item, <see cref="Names"/>' order for null (<see cref="ItemOrder.Resolve"/>); the path pinned last until
+    /// 2026-10-13, when the sides came (<see cref="Sides"/>).
     /// </summary>
-    public static List<string> Order(IReadOnlyList<string>? saved) => ItemOrder.Resolve(saved, Names, Path, Passers);
+    public static List<string> Order(IReadOnlyList<string>? saved) => ItemOrder.Resolve(saved, Names);
 
-    /// <summary>The items that may stand after the path (2026-10-12): the model's name, whose default place that is. Pinned.</summary>
-    public static readonly string[] Passers = [Model];
+    /// <summary>
+    /// The items pinned right by default (2026-10-13, the user's ask: any item pinned left or right): the path and the model's name,
+    /// the row as it was — the glyphs at the left, the path then the name at the right edge. Pinned.
+    /// </summary>
+    public static readonly string[] RightDefaults = [Path, Model];
+
+    /// <summary>The items <paramref name="saved"/> (<see cref="Settings.AppSettingsData.ToolbarRight"/>) pins right: <see cref="RightDefaults"/> for null.</summary>
+    public static IReadOnlySet<string> ResolveRight(IReadOnlyList<string>? saved) => ItemOrder.ResolveRight(saved, Names, RightDefaults);
+
+    /// <summary>What saves for the right group: null for exactly <see cref="RightDefaults"/>.</summary>
+    public static List<string>? SaveRight(IEnumerable<string> right) => ItemOrder.SaveRight(right, Names, RightDefaults);
+
+    /// <summary>The toolbar's two groups for the saved <paramref name="order"/> and <paramref name="right"/> (2026-10-13): every item, checked or not.</summary>
+    public static ItemOrder.Sided Sides(IReadOnlyList<string>? order, IReadOnlyList<string>? right) => ItemOrder.Split(Order(order), ResolveRight(right));
 
     /// <summary>What saves for <paramref name="order"/>: null for <see cref="Names"/>' own order (<see cref="ItemOrder.Save"/>).</summary>
     public static List<string>? SaveOrder(IReadOnlyList<string> order) => ItemOrder.Save(order, Names);

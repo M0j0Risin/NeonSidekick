@@ -368,11 +368,20 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// The hint bar's order (2026-10-12, the user's ask: its sections in any order): every id of <see cref="App.HintBarItems.Names"/>,
-    /// checked or not, in the order the standing row draws them (<see cref="App.HintBarItems.Order"/>); the model keeps the right
-    /// edge while it is the last checked one. Null (the default) is the row's own order, which the checklist's <c>⊡ default</c> puts
+    /// checked or not, in the order the standing row draws them (<see cref="App.HintBarItems.Order"/>), each side's since 2026-10-13
+    /// (<see cref="HintBarRight"/>). Null (the default) is the row's own order, which the checklist's <c>⊡ default</c> puts
     /// back with the checks. No settings row of its own, no variable.
     /// </summary>
     public List<string>? HintBarOrder { get; set; }
+
+    /// <summary>
+    /// The hint bar's sections pinned right (2026-10-13, the user's ask: any section pinned left or right, the sort free within each
+    /// side): ids of <see cref="App.HintBarItems.Names"/>, checked or not; every other one is pinned left. The standing row and the busy
+    /// row both draw the left group from the left edge and the right group at the right edge, each in <see cref="HintBarOrder"/>'s order.
+    /// Null (the default) is <see cref="App.HintBarItems.RightDefaults"/> — the model and the working directory, the row as it was —
+    /// which the checklist's <c>⊡ default</c> puts back; an empty list pins nothing right. No settings row of its own, no variable.
+    /// </summary>
+    public List<string>? HintBarRight { get; set; }
 
     /// <summary>
     /// The items a bare <c>/toolbar</c> (or Ctrl+T, or <c>/toolbar on</c>) brings back after it hid the toolbar (later on 2026-09-30,
@@ -384,12 +393,21 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// The toolbar's order (2026-10-12, the user's ask: the home bar picker's move keys on the <c>Show toolbar</c> checklist):
-    /// every id of <see cref="App.ToolbarItems.Names"/>, checked or not, in the order the strip draws them, the path always last
-    /// (<see cref="App.ToolbarItems.Order"/>). Null (the default) is <see cref="App.ToolbarItems.Names"/>' own order, which the
+    /// every id of <see cref="App.ToolbarItems.Names"/>, checked or not, in the order the strip draws them (the path always last until
+    /// 2026-10-13; each side's order since, <see cref="ToolbarRight"/>) (<see cref="App.ToolbarItems.Order"/>). Null (the default) is <see cref="App.ToolbarItems.Names"/>' own order, which the
     /// checklist's <c>⊡ default</c> puts back with the checks; an id it leaves out goes in after the one before it there. Apart
     /// from <see cref="ToolbarItems"/>, so <c>/toolbar</c> and the checks never touch it. No settings row of its own, no variable.
     /// </summary>
     public List<string>? ToolbarOrder { get; set; }
+
+    /// <summary>
+    /// The toolbar's items pinned right (2026-10-13, the user's ask: any item of the tool bar pinned left or right, the sort free
+    /// within each side): ids of <see cref="App.ToolbarItems.Names"/>, checked or not; every other one is pinned left. The left group
+    /// leads the row, the right group ends it, each in <see cref="ToolbarOrder"/>'s order. Null (the default) is
+    /// <see cref="App.ToolbarItems.RightDefaults"/> — the path and the model's name, the row as it was — which the checklist's
+    /// <c>⊡ default</c> puts back; an empty list pins nothing right. Set on the checklist (Shift+←/→). No settings row of its own, no variable.
+    /// </summary>
+    public List<string>? ToolbarRight { get; set; }
 
     /// <summary>
     /// The performance bar's meters (2026-09-30, the user's ask: <c>Show performance bar</c> a checklist like Show toolbar,

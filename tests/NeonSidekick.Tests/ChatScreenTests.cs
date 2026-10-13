@@ -2888,7 +2888,7 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>The Memory mode row's saved notice for <paramref name="mode"/> (2026-10-04).</summary>
     private string Saved(string mode) => SettingsMenu.SavedNotice(SettingsField.MemoryMode, new AppSettingsData { MemoryMode = mode }, _settings.ProfileDirectory);
 
-    private static string MemoryPaneTitle(MemoryAccess mode) => MemoryMenu.Title + " │ " + string.Join(" · ", MemoryMenu.Buttons(mode).Select(b => b.Title)) + " ";   // Memory mode's buttons on the title row (2026-10-03; three since 2026-10-04)
+    private static string MemoryPaneTitle(MemoryAccess mode) => MemoryMenu.Title + " │ " + string.Join(" · ", MemoryMenu.Buttons(mode, add: true).Select(b => b.Title)) + " ";   // the add button after them since 2026-10-13   // Memory mode's buttons on the title row (2026-10-03; three since 2026-10-04)
     private static readonly string PoliceTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellPolice) + " │ " + SettingsMenu.PoliceStringsTitle(0) + " ";   // /police, the officer (2026-09-22); the strings button since 2026-10-03, its count since 2026-10-04
 
     /// <summary>
@@ -6557,6 +6557,8 @@ public partial class ChatScreenTests : IDisposable
         _memory.Add("They live in Leeds.");
         PushLine("/memory");
         _console.Input.PushKey(Keys.Enter);     // the first row
+        _console.Input.PushKey(Keys.Down);      // forget: the second choice without the pane (disable, forget; 2026-10-13)
+        _console.Input.PushKey(Keys.Enter);
         _console.Input.PushKey(Keys.Down);      // Yes (asked since 2026-10-07)
         _console.Input.PushKey(Keys.Enter);
         _console.Input.PushKey(Keys.Escape);    // back from the re-shown list
@@ -6564,7 +6566,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys), output);
+        Assert.Contains(SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.PlainKeys), output);   // no add without the pane's input row (2026-10-13)
         Assert.Contains("  · (💾 removed: Their name is Chris.)", output);
         Assert.Equal(new[] { "They live in Leeds." }, new MemoryStore(_settings.ProfileDirectory).Snapshot());
         Assert.Empty(_chat.Requests);
@@ -6582,6 +6584,9 @@ public partial class ChatScreenTests : IDisposable
         var rows = store.EntriesSnapshot().Select(e => MemoryMenu.DateLabel(e) + "  " + e.Text).ToList();
         PushLine("/memory");
         _console.Input.PushKey(Keys.Enter);     // the first row
+        _console.Input.PushKey(Keys.Down);      // forget: the third choice (edit, disable, forget; 2026-10-13)
+        _console.Input.PushKey(Keys.Down);
+        _console.Input.PushKey(Keys.Enter);
         _console.Input.PushKey(Keys.Down);      // Yes (asked since 2026-10-07)
         _console.Input.PushKey(Keys.Enter);
         _console.Input.PushKey(Keys.Escape);    // back from the re-shown list
@@ -10286,10 +10291,9 @@ public partial class ChatScreenTests : IDisposable
 
         string rule = new(ScreenPane.RuleGlyph, 240);
         string strip = ChatScreen.SpeechGlyphs(true, false, false, false);
-        // The spinner row: the strip, then the frame with the label — the strip ahead of the spinner.
-        Assert.Contains(Row(Theme.SpinnerFrames[0] + " " + ScreenPane.BusyText(ChatScreen.ThinkingLabel, TimeSpan.Zero) + ScreenPane.HintSeparator + ScreenPane.StopHint, strip: strip), output);
+        // The spinner row: the frame with the label, then the strip in its place (2026-10-13: the busy row follows the sides, the spinner first).
+        Assert.Contains(Row(Theme.SpinnerFrames[0] + " " + ScreenPane.BusyText(ChatScreen.ThinkingLabel, TimeSpan.Zero) + ScreenPane.HintSeparator + strip + ScreenPane.HintSeparator + ScreenPane.StopHint), output);
         // (The startup connect's spinner ran before speech was connected, so it has no strip — only the reply's is checked.)
-        Assert.DoesNotContain(rule + "\n" + Theme.SpinnerFrames[0] + " " + ChatScreen.ThinkingLabel, output);
         // The info pane's hint keeps it too, and the idle line has it as before.
         AssertPaneEnds(output, rule + "\n" + Row(InfoPane.HintText, strip: strip));
         Assert.Contains(rule + "\n" + Row(ChatScreen.HintLine(null), strip: strip), output);
@@ -21786,8 +21790,9 @@ public partial class ChatScreenTests : IDisposable
             {
                 Assert.True(_session.IsLearning);
                 _time.Advance(ScreenPane.Tick);
-                Scripted().PushClick(0, 102);         // 🧠 at 0–1 on the busy row
-                Scripted().PushClick(1, 102);
+                int brain = BusyRows.ColumnOf(Output, "🧠");   // after the spinner's label on the busy row (2026-10-13: it follows the sides)
+                Scripted().PushClick(brain, 102);
+                Scripted().PushClick(brain + 1, 102);
                 var until = DateTime.UtcNow + TimeSpan.FromSeconds(20);
                 while (_session.Learning is not { IsCompleted: true } && DateTime.UtcNow < until)
                 {

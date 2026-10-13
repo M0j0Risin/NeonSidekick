@@ -14,6 +14,7 @@ public partial class SettingsMenuTests
     private static readonly ConsoleKeyInfo ShiftDown = new('\0', ConsoleKey.DownArrow, shift: true, alt: false, control: false);
     private static readonly ConsoleKeyInfo ShiftUp = new('\0', ConsoleKey.UpArrow, shift: true, alt: false, control: false);
     private static readonly ConsoleKeyInfo ShiftEnd = new('\0', ConsoleKey.End, shift: true, alt: false, control: false);
+    private static readonly ConsoleKeyInfo ShiftRight = new('\0', ConsoleKey.RightArrow, shift: true, alt: false, control: false);
     private static readonly ConsoleKeyInfo DeleteKey = new('\0', ConsoleKey.Delete, shift: false, alt: false, control: false);
 
     [Fact]
@@ -171,20 +172,49 @@ public partial class SettingsMenuTests
     {
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.HintBarItems));
-        Push(Keys.Enter);                       // the checklist, on Status
-        Push(ShiftEnd);                         // Status to the bottom, the cursor with it
+        Push(Keys.Enter);                       // the checklist, on Status (the left group's first; its heading above is no stop)
+        Push(ShiftEnd);                         // Status to the bottom of its group, the cursor with it
         Push(Keys.Char(' '));                   // and off
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(["queued", "keys", "timers", "reading", "usage", "model", "cwd", "status"], _settings.Current.HintBarOrder);   // the working directory after the model (later on 2026-10-12)
+        Assert.Equal(["queued", "keys", "timers", "reading", "usage", "status", "model", "cwd"], _settings.Current.HintBarOrder);   // the left group's bottom (2026-10-13)
         Assert.Equal(["queued", "keys", "timers", "reading", "usage", "model"], _settings.Current.HintBarItems);
+        Assert.Null(_settings.Current.HintBarRight);
         Assert.Contains("[x] Status    ", Output);
         Assert.Contains("[ ] Status    ", Output);
+        Assert.Contains(SettingsMenu.PinnedLeftHeading, Output);
+        Assert.Contains(SettingsMenu.PinnedRightHeading, Output);
         Assert.Contains(SettingsMenu.HintBarToggleKeys, Output);
         Assert.Contains(GroupBreadcrumb(SettingsTab.Chat, "Hint bar") + " ", Output);
-        Assert.Contains("  · Hint bar: Queued, Keys, Timers, Reading, Usage, Model", Output);
+        Assert.Contains("  · Hint bar: Queued, Keys, Timers, Reading, Usage | Model", Output);
+        pane.Dispose();
+
+        // Shift+→ pins the cursor's section right, at the right group's start; Shift+← back to the left group's end (2026-10-13).
+        (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.HintBarItems));
+        Push(Keys.Enter);                       // on Queued
+        Push(ShiftRight);
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["queued", "model", "cwd"], _settings.Current.HintBarRight);
+        Assert.Equal(["keys", "timers", "reading", "usage", "status", "queued", "model", "cwd"], _settings.Current.HintBarOrder);
+        Assert.Contains("  · Hint bar: Keys, Timers, Reading, Usage | Queued, Model", Output);
+        pane.Dispose();
+
+        (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.HintBarItems));
+        Push(Keys.Enter);                       // on Keys
+        Push(ShiftEnd, ShiftDown);              // the left group's bottom, then over the gap: the right group's first
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["queued", "keys", "model", "cwd"], _settings.Current.HintBarRight);   // saved in the sections' own order
+        Assert.Equal(["timers", "reading", "usage", "status", "keys", "queued", "model", "cwd"], _settings.Current.HintBarOrder);
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
@@ -198,7 +228,77 @@ public partial class SettingsMenuTests
 
         Assert.Null(_settings.Current.HintBarItems);
         Assert.Null(_settings.Current.HintBarOrder);
+        Assert.Null(_settings.Current.HintBarRight);   // the sides back too
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(Output, "  · Hint bar: " + HintBarItems.DefaultValue));
         pane.Dispose();
+    }
+
+    /// <summary>
+    /// The two groups' rows (2026-10-13, the user's ask): a heading per side counting its items, an empty side's heading saying how to
+    /// fill it, the rows mapped to the items and back; Shift/Alt+←/→ are the side keys, Ctrl and the bare arrows not.
+    /// </summary>
+    [Fact]
+    public void TheSidedChecklist_RowsHeadingsAndKeys_ArePinned()
+    {
+        var sides = ItemOrder.Split(["a", "b", "c"], new HashSet<string> { "c" });
+        var (rows, headings) = SettingsMenu.SidedRows(sides, id => id);
+        Assert.Equal(5, rows.Count);
+        Assert.Equal([0, 3], headings.Order());
+        Assert.Equal(["a", "b", "c"], [rows[1], rows[2], rows[4]]);
+        Assert.Contains(SettingsMenu.PinnedLeftHeading, rows[0]);
+        Assert.Contains(SettingsMenu.PinnedRightHeading, rows[3]);
+        Assert.Equal([-1, 0, 1, -1, 2], Enumerable.Range(0, 5).Select(r => SettingsMenu.SidedItemAt(sides, r)));
+        Assert.Equal([1, 2, 4], Enumerable.Range(0, 3).Select(i => SettingsMenu.SidedRowOf(sides, i)));
+
+        var noneRight = ItemOrder.Split(["a"], new HashSet<string>());
+        Assert.Contains(SettingsMenu.EmptySideNote(right: true), SettingsMenu.SidedRows(noneRight, id => id).Rows[^1]);
+        Assert.Equal("none: Shift+→ pins the item under the cursor here", SettingsMenu.EmptySideNote(right: true));
+
+        Assert.Equal(-1, MenuPane.SideOf(new ConsoleKeyInfo('\0', ConsoleKey.LeftArrow, shift: true, alt: false, control: false)));
+        Assert.Equal(1, MenuPane.SideOf(new ConsoleKeyInfo('\0', ConsoleKey.RightArrow, shift: false, alt: true, control: false)));
+        Assert.Null(MenuPane.SideOf(new ConsoleKeyInfo('\0', ConsoleKey.RightArrow, shift: false, alt: false, control: false)));
+        Assert.Null(MenuPane.SideOf(new ConsoleKeyInfo('\0', ConsoleKey.RightArrow, shift: true, alt: false, control: true)));
+    }
+
+    /// <summary>The tool bar's checklist: Shift+→ pins the path's neighbour right, default puts the sides back (2026-10-13).</summary>
+    [Fact]
+    public async Task OnThePane_ToolBar_ShiftRightPinsAGlyphRight_DefaultPutsTheSidesBack()
+    {
+        var (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        Push(Keys.Enter);                       // on Settings, the left group's first
+        Push(ShiftRight);
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["settings", "path", "model"], _settings.Current.ToolbarRight);
+        Assert.Equal(ToolbarItems.Names.Where(n => n is not ("settings" or "path" or "model")).Concat(["settings", "path", "model"]), _settings.Current.ToolbarOrder);
+        Assert.Contains(SettingsMenu.ToolbarToggleKeys, Output);
+        pane.Dispose();
+
+        (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        Push(Keys.Enter);
+        Push(Keys.Char('d'));
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Null(_settings.Current.ToolbarRight);
+        Assert.Null(_settings.Current.ToolbarOrder);
+        pane.Dispose();
+    }
+
+    /// <summary>The screen's toolbar groups (2026-10-13): each side's checked items in its order, the lock where the policy draws it, an off switch on the slab.</summary>
+    [Fact]
+    public void ToolbarPartsFor_PutsEachCheckedItemOnItsSide()
+    {
+        var shown = new AppSettingsData { ToolbarRight = ["tools", "path"], WebTools = false };
+        var parts = ChatScreen.ToolbarPartsFor(ToolbarItems.Resolve(["settings", "tools", "web", "path", "model"]), shown, @"D:\x", "llama", "");
+        Assert.Equal([ChatScreen.SettingsToolGlyph, ChatScreen.WebToolGlyph, "llama"], parts.Left.Select(i => i.Text));
+        Assert.True(parts.Left[1].Off);
+        Assert.Equal([ChatScreen.ToolsToolGlyph, @"D:\x"], parts.Right.Select(i => i.Text));
+        Assert.Equal(ScreenPane.ToolbarItemKind.Path, parts.Right[1].Kind);
     }
 }

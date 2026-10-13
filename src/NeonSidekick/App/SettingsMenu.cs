@@ -2649,7 +2649,7 @@ internal sealed partial class SettingsMenu
             SettingsField.SessionTool => OnOff(data.SessionTool),
             SettingsField.ShowHeader => OnOff(data.ShowHeader),
             SettingsField.ShowWorkingDirectory => OnOff(data.ShowWorkingDirectory),
-            SettingsField.HintBarItems => App.HintBarItems.Value(data.HintBarItems, data.HintBarOrder),
+            SettingsField.HintBarItems => App.HintBarItems.Value(data.HintBarItems, data.HintBarOrder, data.HintBarRight),
             SettingsField.ToolbarItems => App.ToolbarItems.Value(data.ToolbarItems),
             SettingsField.ShowPerformanceBar => PerfBarItems.Value(data.PerformanceBarItems, data.PerformanceBarLook, data.PerformanceBarOrder),
             SettingsField.ShowHomeBar => HomeBarItems.Value(data.HomeBarItems, null),
@@ -3115,14 +3115,15 @@ internal sealed partial class SettingsMenu
     /// with the move. Shift+Home/End (to the top or the bottom) and Delete (unchecks) work too, but the hint leaves them out to stay
     /// on one row of a 120-cell window; the docs and <c>neon_help</c> name them. Pinned.
     /// </summary>
-    public const string ToolbarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · a = all · n = none · d = default · ESC = back";
+    public const string ToolbarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · Shift+←→ = side · a = all · n = none · d = default · ESC = back";   // the side since 2026-10-13 (the user's ask: pinned left or right)
 
     /// <summary>
-    /// Show performance bar's hint: <see cref="ToolbarToggleKeys"/>' words, the same page since 2026-10-12 (the user's ask). From
+    /// Show performance bar's hint: <see cref="ToolbarToggleKeys"/>' words, the same page since 2026-10-12 (the user's ask), without
+    /// the side (2026-10-13: the bar stays centred). From
     /// 2026-09-30 the page's title row also held the looks (<c>t / g / l = look</c> in the hint, a radio button per look after
     /// default); they went the same day, and <c>/perfbar &lt;look&gt;</c> is the one way to pick it. Pinned.
     /// </summary>
-    public const string PerfBarToggleKeys = ToolbarToggleKeys;
+    public const string PerfBarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · a = all · n = none · d = default · ESC = back";
 
     /// <summary>The Hint bar checklist's hint (2026-10-12): the toolbar's keys, the same string. Pinned.</summary>
     public const string HintBarToggleKeys = ToolbarToggleKeys;
@@ -8246,70 +8247,13 @@ internal sealed partial class SettingsMenu
     /// once, the list re-shown until ESC. Nothing has to stay: nothing checked is no toolbar. Its buttons are the checklists'
     /// and <see cref="DefaultsButton"/> (2026-09-29). Since 2026-10-12 (the user's ask, the home bar picker's move keys) the rows
     /// are the strip's order (<see cref="App.ToolbarItems.Order"/>): Shift+↑↓ moves the cursor's row a place, Shift+Home/End to the
-    /// top or the bottom, the path always last and never moved; Delete unchecks it; default puts the order back with the checks.
+    /// top or the bottom; Delete unchecks it; default puts the order back with the checks. Since 2026-10-13 (the user's ask) the rows
+    /// are two groups, pinned left and pinned right, the path no longer held last (<see cref="EditSidedChecklistAsync"/>).
     /// True when anything changed.
     /// </summary>
     private async Task<bool> EditToolbarItemsAsync(CancellationToken cancellationToken)
     {
-        bool changed = false;
-        int cursor = 0;
-        var names = App.ToolbarItems.Names;
-        while (true)
-        {
-            var saved = _settings.Current;
-            var on = App.ToolbarItems.Resolve(saved.ToolbarItems);
-            var order = App.ToolbarItems.Order(saved.ToolbarOrder);
-            var page = new MenuPage(Crumb(FieldName(SettingsField.ToolbarItems)), order.Select(id => App.ToolbarItems.Label(id, on.Contains(id))).ToList(), ToolbarToggleKeys) { SpaceToggles = true };
-            var picked = await PickOrderedChecklistAsync(page, cursor, cancellationToken, DefaultChecklistButtons).ConfigureAwait(false);
-            if (picked is not { } pick)
-            {
-                if (!changed)
-                {
-                    Sink.Notice(UnchangedNotice);
-                }
-
-                return changed;
-            }
-
-            cursor = pick.Row;
-            if (pick.Move != 0)
-            {
-                var (moved, at) = ItemOrder.Move(order, pick.Row, pick.Move, App.ToolbarItems.Path, App.ToolbarItems.Passers);
-                cursor = at;
-                if (at != pick.Row)
-                {
-                    Apply(SettingsField.ToolbarItems, d => d.ToolbarOrder = App.ToolbarItems.SaveOrder(moved));
-                    changed = true;
-                }
-
-                continue;
-            }
-
-            if (pick.Button == DefaultsIndex)
-            {
-                if (on.SetEquals(App.ToolbarItems.Defaults) && App.ToolbarItems.SaveOrder(order) is null)
-                {
-                    continue;   // the default checks in the default order: nothing to save
-                }
-
-                Apply(SettingsField.ToolbarItems, d => { d.ToolbarItems = null; d.ToolbarOrder = null; });
-                changed = true;
-                continue;
-            }
-
-            string row = order[Math.Clamp(pick.Row, 0, order.Count - 1)];
-            var next = pick.Button == SelectAllIndex ? names.ToHashSet(StringComparer.Ordinal)
-                : pick.Button == SelectNoneIndex ? new HashSet<string>(StringComparer.Ordinal)
-                : pick.Remove ? names.Where(n => on.Contains(n) && n != row).ToHashSet(StringComparer.Ordinal)
-                : names.Where(n => on.Contains(n) != (n == row)).ToHashSet(StringComparer.Ordinal);
-            if (next.SetEquals(on))
-            {
-                continue;   // select all with every item on, none with none, Delete on an unchecked row: nothing to save
-            }
-
-            Apply(SettingsField.ToolbarItems, d => d.ToolbarItems = App.ToolbarItems.Save(next));
-            changed = true;
-        }
+        return await EditSidedChecklistAsync(ToolbarChecklist, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -8317,69 +8261,12 @@ internal sealed partial class SettingsMenu
     /// one <see cref="App.HintBarItems.Label"/> row per section in the row's order (<see cref="App.HintBarItems.Order"/>), Enter or
     /// Space flipping it and saving at once; Shift+↑↓ moves the cursor's section a place, Shift+Home/End to the top or the bottom,
     /// Delete unchecks it; select all, select none and default (every section but the working directory, the row's own order) on the title row. The list is
-    /// re-shown until ESC, the row redrawing under it. True when anything changed.
+    /// re-shown until ESC, the row redrawing under it. Since 2026-10-13 (the user's ask) two groups, pinned left and pinned right
+    /// (<see cref="EditSidedChecklistAsync"/>). True when anything changed.
     /// </summary>
     private async Task<bool> EditHintBarAsync(CancellationToken cancellationToken)
     {
-        bool changed = false;
-        int cursor = 0;
-        var names = App.HintBarItems.Names;
-        while (true)
-        {
-            var saved = _settings.Current;
-            var on = App.HintBarItems.Resolve(saved.HintBarItems);
-            var order = App.HintBarItems.Order(saved.HintBarOrder);
-            var page = new MenuPage(Crumb(FieldName(SettingsField.HintBarItems)), order.Select(id => App.HintBarItems.Label(id, on.Contains(id))).ToList(), HintBarToggleKeys) { SpaceToggles = true };
-            var picked = await PickOrderedChecklistAsync(page, cursor, cancellationToken, DefaultChecklistButtons).ConfigureAwait(false);
-            if (picked is not { } pick)
-            {
-                if (!changed)
-                {
-                    Sink.Notice(UnchangedNotice);
-                }
-
-                return changed;
-            }
-
-            cursor = pick.Row;
-            if (pick.Move != 0)
-            {
-                var (moved, at) = ItemOrder.Move(order, pick.Row, pick.Move);
-                cursor = at;
-                if (at != pick.Row)
-                {
-                    Apply(SettingsField.HintBarItems, d => d.HintBarOrder = App.HintBarItems.SaveOrder(moved));
-                    changed = true;
-                }
-
-                continue;
-            }
-
-            if (pick.Button == DefaultsIndex)
-            {
-                if (on.SetEquals(App.HintBarItems.Defaults) && App.HintBarItems.SaveOrder(order) is null)
-                {
-                    continue;   // the default sections in the default order: nothing to save
-                }
-
-                Apply(SettingsField.HintBarItems, d => { d.HintBarItems = null; d.HintBarOrder = null; });
-                changed = true;
-                continue;
-            }
-
-            string row = order[Math.Clamp(pick.Row, 0, order.Count - 1)];
-            var next = pick.Button == SelectAllIndex ? names.ToHashSet(StringComparer.Ordinal)
-                : pick.Button == SelectNoneIndex ? new HashSet<string>(StringComparer.Ordinal)
-                : pick.Remove ? names.Where(n => on.Contains(n) && n != row).ToHashSet(StringComparer.Ordinal)
-                : names.Where(n => on.Contains(n) != (n == row)).ToHashSet(StringComparer.Ordinal);
-            if (next.SetEquals(on))
-            {
-                continue;   // select all with every section on, none with none, Delete on an unchecked row: nothing to save
-            }
-
-            Apply(SettingsField.HintBarItems, d => d.HintBarItems = App.HintBarItems.Save(next));
-            changed = true;
-        }
+        return await EditSidedChecklistAsync(HintBarChecklist, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

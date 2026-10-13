@@ -746,7 +746,7 @@ Under *Memory mode*.
 | Tool | Arguments | What it does |
 |---|---|---|
 | `save_memory` | `text` | Saves one lasting fact about you, known in every later session. Not offered while *Memory mode* is `read-only`. |
-| `recall_memory` | — | Everything remembered, oldest first. Seeded at the start of every conversation. |
+| `recall_memory` | — | Everything remembered, oldest first, but the memories disabled on the `/memory` pane. Seeded at the start of every conversation. |
 
 ### Skills
 

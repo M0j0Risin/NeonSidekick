@@ -27,7 +27,7 @@ public class MemoryMenuTests : IDisposable
         new(new ScreenPane(console, null, new ManualTimeProvider()), new KeySource(console.Input, TimeSpan.FromMilliseconds(1)));
 
     /// <summary>The prompt host's title: the label and the keys joined.</summary>
-    private static string PromptTitle => SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys);
+    private static string PromptTitle => SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.PlainKeys);   // no input row: no add (2026-10-13)
 
     public void Dispose()
     {
@@ -68,7 +68,7 @@ public class MemoryMenuTests : IDisposable
 
         await _menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(MemoryMenu.Title + "   Enter = remove · ESC = close", _console.Output);
+        Assert.Contains(MemoryMenu.Title + "   Enter = choose · ESC = close", _console.Output);
         Assert.Contains("one", _console.Output);
         Assert.Contains("two", _console.Output);
         Assert.Equal(new[] { "one", "two" }, _store.Snapshot());
@@ -79,7 +79,7 @@ public class MemoryMenuTests : IDisposable
     public async Task Enter_RemovesTheHighlightedRow_AndShowsTheListAgain()
     {
         Seed("one", "two", "three");
-        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the row, then Yes (asked since 2026-10-07)
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the row, forget (the choice since 2026-10-13; no edit without an input row), then Yes (asked since 2026-10-07)
 
         await _menu.ShowAsync(CancellationToken.None);
 
@@ -95,7 +95,7 @@ public class MemoryMenuTests : IDisposable
     public async Task TheRemovalAsks_AndNoKeepsTheMemory()
     {
         Seed("one", "two");
-        Push(Keys.Down, Keys.Enter, Keys.Enter, Keys.Escape);   // the row, No, then close
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Enter, Keys.Escape);   // the row, forget, No, then close
 
         await _menu.ShowAsync(CancellationToken.None);
 
@@ -108,7 +108,7 @@ public class MemoryMenuTests : IDisposable
     public async Task RemovingTheLastRow_EndsWithTheEmptyNotice()
     {
         Seed("only");
-        Push(Keys.Enter, Keys.Down, Keys.Enter);   // the row, then Yes (asked since 2026-10-07)
+        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // the row, forget, then Yes (asked since 2026-10-07)
 
         await _menu.ShowAsync(CancellationToken.None);
 
@@ -121,7 +121,7 @@ public class MemoryMenuTests : IDisposable
     public async Task TwoRemovals_KeepTheCursorWhereItWas()
     {
         Seed("one", "two", "three");
-        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // remove "two", then the row now under the cursor: "three"; each asked
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Enter, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // remove "two", then the row now under the cursor: "three"; each chosen and asked
 
         await _menu.ShowAsync(CancellationToken.None);
 
@@ -181,7 +181,7 @@ public class MemoryMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         // The highlighted memory in full under the list (2026-10-07): the footer band.
-        Assert.Contains(Rule(100) + "\n" + Titled(MemoryMenu.Title) + "\n \n▸ " + rows[0] + "\n  " + rows[1] + "\n" + MenuLayout.Footer(new MenuFooter("one"), 100) + Rule(100) + "\n" + MemoryMenu.Keys + "\n", _console.Output);
+        Assert.Contains(Rule(100) + "\n" + Titled(MemoryMenu.Title) + "\n \n▸ " + rows[0] + "\n  " + rows[1] + "\n" + MenuLayout.Footer(new MenuFooter("one"), 100) + Rule(100) + "\n" + MemoryMenu.PlainKeys + "\n", _console.Output);
         Assert.DoesNotContain(PromptTitle, _console.Output);
         Assert.False(pane.OverlayOpen);
         Assert.Equal(flow, pane.FlowRow);   // nothing reached the transcript
@@ -218,12 +218,12 @@ public class MemoryMenuTests : IDisposable
         var (menu, pane) = PaneMenu();
         var rows = _store.EntriesSnapshot().Select(Row).ToList();
         int flow = pane.FlowRow;
-        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the row, then Yes (asked since 2026-10-07)
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the row, forget, then Yes (asked since 2026-10-07)
 
         await menu.ShowAsync(CancellationToken.None);
 
         // The re-shown list: the notice where the spacer was, the cursor on the row that slid up.
-        Assert.Contains("\n" + Titled(MemoryMenu.Title) + "\n  · (💾 removed: two)\n  " + rows[0] + "\n▸ " + rows[2] + "\n" + MenuLayout.Footer(new MenuFooter("three"), 100) + Rule(100) + "\n" + MemoryMenu.Keys + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(MemoryMenu.Title) + "\n  · (💾 removed: two)\n  " + rows[0] + "\n▸ " + rows[2] + "\n" + MenuLayout.Footer(new MenuFooter("three"), 100) + Rule(100) + "\n" + MemoryMenu.PlainKeys + "\n", _console.Output);
         Assert.Equal(flow, pane.FlowRow);   // the notice was a status line, not a transcript line
         Assert.False(pane.OverlayOpen);
         Assert.Equal(new[] { "one", "three" }, new MemoryStore(_dir).Snapshot());
@@ -236,7 +236,7 @@ public class MemoryMenuTests : IDisposable
         Seed("only");
         var (menu, pane) = PaneMenu();
         int flow = pane.FlowRow;
-        Push(Keys.Enter, Keys.Down, Keys.Enter);   // the row, then Yes (asked since 2026-10-07)
+        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // the row, forget, then Yes (asked since 2026-10-07)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -279,7 +279,7 @@ public class MemoryMenuTests : IDisposable
         Assert.Equal([MemoryAccess.Disabled, MemoryAccess.ReadOnly, MemoryAccess.ReadWrite], switched);
         Assert.Contains("\n" + Titled(SwitchTitle(MemoryAccess.ReadWrite)) + "\n", _console.Output);
         Assert.Contains("\n" + Titled(SwitchTitle(MemoryAccess.ReadOnly)) + "\n", _console.Output);
-        Assert.Contains("\n" + MemoryMenu.SwitchKeys + "\n", _console.Output);
+        Assert.Contains("\n" + MemoryMenu.WithoutAdd(MemoryMenu.SwitchKeys) + "\n", _console.Output);   // no input row: no add
         Assert.Equal(["one"], _store.Snapshot());
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
@@ -292,14 +292,14 @@ public class MemoryMenuTests : IDisposable
         Seed("only");
         var (menu, pane, switched) = SwitchMenu(MemoryAccess.Disabled);
         int flow = pane.FlowRow;
-        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Enter, Keys.Char('w'), Keys.Escape);   // remove it (Yes), Enter on the empty row, read-write, close
+        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Enter, Keys.Char('w'), Keys.Escape);   // forget it (Yes), Enter on the empty row, read-write, close
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(0, _store.Count);
         Assert.Equal([MemoryAccess.ReadWrite], switched);
         Assert.Contains("\n" + Titled(SwitchTitle(MemoryAccess.Disabled)) + "\n  · (💾 removed: only)\n▸ " + MemoryMenu.EmptyNotice + "\n", _console.Output);
-        Assert.Contains("\n" + MemoryMenu.EmptySwitchKeys + "\n", _console.Output);
+        Assert.Contains("\n" + MemoryMenu.WithoutAdd(MemoryMenu.EmptySwitchKeys) + "\n", _console.Output);
         Assert.Equal(flow, pane.FlowRow);   // nothing reached the transcript
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
@@ -322,10 +322,21 @@ public class MemoryMenuTests : IDisposable
         var undated = new MemoryEntry { Text = "z" };
 
         Assert.Equal("💾 Memory", MemoryMenu.Title);
-        Assert.Equal(MemoryMenu.Title + "   Enter = remove · ESC = close", SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys));
+        Assert.Equal(MemoryMenu.Title + "   Enter = choose · a = add · ESC = close", SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys));   // choose and add since 2026-10-13
         Assert.Equal("(💾 nothing remembered)", MemoryMenu.EmptyNotice);
-        Assert.Equal("Enter = remove · w = read-write · o = read-only · x = disabled · ESC = close", MemoryMenu.SwitchKeys);   // 2026-10-03; Memory mode's three since 2026-10-04
-        Assert.Equal("w = read-write · o = read-only · x = disabled · ESC = close", MemoryMenu.EmptySwitchKeys);
+        Assert.Equal("Enter = choose · a = add · w = read-write · o = read-only · x = disabled · ESC = close", MemoryMenu.SwitchKeys);   // 2026-10-03; Memory mode's three since 2026-10-04
+        Assert.Equal("a = add · w = read-write · o = read-only · x = disabled · ESC = close", MemoryMenu.EmptySwitchKeys);
+        Assert.Equal("Enter = choose · w = read-write · o = read-only · x = disabled · ESC = close", MemoryMenu.WithoutAdd(MemoryMenu.SwitchKeys));
+        Assert.Equal(["● read-write", "○ read-only", "○ disabled", "+ add"], MemoryMenu.Buttons(MemoryAccess.ReadWrite, add: true).Select(b => b.Title));
+        Assert.Equal('a', MemoryMenu.Buttons(MemoryAccess.ReadWrite, add: true)[^1].Key);
+        Assert.Equal("💾 \"x\"", MemoryMenu.ActionTitle("x"));
+        Assert.Equal("Enter = choose · ESC = back", MemoryMenu.ActionKeys);
+        Assert.Equal("(💾 edited: x)", MemoryMenu.EditedNotice("x"));
+        Assert.Equal("(💾 disabled: x)", MemoryMenu.DisabledNotice("x"));
+        Assert.Equal("(💾 enabled: x)", MemoryMenu.EnabledNotice("x"));
+        Assert.Equal("Another memory already says that: x", MemoryMenu.DuplicateError("x"));
+        Assert.Equal("disabled: not offered to the model", MemoryMenu.DisabledFooter);
+        Assert.Equal("[#9A8BB8]2026-09-11  x [[y]][/]", MemoryMenu.RowMarkup(new MemoryEntry { Text = "x [y]", SavedAt = dated.SavedAt, Disabled = true }));   // the whole line greyed
         Assert.Equal(["● read-write", "○ read-only", "○ disabled"], MemoryMenu.Buttons(MemoryAccess.ReadWrite).Select(b => b.Title));
         Assert.Equal(["○ read-write", "● read-only", "○ disabled"], MemoryMenu.Buttons(MemoryAccess.ReadOnly).Select(b => b.Title));
         Assert.Equal([true, false, false], MemoryMenu.Buttons(MemoryAccess.ReadWrite).Select(b => b.On));
@@ -337,5 +348,122 @@ public class MemoryMenuTests : IDisposable
         Assert.Equal("----------", MemoryMenu.DateLabel(undated));
         Assert.Equal("[#9A8BB8]2026-09-11[/]  x [[y]]", MemoryMenu.RowMarkup(dated));
         Assert.Equal(new[] { "1. 2026-09-11  x [y]", "2. ----------  z" }, MemoryMenu.ListLines(new[] { dated, undated }));
+    }
+
+    // ── Edit, disable, add (2026-10-13, the user's ask) ─────────────────────
+
+    /// <summary>The menu over a pane with an input row (the screen's), Memory mode's switch wired at read-write.</summary>
+    private (MemoryMenu Menu, ScreenPane Pane) InputMenu()
+    {
+        _console.Profile.Height = 40;
+        var pane = new ScreenPane(_console, new ScreenGeometry(() => null), new ManualTimeProvider()) { Hint = () => "idle" };
+        var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
+        var line = new InputLine(pane, keys);
+        var mode = MemoryAccess.ReadWrite;
+        var menu = new MemoryMenu(new ConsoleWithInput(pane, keys), _store, new TranscriptRenderer(pane), new MenuPane(pane, keys), () => mode, value => { mode = value; return true; }, () => line);
+        pane.Show();
+        return (menu, pane);
+    }
+
+    private void Type(string text)
+    {
+        foreach (char c in text)
+        {
+            _console.Input.PushKey(Keys.Char(c));
+        }
+    }
+
+    /// <summary>A row's choice: edit first, then disable, then forget; edit on the input row, pre-filled, saves the new text, its date kept.</summary>
+    [Fact]
+    public async Task OnThePane_ARowOffersEditDisableForget_AndEditSavesTheNewText()
+    {
+        Seed("one", "two");
+        var (menu, pane) = InputMenu();
+        Push(Keys.Down, Keys.Enter, Keys.Enter);   // the row, edit
+        Push(Keys.End);
+        Type(" too");
+        Push(Keys.Enter, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(MemoryMenu.ActionTitle("two"), _console.Output);
+        foreach (string word in new[] { MemoryMenu.EditWord, MemoryMenu.DisableWord, MemoryMenu.ForgetWord })
+        {
+            Assert.Contains(word, _console.Output);
+        }
+
+        Assert.Contains("(💾 edited: two too)", _console.Output);
+        Assert.Equal(["one", "two too"], new MemoryStore(_dir).Snapshot());
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// Disable: kept and listed, its line greyed and the footer saying so, but not offered to the model (the snapshot the prompt reads);
+    /// the choice then offers enable, which offers it again.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_DisableKeepsTheMemory_OutOfTheModelsView_AndEnableBringsItBack()
+    {
+        Seed("one", "two");
+        var (menu, pane) = InputMenu();
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the row, disable
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains("(💾 disabled: two)", _console.Output);
+        Assert.Equal(["one"], _store.Snapshot());
+        Assert.Equal(["one"], new MemoryStore(_dir).Snapshot());   // on disk too
+        Assert.Equal(2, _store.EntriesSnapshot().Count);
+        Assert.True(_store.EntriesSnapshot()[1].Disabled);
+        Assert.Contains(MemoryMenu.DisabledFooter, _console.Output);
+        pane.Dispose();
+
+        (menu, pane) = InputMenu();
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the row, enable
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(MemoryMenu.EnableWord, _console.Output);
+        Assert.Contains("(💾 enabled: two)", _console.Output);
+        Assert.Equal(["one", "two"], _store.Snapshot());
+        pane.Dispose();
+    }
+
+    /// <summary>A disabled memory can still be edited, and stays disabled.</summary>
+    [Fact]
+    public async Task OnThePane_ADisabledMemory_CanBeEdited_AndStaysDisabled()
+    {
+        Seed("one");
+        _store.SetDisabled("one", true);
+        var (menu, pane) = InputMenu();
+        Push(Keys.Enter, Keys.Enter, Keys.End);   // the row, edit
+        Type("!");
+        Push(Keys.Enter, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal("one!", _store.EntriesSnapshot()[0].Text);
+        Assert.True(_store.EntriesSnapshot()[0].Disabled);
+        Assert.Empty(_store.Snapshot());
+        pane.Dispose();
+    }
+
+    /// <summary>The title row's add (a): a new memory typed on the input row, /remember's notice; an empty store opens with it too.</summary>
+    [Fact]
+    public async Task OnThePane_AddTypesANewMemory_OnAnEmptyStoreToo()
+    {
+        var (menu, pane) = InputMenu();
+        Push(Keys.Char('a'));
+        Type("likes tea");
+        Push(Keys.Enter, Keys.Char('a'));
+        Type("likes tea");   // a duplicate: said so, nothing added
+        Push(Keys.Enter, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(MemoryMenu.AddButton, _console.Output);
+        Assert.Contains(ChatScreen.RememberedNotice("likes tea"), _console.Output);
+        Assert.Contains(ChatScreen.AlreadyRememberedNotice("likes tea"), _console.Output);
+        Assert.Equal(["likes tea"], new MemoryStore(_dir).Snapshot());
+        pane.Dispose();
     }
 }

@@ -1679,12 +1679,12 @@ internal sealed partial class ChatScreen
     /// The strip for the items Show toolbar checks under <paramref name="shown"/>, and the glyphs in it drawn on the off slab
     /// (2026-10-03, the user's ask): by their place among the strip's glyphs, from 0 — each tool switch whose setting is off,
     /// the shell under <c>off</c> (<see cref="ToolbarItemOff"/>). In <paramref name="shown"/>'s order since 2026-10-12
-    /// (<see cref="AppSettingsData.ToolbarOrder"/>, the checklist's move keys). Pinned.
+    /// (<see cref="AppSettingsData.ToolbarOrder"/>, the checklist's move keys), the left group's then the right's since 2026-10-13. Pinned.
     /// </summary>
     public static (string Strip, IReadOnlyList<int> Off) ToolbarStripFor(IReadOnlySet<string> items, AppSettingsData shown)
     {
         ArgumentNullException.ThrowIfNull(shown);
-        return ToolbarGlyphs(items, ToolbarPolicy(shown), shown.ShellPolice, id => ToolbarItemOff(id, shown), ToolbarItems.Order(shown.ToolbarOrder));
+        return ToolbarGlyphs(items, ToolbarPolicy(shown), shown.ShellPolice, id => ToolbarItemOff(id, shown), ToolbarItems.Sides(shown.ToolbarOrder, shown.ToolbarRight).All);
     }
 
     /// <summary>
@@ -1774,18 +1774,7 @@ internal sealed partial class ChatScreen
                 continue;
             }
 
-            string? glyph = id switch
-            {
-                ToolbarItems.CmdList => policy switch
-                {
-                    Shell.CommandPolicyMode.Ask => CmdAskToolGlyph,
-                    Shell.CommandPolicyMode.Yolo => CmdYoloToolGlyph,
-                    _ => null,
-                },
-                ToolbarItems.Police => policy == Shell.CommandPolicyMode.Off ? null : police ? PoliceToolGlyph : NinjaToolGlyph,
-                _ => ToolbarItems.Glyph(id),
-            };
-            if (glyph is null)
+            if (ToolbarGlyph(id, policy, police) is not { } glyph)
             {
                 continue;
             }
@@ -1800,6 +1789,20 @@ internal sealed partial class ChatScreen
 
         return (string.Join(GlyphSeparator, glyphs), dim);
     }
+
+    /// <summary>The glyph item <paramref name="id"/> draws: the lock and the officer (or the ninja) as their switches allow, null where they draw nothing (and for the path and the name).</summary>
+    private static string? ToolbarGlyph(string id, Shell.CommandPolicyMode policy, bool police) => id switch
+    {
+        ToolbarItems.Path or ToolbarItems.Model => null,
+        ToolbarItems.CmdList => policy switch
+        {
+            Shell.CommandPolicyMode.Ask => CmdAskToolGlyph,
+            Shell.CommandPolicyMode.Yolo => CmdYoloToolGlyph,
+            _ => null,
+        },
+        ToolbarItems.Police => policy == Shell.CommandPolicyMode.Off ? null : police ? PoliceToolGlyph : NinjaToolGlyph,
+        _ => ToolbarItems.Glyph(id),
+    };
 
     /// <summary>
     /// The toolbar row for the settings in force: the items Show toolbar checks (2026-09-29, the user's ask: a checklist),
@@ -1980,38 +1983,59 @@ internal sealed partial class ChatScreen
     private ScreenPane.ToolbarParts? ToolbarParts()
     {
         var shown = _effective();
-        var items = ToolbarItems.Resolve(shown.ToolbarItems);
-        var (strip, off) = ToolbarStripFor(items, shown);
         // The profile folder as ~ (2026-10-04, the UI review).
-        string path = items.Contains(ToolbarItems.Path) ? WorkingDirectoryLabel(shown) : "";
-        // The model's name (2026-10-12, the user's ask: Model name) among the glyphs at its place, or at the right after the path; its
-        // reasoning glyph after it since later that day (the user's ask), as on the hint row.
-        string model = items.Contains(ToolbarItems.Model) ? ModelLabel(_session.Endpoint?.ModelId) : "";
+        string path = WorkingDirectoryLabel(shown);
+        // The model's name (2026-10-12, the user's ask: Model name), its reasoning glyph after it since later that day (the user's ask), as on the hint row.
+        string model = ModelLabel(_session.Endpoint?.ModelId);
         string mark = model.Length == 0 ? "" : ModelMark(_session.Endpoint?.ModelId, shown.LlmReasoning);
-        return strip.Length == 0 && path.Length == 0 && model.Length == 0 ? null : new ScreenPane.ToolbarParts(strip, path, off, model, ToolbarModelAt(items, shown), mark);
+        var parts = ToolbarPartsFor(ToolbarItems.Resolve(shown.ToolbarItems), shown, path, model, mark);
+        return parts.Left.Count + parts.Right.Count == 0 ? null : parts;
+    }
+
+    /// <summary>
+    /// The toolbar's two groups for the items Show toolbar checks under <paramref name="shown"/> (2026-10-13, the user's ask: any item
+    /// pinned left or right, <see cref="ToolbarItems.Sides"/>): each side's checked items in its order — a glyph as its switches allow
+    /// (on the off slab where <see cref="ToolbarItemOff"/> says), the path <paramref name="path"/>, the name <paramref name="model"/> with
+    /// <paramref name="mark"/>; an empty one is left out. Pure; pinned.
+    /// </summary>
+    public static ScreenPane.ToolbarParts ToolbarPartsFor(IReadOnlySet<string> items, AppSettingsData shown, string path, string model, string mark)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        ArgumentNullException.ThrowIfNull(shown);
+        var sides = ToolbarItems.Sides(shown.ToolbarOrder, shown.ToolbarRight);
+        var policy = ToolbarPolicy(shown);
+        List<ScreenPane.ToolbarItem> Side(IReadOnlyList<string> ids)
+        {
+            var side = new List<ScreenPane.ToolbarItem>();
+            foreach (string id in ids.Where(items.Contains))
+            {
+                switch (id)
+                {
+                    case ToolbarItems.Path when path.Length > 0:
+                        side.Add(ScreenPane.ToolbarItem.PathOf(path));
+                        break;
+                    case ToolbarItems.Model when model.Length > 0:
+                        side.Add(ScreenPane.ToolbarItem.ModelOf(model, mark));
+                        break;
+                    default:
+                        if (ToolbarGlyph(id, policy, shown.ShellPolice) is { } glyph)
+                        {
+                            side.Add(ScreenPane.ToolbarItem.GlyphOf(glyph, ToolbarItemOff(id, shown)));
+                        }
+
+                        break;
+                }
+            }
+
+            return side;
+        }
+
+        return new ScreenPane.ToolbarParts(Side(sides.Left), Side(sides.Right));
     }
 
     /// <summary>The working directory as the tool bar and the hint row show it (the profile folder as <c>~</c>, 2026-10-04; shared later on 2026-10-12).</summary>
     private string WorkingDirectoryLabel(AppSettingsData shown) =>
         ScreenPane.HomeTilde(WorkingDirectory.Resolve(shown.WorkingDirectory, _settings.ProfileDirectory), UserProfileFolder);
-
-    /// <summary>
-    /// Where the toolbar draws the model's name for the items <paramref name="items"/> checks (2026-10-12): the count of glyphs drawn ahead
-    /// of it in the order (<see cref="ToolbarItems.Order"/>) while it stands ahead of the path, else −1, the right edge after the path.
-    /// </summary>
-    private static int ToolbarModelAt(IReadOnlySet<string> items, AppSettingsData shown)
-    {
-        var order = ToolbarItems.Order(shown.ToolbarOrder);
-        int model = order.IndexOf(ToolbarItems.Model);
-        if (model < 0 || model > order.IndexOf(ToolbarItems.Path))
-        {
-            return -1;
-        }
-
-        var ahead = order.Take(model).ToHashSet(StringComparer.Ordinal);
-        string strip = ToolbarGlyphs(items.Where(ahead.Contains).ToHashSet(StringComparer.Ordinal), ToolbarPolicy(shown), shown.ShellPolice, static _ => false, order).Strip;
-        return strip.Length == 0 ? 0 : strip.Split(GlyphSeparator, StringSplitOptions.RemoveEmptyEntries).Length;
-    }
 
     /// <summary>The policy the toolbar's lock shows for <paramref name="shown"/>: the saved word parsed, a hand-edited one read as <c>ask</c> without a warning (<see cref="Shell.CommandPolicy.Resolve"/> warns once, at the turn).</summary>
     private static Shell.CommandPolicyMode ToolbarPolicy(AppSettingsData shown)
@@ -2297,70 +2321,63 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The standing hint row's parts in the Hint bar's order (2026-10-12, the user's ask: its sections on or off and in any order;
     /// <see cref="ScreenPane.HintLayout"/>): the strip, the queued part, the keys' lead, the timers, the reading, the tally — which, as
-    /// always, stands aside while a timer or a reading shows — the model and (later that day) the working directory, each in the flow
-    /// unless the two end the checked sections, where they share the right edge in their order (<see cref="HintBarItems.RightEdge"/>). An armed exit, rewind or splash delete takes every text section's place, after the strip and the queued
-    /// part in their order. Each section unchecked is left out.
+    /// always, stands aside while a timer or a reading shows — the model and (later that day) the working directory. Since 2026-10-13
+    /// (the user's ask) each on the side it is pinned to (<see cref="HintBarItems.Sides"/>; <see cref="ScreenPane.HintSlot.AtRight"/>), in
+    /// that side's order. An armed exit, rewind or splash delete takes every text section's place at the left group's end, after the strip
+    /// and the queued part; the model and the working directory pinned right keep their places meanwhile. The tally is its own slot
+    /// (<see cref="ScreenPane.HintSlot.UsageOf"/>, empty while it stands aside), so the busy row puts its own there. Each section unchecked is left out.
     /// </summary>
     private IReadOnlyList<ScreenPane.HintSlot> HintSlots()
     {
         var shown = _effective();
         var on = HintBarItems.Resolve(shown.HintBarItems);
-        var order = HintBarItems.Order(shown.HintBarOrder);
-        var slots = new List<ScreenPane.HintSlot>(order.Count);
+        var sides = HintBarItems.Sides(shown.HintBarOrder, shown.HintBarRight);
+        var slots = new List<ScreenPane.HintSlot>(sides.Left.Count + sides.Right.Count + 1);
         string? armed = ArmedHint();
         string? timers = armed is null && on.Contains(HintBarItems.Timers) ? TimerText.StatusLine(_timers.Snapshot()) : null;
         string? reading = armed is null && on.Contains(HintBarItems.Reading) ? ReadingHintPart() : null;
-        var right = HintBarItems.RightEdge(order, on);
-        foreach (string id in order)
+        foreach (string id in sides.Left)
         {
-            if (!on.Contains(id))
-            {
-                continue;
-            }
-
-            string? text = null;
-            switch (id)
-            {
-                case HintBarItems.Status:
-                    slots.Add(ScreenPane.HintSlot.Strip);
-                    break;
-                case HintBarItems.Queued:
-                    slots.Add(ScreenPane.HintSlot.Queued);
-                    break;
-                case HintBarItems.Model when armed is null:
-                    // At the right edge while it ends the row (later on 2026-10-12, with the working directory after it), else in its place.
-                    slots.Add(right.Contains(id) ? ScreenPane.HintSlot.Model.AtRight() : ScreenPane.HintSlot.Model);
-                    break;
-                case HintBarItems.WorkingDirectory when armed is null:
-                    var path = ScreenPane.HintSlot.Path(WorkingDirectoryLabel(shown));
-                    slots.Add(right.Contains(id) ? path.AtRight() : path);
-                    break;
-                case HintBarItems.Keys when armed is null:
-                    text = KeysLead();
-                    break;
-                case HintBarItems.Timers:
-                    text = timers;
-                    break;
-                case HintBarItems.Reading:
-                    text = reading;
-                    break;
-                case HintBarItems.Usage when armed is null && timers is null && reading is null:
-                    text = UsageText.HintPart(_session.Usage, _session.ContextLength);
-                    break;
-            }
-
-            if (!string.IsNullOrEmpty(text))
-            {
-                slots.Add(ScreenPane.HintSlot.Of(text));
-            }
+            Add(id, right: false);
         }
 
         if (armed is not null)
         {
-            slots.Add(ScreenPane.HintSlot.Of(armed));
+            slots.Add(ScreenPane.HintSlot.Of(armed));   // the left group's end
+        }
+
+        foreach (string id in sides.Right)
+        {
+            Add(id, right: true);
         }
 
         return slots;
+
+        void Add(string id, bool right)
+        {
+            if (!on.Contains(id))
+            {
+                return;
+            }
+
+            ScreenPane.HintSlot? slot = id switch
+            {
+                HintBarItems.Status => ScreenPane.HintSlot.Strip,
+                HintBarItems.Queued => ScreenPane.HintSlot.Queued,
+                // An armed hint takes the text sections' place; the model and the working directory pinned right keep theirs (2026-10-13).
+                HintBarItems.Model when armed is null || right => ScreenPane.HintSlot.Model,
+                HintBarItems.WorkingDirectory when armed is null || right => ScreenPane.HintSlot.Path(WorkingDirectoryLabel(shown)),
+                HintBarItems.Keys when armed is null && KeysLead() is { Length: > 0 } keys => ScreenPane.HintSlot.Of(keys),
+                HintBarItems.Timers when !string.IsNullOrEmpty(timers) => ScreenPane.HintSlot.Of(timers),
+                HintBarItems.Reading when !string.IsNullOrEmpty(reading) => ScreenPane.HintSlot.Of(reading),
+                HintBarItems.Usage => ScreenPane.HintSlot.UsageOf(armed is null && timers is null && reading is null ? UsageText.HintPart(_session.Usage, _session.ContextLength) ?? "" : ""),
+                _ => null,
+            };
+            if (slot is { } placed)
+            {
+                slots.Add(right ? placed.AtRight() : placed);
+            }
+        }
     }
 
     /// <summary>
@@ -5284,7 +5301,7 @@ internal sealed partial class ChatScreen
         _operata = new OperataFile(_settings.ProfileDirectory);
         _vocalia = new VocaliaFile(_settings.ProfileDirectory);
         _memoryTools = MemoryTools(_memory);
-        _memoryMenu = new MemoryMenu(new ConsoleWithInput(_pane, _keys), _memory, _flow, _menuPane, () => MemoryMode.Resolve(_settings.Current), mode => _menu.SetMemoryMode(mode));
+        _memoryMenu = new MemoryMenu(new ConsoleWithInput(_pane, _keys), _memory, _flow, _menuPane, () => MemoryMode.Resolve(_settings.Current), mode => _menu.SetMemoryMode(mode), () => _pane.Enabled ? _input : null);
         // The session store (2026-09-18): the old profile's handle closed, the new one opened lazily
         // by its first use; the retention purge runs here, at startup and after every switch.
         _sessions?.Dispose();

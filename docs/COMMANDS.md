@@ -113,7 +113,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/collapse` | Folds them again. |
 | `/find [<words>]` | Finds words in the transcript, every match marked (keys under [Pane keys](#pane-keys)). Ctrl+Shift+F runs it too once Windows Terminal's own find is unbound. |
 | `/mcp` | Connects MCP servers and switches their tools. On the Tools tab typing filters the list, and with two or more servers a second strip picks one server's tools. |
-| `/memory` | Lists memories in a pane; Enter forgets one (asks). `w`, `o` and `x` set *Memory mode* to read-write, read-only or disabled. |
+| `/memory` | Lists memories in a pane. Enter (or a double-click) on one offers **edit** (change its text on the input row), **disable** (keep it, greyed out, but don't offer it to the model; **enable** offers it again) and **forget** (asks). `a` (*+ add*) types a new memory. `w`, `o` and `x` set *Memory mode* to read-write, read-only or disabled. |
 | `/memory read-write\|read-only\|disabled\|on\|off` | Sets *Memory mode* (`on` is read-write, `off` disabled). |
 | `/memory forget\|edit` | `forget` forgets all, after a confirmation; `edit` opens `memory.json` in your editor. |
 | `/memory copy <profile> [overwrite]` | Adds them to another profile's memory (or replaces it with `overwrite`), after a confirmation. |
@@ -195,7 +195,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/timer [<duration> [<name>]]` | Lists timers, or starts one (`10m`, `90s`, `1h30m`). |
 | `/timer stop <name>\|all` | Stops one timer, or every one. |
 | `/toolbar [on\|off]` | Hides the toolbar or shows it again. |
-| `/toolbar edit` | The *Tool bar* checklist: the items and their order. |
+| `/toolbar edit` | The *Tool bar* checklist: the items, the side each is pinned to (left or right), and their order. |
 | `/tools` | Switches the model's tools on or off and edits each group's settings, one tab per group. On the Offered tab, typing filters the list. |
 | `/tools <group>` | Opens one group's page: `shell`, `ask`, `files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it; the pages' buttons are under [Pane keys](#pane-keys). |
 | `/tools shell allowed` | Opens *Shell allowed commands*: Enter removes a prefix (asks), `o`/`a`/`y` switch *Shell command policy* to off, ask or yolo, typing filters. The toolbar's lock or Ctrl+Alt+L. |
@@ -587,7 +587,7 @@ In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes
 
 | Pane | Keys |
 |---|---|
-| `/memory` | Enter forgets (asks) · `w` read-write · `o` read-only · `x` disabled |
+| `/memory` | Enter: edit · disable/enable · forget (asks) · `a` add · `w` read-write · `o` read-only · `x` disabled |
 | `/queue` | Enter removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) |
 | `/rewind` | Enter rewinds to before the message |
 | `/sessions` | Enter opens · type to filter |
@@ -615,6 +615,7 @@ In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes
 | The camera pane | Space takes · `r` retake · Enter attaches · ESC drops |
 | `/settings changed` | Enter edits · `r` back to default |
 | `/toolbar edit`, `/perfbar edit` | Enter or Space flips · Shift+↑/↓ move · Shift+Home/End top or bottom · Delete unchecks · `a` all · `n` none · `d` default |
+| `/toolbar edit` (and *Hint bar*) | Shift+←/→ pins the item to the other side; Shift+↑/↓ crosses into the other group at its edge |
 | `/homebar edit`, On the bar | Shift+↑/↓ move · Shift+Home/End top or bottom · Delete removes · Enter the same as a list, Rename on the bar…, Default name, Change emoji… and Default emoji |
 | `/homebar edit`, the other tabs | Space or Enter adds or removes · type to filter |
 | A room's pane on the home bar | Space switches a device · Enter its actions |

@@ -11,11 +11,11 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public partial class ChatScreenTests
 {
-    /// <summary>The model moved first: the hint row opens with it rather than ending with it, and a double-click there is still /server.</summary>
+    /// <summary>The model pinned left and moved first (2026-10-13: pinned left; moved first alone until then): the hint row opens with it, and a double-click there is still /server.</summary>
     [Fact]
-    public async Task HintBar_TheModelMovedFirst_LeadsTheRow_AndADoubleClickRunsTheServerFlow()
+    public async Task HintBar_TheModelPinnedLeftFirst_LeadsTheRow_AndADoubleClickRunsTheServerFlow()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.LlmUrl = "http://127.0.0.1:1234/v1"; d.LlmModel = "llama"; d.HintBarOrder = ["model", "status", "queued", "keys", "timers", "reading", "usage"]; });
+        _settings.Update(d => { d.TtsOutput = false; d.LlmUrl = "http://127.0.0.1:1234/v1"; d.LlmModel = "llama"; d.HintBarOrder = ["model", "status", "queued", "keys", "timers", "reading", "usage"]; d.HintBarRight = ["cwd"]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -87,15 +87,16 @@ public partial class ChatScreenTests
         Assert.DoesNotContain("› /server", output);
     }
 
-    /// <summary>Model name moved ahead of the path (2026-10-12): drawn among the glyphs where it stands, the glyphs after it still buttons.</summary>
+    /// <summary>Model name pinned left among the glyphs (2026-10-13; moved ahead of the path until then): drawn where it stands, the glyphs after it still buttons.</summary>
     [WindowsFact]
-    public async Task Toolbar_TheModelName_MovedAmongTheGlyphs_IsDrawnThere()
+    public async Task Toolbar_TheModelName_PinnedLeftAmongTheGlyphs_IsDrawnThere()
     {
         _settings.Update(d =>
         {
             d.TtsOutput = false;
             d.ToolbarItems = ["settings", "tools", "model"];
             d.ToolbarOrder = ["settings", "model", "tools"];
+            d.ToolbarRight = ["path"];
         });
         _console.Profile.Height = 40;
         _console.Profile.Width = 120;
@@ -110,6 +111,36 @@ public partial class ChatScreenTests
         Assert.Contains("\n" + ChatScreen.SettingsToolGlyph + " " + ScreenPane.TrailerText("llama", ChatScreen.ModelMark("llama", _settings.Current.LlmReasoning)) + " " + ChatScreen.ToolsToolGlyph, output);
         Assert.Contains(ToolsText.Label + " │ ", output);
     }
+
+    /// <summary>
+    /// A glyph pinned right on the tool bar (2026-10-13, the user's ask): it ends the row, the left group's glyph still at column 0, and a
+    /// double-click on it opens its pane; the path pinned left stands among the glyphs.
+    /// </summary>
+    [WindowsFact]
+    public async Task Toolbar_AGlyphPinnedRight_EndsTheRow_AndADoubleClickOpensItsPane()
+    {
+        _settings.Update(d =>
+        {
+            d.TtsOutput = false;
+            d.ToolbarItems = ["settings", "tools", "path"];
+            d.ToolbarRight = ["tools"];
+        });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        StepsWhenIdle(
+            input => { input.PushClick(117, 103); input.PushClick(117, 103); },   // 🛠️ on the row's last two cells (117–118): /tools
+            Key(Keys.Escape),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
+        string left = ChatScreen.SettingsToolGlyph + " " + cwd;
+        Assert.Contains("\n" + left + new string(' ', 119 - TextCells.Width(left) - 2) + ChatScreen.ToolsToolGlyph, output);
+        Assert.Contains(ToolsText.Label + " │ ", output);
+    }
+
 
 
     /// <summary>

@@ -23,16 +23,61 @@ public class ItemOrderTests
         Assert.Equal(["a", "b", "d", "c"], ItemOrder.Resolve(["d", "c"], Names));                         // a first (nothing before it), b after a
     }
 
+    /// <summary>
+    /// The two groups (2026-10-13, the user's ask: any item of the hint bar and the tool bar pinned left or right): a split keeps the
+    /// order within each side; a step inside a group moves the item there, a step past the group's edge crosses into the other group
+    /// (the index unchanged), Home/End stay within the item's own group.
+    /// </summary>
     [Fact]
-    public void Resolve_KeepsThePinnedItemLast_AndMoveNeverMovesItOrPastIt()
+    public void MoveInGroups_MovesWithinAGroup_CrossesAtItsEdge_TopAndBottomStayInIt()
     {
-        Assert.Equal(["b", "c", "a", "d"], ItemOrder.Resolve(["d", "b", "a"], Names, pinnedLast: "d"));   // c after b, d pinned
-        var order = ItemOrder.Resolve(null, Names, pinnedLast: "d");
+        var sides = ItemOrder.Split(Names, new HashSet<string> { "b", "d" });
+        Assert.Equal(["a", "c"], sides.Left);
+        Assert.Equal(["b", "d"], sides.Right);
+        Assert.Equal(["a", "c", "b", "d"], sides.All);
+        Assert.True(sides.IsRight("d"));
 
-        AssertMoved(["b", "c", "a", "d"], 2, ItemOrder.Move(order, 0, HomeBarItems.Bottom, "d"));
-        AssertMoved(["a", "b", "d", "c"], 2, ItemOrder.Move(order, 3, -1));          // unpinned, it moves
-        AssertMoved(["a", "b", "c", "d"], 3, ItemOrder.Move(order, 3, -1, "d"));     // pinned, it stays
-        AssertMoved(["a", "b", "c", "d"], 2, ItemOrder.Move(order, 2, 1, "d"));      // the row above the pin stays above it
+        AssertSides(["c", "a"], ["b", "d"], 0, ItemOrder.MoveInGroups(sides, 1, -1));
+        AssertSides(["a"], ["c", "b", "d"], 1, ItemOrder.MoveInGroups(sides, 1, 1));       // off the left's end: the right's first
+        AssertSides(["a", "c", "b"], ["d"], 2, ItemOrder.MoveInGroups(sides, 2, -1));      // off the right's start: the left's last
+        AssertSides(["a", "c"], ["d", "b"], 3, ItemOrder.MoveInGroups(sides, 2, 1));
+        AssertSides(["a", "c"], ["b", "d"], 3, ItemOrder.MoveInGroups(sides, 3, 1));       // the right's last stays
+        AssertSides(["a", "c"], ["b", "d"], 0, ItemOrder.MoveInGroups(sides, 0, -1));      // the left's first stays
+        AssertSides(["a", "c"], ["d", "b"], 2, ItemOrder.MoveInGroups(sides, 3, HomeBarItems.Top));      // the top of its own group
+        AssertSides(["c", "a"], ["b", "d"], 1, ItemOrder.MoveInGroups(sides, 0, HomeBarItems.Bottom));   // the bottom of its own group
+        AssertSides(["a", "c"], ["b", "d"], 9, ItemOrder.MoveInGroups(sides, 9, 1));       // out of range: nothing
+    }
+
+    /// <summary>Shift+←/→ (2026-10-13): to the right group's start, to the left group's end — next to the gap; already there, nothing.</summary>
+    [Fact]
+    public void ToSide_PinsTheItemNextToTheGap()
+    {
+        var sides = ItemOrder.Split(Names, new HashSet<string> { "c" });
+        AssertSides(["b", "d"], ["a", "c"], 2, ItemOrder.ToSide(sides, 0, toRight: true));
+        AssertSides(["a", "b", "d", "c"], [], 3, ItemOrder.ToSide(sides, 3, toRight: false));
+        AssertSides(["a", "b", "d"], ["c"], 0, ItemOrder.ToSide(sides, 0, toRight: false));   // already left
+        AssertSides(["a", "b", "d"], ["c"], 3, ItemOrder.ToSide(sides, 3, toRight: true));    // already right
+    }
+
+    [Fact]
+    public void TheRightGroup_ResolvesAndSaves_NullForTheDefaults()
+    {
+        Assert.True(ItemOrder.ResolveRight(null, Names, ["d"]).SetEquals(["d"]));
+        Assert.True(ItemOrder.ResolveRight([" B ", "gone", null!], Names, ["d"]).SetEquals(["b"]));
+        Assert.Empty(ItemOrder.ResolveRight([], Names, ["d"]));
+        Assert.Null(ItemOrder.SaveRight(["d"], Names, ["d"]));
+        Assert.Equal(["b", "d"], ItemOrder.SaveRight(["d", "b"], Names, ["d"]));
+        Assert.Equal([], ItemOrder.SaveRight([], Names, ["d"]));
+
+        Assert.True(ToolbarItems.ResolveRight(null).SetEquals([ToolbarItems.Path, ToolbarItems.Model]));   // the row as it was
+        Assert.True(HintBarItems.ResolveRight(null).SetEquals([HintBarItems.Model, HintBarItems.WorkingDirectory]));
+    }
+
+    private static void AssertSides(string[] left, string[] right, int index, (ItemOrder.Sided Groups, int Index) moved)
+    {
+        Assert.Equal(left, moved.Groups.Left);
+        Assert.Equal(right, moved.Groups.Right);
+        Assert.Equal(index, moved.Index);
     }
 
     private static void AssertMoved(string[] expected, int index, (List<string> Order, int Index) moved)
@@ -50,49 +95,20 @@ public class ItemOrderTests
         Assert.Null(PerfBarItems.SaveOrder(PerfBarItems.Order(null)));
     }
 
+    /// <summary>The toolbar's order (2026-10-13): every item free, the path no longer held last; by default the path and the name are the right group.</summary>
     [Fact]
-    public void TheToolbarsOrder_IsEveryItem_ThePathLast()
+    public void TheToolbarsOrder_IsEveryItemFree_ThePathAndTheNameRightByDefault()
     {
         Assert.Equal(ToolbarItems.Names, ToolbarItems.Order(null));
         var order = ToolbarItems.Order(["path", "perf", "settings"]);
-        Assert.Equal(["perf", "settings"], order.Take(2));
-        Assert.Equal([ToolbarItems.Path, ToolbarItems.Model], order[^2..]);   // the model's name after the path, its default place (2026-10-12)
+        Assert.Equal(["path", "model", "perf", "settings"], order.Take(4));   // the model after the path, its neighbour
         Assert.Equal(ToolbarItems.Names.Length, order.Count);
-    }
-
-    /// <summary>
-    /// The toolbar's Model name (2026-10-12, the user's ask: free to move, after the path by default): an order saved before it puts it
-    /// after the path; saved ahead of the path it stays there; anything else saved after the path goes back ahead of it.
-    /// </summary>
-    [Fact]
-    public void TheToolbarsOrder_TheModelAlonePassesThePath()
-    {
-        List<string> old = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)];
-        Assert.Equal([ToolbarItems.Path, ToolbarItems.Model], ToolbarItems.Order(old)[^2..]);
-        var ahead = ToolbarItems.Order(["model", "settings"]);
-        Assert.Equal(["model", "settings"], ahead.Take(2));
-        Assert.Equal(ToolbarItems.Path, ahead[^1]);
-        var mended = ToolbarItems.Order(["settings", "path", "tools", "model"]);
-        Assert.Equal([ToolbarItems.Path, ToolbarItems.Model], mended[^2..]);
-        Assert.True(mended.IndexOf("tools") < mended.IndexOf("path"));
-    }
-
-    [Fact]
-    public void Move_TheModelStepsOverThePath_TheGlyphsStopAtIt()
-    {
-        var order = ToolbarItems.Order(null);
-        int path = order.IndexOf(ToolbarItems.Path);
-        int model = order.IndexOf(ToolbarItems.Model);
-        var up = ItemOrder.Move(order, model, -1, ToolbarItems.Path, ToolbarItems.Passers);
-        Assert.Equal([ToolbarItems.Model, ToolbarItems.Path], up.Order[^2..]);
-        Assert.Equal(path, up.Index);
-        var top = ItemOrder.Move(order, model, HomeBarItems.Top, ToolbarItems.Path, ToolbarItems.Passers);
-        Assert.Equal((ToolbarItems.Model, 0), (top.Order[0], top.Index));
-        var down = ItemOrder.Move(up.Order, up.Index, 1, ToolbarItems.Path, ToolbarItems.Passers);
-        Assert.Equal(order, down.Order);   // and back past it
-        var glyph = ItemOrder.Move(order, path - 1, HomeBarItems.Bottom, ToolbarItems.Path, ToolbarItems.Passers);
-        Assert.Equal(path - 1, glyph.Index);   // a glyph stops ahead of the path
-        Assert.Equal(order, ItemOrder.Move(order, path, -1, ToolbarItems.Path, ToolbarItems.Passers).Order);   // the path never moves
+        var sides = ToolbarItems.Sides(null, null);
+        Assert.Equal([ToolbarItems.Path, ToolbarItems.Model], sides.Right);
+        Assert.Equal(ToolbarItems.Names, sides.All);
+        var moved = ToolbarItems.Sides(["model", "settings"], ["settings"]);
+        Assert.Equal(["settings"], moved.Right);
+        Assert.Equal(["model", "profile"], moved.Left.Take(2));
     }
 
     [Fact]
@@ -102,6 +118,9 @@ public class ItemOrderTests
         Assert.Equal(string.Join(ChatScreen.GlyphSeparator, ChatScreen.SettingsToolGlyph, ChatScreen.ToolsToolGlyph, ChatScreen.SkillsToolGlyph), ChatScreen.ToolbarStripFor(items, new AppSettingsData()).Strip);
         var (strip, _) =ChatScreen.ToolbarStripFor(items, new AppSettingsData { ToolbarOrder = ["skills", "settings"] });
         Assert.Equal(string.Join(ChatScreen.GlyphSeparator, ChatScreen.SkillsToolGlyph, ChatScreen.SettingsToolGlyph, ChatScreen.ToolsToolGlyph), strip);
+        // The left group's glyphs, then the right's (2026-10-13).
+        (strip, _) = ChatScreen.ToolbarStripFor(items, new AppSettingsData { ToolbarRight = ["settings"] });
+        Assert.Equal(string.Join(ChatScreen.GlyphSeparator, ChatScreen.ToolsToolGlyph, ChatScreen.SkillsToolGlyph, ChatScreen.SettingsToolGlyph), strip);
     }
 
     [Fact]
@@ -124,9 +143,13 @@ public class ItemOrderTests
     [Fact]
     public void ACopy_KeepsBothOrders_ApartFromTheSource()
     {
-        var source = new AppSettingsData { ToolbarOrder = ["perf"], PerformanceBarOrder = ["ram"] };
+        var source = new AppSettingsData { ToolbarOrder = ["perf"], PerformanceBarOrder = ["ram"], ToolbarRight = ["perf"], HintBarRight = ["usage"] };
         var copy = AppSettings.Copy(source);
         Assert.Equal(["perf"], copy.ToolbarOrder);
+        Assert.Equal(["perf"], copy.ToolbarRight);
+        Assert.Equal(["usage"], copy.HintBarRight);
+        Assert.NotSame(source.ToolbarRight, copy.ToolbarRight);
+        Assert.NotSame(source.HintBarRight, copy.HintBarRight);
         Assert.Equal(["ram"], copy.PerformanceBarOrder);
         Assert.NotSame(source.ToolbarOrder, copy.ToolbarOrder);
         Assert.NotSame(source.PerformanceBarOrder, copy.PerformanceBarOrder);

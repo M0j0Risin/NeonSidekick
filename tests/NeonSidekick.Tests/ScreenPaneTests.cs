@@ -10,7 +10,7 @@ using Spectre.Console.Testing;
 
 namespace NeonSidekick.Tests;
 
-public class ScreenPaneTests : IDisposable
+public partial class ScreenPaneTests : IDisposable
 {
     private readonly TestConsole _console = new TestConsole().Interactive();
     private readonly ManualTimeProvider _time = new();

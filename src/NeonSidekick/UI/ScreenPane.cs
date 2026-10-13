@@ -290,6 +290,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int _usageColumn = -1;
     private int _usageCells;
 
+    // The busy row's tally where it stands apart from the spinner (2026-10-13, the sides: the Usage section in its own place): −1 for none.
+    private int _tallyColumn = -1;
+    private int _tallyCells;
+
     // The busy row's label when LabelAfterUsage or LabelZone takes it (2026-09-28, HintZone.Label): −1 for none.
     private int _labelColumn = -1;
     private int _labelCells;
@@ -314,16 +318,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int _toolbarRows;
     private string? _shownToolbar;
     private string _shownToolbarOff = "";
-    private string _toolbarStrip = "";
-    private int _toolbarPathColumn = -1;
-    private int _toolbarPathCells;
-    // The model's name on the toolbar (2026-10-12, the user's ask): its first column and cells, −1 / 0 for none drawn whole; and the
-    // glyphs after it when it stands among them — their text, first column, and their first glyph's place in the strip.
-    private int _toolbarModelColumn = -1;
-    private int _toolbarModelCells;
-    private int _toolbarMarkColumn = -1;   // the reasoning mark's first column within the name's cells (later on 2026-10-12); −1 for none
-    private string _toolbarTail = "";
-    private int _toolbarTailColumn = -1;
+    // The toolbar's runs as drawn, each with its first column (2026-10-13: the two groups, pinned left and pinned right), for the hit test.
+    private IReadOnlyList<ToolbarPlaced> _toolbarRuns = [];
 
     // The performance bar (2026-09-29): the provider (asked with the row's cells; null = no row), the rows the last draw
     // gave it (0 or 1, Draw the only writer) and the row's text as drawn (null = no row; the tick's comparison). It is the
@@ -443,12 +439,76 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// (<see cref="Theme.ToolbarOff"/>) by their place among its glyphs, from 0: a tool switch that is off. Null or empty, none.
     /// </summary>
     /// <remarks>
-    /// <paramref name="Model"/> (2026-10-12, the user's ask: the Tool bar's <c>Model name</c>) is the model's name, empty for none;
-    /// <paramref name="ModelAt"/> the place among the strip's glyphs it is drawn before (its own text, a blank either side), or −1 for
-    /// the right edge after the path, its default place (<see cref="ToolbarModelSeparator"/> between); <paramref name="ModelMark"/>
-    /// (later that day, the user's ask) its reasoning mark after it, in the mark's colour and a zone of its own, as on the hint row.
+    /// The model's name (2026-10-12, the user's ask: the Tool bar's <c>Model name</c>) and its reasoning mark (later that day) in the
+    /// mark's colour and a zone of its own, as on the hint row. Since 2026-10-13 (the user's ask: any item pinned left or right, the sort
+    /// free within each side) the parts are two groups of items, <paramref name="Left"/> drawn from column 0 and <paramref name="Right"/>
+    /// ending on the last cell, each in its order; the strip/path constructor is the row as it was (the glyphs left, the path and the
+    /// name right, or the name among the glyphs before the <c>modelAt</c>-th).
     /// </remarks>
-    public readonly record struct ToolbarParts(string Strip, string Path, IReadOnlyList<int>? Off = null, string Model = "", int ModelAt = -1, string ModelMark = "");
+    public readonly record struct ToolbarParts(IReadOnlyList<ToolbarItem> Left, IReadOnlyList<ToolbarItem> Right)
+    {
+        /// <summary>
+        /// The row as it was until 2026-10-13: <paramref name="strip"/>'s glyphs at the left (<paramref name="off"/> naming those on the
+        /// off slab by their place, from 0), <paramref name="path"/> and <paramref name="model"/> (with <paramref name="modelMark"/>) at
+        /// the right — or the name among the glyphs, before the <paramref name="modelAt"/>-th, when it is 0 or more.
+        /// </summary>
+        public ToolbarParts(string strip, string path, IReadOnlyList<int>? off = null, string model = "", int modelAt = -1, string modelMark = "")
+            : this(OldLeft(strip, off, model, modelAt, modelMark), OldRight(path, model, modelAt, modelMark))
+        {
+        }
+
+        private static List<ToolbarItem> OldLeft(string strip, IReadOnlyList<int>? off, string model, int modelAt, string mark)
+        {
+            ArgumentNullException.ThrowIfNull(strip);
+            var items = strip.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select((g, i) => ToolbarItem.GlyphOf(g, off?.Contains(i) == true)).ToList();
+            if (!string.IsNullOrEmpty(model) && modelAt >= 0)
+            {
+                items.Insert(Math.Min(modelAt, items.Count), ToolbarItem.ModelOf(model, mark ?? ""));
+            }
+
+            return items;
+        }
+
+        private static List<ToolbarItem> OldRight(string path, string model, int modelAt, string mark)
+        {
+            var items = new List<ToolbarItem>(2);
+            if (!string.IsNullOrEmpty(path))
+            {
+                items.Add(ToolbarItem.PathOf(path));
+            }
+
+            if (!string.IsNullOrEmpty(model) && modelAt < 0)
+            {
+                items.Add(ToolbarItem.ModelOf(model, mark ?? ""));
+            }
+
+            return items;
+        }
+
+        /// <summary>The glyphs on the off slab as one comparable word, by their place among all the items, so the tick redraws a flip that leaves the row's text as it was.</summary>
+        public string OffKey => string.Join(',', (Left ?? []).Concat(Right ?? []).Select((item, i) => item.Off ? i : -1).Where(i => i >= 0));
+    }
+
+    /// <summary>What an item of the toolbar is (2026-10-13): a glyph, the working directory's path or the model's name.</summary>
+    public enum ToolbarItemKind
+    {
+        Glyph,
+        Path,
+        Model,
+    }
+
+    /// <summary>
+    /// One item of the toolbar (2026-10-13, <see cref="ToolbarParts"/>): a glyph — <paramref name="Off"/> on the off slab
+    /// (<see cref="Theme.ToolbarOff"/>) —, the path, or the model's name with its reasoning <paramref name="Mark"/>.
+    /// </summary>
+    public readonly record struct ToolbarItem(ToolbarItemKind Kind, string Text, bool Off = false, string Mark = "")
+    {
+        public static ToolbarItem GlyphOf(string glyph, bool off = false) => new(ToolbarItemKind.Glyph, glyph, off);
+
+        public static ToolbarItem PathOf(string path) => new(ToolbarItemKind.Path, path);
+
+        public static ToolbarItem ModelOf(string name, string mark = "") => new(ToolbarItemKind.Model, name, false, mark);
+    }
 
     /// <summary>The part of the toolbar a click landed on (<see cref="TryHitToolbar"/>).</summary>
     public enum ToolbarZone
@@ -756,6 +816,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         Model,
         Text,
         Path,   // later on 2026-10-12: the working directory, its text the slot's
+        Usage,  // 2026-10-13: the token tally, its text the slot's (empty while it stands aside); the busy row puts its own tally there
     }
 
     /// <summary>
@@ -769,8 +830,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         public static HintSlot Model { get; } = new(HintSlotKind.Model);
         public static HintSlot Of(string text) => new(HintSlotKind.Text, text);
         public static HintSlot Path(string text) => new(HintSlotKind.Path, text);
+        public static HintSlot UsageOf(string text) => new(HintSlotKind.Usage, text);
 
-        /// <summary>This slot at the right edge (later on 2026-10-12): the model and the working directory, while they end the row.</summary>
+        /// <summary>This slot at the right edge (later on 2026-10-12: the model and the working directory while they ended the row; any slot pinned right since 2026-10-13).</summary>
         public HintSlot AtRight() => this with { Right = true };
     }
 
@@ -1545,83 +1607,278 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     public const string ToolbarModelSeparator = " · ";
 
     /// <summary>
-    /// The toolbar laid out in its cells (2026-10-12): the strip's glyphs up to the model's name (all of them with the name at the right
-    /// or none), the name among them with the glyphs after it, and the path and a name at the right edge.
+    /// A run of the laid toolbar (2026-10-13): glyphs side by side (<paramref name="Off"/> their places on the slab, from 0;
+    /// <paramref name="Lead"/> the <c>+N</c> ahead of them where the right group gave way), the path, or the model's name and mark.
     /// </summary>
-    private readonly record struct ToolbarLaid(string Lead, string Inline, string Tail, int TailFirst, string Path, string Model)
+    private readonly record struct ToolbarRun(ToolbarItemKind Kind, string Text, IReadOnlyList<int> Off, string Mark = "", string Lead = "")
     {
-        /// <summary>The glyphs, the name among them and the glyphs after it, one blank between each.</summary>
-        public string Left => Lead + (Inline.Length == 0 ? "" : (Lead.Length == 0 ? "" : " ") + Inline) + (Tail.Length == 0 ? "" : " " + Tail);
+        /// <summary>What the run draws: the lead, then the text.</summary>
+        public string Shown => Lead + Text;
+    }
 
-        /// <summary>The path and the name at the right edge, <see cref="ToolbarModelSeparator"/> between.</summary>
-        public string Right => Path.Length == 0 ? Model : Model.Length == 0 ? Path : Path + ToolbarModelSeparator + Model;
+    /// <summary>A run where it was drawn (2026-10-13): its text's first column (after its lead) and its cells.</summary>
+    private readonly record struct ToolbarPlaced(ToolbarItemKind Kind, string Text, int Column, int Cells, string Mark);
 
-        /// <summary>The name's first column among the glyphs.</summary>
-        public int InlineColumn => TextCells.Width(Lead) + (Lead.Length == 0 ? 0 : 1);
+    /// <summary>
+    /// The toolbar laid out in its cells (2026-10-12; two groups since 2026-10-13): the runs pinned left from column 0 and the ones
+    /// pinned right ending on the last cell, <see cref="ToolbarGap"/> at least between.
+    /// </summary>
+    private readonly record struct ToolbarLaid(IReadOnlyList<ToolbarRun> Left, IReadOnlyList<ToolbarRun> Right)
+    {
+        /// <summary>The left group's text.</summary>
+        public string LeftText => JoinRuns(Left);
 
-        /// <summary>The first column of the glyphs after the name.</summary>
-        public int TailColumn => InlineColumn + TextCells.Width(Inline) + 1;
+        /// <summary>The right group's text.</summary>
+        public string RightText => JoinRuns(Right);
 
-        /// <summary>The whole row of <paramref name="cells"/>: the left part, blanks, the right part ending on the last cell.</summary>
+        /// <summary>The whole row of <paramref name="cells"/>: the left group, blanks, the right group ending on the last cell.</summary>
         public string Row(int cells)
         {
-            string left = Left;
-            string right = Right;
+            string left = LeftText;
+            string right = RightText;
             return right.Length == 0 ? left : left + new string(' ', Math.Max(0, cells - TextCells.Width(left) - TextCells.Width(right))) + right;
+        }
+
+        /// <summary>Each run with its first column (its lead's) in a row of <paramref name="cells"/>, the left group's then the right's.</summary>
+        public IEnumerable<(ToolbarRun Run, int Column, string Before)> Placed(int cells)
+        {
+            int column = 0;
+            for (int i = 0; i < Left.Count; i++)
+            {
+                string before = i == 0 ? "" : RunSeparator(Left[i - 1], Left[i]);
+                column += TextCells.Width(before);
+                yield return (Left[i], column, before);
+                column += TextCells.Width(Left[i].Shown);
+            }
+
+            string right = RightText;
+            int start = right.Length == 0 ? column : Math.Max(column, cells - TextCells.Width(right));
+            for (int i = 0; i < Right.Count; i++)
+            {
+                string before = i == 0 ? new string(' ', start - column) : RunSeparator(Right[i - 1], Right[i]);
+                column += TextCells.Width(before);
+                yield return (Right[i], column, before);
+                column += TextCells.Width(Right[i].Shown);
+            }
         }
     }
 
+    /// <summary>Between two runs of a group: <see cref="ToolbarModelSeparator"/> between two texts (the path and the name), else one blank (2026-10-13).</summary>
+    private static string RunSeparator(ToolbarRun before, ToolbarRun after) =>
+        before.Kind != ToolbarItemKind.Glyph && after.Kind != ToolbarItemKind.Glyph ? ToolbarModelSeparator : " ";
+
+    private static string JoinRuns(IReadOnlyList<ToolbarRun> runs)
+    {
+        var text = new System.Text.StringBuilder();
+        for (int i = 0; i < runs.Count; i++)
+        {
+            text.Append(i == 0 ? "" : RunSeparator(runs[i - 1], runs[i])).Append(runs[i].Shown);
+        }
+
+        return text.ToString();
+    }
+
     /// <summary>
-    /// <paramref name="toolbar"/> laid out in <paramref name="cells"/> (2026-10-12): with the name among the glyphs, the glyphs ahead of
-    /// and after it whole and the name fitted (<see cref="NameAndMark"/>) to the room they leave between them; when they do not all fit,
-    /// or the name collapses there (later on 2026-10-12, the user's ask: the glyphs first), the strip fitted alone with no name. The
-    /// right edge as <see cref="ToolbarRow(string, string, string, int)"/> says: the name and the path in what the glyphs leave, each
-    /// collapsing (<see cref="FitName"/>, <see cref="FitPath"/>), the path first.
-    /// <paramref name="spaced"/>: the strip already carries <see cref="TextCells.SpaceSelectorSequences"/>' blanks.
+    /// <paramref name="toolbar"/> laid out in <paramref name="cells"/> (2026-10-12; two groups since 2026-10-13, the user's ask). What
+    /// gives way when the row is too narrow, in the user's order: the model's name and the path first, wherever they are pinned — the
+    /// name fitted (<see cref="NameAndMark"/>, half the row at most at the right) to what everything but the path leaves, then the path
+    /// (<see cref="FitPath"/>) to what is left, each collapsing under eight cells; then the right group, from its inner end (whole runs
+    /// go, a glyph run keeping its outer glyphs behind <c>+N</c>); then the left group from its inner end (<see cref="FitStrip"/>).
+    /// <paramref name="spaced"/>: the glyphs already carry <see cref="TextCells.SpaceSelectorSequences"/>' blanks.
     /// </summary>
     private static ToolbarLaid LayToolbar(ToolbarParts toolbar, int cells, bool spaced = false)
     {
         string Space(string s) => spaced ? s : TextCells.SpaceSelectorSequences(s, TextCells.NarrowSelectorSequences);
-        string model = toolbar.Model ?? "";
-        string mark = toolbar.ModelMark ?? "";
-        string path = toolbar.Path ?? "";
-        string lead;
-        string inline = "";
-        string tail = "";
-        int tailFirst = 0;
-        if (model.Length > 0 && toolbar.ModelAt >= 0)
-        {
-            string[] glyphs = toolbar.Strip.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            int at = Math.Min(toolbar.ModelAt, glyphs.Length);
-            string ahead = Space(string.Join(' ', glyphs, 0, at));
-            string behind = Space(string.Join(' ', glyphs, at, glyphs.Length - at));
-            int column = TextCells.Width(ahead) + (ahead.Length == 0 ? 0 : 1);
-            int behindCells = behind.Length == 0 ? 0 : TextCells.Width(behind) + 1;
-            // The glyphs keep their cells; the name has what is left between them, or goes (later on 2026-10-12).
-            inline = NameAndMark(model, mark, cells - column - behindCells);
-            if (inline.Length > 0)
-            {
-                lead = ahead;
-                tail = behind;
-                tailFirst = behind.Length == 0 ? 0 : at;
-            }
-            else
-            {
-                lead = FitStrip(Space(toolbar.Strip), cells);
-            }
+        var left = Runs(toolbar.Left ?? [], Space);
+        var right = Runs(toolbar.Right ?? [], Space);
 
-            model = "";
-        }
-        else
+        // The name first, in what all but the path leaves; then the path in what is left (the path collapses first, as it always did).
+        bool nameRight = right.Any(r => r.Kind == ToolbarItemKind.Model);
+        FitText(ToolbarItemKind.Model, (run, room) => NameAndMark(run.Text, run.Mark, nameRight ? Math.Min(Math.Max(1, cells / 2), room) : room), withoutPath: true);
+        FitText(ToolbarItemKind.Path, (run, room) => FitPath(run.Text, room), withoutPath: false);
+
+        int leftCells = TextCells.Width(JoinRuns(left));
+        if (right.Count > 0)
         {
-            lead = FitStrip(Space(toolbar.Strip), cells);
+            int room = cells - leftCells - (left.Count == 0 ? 0 : ToolbarGap);
+            right = room < 1 ? [] : FitRight(right, room);
         }
 
-        int room = cells - TextCells.Width(new ToolbarLaid(lead, inline, tail, tailFirst, "", "").Left) - ToolbarGap;
-        string name = NameAndMark(model, mark, Math.Min(Math.Max(1, cells / 2), room));
-        int pathRoom = name.Length == 0 ? room : room - TextCells.Width(name) - ToolbarModelSeparator.Length;
-        string shown = FitPath(path, pathRoom);
-        return new ToolbarLaid(lead, inline, tail, tailFirst, shown, name);
+        if (right.Count == 0 && leftCells > cells)
+        {
+            left = FitLeft(left, cells);
+        }
+
+        return new ToolbarLaid(left, right);
+
+        // A text run fitted to the room the rest of the row leaves it (a stand-in of one cell measures where it goes); gone when empty.
+        void FitText(ToolbarItemKind kind, Func<ToolbarRun, int, string> fit, bool withoutPath)
+        {
+            foreach (var group in new[] { left, right })
+            {
+                int at = group.FindIndex(r => r.Kind == kind);
+                if (at < 0)
+                {
+                    continue;
+                }
+
+                var run = group[at];
+                group[at] = run with { Text = "x", Mark = "" };
+                int rest = Measure(withoutPath) - 1;
+                string text = fit(run, cells - rest);
+                if (text.Length == 0)
+                {
+                    group.RemoveAt(at);
+                }
+                else
+                {
+                    group[at] = run with { Text = text };
+                }
+            }
+        }
+
+        int Measure(bool withoutPath)
+        {
+            var l = withoutPath ? left.Where(r => r.Kind != ToolbarItemKind.Path).ToList() : left;
+            var r = withoutPath ? right.Where(r => r.Kind != ToolbarItemKind.Path).ToList() : right;
+            int width = TextCells.Width(JoinRuns(l)) + TextCells.Width(JoinRuns(r));
+            return width + (l.Count > 0 && r.Count > 0 ? ToolbarGap : 0);
+        }
+    }
+
+    /// <summary>The items as runs: glyphs side by side one run (spaced, their slabs counted from 0 within it), the path and the name one each, empties dropped.</summary>
+    private static List<ToolbarRun> Runs(IReadOnlyList<ToolbarItem> items, Func<string, string> space)
+    {
+        var runs = new List<ToolbarRun>();
+        var glyphs = new List<string>();
+        var off = new List<int>();
+        foreach (var item in items)
+        {
+            if (string.IsNullOrEmpty(item.Text))
+            {
+                continue;
+            }
+
+            if (item.Kind == ToolbarItemKind.Glyph)
+            {
+                if (item.Off)
+                {
+                    off.Add(glyphs.Count);
+                }
+
+                glyphs.Add(item.Text);
+                continue;
+            }
+
+            Flush();
+            runs.Add(new ToolbarRun(item.Kind, item.Text, [], item.Mark ?? ""));
+        }
+
+        Flush();
+        return runs;
+
+        void Flush()
+        {
+            if (glyphs.Count > 0)
+            {
+                runs.Add(new ToolbarRun(ToolbarItemKind.Glyph, space(string.Join(' ', glyphs)), off.ToList()));
+            }
+
+            glyphs.Clear();
+            off.Clear();
+        }
+    }
+
+    /// <summary>
+    /// The right group in <paramref name="room"/> cells (2026-10-13): whole runs kept from its outer (right) end; the first that does not
+    /// fit is a glyph run's outer glyphs behind <c>+N</c>, a path cut from the front, or gone — and everything before it goes.
+    /// </summary>
+    private static List<ToolbarRun> FitRight(List<ToolbarRun> runs, int room)
+    {
+        if (TextCells.Width(JoinRuns(runs)) <= room)
+        {
+            return runs;
+        }
+
+        var kept = new List<ToolbarRun>();
+        for (int i = runs.Count - 1; i >= 0; i--)
+        {
+            var candidate = new List<ToolbarRun> { runs[i] };
+            candidate.AddRange(kept);
+            if (TextCells.Width(JoinRuns(candidate)) <= room)
+            {
+                kept = candidate;
+                continue;
+            }
+
+            int left = room - (kept.Count == 0 ? 0 : TextCells.Width(JoinRuns(kept)) + TextCells.Width(RunSeparator(runs[i], kept[0])));
+            var cut = runs[i].Kind switch
+            {
+                ToolbarItemKind.Glyph => FitStripTail(runs[i], left),
+                ToolbarItemKind.Path when FitPath(runs[i].Text, left) is { Length: > 0 } path => runs[i] with { Text = path },
+                _ => (ToolbarRun?)null,
+            };
+            if (cut is { } shown)
+            {
+                kept.Insert(0, shown);
+            }
+
+            break;
+        }
+
+        return kept;
+    }
+
+    /// <summary>The left group alone in <paramref name="cells"/> (2026-10-13): whole runs from column 0; the first that does not fit a glyph run's first glyphs and <c>+N</c> (<see cref="FitStrip"/>), a path or a name cut, or gone; nothing after it.</summary>
+    private static List<ToolbarRun> FitLeft(List<ToolbarRun> runs, int cells)
+    {
+        var kept = new List<ToolbarRun>();
+        foreach (var run in runs)
+        {
+            var candidate = new List<ToolbarRun>(kept) { run };
+            if (TextCells.Width(JoinRuns(candidate)) <= cells)
+            {
+                kept = candidate;
+                continue;
+            }
+
+            int room = cells - (kept.Count == 0 ? 0 : TextCells.Width(JoinRuns(kept)) + TextCells.Width(RunSeparator(kept[^1], run)));
+            string text = room < 1 ? "" : run.Kind switch
+            {
+                ToolbarItemKind.Glyph => FitStrip(run.Text, room),
+                ToolbarItemKind.Path => FitPath(run.Text, room),
+                _ => NameAndMark(run.Text, "", room),
+            };
+            if (text.Length > 0)
+            {
+                kept.Add(run with { Text = text, Mark = text.EndsWith(run.Mark, StringComparison.Ordinal) ? run.Mark : "" });
+            }
+
+            break;
+        }
+
+        return kept;
+    }
+
+    /// <summary>
+    /// A glyph run of the right group in <paramref name="cells"/> (2026-10-13): its last glyphs behind <c>+N</c> for the N left off, the
+    /// slabs counted on from the first kept; null when not even one glyph and its count fit.
+    /// </summary>
+    private static ToolbarRun? FitStripTail(ToolbarRun run, int cells)
+    {
+        string[] glyphs = run.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        for (int keep = glyphs.Length - 1; keep > 0; keep--)
+        {
+            string lead = "+" + (glyphs.Length - keep).ToString(System.Globalization.CultureInfo.InvariantCulture) + " ";
+            string text = string.Join(' ', glyphs, glyphs.Length - keep, keep);
+            if (TextCells.Width(lead + text) <= cells)
+            {
+                int dropped = glyphs.Length - keep;
+                return run with { Text = text, Lead = lead, Off = run.Off.Where(i => i >= dropped).Select(i => i - dropped).ToList() };
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -4031,6 +4288,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
 
             hit = HintHitAt(_hintStrip, _hintStripColumn, _trailerColumn, _trailerEnd, _markColumn, _markEnd, _hintPathColumn, _hintPathCells, _busyLabel is null ? _queuedColumn : -1, _queuedCells, _usageColumn, _usageCells, _labelColumn, _labelCells, x);
+            if (hit.Zone == HintZone.Row && _tallyColumn >= 0 && x >= _tallyColumn && x < _tallyColumn + _tallyCells)
+            {
+                hit = new HintHit(HintZone.Usage, "", _tallyColumn);   // the busy row's tally apart from the spinner (2026-10-13)
+            }
+
             return true;
         }
     }
@@ -4252,23 +4514,32 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// </summary>
     private ToolbarHit ToolbarHitNow(int x)
     {
-        if (_toolbarMarkColumn >= 0 && x >= _toolbarMarkColumn && x < _toolbarModelColumn + _toolbarModelCells)
+        // Each run where it was drawn (2026-10-13: on either side): the name's mark, the name, the path, a glyph.
+        foreach (var run in _toolbarRuns)
         {
-            return new ToolbarHit(ToolbarZone.Mark, "", _toolbarMarkColumn);
+            if (x < run.Column || x >= run.Column + run.Cells)
+            {
+                continue;
+            }
+
+            switch (run.Kind)
+            {
+                case ToolbarItemKind.Model:
+                    int mark = run.Mark.Length > 0 && run.Text.EndsWith(run.Mark, StringComparison.Ordinal) ? run.Column + run.Cells - TextCells.Width(run.Mark) : -1;
+                    return mark >= 0 && x >= mark ? new ToolbarHit(ToolbarZone.Mark, "", mark) : new ToolbarHit(ToolbarZone.Model, "", run.Column);
+                case ToolbarItemKind.Path:
+                    return new ToolbarHit(ToolbarZone.Path, "", run.Column);
+                default:
+                    if (TryStripGlyphAt(run.Text, x - run.Column, TextCells.NarrowSelectorSequences, out string glyph, out int column))
+                    {
+                        return new ToolbarHit(ToolbarZone.Glyph, glyph, column + run.Column);
+                    }
+
+                    break;
+            }
         }
 
-        if (_toolbarModelColumn >= 0 && x >= _toolbarModelColumn && x < _toolbarModelColumn + _toolbarModelCells)
-        {
-            return new ToolbarHit(ToolbarZone.Model, "", _toolbarModelColumn);
-        }
-
-        if (_toolbarTail.Length > 0 && x >= _toolbarTailColumn
-            && TryStripGlyphAt(_toolbarTail, x - _toolbarTailColumn, TextCells.NarrowSelectorSequences, out string glyph, out int column))
-        {
-            return new ToolbarHit(ToolbarZone.Glyph, glyph, column + _toolbarTailColumn);
-        }
-
-        return ToolbarHitAt(_toolbarStrip, _toolbarPathColumn, _toolbarPathCells, x);
+        return new ToolbarHit(ToolbarZone.Row, "", -1);
     }
 
     /// <summary>
@@ -5662,11 +5933,19 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _usageCells = 0;
             _labelColumn = -1;
             _labelCells = 0;
+            _tallyColumn = -1;
+            _tallyCells = 0;
             return;
         }
 
         string mark = _trailerMark();
-        if (_busyLabel is { } label)
+        _tallyColumn = -1;
+        _tallyCells = 0;
+        if (_busyLabel is { } sided && _hintLayout is { } busyLayout)
+        {
+            WriteBusySided(sided, busyLayout, max, mark);
+        }
+        else if (_busyLabel is { } label)
         {
             // The strip, then the frame in its own style, then the label and its count in what is
             // left ahead of the trailer — the same cut PinRight makes, in four styles; the trailer
@@ -5726,30 +6005,22 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
         else
         {
-            var placed = PlaceStanding(max, mark);
-            var laid = placed.Laid;
-            string row = laid.Row;
-            int cells = placed.Cells;
-            WriteStanding(placed.Text, placed.MarkIndex, placed.Mark);
-            _shownHint = placed.Text;
-            // The strip's place: column 0 as always, or behind the parts ahead of it — there only when the fit left it whole.
-            _hintStrip = laid.StripAhead <= 0 || Whole(laid.StripAhead, laid.Strip, row, cells) ? laid.Strip : "";
-            _hintStripColumn = Math.Max(0, laid.StripAhead);
-            // The model, its mark and the working directory where PlaceStanding put them (2026-10-12): in the flow or at the right edge.
-            _trailerColumn = placed.TrailerColumn;
-            _trailerEnd = placed.TrailerEnd;
-            _markColumn = placed.MarkColumn;
-            _markEnd = placed.MarkEnd;
-            _hintPathColumn = placed.PathColumn;
-            _hintPathCells = placed.PathCells;
-
-            // The queued part's place: after what stands ahead of it — when the fit left it whole.
-            RecordQueued(laid.Queued, 0, laid.QueuedAhead, row, cells);
-            // The usage zone: the tally where the screen's hint put it — nowhere under an overlay's
-            // hint, or when the timers or the exit hint stand in its place.
+            var laid = PlaceStanding(max);
+            WriteHintText(laid, "");
+            _shownHint = laid.Text;
+            // Each part's zone where it was drawn whole, on either side (2026-10-13, the sides).
+            ApplyHintZones(laid, max);
+            // The usage zone: the tally where the screen's hint put it — nowhere under an overlay's hint, or when the timers or
+            // the exit hint stand in its place; a layout of text slots (the tests') has it found by its text.
             string usage = _overlay is null ? _usage() : "";
-            int at = usage.Length == 0 ? -1 : row.IndexOf(usage, StringComparison.Ordinal);
-            RecordUsage(at < 0 ? "" : usage, 0, at < 0 ? 0 : TextCells.Width(row[..at]), row, cells);
+            if (laid.Find(HintPartKind.Usage) is null && usage.Length > 0 && laid.Parts.FirstOrDefault(part => part.Kind == HintPartKind.Text && part.Text.Contains(Spaced(usage), StringComparison.Ordinal)) is { Text.Length: > 0 } holder)
+            {
+                int at = holder.Text.IndexOf(Spaced(usage), StringComparison.Ordinal);
+                bool drawn = holder.Whole;
+                _usageColumn = drawn ? holder.Column + TextCells.Width(holder.Text[..at]) : -1;
+                _usageCells = drawn ? TextCells.Width(Spaced(usage)) : 0;
+            }
+
             _labelColumn = -1;
             _labelCells = 0;
         }
@@ -5797,54 +6068,41 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         int cells = Math.Max(1, width - 1);
         // Terminal.app paints ⚙️ and 🛠️ over the cell after them: a space of their own keeps the strip's gaps (2026-10-06) — LayToolbar spaces it.
         var laid = LayToolbar(toolbar, cells);
-        string row = laid.Row(cells);
-        foreach (var (text, off) in ToolbarStripRuns(laid.Lead, toolbar.Off))
+        var placed = new List<ToolbarPlaced>();
+        foreach (var (run, column, before) in laid.Placed(cells))
         {
-            _inner.Write(new RawText(text, off ? Theme.ToolbarOff : Theme.Hint));
-        }
-
-        // The model's name among the glyphs (2026-10-12) in the hint's style, and the glyphs after it with their slabs counted on.
-        string mark = toolbar.ModelMark ?? "";
-        if (laid.Inline.Length > 0)
-        {
-            _inner.Write(new RawText(laid.Lead.Length == 0 ? "" : " ", Theme.Hint));
-            WriteNamed(laid.Inline, mark);
-        }
-
-        if (laid.Tail.Length > 0)
-        {
-            _inner.Write(new RawText(" ", Theme.Hint));
-            var after = toolbar.Off?.Where(i => i >= laid.TailFirst).Select(i => i - laid.TailFirst).ToList();
-            foreach (var (text, off) in ToolbarStripRuns(laid.Tail, after))
+            // The separators and the blanks between the groups dim, as the path's were (2026-10-13: either group may hold anything).
+            _inner.Write(new RawText(before, Theme.DimText));
+            int textColumn = column + TextCells.Width(run.Lead);
+            if (run.Lead.Length > 0)
             {
-                _inner.Write(new RawText(text, off ? Theme.ToolbarOff : Theme.Hint));
+                _inner.Write(new RawText(run.Lead, Theme.Hint));
             }
-        }
 
-        // The blanks and the path dim, the name at the right edge in the hint's style (2026-10-12).
-        string left = laid.Left;
-        string right = laid.Right;
-        string blanks = row[left.Length..^right.Length];
-        _inner.Write(new RawText(blanks + laid.Path + (laid.Path.Length > 0 && laid.Model.Length > 0 ? ToolbarModelSeparator : ""), Theme.DimText));
-        if (laid.Model.Length > 0)
-        {
-            WriteNamed(laid.Model, mark);
+            switch (run.Kind)
+            {
+                case ToolbarItemKind.Glyph:
+                    foreach (var (text, off) in ToolbarStripRuns(run.Text, run.Off))
+                    {
+                        _inner.Write(new RawText(text, off ? Theme.ToolbarOff : Theme.Hint));
+                    }
+
+                    break;
+                case ToolbarItemKind.Path:
+                    _inner.Write(new RawText(run.Text, Theme.DimText));
+                    break;
+                default:
+                    WriteNamed(run.Text, run.Mark);
+                    break;
+            }
+
+            placed.Add(new ToolbarPlaced(run.Kind, run.Text, textColumn, TextCells.Width(run.Text), run.Mark));
         }
 
         _inner.Write(EraseLineEnd);
-        _shownToolbar = row;
-        _shownToolbarOff = OffKey(toolbar.Off);
-        _toolbarStrip = laid.Lead;
-        _toolbarTail = laid.Tail;
-        _toolbarTailColumn = laid.Tail.Length == 0 ? -1 : laid.TailColumn;
-        int rightColumn = cells - TextCells.Width(right);
-        _toolbarPathCells = TextCells.Width(laid.Path);
-        _toolbarPathColumn = laid.Path.Length == 0 ? -1 : rightColumn;
-        string named = laid.Inline.Length > 0 ? laid.Inline : laid.Model;
-        _toolbarModelCells = TextCells.Width(named);
-        _toolbarModelColumn = laid.Inline.Length > 0 ? laid.InlineColumn : laid.Model.Length > 0 ? cells - _toolbarModelCells : -1;
-        _toolbarMarkColumn = _toolbarModelColumn >= 0 && mark.Length > 0 && named.EndsWith(mark, StringComparison.Ordinal)
-            ? _toolbarModelColumn + _toolbarModelCells - TextCells.Width(mark) : -1;
+        _shownToolbar = laid.Row(cells);
+        _shownToolbarOff = toolbar.OffKey;
+        _toolbarRuns = placed;
     }
 
     /// <summary>The model's name on the toolbar in the hint's style, its reasoning <paramref name="mark"/> at its end in the mark's own (later on 2026-10-12).</summary>
@@ -5922,22 +6180,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         return runs;
     }
 
-    /// <summary>The off glyphs as one comparable word, so the tick redraws a flip that leaves the row's text as it was.</summary>
-    private static string OffKey(IReadOnlyList<int>? off) => off is null || off.Count == 0 ? "" : string.Join(',', off);
-
     /// <summary>No toolbar drawn: nothing for the tick to compare, no zones for the hit test.</summary>
     private void ForgetToolbar()
     {
         _shownToolbar = null;
         _shownToolbarOff = "";
-        _toolbarStrip = "";
-        _toolbarPathColumn = -1;
-        _toolbarPathCells = 0;
-        _toolbarModelColumn = -1;
-        _toolbarModelCells = 0;
-        _toolbarMarkColumn = -1;
-        _toolbarTail = "";
-        _toolbarTailColumn = -1;
+        _toolbarRuns = [];
     }
 
     /// <summary>
@@ -6036,243 +6284,428 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The scroll's row under a find at the transcript's last window (2026-10-07). Pinned.</summary>
     public const string FindAtTheEnd = "the end of the transcript";
 
-    /// <summary>The standing hint behind the strip and the queued part (<see cref="HintRow"/>: each alone when the others are empty).</summary>
-    private string StandingRow() => LayHint().Row;
+    /// <summary>What a part of the laid hint row is (2026-10-13): a slot's kind, or the busy row's spinner with its label.</summary>
+    private enum HintPartKind
+    {
+        Strip,
+        Queued,
+        Usage,
+        Model,
+        Path,
+        Text,
+        Spinner,
+    }
+
+    /// <summary>A part of the hint row before it is placed (2026-10-13): its text — the model's name, its <paramref name="Mark"/> apart until it is fitted.</summary>
+    private readonly record struct HintPart(HintPartKind Kind, string Text, string Mark = "");
+
+    /// <summary>A part where it was placed (2026-10-13): its first column and cells, its char index in the row's text, whether it was drawn whole, whether it ends the row.</summary>
+    private readonly record struct HintPlacedPart(HintPartKind Kind, string Text, int Column, int Cells, int Index, bool Whole, bool Last, string Mark);
+
+    /// <summary>The hint row laid out (2026-10-13): its text and its parts where they stand.</summary>
+    private readonly record struct HintRowLaid(string Text, IReadOnlyList<HintPlacedPart> Parts)
+    {
+        /// <summary>The first part of <paramref name="kind"/>, or null.</summary>
+        public HintPlacedPart? Find(HintPartKind kind)
+        {
+            foreach (var part in Parts)
+            {
+                if (part.Kind == kind)
+                {
+                    return part;
+                }
+            }
+
+            return null;
+        }
+    }
 
     /// <summary>
-    /// The standing row laid out (2026-10-12, Hint bar's order): its text and where the strip, the queued part and a model in the flow
-    /// stand in it (cells ahead, −1 for none; the model's char index too, for its mark's colour). <see cref="HintLayout"/>'s parts in
-    /// order, or under an overlay or with no layout the strip, the queued part and the hint, as the row always was.
+    /// The standing row's parts in their two groups (2026-10-12, Hint bar's order; the sides since 2026-10-13, the user's ask): each slot of
+    /// <see cref="HintLayout"/> in its order, on the side it is pinned to (<see cref="HintSlot.Right"/>); the model at the right edge,
+    /// ahead of anything else there, while no slot names it. Under an overlay or with no layout the strip, the queued part and the hint,
+    /// the model at the right, as the row always was.
     /// </summary>
-    private HintLaid LayHint(bool dropPath = false, bool dropModel = false)
+    private (List<HintPart> Left, List<HintPart> Right) StandingParts()
     {
         string strip = _strip();
+        var model = new HintPart(HintPartKind.Model, _trailer(), _trailerMark());
         if (_overlay is not null || _hintLayout is not { } layout)
         {
-            string queued = StandingQueued();
-            return new HintLaid(HintRow(HintRow(strip, queued), StandingHint()), strip, strip.Length == 0 ? -1 : 0, queued, strip.Length == 0 ? 0 : TextCells.Width(strip) + HintSeparator.Length, false, "", "", -1, -1, "", -1, [HintSlot.Model.AtRight()]);
+            return ([new(HintPartKind.Strip, strip), new(HintPartKind.Queued, StandingQueued()), new(HintPartKind.Text, StandingHint())], [model]);
         }
 
-        string row = "";
-        int stripAhead = -1;
-        string queuedText = "";
-        int queuedAhead = 0;
-        bool inFlow = false;
-        string model = "";
-        string mark = "";
-        int modelAhead = -1;
-        int modelIndex = -1;
-        string path = "";
-        int pathAhead = -1;
-        var right = new List<HintSlot>();
+        var left = new List<HintPart>();
+        var right = new List<HintPart>();
         bool modelSlot = false;
         foreach (var slot in layout())
         {
             modelSlot |= slot.Kind == HintSlotKind.Model;
-            if (!slot.Right && ((dropPath && slot.Kind == HintSlotKind.Path) || (dropModel && slot.Kind == HintSlotKind.Model)))
+            var part = slot.Kind switch
             {
-                continue;   // collapsed for the rest of the flow (PlaceStanding)
-            }
-
-            if (slot.Right)
-            {
-                right.Add(slot);   // the right edge's, in order (later on 2026-10-12)
-                continue;
-            }
-
-            string text = slot.Kind switch
-            {
-                HintSlotKind.Strip => strip,
-                HintSlotKind.Queued => _queued(),
-                HintSlotKind.Model => TrailerText(_trailer(), _trailerMark()),
-                HintSlotKind.Path => slot.Text ?? "",
-                _ => Spaced(slot.Text ?? ""),
+                HintSlotKind.Strip => new HintPart(HintPartKind.Strip, strip),
+                HintSlotKind.Queued => new HintPart(HintPartKind.Queued, _queued()),
+                HintSlotKind.Model => model,
+                HintSlotKind.Path => new HintPart(HintPartKind.Path, slot.Text ?? ""),
+                HintSlotKind.Usage => new HintPart(HintPartKind.Usage, Spaced(slot.Text ?? "")),
+                _ => new HintPart(HintPartKind.Text, Spaced(slot.Text ?? "")),
             };
-            inFlow |= slot.Kind == HintSlotKind.Model;
-            if (text.Length == 0)
-            {
-                continue;
-            }
-
-            if (row.Length > 0)
-            {
-                row += HintSeparator;
-            }
-
-            int ahead = TextCells.Width(row);
-            switch (slot.Kind)
-            {
-                case HintSlotKind.Strip:
-                    stripAhead = ahead;
-                    break;
-                case HintSlotKind.Queued:
-                    queuedText = text;
-                    queuedAhead = ahead;
-                    break;
-                case HintSlotKind.Model:
-                    model = text;
-                    mark = _trailer().Length == 0 ? "" : _trailerMark();
-                    modelAhead = ahead;
-                    modelIndex = row.Length;
-                    break;
-                case HintSlotKind.Path:
-                    path = text;
-                    pathAhead = ahead;
-                    break;
-            }
-
-            row += text;
+            (slot.Right ? right : left).Add(part);
         }
 
-        // No slot names the model: it keeps the right edge, ahead of anything else there, as it always had.
         if (!modelSlot)
         {
-            right.Insert(0, HintSlot.Model.AtRight());
+            right.Insert(0, model);
         }
 
-        return new HintLaid(row, stripAhead < 0 ? "" : strip, stripAhead, queuedText, queuedAhead, inFlow, model, mark, modelAhead, modelIndex, path, pathAhead, right);
+        return (left, right);
     }
 
-    /// <summary>The standing row as <see cref="LayHint"/> laid it out: the flow, its parts' places, and the right edge's slots in order.</summary>
-    private readonly record struct HintLaid(string Row, string Strip, int StripAhead, string Queued, int QueuedAhead, bool ModelInFlow, string Model, string Mark, int ModelAhead, int ModelIndex, string Path, int PathAhead, IReadOnlyList<HintSlot> Right);
-
-    /// <summary>
-    /// The standing row placed in <paramref name="max"/> cells: its text, the cells the flow keeps (<see cref="Cells"/>), and the model's,
-    /// its mark's and the working directory's places wherever they stand; the mark's char index for its colour (−1: none drawn).
-    /// </summary>
-    private readonly record struct HintPlaced(HintLaid Laid, string Text, int Cells, int TrailerColumn, int TrailerEnd, int MarkColumn, int MarkEnd, int MarkIndex, string Mark, int PathColumn, int PathCells);
-
-    /// <summary>
-    /// The standing row in <paramref name="max"/> cells (later on 2026-10-12, Hint bar's Working directory): the flow on the left and the
-    /// right edge's slots in their order behind <see cref="ToolbarModelSeparator"/> — the model's text as <see cref="Trail"/> cuts it
-    /// (giving way to the flow, never under <see cref="TrailerMinCells"/>), the working directory from the front into what the flow and
-    /// the model leave, none under <see cref="ToolbarPathMinCells"/>; the flow cut ahead of them as <see cref="PinRight(string, string, string, int)"/>
-    /// cuts it. The model alone at the right is the row as it always was. <paramref name="mark"/> is <see cref="TrailerMark"/>'s answer.
-    /// </summary>
-    private HintPlaced PlaceStanding(int max, string mark) => PlaceStanding(max, mark, dropPath: false, dropModel: false);
-
-    // The flow's working directory and model collapse for the rest of it (later on 2026-10-12, the user's ask): a flow too wide for
-    // its cells is laid again without the path, then without the model too, ahead of any cut.
-    private HintPlaced PlaceStanding(int max, string mark, bool dropPath, bool dropModel)
+    /// <summary>The standing row in <paramref name="max"/> cells (<see cref="LayParts"/> over <see cref="StandingParts"/>).</summary>
+    private HintRowLaid PlaceStanding(int max)
     {
-        var laid = LayHint(dropPath, dropModel);
-        string row = laid.Row;
-        int leftCells = TextCells.Width(row);
-        string trailer = _trailer();
-        string modelText = laid.Right.Any(s => s.Kind == HintSlotKind.Model) ? Trail(trailer, mark, max, leftCells) : "";
-        var path = laid.Right.FirstOrDefault(s => s.Kind == HintSlotKind.Path);
-        string pathText = "";
-        if (path.Kind == HintSlotKind.Path && !string.IsNullOrEmpty(path.Text))
+        var (left, right) = StandingParts();
+        return LayParts(left, right, max);
+    }
+
+    /// <summary>
+    /// The busy row's parts in their two groups (2026-10-13, the user's pick: the busy row follows the sides): the spinner's frame and its
+    /// label lead the left — the tally with them, the label after it, while the label trails the tally (<see cref="LabelAfterUsage"/>) —,
+    /// then each slot of <paramref name="layout"/> the busy row draws (the strip, the queued part, the tally, the model, the working
+    /// directory) on its side in its order, then the way out (the overlay's keys or the stop hint) at the left group's end.
+    /// </summary>
+    private (List<HintPart> Left, List<HintPart> Right, string Unit, bool After, string Usage, string BusyLabel) BusyParts(string label, Func<IReadOnlyList<HintSlot>> layout, string frame)
+    {
+        string usage = _overlay is null ? _busyUsage() : "";
+        var elapsed = _time.GetElapsedTime(_busySince);
+        TimeSpan? step = _stageSince != _busySince && _stepClockShown() ? _time.GetElapsedTime(_stageSince) : null;
+        bool after = usage.Length > 0 && _labelAfterUsage(label);
+        string busyText = BusyText(label, elapsed, step);
+        string unit = frame + " " + Labelled(busyText, after ? usage : "", after);
+        var left = new List<HintPart> { new(HintPartKind.Spinner, unit) };
+        var right = new List<HintPart>();
+        var model = new HintPart(HintPartKind.Model, _trailer(), _trailerMark());
+        bool modelSlot = false;
+        foreach (var slot in layout())
         {
-            int room = max - leftCells - TrailerGap - (modelText.Length == 0 ? 0 : TextCells.Width(modelText) + ToolbarModelSeparator.Length);
-            pathText = FitPath(path.Text, room);
+            modelSlot |= slot.Kind == HintSlotKind.Model;
+            HintPart? part = slot.Kind switch
+            {
+                HintSlotKind.Strip => new HintPart(HintPartKind.Strip, _strip()),
+                HintSlotKind.Queued => new HintPart(HintPartKind.Queued, StandingQueued()),
+                HintSlotKind.Usage when !after => new HintPart(HintPartKind.Usage, usage),
+                HintSlotKind.Model => model,
+                HintSlotKind.Path => new HintPart(HintPartKind.Path, slot.Text ?? ""),
+                _ => null,
+            };
+            if (part is { } shown)
+            {
+                (slot.Right ? right : left).Add(shown);
+            }
         }
 
-        var parts = laid.Right
-            .Select(s => (s.Kind, Text: s.Kind == HintSlotKind.Model ? modelText : s.Kind == HintSlotKind.Path ? pathText : ""))
-            .Where(p => p.Text.Length > 0)
-            .ToList();
-        string right = string.Join(ToolbarModelSeparator, parts.Select(p => p.Text));
-        int trailerColumn = -1, trailerEnd = int.MaxValue, markColumn = -1, markEnd = int.MaxValue, markIndex = -1, pathColumn = -1, pathCells = 0;
-        string shownMark = "";
-        string text;
-        int cells;
-        if (right.Length == 0)
+        if (!modelSlot)
         {
-            text = Fit(row, max);
-            cells = max;
+            right.Insert(0, model);
         }
-        else
+
+        string hint = Spaced(_overlay?.Hint ?? (_stopHintShown() ? StopHint : ""));
+        left.Add(new HintPart(HintPartKind.Text, hint));
+        return (left, right, unit, after, usage, busyText);
+    }
+
+    /// <summary>
+    /// The busy row with a layout (2026-10-13, the user's pick: it follows the sides): <see cref="BusyParts"/> laid as the standing row is,
+    /// the frame in the spinner's style; the strip and the queued part answer where they were drawn whole, the spinner and its label are
+    /// the usage zone (or the label's, <see cref="HintZone.Label"/>), the tally apart from them a usage zone of its own; the model and the
+    /// working directory are no buttons under a reply.
+    /// </summary>
+    private void WriteBusySided(string label, Func<IReadOnlyList<HintSlot>> layout, int max, string mark)
+    {
+        string frame = Theme.SpinnerFrames[_frame % Theme.SpinnerFrames.Length];
+        var (left, right, unit, after, usage, busyText) = BusyParts(label, layout, frame);
+        var laid = LayParts(left, right, max);
+        WriteHintText(laid, frame);
+        _shownHint = laid.Text;
+        ApplyHintZones(laid, max);
+        _hintPathColumn = -1;   // no button under a reply, as the tool bar's path
+        _hintPathCells = 0;
+        _usageColumn = -1;
+        _usageCells = 0;
+        _labelColumn = -1;
+        _labelCells = 0;
+        if (laid.Find(HintPartKind.Spinner) is { Whole: true } spinner)
         {
-            int rightCells = TextCells.Width(right);
-            cells = max - rightCells - TrailerGap;
-            string fitted = Fit(row, cells);
-            text = fitted + new string(' ', Math.Max(0, max - TextCells.Width(fitted) - rightCells)) + right;
-            int column = max - rightCells;
-            int index = text.Length - right.Length;
-            for (int i = 0; i < parts.Count; i++)
+            _usageColumn = spinner.Column;
+            _usageCells = spinner.Cells;
+            bool trailing = _labelAfterUsage(label);
+            bool leading = !trailing && _labelZone(label);
+            if (trailing)
             {
-                var (kind, partText) = parts[i];
-                int width = TextCells.Width(partText);
-                bool last = i == parts.Count - 1;
-                if (kind == HintSlotKind.Model)
+                // The label after the tally and its separator, or right after the frame's blank with none.
+                _labelColumn = spinner.Column + TextCells.Width(frame + " " + (after ? usage + HintSeparator : ""));
+                _labelCells = TextCells.Width(busyText);
+            }
+            else if (leading)
+            {
+                _labelColumn = spinner.Column;
+                _labelCells = spinner.Cells;
+            }
+        }
+
+        if (laid.Find(HintPartKind.Usage) is { Whole: true } tally)
+        {
+            _tallyColumn = tally.Column;
+            _tallyCells = tally.Cells;
+        }
+    }
+
+    /// <summary>The strip, the queued part, the model and its mark and the working directory's zones where <paramref name="laid"/> drew them whole (2026-10-13: on either side).</summary>
+    private void ApplyHintZones(HintRowLaid laid, int max)
+    {
+        var strip = laid.Find(HintPartKind.Strip);
+        _hintStrip = strip is { Whole: true } s ? s.Text : "";
+        _hintStripColumn = strip?.Column ?? 0;
+        var queued = laid.Find(HintPartKind.Queued);
+        _queuedColumn = queued is { Whole: true } q ? q.Column : -1;
+        _queuedCells = queued is { Whole: true } ? queued.Value.Cells : 0;
+        var tally = laid.Find(HintPartKind.Usage);
+        _usageColumn = tally is { Whole: true } u ? u.Column : -1;
+        _usageCells = tally is { Whole: true } ? tally.Value.Cells : 0;
+        _trailerColumn = -1;
+        _trailerEnd = int.MaxValue;
+        _markColumn = -1;
+        _markEnd = int.MaxValue;
+        if (laid.Find(HintPartKind.Model) is { Whole: true } model)
+        {
+            // The last part runs to the edge (the row's last cell is never drawn), as the trailer always did.
+            _trailerColumn = model.Column;
+            _trailerEnd = model.Last ? int.MaxValue : model.Column + model.Cells;
+            if (model.Mark.Length > 0 && model.Text.EndsWith(model.Mark, StringComparison.Ordinal))
+            {
+                _markColumn = model.Column + model.Cells - TextCells.Width(model.Mark);
+                _markEnd = _trailerEnd;
+            }
+        }
+
+        var path = laid.Find(HintPartKind.Path);
+        _hintPathColumn = path is { Whole: true } pa ? pa.Column : -1;
+        _hintPathCells = path is { Whole: true } ? (path.Value.Last ? Math.Max(path.Value.Cells, max - path.Value.Column) : path.Value.Cells) : 0;
+    }
+
+    /// <summary>
+    /// <paramref name="laid"/>'s text in the hint style (2026-10-13): <paramref name="frame"/> at the spinner's start in the spinner's
+    /// style, the model's reasoning mark in the mark's own, wherever they stand.
+    /// </summary>
+    private void WriteHintText(HintRowLaid laid, string frame)
+    {
+        string text = laid.Text;
+        var spans = new List<(int Index, int Length, Style Style)>();
+        foreach (var part in laid.Parts)
+        {
+            if (part.Kind == HintPartKind.Spinner && frame.Length > 0 && Holds(part.Index, frame))
+            {
+                spans.Add((part.Index, frame.Length, Theme.SpinnerStyle));
+            }
+            else if (part.Kind == HintPartKind.Model && part.Mark.Length > 0 && part.Text.EndsWith(part.Mark, StringComparison.Ordinal)
+                && Holds(part.Index + part.Text.Length - part.Mark.Length, part.Mark))
+            {
+                spans.Add((part.Index + part.Text.Length - part.Mark.Length, part.Mark.Length, Theme.TrailerMark));
+            }
+        }
+
+        int at = 0;
+        foreach (var (index, length, style) in spans.OrderBy(s => s.Index))
+        {
+            if (index < at)
+            {
+                continue;
+            }
+
+            if (index > at)
+            {
+                _inner.Write(new RawText(text[at..index], Theme.Hint));
+            }
+
+            _inner.Write(new RawText(text.Substring(index, length), style));
+            at = index + length;
+        }
+
+        if (at < text.Length)
+        {
+            _inner.Write(new RawText(text[at..], Theme.Hint));
+        }
+
+        bool Holds(int index, string what) =>
+            index >= 0 && index + what.Length <= text.Length && string.CompareOrdinal(text, index, what, 0, what.Length) == 0;
+    }
+
+    /// <summary>
+    /// The hint row's two groups in <paramref name="max"/> cells (later on 2026-10-12; the sides since 2026-10-13, the user's ask): the left
+    /// group from column 0 and the right ending on the last cell, <see cref="HintSeparator"/> between the parts of a group and
+    /// <see cref="TrailerGap"/> at least between the groups. What gives way when the row is too narrow, in the user's order: the model's
+    /// name and the working directory first, wherever they are pinned — the name (its mark never cut) fitted to what all but the path
+    /// leaves, half the row at most at the right as ever (<see cref="Trail"/>), then the path to what is left, each cut to eight cells
+    /// and then gone (<see cref="FitName"/>, <see cref="FitPath"/>); then the right group from its inner end (whole parts go, the first kept
+    /// one maybe cut from the front, no button then); then the left group from its end (<see cref="Fit"/>). Pure.
+    /// </summary>
+    private static HintRowLaid LayParts(List<HintPart> leftParts, List<HintPart> rightParts, int max)
+    {
+        var left = leftParts.Where(Present).ToList();
+        var right = rightParts.Where(Present).ToList();
+        bool nameRight = right.Any(part => part.Kind == HintPartKind.Model);
+        FitText(HintPartKind.Model, (part, room) => FitTrailer(part.Text, part.Mark, nameRight ? Math.Min(max / 2, room) : room), withoutPath: true);
+        FitText(HintPartKind.Path, (part, room) => FitPath(part.Text, room), withoutPath: false);
+
+        string leftText = JoinParts(left);
+        bool cutFirst = false;
+        if (right.Count > 0)
+        {
+            int room = max - TextCells.Width(leftText) - (left.Count == 0 ? 0 : TrailerGap);
+            right = room < 1 ? [] : FitRightParts(right, room, out cutFirst);
+        }
+
+        string rightText = JoinParts(right);
+        int leftCells = right.Count == 0 ? max : max - TextCells.Width(rightText) - (left.Count == 0 ? 0 : TrailerGap);
+        string fitted = Fit(leftText, Math.Max(0, leftCells));
+        string text = rightText.Length == 0 ? fitted : fitted + new string(' ', Math.Max(0, max - TextCells.Width(fitted) - TextCells.Width(rightText))) + rightText;
+
+        var placed = new List<HintPlacedPart>(left.Count + right.Count);
+        int ahead = 0;
+        int index = 0;
+        for (int i = 0; i < left.Count; i++)
+        {
+            if (i > 0)
+            {
+                ahead += TextCells.Width(HintSeparator);
+                index += HintSeparator.Length;
+            }
+
+            var part = left[i];
+            int cells = TextCells.Width(part.Text);
+            placed.Add(new HintPlacedPart(part.Kind, part.Text, ahead, cells, index, Whole(ahead, part.Text, leftText, leftCells), right.Count == 0 && i == left.Count - 1, part.Mark));
+            ahead += cells;
+            index += part.Text.Length;
+        }
+
+        int column = max - TextCells.Width(rightText);
+        int at = text.Length - rightText.Length;
+        for (int i = 0; i < right.Count; i++)
+        {
+            if (i > 0)
+            {
+                column += TextCells.Width(HintSeparator);
+                at += HintSeparator.Length;
+            }
+
+            var part = right[i];
+            int cells = TextCells.Width(part.Text);
+            placed.Add(new HintPlacedPart(part.Kind, part.Text, column, cells, at, !(i == 0 && cutFirst), i == right.Count - 1, part.Mark));
+            column += cells;
+            at += part.Text.Length;
+        }
+
+        return new HintRowLaid(text, placed);
+
+        static bool Present(HintPart part) => part.Text.Length > 0 || (part.Kind == HintPartKind.Model && part.Mark.Length > 0);
+
+        // A text part fitted to the room the rest of the row leaves it (a stand-in of one cell measures where it goes); gone when empty.
+        void FitText(HintPartKind kind, Func<HintPart, int, string> fit, bool withoutPath)
+        {
+            foreach (var group in new[] { left, right })
+            {
+                int i = group.FindIndex(part => part.Kind == kind);
+                if (i < 0)
                 {
-                    // The last part runs to the edge (the row's last cell is never drawn), as the trailer always did.
-                    trailerColumn = column;
-                    trailerEnd = last ? int.MaxValue : column + width;
-                    if (mark.Length > 0 && partText.EndsWith(mark, StringComparison.Ordinal))
-                    {
-                        markColumn = column + width - TextCells.Width(mark);
-                        markEnd = trailerEnd;
-                        markIndex = index + partText.Length - mark.Length;
-                        shownMark = mark;
-                    }
+                    continue;
+                }
+
+                var part = group[i];
+                group[i] = part with { Text = "x" };
+                int rest = Measure(withoutPath) - 1;
+                string shown = fit(part, max - rest);
+                if (shown.Length == 0)
+                {
+                    group.RemoveAt(i);
                 }
                 else
                 {
-                    pathColumn = column;
-                    pathCells = last ? Math.Max(width, max - column) : width;
+                    group[i] = part with { Text = shown };
                 }
-
-                column += width + TextCells.Width(ToolbarModelSeparator);
-                index += partText.Length + ToolbarModelSeparator.Length;
             }
         }
 
-        if (TextCells.Width(row) > cells && laid.Path.Length > 0 && !dropPath)
+        int Measure(bool withoutPath)
         {
-            return PlaceStanding(max, mark, dropPath: true, dropModel);
+            var l = withoutPath ? left.Where(part => part.Kind != HintPartKind.Path).ToList() : left;
+            var r = withoutPath ? right.Where(part => part.Kind != HintPartKind.Path).ToList() : right;
+            return TextCells.Width(JoinParts(l)) + TextCells.Width(JoinParts(r)) + (l.Count > 0 && r.Count > 0 ? TrailerGap : 0);
+        }
+    }
+
+    private static string JoinParts(IEnumerable<HintPart> parts) => string.Join(HintSeparator, parts.Select(part => part.Text));
+
+    /// <summary>
+    /// The right group in <paramref name="room"/> cells (2026-10-13): whole parts kept from its outer (right) end; the first that does not
+    /// fit is cut from the front (a path as <see cref="FitPath"/> cuts it, the model gone) — <paramref name="cutFirst"/> — and everything before it goes.
+    /// </summary>
+    private static List<HintPart> FitRightParts(List<HintPart> parts, int room, out bool cutFirst)
+    {
+        cutFirst = false;
+        if (TextCells.Width(JoinParts(parts)) <= room)
+        {
+            return parts;
         }
 
-        if (TextCells.Width(row) > cells && laid.ModelInFlow && laid.Model.Length > 0 && !dropModel)
+        var kept = new List<HintPart>();
+        for (int i = parts.Count - 1; i >= 0; i--)
         {
-            return PlaceStanding(max, mark, dropPath, dropModel: true);
+            var candidate = new List<HintPart> { parts[i] };
+            candidate.AddRange(kept);
+            if (TextCells.Width(JoinParts(candidate)) <= room)
+            {
+                kept = candidate;
+                continue;
+            }
+
+            int left = room - (kept.Count == 0 ? 0 : TextCells.Width(JoinParts(kept)) + TextCells.Width(HintSeparator));
+            string cut = left < 1 ? "" : parts[i].Kind switch
+            {
+                HintPartKind.Path => FitPath(parts[i].Text, left),
+                HintPartKind.Model => "",
+                _ => FitTail(parts[i].Text, left),
+            };
+            if (cut.Length > 0)
+            {
+                kept.Insert(0, parts[i] with { Text = cut });
+                cutFirst = true;
+            }
+
+            break;
         }
 
-        // The model and the working directory in the flow, where the fit left them whole.
-        if (laid.ModelInFlow && laid.Model.Length > 0 && Whole(laid.ModelAhead, laid.Model, row, cells))
+        return kept;
+    }
+
+    /// <summary>
+    /// The model's name and its <paramref name="mark"/> in <paramref name="room"/> cells (2026-10-13, <see cref="Trail"/>'s fit with its room
+    /// given): the name as <see cref="FitName"/> fits it ahead of the mark, which is never cut; the mark alone with no name, where it fits.
+    /// </summary>
+    private static string FitTrailer(string trailer, string mark, int room)
+    {
+        if (trailer.Length == 0)
         {
-            trailerColumn = laid.ModelAhead;
-            trailerEnd = laid.ModelAhead + TextCells.Width(laid.Model);
-            markColumn = laid.Mark.Length > 0 ? trailerEnd - TextCells.Width(laid.Mark) : -1;
-            markEnd = trailerEnd;
-            markIndex = laid.Mark.Length > 0 ? laid.ModelIndex + laid.Model.Length - laid.Mark.Length : -1;
-            shownMark = laid.Mark;
+            return TextCells.Width(mark) <= room ? mark : "";
         }
 
-        if (laid.Path.Length > 0 && Whole(laid.PathAhead, laid.Path, row, cells))
-        {
-            pathColumn = laid.PathAhead;
-            pathCells = TextCells.Width(laid.Path);
-        }
-
-        return new HintPlaced(laid, text, cells, trailerColumn, trailerEnd, markColumn, markEnd, markIndex, shownMark, pathColumn, pathCells);
+        int markCells = mark.Length == 0 ? 0 : TextCells.Width(mark) + MarkSeparator.Length;
+        string name = FitName(trailer, room - markCells);
+        return name.Length == 0 ? "" : TrailerText(name, mark);
     }
 
     /// <summary>Whether <paramref name="text"/>, <paramref name="ahead"/> cells into <paramref name="row"/>, is whole once the row is cut to <paramref name="cells"/> (<see cref="RecordQueued"/>'s rule).</summary>
     private static bool Whole(int ahead, string text, string row, int cells) =>
         ahead >= 0 && (TextCells.Width(row) <= cells || ahead + TextCells.Width(text) < cells);
-
-    /// <summary>
-    /// The standing row in the hint style, its <paramref name="mark"/> at char <paramref name="markIndex"/> in the mark's own (2026-10-12:
-    /// at the right edge or in the flow, the working directory maybe after it; −1 or a mark the fit cut, none).
-    /// </summary>
-    private void WriteStanding(string text, int markIndex, string mark)
-    {
-        if (markIndex < 0 || mark.Length == 0 || markIndex + mark.Length > text.Length
-            || !string.Equals(text.Substring(markIndex, mark.Length), mark, StringComparison.Ordinal))
-        {
-            _inner.Write(new RawText(text, Theme.Hint));
-            return;
-        }
-
-        _inner.Write(new RawText(text[..markIndex], Theme.Hint));
-        _inner.Write(new RawText(mark, Theme.TrailerMark));
-        if (markIndex + mark.Length < text.Length)
-        {
-            _inner.Write(new RawText(text[(markIndex + mark.Length)..], Theme.Hint));
-        }
-    }
 
     /// <summary>
     /// The hint row again, in place: down from the cursor's row over the rows under it and the
@@ -6534,7 +6967,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The toolbar <see cref="Toolbar"/> answers now is not the drawn one (its text, or its off slabs since 2026-10-03 — a presence change is <see cref="ToolbarRowsFor"/> against the drawn rows).</summary>
     private bool ToolbarChanged() => _toolbarRows > 0 && _toolbar() is { } toolbar
         && (!string.Equals(LayToolbar(toolbar, Math.Max(1, Width - 1)).Row(Math.Max(1, Width - 1)), _shownToolbar, StringComparison.Ordinal)
-            || !string.Equals(OffKey(toolbar.Off), _shownToolbarOff, StringComparison.Ordinal));
+            || !string.Equals(toolbar.OffKey, _shownToolbarOff, StringComparison.Ordinal));
 
     /// <summary>The performance bar <see cref="Perf"/> answers now is not the drawn one (its text — a presence change is <see cref="PerfRowsFor"/> against the drawn rows).</summary>
     private bool PerfChanged() => _perfRows > 0 && _perf(Math.Max(1, Width - 1)) is { } row && !string.Equals(row.Text, _shownPerf, StringComparison.Ordinal);
@@ -6544,7 +6977,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>The standing hint (the overlay's while one is open) with the trailer is not what the hint row shows.</summary>
     private bool HintChanged() =>
-        !string.Equals((_dragHint ?? _alertHint) is { } whole ? Fit(Spaced(whole), Math.Max(1, Width - 1)) : PlaceStanding(Math.Max(1, Width - 1), _trailerMark()).Text, _shownHint, StringComparison.Ordinal);
+        !string.Equals((_dragHint ?? _alertHint) is { } whole ? Fit(Spaced(whole), Math.Max(1, Width - 1)) : PlaceStanding(Math.Max(1, Width - 1)).Text, _shownHint, StringComparison.Ordinal);
 
     private void ColumnZero() => _inner.Cursor.Move(CursorDirection.Left, Width);
 

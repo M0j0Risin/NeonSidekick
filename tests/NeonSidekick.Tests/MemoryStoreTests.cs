@@ -388,4 +388,51 @@ public class MemoryStoreTests : IDisposable
         Assert.Equal(200, MemoryStore.MaxEntries);
         Assert.Equal(300, MemoryStore.MaxTextLength);
     }
+
+    /// <summary>
+    /// Disable (2026-10-13, the user's ask): kept, listed, but not in <see cref="MemoryStore.Snapshot"/> — what the model is offered; the
+    /// mark on disk only while set; enable brings it back; a second disable or a missing text changes nothing.
+    /// </summary>
+    [Fact]
+    public void SetDisabled_HidesTheMemoryFromTheModel_KeepsItListed_AndWritesTheMarkOnlyWhenSet()
+    {
+        var store = new MemoryStore(_dir);
+        store.Add("one");
+        store.Add("two");
+        Assert.DoesNotContain("Disabled", File.ReadAllText(FilePath));   // a file without disabled memories reads as it always did
+
+        Assert.True(store.SetDisabled("TWO", true));
+        Assert.False(store.SetDisabled("two", true));
+        Assert.False(store.SetDisabled("three", true));
+        Assert.Equal(["one"], store.Snapshot());
+        Assert.Equal(2, store.Count);
+        Assert.True(store.EntriesSnapshot()[1].Disabled);
+        Assert.Contains("\"Disabled\": true", File.ReadAllText(FilePath));
+        Assert.Equal(["one"], new MemoryStore(_dir).Snapshot());
+
+        Assert.True(store.SetDisabled("two", false));
+        Assert.Equal(["one", "two"], store.Snapshot());
+        Assert.DoesNotContain("Disabled", File.ReadAllText(FilePath));
+    }
+
+    /// <summary>Edit (2026-10-13, the user's ask): the text normalised, its date and mark kept; a duplicate, an empty text or a missing one change nothing.</summary>
+    [Fact]
+    public void Edit_ChangesTheText_KeepsTheDateAndTheMark_AndRefusesADuplicate()
+    {
+        var store = new MemoryStore(_dir);
+        store.Add("one");
+        store.Add("two");
+        store.SetDisabled("two", true);
+        var saved = store.EntriesSnapshot()[1].SavedAt;
+
+        Assert.Equal(new MemoryEditResult(MemoryEditOutcome.Edited, "two too"), store.Edit("two", "  two\n too "));
+        Assert.Equal("two too", store.EntriesSnapshot()[1].Text);
+        Assert.Equal(saved, store.EntriesSnapshot()[1].SavedAt);
+        Assert.True(store.EntriesSnapshot()[1].Disabled);
+        Assert.Equal(new MemoryEditResult(MemoryEditOutcome.Duplicate, "one"), store.Edit("two too", "ONE"));
+        Assert.Equal(MemoryEditOutcome.Unchanged, store.Edit("one", "one").Outcome);
+        Assert.Equal(MemoryEditOutcome.Empty, store.Edit("one", "   ").Outcome);
+        Assert.Equal(MemoryEditOutcome.Missing, store.Edit("gone", "x").Outcome);
+        Assert.Equal(["one", "two too"], new MemoryStore(_dir).EntriesSnapshot().Select(e => e.Text));
+    }
 }

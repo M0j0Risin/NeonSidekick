@@ -369,8 +369,9 @@ public partial class ChatScreenTests
                 // Ada answers while the picture renders: the strip's glyph double-clicked on the busy row.
                 await polled.Task.WaitAsync(TimeSpan.FromSeconds(10), CancellationToken.None);
                 _time.Advance(ScreenPane.Tick);
-                Scripted().PushClick(0, 102);         // 🖼️ at 0–1, the strip's only glyph
-                Scripted().PushClick(1, 102);
+                int glyph = BusyRows.ColumnOf(Output, "🖼");   // the strip's only glyph, after the spinner's label (2026-10-13: the busy row follows the sides)
+                Scripted().PushClick(glyph, 102);
+                Scripted().PushClick(glyph + 1, 102);
                 for (int tries = 0; tries < 500 && !drained; tries++)
                 {
                     await Task.Delay(10, CancellationToken.None);

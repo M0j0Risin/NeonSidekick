@@ -239,6 +239,13 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public bool Moves { get; init; }
 
     /// <summary>
+    /// The rows are an order in two groups, pinned left and pinned right (2026-10-13, the user's ask: the hint bar's and the tool
+    /// bar's items on either side): Shift+←/→ and Alt+←/→ return a <see cref="MenuPick"/> with <see cref="MenuPick.Side"/> −1 or +1
+    /// for the cursor's row (<see cref="MenuPane.SideOf"/>). Only on an untabbed page, where ←/→ walk nothing. False: the keys are what they were.
+    /// </summary>
+    public bool Sides { get; init; }
+
+    /// <summary>
     /// A page over <paramref name="tabs"/> showing <paramref name="tab"/>: the strip labelled
     /// <paramref name="title"/>, that tab's rows, its caption, and its hint when it has one else
     /// <paramref name="hint"/> (kept as <see cref="BaseHint"/> for the tabs without); a tab with sub-tabs gives its shown one's
@@ -334,9 +341,10 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
 /// <see cref="MenuPage.Filter"/> (2026-10-03) is <see cref="Filter"/>, the text it leaves; null otherwise. <see cref="Sub"/> is the sub-tab
 /// on show on a tab that holds them (2026-10-10, <see cref="MenuTab.SubTabs"/>), −1 on one that does not. <see cref="Refresh"/>
 /// (2026-10-12): nothing picked — the page's facts changed under it (<see cref="MenuPane.PickAsync"/>'s <c>stale</c>), so the host builds it
-/// again and shows it with the same tab, sub-tab and cursor.
+/// again and shows it with the same tab, sub-tab and cursor. <see cref="Side"/> (2026-10-13, <see cref="MenuPage.Sides"/>): −1 to pin the
+/// cursor's row left, +1 right, 0 for anything else.
 /// </summary>
-public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, int Button = -1, string? Filter = null, int Sub = -1, int Move = 0, bool Remove = false, bool Refresh = false);
+public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, int Button = -1, string? Filter = null, int Sub = -1, int Move = 0, bool Remove = false, bool Refresh = false, int Side = 0);
 
 /// <summary>
 /// A menu in the bottom pane: the <see cref="InfoPane"/> shape for a list — a title, a status line
@@ -934,6 +942,13 @@ public sealed class MenuPane : INoticeSink
                         : new MenuPick(page.Tab, _cursor, Sub: page.Sub, Move: move);
                 }
 
+                if (page.Sides && page.Tabs is null && count > 0 && SideOf(k) is { } side)
+                {
+                    // Pinned left or right (2026-10-13): the host moves the row to that group and shows the page again.
+                    _status.Clear();
+                    return new MenuPick(page.Tab, _cursor, Sub: page.Sub, Side: side);
+                }
+
                 if (page.Tabs is { } tabs && (tabs.Count > 1 || page.Sub >= 0) && (page.Grid is null || k.Key == ConsoleKey.Tab) && InfoPane.TabStep(k) is int step)
                 {
                     // The arrows walk every sub-tab, Tab and Shift+Tab whole tabs (2026-10-10); the same on a strip without sub-tabs.
@@ -1121,6 +1136,21 @@ public sealed class MenuPane : INoticeSink
             ConsoleKey.Home when held => int.MinValue,
             ConsoleKey.End when held => int.MaxValue,
             ConsoleKey.Delete when key.Modifiers == 0 => 0,
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// What a key does on a <see cref="MenuPage.Sides"/> page (2026-10-13): Shift/Alt+← −1 (pin left), Shift/Alt+→ +1 (pin right),
+    /// Ctrl not held; null for any other key. Pure.
+    /// </summary>
+    public static int? SideOf(ConsoleKeyInfo key)
+    {
+        bool held = (key.Modifiers & (ConsoleModifiers.Shift | ConsoleModifiers.Alt)) != 0 && (key.Modifiers & ConsoleModifiers.Control) == 0;
+        return key.Key switch
+        {
+            ConsoleKey.LeftArrow when held => -1,
+            ConsoleKey.RightArrow when held => 1,
             _ => null,
         };
     }

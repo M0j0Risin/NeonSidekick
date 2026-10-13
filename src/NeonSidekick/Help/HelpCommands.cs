@@ -202,7 +202,7 @@ public static class HelpCommands
         ]),
         new("/memory",
         [
-            new("/memory", "List memories on a pane; Enter forgets one after a yes, and **read-write** (`w`), **read-only** (`o`) and **disabled** (`x`) on its title row set *Memory mode*."),
+            new("/memory", "List memories on a pane; Enter on one offers **edit** (its text on the input row), **disable** (kept and greyed out, but not offered to the model; **enable** offers it again) and **forget** (after a yes), **+ add** (`a`) types a new one, and **read-write** (`w`), **read-only** (`o`) and **disabled** (`x`) on its title row set *Memory mode*."),
             new("/memory read-write|read-only|disabled|on|off", "Set *Memory mode* (`on` is read-write, `off` disabled)."),
             new("/memory forget|edit", "`forget` forgets them all, after you confirm; `edit` opens `memory.json` in your editor (invalid JSON is ignored with a warning)."),
             new("/memory copy <profile> [overwrite]", "Add them to another profile's memory, skipping duplicates, or replace it with `overwrite`, after you confirm."),
