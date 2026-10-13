@@ -4974,7 +4974,7 @@ public partial class ScreenPaneTests : IDisposable
         // Rule / input / rule / hint / toolbar / perf / home: the toolbar at 103, the performance bar at 104, the home bar at 105.
         Assert.Equal((1, 1, 1), (pane.ToolbarRows, pane.PerfRows, pane.HomeRows));
         Assert.Equal(3, pane.BarRowsDrawn);
-        string desk = new string(' ', 15) + " 💡 Desk ";
+        string desk = new string(' ', 16) + "💡 Desk";   // 7 cells centred in 39 (the chips' edge blanks went later still on 2026-10-13)
         Assert.Contains("\nidle\n🔧" + new string(' ', 33) + @"D:\x" + "\nCPU 5%\n" + desk, Output);
         Assert.True(pane.TryHitToolbar(1, 103, out var tool));
         Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🔧", 0), tool);
@@ -5031,7 +5031,7 @@ public partial class ScreenPaneTests : IDisposable
         pane.ShowInput("abc", 3);
 
         // Rule / input / rule / toolbar / perf / hint / home: the toolbar at 102, the performance bar at 103, the hint at 104, the home bar at 105.
-        string desk = new string(' ', 15) + " 💡 Desk ";
+        string desk = new string(' ', 16) + "💡 Desk";   // 7 cells centred in 39 (the chips' edge blanks went later still on 2026-10-13)
         Assert.Contains("\n🔧" + new string(' ', 33) + @"D:\x" + "\nCPU 5%\nidle\n" + desk, Output);
         Assert.True(pane.TryHitToolbar(1, 102, out var tool));
         Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🔧", 0), tool);

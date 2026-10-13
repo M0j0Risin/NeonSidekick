@@ -86,8 +86,8 @@ public partial class ChatScreenTests
         input.OnWait = () =>
         {
             input.OnWait = null;
-            TickUntil(() => Output.Contains("  💡 Desk ", StringComparison.Ordinal) && server.Subscribed.Count > 0);
-            drawn = Output.Contains("  💡 Desk ", StringComparison.Ordinal);
+            TickUntil(() => Output.Contains("  💡 Desk", StringComparison.Ordinal) && server.Subscribed.Count > 0);
+            drawn = Output.Contains("  💡 Desk", StringComparison.Ordinal);
             input.PushClick(58, 103);
             input.OnWait = () =>
             {
@@ -174,7 +174,7 @@ public partial class ChatScreenTests
         input.OnWait = () =>
         {
             input.OnWait = null;
-            TickUntil(() => Output.Contains("  💡 Desk ", StringComparison.Ordinal) && server.Subscribed.Count > 0);
+            TickUntil(() => Output.Contains("  💡 Desk", StringComparison.Ordinal) && server.Subscribed.Count > 0);
             mark = Output.Length;
             input.PushClick(20, 103);
             input.PushClick(20, 103);
@@ -208,7 +208,7 @@ public partial class ChatScreenTests
         input.OnWait = () =>
         {
             input.OnWait = null;
-            TickUntil(() => Output.Contains("  🔒 Front Door ", StringComparison.Ordinal) && server.Subscribed.Count > 0);
+            TickUntil(() => Output.Contains("  🔒 Front Door", StringComparison.Ordinal) && server.Subscribed.Count > 0);
             input.PushClick(58, 103);
             input.PushClick(58, 103);
             input.OnWait = () =>
@@ -334,8 +334,8 @@ public partial class ChatScreenTests
             input =>
             {
                 afterSet = _settings.Current.HomeBarGlyphs?.GetValueOrDefault("entity:light.desk");
-                TickUntil(() => Output.Contains("  🦊 Desk ", StringComparison.Ordinal));
-                drawn = Output.Contains("  🦊 Desk ", StringComparison.Ordinal);
+                TickUntil(() => Output.Contains("  🦊 Desk", StringComparison.Ordinal));
+                drawn = Output.Contains("  🦊 Desk", StringComparison.Ordinal);
                 PushLine(input, "/homebar emoji Desk = default");
             },
             Line("/homebar emoji Desk = 🐙"),
@@ -368,7 +368,7 @@ public partial class ChatScreenTests
         _settings.Update(d => { d.TtsOutput = false; d.HomeBarItems = [HomeBarItems.Shopping]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 120;
-        _geometry = new ScreenGeometry(() => null, () => 100);   // the home bar at 103, " 🛒 0 " centred
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the home bar at 103, "🛒 0" centred
         bool one = false;
         bool none = false;
         int mark = -1;
@@ -379,14 +379,14 @@ public partial class ChatScreenTests
             Line("/shopping tick milk"),
             input =>
             {
-                TickUntil(() => Output.Contains(" 🛒 1 ", StringComparison.Ordinal));
-                one = Output.Contains(" 🛒 1 ", StringComparison.Ordinal);
+                TickUntil(() => Output.Contains("  🛒 1", StringComparison.Ordinal));
+                one = Output.Contains("  🛒 1", StringComparison.Ordinal);
                 PushLine(input, "/shopping tick eggs");
             },
             input =>
             {
-                TickUntil(() => Output.Contains(" 🛒 0 ", StringComparison.Ordinal));
-                none = Output.Contains(" 🛒 0 ", StringComparison.Ordinal);
+                TickUntil(() => Output.Contains("  🛒 0", StringComparison.Ordinal));
+                none = Output.Contains("  🛒 0", StringComparison.Ordinal);
                 mark = Output.Length;
                 input.PushClick(59, 103);
                 input.PushClick(59, 103);

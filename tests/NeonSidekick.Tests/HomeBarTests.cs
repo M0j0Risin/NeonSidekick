@@ -356,17 +356,18 @@ public sealed class HomeBarTests
     [Fact]
     public void Render_TheChips_Centred_WithTheirSpans()
     {
-        // Centred as the meters are (later on 2026-10-12, the user's ask), no ⌂ ahead of them: 22 cells of chips in 80, 29 blanks first.
+        // Centred as the meters are (later on 2026-10-12, the user's ask), no ⌂ ahead of them: 19 cells of chips in 80, 30 blanks first.
         var row = HomeBar.Render([Chip("Desk", "80%"), Chip("Hall")], 80)!;
 
-        Assert.Equal(new string(' ', 29) + " 💡 Desk 80%  💡 Hall ", Text(row));
+        Assert.Equal(new string(' ', 30) + "💡 Desk 80% 💡 Hall", Text(row));   // one blank between two chips (later still on 2026-10-13)
         Assert.Equal(1, row.Pages);
         Assert.Equal(2, row.Spans.Count);
-        Assert.Equal(new HomeSpan(29, 13, HomeTarget.Chip, 0), row.Spans[0]);
-        Assert.Equal(new HomeSpan(42, 9, HomeTarget.Chip, 1), row.Spans[1]);
-        Assert.Null(HomeBar.HitAt(row.Spans, 28));   // the run ahead is a blank: the toolbar's, /settings on a double-click
+        Assert.Equal(new HomeSpan(30, 11, HomeTarget.Chip, 0), row.Spans[0]);
+        Assert.Equal(new HomeSpan(42, 7, HomeTarget.Chip, 1), row.Spans[1]);
+        Assert.Null(HomeBar.HitAt(row.Spans, 29));   // the run ahead is a blank: the toolbar's, /settings on a double-click
         Assert.Equal(HomeTarget.Chip, HomeBar.HitAt(row.Spans, 32)!.Value.Target);
-        Assert.Equal(0, HomeBar.HitAt(row.Spans, 41)!.Value.Index);   // no gap between the chips (2026-10-12): the first's last blank
+        Assert.Equal(0, HomeBar.HitAt(row.Spans, 40)!.Value.Index);
+        Assert.Null(HomeBar.HitAt(row.Spans, 41));   // the blank between the chips is the bar's blank space
         Assert.Equal(1, HomeBar.HitAt(row.Spans, 42)!.Value.Index);
         Assert.Null(HomeBar.Render([], 80));
     }
@@ -383,15 +384,15 @@ public sealed class HomeBarTests
         var divider = Divider(1);
         Assert.True(divider.Divider);
         Assert.Equal(Theme.TabSeparator, divider.Style);
-        Assert.Equal(" │ ", HomeBar.ChipText(divider, HomeBar.Fit.Full));
+        Assert.Equal("│", HomeBar.ChipText(divider, HomeBar.Fit.Full));
 
         var row = HomeBar.Render([Chip("Desk"), divider, Chip("Hall")], 80)!;
-        Assert.EndsWith(" 💡 Desk  │  💡 Hall ", Text(row));
+        Assert.EndsWith(" 💡 Desk │ 💡 Hall", Text(row));   // the tool bar's 🎓 │ 💾
         Assert.Equal(2, row.Spans.Count);
         Assert.Equal([0, 2], row.Spans.Select(s => s.Index));
         int bar = Text(row).IndexOf('│', StringComparison.Ordinal);
         Assert.Null(HomeBar.HitAt(row.Spans, TextCells.Width(Text(row)[..bar])));
-        Assert.Contains(row.Segments, s => s.Text == " │ " && s.Style == Theme.TabSeparator);
+        Assert.Contains(row.Segments, s => s.Text == "│" && s.Style == Theme.TabSeparator);
 
         var stray = HomeBar.ShownDividers([Divider(1), Chip("Desk"), Divider(2), Divider(3), Chip("Hall"), Divider(4)]);
         Assert.Equal(["entity:light.desk", "divider:2", "entity:light.hall"], stray.Select(c => c.Reference));
@@ -418,15 +419,15 @@ public sealed class HomeBarTests
         Assert.Empty(HomeBarItems.EntityIds(["divider:1"], null));
     }
 
-    /// <summary>The odd cell of the room goes to the right, as the meters' does: 9 cells in 20 is 5 blanks ahead, 6 after.</summary>
+    /// <summary>The odd cell of the room goes to the right, as the meters' does: 7 cells in 20 is 6 blanks ahead, 7 after.</summary>
     [Fact]
     public void TheChips_AreCentred_TheOddCellAtTheRight()
     {
         var row = HomeBar.Render([Chip("Desk")], 20)!;
 
-        Assert.Equal("      💡 Desk ", Text(row));
-        Assert.Equal(new HomeSpan(5, 9, HomeTarget.Chip, 0), row.Spans[0]);
-        Assert.Equal(" 💡 Desk ", Text(HomeBar.Render([Chip("Desk")], 9)!));   // a row just wide enough: no run ahead
+        Assert.Equal("      💡 Desk", Text(row));
+        Assert.Equal(new HomeSpan(6, 7, HomeTarget.Chip, 0), row.Spans[0]);
+        Assert.Equal("💡 Desk", Text(HomeBar.Render([Chip("Desk")], 7)!));   // a row just wide enough: no run ahead
     }
 
     [Fact]
@@ -434,17 +435,18 @@ public sealed class HomeBarTests
     {
         var chips = new[] { Chip("Living Room Lamp", "50%", "Lamp"), Chip("Kitchen Spot", "", "Spot"), Chip("Hallway Ceiling", "", "Ceiling") };
         Assert.Contains("Living Room Lamp", Text(HomeBar.Render(chips, 80)!), StringComparison.Ordinal);
-        Assert.Equal("    💡 Lamp 50%  💡 Spot  💡 Ceiling ", Text(HomeBar.Render(chips, 40)!));
-        Assert.Equal("    💡 50%  💡  💡 ", Text(HomeBar.Render(chips, 22)!));
+        Assert.Equal("     💡 Lamp 50% 💡 Spot 💡 Ceiling", Text(HomeBar.Render(chips, 40)!));
+        Assert.Equal("     💡 50% 💡 💡", Text(HomeBar.Render(chips, 22)!));
 
-        var paged = HomeBar.Render(chips, 14)!;
+        var paged = HomeBar.Render(chips, 11)!;
         Assert.True(paged.Pages > 1);
-        Assert.StartsWith(" ‹  💡 ", Text(paged), StringComparison.Ordinal);   // centred too: 12 cells in 14
-        Assert.Equal(new HomeSpan(3, 8, HomeTarget.Chip, 0), paged.Spans.Single(s => s.Target == HomeTarget.Chip));
+        Assert.StartsWith("‹ 💡 50% ›", Text(paged), StringComparison.Ordinal);   // centred too: 10 cells in 11, the odd cell at the right
+        Assert.Equal(new HomeSpan(2, 6, HomeTarget.Chip, 0), paged.Spans.Single(s => s.Target == HomeTarget.Chip));
         Assert.EndsWith(" ›", Text(paged), StringComparison.Ordinal);
         Assert.DoesNotContain(paged.Spans, s => s.Target == HomeTarget.Prev);   // the first page: nothing back
         Assert.Contains(paged.Spans, s => s.Target == HomeTarget.Next);
-        var last = HomeBar.Render(chips, 14, page: 99)!;
+        var last = HomeBar.Render(chips, 11, page: 99)!;
+        Assert.Equal(" ‹ 💡 💡 ›", Text(last));   // a page's chips one blank apart, the arrows a blank off them; 9 cells in 11, centred
         Assert.Contains(last.Spans, s => s.Target == HomeTarget.Prev);
         Assert.DoesNotContain(last.Spans, s => s.Target == HomeTarget.Next);
     }
@@ -458,14 +460,14 @@ public sealed class HomeBarTests
     {
         var row = HomeBar.Render([Chip("Desk")], [Chip("Hall")], [Chip("Lamp")], 40)!;
 
-        Assert.Equal(" 💡 Desk " + new string(' ', 6) + " 💡 Hall " + new string(' ', 7) + " 💡 Lamp ", Text(row));
-        Assert.Equal([new HomeSpan(0, 9, HomeTarget.Chip, 0), new HomeSpan(15, 9, HomeTarget.Chip, 1), new HomeSpan(31, 9, HomeTarget.Chip, 2)], row.Spans);
+        Assert.Equal("💡 Desk" + new string(' ', 9) + "💡 Hall" + new string(' ', 10) + "💡 Lamp", Text(row));
+        Assert.Equal([new HomeSpan(0, 7, HomeTarget.Chip, 0), new HomeSpan(16, 7, HomeTarget.Chip, 1), new HomeSpan(33, 7, HomeTarget.Chip, 2)], row.Spans);
         Assert.Equal(Text(HomeBar.Render([Chip("Hall")], 40)!), Text(HomeBar.Render([], [Chip("Hall")], [], 40)!));   // the center alone: as the bar always was
 
         // A wide left group pushes the center off the row's middle, GroupGap after it; the right alone ends on the last cell.
         var pushed = HomeBar.Render([Chip("Living Room Lamp")], [Chip("Desk")], [], 40)!;
-        Assert.Equal(" 💡 Living Room Lamp " + new string(' ', HomeBar.GroupGap) + " 💡 Desk ", Text(pushed));
-        Assert.Equal(new string(' ', 31) + " 💡 Lamp ", Text(HomeBar.Render([], [], [Chip("Lamp")], 40)!));
+        Assert.Equal("💡 Living Room Lamp" + new string(' ', HomeBar.GroupGap) + "💡 Desk", Text(pushed));
+        Assert.Equal(new string(' ', 33) + "💡 Lamp", Text(HomeBar.Render([], [], [Chip("Lamp")], 40)!));
     }
 
     /// <summary>
@@ -479,22 +481,22 @@ public sealed class HomeBarTests
         HomeChip[] center = [Chip("Center", "", "C")];
         HomeChip[] right = [Chip("Right Lamp", "", "RL")];
         Assert.Contains("Right Lamp", Text(HomeBar.Render(left, center, right, 44)!), StringComparison.Ordinal);
-        Assert.Equal(" 💡 LL " + new string(' ', 5) + " 💡 C " + new string(' ', 6) + " 💡 RL ", Text(HomeBar.Render(left, center, right, 31)!));
-        Assert.Equal(3, HomeBar.Render(left, center, right, 16)!.Spans.Count);   // the glyphs alone, all three
-        Assert.Equal([0, 1], HomeBar.Render(left, center, right, 15)!.Spans.Select(s => s.Index));   // the right gone first
-        Assert.Equal([1], HomeBar.Render(left, center, right, 9)!.Spans.Select(s => s.Index));       // then the left
+        Assert.Equal("💡 LL" + new string(' ', 8) + "💡 C" + new string(' ', 9) + "💡 RL", Text(HomeBar.Render(left, center, right, 31)!));
+        Assert.Equal(3, HomeBar.Render(left, center, right, 14)!.Spans.Count);   // the glyphs alone, all three
+        Assert.Equal([0, 1], HomeBar.Render(left, center, right, 13)!.Spans.Select(s => s.Index));   // the right gone first
+        Assert.Equal([1], HomeBar.Render(left, center, right, 7)!.Spans.Select(s => s.Index));       // then the left
 
         // The right group goes from its inner end (its outer chip kept), the left from its; a divider at the cut edge goes with them.
-        var wide = HomeBar.Render([Chip("A"), Chip("B")], [Chip("C")], [Chip("D"), Divider(1), Chip("E")], 22)!;
+        var wide = HomeBar.Render([Chip("A"), Chip("B")], [Chip("C")], [Chip("D"), Divider(1), Chip("E")], 20)!;
         Assert.Equal([0, 1, 2, 5], wide.Spans.Select(s => s.Index));
         Assert.DoesNotContain("│", Text(wide), StringComparison.Ordinal);
         Assert.Equal([0, 2], HomeBar.Render([Chip("A"), Chip("B")], [Chip("C")], [], 10)!.Spans.Select(s => s.Index));
 
         // The center alone pages, the groups gone; its spans still count from the left group's.
-        var paged = HomeBar.Render([Chip("L")], [Chip("C1"), Chip("C2"), Chip("C3")], [Chip("R")], 10)!;
+        var paged = HomeBar.Render([Chip("L")], [Chip("C1"), Chip("C2"), Chip("C3")], [Chip("R")], 7)!;
         Assert.Equal(3, paged.Pages);
         Assert.Equal(1, paged.Spans.Single(s => s.Target == HomeTarget.Chip).Index);
-        Assert.Equal(3, HomeBar.Render([Chip("L")], [Chip("C1"), Chip("C2"), Chip("C3")], [Chip("R")], 10, page: 2)!.Spans.Single(s => s.Target == HomeTarget.Chip).Index);
+        Assert.Equal(3, HomeBar.Render([Chip("L")], [Chip("C1"), Chip("C2"), Chip("C3")], [Chip("R")], 7, page: 2)!.Spans.Single(s => s.Target == HomeTarget.Chip).Index);
         var tv = Chip("Tv", "▸ A very long title indeed") with { Short = "Tv" };
         Assert.Equal(0, HomeBar.Render([tv], [], [], 12)!.Spans.Single().Index);   // no center: the left pages in its place, cut to the page
     }
@@ -527,8 +529,34 @@ public sealed class HomeBarTests
     [Fact]
     public void AChipsMark_FollowsIt()
     {
-        Assert.Equal(" 💡 Desk…", HomeBar.ChipText(Chip("Desk") with { Mark = HomeChipMark.Pending }, HomeBar.Fit.Full));
-        Assert.Equal(" 💡 Desk!", HomeBar.ChipText(Chip("Desk") with { Mark = HomeChipMark.Failed }, HomeBar.Fit.Full));
+        Assert.Equal("💡 Desk…", HomeBar.ChipText(Chip("Desk") with { Mark = HomeChipMark.Pending }, HomeBar.Fit.Full));
+        Assert.Equal("💡 Desk!", HomeBar.ChipText(Chip("Desk") with { Mark = HomeChipMark.Failed }, HomeBar.Fit.Full));
+    }
+
+    /// <summary>
+    /// The chips one blank apart (later still on 2026-10-13, the user's ask): glyph-only chips pinned left sit three cells apart from
+    /// column 0, under the tool bar's glyphs; a mark stands in the blank after its chip; the right group ends on the row's last cell.
+    /// </summary>
+    [Fact]
+    public void BareChips_PinnedLeft_LineUpUnderTheToolbarGlyphs()
+    {
+        string[] glyphs = ["📎", "🧘‍♂️", "🌄", "🖥️", "🪴", "🛋️", "🕯️"];
+        var bare = glyphs.Select((g, i) => Chip("Item" + i) with { Glyph = g, Label = "", Short = "", Bare = true }).ToList();
+        var row = HomeBar.Render(bare, [], [], 80)!;
+
+        Assert.Equal(string.Join(" ", glyphs), Text(row));
+        Assert.Equal([0, 3, 6, 9, 12, 15, 18], row.Spans.Select(s => s.Start));
+        string[] tools = ["⚙️", "🛠️", "🎓", "💾", "⏳", "🔒", "👮"];   // the tool bar's strip: each glyph and a blank, from column 0
+        Assert.Equal(Enumerable.Range(0, 7).Select(i => tools.Take(i).Sum(g => TextCells.Width(g) + 1)), row.Spans.Select(s => s.Start));
+
+        var marked = HomeBar.Render([bare[0] with { Mark = HomeChipMark.Pending }, bare[1], bare[2]], [], [], 80)!;
+        Assert.Equal("📎…🧘‍♂️ 🌄", Text(marked));   // the mark in the blank: the chips keep their columns
+        Assert.Equal([0, 3, 6], marked.Spans.Select(s => s.Start));
+
+        var ends = HomeBar.Render([Chip("Desk")], [], [Chip("Hall"), Chip("Lamp")], 40)!;
+        Assert.EndsWith("💡 Hall 💡 Lamp", Text(ends), StringComparison.Ordinal);
+        Assert.Equal(40, TextCells.Width(Text(ends)));
+        Assert.StartsWith("💡 Desk ", Text(ends), StringComparison.Ordinal);
     }
 
     // ─── keys and the pane ──────────────────────────────────────────────────────
@@ -637,12 +665,12 @@ public sealed class HomeBarTests
         var aliases = new Dictionary<string, string> { ["area:den"] = "", ["entity:sensor.t"] = " " };
         var room = HomeChips.Build("area:den", Entities(Entity("light.den_lamp", "on"), Entity("light.den_spot", "off")), Catalog(), HomeChipMark.None, false, aliases);
         Assert.True(room.Bare);
-        Assert.Equal(" " + HomeChips.AreaGlyph + " ", HomeBar.ChipText(room, HomeBar.Fit.Full));
-        Assert.Equal(" " + HomeChips.AreaGlyph + " ", HomeBar.ChipText(room, HomeBar.Fit.Short));
+        Assert.Equal(HomeChips.AreaGlyph, HomeBar.ChipText(room, HomeBar.Fit.Full));
+        Assert.Equal(HomeChips.AreaGlyph, HomeBar.ChipText(room, HomeBar.Fit.Short));
         Assert.StartsWith("Den: ", room.Note, StringComparison.Ordinal);   // the click's note keeps the name and the count
 
         var sensor = HomeChips.Build("entity:sensor.t", Entities(Entity("sensor.t", "21.47")), null, HomeChipMark.Pending, false, aliases);
-        Assert.Equal(" " + sensor.Glyph + HomeBarText.PendingMark, HomeBar.ChipText(sensor, HomeBar.Fit.Full));   // the mark still shows
+        Assert.Equal(sensor.Glyph + HomeBarText.PendingMark, HomeBar.ChipText(sensor, HomeBar.Fit.Full));   // the mark still shows
 
         Assert.Equal("emoji alone · light.den", HomeBarText.AliasNote("", "light.den"));
         Assert.Equal("The home bar shows Den as its emoji alone", HomeBarText.Bared("Den"));
@@ -674,7 +702,7 @@ public sealed class HomeBarTests
         Assert.Equal("PC", chip.Short);
         Assert.Equal("Den PC Monitor", chip.Name);
         Assert.StartsWith("Den PC Monitor: on", chip.Note, StringComparison.Ordinal);
-        Assert.Contains(" PC ", HomeBar.ChipText(chip, HomeBar.Fit.Full), StringComparison.Ordinal);
+        Assert.Contains(" PC", HomeBar.ChipText(chip, HomeBar.Fit.Full), StringComparison.Ordinal);
         Assert.DoesNotContain("Monitor", HomeBar.ChipText(chip, HomeBar.Fit.Full), StringComparison.Ordinal);
 
         var plain = HomeChips.Build("entity:light.den_pc_monitor", Entities(monitor), Catalog(), HomeChipMark.None, stale: false);
@@ -749,22 +777,22 @@ public sealed class HomeBarTests
     public void TheShoppingChip_IsTheCartAndItsCount_LitWhileAnythingIsLeft_NeverStale()
     {
         var three = HomeChips.Build(HomeBarItems.Shopping, Entities(), null, HomeChipMark.None, stale: true, shoppingOpen: 3);
-        Assert.Equal(" 🛒 3 ", HomeBar.ChipText(three, HomeBar.Fit.Full));
-        Assert.Equal(" 🛒 3 ", HomeBar.ChipText(three, HomeBar.Fit.Short));
+        Assert.Equal("🛒 3", HomeBar.ChipText(three, HomeBar.Fit.Full));
+        Assert.Equal("🛒 3", HomeBar.ChipText(three, HomeBar.Fit.Short));
         Assert.Equal(HomeChips.Lit(Theme.Secondary), three.Style);   // not dimmed though Home Assistant's feed is down
         Assert.Equal(HomeChipAction.Detail, three.Action);
         Assert.Equal(HomeBarText.ShoppingNote(3), three.Note);
 
         var none = HomeChips.Build(HomeBarItems.Shopping, Entities(), null, HomeChipMark.None, stale: false, shoppingOpen: 0);
-        Assert.Equal(" 🛒 0 ", HomeBar.ChipText(none, HomeBar.Fit.Full));
+        Assert.Equal("🛒 0", HomeBar.ChipText(none, HomeBar.Fit.Full));
         Assert.Equal(HomeChips.Off, none.Style);
 
         var off = HomeChips.Build(HomeBarItems.Shopping, Entities(), null, HomeChipMark.None, stale: false);
-        Assert.Equal(" 🛒 ? ", HomeBar.ChipText(off, HomeBar.Fit.Full));
+        Assert.Equal("🛒 ?", HomeBar.ChipText(off, HomeBar.Fit.Full));
         Assert.Equal(Theme.DimText, off.Style);
 
         var aliases = new Dictionary<string, string> { [HomeBarItems.Shopping] = "Cart" };
         var glyphs = new Dictionary<string, string> { [HomeBarItems.Shopping] = "🧺" };
-        Assert.Equal(" 🧺 2 ", HomeBar.ChipText(HomeChips.Build(HomeBarItems.Shopping, Entities(), null, HomeChipMark.None, false, aliases, glyphs, 2), HomeBar.Fit.Full));
+        Assert.Equal("🧺 2", HomeBar.ChipText(HomeChips.Build(HomeBarItems.Shopping, Entities(), null, HomeChipMark.None, false, aliases, glyphs, 2), HomeBar.Fit.Full));
     }
 }

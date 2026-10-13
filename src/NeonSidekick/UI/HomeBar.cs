@@ -24,8 +24,10 @@ public sealed record HomeRow(IReadOnlyList<PerfSegment> Segments, IReadOnlyList<
 
 /// <summary>
 /// The home bar's row (2026-10-12, the user's ask: a bar of Home Assistant rooms and devices under the perf bar): the chips
-/// (<see cref="HomeChips"/>) side by side, each with a blank at either end — <c> 💡 Desk 80% </c> — so two blanks part one
-/// name from the next (a third, a gap between the chips, went on 2026-10-12, the user's call, once the chips lost their fills).
+/// (<see cref="HomeChips"/>) side by side, one blank between two — <c>💡 Desk 80% 💡 Hall</c> — since later still on 2026-10-13 (the
+/// user's ask: glyph-only chips pinned left line up under the tool bar's glyphs, three cells apart from column 0; until then each chip
+/// had a blank at either end, two between names, and a third, a gap between the chips, went on 2026-10-12 once the chips lost their
+/// fills). A chip's mark (<see cref="HomeBarText.PendingMark"/>, <see cref="HomeBarText.FailedMark"/>) stands in the blank after it.
 /// Centred on the row as the meters are (<see cref="PerfBar"/>), the odd cell at the right; left-aligned behind a ⌂ status glyph
 /// until later on 2026-10-12, when the user had the glyph, its note and its double-click to the picker taken off (the chips
 /// still go dim while the feed is down; Enter on <c>Home bar</c> and <c>/homebar edit</c> open the picker). Too narrow a window
@@ -78,7 +80,7 @@ public static class HomeBar
         foreach (var fit in new[] { Fit.Full, Fit.Short, Fit.Tight })
         {
             var texts = chips.Select(c => ChipText(c, fit)).ToList();
-            if (Width(texts, whole) <= room)
+            if (Width(chips, texts, whole) <= room)
             {
                 return Lay(chips, texts, whole, room);
             }
@@ -89,14 +91,14 @@ public static class HomeBar
         var groups = whole.Select(g => g.ToList()).ToArray();
         foreach (int side in (int[])[2, 0])
         {
-            while (groups[side].Count > 0 && Width(tight, groups) > room)
+            while (groups[side].Count > 0 && Width(chips, tight, groups) > room)
             {
                 groups[side].RemoveAt(side == 2 ? 0 : groups[side].Count - 1);
                 groups[side] = Trim(chips, groups[side]);
             }
         }
 
-        if (groups.Any(g => g.Count > 0) && Width(tight, groups) <= room)
+        if (groups.Any(g => g.Count > 0) && Width(chips, tight, groups) <= room)
         {
             return Lay(chips, tight, groups, room);
         }
@@ -115,14 +117,14 @@ public static class HomeBar
         int from = pager[0];
         int to = pager[^1] + 1;
         var cut = tight.Select(t => TextCells.Width(t) > pageRoom ? HomeChips.Clip(t, pageRoom) : t).ToList();
-        var starts = Pages(cut.GetRange(from, to - from), pageRoom).Select(s => s + from).ToList();
+        var starts = Pages(cut.GetRange(from, to - from), pageRoom, chips.Skip(from).Take(to - from).Select(Gap).ToList()).Select(s => s + from).ToList();
         int shown = Math.Clamp(page, 0, starts.Count - 1);
         int end = shown + 1 < starts.Count ? starts[shown + 1] : to;
         return Build(chips, cut, room, starts[shown], end, starts.Count, shown);
     }
 
-    /// <summary>The least blank between two groups beyond the chips' own blanks (later on 2026-10-13).</summary>
-    public const int GroupGap = 2;
+    /// <summary>The least blank between two groups (later on 2026-10-13; 4 since the chips lost their edge blanks later still that day, the least the groups were apart until then).</summary>
+    public const int GroupGap = 4;
 
     // The indices [from, from + count) of a group, without a divider at either end or beside another.
     private static List<int> Trim(IReadOnlyList<HomeChip> chips, int from, int count) => Trim(chips, Enumerable.Range(from, count).ToList());
@@ -149,17 +151,34 @@ public static class HomeBar
     }
 
     // The groups' cells together, GroupGap between two that draw.
-    private static int Width(IReadOnlyList<string> texts, IReadOnlyList<List<int>> groups)
+    private static int Width(IReadOnlyList<HomeChip> chips, IReadOnlyList<string> texts, IReadOnlyList<List<int>> groups)
     {
         var drawn = groups.Where(g => g.Count > 0).ToList();
-        return drawn.Sum(g => g.Sum(i => TextCells.Width(texts[i]))) + GroupGap * Math.Max(0, drawn.Count - 1);
+        return drawn.Sum(g => RunCells(chips, texts, g)) + GroupGap * Math.Max(0, drawn.Count - 1);
     }
+
+    // A run of chips' cells (later still on 2026-10-13): their texts and the blank between two, none after a chip whose mark stands in it.
+    private static int RunCells(IReadOnlyList<HomeChip> chips, IReadOnlyList<string> texts, IEnumerable<int> run)
+    {
+        int cells = 0;
+        int owed = 0;
+        foreach (int i in run)
+        {
+            cells += owed + TextCells.Width(texts[i]);
+            owed = Gap(chips[i]);
+        }
+
+        return cells;
+    }
+
+    // The blank after a chip ahead of the next one: none when its mark stands there.
+    private static int Gap(HomeChip chip) => !chip.Divider && chip.Mark is HomeChipMark.Pending or HomeChipMark.Failed ? 0 : 1;
 
     // The three groups on one row of cells (later on 2026-10-13): the left from column 0, the right ending on the last cell, the center
     // centred between them, the odd cell at its right; the center alone is exactly the row Build draws for one page.
     private static HomeRow Lay(IReadOnlyList<HomeChip> chips, IReadOnlyList<string> texts, IReadOnlyList<List<int>> groups, int cells)
     {
-        int Cells(List<int> group) => group.Sum(i => TextCells.Width(texts[i]));
+        int Cells(List<int> group) => RunCells(chips, texts, group);
         var (left, center, right) = (groups[0], groups[1], groups[2]);
         int rightStart = cells - Cells(right);
         int centerStart = 0;
@@ -191,8 +210,8 @@ public static class HomeBar
     /// <summary>An arrow and the blank beside it.</summary>
     private const int ArrowCells = 2;
 
-    /// <summary>The narrowest page worth drawing: a glyph chip's blank, glyph and blank, and a cell to spare.</summary>
-    private const int MinPageCells = 5;
+    /// <summary>The narrowest page worth drawing: a glyph chip's glyph and a cell to spare.</summary>
+    private const int MinPageCells = 3;
 
     /// <summary>
     /// <paramref name="chips"/> without the dividers that would show nothing between (2026-10-13, the user's ask: a divider stands only
@@ -220,16 +239,16 @@ public static class HomeBar
         return kept;
     }
 
-    /// <summary>A chip's text: <c> glyph name value </c>, the name per <paramref name="fit"/>, the mark after; a bare chip's glyph alone (<see cref="HomeChip.Bare"/>); a divider's <c> │ </c> (2026-10-13). Pure.</summary>
+    /// <summary>A chip's text: <c>glyph name value</c>, the name per <paramref name="fit"/>, the mark after; a bare chip's glyph alone (<see cref="HomeChip.Bare"/>); a divider's <c>│</c> (2026-10-13). No blank at either end since later still on 2026-10-13: the row puts one between two chips. Pure.</summary>
     public static string ChipText(HomeChip chip, Fit fit)
     {
         ArgumentNullException.ThrowIfNull(chip);
         if (chip.Divider)
         {
-            return " " + chip.Glyph + " ";
+            return chip.Glyph;
         }
 
-        var text = new StringBuilder(" ").Append(chip.Glyph);
+        var text = new StringBuilder(chip.Glyph);
         if (chip.Bare)
         {
             fit = Fit.Tight;
@@ -259,25 +278,33 @@ public static class HomeBar
             HomeChipMark.Failed => HomeBarText.FailedMark,
             _ => "",
         };
-        return text.Append(mark.Length > 0 ? mark : " ").ToString();
+        return text.Append(mark).ToString();
     }
 
-    /// <summary>Where each page starts, for chips of <paramref name="texts"/>' widths in <paramref name="room"/> cells (a chip wider than a page is a page alone). Pure.</summary>
-    public static List<int> Pages(IReadOnlyList<string> texts, int room)
+    /// <summary>
+    /// Where each page starts, for chips of <paramref name="texts"/>' widths in <paramref name="room"/> cells, a blank between two on a
+    /// page (later still on 2026-10-13), or <paramref name="gaps"/>' cells after each (none after a mark); a chip wider than a page is a page alone. Pure.
+    /// </summary>
+    public static List<int> Pages(IReadOnlyList<string> texts, int room, IReadOnlyList<int>? gaps = null)
     {
+        ArgumentNullException.ThrowIfNull(texts);
         var starts = new List<int> { 0 };
         int used = 0;
+        int owed = 0;
         for (int i = 0; i < texts.Count; i++)
         {
             int width = TextCells.Width(texts[i]);
-            if (used > 0 && used + width > room)
+            if (used > 0 && used + owed + width > room)
             {
                 starts.Add(i);
-                used = TextCells.Width(texts[i]);
-                continue;
+                used = width;
+            }
+            else
+            {
+                used += owed + width;
             }
 
-            used += width;
+            owed = gaps is null ? 1 : gaps[i];
         }
 
         return starts;
@@ -313,11 +340,7 @@ public static class HomeBar
             to--;
         }
 
-        int drawn = pages > 1 ? ArrowCells * 2 : 0;
-        for (int i = from; i < to; i++)
-        {
-            drawn += TextCells.Width(texts[i]);
-        }
+        int drawn = (pages > 1 ? ArrowCells * 2 : 0) + RunCells(chips, texts, Enumerable.Range(from, Math.Max(0, to - from)));
 
         var row = new Writer();
         if (to > from)
@@ -345,27 +368,46 @@ public static class HomeBar
         return row.Done(pages);
     }
 
-    // The row as it is written: the styled runs, the spans where they start, and the column the next run starts at.
+    // The row as it is written: the styled runs, the spans where they start, and the column the next run starts at; the blank the
+    // last chip owes the next one of its run (later still on 2026-10-13), dropped by anything else written.
     private sealed class Writer
     {
         private readonly List<PerfSegment> _segments = [];
         private readonly List<HomeSpan> _spans = [];
         private int _column;
+        private int _owed;
 
-        // Blanks up to column (none when the row is there already).
+        // Blanks up to column (none when the row is there already); a new run starts.
         public void PadTo(int column)
         {
             if (column > _column)
             {
                 Add(new string(' ', column - _column), Style.Plain, null);
             }
+
+            _owed = 0;
         }
 
-        // A chip's text in its style; a divider is a blank to a click (2026-10-13).
-        public void Chip(HomeChip chip, string text, int index) =>
-            Add(text, chip.Style, chip.Divider ? null : new HomeSpan(0, TextCells.Width(text), HomeTarget.Chip, index));
+        // A chip's text in its style, after the blank between it and the chip before; a divider is a blank to a click (2026-10-13),
+        // and so is the blank between two chips.
+        public void Chip(HomeChip chip, string text, int index)
+        {
+            if (_owed > 0)
+            {
+                Write(new string(' ', _owed), Style.Plain, null);
+            }
+
+            Write(text, chip.Style, chip.Divider ? null : new HomeSpan(0, TextCells.Width(text), HomeTarget.Chip, index));
+            _owed = Gap(chip);
+        }
 
         public void Add(string text, Style style, HomeSpan? span)
+        {
+            _owed = 0;
+            Write(text, style, span);
+        }
+
+        private void Write(string text, Style style, HomeSpan? span)
         {
             if (span is { } s)
             {
