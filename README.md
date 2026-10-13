@@ -48,6 +48,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Embedded LLM:** no server needed. Install a Gemma, Qwen or Muse model from `/settings` › Servers › Embedded and the app runs it on a built-in llama.cpp (CUDA, Vulkan or CPU; Metal on a Mac). Every model does vision and tool calls, in Q4-and-up quants sized for 8–32 GB of VRAM, plus NVFP4 quants for NVIDIA cards.
 * **Docker servers (Windows):** your vLLM or SGLang containers as `/server` choices, one running at a time ([vLLM](docs/DOCKER_WINDOWS_VLLM.md) and [SGLang](docs/DOCKER_WINDOWS_SGLANG.md) examples).
 * **Cloud models:** the Anthropic and OpenAI APIs with your own key, or your Claude Code install. All off until you turn them on.
+* **Advisors:** other profiles/models in a role you give them (a database architect, a UX designer). The model or `/advisor` asks one; it answers on its own server and model, with the chat's read-only tools.
 * **Context control:** automatic compaction keeps the conversation inside the model's window; `/compact` and `/rewind` do it by hand.
 * **Prompt transparency:** `/sys` shows exactly what the model is sent.
 
@@ -55,12 +56,14 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Profiles:** each has its own working directory, settings, persona, memory and sessions.
 * **Sessions:** resume, search and learn from past conversations.
 * **Memory** you can edit, added to every conversation.
-* **Skills** at four levels (global, profile, project, or the project's `.agents/skills`), installed from [skills.sh](https://skills.sh) or GitHub with `/skills add`. Lock one so the model can't change it, or disable it without deleting it.
+* **Skills** at four levels (global, profile, project, or the project's `.agents/skills`), installed from [skills.sh](https://skills.sh) or GitHub with `/skills add`.
+* **Skill editor:** on `/skills`, Enter on a skill to edit its `SKILL.md` in your editor, rename it, move it between profiles or to global, revert it to one of its last 10 versions, or delete it. The model has its own, the `skill_editor` tool: it creates and updates profile or global skills and writes their supporting files, but never deletes one. Lock one so the model can't change it, or disable it without deleting it.
 * **Self-learning:** a background reflection writes new skills and improves existing ones from your work.
 
 ### Tools & safety
 * **Built-in tools:** files, Git, shell (PowerShell, cmd, bash; zsh on a Mac), scripts (PowerShell, Python, Node), web search and browsing, questions on a pane, clock and timers, and `neon_help`, the app's own manual. Each integration below is a set of tools too, offered only when you switch it on in `/tools`. [TOOLS.md](docs/TOOLS.md) lists them all.
-* **Sandboxed:** file tools reach only the working directory. Shell commands go through an approval pane (once, this session, or always), and commands that reach outside the working directory are refused.
+* **Sandboxed:** file tools reach only the working directory. Shell commands go through an approval pane (once, this session, or always).
+* **Shell police (👮):** refuses any command, script or process input that names a path outside the working directory, or contains a forbidden string (disk wipes, shutdowns and other harmful actions, a list you can edit), even under `--yolo`. While the database tools are on, it keeps the shell off their databases too. [SETTINGS.md](docs/SETTINGS.md#shell-guards) has the details.
 * **Plan mode:** `/plan <requirement>` researches with read-only tools and saves a plan; nothing changes until you approve it.
 * **MCP servers** for more tools and data sources.
 
@@ -80,7 +83,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Printing & PDFs:** `/print` to any installed printer (Windows or Mac), and `/pdf` from Markdown, text, pictures or a web page.
 * **Claude Code:** `/claude` messages your installed Claude Code, or use it as the chat's server (an advisor profile can too).
 * **Bot chat:** `/botchat` lets your profiles talk to each other in their own personas and voices, optionally illustrated by ComfyUI.
-* **Advisors:** other profiles in a role you give them (a database architect, a UX designer). The model or `/advisor` asks one; it answers on its own server and model, with the chat's read-only tools.
+
 
 ### Extras
 * `/loop` repeats a message, `/test` benchmarks the connected model, and the performance bar shows CPU, RAM, GPU and network.
