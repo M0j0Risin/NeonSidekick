@@ -86,10 +86,41 @@ public static class HomeBar
     /// <summary>The narrowest page worth drawing: a glyph chip's blank, glyph and blank, and a cell to spare.</summary>
     private const int MinPageCells = 5;
 
-    /// <summary>A chip's text: <c> glyph name value </c>, the name per <paramref name="fit"/>, the mark after; a bare chip's glyph alone (<see cref="HomeChip.Bare"/>). Pure.</summary>
+    /// <summary>
+    /// <paramref name="chips"/> without the dividers that would show nothing between (2026-10-13, the user's ask: a divider stands only
+    /// between two chips): none at either end, none beside another. Pure.
+    /// </summary>
+    public static List<HomeChip> ShownDividers(IReadOnlyList<HomeChip> chips)
+    {
+        ArgumentNullException.ThrowIfNull(chips);
+        var kept = new List<HomeChip>(chips.Count);
+        foreach (var chip in chips)
+        {
+            if (chip.Divider && (kept.Count == 0 || kept[^1].Divider))
+            {
+                continue;
+            }
+
+            kept.Add(chip);
+        }
+
+        while (kept.Count > 0 && kept[^1].Divider)
+        {
+            kept.RemoveAt(kept.Count - 1);
+        }
+
+        return kept;
+    }
+
+    /// <summary>A chip's text: <c> glyph name value </c>, the name per <paramref name="fit"/>, the mark after; a bare chip's glyph alone (<see cref="HomeChip.Bare"/>); a divider's <c> │ </c> (2026-10-13). Pure.</summary>
     public static string ChipText(HomeChip chip, Fit fit)
     {
         ArgumentNullException.ThrowIfNull(chip);
+        if (chip.Divider)
+        {
+            return " " + chip.Glyph + " ";
+        }
+
         var text = new StringBuilder(" ").Append(chip.Glyph);
         if (chip.Bare)
         {
@@ -167,6 +198,17 @@ public static class HomeBar
         var spans = new List<HomeSpan>();
         int column = 0;
 
+        // A divider at a page's edge shows nothing between (2026-10-13): left off the page.
+        while (from < to && chips[from].Divider)
+        {
+            from++;
+        }
+
+        while (to > from && chips[to - 1].Divider)
+        {
+            to--;
+        }
+
         int drawn = pages > 1 ? ArrowCells * 2 : 0;
         for (int i = from; i < to; i++)
         {
@@ -189,7 +231,7 @@ public static class HomeBar
         {
             var chip = chips[i];
             int width = TextCells.Width(texts[i]);
-            Add(texts[i], chip.Style, new HomeSpan(column, width, HomeTarget.Chip, i));
+            Add(texts[i], chip.Style, chip.Divider ? null : new HomeSpan(column, width, HomeTarget.Chip, i));   // a divider is a blank to a click (2026-10-13)
         }
 
         if (pages > 1)

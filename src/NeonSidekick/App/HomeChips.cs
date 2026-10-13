@@ -47,7 +47,8 @@ public sealed record HomeChip(
     string Note,
     HomeChipMark Mark = HomeChipMark.None,
     string? Label = null,
-    bool Bare = false);
+    bool Bare = false,
+    bool Divider = false);
 
 /// <summary>
 /// The home bar's chips, kind by kind (2026-10-12, the user's ask; the looks and the clicks agreed in the plan): what each
@@ -127,6 +128,12 @@ public static class HomeChips
         if (!HomeBarItems.TryParse(reference, out var kind, out string id))
         {
             return Waiting(reference, ToggleGlyph, reference, mark);
+        }
+
+        if (kind == HomeItemKind.Divider)
+        {
+            // A dim │ (2026-10-13, the user's ask): no name, no value, no action, no span (UI.HomeBar.Build).
+            return new HomeChip(reference, UI.ScreenPane.DividerGlyph, HomeBarText.DividerName, "", "", Theme.TabSeparator, HomeChipAction.None, null, "", Divider: true);
         }
 
         if (kind == HomeItemKind.Shopping)

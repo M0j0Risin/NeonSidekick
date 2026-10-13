@@ -489,13 +489,17 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         public string OffKey => string.Join(',', (Left ?? []).Concat(Right ?? []).Select((item, i) => item.Off ? i : -1).Where(i => i >= 0));
     }
 
-    /// <summary>What an item of the toolbar is (2026-10-13): a glyph, the working directory's path or the model's name.</summary>
+    /// <summary>What an item of the toolbar is (2026-10-13): a glyph, the working directory's path, the model's name or (later that day) a divider.</summary>
     public enum ToolbarItemKind
     {
         Glyph,
         Path,
         Model,
+        Divider,
     }
+
+    /// <summary>What a divider draws on the tool bar and the home bar (2026-10-13, the user's pick: a dim bar). Pinned.</summary>
+    public const string DividerGlyph = "│";
 
     /// <summary>
     /// One item of the toolbar (2026-10-13, <see cref="ToolbarParts"/>): a glyph — <paramref name="Off"/> on the off slab
@@ -508,6 +512,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         public static ToolbarItem PathOf(string path) => new(ToolbarItemKind.Path, path);
 
         public static ToolbarItem ModelOf(string name, string mark = "") => new(ToolbarItemKind.Model, name, false, mark);
+
+        public static ToolbarItem DividerOf() => new(ToolbarItemKind.Divider, DividerGlyph);
     }
 
     /// <summary>The part of the toolbar a click landed on (<see cref="TryHitToolbar"/>).</summary>
@@ -817,6 +823,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         Text,
         Path,   // later on 2026-10-12: the working directory, its text the slot's
         Usage,  // 2026-10-13: the token tally, its text the slot's (empty while it stands aside); the busy row puts its own tally there
+        Spinner,   // later on 2026-10-13: the busy row's spinner, label and stop hint stand here; nothing on the standing row
     }
 
     /// <summary>
@@ -831,6 +838,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         public static HintSlot Of(string text) => new(HintSlotKind.Text, text);
         public static HintSlot Path(string text) => new(HintSlotKind.Path, text);
         public static HintSlot UsageOf(string text) => new(HintSlotKind.Usage, text);
+        public static HintSlot Spinner { get; } = new(HintSlotKind.Spinner);
 
         /// <summary>This slot at the right edge (later on 2026-10-12: the model and the working directory while they ended the row; any slot pinned right since 2026-10-13).</summary>
         public HintSlot AtRight() => this with { Right = true };
@@ -1663,9 +1671,34 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
     }
 
-    /// <summary>Between two runs of a group: <see cref="ToolbarModelSeparator"/> between two texts (the path and the name), else one blank (2026-10-13).</summary>
+    /// <summary>Between two runs of a group: <see cref="ToolbarModelSeparator"/> between two texts (the path and the name), else one blank (2026-10-13); a blank either side of a divider (later that day).</summary>
     private static string RunSeparator(ToolbarRun before, ToolbarRun after) =>
-        before.Kind != ToolbarItemKind.Glyph && after.Kind != ToolbarItemKind.Glyph ? ToolbarModelSeparator : " ";
+        before.Kind is ToolbarItemKind.Path or ToolbarItemKind.Model && after.Kind is ToolbarItemKind.Path or ToolbarItemKind.Model ? ToolbarModelSeparator : " ";
+
+    /// <summary>
+    /// <paramref name="runs"/> without a divider the squeeze left at either end or beside another (later on 2026-10-13, the shared
+    /// rule: a divider stands only between two drawn items).
+    /// </summary>
+    private static List<ToolbarRun> TrimDividers(List<ToolbarRun> runs)
+    {
+        var kept = new List<ToolbarRun>(runs.Count);
+        foreach (var run in runs)
+        {
+            if (run.Kind == ToolbarItemKind.Divider && (kept.Count == 0 || kept[^1].Kind == ToolbarItemKind.Divider))
+            {
+                continue;
+            }
+
+            kept.Add(run);
+        }
+
+        while (kept.Count > 0 && kept[^1].Kind == ToolbarItemKind.Divider)
+        {
+            kept.RemoveAt(kept.Count - 1);
+        }
+
+        return kept;
+    }
 
     private static string JoinRuns(IReadOnlyList<ToolbarRun> runs)
     {
@@ -1696,17 +1729,19 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         bool nameRight = right.Any(r => r.Kind == ToolbarItemKind.Model);
         FitText(ToolbarItemKind.Model, (run, room) => NameAndMark(run.Text, run.Mark, nameRight ? Math.Min(Math.Max(1, cells / 2), room) : room), withoutPath: true);
         FitText(ToolbarItemKind.Path, (run, room) => FitPath(run.Text, room), withoutPath: false);
+        left = TrimDividers(left);
+        right = TrimDividers(right);
 
         int leftCells = TextCells.Width(JoinRuns(left));
         if (right.Count > 0)
         {
             int room = cells - leftCells - (left.Count == 0 ? 0 : ToolbarGap);
-            right = room < 1 ? [] : FitRight(right, room);
+            right = room < 1 ? [] : TrimDividers(FitRight(right, room));
         }
 
         if (right.Count == 0 && leftCells > cells)
         {
-            left = FitLeft(left, cells);
+            left = TrimDividers(FitLeft(left, cells));
         }
 
         return new ToolbarLaid(left, right);
@@ -1771,7 +1806,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
 
             Flush();
-            runs.Add(new ToolbarRun(item.Kind, item.Text, [], item.Mark ?? ""));
+            runs.Add(new ToolbarRun(item.Kind, item.Text, [], item.Mark ?? ""));   // a divider a run of its own (later on 2026-10-13)
         }
 
         Flush();
@@ -1847,6 +1882,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             {
                 ToolbarItemKind.Glyph => FitStrip(run.Text, room),
                 ToolbarItemKind.Path => FitPath(run.Text, room),
+                ToolbarItemKind.Divider => "",
                 _ => NameAndMark(run.Text, "", room),
             };
             if (text.Length > 0)
@@ -4529,6 +4565,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                     return mark >= 0 && x >= mark ? new ToolbarHit(ToolbarZone.Mark, "", mark) : new ToolbarHit(ToolbarZone.Model, "", run.Column);
                 case ToolbarItemKind.Path:
                     return new ToolbarHit(ToolbarZone.Path, "", run.Column);
+                case ToolbarItemKind.Divider:
+                    return new ToolbarHit(ToolbarZone.Row, "", -1);   // a divider is a blank's (later on 2026-10-13)
                 default:
                     if (TryStripGlyphAt(run.Text, x - run.Column, TextCells.NarrowSelectorSequences, out string glyph, out int column))
                     {
@@ -6091,6 +6129,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 case ToolbarItemKind.Path:
                     _inner.Write(new RawText(run.Text, Theme.DimText));
                     break;
+                case ToolbarItemKind.Divider:
+                    _inner.Write(new RawText(run.Text, Theme.TabSeparator));   // the tab strips' │ (later on 2026-10-13)
+                    break;
                 default:
                     WriteNamed(run.Text, run.Mark);
                     break;
@@ -6340,6 +6381,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         bool modelSlot = false;
         foreach (var slot in layout())
         {
+            if (slot.Kind == HintSlotKind.Spinner)
+            {
+                continue;   // the busy row's alone (later on 2026-10-13)
+            }
+
             modelSlot |= slot.Kind == HintSlotKind.Model;
             var part = slot.Kind switch
             {
@@ -6369,10 +6415,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// The busy row's parts in their two groups (2026-10-13, the user's pick: the busy row follows the sides): the spinner's frame and its
-    /// label lead the left — the tally with them, the label after it, while the label trails the tally (<see cref="LabelAfterUsage"/>) —,
-    /// then each slot of <paramref name="layout"/> the busy row draws (the strip, the queued part, the tally, the model, the working
-    /// directory) on its side in its order, then the way out (the overlay's keys or the stop hint) at the left group's end.
+    /// The busy row's parts in their two groups (2026-10-13, the user's pick: the busy row follows the sides): each slot of
+    /// <paramref name="layout"/> the busy row draws (the strip, the queued part, the tally, the model, the working directory) on its side
+    /// in its order. The spinner's frame and its label — the tally with them, the label after it, while the label trails the tally
+    /// (<see cref="LabelAfterUsage"/>) — stand where the <see cref="HintSlotKind.Spinner"/> slot does (later that day, the user's ask: the
+    /// spinner a section of its own, movable), the way out (the overlay's keys or the stop hint) right after them (the user's pick); a
+    /// layout without that slot has them lead the left, as before.
     /// </summary>
     private (List<HintPart> Left, List<HintPart> Right, string Unit, bool After, string Usage, string BusyLabel) BusyParts(string label, Func<IReadOnlyList<HintSlot>> layout, string frame)
     {
@@ -6382,13 +6430,23 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         bool after = usage.Length > 0 && _labelAfterUsage(label);
         string busyText = BusyText(label, elapsed, step);
         string unit = frame + " " + Labelled(busyText, after ? usage : "", after);
-        var left = new List<HintPart> { new(HintPartKind.Spinner, unit) };
+        var spinner = new HintPart(HintPartKind.Spinner, unit);
+        var hint = new HintPart(HintPartKind.Text, Spaced(_overlay?.Hint ?? (_stopHintShown() ? StopHint : "")));
+        var left = new List<HintPart>();
         var right = new List<HintPart>();
         var model = new HintPart(HintPartKind.Model, _trailer(), _trailerMark());
         bool modelSlot = false;
+        bool spinnerSlot = false;
         foreach (var slot in layout())
         {
             modelSlot |= slot.Kind == HintSlotKind.Model;
+            if (slot.Kind == HintSlotKind.Spinner && !spinnerSlot)
+            {
+                spinnerSlot = true;
+                (slot.Right ? right : left).AddRange([spinner, hint]);
+                continue;
+            }
+
             HintPart? part = slot.Kind switch
             {
                 HintSlotKind.Strip => new HintPart(HintPartKind.Strip, _strip()),
@@ -6409,8 +6467,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             right.Insert(0, model);
         }
 
-        string hint = Spaced(_overlay?.Hint ?? (_stopHintShown() ? StopHint : ""));
-        left.Add(new HintPart(HintPartKind.Text, hint));
+        if (!spinnerSlot)
+        {
+            left.InsertRange(0, [spinner, hint]);
+        }
+
         return (left, right, unit, after, usage, busyText);
     }
 
@@ -6557,9 +6618,28 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         FitText(HintPartKind.Model, (part, room) => FitTrailer(part.Text, part.Mark, nameRight ? Math.Min(max / 2, room) : room), withoutPath: true);
         FitText(HintPartKind.Path, (part, room) => FitPath(part.Text, room), withoutPath: false);
 
-        string leftText = JoinParts(left);
         bool cutFirst = false;
-        if (right.Count > 0)
+        bool spinnerRight = right.Any(part => part.Kind == HintPartKind.Spinner);
+        if (spinnerRight)
+        {
+            // The spinner kept last (later on 2026-10-13, the user's pick): the right group's other parts go first from its inner
+            // end, then the left gives way (below, as Fit cuts it); the spinner itself is cut from its end only when it alone is too wide.
+            while (right.Count > 1 && Measure(withoutPath: false) > max)
+            {
+                right.RemoveAt(right[0].Kind == HintPartKind.Spinner ? 1 : 0);
+            }
+
+            if (TextCells.Width(JoinParts(right)) > max)
+            {
+                var only = right.Single(part => part.Kind == HintPartKind.Spinner);
+                right = [only with { Text = Fit(only.Text, max) }];
+                left.Clear();
+                cutFirst = true;
+            }
+        }
+
+        string leftText = JoinParts(left);
+        if (right.Count > 0 && !spinnerRight)
         {
             int room = max - TextCells.Width(leftText) - (left.Count == 0 ? 0 : TrailerGap);
             right = room < 1 ? [] : FitRightParts(right, room, out cutFirst);
@@ -6567,6 +6647,19 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         string rightText = JoinParts(right);
         int leftCells = right.Count == 0 ? max : max - TextCells.Width(rightText) - (left.Count == 0 ? 0 : TrailerGap);
+        if (left.FindIndex(part => part.Kind == HintPartKind.Spinner) is var at0 and > 0 && TextCells.Width(JoinParts(left.Take(at0 + 1))) >= leftCells)
+        {
+            // A spinner pinned late in the left group (later on 2026-10-13) is kept last there too: the cut, from the end, would reach
+            // it, so the parts after it go whole, then those before it from the nearest, until it ends within the room.
+            int spinnerAt = at0;
+            left.RemoveRange(spinnerAt + 1, left.Count - spinnerAt - 1);
+            while (spinnerAt > 0 && TextCells.Width(JoinParts(left)) > leftCells)
+            {
+                left.RemoveAt(--spinnerAt);
+            }
+
+            leftText = JoinParts(left);
+        }
         string fitted = Fit(leftText, Math.Max(0, leftCells));
         string text = rightText.Length == 0 ? fitted : fitted + new string(' ', Math.Max(0, max - TextCells.Width(fitted) - TextCells.Width(rightText))) + rightText;
 

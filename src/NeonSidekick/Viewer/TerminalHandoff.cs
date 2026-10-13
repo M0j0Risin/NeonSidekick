@@ -152,6 +152,36 @@ public static class TerminalHandoff
         }
     }
 
+    /// <summary>
+    /// Whether a closing window hands the foreground back to the terminal (2026-10-13, the user's ask: "return focus to the terminal
+    /// window after closing the external window if focus is not already on the terminal window"): only when the window in front is
+    /// <paramref name="closing"/> or one it owns (<paramref name="foregroundRoot"/>, its root owner) — never when the terminal or
+    /// another app has it, and never without a terminal. Pure.
+    /// </summary>
+    public static bool ShouldReturn(IntPtr foreground, IntPtr foregroundRoot, IntPtr closing, IntPtr terminal) =>
+        closing != IntPtr.Zero && terminal != IntPtr.Zero && foreground != IntPtr.Zero && foreground != terminal
+        && (foreground == closing || foregroundRoot == closing);
+
+    /// <summary>
+    /// A window of the app's own closing, on its thread before it is destroyed (2026-10-13, any close — its chord, ESC, Alt+F4, ×):
+    /// the terminal brought forward when <see cref="ShouldReturn"/> says so. The window is still in front, so Windows lets its thread
+    /// hand the foreground on, as TAB's does. Nothing elsewhere.
+    /// </summary>
+    internal static void ReturnFocus(IntPtr closing)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        IntPtr foreground = GetForegroundWindow();
+        IntPtr root = foreground == IntPtr.Zero ? IntPtr.Zero : GetAncestor(foreground, GaRootOwner);
+        if (ShouldReturn(foreground, root, closing, s_terminal))
+        {
+            FocusTerminal();
+        }
+    }
+
     /// <summary>Whether Alt is held right now, on a window's thread: a key with Alt held is never the window's own.</summary>
     internal static bool AltHeld() => GetKeyState(VkMenu) < 0;
 

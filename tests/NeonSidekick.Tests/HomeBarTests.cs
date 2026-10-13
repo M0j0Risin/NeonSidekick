@@ -338,6 +338,53 @@ public sealed class HomeBarTests
         Assert.Null(HomeBar.Render([], 80));
     }
 
+    private static HomeChip Divider(int n) => HomeChips.Build("divider:" + n, new Dictionary<string, HaLiveEntity>(), null, HomeChipMark.None, stale: false);
+
+    /// <summary>
+    /// A divider (2026-10-13, the user's ask): a dim │ between two chips, no span (a click is a blank's); one at either end or beside
+    /// another is left off (<see cref="HomeBar.ShownDividers"/>), and so is one at a page's edge.
+    /// </summary>
+    [Fact]
+    public void Render_ADivider_IsADimBarBetweenChips_NoSpan()
+    {
+        var divider = Divider(1);
+        Assert.True(divider.Divider);
+        Assert.Equal(Theme.TabSeparator, divider.Style);
+        Assert.Equal(" │ ", HomeBar.ChipText(divider, HomeBar.Fit.Full));
+
+        var row = HomeBar.Render([Chip("Desk"), divider, Chip("Hall")], 80)!;
+        Assert.EndsWith(" 💡 Desk  │  💡 Hall ", Text(row));
+        Assert.Equal(2, row.Spans.Count);
+        Assert.Equal([0, 2], row.Spans.Select(s => s.Index));
+        int bar = Text(row).IndexOf('│', StringComparison.Ordinal);
+        Assert.Null(HomeBar.HitAt(row.Spans, TextCells.Width(Text(row)[..bar])));
+        Assert.Contains(row.Segments, s => s.Text == " │ " && s.Style == Theme.TabSeparator);
+
+        var stray = HomeBar.ShownDividers([Divider(1), Chip("Desk"), Divider(2), Divider(3), Chip("Hall"), Divider(4)]);
+        Assert.Equal(["entity:light.desk", "divider:2", "entity:light.hall"], stray.Select(c => c.Reference));
+        Assert.Empty(HomeBar.ShownDividers([Divider(1), Divider(2)]));
+    }
+
+    /// <summary>The divider's reference (2026-10-13): parsed and kept apart from the chips the commands name; no name to change, no count.</summary>
+    [Fact]
+    public void ADividersReference_IsItsOwn_AndNeverTheOneNamed()
+    {
+        Assert.True(HomeBarItems.TryParse(" Divider:2 ", out var kind, out string id));
+        Assert.Equal(HomeItemKind.Divider, kind);
+        Assert.Equal("2", id);
+        Assert.Equal("divider:2", HomeBarItems.Normalize("DIVIDER:2"));
+        Assert.Null(HomeBarItems.Normalize("divider:0"));
+        Assert.True(HomeBarItems.IsNameless("divider:1"));
+        Assert.True(HomeBarItems.IsDivider("divider:1"));
+        Assert.Equal(["area:den", "divider:1", "divider:2"], HomeBarItems.Resolve(["area:den", "divider:1", "divider:2", "divider:1"]));
+        Assert.Equal(["area:den", "divider:1"], HomeBarItems.AddDivider(["area:den"]));
+        Assert.Equal("Divider", HomeBarItems.NameOf("divider:1", null));
+        Assert.Null(HomeBarItems.Find(["divider:1", "area:den"], "Divider", null, null));
+        Assert.Null(HomeBarItems.Find(["divider:1"], "divider:1", null, null));
+        Assert.Equal("1 · den", HomeBarItems.Value(["divider:1", "area:den"], null));   // a divider is no item to count
+        Assert.Empty(HomeBarItems.EntityIds(["divider:1"], null));
+    }
+
     /// <summary>The odd cell of the room goes to the right, as the meters' does: 9 cells in 20 is 5 blanks ahead, 6 after.</summary>
     [Fact]
     public void TheChips_AreCentred_TheOddCellAtTheRight()

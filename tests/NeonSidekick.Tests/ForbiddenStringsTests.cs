@@ -99,10 +99,39 @@ public sealed class ForbiddenStringsTests
         Assert.Equal(ForbiddenStrings.Sorted(expected), ForbiddenStrings.Defaults);
         Assert.Equal(expected.Count, ForbiddenStrings.Defaults.Count);
         Assert.Equal(ForbiddenStrings.Defaults, new AppSettingsData().ShellPoliceForbiddenStrings);
-        Assert.Equal(49, DefaultsFor("windows").Count);
-        Assert.Equal(48, DefaultsFor("mac").Count);
+        // No count pinned since 2026-10-13: the list is assets/police/strings.txt's, free to grow or shrink.
         Assert.Equal(DefaultsFor("windows").Count, ForbiddenStrings.Sorted(DefaultsFor("windows")).Count);
         Assert.Equal(DefaultsFor("mac").Count, ForbiddenStrings.Sorted(DefaultsFor("mac")).Count);
+    }
+
+    /// <summary>The file's grammar (2026-10-13): sections, comments, blanks, the lines before a header, an unknown header, repeats, CRLF, a backslash.</summary>
+    [Fact]
+    public void Parse_ReadsTheSections()
+    {
+        string text = "# a comment\r\nfirst\r\n\r\n[ALL]\r\n  | bash  \r\nfirst\r\n   # an indented comment\r\n[windows]\r\n.ssh\\id_\r\n[linux]\r\nignored\r\n[Mac]\r\nnvram\r\nnvram\r\n";
+        var (shared, windows, mac) = ForbiddenStrings.Parse(text);
+        Assert.Equal(["first", "| bash"], shared);
+        Assert.Equal([".ssh\\id_"], windows);
+        Assert.Equal(["nvram"], mac);
+        var empty = ForbiddenStrings.Parse("");
+        Assert.Empty(empty.Shared);
+        Assert.Empty(empty.Windows);
+        Assert.Empty(empty.Mac);
+    }
+
+    /// <summary>The embedded file (2026-10-13): every section there, every entry something once normalised, no header but the three.</summary>
+    [Fact]
+    public void TheEmbeddedFile_HasThreeSections_EachEntryReal()
+    {
+        Assert.NotEmpty(ForbiddenStrings.SharedDefaults);
+        Assert.NotEmpty(ForbiddenStrings.WindowsDefaults);
+        Assert.NotEmpty(ForbiddenStrings.MacDefaults);
+        Assert.All([.. ForbiddenStrings.SharedDefaults, .. ForbiddenStrings.WindowsDefaults, .. ForbiddenStrings.MacDefaults], entry => Assert.NotEqual("", ForbiddenStrings.Normalize(entry)));
+        using var stream = typeof(ForbiddenStrings).Assembly.GetManifestResourceStream(ForbiddenStrings.ResourceName);
+        Assert.NotNull(stream);
+        using var reader = new StreamReader(stream);
+        var headers = reader.ReadToEnd().Split('\n').Select(line => line.Trim()).Where(line => line.StartsWith('[') && line.EndsWith(']')).ToList();
+        Assert.Equal(["[all]", "[windows]", "[mac]"], headers);
     }
 
     /// <summary>

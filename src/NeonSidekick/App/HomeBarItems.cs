@@ -9,6 +9,7 @@ public enum HomeItemKind
     Area,
     Entity,
     Shopping,
+    Divider,   // 2026-10-13, the user's ask: a dim │ between chips, any number of them (divider:1, divider:2…)
 }
 
 /// <summary>What <c>/homebar</c> saves (<see cref="HomeBarItems.Toggle"/>): the items shown (empty: hidden), the ones a later show brings back, and whether there is nothing to show yet (the picker opens instead).</summary>
@@ -61,6 +62,13 @@ public static class HomeBarItems
             return id.Length > 0;
         }
 
+        if (text.StartsWith(ItemOrder.DividerPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            kind = HomeItemKind.Divider;
+            id = text[ItemOrder.DividerPrefix.Length..].Trim();
+            return ItemOrder.IsDivider(ItemOrder.DividerPrefix + id);
+        }
+
         if (text.StartsWith(ShoppingPrefix, StringComparison.OrdinalIgnoreCase))
         {
             kind = HomeItemKind.Shopping;
@@ -79,10 +87,22 @@ public static class HomeBarItems
 
     /// <summary>A reference in its one spelling (the prefix lower case, an entity id lower case), or null when it is none. Pure.</summary>
     public static string? Normalize(string? reference) =>
-        TryParse(reference, out var kind, out string id) ? kind switch { HomeItemKind.Area => Area(id), HomeItemKind.Shopping => Shopping, _ => Entity(id) } : null;
+        TryParse(reference, out var kind, out string id) ? kind switch { HomeItemKind.Area => Area(id), HomeItemKind.Shopping => Shopping, HomeItemKind.Divider => ItemOrder.DividerPrefix + id, _ => Entity(id) } : null;
 
-    /// <summary>An item with no name to change (later on 2026-10-12, the user's call): the shopping list's 🛒 shows its count alone. Pure.</summary>
-    public static bool IsNameless(string reference) => TryParse(reference, out var kind, out _) && kind == HomeItemKind.Shopping;
+    /// <summary>An item with no name to change (later on 2026-10-12, the user's call): the shopping list's 🛒 shows its count alone; a divider (2026-10-13) none at all. Pure.</summary>
+    public static bool IsNameless(string reference) => TryParse(reference, out var kind, out _) && kind is HomeItemKind.Shopping or HomeItemKind.Divider;
+
+    /// <summary>Whether <paramref name="reference"/> is a divider's (2026-10-13): a dim │, no chip, no name, no emoji. Pure.</summary>
+    public static bool IsDivider(string reference) => TryParse(reference, out var kind, out _) && kind == HomeItemKind.Divider;
+
+    /// <summary><paramref name="items"/> with a new divider at the end (2026-10-13, the bar tab's <c>+ Add divider</c>; <see cref="ItemOrder.NextDivider"/>). Pure.</summary>
+    public static List<string> AddDivider(IReadOnlyList<string> items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        var list = Resolve(items).ToList();
+        list.Add(ItemOrder.NextDivider(list));
+        return list;
+    }
 
     /// <summary>The items <paramref name="saved"/> names, in its order, each once; malformed ones and nulls skipped. Pure.</summary>
     public static IReadOnlyList<string> Resolve(IReadOnlyList<string>? saved)
@@ -239,7 +259,7 @@ public static class HomeBarItems
     /// </summary>
     public static string Value(IReadOnlyList<string>? saved, HaCatalog? catalog)
     {
-        var items = Resolve(saved);
+        var items = Resolve(saved).Where(i => !IsDivider(i)).ToList();   // a divider is no item to count (2026-10-13)
         return items.Count == 0 ? HomeBarText.NoItems : HomeBarText.ItemsValue(items.Select(i => NameOf(i, catalog)).ToList());
     }
 
@@ -259,6 +279,11 @@ public static class HomeBarItems
         if (kind == HomeItemKind.Shopping)
         {
             return HomeBarText.ShoppingName;
+        }
+
+        if (kind == HomeItemKind.Divider)
+        {
+            return HomeBarText.DividerName;
         }
 
         return catalog is null ? Readable(id) : catalog.NameOf(id);
@@ -345,6 +370,7 @@ public static class HomeBarItems
             return null;
         }
 
+        items = items.Where(i => !IsDivider(i)).ToList();   // a divider is never the one named (2026-10-13)
         if (Normalize(text) is { } reference && items.Contains(reference, StringComparer.Ordinal))
         {
             return reference;

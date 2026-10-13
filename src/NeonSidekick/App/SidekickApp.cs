@@ -99,6 +99,8 @@ public sealed class SidekickApp
 
     /// <summary><c>/log</c>'s window (2026-10-02, <c>Viewer.LogWindow.Show</c> over the run's buffer), or null where there is none.</summary>
     private readonly Action? _openLogWindow;
+    private readonly Action? _openLogWindowBehind;
+    private readonly Action<string>? _openViewerBehind;
 
     /// <summary><c>/process &lt;id&gt;</c>'s window (2026-10-05, <c>Viewer.ProcessWindow.Show</c>), or null where there is none.</summary>
     private readonly Action<Shell.ProcessSession, Action<Shell.ProcessSession>>? _openProcessWindow;
@@ -216,6 +218,8 @@ public sealed class SidekickApp
         Func<string, Action, Viewer.ILiveView>? liveView = null,
         Action<string>? showShot = null,
         Action? openLogWindow = null,
+        Action? openLogWindowBehind = null,
+        Action<string>? openViewerBehind = null,
         Func<bool>? closeLogWindow = null,
         Func<bool>? closeViewer = null,
         Screen.IScreenSystem? screenSystem = null, Hotkeys.IHotkeyProbe? hotkeyProbe = null,
@@ -247,6 +251,8 @@ public sealed class SidekickApp
         _liveView = liveView;
         _showShot = showShot;
         _openLogWindow = openLogWindow;
+        _openLogWindowBehind = openLogWindowBehind;
+        _openViewerBehind = openViewerBehind;
         _closeLogWindow = closeLogWindow;
         _closeViewer = closeViewer;
         // The Claude Code server (2026-09-30): a host over the real CLI, with this executable as its MCP relay, unless a test gives its own.
@@ -2277,7 +2283,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as IMouseInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

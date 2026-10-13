@@ -138,4 +138,106 @@ public partial class ScreenPaneTests
             Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
         }
     }
+
+    /// <summary>The spinner's frame, a blank and its label at zero seconds: the busy row's spinner part.</summary>
+    private static string SpinnerPart(string label) => Theme.SpinnerFrames[0] + " " + ScreenPane.BusyText(label, TimeSpan.Zero);
+
+    /// <summary>
+    /// The spinner a section of its own (later on 2026-10-13, the user's ask): pinned right it stands at the right edge, the stop
+    /// hint right after it (the user's pick), its usage zone there; the idle row draws nothing in its place.
+    /// </summary>
+    [Fact]
+    public void TheBusyRow_TheSpinnerPinnedRight_StandsThere_TheStopHintAfterIt()
+    {
+        _cursorTop = 100;
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Strip = () => "🔊";
+        pane.Trailer = () => "";
+        pane.StopHintShown = () => true;
+        pane.HintLayout = () => [ScreenPane.HintSlot.Strip, ScreenPane.HintSlot.Spinner.AtRight()];
+        pane.Show();
+        pane.ShowInput("", 0);
+        Assert.DoesNotContain("thinking", Output);   // at rest: nothing for the spinner
+
+        using (pane.BeginBusy("thinking"))
+        {
+            string right = SpinnerPart("thinking") + ScreenPane.HintSeparator + ScreenPane.StopHint;
+            int column = 39 - TextCells.Width(right);
+            Assert.Contains("🔊" + new string(' ', column - 2) + right, Output);
+            Assert.True(pane.TryHitHint(column + 1, 102, out var hit));
+            Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Usage, "", column), hit);
+            Assert.True(pane.TryHitHint(0, 102, out hit));
+            Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "🔊", 0), hit);
+        }
+    }
+
+    /// <summary>The spinner after the strip on the left (later on 2026-10-13): it stands there, the stop hint after it.</summary>
+    [Fact]
+    public void TheBusyRow_TheSpinnerAfterTheStrip_OnTheLeft()
+    {
+        _cursorTop = 100;
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Strip = () => "🔊";
+        pane.Trailer = () => "";
+        pane.StopHintShown = () => true;
+        pane.HintLayout = () => [ScreenPane.HintSlot.Strip, ScreenPane.HintSlot.Spinner];
+        pane.Show();
+        pane.ShowInput("", 0);
+
+        using (pane.BeginBusy("thinking"))
+        {
+            Assert.Contains("🔊" + ScreenPane.HintSeparator + SpinnerPart("thinking") + ScreenPane.HintSeparator + ScreenPane.StopHint, Output);
+            int column = TextCells.Width("🔊" + ScreenPane.HintSeparator);
+            Assert.True(pane.TryHitHint(column, 102, out var hit));
+            Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Usage, "", column), hit);
+        }
+    }
+
+    /// <summary>
+    /// The spinner kept last (later on 2026-10-13, the user's pick): pinned right on a row too narrow, the right group's other part goes
+    /// first, then the left gives way; the spinner stays whole.
+    /// </summary>
+    [Fact]
+    public void TheBusyRow_TooNarrow_TheSpinnerPinnedRight_IsKeptLast()
+    {
+        _cursorTop = 100;
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Trailer = () => "";
+        pane.Strip = () => "abc";
+        pane.BusyUsage = () => new string('x', 30);   // the tally: the busy row draws the strip, the queued count and the tally, no text slots
+        pane.HintLayout = () => [ScreenPane.HintSlot.UsageOf(""), ScreenPane.HintSlot.Strip.AtRight(), ScreenPane.HintSlot.Spinner.AtRight()];
+        pane.Show();
+        pane.ShowInput("", 0);
+
+        using (pane.BeginBusy("thinking"))
+        {
+            string spinner = SpinnerPart("thinking");
+            string left = ScreenPane.Fit(new string('x', 30), 39 - TextCells.Width(spinner) - ScreenPane.TrailerGap);
+            Assert.Contains(left + new string(' ', 39 - TextCells.Width(left) - TextCells.Width(spinner)) + spinner, Output);
+            // The strip ("abc", the right group's inner part) went first: nothing stands between the cut left group and the spinner.
+        }
+    }
+
+    /// <summary>The spinner kept last on the left too (later on 2026-10-13): a part before it goes whole rather than the spinner be cut.</summary>
+    [Fact]
+    public void TheBusyRow_TooNarrow_TheSpinnerLateOnTheLeft_IsKeptLast()
+    {
+        _cursorTop = 100;
+        using var pane = Pane();
+        pane.Hint = () => "idle";
+        pane.Trailer = () => "";
+        pane.Strip = () => "abc";
+        pane.BusyUsage = () => new string('x', 30);
+        pane.HintLayout = () => [ScreenPane.HintSlot.Strip, ScreenPane.HintSlot.UsageOf(""), ScreenPane.HintSlot.Spinner];
+        pane.Show();
+        pane.ShowInput("", 0);
+
+        using (pane.BeginBusy("thinking"))
+        {
+            Assert.Contains("abc" + ScreenPane.HintSeparator + SpinnerPart("thinking"), Output);
+        }
+    }
 }

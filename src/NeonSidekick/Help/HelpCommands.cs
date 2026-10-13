@@ -89,7 +89,7 @@ public static class HelpCommands
             new("/comfy", "Show the ComfyUI server's status, the workflows found (family, input, size, placeholders), skipped files and where workflows go, in a pane. A server that does not answer is an error line in the chat."),
             new("/comfy offered", "List the workflows currently offered to the model in a pane, one bullet each (name, family, input, size, description), without asking the server."),
             new("/comfy edit json|markdown|md <workflow>", "Open a workflow's graph, or its `.md`, in your editor (the `.md` is created with the family filled in if it does not exist)."),
-            new("/comfy view", "Open the picture viewer on the output folder. Works while a reply runs."),
+            new("/comfy view", "Open the picture viewer on the output folder. Works while a reply runs. Ctrl+Alt+U opens it behind the terminal's keyboard focus (or closes it); however it closes, the terminal gets the focus back if the viewer had it."),
             new("/comfy thumbs", "Open the thumbnail browser on the output folder. Works while a reply runs."),
             new("/comfy purge", "Permanently delete everything in the output folder (under the profile's `images` folder), after a yes/no. Refused when the output folder is the `images` folder itself."),
         ]),
@@ -187,7 +187,7 @@ public static class HelpCommands
         ]),
         new("/log",
         [
-            new("/log", "Open the log window: this run's diagnostic lines, coloured by level, following the newest while it is at the bottom. Scrolling away pauses it; Ctrl+E, Ctrl+End or scrolling back to the bottom follows again, Ctrl+Home goes to the top. Drag to select, Ctrl+A selects all, Ctrl+C copies. F11 or a double-click is full screen, Esc leaves full screen and then closes it. TAB brings the terminal forward, and any other Ctrl or Alt chord runs in the chat as if pressed there (Ctrl+G closes the window)."),
+            new("/log", "Open the log window: this run's diagnostic lines, coloured by level, following the newest while it is at the bottom. Scrolling away pauses it; Ctrl+E, Ctrl+End or scrolling back to the bottom follows again, Ctrl+Home goes to the top. Drag to select, Ctrl+A selects all, Ctrl+C copies. F11 or a double-click is full screen, Esc leaves full screen and then closes it. TAB brings the terminal forward, and any other Ctrl or Alt chord runs in the chat as if pressed there (Ctrl+G closes the window). Opened by Ctrl+G it stays behind the terminal's keyboard focus; however it closes, the terminal gets the focus back if the window had it."),
             new("/log file", "Open the diagnostic log file in your editor. Only available when the app was started with `--log <path>`."),
             new("/log path", "Copy the diagnostic log file's path to the clipboard. Only available when the app was started with `--log <path>`."),
         ]),
@@ -277,6 +277,8 @@ public static class HelpCommands
         new("/queue",
         [
             new("/queue [clear]", "List and prune the messages queued during a reply (`⊠ clear all` or `c` drops them all). While the queue is held (*Queue cancel mode* `hold`, after a cancelled reply), `➤ send` or `s` sends the next one now; its reply's end releases the hold. Under *Queue mode* `manual` the send is always there: each press sends the next message (under a reply, when it ends). `/queue clear` drops them without opening the pane. Ctrl+Q runs `/queue`, Ctrl+Alt+Q `/queue clear`."),
+            new("/queue mode automatic|manual|disabled", "Set *Queue mode* without opening `/settings`: `automatic` queues what you send during a reply and sends it when the reply ends, `manual` queues every message for `➤ send`, `disabled` keeps no list. Works during a reply too."),
+            new("/queue cancel hold|drain|empty", "Set *Queue cancel mode* without opening `/settings`: what a cancelled reply does to the queue (`hold` holds it until your next message has run, `drain` sends the next one at once, `empty` drops them all). Works during a reply too."),
         ]),
         new("/read",
         [

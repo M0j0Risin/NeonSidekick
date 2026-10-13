@@ -755,6 +755,7 @@ internal sealed unsafe class ThumbsWindowThread
                 DisarmDelete();
                 return IntPtr.Zero;
             case WmClose:
+                TerminalHandoff.ReturnFocus(hwnd);   // the terminal in front again when this window had it (2026-10-13, the user's ask)
                 _menu?.Close();
                 _chrome.RememberPosition(ThumbsWindow.Placed);
                 DestroyWindow(hwnd);

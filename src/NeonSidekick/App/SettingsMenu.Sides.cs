@@ -54,7 +54,10 @@ internal sealed partial class SettingsMenu
     /// <summary>The page row of <see cref="SidedRows"/> that shows item <paramref name="index"/> (into <see cref="ItemOrder.Sided.All"/>). Pure.</summary>
     public static int SidedRowOf(ItemOrder.Sided groups, int index) => index < groups.Left.Count ? index + 1 : index + 2;
 
-    /// <summary>What a sided checklist reads and writes: the field it saves under, its ids and labels, and its three saved lists.</summary>
+    /// <summary>
+    /// What a sided checklist reads and writes: the field it saves under, its ids and labels, and its three saved lists; the ids that
+    /// are always on and the notice when one is asked to go (2026-10-13, the hint bar's spinner).
+    /// </summary>
     private sealed record SidedChecklist(
         SettingsField Field,
         string Hint,
@@ -66,7 +69,10 @@ internal sealed partial class SettingsMenu
         Action<AppSettingsData, IReadOnlySet<string>> SaveOn,
         Action<AppSettingsData, ItemOrder.Sided> SaveSides,
         Action<AppSettingsData> Reset,
-        Func<AppSettingsData, bool> IsDefault);
+        Func<AppSettingsData, bool> IsDefault,
+        IReadOnlySet<string>? Fixed = null,
+        string? FixedNotice = null,
+        bool Dividers = false);
 
     /// <summary>The Tool bar's checklist (<see cref="EditToolbarItemsAsync"/>).</summary>
     private static readonly SidedChecklist ToolbarChecklist = new(
@@ -82,7 +88,8 @@ internal sealed partial class SettingsMenu
         d => { d.ToolbarItems = null; d.ToolbarOrder = null; d.ToolbarRight = null; },
         d => App.ToolbarItems.Resolve(d.ToolbarItems).SetEquals(App.ToolbarItems.Defaults)
             && App.ToolbarItems.SaveOrder(App.ToolbarItems.Sides(d.ToolbarOrder, d.ToolbarRight).All) is null
-            && App.ToolbarItems.SaveRight(App.ToolbarItems.ResolveRight(d.ToolbarRight)) is null);
+            && App.ToolbarItems.SaveRight(App.ToolbarItems.ResolveRight(d.ToolbarRight)) is null,
+        Dividers: true);
 
     /// <summary>The Hint bar's checklist (<see cref="EditHintBarAsync"/>).</summary>
     private static readonly SidedChecklist HintBarChecklist = new(
@@ -98,7 +105,9 @@ internal sealed partial class SettingsMenu
         d => { d.HintBarItems = null; d.HintBarOrder = null; d.HintBarRight = null; },
         d => App.HintBarItems.Resolve(d.HintBarItems).SetEquals(App.HintBarItems.Defaults)
             && App.HintBarItems.SaveOrder(App.HintBarItems.Sides(d.HintBarOrder, d.HintBarRight).All) is null
-            && App.HintBarItems.SaveRight(App.HintBarItems.ResolveRight(d.HintBarRight)) is null);
+            && App.HintBarItems.SaveRight(App.HintBarItems.ResolveRight(d.HintBarRight)) is null,
+        App.HintBarItems.Fixed,
+        App.HintBarItems.SpinnerFixedNotice);
 
     /// <summary>
     /// A checklist in two groups under the settings list (2026-10-13): Enter or Space flips the cursor's item and saves at once, the
@@ -117,7 +126,7 @@ internal sealed partial class SettingsMenu
             var all = sides.All;
             var (rows, headings) = SidedRows(sides, id => list.Label(id, on.Contains(id)));
             var page = new MenuPage(Crumb(FieldName(list.Field)), rows, list.Hint) { SpaceToggles = true, Headings = headings };
-            var picked = await PickSidedChecklistAsync(page, SidedRowOf(sides, Math.Clamp(index, 0, all.Count - 1)), cancellationToken).ConfigureAwait(false);
+            var picked = await PickSidedChecklistAsync(page, SidedRowOf(sides, Math.Clamp(index, 0, all.Count - 1)), list.Dividers ? DividerChecklistButtons : DefaultChecklistButtons, cancellationToken).ConfigureAwait(false);
             if (picked is not { } pick)
             {
                 if (!changed)
@@ -140,6 +149,16 @@ internal sealed partial class SettingsMenu
                 continue;   // the default checks, order and sides already: nothing to save
             }
 
+            if (pick.Button == DividerIndex && list.Dividers)
+            {
+                // + divider (2026-10-13, the user's ask): a new one right after the cursor's item, on its side, the cursor on it.
+                var (added, landed) = ItemOrder.AddDivider(sides, at < 0 ? index : at);
+                Apply(list.Field, d => list.SaveSides(d, added));
+                index = landed;
+                changed = true;
+                continue;
+            }
+
             if (pick.Button < 0 && at < 0)
             {
                 continue;   // a heading (the prompt without the pane lists them too): nothing there
@@ -160,8 +179,30 @@ internal sealed partial class SettingsMenu
             }
 
             string row = all[index];
+            if (pick.Button < 0 && ItemOrder.IsDivider(row))
+            {
+                // A divider (2026-10-13) has no check: Delete takes it out, Enter and Space do nothing.
+                if (pick.Remove)
+                {
+                    var without = new ItemOrder.Sided(sides.Left.Where(id => id != row).ToList(), sides.Right.Where(id => id != row).ToList());
+                    Apply(list.Field, d => list.SaveSides(d, without));
+                    index = Math.Min(index, Math.Max(0, without.All.Count - 1));
+                    changed = true;
+                }
+
+                continue;
+            }
+
+            var fixedIds = list.Fixed ?? new HashSet<string>(StringComparer.Ordinal);
+            if (pick.Button < 0 && fixedIds.Contains(row))
+            {
+                // An always-on item (2026-10-13, the hint bar's spinner): Enter, Space and Delete leave it, and say how it moves.
+                Sink.Notice(list.FixedNotice ?? UnchangedNotice);
+                continue;
+            }
+
             var next = pick.Button == SelectAllIndex ? list.Names.ToHashSet(StringComparer.Ordinal)
-                : pick.Button == SelectNoneIndex ? new HashSet<string>(StringComparer.Ordinal)
+                : pick.Button == SelectNoneIndex ? fixedIds.ToHashSet(StringComparer.Ordinal)
                 : pick.Remove ? list.Names.Where(n => on.Contains(n) && n != row).ToHashSet(StringComparer.Ordinal)
                 : list.Names.Where(n => on.Contains(n) != (n == row)).ToHashSet(StringComparer.Ordinal);
             if (next.SetEquals(on))
@@ -178,11 +219,11 @@ internal sealed partial class SettingsMenu
     /// <see cref="PickOrderedChecklistAsync"/> for a checklist in two groups (2026-10-13): <see cref="MenuPage.Sides"/> on too, the pick
     /// whole. Without the pane, the row alone (no buttons, moves or sides).
     /// </summary>
-    private async Task<MenuPick?> PickSidedChecklistAsync(MenuPage page, int cursor, CancellationToken cancellationToken)
+    private async Task<MenuPick?> PickSidedChecklistAsync(MenuPage page, int cursor, IReadOnlyList<MenuButton> buttons, CancellationToken cancellationToken)
     {
         if (_pane.Enabled)
         {
-            return await _pane.PickAsync(page with { Buttons = DefaultChecklistButtons, Moves = true, Sides = true }, cursor, cancellationToken).ConfigureAwait(false);
+            return await _pane.PickAsync(page with { Buttons = buttons, Moves = true, Sides = true }, cursor, cancellationToken).ConfigureAwait(false);
         }
 
         return await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { } row ? new MenuPick(0, row) : null;

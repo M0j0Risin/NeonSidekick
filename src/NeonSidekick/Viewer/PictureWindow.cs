@@ -83,6 +83,9 @@ public static class PictureWindow
     /// </summary>
     public static void Open(string folder) => OpenOn(folder, null);
 
+    /// <summary><see cref="Open(string)"/>, brought forward or not (2026-10-13, the user's ask: a chord's open leaves the keyboard in the terminal).</summary>
+    public static void Open(string folder, bool activate) => OpenOn(folder, null, activate);
+
     /// <summary>
     /// The window on the folder of <paramref name="picture"/> (a full path to a file that exists), held on that picture — a
     /// double-clicked one (2026-09-27, the user's call: clicks open the built-in viewer, not the app Windows registers).
@@ -1180,6 +1183,7 @@ internal sealed unsafe class PictureWindowThread : ILiveWindow
                 TakeEdited();
                 return IntPtr.Zero;
             case WmClose:
+                TerminalHandoff.ReturnFocus(hwnd);   // the terminal in front again when this window had it (2026-10-13, the user's ask)
                 _menu?.Close();
                 LeaveLive();
                 _chrome.RememberPosition(_camera ? PictureWindow.LivePlaced : PictureWindow.Placed);

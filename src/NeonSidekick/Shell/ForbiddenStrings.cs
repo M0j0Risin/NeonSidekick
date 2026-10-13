@@ -13,130 +13,83 @@ namespace NeonSidekick.Shell;
 public static class ForbiddenStrings
 {
     /// <summary>
+    /// The manifest name <c>assets/police/strings.txt</c> is embedded under (2026-10-13, the user's ask: the starter list in a file,
+    /// the fun verbs' way, so it changes without touching code). Its <c>[all]</c>, <c>[windows]</c> and <c>[mac]</c> sections are
+    /// <see cref="SharedDefaults"/>, <see cref="WindowsDefaults"/> and <see cref="MacDefaults"/> (<see cref="Parse"/>); the reasons for
+    /// each entry are the file's own comments.
+    /// </summary>
+    public const string ResourceName = "police/strings.txt";
+
+    /// <summary>The file's three sections, read once.</summary>
+    private static readonly (string[] Shared, string[] Windows, string[] Mac) Embedded = ReadEmbedded();
+
+    private static (string[] Shared, string[] Windows, string[] Mac) ReadEmbedded()
+    {
+        using var stream = typeof(ForbiddenStrings).Assembly.GetManifestResourceStream(ResourceName)
+            ?? throw new InvalidOperationException("The forbidden strings " + ResourceName + " are not embedded.");
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return Parse(reader.ReadToEnd());
+    }
+
+    /// <summary>
+    /// The sections <paramref name="text"/> holds (2026-10-13): one string per line (CRLF or LF), each trimmed, blank lines skipped,
+    /// a line whose first non-blank character is <c>#</c> a comment; a <c>[all]</c>, <c>[windows]</c> or <c>[mac]</c> line (any case)
+    /// starts a section, the lines before any header are <c>[all]</c>'s, and an unknown header's lines are skipped. A repeat within a
+    /// section is dropped (the first kept); everything else is the file's, kept as written. Pure.
+    /// </summary>
+    public static (string[] Shared, string[] Windows, string[] Mac) Parse(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var shared = new List<string>();
+        var windows = new List<string>();
+        var mac = new List<string>();
+        List<string>? into = shared;
+        foreach (string raw in text.Split('\n'))
+        {
+            string line = raw.Trim();
+            if (line.Length == 0 || line[0] == '#')
+            {
+                continue;
+            }
+
+            if (line[0] == '[' && line[^1] == ']')
+            {
+                into = line[1..^1].Trim().ToLowerInvariant() switch
+                {
+                    "all" => shared,
+                    "windows" => windows,
+                    "mac" => mac,
+                    _ => null,
+                };
+                continue;
+            }
+
+            if (into is not null && !into.Contains(line, StringComparer.Ordinal))
+            {
+                into.Add(line);
+            }
+        }
+
+        return (shared.ToArray(), windows.ToArray(), mac.ToArray());
+    }
+
+    /// <summary>
     /// The entries a fresh profile starts with on either system (2026-10-08, the user's call, from the review in
-    /// <c>.notes/RECOMMENDED_FORBIDDEN_STRINGS.md</c>): actions that do harm wherever they run, worded so ordinary agent work
-    /// almost never contains them, since a match has no pane and no yolo. A pipe into a shell is spelled both ways because
-    /// <see cref="Normalize"/> never adds or removes a space. PowerShell's (<c>-EncodedCommand</c>, <c>| iex</c>,
-    /// <c>DownloadString(</c>) stay on a Mac too: pwsh may be installed, and they match nothing otherwise.
+    /// <c>.notes/RECOMMENDED_FORBIDDEN_STRINGS.md</c>): the file's <c>[all]</c> section since 2026-10-13 (<see cref="ResourceName"/>).
     /// </summary>
-    public static string[] SharedDefaults =>
-    [
-        "shutdown -",
-        ".ssh/id_",
-        "| bash",
-        "|bash",
-        "-EncodedCommand",
-        "DownloadString(",
-        "| iex",
-        "|iex",
-        "push --force",
-        "reset --hard",
-    ];
+    public static string[] SharedDefaults => [.. Embedded.Shared];
 
-    /// <summary>
-    /// Windows' own defaults beside <see cref="SharedDefaults"/>: disks, boot and backups; power; Defender and the firewall;
-    /// scheduled tasks, services and accounts; credentials, the app's own DPAPI secrets among them (the Win32 call and .NET's
-    /// wrapper from C# and PowerShell, never a bare <c>ProtectedData</c>, which Microsoft.Extensions.AI's
-    /// <c>TextReasoningContent.ProtectedData</c> would trip); the event logs. <c>of=/dev/sd</c>/<c>nvme</c> are dd under WSL or
-    /// Git Bash (a bare <c>of=/dev/</c> would refuse <c>of=/dev/null</c>); <c>PhysicalDrive</c> is <c>\\.\PhysicalDrive0</c>
-    /// in any backslash spelling.
-    /// </summary>
-    public static string[] WindowsDefaults =>
-    [
-        "format c:",
-        "Format-Volume",
-        "Clear-Disk",
-        "Initialize-Disk",
-        "diskpart",
-        "bcdedit",
-        "vssadmin delete",
-        "shadowcopy delete",
-        "wbadmin delete",
-        "cipher /w",
-        "mkfs",
-        "of=/dev/sd",
-        "of=/dev/nvme",
-        "PhysicalDrive",
-        "shutdown /",
-        "Stop-Computer",
-        "Restart-Computer",
-        "Set-MpPreference",
-        "Add-MpPreference",
-        "netsh advfirewall",
-        "Set-NetFirewallProfile",
-        "schtasks /create",
-        "Register-ScheduledTask",
-        "New-Service",
-        "New-LocalUser",
-        "Add-LocalGroupMember",
-        "net localgroup",
-        "mimikatz",
-        "sekurlsa",
-        "lsass",
-        "reg save hklm",
-        "cmdkey /list",
-        "vaultcmd",
-        "CryptUnprotectData",
-        "ProtectedData.Unprotect",
-        "ProtectedData]::Unprotect",
-        @".ssh\id_",
-        "wevtutil cl",
-        "Clear-EventLog",
-    ];
+    /// <summary>Windows' own defaults beside <see cref="SharedDefaults"/>: the file's <c>[windows]</c> section.</summary>
+    public static string[] WindowsDefaults => [.. Embedded.Windows];
 
-    /// <summary>
-    /// The Mac's own defaults beside <see cref="SharedDefaults"/>: diskutil's erasing verbs, <c>newfs_</c>, dd onto a disk,
-    /// Time Machine's deletes; <c>nvram</c>; Gatekeeper, the firewalls and the privacy database; launchd, login hooks, cron
-    /// and the account tools; the Keychain (the app's own <c>keychain:</c> key is a generic password, <c>Sql/MacKeychain</c>)
-    /// and password prompts; a pipe into zsh; <c>log erase</c>. Left out: <c>csrutil</c> (Recovery only, so it guards nothing)
-    /// and <c>com.apple.quarantine</c> (the app's own README asks the user to clear it).
-    /// </summary>
-    public static string[] MacDefaults =>
-    [
-        "diskutil erase",
-        "diskutil zeroDisk",
-        "diskutil secureErase",
-        "diskutil partitionDisk",
-        "diskutil apfs delete",
-        "newfs_",
-        "of=/dev/disk",
-        "of=/dev/rdisk",
-        "tmutil delete",
-        "tmutil disable",
-        "nvram",
-        "spctl --master-disable",
-        "spctl --global-disable",
-        "spctl --add",
-        "socketfilterfw",
-        "pfctl -d",
-        "tccutil reset",
-        "TCC.db",
-        "LaunchAgents",
-        "LaunchDaemons",
-        "launchctl load",
-        "launchctl bootstrap",
-        "launchctl submit",
-        "LoginHook",
-        "crontab",
-        "dscl",
-        "sysadminctl",
-        "dseditgroup",
-        "generic-password",
-        "internet-password",
-        "dump-keychain",
-        ".keychain-db",
-        "hidden answer",
-        "with administrator privileges",
-        "sudo -S",
-        "| zsh",
-        "|zsh",
-        "log erase",
-    ];
+    /// <summary>The Mac's own defaults beside <see cref="SharedDefaults"/>: the file's <c>[mac]</c> section.</summary>
+    public static string[] MacDefaults => [.. Embedded.Mac];
 
     /// <summary>
     /// What <see cref="Settings.AppSettingsData.ShellPoliceForbiddenStrings"/> starts as: <see cref="SharedDefaults"/> and this
-    /// system's own list (Windows', else the Mac's), <see cref="Sorted"/> as the editor saves it. Only a fresh profile gets it; a
-    /// saved list stands, the fresh <c>ToolsDisabled</c>'s way, so a profile from before keeps its own (empty) list.
+    /// system's own list (Windows', else the Mac's), <see cref="Sorted"/> as the editor saves it. Only a fresh profile gets it, and
+    /// the restore button puts it back; a saved list stands, the fresh <c>ToolsDisabled</c>'s way, so a profile keeps its own list
+    /// when the file changes.
     /// </summary>
     public static List<string> Defaults => Sorted([.. SharedDefaults, .. OperatingSystem.IsWindows() ? WindowsDefaults : MacDefaults]);
 

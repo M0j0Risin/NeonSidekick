@@ -51,6 +51,7 @@ public class AppSettingsTests : IDisposable
         BotChatLimitedComfyWorkflows = ["flux", "flux-edit"],
         BotChatImageMode = "autonomous",
         BotChatImg2ImgMode = "chat-history",
+        BotChatImageMentionMode = "generate",   // disabled by default since 2026-10-13
         BotChatImageAsync = false,
         BotChatNonTtsDelaySeconds = 12,
         BotChatTools = true,

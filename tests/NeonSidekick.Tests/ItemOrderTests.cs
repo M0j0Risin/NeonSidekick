@@ -95,17 +95,57 @@ public class ItemOrderTests
         Assert.Null(PerfBarItems.SaveOrder(PerfBarItems.Order(null)));
     }
 
+    /// <summary>
+    /// Dividers (2026-10-13, the user's ask): their own ids, kept only where asked for; a new one takes the lowest free number; one is
+    /// shown only between two drawn items; the tool bar's default order holds two (after Memory and after Shell).
+    /// </summary>
+    [Fact]
+    public void Dividers_AreTheirOwnIds_KeptWhereAsked_ShownBetweenItemsAlone()
+    {
+        Assert.True(ItemOrder.IsDivider("divider:1"));
+        Assert.True(ItemOrder.IsDivider("divider:12"));
+        Assert.False(ItemOrder.IsDivider("divider:0"));
+        Assert.False(ItemOrder.IsDivider("divider:"));
+        Assert.False(ItemOrder.IsDivider("divider:x"));
+        Assert.False(ItemOrder.IsDivider("Divider:1"));
+        Assert.Equal("divider:2", ItemOrder.NextDivider(["divider:1", "divider:3", "a"]));
+        Assert.Equal("divider:1", ItemOrder.NextDivider([]));
+        Assert.Equal(["a", "divider:1", "b"], ItemOrder.Resolve(["a", " DIVIDER:1 ", "b", "divider:1"], ["a", "b"], keepDividers: true));
+        Assert.Equal(["a", "b"], ItemOrder.Resolve(["a", "divider:1", "b"], ["a", "b"]));
+        Assert.True(ItemOrder.ResolveRight(["b", "divider:2"], ["a", "b"], [], keepDividers: true).SetEquals(["b", "divider:2"]));
+        Assert.Equal(["b", "divider:2"], ItemOrder.SaveRight(["divider:2", "b"], ["a", "b"], []));
+        Assert.Null(ItemOrder.Save(["a", "divider:1", "b"], ["a", "b"], ["a", "divider:1", "b"]));
+
+        // Shown only between two drawn items: none at an end, none doubled, none beside a hidden one's gap.
+        Assert.Equal(["a", "divider:1", "c"], ItemOrder.ShownDividers(["divider:9", "a", "divider:1", "b", "divider:2", "c", "divider:3"], id => id != "b"));
+        Assert.Equal(["a"], ItemOrder.ShownDividers(["a", "divider:1", "b"], id => id == "a"));
+
+        var (added, at) = ItemOrder.AddDivider(new ItemOrder.Sided(["a", "b"], ["c"]), 2);
+        Assert.Equal(["c", "divider:1"], added.Right);
+        Assert.Equal(3, at);
+        (added, at) = ItemOrder.AddDivider(new ItemOrder.Sided(["a", "b"], ["c"]), 0);
+        Assert.Equal(["a", "divider:1", "b"], added.Left);
+        Assert.Equal(1, at);
+
+        string[] memoryOn = [.. ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Memory).Take(3)];
+        Assert.Equal([ToolbarItems.Memory, "divider:1", ToolbarItems.Ask], memoryOn);
+        Assert.Equal([ToolbarItems.Shell, "divider:2", ToolbarItems.Files], ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Shell).Take(3));
+        Assert.Equal(ToolbarItems.Names.Length + 2, ToolbarItems.DefaultOrder.Length);
+        Assert.Null(ToolbarItems.SaveOrder(ToolbarItems.DefaultOrder));
+        Assert.Equal(ToolbarItems.Names, ToolbarItems.Order([.. ToolbarItems.Names]));   // a saved order without them stays without
+    }
+
     /// <summary>The toolbar's order (2026-10-13): every item free, the path no longer held last; by default the path and the name are the right group.</summary>
     [Fact]
     public void TheToolbarsOrder_IsEveryItemFree_ThePathAndTheNameRightByDefault()
     {
-        Assert.Equal(ToolbarItems.Names, ToolbarItems.Order(null));
+        Assert.Equal(ToolbarItems.DefaultOrder, ToolbarItems.Order(null));   // with its two dividers since 2026-10-13
         var order = ToolbarItems.Order(["path", "perf", "settings"]);
         Assert.Equal(["path", "model", "perf", "settings"], order.Take(4));   // the model after the path, its neighbour
         Assert.Equal(ToolbarItems.Names.Length, order.Count);
         var sides = ToolbarItems.Sides(null, null);
         Assert.Equal([ToolbarItems.Path, ToolbarItems.Model], sides.Right);
-        Assert.Equal(ToolbarItems.Names, sides.All);
+        Assert.Equal(ToolbarItems.DefaultOrder, sides.All);
         var moved = ToolbarItems.Sides(["model", "settings"], ["settings"]);
         Assert.Equal(["settings"], moved.Right);
         Assert.Equal(["model", "profile"], moved.Left.Take(2));

@@ -9,6 +9,23 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public sealed class TerminalHandoffTests
 {
+    /// <summary>
+    /// A closing window hands the foreground back (2026-10-13, the user's ask) only when it, or a window it owns, is in front: never
+    /// when the terminal or another app is, and never without a terminal or a window.
+    /// </summary>
+    [Fact]
+    public void ShouldReturn_OnlyWhenTheClosingWindowHasTheFocus()
+    {
+        IntPtr viewer = new(0x100), menu = new(0x200), terminal = new(0x300), other = new(0x400);
+        Assert.True(TerminalHandoff.ShouldReturn(viewer, viewer, viewer, terminal));
+        Assert.True(TerminalHandoff.ShouldReturn(menu, viewer, viewer, terminal));      // its context menu in front, the viewer its owner
+        Assert.False(TerminalHandoff.ShouldReturn(terminal, terminal, viewer, terminal)); // the terminal has it already
+        Assert.False(TerminalHandoff.ShouldReturn(other, other, viewer, terminal));      // another app has it: left alone
+        Assert.False(TerminalHandoff.ShouldReturn(viewer, viewer, viewer, IntPtr.Zero)); // no terminal found
+        Assert.False(TerminalHandoff.ShouldReturn(IntPtr.Zero, IntPtr.Zero, viewer, terminal));
+        Assert.False(TerminalHandoff.ShouldReturn(viewer, viewer, IntPtr.Zero, terminal));
+    }
+
     [Theory]
     [InlineData(0x09, false, false, WindowKey.Focus)]   // TAB (Shift+TAB arrives the same: Shift is not looked at)
     [InlineData(0x09, true, false, WindowKey.Pass)]     // Ctrl+TAB is a chord

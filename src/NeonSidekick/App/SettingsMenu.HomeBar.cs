@@ -35,6 +35,9 @@ internal sealed partial class SettingsMenu
     // One tab as built: its strip title and rows, and the reference behind each row (null for a heading, a gap or a note).
     private sealed record HomeTab(MenuTab Tab, List<string?> Refs);
 
+    // The bar tab's last row (2026-10-13, the user's pick: "+ Add divider" under the items): no reference, this word instead.
+    private const string AddDividerRef = "+divider";
+
     /// <summary>
     /// The home bar's picker (2026-10-12, the user's ask: choose between rooms, lights, devices, and change the order): On the bar
     /// first — the items in the bar's order, numbered, the move keys (<see cref="MenuPage.Moves"/>: Shift+↑↓ a place,
@@ -100,6 +103,19 @@ internal sealed partial class SettingsMenu
 
                 if (tab == 0)
                 {
+                    if (pick.Row >= 0 && pick.Row < built[0].Refs.Count && built[0].Refs[pick.Row] == AddDividerRef)
+                    {
+                        // + Add divider (2026-10-13, the user's ask): a new one at the bar's end, the cursor on it to move it up.
+                        if (!pick.Remove && pick.Move == 0)
+                        {
+                            Apply(SettingsField.ShowHomeBar, d => d.HomeBarItems = HomeBarItems.AddDivider(items));
+                            cursor = items.Count;
+                            changed = true;
+                        }
+
+                        continue;
+                    }
+
                     if (items.Count == 0 || pick.Row >= items.Count)
                     {
                         continue;
@@ -205,10 +221,14 @@ internal sealed partial class SettingsMenu
             }
         }
 
-        rows.Add((Markup.Escape(HomeBarText.EmojiItem) + (glyph is not null ? Theme.DimMarkup("  " + glyph) : ""), (0, HomeItemDo.Emoji)));
-        if (glyph is not null)
+        if (!HomeBarItems.IsDivider(reference))
         {
-            rows.Add((Markup.Escape(HomeBarText.DefaultEmojiItem) + Theme.DimMarkup("  " + HomeChips.DefaultGlyph(reference, catalog)), (0, HomeItemDo.DefaultEmoji)));
+            // A divider has no emoji either (2026-10-13): its page is the moves and Remove.
+            rows.Add((Markup.Escape(HomeBarText.EmojiItem) + (glyph is not null ? Theme.DimMarkup("  " + glyph) : ""), (0, HomeItemDo.Emoji)));
+            if (glyph is not null)
+            {
+                rows.Add((Markup.Escape(HomeBarText.DefaultEmojiItem) + Theme.DimMarkup("  " + HomeChips.DefaultGlyph(reference, catalog)), (0, HomeItemDo.DefaultEmoji)));
+            }
         }
 
         rows.Add((Markup.Escape(HomeBarText.RemoveItem), (0, HomeItemDo.Move)));
@@ -311,6 +331,13 @@ internal sealed partial class SettingsMenu
         foreach (string item in items)
         {
             HomeBarItems.TryParse(item, out var kind, out string id);
+            if (kind == HomeItemKind.Divider)
+            {
+                rows.Add(Markup.Escape($"{number++.ToString(System.Globalization.CultureInfo.InvariantCulture),2}. {ScreenPane.DividerGlyph} {HomeBarText.DividerName}") + Theme.DimMarkup("  " + HomeBarText.DividerWhere));
+                refs.Add(item);
+                continue;
+            }
+
             // The entity's own glyph, as its chip has (2026-10-12: a TV's 📺 is in its device class, which a bare id lacks), or the
             // emoji of the user's own (later that day), the own one dim at the end.
             string own = HomeChips.DefaultGlyph(item, catalog);
@@ -330,6 +357,8 @@ internal sealed partial class SettingsMenu
             refs.Add(null);
         }
 
+        rows.Add(Markup.Escape(HomeBarText.AddDividerRow));
+        refs.Add(AddDividerRef);
         return new HomeTab(new MenuTab(HomeBarText.BarTab, rows) { Moves = true, Hint = HomeBarText.BarHint }, refs);
     }
 

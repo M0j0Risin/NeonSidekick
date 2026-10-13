@@ -238,9 +238,18 @@ public enum QueueAction
     /// <summary><c>clear</c>: every queued message dropped.</summary>
     Clear,
 
+    /// <summary><c>mode automatic|manual|disabled</c> (2026-10-13, the user's ask): <c>Queue mode</c> set, <see cref="QueueCommand.Mode"/>.</summary>
+    Mode,
+
+    /// <summary><c>cancel hold|drain|empty</c> (2026-10-13, the user's ask): <c>Queue cancel mode</c> set, <see cref="QueueCommand.Cancel"/>.</summary>
+    Cancel,
+
     /// <summary>Anything else; <see cref="ChatScreen.QueueUsageError"/>.</summary>
     Invalid,
 }
+
+/// <summary>The parsed <c>/queue</c> argument (2026-10-13): <paramref name="Mode"/> set by <see cref="QueueAction.Mode"/> alone, <paramref name="Cancel"/> by <see cref="QueueAction.Cancel"/>.</summary>
+public readonly record struct QueueCommand(QueueAction Action, Queueing Mode = Queueing.Automatic, QueueCancel Cancel = QueueCancel.Empty);
 
 /// <summary>
 /// What a <c>/memory</c> line asks for (2026-09-22, the user's ask, twice: <c>/forget</c> folded
@@ -510,7 +519,16 @@ internal sealed partial class ChatScreen
     /// <summary>The <c>/queue</c> word that drops every queued message (2026-09-21, the user's ask); case folded.</summary>
     public const string QueueClearWord = "clear";
     public const string QueueClearNote = "drop every queued message";
-    public const string QueueUsageError = "/queue lists the queued messages; /queue clear drops them all.";
+
+    /// <summary>The <c>/queue</c> word that sets <c>Queue mode</c> (2026-10-13, the user's ask); case folded.</summary>
+    public const string QueueModeWord = "mode";
+    public const string QueueModeNote = "set Queue mode: automatic, manual or disabled";
+
+    /// <summary>The <c>/queue</c> word that sets <c>Queue cancel mode</c> (2026-10-13, the user's ask); case folded.</summary>
+    public const string QueueCancelWord = "cancel";
+    public const string QueueCancelNote = "set Queue cancel mode: hold, drain or empty";
+
+    public const string QueueUsageError = "/queue lists the queued messages; /queue clear drops them all; /queue mode automatic|manual|disabled sets Queue mode; /queue cancel hold|drain|empty sets Queue cancel mode.";
 
 
     // The /memory grammar's words, their notes on the argument list and the usage error (2026-09-22,
@@ -583,6 +601,19 @@ internal sealed partial class ChatScreen
 
     /// <summary>The log window opened, or the open one brought forward (2026-10-02, <c>/log</c>; <c>Viewer.LogWindow.Show</c> over the run's buffer). Null = no window here: <c>/log</c> says so.</summary>
     private readonly Action? _openLogWindow;
+
+    /// <summary>The log window opened behind the terminal's focus (2026-10-13, the user's ask: a chord's open); null falls back to <see cref="_openLogWindow"/>.</summary>
+    private readonly Action? _openLogWindowBehind;
+
+    /// <summary>The viewer opened on a folder behind the terminal's focus (2026-10-13, a chord's open); null falls back to <see cref="_openViewer"/>.</summary>
+    private readonly Action<string>? _openViewerBehind;
+
+    /// <summary>
+    /// Whether the command running now came from a chord (2026-10-13, the user's ask: "a keyboard shortcut used to open and close any
+    /// external window should leave focus on the terminal window"): the window it opens is shown and raised without the focus.
+    /// Flows into the awaited dispatch (<see cref="ByChord"/>).
+    /// </summary>
+    private static readonly AsyncLocal<bool> s_byChord = new();
 
     /// <summary>The log window closed, true when one was open (later on 2026-10-02, the log chord's second press, Ctrl+G since 2026-10-12: <c>Viewer.LogWindow.Close</c>). Null = no window here.</summary>
     private readonly Func<bool>? _closeLogWindow;
@@ -1061,6 +1092,8 @@ internal sealed partial class ChatScreen
         Func<string, Action, Viewer.ILiveView>? liveView = null,
         Action<string>? showShot = null,
         Action? openLogWindow = null,
+        Action? openLogWindowBehind = null,
+        Action<string>? openViewerBehind = null,
         Func<bool>? closeLogWindow = null,
         Func<bool>? closeViewer = null,
         Action<string>? openTerminal = null,
@@ -1077,6 +1110,8 @@ internal sealed partial class ChatScreen
         _openProcessWindow = openProcessWindow;
         _openTerminal = openTerminal;
         _openLogWindow = openLogWindow;
+        _openLogWindowBehind = openLogWindowBehind;
+        _openViewerBehind = openViewerBehind;
         _closeLogWindow = closeLogWindow;
         _closeViewer = closeViewer;
         ArgumentNullException.ThrowIfNull(time);
@@ -1916,10 +1951,10 @@ internal sealed partial class ChatScreen
                 RunOrPost(() => HandleTerminal(""));
                 return true;
             case SlashCommand.Log:
-                RunOrPost(() => { if (!CloseByChord(command, args)) HandleLog(""); });
+                RunOrPost(() => { if (!CloseByChord(command, args)) ByChord(true, () => HandleLog("")); });
                 return true;
             case SlashCommand.Comfy when string.Equals(args.Trim(), ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase):
-                RunOrPost(() => { if (!CloseByChord(command, args)) OpenViewer(notice: true); });
+                RunOrPost(() => { if (!CloseByChord(command, args)) ByChord(true, () => OpenViewer(notice: true)); });
                 return true;
             case SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.Live:
                 RunOrPost(() => { if (!CloseByChord(command, args)) StartLive(); });
@@ -1951,6 +1986,32 @@ internal sealed partial class ChatScreen
     /// window the user closed in between is opened again. A chord held under a spinner waits for the idle line as a typed line
     /// and opens, as every chord there runs as typed. True when a window closed (and the notice is out); false runs the opener.
     /// </summary>
+    /// <summary>
+    /// <paramref name="run"/> with <see cref="s_byChord"/> set while <paramref name="chord"/> (2026-10-13): an async run takes the flag
+    /// into its awaits; the caller's own is put back as it returns.
+    /// </summary>
+    private static T ByChord<T>(bool chord, Func<T> run)
+    {
+        if (!chord)
+        {
+            return run();
+        }
+
+        bool was = s_byChord.Value;
+        s_byChord.Value = true;
+        try
+        {
+            return run();
+        }
+        finally
+        {
+            s_byChord.Value = was;
+        }
+    }
+
+    /// <summary><see cref="ByChord{T}"/> for a run with no result.</summary>
+    private static void ByChord(bool chord, Action run) => ByChord(chord, () => { run(); return 0; });
+
     private bool CloseByChord(string line)
     {
         var (command, args) = ParseLine(line);
@@ -2004,31 +2065,17 @@ internal sealed partial class ChatScreen
         ArgumentNullException.ThrowIfNull(shown);
         var sides = ToolbarItems.Sides(shown.ToolbarOrder, shown.ToolbarRight);
         var policy = ToolbarPolicy(shown);
-        List<ScreenPane.ToolbarItem> Side(IReadOnlyList<string> ids)
+        ScreenPane.ToolbarItem? ItemOf(string id) => id switch
         {
-            var side = new List<ScreenPane.ToolbarItem>();
-            foreach (string id in ids.Where(items.Contains))
-            {
-                switch (id)
-                {
-                    case ToolbarItems.Path when path.Length > 0:
-                        side.Add(ScreenPane.ToolbarItem.PathOf(path));
-                        break;
-                    case ToolbarItems.Model when model.Length > 0:
-                        side.Add(ScreenPane.ToolbarItem.ModelOf(model, mark));
-                        break;
-                    default:
-                        if (ToolbarGlyph(id, policy, shown.ShellPolice) is { } glyph)
-                        {
-                            side.Add(ScreenPane.ToolbarItem.GlyphOf(glyph, ToolbarItemOff(id, shown)));
-                        }
+            ToolbarItems.Path => path.Length > 0 ? ScreenPane.ToolbarItem.PathOf(path) : null,
+            ToolbarItems.Model => model.Length > 0 ? ScreenPane.ToolbarItem.ModelOf(model, mark) : null,
+            _ => ToolbarGlyph(id, policy, shown.ShellPolice) is { } glyph ? ScreenPane.ToolbarItem.GlyphOf(glyph, ToolbarItemOff(id, shown)) : null,
+        };
 
-                        break;
-                }
-            }
-
-            return side;
-        }
+        // A divider only between two drawn items of its side (later on 2026-10-13, ItemOrder.ShownDividers).
+        List<ScreenPane.ToolbarItem> Side(IReadOnlyList<string> ids) =>
+            [.. ItemOrder.ShownDividers(ids, id => items.Contains(id) && ItemOf(id) is not null)
+                .Select(id => ItemOrder.IsDivider(id) ? ScreenPane.ToolbarItem.DividerOf() : ItemOf(id)!.Value)];
 
         return new ScreenPane.ToolbarParts(Side(sides.Left), Side(sides.Right));
     }
@@ -2362,6 +2409,7 @@ internal sealed partial class ChatScreen
 
             ScreenPane.HintSlot? slot = id switch
             {
+                HintBarItems.Spinner => ScreenPane.HintSlot.Spinner,   // later on 2026-10-13: where the busy row puts its spinner; nothing at rest
                 HintBarItems.Status => ScreenPane.HintSlot.Strip,
                 HintBarItems.Queued => ScreenPane.HintSlot.Queued,
                 // An armed hint takes the text sections' place; the model and the working directory pinned right keep theirs (2026-10-13).
@@ -3074,13 +3122,38 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>The <c>/queue</c> grammar, pure (2026-09-21): nothing ⇒ the pane; <c>clear</c> (ignoring case) ⇒ drop every one; anything else ⇒ invalid.</summary>
-    public static QueueAction ParseQueueArgs(string args)
+    /// <summary>The <c>/queue</c> grammar's action alone (<see cref="ParseQueueCommand"/>).</summary>
+    public static QueueAction ParseQueueArgs(string args) => ParseQueueCommand(args).Action;
+
+    /// <summary>
+    /// The <c>/queue</c> grammar, pure (2026-09-21): nothing ⇒ the pane; <c>clear</c> (ignoring case) ⇒ drop every one; since
+    /// 2026-10-13 (the user's ask) <c>mode</c> and one of <see cref="QueueMode.Names"/> ⇒ <c>Queue mode</c> set, <c>cancel</c> and one
+    /// of <see cref="QueueCancelMode.Names"/> ⇒ <c>Queue cancel mode</c> set, every word folding case; anything else ⇒ invalid.
+    /// </summary>
+    public static QueueCommand ParseQueueCommand(string args)
     {
-        string text = (args ?? "").Trim();
-        return text.Length == 0 ? QueueAction.List
-            : text.Equals(QueueClearWord, StringComparison.OrdinalIgnoreCase) ? QueueAction.Clear
-            : QueueAction.Invalid;
+        string[] words = (args ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0)
+        {
+            return new(QueueAction.List);
+        }
+
+        if (words.Length == 1 && words[0].Equals(QueueClearWord, StringComparison.OrdinalIgnoreCase))
+        {
+            return new(QueueAction.Clear);
+        }
+
+        if (words.Length == 2 && words[0].Equals(QueueModeWord, StringComparison.OrdinalIgnoreCase) && QueueMode.TryParse(words[1], out var mode))
+        {
+            return new(QueueAction.Mode, Mode: mode);
+        }
+
+        if (words.Length == 2 && words[0].Equals(QueueCancelWord, StringComparison.OrdinalIgnoreCase) && QueueCancelMode.TryParse(words[1], out var cancel))
+        {
+            return new(QueueAction.Cancel, Cancel: cancel);
+        }
+
+        return new(QueueAction.Invalid);
     }
 
     /// <summary>
@@ -3172,11 +3245,21 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>The half of <see cref="HandleQueueAsync"/> that needs no pane: the mid-turn quick act for <c>/queue clear</c> (2026-09-21), on the turn task.</summary>
+    /// <summary>
+    /// The half of <see cref="HandleQueueAsync"/> that needs no pane: the mid-turn quick act for <c>/queue clear</c> (2026-09-21), on the
+    /// turn task; since 2026-10-13 <c>/queue mode …</c> and <c>/queue cancel …</c> too, the rows' own save and notice.
+    /// </summary>
     private void HandleQueueArgs(string args)
     {
-        switch (ParseQueueArgs(args))
+        var command = ParseQueueCommand(args);
+        switch (command.Action)
         {
+            case QueueAction.Mode:
+                _menu.SetQueueMode(command.Mode);
+                break;
+            case QueueAction.Cancel:
+                _menu.SetQueueCancelMode(command.Cancel);
+                break;
             case QueueAction.Clear:
                 if (_queue.Count == 0)
                 {
@@ -4745,7 +4828,18 @@ internal sealed partial class ChatScreen
             }
 
             case SlashCommand.Queue:
-                return MentionCompleter.Matches([new(QueueClearWord, QueueClearNote)], argText);
+                // clear, mode and cancel; after "mode " or "cancel " their words (2026-10-13, the /copy branch's shape).
+                if (argText.StartsWith(QueueModeWord + " ", StringComparison.OrdinalIgnoreCase))
+                {
+                    return MentionCompleter.Matches(QueueMode.Names.Select(name => new CompletionItem(QueueModeWord + " " + name, QueueMode.Describe(name))).ToList(), argText);
+                }
+
+                if (argText.StartsWith(QueueCancelWord + " ", StringComparison.OrdinalIgnoreCase))
+                {
+                    return MentionCompleter.Matches(QueueCancelMode.Names.Select(name => new CompletionItem(QueueCancelWord + " " + name, QueueCancelMode.Describe(name))).ToList(), argText);
+                }
+
+                return MentionCompleter.Matches([new(QueueClearWord, QueueClearNote), new(QueueModeWord, QueueModeNote), new(QueueCancelWord, QueueCancelNote)], argText);
 
             case SlashCommand.Memory:
             {
@@ -5486,7 +5580,8 @@ internal sealed partial class ChatScreen
 
         try
         {
-            _openLogWindow();
+            // A chord's open behind the terminal's focus (2026-10-13, the user's ask); typed, in front as ever.
+            (s_byChord.Value && _openLogWindowBehind is { } behind ? behind : _openLogWindow)();
             _transcript.Notice(LogViewText.WindowOpenedNotice);
         }
         catch (Exception ex) when (ex is InvalidOperationException or PlatformNotSupportedException)
@@ -9805,7 +9900,7 @@ internal sealed partial class ChatScreen
                         continue;
                     }
 
-                    if (await HandleAsync(offPane, [], cancellationToken).ConfigureAwait(false))
+                    if (await ByChord(offPaneHit.Chord, () => HandleAsync(offPane, [], cancellationToken)).ConfigureAwait(false))
                     {
                         return 0;
                     }
@@ -10113,7 +10208,7 @@ internal sealed partial class ChatScreen
                             break;
                         }
 
-                        if (await HandleAsync(shortcut.Line, [], cancellationToken).ConfigureAwait(false))
+                        if (await ByChord(true, () => HandleAsync(shortcut.Line, [], cancellationToken)).ConfigureAwait(false))
                         {
                             return 0;
                         }
@@ -13911,9 +14006,10 @@ internal sealed partial class ChatScreen
                 // Autonomous (2026-09-25, the user's ask: a bot said it drew something and had not): a reply that talks about
                 // a picture its bot never called generate_image for gets that picture from the app, so the reply is true. A call
                 // that failed (no prompt, later the same day) drew nothing and is intent enough: the word sieve is skipped.
+                // A mention alone only under Botchat image mention mode generate since 2026-10-13 (the user's ask; disabled by default).
                 var attempt = BotChat.PictureAttempt(history.Messages);
                 if (imageMode == BotImageMode.Autonomous && imageTool is not null && reply.Length > 0
-                    && !attempt.Drew && (attempt.Tried || BotChat.MentionsPicture(reply)))
+                    && !attempt.Drew && (attempt.Tried || (BotChatImageMentionMode.Resolve(effective) == BotImageMention.Generate && BotChat.MentionsPicture(reply))))
                 {
                     if (effective.BotChatImageAsync)
                     {
@@ -16037,7 +16133,8 @@ internal sealed partial class ChatScreen
         try
         {
             Directory.CreateDirectory(full);
-            _openViewer(full);
+            // A chord's open behind the terminal's focus (2026-10-13, the user's ask); typed, in front as ever.
+            (s_byChord.Value && _openViewerBehind is { } behind ? behind : _openViewer)(full);
             if (notice)
             {
                 _flow.Notice(ViewerText.Opened(full));

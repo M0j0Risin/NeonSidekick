@@ -1047,6 +1047,9 @@ public enum SettingsField
 
     /// <summary>A picker over <see cref="Skills.ReflectionConfirmMode.Names"/>: which of a reflection's writes wait for the user (<see cref="Settings.AppSettingsData.ReflectionConfirmMode"/>). The Reflection tab of <c>/skills</c>, the first row of What it may change (2026-10-12, the user's ask and place); no reconnect (read when a reflection is decided). Last in the enum, as every newcomer.</summary>
     ReflectionConfirmMode,
+
+    /// <summary>A picker: what a <c>/botchat</c> bot's mention of a picture it never drew does — <c>disabled</c> / <c>generate</c> (<see cref="Settings.AppSettingsData.BotChatImageMentionMode"/>). The Botchat tab, right under <see cref="BotChatImg2ImgMode"/> (2026-10-13, the user's ask and place); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
+    BotChatImageMentionMode,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1469,7 +1472,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays,
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
          SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
-        [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
+        [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
         [SettingsField.LlmUrl, SettingsField.LlmModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
@@ -2135,6 +2138,7 @@ internal sealed partial class SettingsMenu
         SettingsField.BotChatLimitedComfyWorkflows => "Botchat ComfyUI limited workflows",
         SettingsField.BotChatImageMode => "Botchat image mode",
         SettingsField.BotChatImg2ImgMode => "Botchat img2img mode",
+        SettingsField.BotChatImageMentionMode => "Botchat image mention mode",   // "Image mention mode" on the Botchat tab (RowName)
         SettingsField.BotChatImageAsync => "Botchat image async",
         SettingsField.BotChatNonTtsDelaySeconds => "Botchat non-TTS delay",
         SettingsField.BotChatTools => "Botchat tools enabled",
@@ -2497,6 +2501,7 @@ internal sealed partial class SettingsMenu
             SettingsField.BotChatLimitedComfyWorkflows => LimitedNamesValue(data.BotChatLimitedComfyWorkflows),
             SettingsField.BotChatImageMode => data.BotChatImageMode,
             SettingsField.BotChatImg2ImgMode => data.BotChatImg2ImgMode,
+            SettingsField.BotChatImageMentionMode => data.BotChatImageMentionMode,
             SettingsField.BotChatImageAsync => OnOff(data.BotChatImageAsync),
             SettingsField.BotChatNonTtsDelaySeconds => SecondsLabel(data.BotChatNonTtsDelaySeconds),
             SettingsField.BotChatTools => OnOff(data.BotChatTools),
@@ -3115,7 +3120,18 @@ internal sealed partial class SettingsMenu
     /// with the move. Shift+Home/End (to the top or the bottom) and Delete (unchecks) work too, but the hint leaves them out to stay
     /// on one row of a 120-cell window; the docs and <c>neon_help</c> name them. Pinned.
     /// </summary>
-    public const string ToolbarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · Shift+←→ = side · a = all · n = none · d = default · ESC = back";   // the side since 2026-10-13 (the user's ask: pinned left or right)
+    public const string ToolbarToggleKeys = "Space = on or off · Shift+↑↓ = move · Shift+←→ = side · + = divider · a = all · n = none · d = default · ESC = back";   // the side since 2026-10-13 (the user's ask: pinned left or right); + = divider later that day, Enter left unnamed to keep one row
+
+    /// <summary>The Tool bar checklist's fourth title-row button (2026-10-13, the user's ask: dividers on the tool bar): a new divider after the cursor's item. Pinned.</summary>
+    public const string DividerButton = "+ divider";
+
+    /// <summary>The key that is <see cref="DividerButton"/>.</summary>
+    public const char DividerKey = '+';
+
+    /// <summary>The Tool bar checklist's buttons: <see cref="DefaultChecklistButtons"/>, then <see cref="DividerButton"/> (index 3).</summary>
+    public static readonly IReadOnlyList<MenuButton> DividerChecklistButtons = [.. DefaultChecklistButtons, new(DividerButton, DividerKey)];
+
+    private const int DividerIndex = 3;
 
     /// <summary>
     /// Show performance bar's hint: <see cref="ToolbarToggleKeys"/>' words, the same page since 2026-10-12 (the user's ask), without
@@ -3125,8 +3141,8 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public const string PerfBarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · a = all · n = none · d = default · ESC = back";
 
-    /// <summary>The Hint bar checklist's hint (2026-10-12): the toolbar's keys, the same string. Pinned.</summary>
-    public const string HintBarToggleKeys = ToolbarToggleKeys;
+    /// <summary>The Hint bar checklist's hint (2026-10-12): the toolbar's keys, the same string until the tool bar's dividers (2026-10-13). Pinned.</summary>
+    public const string HintBarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · Shift+←→ = side · a = all · n = none · d = default · ESC = back";
 
     /// <summary>The Toolbar order page's hint (2026-10-12): the move keys and default, nothing to check. Pinned.</summary>
     public const string BarOrderKeys = "Shift+↑↓ = move · Shift+Home/End = top or bottom · d = default · ESC = back";
@@ -3475,6 +3491,10 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the botchat-img2img-mode picker: the mode and its hint (padded to thirteen: <c>chat-history</c> is twelve). Pinned.</summary>
     public static string BotChatImg2ImgModeLabel(string name) =>
         Markup.Escape(name.PadRight(13)) + Theme.DimMarkup(App.BotChatImg2ImgMode.Describe(name));
+
+    /// <summary>One row of the botchat image mention mode picker (2026-10-13): the word, then its hint dimmed. Pinned.</summary>
+    public static string BotChatImageMentionModeLabel(string name) =>
+        Markup.Escape(name.PadRight(10)) + Theme.DimMarkup(App.BotChatImageMentionMode.Describe(name));
 
     /// <summary>One row of the memory-mode picker (2026-10-04): the mode and its hint (padded to twelve: <c>read-write</c> is ten). Pinned.</summary>
     public static string MemoryModeLabel(string name) =>
@@ -4929,6 +4949,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.BotChatLimitedComfyWorkflows)
         {
             return await EditBotChatLimitedComfyAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.BotChatImageMentionMode)
+        {
+            return await PickBotChatImageMentionModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.BotChatImg2ImgMode)
@@ -6917,6 +6942,38 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
+    /// <summary>
+    /// Queue mode set straight (2026-10-13, the user's ask: <c>/queue mode automatic|manual|disabled</c>): the row's own save and
+    /// notice. False, with <see cref="UnchangedNotice"/>, when it already is.
+    /// </summary>
+    internal bool SetQueueMode(Queueing mode)
+    {
+        string name = App.QueueMode.Name(mode);
+        if (string.Equals(_settings.Current.QueueMode, name, StringComparison.Ordinal))
+        {
+            return Unchanged();
+        }
+
+        Apply(SettingsField.QueueMode, data => data.QueueMode = name);
+        return true;
+    }
+
+    /// <summary>
+    /// Queue cancel mode set straight (2026-10-13, the user's ask: <c>/queue cancel hold|drain|empty</c>): the row's own save and
+    /// notice. False, with <see cref="UnchangedNotice"/>, when it already is.
+    /// </summary>
+    internal bool SetQueueCancelMode(QueueCancel mode)
+    {
+        string name = App.QueueCancelMode.Name(mode);
+        if (string.Equals(_settings.Current.QueueCancelMode, name, StringComparison.Ordinal))
+        {
+            return Unchanged();
+        }
+
+        Apply(SettingsField.QueueCancelMode, data => data.QueueCancelMode = name);
+        return true;
+    }
+
     private async Task<bool> PickToggleAsync(SettingsField field, AppSettingsData saved, CancellationToken cancellationToken)
     {
         // The interrupt is the wake phrase during a reply: it needs the wake word on, and goes off with it.
@@ -8780,6 +8837,22 @@ internal sealed partial class SettingsMenu
 
         string name = names[index];
         Apply(SettingsField.BotChatImg2ImgMode, d => d.BotChatImg2ImgMode = name);
+        return true;
+    }
+
+    /// <summary>The botchat-image-mention-mode picker under the settings list (2026-10-13): one <see cref="BotChatImageMentionModeLabel"/> row per <see cref="App.BotChatImageMentionMode.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickBotChatImageMentionModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = App.BotChatImageMentionMode.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.BotChatImageMentionMode)), names.Select(BotChatImageMentionModeLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, saved.BotChatImageMentionMode)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.BotChatImageMentionMode, d => d.BotChatImageMentionMode = name);
         return true;
     }
 

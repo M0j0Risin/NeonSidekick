@@ -488,6 +488,7 @@ internal sealed unsafe class VideoWindowThread
 
                 break;
             case WmClose:
+                TerminalHandoff.ReturnFocus(hwnd);   // the terminal in front again when this window had it (2026-10-13, the user's ask)
                 _chrome.RememberPosition(VideoWindow.Placed);
                 _host?.Close();
                 DestroyWindow(hwnd);

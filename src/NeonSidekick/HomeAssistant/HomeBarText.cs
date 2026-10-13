@@ -82,6 +82,15 @@ public static class HomeBarText
     /// <summary>Its place on the bar's tab, where a device's room goes.</summary>
     public const string ShoppingWhere = "shopping";
 
+    /// <summary>A divider's name on the picker's bar tab (2026-10-13, the user's ask: a divider on the home bar). Pinned.</summary>
+    public const string DividerName = "Divider";
+
+    /// <summary>A divider's dim note on the bar tab (2026-10-13). Pinned.</summary>
+    public const string DividerWhere = "between the chips around it";
+
+    /// <summary>The bar tab's last row (2026-10-13, the user's pick): Enter or Space puts a new divider at the bar's end. Pinned.</summary>
+    public const string AddDividerRow = "+ Add divider";
+
     /// <summary>The 🛒 chip's click note: the lines to get, or the list off. Pinned.</summary>
     public static string ShoppingNote(int? open) => open is { } count
         ? ShoppingName + ": " + count.ToString(CultureInfo.InvariantCulture) + " to get — double-click or right-click for the list"

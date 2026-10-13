@@ -1064,6 +1064,14 @@ public sealed class AppSettingsData
     public string BotChatImg2ImgMode { get; set; } = App.BotChatImg2ImgMode.Default;
 
     /// <summary>
+    /// What a <c>/botchat</c> bot's mention of a picture it never drew does (2026-10-13, the user's words and default): one of
+    /// <see cref="App.BotChatImageMentionMode.Names"/> — <c>disabled</c> (the default: ignored) or <c>generate</c> (the app draws it
+    /// for the bot, as <c>autonomous</c> always did until then). Only under <see cref="BotChatImageMode"/> <c>autonomous</c>; a
+    /// <c>generate_image</c> call that failed is drawn either way. The Botchat tab of <c>/settings</c>, under the img2img mode. No variable.
+    /// </summary>
+    public string BotChatImageMentionMode { get; set; } = App.BotChatImageMentionMode.Default;
+
+    /// <summary>
     /// Whether the chat waits for the app's <c>/botchat</c> picture (2026-09-25, the user's call, on by default): on, the
     /// picture renders while the next bot answers and is drawn — labelled with whose it is — at the first moment nothing
     /// streams: before a turn, or while a voice plays. Off (later on 2026-09-25, the user's ask: the picture before the

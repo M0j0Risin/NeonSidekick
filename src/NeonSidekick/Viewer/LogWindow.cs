@@ -34,9 +34,11 @@ public static class LogWindow
 
     /// <summary>
     /// The window on <paramref name="buffer"/>: opened at the bottom, following, and brought forward — or the open one brought
-    /// forward. Throws <see cref="InvalidOperationException"/> with the reason when no window could be made.
+    /// forward. With <paramref name="activate"/> false (2026-10-13, the user's ask: a chord's open leaves the keyboard in the
+    /// terminal) it is shown and raised without taking the focus. Throws <see cref="InvalidOperationException"/> with the reason
+    /// when no window could be made.
     /// </summary>
-    public static void Show(DiagnosticBuffer buffer)
+    public static void Show(DiagnosticBuffer buffer, bool activate = true)
     {
         ArgumentNullException.ThrowIfNull(buffer);
         if (!IsAvailable)
@@ -52,12 +54,12 @@ public static class LogWindow
 
         lock (s_gate)
         {
-            if (s_open is { Alive: true } open && open.Raise())
+            if (s_open is { Alive: true } open && open.Raise(activate))
             {
                 return;
             }
 
-            var window = new LogWindowThread(new DiagnosticFeed(buffer), "Log window", Position, Placed);
+            var window = new LogWindowThread(new DiagnosticFeed(buffer), "Log window", Position, Placed, activate);
             window.Start();
             s_open = window;
         }
@@ -172,13 +174,16 @@ internal sealed unsafe class LogWindowThread
     private (int X, int Y) _mouse;
     private int _wheel;
     private string? _title;
+    private readonly bool _startActivate;
 
     /// <param name="feed">The lines shown; the window owns it and disposes it as it closes.</param>
     /// <param name="name">The window's name in the log and on its thread: <c>Log window</c>, <c>Process window</c>.</param>
     /// <param name="position">Where it last closed, read as it opens (<see cref="LogWindow.Position"/>); null is Windows' place.</param>
     /// <param name="placed">Told its corner as it closes (<see cref="LogWindow.Placed"/>), on its thread.</param>
-    public LogWindowThread(ILineFeed feed, string name, Func<(int X, int Y)?>? position, Action<int, int>? placed)
+    /// <param name="activate">Whether it opens with the focus (2026-10-13: false for a chord's open, raised without it).</param>
+    public LogWindowThread(ILineFeed feed, string name, Func<(int X, int Y)?>? position, Action<int, int>? placed, bool activate = true)
     {
+        _startActivate = activate;
         _feed = feed;
         _name = name;
         _position = position;
@@ -199,8 +204,8 @@ internal sealed unsafe class LogWindowThread
         }
     }
 
-    /// <summary>The open window brought forward; false when it is gone.</summary>
-    public bool Raise() => _alive && PostMessageW(_hwnd, RaiseMessage, IntPtr.Zero, IntPtr.Zero);
+    /// <summary>The open window brought forward (with the focus unless <paramref name="activate"/> is false, 2026-10-13); false when it is gone.</summary>
+    public bool Raise(bool activate = true) => _alive && PostMessageW(_hwnd, RaiseMessage, activate ? 1 : IntPtr.Zero, IntPtr.Zero);
 
     /// <summary>
     /// The open window shown over <paramref name="feed"/> in place of its own, without a wait (2026-10-05, the code review: the
@@ -439,8 +444,17 @@ internal sealed unsafe class LogWindowThread
             TakeAppended();
             Layout();
             UpdateTitle(force: true);
-            ShowWindow(_hwnd, SwShow);
-            _chrome.BringForward();
+            if (_startActivate)
+            {
+                ShowWindow(_hwnd, SwShow);
+                _chrome.BringForward();
+            }
+            else
+            {
+                ShowWindow(_hwnd, SwShowNoActivate);   // a chord's open (2026-10-13): in front, the keyboard left in the terminal
+                _chrome.RaiseQuietly();
+            }
+
             DiagnosticLog.Info("Viewer", $"{_name} opened.");
 
             _started = true;
@@ -656,7 +670,15 @@ internal sealed unsafe class LogWindowThread
                 return IntPtr.Zero;
             case RaiseMessage:
                 ApplyStyle();
-                _chrome.BringForward();
+                if (wParam != IntPtr.Zero)
+                {
+                    _chrome.BringForward();
+                }
+                else
+                {
+                    _chrome.RaiseQuietly();
+                }
+
                 return IntPtr.Zero;
             case SwapMessage:
                 TakeSwap();
@@ -664,6 +686,7 @@ internal sealed unsafe class LogWindowThread
                 _chrome.BringForward();
                 return IntPtr.Zero;
             case WmClose:
+                TerminalHandoff.ReturnFocus(hwnd);   // the terminal in front again when this window had it (2026-10-13, the user's ask)
                 _chrome.RememberPosition(_placed);
                 DestroyWindow(hwnd);
                 return IntPtr.Zero;

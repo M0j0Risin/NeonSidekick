@@ -20,13 +20,13 @@ public partial class ChatScreenTests
     private const string DogReply = "I once saw a dog surf.";
 
     /// <summary>The two-bot fixture on a stub ComfyUI with one text → image workflow (pony), pictures on in <paramref name="mode"/>.</summary>
-    private StubHttpMessageHandler BotPicturesFixture(string mode = "automatic", bool async = false, int width = 4, int height = 4)
+    private StubHttpMessageHandler BotPicturesFixture(string mode = "automatic", bool async = false, int width = 4, int height = 4, string mention = "generate")
     {
         BotChatFixture();
         var stub = ComfyServer(width, height);
         // The workflow ticked (later on 2026-10-04, Botchat ComfyUI limited workflows; Botchat images enabled and the txt2img
         // picker until then).
-        _settings.Update(d => { d.BotChatLimitedComfyWorkflows = ["pony"]; d.BotChatImageMode = mode; d.BotChatImageAsync = async; });
+        _settings.Update(d => { d.BotChatLimitedComfyWorkflows = ["pony"]; d.BotChatImageMode = mode; d.BotChatImageAsync = async; d.BotChatImageMentionMode = mention; });   // mention: generate, what autonomous did before 2026-10-13
         return stub;
     }
 
@@ -1248,6 +1248,48 @@ public partial class ChatScreenTests
         int picture = output.IndexOf(ComfyText.TextToImageGlyph + "generated 1 picture with pony", StringComparison.Ordinal);
         Assert.True(words >= 0 && picture > words, $"words {words}, picture {picture}");
         Assert.DoesNotContain(BotChat.PictureNotice("neon"), output);
+    }
+
+    /// <summary>
+    /// Botchat image mention mode disabled (2026-10-13, the user's ask and default): a picture the bot only talked about is
+    /// ignored — no promised-picture request, nothing drawn — and the next bot speaks at once.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_Autonomous_MentionModeDisabled_APictureTheBotOnlyTalkedAbout_IsIgnored()
+    {
+        var stub = BotPicturesFixture(mode: "autonomous", mention: "disabled");
+        _chat.EnqueueText(SketchReply);
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(2);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Contains(AdaMarker, SystemText(_chat.Requests[1]));
+        Assert.DoesNotContain(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
+        Assert.Contains(SketchReply, output);
+    }
+
+    /// <summary>Under mention mode disabled a generate_image call that failed is still drawn (2026-10-13): a call, not a mention.</summary>
+    [Fact]
+    public async Task BotChat_Autonomous_MentionModeDisabled_ACallWithNoPrompt_StillGetsItsPicture()
+    {
+        var stub = BotPicturesFixture(mode: "autonomous", mention: "disabled");
+        _chat.Enqueue(FakeChatClient.Call("g1", GenerateImageTool.ToolName, new Dictionary<string, object?>()));
+        _chat.EnqueueText("Oops, there it is anyway.");
+        _chat.EnqueueText("a dog surfing a big wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(4);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Equal(BotChat.PromisedPictureInstruction(PonyWorkflow), SystemText(_chat.Requests[2]));
+        Assert.Contains("\"text\":\"a dog surfing a big wave", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
     }
 
     /// <summary>A NONE, or an empty answer (pinned at the second 2026-10-04 review), is no picture and no notice.</summary>

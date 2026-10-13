@@ -146,7 +146,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/profile push\|pull vocalia <name> [overwrite]` | The same for `vocalia.md` (the spoken-reply directive). |
 | `/profile push\|pull avatar user\|model <name>` | Copies the *User avatar* or the *Model avatar*, replacing the target's, after a confirmation. |
 | `/profile edit\|reload` | `edit` opens `profile.json`; `reload` reads it back and reconnects what changed. |
-| `/queue [clear]` | Lists the queued messages: Enter removes one (asks), `c` clears all, and `s` sends the next one now while the queue is held or under *Queue mode* `manual`. `/queue clear` drops them without the pane. |
+| `/queue [clear]` | Lists the queued messages: Enter removes one (asks), `c` clears all, and `s` sends the next one now while the queue is held or under *Queue mode* `manual`. `/queue clear` drops them without the pane. `/queue mode automatic\|manual\|disabled` sets *Queue mode*, and `/queue cancel hold\|drain\|empty` sets *Queue cancel mode*, at once (during a reply too). |
 | `/read [<file> [<n>]\|<n>]` | Reads a text file aloud; alone it resumes, and a number starts at that sentence. On an empty line Space pauses or plays and ←/→ step a sentence. |
 | `/reasoning [none\|low\|medium\|high\|xhigh]` | Picks the reasoning effort. |
 | `/rewind [<n>]` | Goes back to an earlier message: it and everything after leave the conversation and the stored session, and its text returns to the input row. Tool changes are not undone; compacted messages can't be picked. |
@@ -368,6 +368,7 @@ The picture viewer is a window of its own (on a Mac it needs the desktop; over S
 | Any other Ctrl or Alt chord | Runs in the chat as if pressed there (Ctrl+Alt+U closes the viewer) |
 
 * It wears the theme unless *Themed external windows* is off, reopens where it was closed, and closes with the app.
+* Opened by its chord it stays behind the terminal's keyboard focus; typed, it comes to the front. However it closes (its chord, Esc, Alt+F4, ×), the terminal gets the focus back if the window had it. The log, thumbnail, camera and video windows do the same.
 * It, the thumbnail browser and the ComfyUI picture strip follow each other's selection.
 * **The picture menu** rotates and flips, recolours (greyscale, sepia, negative, polaroid), resizes, converts (PNG, JPEG, GIF, BMP), shrinks the file under a size, and strips metadata losslessly; then copies the path, shows it in Explorer, attaches it to the chat, prints, or deletes it (permanent, no confirmation). *Image edit mode* decides whether an edit writes `photo-edited.png` beside the picture or replaces it.
 * **On a Mac** it is an AppKit window with the same keys, plus ⌫ for Del, ⌘W to close and ⌃⌘F for full screen (F11 is macOS's Show Desktop); Control-click is a right-click, and *Show in Finder* replaces *Show in Explorer*.

@@ -120,7 +120,7 @@ internal sealed partial class ChatScreen
 
             UpdateHomePending(live, now);
             bool stale = live.Status != HaLiveStatus.Live;
-            var chips = items.Select(i => HomeChips.Build(i, live.Entities, live.Catalog, HomeMarkOf(i), stale, aliases, glyphs, shopping)).ToList();
+            var chips = HomeBar.ShownDividers(items.Select(i => HomeChips.Build(i, live.Entities, live.Catalog, HomeMarkOf(i), stale, aliases, glyphs, shopping)).ToList());   // a divider only between two chips (2026-10-13)
             row = HomeBar.Render(chips, cells, _homePage);
             if (row is not null && _homePage >= row.Pages)
             {
@@ -424,9 +424,10 @@ internal sealed partial class ChatScreen
         }
 
         string? reference = HomeBarItems.Normalize(item);
-        return cache.Chips.FirstOrDefault(c => string.Equals(c.Reference, reference, StringComparison.Ordinal))
-            ?? cache.Chips.FirstOrDefault(c => string.Equals(c.Label, item.Trim(), StringComparison.OrdinalIgnoreCase))
-            ?? cache.Chips.FirstOrDefault(c => string.Equals(c.Name, item.Trim(), StringComparison.OrdinalIgnoreCase));
+        var chips = cache.Chips.Where(c => !c.Divider).ToList();   // a divider is never the one named (2026-10-13)
+        return chips.FirstOrDefault(c => string.Equals(c.Reference, reference, StringComparison.Ordinal))
+            ?? chips.FirstOrDefault(c => string.Equals(c.Label, item.Trim(), StringComparison.OrdinalIgnoreCase))
+            ?? chips.FirstOrDefault(c => string.Equals(c.Name, item.Trim(), StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

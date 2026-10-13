@@ -192,9 +192,11 @@ public partial class ChatScreenTests
                 _time.Advance(TimeSpan.FromMilliseconds(100));   // the spinner's next frame redraws the row
                 return Output.Contains("1.2k tokens", StringComparison.Ordinal);
             }, ct);
-            // "⠋ 🦙 starting Gemma 4 E2B 00:00 · 1.2k tokens": the label's zone ends at 30, the tally starts at 34.
-            input.PushClick(36, 102);
-            input.PushClick(36, 102);
+            // "⠋ 🦙 starting Gemma 4 E2B 00:00 · … · 1.2k tokens": a click two cells into the tally, wherever the row put it
+            // (2026-10-13: the stop hint follows the spinner now, so the tally's column is read, not pinned).
+            int tally = BusyRows.ColumnOf(Output, "1.2k tokens") + 2;
+            input.PushClick(tally, 102);
+            input.PushClick(tally, 102);
             await opened.Task.WaitAsync(ct);
         };
 

@@ -950,6 +950,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.ShoppingList,    // 2026-10-11, the list's checklist, above the stores' row
                 SettingsField.UserAvatar,      // 2026-10-12, Chat's Who and where under Model avatar: the user's emoji
                 SettingsField.ReflectionConfirmMode,   // later on 2026-10-12, /skills › Reflection, What it may change's first row
+                SettingsField.BotChatImageMentionMode,   // 2026-10-13, the Botchat tab under the img2img mode
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -4737,7 +4738,7 @@ public partial class SettingsMenuTests : IDisposable
         Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);                       // the checklist, on Settings
         Push(Keys.Char(' '));                   // Settings off (a default since 2026-10-05; on until then)
-        Down(ToolbarItems.Names.Length - 2);
+        Down(ToolbarItems.DefaultOrder.Length - 2);   // the default order's two dividers rows too (2026-10-13)
         Push(Keys.Enter);                       // the path off (the last but the model's name since 2026-10-12: the thirteenth since the ID card and the rising chart, later on 2026-09-29; the thirtieth since 2026-10-03)
         Push(Keys.Escape, Keys.Escape);
 
@@ -4842,7 +4843,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("  · Performance bar: CPU, RAM · text", Output);
         Assert.DoesNotContain("◔ gauge", Output);
         Assert.DoesNotContain("t / g / l", Output);
-        Assert.Equal(SettingsMenu.PerfBarToggleKeys, SettingsMenu.ToolbarToggleKeys.Replace(" · Shift+←→ = side", "", StringComparison.Ordinal));   // no sides: the bar stays centred (2026-10-13)
+        Assert.Equal(SettingsMenu.PerfBarToggleKeys, SettingsMenu.HintBarToggleKeys.Replace(" · Shift+←→ = side", "", StringComparison.Ordinal));   // no sides: the bar stays centred (2026-10-13); the hint bar's, the tool bar's naming + too
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
@@ -4894,9 +4895,9 @@ public partial class SettingsMenuTests : IDisposable
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
-        for (int i = 0; i < ToolbarItems.Names.Length; i++)
+        for (int i = 0; i < ToolbarItems.DefaultOrder.Length; i++)
         {
-            Push(Keys.Enter, Keys.Down);
+            Push(Keys.Enter, Keys.Down);   // Enter on a divider's row does nothing (2026-10-13)
         }
 
         Push(Keys.Escape, Keys.Escape);
@@ -5128,7 +5129,7 @@ public partial class SettingsMenuTests : IDisposable
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
-        Down(ToolbarItems.Names.Length - 2);
+        Down(ToolbarItems.DefaultOrder.Length - 2);
         Push(Keys.Char(' '));                   // the path back (the last but the model's name since 2026-10-12): the defaults
         Push(Keys.Escape, Keys.Escape);
 

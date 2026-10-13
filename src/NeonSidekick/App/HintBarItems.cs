@@ -12,13 +12,16 @@ namespace NeonSidekick.App;
 /// after Model, off by default) is free the same way; until 2026-10-13 the two shared the right edge while they ended the checked order.
 /// Since 2026-10-13 (the user's ask: any section pinned left or right, the sort free within each side) every section is pinned to a
 /// side (<see cref="Sides"/> over <see cref="Settings.AppSettingsData.HintBarRight"/>; <see cref="RightDefaults"/> the model and the
-/// working directory, the row as it was), and the busy row follows the sides too, its spinner and label leading the left. The
-/// whole-row prompts (the drag, an alert, the armed exit, rewind and splash delete) and the busy row's spinner, label and stop hint
-/// are no sections: they show whatever is checked. Under a reply the checks hold (no strip, queued count, tally or model while off).
-/// A display setting, so an unknown word is dropped without a warning. Pure.
+/// working directory, the row as it was), and the busy row follows the sides too. Later that day (the user's ask: "could the
+/// spinner in the hint row also be one of the moveable options? … mandatory and can't be disabled, but it can be moved") the busy
+/// row's spinner, its label and clock and the stop hint after them are the <see cref="Spinner"/> section: first by default, always
+/// on (<see cref="Fixed"/>), on either side in any place, drawn under a reply alone. The whole-row prompts (the drag, an alert, the
+/// armed exit, rewind and splash delete) are no sections: they show whatever is checked. Under a reply the checks hold (no strip,
+/// queued count, tally or model while off). A display setting, so an unknown word is dropped without a warning. Pure.
 /// </summary>
 public static class HintBarItems
 {
+    public const string Spinner = "spinner";   // 2026-10-13, the user's ask: always on, movable
     public const string Status = "status";
     public const string Queued = "queued";
     public const string Keys = "keys";
@@ -28,11 +31,17 @@ public static class HintBarItems
     public const string Model = "model";
     public const string WorkingDirectory = "cwd";   // later on 2026-10-12, the user's ask
 
-    /// <summary>Every section in the row's own order, the one it always had, the working directory after the model. Pinned.</summary>
-    public static readonly string[] Names = [Status, Queued, Keys, Timers, Reading, Usage, Model, WorkingDirectory];
+    /// <summary>Every section in the row's own order, the one it always had, the working directory after the model; the spinner first (2026-10-13), where the busy row always had it. Pinned.</summary>
+    public static readonly string[] Names = [Spinner, Status, Queued, Keys, Timers, Reading, Usage, Model, WorkingDirectory];
 
     /// <summary>What a profile that never chose shows: every section but the working directory (the user's pick), the row as it was. Pinned.</summary>
-    public static readonly string[] Defaults = [Status, Queued, Keys, Timers, Reading, Usage, Model];
+    public static readonly string[] Defaults = [Spinner, Status, Queued, Keys, Timers, Reading, Usage, Model];
+
+    /// <summary>The sections that are always on (2026-10-13, the user's ask): the spinner, which moves but never goes. Pinned.</summary>
+    public static readonly IReadOnlySet<string> Fixed = new HashSet<string>(StringComparer.Ordinal) { Spinner };
+
+    /// <summary>The notice when the checklist is asked to turn a <see cref="Fixed"/> section off (2026-10-13). Pinned.</summary>
+    public const string SpinnerFixedNotice = "The spinner is always on: Shift+↑↓ and Shift+←→ move it";
 
     /// <summary>The sections pinned right by default (2026-10-13): the model and the working directory, the row as it was. Pinned.</summary>
     public static readonly string[] RightDefaults = [Model, WorkingDirectory];
@@ -40,6 +49,7 @@ public static class HintBarItems
     /// <summary>A section's name on the checklist and in the row's value. Pinned.</summary>
     public static string Title(string id) => id switch
     {
+        Spinner => "Spinner",
         Status => "Status",
         Queued => "Queued",
         Keys => "Keys",
@@ -54,6 +64,7 @@ public static class HintBarItems
     /// <summary>The checklist's dim note beside a section: what it shows. Pinned.</summary>
     public static string Describe(string id) => id switch
     {
+        Spinner => "always on: the spinner, its label and clock under a reply, then esc to stop",
         Status => "the switches and jobs at the start: 🔊 🎤 👂 ✋, 🧠, 🏷️…",
         Queued => "the lines waiting to be sent (/queue)",
         Keys => "the arrows' keys over the splash or the pictures, /read's keys",
@@ -72,7 +83,10 @@ public static class HintBarItems
     public static string Label(string id, bool on) =>
         Markup.Escape((on ? "[x] " : "[ ] ") + Title(id).PadRight(TitleWidth)) + Theme.DimMarkup(Describe(id));
 
-    /// <summary>The sections <paramref name="saved"/> names: <see cref="Defaults"/> when null, the known ids (trimmed, any case) otherwise.</summary>
+    /// <summary>
+    /// The sections <paramref name="saved"/> names: <see cref="Defaults"/> when null, the known ids (trimmed, any case) otherwise —
+    /// and the <see cref="Fixed"/> ones always (2026-10-13), whatever the list says.
+    /// </summary>
     public static IReadOnlySet<string> Resolve(IReadOnlyList<string>? saved)
     {
         if (saved is null)
@@ -82,7 +96,7 @@ public static class HintBarItems
 
         // A null in a hand-edited list is skipped: this runs on the pane's tick, where a throw repeats.
         var wanted = saved.OfType<string>().Select(w => w.Trim().ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
-        return Names.Where(wanted.Contains).ToHashSet(StringComparer.Ordinal);
+        return Names.Where(name => wanted.Contains(name) || Fixed.Contains(name)).ToHashSet(StringComparer.Ordinal);
     }
 
     /// <summary>What saves for <paramref name="on"/>: null for exactly <see cref="Defaults"/> (so the profile follows a later default), else the ids in <see cref="Names"/> order, empty for none.</summary>
@@ -110,13 +124,14 @@ public static class HintBarItems
 
     /// <summary>
     /// The <c>Hint bar</c> row's value: <see cref="DefaultValue"/> for the defaults in the default order and sides, <see cref="AllValue"/>
-    /// for every section in them, <see cref="NoneValue"/> with none, else the checked names in order — since 2026-10-13 the left
-    /// group's, then <see cref="SidesSeparator"/> and the right group's while any is checked there. Pinned.
+    /// for every section in them, <see cref="NoneValue"/> with none but the always-on spinner, else the checked names in order — since
+    /// 2026-10-13 the left group's, then <see cref="SidesSeparator"/> and the right group's while any is checked there; the spinner
+    /// named only away from the left group's lead, its own place (later that day). Pinned.
     /// </summary>
     public static string Value(IReadOnlyList<string>? saved, IReadOnlyList<string>? order, IReadOnlyList<string>? right = null)
     {
         var on = Resolve(saved);
-        if (on.Count == 0)
+        if (on.All(Fixed.Contains))
         {
             return NoneValue;
         }
@@ -133,7 +148,8 @@ public static class HintBarItems
             return AllValue;
         }
 
-        string left = string.Join(", ", sides.Left.Where(on.Contains).Select(Title));
+        bool spinnerLeads = sides.Left.Count > 0 && sides.Left[0] == Spinner;
+        string left = string.Join(", ", sides.Left.Where((id, i) => on.Contains(id) && !(i == 0 && spinnerLeads)).Select(Title));
         string pinned = string.Join(", ", sides.Right.Where(on.Contains).Select(Title));
         return pinned.Length == 0 ? left : left.Length == 0 ? SidesSeparator.TrimStart() + pinned : left + SidesSeparator + pinned;
     }

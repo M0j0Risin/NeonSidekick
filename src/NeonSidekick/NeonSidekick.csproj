@@ -255,6 +255,9 @@
     <!-- The fun verbs (2026-10-12, the user's ask): assets\verbs\verbs.txt, one verb per line, is App/ThinkingVerbs.All — the words the
          thinking spinner reads under LLM use fun verbs. Edit the file; the next build has the list. -->
     <EmbeddedResource Include="..\..\assets\verbs\verbs.txt" LogicalName="verbs/verbs.txt" Visible="false" />
+    <!-- The shell police's starter list (2026-10-13, the user's ask): assets\police\strings.txt, its [all], [windows] and [mac]
+         sections, is Shell/ForbiddenStrings.Defaults — a fresh profile's Shell police forbidden strings and what r restores. -->
+    <EmbeddedResource Include="..\..\assets\police\strings.txt" LogicalName="police/strings.txt" Visible="false" />
     <!-- The video window's page (2026-10-05): the IFrame Player API host Viewer/VideoPage writes into <home>\webview2\site and
          WebView2 serves from https://player.neonsidekick.example/ (a page with an origin, so YouTube's embeds get a Referer). -->
     <EmbeddedResource Include="..\..\assets\youtube\player.html" LogicalName="youtube/player.html" Visible="false" />

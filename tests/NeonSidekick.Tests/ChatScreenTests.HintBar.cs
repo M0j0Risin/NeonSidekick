@@ -167,4 +167,45 @@ public partial class ChatScreenTests
         Assert.Contains(Titled(FolderText.Title + " │ " + FolderText.CollapseAllButton + " "), output);
         Assert.Null(HintBarItems.Save(HintBarItems.Resolve(null).ToHashSet()));   // off by default
     }
+
+    /// <summary>
+    /// The tool bar's default order (2026-10-13, the user's ask): a dim │ after 💾 and another after 🐚, each between two drawn glyphs
+    /// (the fixture saves a bare order for the column pins; this test takes the default again).
+    /// </summary>
+    [WindowsFact]
+    public async Task Toolbar_TheDefaultOrder_DrawsItsTwoDividers()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = null; d.ToolbarOrder = null; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        LinesWhenIdle("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.MemoryToolGlyph + " " + ScreenPane.DividerGlyph + " ", output);
+        Assert.Contains(ChatScreen.ShellToolGlyph + " " + ScreenPane.DividerGlyph + " " + ChatScreen.FilesToolGlyph, output);
+    }
+
+    /// <summary>
+    /// The spinner pinned right (2026-10-13, the user's ask: the spinner a Hint bar section, always on but movable): under a reply it
+    /// stands at the right with the stop hint after it and the model's name, not at the row's start.
+    /// </summary>
+    [WindowsFact]
+    public async Task HintBar_TheSpinnerPinnedRight_StandsAtTheRightUnderAReply()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.HintBarRight = [HintBarItems.Spinner, HintBarItems.Model, HintBarItems.WorkingDirectory]; d.ToolbarItems = []; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        _chat.EnqueueText("Hello.");
+        LinesWhenIdle("hi", "/exit");
+
+        string output = await RunAsync();
+
+        string spinner = Theme.SpinnerFrames[0] + " " + ScreenPane.BusyText(ChatScreen.ThinkingLabel, TimeSpan.Zero) + ScreenPane.HintSeparator + ScreenPane.StopHint;
+        string line = output.Split('\n').Last(l => l.Contains(spinner, StringComparison.Ordinal));
+        Assert.True(TextCells.Width(line[..line.IndexOf(spinner, StringComparison.Ordinal)]) > 150, line);   // at the right, not at column 0
+        Assert.Contains(spinner + ScreenPane.HintSeparator + "llama", line);
+    }
 }

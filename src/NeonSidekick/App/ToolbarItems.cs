@@ -234,6 +234,12 @@ public static class ToolbarItems
     public static string Note(string glyph, string id, string? state) =>
         glyph + " " + Title(id) + (state is null ? "" : ": " + state) + " · " + DoubleClickNote;
 
+    /// <summary>A divider's name on the checklist (2026-10-13). Pinned.</summary>
+    public const string DividerTitle = "Divider";
+
+    /// <summary>A divider's dim note on the checklist (2026-10-13). Pinned.</summary>
+    public const string DividerNote = "a divider between the items around it";
+
     /// <summary>One click on the model's name on the toolbar (2026-10-12): <c>Model name: Qwen3-30B · double-click to open</c>. Pinned.</summary>
     public static string ModelNote(string name) => Title(Model) + ": " + name + " · " + DoubleClickNote;
 
@@ -246,6 +252,12 @@ public static class ToolbarItems
     /// </summary>
     public static string Label(string id, bool on)
     {
+        if (ItemOrder.IsDivider(id))
+        {
+            // No check box (2026-10-13): a divider is on by being in the order; Delete takes it out.
+            return Markup.Escape("    " + ItemOrder.DividerGlyph + "   " + DividerTitle.PadRight(TitleWidth)) + Theme.DimMarkup(DividerNote);
+        }
+
         string glyph = Glyph(id);
         return Markup.Escape((on ? "[x] " : "[ ] ") + (glyph.Length == 0 ? "  " : glyph) + "  " + Title(id).PadRight(TitleWidth)) + Theme.DimMarkup(Describe(id));
     }
@@ -275,11 +287,19 @@ public static class ToolbarItems
     }
 
     /// <summary>
-    /// The checklist's and the strip's order for <paramref name="saved"/> (<see cref="Settings.AppSettingsData.ToolbarOrder"/>,
-    /// 2026-10-12): every item, <see cref="Names"/>' order for null (<see cref="ItemOrder.Resolve"/>); the path pinned last until
-    /// 2026-10-13, when the sides came (<see cref="Sides"/>).
+    /// The default order (2026-10-13, the user's ask: <c>⚙️ 🛠️ 🎓 💾 | 🔓 👮 🐚 | 📁 🌄 🌐</c>): <see cref="Names"/> with a divider after
+    /// Memory (ahead of Ask, unchecked by default) and another after Shell. A divider whose neighbours are hidden is not drawn
+    /// (<see cref="ItemOrder.ShownDividers"/>). Pinned.
     /// </summary>
-    public static List<string> Order(IReadOnlyList<string>? saved) => ItemOrder.Resolve(saved, Names);
+    public static readonly string[] DefaultOrder =
+        [.. Names.TakeWhile(id => id != Ask), ItemOrder.DividerPrefix + "1", .. Names.SkipWhile(id => id != Ask).TakeWhile(id => id != Files), ItemOrder.DividerPrefix + "2", .. Names.SkipWhile(id => id != Files)];
+
+    /// <summary>
+    /// The checklist's and the strip's order for <paramref name="saved"/> (<see cref="Settings.AppSettingsData.ToolbarOrder"/>,
+    /// 2026-10-12): every item, <see cref="DefaultOrder"/> for null (<see cref="ItemOrder.Resolve"/>); the path pinned last until
+    /// 2026-10-13, when the sides came (<see cref="Sides"/>), and the dividers with them (later that day, kept where saved).
+    /// </summary>
+    public static List<string> Order(IReadOnlyList<string>? saved) => ItemOrder.Resolve(saved, Names, keepDividers: true, defaultOrder: DefaultOrder);
 
     /// <summary>
     /// The items pinned right by default (2026-10-13, the user's ask: any item pinned left or right): the path and the model's name,
@@ -288,7 +308,7 @@ public static class ToolbarItems
     public static readonly string[] RightDefaults = [Path, Model];
 
     /// <summary>The items <paramref name="saved"/> (<see cref="Settings.AppSettingsData.ToolbarRight"/>) pins right: <see cref="RightDefaults"/> for null.</summary>
-    public static IReadOnlySet<string> ResolveRight(IReadOnlyList<string>? saved) => ItemOrder.ResolveRight(saved, Names, RightDefaults);
+    public static IReadOnlySet<string> ResolveRight(IReadOnlyList<string>? saved) => ItemOrder.ResolveRight(saved, Names, RightDefaults, keepDividers: true);
 
     /// <summary>What saves for the right group: null for exactly <see cref="RightDefaults"/>.</summary>
     public static List<string>? SaveRight(IEnumerable<string> right) => ItemOrder.SaveRight(right, Names, RightDefaults);
@@ -296,8 +316,8 @@ public static class ToolbarItems
     /// <summary>The toolbar's two groups for the saved <paramref name="order"/> and <paramref name="right"/> (2026-10-13): every item, checked or not.</summary>
     public static ItemOrder.Sided Sides(IReadOnlyList<string>? order, IReadOnlyList<string>? right) => ItemOrder.Split(Order(order), ResolveRight(right));
 
-    /// <summary>What saves for <paramref name="order"/>: null for <see cref="Names"/>' own order (<see cref="ItemOrder.Save"/>).</summary>
-    public static List<string>? SaveOrder(IReadOnlyList<string> order) => ItemOrder.Save(order, Names);
+    /// <summary>What saves for <paramref name="order"/>: null for <see cref="DefaultOrder"/> (<see cref="ItemOrder.Save"/>).</summary>
+    public static List<string>? SaveOrder(IReadOnlyList<string> order) => ItemOrder.Save(order, Names, DefaultOrder);
 
     /// <summary><c>/toolbar</c>'s words (later on 2026-09-30): <c>on</c> and <c>off</c>, the completion's list. Pinned.</summary>
     public const string OnWord = "on";

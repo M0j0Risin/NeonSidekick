@@ -91,6 +91,8 @@ public partial class ChatScreenTests : IDisposable
     private Action<string, string>? _openImage;   // a double-clicked picture (later on 2026-09-24): null = the plain opener, _openedFiles   // /imagine and the image tools (2026-09-24): a client over a stub server
     private string? _logFile;   // /log file (2026-09-22): the --log file the screen is handed; null = started without --log
     private Action? _openLogWindow;   // /log (2026-10-02): the log window's opener; null = no window here
+    private Action? _openLogWindowBehind;   // a chord's /log (2026-10-13): opened behind the terminal's focus; null = the opener above
+    private Action<string>? _openViewerBehind;   // a chord's /comfy view (2026-10-13), as the log's
     private Action<ProcessSession, Action<ProcessSession>>? _openProcessWindow;   // /process <id> (2026-10-05): the process window's opener; null = no window here
     private Func<bool>? _closeLogWindow;   // the log chord's second press (later on 2026-10-02; Ctrl+G since 2026-10-12): true when a window was open
     private Func<bool>? _closeViewer;      // Ctrl+Alt+U's second press (later on 2026-10-02): true when a viewer was open
@@ -149,6 +151,9 @@ public partial class ChatScreenTests : IDisposable
         // The toolbar under the hint row is on by default (2026-09-21) and takes a row of every pane drawn here — the scroll
         // tests count rows at height 10, the menu tests their tab's rows — so the fixture opts out and the toolbar tests opt in.
         _settings.Update(d => d.ToolbarItems = []);
+        // The default order holds two dividers since 2026-10-13 (the user's ask): the toolbar tests pin their glyphs' columns as laid
+        // without them, so the fixture saves the order bare; the divider tests opt back in (ToolbarOrder null).
+        _settings.Update(d => d.ToolbarOrder = [.. ToolbarItems.Names]);
         // The performance bar shows by default since 2026-10-02 (the user's ask): the same row-counting reason, the same opt-out; the
         // bar's tests opt in.
         _settings.Update(d => d.PerformanceBarItems = []);
@@ -303,7 +308,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer);
         screen.UserProfileFolder = _userProfile;
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
@@ -6633,9 +6638,79 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(QueueAction.Invalid, ChatScreen.ParseQueueArgs("now"));
         Assert.Equal(QueueAction.Invalid, ChatScreen.ParseQueueArgs("clear all"));
         Assert.Equal("clear", ChatScreen.QueueClearWord);
-        Assert.Equal([new CompletionItem("clear", ChatScreen.QueueClearNote)], ChatScreen.ArgumentItems("/queue", "", Sources()));
+        Assert.Equal([new CompletionItem("clear", ChatScreen.QueueClearNote), new CompletionItem("mode", ChatScreen.QueueModeNote), new CompletionItem("cancel", ChatScreen.QueueCancelNote)], ChatScreen.ArgumentItems("/queue", "", Sources()));
         Assert.Equal([new CompletionItem("clear", ChatScreen.QueueClearNote)], ChatScreen.ArgumentItems("/queue", "cl", Sources()));
         Assert.Empty(ChatScreen.ArgumentItems("/queue", "x", Sources()));
+    }
+
+    /// <summary>
+    /// /queue mode and /queue cancel (2026-10-13, the user's ask): each with one of its setting's words (any case) sets it; a bare
+    /// word, a word of the other setting or a third word is the usage error. The words complete after their lead.
+    /// </summary>
+    [Fact]
+    public void ParseQueueCommand_ModeAndCancel_AndTheirWordsComplete()
+    {
+        Assert.Equal(new QueueCommand(QueueAction.Mode, Mode: Queueing.Manual), ChatScreen.ParseQueueCommand("mode manual"));
+        Assert.Equal(new QueueCommand(QueueAction.Mode, Mode: Queueing.Disabled), ChatScreen.ParseQueueCommand(" MODE  Disabled "));
+        Assert.Equal(new QueueCommand(QueueAction.Mode, Mode: Queueing.Automatic), ChatScreen.ParseQueueCommand("mode automatic"));
+        Assert.Equal(new QueueCommand(QueueAction.Cancel, Cancel: QueueCancel.Hold), ChatScreen.ParseQueueCommand("cancel hold"));
+        Assert.Equal(new QueueCommand(QueueAction.Cancel, Cancel: QueueCancel.Drain), ChatScreen.ParseQueueCommand("Cancel DRAIN"));
+        Assert.Equal(new QueueCommand(QueueAction.Cancel, Cancel: QueueCancel.Empty), ChatScreen.ParseQueueCommand("cancel empty"));
+        foreach (string bad in new[] { "mode", "cancel", "mode bogus", "cancel automatic", "mode hold", "mode manual extra" })
+        {
+            Assert.Equal(QueueAction.Invalid, ChatScreen.ParseQueueArgs(bad));
+        }
+
+        Assert.Equal(QueueAction.Clear, ChatScreen.ParseQueueCommand("clear").Action);
+        Assert.Equal(QueueAction.List, ChatScreen.ParseQueueCommand("").Action);
+        Assert.Equal([new CompletionItem("mode", ChatScreen.QueueModeNote)], ChatScreen.ArgumentItems("/queue", "mo", Sources()));
+        Assert.Equal(QueueMode.Names.Select(name => new CompletionItem("mode " + name, QueueMode.Describe(name))), ChatScreen.ArgumentItems("/queue", "mode ", Sources()));
+        Assert.Equal([new CompletionItem("mode manual", QueueMode.Describe("manual"))], ChatScreen.ArgumentItems("/queue", "mode ma", Sources()));
+        Assert.Equal(QueueCancelMode.Names.Select(name => new CompletionItem("cancel " + name, QueueCancelMode.Describe(name))), ChatScreen.ArgumentItems("/queue", "cancel ", Sources()));
+        Assert.Contains("/queue mode automatic|manual|disabled", ChatScreen.QueueUsageError);
+        Assert.Contains("/queue cancel hold|drain|empty", ChatScreen.QueueUsageError);
+    }
+
+    /// <summary>/queue mode and /queue cancel at the idle line (2026-10-13): the rows' own save and notice, unchanged when already so; a bad word is the usage error.</summary>
+    [Fact]
+    public async Task Queue_ModeAndCancel_SetTheSettings_AndSayUnchangedWhenTheyAlreadyAre()
+    {
+        PushLine("/queue mode manual");
+        PushLine("/queue mode manual");
+        PushLine("/queue cancel drain");
+        PushLine("/queue cancel bogus");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal("manual", _settings.Current.QueueMode);
+        Assert.Equal("drain", _settings.Current.QueueCancelMode);
+        int mode = output.IndexOf(SettingsMenu.SavedNotice(SettingsField.QueueMode, new AppSettingsData { QueueMode = "manual" }, _settings.ProfileDirectory), StringComparison.Ordinal);
+        int unchanged = output.IndexOf("  · " + SettingsMenu.UnchangedNotice, mode, StringComparison.Ordinal);
+        int cancel = output.IndexOf(SettingsMenu.SavedNotice(SettingsField.QueueCancelMode, new AppSettingsData { QueueCancelMode = "drain" }, _settings.ProfileDirectory), unchanged, StringComparison.Ordinal);
+        int error = output.IndexOf("  ✗ " + ChatScreen.QueueUsageError, cancel, StringComparison.Ordinal);
+        Assert.True(mode > 0 && unchanged > mode && cancel > unchanged && error > cancel, output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>/queue mode and /queue cancel under a reply (2026-10-13) are quick acts: saved at once, the reply runs on.</summary>
+    [Fact]
+    public async Task MidTurn_QueueModeAndCancel_SaveAtOnce_AndTheReplyRunsOn()
+    {
+        MidTurnHeldFixture(async _ =>
+        {
+            PushLine("/queue mode disabled");
+            await UntilAsync(() => _settings.Current.QueueMode == "disabled", CancellationToken.None);
+            PushLine("/queue cancel hold");
+            await UntilAsync(() => _settings.Current.QueueCancelMode == "hold", CancellationToken.None);
+        });
+
+        string output = await RunAsync();
+
+        Assert.Single(_chat.Requests);
+        Assert.Contains("three.", output);
+        Assert.Equal("disabled", _settings.Current.QueueMode);
+        Assert.Equal("hold", _settings.Current.QueueCancelMode);
     }
 
     /// <summary>/queue clear at the idle line over a held queue (2026-09-21): every message dropped with the loop's notice, none sent.</summary>
@@ -10292,7 +10367,7 @@ public partial class ChatScreenTests : IDisposable
         string rule = new(ScreenPane.RuleGlyph, 240);
         string strip = ChatScreen.SpeechGlyphs(true, false, false, false);
         // The spinner row: the frame with the label, then the strip in its place (2026-10-13: the busy row follows the sides, the spinner first).
-        Assert.Contains(Row(Theme.SpinnerFrames[0] + " " + ScreenPane.BusyText(ChatScreen.ThinkingLabel, TimeSpan.Zero) + ScreenPane.HintSeparator + strip + ScreenPane.HintSeparator + ScreenPane.StopHint), output);
+        Assert.Contains(Row(Theme.SpinnerFrames[0] + " " + ScreenPane.BusyText(ChatScreen.ThinkingLabel, TimeSpan.Zero) + ScreenPane.HintSeparator + ScreenPane.StopHint + ScreenPane.HintSeparator + strip), output);   // the stop hint after the spinner (later on 2026-10-13)
         // (The startup connect's spinner ran before speech was connected, so it has no strip — only the reply's is checked.)
         // The info pane's hint keeps it too, and the idle line has it as before.
         AssertPaneEnds(output, rule + "\n" + Row(InfoPane.HintText, strip: strip));
@@ -14110,7 +14185,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, "", "", UsageText.BusyHintPart(Tally(1_240), _session.ContextLength, MidTurnUsage.LastKnown, StreamMeter.Reading.Idle)!), output);
+        // The stop hint right after the spinner since 2026-10-13 (the user's pick), the tally after it.
+        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, ScreenPane.StopHint) + ScreenPane.HintSeparator + UsageText.BusyHintPart(Tally(1_240), _session.ContextLength, MidTurnUsage.LastKnown, StreamMeter.Reading.Idle)!, output);
         if (mode == "estimate")
         {
             Assert.Contains(UsageText.EstimateMark + UsageText.CompactNumber(1_242), output);
@@ -14148,7 +14224,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("and then?", _chat.Requests[1][^1].Text);
-        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, "", ChatScreen.QueuedHintPart(1)), output);
+        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, ScreenPane.StopHint) + ScreenPane.HintSeparator + ChatScreen.QueuedHintPart(1), output);   // the stop hint after the spinner (2026-10-13)
         int firstReplyEnd = output.IndexOf("three.", StringComparison.Ordinal);
         int sentRow = output.LastIndexOf("› and then?", StringComparison.Ordinal);
         Assert.True(firstReplyEnd >= 0 && sentRow > firstReplyEnd, "the queued message's row is written when it is sent, after the first reply");
@@ -14319,6 +14395,25 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ChatScreen.QueueDroppedNotice(1), output);
         Assert.Contains("› /queue clear", output);
         Assert.Equal(0, _running!.QueuedCount);
+    }
+
+    /// <summary>From manual, /queue mode automatic at the idle line (2026-10-13) lets the queue drain: each queued message goes, one per turn.</summary>
+    [Fact]
+    public async Task Manual_QueueModeAutomatic_SendsWhatWasQueued()
+    {
+        ManualQueueFixture();
+        _chat.EnqueueText("First.");
+        _chat.EnqueueText("Second.");
+        StepsWhenIdle(Line("first"), Line("second"), Line("/queue mode automatic"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal("automatic", _settings.Current.QueueMode);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("first", UserText(_chat.Requests[0]));
+        Assert.Equal("second", _chat.Requests[1][^1].Text);
+        Assert.Equal(0, _running!.QueuedCount);
+        Assert.Contains("Second.", output);
     }
 
     /// <summary>
@@ -14542,8 +14637,8 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null, () => 100);
         _chat.EnqueueText("One ", "two ", "three.");
         _chat.EnqueueText("Later.");
-        // No strip: the frame at 0, " writing 00:00 · " after it, the count from column 18.
-        int column = 1 + TextCells.Width(" " + ScreenPane.BusyText(TurnStages.WritingLabel, TimeSpan.Zero) + ScreenPane.HintSeparator);
+        // No strip: the frame at 0, " writing 00:00 · esc to stop · " after it (the stop hint after the spinner since 2026-10-13), then the count.
+        int column = 1 + TextCells.Width(" " + ScreenPane.BusyText(TurnStages.WritingLabel, TimeSpan.Zero) + ScreenPane.HintSeparator + ScreenPane.StopHint + ScreenPane.HintSeparator);
         _chat.BeforeUpdate = async (i, _) =>
         {
             if (_chat.Requests.Count != 1)
@@ -14649,7 +14744,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("summarise " + block.Replace("\r\n", "\n"), _chat.Requests[1][^1].Text);
-        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, "", ChatScreen.QueuedHintPart(1)), output);
+        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, ScreenPane.StopHint) + ScreenPane.HintSeparator + ChatScreen.QueuedHintPart(1), output);   // the stop hint after the spinner (2026-10-13)
         int firstReplyEnd = output.IndexOf("three.", StringComparison.Ordinal);
         int sentRow = output.LastIndexOf("› summarise [Pasted text #1 +8 lines]\n  row 1\n  row 2\n", StringComparison.Ordinal);
         Assert.True(firstReplyEnd >= 0 && sentRow > firstReplyEnd, "the pasted line's row, with its preview, is written when it is sent");
@@ -18678,6 +18773,39 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(LogViewText.WindowOpenedNotice, output);
         Assert.DoesNotContain("› /log", output);
         Assert.Equal("keep", UserText(Assert.Single(_chat.Requests)));
+    }
+
+    /// <summary>
+    /// A chord's window opens behind the terminal's focus (2026-10-13, the user's ask): Ctrl+G and Ctrl+Alt+U at the idle line and in a
+    /// pane take the behind openers; the typed /log and /comfy view bring their window forward as ever.
+    /// </summary>
+    [Fact]
+    public async Task ChordsOpenTheirWindowsBehindTheTerminal_TypedCommandsInFront()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });
+        _console.Profile.Height = 112;
+        _geometry = new ScreenGeometry(() => null);
+        var log = new List<string>();
+        _openLogWindow = () => log.Add("front");
+        _openLogWindowBehind = () => log.Add("behind");
+        _closeLogWindow = () => false;   // never open: each press opens
+        var viewer = new List<string>();
+        _openViewer = _ => viewer.Add("front");
+        _openViewerBehind = _ => viewer.Add("behind");
+        _closeViewer = () => false;
+        StepsWhenIdle(
+            Key(Keys.Ctrl(ConsoleKey.G)),
+            Line("/log"),
+            Key(Keys.CtrlAlt(ConsoleKey.U)),
+            Line("/comfy view"),
+            input => { PushLine(input, "/help"); input.Push(Keys.Ctrl(ConsoleKey.G), Keys.Escape); },   // in a pane, in place
+            Line("/exit"));
+
+        await RunAsync();
+
+        Assert.Equal(["behind", "front", "behind"], log);
+        Assert.Equal(["behind", "front"], viewer);
+        Assert.Empty(_chat.Requests);
     }
 
     [Fact]

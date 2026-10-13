@@ -340,7 +340,7 @@ internal sealed partial class ChatScreen
                 // A window chord pressed again closes its window (later on 2026-10-02, CloseByChord), asked as the act runs; a window
                 // item's double-click on the toolbar the same (2026-10-03) — a clicked word is the one line with no live row behind it.
                 bool closes = line.Chord || (line.Line is null && TogglesWindow(text));
-                Post(() => closes && CloseByChord(command, args) ? Task.CompletedTask : HandleQuickAsync(command, args, text, paneToken));
+                Post(() => closes && CloseByChord(command, args) ? Task.CompletedTask : ByChord(line.Chord, () => HandleQuickAsync(command, args, text, paneToken)));   // a chord's window opens behind the terminal's focus (2026-10-13)
                 return true;
             default:
                 if (await RunPaneAsync(command, args, paneToken).ConfigureAwait(false) is { } chord)
