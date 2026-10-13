@@ -350,6 +350,7 @@ public sealed partial class InputLine
     {
         ScreenPane.HintZone.Strip => 8 + hit.Column,
         ScreenPane.HintZone.Path => ScreenPane.HintPathKey,   // later on 2026-10-12: its number would be the strip's first column's
+        ScreenPane.HintZone.Timers => ScreenPane.HintTimersKey,   // 2026-10-13: the same, a strip column's
         _ => (int)hit.Zone,
     };
 

@@ -138,7 +138,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/profile push\|pull <name>` | Copies every setting but the working directory to (`push`) or from (`pull`) another profile; a pull clears the conversation. |
 | `/profile push\|pull keys <name>` | Copies the LLM, Anthropic, OpenAI, Home Assistant and YouTube API keys, after a confirmation; a key unset in the source clears the target's. Keys set only by environment variable aren't copied. |
 | `/profile push\|pull servers <name>` | Copies the server settings (URL, model, reasoning, sampling, and the embedded, Docker, Anthropic, OpenAI, Claude Code and `/claude` rows), replacing the target's, after a confirmation. Saved values only. |
-| `/profile push\|pull commands <name> [overwrite]` | Copies *Shell allowed commands* (added, or replacing with `overwrite`). |
+| `/profile push\|pull allowed <name> [overwrite]` | Copies *Shell allowed commands* (added, or replacing with `overwrite`). |
 | `/profile push\|pull history <name> [overwrite]` | Copies the message history; refused when the target has *Keep message history* off. |
 | `/profile push\|pull policestrings <name> [overwrite]` | Copies *Shell police forbidden strings* (added, or replacing with `overwrite`). |
 | `/profile push\|pull persona <name> [overwrite]` | Copies `persona.md` (the personality), after a confirmation; an existing one is replaced only with `overwrite`. |
@@ -146,7 +146,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/profile push\|pull vocalia <name> [overwrite]` | The same for `vocalia.md` (the spoken-reply directive). |
 | `/profile push\|pull avatar user\|model <name>` | Copies the *User avatar* or the *Model avatar*, replacing the target's, after a confirmation. |
 | `/profile edit\|reload` | `edit` opens `profile.json`; `reload` reads it back and reconnects what changed. |
-| `/queue [clear]` | Lists the queued messages: Enter removes one (asks), `c` clears all, and `s` sends the next one now while the queue is held or under *Queue mode* `manual`. `/queue clear` drops them without the pane. `/queue mode automatic\|manual\|disabled` sets *Queue mode*, and `/queue cancel hold\|drain\|empty` sets *Queue cancel mode*, at once (during a reply too). |
+| `/queue [clear]` | Lists the queued messages: Enter removes one (asks), `c` clears all, and `s` sends the next one now while the queue is held or under *Queue mode* `manual`. `m` (**mode: …**) and `k` (**cancel: …**) on the title row step *Queue mode* and *Queue cancel mode* to their next value, on the empty queue too. The toolbar's ⏳ opens it. `/queue clear` drops them without the pane. `/queue mode automatic\|manual\|disabled` sets *Queue mode*, and `/queue cancel hold\|drain\|empty` sets *Queue cancel mode*, at once (during a reply too). |
 | `/read [<file> [<n>]\|<n>]` | Reads a text file aloud; alone it resumes, and a number starts at that sentence. On an empty line Space pauses or plays and ←/→ step a sentence. |
 | `/reasoning [none\|low\|medium\|high\|xhigh]` | Picks the reasoning effort. |
 | `/rewind [<n>]` | Goes back to an earlier message: it and everything after leave the conversation and the stored session, and its text returns to the input row. Tool changes are not undone; compacted messages can't be picked. |
@@ -589,7 +589,7 @@ In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes
 | Pane | Keys |
 |---|---|
 | `/memory` | Enter: edit · disable/enable · forget (asks) · `a` add · `w` read-write · `o` read-only · `x` disabled |
-| `/queue` | Enter removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) |
+| `/queue` | Enter removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) · `m` Queue mode · `k` Queue cancel mode |
 | `/rewind` | Enter rewinds to before the message |
 | `/sessions` | Enter opens · type to filter |
 | `/process` | Enter opens the window · `k` kills (asks) · `r` / `e` running / ended only |

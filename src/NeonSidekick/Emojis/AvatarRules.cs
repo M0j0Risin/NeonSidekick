@@ -15,6 +15,12 @@ public static class AvatarRules
     /// </summary>
     public const string DefaultAvatar = "🤖";
 
+    /// <summary>
+    /// The user avatar a profile wears until one is picked (2026-10-13, the user's call: none, the <c>›</c>, until then). 🚫 on the
+    /// picker, <c>/avatar user clear</c>, still clears it: an empty value saved is none.
+    /// </summary>
+    public const string DefaultUserAvatar = "🙊";
+
     /// <summary>Whether <paramref name="text"/> (already trimmed) is one emoji as above.</summary>
     public static bool IsEmoji(string? text)
     {

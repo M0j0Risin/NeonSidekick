@@ -56,7 +56,6 @@ public partial class ChatScreenTests
     [Fact]
     public async Task ASentLine_OpensWithTheUserAvatar_InPlaceOfThePrompt()
     {
-        Assert.Null(new AppSettingsData().UserAvatar);
         _settings.Update(d => d.UserAvatar = "🦉");
         _chat.EnqueueText("Hello.");
         PushLine("hi there");
@@ -202,7 +201,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains("🦉 hi there", output);
-        Assert.Null(_settings.Current.UserAvatar);
+        Assert.Equal("", _settings.Current.UserAvatar);
         Assert.Equal("🐙", _settings.Current.ModelAvatar);
         Assert.Equal(["🐙 neon"], _titles);   // a user avatar never touches the title
     }

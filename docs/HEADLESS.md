@@ -287,7 +287,7 @@ Select-String -Path yolo.log -Pattern "--yolo|COMMAND_POLICY|approval: yolo"
 ### A safer alternative
 
 Stay on `ask` and allow-list only the prefixes the job needs (`dotnet build`, `git status`…): run the job once in the TUI on
-the same profile and answer *Allow … always*, or copy a list with `/profile pull commands <name>`. Exit code 3 then tells
+the same profile and answer *Allow … always*, or copy a list with `/profile pull allowed <name>`. Exit code 3 then tells
 you when the job needed something more.
 
 ---

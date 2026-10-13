@@ -50,11 +50,20 @@ public sealed class AppSettingsData
     /// <summary>
     /// The user's avatar (2026-10-12, the user's ask): one emoji, picked on <c>/settings</c> › Client › Chat's grid picker right under
     /// <see cref="ModelAvatar"/>. It opens each of the user's lines in the transcript, the main chat's and <c>/botchat</c>'s alike, in
-    /// place of <c>›</c> (<see cref="UI.InputLine.UserGlyph"/>); the input row keeps <c>›</c> while it is typed. Null by default (the
-    /// <c>›</c>); anything that is not one two-cell emoji (<see cref="Emojis.AvatarRules"/>) reads as none. An ordinary setting
-    /// otherwise: <c>/profile add</c> and <c>push|pull</c> carry it, a plain <c>/profile reset</c> keeps it as it keeps the model's. No variable.
+    /// place of <c>›</c> (<see cref="UI.InputLine.UserGlyph"/>); the input row keeps <c>›</c> while it is typed. 🙊 by default
+    /// (<see cref="Emojis.AvatarRules.DefaultUserAvatar"/>, 2026-10-13, the user's call; null, the <c>›</c>, until then); empty for none
+    /// (the <c>›</c>); anything that is not one two-cell emoji (<see cref="Emojis.AvatarRules"/>) reads as none. A null read or set is the
+    /// default: every profile saved before then holds <c>"UserAvatar": null</c>, and one that never chose wears the default as the model's
+    /// 🤖 came. An ordinary setting otherwise: <c>/profile add</c> and <c>push|pull</c> carry it, a plain <c>/profile reset</c> keeps it as
+    /// it keeps the model's. No variable.
     /// </summary>
-    public string? UserAvatar { get; set; }
+    public string? UserAvatar
+    {
+        get => _userAvatar;
+        set => _userAvatar = value ?? Emojis.AvatarRules.DefaultUserAvatar;
+    }
+
+    private string _userAvatar = Emojis.AvatarRules.DefaultUserAvatar;
 
     /// <summary>
     /// Whether a sent line that is exactly a command's name without its slash (<c>clear</c>) is

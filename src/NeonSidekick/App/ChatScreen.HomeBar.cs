@@ -252,13 +252,32 @@ internal sealed partial class ChatScreen
     /// marked pending until the state changes; or the line that asks or opens its pane); a right-click opens its pane; ‹ › turn
     /// the page (the ⌂ status glyph's note and its double-click to the picker went later on 2026-10-12, the user's call). A click on the bar's blanks is not the bar's: it
     /// goes on to the readers as a click on the toolbar's blanks (<see cref="ScreenPane.TryHitToolbar"/>), so a double-click there
-    /// opens <c>/settings</c> as on every other bar (2026-10-12, the user's ask; spent until then).
+    /// opens <c>/settings</c> as on every other bar (2026-10-12, the user's ask; spent until then). Since 2026-10-13 (the user's ask: as
+    /// on the home bar) a right-click on a toolbar glyph is its double-click's line too (<see cref="ToolbarRightClick"/>).
     /// </summary>
+    /// <summary>
+    /// A right-click on a toolbar glyph (2026-10-13, the user's ask: as a home bar chip's): its double-click's line
+    /// (<see cref="ToolbarWord"/>), read as a command chord's wherever the click is read — the idle line, a pane, under a reply — and never
+    /// the line's paste. Glyphs only (the user's call): the path, the model's name and its mark, and the blanks are not ours. Under an open
+    /// pane the toolbar is off its hit test, so the click is read as the off-pane pair's (<see cref="ScreenPane.OffPaneHitAt"/>), and the
+    /// line closes the pane it names or switches to another, as that pair does.
+    /// </summary>
+    private HomeClick ToolbarRightClick(InputEvent.Click click)
+    {
+        if (click.Button != MouseButton.Right)
+        {
+            return HomeClick.NotOurs;
+        }
+
+        ScreenPane.ToolbarHit? tool = _pane.TryHitToolbar(click.X, click.Y, out var hit) ? hit : _pane.OverlayOpen ? _pane.OffPaneHitAt(click.X, click.Y)?.Toolbar : null;
+        return tool is { Zone: ScreenPane.ToolbarZone.Glyph } glyph && ToolbarWord(glyph.Glyph) is { } line ? HomeClick.Run(line) : HomeClick.NotOurs;
+    }
+
     private HomeClick HomeBarClick(InputEvent.Click click)
     {
         if (!_pane.TryHitHomeBar(click.X, click.Y, out var span))
         {
-            return HomeClick.NotOurs;
+            return ToolbarRightClick(click);
         }
 
         HomeCache? cache;

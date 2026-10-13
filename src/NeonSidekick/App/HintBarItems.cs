@@ -64,16 +64,16 @@ public static class HintBarItems
         _ => id,
     };
 
-    /// <summary>The checklist's dim note beside a section: what it shows. Pinned.</summary>
+    /// <summary>The checklist's dim note beside a section: what it shows (the user's words since 2026-10-13). Pinned.</summary>
     public static string Describe(string id) => id switch
     {
-        Spinner => "always on: the spinner, its label and clock under a reply, then esc to stop",
-        Status => "the switches and jobs at the start: 🔊 🎤 👂 ✋, 🧠, 🏷️…",
-        Queued => "the lines waiting to be sent (/queue)",
-        Keys => "the arrows' keys over the splash or the pictures, /read's keys",
-        Timers => "the timers while any run",
-        Reading => "/read's reading",
-        Usage => "the token tally (/usage), while no timer or reading stands",
+        Spinner => "turn activity spinner, info and stop hint: always on",
+        Status => "status icons: 🔊 🎤 👂 ✋, 🧠, 🏷️…",
+        Queued => "queue status when messages are queued",
+        Keys => "additional key hints",
+        Timers => "timer info while timer(s) active",
+        Reading => "reading info while reading is active (/read or /echo)",
+        Usage => "context and usage info",
         Model => "the model's name and its reasoning mark",
         WorkingDirectory => "the working directory, as the tool bar shows it (/cwd browse)",
         _ => "",

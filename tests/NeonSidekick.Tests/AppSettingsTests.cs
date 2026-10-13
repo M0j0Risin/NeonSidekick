@@ -797,6 +797,24 @@ public class AppSettingsTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// The user avatar's default (2026-10-13, the user's call: 🙊; none until then): a profile saved before then holds an explicit null and
+    /// reads as 🙊, one that cleared it holds an empty string and keeps none, and one with no key at all reads as 🙊.
+    /// </summary>
+    [Theory]
+    [InlineData("\"UserAvatar\": null, ", "🙊")]
+    [InlineData("\"UserAvatar\": \"\", ", "")]
+    [InlineData("\"UserAvatar\": \"🦉\", ", "🦉")]
+    [InlineData("", "🙊")]
+    public void ProfileFile_UserAvatar_NullIsTheDefault_EmptyIsNone(string entry, string expected)
+    {
+        Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
+        File.WriteAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName), "{ " + entry + "\"SchemaVersion\": 1 }");
+
+        using var settings = new AppSettings(_dir);
+        Assert.Equal(expected, settings.Current.UserAvatar);
+    }
+
     [Fact]
     public void ProfileFile_WithARetiredOrRenamedField_LoadsAndKeepsTheOthers()
     {

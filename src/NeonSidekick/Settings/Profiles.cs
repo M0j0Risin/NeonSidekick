@@ -50,7 +50,7 @@ public static class Profiles
     /// reads as a profile called keys); a profile cannot be called any of them, so <c>/profile add</c> is never a switch and
     /// <c>/profile reset</c> is always the loaded one.
     /// </summary>
-    public static readonly string[] ReservedNames = { "add", "commands", "delete", "edit", "history", "keys", "operata", "persona", "policestrings", "pull", "push", "reload", "rename", "reset", "servers", "vocalia" };
+    public static readonly string[] ReservedNames = { "add", "allowed", "delete", "edit", "history", "keys", "operata", "persona", "policestrings", "pull", "push", "reload", "rename", "reset", "servers", "vocalia" };
 
     /// <summary>The wording for a name <see cref="IsValidName"/> refuses. Pinned.</summary>
     public const string NameError = "must be 1 to 32 letters, digits, - or _ (and not add, delete, edit, pull, push, reload, rename or reset)";

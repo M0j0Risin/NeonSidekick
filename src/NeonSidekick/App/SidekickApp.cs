@@ -2153,7 +2153,7 @@ public sealed class SidekickApp
         {
             if (user)
             {
-                d.UserAvatar = chosen.Length == 0 ? null : chosen;
+                d.UserAvatar = chosen;   // empty for none (null is the 🙊 default since 2026-10-13)
             }
             else
             {

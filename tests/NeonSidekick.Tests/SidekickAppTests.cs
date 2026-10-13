@@ -40,6 +40,8 @@ public partial class SidekickAppTests : IDisposable
         // The model-written session title is the default (2026-09-18): the title request after an interactive script's first
         // turn would dequeue its next reply, so the fixture opts out, as ChatScreenTests does (headless never titles).
         _settings.Update(d => d.SessionNamingMode = "first-line");
+        // The user avatar is 🙊 by default (2026-10-13): the interactive scripts pin the sent line's ›, so the fixture opts out.
+        _settings.Update(d => d.UserAvatar = "");
         // delete is off in a fresh profile (2026-09-20); the headless scripts pin the full file rule, so the fixture opts it back on —
         // and File safe edits with it, since the rule's clause reads "into .trash" only under the setting (later on 2026-09-20).
         _settings.Update(d => { d.ToolsDisabled = []; d.GitLibTools = true; });   // GitLib tools off by default since 2026-09-21: the headless turns opt in

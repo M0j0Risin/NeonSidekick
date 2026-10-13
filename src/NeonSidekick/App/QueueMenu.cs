@@ -25,15 +25,21 @@ namespace NeonSidekick.App;
 /// <para>Under <c>Queue mode</c> <c>manual</c> (2026-10-09, the user's ask) the send is always offered, under a reply too: nothing
 /// leaves that queue by itself, so each press sends the front message and the next waits for the next press. Under a reply the
 /// line waits for the idle loop, which sends it first once the reply ends. The caller says when (<c>canSend</c>).</para>
+/// <para>The two mode buttons (2026-10-13, the user's ask, with the toolbar's ⏳): <see cref="ModeButton"/> steps <c>Queue mode</c> and
+/// <see cref="CancelButton"/> <c>Queue cancel mode</c> to the next word (wrapping), saved with the rows' own notice on the status line,
+/// and the list shows again; on the empty queue too, whose pane is a one-row list carrying them (Memory's empty page).</para>
 /// </summary>
 internal sealed class QueueMenu
 {
     // The label and the key hints: the pane shows the label as its title and the keys in its hint row. Pinned.
-    public const string Title = "⏳ Queue";
-    public const string Keys = "Enter = remove · c = clear all · ESC = close";   // close since 2026-10-07: the pane's top level
+    public const string Title = ChatScreen.QueueToolGlyph + " Queue";
+    public const string Keys = "Enter = remove · m = mode · k = cancel mode · c = clear all · ESC = close";   // close since 2026-10-07: the pane's top level; m and k 2026-10-13
 
     /// <summary>The key hints with the <see cref="SendButton"/> on the title row (2026-10-05). Pinned.</summary>
-    public const string KeysWithSend = "Enter = remove · s = send · c = clear all · ESC = close";
+    public const string KeysWithSend = "Enter = remove · s = send · m = mode · k = cancel mode · c = clear all · ESC = close";
+
+    /// <summary>The key hints over the empty queue (2026-10-13): the mode buttons alone. Pinned.</summary>
+    public const string EmptyKeys = "m = mode · k = cancel mode · ESC = close";
     public const string EmptyNotice = "(" + NoticeGlyphs.Queue + "nothing queued)";   // the hourglass since 2026-09-22
 
     /// <summary>The one button on the title row (2026-09-21), drawn as a dim tab: every queued message dropped.</summary>
@@ -48,23 +54,90 @@ internal sealed class QueueMenu
     /// <summary>The key that is the send button.</summary>
     public const char SendKey = 's';
 
-    /// <summary>The page's buttons: clear all alone.</summary>
-    public static readonly IReadOnlyList<MenuButton> Buttons = [new(ClearAllButton, ClearAllKey)];
+    /// <summary>The key of the Queue mode button (2026-10-13).</summary>
+    public const char ModeKey = 'm';
 
-    /// <summary>The page's buttons while a send is offered: send, then clear all.</summary>
-    public static readonly IReadOnlyList<MenuButton> ButtonsWithSend = [new(SendButton, SendKey), new(ClearAllButton, ClearAllKey)];
+    /// <summary>The key of the Queue cancel mode button (2026-10-13).</summary>
+    public const char CancelKey = 'k';
+
+    /// <summary>The Queue mode button (2026-10-13, the user's ask): the word in force, <c>mode: automatic</c>; a press steps to the next. Pinned.</summary>
+    public static string ModeButton(Queueing mode) => "mode: " + QueueMode.Name(mode);
+
+    /// <summary>The Queue cancel mode button (2026-10-13, the user's ask): the word in force, <c>cancel: empty</c>; a press steps to the next. Pinned.</summary>
+    public static string CancelButton(QueueCancel mode) => "cancel: " + QueueCancelMode.Name(mode);
+
+    /// <summary>The Queue mode after <paramref name="mode"/> in <see cref="QueueMode.Names"/>' order, the last wrapping to the first. Pure.</summary>
+    public static Queueing NextMode(Queueing mode)
+    {
+        int at = Array.IndexOf(QueueMode.Names, QueueMode.Name(mode));
+        QueueMode.TryParse(QueueMode.Names[(at + 1) % QueueMode.Names.Length], out var next);
+        return next;
+    }
+
+    /// <summary>The Queue cancel mode after <paramref name="mode"/> in <see cref="QueueCancelMode.Names"/>' order, the last wrapping to the first. Pure.</summary>
+    public static QueueCancel NextCancel(QueueCancel mode)
+    {
+        int at = Array.IndexOf(QueueCancelMode.Names, QueueCancelMode.Name(mode));
+        QueueCancelMode.TryParse(QueueCancelMode.Names[(at + 1) % QueueCancelMode.Names.Length], out var next);
+        return next;
+    }
+
+    /// <summary>
+    /// The title row's buttons: send while it is offered, the two mode buttons while <paramref name="modes"/> names them (2026-10-13),
+    /// then clear all unless the queue is <paramref name="empty"/>.
+    /// </summary>
+    public static IReadOnlyList<MenuButton> Buttons(bool send, (Queueing Mode, QueueCancel Cancel)? modes, bool empty = false) =>
+    [
+        .. send ? new[] { new MenuButton(SendButton, SendKey) } : [],
+        .. modes is { } m ? new[] { new MenuButton(ModeButton(m.Mode), ModeKey), new MenuButton(CancelButton(m.Cancel), CancelKey) } : [],
+        .. empty ? [] : new[] { new MenuButton(ClearAllButton, ClearAllKey) },
+    ];
 
     private readonly MessageQueue _queue;
     private readonly INoticeSink _transcript;
     private readonly MenuPane _pane;
+    private readonly Func<Queueing>? _queueMode;
+    private readonly Func<Queueing, bool>? _setQueueMode;
+    private readonly Func<QueueCancel>? _cancelMode;
+    private readonly Func<QueueCancel, bool>? _setCancelMode;
 
     /// <param name="transcript">Where the lines outside the pane go: the screen's deferring sink, since the list may open while a reply runs.</param>
     /// <param name="pane">The menu host in the bottom pane.</param>
-    public QueueMenu(MessageQueue queue, INoticeSink transcript, MenuPane pane)
+    /// <param name="queueMode">The saved Queue mode (2026-10-13): with the three others, the mode buttons on the title row; null, none.</param>
+    /// <param name="setQueueMode">Sets Queue mode, saving and saying so (<see cref="SettingsMenu.SetQueueMode"/>).</param>
+    /// <param name="cancelMode">The saved Queue cancel mode.</param>
+    /// <param name="setCancelMode">Sets Queue cancel mode, saving and saying so (<see cref="SettingsMenu.SetQueueCancelMode"/>).</param>
+    public QueueMenu(MessageQueue queue, INoticeSink transcript, MenuPane pane, Func<Queueing>? queueMode = null, Func<Queueing, bool>? setQueueMode = null, Func<QueueCancel>? cancelMode = null, Func<QueueCancel, bool>? setCancelMode = null)
     {
         _queue = queue ?? throw new ArgumentNullException(nameof(queue));
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
+        _queueMode = queueMode;
+        _setQueueMode = setQueueMode;
+        _cancelMode = cancelMode;
+        _setCancelMode = setCancelMode;
+    }
+
+    /// <summary>The two modes in force while the buttons are wired, else null (2026-10-13).</summary>
+    private (Queueing Mode, QueueCancel Cancel)? Modes =>
+        _queueMode is { } mode && _setQueueMode is not null && _cancelMode is { } cancel && _setCancelMode is not null ? (mode(), cancel()) : null;
+
+    /// <summary>A mode button pressed (2026-10-13): the setting stepped to its next word, the rows' own notice said. False for another button.</summary>
+    private bool PressMode(MenuButton button)
+    {
+        if (button.Key == ModeKey && _queueMode is { } mode && _setQueueMode is { } setMode)
+        {
+            setMode(NextMode(mode()));
+            return true;
+        }
+
+        if (button.Key == CancelKey && _cancelMode is { } cancel && _setCancelMode is { } setCancel)
+        {
+            setCancel(NextCancel(cancel()));
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>Where a notice goes: the pane's status line while the list is open there, else the transcript.</summary>
@@ -111,9 +184,14 @@ internal sealed class QueueMenu
 
         if (entries.Count == 0)
         {
-            // The pane opens on the empty queue too (2026-10-07, the consistency pass).
-            await _pane.ShowEmptyAsync(Title, EmptyNotice, cancellationToken).ConfigureAwait(false);
-            return null;
+            // The pane opens on the empty queue too (2026-10-07, the consistency pass), with the mode buttons since 2026-10-13.
+            if (Modes is null)
+            {
+                await _pane.ShowEmptyAsync(Title, EmptyNotice, cancellationToken).ConfigureAwait(false);
+                return null;
+            }
+
+            return await ShowEmptyAsync(cancellationToken, canSend).ConfigureAwait(false);
         }
 
         // What ends the visit is said after the pane has closed, so it lands in the transcript
@@ -125,7 +203,7 @@ internal sealed class QueueMenu
             while (true)
             {
                 bool send = canSend?.Invoke() == true;
-                var buttons = send ? ButtonsWithSend : Buttons;
+                var buttons = Buttons(send, Modes);
                 var shownEntries = entries;
                 var page = new MenuPage(Title, entries.Select((entry, i) => RowMarkup(i, entry.Label)).ToList(), send ? KeysWithSend : Keys)
                 {
@@ -136,6 +214,19 @@ internal sealed class QueueMenu
                 if (picked is not { Row: var row })
                 {
                     return null;
+                }
+
+                if (picked.Value.Button >= 0 && PressMode(buttons[picked.Value.Button]))
+                {
+                    // A mode button (2026-10-13): saved and said; the list again from a fresh snapshot, the cursor kept.
+                    entries = _queue.Snapshot();
+                    if (entries.Count == 0)
+                    {
+                        return await ShowEmptyAsync(cancellationToken, canSend).ConfigureAwait(false);   // the loop took the last meanwhile
+                    }
+
+                    cursor = Math.Min(row, entries.Count - 1);
+                    continue;
                 }
 
                 if (picked.Value.Button >= 0 && buttons[picked.Value.Button].Title == SendButton)
@@ -204,5 +295,37 @@ internal sealed class QueueMenu
                 _transcript.Notice(closingNotice);
             }
         }
+    }
+
+    /// <summary>
+    /// The empty queue's pane with the mode buttons (2026-10-13): one dim <see cref="EmptyNotice"/> row, Enter on it nothing, a mode
+    /// button saved and the page again, until ESC. A message queued meanwhile (a reply's) turns it into the list.
+    /// </summary>
+    private async Task<SubmittedLine?> ShowEmptyAsync(CancellationToken cancellationToken, Func<bool>? canSend)
+    {
+        try
+        {
+            while (_queue.Count == 0 && Modes is { } modes)
+            {
+                var buttons = Buttons(send: false, modes, empty: true);
+                var page = new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], EmptyKeys) { Buttons = buttons };
+                var picked = await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false);
+                if (picked is null)
+                {
+                    return null;
+                }
+
+                if (picked.Value.Button >= 0)
+                {
+                    PressMode(buttons[picked.Value.Button]);
+                }
+            }
+        }
+        finally
+        {
+            _pane.Close();
+        }
+
+        return await ShowAsync(cancellationToken, canSend).ConfigureAwait(false);
     }
 }

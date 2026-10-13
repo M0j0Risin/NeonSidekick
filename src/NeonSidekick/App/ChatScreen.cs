@@ -1428,7 +1428,6 @@ internal sealed partial class ChatScreen
         _presentPlan = new PresentPlanTool(_plan, _files, time, PresentPlanAsync);
         // Menus read console.Input themselves; over the key source they also see type-ahead.
         _flow = new FlowSink(this);
-        _queueMenu = new QueueMenu(_queue, _flow, _menuPane);
         _queuedClicks = new DoubleClick(_pane.Time);
         _menu = new SettingsMenu(new ConsoleWithInput(_pane, keys), settings, overriddenBy, _input, _transcript, speech, _menuPane, _web.Browser.Locate, () => _interpreters.AvailableShells().Select(ShellKinds.Name).ToHashSet(StringComparer.Ordinal), () => _interpreters.AvailableLanguages([CodeLanguage.PowerShell, CodeLanguage.Python, CodeLanguage.Node]).Select(CodeLanguages.Name).ToHashSet(StringComparer.Ordinal), BrowseWorkingDirectoryAsync, BrowseVaultAsync, _openFile, comfyClient: _comfy.Client, botChatSkills: () => { _catalog.Scan(_effective().ExternalSkills); return _catalog.Skills; }, testHomeAssistant: _ha.TestAsync, printers: _print.Printers, botChatTools: BotChatToolGroups)
         {
@@ -1437,6 +1436,8 @@ internal sealed partial class ChatScreen
             // The home bar's picker reads the registries through the live feed (2026-10-12).
             HomeCatalog = _homeLive.CatalogAsync,
         };
+        // The mode buttons (2026-10-13, the user's ask): after the settings menu, whose rows save them; the saved words, read without the turn's warning; set through the rows' own save.
+        _queueMenu = new QueueMenu(_queue, _flow, _menuPane, () => SavedQueueMode(_settings.Current), mode => _menu.SetQueueMode(mode), () => SavedQueueCancel(_settings.Current), mode => _menu.SetQueueCancelMode(mode));
         // Built once: the roots ride the facts, so a profile switch needs no rebind; the Options rows through the settings menu (2026-09-19).
         _skillsMenu = new SkillsMenu(SkillsFacts, settings, _menu, _flow, _menuPane, _input, _openFile, name => SkillsMenu.UsageCaption(_skillRecords, _catalog.Find(name), _time.LocalTimeZone), _skillRecords, SkillVersions, RestoreSkill, ForgetSkillVersions,
             session: _session.History);   // the loaded sub-tab (2026-10-12): the one history the session keeps, watched while the pane is open
@@ -1488,17 +1489,15 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The standing hint under the input line: the timers while any run, then the <c>/read</c>
     /// reading's status (<see cref="SpeakReading.StatusLine"/>, 2026-09-17) while it is on the
-    /// row, else the token tally (<see cref="UsageText.HintPart"/>) once something was counted —
-    /// empty at a silent idle line. The timers take the usage part's place, as they always did;
-    /// the reading takes it too, and rides after the timers with <see cref="HintJoin"/> between,
-    /// so a running timer is never hidden by a long reading.
+    /// row, then the token tally (<see cref="UsageText.HintPart"/>) once something was counted —
+    /// empty at a silent idle line — each after the one before with <see cref="HintJoin"/> between.
+    /// The timers and the reading took the tally's place until 2026-10-13 (the user's ask: the tally
+    /// shown whatever stands).
     /// The speech strip (<see cref="SpeechGlyphs"/>) is not part of it since 2026-09-15: it is the
     /// pane's <see cref="ScreenPane.Strip"/>, drawn ahead of it in every state. Pinned.
     /// </summary>
     public static string HintLine(string? timers, string? usage = null, string? reading = null) =>
-        reading is null ? timers ?? usage ?? ""
-        : timers is null ? reading
-        : timers + HintJoin + reading;
+        string.Join(HintJoin, new[] { timers, reading, usage }.Where(part => !string.IsNullOrEmpty(part)));
 
     /// <summary>Between the timers and the reading on the hint row. Pinned.</summary>
     public const string HintJoin = " · ";
@@ -1590,6 +1589,12 @@ internal sealed partial class ChatScreen
     public const string UsageToolGlyph = "📊";
     public const string PerfToolGlyph = Perf.PerfText.Glyph;
     public const string MemoryToolGlyph = "💾";
+
+    /// <summary>
+    /// The Queue item (2026-10-13, the user's ask): the queue's hourglass after the disk, its double-click the bare <c>/queue</c>,
+    /// the pane with Queue mode's and Queue cancel mode's buttons; on the off slab while Queue mode is <c>disabled</c>. Pinned.
+    /// </summary>
+    public const string QueueToolGlyph = "⏳";
 
     /// <summary>
     /// The Ask item (2026-10-09, the user's ask): a raised hand between the disk and the lock, a tool switch like the others —
@@ -1728,8 +1733,8 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// Whether item <paramref name="id"/> is drawn on the off slab under <paramref name="shown"/> (2026-10-03, the user's ask: a
     /// dark slab behind the glyph, the one look that reads on a colour emoji): a tool switch that is off, the shell under the
-    /// policy <c>off</c>, the disk while Memory mode is disabled (later that day, the user's ask: the disk no longer gone while it is);
-    /// never any other item. Pinned.
+    /// policy <c>off</c>, the disk while Memory mode is disabled (later that day, the user's ask: the disk no longer gone while it is),
+    /// the hourglass while Queue mode is disabled (2026-10-13); never any other item. Pinned.
     /// </summary>
     public static bool ToolbarItemOff(string id, AppSettingsData shown)
     {
@@ -1737,6 +1742,12 @@ internal sealed partial class ChatScreen
         if (id == ToolbarItems.Memory)
         {
             return !MemoryMode.Enabled(shown);
+        }
+
+        if (id == ToolbarItems.Queue)
+        {
+            // 2026-10-13: the hourglass on the slab while Queue mode is disabled, as the disk under Memory disabled (a hand-edited word reads as the default).
+            return QueueMode.TryParse(shown.QueueMode, out var queueing) && queueing == Queueing.Disabled;
         }
 
         return ToolsText.SwitchField(id) switch
@@ -1760,8 +1771,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The hint row's note for one click on toolbar glyph <paramref name="glyph"/> under <paramref name="shown"/> (2026-10-04, the UI
-    /// review; <see cref="ToolbarItems.Note"/>): the shell and the lock the policy, the officer its switch, the disk Memory mode, a
-    /// tool switch on or off, a pane or a window its name alone; null for a glyph that is no item's. Pure; pinned.
+    /// review; <see cref="ToolbarItems.Note"/>): the shell and the lock the policy, the officer its switch, the disk Memory mode, the
+    /// hourglass Queue mode (2026-10-13), a tool switch on or off, a pane or a window its name alone; null for a glyph that is no item's. Pure; pinned.
     /// </summary>
     public static string? ToolbarGlyphNote(string glyph, AppSettingsData shown)
     {
@@ -1778,6 +1789,7 @@ internal sealed partial class ChatScreen
             ToolbarItems.Shell or ToolbarItems.CmdList => Shell.CommandPolicy.Name(ToolbarPolicy(shown)),
             ToolbarItems.Police => shown.ShellPolice ? ToolbarItems.OnWord : ToolbarItems.OffWord,
             ToolbarItems.Memory => MemoryMode.Name(memory),
+            ToolbarItems.Queue => QueueMode.Name(SavedQueueMode(shown)),   // 2026-10-13
             _ when ToolsText.SwitchField(id) is not null => ToolbarItemOff(id, shown) ? ToolbarItems.OffWord : ToolbarItems.OnWord,
             _ => null,
         };
@@ -2174,6 +2186,7 @@ internal sealed partial class ChatScreen
         UsageToolGlyph => SlashCommands.UsageWord,
         PerfToolGlyph => SlashCommands.PerfWord,
         MemoryToolGlyph => SlashCommands.MemoryWord,
+        QueueToolGlyph => SlashCommands.QueueWord,   // 2026-10-13: the /queue pane
         AskToolGlyph => ToolsText.SwitchLine(ToolbarItems.Ask),
         CmdAskToolGlyph or CmdYoloToolGlyph => ToolsText.ShellSubLine(ToolsText.ShellAllowedWord),
         PoliceToolGlyph or NinjaToolGlyph => ToolsText.ShellSubLine(ToolsText.ShellPoliceWord),
@@ -2382,12 +2395,12 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The standing hint row's parts in the Hint bar's order (2026-10-12, the user's ask: its sections on or off and in any order;
-    /// <see cref="ScreenPane.HintLayout"/>): the strip, the queued part, the keys' lead, the timers, the reading, the tally — which, as
-    /// always, stands aside while a timer or a reading shows — the model and (later that day) the working directory. Since 2026-10-13
+    /// <see cref="ScreenPane.HintLayout"/>): the strip, the queued part, the keys' lead, the timers, the reading, the tally — which stood
+    /// aside while a timer or a reading showed until 2026-10-13 (the user's ask: shown whatever stands) — the model and (later that day) the working directory. Since 2026-10-13
     /// (the user's ask) each on the side it is pinned to (<see cref="HintBarItems.Sides"/>; <see cref="ScreenPane.HintSlot.AtRight"/>), in
     /// that side's order. An armed exit, rewind or splash delete takes every text section's place at the left group's end, after the strip
     /// and the queued part; the model and the working directory pinned right keep their places meanwhile. The tally is its own slot
-    /// (<see cref="ScreenPane.HintSlot.UsageOf"/>, empty while it stands aside), so the busy row puts its own there. Each section unchecked is left out.
+    /// (<see cref="ScreenPane.HintSlot.UsageOf"/>, empty under an armed hint), so the busy row puts its own there. Each section unchecked is left out.
     /// </summary>
     private IReadOnlyList<ScreenPane.HintSlot> HintSlots()
     {
@@ -2431,9 +2444,10 @@ internal sealed partial class ChatScreen
                 HintBarItems.Model when armed is null || right => ScreenPane.HintSlot.Model,
                 HintBarItems.WorkingDirectory when armed is null || right => ScreenPane.HintSlot.Path(WorkingDirectoryLabel(_effective())),   // --cwd may override it
                 HintBarItems.Keys when armed is null && KeysLead() is { Length: > 0 } keys => ScreenPane.HintSlot.Of(keys),
-                HintBarItems.Timers when !string.IsNullOrEmpty(timers) => ScreenPane.HintSlot.Of(timers),
+                HintBarItems.Timers when !string.IsNullOrEmpty(timers) => ScreenPane.HintSlot.TimersOf(timers),   // its own zone since 2026-10-13: a double-click asks to cancel them all
                 HintBarItems.Reading when !string.IsNullOrEmpty(reading) => ScreenPane.HintSlot.Of(reading),
-                HintBarItems.Usage => ScreenPane.HintSlot.UsageOf(armed is null && timers is null && reading is null ? UsageText.HintPart(_session.Usage, _session.ContextLength) ?? "" : ""),
+                // The tally stands beside the timers and the reading since 2026-10-13 (the user's ask); only an armed hint takes its place.
+                HintBarItems.Usage => ScreenPane.HintSlot.UsageOf(armed is null ? UsageText.HintPart(_session.Usage, _session.ContextLength) ?? "" : ""),
                 _ => null,
             };
             if (slot is { } placed)
@@ -3090,6 +3104,14 @@ internal sealed partial class ChatScreen
         }
     }
 
+    /// <summary>The saved <c>Queue mode</c> for the <c>/queue</c> pane's button (2026-10-13): a hand-edited word reads as the default, without a warning.</summary>
+    private static Queueing SavedQueueMode(AppSettingsData saved) =>
+        QueueMode.TryParse(saved.QueueMode, out var mode) || QueueMode.TryParse(QueueMode.Default, out mode) ? mode : Queueing.Automatic;
+
+    /// <summary>The saved <c>Queue cancel mode</c> for the <c>/queue</c> pane's button (2026-10-13): a hand-edited word reads as the default, without a warning.</summary>
+    private static QueueCancel SavedQueueCancel(AppSettingsData saved) =>
+        QueueCancelMode.TryParse(saved.QueueCancelMode, out var mode) || QueueCancelMode.TryParse(QueueCancelMode.Default, out mode) ? mode : QueueCancel.Empty;
+
     /// <summary>
     /// The <c>Queue mode</c> in force (2026-10-09, the user's call): the saved word, except that <c>manual</c> is <c>automatic</c>
     /// without the bottom pane — its <c>/queue</c> send is the only way a manual queue moves. Read at each Enter and keystroke.
@@ -3127,6 +3149,22 @@ internal sealed partial class ChatScreen
     /// <summary><c>Queue cancel mode hold applied after a cancelled reply (2 waiting)</c> — only with something queued. Pinned.</summary>
     public static string QueueCancelLogLine(QueueCancel mode, int waiting) =>
         string.Create(CultureInfo.InvariantCulture, $"Queue cancel mode {QueueCancelMode.Name(mode)} applied after a cancelled reply ({waiting} waiting)");
+
+    /// <summary>
+    /// A double-click on the hint row's timers (2026-10-13, the user's ask): <see cref="TimerText.CancelAllPrompt"/>, then on a yes every
+    /// timer stopped with <c>/timer stop all</c>'s notice, on a no <see cref="KeptNotice"/>. Nothing with none left to cancel.
+    /// </summary>
+    private async Task CancelAllTimersAsync(CancellationToken cancellationToken)
+    {
+        if (_timers.Snapshot().Count == 0)
+        {
+            return;
+        }
+
+        _transcript.Notice(await ConfirmAsync(TimerText.CancelAllPrompt, cancellationToken).ConfigureAwait(false)
+            ? TimerText.StoppedAll(_timers.StopAll())
+            : KeptNotice);
+    }
 
     /// <summary>Every queued message dropped with <see cref="QueueDroppedNotice"/> — nothing said when there was none. Every conversation clear calls it: a forgotten conversation never receives stale questions.</summary>
     private void DropQueue()
@@ -9558,7 +9596,7 @@ internal sealed partial class ChatScreen
     [
         ("keys", ProfileSection.Keys, "the five API keys, mirrored"),
         ("servers", ProfileSection.Servers, "the server settings: Common, Http, Embedded, Docker, Anthropic and OpenAI"),
-        ("commands", ProfileSection.Commands, "Shell allowed commands, added (or replaced with overwrite)"),
+        ("allowed", ProfileSection.Commands, "Shell allowed commands, added (or replaced with overwrite)"),
         ("history", ProfileSection.History, "the message history, added (or replaced with overwrite)"),
         ("policestrings", ProfileSection.PoliceStrings, "Shell police forbidden strings, added (or replaced with overwrite)"),
         ("persona", ProfileSection.Persona, "persona.md, the persona (overwrite replaces the target's)"),
@@ -10134,6 +10172,10 @@ internal sealed partial class ChatScreen
                         else if (hint.Hit.Zone == ScreenPane.HintZone.Strip && SwitchForGlyph(hint.Hit.Glyph) is { } glyphSwitch)
                         {
                             await HandleSwitchAsync(glyphSwitch.Command, glyphSwitch.Off, midTurn: false, cancellationToken).ConfigureAwait(false);
+                        }
+                        else if (hint.Hit.Zone == ScreenPane.HintZone.Timers)
+                        {
+                            await CancelAllTimersAsync(cancellationToken).ConfigureAwait(false);
                         }
                         else
                         {

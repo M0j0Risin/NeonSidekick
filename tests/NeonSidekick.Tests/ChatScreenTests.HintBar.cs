@@ -37,6 +37,34 @@ public partial class ChatScreenTests
         Assert.DoesNotContain("› /server", output);
     }
 
+    /// <summary>
+    /// A double-click on the timers (2026-10-13, the user's ask) asks "Cancel all timers?": a no keeps them, a yes stops every one with
+    /// /timer stop all's notice; the tally beside them, no longer in their place.
+    /// </summary>
+    [Fact]
+    public async Task HintBar_ADoubleClickOnTheTimers_AsksAndCancelsThemAll()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.HintBarItems = ["timers", "usage"]; d.ToolbarItems = []; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // an empty line: row 100, the rule 101, the hint row 102
+        StepsWhenIdle(
+            Line("/timer 10m tea"),
+            Line("/timer 5m eggs"),
+            input => { input.PushClick(4, 102); input.PushClick(4, 102); },   // the timers: the question, No under the cursor
+            Key(Keys.Enter),                                                   // no: kept
+            input => { input.PushClick(4, 102); input.PushClick(4, 102); },
+            input => input.Push(Keys.Char('y'), Keys.Enter),                   // yes: all stopped
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(Titled(Timers.TimerText.CancelAllPrompt), output);
+        Assert.Contains("  · " + ChatScreen.KeptNotice + "\n", output);
+        Assert.Contains(Timers.TimerText.StoppedAll(2), output);
+        Assert.True(output.IndexOf(ChatScreen.KeptNotice, StringComparison.Ordinal) < output.IndexOf(Timers.TimerText.StoppedAll(2), StringComparison.Ordinal), output);
+    }
+
     /// <summary>The model unchecked: neither at the right edge nor anywhere on the row.</summary>
     [Fact]
     public async Task HintBar_AnUncheckedSection_IsLeftOut()
@@ -169,7 +197,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// The tool bar's default order (2026-10-13, the user's ask): a dim │ after 💾 and another after 🐚, each between two drawn glyphs
+    /// The tool bar's default order (2026-10-13, the user's ask): a dim │ after 💾 (after ⏳ later that day) and another after 🐚, each between two drawn glyphs
     /// (the fixture saves a bare order for the column pins; this test takes the default again).
     /// </summary>
     [WindowsFact]
@@ -183,7 +211,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(ChatScreen.MemoryToolGlyph + " " + ScreenPane.DividerGlyph + " ", output);
+        Assert.Contains(ChatScreen.MemoryToolGlyph + " " + ChatScreen.QueueToolGlyph + " " + ScreenPane.DividerGlyph + " ", output);   // ⏳ ahead of it since 2026-10-13
         Assert.Contains(ChatScreen.ShellToolGlyph + " " + ScreenPane.DividerGlyph + " " + ChatScreen.FilesToolGlyph, output);
     }
 

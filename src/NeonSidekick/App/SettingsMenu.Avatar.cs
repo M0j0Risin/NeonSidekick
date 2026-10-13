@@ -120,8 +120,8 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
-    /// <summary>The user avatar saved: null for none, the default (2026-10-12).</summary>
-    private static void SetUser(AppSettingsData d, string avatar) => d.UserAvatar = avatar.Length == 0 ? null : avatar;
+    /// <summary>The user avatar saved: empty for none (null until 2026-10-13, when null became the 🙊 default).</summary>
+    private static void SetUser(AppSettingsData d, string avatar) => d.UserAvatar = avatar;
 
     /// <summary>
     /// The draft line's emoji picker (2026-10-11, the user's ask: the <c>Emoji picker</c> setting's button at the draft row's end): the

@@ -41,6 +41,7 @@ public static class ToolbarItems
     public const string Usage = "usage";
     public const string Perf = "perf";         // later on 2026-09-29, the user's ask: 📈, the performance bar shown or hidden
     public const string Memory = "memory";
+    public const string Queue = "queue";       // 2026-10-13, the user's ask: ⏳, the /queue pane, after the disk (checked by default)
     public const string Ask = "ask";           // 2026-10-09, the user's ask: 🙋, the Ask user switch (/tools ask), between the disk and the lock
     public const string CmdList = "cmdlist";
     public const string Police = "police";
@@ -82,24 +83,25 @@ public static class ToolbarItems
     /// 2026-10-03, the user's ask); Themes after Profile and the Comfy thumb viewer after the Comfy viewer (2026-10-04); Process
     /// after the log (2026-10-05); YouTube where the Camera live viewer was (2026-10-08), after the Comfy thumb viewer later that day
     /// (the user's ask); Ask between the disk and the lock (2026-10-09, the user's ask); Image after Files (2026-10-10, the user's ask); Advisors after
-    /// the Claude Code advisor (later that day, the profile advisors), after Web once that one was retired (later still). Pinned.
+    /// the Claude Code advisor (later that day, the profile advisors), after Web once that one was retired (later still); Queue after
+    /// Memory (2026-10-13, the user's ask). Pinned.
     /// </summary>
     public static readonly string[] Names =
     [
-        Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Ask, CmdList, Police,
+        Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Queue, Ask, CmdList, Police,
         Shell, Files, Image, Web, Advisors, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
         Log, Process, ComfyView, ComfyThumbs, YouTube, ShoppingList, Perf, Path, Model,
     ];
 
     /// <summary>
-    /// What a profile that never chose shows (2026-10-05, the user's pick): Settings, Tools, Skills, Memory, Shell allowed
+    /// What a profile that never chose shows (2026-10-05, the user's pick): Settings, Tools, Skills, Memory, Queue (2026-10-13, the user's pick), Shell allowed
     /// commands, Shell police, the Shell, Files, Image (2026-10-10, the user's ask) and Web switches and the path — the lock and the officer still only under a
     /// policy other than off. Tools, Shell allowed commands, Shell police, the three switches and the path from 2026-10-03; Shell
     /// allowed commands, Shell police and the path from 2026-10-02; Settings, Tools, Skills, Sessions and the path from later on
     /// 2026-09-29, every item before; a profile that saved the defaults as null follows. In <see cref="Names"/> order, which
     /// <see cref="Save"/> compares by. Pinned.
     /// </summary>
-    public static readonly string[] Defaults = [Settings, Tools, Skills, Memory, CmdList, Police, Shell, Files, Image, Web, Path];
+    public static readonly string[] Defaults = [Settings, Tools, Skills, Memory, Queue, CmdList, Police, Shell, Files, Image, Web, Path];
 
     /// <summary>
     /// The glyph an item draws on the checklist (the lock's closed one for <see cref="CmdList"/>; the folder for the path
@@ -118,6 +120,7 @@ public static class ToolbarItems
         Usage => ChatScreen.UsageToolGlyph,
         Perf => ChatScreen.PerfToolGlyph,
         Memory => ChatScreen.MemoryToolGlyph,
+        Queue => ChatScreen.QueueToolGlyph,
         Ask => ChatScreen.AskToolGlyph,
         CmdList => ChatScreen.CmdAskToolGlyph,
         Police => ChatScreen.PoliceToolGlyph,
@@ -162,6 +165,7 @@ public static class ToolbarItems
         Usage => "Usage",
         Perf => "Performance",
         Memory => "Memory",
+        Queue => "Queue",
         Ask => "Ask",
         CmdList => "Shell allowed commands",
         Police => "Shell police",
@@ -210,6 +214,7 @@ public static class ToolbarItems
         Usage => "/usage",
         Perf => "/perfbar",
         Memory => "/memory",
+        Queue => SlashCommands.QueueWord,
         CmdList => ToolsText.ShellSubLine(ToolsText.ShellAllowedWord),
         Police => ToolsText.ShellSubLine(ToolsText.ShellPoliceWord),
         Log => ChatScreen.LogToolLine,
@@ -223,16 +228,19 @@ public static class ToolbarItems
         _ => ToolsText.SwitchField(id) is null ? "" : ToolsText.SwitchLine(id),
     };
 
-    /// <summary>The tail of a glyph's note (<see cref="Note"/>): what the second click does. Pinned.</summary>
+    /// <summary>The tail of the model name's note (<see cref="ModelNote"/>): what the second click does. Pinned.</summary>
     public const string DoubleClickNote = "double-click to open";
+
+    /// <summary>The tail of a glyph's note (<see cref="Note"/>, 2026-10-13): the second click, or a right-click, as on the home bar. Pinned.</summary>
+    public const string GlyphClickNote = "double-click or right-click to open";
 
     /// <summary>
     /// What one click on a toolbar glyph puts on the hint row (2026-10-04, the UI review: a row of glyphs and no way to tell them
-    /// apart but to open each): the glyph, the item's name, its state where it has one, and <see cref="DoubleClickNote"/> —
-    /// <c>🐚 Shell: ask · double-click to open</c>, <c>⚙️ Settings · double-click to open</c>. Pinned.
+    /// apart but to open each): the glyph, the item's name, its state where it has one, and <see cref="GlyphClickNote"/> —
+    /// <c>🐚 Shell: ask · double-click or right-click to open</c>, <c>⚙️ Settings · double-click or right-click to open</c>. Pinned.
     /// </summary>
     public static string Note(string glyph, string id, string? state) =>
-        glyph + " " + Title(id) + (state is null ? "" : ": " + state) + " · " + DoubleClickNote;
+        glyph + " " + Title(id) + (state is null ? "" : ": " + state) + " · " + GlyphClickNote;
 
     /// <summary>A divider's name on the checklist (2026-10-13). Pinned.</summary>
     public const string DividerTitle = "Divider";
@@ -287,8 +295,8 @@ public static class ToolbarItems
     }
 
     /// <summary>
-    /// The default order (2026-10-13, the user's ask: <c>⚙️ 🛠️ 🎓 💾 | 🔓 👮 🐚 | 📁 🌄 🌐</c>): <see cref="Names"/> with a divider after
-    /// Memory (ahead of Ask, unchecked by default) and another after Shell. A divider whose neighbours are hidden is not drawn
+    /// The default order (2026-10-13, the user's ask: <c>⚙️ 🛠️ 🎓 💾 ⏳ | 🔓 👮 🐚 | 📁 🌄 🌐</c>): <see cref="Names"/> with a divider after
+    /// Queue (ahead of Ask, unchecked by default; after Memory until Queue came later that day) and another after Shell. A divider whose neighbours are hidden is not drawn
     /// (<see cref="ItemOrder.ShownDividers"/>). Pinned.
     /// </summary>
     public static readonly string[] DefaultOrder =

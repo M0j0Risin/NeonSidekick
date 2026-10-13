@@ -29,7 +29,7 @@ public sealed class HintBarItemsTests
         Assert.Contains("spinner", HintBarItems.Resolve(["status"]));
         Assert.Contains("spinner", HintBarItems.Resolve(null));
         Assert.Equal("The spinner is always on: Shift+↑↓ and Shift+←→ move it", HintBarItems.SpinnerFixedNotice);
-        Assert.Equal("[[x]] Spinner            " + Theme.DimMarkup("always on: the spinner, its label and clock under a reply, then esc to stop"), HintBarItems.Label("spinner", true));
+        Assert.Equal("[[x]] Spinner            " + Theme.DimMarkup("turn activity spinner, info and stop hint: always on"), HintBarItems.Label("spinner", true));
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public sealed class HintBarItemsTests
         Assert.Equal("Status, Queued, Keys, Timers, Reading, Usage | Model", HintBarItems.Value(null, ["model", "status", "queued", "keys", "timers", "reading", "usage", "cwd"]));   // the defaults, moved: named, each side (2026-10-13)
         Assert.Equal("Status, Queued, Keys, Timers, Reading, Model | Usage", HintBarItems.Value(null, null, ["usage"]));
         Assert.Equal("| Status, Usage", HintBarItems.Value(["usage", "status"], null, ["usage", "status"]));
-        Assert.Equal("[[x]] Status             " + Theme.DimMarkup("the switches and jobs at the start: 🔊 🎤 👂 ✋, 🧠, 🏷️…"), HintBarItems.Label("status", true));
+        Assert.Equal("[[x]] Status             " + Theme.DimMarkup("status icons: 🔊 🎤 👂 ✋, 🧠, 🏷️…"), HintBarItems.Label("status", true));
         Assert.Equal("[[ ]] Model              " + Theme.DimMarkup("the model's name and its reasoning mark"), HintBarItems.Label("model", false));
         Assert.Equal("[[ ]] Working directory  " + Theme.DimMarkup("the working directory, as the tool bar shows it (/cwd browse)"), HintBarItems.Label("cwd", false));
         Assert.Equal(["Status", "Spinner", "Queued", "Keys", "Timers", "Reading", "Usage", "Model", "Working directory"], HintBarItems.Names.Select(HintBarItems.Title));

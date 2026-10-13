@@ -276,6 +276,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     // The working directory on the hint row (later on 2026-10-12, Hint bar's Working directory): its first column and cells, −1 / 0 for none drawn whole.
     private int _hintPathColumn = -1;
     private int _hintPathCells;
+    private int _hintTimersColumn = -1;   // 2026-10-13: the standing row's timers, the double-click's zone
+    private int _hintTimersCells;
 
     // The queued part (Queued) as last drawn, in either row: its first column and its width in
     // cells, −1 / 0 when none was drawn (nothing queued, cut by a narrow window, or under an
@@ -424,6 +426,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         /// since its number would be the strip's first column's.
         /// </summary>
         Path,
+
+        /// <summary>
+        /// The timers on the standing row (2026-10-13, the user's ask: a double-click there asks to cancel them all). Last, for the same
+        /// reason; its pairing key is <see cref="HintTimersKey"/>, since its number would be a strip column's.
+        /// </summary>
+        Timers,
     }
 
     /// <summary>Where on the hint row a click landed: the zone, the strip glyph under it (<c>""</c> elsewhere) and the zone's first column (−1 for the row).</summary>
@@ -794,6 +802,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _ => -5 - tool.Column,
         },
         { Hint: { Zone: HintZone.Path } } => HintPathKey,
+        { Hint: { Zone: HintZone.Timers } } => HintTimersKey,
         { Hint: { } row } => row.Zone == HintZone.Strip ? -200 - row.Column : -100 - (int)row.Zone,
         _ => MenuPane.OutsideRow,
     };
@@ -824,6 +833,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         Path,   // later on 2026-10-12: the working directory, its text the slot's
         Usage,  // 2026-10-13: the token tally, its text the slot's (empty while it stands aside); the busy row puts its own tally there
         Spinner,   // later on 2026-10-13: the busy row's spinner, label and stop hint stand here; nothing on the standing row
+        Timers,    // later still on 2026-10-13: the timers, its text the slot's; a double-click there asks to cancel them all
     }
 
     /// <summary>
@@ -839,6 +849,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         public static HintSlot Path(string text) => new(HintSlotKind.Path, text);
         public static HintSlot UsageOf(string text) => new(HintSlotKind.Usage, text);
         public static HintSlot Spinner { get; } = new(HintSlotKind.Spinner);
+        public static HintSlot TimersOf(string text) => new(HintSlotKind.Timers, text);
 
         /// <summary>This slot at the right edge (later on 2026-10-12: the model and the working directory while they ended the row; any slot pinned right since 2026-10-13).</summary>
         public HintSlot AtRight() => this with { Right = true };
@@ -846,6 +857,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>The working directory on the hint row in the off-pane and pairing keys (later on 2026-10-12): far from every column's key. Pinned.</summary>
     public const int HintPathKey = -500_003;
+
+    /// <summary>The timers on the hint row in the pairing keys (2026-10-13): far from every column's key. Pinned.</summary>
+    public const int HintTimersKey = -500_004;
 
     /// <summary>
     /// The standing hint row's parts in order (2026-10-12, the user's ask: the Hint bar setting, its sections in any order), each
@@ -4329,6 +4343,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 hit = new HintHit(HintZone.Usage, "", _tallyColumn);   // the busy row's tally apart from the spinner (2026-10-13)
             }
 
+            if (hit.Zone == HintZone.Row && _busyLabel is null && _hintTimersColumn >= 0 && x >= _hintTimersColumn && x < _hintTimersColumn + _hintTimersCells)
+            {
+                hit = new HintHit(HintZone.Timers, "", _hintTimersColumn);   // the standing row's timers (later still on 2026-10-13)
+            }
+
             return true;
         }
     }
@@ -5965,6 +5984,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _markEnd = int.MaxValue;
             _hintPathColumn = -1;
             _hintPathCells = 0;
+            _hintTimersColumn = -1;
+            _hintTimersCells = 0;
             _queuedColumn = -1;
             _queuedCells = 0;
             _usageColumn = -1;
@@ -6021,6 +6042,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _hintStripColumn = 0;
             _hintPathColumn = -1;   // the working directory is the standing row's alone
             _hintPathCells = 0;
+            _hintTimersColumn = -1;
+            _hintTimersCells = 0;
             // The queued part's place: after the prefix, the frame, the blank, the label, the tally and a separator — when the fit left it whole.
             RecordQueued(queued, TextCells.Width(prefix) + TextCells.Width(frame), TextCells.Width(labelled + HintSeparator), unfitted, restMax);
             // The usage zone: the frame, the label and the tally after the prefix — when the fit kept them
@@ -6048,8 +6071,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _shownHint = laid.Text;
             // Each part's zone where it was drawn whole, on either side (2026-10-13, the sides).
             ApplyHintZones(laid, max);
-            // The usage zone: the tally where the screen's hint put it — nowhere under an overlay's hint, or when the timers or
-            // the exit hint stand in its place; a layout of text slots (the tests') has it found by its text.
+            // The usage zone: the tally where the screen's hint put it — nowhere under an overlay's hint, or when the exit hint
+            // stands in its place (the timers too until 2026-10-13); a layout of text slots (the tests') has it found by its text.
             string usage = _overlay is null ? _usage() : "";
             if (laid.Find(HintPartKind.Usage) is null && usage.Length > 0 && laid.Parts.FirstOrDefault(part => part.Kind == HintPartKind.Text && part.Text.Contains(Spaced(usage), StringComparison.Ordinal)) is { Text.Length: > 0 } holder)
             {
@@ -6335,6 +6358,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         Path,
         Text,
         Spinner,
+        Timers,   // 2026-10-13: laid out as text, its place kept for the double-click's zone
     }
 
     /// <summary>A part of the hint row before it is placed (2026-10-13): its text — the model's name, its <paramref name="Mark"/> apart until it is fitted.</summary>
@@ -6394,6 +6418,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 HintSlotKind.Model => model,
                 HintSlotKind.Path => new HintPart(HintPartKind.Path, slot.Text ?? ""),
                 HintSlotKind.Usage => new HintPart(HintPartKind.Usage, Spaced(slot.Text ?? "")),
+                HintSlotKind.Timers => new HintPart(HintPartKind.Timers, Spaced(slot.Text ?? "")),   // a text part with a zone of its own (2026-10-13)
                 _ => new HintPart(HintPartKind.Text, Spaced(slot.Text ?? "")),
             };
             (slot.Right ? right : left).Add(part);
@@ -6491,6 +6516,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         ApplyHintZones(laid, max);
         _hintPathColumn = -1;   // no button under a reply, as the tool bar's path
         _hintPathCells = 0;
+        _hintTimersColumn = -1;
+        _hintTimersCells = 0;
         _usageColumn = -1;
         _usageCells = 0;
         _labelColumn = -1;
@@ -6552,6 +6579,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         var path = laid.Find(HintPartKind.Path);
         _hintPathColumn = path is { Whole: true } pa ? pa.Column : -1;
         _hintPathCells = path is { Whole: true } ? (path.Value.Last ? Math.Max(path.Value.Cells, max - path.Value.Column) : path.Value.Cells) : 0;
+        var timers = laid.Find(HintPartKind.Timers);
+        _hintTimersColumn = timers is { Whole: true, Cells: > 0 } ti ? ti.Column : -1;
+        _hintTimersCells = timers is { Whole: true } ? timers.Value.Cells : 0;
     }
 
     /// <summary>

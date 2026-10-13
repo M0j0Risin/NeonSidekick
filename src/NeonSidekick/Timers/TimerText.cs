@@ -310,6 +310,9 @@ public static class TimerText
         return ScreenPane.Fit(name, StatusNameCells);
     }
 
+    /// <summary>The question a double-click on the hint row's timers asks before stopping them all (2026-10-13, the user's words). Pinned.</summary>
+    public const string CancelAllPrompt = "Cancel all timers?";
+
     /// <summary><c>(stopped 2 timers)</c>, <c>(stopped 1 timer)</c>, <c>(no timers)</c>.</summary>
     public static string StoppedAll(int count) => count == 0 ? "(" + StatusGlyph + " no timers)" : "(" + StatusGlyph + " stopped " + ClockText.Count(count, "timer") + ")";   // the clock since 2026-09-22
 }
