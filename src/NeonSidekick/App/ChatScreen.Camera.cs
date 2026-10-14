@@ -226,7 +226,7 @@ internal sealed partial class ChatScreen
     {
         if (!_cameraAllowed)
         {
-            var allow = await RunCameraPaneAsync(token => _cameraMenu.AllowAsync(prompt, token), null, turnToken).ConfigureAwait(false);
+            var allow = await AllowBothAsync(CameraText.AllowTitle, prompt, null, token => _cameraMenu.AllowAsync(prompt, token), turnToken).ConfigureAwait(false);
             if (allow is not { } choice)
             {
                 return new CameraAnswer.NoScreen();

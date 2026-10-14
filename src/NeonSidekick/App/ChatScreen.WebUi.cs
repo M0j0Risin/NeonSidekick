@@ -1,0 +1,348 @@
+using System.Globalization;
+using System.Net;
+using NeonSidekick.Diagnostics;
+using NeonSidekick.Settings;
+using NeonSidekick.UI;
+using NeonSidekick.WebUi;
+
+namespace NeonSidekick.App;
+
+// ── The Web UI (2026-10-14, the user's ask) ─────────────────────────────────
+// A browser front end the app hosts for the loaded profile: the chat as it happens, a draft line of its own, the panes that ask
+// answered there or here (the first answer wins), and the shopping list. The server (WebUi/WebUiHost) only turns HTTP into calls on
+// the session (WebUi/WebUiSession), which outlives its restarts; this part feeds the session and takes from it on the screen's own
+// tasks — a message from the page is sent from the idle line, a notice printed there or by the turn's act drain, never from a
+// Kestrel thread.
+
+internal sealed partial class ChatScreen
+{
+    private const string WebUiCategory = "WebUi";
+
+    /// <summary>The app's side of the Web UI: the feed, the asks, the page's messages and notices waiting.</summary>
+    private readonly WebUiSession _webUi;
+
+    /// <summary>Starts, stops and restarts the server as the settings say.</summary>
+    private readonly WebUiController _webUiController;
+
+    /// <summary>The token as the profile stores it (encrypted) and as the server compares it; read again only when the stored value changes.</summary>
+    private string? _webUiTokenStored;
+    private string _webUiTokenPlain = "";
+
+    /// <summary>The state last handed to the controller: the idle line's backstop asks again only when the settings say otherwise.</summary>
+    private WebUiWanted? _webUiAsked;
+
+    /// <summary>
+    /// The page's Stop asked for the turn's end (2026-10-14): before the model's first event the turn ends withdrawn, as ESC's would
+    /// (<see cref="TurnEndNotice"/> reads it as <see cref="Interrupt.Cancel"/> at its call); cleared at each turn's start and end.
+    /// </summary>
+    private volatile bool _webStopRequested;
+
+    /// <summary>The line sent last came from the page (2026-10-14): withdrawn, it goes back to the page's draft, never the PC's row.</summary>
+    private bool _sentFromWeb;
+
+    /// <summary>Builds the session and the controller, and wires the feed (from the constructor, before the first draw).</summary>
+    private (WebUiSession Session, WebUiController Controller) CreateWebUi(Func<IWebUiBackend, IWebUiHost>? webUiHost)
+    {
+        var session = new WebUiSession(WebStateNow, WebStop, () => _shopping, HomeShoppingChanged, _time) { Nudge = WebNudge };
+        return (session, new WebUiController(webUiHost, session));
+    }
+
+    /// <summary>The transcript recorded for the pages from the start: the renderer's lines and the sent lines.</summary>
+    private void WireWebUiFeed()
+    {
+        _transcript.Feed = _webUi.Feed;
+        _pane.Committed = text => _webUi.Feed.Add(FeedKind.User, text);
+    }
+
+    /// <summary>A message or a notice waits: the idle read ends, and a turn's (or a botchat's) wait wakes to drain the notices.</summary>
+    private void WebNudge()
+    {
+        SignalAlert();
+        Volatile.Read(ref _actSignal).TrySetResult();
+    }
+
+    // ── The server's life ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// The server as the settings say, now (the screen's start, a settings change, a profile switch, <c>/webui</c>) or at the idle line's
+    /// backstop: started, stopped, restarted or left. A token is minted here, on the screen's task, when the profile has none it can
+    /// read. The start itself runs behind the line (it is not awaited), its notices queued for the line.
+    /// </summary>
+    private void ReconcileWebUi()
+    {
+        if (!_webUiController.Available)
+        {
+            return;
+        }
+
+        var wanted = WebUiWantedNow();
+        if (wanted == _webUiAsked)
+        {
+            return;
+        }
+
+        _webUiAsked = wanted;
+        _ = ReconcileWebUiQuietlyAsync(wanted);
+    }
+
+    private async Task ReconcileWebUiQuietlyAsync(WebUiWanted wanted)
+    {
+        try
+        {
+            await _webUiController.ReconcileAsync(wanted).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            DiagnosticLog.Error(WebUiCategory, "Web UI: the server could not be started or stopped: " + e.Message, e);
+            _webUi.Notice("Web UI: " + e.Message, error: true);
+        }
+    }
+
+    /// <summary>What the server should be doing for the settings in force.</summary>
+    private WebUiWanted WebUiWantedNow()
+    {
+        var effective = _effective();
+        if (!effective.WebUi)
+        {
+            return WebUiWanted.Off;
+        }
+
+        int port = Math.Clamp(effective.WebUiPort, AppSettingsData.MinWebUiPort, AppSettingsData.MaxWebUiPort);
+        return new WebUiWanted(true, port, WebUiReach.Resolve(effective), WebUiTokenNow(mint: true));
+    }
+
+    /// <summary>
+    /// The profile's sign-in token, plain: decrypted once per stored value; with <paramref name="mint"/>, a new one made and saved when there
+    /// is none this machine can read (a fresh profile, or a profile.json copied from another machine — then the notice says the browsers
+    /// sign in again). Never empty when minted.
+    /// </summary>
+    private string WebUiTokenNow(bool mint)
+    {
+        string stored = _settings.Current.WebUiToken ?? "";
+        if (stored != _webUiTokenStored)
+        {
+            _webUiTokenStored = stored;
+            _webUiTokenPlain = SettingsSecrets.Reveal(stored) ?? "";
+        }
+
+        if (!mint || WebUiAuth.IsWellFormed(_webUiTokenPlain))
+        {
+            return _webUiTokenPlain;
+        }
+
+        return MintWebUiToken(announce: stored.Trim().Length > 0);
+    }
+
+    /// <summary>A new token, saved encrypted; every browser signed in with the old one is signed out.</summary>
+    private string MintWebUiToken(bool announce)
+    {
+        string fresh = WebUiAuth.NewToken();
+        string saved = SettingsSecrets.Protect(fresh, out string? error);
+        if (error is not null)
+        {
+            DiagnosticLog.Warn(WebUiCategory, "Web UI: the sign-in token stays unencrypted: " + error + ".");
+        }
+
+        _settings.Update(d => d.WebUiToken = saved);
+        _webUiTokenStored = _settings.Current.WebUiToken;
+        _webUiTokenPlain = fresh;
+        if (announce)
+        {
+            _transcript.Notice(WebUiText.TokenMintedNotice);
+        }
+
+        return fresh;
+    }
+
+    /// <summary>The queued notices, on the screen's task: the idle line's top and the turn's act drain.</summary>
+    private void PrintWebNotices()
+    {
+        foreach (var (text, error) in _webUi.TakeNotices())
+        {
+            if (error)
+            {
+                _transcript.Error(text);
+            }
+            else
+            {
+                _transcript.Notice(text);
+            }
+        }
+    }
+
+    // ── The page's state and Stop ─────────────────────────────────────────
+
+    /// <summary>The page's header and composer, read on the sampler's timer thread (reads only).</summary>
+    private WebState WebStateNow()
+    {
+        var effective = _effective();
+        var (working, loading) = ScopesNow();
+        return new WebState(
+            _settings.ProfileName,
+            effective.ModelAvatar ?? "",
+            effective.UserAvatar ?? "",
+            ModelLabel(_session.Endpoint?.ModelId),
+            working,
+            loading,
+            _plan.Active,
+            _sessionTitle?.Title ?? "",
+            _webUi.Waiting,
+            WaitingAtPc(working),
+            WebUiText.Version);
+    }
+
+    /// <summary>
+    /// What the PC waits on that the page cannot answer (2026-10-14): the open pane's title while a turn runs or a message from the page
+    /// waits, and no ask is open on the page (an ask open there is the page's to answer).
+    /// </summary>
+    private string? WaitingAtPc(bool working)
+    {
+        if (!(working || _webUi.WaitingCount > 0) || _webUi.Asks.OpenAsks().Count > 0)
+        {
+            return null;
+        }
+
+        return _menuPane.OpenTitle is { Length: > 0 } title ? title : null;
+    }
+
+    /// <summary>
+    /// The page's Stop (a Kestrel thread): speech stopped and the model's work cancelled — a reply, a compact, a botchat, an advisor,
+    /// <c>/imagine</c>, <c>/test</c>, <c>/loop</c>'s wait — never the user's own editor and never a model's load (Ctrl+C's at the PC).
+    /// Before the reply's first event it withdraws the message, as ESC does.
+    /// </summary>
+    private WebReply WebStop(IPAddress? remote)
+    {
+        var (working, loading) = ScopesNow();
+        if (!working)
+        {
+            return new WebReply(WebOutcome.Conflict, loading ? WebUiText.LoadingNoStop : WebUiText.NothingToStop);
+        }
+
+        _webStopRequested = true;
+        DiagnosticLog.Info(WebUiCategory, "Web UI: Stop from " + (remote?.ToString() ?? "an unknown address") + ".");
+        _ = Task.Run(() =>
+        {
+            _speech.Stop();
+            CancelScopes(all: false);
+        });
+        return WebReply.Ok;
+    }
+
+    // ── The page's messages ───────────────────────────────────────────────
+
+    /// <summary>The next message from the page as the idle line sends it: its text alone, never through the PC's paste store.</summary>
+    private SubmittedLine? TakeWebLine()
+    {
+        if (_queue.Held || !_webUi.TryTakeLine(out var line))
+        {
+            return null;
+        }
+
+        string label = line.Text.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\n', ' ').Replace('\r', ' ');
+        return new SubmittedLine(line.Text, line.Text.TrimEnd(), [], label) { FromWeb = true };
+    }
+
+    /// <summary>A message from the page, withdrawn before the model answered: back to the page's draft.</summary>
+    private void WithdrawWebLine(string text) => _webUi.Withdrawn(text);
+
+    // ── /webui ─────────────────────────────────────────────────────────────
+
+    /// <summary>The words <c>/webui</c> takes, with their notes for the completion list.</summary>
+    public static readonly IReadOnlyList<CompletionItem> WebUiWords =
+    [
+        new("on", "start the Web UI for this profile"),
+        new("off", "stop it"),
+        new("copy", "copy the sign-in link to the clipboard"),
+        new("reset", "a new sign-in token: every browser signs in again"),
+    ];
+
+    /// <summary>
+    /// <c>/webui [on|off|copy|reset]</c> (2026-10-14): bare, the pane with the state and the sign-in links (an info pane, so the token stays
+    /// out of the transcript; printed as notices where there is no pane); <c>on</c>/<c>off</c> the switch, reconciled at once; <c>copy</c>
+    /// the first link to the clipboard; <c>reset</c> a new token after a yes.
+    /// </summary>
+    private async Task WebUiCommandAsync(string args, CancellationToken cancellationToken)
+    {
+        if (!_webUiController.Available)
+        {
+            _transcript.Error(WebUiText.NotAvailableError);
+            return;
+        }
+
+        switch (args.Trim().ToLowerInvariant())
+        {
+            case "":
+                await ShowWebUiAsync(cancellationToken).ConfigureAwait(false);
+                return;
+            case "on":
+            case "off":
+                bool on = args.Trim().Equals("on", StringComparison.OrdinalIgnoreCase);
+                _settings.Update(d => d.WebUi = on);
+                _transcript.Notice(SettingsMenu.SavedNotice(SettingsField.WebUi, _settings.Current, _settings.ProfileDirectory));
+                ReconcileWebUi();
+                return;
+            case "copy":
+                if (_webUiController.Links(WebUiTokenNow(mint: false)) is not [var link, ..])
+                {
+                    _transcript.Error(WebUiText.NoLinkError);
+                    return;
+                }
+
+                _transcript.Notice(_copy(link) ? WebUiText.CopiedNotice : WebUiText.CopyFailedError);
+                return;
+            case "reset":
+                if (!await ConfirmAsync(WebUiText.ResetQuestion, cancellationToken).ConfigureAwait(false))
+                {
+                    _transcript.Notice(KeptNotice);
+                    return;
+                }
+
+                MintWebUiToken(announce: false);
+                _transcript.Notice(WebUiText.ResetNotice);
+                ReconcileWebUi();
+                return;
+            default:
+                _transcript.Error(WebUiText.UsageError);
+                return;
+        }
+    }
+
+    /// <summary><c>/webui</c>'s pane: on or off, the port, the reach, the links (the token in them, never in the transcript but without a pane).</summary>
+    private async Task ShowWebUiAsync(CancellationToken cancellationToken)
+    {
+        var effective = _effective();
+        var lines = WebUiText.PaneLines(effective.WebUi, _webUiController.Serving, _webUiController.Serving ? _webUiController.Port : effective.WebUiPort,
+            WebUiReach.Resolve(effective), _webUiController.Links(WebUiTokenNow(mint: false)));
+        if (!_pane.Enabled)
+        {
+            foreach (string line in lines.Where(l => l.Length > 0))
+            {
+                _transcript.Notice(line);
+            }
+
+            return;
+        }
+
+        var links = _webUiController.Links(WebUiTokenNow(mint: false));
+        if (links.Count == 0)
+        {
+            string text = string.Join("\n", lines);
+            await _info.ShowAsync(WebUiText.PaneTitle, [new InfoTab(WebUiText.PaneTitle, () => new Spectre.Console.Text(text))], 0, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        // One tab per address (2026-10-14, the user's ask): its QR code for the phone's camera, then the link itself.
+        string status = string.Join("\n", WebUiText.StatusLines(effective.WebUi, true, _webUiController.Port, WebUiReach.Resolve(effective)));
+        var tabs = links.Select(link => new InfoTab(WebUiText.LinkTabTitle(link), () => new Spectre.Console.Rows(
+            new Spectre.Console.Text(status + "\n\n" + WebUiText.ScanHint + "\n"),
+            new QrView(QrCode.Encode(link)),
+            new Spectre.Console.Text("\n" + link + "\n\n" + WebUiText.TokenWarning)))).ToList();
+        await _info.ShowAsync(WebUiText.PaneTitle, tabs, 0, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>For the tests: the session the fake server drives.</summary>
+    internal WebUiSession WebUiSessionForTests => _webUi;
+
+    /// <summary>For the tests: the PC's ↑ history, which the page's lines never join.</summary>
+    internal IReadOnlyList<string> InputHistoryForTests => _input.History;
+}

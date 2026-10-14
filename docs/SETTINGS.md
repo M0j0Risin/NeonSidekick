@@ -7,7 +7,7 @@ Inside the app, the highlighted row of any pane explains itself, and the model's
 ## Contents
 
 - [Panes](#panes)
-- [App settings (`/settings`)](#app-settings-settings): [Client](#client) ([Chat](#chat), [Sessions](#sessions), [Botchat](#botchat)) · [Servers](#servers) ([Common](#common), [Http](#http), [Embedded](#embedded), [Docker](#docker), [Anthropic](#anthropic), [OpenAI](#openai)) · [Advisors](#advisors) · [Voice](#voice) ([TTS](#tts), [STT](#stt))
+- [App settings (`/settings`)](#app-settings-settings): [Client](#client) ([Chat](#chat), [Sessions](#sessions), [Botchat](#botchat), [Web UI](#web-ui)) · [Servers](#servers) ([Common](#common), [Http](#http), [Embedded](#embedded), [Docker](#docker), [Anthropic](#anthropic), [OpenAI](#openai)) · [Advisors](#advisors) · [Voice](#voice) ([TTS](#tts), [STT](#stt))
 - [Skills settings (`/skills`)](#skills-settings-skills): Offered, Reflection, Options, and managing skills
 - [Tools settings (`/tools`)](#tools-settings-tools): Offered · [Core](#core) · [Files](#files) · [Apps](#apps) · [Databases](#databases) · [Devices](#devices) · [Home](#home)
 - [MCP servers (`/mcp`)](#mcp-servers-mcp)
@@ -110,6 +110,16 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 * **`autonomous`:** the bots get `generate_image`, limited to those workflows. A call a bot writes out as text still runs, and a call that fails is drawn by the app.
 * **Reworks:** once there's a picture and an image → image workflow, the prompt writer chooses between a new picture and a rework.
 * **Async on:** 🖼️ (🎨 for a rework) shows on the status bar while a picture renders. **Async off:** ESC on a held reply cuts that bot short; ESC under the picture's spinner skips the picture.
+
+#### Web UI
+
+A browser front end for this profile: the chat, its questions and the shopping list, from a phone on the home network. See [the Web UI](INTERFACE.md#web-ui).
+
+| Setting | What it does | Default |
+|---|---|---|
+| Web UI | Serves the pages for this profile. `/webui` shows the sign-in link. A profile switch hands the server to the other profile's settings. Refused while a reply runs. | off |
+| Web UI port | The TCP port it listens on (1024–65535). A port in use, or one Windows reserves, keeps it off with a notice. Changing it signs browsers out. | 8765 |
+| Web UI reach | `local` (this machine only) or `lan` (the home network: browsers at a private address, signed in with the link). | `lan` |
 
 ### Servers
 

@@ -1119,7 +1119,8 @@ internal sealed partial class ChatScreen
         Func<bool>? closeThumbs = null,
         Action<ProcessSession, Action<ProcessSession>>? openProcessWindow = null,
         Viewer.IVideoPlayer? videoPlayer = null,
-        Viewer.IBrowserWindow? browserWindow = null)
+        Viewer.IBrowserWindow? browserWindow = null,
+        Func<WebUi.IWebUiBackend, WebUi.IWebUiHost>? webUiHost = null)
     {
         _logFile = logFile;
         // The Browser window (2026-10-13): a web tool's bot check shown to the user, and /browser; none in headless or off Windows.
@@ -1296,6 +1297,8 @@ internal sealed partial class ChatScreen
         // Everything the screen shows goes through the pane: the transcript flows above it, the
         // input row and the hint line stay on the window's last rows. The profile's name is in the
         // window title (WindowTitle), not on the row (2026-09-15).
+        // The Web UI (2026-10-14): its session before the pane, whose Queued part counts the page's waiting messages.
+        (_webUi, _webUiController) = CreateWebUi(webUiHost);
         _pane = new ScreenPane(console, geometry, time)
         {
             Frames = frames,
@@ -1325,7 +1328,7 @@ internal sealed partial class ChatScreen
             TrailerMark = () => HintOn(StatusBarItems.Model) ? ModelMark(_session.Endpoint?.ModelId, _effective().LlmReasoning) : "",
             // The queued count after the row's lead in both states (2026-09-18): the pane draws it
             // and records where, so a double-click on it can open /queue mid-turn and at idle.
-            Queued = () => _queue.Count is > 0 and var queued && HintOn(StatusBarItems.Queued) ? QueuedHintPart(queued) : "",
+            Queued = () => _queue.Count + _webUi.WaitingCount is > 0 and var queued && HintOn(StatusBarItems.Queued) ? QueuedHintPart(queued) : "",
             // The tally as HintText carries it (2026-09-21): the pane finds it in the drawn row and
             // records where, so a double-click on it (or on the spinner under a turn) opens /usage.
             Usage = () => HintOn(StatusBarItems.Usage) ? UsageText.HintPart(_session.Usage, _session.ContextLength) ?? "" : "",
@@ -1397,6 +1400,8 @@ internal sealed partial class ChatScreen
             // Code collapse count (later on 2026-09-22): read when a reply opens, clamped the same way.
             CodeCollapseCount = () => Math.Clamp(_effective().CodeCollapseCount, AppSettingsData.MinCodeCollapseCount, AppSettingsData.MaxCodeCollapseCount),
         };
+        // The Web UI's copy of the transcript (2026-10-14): recorded from here on, whether or not the server ever runs.
+        WireWebUiFeed();
         // The @-mention list asks the sandbox as it stands at the keystroke (the root is a live read too);
         // the command and #-mention lists the catalog and the two Skills-tab switches (2026-09-17);
         // Ctrl+C over a selection writes the clipboard with /copy's writer.
@@ -3249,9 +3254,11 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>Every queued message dropped with <see cref="QueueDroppedNotice"/> — nothing said when there was none. Every conversation clear calls it: a forgotten conversation never receives stale questions.</summary>
-    private void DropQueue()
+    private void DropQueue(bool web = true)
     {
-        if (_queue.Clear() is > 0 and var dropped)
+        // The Web UI's waiting messages go with the PC's (2026-10-14), back to the page's draft — but not for /queue clear, which empties
+        // the queue its pane shows (web: false).
+        if (_queue.Clear() + (web ? _webUi.DropLines() : 0) is > 0 and var dropped)
         {
             _transcript.Notice(QueueDroppedNotice(dropped));
         }
@@ -3392,7 +3399,7 @@ internal sealed partial class ChatScreen
                 }
                 else
                 {
-                    DropQueue();
+                    DropQueue(web: false);
                 }
 
                 break;
@@ -4927,6 +4934,9 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Shortcut:
                 return ShortcutItems(argText, sources.Profiles(), sources.LoadedProfile);
+
+            case SlashCommand.WebUi:
+                return MentionCompleter.Matches(WebUiWords, argText);
 
             case SlashCommand.Cwd:
                 return MentionCompleter.Matches([new(CwdHomeWord, CwdDefaultNote), new(CwdBrowseWord, FolderText.BrowseNote)], argText);
@@ -7097,7 +7107,7 @@ internal sealed partial class ChatScreen
                 {
                     await _editDraft(path, editorCommand, token).ConfigureAwait(false);
                     return true;
-                }), KeySource.IsTurnCancel, cancellationToken).ConfigureAwait(false))
+                }), KeySource.IsTurnCancel, cancellationToken, kind: KillScopeKind.Edit).ConfigureAwait(false))
             {
                 DraftFile.TryDelete(path);
                 DiagnosticLog.Debug(AppCategory, DraftDroppedLogLine(name, DraftCancelledReason));
@@ -7333,6 +7343,8 @@ internal sealed partial class ChatScreen
         bool styled = StyledReply(effective.TranscriptMarkdown, _pane.Enabled);
         using (_pane.Batch())
         {
+            // The Web UI's copy starts afresh (2026-10-14); the replay below fills it again.
+            _webUi.Feed.Clear();
             RedrawScreen();
             _session.History.Restore(messages);
             DropQueue();
@@ -10038,6 +10050,8 @@ internal sealed partial class ChatScreen
             _mouse?.Invoke(true);
             _holdWheel?.Invoke(true);
             ApplyWindowTitle();
+            // The Web UI's server, as the profile says (2026-10-14): started behind the line, its notice printed at the loop's top.
+            ReconcileWebUi();
             // The watch pictures a double-click left behind (2026-10-02): cleared as the profile loads, in case watch mode never stopped cleanly.
             ClearWatchFolder();
 
@@ -10059,6 +10073,9 @@ internal sealed partial class ChatScreen
             while (!cancellationToken.IsCancellationRequested)
             {
                 DrainDiagnostics();
+                // The Web UI's notices (a sign-in, the server's start) and, as a backstop, its server as the settings now say (2026-10-14).
+                PrintWebNotices();
+                ReconcileWebUi();
                 // The jobs behind the line that ended (2026-09-29): their lines, an embedded model's connect — here, never under a reply.
                 await _jobs.DrainAsync().ConfigureAwait(false);
                 if (await AnnounceAlertsAsync(cancellationToken).ConfigureAwait(false))
@@ -10136,6 +10153,12 @@ internal sealed partial class ChatScreen
                     // mode manual (2026-10-09): the /queue send pends the one it sends, taken above.
                     send = queued.Line;
                 }
+                else if (TakeWebLine() is { } webLine)
+                {
+                    // A message from the Web UI's page (2026-10-14): after the PC's queue, sent as a queued line is; not under a held queue.
+                    // Queue mode manual never holds it — the page has no /queue to send it with.
+                    send = webLine;
+                }
 
                 InputResult result;
                 WakeHit? hit = null;
@@ -10146,6 +10169,7 @@ internal sealed partial class ChatScreen
                     // draft on the row, if any, stays for the next read.
                     result = _input.Send(send, DismissSplash, Math.Clamp(_effective().PastePreviewLines, 0, PasteBlocks.MaxPreviewLines));
                     _sentDraft = send.Draft;
+                    _sentFromWeb = send.FromWeb;
                 }
                 else
                 {
@@ -10153,6 +10177,7 @@ internal sealed partial class ChatScreen
                     if (result is InputResult.Submitted && _input.History.Count > 0)
                     {
                         _sentDraft = _input.History[^1];
+                        _sentFromWeb = false;
                     }
 
                     if (_input.Chat.Text.Length == 0)
@@ -10450,6 +10475,9 @@ internal sealed partial class ChatScreen
             _cameraWatch.Dispose();
             _camera.Dispose();
             _sessions.Dispose();
+            // The Web UI's server stops before the shopping list closes under it (2026-10-14).
+            await _webUiController.DisposeAsync().ConfigureAwait(false);
+            _webUi.Dispose();
             DisposeShopping();
             _skillRecords.Store.Dispose();
             if (_ownsMcp)
@@ -10519,7 +10547,8 @@ internal sealed partial class ChatScreen
         }
 
         Volatile.Write(ref _alertSignal, alert);
-        if (_timers.HasAlerts || _processes.HasAlerts || LearnPending || _jobs.HasCompletions || ImagineReady || WindowWorkReady || ReadSeekReady)
+        if (_timers.HasAlerts || _processes.HasAlerts || LearnPending || _jobs.HasCompletions || ImagineReady || WindowWorkReady || ReadSeekReady
+            || _webUi.LinesReady || _webUi.NoticesReady)
         {
             // Queued between the loop's drain and this arm: the read returns at once.
             alert.Cancel();
@@ -10803,6 +10832,8 @@ internal sealed partial class ChatScreen
     {
         using (_pane.Batch())
         {
+            // The Web UI's copy goes with the screen (2026-10-14): the pages start afresh.
+            _webUi.Feed.Clear();
             RedrawScreen();
             _session.History.Clear();
             DropQueue();
@@ -11688,7 +11719,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool> ConnectUnderWatchAsync(string glyph, Func<CancellationToken, Task> connect, CancellationToken cancellationToken)
     {
-        if (await WaitUnderWatchAsync(connect, Keys.IsInterrupt, cancellationToken).ConfigureAwait(false))
+        if (await WaitUnderWatchAsync(connect, Keys.IsInterrupt, cancellationToken, kind: KillScopeKind.Load).ConfigureAwait(false))
         {
             _transcript.Notice(ConnectCancelledNotice(glyph));
             return true;
@@ -11712,12 +11743,13 @@ internal sealed partial class ChatScreen
     /// (2026-09-25), a line sent there waiting for the idle line; a connect's short wait keeps the keys type-ahead,
     /// so an ESC typed under it still reaches the picker after it.</para>
     /// </summary>
-    private async Task<bool> WaitUnderWatchAsync(Func<CancellationToken, Task> work, Func<ConsoleKeyInfo, bool> cancel, CancellationToken cancellationToken, bool pointer = false)
+    private async Task<bool> WaitUnderWatchAsync(Func<CancellationToken, Task> work, Func<ConsoleKeyInfo, bool> cancel, CancellationToken cancellationToken, bool pointer = false, KillScopeKind kind = KillScopeKind.Work)
     {
         using var workCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
-        // A connect's load, a draft's or a loop's wait (2026-10-01): Ctrl+Alt+X cancels it as Ctrl+C does.
-        using var killScope = BeginKillScope(workCts);
+        // A connect's load, a draft's or a loop's wait (2026-10-01): Ctrl+Alt+X cancels it as Ctrl+C does. Its kind (2026-10-14) says
+        // whether the Web UI's Stop may: a loop's wait yes, the user's own editor or a model's load no.
+        using var killScope = BeginKillScope(workCts, kind);
         if (pointer)
         {
             _queuedClicks.Reset();
@@ -11767,12 +11799,12 @@ internal sealed partial class ChatScreen
     {
         if (_turnRunning)
         {
-            return await WaitUnderWatchAsync(load, Keys.IsInterrupt, cancellationToken).ConfigureAwait(false);
+            return await WaitUnderWatchAsync(load, Keys.IsInterrupt, cancellationToken, kind: KillScopeKind.Load).ConfigureAwait(false);
         }
 
         using var workCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
-        using var killScope = BeginKillScope(workCts);
+        using var killScope = BeginKillScope(workCts, KillScopeKind.Load);
         _loadCancel = workCts;
         var watcher = StartReplyWatch(workCts, stop.Token, cancellationToken, cancel: Keys.IsInterrupt, spend: SpendLoadEscape);
         try
@@ -12302,6 +12334,12 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task ApplySettingsChangesAsync(SettingsChanges changes, CancellationToken cancellationToken)
     {
+        if (changes.HasFlag(SettingsChanges.WebUi))
+        {
+            // One of the Web UI's rows (2026-10-14): the server started, stopped or restarted as they now say.
+            ReconcileWebUi();
+        }
+
         if (_windowTitle is not null && WindowTitle(_settings.ProfileName, _effective().ModelAvatar) != _windowTitle)
         {
             // The avatar changed (2026-10-10): the title wears the new one at once.
@@ -12619,6 +12657,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.GitUser:
                 HandleGit(args);
+                return false;
+
+            case SlashCommand.WebUi:
+                await WebUiCommandAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Read:
@@ -13388,6 +13430,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task AfterProfileSwitchAsync(CancellationToken cancellationToken, string? preface = null, string? notice = null)
     {
+        // The Web UI's copy is the old profile's conversation's (2026-10-14): cleared; the server is reconciled below for the new profile.
+        _webUi.Feed.Clear();
         // An embedded download is the old profile's (2026-09-29): paused, so its end never saves into the new one.
         _jobs.Cancel(BackgroundJobKind.EmbeddedDownload);
         ForgetSession();
@@ -13440,6 +13484,8 @@ internal sealed partial class ChatScreen
         await ConnectSpeechAsync(cancellationToken, quiet: true).ConfigureAwait(false);
         await ConnectVoiceAsync(cancellationToken, quiet: true).ConfigureAwait(false);
         await ConnectMcpAsync(cancellationToken).ConfigureAwait(false);
+        // The Web UI as the new profile says (2026-10-14): its port, its reach, its token — a phone signed in to the old one signs in again.
+        ReconcileWebUi();
         ReportTimers();
         RefitSplash(Head);
     }
@@ -15058,6 +15104,14 @@ internal sealed partial class ChatScreen
             joined = true;
         }
 
+        // The Web UI's messages too (2026-10-14), after the PC's and never under a held queue: the page has no command to send.
+        while (TakeWebLine() is { } web)
+        {
+            _transcript.User(web.Label);
+            lines.Add(new BotChatLine(BotChat.UserName, web.Text, IsUser: true));
+            joined = true;
+        }
+
         return joined;
     }
 
@@ -15191,6 +15245,14 @@ internal sealed partial class ChatScreen
             if (outcome == TurnOutcome.Exit)
             {
                 return true;
+            }
+
+            if (outcome == TurnOutcome.Withdrawn && _sentFromWeb)
+            {
+                // A message from the Web UI's page (2026-10-14): back to the page's draft. The PC's row is left alone, and no draft is
+                // parked there, so the PC's queue never waits on it.
+                WithdrawWebLine(_sentDraft ?? text);
+                return false;
             }
 
             if (outcome == TurnOutcome.Withdrawn)
@@ -15488,6 +15550,7 @@ internal sealed partial class ChatScreen
             _transcript.User(text);
             _input.Remember(text);
             _sentDraft = text;
+            _sentFromWeb = false;
         }
 
         return new ListenOutcome(text, Exit: false, Discarded: false);
@@ -15557,6 +15620,7 @@ internal sealed partial class ChatScreen
         // The mid-turn line hook (the pane only: without it nothing can be shown or typed under
         // a reply): a pane it opens reads the keys under the app token and the close signal the
         // turn's end may send (EndTurnAsync). The previous turn's pane was awaited before this one.
+        _webStopRequested = false;
         _turnRunning = true;
         BeginReplyRun();
         // The hint row is the turn's again (the usage part); the reading stays remembered for /read.
@@ -15836,6 +15900,13 @@ internal sealed partial class ChatScreen
 
             stop.Cancel();
             interrupt = await watcher.ConfigureAwait(false);
+            if (_webStopRequested && interrupt == Interrupt.None)
+            {
+                // The Web UI's Stop (2026-10-14) ends a turn as ESC does: before the first event, withdrawn.
+                interrupt = Interrupt.Cancel;
+            }
+
+            _webStopRequested = false;
             // A cancelled turn (ESC, the phrase, the app token) has silenced the device through
             // the registration, a speech ESC through the hook; wait for the consumer so the reason
             // below is final. Otherwise the tail plays on under the input line and the session
@@ -15850,6 +15921,11 @@ internal sealed partial class ChatScreen
 
             string? notice;
             (notice, outcome) = TurnEndNotice(cancelled, stoppedEarly, interrupt, hit is not null, cancellationToken.IsCancellationRequested, returned);
+            if (outcome == TurnOutcome.Withdrawn && _sentFromWeb && bot is null)
+            {
+                // The page's message goes back to the page (2026-10-14), not to this line.
+                notice = WebUi.WebUiText.WithdrawnNotice;
+            }
             if (bot is not null && notice is not null && (cancelled || outcome == TurnOutcome.Withdrawn))
             {
                 // A bot has no line to take back (2026-09-25): cut short by the ladder, or cancelled.

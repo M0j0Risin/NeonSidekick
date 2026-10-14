@@ -4114,6 +4114,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
 
             ResetInputRow();
+            Committed?.Invoke(submitted);
             return;
         }
 
@@ -4138,7 +4139,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         // The preview folds past its first lines once the next thing is said (2026-10-04, SentLineView).
         Write(new SentLineView(InputLine.SubmittedMarkup(submitted, _userLineStyle(), _userGlyph()), preview.Length == 0 ? "" : InputLine.PreviewMarkup(preview)));
+        Committed?.Invoke(submitted);
     }
+
+    /// <summary>
+    /// A sent line went into the transcript (2026-10-14, the Web UI's copy of it): the line as the row showed it, its pastes collapsed. Not a
+    /// pane's typed value (a setting, a plan's feedback), which stays in its pane. Runs on the committing task.
+    /// </summary>
+    public Action<string>? Committed { get; set; }
 
     /// <summary>
     /// The read ended without a submission (ESC, the wake word, an alert, no keyboard). Disabled,

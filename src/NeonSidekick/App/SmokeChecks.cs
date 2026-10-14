@@ -162,6 +162,7 @@ public static partial class SmokeChecks
         results.Add(ProbeCarbonHotkeys());
         results.Add(ProbeShortcut());
         results.Add(ProbeSqlite());
+        results.Add(ProbeWebUi());
         results.Add(ProbePostgres());
         results.Add(ProbePrintSpooler());
         results.Add(ProbeMacPrint());

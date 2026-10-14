@@ -52,6 +52,19 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The Web UI's HTTP server (2026-10-14, the user's pick: Kestrel). The shared framework, not a package: the SDK carries it, and
+         an AOT publish restores its runtime pack (Microsoft.AspNetCore.App.Runtime.<rid>) from NuGet. Used through
+         WebApplication.CreateEmptyBuilder + UseKestrelCore and one hand-routed RequestDelegate (WebUi/WebUiHost.cs): no minimal-API
+         lambdas, no Request Delegate Generator, no reflection, no configuration sources. Its code is linked in only as far as the
+         host reaches it. No process-start site, no native DLL. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- Pinned past what Microsoft.Data.SqlClient 7.1.0 and Oracle.ManagedDataAccess.Core 23.26.301 ask for (2026-10-14): NuGet's audit
+         flags their 9.0.18 (GHSA-2fmv-rv2c-59x7, GHSA-846f-f764-76mx), and the warning broke build.ps1's zero-warning budget. The .NET 10
+         servicing build, the same line as Microsoft.Data.Sqlite's. Drop it once both drivers ask for a fixed version. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Spectre.Console" Version="0.57.2" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.8.3" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.8.3" />
@@ -261,6 +274,9 @@
     <!-- The video window's page (2026-10-05): the IFrame Player API host Viewer/VideoPage writes into <home>\webview2\site and
          WebView2 serves from https://player.neonsidekick.example/ (a page with an origin, so YouTube's embeds get a Referer). -->
     <EmbeddedResource Include="..\..\assets\youtube\player.html" LogicalName="youtube/player.html" Visible="false" />
+    <!-- The Web UI's pages (2026-10-14): plain HTML, CSS and JavaScript, no library, served by WebUi/WebUiAssets from memory
+         (no web root on disk). -->
+    <EmbeddedResource Include="..\..\assets\webui\*.*" LogicalName="webui/%(Filename)%(Extension)" Visible="false" />
     <!-- The emoji catalog (2026-10-10, the avatar picker): assets\emoji\emoji.tsv, written by tools\EmojiGen.cs from Unicode's
          emoji-test.txt and CLDR's annotations (Unicode License v3), read once by Emojis/EmojiCatalog. Rerun the tool; never edit. -->
     <EmbeddedResource Include="..\..\assets\emoji\emoji.tsv" LogicalName="emoji/emoji.tsv" Visible="false" />

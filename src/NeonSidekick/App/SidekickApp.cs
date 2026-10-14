@@ -92,6 +92,9 @@ public sealed class SidekickApp
     /// <summary>The Browser window for bot checks and <c>/browser</c> (2026-10-13): <see cref="Viewer.BrowserWindow.Window"/> on Windows, null elsewhere and in headless.</summary>
     private readonly Viewer.IBrowserWindow? _browserWindow;
 
+    /// <summary>The Web UI's server over the screen's session (2026-10-14): <see cref="WebUi.WebUiHost"/> in the app; null in tests and headless, no Web UI.</summary>
+    private readonly Func<WebUi.IWebUiBackend, WebUi.IWebUiHost>? _webUiHost;
+
     /// <summary>The <c>/keycheck</c> probe (2026-10-04): <see cref="Hotkeys.WindowsHotkeyProbe"/> on Windows, null elsewhere.</summary>
     private readonly Hotkeys.IHotkeyProbe? _hotkeyProbe;
 
@@ -233,10 +236,12 @@ public sealed class SidekickApp
         Func<bool>? closeThumbs = null,
         Action<Shell.ProcessSession, Action<Shell.ProcessSession>>? openProcessWindow = null,
         Viewer.IVideoPlayer? videoPlayer = null,
-        Viewer.IBrowserWindow? browserWindow = null)
+        Viewer.IBrowserWindow? browserWindow = null,
+        Func<WebUi.IWebUiBackend, WebUi.IWebUiHost>? webUiHost = null)
     {
         _openProcessWindow = openProcessWindow;
         _browserWindow = browserWindow;
+        _webUiHost = webUiHost;
         // The video window (2026-10-05): VideoWindow.Player in the app on Windows, a fake in tests, none elsewhere.
         _videoPlayer = videoPlayer;
         // The thumbnail browser (2026-10-04): ThumbsWindow and PictureWindow.ShowQuietly in the app on Windows, null in tests and
@@ -1158,6 +1163,13 @@ public sealed class SidekickApp
                 if (SlashCommands.Parse(text) is (SlashCommand.Avatar, var avatarArgs))
                 {
                     await HeadlessLineAsync(HeadlessAvatar(avatarArgs)).ConfigureAwait(false);
+                    continue;
+                }
+
+                // /webui (2026-10-14): the Web UI is the screen's alone in this version.
+                if (SlashCommands.Parse(text) is (SlashCommand.WebUi, _))
+                {
+                    await HeadlessLineAsync("[error] " + WebUi.WebUiText.NotHeadlessError).ConfigureAwait(false);
                     continue;
                 }
 
@@ -2434,7 +2446,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as IMouseInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

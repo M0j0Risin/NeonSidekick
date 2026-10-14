@@ -94,6 +94,10 @@ internal sealed partial class SettingsMenu
                 (SettingsField.BotChatVision, "Seeing"),
                 (SettingsField.BotChatRecentContext, "Context"),
             ],
+            [SettingsTab.WebUi] =
+            [
+                (SettingsField.WebUi, "Server"),
+            ],
             [SettingsTab.Advisors] =
             [
                 (SettingsField.Advisors, "The panel"),

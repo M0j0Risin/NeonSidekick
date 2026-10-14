@@ -935,6 +935,8 @@ internal sealed partial class ChatScreen
     private async Task DrainActsAsync()
     {
         Interlocked.Exchange(ref _actSignal, new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+        // The Web UI's notices under a reply (2026-10-14): printed by the turn task, the transcript's one writer.
+        PrintWebNotices();
         while (_acts.TryDequeue(out var act))
         {
             try
@@ -1080,31 +1082,17 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<IReadOnlyList<AskAnswer>?> AskUserAsync(IReadOnlyList<AskQuestion> questions, CancellationToken turnToken)
     {
-        var paneToken = _paneClose?.Token ?? CancellationToken.None;
-        IReadOnlyList<AskAnswer>? answers = null;
-        var request = _keys.RequestPaneAsync(async () =>
-        {
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(paneToken, turnToken);
-            try
-            {
-                answers = await _questionMenu.AskAsync(questions, linked.Token).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException && !linked.IsCancellationRequested)
-            {
-                DiagnosticLog.Error(ScreenPane.Category, "The question pane failed: " + Llm.Assistant.Explain(ex), ex);
-            }
-        });
-        try
-        {
-            await request.WaitAsync(turnToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!turnToken.IsCancellationRequested)
+        // On the PC's pane and the Web UI's page at once (2026-10-14, AskBothAsync), the first answer winning.
+        var outcome = await AskBothAsync<IReadOnlyList<AskAnswer>?>(QuestionSpec(questions), token => _questionMenu.AskAsync(questions, token),
+            answer => QuestionAnswers(questions, answer), "The question pane failed: ", turnToken).ConfigureAwait(false);
+        if (outcome.NeverAsked)
         {
             // No watcher to run the pane: never asked.
             DiagnosticLog.Info(AppCategory, AskUserNotAskedLogLine);
             return null;
         }
 
+        var answers = outcome.Value;
         DiagnosticLog.Info(AppCategory, answers is null ? AskUserNotAnsweredLogLine : AskUserAnsweredLogLine(questions.Count));
         return answers;
     }
@@ -1127,30 +1115,17 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<CommandChoice?> ApproveCommandAsync(CommandRequest request, CancellationToken turnToken)
     {
-        var paneToken = _paneClose?.Token ?? CancellationToken.None;
-        CommandChoice? choice = null;
-        var pending = _keys.RequestPaneAsync(async () =>
-        {
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(paneToken, turnToken);
-            try
-            {
-                choice = await _approvalMenu.AskAsync(request, linked.Token).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException && !linked.IsCancellationRequested)
-            {
-                DiagnosticLog.Error(ScreenPane.Category, "The approval pane failed: " + Llm.Assistant.Explain(ex), ex);
-            }
-        });
-        try
-        {
-            await pending.WaitAsync(turnToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!turnToken.IsCancellationRequested)
+        // On the PC's pane and the Web UI's page at once (2026-10-14, AskBothAsync), the first answer winning.
+        var outcome = await AskBothAsync<CommandChoice?>(ApprovalSpec(request), async token => await _approvalMenu.AskAsync(request, token).ConfigureAwait(false),
+            answer => ApprovalChoice(answer), "The approval pane failed: ", turnToken).ConfigureAwait(false);
+        if (outcome.NeverAsked)
         {
             // No watcher to run the pane: never asked.
             DiagnosticLog.Info(AppCategory, ApprovalNotAskedLogLine);
             return null;
         }
+
+        var choice = outcome.Value;
 
         switch (choice)
         {

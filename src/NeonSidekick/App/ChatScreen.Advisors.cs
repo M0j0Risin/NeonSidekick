@@ -75,35 +75,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool?> ConfirmNeonAdvisorAsync(AdvisorEntry advisor, string question, CancellationToken turnToken)
     {
-        if (!_pane.Enabled)
-        {
-            return null;
-        }
-
-        var paneToken = _paneClose?.Token ?? CancellationToken.None;
-        bool? yes = null;
-        var pending = _keys.RequestPaneAsync(async () =>
-        {
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(paneToken, turnToken);
-            try
-            {
-                yes = await _menu.ConfirmAsync(AdvisorText.ConfirmQuestion(advisor, question), linked.Token).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException && !linked.IsCancellationRequested)
-            {
-                DiagnosticLog.Error(UI.ScreenPane.Category, "The advisor's confirm pane failed: " + Assistant.Explain(ex), ex);
-            }
-        });
-        try
-        {
-            await pending.WaitAsync(turnToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!turnToken.IsCancellationRequested)
-        {
-            return null;
-        }
-
-        return yes ?? false;
+        // On the PC's pane and the Web UI's page at once (2026-10-14, ConfirmBothAsync), the first answer winning.
+        return await ConfirmBothAsync(AdvisorText.ConfirmQuestion(advisor, question), "The advisor's confirm pane failed: ", turnToken).ConfigureAwait(false);
     }
 
     /// <summary><c>/advisor</c>'s names (2026-10-10): the advisor list as <c>/advisor</c> reads it, each profile with its role as the note.</summary>

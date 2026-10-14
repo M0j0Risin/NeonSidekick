@@ -403,11 +403,13 @@ public static class Profiles
         string path = ProfileFile(home, to);
         string keptDirectory = "";
         string keptAvatar = "";
+        string keptToken = "";
         try
         {
             var target = ReadProfileFile(path);
             keptDirectory = target.WorkingDirectory;
             keptAvatar = target.ModelAvatar;   // 2026-10-10: the target's own face, never the source's
+            keptToken = target.WebUiToken;     // 2026-10-14: a Web UI token never travels between profiles (a new one is minted when it first serves)
         }
         catch (JsonException ex)
         {
@@ -416,6 +418,7 @@ public static class Profiles
 
         data.WorkingDirectory = keptDirectory;
         data.ModelAvatar = keptAvatar;
+        data.WebUiToken = keptToken;
         System.IO.Directory.CreateDirectory(Directory(home, to));
         WriteProfileFile(path, data);
         DiagnosticLog.Info(Category, $"Copied profile \"{from}\"'s settings to \"{to}\".");
@@ -447,6 +450,7 @@ public static class Profiles
         nameof(AppSettingsData.YouTubeApiKey),
         nameof(AppSettingsData.ModelAvatar),
         nameof(AppSettingsData.UserAvatar),
+        nameof(AppSettingsData.WebUiToken),
     };
 
     /// <summary>Copies <see cref="ResetKeptSettings"/> from <paramref name="from"/> onto <paramref name="to"/>, one by one (no reflection under AOT). The keys go as stored, protected or not.</summary>
@@ -469,6 +473,7 @@ public static class Profiles
         to.YouTubeApiKey = from.YouTubeApiKey;   // 2026-10-05, the user's ask: a plain reset keeps it, as the other keys
         to.ModelAvatar = from.ModelAvatar;       // 2026-10-10: the profile's face, as its name, not a taste a reset puts back
         to.UserAvatar = from.UserAvatar;         // 2026-10-12: the user's own face, kept as the model's is
+        to.WebUiToken = from.WebUiToken;         // 2026-10-14: a phone signed in stays signed in once the Web UI is on again
     }
 
     /// <summary>

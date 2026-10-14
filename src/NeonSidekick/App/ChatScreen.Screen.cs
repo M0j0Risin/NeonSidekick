@@ -107,7 +107,7 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        var allow = await RunCameraPaneAsync(token => _cameraMenu.AllowAsync(ScreenText.AllowCaption(aim.Described, prompt), token, ScreenText.AllowTitle), null, turnToken).ConfigureAwait(false);
+        var allow = await AllowBothAsync(ScreenText.AllowTitle, ScreenText.AllowCaption(aim.Described, prompt), null, token => _cameraMenu.AllowAsync(ScreenText.AllowCaption(aim.Described, prompt), token, ScreenText.AllowTitle), turnToken).ConfigureAwait(false);
         if (allow is not { } choice)
         {
             return new ScreenAnswer.NoScreen();

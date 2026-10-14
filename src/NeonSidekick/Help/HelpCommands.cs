@@ -450,6 +450,12 @@ public static class HelpCommands
             new("/view <image> --chat", "Draw the image in the transcript instead; `--chat` may be the first or last word."),
             new("/view <image>|<folder> --thumbs", "Open the folder (an image's folder, with the image selected) as thumbnails in a window of their own, in step with the picture viewer and the picture strip. A click shows the picture in the viewer, a double-click or Enter opens it there, and the viewer's own moves select it here; new pictures go on the end, so nothing moves. + and − or Ctrl+wheel resize the tiles, F5 lists and fits again, and a right-click opens the picture menu. `--thumbs` may be the first or last word. Works while a reply runs."),
         ]),
+        new("/webui",
+        [
+            new("/webui", "Show the Web UI: on or off, its port and reach, and a tab per address with a QR code to scan with a phone on the same network and the sign-in link to open in a browser. The link signs the browser in and leaves the address bar at once; the browser keeps a cookie for a year. *Web UI* (`/settings` › Client › Web UI) turns it on. Waits for the idle line under a reply."),
+            new("/webui on|off", "Turn the Web UI on or off for this profile: the server starts or stops at once."),
+            new("/webui reset", "Make a new sign-in token, after a yes: every browser signed in now is signed out, and `/webui` shows the new link."),
+        ]),
         new("/window",
         [
             new("/window", "Show the terminal window's width and height."),

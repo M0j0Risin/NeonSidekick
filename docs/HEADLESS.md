@@ -76,6 +76,7 @@ They need no server unless the row says so.
 | `/camera list`, `/screen list` | List the cameras, or the monitors and windows; other forms are errors. On a Mac they need macOS 14 or later. |
 | `/avatar …` | Prints or sets the *Model avatar* (`user`: your *User avatar*); words pick the best match. |
 | `/help <words>` | Asks the model to look the words up in the app's manual (`neon_help`). With no server, or `neon_help` off, it prints the manual's own answer (after a `[notice]` when a server is there). |
+| `/webui …` | An error: the [Web UI](INTERFACE.md#web-ui) is the screen's alone in this version. |
 
 - Case doesn't matter. `/exit`, `/new`, `/clear` and `/splash` must be alone on the line: `/new please` goes to the model as text.
 - With no server, messages and the commands that need one get `Neon: [error] No LLM server. Set NEONSIDEKICK_LLM_URL and restart.`

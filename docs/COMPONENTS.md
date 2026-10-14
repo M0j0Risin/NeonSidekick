@@ -22,6 +22,8 @@ What Neon Sidekick is built on. Back to the [README](../README.md).
 * `Markdig`
 * `LibGit2Sharp` (with its native `libgit2`)
 * `Microsoft.Web.WebView2` (Windows: its loader DLL, for the video window and the Browser window)
+* `ASP.NET Core` (Kestrel, part of .NET: the Web UI's HTTP server)
+* `System.Security.Cryptography.Pkcs` (pinned to a patched version for the SQL Server and Oracle clients)
 * `llama.cpp` (`llama-server`, downloaded on first use of the embedded LLM)
 * `pdf.js` (Mozilla, Apache-2.0; `pdfjs-dist` 4.10.38, embedded: reads stores' PDFs for the shopping list in the headless browser)
 * Unicode's `emoji-test.txt` and CLDR's English annotations (the avatar picker's emoji, names and keywords) and CLDR's `windowsZones.xml` (the clock tools' time zones), under the [Unicode License v3](https://www.unicode.org/license.txt)

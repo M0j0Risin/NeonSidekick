@@ -16,7 +16,11 @@ namespace NeonSidekick.App;
 internal sealed partial class ChatScreen
 {
     /// <summary>One reflection write waiting for the user: what it would write, and the answer the reflection awaits.</summary>
-    private sealed record LearnAsk(SkillProposal Proposal, TaskCompletionSource<bool> Answer);
+    private sealed record LearnAsk(SkillProposal Proposal, TaskCompletionSource<bool> Answer)
+    {
+        /// <summary>The same ask on the Web UI's page (2026-10-14): whichever side claims it first answers.</summary>
+        public WebUi.WebAskHandle? Web { get; init; }
+    }
 
     private readonly ConcurrentQueue<LearnAsk> _learnAsks = new();
 
@@ -118,7 +122,22 @@ internal sealed partial class ChatScreen
                 return false;
             }
 
-            var ask = new LearnAsk(proposal, new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously));
+            // The Web UI's page asks at once (2026-10-14), even before the idle line reaches it: Keep or Discard, the proposal whole (no View).
+            var web = _webUi.Asks.Open(new WebUi.WebAskSpec("learn", LearnAskTitle(proposal),
+                [new WebUi.WebChoice("keep", LearnAskRows[0]), new WebUi.WebChoice("discard", LearnAskRows[2])],
+                Body: LearnAskDetail(proposal)));
+            var ask = new LearnAsk(proposal, new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)) { Web = web };
+            _ = web.Answered.ContinueWith(answered =>
+            {
+                if (answered.IsCompletedSuccessfully && ask.Answer.TrySetResult(answered.Result.Choice == "keep"))
+                {
+                    string said = web.Describe(answered.Result);
+                    DiagnosticLog.Info(WebUiCategory, WebUi.WebUiText.AnsweredLogLine(web.Spec.Title, said, web.Remote));
+                    _webUi.Notice(WebUi.WebUiText.AnsweredNotice(said));
+                }
+            }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            // Answered either way, or withdrawn: the page's ask goes.
+            _ = ask.Answer.Task.ContinueWith(_ => _webUi.Asks.Close(web), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             using var withdraw = cancellationToken.Register(() => ask.Answer.TrySetCanceled(cancellationToken));
             _learnAsks.Enqueue(ask);
             SignalAlert();
@@ -183,9 +202,14 @@ internal sealed partial class ChatScreen
             finally
             {
                 _menuPane.Close();
-                if (!ask.Answer.TrySetResult(keep) && ask.Answer.Task.IsCanceled && !cancellationToken.IsCancellationRequested)
+                // The pane's answer counts only when its claim wins (2026-10-14): the page may have answered first, its answer then set
+                // by its own continuation.
+                if (ask.Web is not { } web || web.TryClaim(WebUi.AskSource.Pc) || web.Winner == WebUi.AskSource.Pc)
                 {
-                    _transcript.Notice(LearnAskWithdrawnNotice);
+                    if (!ask.Answer.TrySetResult(keep) && ask.Answer.Task.IsCanceled && !cancellationToken.IsCancellationRequested)
+                    {
+                        _transcript.Notice(LearnAskWithdrawnNotice);
+                    }
                 }
             }
         }

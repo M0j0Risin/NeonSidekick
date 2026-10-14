@@ -3110,4 +3110,40 @@ public sealed class AppSettingsData
     /// Anything else reads as <c>auto</c>. The Print tab of <c>/tools</c>. No variable.
     /// </summary>
     public string PdfEngine { get; set; } = Pdf.PdfEngine.Default;
+
+    // ─── Web UI (2026-10-14) ────────────────────────────────────────────────────
+    // A browser front end the app hosts for the loaded profile (2026-10-14, the user's ask: the chat with its draft line and
+    // panes, and the shopping list, from a phone on the home network). Kestrel in-process; a token swapped for a cookie.
+
+    /// <summary>
+    /// Whether this profile hosts the Web UI (2026-10-14): on, the app serves its pages on <see cref="WebUiPort"/> to
+    /// <see cref="WebUiReach"/>, signed in with <see cref="WebUiToken"/>'s link (<c>/webui</c>). Off by default. A profile switch
+    /// hands the server to the new profile's settings. The Web UI tab of <c>/settings</c> (under Client). No variable.
+    /// </summary>
+    public bool WebUi { get; set; }
+
+    /// <summary>
+    /// The TCP port the Web UI listens on (2026-10-14): <see cref="MinWebUiPort"/> to <see cref="MaxWebUiPort"/>. A port in use, or in a
+    /// range Windows reserves, keeps the Web UI off with a notice. No variable.
+    /// </summary>
+    public int WebUiPort { get; set; } = DefaultWebUiPort;
+
+    public const int MinWebUiPort = 1024;
+    public const int MaxWebUiPort = 65535;
+    public const int DefaultWebUiPort = 8765;
+
+    /// <summary>
+    /// Who may reach the Web UI (2026-10-14, the user's pick: the home network with a token): one of <see cref="NeonSidekick.WebUi.WebUiReach.Names"/>
+    /// — <c>local</c> (this machine alone) or <c>lan</c> (the default: every interface, a private address's browsers only).
+    /// Anything else reads as <c>lan</c> with a warning. No variable.
+    /// </summary>
+    public string WebUiReach { get; set; } = NeonSidekick.WebUi.WebUiReach.Default;
+
+    /// <summary>
+    /// The Web UI's sign-in token (2026-10-14): 32 random bytes as hex, minted when the Web UI first serves and by <c>/webui reset</c>,
+    /// kept encrypted for this Windows user (<see cref="SettingsSecrets"/>; the keychain on a Mac). A browser opens the link
+    /// <c>/webui</c> shows and keeps a cookie. Never logged (<see cref="SettingsDiff.Secrets"/>); never copied to another profile
+    /// (<see cref="Profiles.CopySettings"/>); a plain <c>/profile reset</c> keeps it. profile.json only, no row. No variable.
+    /// </summary>
+    public string WebUiToken { get; set; } = "";
 }

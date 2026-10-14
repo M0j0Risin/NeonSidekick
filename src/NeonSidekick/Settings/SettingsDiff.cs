@@ -19,7 +19,7 @@ public static class SettingsDiff
     public const string Arrow = " → ";
 
     /// <summary>The properties whose values are never written to a log.</summary>
-    public static readonly IReadOnlySet<string> Secrets = new HashSet<string>(StringComparer.Ordinal) { nameof(AppSettingsData.LlmApiKey), nameof(AppSettingsData.AnthropicApiKey), nameof(AppSettingsData.OpenAIApiKey), nameof(AppSettingsData.HomeAssistantToken), nameof(AppSettingsData.YouTubeApiKey) };
+    public static readonly IReadOnlySet<string> Secrets = new HashSet<string>(StringComparer.Ordinal) { nameof(AppSettingsData.LlmApiKey), nameof(AppSettingsData.AnthropicApiKey), nameof(AppSettingsData.OpenAIApiKey), nameof(AppSettingsData.HomeAssistantToken), nameof(AppSettingsData.YouTubeApiKey), nameof(AppSettingsData.WebUiToken) };
 
     /// <summary>
     /// One <c>Name: old → new</c> line per property whose value differs, in the file's order;

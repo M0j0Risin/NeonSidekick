@@ -19,7 +19,7 @@ public partial class SettingsMenuTests
         Assert.Equal(["Client", "Servers", "Advisors", "Voice"], SettingsMenu.StripTitles);   // Client since later on 2026-10-10 (the user's pick); Advisors before Voice later still (the user's order)
         Assert.Equal(
             [
-                [SettingsTab.Chat, SettingsTab.Sessions, SettingsTab.BotChat],
+                [SettingsTab.Chat, SettingsTab.Sessions, SettingsTab.BotChat, SettingsTab.WebUi],   // Web UI since 2026-10-14
                 [SettingsTab.Common, SettingsTab.Http, SettingsTab.Embedded, SettingsTab.Docker, SettingsTab.Anthropic, SettingsTab.OpenAI],
                 [SettingsTab.Advisors],
                 [SettingsTab.Tts, SettingsTab.Stt],

@@ -156,6 +156,8 @@ internal sealed partial class ChatScreen
         bool styled = StyledReply(_effective().TranscriptMarkdown, _pane.Enabled);
         using (_pane.Batch())
         {
+            // The Web UI's copy starts afresh (2026-10-14); the kept turns' replay below fills it again.
+            _webUi.Feed.Clear();
             RedrawScreen();
             DropQueue();
             _pictureStrip.Clear();

@@ -106,6 +106,11 @@ internal sealed partial class SettingsMenu
             changes |= SettingsChanges.Mcp;
         }
 
+        if (IsWebUiField(field))
+        {
+            changes |= SettingsChanges.WebUi;
+        }
+
         return changes;
     }
 

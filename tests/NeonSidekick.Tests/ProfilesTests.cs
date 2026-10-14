@@ -322,6 +322,7 @@ public class ProfilesTests : IDisposable
             LlmApiKey = "dpapi:llm",
             ModelAvatar = "🦊",
             UserAvatar = "🦉",
+            WebUiToken = "dpapi:web",
             TtsOutput = !new AppSettingsData().TtsOutput,
             WorkingDirectory = @"C:\elsewhere",
         };
@@ -343,7 +344,8 @@ public class ProfilesTests : IDisposable
         Assert.Equal("dpapi:yt", kept.YouTubeApiKey);   // the YouTube API key (2026-10-05, the user's ask)
         Assert.Equal("🦊", kept.ModelAvatar);   // the profile's face (2026-10-10)
         Assert.Equal("🦉", kept.UserAvatar);    // the user's own (2026-10-12)
-        Assert.Equal(17, Profiles.ResetKeptSettings.Length);
+        Assert.Equal("dpapi:web", kept.WebUiToken);   // the Web UI's token (2026-10-14): a signed-in phone stays signed in
+        Assert.Equal(18, Profiles.ResetKeptSettings.Length);
 
         Profiles.Create(_dir, "home", mine);
         Profiles.Reset(_dir, "home", all: true);

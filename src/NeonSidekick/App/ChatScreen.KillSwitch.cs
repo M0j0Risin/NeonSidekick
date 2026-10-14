@@ -5,6 +5,18 @@ namespace NeonSidekick.App;
 
 // ── The embedded model's kill switch, Ctrl+Alt+X (2026-10-01) ─────────────
 
+/// <summary>
+/// What a kill scope holds (2026-10-14, the Web UI's Stop): <see cref="Work"/> the model's work or a loop's wait (a reply, a compact, a
+/// botchat, an advisor, <c>/imagine</c>, <c>/test</c>, <c>/loop</c>), which the Web UI's Stop cancels; <see cref="Edit"/> the user's own
+/// editor (<c>/draft</c>, <c>/prompts</c>); <see cref="Load"/> a connect or a model's load, which only Ctrl+C and the kill switch end.
+/// </summary>
+internal enum KillScopeKind
+{
+    Work,
+    Edit,
+    Load,
+}
+
 internal sealed partial class ChatScreen
 {
     /// <summary>The log line when Ctrl+Alt+X finds no embedded model to unload: another server, or none loaded. Pinned.</summary>
@@ -66,12 +78,8 @@ internal sealed partial class ChatScreen
 
         // The work first, then the servers: a load in progress ends on its token, as Ctrl+C under its spinner ends it, rather
         // than reading the kill as a crash. The scope's notice is read only once its owner has joined the watcher this runs on.
-        Volatile.Read(ref _botLadder)?.End();
         var scope = Volatile.Read(ref _killScopes);
-        for (var outer = scope; outer is not null; outer = outer.Outer)
-        {
-            VoiceSession.SafeCancel(outer.Cts);
-        }
+        CancelScopes(all: true);
 
         var ids = _session.KillEmbedded();
         if (ids.Count == 0)
@@ -98,10 +106,50 @@ internal sealed partial class ChatScreen
         _transcript.Notice(notice);
     }
 
-    /// <summary>Marks <paramref name="cts"/> as the model's work until the scope is disposed: the kill switch cancels it.</summary>
-    private KillScope BeginKillScope(CancellationTokenSource cts)
+    /// <summary>
+    /// Ends a running botchat and cancels the running work (2026-10-14, out of <see cref="KillSwitch"/> for the Web UI's Stop as well):
+    /// every scope under <paramref name="all"/> (the kill switch, which unloads the model), else the <see cref="KillScopeKind.Work"/>
+    /// ones alone (the Web UI's Stop: never the user's own editor, never a model's load). True when anything was cancelled.
+    /// </summary>
+    private bool CancelScopes(bool all)
     {
-        var scope = new KillScope(this, cts, Volatile.Read(ref _killScopes));
+        bool any = false;
+        if (Volatile.Read(ref _botLadder) is { } ladder)
+        {
+            ladder.End();
+            any = true;
+        }
+
+        for (var outer = Volatile.Read(ref _killScopes); outer is not null; outer = outer.Outer)
+        {
+            if (all || outer.Kind == KillScopeKind.Work)
+            {
+                VoiceSession.SafeCancel(outer.Cts);
+                any = true;
+            }
+        }
+
+        return any;
+    }
+
+    /// <summary>What runs now, as the Web UI's header says it: model work (Stop shows) and a model's load alone.</summary>
+    private (bool Working, bool Loading) ScopesNow()
+    {
+        bool working = false;
+        bool loading = false;
+        for (var outer = Volatile.Read(ref _killScopes); outer is not null; outer = outer.Outer)
+        {
+            working |= outer.Kind == KillScopeKind.Work;
+            loading |= outer.Kind == KillScopeKind.Load;
+        }
+
+        return (working || Volatile.Read(ref _botLadder) is not null, loading && !working);
+    }
+
+    /// <summary>Marks <paramref name="cts"/> as the model's work until the scope is disposed: the kill switch cancels it, and the Web UI's Stop as well when it is <see cref="KillScopeKind.Work"/>.</summary>
+    private KillScope BeginKillScope(CancellationTokenSource cts, KillScopeKind kind = KillScopeKind.Work)
+    {
+        var scope = new KillScope(this, cts, Volatile.Read(ref _killScopes), kind);
         Volatile.Write(ref _killScopes, scope);
         return scope;
     }
@@ -111,11 +159,14 @@ internal sealed partial class ChatScreen
     /// Disposed on the owning task once the work has wound down (the watcher joined): the scope is popped, and a kill that
     /// landed under it is finished there (<see cref="FinishKill"/>).
     /// </summary>
-    private sealed class KillScope(ChatScreen screen, CancellationTokenSource cts, KillScope? outer) : IDisposable
+    private sealed class KillScope(ChatScreen screen, CancellationTokenSource cts, KillScope? outer, KillScopeKind kind) : IDisposable
     {
         private string? _notice;
 
         public CancellationTokenSource Cts { get; } = cts;
+
+        /// <summary>What the scope holds (2026-10-14): whether the Web UI's Stop may cancel it.</summary>
+        public KillScopeKind Kind { get; } = kind;
 
         public KillScope? Outer { get; } = outer;
 

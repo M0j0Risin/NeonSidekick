@@ -69,3 +69,6 @@ NEON.md
 
 # macOS Desktop Services Store
 .DS_Store
+
+# A local shortcut to run the app from source (2026-10-14)
+run.bat

@@ -175,6 +175,8 @@ public static class AboutText
         new("Markdig", "1.3.2", "BSD-2-Clause", "the Markdown reader behind the styled transcript"),
         new("Microsoft.Web.WebView2", "1.0.4258.31", "BSD-3-Clause", "the video window's WebView2 loader; the browser is Windows' WebView2 Runtime" + WindowsOnlyNote),   // 2026-10-05
         new("llama.cpp (llama-server)", EmbeddedLlm.LlamaRelease.Tag, "MIT", "embedded LLM server, downloaded on first use"),   // 2026-09-29; the user's wording 2026-10-03
+        new("ASP.NET Core (Kestrel)", Environment.Version.ToString(3), "MIT", "the Web UI's HTTP server, part of .NET"),   // 2026-10-14
+        new("System.Security.Cryptography.Pkcs", "10.0.13", "MIT", "the SQL Server and Oracle clients' signing, pinned past an audited version"),   // 2026-10-14
     ];   // the Gemma 4 (GGUF) row gone 2026-10-03, the user's call
 
     /// <summary>The manifest resource the project file embeds the repository's <c>LICENSE</c> as.</summary>

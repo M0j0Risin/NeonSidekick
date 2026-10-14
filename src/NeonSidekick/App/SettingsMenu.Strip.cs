@@ -10,7 +10,7 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The group tab holding the Chat, Sessions and Botchat tabs (2026-10-10, the user's pick after a naming round: "General" said
     /// nothing; this side of the connection, as <see cref="ServersTabTitle"/> is the other; Chat the old General, Sessions and Botchat
-    /// off the root strip beside it, in that order). Pinned.
+    /// off the root strip beside it, in that order; Web UI after Botchat since 2026-10-14, the user's ask). Pinned.
     /// </summary>
     public const string ClientTabTitle = "Client";
 
@@ -34,7 +34,7 @@ internal sealed partial class SettingsMenu
     /// <summary>The tabs each of <see cref="StripTitles"/> holds, in <see cref="SettingsTab"/> order (the enum follows the walk): one for a plain tab, more for a group. Pinned.</summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsTab>> StripTabs =
     [
-        [SettingsTab.Chat, SettingsTab.Sessions, SettingsTab.BotChat],
+        [SettingsTab.Chat, SettingsTab.Sessions, SettingsTab.BotChat, SettingsTab.WebUi],
         [SettingsTab.Common, SettingsTab.Http, SettingsTab.Embedded, SettingsTab.Docker, SettingsTab.Anthropic, SettingsTab.OpenAI],
         [SettingsTab.Advisors],
         [SettingsTab.Tts, SettingsTab.Stt],
@@ -70,7 +70,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The picker's root under a group's tab (2026-10-10, <c>/tools</c>' <c>GroupCrumb</c>): <c>⚙️ Settings › Client</c> for a row of Chat,
-    /// Sessions or Botchat, <c>⚙️ Settings › Servers</c> for a row of Common, Http, Embedded, Docker, Anthropic or OpenAI,
+    /// Sessions, Botchat or Web UI (2026-10-14), <c>⚙️ Settings › Servers</c> for a row of Common, Http, Embedded, Docker, Anthropic or OpenAI,
     /// <c>⚙️ Settings › Voice</c> for TTS and STT; the title alone elsewhere (Advisors). Pinned.
     /// </summary>
     public static string GroupCrumb(SettingsTab tab) => PlaceOf(tab) is var (strip, _) && IsGroup(strip) ? Title + " › " + StripTitles[strip] : Title;

@@ -281,6 +281,7 @@ public sealed class TranscriptRenderer : INoticeSink
     /// <summary>What the user said, in the same shape the input line leaves behind (the user avatar too, <see cref="ScreenPane.UserGlyph"/>). Voice input uses this.</summary>
     public void User(string text)
     {
+        Feed?.Add(WebUi.FeedKind.User, text);
         EndRun();
         BreakIfMidText();
         _console.MarkupLine(InputLine.SubmittedMarkup(text, _pane?.UserLineStyle(), _pane?.UserGlyph()));
@@ -294,6 +295,7 @@ public sealed class TranscriptRenderer : INoticeSink
     public void Speaker(string name, Color color, string? avatar = null)
     {
         ArgumentNullException.ThrowIfNull(name);
+        Feed?.Add(WebUi.FeedKind.Speaker, string.IsNullOrEmpty(avatar) ? name : avatar + " " + name);
         EndRun();
         BreakIfMidText();
         _console.MarkupLine(SpeakerMarkup(name, color, avatar));
@@ -312,6 +314,7 @@ public sealed class TranscriptRenderer : INoticeSink
             return;
         }
 
+        Feed?.Add(WebUi.FeedKind.Picture, thumbnails.Count == 1 ? "a picture" : thumbnails.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) + " pictures");
         EndRun();
         BreakIfMidText();
         var strip = new ImageStrip(thumbnails, ids);
@@ -336,6 +339,7 @@ public sealed class TranscriptRenderer : INoticeSink
     public void Picture(ImageThumbnail thumbnail, int? id = null)
     {
         ArgumentNullException.ThrowIfNull(thumbnail);
+        Feed?.Add(WebUi.FeedKind.Picture, "a picture");
         EndRun();
         BreakIfMidText();
         if (id is { } key && _pane is { Enabled: true } pane)
@@ -351,7 +355,11 @@ public sealed class TranscriptRenderer : INoticeSink
         _state = LineState.AtLineStart;
     }
 
-    public void Notice(string text) => Line(NoticeMarkup(text), Theme.StyleMarkup(Theme.SystemText, text));
+    public void Notice(string text)
+    {
+        Feed?.Add(WebUi.FeedKind.Notice, text);
+        Line(NoticeMarkup(text), Theme.StyleMarkup(Theme.SystemText, text));
+    }
 
     /// <summary>
     /// The banner's sunset rule across the transcript (<c>/new</c>, 2026-09-16): a divider between
@@ -360,22 +368,44 @@ public sealed class TranscriptRenderer : INoticeSink
     /// </summary>
     public void Rule()
     {
+        Feed?.Add(WebUi.FeedKind.Separator, "");
         EndRun();
         BreakIfMidText();
         _console.MarkupLine(Theme.Rule(RuleWidth(_console.Profile.Width)));
         _state = LineState.AtLineStart;
     }
 
-    public void Warning(string text) => Line(WarningMarkup(text), Theme.ColorMarkup(Theme.Warn, text));
+    public void Warning(string text)
+    {
+        Feed?.Add(WebUi.FeedKind.Warning, text);
+        Line(WarningMarkup(text), Theme.ColorMarkup(Theme.Warn, text));
+    }
 
-    public void Error(string text) => Line(ErrorMarkup(text), Theme.StyleMarkup(Theme.ErrorText, text));
+    public void Error(string text)
+    {
+        Feed?.Add(WebUi.FeedKind.Error, text);
+        Line(ErrorMarkup(text), Theme.StyleMarkup(Theme.ErrorText, text));
+    }
 
-    public void Alert(string text) => Line(AlertMarkup(text), Theme.ColorMarkup(Theme.Warn, text));
+    public void Alert(string text)
+    {
+        Feed?.Add(WebUi.FeedKind.Alert, text);
+        Line(AlertMarkup(text), Theme.ColorMarkup(Theme.Warn, text));
+    }
 
-    public void ProcessAlert(string text) => Line(ProcessAlertMarkup(text), Theme.ColorMarkup(Theme.Warn, text));
+    public void ProcessAlert(string text)
+    {
+        Feed?.Add(WebUi.FeedKind.Alert, text);
+        Line(ProcessAlertMarkup(text), Theme.ColorMarkup(Theme.Warn, text));
+    }
+
+    /// <summary>A tool call's one line as plain text (the Web UI's feed): <see cref="ToolMarkup"/> without its markup.</summary>
+    public static string ToolText(string name, string argumentsJson) =>
+        (ToolGlyph.TrimStart() + name + " " + Truncate(ToolCallText.Brief(argumentsJson), ToolTextLimit)).TrimEnd();
 
     public void Tool(string name, string argumentsJson)
     {
+        Feed?.Add(WebUi.FeedKind.Tool, ToolText(name, argumentsJson));
         ToolLine(ToolMarkup(name, argumentsJson), ToolMarkup(name, argumentsJson).TrimStart());
         _callOpen = true;   // its result joins this call's unit (2026-10-04)
     }
@@ -383,6 +413,7 @@ public sealed class TranscriptRenderer : INoticeSink
     public void ToolResult(string name, string text)
     {
         ArgumentNullException.ThrowIfNull(text);
+        Feed?.Add(WebUi.FeedKind.ToolResult, Truncate(text, ToolTextLimit), failed: IsToolFailure(text));
         // On the pane: the result under its call, its first line and the next ones that fold with the run (2026-10-04).
         bool sameUnit = TakeCall();
         ToolWrite(new ToolResultView(text), () => WriteLine(ToolResultMarkup(name, text), ToolResultMarkup(name, text).TrimStart()), sameUnit);
@@ -408,6 +439,7 @@ public sealed class TranscriptRenderer : INoticeSink
     private void Note(string text, string glyph)
     {
         ArgumentNullException.ThrowIfNull(text);
+        Feed?.Add(WebUi.FeedKind.Tool, glyph.TrimStart() + Truncate(text, ToolTextLimit), failed: IsToolFailure(text));
         ToolLine(ToolNoteMarkup(text, glyph), sameUnit: TakeCall(), inlineMarkup: IsToolFailure(text)
             ? Theme.ColorMarkup(Theme.Warn, ToolFailedGlyph.TrimStart() + Truncate(text, ToolTextLimit))
             : Theme.ColorMarkup(Theme.Dim, glyph.TrimStart() + Truncate(text, ToolTextLimit)));
@@ -437,6 +469,7 @@ public sealed class TranscriptRenderer : INoticeSink
     {
         ArgumentNullException.ThrowIfNull(text);
         string flat = text.ReplaceLineEndings(" ");
+        Feed?.Add(WebUi.FeedKind.Tool, ToolGlyph.TrimStart() + flat);
         ToolLine(Theme.ColorMarkup(Theme.Dim, ToolGlyph + flat), Theme.ColorMarkup(Theme.Dim, ToolGlyph.TrimStart() + flat));
     }
 
@@ -452,6 +485,7 @@ public sealed class TranscriptRenderer : INoticeSink
         {
             if (!string.IsNullOrWhiteSpace(line))
             {
+                Feed?.Add(WebUi.FeedKind.ToolResult, line.Trim());
                 ToolLine(Theme.ColorMarkup(color, ToolAnswerIndent + line.TrimEnd()), Theme.ColorMarkup(color, line.Trim()));
             }
         }
@@ -468,6 +502,7 @@ public sealed class TranscriptRenderer : INoticeSink
     {
         ArgumentNullException.ThrowIfNull(note);
         ArgumentNullException.ThrowIfNull(diff);
+        Feed?.Add(WebUi.FeedKind.Tool, ToolGlyph.TrimStart() + Truncate(note, ToolTextLimit));
         var full = new DiffView(new Markup(ToolNoteMarkup(note)), diff, maxLines, collapseCount);
         var inline = new DiffView(new Markup(Theme.ColorMarkup(Theme.Dim, ToolGlyph.TrimStart() + Truncate(note, ToolTextLimit))), diff, maxLines, collapseCount);
         ToolWrite(full, () => WriteBlock(full, inline));
@@ -477,10 +512,22 @@ public sealed class TranscriptRenderer : INoticeSink
     public const string ToolAnswerIndent = "     ";
 
     /// <summary><see cref="ToolNote"/> for a skill tool's result: the same dim line behind <see cref="SkillGlyph"/>.</summary>
-    public void SkillNote(string text) => ToolLine(SkillNoteMarkup(text), Theme.ColorMarkup(Theme.Dim, SkillGlyph.TrimStart() + Truncate(text, ToolTextLimit)));
+    public void SkillNote(string text)
+    {
+        Feed?.Add(WebUi.FeedKind.Tool, SkillGlyph.TrimStart() + Truncate(text, ToolTextLimit));
+        SkillLine(text);
+    }
+
+    private void SkillLine(string text) => ToolLine(SkillNoteMarkup(text), Theme.ColorMarkup(Theme.Dim, SkillGlyph.TrimStart() + Truncate(text, ToolTextLimit)));
 
     /// <summary><see cref="ToolNote"/> for a result the police refused: the same dim line behind <see cref="PoliceGlyph"/>.</summary>
-    public void PoliceNote(string text) => ToolLine(PoliceNoteMarkup(text), Theme.ColorMarkup(Theme.Dim, PoliceGlyph.TrimStart() + Truncate(text, ToolTextLimit)));
+    public void PoliceNote(string text)
+    {
+        Feed?.Add(WebUi.FeedKind.Tool, PoliceGlyph.TrimStart() + Truncate(text, ToolTextLimit));
+        PoliceLine(text);
+    }
+
+    private void PoliceLine(string text) => ToolLine(PoliceNoteMarkup(text), Theme.ColorMarkup(Theme.Dim, PoliceGlyph.TrimStart() + Truncate(text, ToolTextLimit)));
 
     /// <summary>
     /// One line a <c>/cmd</c> run printed (2026-10-09): whole — wrapped by the window, never cut — in the body colour, stderr's in
@@ -521,6 +568,13 @@ public sealed class TranscriptRenderer : INoticeSink
     /// when a run opens; 0 (the default here, and every console without the pane) folds nothing.
     /// </summary>
     public Func<int> ToolCollapseCount { get; set; } = static () => 0;
+
+    /// <summary>
+    /// The Web UI's copy of the transcript (2026-10-14): every line drawn here is recorded there as well, plain — the user's line, a
+    /// speaker, a reply growing by its deltas, a tool's one line and its result's, the notices, the rule, a picture's place. Thinking is
+    /// not. Null records nothing (headless, the tests that do not ask for it).
+    /// </summary>
+    public WebUi.TranscriptFeed? Feed { get; set; }
 
     /// <summary>
     /// How many lines a top-level code block of a styled reply may have before the transcript folds
@@ -569,7 +623,11 @@ public sealed class TranscriptRenderer : INoticeSink
         }
     }
 
-    public void Diagnostic(DiagnosticEvent evt) => Line(DiagnosticMarkup(evt), DiagnosticMarkup(evt).TrimStart());
+    public void Diagnostic(DiagnosticEvent evt)
+    {
+        Feed?.Add(evt.Level >= DiagnosticLevel.Error ? WebUi.FeedKind.Error : WebUi.FeedKind.Warning, Markup.Remove(DiagnosticMarkup(evt)).Trim());
+        Line(DiagnosticMarkup(evt), DiagnosticMarkup(evt).TrimStart());
+    }
 
     // ── The assistant's reply ───────────────────────────────────────────────
 
@@ -590,6 +648,7 @@ public sealed class TranscriptRenderer : INoticeSink
         EndRun();
         BreakIfMidText();
         _openGlyph = string.IsNullOrEmpty(glyph) ? AssistantGlyph : glyph;
+        Feed?.Begin(_openGlyph.Trim());
         _slot = markdown && _pane is { Enabled: true };
         if (_slot)
         {
@@ -647,6 +706,7 @@ public sealed class TranscriptRenderer : INoticeSink
             EndRun();
         }
 
+        Feed?.Append(text);
         if (_slot)
         {
             // The whole reply again; the pane lays it out on its tick. A slot that was committed
@@ -693,6 +753,7 @@ public sealed class TranscriptRenderer : INoticeSink
     /// </summary>
     public void EndAssistant()
     {
+        Feed?.End();
         EndThinking();
         EndRun();
         _glyphPending = false;

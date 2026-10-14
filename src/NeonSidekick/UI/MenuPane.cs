@@ -575,6 +575,12 @@ public sealed class MenuPane : INoticeSink
     /// <summary>A visit is in progress: between the first <see cref="PickAsync"/> and <see cref="Close"/>.</summary>
     public bool IsOpen => _open;
 
+    /// <summary>
+    /// The title of the page on show while a visit is in progress, else null (2026-10-14, the Web UI's "waiting for an answer at the PC":
+    /// a pane the page cannot answer, named). Plain text, as the page was given it; read from any thread.
+    /// </summary>
+    public string? OpenTitle => Volatile.Read(ref _open) ? Volatile.Read(ref _page)?.Title : null;
+
     /// <summary>The status lines shown under the title (tests).</summary>
     public IReadOnlyList<(NoticeKind Kind, string Text)> Status => _status;
 

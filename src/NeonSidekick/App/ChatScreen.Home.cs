@@ -62,36 +62,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool?> ConfirmHomeAsync(string question, CancellationToken turnToken)
     {
-        if (!_pane.Enabled)
-        {
-            return null;
-        }
-
-        var paneToken = _paneClose?.Token ?? CancellationToken.None;
-        bool? yes = null;
-        var pending = _keys.RequestPaneAsync(async () =>
-        {
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(paneToken, turnToken);
-            try
-            {
-                yes = await _menu.ConfirmAsync(question, linked.Token).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException && !linked.IsCancellationRequested)
-            {
-                DiagnosticLog.Error(ScreenPane.Category, "The Home Assistant confirm pane failed: " + Llm.Assistant.Explain(ex), ex);
-            }
-        });
-        try
-        {
-            await pending.WaitAsync(turnToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!turnToken.IsCancellationRequested)
-        {
-            // No watcher to run the pane: never asked.
-            return null;
-        }
-
-        return yes ?? false;
+        // On the PC's pane and the Web UI's page at once (2026-10-14, ConfirmBothAsync), the first answer winning.
+        return await ConfirmBothAsync(question, "The Home Assistant confirm pane failed: ", turnToken).ConfigureAwait(false);
     }
 
     /// <summary>

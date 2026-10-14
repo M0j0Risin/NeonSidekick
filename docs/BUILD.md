@@ -50,7 +50,8 @@ The native exe lands in `publish\output\NeonSidekick.exe`. Close it before a pub
 The build is strict on purpose:
 * **Zero warnings.** Any compiler warning fails the build, and so does any NativeAOT warning about the app's own code. Warnings from other libraries are listed and tolerated.
 * **Coverage.** The tests must cover at least 80% of the lines.
-* **Smoke test.** After publishing, the script runs the native exe with `--smoke` to check that every native library loads and works. `dotnet build` and `dotnet test` can't catch a missing native DLL; this can.
+* **Smoke test.** After publishing, the script runs the native exe with `--smoke` to check that every native library loads and works, and that the trimmed web server (`webui:kestrel`) still serves. `dotnet build` and `dotnet test` can't catch a missing native DLL; this can.
+* **ASP.NET Core.** The Web UI uses the ASP.NET Core shared framework, which the .NET SDK carries; a NativeAOT publish restores its runtime pack (`Microsoft.AspNetCore.App.Runtime.<rid>`) from NuGet.
 * **Version check.** `-Package` checks that the published exe's `--version` matches the project's `<Version>`.
 
 ## Tests

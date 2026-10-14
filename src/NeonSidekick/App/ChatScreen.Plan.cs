@@ -295,32 +295,17 @@ internal sealed partial class ChatScreen
             return new PlanVerdict(PlanChoice.Saved);
         }
 
-        var paneToken = _paneClose?.Token ?? CancellationToken.None;
-        PlanVerdict? verdict = null;
-        var request = _keys.RequestPaneAsync(async () =>
-        {
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(paneToken, turnToken);
-            try
-            {
-                verdict = await _planMenu.AskAsync(plan, linked.Token).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException && !linked.IsCancellationRequested)
-            {
-                DiagnosticLog.Error(ScreenPane.Category, "The plan approval pane failed: " + Llm.Assistant.Explain(ex), ex);
-            }
-        });
-        try
-        {
-            await request.WaitAsync(turnToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!turnToken.IsCancellationRequested)
+        // On the PC's pane and the Web UI's page at once (2026-10-14, AskBothAsync), the first answer winning; Close gaps stays the PC's.
+        var outcome = await AskBothAsync<PlanVerdict?>(PlanSpec(plan), async token => await _planMenu.AskAsync(plan, token).ConfigureAwait(false),
+            answer => PlanVerdictOf(answer), "The plan approval pane failed: ", turnToken).ConfigureAwait(false);
+        if (outcome.NeverAsked)
         {
             // No watcher to run the pane: saved, the user approves with /plan approve.
             DiagnosticLog.Info(AppCategory, PlanVerdictLogLine(PlanChoice.Saved));
             return new PlanVerdict(PlanChoice.Saved);
         }
 
-        var result = verdict ?? new PlanVerdict(PlanChoice.Refine);
+        var result = outcome.Value ?? new PlanVerdict(PlanChoice.Refine);
         DiagnosticLog.Info(AppCategory, PlanVerdictLogLine(result.Choice, result.Reviewer));
         switch (result.Choice)
         {

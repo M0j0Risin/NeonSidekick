@@ -1075,6 +1075,15 @@ public enum SettingsField
 
     /// <summary>Typed: the most passes plan mode's gap-closing loop runs, 0 to 20, 0 for no limit (<see cref="Settings.AppSettingsData.PlanGapPasses"/>). On the Common tab under <see cref="LlmMaxToolIterations"/> (2026-10-13), last here so the flat list's rows above keep their places; read when a loop starts.</summary>
     PlanGapPasses,
+
+    /// <summary>A toggle: whether this profile hosts the Web UI (<see cref="Settings.AppSettingsData.WebUi"/>). The Web UI tab under Client (2026-10-14, the user's ask); a flip starts or stops the server (<see cref="SettingsChanges.WebUi"/>), so it is refused mid-turn. Last in the enum, as every newcomer.</summary>
+    WebUi,
+
+    /// <summary>Typed: the Web UI's TCP port, 1024 to 65535 (<see cref="Settings.AppSettingsData.WebUiPort"/>). The Web UI tab under <see cref="WebUi"/> (2026-10-14); a change restarts the server, so it is refused mid-turn.</summary>
+    WebUiPort,
+
+    /// <summary>A picker over <see cref="NeonSidekick.WebUi.WebUiReach.Names"/>: who may reach the Web UI, this machine or the home network (<see cref="Settings.AppSettingsData.WebUiReach"/>). The Web UI tab under <see cref="WebUiPort"/> (2026-10-14); a change restarts the server, so it is refused mid-turn.</summary>
+    WebUiReach,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1092,6 +1101,9 @@ public enum SettingsTab
 
     /// <summary>The <c>/botchat</c> rows (2026-09-25, the user's ask: a Botchat tab on <c>/settings</c>): third, under Client after Sessions, since 2026-10-10 (the user's order); after Sessions on the root strip until then (a Claude tab followed it on 2026-09-27 until later that day, when its rows moved to <c>/tools</c>' ClaudeCode tab, the user's call; <c>/claude</c>'s four came back to the Anthropic tab on 2026-10-10).</summary>
     BotChat,
+
+    /// <summary>The Web UI's rows (2026-10-14, the user's ask: a Web UI tab under Client, after Botchat): the switch, the port and the reach.</summary>
+    WebUi,
 
     /// <summary>
     /// The LLM rows every server reads, whatever its kind: the URL and model, the reasoning, the tools and limits, the context, the
@@ -1173,6 +1185,9 @@ public enum SettingsChanges
     /// the new colours — since what is already drawn keeps the old ones. No reconnect.
     /// </summary>
     Theme = 64,
+
+    /// <summary>One of the Web UI's rows changed (2026-10-14): the screen starts, stops or restarts the server for the settings now saved.</summary>
+    WebUi = 128,
 }
 
 /// <summary>
@@ -1331,6 +1346,10 @@ internal sealed partial class SettingsMenu
     public static readonly string PlanGapPassesRangeError =
         "must be " + AppSettingsData.MinPlanGapPasses.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxPlanGapPasses.ToString(CultureInfo.InvariantCulture) + " passes (0 for no limit)";
 
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.WebUiPort"/> (2026-10-14). Pinned.</summary>
+    public static readonly string WebUiPortRangeError =
+        "must be a port from " + AppSettingsData.MinWebUiPort.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxWebUiPort.ToString(CultureInfo.InvariantCulture);
+
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.LlmMaxToolIterations"/>. Pinned.</summary>
     public static readonly string MaxToolIterationsRangeError =
         "must be " + AppSettingsData.MinToolIterations.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxToolIterationsCap.ToString(CultureInfo.InvariantCulture) + " round trips";
@@ -1437,13 +1456,16 @@ internal sealed partial class SettingsMenu
     private static readonly SettingsField[] Fields = Enum.GetValues<SettingsField>();
 
     /// <summary>The leaf tabs' titles, one per <see cref="SettingsTab"/>, each a sub-tab of <see cref="StripTitles"/>' groups (five since 2026-09-19: Ask, Files and Web are <c>/tools</c>' tabs, <see cref="ToolsText.TabTitles"/>, and Skills is <c>/skills</c>' Options tab, <see cref="SkillsText.OptionsTabTitle"/>). Pinned.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [ChatTabTitle, "Sessions", "Botchat", CommonTabTitle, HttpTabTitle, EmbeddedTabTitle, DockerTabTitle, AnthropicTabTitle, OpenAITabTitle, AdvisorsTabTitle, "TTS", "STT"];
+    public static readonly IReadOnlyList<string> TabTitles = [ChatTabTitle, "Sessions", "Botchat", WebUiTabTitle, CommonTabTitle, HttpTabTitle, EmbeddedTabTitle, DockerTabTitle, AnthropicTabTitle, OpenAITabTitle, AdvisorsTabTitle, "TTS", "STT"];
 
     /// <summary>The title of the tab of the chat's own rows: the profile, the input line, the transcript, the screen, the outside apps (2026-10-10, the user's pick; "General" until then). Pinned.</summary>
     public const string ChatTabTitle = "Chat";
 
     /// <summary>The title of the tab of LLM rows every server reads (2026-10-10, the user's call; "LLM" until then). Pinned.</summary>
     public const string CommonTabTitle = "Common";
+
+    /// <summary>The title of the Web UI's tab, under Client after Botchat (2026-10-14, the user's name). Pinned.</summary>
+    public const string WebUiTabTitle = "Web UI";
 
     /// <summary>The title of the tab of LLM rows only an OpenAI-compatible HTTP server reads (2026-10-10, the user's pick and casing). Pinned.</summary>
     public const string HttpTabTitle = "Http";
@@ -1453,7 +1475,8 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The rows of each tab on the pane, indexed by <see cref="SettingsTab"/>, in the order shown
-    /// (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, Advisors, TTS, STT — Advisors before Voice, the user's order,
+    /// (Chat, Sessions, Botchat, Web UI, Common, Http, Embedded, Docker, Anthropic, OpenAI, Advisors, TTS, STT — Web UI under Client after Botchat,
+    /// 2026-10-14, the user's ask; Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, Advisors, TTS, STT — Advisors before Voice, the user's order,
     /// later still on 2026-10-10; Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat, and Sessions
     /// and Botchat beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic,
     /// OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04;
@@ -1502,6 +1525,7 @@ internal sealed partial class SettingsMenu
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
          SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
+        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach],
         [SettingsField.LlmUrl, SettingsField.LlmModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.PlanGapPasses,
@@ -1785,6 +1809,9 @@ internal sealed partial class SettingsMenu
     /// <summary>Whether a change to <paramref name="field"/> connects or disconnects the MCP servers (2026-09-20): the master switch alone — the timeout is read at the next connect.</summary>
     public static bool IsMcpField(SettingsField field) => field is SettingsField.McpServers;
 
+    /// <summary>Whether a change to <paramref name="field"/> starts, stops or restarts the Web UI's server (2026-10-14): its three rows.</summary>
+    public static bool IsWebUiField(SettingsField field) => field is SettingsField.WebUi or SettingsField.WebUiPort or SettingsField.WebUiReach;
+
     /// <summary>The settings-menu wording for a bad wake phrase. Pinned.</summary>
     public const string WakePhraseError = "must be one to three words of letters";
 
@@ -2007,7 +2034,8 @@ internal sealed partial class SettingsMenu
             or SettingsField.PostgresTools or SettingsField.PostgresPercentMention
             or SettingsField.YouTubeTools or SettingsField.YouTubeAutoplay
             or SettingsField.Advisors or SettingsField.AdvisorConfirm
-            or SettingsField.ShoppingTools;
+            or SettingsField.ShoppingTools
+            or SettingsField.WebUi;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -2083,6 +2111,9 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmPictureMegabytes => "LLM max images (MB)",
         SettingsField.LlmMaxToolIterations => "LLM max tool iterations",
         SettingsField.PlanGapPasses => "LLM plan gap passes",
+        SettingsField.WebUi => "Web UI",
+        SettingsField.WebUiPort => "Web UI port",
+        SettingsField.WebUiReach => "Web UI reach",
         SettingsField.ImageThumbnailSize => "Image thumbnail size",
         SettingsField.FileTreeMaxLength => "File /tree max entries",
         SettingsField.FileTreeShowSizes => "File /tree show sizes",
@@ -2658,6 +2689,9 @@ internal sealed partial class SettingsMenu
             SettingsField.FileBrowserMode => data.FileBrowserMode,
             SettingsField.AgentSkills => OnOff(data.AgentSkills),
             SettingsField.GlobalSkills => OnOff(data.GlobalSkills),
+            SettingsField.WebUi => OnOff(data.WebUi),
+            SettingsField.WebUiPort => data.WebUiPort.ToString(CultureInfo.InvariantCulture),
+            SettingsField.WebUiReach => data.WebUiReach,
             SettingsField.ExternalSkills => OnOff(data.ExternalSkills),
             SettingsField.ProjectFile => OnOff(data.ProjectFile),
             SettingsField.TranscriptMarkdown => OnOff(data.TranscriptMarkdown),
@@ -3548,6 +3582,10 @@ internal sealed partial class SettingsMenu
     public static string NetworkModeLabel(string name) =>
         Markup.Escape(name.PadRight(9)) + Theme.DimMarkup(Web.NetworkMode.Describe(name));
 
+    /// <summary>One row of the Web UI reach picker (2026-10-14): the word and its hint (padded to six: <c>local</c> is five). Pinned.</summary>
+    public static string WebUiReachLabel(string name) =>
+        Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(NeonSidekick.WebUi.WebUiReach.Describe(name));
+
     /// <summary>One row of the queue-mode picker (2026-10-09): the mode and its hint (padded to ten: <c>automatic</c> is nine). Pinned.</summary>
     public static string QueueModeLabel(string name) =>
         Markup.Escape(name.PadRight(10)) + Theme.DimMarkup(QueueMode.Describe(name));
@@ -3742,6 +3780,7 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmMaxTurns => data.LlmMaxTurns > 0 ? data.LlmMaxTurns.ToString(CultureInfo.InvariantCulture) : LlmMaxTurnsAutoLabel,
         SettingsField.LlmMaxToolIterations => data.LlmMaxToolIterations.ToString(CultureInfo.InvariantCulture),
         SettingsField.PlanGapPasses => data.PlanGapPasses.ToString(CultureInfo.InvariantCulture),
+        SettingsField.WebUiPort => data.WebUiPort.ToString(CultureInfo.InvariantCulture),
         SettingsField.FileTreeMaxLength => data.FileTreeMaxLength.ToString(CultureInfo.InvariantCulture),
         SettingsField.WorkingDirectory => data.WorkingDirectory,
         SettingsField.WebBrowserPath => data.WebBrowserPath,
@@ -4013,6 +4052,11 @@ internal sealed partial class SettingsMenu
                     {
                         changes |= SettingsChanges.Mcp;
                     }
+
+                    if (IsWebUiField(field))
+                    {
+                        changes |= SettingsChanges.WebUi;
+                    }
                 }
             }
         }
@@ -4023,10 +4067,10 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    /// <summary>Whether <paramref name="field"/> is refused while a reply runs: the profile, the working directory, every reconnecting row, the tools flip and the theme (a change starts the screen over, 2026-09-23). Pure.</summary>
+    /// <summary>Whether <paramref name="field"/> is refused while a reply runs: the profile, the working directory, every reconnecting row, the tools flip, the theme (a change starts the screen over, 2026-09-23) and the Web UI's rows (2026-10-14: a reply's hand-over drops the restart's flag). Pure.</summary>
     public static bool RefusedMidTurn(SettingsField field) =>
         field is SettingsField.Profile or SettingsField.WorkingDirectory or SettingsField.LlmOfferTools or SettingsField.Theme
-        || IsLlmField(field) || IsTtsField(field) || IsVoiceField(field) || IsMcpField(field);
+        || IsLlmField(field) || IsTtsField(field) || IsVoiceField(field) || IsMcpField(field) || IsWebUiField(field);
 
     /// <summary>
     /// A yes/no question as a pane (or the prompt host without one): <paramref name="question"/> as
@@ -4944,6 +4988,11 @@ internal sealed partial class SettingsMenu
             return await PickNetworkModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
+        if (field == SettingsField.WebUiReach)
+        {
+            return await PickWebUiReachAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
         if (field == SettingsField.ShellCommandPolicy)
         {
             return await PickCommandPolicyAsync(saved, cancellationToken).ConfigureAwait(false);
@@ -5522,6 +5571,16 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.PlanGapPasses = passes);
+                return true;
+
+            case SettingsField.WebUiPort:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int port) || port < AppSettingsData.MinWebUiPort || port > AppSettingsData.MaxWebUiPort)
+                {
+                    Sink.Error($"{FieldName(field)} {WebUiPortRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.WebUiPort = port);
                 return true;
 
             case SettingsField.FileTreeMaxLength:
@@ -7450,6 +7509,7 @@ internal sealed partial class SettingsMenu
             SettingsField.AskUser => data.AskUser,
             SettingsField.AgentSkills => data.AgentSkills,
             SettingsField.GlobalSkills => data.GlobalSkills,
+            SettingsField.WebUi => data.WebUi,
             SettingsField.ExternalSkills => data.ExternalSkills,
             SettingsField.ProjectFile => data.ProjectFile,
             SettingsField.TranscriptMarkdown => data.TranscriptMarkdown,
@@ -7560,6 +7620,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.AskUser: data.AskUser = on; break;
             case SettingsField.AgentSkills: data.AgentSkills = on; break;
             case SettingsField.GlobalSkills: data.GlobalSkills = on; break;
+            case SettingsField.WebUi: data.WebUi = on; break;
             case SettingsField.ExternalSkills: data.ExternalSkills = on; break;
             case SettingsField.ProjectFile: data.ProjectFile = on; break;
             case SettingsField.TranscriptMarkdown: data.TranscriptMarkdown = on; break;
@@ -7677,6 +7738,7 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmCompactShowSummary => on ? "the summary's lines or the pruned results, then the protected counts" : "the one compact notice alone",
         SettingsField.AgentSkills => on ? "the skills catalog, load_skill and skill_editor are offered" : "no skills, no project notes",
         SettingsField.GlobalSkills => on ? "every profile's global skills are read too" : "only this profile's skills; the global ones are hidden and left alone",
+        SettingsField.WebUi => on ? "the pages are served; /webui shows the sign-in link" : "no web server",
         SettingsField.ExternalSkills => on ? (OperatingSystem.IsMacOS() ? "~/.agents/skills is read too" : "%USERPROFILE%\\.agents\\skills is read too") : "no external skills",   // the Mac's home, 2026-10-06
         SettingsField.ProjectFile => on ? "use project file (NEON.md or AGENTS.md in the working directory)" : "project files in the working directory are ignored",   // the user's wording, 2026-10-01
         SettingsField.SkillHashMention => on ? "# and part of a name lists the loaded skills on the line" : "# is ordinary text",
@@ -8028,6 +8090,22 @@ internal sealed partial class SettingsMenu
 
         string name = Web.NetworkMode.Names[index];
         Apply(SettingsField.WebBrowserNetworkMode, d => d.WebBrowserNetworkMode = name);
+        return true;
+    }
+
+    /// <summary>The Web UI reach picker under the settings list (2026-10-14): one <see cref="WebUiReachLabel"/> row per <see cref="NeonSidekick.WebUi.WebUiReach.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickWebUiReachAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = NeonSidekick.WebUi.WebUiReach.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.WebUiReach)), names.Select(WebUiReachLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, saved.WebUiReach)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.WebUiReach, d => d.WebUiReach = name);
         return true;
     }
 

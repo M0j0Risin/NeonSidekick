@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NeonSidekick</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css">
+<script src="/chat.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="who"><span id="profile">NeonSidekick</span><span class="model" id="model"></span></div>
+  <nav><a href="/" class="here">Chat</a><a href="/shopping">Shopping</a></nav>
+  <span class="dot" id="dot" title="connection"></span>
+</header>
+<main>
+  <div id="log" aria-live="polite"></div>
+</main>
+<footer class="bottom">
+  <div class="inner">
+    <div id="asks"></div>
+    <div class="banner waiting hidden" id="waiting"></div>
+    <div class="banner hidden" id="loading"></div>
+    <div class="queued hidden" id="queued"></div>
+    <div class="banner message hidden" id="message"></div>
+    <div class="compose">
+      <textarea id="draft" rows="1" placeholder="Message…" enterkeyhint="send"></textarea>
+      <button class="primary" id="send" title="Send">➤</button>
+      <button class="stop hidden" id="stop" title="Stop">■</button>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

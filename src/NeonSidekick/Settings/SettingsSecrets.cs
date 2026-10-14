@@ -4,8 +4,9 @@ using NeonSidekick.Sql;
 namespace NeonSidekick.Settings;
 
 /// <summary>
-/// The five secrets a <c>profile.json</c> keeps — <see cref="AppSettingsData.LlmApiKey"/>, <see cref="AppSettingsData.AnthropicApiKey"/>,
-/// <see cref="AppSettingsData.OpenAIApiKey"/> (2026-10-03), <see cref="AppSettingsData.HomeAssistantToken"/> and <see cref="AppSettingsData.YouTubeApiKey"/> (2026-10-05) — encrypted with DPAPI for this Windows user on this machine
+/// The six secrets a <c>profile.json</c> keeps — <see cref="AppSettingsData.LlmApiKey"/>, <see cref="AppSettingsData.AnthropicApiKey"/>,
+/// <see cref="AppSettingsData.OpenAIApiKey"/> (2026-10-03), <see cref="AppSettingsData.HomeAssistantToken"/>, <see cref="AppSettingsData.YouTubeApiKey"/> (2026-10-05)
+/// and <see cref="AppSettingsData.WebUiToken"/> (2026-10-14, the Web UI's sign-in token) — encrypted with DPAPI for this Windows user on this machine
 /// (<see cref="WindowsCredentials.Protect"/>: <c>dpapi:</c> and the blob). The Claude key was first (2026-09-27), the Home
 /// Assistant key next (2026-09-28); the LLM API key joined them the same day (the user's call: "since we've done it with all
 /// the rest"), and with it <see cref="ProtectAtRest"/>, which encrypts a plain value of any of the three when the profile
@@ -95,6 +96,11 @@ public static class SettingsSecrets
         if (NeedsProtecting(data.YouTubeApiKey))
         {
             changed |= Swap(data.YouTubeApiKey, v => data.YouTubeApiKey = v, ref error);
+        }
+
+        if (NeedsProtecting(data.WebUiToken))
+        {
+            changed |= Swap(data.WebUiToken, v => data.WebUiToken = v, ref error);
         }
 
         if (error is not null)

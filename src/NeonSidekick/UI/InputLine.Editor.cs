@@ -19,6 +19,12 @@ public sealed record SubmittedLine(string Draft, string Text, IReadOnlyList<Imag
     /// collapsed paste, a picture or a multi-line message is never a command, the watcher's old rule), else null.
     /// </summary>
     public string? CommandText => Draft.Contains('\n', StringComparison.Ordinal) || Draft.Any(PasteBlocks.IsToken) ? null : Draft.Trim();
+
+    /// <summary>
+    /// A message the Web UI's page sent (2026-10-14): built from its text alone, never through the PC's paste store, and routed back to the
+    /// page — not to the PC's row — when it is withdrawn.
+    /// </summary>
+    public bool FromWeb { get; init; }
 }
 
 /// <summary>What one event did to an <see cref="InputLine.Editor"/> (2026-09-25).</summary>

@@ -188,7 +188,7 @@ internal sealed partial class ChatScreen
                 {
                     await _editDraft(path, editorCommand, token).ConfigureAwait(false);
                     return true;
-                }), KeySource.IsTurnCancel, cancellationToken).ConfigureAwait(false))
+                }), KeySource.IsTurnCancel, cancellationToken, kind: KillScopeKind.Edit).ConfigureAwait(false))
             {
                 return new(null, SavedPromptText.EditorCancelled);
             }

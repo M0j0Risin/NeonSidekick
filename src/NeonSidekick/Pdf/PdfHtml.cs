@@ -125,13 +125,20 @@ public static class PdfHtml
 
     /// <summary>
     /// <paramref name="markdown"/> as the page's body. <paramref name="resolveImage"/> turns a picture's address into the
-    /// <c>data:</c> URI to show, or null — the picture is then its alt text in brackets.
+    /// <c>data:</c> URI to show, or null — the picture is then its alt text in brackets. <paramref name="link"/> (2026-10-14, the Web UI's
+    /// replies, which share this renderer) vets each link's address: the address to keep, or null to leave the link's text alone; a kept
+    /// link opens in a new tab with no opener and no referrer. Without it the links are kept as written (the PDF's).
     /// </summary>
-    public static string Markdown(string markdown, Func<string, string?> resolveImage)
+    public static string Markdown(string markdown, Func<string, string?> resolveImage, Func<string, string?>? link = null)
     {
         ArgumentNullException.ThrowIfNull(markdown);
         ArgumentNullException.ThrowIfNull(resolveImage);
         var document = Markdig.Markdown.Parse(markdown, Pipeline);
+        if (link is not null)
+        {
+            VetLinks(document, link);
+        }
+
         foreach (var image in document.Descendants<LinkInline>().Where(l => l.IsImage).ToList())
         {
             string? data = string.IsNullOrWhiteSpace(image.Url) ? null : resolveImage(image.Url);
@@ -153,6 +160,41 @@ public static class PdfHtml
         renderer.Render(document);
         writer.Flush();
         return writer.ToString();
+    }
+
+    /// <summary>Each link's address through <paramref name="link"/>: kept with <c>target=_blank rel="noopener noreferrer"</c>, or the link replaced by its text.</summary>
+    private static void VetLinks(Markdig.Syntax.MarkdownDocument document, Func<string, string?> link)
+    {
+        foreach (var inline in document.Descendants<LinkInline>().Where(l => !l.IsImage).ToList())
+        {
+            if (string.IsNullOrWhiteSpace(inline.Url) || link(inline.Url) is not { } url)
+            {
+                string words = string.Concat(inline.Descendants<LiteralInline>().Select(l => l.Content.ToString()));
+                inline.ReplaceBy(new LiteralInline(words.Length > 0 ? words : inline.Url ?? ""), copyChildren: false);
+                continue;
+            }
+
+            inline.Url = url;
+            OpenApart(inline);
+        }
+
+        foreach (var auto in document.Descendants<AutolinkInline>().ToList())
+        {
+            if (link(auto.IsEmail ? "mailto:" + auto.Url : auto.Url) is null)
+            {
+                auto.ReplaceBy(new LiteralInline(auto.Url));
+                continue;
+            }
+
+            OpenApart(auto);
+        }
+    }
+
+    private static void OpenApart(Inline inline)
+    {
+        var attributes = inline.GetAttributes();
+        attributes.AddPropertyIfNotExist("target", "_blank");
+        attributes.AddPropertyIfNotExist("rel", "noopener noreferrer");
     }
 
     /// <summary>A text file as the page's body: one listing, coloured when <paramref name="display"/>'s extension names a language.</summary>
