@@ -159,6 +159,7 @@ public class AppSettingsTests : IDisposable
         WebSearchMethod = "searxng",
         WebTools = true,   // off by default since 2026-09-29
         AgentSkills = false,
+        GlobalSkills = false,   // the non-default, so a field Copy misses shows (2026-10-13)
         ExternalSkills = true,
         ProjectFile = false,
         ReflectionAutoLearn = false,
@@ -296,6 +297,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.WebSearchMethod, actual.WebSearchMethod);
         Assert.Equal(expected.WebTools, actual.WebTools);
         Assert.Equal(expected.AgentSkills, actual.AgentSkills);
+        Assert.Equal(expected.GlobalSkills, actual.GlobalSkills);
         Assert.Equal(expected.ExternalSkills, actual.ExternalSkills);
         Assert.Equal(expected.ProjectFile, actual.ProjectFile);
         Assert.Equal(expected.ReflectionAutoLearn, actual.ReflectionAutoLearn);
@@ -455,6 +457,7 @@ public class AppSettingsTests : IDisposable
             d.WebSearchMethod = full.WebSearchMethod;
             d.WebTools = full.WebTools;
             d.AgentSkills = full.AgentSkills;
+            d.GlobalSkills = full.GlobalSkills;
             d.ExternalSkills = full.ExternalSkills;
             d.ProjectFile = full.ProjectFile;
             d.ReflectionAutoLearn = full.ReflectionAutoLearn;
@@ -603,6 +606,7 @@ public class AppSettingsTests : IDisposable
                 d.WebSearchMethod = full.WebSearchMethod;
                 d.WebTools = full.WebTools;
                 d.AgentSkills = full.AgentSkills;
+                d.GlobalSkills = full.GlobalSkills;
                 d.ExternalSkills = full.ExternalSkills;
                 d.ProjectFile = full.ProjectFile;
                 d.ReflectionAutoLearn = full.ReflectionAutoLearn;
@@ -1582,6 +1586,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("vosk-model-small-en-us-0.15", s.SttVoskModel);
         Assert.Equal("remain", s.FileMentionFolderMode);
         Assert.True(s.AgentSkills);
+        Assert.True(s.GlobalSkills);   // 2026-10-13: on by default, the user's pick
         Assert.False(s.ExternalSkills);
         Assert.True(s.ProjectFile);   // later on 2026-09-19: the notes read unless the toggle (the Options tab of /skills since 2026-10-01) says not
         Assert.Equal("protected", s.SkillCompactMode);
@@ -1755,5 +1760,38 @@ public class AppSettingsTests : IDisposable
         Assert.All(lines, e => Assert.Equal(NeonSidekick.Diagnostics.DiagnosticLevel.Info, e.Level));
         Assert.Equal("Changed TtsSpeed: 1 → 1.2", AppSettings.ChangedLogLine("TtsSpeed: 1 → 1.2"));
         Assert.Equal("Settings", AppSettings.Category);
+    }
+
+    /// <summary>
+    /// Global skills (2026-10-13): a profile.json from before the key loads it on, the saved value round-trips through Current, and
+    /// SkillsView reads the profile's skills folder and the switch together.
+    /// </summary>
+    [Fact]
+    public async Task GlobalSkills_AnOldProfileLoadsOn_TheValueRoundTrips_AndSkillsViewReadsBothTogether()
+    {
+        using (var first = new AppSettings(_dir))
+        {
+            first.Update(d => d.TtsOutput = false);
+            await first.FlushAsync();
+        }
+
+        string file = Profiles.ProfileFile(_dir, Profiles.DefaultName);
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+        json.Remove(nameof(AppSettingsData.GlobalSkills));
+        File.WriteAllText(file, json.ToJsonString());   // a profile saved before the key
+
+        using var settings = new AppSettings(_dir);
+        Assert.True(settings.Current.GlobalSkills);
+        Assert.Equal((settings.ProfileSkillsDirectory, true), settings.SkillsView);
+
+        settings.Update(d => d.GlobalSkills = false);
+
+        Assert.False(settings.Current.GlobalSkills);
+        Assert.Equal((settings.ProfileSkillsDirectory, false), settings.SkillsView);
+        var roots = Skills.SkillRoots.For(settings, Path.Combine(_dir, ".agents", "skills"));
+        Assert.Equal((settings.ProfileSkillsDirectory, settings.GlobalSkillsDirectory, false), (roots.Profile, roots.Global, roots.GlobalOn));
+        Assert.Equal([Skills.SkillScope.Profile], roots.WritableScopes);
+        Assert.False(roots.Reads(Skills.SkillScope.Global));
+        Assert.True(roots.Reads(Skills.SkillScope.External));
     }
 }

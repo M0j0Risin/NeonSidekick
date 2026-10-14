@@ -302,4 +302,50 @@ public class SkillCatalogTests : IDisposable
         Assert.True(cut.Truncated);
         Assert.EndsWith("\n\n(cut at 64,000 characters)\n</skill_file>", SkillText.File("emojese", "huge.json", cut.Text, cut.Truncated), StringComparison.Ordinal);
     }
+
+    // ── Global skills (2026-10-13, the profile's switch) ────────────────────
+
+    /// <summary>Off, the global root is not read: its skills are neither offered nor shadowed, an external twin of one shows, and the scan says so.</summary>
+    [Fact]
+    public void GlobalOff_HidesTheGlobalRoot_ItsTwinsToo_AndTheScanSaysSo()
+    {
+        Put(SkillScope.Profile, "haiku", Skill("haiku", "The profile's."));
+        Put(SkillScope.Global, "haiku", Skill("haiku", "The global twin."));
+        Put(SkillScope.Global, "pdf", Skill("pdf"));
+        Put(SkillScope.External, "pdf", Skill("pdf", "The external one."));
+        var off = new SkillCatalog(() => _roots with { GlobalOn = false });
+
+        off.Scan(external: true);
+
+        Assert.Equal([("haiku", SkillScope.Profile), ("pdf", SkillScope.External)], off.Skills.Select(s => (s.Name, s.Scope)));
+        Assert.Empty(off.Shadowed);   // the global haiku is not there to be shadowed
+        Assert.False(off.GlobalEnabled);
+
+        _catalog.Scan(external: true);
+        Assert.Equal([("haiku", SkillScope.Profile), ("pdf", SkillScope.Global)], _catalog.Skills.Select(s => (s.Name, s.Scope)));
+        Assert.Equal([("haiku", SkillScope.Global), ("pdf", SkillScope.External)], _catalog.Shadowed.Select(s => (s.Name, s.Scope)));
+        Assert.True(_catalog.GlobalEnabled);
+    }
+
+    /// <summary>The roots are read at every scan: a flip shows at the next one, the version moving with the names.</summary>
+    [Fact]
+    public void GlobalOff_AFlipShowsAtTheNextScan_AndMovesTheVersion()
+    {
+        Put(SkillScope.Profile, "haiku", Skill("haiku"));
+        Put(SkillScope.Global, "pdf", Skill("pdf"));
+        bool on = true;
+        var catalog = new SkillCatalog(() => _roots with { GlobalOn = on });
+        catalog.Scan(external: false);
+        int version = catalog.Version;
+
+        on = false;
+        Assert.False(catalog.Roots.GlobalOn);   // the roots are live,
+        Assert.Equal(["haiku", "pdf"], catalog.Skills.Select(s => s.Name));   // the list the last scan's
+        Assert.True(catalog.GlobalEnabled);
+        catalog.Scan(external: false);
+
+        Assert.Equal(["haiku"], catalog.Skills.Select(s => s.Name));
+        Assert.False(catalog.GlobalEnabled);
+        Assert.Equal(version + 1, catalog.Version);
+    }
 }

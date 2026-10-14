@@ -90,6 +90,12 @@ public static class SkillInstaller
         string name = candidate.Name;
         string root = Path.GetFullPath(roots.Of(scope));
         string target = Path.Combine(root, name);
+        if (roots.Hides(scope))
+        {
+            // The global root switched off for this profile (2026-10-13): this write never goes through SkillEditor, so it refuses itself.
+            return new SkillInstallResult(false, false, scope, target, SkillInstallText.GlobalOffError);
+        }
+
         if (candidate.Refusal is { } refusal)
         {
             return new SkillInstallResult(false, false, scope, target, refusal);

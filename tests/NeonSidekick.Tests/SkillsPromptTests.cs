@@ -90,4 +90,18 @@ public class SkillsPromptTests
         Assert.Throws<ArgumentNullException>(() => SkillsPrompt.Section(null!));
         Assert.Throws<ArgumentNullException>(() => SkillsPrompt.Catalog(null!));
     }
+
+    /// <summary>Global skills off (2026-10-13): both directives name no global scope, since skill_editor offers none.</summary>
+    [Fact]
+    public void Section_GlobalOff_NamesNoGlobalScope_WithSkillsAndWithout()
+    {
+        var haiku = new Skill("haiku", "Writes haiku.", SkillScope.Profile, "haiku");
+        Assert.Equal("To keep a procedure for later sessions, or improve one, call skill_editor; a skill you write is kept for this profile.", SkillsPrompt.EditorSentenceProfileOnly);
+        Assert.Equal(SkillsPrompt.DirectiveProfileOnly + "\n\n" + SkillsPrompt.Catalog([haiku]), SkillsPrompt.Section([haiku], global: false));
+        Assert.Equal(SkillsPrompt.DirectiveWithoutSkillsProfileOnly, SkillsPrompt.Section([], global: false));
+        Assert.DoesNotContain("global", SkillsPrompt.Section([haiku], global: false), StringComparison.Ordinal);
+        Assert.DoesNotContain("global", SkillsPrompt.Section([], global: false), StringComparison.Ordinal);
+        Assert.Equal(SkillsPrompt.Section([haiku]), SkillsPrompt.Section([haiku], global: true));
+        Assert.Contains("global for every profile", SkillsPrompt.Section([haiku]), StringComparison.Ordinal);
+    }
 }

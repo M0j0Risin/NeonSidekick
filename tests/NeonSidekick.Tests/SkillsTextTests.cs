@@ -257,6 +257,7 @@ public class SkillsTextTests
         Assert.Equal([null, SkillScope.Profile, SkillScope.Global, SkillScope.External], SkillsText.ScopeTabs(Facts(skills: [Haiku, Pdf])));
         Assert.Empty(SkillsText.ScopeTabs(Facts()));
         Assert.Empty(SkillsText.ScopeTabs(Facts(enabled: false, skills: [Haiku])));
+        Assert.Equal([null, SkillScope.Profile, SkillScope.External], SkillsText.ScopeTabs(Facts(skills: [Haiku, Pdf]) with { Roots = Facts().Roots with { GlobalOn = false } }));   // no global sub-tab while Global skills is off (2026-10-13)
 
         Assert.Equal(["all", "profile", "global", "external"], new SkillScope?[] { null, SkillScope.Profile, SkillScope.Global, SkillScope.External }.Select(SkillsText.ScopeTitle));
         Assert.Equal("(no profile skills)", SkillsText.ScopeNoneLine(SkillScope.Profile));

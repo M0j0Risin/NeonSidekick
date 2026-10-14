@@ -243,7 +243,7 @@ public static partial class BotChat
     /// <paramref name="memories"/> (<c>Botchat memory enabled</c>) the memory section with the list follows them
     /// (<paramref name="memorySave"/>: <c>save_memory</c> offered) and <see cref="Rules"/> gains <see cref="MemoryRule"/>. With
     /// <paramref name="skills"/> (<c>Botchat skills enabled</c>, 2026-09-27, or <c>Botchat limited skills</c> since 2026-10-04: the
-    /// main chat's catalog — the starting profile's, the global and the external skills, never the speaker's own profile's) the
+    /// main chat's catalog — the starting profile's, the global (while its Global skills is on) and the external skills, never the speaker's own profile's) the
     /// load-only skills block (<see cref="Skills.SkillsPrompt.LoadOnlySection"/>) goes before the rules. With none of them the
     /// prompt is as before, byte for byte. The preloaded skills' block of 2026-09-27 went on 2026-10-04 (the user's call). Pure.
     /// </summary>

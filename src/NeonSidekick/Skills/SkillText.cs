@@ -146,6 +146,16 @@ public static class SkillText
 
     public static string BadScope(string raw) => $"Error: '{raw.Trim()}' is not a scope; use {SkillScopes.ProfileName} (this profile only) or {SkillScopes.GlobalName} (every profile)";
 
+    /// <summary><see cref="BadScope(string)"/>, naming <c>profile</c> alone while the profile has <c>Global skills</c> off (2026-10-13). Pinned.</summary>
+    public static string BadScope(string raw, bool global) =>
+        global ? BadScope(raw) : $"Error: '{raw.Trim()}' is not a scope; use {SkillScopes.ProfileName}";
+
+    /// <summary>
+    /// A write into the global skills while this profile has <c>Global skills</c> off (2026-10-13, <see cref="SkillEditOutcome.GlobalOff"/>):
+    /// the model's answer, and the pane's and the purge's reason. Pinned.
+    /// </summary>
+    public const string GlobalSkillsOff = "Error: global skills are off for this profile; use scope profile";
+
     public static string BadName(string name) => $"Error: '{name.Trim()}' is not a valid skill name; use {SkillFrontmatter.NameRule}";
 
     public static string Exists(string name, SkillScope scope) =>
@@ -325,6 +335,8 @@ public static class SkillText
             SkillEditOutcome.Locked => Locked(result.Name),
             SkillEditOutcome.Disabled => Disabled(result.Name),
             SkillEditOutcome.Declined => Declined(result.Name, DeclinedKind(result)),
+            // Its own arm (2026-10-13): the fallback below would read as a failure with no reason.
+            SkillEditOutcome.GlobalOff => GlobalSkillsOff,
             _ => CouldNot("write", result.Name, result.Detail),
         };
     }

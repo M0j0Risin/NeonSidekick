@@ -60,6 +60,12 @@ public enum SkillEditOutcome
     /// and the reflection ends there.
     /// </summary>
     Declined,
+
+    /// <summary>
+    /// The global root is switched off for this profile (2026-10-13, <c>Global skills</c>, <see cref="SkillRoots.GlobalOn"/>): nothing is
+    /// written there — a create, a move to or from it, a rename, delete or revert of a skill that lives there, an install into it.
+    /// </summary>
+    GlobalOff,
 }
 
 /// <summary>
@@ -116,7 +122,8 @@ public static class SkillEditor
     /// <summary>
     /// Where <paramref name="name"/> is already a skill (a folder holding <c>SKILL.md</c>), checked
     /// in precedence order; null when nowhere. The external root only while <paramref name="external"/>
-    /// says the catalog reads it — a skill there is invisible otherwise, and no reason to refuse.
+    /// says the catalog reads it — a skill there is invisible otherwise, and no reason to refuse. The global root only while the
+    /// roots read it (2026-10-13, <see cref="SkillRoots.GlobalOn"/>), for the same reason.
     /// </summary>
     public static SkillScope? Find(SkillRoots roots, string name, bool external)
     {
@@ -124,7 +131,7 @@ public static class SkillEditor
         ArgumentNullException.ThrowIfNull(name);
         foreach (var scope in new[] { SkillScope.Profile, SkillScope.Global, SkillScope.External })
         {
-            if (scope == SkillScope.External && !external)
+            if ((scope == SkillScope.External && !external) || !roots.Reads(scope))
             {
                 continue;
             }
@@ -147,6 +154,12 @@ public static class SkillEditor
         ArgumentNullException.ThrowIfNull(description);
         ArgumentNullException.ThrowIfNull(instructions);
         name = name.Trim();
+        if (roots.Hides(scope))
+        {
+            // The global root switched off for this profile (2026-10-13): nothing new goes there.
+            return new SkillEditResult(SkillEditOutcome.GlobalOff, name, scope);
+        }
+
         if (!SkillFrontmatter.IsValidName(name))
         {
             return new SkillEditResult(SkillEditOutcome.BadName, name, scope);
@@ -181,7 +194,9 @@ public static class SkillEditor
     /// A new description, new instructions or both for an existing skill. When the named root has no
     /// such skill the one in the other writable root is changed instead (the result's scope says which);
     /// a skill in the external folder alone is refused. A file whose frontmatter cannot be read is
-    /// rewritten only when both are given (its other lines are lost then).
+    /// rewritten only when both are given (its other lines are lost then). With the global root switched off for this profile
+    /// (2026-10-13, <see cref="SkillRoots.GlobalOn"/>) a global <paramref name="scope"/> is read as the profile's — an update's scope is
+    /// only a first guess, and a global skill the profile cannot see answers <see cref="SkillEditOutcome.Missing"/> like any other.
     /// </summary>
     /// <param name="external">Whether the external root is read: a skill only there answers <see cref="SkillEditOutcome.ExternalReadOnly"/>, not <see cref="SkillEditOutcome.Missing"/>.</param>
     public static SkillEditResult Update(SkillRoots roots, SkillScope scope, string name, string? description, string? instructions, bool external)
@@ -189,6 +204,8 @@ public static class SkillEditor
         ArgumentNullException.ThrowIfNull(roots);
         ArgumentNullException.ThrowIfNull(name);
         name = name.Trim();
+        // Before the root is read (2026-10-13, the review's finding): a global scope went straight to the global file.
+        scope = Visible(roots, scope);
         if (!SkillFrontmatter.IsValidName(name))
         {
             return new SkillEditResult(SkillEditOutcome.BadName, name, scope);
@@ -264,6 +281,12 @@ public static class SkillEditor
         return written.Outcome == SkillEditOutcome.Updated ? written with { Previous = Kept(text), Existed = true } : written;
     }
 
+    /// <summary>
+    /// <paramref name="scope"/> as an update or a file action reads it (2026-10-13): the profile's in place of a global root this profile
+    /// has switched off, so the write can only land in a root the profile sees — a hidden global skill is <see cref="SkillEditOutcome.Missing"/>.
+    /// </summary>
+    private static SkillScope Visible(SkillRoots roots, SkillScope scope) => roots.Hides(scope) ? SkillScope.Profile : scope;
+
     /// <summary>A replaced text as a revision keeps it: null past <see cref="SkillRecordStore.MaxRevisionChars"/>.</summary>
     private static string? Kept(string? text) => text is null || text.Length > SkillRecordStore.MaxRevisionChars ? null : text;
 
@@ -283,6 +306,12 @@ public static class SkillEditor
         if (scope == SkillScope.External)
         {
             return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, name, SkillScope.External);
+        }
+
+        if (roots.Hides(scope))
+        {
+            // The global root switched off for this profile (2026-10-13): a revert there is refused like any write.
+            return new SkillEditResult(SkillEditOutcome.GlobalOff, name, scope);
         }
 
         if (SkillLock.IsLocked(directory))
@@ -389,6 +418,8 @@ public static class SkillEditor
         ArgumentNullException.ThrowIfNull(time);
         name = name.Trim();
         string relative = path.Trim();
+        // As Update reads it (2026-10-13): a global scope is the profile's while this profile has the global root switched off.
+        scope = Visible(roots, scope);
         if (!SkillFrontmatter.IsValidName(name))
         {
             return new SkillEditResult(SkillEditOutcome.BadName, name, scope);
@@ -496,6 +527,12 @@ public static class SkillEditor
             return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, skill.Name, SkillScope.External);
         }
 
+        if (roots.Hides(skill.Scope) || roots.Hides(to))
+        {
+            // The global root switched off for this profile (2026-10-13): nothing moves into it or out of it.
+            return new SkillEditResult(SkillEditOutcome.GlobalOff, skill.Name, roots.Hides(to) ? to : skill.Scope);
+        }
+
         if (SkillLock.IsLocked(skill.Directory))
         {
             return new SkillEditResult(SkillEditOutcome.Locked, skill.Name, skill.Scope);
@@ -587,6 +624,12 @@ public static class SkillEditor
             return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, skill.Name, SkillScope.External);
         }
 
+        if (roots.Hides(skill.Scope))
+        {
+            // A skill shown before the global root was switched off (2026-10-13): this profile no longer deletes it.
+            return new SkillEditResult(SkillEditOutcome.GlobalOff, skill.Name, skill.Scope);
+        }
+
         if (SkillLock.IsLocked(skill.Directory))
         {
             return new SkillEditResult(SkillEditOutcome.Locked, skill.Name, skill.Scope);
@@ -635,6 +678,12 @@ public static class SkillEditor
         if (skill.Scope == SkillScope.External)
         {
             return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, skill.Name, SkillScope.External);
+        }
+
+        if (roots.Hides(skill.Scope))
+        {
+            // A skill shown before the global root was switched off (2026-10-13): this profile no longer renames it.
+            return new SkillEditResult(SkillEditOutcome.GlobalOff, skill.Name, skill.Scope);
         }
 
         if (SkillLock.IsLocked(skill.Directory))

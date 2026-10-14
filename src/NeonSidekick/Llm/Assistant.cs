@@ -659,9 +659,10 @@ public sealed class Assistant
     /// is on) puts the list into the memory section as under <paramref name="tools"/> false, since no opening call carries it;
     /// the third (2026-09-20) is a whole group: <paramref name="timers"/> false (no timer tool offered — headless, or the
     /// three switched off) drops <see cref="TimerRule"/>. With <paramref name="save"/> false (<c>Memory mode</c> read-only, 2026-10-04)
-    /// the memory directive loses its save sentences (<see cref="MemoryPrompt.ReadOnlyDirective"/>).
+    /// the memory directive loses its save sentences (<see cref="MemoryPrompt.ReadOnlyDirective"/>). With <paramref name="globalSkills"/>
+    /// false (2026-10-13, the profile's <c>Global skills</c> off) the skills block names no global scope (<see cref="Skills.SkillsPrompt.EditorSentenceProfileOnly"/>).
     /// </summary>
-    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool save = true, bool sqliteWrite = false, ServerWrites serverWrites = ServerWrites.None, bool images = false, bool advisors = false, bool shopping = false)
+    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool save = true, bool sqliteWrite = false, ServerWrites serverWrites = ServerWrites.None, bool images = false, bool advisors = false, bool shopping = false, bool globalSkills = true)
     {
         bool customPersona = !string.IsNullOrWhiteSpace(persona);
         bool customRules = !string.IsNullOrWhiteSpace(operatingRules);
@@ -679,7 +680,7 @@ public sealed class Assistant
 
         if (tools && skills is not null)
         {
-            sb.Append("\n\n").Append(Skills.SkillsPrompt.Section(skills));
+            sb.Append("\n\n").Append(Skills.SkillsPrompt.Section(skills, globalSkills));
         }
 
         // Plan mode's directive (2026-09-26, PlanText.Directive): after the skills, apart from the rules so a custom

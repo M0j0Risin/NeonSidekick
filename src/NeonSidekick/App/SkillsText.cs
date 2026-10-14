@@ -324,8 +324,9 @@ public static class SkillsText
 
     /// <summary>
     /// The Offered tab's sub-tabs (2026-10-10, the user's ask: a filter for the profile's skills or the global ones), null standing for
-    /// <see cref="AllSubTitle"/>: all, profile and global always, external after them while a listed or shadowed skill is one; none while
-    /// the skills are off or none is installed, the tab then a plain one with no second strip.
+    /// <see cref="AllSubTitle"/>: all and profile always, global while the profile reads it (2026-10-13, <c>Global skills</c>), external
+    /// after them while a listed or shadowed skill is one; none while the skills are off or none is installed, the tab then a plain one
+    /// with no second strip.
     /// </summary>
     public static IReadOnlyList<SkillScope?> ScopeTabs(SkillsFacts facts)
     {
@@ -335,7 +336,13 @@ public static class SkillsText
             return [];
         }
 
-        var tabs = new List<SkillScope?> { null, SkillScope.Profile, SkillScope.Global };
+        // No global sub-tab while the profile has its global root off (2026-10-13, Global skills): nothing of it is listed.
+        var tabs = new List<SkillScope?> { null, SkillScope.Profile };
+        if (facts.Roots.GlobalOn)
+        {
+            tabs.Add(SkillScope.Global);
+        }
+
         if (facts.Skills.Concat(facts.Shadowed).Any(s => s.Scope == SkillScope.External))
         {
             tabs.Add(SkillScope.External);

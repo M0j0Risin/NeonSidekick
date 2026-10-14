@@ -1069,4 +1069,21 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(Lead(ansiOn.Output, "Clock"), Lead(dimmed, "Memory"));
         Assert.NotEqual(Lead(ansiOn.Output, "save_memory"), Lead(dimmed, "save_memory"));   // the rows under it still dim
     }
+
+    /// <summary>Global skills off (2026-10-13): the Skills section's status says so beside the external count, and its body is the prompt's, the sentence naming no global scope.</summary>
+    [Fact]
+    public void Skills_GlobalOff_TheStatusSaysSo_AndTheBodyIsThePromptsOwn()
+    {
+        var haiku = new Skill("haiku", "Writes haiku. Use when asked for one.", SkillScope.Profile, @"D:\home\profiles\default\skills\haiku");
+        var shared = new Skill("deploy", "Deploys the site.", SkillScope.External, @"C:\Users\x\.agents\skills\deploy");
+        var facts = Facts(catalog: [haiku, shared]) with { GlobalSkills = false };
+
+        var sections = SystemPromptSummary.PromptSections(facts);
+
+        Assert.Equal("Skills — on, 2 skills (1 external, global off)", sections[4].Heading);
+        Assert.Equal(SkillsPrompt.Section([haiku, shared], global: false), sections[4].Body);
+        Assert.Equal("Skills — on, none installed (global off)", Headings(Facts(catalog: []) with { GlobalSkills = false })[4]);
+        Assert.Equal(Assistant.SystemPrompt(false, [], skills: [haiku, shared], globalSkills: false), SystemPromptSummary.SystemPrompt(facts));
+        Assert.Contains(SkillsPrompt.EditorSentenceProfileOnly, SystemPromptSummary.SystemPrompt(facts), StringComparison.Ordinal);
+    }
 }

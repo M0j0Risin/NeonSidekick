@@ -73,6 +73,11 @@ internal sealed partial class ChatScreen
                 deleted.Add(record.Folder);
                 DiagnosticLog.Info(SkillCatalog.Category, SkillRecordText.PurgedLogLine(record));
             }
+            else if (result.Outcome == SkillEditOutcome.GlobalOff)
+            {
+                // Global skills went off between the list and the yes (2026-10-13): the global skill is left as it is, said so.
+                _transcript.Notice(SkillRecordText.GlobalOffNotice(record.Name));
+            }
             else
             {
                 failed++;

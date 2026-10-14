@@ -46,8 +46,18 @@ public sealed class LoadSkillTool : AIFunction
         _only = only is null ? null : new HashSet<string>(only, StringComparer.OrdinalIgnoreCase);
     }
 
-    /// <summary>The catalog's skills it serves, in the catalog's order.</summary>
-    private IEnumerable<Skill> Offered => _only is null ? _catalog.Skills : _catalog.Skills.Where(s => _only.Contains(s.Name));
+    /// <summary>
+    /// The catalog's skills it serves, in the catalog's order: none of a root the live roots no longer read (2026-10-13, <c>Global skills</c>
+    /// switched off mid-reply, before the next turn's scan drops them), so neither a load nor the unknown-name list offers one.
+    /// </summary>
+    private IEnumerable<Skill> Offered
+    {
+        get
+        {
+            var roots = _catalog.Roots;
+            return _catalog.Skills.Where(s => roots.Reads(s.Scope) && (_only is null || _only.Contains(s.Name)));
+        }
+    }
 
     public override string Name => ToolName;
 
@@ -98,7 +108,7 @@ public sealed class LoadSkillTool : AIFunction
         }
 
         var skill = _catalog.Find(name);
-        if (skill is null || (_only is not null && !_only.Contains(skill.Name)))
+        if (skill is null || (_only is not null && !_only.Contains(skill.Name)) || !_catalog.Roots.Reads(skill.Scope))
         {
             return SkillText.Unknown(name, Offered.Select(s => s.Name).ToList());
         }

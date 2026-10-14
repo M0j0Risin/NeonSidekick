@@ -86,6 +86,45 @@ public sealed class SkillEditorTool : AIFunction
         }
         """);
 
+    // The two schemas while the profile has Global skills off (2026-10-13): the scope enum is the profile alone, so the model is never
+    // offered a root this profile cannot see. The editor reads a global scope as the profile's anyway; a create is refused.
+    private static readonly JsonElement ProfileSchema = ToolSchema.Parse(
+        """
+        {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["create", "update"], "description": "create writes a new skill (the name must not be a skill in any folder yet); update changes an existing one's description, instructions or both, wherever it lives." },
+            "scope": { "type": "string", "enum": ["profile"], "description": "Where a new skill goes: profile, this profile's skills. Optional; ignored for update, which changes the skill where it already is." },
+            "name": { "type": "string", "description": "The skill's name and folder: 1 to 64 lowercase letters, digits and hyphens (pdf-processing), not starting or ending with a hyphen." },
+            "description": { "type": "string", "description": "One or two sentences on what the skill does and when to use it, with the words a task would contain; at most 1,024 characters. Required for create." },
+            "instructions": { "type": "string", "description": "The skill's Markdown body: the steps to follow, examples, edge cases. Required for create; replaces the whole body on update." },
+            "summary": { "type": "string", "description": "One or two sentences on what you changed and why, for the user to read; never part of the skill. Optional." }
+          },
+          "required": ["action", "name"]
+        }
+        """);
+
+    private static readonly JsonElement ProfileFileSchema = ToolSchema.Parse(
+        """
+        {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["create", "update", "write_file", "edit_file"], "description": "create writes a new skill (the name must not be a skill in any folder yet); update changes an existing one's description, instructions or both, wherever it lives; write_file creates or replaces a supporting file of an existing skill (a mapping, examples, a script) with content; edit_file replaces old_text with new_text in one." },
+            "scope": { "type": "string", "enum": ["profile"], "description": "Where a new skill goes: profile, this profile's skills. Optional; ignored for the other actions, which work on the skill where it already is." },
+            "name": { "type": "string", "description": "The skill's name and folder: 1 to 64 lowercase letters, digits and hyphens (pdf-processing), not starting or ending with a hyphen." },
+            "description": { "type": "string", "description": "One or two sentences on what the skill does and when to use it, with the words a task would contain; at most 1,024 characters. Required for create." },
+            "instructions": { "type": "string", "description": "The skill's Markdown body: the steps to follow, examples, edge cases. Required for create; replaces the whole body on update." },
+            "path": { "type": "string", "description": "write_file / edit_file: the supporting file, relative to the skill folder (data/mapping.json), as load_skill lists it. Never SKILL.md; change that with update." },
+            "content": { "type": "string", "description": "write_file: the whole new content of the file." },
+            "old_text": { "type": "string", "description": "edit_file: the text to replace, copied from the file as load_skill shows it; it must occur exactly once unless replace_all is true. Small differences in spacing, indentation, quotes and dashes are tolerated." },
+            "new_text": { "type": "string", "description": "edit_file: the text to put in its place. Empty removes old_text." },
+            "replace_all": { "type": "boolean", "description": "edit_file: true replaces every occurrence of old_text. Default false: exactly one." },
+            "summary": { "type": "string", "description": "One or two sentences on what you changed and why, for the user to read; never part of the skill. Optional." }
+          },
+          "required": ["action", "name"]
+        }
+        """);
+
     private readonly Func<SkillRoots> _roots;
     private readonly Func<bool> _external;
     private readonly SkillFileAccess? _files;
@@ -134,7 +173,10 @@ public sealed class SkillEditorTool : AIFunction
     public const string FilesSentence =
         "A skill's supporting files (the ones load_skill lists beside its instructions) are kept current with write_file (the whole file) or edit_file (old_text to new_text), paths relative to the skill folder; the SKILL.md itself only through create and update.";
 
-    public override JsonElement JsonSchema => _files is null ? Schema : FileSchema;
+    /// <summary>The schema for the live roots (2026-10-13): the profile-only twins while the profile has <c>Global skills</c> off.</summary>
+    public override JsonElement JsonSchema => _roots().GlobalOn
+        ? (_files is null ? Schema : FileSchema)
+        : (_files is null ? ProfileSchema : ProfileFileSchema);
 
     /// <summary>
     /// The editor's result of the last call, for a host that runs the tool itself
@@ -163,9 +205,17 @@ public sealed class SkillEditorTool : AIFunction
         }
 
         // Blank is the profile; an update redirects to where the skill lives, so its scope is never refused.
+        var roots = _roots();
         if (!SkillScopes.TryParseWritable(scope, out var where) && create && !string.IsNullOrWhiteSpace(scope))
         {
-            return SkillText.BadScope(scope);
+            return SkillText.BadScope(scope, roots.GlobalOn);
+        }
+
+        // A new skill in the global root while this profile has it off (2026-10-13): refused before any ask. An update's scope is only
+        // a first guess, which the editor reads as the profile's (SkillEditor.Update).
+        if (create && roots.Hides(where))
+        {
+            return SkillText.GlobalSkillsOff;
         }
 
         // A reflection's update first passes its guard (2026-10-02): an instructions rewrite only over what its load served.
@@ -175,7 +225,6 @@ public sealed class SkillEditorTool : AIFunction
         }
 
         bool external = _external();
-        var roots = _roots();
         if (_confirm is not null && SkillEditor.Find(roots, name.Trim(), external) is var found && (create ? found is null : found is { } at && at != SkillScope.External))
         {
             // The ask (2026-10-12): a create for a free name, an update for a skill that is there; a call the editor would refuse anyway

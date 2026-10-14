@@ -270,7 +270,7 @@ The app itself, this side of the connection, in three tabs: Chat, Sessions and B
 | Botchat reading pause (s) | A reading pause after each reply when *TTS output* is off (0–30 s). A line you send ends the pause. | 5 |
 | Botchat tools enabled | Offers every bot the tools a turn of this chat would get, with the same approvals. Off, *Botchat limited tools* decides. | off |
 | Botchat limited tools | With *Botchat tools enabled* off, the tools the bots get (a checklist grouped as on `/tools`). None ticked: no tools. | empty |
-| Botchat skills enabled | Offers every bot `load_skill` over this profile's, the global and the external skills. Needs *Agent skills*. Off, *Botchat limited skills* decides. | off |
+| Botchat skills enabled | Offers every bot `load_skill` over this profile's, the global (while *Global skills* is on) and the external skills. Needs *Agent skills*. Off, *Botchat limited skills* decides. | off |
 | Botchat limited skills | With *Botchat skills enabled* off, the skills the bots may load (a checklist). None ticked: no skill tool. | empty |
 | Botchat memory enabled | Gives every bot memories (`save_memory`, `recall_memory`). Inside `/botchat` this overrides every profile's *Memory mode*. | on |
 | Botchat memory mode | Whose memories: `shared-parent` (the starting profile's) or `independent` (each bot's own). | `shared-parent` |
@@ -569,7 +569,7 @@ Voice input sets up in the background (🎙️ on the hint row).
 
 The loaded skills with their scope (`profile`, `global` or `external`), version, last change (`yyyy-MM-dd HH:mm`, local time: the later of the app's record and the SKILL.md's own write) and description, then any shadowed duplicates and skipped folders (with the reason). The second strip narrows the list to one scope. Enter on a skill can:
 
-* move it between the profile and global folders, or a profile skill into another profile's skills (`move`: pick the profile, then confirm), or rename it;
+* move it between the profile and global folders (while *Global skills* is on), or a profile skill into another profile's skills (`move`: pick the profile, then confirm), or rename it;
 * edit its `SKILL.md` in your editor;
 * revert it to a kept version (see [Skill history](#skill-history));
 * lock or unlock it (see [Locking a skill](#locking-a-skill)), shown as `🔒 v4`;
@@ -598,6 +598,7 @@ The loaded skills with their scope (`profile`, `global` or `external`), version,
 | Setting | What it does | Default |
 |---|---|---|
 | Agent skills | Lists the skills in the prompt and offers `load_skill` and `skill_editor`. Off also stops the project file being read. | on |
+| Global skills | Reads the global skills, the home folder's `skills` folder that every profile shares. Off, this profile sees and writes only its own: the global skills aren't listed, offered, loaded or #-mentioned, `skill_editor` and reflection keep to the profile scope, `/skills add` has no global choice (`--global` is refused), and moves and purges leave them alone. | on |
 | External skills (.agents\skills) | Also reads `%USERPROFILE%\.agents\skills` (`~/.agents/skills` on a Mac), read-only. | off |
 | Project file | Reads `NEON.md` (or `AGENTS.md`) in the working directory into the prompt as project notes. Needs *Agent skills*. | on |
 | Skill compact mode | `protected` keeps a loaded skill's instructions through a prune; `unprotected` prunes them like any tool result. | `protected` |
@@ -610,14 +611,14 @@ The loaded skills with their scope (`profile`, `global` or `external`), version,
 - **Sources:** search words (`/skills add pdf`) look it up on [skills.sh](https://skills.sh); `owner/repo` offers every skill in a GitHub repository and `owner/repo/skill` names one; a GitHub `tree/…` or `blob/…/SKILL.md` link narrows to a folder; any `https://…/*.zip` link is downloaded as is.
 - **Network:** *Web browser network mode* applies (nothing is fetched under `lan`); the *Web tools* switch doesn't.
 - **Preview first:** you see the description, source, file list and any scripts before installing. Unsafe paths and very large skills (over 200 files or 20 MB) are refused.
-- **Where it goes:** the profile's or the global `skills` folder, with a `.neon-source.json` recording where it came from. Bundled scripts run only through `run_command` and its approval.
+- **Where it goes:** the profile's or the global `skills` folder (the global one only while *Global skills* is on), with a `.neon-source.json` recording where it came from. Bundled scripts run only through `run_command` and its approval.
 - **Name collisions** are refused, except the same source installed again, which updates it in place.
 
 ### Skill records and purging unused skills
 
-`skills.db` in the home folder's `db\skills` records every global and profile skill: its scope, when it was created, last modified and last used. The app keeps it in step with the skill folders at every start and profile load. External skills are not recorded and never purged.
+`skills.db` in the home folder's `db\skills` records every global and profile skill: its scope, when it was created, last modified and last used. The app keeps it in step with the skill folders at every start and profile load. External skills are not recorded and never purged. A profile with *Global skills* off never adds, changes or removes a global skill's record; the next start or profile load in a profile with it on catches them up.
 
-`/skills purge list <age>` lists skills unused for that long; `/skills purge commit <age>` deletes them after a yes/no. The age is days (`30`) or a duration (`12h`, `1d 6h`). Only global skills and the loaded profile's count, and a global skill used in any profile counts as used.
+`/skills purge list <age>` lists skills unused for that long; `/skills purge commit <age>` deletes them after a yes/no. The age is days (`30`) or a duration (`12h`, `1d 6h`). Only global skills (while *Global skills* is on) and the loaded profile's count, and a global skill used in any profile counts as used.
 
 ### Skill history
 

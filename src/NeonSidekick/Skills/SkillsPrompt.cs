@@ -33,6 +33,21 @@ public static class SkillsPrompt
     public const string EditorSentence =
         "To keep a procedure for later sessions, or improve one, call " + SkillEditorTool.ToolName + ": the " + SkillScopes.ProfileName + " scope is for this profile only, " + SkillScopes.GlobalName + " for every profile.";
 
+    /// <summary>
+    /// <see cref="EditorSentence"/> while the profile has <c>Global skills</c> off (2026-10-13): no global scope named, since
+    /// <c>skill_editor</c> offers none. Pinned.
+    /// </summary>
+    public const string EditorSentenceProfileOnly =
+        "To keep a procedure for later sessions, or improve one, call " + SkillEditorTool.ToolName + "; a skill you write is kept for this profile.";
+
+    /// <summary><see cref="Directive"/> with <see cref="EditorSentenceProfileOnly"/> (2026-10-13).</summary>
+    public static readonly string DirectiveProfileOnly = LoadOnlyDirective + " " + EditorSentenceProfileOnly;
+
+    /// <summary><see cref="DirectiveWithoutSkills"/> with <see cref="EditorSentenceProfileOnly"/> (2026-10-13).</summary>
+    public static readonly string DirectiveWithoutSkillsProfileOnly =
+        "No skills are installed yet. A skill is a folder of instructions for a specific task, kept for later sessions. " +
+        EditorSentenceProfileOnly;
+
     /// <summary>A locked skill's line in its catalog entry (2026-10-07): the user locked it, and <c>skill_editor</c> refuses any change to it. Pinned.</summary>
     public const string LockedTag = "<locked>the user locked this skill: it can be loaded, not changed</locked>";
 
@@ -45,11 +60,16 @@ public static class SkillsPrompt
     public const string CatalogOpen = "<available_skills>";
     public const string CatalogClose = "</available_skills>";
 
-    /// <summary>The block: the directive, then (with any skill) a blank line and the catalog.</summary>
-    public static string Section(IReadOnlyList<Skill> skills)
+    /// <summary>
+    /// The block: the directive, then (with any skill) a blank line and the catalog. <paramref name="global"/> false (2026-10-13, the
+    /// profile's <c>Global skills</c> off, the scan's own <see cref="SkillCatalog.GlobalEnabled"/>) takes the profile-only directives.
+    /// </summary>
+    public static string Section(IReadOnlyList<Skill> skills, bool global = true)
     {
         ArgumentNullException.ThrowIfNull(skills);
-        return skills.Count == 0 ? DirectiveWithoutSkills : Directive + "\n\n" + Catalog(skills);
+        return skills.Count == 0
+            ? (global ? DirectiveWithoutSkills : DirectiveWithoutSkillsProfileOnly)
+            : (global ? Directive : DirectiveProfileOnly) + "\n\n" + Catalog(skills);
     }
 
     /// <summary>The load-only block (2026-09-27, the <c>/botchat</c> bots): <see cref="LoadOnlyDirective"/>, a blank line and the catalog. Only for a non-empty list.</summary>

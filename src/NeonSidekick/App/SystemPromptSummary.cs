@@ -72,6 +72,7 @@ namespace NeonSidekick.App;
 /// <param name="ImageTools">How many picture tools the next turn offers (none without codecs, the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.ImageRule"/> while any is.</param>
 /// <param name="ShoppingEnabled">The setting <c>Shopping tools</c> (2026-10-11).</param>
 /// <param name="ShoppingTools">How many shopping tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.ShoppingRule"/> while any is.</param>
+/// <param name="GlobalSkills">The profile's <c>Global skills</c> switch as the catalog's last scan read it (2026-10-13, <see cref="SkillCatalog.GlobalEnabled"/>): off, the skills block names no global scope and its status says <see cref="SystemPromptSummary.GlobalOffSuffix"/>.</param>
 /// <param name="PlanDirective">Plan mode's directive while planning (2026-09-26, <see cref="Plans.PlanText.Directive"/>), else null: its own section, after the skills.</param>
 public sealed record SystemPromptFacts(
     string? Persona,
@@ -137,7 +138,8 @@ public sealed record SystemPromptFacts(
     bool AdvisorsEnabled = false,
     int AdvisorTools = 0,
     bool ShoppingEnabled = false,
-    int ShoppingTools = 0)
+    int ShoppingTools = 0,
+    bool GlobalSkills = true)
 {
     /// <summary>Whether the rules carry <see cref="Assistant.ShoppingRule"/>: tools on, the switch on and a shopping tool offered (2026-10-11).</summary>
     public bool Shopping => ToolsEnabled && ShoppingEnabled && ShoppingTools > 0;
@@ -322,6 +324,9 @@ public static class SystemPromptSummary
     /// <summary>The tail of the Skills group, the skills section and the project notes while the setting <c>Agent skills</c> is off (2026-09-16). Pinned.</summary>
     public const string SkillsOffSuffix = "agent skills is off";
 
+    /// <summary>The Skills section's status note while the profile has <c>Global skills</c> off (2026-10-13), beside the external count. Pinned.</summary>
+    public const string GlobalOffSuffix = "global off";
+
     /// <summary>The Project notes row's reason while the toggle on <c>/skills</c>' Options tab is off (later on 2026-09-19; its Project tab until 2026-10-01). Pinned.</summary>
     public const string ProjectFileOffSuffix = "Project file is off on the Options tab of /skills";
 
@@ -483,9 +488,20 @@ public static class SystemPromptSummary
         {
             var skills = facts.Skills ?? [];
             int external = skills.Count(s => s.Scope == SkillScope.External);
-            string count = skills.Count == 0 ? "none installed"
-                : (skills.Count == 1 ? "1 skill" : $"{skills.Count.ToString(CultureInfo.InvariantCulture)} skills") + (external > 0 ? $" ({external.ToString(CultureInfo.InvariantCulture)} external)" : "");
-            sections.Add(new(SkillsLabel, $"on, {count}", SkillsPrompt.Section(skills)));
+            var notes = new List<string>(2);
+            if (external > 0)
+            {
+                notes.Add($"{external.ToString(CultureInfo.InvariantCulture)} external");
+            }
+
+            if (!facts.GlobalSkills)
+            {
+                notes.Add(GlobalOffSuffix);
+            }
+
+            string count = (skills.Count == 0 ? "none installed" : skills.Count == 1 ? "1 skill" : $"{skills.Count.ToString(CultureInfo.InvariantCulture)} skills")
+                + (notes.Count > 0 ? $" ({string.Join(", ", notes)})" : "");
+            sections.Add(new(SkillsLabel, $"on, {count}", SkillsPrompt.Section(skills, facts.GlobalSkills)));
         }
 
         // Plan mode's directive only while planning (2026-09-26), where the prompt carries it: after the skills, ahead of the voice.
@@ -553,7 +569,8 @@ public static class SystemPromptSummary
             serverWrites: facts.ServerWrites,
             images: facts.Images,
             advisors: facts.Advisors,
-            shopping: facts.Shopping);
+            shopping: facts.Shopping,
+            globalSkills: facts.GlobalSkills);
     }
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26): <see cref="PlanModeLabel"/> and <see cref="PlanModeStatus"/> as <see cref="SystemPromptSection.Heading"/> joins them. Pinned.</summary>

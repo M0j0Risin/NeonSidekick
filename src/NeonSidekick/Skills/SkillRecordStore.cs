@@ -629,15 +629,17 @@ public sealed class SkillRecordStore : IDisposable
 
     /// <summary>
     /// The newest event of <paramref name="actor"/> that wrote a skill (<see cref="SkillEventKinds.Written"/>) in <paramref name="profile"/>'s
-    /// view — every global skill and the profile's own — with the skill's row as it is now; null when there is none.
+    /// view — every global skill and the profile's own — with the skill's row as it is now; null when there is none. <paramref name="global"/>
+    /// false (2026-10-13, the profile's <c>Global skills</c> off) leaves the global skills out of the view inside the query, so an older
+    /// write of the profile's own is still found past a newer global one (a filter after <c>LIMIT 1</c> would lose it).
     /// </summary>
-    public SkillWriteMark? LastWrite(string profile, string actor)
+    public SkillWriteMark? LastWrite(string profile, string actor, bool global = true)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(actor);
         var events = ReadEvents(
             "SELECT e.id, e.skill_id, e.at, e.kind, e.actor, e.profile, e.session_id, e.errors_after, e.detail FROM skill_events e JOIN skills s ON s.id = e.skill_id " +
-            "WHERE e.actor = $actor AND e.kind IN ($created, $updated, $file) AND (s.scope = $global OR (s.scope = $profileScope AND s.profile = $profile)) ORDER BY e.at DESC, e.id DESC LIMIT 1",
+            "WHERE e.actor = $actor AND e.kind IN ($created, $updated, $file) AND (" + (global ? "s.scope = $global OR " : "") + "(s.scope = $profileScope AND s.profile = $profile)) ORDER BY e.at DESC, e.id DESC LIMIT 1",
             command =>
             {
                 command.Parameters.AddWithValue("$actor", actor);

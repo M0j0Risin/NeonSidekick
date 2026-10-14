@@ -1168,7 +1168,7 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Whether the <c>/botchat</c> bots get skills (2026-09-27, the user's ask): on, and with <see cref="AgentSkills"/> on,
-    /// every bot's prompt lists the skills the main chat sees — the starting profile's, the global ones and, with
+    /// every bot's prompt lists the skills the main chat sees — the starting profile's, the global ones while its <see cref="GlobalSkills"/> is on and, with
     /// <see cref="ExternalSkills"/> on, the external ones; never a bot's own profile's (the user's call: the parent's
     /// skills stand for the room) — and each bot is offered <c>load_skill</c>, never <c>skill_editor</c> (a bot must not
     /// write the parent's skills). Off (the default), <see cref="BotChatLimitedSkills"/> says. Read per reply, no reconnect.
@@ -1180,7 +1180,7 @@ public sealed class AppSettingsData
     /// The skills the <c>/botchat</c> bots and its picture prompt writer may load while <see cref="BotChatSkills"/> is off
     /// (2026-10-04, the user's ask; until then <c>BotChatPreloadedSkills</c>, whose skills were pasted into the prompts, and
     /// <c>BotChatSkillMode</c>, which said whose — both keys retired, no migration): names among the skills a botchat sees
-    /// (the starting profile's, the global and, with <see cref="ExternalSkills"/>, the external ones). With any, the skills
+    /// (the starting profile's, the global while <see cref="GlobalSkills"/> is on and, with <see cref="ExternalSkills"/>, the external ones). With any, the skills
     /// list and <c>load_skill</c> are offered for those skills alone; null or empty (the default), no skill tool. Needs
     /// <see cref="AgentSkills"/>. A name no longer installed is kept and skipped. Read per reply. The Botchat tab of
     /// <c>/settings</c>, a checklist. No variable.
@@ -1247,6 +1247,19 @@ public sealed class AppSettingsData
     /// <see cref="Memory"/>, no reconnect; the Options tab of <c>/skills</c>, first row. No variable.
     /// </summary>
     public bool AgentSkills { get; set; } = true;
+
+    /// <summary>
+    /// Whether this profile reads the global skills, <c>&lt;home&gt;\skills</c> (2026-10-13, the user's ask, name and default): on (the
+    /// default) as always; off, the profile sees only its own skills (and the external ones under <see cref="ExternalSkills"/>) — the
+    /// global ones are not listed, offered, loaded, #-mentioned or shadowing, and nothing this profile does writes them: <c>skill_editor</c>
+    /// and the reflection keep to the profile scope, <c>/skills add</c> has no global choice, the pane no move to global, and
+    /// <c>/skills purge</c> leaves them alone. The global rows of the shared <c>skills.db</c> are never added, changed or removed from
+    /// such a profile; the next reconcile in a profile with the switch on catches them up. Read live (<see cref="Skills.SkillRoots.For"/>),
+    /// no reconnect; a reflection decided before a flip follows the flip while its profile stays loaded. A global skill loaded before
+    /// the flip keeps its instructions in the history, as a disabled skill does. The <c>/botchat</c> bots follow the starting profile's
+    /// switch. The Options tab of <c>/skills</c>, under <see cref="AgentSkills"/>. No variable.
+    /// </summary>
+    public bool GlobalSkills { get; set; } = true;
 
     /// <summary>
     /// Whether the cross-client folder <c>%USERPROFILE%\.agents\skills</c> is scanned too

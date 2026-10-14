@@ -69,7 +69,7 @@ You:
 | `/print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape] \| reply \| printers` | Prints a file or the last reply, or lists the printers (see [Printing](TOOLS.md#printing)); *Print action policy* doesn't apply. On a Mac it prints through CUPS. No server needed. |
 | `/pdf <file> \| https://… \| reply [to=<out.pdf>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF in the working directory (see [Making PDFs](TOOLS.md#making-pdfs)); *Web browser network mode* still judges a web page. On a Mac only the `browser` engine works. No server needed. |
 | `/test [id \| reasoning \| structured \| long \| all \| history]` | Runs the [benchmark tests](COMMANDS.md#benchmark-tests): a `[notice]` per test, then the results table. Alone it lists the tests; `history` prints saved runs. The listing and `history` need no server; a run does. |
-| `/skills add <source> [--global \| --profile] [--yes]` | Installs an Agent Skill (see [Installing skills](SETTINGS.md#installing-skills)). Without `--yes` it only previews; several matches print as ids to type back. No server needed. |
+| `/skills add <source> [--global \| --profile] [--yes]` | Installs an Agent Skill (see [Installing skills](SETTINGS.md#installing-skills)). Without `--yes` it only previews; several matches print as ids to type back. `--global` is refused while *Global skills* is off. No server needed. |
 
 - Case doesn't matter and spaces around the line are ignored. `/exit`, `/new`, `/clear` and `/splash` must be alone on the
   line (`/new please` goes to the model as text).

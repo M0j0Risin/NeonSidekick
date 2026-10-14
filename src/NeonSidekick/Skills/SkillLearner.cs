@@ -362,6 +362,16 @@ public static class SkillLearner
         return lines;
     }
 
+    /// <summary>
+    /// <paramref name="roots"/> with the global root as <paramref name="globalOn"/> says at each call (2026-10-13): the decision's
+    /// switch, turned off by a later flip, never on again by one. Shared with the reflection's <see cref="ReflectionWriteGuard"/>.
+    /// </summary>
+    public static Func<SkillRoots> Live(SkillRoots roots, Func<bool>? globalOn)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        return globalOn is null ? () => roots : () => roots.GlobalOn && !globalOn() ? roots with { GlobalOn = false } : roots;
+    }
+
     /// <summary>The reflection over the last turns with no session evidence — the shape since 2026-09-17; see <see cref="RunAsync(Assistant, ReflectionMaterial, SkillRoots, bool, ReasoningEffort, CancellationToken, int, SessionEvidence?)"/>.</summary>
     public static Task<SkillLearnResult> RunAsync(Assistant assistant, IReadOnlyList<ChatMessage> turn, SkillRoots roots, bool external, string? focus, ReasoningEffort effort, CancellationToken cancellationToken, int maxRequests = DefaultMaxRequests) =>
         RunAsync(assistant, new ReflectionMaterial.Turn(turn, focus), roots, external, effort, cancellationToken, maxRequests, null);
@@ -381,18 +391,21 @@ public static class SkillLearner
     /// says; null = no usage lines. <paramref name="guard"/> (the same day): what the editor may write (<see cref="ReflectionWriteGuard"/>),
     /// its <c>load_skill</c> telling it each load; null = no guard. <paramref name="confirm"/> (2026-10-12, <c>Reflection confirm mode</c>): the
     /// editor's ask before each write (<see cref="SkillEditorTool"/>); a no ends the pass <see cref="SkillLearnOutcome.Declined"/>.
+    /// <paramref name="globalOn"/> (2026-10-13, the profile's <c>Global skills</c>): read at each use while the pass runs, so a flip off made
+    /// after the reflection was decided reaches its catalog, its editor and its guard (null: the decision's roots stand).
     /// </summary>
     public static async Task<SkillLearnResult> RunAsync(Assistant assistant, ReflectionMaterial material, SkillRoots roots, bool external, ReasoningEffort effort, CancellationToken cancellationToken, int maxRequests, SessionEvidence? sessions, SkillFileAccess? files = null, SkillRecords? records = null, ReflectionWriteGuard? guard = null,
-        Func<SkillProposal, CancellationToken, Task<bool>>? confirm = null)
+        Func<SkillProposal, CancellationToken, Task<bool>>? confirm = null, Func<bool>? globalOn = null)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(material);
         ArgumentNullException.ThrowIfNull(roots);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxRequests, 1);
 
-        var catalog = new SkillCatalog(() => roots);
+        var live = Live(roots, globalOn);
+        var catalog = new SkillCatalog(live);
         catalog.Scan(external);
-        var editor = new SkillEditorTool(() => roots, () => external, files, guard: guard, confirm: confirm);
+        var editor = new SkillEditorTool(live, () => external, files, guard: guard, confirm: confirm);
         var tools = new List<AIFunction>(3);
         if (catalog.Skills.Count > 0)
         {

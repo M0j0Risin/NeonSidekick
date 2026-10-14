@@ -134,6 +134,23 @@ public sealed class AppSettings : IDisposable
     public string ProfileSkillsDirectory => Path.Combine(ProfileDirectory, Skills.SkillRoots.DirectoryName);
 
     /// <summary>
+    /// The loaded profile's skills folder and its <see cref="AppSettingsData.GlobalSkills"/> switch, read together under one lock
+    /// (2026-10-13, the Global skills switch): <see cref="Skills.SkillRoots.For"/> builds every roots value from it, so a profile switch
+    /// never mixes one profile's folder with another's switch, and the roots, read at every records write and catalog scan, never
+    /// copy the whole <see cref="Current"/>.
+    /// </summary>
+    public (string ProfileSkills, bool GlobalSkills) SkillsView
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return (Path.Combine(Profiles.Directory(StorageDirectory, _profileName), Skills.SkillRoots.DirectoryName), _data.GlobalSkills);
+            }
+        }
+    }
+
+    /// <summary>
     /// The loaded profile's own splash folder, whose pictures stand in for the embedded set (<see cref="UI.SplashImages.FromDirectory"/>):
     /// <c>splash_images</c> under <see cref="ProfileImagesDirectory"/> since 2026-10-10 (the user's call), <c>splash</c> under
     /// <see cref="ProfileDirectory"/> until then.
@@ -837,6 +854,7 @@ public sealed class AppSettings : IDisposable
         SttWakePhrase = source.SttWakePhrase,
         SttWhisperModel = source.SttWhisperModel,
         AgentSkills = source.AgentSkills,
+        GlobalSkills = source.GlobalSkills,
         ExternalSkills = source.ExternalSkills,
         ProjectFile = source.ProjectFile,
         ReflectionAutoLearn = source.ReflectionAutoLearn,

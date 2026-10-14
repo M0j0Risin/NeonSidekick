@@ -75,7 +75,7 @@ public sealed class SkillCatalog
         _roots = roots ?? throw new ArgumentNullException(nameof(roots));
     }
 
-    /// <summary>The roots as of the last scan (or right now, before any).</summary>
+    /// <summary>The roots right now: read live at each call, so a profile switch or a flip of <c>Global skills</c> shows at once (the last scan's own value is <see cref="GlobalEnabled"/>).</summary>
     public SkillRoots Roots => _roots();
 
     /// <summary>The skills the model is offered, in precedence order then by folder name within a root; a disabled one never (2026-10-09, <see cref="Disabled"/>).</summary>
@@ -98,6 +98,12 @@ public sealed class SkillCatalog
 
     /// <summary>Whether the last scan read the external root.</summary>
     public bool ExternalEnabled { get; private set; }
+
+    /// <summary>
+    /// Whether the last scan read the global root (2026-10-13, the profile's <c>Global skills</c> switch): the value the scan itself
+    /// used, so the prompt's editor sentence never disagrees with the list it heads, whatever a flip did since.
+    /// </summary>
+    public bool GlobalEnabled { get; private set; } = true;
 
     /// <summary>Bumped when the set of offered names changes: <c>load_skill</c> rebuilds its schema off it.</summary>
     public int Version { get; private set; }
@@ -123,8 +129,8 @@ public sealed class SkillCatalog
     }
 
     /// <summary>
-    /// Rescans the roots — the profile's and the global one always, the external one when
-    /// <paramref name="external"/> — and replaces <see cref="Skills"/>, <see cref="Shadowed"/>
+    /// Rescans the roots — the profile's always, the global one while the roots read it (<see cref="SkillRoots.GlobalOn"/>,
+    /// 2026-10-13), the external one when <paramref name="external"/> — and replaces <see cref="Skills"/>, <see cref="Shadowed"/>
     /// and <see cref="Problems"/>. Never throws.
     /// </summary>
     public void Scan(bool external)
@@ -138,7 +144,7 @@ public sealed class SkillCatalog
 
         foreach (var scope in new[] { SkillScope.Profile, SkillScope.Global, SkillScope.External })
         {
-            if (scope == SkillScope.External && !external)
+            if ((scope == SkillScope.External && !external) || !roots.Reads(scope))
             {
                 continue;
             }
@@ -198,6 +204,7 @@ public sealed class SkillCatalog
             _shadowed = shadowed;
             _problems = problems;
             ExternalEnabled = external;
+            GlobalEnabled = roots.GlobalOn;
         }
     }
 

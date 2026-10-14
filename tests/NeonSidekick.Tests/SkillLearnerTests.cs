@@ -548,4 +548,46 @@ public class SkillLearnerTests : IDisposable
         Assert.Equal(SkillLearner.SessionsRequest(null), _client.Requests[0][^1].Text);
         Assert.Equal([SkillEditorTool.ToolName, SessionManagerTool.ToolName], _client.Options[0]!.Tools!.Select(t => t.Name));
     }
+
+    // ── Global skills (2026-10-13, the profile's switch) ────────────────────
+
+    /// <summary>A flip after the decision reaches the pass: a create with global is refused, an update of a global skill finds none, nothing global is written.</summary>
+    [Fact]
+    public async Task GlobalOff_AfterTheDecision_TheReflectionWritesNothingGlobal()
+    {
+        Put(_roots.Global, "deploy-x", "Deploys X.", "1. Old.");
+        string global = File.ReadAllText(Path.Combine(_roots.Global, "deploy-x", SkillCatalog.FileName));
+        var create = CreateArgs("deploy-y");
+        create[SkillEditorTool.ScopeArgument] = SkillScopes.GlobalName;
+        _client.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, create), FakeChatClient.Usage(100, 10));
+        _client.Enqueue(FakeChatClient.Call("r2", SkillEditorTool.ToolName, new Dictionary<string, object?>
+        {
+            [SkillEditorTool.ActionArgument] = SkillEditorTool.UpdateAction,
+            [SkillEditorTool.ScopeArgument] = SkillScopes.GlobalName,
+            [SkillEditorTool.NameArgument] = "deploy-x",
+            [SkillEditorTool.DescriptionArgument] = "Rewritten.",
+        }), FakeChatClient.Usage(100, 10));
+        _client.EnqueueText("nothing");
+        var turn = Turn(new ChatMessage(ChatRole.User, "deploy x"), ToolCall("c1", "read_file"), ToolResult("c1", "1: text"), new ChatMessage(ChatRole.Assistant, "Done."));
+
+        var result = await SkillLearner.RunAsync(_assistant, new ReflectionMaterial.Turn(turn, null), _roots, false, ReasoningEffort.None, CancellationToken.None, SkillLearner.DefaultMaxRequests, null, globalOn: () => false);
+
+        Assert.Equal(SkillLearnOutcome.Nothing, result.Outcome);
+        Assert.Null(result.Edit);
+        Assert.False(Directory.Exists(Path.Combine(_roots.Global, "deploy-y")));
+        Assert.Equal(global, File.ReadAllText(Path.Combine(_roots.Global, "deploy-x", SkillCatalog.FileName)));
+    }
+
+    /// <summary>The live roots: the decision's switch, turned off by a later flip, never turned on by one; no func, the decision's roots.</summary>
+    [Fact]
+    public void Live_FollowsAFlipOff_NeverOn()
+    {
+        bool on = true;
+        var live = SkillLearner.Live(_roots, () => on);
+        Assert.True(live().GlobalOn);
+        on = false;
+        Assert.False(live().GlobalOn);
+        Assert.False(SkillLearner.Live(_roots with { GlobalOn = false }, () => true)().GlobalOn);
+        Assert.Same(_roots, SkillLearner.Live(_roots, null)());
+    }
 }

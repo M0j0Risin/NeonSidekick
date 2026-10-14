@@ -21193,7 +21193,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Matches(@"  · Offered\n  ·   haiku  profile  v1  " + SkillChanged + @"Writes haiku\. Use when asked for one\.\n  · " + Regex.Escape(SkillsText.LoadedTitle) + @"\n  ·   " + Regex.Escape(SkillsText.NoneLoadedLine) + @"\n  · Reflection\n", output);   // Reflection right after Offered since 2026-09-22; the loaded skills between them since 2026-10-12
-        Assert.Contains("  · Options\n  ·   Agent skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n", output);   // the Options section last (2026-09-22; between Offered and Reflection from 2026-09-19), the Project file row among it since 2026-10-01
+        Assert.Contains("  · Options\n  ·   Agent skills: on\n  ·   Global skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n", output);   // Global skills under Agent skills since 2026-10-13   // the Options section last (2026-09-22; between Offered and Reflection from 2026-09-19), the Project file row among it since 2026-10-01
         Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection include sessions: off\n  ·   Reflection cooldown (min): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection yield to turns: off\n  ·   Reflection confirm mode: none\n  ·   Reflection edit supporting files: off\n  ·   Reflection edit downloaded skills: allow-and-mark\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
         Assert.DoesNotContain("  · Project\n", output);   // the Project section, the toggle row alone from later on 2026-09-19, went on 2026-10-01
         Assert.DoesNotContain("Roots", output);
@@ -21213,7 +21213,8 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Tab);   // Reflection (the reflection's rows, 2026-09-19); Tab past the Offered scopes since 2026-10-10
         _console.Input.PushKey(Keys.Tab);   // Options (the settings rows, 2026-09-19; last since 2026-09-22)
         _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);    // Project file (its own Project tab until 2026-10-01)
+        _console.Input.PushKey(Keys.Down);
+        _console.Input.PushKey(Keys.Down);    // Project file (its own Project tab until 2026-10-01; third since Global skills, 2026-10-13)
         _console.Input.PushKey(Keys.Enter);   // its page
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Enter);   // off
@@ -21226,7 +21227,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("Roots", output);
         Assert.False(_settings.Current.ProjectFile);
         Assert.Contains("\n▸ Reflection (auto-learn)            off\n  Reflection reasoning               none\n", output);   // the Reflection tab, padded to its own column (35 since the downloaded skills row's longer name, 2026-10-12) (the fixture turns the auto-learn off)
-        Assert.Contains("\n▸ Agent skills                      on\n  " + SettingsMenu.ExternalSkillsName + "  off\n  Project file                      on\n", output);   // the Options tab, the rows padded to its own column
+        Assert.Contains("\n▸ Agent skills                      on\n  Global skills                     on\n  " + SettingsMenu.ExternalSkillsName + "  off\n  Project file                      on\n", output);   // the Options tab, the rows padded to its own column
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
         Assert.Matches(@"\n▸ haiku  profile  v1  " + SkillChanged + @"Writes haiku\. Use when asked for one\.\n", output);
         Assert.Contains("\n" + SkillsMenu.LoadedKeys, output);   // the trailer follows on the hint row

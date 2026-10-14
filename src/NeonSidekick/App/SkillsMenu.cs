@@ -74,6 +74,16 @@ internal sealed class SkillsMenu
     /// <summary>The scope page's two root rows, in the roots' precedence order; rename, edit and <see cref="DeleteWord"/> after them.</summary>
     public static readonly IReadOnlyList<SkillScope> ScopeRows = [SkillScope.Profile, SkillScope.Global];
 
+    /// <summary>
+    /// The scope page's root rows for <paramref name="roots"/> (2026-10-13): <see cref="ScopeRows"/>, or the profile's alone while the
+    /// profile has <c>Global skills</c> off — no move to global. The page counts every later row from this list.
+    /// </summary>
+    public static IReadOnlyList<SkillScope> ScopeRowsFor(SkillRoots roots)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        return roots.WritableScopes;
+    }
+
     private readonly Func<SkillsFacts> _facts;
     private readonly AppSettings _settings;
     private readonly SettingsMenu _menu;
@@ -595,7 +605,14 @@ internal sealed class SkillsMenu
                     var shown = pick.Tab == page.Tab ? page : MenuPage.Tabbed(SkillsText.Label, page.Tabs!, pick.Tab, OtherKeys) with { Footer = page.Footer };
                     if (pick.Toggle ? await _menu.FlipAsync(field, cancellationToken).ConfigureAwait(false) : await _menu.EditAsync(field, saved, shown, cursor, cancellationToken).ConfigureAwait(false))
                     {
+                        var scopesBefore = SkillsText.ScopeTabs(facts);
                         facts = _facts();   // the skills switch empties the Offered tab
+                        if (!scopesBefore.SequenceEqual(SkillsText.ScopeTabs(facts)))
+                        {
+                            // The strip changed (2026-10-13: Global skills flipped, the global sub-tab gone or back): the remembered
+                            // sub-tab is a position, so it would land on another scope; back to all.
+                            sub = 0;
+                        }
                     }
 
                     continue;
@@ -637,7 +654,17 @@ internal sealed class SkillsMenu
     private async Task<bool> PickScopeAsync(Skill skill, SkillsFacts facts, CancellationToken cancellationToken)
     {
         var roots = facts.Roots;
-        var rows = ScopeRows.Select(scope => ScopeRow(scope, roots)).ToList();
+        if (roots.Hides(skill.Scope))
+        {
+            // A global skill from a list read before Global skills went off (2026-10-13): no page — every act on it is refused below
+            // anyway — and the list again, without it.
+            Sink.Notice(SkillRecordText.GlobalOffNotice(skill.Name));
+            return true;
+        }
+
+        // The page's own root rows (2026-10-13): one while Global skills is off, and every index below counts from them.
+        var scopeRows = ScopeRowsFor(roots);
+        var rows = scopeRows.Select(scope => ScopeRow(scope, roots)).ToList();
         // The move to another profile (2026-10-13, the user's ask): a profile skill's alone, after the two roots; every row its own index since.
         int moveRow = skill.Scope == SkillScope.Profile ? rows.Count : -1;
         if (moveRow >= 0)
@@ -666,7 +693,7 @@ internal sealed class SkillsMenu
         rows.Add(DeleteRow);
 
         var page = new MenuPage(ScopeTitle(skill.Name), rows, ScopeKeys) { Caption = _usage(skill.Name) };
-        var picked = await _pane.PickAsync(page, IndexOf(ScopeRows, skill.Scope), cancellationToken).ConfigureAwait(false);
+        var picked = await _pane.PickAsync(page, Math.Max(0, IndexOf(scopeRows, skill.Scope)), cancellationToken).ConfigureAwait(false);
         if (picked is not { Row: var row })
         {
             return false;
@@ -684,7 +711,7 @@ internal sealed class SkillsMenu
 
         // A locked skill (2026-10-07): rename, move and delete refused before any question; edit (the user's own editor) and the
         // revert list (its d and c) still open.
-        bool changes = row == renameRow || row == moveRow || row == deleteRow || (row < ScopeRows.Count && ScopeRows[row] != skill.Scope);
+        bool changes = row == renameRow || row == moveRow || row == deleteRow || (row < scopeRows.Count && scopeRows[row] != skill.Scope);
         if (changes && skill.Locked)
         {
             Sink.Notice(SkillRecordText.LockedNotice(skill.Name));
@@ -730,13 +757,21 @@ internal sealed class SkillsMenu
                 case SkillEditOutcome.Missing:
                     Sink.Error(MissingError(skill.Name));
                     return true;
+                case SkillEditOutcome.GlobalOff:
+                    Sink.Notice(SkillRecordText.GlobalOffNotice(skill.Name));   // 2026-10-13: the list again, without it
+                    return true;
                 default:
                     Sink.Error(DeleteFailedError(deleted.Detail));
                     return false;
             }
         }
 
-        var to = ScopeRows[row];
+        if (row >= scopeRows.Count)
+        {
+            return false;
+        }
+
+        var to = scopeRows[row];
         if (to == skill.Scope)
         {
             Sink.Notice(SettingsMenu.UnchangedNotice);
@@ -769,6 +804,9 @@ internal sealed class SkillsMenu
                 return true;
             case SkillEditOutcome.Missing:
                 Sink.Error(MissingError(skill.Name));
+                return true;
+            case SkillEditOutcome.GlobalOff:
+                Sink.Notice(SkillRecordText.GlobalOffNotice(skill.Name));   // 2026-10-13
                 return true;
             default:
                 Sink.Error(MoveFailedError(moved.Detail));
@@ -1024,6 +1062,9 @@ internal sealed class SkillsMenu
             case SkillEditOutcome.BadName:
                 Sink.Error(RenameEmptyError);
                 return false;
+            case SkillEditOutcome.GlobalOff:
+                Sink.Notice(SkillRecordText.GlobalOffNotice(skill.Name));   // 2026-10-13
+                return true;
             default:
                 Sink.Error(RenameFailedError(renamed.Detail));
                 return renamed.Outcome != SkillEditOutcome.Unparseable;   // a failed write after the move: the list shows the renamed folder

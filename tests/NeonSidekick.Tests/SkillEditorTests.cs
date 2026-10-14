@@ -433,4 +433,75 @@ public class SkillEditorTests : IDisposable
         Assert.EndsWith(Path.Combine(".agents", "skills"), SkillRoots.DefaultExternalDirectory());
         Assert.True(Path.IsPathRooted(SkillRoots.DefaultExternalDirectory()));
     }
+
+    // ── Global skills (2026-10-13, the profile's switch) ────────────────────
+
+    /// <summary>The roots with the profile's Global skills off.</summary>
+    private SkillRoots Off => _roots with { GlobalOn = false };
+
+    /// <summary>The review's finding: an update naming global used to go straight to the global file. Off, it is read as the profile's.</summary>
+    [Fact]
+    public void GlobalOff_AnUpdateNamingGlobal_NeverReachesTheGlobalFile()
+    {
+        Put(SkillScope.Global, "haiku", "The global one.", "global body");
+        string global = File.ReadAllText(FileOf(SkillScope.Global, "haiku"));
+
+        var hidden = SkillEditor.Update(Off, SkillScope.Global, "haiku", null, "Rewritten.", external: false);
+
+        Assert.Equal((SkillEditOutcome.Missing, SkillScope.Profile), (hidden.Outcome, hidden.Scope));   // a skill the profile cannot see
+        Assert.Equal(global, File.ReadAllText(FileOf(SkillScope.Global, "haiku")));
+        Assert.Null(SkillEditor.Find(Off, "haiku", external: false));
+        Assert.Equal(SkillScope.Global, SkillEditor.Find(_roots, "haiku", external: false));
+
+        Put(SkillScope.Profile, "haiku", "The profile's.", "profile body");
+        var twin = SkillEditor.Update(Off, SkillScope.Global, "haiku", null, "Rewritten.", external: false);
+
+        Assert.Equal((SkillEditOutcome.Updated, SkillScope.Profile), (twin.Outcome, twin.Scope));
+        Assert.Contains("Rewritten.", File.ReadAllText(FileOf(SkillScope.Profile, "haiku")));
+        Assert.Equal(global, File.ReadAllText(FileOf(SkillScope.Global, "haiku")));
+    }
+
+    /// <summary>The file actions read a global scope the same way (the tool always passes the profile's; this is the editor's own rule).</summary>
+    [Fact]
+    public void GlobalOff_AFileActionNamingGlobal_IsReadAsTheProfiles()
+    {
+        Put(SkillScope.Global, "haiku");
+        var hidden = SkillEditor.WriteFile(Off, SkillScope.Global, "haiku", "notes.md", "text", external: false, TimeProvider.System);
+        Assert.Equal(SkillEditOutcome.Missing, hidden.Outcome);
+        Assert.Equal(SkillEditOutcome.Missing, SkillEditor.EditFile(Off, SkillScope.Global, "haiku", "notes.md", "a", "b", replaceAll: false, external: false, TimeProvider.System).Outcome);
+        Assert.False(File.Exists(Path.Combine(_roots.Global, "haiku", "notes.md")));
+
+        Put(SkillScope.Profile, "haiku");
+        var twin = SkillEditor.WriteFile(Off, SkillScope.Global, "haiku", "notes.md", "text", external: false, TimeProvider.System);
+
+        Assert.Equal((SkillEditOutcome.FileWritten, SkillScope.Profile), (twin.Outcome, twin.Scope));
+        Assert.True(File.Exists(Path.Combine(_roots.Profile, "haiku", "notes.md")));
+        Assert.False(File.Exists(Path.Combine(_roots.Global, "haiku", "notes.md")));
+    }
+
+    /// <summary>A create there, a move into or out of it, and a rename, delete or revert of a skill read before the flip: each refused, nothing moved.</summary>
+    [Fact]
+    public void GlobalOff_EveryWriteIntoOrOutOfTheGlobalRoot_IsRefused_AndNothingMoves()
+    {
+        Put(SkillScope.Global, "haiku");
+        Put(SkillScope.Profile, "pdf");
+        var global = Scanned(SkillScope.Global, "haiku");   // read while the switch was on: a pane left open
+        var profile = Scanned(SkillScope.Profile, "pdf");
+        string text = File.ReadAllText(FileOf(SkillScope.Global, "haiku"));
+
+        Assert.Equal(SkillEditOutcome.GlobalOff, SkillEditor.Create(Off, SkillScope.Global, "fresh", "d", "i", external: false).Outcome);
+        Assert.Equal(SkillEditOutcome.GlobalOff, SkillEditor.Move(Off, profile, SkillScope.Global).Outcome);
+        Assert.Equal(SkillEditOutcome.GlobalOff, SkillEditor.Move(Off, global, SkillScope.Profile).Outcome);
+        Assert.Equal(SkillEditOutcome.GlobalOff, SkillEditor.Rename(Off, global, "renamed").Outcome);
+        Assert.Equal(SkillEditOutcome.GlobalOff, SkillEditor.Delete(Off, global).Outcome);
+        Assert.Equal(SkillEditOutcome.GlobalOff, SkillEditor.Restore(Off, SkillScope.Global, global.Directory, global.FolderName, SkillCatalog.FileName, "changed").Outcome);
+
+        Assert.False(Directory.Exists(Path.Combine(_roots.Global, "fresh")));
+        Assert.False(Directory.Exists(Path.Combine(_roots.Global, "pdf")));
+        Assert.False(Directory.Exists(Path.Combine(_roots.Global, "renamed")));
+        Assert.True(File.Exists(FileOf(SkillScope.Profile, "pdf")));
+        Assert.Equal(text, File.ReadAllText(FileOf(SkillScope.Global, "haiku")));
+        Assert.Equal(SkillText.GlobalSkillsOff, SkillText.Edited(new SkillEditResult(SkillEditOutcome.GlobalOff, "haiku", SkillScope.Global)));   // its own sentence, not the fallback
+        Assert.Equal(SkillEditOutcome.Created, SkillEditor.Create(Off, SkillScope.Profile, "fresh", "d", "i", external: false).Outcome);   // the profile's as ever
+    }
 }

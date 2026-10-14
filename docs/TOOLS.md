@@ -772,7 +772,7 @@ Under *Agent skills*.
 | Tool | Arguments | What it does |
 |---|---|---|
 | `load_skill` | `name, file?` | Loads a skill's instructions (the list is in the system prompt), or one of its files, up to 64,000 characters. Offered only while a skill is installed; never a skill you [disabled](SETTINGS.md#disabling-a-skill). |
-| `skill_editor` | `action, scope?, name, description?, instructions?, path?, content?, old_text?, new_text?, replace_all?, summary?` | `create` or `update` a skill under `profile` (default) or `global`. `write_file` writes a supporting file and `edit_file` swaps `old_text` for `new_text`; `path` is relative to the skill folder. Never edits external skills or one you [locked](SETTINGS.md#locking-a-skill) or [disabled](SETTINGS.md#disabling-a-skill), and never deletes. |
+| `skill_editor` | `action, scope?, name, description?, instructions?, path?, content?, old_text?, new_text?, replace_all?, summary?` | `create` or `update` a skill under `profile` (default) or `global` (offered only while *Global skills* is on). `write_file` writes a supporting file and `edit_file` swaps `old_text` for `new_text`; `path` is relative to the skill folder. Never edits external skills or one you [locked](SETTINGS.md#locking-a-skill) or [disabled](SETTINGS.md#disabling-a-skill), and never deletes. |
 
 ### Sessions
 

@@ -287,6 +287,8 @@ public static class SkillRecordText
             SkillRevertOutcome.NotKept => (false, NotKeptError(name, revert.Revision?.Path ?? SkillCatalog.FileName)),
             SkillRevertOutcome.Locked => (false, LockedNotice(name)),
             SkillRevertOutcome.Disabled => (false, DisabledNotice(name)),
+            // Its own arm (2026-10-13): the fallback below would read as a failure with no reason.
+            SkillRevertOutcome.GlobalOff => (false, GlobalOffNotice(name)),
             _ => (false, RevertFailedError(name, revert.Edit?.Detail ?? "")),
         };
     }
@@ -362,6 +364,15 @@ public static class SkillRecordText
 
     /// <summary>The enable's glyph, its notice's.</summary>
     public const string EnabledGlyph = "✅";
+
+    /// <summary>
+    /// A change refused because the skill is a global one and this profile has <c>Global skills</c> off (2026-10-13): the pane's notice
+    /// for a revert, a move, a rename, a delete, a lock, a disable, and the purge's. Pinned.
+    /// </summary>
+    public static string GlobalOffNotice(string name) => "(" + name + " is a global skill and Global skills is off for this profile: nothing changed)";
+
+    /// <summary>The Debug line for a record a profile with <c>Global skills</c> off left alone (2026-10-13).</summary>
+    public static string GlobalOffSkippedLogLine(string what) => "Global skills is off for this profile: the global record of " + what + " left as it is";
 
     /// <summary>A content change refused on the pane because the skill is disabled: <c>(⛔ haiku is disabled: enable it first)</c>. Pinned.</summary>
     public static string DisabledNotice(string name) => "(" + DisabledGlyph + " " + name + " is disabled: enable it first)";

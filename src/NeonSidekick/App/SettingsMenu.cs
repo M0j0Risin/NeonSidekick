@@ -1059,6 +1059,9 @@ public enum SettingsField
 
     /// <summary>A picker over <see cref="Viewer.BrowserPrivacy.Names"/>: whether the Browser window keeps its history or clears it as it closes (<see cref="Settings.AppSettingsData.BrowserPrivacy"/>). The Web tab, right under <see cref="WebBrowserHomePage"/> (later on 2026-10-13, the user's ask and name); no reconnect (read at each close). Last in the enum, as every newcomer.</summary>
     BrowserPrivacy,
+
+    /// <summary>A toggle: whether this profile reads the global skills, <c>&lt;home&gt;\skills</c> (<see cref="Settings.AppSettingsData.GlobalSkills"/>); off, it sees and writes only its own. The Options tab of <c>/skills</c>, right under <see cref="AgentSkills"/> (2026-10-13, the user's ask, name and default); no reconnect (read at each scan). Last in the enum, as every newcomer.</summary>
+    GlobalSkills,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1518,7 +1521,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> SkillsTabFields =
     [
-        [SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention],
+        [SettingsField.AgentSkills, SettingsField.GlobalSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention],
         [SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionConfirmMode, SettingsField.ReflectionEditsSupportingFiles, SettingsField.ReflectionInstalledSkills],
     ];
 
@@ -1969,7 +1972,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.CopyUserPrompt or SettingsField.ShowImageThumbnails
             or SettingsField.FileTreeShowSizes or SettingsField.LlmOfferTools or SettingsField.LlmUseFunVerbs or SettingsField.LlmShowThinking or SettingsField.LlmPreserveThinking or SettingsField.LlmSamplingFromHuggingFace
             or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser
-            or SettingsField.AgentSkills or SettingsField.ExternalSkills or SettingsField.ProjectFile or SettingsField.TranscriptMarkdown
+            or SettingsField.AgentSkills or SettingsField.GlobalSkills or SettingsField.ExternalSkills or SettingsField.ProjectFile or SettingsField.TranscriptMarkdown
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
             or SettingsField.HideExitAutocomplete or SettingsField.EmojiPicker or SettingsField.CommandTypoIntercept or SettingsField.KeepMessageHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedExternalWindows or SettingsField.ThemedBackground
             or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
@@ -2274,6 +2277,7 @@ internal sealed partial class SettingsMenu
         SettingsField.FileMentionFolderMode => "File @-mention folder mode",
         SettingsField.FileBrowserMode => "File browser/tree mode",   // "File browser mode" until 2026-09-23, when /tree came to follow it (the user's call)
         SettingsField.AgentSkills => "Agent skills",
+        SettingsField.GlobalSkills => "Global skills",
         SettingsField.ExternalSkills => ExternalSkillsName,
         SettingsField.ProjectFile => "Project file",
         SettingsField.TranscriptMarkdown => "Transcript markdown",
@@ -2631,6 +2635,7 @@ internal sealed partial class SettingsMenu
             SettingsField.FileMentionFolderMode => data.FileMentionFolderMode,
             SettingsField.FileBrowserMode => data.FileBrowserMode,
             SettingsField.AgentSkills => OnOff(data.AgentSkills),
+            SettingsField.GlobalSkills => OnOff(data.GlobalSkills),
             SettingsField.ExternalSkills => OnOff(data.ExternalSkills),
             SettingsField.ProjectFile => OnOff(data.ProjectFile),
             SettingsField.TranscriptMarkdown => OnOff(data.TranscriptMarkdown),
@@ -7383,6 +7388,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ShoppingTools => data.ShoppingTools,
             SettingsField.AskUser => data.AskUser,
             SettingsField.AgentSkills => data.AgentSkills,
+            SettingsField.GlobalSkills => data.GlobalSkills,
             SettingsField.ExternalSkills => data.ExternalSkills,
             SettingsField.ProjectFile => data.ProjectFile,
             SettingsField.TranscriptMarkdown => data.TranscriptMarkdown,
@@ -7492,6 +7498,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ShoppingTools: data.ShoppingTools = on; break;
             case SettingsField.AskUser: data.AskUser = on; break;
             case SettingsField.AgentSkills: data.AgentSkills = on; break;
+            case SettingsField.GlobalSkills: data.GlobalSkills = on; break;
             case SettingsField.ExternalSkills: data.ExternalSkills = on; break;
             case SettingsField.ProjectFile: data.ProjectFile = on; break;
             case SettingsField.TranscriptMarkdown: data.TranscriptMarkdown = on; break;
@@ -7601,14 +7608,15 @@ internal sealed partial class SettingsMenu
         SettingsField.BotChatComfy => on ? "the bots get this profile's offered ComfyUI workflows" : "the bots get the Botchat ComfyUI limited workflows alone",
         SettingsField.BotChatImageAsync => on ? "the next bot answers while the picture renders" : "the chat waits for each picture",
         SettingsField.BotChatTools => on ? "the bots get every tool this chat would offer" : "the bots get the Botchat limited tools alone",
-        SettingsField.BotChatSkills => on ? "the bots get load_skill over this profile's and the global skills" : "the bots get the Botchat limited skills alone",
+        SettingsField.BotChatSkills => on ? "the bots get load_skill over the skills this chat sees" : "the bots get the Botchat limited skills alone",
         SettingsField.BotChatMemory => on ? "the bots remember (Botchat memory mode says whose memories)" : "the bots remember nothing",
         SettingsField.BotChatVision => on ? "each bot sees the pictures shown since it last spoke (vision models)" : "the bots see text alone",
         SettingsField.BotChatMultiEmbeddedKill => on ? "the extra servers stop when the botchat ends" : "extra servers stay up for later botchats until /botchat --kill or exit",
         SettingsField.SqlPercentMention => on ? "% and part of a name lists the SQL connections on the line" : "% is ordinary text",
         SettingsField.LlmCompactShowSummary => on ? "the summary's lines or the pruned results, then the protected counts" : "the one compact notice alone",
         SettingsField.AgentSkills => on ? "the skills catalog, load_skill and skill_editor are offered" : "no skills, no project notes",
-        SettingsField.ExternalSkills => on ? (OperatingSystem.IsMacOS() ? "~/.agents/skills is read too" : "%USERPROFILE%\\.agents\\skills is read too") : "profile and global skills only",   // the Mac's home, 2026-10-06
+        SettingsField.GlobalSkills => on ? "every profile's global skills are read too" : "only this profile's skills; the global ones are hidden and left alone",
+        SettingsField.ExternalSkills => on ? (OperatingSystem.IsMacOS() ? "~/.agents/skills is read too" : "%USERPROFILE%\\.agents\\skills is read too") : "no external skills",   // the Mac's home, 2026-10-06
         SettingsField.ProjectFile => on ? "use project file (NEON.md or AGENTS.md in the working directory)" : "project files in the working directory are ignored",   // the user's wording, 2026-10-01
         SettingsField.SkillHashMention => on ? "# and part of a name lists the loaded skills on the line" : "# is ordinary text",
         SettingsField.ToolsDollarMention => on ? "$ and part of a name lists the offered tools on the line" : "$ is ordinary text",

@@ -180,7 +180,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/shopping reindex [<store>]` | Re-reads the store's reference documents (also done whenever a file changes). |
 | `/shortcut [<profile>] [--log]` | Puts a desktop shortcut that starts the app on this profile (or the one named); `--log` adds a log. On a Mac it is a `.command` file. See [Desktop shortcuts](#desktop-shortcuts). |
 | `/skills` | Lists the skills and edits the skill, reflection and project-file settings. The Offered tab shows each skill's version (🔒 [locked](SETTINGS.md#locking-a-skill), ⛔ [disabled](SETTINGS.md#disabling-a-skill)) and when it last changed; a second strip picks the scope, and typing filters. Its last sub-tab, **loaded**, lists the skills loaded into this conversation now, and keeps up while it is open (a reply loading one, a compact dropping one). |
-| `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. Refused during a reply. See [Installing skills](SETTINGS.md#installing-skills). |
+| `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. `--global` is refused while *Global skills* is off. Refused during a reply. See [Installing skills](SETTINGS.md#installing-skills). |
 | `/skills purge list\|commit <age>` | `list` shows the skills unused for that long; `commit` deletes them after a yes/no. See [Skill records and purging unused skills](SETTINGS.md#skill-records-and-purging-unused-skills). |
 | `/splash` | Starts a new conversation and shows the splash screen. |
 | `/stt [on\|off]` | Toggles voice input. |
@@ -595,7 +595,7 @@ In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes
 | `/rewind` | Enter rewinds to before the message |
 | `/sessions` | Enter opens · type to filter |
 | `/process` | Enter opens the window · `k` kills (asks) · `f` steps the filter: all, running, ended |
-| `/skills` › a skill | Enter on a row: move (between the profile and global skills, or a profile skill to another profile, asks), rename, edit, revert, lock/unlock, disable/enable, delete (asks) |
+| `/skills` › a skill | Enter on a row: move (between the profile and global skills while *Global skills* is on, or a profile skill to another profile, asks), rename, edit, revert, lock/unlock, disable/enable, delete (asks) |
 | `/skills` › a skill › `revert` | Enter puts the version back · `d` removes it (asks) · `c` clear all (asks) |
 | `/docker` | Enter opens · `r` refresh · `l` LLM servers only (*Docker server containers*) · type to filter |
 | `/shopping` | Enter / Space tick or untick · `i` add · `p` place at an aisle or section · `n` rename · `r` remove · `a` tick all · `c` clear ticked · `s` stores · `+` / `-` quantity |

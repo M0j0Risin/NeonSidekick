@@ -87,6 +87,14 @@ public sealed class SkillInstallFlow
             return false;
         }
 
+        // --global while the profile has Global skills off (2026-10-13): refused before anything is fetched. The flag as SplitFlags
+        // resolved it, since the last one wins (--global --profile is the profile's).
+        if (scopeFlag is { } flagged && host.Roots.Hides(flagged))
+        {
+            host.Error(SkillInstallText.GlobalOffError);
+            return false;
+        }
+
         string? skillsShId = null;
         if (source!.Kind == SkillSourceKind.Search)
         {

@@ -3830,11 +3830,19 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void StartLearn(PendingLearn pending)
     {
-        // A guard of its own each run (2026-10-02): a paused reflection run again loads afresh before it may rewrite.
-        var guard = new ReflectionWriteGuard(() => pending.Roots, pending.External, pending.Installed);
+        // The profile's Global skills switch read at each use (2026-10-13): a flip off after the decision reaches the pass, while the
+        // profile it was decided in stays loaded; after a profile switch the decision's own roots stand.
+        Func<bool> globalOn = () =>
+        {
+            var (profileSkills, global) = _settings.SkillsView;
+            return global || !string.Equals(profileSkills, pending.Roots.Profile, StringComparison.OrdinalIgnoreCase);
+        };
+        // A guard of its own each run (2026-10-02): a paused reflection run again loads afresh before it may rewrite. Over the same live
+        // roots as the pass (2026-10-13), so after a flip it never asks for a load of a skill load_skill no longer serves.
+        var guard = new ReflectionWriteGuard(SkillLearner.Live(pending.Roots, globalOn), pending.External, pending.Installed);
         // Its ask (2026-10-12, Reflection confirm mode): null under confirm-none, so a reflection writes as it always has.
         var confirm = LearnConfirm(pending.Confirm);
-        var job = _session.StartLearning((a, token) => SkillLearner.RunAsync(a, pending.Material, pending.Roots, pending.External, pending.Effort, token, pending.MaxRequests, pending.Sessions, pending.Files, _skillRecords, guard, confirm), pending.Token);
+        var job = _session.StartLearning((a, token) => SkillLearner.RunAsync(a, pending.Material, pending.Roots, pending.External, pending.Effort, token, pending.MaxRequests, pending.Sessions, pending.Files, _skillRecords, guard, confirm, globalOn), pending.Token);
         if (job is null)
         {
             return;
@@ -4098,7 +4106,9 @@ internal sealed partial class ChatScreen
             AdvisorsOffered(effective),
             Without(_neonAdvisorTools, disabled).Count,
             ShoppingOffered(effective),
-            Without(_shoppingTools, disabled).Count);
+            Without(_shoppingTools, disabled).Count,
+            // After Catalog(effective) above (arguments run in order): the switch as that scan read it (2026-10-13).
+            GlobalSkills: _catalog.GlobalEnabled);
     }
 
     /// <summary>
@@ -6455,9 +6465,12 @@ internal sealed partial class ChatScreen
         ProjectNotes? project = null;
         IReadOnlyList<AIFunction> skillTools = [];
         IReadOnlyList<Skill>? catalog = null;
+        bool globalSkills = true;
         if (skills is { Enabled: true })
         {
             skills.Catalog.Scan(skills.External);
+            // The scan's own reading of the profile's Global skills switch (2026-10-13): the editor sentence never disagrees with the list.
+            globalSkills = skills.Catalog.GlobalEnabled;
             project = skills.ProjectFile ? skills.Project.ReadNotes() : null;
             catalog = skills.Catalog.Skills;
             skillTools = catalog.Count > 0 ? skills.Tools : skills.Tools.Where(t => !string.Equals(t.Name, LoadSkillTool.ToolName, StringComparison.Ordinal)).ToList();
@@ -6526,7 +6539,7 @@ internal sealed partial class ChatScreen
         // The notified exits since the last turn ride in as seeded polls (2026-09-21), on every turn, while process is offered.
         assistant.PendingCalls = processes is null ? [] : PendingProcessPolls(processes, assistant.Tools);
         var r = set.Rules;
-        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: r.Web, files: r.Files, ask: r.Ask, project: project, skills: catalog, markdown: markdown, sessions: r.Sessions, download: r.Download, recall: recall is not null, delete: r.Delete, mcp: r.Mcp, timers: r.Timers, git: r.Git, shell: r.Shell, bridge: r.Bridge, police: r.Police, obsidian: r.Obsidian, obsidianDelete: r.ObsidianDelete, sql: r.Sql, native: r.Native, plan: inputs.Plan?.DirectiveFor(r.Advisors ? set.Advisors?.Advisors : null), homeAssistant: r.HomeAssistant, oracle: r.Oracle, mysql: r.MySql, unc: r.Unc, uncFetch: r.UncFetch, uncWrite: r.UncWrite, docker: r.Docker, dockerWrite: r.DockerWrite, help: r.Help, sqlite: r.Sqlite, postgres: r.Postgres, save: inputs.MemorySave, sqliteWrite: r.Sqlite && r.SqliteWrite, serverWrites: r.ServerWrites, images: r.Images, advisors: r.Advisors, shopping: r.Shopping);
+        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: r.Web, files: r.Files, ask: r.Ask, project: project, skills: catalog, markdown: markdown, sessions: r.Sessions, download: r.Download, recall: recall is not null, delete: r.Delete, mcp: r.Mcp, timers: r.Timers, git: r.Git, shell: r.Shell, bridge: r.Bridge, police: r.Police, obsidian: r.Obsidian, obsidianDelete: r.ObsidianDelete, sql: r.Sql, native: r.Native, plan: inputs.Plan?.DirectiveFor(r.Advisors ? set.Advisors?.Advisors : null), homeAssistant: r.HomeAssistant, oracle: r.Oracle, mysql: r.MySql, unc: r.Unc, uncFetch: r.UncFetch, uncWrite: r.UncWrite, docker: r.Docker, dockerWrite: r.DockerWrite, help: r.Help, sqlite: r.Sqlite, postgres: r.Postgres, save: inputs.MemorySave, sqliteWrite: r.Sqlite && r.SqliteWrite, serverWrites: r.ServerWrites, images: r.Images, advisors: r.Advisors, shopping: r.Shopping, globalSkills: globalSkills);
     }
 
     /// <summary>

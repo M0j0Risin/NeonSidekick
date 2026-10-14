@@ -786,4 +786,90 @@ public class SkillRecordsTests : IDisposable
         Assert.Equal(at, never.Reference);
         Assert.Equal(at, used.Reference);
     }
+
+    // ── Global skills (2026-10-13, the profile's switch) ────────────────────
+
+    /// <summary>Every global row as a line: its folder, name, moments, events and kept versions.</summary>
+    private string GlobalRows() => string.Join("\n", _store.All().Where(r => r.Scope == SkillScope.Global).OrderBy(r => r.Folder, StringComparer.Ordinal)
+        .Select(r => string.Join("|", r.Folder, r.Name, r.Modified.ToString("o", System.Globalization.CultureInfo.InvariantCulture), r.LastUsed?.ToString("o", System.Globalization.CultureInfo.InvariantCulture) ?? "-",
+            _store.Events(r.Id).Count.ToString(System.Globalization.CultureInfo.InvariantCulture), _store.Revisions(r.Id).Count.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+
+    /// <summary>Off, the reconcile adds, removes and changes no global row — not one whose folder went, not one edited by hand, not one whose name differs from its folder; on again, it catches up.</summary>
+    [Fact]
+    public void GlobalOff_TheReconcile_LeavesEveryGlobalRowAlone_AndOnAgainCatchesUp()
+    {
+        Write(_roots.Global, "gone");
+        Write(_roots.Global, "edited", "edited-name");
+        Write(_roots.Profile, "haiku");
+        Reconcile();
+        string before = GlobalRows();
+        Assert.Contains("edited|edited-name|", before);
+
+        _roots = _roots with { GlobalOn = false };
+        Directory.Delete(Path.Combine(_roots.Global, "gone"), recursive: true);
+        string edited = Path.Combine(_roots.Global, "edited", SkillCatalog.FileName);
+        File.WriteAllText(edited, "---\nname: edited-name\ndescription: Changed.\n---\nNew.\n");
+        File.SetLastWriteTimeUtc(edited, DateTime.UtcNow.AddMinutes(10));
+        Write(_roots.Global, "fresh");
+        Write(_roots.Profile, "pdf");
+
+        var off = Reconcile();
+
+        Assert.Equal((1, 0, 0), (off.Added, off.Removed, off.Modified));   // the profile's pdf alone
+        Assert.Equal(before, GlobalRows());
+
+        _roots = _roots with { GlobalOn = true };
+        var on = Reconcile();
+
+        Assert.Equal((1, 1, 1), (on.Added, on.Removed, on.Modified));   // fresh, gone, the hand edit
+        Assert.Equal(["edited", "fresh"], _store.All().Where(r => r.Scope == SkillScope.Global).Select(r => r.Folder).Order());
+        Assert.Contains("edited|edited-name|", GlobalRows());
+    }
+
+    /// <summary>
+    /// Off, the purge lists no global skill, the cooldown's mark skips a newer global write for an older profile one, and no write method
+    /// touches a global row; a write made under roots with the switch on (a reflection decided before the flip) is still recorded.
+    /// </summary>
+    [Fact]
+    public void GlobalOff_PurgeAndCooldown_LeaveTheGlobalSkillsOut_AndNoWriteTouchesTheirRows()
+    {
+        Write(_roots.Global, "old-global");
+        Write(_roots.Profile, "old-profile");
+        Reconcile();
+        Editor(SkillActors.Reflection).Describe("update", "", "old-profile", null, "Profile steps.");
+        _time.Advance(TimeSpan.FromMinutes(1));
+        Editor(SkillActors.Reflection).Describe("update", "", "old-global", null, "Global steps.");
+        Assert.Equal("old-global", _records.LastReflectionWrite()!.Skill.Folder);
+        var global = SkillOf("old-global");   // read while the switch was on
+        _time.Advance(TimeSpan.FromDays(60));
+
+        _roots = _roots with { GlobalOn = false };
+
+        Assert.Equal("old-profile", _records.LastReflectionWrite()!.Skill.Folder);   // past the newer global write
+        Assert.Equal(["old-profile"], _records.UnusedSince(DateTimeOffset.UtcNow.AddYears(1)).Select(r => r.Folder));   // every row old enough (the files' own times are the real clock's)
+        string snapshot = GlobalRows();
+        var revisions = _records.Revisions(global);
+        Assert.NotEmpty(revisions);
+
+        _records.Used(global);
+        _records.Moved(global, SkillScope.Profile);
+        _records.Renamed(global, "renamed");
+        _records.Installed(SkillScope.Global, global.Directory, updated: true);
+        _records.Edited(_roots, new SkillEditResult(SkillEditOutcome.Updated, "old-global", SkillScope.Global), SkillActors.Model);
+        Assert.Equal(0, _records.ForgetVersions(global, null));
+        Assert.Equal(SkillText.GlobalSkillsOff, _records.SetLocked(global, true));
+        Assert.Equal(SkillText.GlobalSkillsOff, _records.SetDisabled(global, true));
+        var revert = _records.Restore(global, revisions[0]);
+        _records.Deleted(SkillScope.Global, "old-global");
+
+        Assert.Equal(SkillRevertOutcome.GlobalOff, revert.Outcome);
+        Assert.Equal((false, SkillRecordText.GlobalOffNotice("old-global")), SkillRecordText.RevertText("old-global", revert, _time.LocalTimeZone));
+        Assert.False(SkillLock.IsLocked(global.Directory));
+        Assert.False(SkillDisable.IsDisabled(global.Directory));
+        Assert.Equal(snapshot, GlobalRows());
+
+        // Written under roots with the switch on: recorded, whatever the live roots say.
+        _records.Edited(_roots with { GlobalOn = true }, new SkillEditResult(SkillEditOutcome.Updated, "old-global", SkillScope.Global), SkillActors.Reflection);
+        Assert.NotEqual(snapshot, GlobalRows());
+    }
 }

@@ -1,4 +1,7 @@
 using System.Net;
+using Microsoft.Extensions.AI;
+using NeonSidekick.Llm;
+using NeonSidekick.Llm.Tools;
 using NeonSidekick.Skills;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
@@ -83,5 +86,70 @@ public partial class ChatScreenTests
         Assert.Contains(SkillInstallText.KeptNotice("docx"), output);
         Assert.False(Directory.Exists(Path.Combine(_settings.GlobalSkillsDirectory, "docx")));
         Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>
+    /// Global skills off (2026-10-13): the install page has no global row and no g; Enter is still Cancel (it sits one row up now), g picks
+    /// nothing, and p installs to the profile. Nothing reaches the global folder.
+    /// </summary>
+    [Fact]
+    public async Task SkillsAdd_GlobalOff_ThePageHasNoGlobalRow_EnterIsStillCancel_AndPInstallsToTheProfile()
+    {
+        SkillRepoOnCodeload();
+        PaneOn();
+        _settings.Update(d => d.GlobalSkills = false);
+        StepsWhenIdle(
+            input => { PushLine(input, "/skills add anthropics/skills/pdf"); input.Push(Keys.Enter); },
+            input => { PushLine(input, "/skills add anthropics/skills/pdf"); input.Push(Keys.Char('g'), Keys.Escape); },
+            input => { PushLine(input, "/skills add anthropics/skills/docx"); input.Push(Keys.Char('p'), Keys.Enter); },
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(SkillInstallText.GlobalRow, output);
+        Assert.Contains(SkillInstallText.InstallKeysProfileOnly, output);
+        Assert.Contains(SkillInstallText.KeptNotice("pdf"), output);
+        Assert.False(Directory.Exists(Path.Combine(_settings.GlobalSkillsDirectory, "pdf")));
+        Assert.False(Directory.Exists(Path.Combine(ProfileSkills, "pdf")));
+        Assert.True(File.Exists(Path.Combine(ProfileSkills, "docx", SkillCatalog.FileName)));
+        Assert.False(Directory.Exists(Path.Combine(_settings.GlobalSkillsDirectory, "docx")));
+    }
+
+    /// <summary>Global skills off: --global is refused before anything is fetched.</summary>
+    [Fact]
+    public async Task SkillsAdd_GlobalOff_DashDashGlobal_IsRefusedBeforeAnyFetch()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.GlobalSkills = false; });
+        SkillRepoOnCodeload();
+        PushLine("/skills add anthropics/skills/pdf --global");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SkillInstallText.GlobalOffError, output);
+        Assert.DoesNotContain(_http.Requests, r => r.Uri.Host is "codeload.github.com" or "api.github.com" or "raw.githubusercontent.com" or "skills.sh");   // the LLM probes aside, nothing fetched
+        Assert.False(Directory.Exists(Path.Combine(_settings.GlobalSkillsDirectory, "pdf")));
+    }
+
+    /// <summary>Global skills off (2026-10-13): the turn lists the profile's skills alone, the editor sentence names no global scope, and skill_editor offers the profile alone.</summary>
+    [Fact]
+    public async Task Turn_GlobalSkillsOff_ListsTheProfilesSkillsAlone_AndOffersNoGlobalScope()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.GlobalSkills = false; });
+        string directory = PutSkill(ProfileSkills, "haiku");
+        PutSkill(GlobalSkills, "haiku", "The global twin.");
+        PutSkill(GlobalSkills, "deploy", "Not read: Global skills is off.");
+        _chat.EnqueueText("Hi.");
+        PushLine("hi");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        var haiku = new Skill("haiku", "Writes haiku. Use when asked for one.", SkillScope.Profile, directory);
+        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, skills: [haiku], sessions: true, git: true, shell: true, native: true, help: true, globalSkills: false), _chat.Requests[0][0].Text);
+        Assert.DoesNotContain("deploy", _chat.Requests[0][0].Text);
+        Assert.Contains(SkillsPrompt.EditorSentenceProfileOnly, _chat.Requests[0][0].Text);
+        var editor = _chat.Options[0]!.Tools!.Cast<AIFunction>().Single(t => t.Name == SkillEditorTool.ToolName);
+        Assert.Equal(["profile"], editor.JsonSchema.GetProperty("properties").GetProperty("scope").GetProperty("enum").EnumerateArray().Select(e => e.GetString()));
     }
 }

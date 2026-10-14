@@ -189,4 +189,29 @@ public class LoadSkillToolTests : IDisposable
     {
         Assert.Throws<ArgumentNullException>(() => new LoadSkillTool(null!));
     }
+
+    /// <summary>
+    /// Global skills switched off while a reply runs (2026-10-13): the catalog keeps the turn's scan until the next turn, but a global skill
+    /// in it is unknown at once — its instructions and its files — and the unknown answer does not list it.
+    /// </summary>
+    [Fact]
+    public void GlobalOff_MidReply_AGlobalSkillStillInTheCatalog_IsUnknown_AndNotListed()
+    {
+        Put("haiku");
+        string global = Path.Combine(_roots.Global, "pdf");
+        Directory.CreateDirectory(global);
+        File.WriteAllText(Path.Combine(global, SkillCatalog.FileName), "---\nname: pdf\ndescription: Reads PDFs.\n---\n# PDF\n");
+        File.WriteAllText(Path.Combine(global, "notes.md"), "notes");
+        bool on = true;
+        var catalog = new SkillCatalog(() => _roots with { GlobalOn = on });
+        var tool = new LoadSkillTool(catalog);
+        catalog.Scan(external: false);   // the turn's scan, the switch on
+        Assert.Contains("# PDF", tool.Describe("pdf", null));
+
+        on = false;   // flipped on /skills under the reply: no scan until the next turn
+
+        Assert.Equal(SkillText.Unknown("pdf", ["haiku"]), tool.Describe("pdf", null));
+        Assert.Equal(SkillText.Unknown("pdf", ["haiku"]), tool.Describe("pdf", "notes.md"));
+        Assert.Contains("Five, seven, five.", tool.Describe("haiku", null));
+    }
 }

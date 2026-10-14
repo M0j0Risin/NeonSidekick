@@ -175,4 +175,20 @@ public class SkillInstallerTests : IDisposable
         File.WriteAllText(Path.Combine(folder, SkillProvenance.FileName), "{not json");
         Assert.Null(SkillProvenance.Read(folder));
     }
+
+    /// <summary>The install writes its folder itself, past the editor (2026-10-13): off, it refuses the global root on its own.</summary>
+    [Fact]
+    public void Install_GlobalOff_RefusesTheGlobalRoot_AndWritesNothing()
+    {
+        var (archive, candidate) = Pdf();
+        using (archive)
+        {
+            var refused = SkillInstaller.Install(_roots with { GlobalOn = false }, SkillScope.Global, archive, candidate, Origin(), replace: false);
+
+            Assert.False(refused.Ok);
+            Assert.Equal(SkillInstallText.GlobalOffError, refused.Error);
+            Assert.False(Directory.Exists(Path.Combine(_roots.Global, "pdf")));
+            Assert.True(SkillInstaller.Install(_roots with { GlobalOn = false }, SkillScope.Profile, archive, candidate, Origin(), replace: false).Ok);
+        }
+    }
 }

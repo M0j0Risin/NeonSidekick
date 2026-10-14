@@ -171,6 +171,9 @@ public static class SkillInstallText
     public static string UpdateRow(SkillScope scope) => $"Replace the one in the {SkillScopes.Name(scope)} skills (update from the same source)";
     public const string CancelRow = "Cancel";
     public const string InstallKeys = "p / g / c = pick · Enter = choose · ESC = cancel";
+
+    /// <summary>The install page's keys while the profile has <c>Global skills</c> off (2026-10-13): no <c>g</c>, no global row. Pinned.</summary>
+    public const string InstallKeysProfileOnly = "p / c = pick · Enter = choose · ESC = cancel";
     public const string UpdateKeys = "u / c = pick · Enter = choose · ESC = cancel";
 
     public static string InstallCaption(SkillCandidate candidate, SkillSource source)
@@ -187,6 +190,12 @@ public static class SkillInstallText
 
     public static string TakenError(string name, SkillScope scope) =>
         $"A skill named '{name}' is already in the {SkillScopes.Name(scope)} skills and did not come from this source; rename or delete it on /skills first";
+
+    /// <summary>
+    /// <c>--global</c> (or an install into the global root) while the profile has <c>Global skills</c> off (2026-10-13): refused before
+    /// anything is fetched. Pinned.
+    /// </summary>
+    public const string GlobalOffError = "Global skills is off for this profile (the Options tab of /skills): a skill installs to this profile's skills only; leave out --global";
 
     public static string LockedError(string name) =>
         $"Skill '{name}' is locked: unlock it on /skills (its page's unlock row) to update it";

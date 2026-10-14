@@ -24,16 +24,26 @@ public sealed class SkillInstallMenu
     }
 
     public static readonly IReadOnlyDictionary<char, int> InstallHotkeys = new Dictionary<char, int> { ['p'] = 0, ['g'] = 1, ['c'] = 2 };
+
+    /// <summary>The install page's keys while the profile has <c>Global skills</c> off (2026-10-13): no <c>g</c>, Cancel one row up.</summary>
+    public static readonly IReadOnlyDictionary<char, int> InstallHotkeysProfileOnly = new Dictionary<char, int> { ['p'] = 0, ['c'] = 1 };
+
     public static readonly IReadOnlyDictionary<char, int> UpdateHotkeys = new Dictionary<char, int> { ['u'] = 0, ['c'] = 1 };
 
-    /// <summary>The install page for a new skill: profile, global, cancel — the cursor on Cancel.</summary>
-    public static MenuPage InstallPage(SkillCandidate candidate, SkillSource source) =>
+    /// <summary>
+    /// The scopes the install page's rows stand for, in order; Cancel is the row after them (2026-10-13). <paramref name="global"/> false
+    /// (the profile's <c>Global skills</c> off) leaves the global row out, and every index follows this list, so Cancel is never a scope.
+    /// </summary>
+    public static IReadOnlyList<SkillScope> InstallScopes(bool global) => global ? [SkillScope.Profile, SkillScope.Global] : [SkillScope.Profile];
+
+    /// <summary>The install page for a new skill: profile, global (while <paramref name="global"/>), cancel — the cursor on Cancel.</summary>
+    public static MenuPage InstallPage(SkillCandidate candidate, SkillSource source, bool global = true) =>
         new(Markup.Escape(SkillInstallText.InstallTitle(candidate.Name)),
-            [Markup.Escape(SkillInstallText.ProfileRow), Markup.Escape(SkillInstallText.GlobalRow), Markup.Escape(SkillInstallText.CancelRow)],
-            SkillInstallText.InstallKeys)
+            [.. InstallScopes(global).Select(scope => Markup.Escape(scope == SkillScope.Global ? SkillInstallText.GlobalRow : SkillInstallText.ProfileRow)), Markup.Escape(SkillInstallText.CancelRow)],
+            global ? SkillInstallText.InstallKeys : SkillInstallText.InstallKeysProfileOnly)
         {
             Caption = SkillInstallText.InstallCaption(candidate, source),
-            Hotkeys = InstallHotkeys,
+            Hotkeys = global ? InstallHotkeys : InstallHotkeysProfileOnly,
         };
 
     /// <summary>The page for an update in <paramref name="scope"/>: replace, cancel — the cursor on Cancel.</summary>
@@ -68,8 +78,8 @@ public sealed class SkillInstallMenu
         }
     }
 
-    /// <summary>The scope to install to, or null to keep the skill out.</summary>
-    public async Task<SkillScope?> AskAsync(SkillCandidate candidate, SkillSource source, SkillInstallCheck check, CancellationToken cancellationToken)
+    /// <summary>The scope to install to, or null to keep the skill out. <paramref name="global"/> false: no global row (2026-10-13).</summary>
+    public async Task<SkillScope?> AskAsync(SkillCandidate candidate, SkillSource source, SkillInstallCheck check, CancellationToken cancellationToken, bool global = true)
     {
         ArgumentNullException.ThrowIfNull(candidate);
         ArgumentNullException.ThrowIfNull(source);
@@ -87,13 +97,11 @@ public sealed class SkillInstallMenu
                 return update is { Row: 0 } ? scope : null;
             }
 
-            var pick = await _pane.PickAsync(InstallPage(candidate, source), 2, cancellationToken).ConfigureAwait(false);
-            return pick?.Row switch
-            {
-                0 => SkillScope.Profile,
-                1 => SkillScope.Global,
-                _ => null,
-            };
+            // The cursor on Cancel and the row read through the page's own scopes (2026-10-13): with the global row gone, Cancel moves up
+            // one, and a fixed "row 1 is global" would have installed on Cancel.
+            var scopes = InstallScopes(global);
+            var pick = await _pane.PickAsync(InstallPage(candidate, source, global), scopes.Count, cancellationToken).ConfigureAwait(false);
+            return pick is { Row: var row } && row >= 0 && row < scopes.Count ? scopes[row] : null;
         }
         finally
         {

@@ -365,4 +365,17 @@ public class SkillInstallFlowTests : IDisposable
 
         public void Rescan() => Rescans++;
     }
+
+    /// <summary>--global while the profile has Global skills off (2026-10-13): refused before anything is fetched.</summary>
+    [Fact]
+    public async Task GlobalFlag_GlobalOff_IsRefused_BeforeAnyFetch()
+    {
+        var host = new FakeHost(_host.Roots with { GlobalOn = false }) { Headless = true };
+
+        Assert.False(await Flow().RunAsync("anthropics/skills/pdf --global --yes", host, CancellationToken.None));
+
+        Assert.Equal([SkillInstallText.GlobalOffError], host.Errors);
+        Assert.Empty(_http.Requests);
+        Assert.False(Directory.Exists(Path.Combine(_host.Roots.Global, "pdf")));
+    }
 }

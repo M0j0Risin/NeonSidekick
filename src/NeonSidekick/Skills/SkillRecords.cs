@@ -41,6 +41,9 @@ public enum SkillRevertOutcome
 
     /// <summary>The skill is disabled (2026-10-09, <see cref="SkillDisable"/>): nothing kept, nothing written.</summary>
     Disabled,
+
+    /// <summary>The skill is a global one and the profile has <c>Global skills</c> off (2026-10-13): nothing kept, nothing written.</summary>
+    GlobalOff,
 }
 
 /// <summary>The outcome, the revision it read (null for none) and the editor's result when it wrote.</summary>
@@ -98,6 +101,25 @@ public sealed class SkillRecords
     /// <summary>The profile of the roots in force.</summary>
     public string CurrentProfile => ProfileOf(_roots());
 
+    /// <summary>
+    /// Whether <paramref name="scope"/> is the global root while <paramref name="roots"/> have it switched off (2026-10-13, the profile's
+    /// <c>Global skills</c>): such a profile never adds, changes or removes a global row — the rows are every profile's, and the next
+    /// reconcile in a profile with the switch on catches them up. A Debug line says what was skipped.
+    /// </summary>
+    private static bool Hidden(SkillRoots roots, SkillScope scope, string what)
+    {
+        if (!roots.Hides(scope))
+        {
+            return false;
+        }
+
+        DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.GlobalOffSkippedLogLine(what));
+        return true;
+    }
+
+    /// <summary><see cref="Hidden(SkillRoots, SkillScope, string)"/> over the roots in force.</summary>
+    private bool Hidden(SkillScope scope, string what) => Hidden(_roots(), scope, what);
+
     /// <summary>The main chat's <c>skill_editor</c> result (the tool's listener): <see cref="Edited(SkillRoots, SkillEditResult, string, long?)"/> with the model as the actor.</summary>
     public void Edited(SkillRoots roots, SkillEditResult result) => Edited(roots, result, SkillActors.Model);
 
@@ -112,8 +134,10 @@ public sealed class SkillRecords
         ArgumentNullException.ThrowIfNull(roots);
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(actor);
-        if (result.Scope == SkillScope.External || result.Name.Length == 0)
+        if (result.Scope == SkillScope.External || result.Name.Length == 0 || Hidden(roots, result.Scope, result.Name))
         {
+            // The roots it was written under decide (2026-10-13): a reflection that wrote global in a profile with the switch on is
+            // still recorded after a switch to one with it off.
             return;
         }
 
@@ -249,7 +273,7 @@ public sealed class SkillRecords
     public void Installed(SkillInstallResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        if (result.Scope == SkillScope.External)
+        if (result.Scope == SkillScope.External || Hidden(result.Scope, result.Directory))
         {
             return;
         }
@@ -282,7 +306,7 @@ public sealed class SkillRecords
     public void Used(Skill skill)
     {
         ArgumentNullException.ThrowIfNull(skill);
-        if (skill.Scope == SkillScope.External)
+        if (skill.Scope == SkillScope.External || Hidden(skill.Scope, skill.FolderName))
         {
             return;
         }
@@ -305,9 +329,11 @@ public sealed class SkillRecords
             return;
         }
 
-        string profile = CurrentProfile;
+        var roots = _roots();
+        string profile = ProfileOf(roots);
         var now = _time.GetUtcNow();
-        var known = skills.ToList();
+        // A global skill loaded before the profile switched its global root off (2026-10-13) is not this profile's to record.
+        var known = skills.Where(s => !roots.Hides(s.Scope)).ToList();
         foreach (var (name, errors) in trace.ErrorsAfterLoad)
         {
             if (known.Find(s => string.Equals(s.Name, name, StringComparison.Ordinal)) is { Scope: not SkillScope.External } skill)
@@ -352,7 +378,13 @@ public sealed class SkillRecords
     }
 
     /// <summary>The newest skill a reflection wrote in the current profile's view (the cooldown's mark), followed through a rename; null for none.</summary>
-    public SkillWriteMark? LastReflectionWrite() => _store.LastWrite(CurrentProfile, SkillActors.Reflection);
+    /// <remarks>While the profile has <c>Global skills</c> off (2026-10-13) the global skills are out of the view: another profile's
+    /// reflection writing one sets no mark here.</remarks>
+    public SkillWriteMark? LastReflectionWrite()
+    {
+        var roots = _roots();
+        return _store.LastWrite(ProfileOf(roots), SkillActors.Reflection, roots.GlobalOn);
+    }
 
     /// <summary>How many times a reflection changed the installed skill <paramref name="skill"/> since its install (the update page's warning).</summary>
     public int ReflectionChangesSinceInstall(Skill skill) => FactsOf(skill)?.ReflectionWritesSinceInstall ?? 0;
@@ -444,7 +476,7 @@ public sealed class SkillRecords
     public int ForgetVersions(Skill skill, SkillRevision? revision)
     {
         ArgumentNullException.ThrowIfNull(skill);
-        if (skill.Scope == SkillScope.External)
+        if (skill.Scope == SkillScope.External || Hidden(skill.Scope, skill.FolderName))
         {
             return 0;
         }
@@ -479,6 +511,13 @@ public sealed class SkillRecords
     {
         ArgumentNullException.ThrowIfNull(skill);
         ArgumentNullException.ThrowIfNull(revision);
+        if (Hidden(skill.Scope, skill.FolderName))
+        {
+            // First of all (2026-10-13, the review's finding): below, the current text is kept as a revision on the shared global row
+            // before the editor would refuse.
+            return new SkillRevert(SkillRevertOutcome.GlobalOff, revision, null);
+        }
+
         if (SkillLock.IsLocked(skill.Directory))
         {
             // Before the current text is kept as a version (2026-10-07): a locked skill's revert changes nothing at all.
@@ -542,6 +581,9 @@ public sealed class SkillRecords
     /// skill as a <c>used</c> event (the turn's errors standing in for the errors after the load, which the old rows never kept). Names are
     /// found among <paramref name="skills"/>; a skill gone since is skipped. Once per profile (<see cref="ImportFlag"/>); nothing while
     /// either store is off, and nothing (no flag either) while the profile has no <c>sessions.db</c> yet. The count of events added.
+    /// While the profile has <c>Global skills</c> off (2026-10-13) <paramref name="skills"/> holds no global skill, so the import adds no
+    /// global events, and its flag is set all the same: those events are never imported later. That keeps the rule that such a profile
+    /// never writes a global row.
     /// </summary>
     public int ImportFrom(Sessions.SessionStore sessions, IEnumerable<Skill> skills)
     {
@@ -587,6 +629,11 @@ public sealed class SkillRecords
     public void Moved(Skill skill, SkillScope to)
     {
         ArgumentNullException.ThrowIfNull(skill);
+        if (Hidden(skill.Scope, skill.FolderName) || Hidden(to, skill.FolderName))
+        {
+            return;
+        }
+
         string profile = CurrentProfile;
         _store.Move(skill.Scope, profile, skill.FolderName, to, profile, skill.FolderName, skill.Name);
         DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.MovedLogLine(skill.Scope, to, skill.FolderName));
@@ -609,6 +656,11 @@ public sealed class SkillRecords
     {
         ArgumentNullException.ThrowIfNull(skill);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        if (Hidden(skill.Scope, skill.FolderName))
+        {
+            return;
+        }
+
         string profile = CurrentProfile;
         _store.Move(skill.Scope, profile, skill.FolderName, skill.Scope, profile, name, name);
         DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.RenamedLogLine(skill.Scope, skill.FolderName, name));
@@ -622,6 +674,12 @@ public sealed class SkillRecords
     public string? SetLocked(Skill skill, bool locked)
     {
         ArgumentNullException.ThrowIfNull(skill);
+        if (Hidden(skill.Scope, skill.FolderName))
+        {
+            // Before the marker file is written into the folder (2026-10-13).
+            return SkillText.GlobalSkillsOff;
+        }
+
         var now = _time.GetUtcNow();
         if (SkillLock.Set(skill.Directory, locked, now) is { } error)
         {
@@ -646,6 +704,12 @@ public sealed class SkillRecords
     public string? SetDisabled(Skill skill, bool disabled)
     {
         ArgumentNullException.ThrowIfNull(skill);
+        if (Hidden(skill.Scope, skill.FolderName))
+        {
+            // Before the marker file is written into the folder (2026-10-13).
+            return SkillText.GlobalSkillsOff;
+        }
+
         var now = _time.GetUtcNow();
         if (SkillDisable.Set(skill.Directory, disabled, now) is { } error)
         {
@@ -666,6 +730,11 @@ public sealed class SkillRecords
     public void Deleted(SkillScope scope, string folder)
     {
         ArgumentNullException.ThrowIfNull(folder);
+        if (Hidden(scope, folder))
+        {
+            return;
+        }
+
         if (_store.Delete(scope, CurrentProfile, folder))
         {
             DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.DeletedLogLine(scope, folder));
@@ -716,6 +785,13 @@ public sealed class SkillRecords
         var seen = new HashSet<long>();
         foreach (var scope in new[] { SkillScope.Global, SkillScope.Profile })
         {
+            if (roots.Hides(scope))
+            {
+                // The profile has its global root off (2026-10-13): its folders are not walked — a hand edit would be recorded under
+                // this profile, and with no catalog names for them the rows would be renamed to their folders.
+                continue;
+            }
+
             foreach (string directory in SkillCatalog.Folders(roots.Of(scope)))
             {
                 string folder = Path.GetFileName(directory);
@@ -766,7 +842,9 @@ public sealed class SkillRecords
             }
         }
 
-        foreach (var row in rows.Where(r => !seen.Contains(r.Id)))
+        // A global row is never removed from a profile with the global root off (2026-10-13): its walk was skipped above, so every one
+        // would read as gone. A folder that really went is caught at the next reconcile in a profile with the switch on.
+        foreach (var row in rows.Where(r => !seen.Contains(r.Id) && !roots.Hides(r.Scope)))
         {
             _store.Delete(row.Id);
             removed++;
@@ -805,8 +883,9 @@ public sealed class SkillRecords
     public IReadOnlyList<SkillRecord> UnusedSince(DateTimeOffset cutoff)
     {
         var roots = _roots();
-        return _store.List(CurrentProfile)
-            .Where(r => r.Reference < cutoff && !SkillLock.IsLocked(Path.Combine(roots.Of(r.Scope), r.Folder)) && !SkillDisable.IsDisabled(Path.Combine(roots.Of(r.Scope), r.Folder)))
+        // The global skills are out of the view while the profile has them off (2026-10-13): purge neither lists nor deletes them.
+        return _store.List(ProfileOf(roots))
+            .Where(r => !roots.Hides(r.Scope) && r.Reference < cutoff && !SkillLock.IsLocked(Path.Combine(roots.Of(r.Scope), r.Folder)) && !SkillDisable.IsDisabled(Path.Combine(roots.Of(r.Scope), r.Folder)))
             .OrderBy(r => r.Reference).ThenBy(r => r.Folder, StringComparer.OrdinalIgnoreCase).ToList();
     }
 }

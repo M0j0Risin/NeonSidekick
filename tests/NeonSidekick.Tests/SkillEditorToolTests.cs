@@ -165,4 +165,36 @@ public class SkillEditorToolTests : IDisposable
         Assert.Throws<ArgumentNullException>(() => new SkillEditorTool(null!, () => false));
         Assert.Throws<ArgumentNullException>(() => new SkillEditorTool(() => _roots, null!));
     }
+
+    // ── Global skills (2026-10-13, the profile's switch) ────────────────────
+
+    private static string[] ScopeEnum(SkillEditorTool tool) =>
+        [.. tool.JsonSchema.GetProperty("properties").GetProperty("scope").GetProperty("enum").EnumerateArray().Select(e => e.GetString()!)];
+
+    /// <summary>Off, the schema offers the profile alone (with the file actions or without), a create there is refused, and an update naming global never writes the global file.</summary>
+    [Fact]
+    public void GlobalOff_TheSchemaOffersTheProfileAlone_ACreateThereIsRefused_AndAnUpdateNeverReachesIt()
+    {
+        var off = _roots with { GlobalOn = false };
+        var tool = new SkillEditorTool(() => off, () => false);
+        var withFiles = new SkillEditorTool(() => off, () => false, new SkillFileAccess(TimeProvider.System));
+
+        Assert.Equal(["profile"], ScopeEnum(tool));
+        Assert.Equal(["profile"], ScopeEnum(withFiles));
+        Assert.DoesNotContain("global", tool.JsonSchema.GetProperty("properties").GetProperty("scope").GetProperty("description").GetString(), StringComparison.Ordinal);
+        Assert.Equal(["create", "update", "write_file", "edit_file"], withFiles.JsonSchema.GetProperty("properties").GetProperty("action").GetProperty("enum").EnumerateArray().Select(e => e.GetString()));
+        Assert.Equal(["profile", "global"], ScopeEnum(_tool));
+        Assert.Equal(["profile", "global"], ScopeEnum(new SkillEditorTool(() => _roots, () => false, new SkillFileAccess(TimeProvider.System))));
+
+        Assert.Equal(SkillText.GlobalSkillsOff, tool.Describe("create", "global", "haiku", "Writes haiku.", "Five, seven, five."));
+        Assert.False(Directory.Exists(Path.Combine(_roots.Global, "haiku")));
+        Assert.Equal("Error: 'team' is not a scope; use profile", tool.Describe("create", "team", "haiku", "d", "i"));
+        Assert.Equal(SkillText.BadScope("team"), _tool.Describe("create", "team", "haiku", "d", "i"));
+
+        string file = Path.Combine(_roots.Global, "pdf", SkillCatalog.FileName);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, "---\nname: pdf\ndescription: d\n---\n\ni\n");
+        Assert.Equal(SkillText.Missing("pdf", SkillScope.Profile), tool.Describe("update", "global", "pdf", null, "Rewritten."));
+        Assert.Equal("---\nname: pdf\ndescription: d\n---\n\ni\n", File.ReadAllText(file));
+    }
 }

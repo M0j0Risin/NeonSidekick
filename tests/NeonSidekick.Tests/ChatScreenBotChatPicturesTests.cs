@@ -824,6 +824,34 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
+    /// Global skills off on the starting profile (2026-10-13): the room uses its catalog, so the bots' writer is offered the profile's skill
+    /// and never the global one.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_GlobalSkillsOff_TheBotsSeeNoGlobalSkill()
+    {
+        var stub = BotPicturesFixture();
+        _settings.Update(d => { d.BotChatSkills = true; d.GlobalSkills = false; });
+        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
+        PutSkill(GlobalSkills, "global-prompts", "Not read: Global skills is off.");
+        _chat.EnqueueText(DogReply);
+        _chat.Enqueue(FakeChatClient.Call("s1", LoadSkillTool.ToolName, new Dictionary<string, object?> { ["name"] = "pony-prompts" }));
+        _chat.EnqueueText("score_9, a dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(4);
+        PushLine("/botchat use the pony prompts skill for pictures");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        string system = SystemText(_chat.Requests[1]);
+        Assert.Contains("<name>pony-prompts</name>", system);
+        Assert.DoesNotContain("global-prompts", system);
+        Assert.All(_chat.Requests, request => Assert.DoesNotContain("global-prompts", SystemText(request)));
+        _ = stub;
+    }
+
+    /// <summary>
     /// The writer's round trips are capped (2026-09-27): three load_skill calls, then a request with no tool, whose text is the
     /// prompt. Each for another file (2026-09-30, code review): a call repeating one already answered ends the rounds sooner.
     /// </summary>

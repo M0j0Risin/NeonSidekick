@@ -111,7 +111,8 @@ internal sealed partial class ChatScreen
         {
             if (screen._menuPane.Enabled)
             {
-                return await screen._skillInstallMenu.AskAsync(candidate, source, check, cancellationToken).ConfigureAwait(false);
+                // No global row while the profile has Global skills off (2026-10-13).
+                return await screen._skillInstallMenu.AskAsync(candidate, source, check, cancellationToken, screen._catalog.Roots.GlobalOn).ConfigureAwait(false);
             }
 
             var scope = check.Scope ?? preselect ?? SkillScope.Profile;
