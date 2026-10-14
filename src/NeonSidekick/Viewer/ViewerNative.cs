@@ -70,6 +70,8 @@ internal static unsafe partial class ViewerNative
     public const uint WsOverlappedWindow = 0x00CF0000;
     public const uint WsPopup = 0x80000000;
     public const uint WsVisible = 0x10000000;
+    public const uint WsClipSiblings = 0x04000000;
+    public const uint WsClipChildren = 0x02000000;
     public const int CwUseDefault = unchecked((int)0x80000000);
 
     public const int GwlStyle = -16;

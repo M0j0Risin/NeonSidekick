@@ -118,7 +118,8 @@ internal sealed unsafe partial class BrowserWindowThread
         }
     }
 
-    // Everything placed for the window's width: the layout, the box, the tooltips' rectangles, and the view below the strip.
+    // Everything placed for the window's width: the layout, the box, the tooltips' rectangles, and the view below the strip — or,
+    // in the page's own full screen (2026-10-14), the box hidden and the view over the whole window, the keyboard taken off the box.
     private void LayOutBar()
     {
         if (_hwnd == IntPtr.Zero || _glyphFont == IntPtr.Zero)
@@ -134,6 +135,12 @@ internal sealed unsafe partial class BrowserWindowThread
         {
             var box = layout.EditFor(_lineHeight);
             SetWindowPos(_edit, IntPtr.Zero, box.Left, box.Top, box.Width, box.Height, SwpNoZOrder | SwpNoActivate);
+            if (!_full.BarShown && GetFocus() == _edit)
+            {
+                _host?.Focus();
+            }
+
+            ShowWindow(_edit, _full.BarShown ? SwShowNoActivate : SwHide);
         }
 
         if (_tooltip != IntPtr.Zero)
@@ -146,12 +153,15 @@ internal sealed unsafe partial class BrowserWindowThread
 
         if (_host is { } host)
         {
-            host.TopInset = layout.Height;
+            host.TopInset = BarHeight;
             host.Resize();
         }
 
         InvalidateRect(_hwnd, null, false);
     }
+
+    // The strip's height, none while the page's own full screen has put it aside.
+    private int BarHeight => _full.BarShown ? _layout?.Height ?? 0 : 0;
 
     private void InvalidateBar()
     {
@@ -224,7 +234,7 @@ internal sealed unsafe partial class BrowserWindowThread
             Rect client;
             GetClientRect(hwnd, &client);
             int width = Math.Max(1, client.Right);
-            int height = _layout?.Height ?? 0;
+            int height = BarHeight;
             if (client.Bottom > height)
             {
                 Fill(hdc, new Rect { Top = height, Right = width, Bottom = client.Bottom }, White);
@@ -380,8 +390,13 @@ internal sealed unsafe partial class BrowserWindowThread
             case WmDpiChanged:
             {
                 // Dragged onto a monitor of another scale: Windows' suggested frame, the fonts made again, everything placed again.
+                // Full screen keeps covering its monitor (the suggested frame would shrink it); only the fonts and places change.
                 var r = (Rect*)lParam;
-                SetWindowPos(hwnd, IntPtr.Zero, r->Left, r->Top, r->Right - r->Left, r->Bottom - r->Top, SwpNoZOrder | SwpNoActivate);
+                if (!_chrome.FullScreen)
+                {
+                    SetWindowPos(hwnd, IntPtr.Zero, r->Left, r->Top, r->Right - r->Left, r->Bottom - r->Top, SwpNoZOrder | SwpNoActivate);
+                }
+
                 _dpi = Math.Max(96u, (uint)((long)wParam & 0xFFFF));
                 MakeFonts();
                 if (_edit != IntPtr.Zero)
@@ -397,7 +412,7 @@ internal sealed unsafe partial class BrowserWindowThread
         return false;
     }
 
-    private BrowserToolItem? HitTest(IntPtr lParam) =>
+    private BrowserToolItem? HitTest(IntPtr lParam) => !_full.BarShown ? null :
         _layout?.HitTest((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
 
     private void Click(BrowserToolItem item)

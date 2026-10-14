@@ -22,7 +22,11 @@ internal sealed unsafe class WindowChrome(string owner)
     /// <summary>Whether the window is full screen (<see cref="SetFullScreen"/>).</summary>
     public bool FullScreen { get; private set; }
 
-    /// <summary>Borderless over the whole monitor and back to the placement it had (FolderPictureViewer's F11).</summary>
+    /// <summary>
+    /// Borderless over the whole monitor and back to the placement it had (FolderPictureViewer's F11). The clip bits stay
+    /// (2026-10-14, when the Browser window took F11): without its <c>WS_CLIPCHILDREN</c> its bar's paint would cover the view
+    /// and the address box.
+    /// </summary>
     public void SetFullScreen(bool on)
     {
         if (on == FullScreen || Window == IntPtr.Zero)
@@ -38,7 +42,8 @@ internal sealed unsafe class WindowChrome(string owner)
             _savedPlacement = placement;
             var monitor = new MonitorInfo { cbSize = (uint)sizeof(MonitorInfo) };
             GetMonitorInfoW(MonitorFromWindow(Window, MonitorDefaultToNearest), &monitor);
-            SetWindowLongPtr(Window, GwlStyle, new IntPtr((long)(WsPopup | WsVisible)));
+            uint clip = (uint)(_savedStyle.ToInt64() & (WsClipChildren | WsClipSiblings));
+            SetWindowLongPtr(Window, GwlStyle, new IntPtr((long)(WsPopup | WsVisible | clip)));
             var r = monitor.rcMonitor;
             SetWindowPos(Window, HwndTop, r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top, SwpFrameChanged | SwpShowWindow);
         }

@@ -304,6 +304,7 @@ internal sealed unsafe partial class BrowserWindowThread
     private static ushort s_atom;
 
     private readonly WindowChrome _chrome = new("browser window");
+    private BrowserFullScreen _full;
     private readonly ManualResetEventSlim _ready = new();
     private readonly Lock _gate = new();
     private readonly Queue<Action> _inbox = new();
@@ -527,7 +528,7 @@ internal sealed unsafe partial class BrowserWindowThread
                 return;
             }
 
-            _hwnd = CreateWindowExW(0, s_className, IntPtr.Zero, WsOverlappedWindow | BrowserBarNative.WsClipChildren, CwUseDefault, CwUseDefault, CwUseDefault, CwUseDefault, IntPtr.Zero, IntPtr.Zero, instance, GCHandle.ToIntPtr(self));
+            _hwnd = CreateWindowExW(0, s_className, IntPtr.Zero, WsOverlappedWindow | WsClipChildren, CwUseDefault, CwUseDefault, CwUseDefault, CwUseDefault, IntPtr.Zero, IntPtr.Zero, instance, GCHandle.ToIntPtr(self));
             if (_hwnd == IntPtr.Zero)
             {
                 _failure = $"CreateWindowExW failed ({Marshal.GetLastPInvokeError()})";
@@ -550,6 +551,7 @@ internal sealed unsafe partial class BrowserWindowThread
                 Created = OnCreated,
                 Failed = OnFailed,
                 Key = OnKey,
+                FullScreen = OnPageFullScreen,
                 NavigationDone = OnNavigationDone,
                 TitleChanged = OnTitleChanged,
                 SourceChanged = OnSourceChanged,
@@ -1120,7 +1122,8 @@ internal sealed unsafe partial class BrowserWindowThread
 
     // A key the window has (BrowserKeys): Ctrl+W closes, F5 or Ctrl+R reloads, Alt+← and Alt+→ move through the history, Ctrl+L,
     // Alt+D or F6 goes to the address box, Esc stops a load, Ctrl+H the history, Ctrl+D saves or unsaves the page, Ctrl+Shift+O the
-    // saved links; everything else is the page's (Ctrl+C, Ctrl+V, Esc for its dialog).
+    // saved links, F11 full screen and Esc out of it; everything else is the page's (Ctrl+C, Ctrl+V, Esc for its dialog). The box
+    // and the menus' buttons are on the bar, which the page's own full screen puts aside: that is left first.
     private bool OnKey(int virtualKey)
     {
         bool control = GetKeyState(VkControl) < 0;
@@ -1131,7 +1134,13 @@ internal sealed unsafe partial class BrowserWindowThread
             return true;   // the history menu has the keys while it shows (from the page too); a chord goes on as usual
         }
 
-        switch (BrowserKeys.ActionFor(virtualKey, control, alt, _barState.Loading, shift))
+        var action = BrowserKeys.ActionFor(virtualKey, control, alt, _barState.Loading, shift, _full.Covering);
+        if (_full.Page && action is BrowserKeyAction.Address or BrowserKeyAction.History or BrowserKeyAction.Links)
+        {
+            ApplyFullScreen(_full with { Page = false });
+        }
+
+        switch (action)
         {
             case BrowserKeyAction.Close:
                 PostMessageW(_hwnd, WmClose, IntPtr.Zero, IntPtr.Zero);
@@ -1160,8 +1169,38 @@ internal sealed unsafe partial class BrowserWindowThread
             case BrowserKeyAction.Links:
                 OpenLinksMenu(keyboard: true);
                 return true;
+            case BrowserKeyAction.ToggleFullScreen:
+                ApplyFullScreen(_full.Toggled());
+                return true;
+            case BrowserKeyAction.LeaveFullScreen:
+                ApplyFullScreen(_full.Left());
+                return true;
             default:
                 return false;
+        }
+    }
+
+    // The window's full screen made what next says: the page taken out of its own when that ends here (the window's key), the
+    // state kept at once so the bar is back before the page's answer comes (it then finds nothing to change), the bar placed
+    // again for the case the size stays (the page's full screen inside F11's).
+    private void ApplyFullScreen(BrowserFullScreen next, bool leavePage = true)
+    {
+        if (leavePage && _full.Page && !next.Page)
+        {
+            _host?.LeavePageFullScreen();
+        }
+
+        _full = next;
+        _chrome.SetFullScreen(next.Covering);
+        LayOutBar();
+    }
+
+    // The page's own full screen (a video's button) takes the window with it, the bar put aside; F11's stays as it was.
+    private void OnPageFullScreen(bool on)
+    {
+        if (on != _full.Page)
+        {
+            ApplyFullScreen(_full.PageChanged(on), leavePage: false);
         }
     }
 

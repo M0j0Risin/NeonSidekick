@@ -314,4 +314,64 @@ public sealed class BrowserToolbarTests
         Assert.Equal(BrowserKeyAction.History, BrowserKeys.ActionFor(BrowserKeys.VkH, control: true, alt: false));   // later on 2026-10-13
         Assert.Equal(BrowserKeyAction.None, BrowserKeys.ActionFor(BrowserKeys.VkH, control: false, alt: false));
     }
+
+    [Fact]
+    public void Keys_F11AndEsc_FullScreen()
+    {
+        Assert.Equal(BrowserKeyAction.ToggleFullScreen, BrowserKeys.ActionFor(BrowserKeys.VkF11, control: false, alt: false));
+        Assert.Equal(BrowserKeyAction.ToggleFullScreen, BrowserKeys.ActionFor(BrowserKeys.VkF11, control: false, alt: false, fullScreen: true));
+        Assert.Equal(BrowserKeyAction.None, BrowserKeys.ActionFor(BrowserKeys.VkF11, control: true, alt: false));
+        Assert.Equal(BrowserKeyAction.None, BrowserKeys.ActionFor(BrowserKeys.VkF11, control: false, alt: true));
+        Assert.Equal(BrowserKeyAction.LeaveFullScreen, BrowserKeys.ActionFor(BrowserKeys.VkEscape, control: false, alt: false, fullScreen: true));
+        Assert.Equal(BrowserKeyAction.Stop, BrowserKeys.ActionFor(BrowserKeys.VkEscape, control: false, alt: false, loading: true, fullScreen: true));   // the load first
+        Assert.Equal(BrowserKeyAction.None, BrowserKeys.ActionFor(BrowserKeys.VkEscape, control: true, alt: false, fullScreen: true));
+    }
+
+    // ── Full screen (2026-10-14) ────────────────────────────────────────────
+
+    [Fact]
+    public void FullScreen_F11_TogglesTheWindowsOwn_WithTheBar()
+    {
+        var on = default(BrowserFullScreen).Toggled();
+        Assert.Equal(new BrowserFullScreen(Window: true, Page: false), on);
+        Assert.True(on.Covering);
+        Assert.True(on.BarShown);
+        Assert.Equal(default, on.Toggled());
+        Assert.False(default(BrowserFullScreen).Covering);
+    }
+
+    [Fact]
+    public void FullScreen_ThePagesOwn_PutsTheBarAside()
+    {
+        var page = default(BrowserFullScreen).PageChanged(true);
+        Assert.True(page.Covering);
+        Assert.False(page.BarShown);
+        Assert.Equal(default, page.PageChanged(false));
+    }
+
+    [Fact]
+    public void FullScreen_F11DuringThePagesOwn_LeavesBoth()
+    {
+        Assert.Equal(default, new BrowserFullScreen(Window: true, Page: true).Toggled());
+        Assert.Equal(default, new BrowserFullScreen(Window: false, Page: true).Toggled());
+    }
+
+    [Fact]
+    public void FullScreen_Esc_PeelsThePagesFirst()
+    {
+        var both = new BrowserFullScreen(Window: true, Page: true);
+        var f11 = both.Left();
+        Assert.Equal(new BrowserFullScreen(Window: true, Page: false), f11);
+        Assert.True(f11.BarShown);
+        Assert.Equal(default, f11.Left());
+        Assert.Equal(default, new BrowserFullScreen(Window: false, Page: true).Left());
+    }
+
+    [Fact]
+    public void FullScreen_ThePageLeavingItsOwn_KeepsF11s()
+    {
+        var f11 = default(BrowserFullScreen).Toggled();
+        var video = f11.PageChanged(true);
+        Assert.Equal(f11, video.PageChanged(false));
+    }
 }

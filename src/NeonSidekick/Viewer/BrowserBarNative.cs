@@ -15,7 +15,6 @@ namespace NeonSidekick.Viewer;
 internal static unsafe partial class BrowserBarNative
 {
     public const uint WsChild = 0x40000000;
-    public const uint WsClipChildren = 0x02000000;
     public const uint EsAutoHScroll = 0x0080;
     public const uint WmSetFocus = 0x0007;
     public const uint WmSetFont = 0x0030;

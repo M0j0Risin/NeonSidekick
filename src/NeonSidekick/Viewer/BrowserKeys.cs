@@ -27,14 +27,22 @@ public enum BrowserKeyAction
 
     /// <summary>The saved links' menu opened at its button, the keyboard on it (Ctrl+Shift+O, Edge's favorites key; later still).</summary>
     Links,
+
+    /// <summary>The window full screen, or out of every full screen when it is (F11; 2026-10-14).</summary>
+    ToggleFullScreen,
+
+    /// <summary>One full screen left, the page's first (Esc while full screen and no page loading).</summary>
+    LeaveFullScreen,
 }
 
 /// <summary>
 /// The Browser window's keys (2026-10-13): Ctrl+W closes it, F5 or Ctrl+R reloads, Alt+← goes back and Alt+→ forward, Ctrl+L, Alt+D
 /// or F6 goes to the address box, Esc stops a page that is loading (later the same day, with the navigation bar), Ctrl+H opens the
-/// history menu (later still), Ctrl+D saves or unsaves the page and Ctrl+Shift+O opens the saved links (later still); nothing else is
-/// taken — unlike the video window, no chord goes to the chat (<c>TerminalHandoff.Take</c>), since a page's form wants Ctrl+C, Ctrl+V
-/// and the rest, and a page's own dialog Esc. Pure; pinned.
+/// history menu (later still), Ctrl+D saves or unsaves the page and Ctrl+Shift+O opens the saved links (later still), and F11 goes
+/// full screen and back with Esc leaving it after a load is stopped (2026-10-14, the user's ask; <see cref="BrowserFullScreen"/>,
+/// never closing the window, which Esc does in the picture windows); nothing else is taken — unlike the video window, no chord
+/// goes to the chat (<c>TerminalHandoff.Take</c>), since a page's form wants Ctrl+C, Ctrl+V and the rest, and a page's own dialog
+/// Esc (while full screen, the second Esc). Pure; pinned.
 /// </summary>
 public static class BrowserKeys
 {
@@ -46,12 +54,16 @@ public static class BrowserKeys
     public const int VkO = 0x4F;
     public const int VkF5 = 0x74;
     public const int VkF6 = 0x75;
+    public const int VkF11 = 0x7A;
     public const int VkLeft = 0x25;
     public const int VkRight = 0x27;
     public const int VkEscape = 0x1B;
 
-    /// <summary>What <paramref name="virtualKey"/> does with the modifiers held; <paramref name="shift"/> matters to Ctrl+Shift+O alone (Ctrl+D ignores it).</summary>
-    public static BrowserKeyAction ActionFor(int virtualKey, bool control, bool alt, bool loading = false, bool shift = false) => virtualKey switch
+    /// <summary>
+    /// What <paramref name="virtualKey"/> does with the modifiers held; <paramref name="shift"/> matters to Ctrl+Shift+O alone (Ctrl+D
+    /// ignores it), and <paramref name="fullScreen"/> (either full screen) to Esc.
+    /// </summary>
+    public static BrowserKeyAction ActionFor(int virtualKey, bool control, bool alt, bool loading = false, bool shift = false, bool fullScreen = false) => virtualKey switch
     {
         VkW when control && !alt => BrowserKeyAction.Close,
         VkF5 when !control && !alt => BrowserKeyAction.Reload,
@@ -62,6 +74,8 @@ public static class BrowserKeys
         VkD when alt && !control => BrowserKeyAction.Address,
         VkF6 when !control && !alt => BrowserKeyAction.Address,
         VkEscape when loading && !control && !alt => BrowserKeyAction.Stop,
+        VkEscape when fullScreen && !control && !alt => BrowserKeyAction.LeaveFullScreen,
+        VkF11 when !control && !alt => BrowserKeyAction.ToggleFullScreen,
         VkH when control && !alt => BrowserKeyAction.History,
         VkD when control && !alt => BrowserKeyAction.SaveLink,
         VkO when control && shift && !alt => BrowserKeyAction.Links,

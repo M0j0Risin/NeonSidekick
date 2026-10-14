@@ -26,7 +26,8 @@
     app-made COM objects, stay covered. NeonSidekick.Viewer.VideoWindow* (2026-10-05): the video window and its thread, proven by hand on the
     published exe; VideoMessages, VideoKeys, VideoText and the VideoPlayer records, where its decisions live, stay covered.
     NeonSidekick.Viewer.BrowserWindow* (2026-10-13): the Browser window and its thread, proven by browser:webview2 (the new slots)
-    and by hand; BrowserPage, BrowserWatch, BrowserKeys, BrowserAnswers and BrowserText, where its decisions live, stay covered.
+    and by hand; BrowserPage, BrowserWatch, BrowserKeys, BrowserAnswers and BrowserText, where its decisions live, stay covered
+    (BrowserFullScreen too, 2026-10-14: F11's full screen and the page's own).
     BrowserBarNative (later that day): its navigation bar's EDIT, focus and comctl32 tooltip calls, proven by the same probe
     (the box and a tooltip made); BrowserToolbar and BrowserAddress, the bar's layout, state and addresses, stay covered.
   - NeonSidekick.Printing.WindowsPrintSpooler* and PrintNative (2026-09-28): the printers, a printer's device context and the
