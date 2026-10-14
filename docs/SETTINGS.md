@@ -549,7 +549,7 @@ Network shares and folders outside the working directory; see [UNC shares](TOOLS
 | UNC shares offered | As *SQL connections offered*. | empty |
 | UNC set password | As *SQL set password*, for runas shares. | — |
 | UNC add/edit share | The wizard for a new or saved share; its test lists the share's root under its account. | — |
-| UNC *-mention enabled | `*` and part of a name lists the offered shares; a pick writes `*name`. Not on a Mac yet. | on |
+| UNC *-mention enabled | `*` and part of a name lists the offered shares; a pick writes `*name`. | on |
 | UNC shares (profile) | As *SQL connections (profile)*. | — |
 | UNC shares (global) | As *SQL connections (global)*. | — |
 

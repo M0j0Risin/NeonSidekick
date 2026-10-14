@@ -4232,12 +4232,14 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The input line's <c>*</c>-mention list (2026-10-01, the user's ask: the UNC shares off the database connections' <c>%</c>):
     /// <see cref="UncChoices"/> over the offered shares while <c>UNC *-mention enabled</c> and <c>UNC tools</c> are both on, else
-    /// nothing, and <c>*</c> is ordinary text.
+    /// nothing, and <c>*</c> is ordinary text. On a Mac too since 2026-10-14 (the user's ask, found by the docs pass): the
+    /// 2026-10-06 gate that left a Mac's list empty outlived UNC's arrival there on 2026-10-11 (the shares mounted through
+    /// <see cref="Unc.MacMountSystem"/>), so a Mac offered the shares as tools but never on the line.
     /// </summary>
     private IReadOnlyList<CompletionItem> StarChoices()
     {
         var effective = _effective();
-        return effective.UncStarMention && effective.UncTools && !OperatingSystem.IsMacOS() ? UncChoices(_unc.Catalog()) : [];   // no UNC on a Mac (2026-10-06)
+        return effective.UncStarMention && effective.UncTools ? UncChoices(_unc.Catalog()) : [];
     }
 
     /// <summary>The UNC shares as mention items (2026-09-30): each name with <see cref="UncText.MentionNote"/>, in the catalog's order. Pure.</summary>

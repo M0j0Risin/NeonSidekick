@@ -39,7 +39,7 @@ From top to bottom:
 * **Enter** sends; Ctrl+Enter starts a new line. ↑/↓ walk earlier messages and move through a wrapped draft.
 * **Copy and paste:** Ctrl+A or a drag selects, Ctrl+C copies, Ctrl+X cuts. A right-click or Alt+V pastes, pictures too.
 * **Ctrl+C** with nothing selected stops the speech, else cancels the reply; twice at an idle line, it exits.
-* **Lists:** `/` commands, `@` files, `#` skills, `$` tools, `%` database connections, `^` ComfyUI workflows, `*` UNC shares (not on a Mac yet). They work inside a command's text too, except in `/read`, `/view`, `/print` and `/pdf`.
+* **Lists:** `/` commands, `@` files, `#` skills, `$` tools, `%` database connections, `^` ComfyUI workflows, `*` UNC shares. They work inside a command's text too, except in `/read`, `/view`, `/print` and `/pdf`.
 * **Drop a picture** from the picture strip or the transcript onto the input row to attach it (**🖼️ drop on line**).
 * **During a reply** Enter queues the message. ESC stops the speech, then closes an open list, then cancels the reply; it never clears your draft.
 * **At the idle line** ESC clears the draft (↑ brings it back); ESC twice on an empty line opens `/rewind`.

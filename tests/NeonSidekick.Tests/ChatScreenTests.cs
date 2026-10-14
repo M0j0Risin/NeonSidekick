@@ -4685,6 +4685,32 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
+    /// <summary>
+    /// <c>*</c> and part of a name lists the offered UNC shares on every OS (2026-10-14): a Mac's list was empty until then, a
+    /// gate from before UNC came to the Mac. A plain <see cref="FactAttribute"/>, so the Mac run proves it there.
+    /// </summary>
+    [Fact]
+    public async Task WithGeometry_StarMention_ListsTheOfferedShares()
+    {
+        File.WriteAllText(Path.Combine(_settings.ProfileDirectory, "unc.json"), "{ \"shares\": { \"zebrashare\": { \"path\": \"" + _dir.Replace("\\", "/", StringComparison.Ordinal) + "\" } } }");
+        _settings.Update(d => { d.TtsOutput = false; d.UncTools = true; d.UncSharesOffered = ["zebrashare"]; });
+        _console.Profile.Height = 80;
+        _geometry = new ScreenGeometry(() => null);
+        foreach (char c in "*zeb")
+        {
+            _console.Input.PushKey(Keys.Char(c));
+        }
+
+        _console.Input.PushKey(Keys.Escape);   // the list closed, the draft cleared
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("zebrashare", output);
+        Assert.Empty(_chat.Requests);
+    }
+
     [WindowsFact]
     public async Task WithGeometry_BareTools_OpensTheToolsMenu_OnNineTabs()
     {
