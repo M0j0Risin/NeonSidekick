@@ -24,7 +24,7 @@ public enum BrowserPrivacyKind
 }
 
 /// <summary>
-/// The setting <c>Browser privacy</c> (2026-10-13, the user's ask and name): <c>keep-history</c> or <c>clear-history</c>, the
+/// The setting <c>Web browser privacy</c> (2026-10-13, the user's ask and name): <c>keep-history</c> or <c>clear-history</c>, the
 /// <see cref="Web.BotcheckWindow"/> shape. Under <c>clear-history</c> (the user's default) the Browser window clears its browsing and
 /// download history when it closes; its cookies and sign-ins stay either way (<c>/browser clear all</c> takes those). The window's data
 /// is the loaded profile's own (<see cref="BrowserPage.UserDataFolder"/>), so one profile's setting never reaches another's.

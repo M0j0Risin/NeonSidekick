@@ -62,6 +62,30 @@ public class MenuPaneTests : IDisposable
         menu.Close();
     }
 
+    /// <summary>
+    /// Shift+letter starts the filter (2026-10-13, the user's pick: the saved links' five lettered buttons): a button's letter typed with
+    /// Shift goes on the filter, so a filter may start with it. The modifier decides, not the case: Caps Lock's upper case without Shift
+    /// is still the button, and a symbol typed with Shift (a <c>+</c>) still presses its button.
+    /// </summary>
+    [Fact]
+    public async Task ShiftLetter_StartsTheFilter_CapsLockAndAShiftedSymbolStayTheButtons()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        var page = Page("one", "two") with { Buttons = [new MenuButton("✖  remove", 'd'), new MenuButton("+ more", '+')], Filter = "" };
+
+        Push(new ConsoleKeyInfo('D', ConsoleKey.D, shift: true, alt: false, control: false));
+        Assert.Equal("D", (await menu.PickAsync(page, 0, CancellationToken.None))!.Value.Filter);
+        Push(new ConsoleKeyInfo('D', ConsoleKey.D, shift: false, alt: false, control: false));   // Caps Lock: upper case, no Shift
+        Assert.Equal(0, (await menu.PickAsync(page, 0, CancellationToken.None))!.Value.Button);
+        Push(Keys.Char('d'));
+        Assert.Equal(0, (await menu.PickAsync(page, 0, CancellationToken.None))!.Value.Button);
+        Push(new ConsoleKeyInfo('+', ConsoleKey.OemPlus, shift: true, alt: false, control: false));
+        Assert.Equal(1, (await menu.PickAsync(page, 0, CancellationToken.None))!.Value.Button);
+        menu.Close();
+    }
+
     [Fact]
     public async Task Enter_ReturnsTheRow_UpAndDownWrap_AndThePaneStaysOpen()
     {

@@ -65,8 +65,10 @@ public class ConsistencyPassTests
     [Fact]
     public void AFiltersHint_DropsTheLetterKeys_ItTakes()
     {
-        Assert.Equal("Enter = play · d = remove · c = clear all · " + MenuFilter.TypeAndCloseKeys, MenuFilter.Hint(YouTubeText.SavedKeys, ""));
-        Assert.Equal("Enter = play · " + MenuFilter.FilteringKeys, MenuFilter.Hint(YouTubeText.SavedKeys, "c"));
+        Assert.Equal("Enter = play · d = remove · c = clear all · Shift+↑↓ = move · " + MenuFilter.TypeOrShiftAndCloseKeys, MenuFilter.Hint(YouTubeText.SavedKeys, ""));
+        Assert.Equal("Enter = play · " + MenuFilter.FilteringKeys, MenuFilter.Hint(YouTubeText.SavedKeys, "c"));   // the move keys go too (2026-10-13)
+        Assert.Equal("Enter = open · " + MenuFilter.FilteringKeys, MenuFilter.Hint(Viewer.BrowserLinkText.PaneKeys, "n"));
+        Assert.Equal("Enter = remove · p = policy · type / Shift+letter = filter · ESC = back", MenuFilter.HintBeforeEsc(SettingsMenu.AllowedCommandsKeys, "", letteredButtons: true));
         Assert.Equal("Enter = remove · " + MenuFilter.FilteringKeys, MenuFilter.HintBeforeEsc(SettingsMenu.AllowedCommandsKeys, "git"));
         Assert.Equal("Enter = choose · " + MenuFilter.FilteringKeys, MenuFilter.HintBeforeEsc("Enter = choose · d / h / c = browser mode · ESC = keep", "x"));
         Assert.Equal(MenuFilter.FilteringKeys, MenuFilter.HintBeforeEsc("r = refresh · ESC = close", "x"));

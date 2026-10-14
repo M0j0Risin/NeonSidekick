@@ -1018,10 +1018,15 @@ public sealed class SidekickApp
                     continue;
                 }
 
-                // /browser (2026-10-13): the Browser window is the screen's; headless says so, ahead of the server check.
-                if (SlashCommands.Parse(text) is (SlashCommand.Browser, _))
+                // /browser (2026-10-13): the Browser window is the screen's; headless says so, ahead of the server check. The saved links
+                // (later that day) need no window: save <url>, list, list --clear (at once) and unsave work here (BrowserCommand.Headless).
+                if (SlashCommands.Parse(text) is (SlashCommand.Browser, var browserArgs))
                 {
-                    await HeadlessLineAsync("[error] " + Web.BotCheckText.BrowserNeedsScreen).ConfigureAwait(false);
+                    foreach (string browserRow in BrowserCommand.Headless(new Viewer.BrowserLinks(_settings.ProfileDirectory, _time), browserArgs))
+                    {
+                        await HeadlessLineAsync(browserRow.StartsWith("Error: ", StringComparison.Ordinal) ? "[error] " + browserRow["Error: ".Length..] : browserRow).ConfigureAwait(false);
+                    }
+
                     continue;
                 }
 

@@ -16,7 +16,9 @@ namespace NeonSidekick.App;
 /// highlighted video's remove, and one at a time is <c>/youtube unsave</c>'s) takes every saved video off the list after a yes/no (the
 /// cursor on No), the whole list whatever the filter shows, and closes the pane with <see cref="YouTubeText.Cleared"/> on the
 /// transcript — <c>/queue</c>'s clear all. The <see cref="ProcessMenu"/> shape, the list read again after every act. Without the pane
-/// the screen prints the rows instead (<c>ChatScreen.ShowSavedVideosAsync</c>).
+/// the screen prints the rows instead (<c>ChatScreen.ShowSavedVideosAsync</c>). The order is the user's since 2026-10-13 (the user's
+/// ask, with the Browser window's saved links): <see cref="MenuPage.Moves"/> while nothing is typed — Shift/Alt+↑↓ a place,
+/// Shift/Alt+Home/End to the top or bottom, silently (<see cref="YouTubeLibrary.Move"/>) — and Delete is the remove's key too.
 /// </summary>
 internal sealed class YouTubeSavedMenu
 {
@@ -83,6 +85,7 @@ internal sealed class YouTubeSavedMenu
                     Filter = filter,
                     Caption = MenuFilter.CaptionOrNull(filter, shown.Count, listed.Count) ?? YouTubeText.SavedCaption(listed.Count),
                     Footer = (_, row) => row < shown.Count ? YouTubeText.SavedFooter(listed[shown[row]], _zone) : null,
+                    Moves = filter.Length == 0,   // the order is the whole list's: no moves while a filter shows part of it
                 };
                 if (await _pane.PickAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken).ConfigureAwait(false) is not { } pick)
                 {
@@ -116,7 +119,12 @@ internal sealed class YouTubeSavedMenu
                 {
                     continue;   // the no-match row
                 }
-                else if (pick.Button == RemoveSelected)
+                else if (pick.Move != 0)
+                {
+                    // A move (2026-10-13): silent, the row going with the cursor.
+                    _library().Move(videos[cursor].Id, pick.Move);
+                }
+                else if (pick.Button == RemoveSelected || pick.Remove)
                 {
                     if (await ConfirmAsync(YouTubeText.RemovePrompt(videos[cursor]), cancellationToken).ConfigureAwait(false))
                     {

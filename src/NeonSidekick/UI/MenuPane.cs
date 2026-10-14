@@ -966,8 +966,12 @@ public sealed class MenuPane : INoticeSink
                 }
 
                 // A button's key wins while nothing is typed (2026-10-07: a list with keyed buttons that filters too, /docker's r = refresh,
-                // /youtube list's d = remove and c = clear all); once a filter is under way every character goes on it.
-                bool buttonKey = page.Filter is { Length: 0 } && page.Tabs is null && page.Buttons is { Count: > 0 } offered
+                // /youtube list's d = remove and c = clear all); once a filter is under way every character goes on it. A letter typed with
+                // Shift always goes on the filter (2026-10-13, the user's pick, with the Browser window's saved links and their five lettered
+                // buttons): a filter may start with a button's letter that way. The modifier, not the case, so Caps Lock leaves the buttons
+                // be on Windows; a Unix terminal sends the character alone (VtInputParser reads A–Z as Shift), so there Caps Lock filters.
+                bool shiftedLetter = (k.Modifiers & ConsoleModifiers.Shift) != 0 && char.IsLetter(k.KeyChar);
+                bool buttonKey = page.Filter is { Length: 0 } && page.Tabs is null && page.Buttons is { Count: > 0 } offered && !shiftedLetter
                     && k.KeyChar is not '\0' && !char.IsControl(k.KeyChar) && ButtonFor(offered, k.KeyChar) is not null;
                 if (!buttonKey && page.Filter is { } filter && MenuFilter.Edit(filter, k, page.SpaceFlips) is { } typed)
                 {

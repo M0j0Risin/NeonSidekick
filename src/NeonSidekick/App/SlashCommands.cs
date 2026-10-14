@@ -142,7 +142,9 @@ public enum SlashCommand
     /// <summary>
     /// <c>/browser [url]</c> (2026-10-13, the user's ask, with the bot checks): the Browser window (WebView2) on a page, or the blank
     /// page, for the user to browse; its cookies go to the web tools when they close it (<c>ChatScreen.HandleBrowser</c>). <c>/browser clear
-    /// history|all</c> (later on 2026-10-13) clears what the window keeps for the loaded profile. Windows only; never headless.
+    /// history|all</c> (later on 2026-10-13) clears what the window keeps for the loaded profile. The saved links (later still,
+    /// <c>BrowserCommand</c>): <c>save [url [name]]</c>, <c>list [--clear]</c>, <c>unsave &lt;n|url&gt;</c> and <c>/browser &lt;n&gt;</c>; they
+    /// need no window, so they work headless and off Windows. The window itself is Windows only, never headless.
     /// </summary>
     Browser,
 
@@ -378,7 +380,7 @@ public static class SlashCommands
             new(Advisors.AdvisorText.Word, Advisors.AdvisorText.HelpSummary),
             new("/botchat", "let the profiles talk to each other"),
             new("/browse", "browse the working directory's files"),
-            new("/browser", "open or clear the Browser window"),
+            new("/browser", "the Browser window and its saved links"),
             new("/claude", "ask Claude Code from the chat"),
             new(Camera.CameraText.Word, Camera.CameraText.HelpSummary),
             new(NeonSidekick.Screen.ScreenText.Word, NeonSidekick.Screen.ScreenText.HelpSummary),

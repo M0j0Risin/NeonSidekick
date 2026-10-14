@@ -310,7 +310,7 @@ if (OperatingSystem.IsWindows())
 {
     NeonSidekick.Viewer.BrowserWindow.SearchUrl = words => NeonSidekick.Viewer.BrowserAddress.SearchUrl(app.EffectiveSettings, words);
     NeonSidekick.Viewer.BrowserWindow.HomePage = () => app.EffectiveSettings.WebBrowserHomePage;
-    NeonSidekick.Viewer.BrowserWindow.Privacy = () => NeonSidekick.Viewer.BrowserPrivacy.Resolve(app.EffectiveSettings);   // Browser privacy, read when it acts
+    NeonSidekick.Viewer.BrowserWindow.Privacy = () => NeonSidekick.Viewer.BrowserPrivacy.Resolve(app.EffectiveSettings);   // Web browser privacy, read when it acts
 }
 
 // The app's own windows hand back what they have no use for (2026-10-03): TAB brings the terminal forward, found now, while

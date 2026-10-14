@@ -7,7 +7,10 @@ namespace NeonSidekick.Tests.Fakes;
 /// The Browser window without WebView2 (2026-10-13): every bot check and <c>/browser</c> visit recorded; a check answers
 /// <see cref="Answer"/> at once (cleared with <see cref="Html"/> by default), or with <see cref="Hold"/> waits until its token is
 /// cancelled and ends as given up, noting the cancel; a visit answers <see cref="Visit"/>; a clear (later on 2026-10-13) is recorded and
-/// answers <see cref="ClearAnswer"/>; every <see cref="Close"/> is counted.
+/// answers <see cref="ClearAnswer"/>; every <see cref="Close"/> is counted. The saved links (later still): <see cref="Current"/> is the page
+/// a bare <c>/browser save</c> reads (<see cref="CurrentHold"/>: it never answers), <see cref="LinksChangedCount"/> counts the pane's
+/// changes, and with <see cref="HoldVisit"/> every visit stays open until <see cref="EndVisit"/>, all of them answered at once as the
+/// window does.
 /// </summary>
 public sealed class FakeBrowserWindow : IBrowserWindow
 {
@@ -43,11 +46,50 @@ public sealed class FakeBrowserWindow : IBrowserWindow
         return held.Task;
     }
 
+    public bool HoldVisit { get; set; }
+
+    private TaskCompletionSource<BrowserVisit>? _held;
+
     public Task<BrowserVisit> BrowseAsync(Uri? url)
     {
         Browses.Add(url);
-        return Task.FromResult(Visit);
+        if (!HoldVisit)
+        {
+            return Task.FromResult(Visit);
+        }
+
+        _held ??= new TaskCompletionSource<BrowserVisit>(TaskCreationOptions.RunContinuationsAsynchronously);
+        return _held.Task;
     }
+
+    /// <summary>The held visit closed: every open of it answered <see cref="Visit"/>.</summary>
+    public void EndVisit()
+    {
+        var held = _held;
+        _held = null;
+        held?.TrySetResult(Visit);
+    }
+
+    /// <summary>The page the window shows for a bare <c>/browser save</c>; null: none open.</summary>
+    public (string Url, string? Title)? Current { get; set; }
+
+    /// <summary>The page is asked for and never answered (a closing window), so the screen's own wait ends it.</summary>
+    public bool CurrentHold { get; set; }
+
+    /// <summary>How many times the page was asked for.</summary>
+    public int CurrentAsks => Volatile.Read(ref _currentAsks);
+
+    private int _currentAsks;
+
+    public Task<(string Url, string? Title)?> CurrentPageAsync()
+    {
+        Interlocked.Increment(ref _currentAsks);
+        return CurrentHold ? new TaskCompletionSource<(string Url, string? Title)?>().Task : Task.FromResult(Current);
+    }
+
+    public int LinksChangedCount { get; private set; }
+
+    public void LinksChanged() => LinksChangedCount++;
 
     public List<BrowserClear> Clears { get; } = new();
 

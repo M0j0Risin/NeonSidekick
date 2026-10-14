@@ -1467,7 +1467,7 @@ internal sealed partial class ChatScreen
         // The Camera tool page's watch button (2026-10-04, the user's ask), only where there is a camera layer to watch with.
         _menu.CameraWatching = _camera.Available ? () => _cameraWatch.Running : null;
         _menu.SetCameraWatch = _camera.Available ? SetWatchFromPane : null;
-        _menu.OpenBrowser = _browserWindow is not null ? () => HandleBrowser("") : null;   // the Web tools page's open-browser button (2026-10-13)
+        _menu.OpenBrowser = _browserWindow is not null ? () => OpenInBrowser(Viewer.BrowserAddress.Home(_effective().WebBrowserHomePage), _flow) : null;   // the Web tools page's open-browser button (2026-10-13)
         // Its live, snap and screen buttons (2026-10-05, the user's ask): each line run as its chord is in a pane — /camera live
         // toggled in place, /camera snap and /screen with the pane closed first, so the picture attaches at the idle line.
         _menu.CameraLive = _camera.Available && _liveView is not null ? () => _liveLease is not null : null;
@@ -1676,6 +1676,15 @@ internal sealed partial class ChatScreen
     /// double-click off it closes it. Pinned.
     /// </summary>
     public const string YouTubeToolGlyph = "📺";
+
+    /// <summary>
+    /// The saved links' item (later on 2026-10-13, the user's ask and pick): a star, the Browser window's ☆ in colour,
+    /// <see cref="BrowserLinksToolLine"/>, the saved links' pane — a pane like 📺's, after it. 🔗 was the UNC tools' already. Pinned.
+    /// </summary>
+    public const string BrowserLinksToolGlyph = "⭐";
+
+    /// <summary>The line the saved links' item runs (later on 2026-10-13): <c>/browser list</c>.</summary>
+    public const string BrowserLinksToolLine = BrowserCommand.Word + " " + BrowserCommand.ListWord;
 
     /// <summary>
     /// The shopping list's item (2026-10-11, the user's ask): a cart, <see cref="ShoppingToolLine"/>, the list's checklist pane — a pane like
@@ -2221,6 +2230,7 @@ internal sealed partial class ChatScreen
         ComfyViewToolGlyph => ComfyViewToolLine,
         ComfyThumbsToolGlyph => ComfyThumbsToolLine,
         YouTubeToolGlyph => YouTubeToolLine,
+        BrowserLinksToolGlyph => BrowserLinksToolLine,
         ShoppingToolGlyph => ShoppingToolLine,
         _ => null,
     };
@@ -4991,6 +5001,10 @@ internal sealed partial class ChatScreen
             case SlashCommand.YouTube:
                 // The verbs (2026-10-05); past the first word, a search's words or a video, free text.
                 return YouTube.YouTubeCommand.Complete(argText);
+
+            case SlashCommand.Browser:
+                // The saved links' verbs and clear (later on 2026-10-13); an address is free text.
+                return BrowserCommand.Complete(argText);
 
             case SlashCommand.Shopping:
                 // The verbs (2026-10-11), then the stores' names and the list's lines.
@@ -12477,7 +12491,7 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Browser:
-                await HandleBrowserAtIdleAsync(args, cancellationToken).ConfigureAwait(false);
+                await HandleBrowserAsync(args, _transcript, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Terminal:

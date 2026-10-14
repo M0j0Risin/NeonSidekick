@@ -1847,7 +1847,7 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.False(_settings.Current.WebTools);
         // The eleven rows padded to the tab's own column (29 since the botcheck window's row, 2026-10-13), the toggle's notice on the status line under the strip.
-        AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.WebTabTitle, "▸ Web tools                    on\n  Web browser mode             auto\n  Web browser path             (auto: msedge.exe)\n  Web browser botcheck window  ask\n  Web browser home page        (blank page)\n  Browser privacy              clear-history\n  Web browser network mode     internet\n  Web search method            duckduckgo\n  Web SearXNG URL              (not set)\n  Web search max results       20 results\n  Web download max (MB)        50 MB\n"), 100);
+        AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.WebTabTitle, "▸ Web tools                    on\n  Web browser mode             auto\n  Web browser path             (auto: msedge.exe)\n  Web browser botcheck window  ask\n  Web browser home page        (blank page)\n  Web browser privacy          clear-history\n  Web browser network mode     internet\n  Web search method            duckduckgo\n  Web SearXNG URL              (not set)\n  Web search max results       20 results\n  Web download max (MB)        50 MB\n"), 100);
         Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.CoreTabTitle) + "\n  · Web tools: off\n" + Heading("── Browser") + "\n▸ Web tools                    off\n", Output);
         pane.Dispose();
     }
@@ -2143,8 +2143,8 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.Equal("keep-history", _settings.Current.BrowserPrivacy);
         Assert.Contains("\n  keep-history  keeps the pages it visited, in its history menu too\n▸ clear-history clears its history when the window closes; cookies and sign-ins stay\n", Output);
-        Assert.Contains("  · Browser privacy: keep-history\n", Output);
-        Assert.Equal("Browser privacy", SettingsMenu.FieldName(SettingsField.BrowserPrivacy));
+        Assert.Contains("  · Web browser privacy: keep-history\n", Output);
+        Assert.Equal("Web browser privacy", SettingsMenu.FieldName(SettingsField.BrowserPrivacy));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BrowserPrivacy));
         pane.Dispose();
     }
@@ -2155,7 +2155,7 @@ public partial class ToolsMenuTests : IDisposable
         // 2026-10-01, the user's ask: 1 to 102400 MB, 50 by default (the constant until then).
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.WebTabTitle));   // Web
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the eleventh row (the botcheck window's, the home page's and Browser privacy's since 2026-10-13), after the search count: the typed slot with "50"
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the eleventh row (the botcheck window's, the home page's and Web browser privacy's since 2026-10-13), after the search count: the typed slot with "50"
         Push(Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);   // refused: 0
         Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Char('2'), Keys.Char('0'), Keys.Char('0'), Keys.Char('0'), Keys.Enter);   // 2000
         Push(Keys.Escape);
@@ -2344,7 +2344,7 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.Equal("yolo", _settings.Current.ShellCommandPolicy);
         Assert.Equal(["git push"], _settings.Current.ShellCommandAllowed);
-        Assert.Contains(MenuFilter.HintBeforeEsc(SettingsMenu.AllowedCommandsKeys, ""), Output);   // type to filter since 2026-10-07
+        Assert.Contains(MenuFilter.HintBeforeEsc(SettingsMenu.AllowedCommandsKeys, "", letteredButtons: true), Output);   // type to filter since 2026-10-07; Shift+letter since 2026-10-13
         Assert.Contains("\n" + Titled(SettingsMenu.YoloConfirmQuestion) + "\n", Output);
         Assert.Contains("  · Shell command policy: yolo\n▸ git push\n", Output);
         Assert.False(pane.OverlayOpen);

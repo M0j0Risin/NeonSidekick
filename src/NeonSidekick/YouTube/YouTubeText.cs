@@ -330,9 +330,9 @@ public static class YouTubeText
 
     /// <summary>
     /// The saved-videos pane's hint row (type to filter since 2026-10-07; <c>c = clear all</c> for <c>d = remove</c> on 2026-10-08, and
-    /// later that day both, the user's ask). Pinned.
+    /// later that day both, the user's ask; the move keys and a filter's Shift on 2026-10-13, the user's ask). Pinned.
     /// </summary>
-    public const string SavedKeys = "Enter = play · d = remove · c = clear all · " + UI.MenuFilter.TypeAndCloseKeys;
+    public const string SavedKeys = "Enter = play · d = remove · c = clear all · Shift+↑↓ = move · " + UI.MenuFilter.TypeOrShiftAndCloseKeys;
 
     /// <summary>
     /// A list's remove button: the highlighted row taken off after a yes/no (the skills' version list's; the saved-videos pane's until

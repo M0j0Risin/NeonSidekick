@@ -22,6 +22,25 @@ public sealed class YouTubeLibraryTests : IDisposable
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
     }
 
+    /// <summary>The saved videos reordered (2026-10-13, the user's ask): each way, held at the ends, the top and the bottom; a resume's update keeps the place.</summary>
+    [Fact]
+    public void Move_EachWay_AndAResumeUpdateKeepsTheNewPlace()
+    {
+        var library = new YouTubeLibrary(_dir, _time);
+        library.Add(Bunny, "Bunny");
+        library.Add(Zoo, "Zoo");
+        library.Add("dQw4w9WgXcQ", "Third");
+
+        Assert.True(library.Move("dQw4w9WgXcQ", int.MinValue));
+        Assert.Equal(["dQw4w9WgXcQ", Bunny, Zoo], library.List().Select(v => v.Id));
+        Assert.True(library.Move(Bunny, 1));
+        Assert.True(library.Move(Bunny, 1));   // held at the bottom
+        Assert.Equal(["dQw4w9WgXcQ", Zoo, Bunny], library.List().Select(v => v.Id));
+        Assert.True(library.Update(Bunny, v => v with { Position = 42 }));
+        Assert.Equal(["dQw4w9WgXcQ", Zoo, Bunny], library.List().Select(v => v.Id));
+        Assert.False(library.Move("xxxxxxxxxxx", 1));
+    }
+
     private YouTubeLibrary Library() => new(_dir, _time);
 
     // ── The list ─────────────────────────────────────────────────────────────

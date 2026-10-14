@@ -2239,7 +2239,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebBrowserPath => "Web browser path",
         SettingsField.WebBrowserBotcheckWindow => "Web browser botcheck window",
         SettingsField.WebBrowserHomePage => "Web browser home page",
-        SettingsField.BrowserPrivacy => "Browser privacy",
+        SettingsField.BrowserPrivacy => "Web browser privacy",
         SettingsField.WebBrowserNetworkMode => "Web browser network mode",
         SettingsField.WebSearxngUrl => "Web SearXNG URL",
         SettingsField.WebSearchMaxResults => "Web search max results",
@@ -3509,7 +3509,7 @@ internal sealed partial class SettingsMenu
     public static string BotcheckWindowLabel(string name) =>
         Markup.Escape(name.PadRight(10)) + Theme.DimMarkup(Web.BotcheckWindow.Describe(name));
 
-    /// <summary>One row of the Browser privacy picker (later on 2026-10-13): the mode and its hint, padded to fourteen (<c>clear-history</c> is thirteen). Pinned.</summary>
+    /// <summary>One row of the Web browser privacy picker (later on 2026-10-13): the mode and its hint, padded to fourteen (<c>clear-history</c> is thirteen). Pinned.</summary>
     public static string BrowserPrivacyLabel(string name) =>
         Markup.Escape(name.PadRight(14)) + Theme.DimMarkup(Viewer.BrowserPrivacy.Describe(name));
 
@@ -4534,7 +4534,7 @@ internal sealed partial class SettingsMenu
             while (true)
             {
                 var shown = filter.Arrange(Enumerable.Range(0, servers.Count).Where(i => Passes(servers[i]) && ServerMatches(text, servers[i])).ToList(), i => NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(servers[i].BaseUrl) ? EmbeddedRowModel(servers[i]) : null);
-                var page = new MenuPage(title, text.Length > 0 && shown.Count == 0 ? [MenuFilter.NoMatchRow(text)] : FilteredRows(labels, shown), MenuFilter.HintBeforeEsc(baseHint, text))
+                var page = new MenuPage(title, text.Length > 0 && shown.Count == 0 ? [MenuFilter.NoMatchRow(text)] : FilteredRows(labels, shown), MenuFilter.HintBeforeEsc(baseHint, text, letteredButtons: embedded))
                 {
                     Filter = text,
                     Caption = MenuFilter.CaptionOrNull(text, shown.Count, servers.Count),
@@ -7921,7 +7921,7 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
-    /// <summary>The Browser privacy picker (later on 2026-10-13): one <see cref="BrowserPrivacyLabel"/> row per <see cref="Viewer.BrowserPrivacy.Names"/> entry, the saved one under the cursor.</summary>
+    /// <summary>The Web browser privacy picker (later on 2026-10-13): one <see cref="BrowserPrivacyLabel"/> row per <see cref="Viewer.BrowserPrivacy.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickBrowserPrivacyAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
         var names = Viewer.BrowserPrivacy.Names;
@@ -8190,7 +8190,7 @@ internal sealed partial class SettingsMenu
             IReadOnlyList<string> rows = allowed.Count == 0 ? [Markup.Escape(NoAllowedCommandsRow)]
                 : shown.Count == 0 ? [MenuFilter.NoMatchNameRow(filter)]
                 : shown.Select(i => Markup.Escape(allowed[i])).ToList();
-            var page = new MenuPage(Crumb(FieldName(SettingsField.ShellCommandAllowed)), rows, allowed.Count == 0 ? AllowedCommandsEmptyKeys : MenuFilter.HintBeforeEsc(AllowedCommandsKeys, filter))
+            var page = new MenuPage(Crumb(FieldName(SettingsField.ShellCommandAllowed)), rows, allowed.Count == 0 ? AllowedCommandsEmptyKeys : MenuFilter.HintBeforeEsc(AllowedCommandsKeys, filter, letteredButtons: true))
             {
                 Filter = allowed.Count == 0 ? null : filter,
                 Caption = MenuFilter.CaptionOrNull(filter, shown.Count, allowed.Count),

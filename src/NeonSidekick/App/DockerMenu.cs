@@ -23,7 +23,7 @@ internal sealed class DockerMenu
 {
     // The key hints. Pinned.
     public const string Title = DockerText.Glyph + " Docker";
-    public const string Keys = "Enter = open · r = refresh · l = llm · " + MenuFilter.TypeAndCloseKeys;   // type to filter since 2026-10-07; l since 2026-10-11
+    public const string Keys = "Enter = open · r = refresh · l = llm · " + MenuFilter.TypeOrShiftAndCloseKeys;   // type to filter since 2026-10-07; l since 2026-10-11; Shift+letter since 2026-10-13
 
     /// <summary>The hint under a host that drew the list (2026-10-11, the Docker tools page's manage button): ESC goes back to it. Pinned.</summary>
     public const string BackKeys = "Enter = open · r = refresh · l = llm · " + MenuFilter.TypeKeys + " · ESC = back";

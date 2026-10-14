@@ -7,7 +7,7 @@ namespace NeonSidekick.Viewer;
 // ── Privacy, clears and the history menu (later on 2026-10-13) ────────────
 
 /// <summary>
-/// The Browser window's privacy (later on 2026-10-13, the user's ask): under <c>Browser privacy</c> <c>clear-history</c> its history is
+/// The Browser window's privacy (later on 2026-10-13, the user's ask): under <c>Web browser privacy</c> <c>clear-history</c> its history is
 /// cleared at every close (after a visit's cookies are read) and, as a backstop for a close that never finished, as it opens, before
 /// its first page; <c>/browser clear history|all</c> (<see cref="ClearAsync"/>) clears on demand. Beside Chromium's history, which
 /// WebView2 cannot read back, the window keeps its own list of visits (<see cref="BrowserHistory"/>) for the history menu (🕘, Ctrl+H):

@@ -41,6 +41,7 @@ public static class BrowserText
     public const string StopName = "Stop";
     public const string HomeName = "Home";
     public const string HistoryName = "History";
+    public const string LinksName = "Saved links";
     public const string GoName = "Go";
     public const string OpenName = "Open in your browser";
     public const string SecureName = "Secure";

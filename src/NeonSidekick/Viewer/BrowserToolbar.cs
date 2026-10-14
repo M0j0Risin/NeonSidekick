@@ -13,6 +13,9 @@ public enum BrowserToolItem
     /// <summary>The history menu (later on 2026-10-13): the window's own list of visits.</summary>
     History,
 
+    /// <summary>The saved links' menu (later still on 2026-10-13): ☆, or ★ while the page is saved (<see cref="BrowserBarState.Saved"/>).</summary>
+    Links,
+
     /// <summary>The https / not-secure mark before the address; drawn, never clicked.</summary>
     Padlock,
 
@@ -49,10 +52,10 @@ public readonly record struct BarRect(int Left, int Top, int Right, int Bottom)
 /// Where everything on the bar is for one client width and DPI (<see cref="BrowserToolbar.Layout"/>): the strip's height, each
 /// button's square, the framed field (the padlock's slot and the address box inside its 1 px frame). Pure.
 /// </summary>
-public sealed record BrowserBarLayout(int Height, BarRect Back, BarRect Forward, BarRect Reload, BarRect Home, BarRect History, BarRect Field, BarRect Padlock, BarRect Address, BarRect Go, BarRect Open)
+public sealed record BrowserBarLayout(int Height, BarRect Back, BarRect Forward, BarRect Reload, BarRect Home, BarRect History, BarRect Links, BarRect Field, BarRect Padlock, BarRect Address, BarRect Go, BarRect Open)
 {
     /// <summary>The buttons left to right: what a click can land on.</summary>
-    public static readonly IReadOnlyList<BrowserToolItem> Buttons = [BrowserToolItem.Back, BrowserToolItem.Forward, BrowserToolItem.Reload, BrowserToolItem.Home, BrowserToolItem.History, BrowserToolItem.Go, BrowserToolItem.Open];
+    public static readonly IReadOnlyList<BrowserToolItem> Buttons = [BrowserToolItem.Back, BrowserToolItem.Forward, BrowserToolItem.Reload, BrowserToolItem.Home, BrowserToolItem.History, BrowserToolItem.Links, BrowserToolItem.Go, BrowserToolItem.Open];
 
     public BarRect this[BrowserToolItem item] => item switch
     {
@@ -61,6 +64,7 @@ public sealed record BrowserBarLayout(int Height, BarRect Back, BarRect Forward,
         BrowserToolItem.Reload => Reload,
         BrowserToolItem.Home => Home,
         BrowserToolItem.History => History,
+        BrowserToolItem.Links => Links,
         BrowserToolItem.Padlock => Padlock,
         BrowserToolItem.Address => Address,
         BrowserToolItem.Go => Go,
@@ -96,6 +100,9 @@ public sealed record BrowserBarLayout(int Height, BarRect Back, BarRect Forward,
 /// </summary>
 public sealed record BrowserBarState(bool CanBack, bool CanForward, bool Loading, string? Source, bool Typed)
 {
+    /// <summary>Whether the page is one of the saved links (later on 2026-10-13): the links button draws a filled star.</summary>
+    public bool Saved { get; init; }
+
     public static BrowserBarState Initial { get; } = new(false, false, false, null, false);
 
     public BrowserLock Lock =>
@@ -121,6 +128,7 @@ public sealed record BrowserBarState(bool CanBack, bool CanForward, bool Loading
         BrowserToolItem.Reload => Loading ? BrowserToolbar.StopGlyph : BrowserToolbar.ReloadGlyph,
         BrowserToolItem.Home => BrowserToolbar.HomeGlyph,
         BrowserToolItem.History => BrowserToolbar.HistoryGlyph,
+        BrowserToolItem.Links => Saved ? BrowserToolbar.SavedGlyph : BrowserToolbar.LinksGlyph,
         BrowserToolItem.Padlock => Lock switch
         {
             BrowserLock.Secure => BrowserToolbar.LockGlyph,
@@ -140,6 +148,7 @@ public sealed record BrowserBarState(bool CanBack, bool CanForward, bool Loading
         BrowserToolItem.Reload => Loading ? BrowserText.StopName : BrowserText.ReloadName,
         BrowserToolItem.Home => BrowserText.HomeName,
         BrowserToolItem.History => BrowserText.HistoryName,
+        BrowserToolItem.Links => BrowserText.LinksName,
         BrowserToolItem.Padlock => Lock == BrowserLock.Secure ? BrowserText.SecureName : Lock == BrowserLock.NotSecure ? BrowserText.NotSecureName : "",
         BrowserToolItem.Go => BrowserText.GoName,
         BrowserToolItem.Open => BrowserText.OpenName,
@@ -150,7 +159,7 @@ public sealed record BrowserBarState(bool CanBack, bool CanForward, bool Loading
 /// <summary>
 /// The Browser window's navigation bar (2026-10-13, the user's ask, "the full monty"): back, forward, reload (stop while a page loads)
 /// and home, the address box with its padlock and Go, and open in the default browser — <c>[←][→][⟳][⌂]  [🔒 address…][Go]  [↗]</c>;
-/// the history menu's button after home since later that day (<c>[⌂][🕘]</c>).
+/// the history menu's button after home since later that day (<c>[⌂][🕘]</c>), and the saved links' after it later still (<c>[🕘][☆]</c>).
 /// The window draws it with GDI across its top (the log window's and the picture menu's way: a memory DC, Segoe UI at the window's DPI,
 /// <see cref="ViewerStyle"/>'s colours) and puts a native EDIT child in the address box; WebView2 sits below it. The glyphs are Segoe
 /// MDL2 Assets', Edge's own, on Windows 10 and 11. This class is the layout, the state's glyphs and the pointer's hover and press, with
@@ -164,6 +173,8 @@ public sealed class BrowserToolbar
     public const string StopGlyph = "\uE711";
     public const string HomeGlyph = "\uE80F";
     public const string HistoryGlyph = "\uE81C";
+    public const string LinksGlyph = "\uE734";   // FavoriteStar
+    public const string SavedGlyph = "\uE735";   // FavoriteStarFill
     public const string LockGlyph = "\uE72E";
     public const string NotSecureGlyph = "\uE7BA";
     public const string GoGlyph = "\uE751";
@@ -206,7 +217,8 @@ public sealed class BrowserToolbar
         var reload = Square(forward.Right + gap);
         var home = Square(reload.Right + gap);
         var history = Square(home.Right + gap);
-        int fieldLeft = history.Right + group;
+        var links = Square(history.Right + gap);
+        int fieldLeft = links.Right + group;
         int padlockWidth = Scale(PadlockWidth, dpi), inset = Scale(4, dpi);
         int fieldRight = Math.Max(fieldLeft + 1 + padlockWidth + Scale(MinAddressWidth, dpi) + inset + 1, clientWidth - margin - size - group - size - gap);
         int fieldHeight = Scale(FieldHeight, dpi);
@@ -216,7 +228,7 @@ public sealed class BrowserToolbar
         var address = new BarRect(padlock.Right, field.Top + 1, field.Right - 1 - inset, field.Bottom - 1);
         var go = Square(field.Right + gap);
         var open = Square(go.Right + group);
-        return new BrowserBarLayout(height, back, forward, reload, home, history, field, padlock, address, go, open);
+        return new BrowserBarLayout(height, back, forward, reload, home, history, links, field, padlock, address, go, open);
     }
 
     /// <summary>The pointer moved onto <paramref name="item"/> (null: off every button); true when the bar must be drawn again.</summary>

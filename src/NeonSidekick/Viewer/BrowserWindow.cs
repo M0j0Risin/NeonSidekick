@@ -50,7 +50,7 @@ public static class BrowserWindow
     /// </summary>
     public static Func<string>? ProfileDirectory { get; set; }
 
-    /// <summary>The setting <c>Browser privacy</c> as it is now (<c>Program</c>), read when it acts; <c>clear-history</c> until it is set.</summary>
+    /// <summary>The setting <c>Web browser privacy</c> as it is now (<c>Program</c>), read when it acts; <c>clear-history</c> until it is set.</summary>
     public static Func<BrowserPrivacyKind>? Privacy { get; set; }
 
     /// <summary>The privacy in force now.</summary>
@@ -110,7 +110,7 @@ public static class BrowserWindow
 
             stale?.Close();
             var identity = CheckRuntime();
-            var window = new BrowserWindowThread(folder, identity, Path.Combine(profile, BrowserHistory.FileName), forClear);
+            var window = new BrowserWindowThread(folder, identity, Path.Combine(profile, BrowserHistory.FileName), forClear, profile);
             window.Start();
             lock (s_gate)
             {
@@ -118,6 +118,15 @@ public static class BrowserWindow
             }
 
             return (window, true);
+        }
+    }
+
+    /// <summary>The window open now, never one started for the asking (the saved links' calls, later on 2026-10-13); null with none.</summary>
+    private static BrowserWindowThread? OpenNow()
+    {
+        lock (s_gate)
+        {
+            return s_open is { Alive: true } open ? open : null;
         }
     }
 
@@ -187,6 +196,11 @@ public static class BrowserWindow
         }
 
         public bool Close() => BrowserWindow.Close();
+
+        public Task<(string Url, string? Title)?> CurrentPageAsync() =>
+            OpenNow() is { } window ? window.CurrentPageAsync() : Task.FromResult<(string Url, string? Title)?>(null);
+
+        public void LinksChanged() => OpenNow()?.LinksChanged();
 
         public async Task<string?> ClearAsync(BrowserClear kind)
         {
@@ -268,12 +282,14 @@ internal sealed unsafe partial class BrowserWindowThread
     private volatile bool _noHarvest;
     private volatile bool _alive = true;
 
-    public BrowserWindowThread(string userDataFolder, BrowserIdentity identity, string? historyFile = null, bool forClear = false)
+    /// <param name="linksDirectory">The profile folder whose saved links the ☆ menu shows (later on 2026-10-13); null: none (the smoke).</param>
+    public BrowserWindowThread(string userDataFolder, BrowserIdentity identity, string? historyFile = null, bool forClear = false, string? linksDirectory = null)
     {
         _userDataFolder = userDataFolder;
         _identity = identity;
         _historyFile = historyFile;
         _forClear = forClear;
+        _links = linksDirectory is null ? null : new BrowserLinks(linksDirectory);
     }
 
     public bool Alive => _alive;
@@ -566,6 +582,7 @@ internal sealed unsafe partial class BrowserWindowThread
         }
 
         EndClears(_failure ?? BrowserText.Closed);
+        EndPages();
 
         SettleVisits(_failure is { } why ? BrowserVisit.Empty with { Failure = why } : BrowserVisit.Empty);
     }
@@ -600,7 +617,7 @@ internal sealed unsafe partial class BrowserWindowThread
                 EndOpenClear();
                 return IntPtr.Zero;
             case MenuChosenMessage:
-                RunHistoryCommand((int)wParam);
+                RunMenuCommand((int)wParam);
                 return IntPtr.Zero;
             case WmTimer when wParam == LingerTimer:
                 KillTimer(hwnd, LingerTimer);
@@ -995,6 +1012,7 @@ internal sealed unsafe partial class BrowserWindowThread
         if (ok)
         {
             RecordVisit();
+            FillLinkName();
         }
 
         if (_job is { } job && BrowserPage.HostOf(_host?.Source) is not null)
@@ -1015,6 +1033,7 @@ internal sealed unsafe partial class BrowserWindowThread
     private void OnSourceChanged(string source)
     {
         SetBarState(_barState with { Source = source });
+        RefreshSaved();
         ShowAddress(source);
         if (_visited is not null && BrowserPage.HostOf(source) is { } host)
         {
@@ -1055,17 +1074,19 @@ internal sealed unsafe partial class BrowserWindowThread
     }
 
     // A key the window has (BrowserKeys): Ctrl+W closes, F5 or Ctrl+R reloads, Alt+← and Alt+→ move through the history, Ctrl+L,
-    // Alt+D or F6 goes to the address box, Esc stops a load; everything else is the page's (Ctrl+C, Ctrl+V, Esc for its dialog).
+    // Alt+D or F6 goes to the address box, Esc stops a load, Ctrl+H the history, Ctrl+D saves or unsaves the page, Ctrl+Shift+O the
+    // saved links; everything else is the page's (Ctrl+C, Ctrl+V, Esc for its dialog).
     private bool OnKey(int virtualKey)
     {
         bool control = GetKeyState(VkControl) < 0;
         bool alt = GetKeyState(VkMenu) < 0;
+        bool shift = GetKeyState(VkShift) < 0;
         if (MenuKey(virtualKey))
         {
             return true;   // the history menu has the keys while it shows (from the page too); a chord goes on as usual
         }
 
-        switch (BrowserKeys.ActionFor(virtualKey, control, alt, _barState.Loading))
+        switch (BrowserKeys.ActionFor(virtualKey, control, alt, _barState.Loading, shift))
         {
             case BrowserKeyAction.Close:
                 PostMessageW(_hwnd, WmClose, IntPtr.Zero, IntPtr.Zero);
@@ -1087,6 +1108,12 @@ internal sealed unsafe partial class BrowserWindowThread
                 return true;
             case BrowserKeyAction.History:
                 OpenHistoryMenu(keyboard: true);
+                return true;
+            case BrowserKeyAction.SaveLink:
+                ToggleSaved(_host?.Source, _host?.Title ?? _pageTitle);
+                return true;
+            case BrowserKeyAction.Links:
+                OpenLinksMenu(keyboard: true);
                 return true;
             default:
                 return false;

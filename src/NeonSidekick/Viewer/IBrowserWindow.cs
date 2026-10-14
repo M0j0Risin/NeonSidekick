@@ -40,4 +40,13 @@ public interface IBrowserWindow
     /// done, else why not: no window could be had, a bot check waits in it, the runtime refused.
     /// </summary>
     Task<string?> ClearAsync(BrowserClear kind);
+
+    /// <summary>
+    /// The page the open window shows, its address and title (a bare <c>/browser save</c>, later on 2026-10-13); null with no window open
+    /// (none is started for it) or one that closed before it answered. Never hangs on a closing window; the caller caps the wait.
+    /// </summary>
+    Task<(string Url, string? Title)?> CurrentPageAsync();
+
+    /// <summary>The saved links changed outside the window (the pane): its ☆ is read again. Nothing with no window open.</summary>
+    void LinksChanged();
 }

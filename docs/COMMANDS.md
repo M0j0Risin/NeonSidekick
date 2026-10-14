@@ -83,7 +83,12 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/explore [<folder>]` | Opens the working directory in your file browser. |
 | `/browse [<folder>]` | Browses the working directory as a tree in a pane; Enter on a file opens it in its default app. See [File browser](#file-browser). |
 | `/browser [<url>]` | Opens the page (or *Web browser home page*) in the Browser window, for you to sign in to a site or get past its bot check; when you close it, its cookies go to the web tools. Windows only. See [The Browser window](TOOLS.md#the-browser-window). |
-| `/browser clear history\|all` | Clears the Browser window's history (`history`), or everything it keeps for this profile, cookies and sign-ins too (`all`, after a yes, at the idle line). |
+| `/browser clear history\|all` | Clears the Browser window's history (`history`), or everything it keeps for this profile, cookies and sign-ins too (`all`, after a yes). Your saved links stay. |
+| `/browser <n>` | Opens saved link *n* (its number in `/browser list`) in the Browser window. |
+| `/browser save [<url> [<name>]]` | Saves a link: the address, the words after it as its name; with no address, the page the Browser window shows. |
+| `/browser list` | The saved links in a pane; Enter or a double-click opens one in the Browser window, `a` adds, `n` renames, `e` changes the address, `d` removes, `c` clears all (each removal asks), Shift+↑↓ moves. The toolbar's ⭐ opens it too. |
+| `/browser list --clear` | Removes every saved link, after a yes (headless: at once). |
+| `/browser unsave <n>\|<url>` | Removes one saved link, by its number or its address. |
 | `/gituser [force]` | Writes *GitLib user email* and *GitLib user name* into the repository's config; an existing `[user]` stays unless `force`. Needs *GitLib tools* on. |
 | `/ha` | Home Assistant at a glance: lights on per room, the TV, temperatures, motion, low batteries and to-do lists. |
 | `/ha on\|off\|toggle <name> [<brightness>]` | Switches a room, light, switch or the TV (`/ha on den 40%`, `/ha off kitchen and hallway`). |
@@ -228,7 +233,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/youtube playlist [<id>\|<link>]` | A playlist's videos in a pane (needs a key: 1 unit, plus 1 per 50 videos); Enter plays from there, `s` saves a video. Alone, the playlist playing. |
 | `/youtube play\|resume`, `pause`, `seek <time>`, `volume <level>`, `mute\|unmute`, `close` | Drive the video window: resume, pause, go to a time, set the volume (0–100), mute or unmute, close it. |
 | `/youtube save [<id>\|<link>]` | Saves the video playing (or the one named) to this profile's `youtube.json`; it later resumes a few seconds before where you left it. |
-| `/youtube list` | The saved videos in a pane, each with where it was left; Enter plays, `d` removes one, `c` clears all (each asks). |
+| `/youtube list` | The saved videos in a pane, each with where it was left; Enter plays, `d` removes one, `c` clears all (each asks), Shift+↑↓ moves one (the list's numbers follow). |
 | `/youtube list --clear` | Removes every saved video, after a yes (headless: at once). |
 | `/youtube unsave <n>\|<id>\|<link>` | Removes a saved video by its number, id or link. |
 
@@ -602,7 +607,8 @@ In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes
 | `/shopping`'s add page (`i`, or `/shopping add` alone) | Enter on the first row types new items · Enter on a past item adds it again · `x` forgets it · type to filter |
 | *Shopping stores* (`/shopping`'s `s`) | Enter shops there (the first row adds a store) · `l` layout · `n` rename · `r` remove (asks) · `f` open its folder · `i` reindex |
 | A store's layout (*Shopping stores*' `l`) | Tabs **Aisles**, **Sections**, **Facts** and **Guesses** (the model's), ←/→ between them; Enter on a row to rename, move or remove |
-| `/youtube list` | Enter plays · `d` remove (asks) · `c` clear all (asks) · type to filter |
+| `/youtube list` | Enter plays · `d` remove (asks) · `c` clear all (asks) · Shift+↑↓ / Shift+Home/End move · Delete remove (asks) · type to filter, Shift+letter starts a filter with `d` or `c` |
+| `/browser list` | Enter or double-click opens in the Browser window · `a` add · `n` name · `e` address · `d` remove (asks) · `c` clear all (asks) · Shift+↑↓ / Shift+Home/End move · Delete remove (asks) · type to filter, Shift+letter starts a filter with a button's letter |
 | `/youtube <words>`, `/youtube playlist` | Enter plays · `s` save the highlighted video |
 | `/tools shell` (*Shell command policy*) | `c` the allowed commands · `p` the police |
 | `/tools shell allowed` (*Shell allowed commands*) | Enter removes (asks) · `p` steps *Shell command policy*: off, ask, yolo (asks; a no goes on to off) · type to filter |

@@ -16,15 +16,19 @@ public sealed class BrowserHistoryFile
     public List<BrowserHistoryEntry> Visits { get; set; } = [];
 }
 
-/// <summary>The source-generated context for <c>browser-history.json</c> (later on 2026-10-13). Reflection serialisation is off.</summary>
+/// <summary>
+/// The source-generated context for <c>browser-history.json</c> (later on 2026-10-13) and <c>browser-links.json</c> (later still, the
+/// saved links). Reflection serialisation is off.
+/// </summary>
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(BrowserHistoryFile))]
+[JsonSerializable(typeof(BrowserLinksFile))]
 public sealed partial class BrowserJsonContext : JsonSerializerContext;
 
 /// <summary>
 /// The Browser window's own list of visits (later on 2026-10-13, the user's ask: history in the window): WebView2 records Chromium's
 /// history but cannot read it back, so the window keeps this beside it for its history menu (🕘, Ctrl+H). Newest first, one entry per
-/// address (a <c>#fragment</c> is the same page), web addresses only, at most <see cref="Cap"/>. Under <c>Browser privacy</c>
+/// address (a <c>#fragment</c> is the same page), web addresses only, at most <see cref="Cap"/>. Under <c>Web browser privacy</c>
 /// <c>keep-history</c> it lives in the profile's <see cref="FileName"/>; under <c>clear-history</c> only while the window is open.
 /// <see cref="MenuItems"/> turns it into the menu's rows. Pure but for <see cref="Load"/> and <see cref="Save"/>; pinned.
 /// </summary>

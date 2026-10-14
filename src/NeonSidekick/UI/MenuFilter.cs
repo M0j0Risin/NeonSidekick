@@ -10,6 +10,9 @@ namespace NeonSidekick.UI;
 /// </summary>
 public static class MenuFilter
 {
+    /// <summary>The move keys' piece of a hint (2026-10-13, the saved lists' order), dropped while a filter is typed.</summary>
+    public const string MoveKeys = "Shift+↑↓";
+
     /// <summary>The most characters a filter holds; a key past it is nothing.</summary>
     public const int MaxLength = 40;
 
@@ -112,7 +115,20 @@ public static class MenuFilter
     public const string TypeAndKeepKeys = TypeKeys + " · ESC = keep";
 
     /// <summary>
-    /// A filtering tab's hint: <paramref name="keys"/> (which ends in <see cref="TypeAndCloseKeys"/> or <see cref="TypeAndKeepKeys"/>)
+    /// <see cref="TypeKeys"/> on a list with lettered buttons (2026-10-13, the user's pick): a button's letter presses it while nothing
+    /// is typed, so a filter starting with one takes Shift (<see cref="MenuPane"/>'s rule). Pinned.
+    /// </summary>
+    public const string TypeOrShiftKeys = "type / Shift+letter = filter";
+
+    /// <summary><see cref="TypeAndCloseKeys"/> on a list with lettered buttons (2026-10-13). Pinned.</summary>
+    public const string TypeOrShiftAndCloseKeys = TypeOrShiftKeys + " · ESC = close";
+
+    /// <summary><see cref="TypeAndKeepKeys"/> on a list with lettered buttons (2026-10-13). Pinned.</summary>
+    public const string TypeOrShiftAndKeepKeys = TypeOrShiftKeys + " · ESC = keep";
+
+    /// <summary>
+    /// A filtering tab's hint: <paramref name="keys"/> (which ends in <see cref="TypeAndCloseKeys"/> or <see cref="TypeAndKeepKeys"/>, or
+    /// their <see cref="TypeOrShiftKeys"/> forms)
     /// as it is while nothing is typed, else with <see cref="FilteringKeys"/> in place of that end (ESC clears the filter first). Pure.
     /// </summary>
     public static string Hint(string keys, string filter)
@@ -121,7 +137,7 @@ public static class MenuFilter
         ArgumentNullException.ThrowIfNull(filter);
         if (filter.Length > 0)
         {
-            foreach (string end in (ReadOnlySpan<string>)[TypeAndCloseKeys, TypeAndKeepKeys])
+            foreach (string end in (ReadOnlySpan<string>)[TypeAndCloseKeys, TypeAndKeepKeys, TypeOrShiftAndCloseKeys, TypeOrShiftAndKeepKeys])
             {
                 if (keys.EndsWith(end, StringComparison.Ordinal))
                 {
@@ -138,19 +154,21 @@ public static class MenuFilter
     /// <c>ESC = the first listed</c>): <see cref="TypeKeys"/> before its <c>ESC = …</c> part while nothing is typed, else
     /// <see cref="FilteringKeys"/> in that part's place. A hint with no ESC part gets the piece at its end. Pure.
     /// </summary>
-    public static string HintBeforeEsc(string keys, string filter)
+    public static string HintBeforeEsc(string keys, string filter, bool letteredButtons = false)
     {
         ArgumentNullException.ThrowIfNull(keys);
         ArgumentNullException.ThrowIfNull(filter);
         int esc = keys.LastIndexOf("ESC = ", StringComparison.Ordinal);
         string head = esc > 0 ? keys[..esc] : keys + " · ";
-        return filter.Length > 0 ? WithoutLetterKeys(head) + FilteringKeys : head + TypeKeys + (esc > 0 ? " · " + keys[esc..] : "");
+        string type = letteredButtons ? TypeOrShiftKeys : TypeKeys;   // 2026-10-13: the page has lettered buttons, so a filter may start with Shift
+        return filter.Length > 0 ? WithoutLetterKeys(head) + FilteringKeys : head + type + (esc > 0 ? " · " + keys[esc..] : "");
     }
 
     /// <summary>
     /// A hint's head (its pieces each ending in <c> · </c>) without the pieces a typed character works (2026-10-07, the consistency pass:
     /// <c>d = remove</c> went on showing while a <c>d</c> went on the filter): a key of one character, or several joined by <c> / </c>
-    /// (<c>w = watch</c>, <c>d / h / c = browser mode</c>). <c>Enter</c>, <c>Space</c> and the arrows stay. Pure.
+    /// (<c>w = watch</c>, <c>d / h / c = browser mode</c>). <c>Enter</c>, <c>Space</c> and the arrows stay; the move keys go too
+    /// (2026-10-13: a list's order moves only while no filter shows part of it). Pure.
     /// </summary>
     private static string WithoutLetterKeys(string head)
     {
@@ -158,7 +176,7 @@ public static class MenuFilter
         var kept = head.Split(Separator, StringSplitOptions.RemoveEmptyEntries).Where(piece =>
         {
             int equals = piece.IndexOf(" = ", StringComparison.Ordinal);
-            return equals < 0 || !piece[..equals].Split(" / ").All(key => key.Length == 1);
+            return equals < 0 || (!piece[..equals].Split(" / ").All(key => key.Length == 1) && !piece[..equals].StartsWith(MoveKeys, StringComparison.Ordinal));
         });
         string joined = string.Join(Separator, kept);
         return joined.Length == 0 ? "" : joined + Separator;

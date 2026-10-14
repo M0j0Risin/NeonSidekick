@@ -21,7 +21,8 @@ namespace NeonSidekick.App;
 /// after the log, <c>/process</c>'s list of the model's background processes (a pane, not a window). 📺 YouTube in the Camera live
 /// viewer's place on 2026-10-08 (the user's ask: the live viewer's item gone, <c>/camera live</c> and Ctrl+Alt+V still open its window),
 /// <c>/youtube list</c>'s saved videos (a pane); a saved <c>liveview</c> is an unknown word, dropped as any is. Later that day (the
-/// user's ask) 📺 moved behind 🪟, the two viewers together again. 🙋 Ask on 2026-10-09 (the user's ask): the <c>Ask user</c> switch
+/// user's ask) 📺 moved behind 🪟, the two viewers together again. ⭐ Saved links after 📺 on 2026-10-13 (the user's ask and pick, off by
+/// default): <c>/browser list</c>, the Browser window's saved links (a pane). 🙋 Ask on 2026-10-09 (the user's ask): the <c>Ask user</c> switch
 /// between the disk and the lock, <c>/tools ask</c>. The order is the user's to change since 2026-10-12 (the user's ask, the home bar
 /// picker's move keys on this checklist): <see cref="Order"/> over <see cref="Settings.AppSettingsData.ToolbarOrder"/>, the path
 /// always last until 2026-10-13; <see cref="Names"/> is the default order, which <c>⊡ default</c> puts back with the checks. Since
@@ -73,6 +74,7 @@ public static class ToolbarItems
     public const string ComfyView = "comfyview";
     public const string ComfyThumbs = "comfythumbs"; // 2026-10-04, the user's ask: 🪟, /comfy thumbs
     public const string YouTube = "youtube";         // 2026-10-08, the user's ask: 📺, /youtube list (a pane; after 🪟 later that day)
+    public const string BrowserLinks = "browserlinks";   // later on 2026-10-13, the user's ask: ⭐, /browser list (a pane), after 📺, off by default
     public const string ShoppingList = "shoppinglist"; // 2026-10-11, the user's ask: 🛒, /shopping's list (a pane), after 📺; the Shopping tools switch (id shopping, after Print) until later that day
     public const string Path = "path";
     public const string Model = "model";   // 2026-10-12, the user's ask: the model's name (its reasoning glyph after it since later that day); after the path by default, and free to move past it
@@ -84,13 +86,13 @@ public static class ToolbarItems
     /// after the log (2026-10-05); YouTube where the Camera live viewer was (2026-10-08), after the Comfy thumb viewer later that day
     /// (the user's ask); Ask between the disk and the lock (2026-10-09, the user's ask); Image after Files (2026-10-10, the user's ask); Advisors after
     /// the Claude Code advisor (later that day, the profile advisors), after Web once that one was retired (later still); Queue after
-    /// Memory (2026-10-13, the user's ask). Pinned.
+    /// Memory (2026-10-13, the user's ask); Saved links after YouTube (later that day, the user's ask). Pinned.
     /// </summary>
     public static readonly string[] Names =
     [
         Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Queue, Ask, CmdList, Police,
         Shell, Files, Image, Web, Advisors, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
-        Log, Process, ComfyView, ComfyThumbs, YouTube, ShoppingList, Perf, Path, Model,
+        Log, Process, ComfyView, ComfyThumbs, YouTube, BrowserLinks, ShoppingList, Perf, Path, Model,
     ];
 
     /// <summary>
@@ -146,6 +148,7 @@ public static class ToolbarItems
         ComfyView => ChatScreen.ComfyViewToolGlyph,
         ComfyThumbs => ChatScreen.ComfyThumbsToolGlyph,
         YouTube => ChatScreen.YouTubeToolGlyph,
+        BrowserLinks => ChatScreen.BrowserLinksToolGlyph,
         ShoppingList => ChatScreen.ShoppingToolGlyph,
         Path => FolderText.FolderGlyph,
         _ => "",
@@ -191,6 +194,7 @@ public static class ToolbarItems
         ComfyView => "Comfy viewer",
         ComfyThumbs => "Comfy thumb viewer",
         YouTube => "YouTube",
+        BrowserLinks => "Saved links",
         ShoppingList => "Shopping list",
         Path => "Working directory path",
         Model => "Model name",
@@ -222,6 +226,7 @@ public static class ToolbarItems
         ComfyView => ChatScreen.ComfyViewToolLine,
         ComfyThumbs => ChatScreen.ComfyThumbsToolLine,
         YouTube => ChatScreen.YouTubeToolLine,
+        BrowserLinks => ChatScreen.BrowserLinksToolLine,
         ShoppingList => ChatScreen.ShoppingToolLine,
         Path => "/cwd browse",
         Model => SlashCommands.ServerWord,

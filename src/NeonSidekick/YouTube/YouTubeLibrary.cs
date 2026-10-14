@@ -214,6 +214,45 @@ public sealed class YouTubeLibrary
         }
     }
 
+    /// <summary>
+    /// The saved video <paramref name="id"/> moved in the list (2026-10-13, the user's ask: the saved videos reordered as the Browser
+    /// window's saved links are): <paramref name="delta"/> places down (negative up), <see cref="int.MinValue"/> to the top,
+    /// <see cref="int.MaxValue"/> to the bottom, held at the ends. True when it is where it was asked to be (nothing written when it was
+    /// there already); false when it is not saved or the write failed. <see cref="Update"/> keeps a video's place, so the resume's
+    /// writes never undo a move.
+    /// </summary>
+    public bool Move(string id, int delta)
+    {
+        lock (_gate)
+        {
+            var videos = Load();
+            int at = videos.FindIndex(v => v.Id == id);
+            if (at < 0)
+            {
+                return false;
+            }
+
+            int to = MovedTo(at, delta, videos.Count);
+            if (to == at)
+            {
+                return true;
+            }
+
+            var video = videos[at];
+            videos.RemoveAt(at);
+            videos.Insert(to, video);
+            return Save(videos);
+        }
+    }
+
+    /// <summary>Where a row at <paramref name="at"/> of <paramref name="count"/> lands after a move of <paramref name="delta"/> (<see cref="int.MinValue"/> the top, <see cref="int.MaxValue"/> the bottom). Pure.</summary>
+    public static int MovedTo(int at, int delta, int count) => delta switch
+    {
+        int.MinValue => 0,
+        int.MaxValue => count - 1,
+        _ => (int)Math.Clamp((long)at + delta, 0L, count - 1L),
+    };
+
     private static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
     /// <summary>The list as the file has it; missing or unreadable is empty, and an entry with no video id is dropped. Caller holds the lock.</summary>

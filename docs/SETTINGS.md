@@ -21,7 +21,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 * **Second strip:** some tabs hold tabs of their own, shown as a second row under the first: `/settings`' Client, Servers and Voice, `/tools`' groups, `/skills`' Offered, and `/mcp`'s Tools with two or more servers connected. ←/→ walk through every one and on into the next tab; Tab and Shift+Tab jump a whole tab.
 * **Under the list:** the highlighted row's description and default, or on a list pane the details the row has no room for.
 * **Tabs:** the current tab is underlined; a small number after a name (`Client³`) counts its settings changed from the default. A tab's rows sit under headings the cursor skips, and may drop the tab's name (*Botchat LLM mode* reads *LLM mode*).
-* **Type to filter:** on `/sessions`, `/server`, `/model`, `/docker`, `/youtube list`, the allowed commands and the Offered tabs, typing narrows the list. Backspace erases; the first ESC clears it.
+* **Type to filter:** on `/sessions`, `/server`, `/model`, `/docker`, `/youtube list`, `/browser list`, the allowed commands and the Offered tabs, typing narrows the list. Backspace erases; the first ESC clears it. Where the pane has lettered buttons (`d` remove, `r` refresh…), a plain letter presses its button while nothing is typed; start a filter with Shift+letter.
 * **Find:** on the read-only panes (`/help`, `/sys`, `/about`, `/tree`, `/docker logs`…) typing finds and marks every match. Enter or F3 goes to the next, Shift+Enter or Shift+F3 to the one before (Shift+F3 on a Mac); the first ESC clears the find. A word wrapped across two rows isn't found.
 * **Lists:** removing anything asks first, with No on the cursor. A list cut by the window ends in `▲▼ 13–25 of 58`. On `/tools` Offered, a group that is off says why on its heading.
 * **Mouse:** a click moves the cursor; a double-click picks a row or tab (on the input line, selects a word; on the `›` before it, the whole draft). The × at the top right works like ESC, and a double-click outside a pane closes it. A double-click on a picture in the transcript opens the [picture viewer](COMMANDS.md#picture-viewer).
@@ -143,6 +143,7 @@ In a pane opened over the reply, the rows that would disturb it (a reconnect, th
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
 | 🪟 | always | `/comfy thumbs`, the thumbnail browser on the ComfyUI output folder |
 | 📺 | always | `/youtube list`, the saved videos |
+| ⭐ | always | `/browser list`, the Browser window's saved links |
 | 🛒 | always | `/shopping`, the shopping list's checklist |
 | 📈 | always | `/perfbar`: hides or shows the performance bar |
 | working directory (pinned right by default) | always | `/cwd browse` |
@@ -675,7 +676,7 @@ The tools most profiles use and the pane's own options, in four tabs: Ask, Web, 
 | Web browser path | The Chromium-based browser for headless fetches and making PDFs; empty finds Edge, Chrome or Brave. | empty (found) |
 | Web browser botcheck window | What a bot check the web tools can't get past does: `ask` asks on the pane, then opens the page in the Browser window for you to solve; `automatic` opens it without asking; `off` never does. See [The Browser window](TOOLS.md#the-browser-window). Windows only. | `ask` |
 | Web browser home page | Where the Browser window's home button and a bare `/browser` go: a web address (`example.com`, `localhost:3000`), or empty for the blank page. Windows only. | empty |
-| Browser privacy | `keep-history` keeps the pages the Browser window visited, in its history menu too; `clear-history` clears them when the window closes. Cookies and sign-ins stay either way (`/browser clear all` removes them). Each profile has its own. Windows only. | `clear-history` |
+| Web browser privacy | `keep-history` keeps the pages the Browser window visited, in its history menu too; `clear-history` clears them when the window closes. Cookies and sign-ins stay either way (`/browser clear all` removes them). Each profile has its own. Windows only. | `clear-history` |
 | Web browser network mode | Where a fetch may reach: `internet` (public addresses), `lan` (this machine and the LAN) or `both`. | `internet` |
 | Web search method | `duckduckgo` (built in) or `searxng`. | `duckduckgo` |
 | Web SearXNG URL | The SearXNG instance, for `searxng`. | empty |

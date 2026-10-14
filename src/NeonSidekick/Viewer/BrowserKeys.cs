@@ -21,12 +21,18 @@ public enum BrowserKeyAction
 
     /// <summary>The history menu opened at its button (Ctrl+H, later on 2026-10-13).</summary>
     History,
+
+    /// <summary>The page saved to the saved links, or taken off them when it is one (Ctrl+D, later still on 2026-10-13).</summary>
+    SaveLink,
+
+    /// <summary>The saved links' menu opened at its button, the keyboard on it (Ctrl+Shift+O, Edge's favorites key; later still).</summary>
+    Links,
 }
 
 /// <summary>
 /// The Browser window's keys (2026-10-13): Ctrl+W closes it, F5 or Ctrl+R reloads, Alt+← goes back and Alt+→ forward, Ctrl+L, Alt+D
 /// or F6 goes to the address box, Esc stops a page that is loading (later the same day, with the navigation bar), Ctrl+H opens the
-/// history menu (later still); nothing else is
+/// history menu (later still), Ctrl+D saves or unsaves the page and Ctrl+Shift+O opens the saved links (later still); nothing else is
 /// taken — unlike the video window, no chord goes to the chat (<c>TerminalHandoff.Take</c>), since a page's form wants Ctrl+C, Ctrl+V
 /// and the rest, and a page's own dialog Esc. Pure; pinned.
 /// </summary>
@@ -37,13 +43,15 @@ public static class BrowserKeys
     public const int VkL = 0x4C;
     public const int VkD = 0x44;
     public const int VkH = 0x48;
+    public const int VkO = 0x4F;
     public const int VkF5 = 0x74;
     public const int VkF6 = 0x75;
     public const int VkLeft = 0x25;
     public const int VkRight = 0x27;
     public const int VkEscape = 0x1B;
 
-    public static BrowserKeyAction ActionFor(int virtualKey, bool control, bool alt, bool loading = false) => virtualKey switch
+    /// <summary>What <paramref name="virtualKey"/> does with the modifiers held; <paramref name="shift"/> matters to Ctrl+Shift+O alone (Ctrl+D ignores it).</summary>
+    public static BrowserKeyAction ActionFor(int virtualKey, bool control, bool alt, bool loading = false, bool shift = false) => virtualKey switch
     {
         VkW when control && !alt => BrowserKeyAction.Close,
         VkF5 when !control && !alt => BrowserKeyAction.Reload,
@@ -55,6 +63,8 @@ public static class BrowserKeys
         VkF6 when !control && !alt => BrowserKeyAction.Address,
         VkEscape when loading && !control && !alt => BrowserKeyAction.Stop,
         VkH when control && !alt => BrowserKeyAction.History,
+        VkD when control && !alt => BrowserKeyAction.SaveLink,
+        VkO when control && shift && !alt => BrowserKeyAction.Links,
         _ => BrowserKeyAction.None,
     };
 }

@@ -238,6 +238,7 @@ internal sealed partial class ChatScreen
         SlashCommand.HomeBar => HomeBarToggles(args) ? MidTurnClass.Quick : MidTurnClass.Pane,   // 2026-10-12: a toggle at once; the picker, a chip's pane or confirm on the watcher
         SlashCommand.Toolbar when ToolbarItems.IsEdit(args) => MidTurnClass.Pane,   // /toolbar edit (2026-10-12): the checklist on the watcher; a toggle stays quick
         SlashCommand.Perf when PerfBarMode.IsEdit(args) => MidTurnClass.Pane,       // /perfbar edit, the same
+        SlashCommand.Browser when BrowserCommand.IsPane(args) => MidTurnClass.Pane,   // later on 2026-10-13: the saved links' pane, a question, a bare save
         _ => MidTurnPolicy(command, args.Length > 0),
     };
 
@@ -613,6 +614,11 @@ internal sealed partial class ChatScreen
                 // /shopping (2026-10-11): /youtube's way — the verb on the watcher, the reply streaming on; the bare word prints the list.
                 await HandleShoppingAsync(args, _flow, spinner: false, cancellationToken).ConfigureAwait(false);
                 break;
+            case SlashCommand.Browser:
+                // /browser list, list --clear, clear all and a bare save (later on 2026-10-13): the saved links' pane, a question, or the
+                // window's answer waited on, on the watcher with the reply streaming on (BrowserCommand.IsPane).
+                await HandleBrowserAsync(args, _flow, cancellationToken).ConfigureAwait(false);
+                break;
             case SlashCommand.Docker:
                 // /docker (2026-10-02, /ha's way): the engine call on the watcher, the reply streaming on; the bare word lists rather than opening the pane.
                 await HandleDockerMidTurnAsync(args, cancellationToken).ConfigureAwait(false);
@@ -671,8 +677,9 @@ internal sealed partial class ChatScreen
                 HandleOpen(args);
                 break;
             case SlashCommand.Browser:
-                // /browser (2026-10-13): the Browser window is its own thread, as the log window's.
-                HandleBrowser(args);
+                // /browser (2026-10-13): the Browser window is its own thread, as the log window's; an open, a save of an address, an
+                // unsave and the history's clear return at once. The pane, the questions and a bare save are panes (later on 2026-10-13).
+                await HandleBrowserAsync(args, _flow, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Terminal:
                 HandleTerminal(args);

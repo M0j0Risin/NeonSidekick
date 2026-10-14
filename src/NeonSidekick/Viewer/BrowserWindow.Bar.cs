@@ -422,6 +422,9 @@ internal sealed unsafe partial class BrowserWindowThread
             case BrowserToolItem.History:
                 OpenHistoryMenu(keyboard: false);
                 break;
+            case BrowserToolItem.Links:
+                OpenLinksMenu(keyboard: false);
+                break;
             case BrowserToolItem.Go:
                 GoTyped();
                 break;

@@ -553,7 +553,7 @@ public static class ShoppingText
     public const string AddItemRow = "+ type a new item…";
 
     /// <summary>The add page's hint row. Pinned.</summary>
-    public const string AddKeys = "Enter = add (the first row types new ones) · x = forget a bought line · Esc = back";
+    public const string AddKeys = "Enter = add (the first row types new ones) · x = forget a bought line · " + UI.MenuFilter.TypeOrShiftKeys + " · Esc = back";   // the filter's Shift since 2026-10-13
 
     /// <summary>The add page's caption with nothing bought yet. Pinned.</summary>
     public const string NothingBoughtYet = "Lines ticked and cleared are remembered here, to add again.";

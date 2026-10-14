@@ -1,4 +1,6 @@
 using NeonSidekick.Diagnostics;
+using NeonSidekick.UI;
+using NeonSidekick.Viewer;
 using NeonSidekick.Web;
 
 namespace NeonSidekick.App;
@@ -7,98 +9,239 @@ namespace NeonSidekick.App;
 
 internal sealed partial class ChatScreen
 {
-    /// <summary>
-    /// <c>/browser [url]</c> (2026-10-13, the user's ask, with the bot checks): the Browser window on the page (without one, the
-    /// setting <c>Web browser home page</c>, the blank page when that is empty) for the user to browse — sign in to a site, get past its check — and when they close it, its cookies for every host it went
-    /// to go to the web tools' HTTP client (<see cref="WebFetcher.Adopt(IReadOnlyList{BrowserCookie}?, BrowserIdentity, Uri)"/>), the
-    /// notice saying for which. The window is its own thread, so this returns at once and is safe under a reply; the close's notice
-    /// comes through the flow sink. Any thread.
-    /// </summary>
-    private void HandleBrowser(string args) => HandleBrowser(args, atIdle: false);
+    /// <summary>How long a bare <c>/browser save</c> waits for the window to say what it shows (later on 2026-10-13).</summary>
+    public static readonly TimeSpan CurrentPageWait = TimeSpan.FromSeconds(2);
+
+    // The loaded profile's saved links (later on 2026-10-13): the one made for its directory, or a new one once a profile switch moved it.
+    private BrowserLinks? _browserLinks;
+
+    // The visit whose close is reported (later on 2026-10-13): while it runs, another open navigates the same window and stays quiet.
+    private Task? _visit;
 
     /// <summary>
-    /// <c>/browser</c> at the idle line (later on 2026-10-13): as <see cref="HandleBrowser(string)"/>, but <c>/browser clear all</c> asks
-    /// its question here, awaited, before the clear goes off on its own task; under a reply that clear is refused (nothing may take the
-    /// pane from the reply's watcher).
+    /// <c>/browser</c> (2026-10-13, the user's ask, with the bot checks), parsed by <see cref="BrowserCommand"/>. <c>/browser [url]</c>: the
+    /// Browser window on the page (without one, <c>Web browser home page</c>, the blank page when that is empty) for the user to browse —
+    /// sign in to a site, get past its check — and when they close it, its cookies for every host it went to go to the web tools' HTTP
+    /// client (<see cref="WebFetcher.Adopt(IReadOnlyList{BrowserCookie}?, BrowserIdentity, Uri)"/>), the notice saying for which. The
+    /// window is its own thread, so an open returns at once; the close's notice comes through the flow sink. <c>/browser clear
+    /// history|all</c> (later on 2026-10-13) clears what the window keeps for the loaded profile, <c>all</c> after a yes. The saved links
+    /// (later still, the user's ask, <c>/youtube</c>'s verbs): <c>save [url [name]]</c> (no address: the page the window shows),
+    /// <c>list [--clear]</c>, <c>unsave &lt;n|url&gt;</c> and <c>/browser &lt;n&gt;</c>; the list needs no window, so those work on a Mac
+    /// too. Under a reply the pane, the questions and a bare <c>save</c> run on the watcher (<see cref="BrowserCommand.IsPane"/>), the rest on
+    /// the turn task; <paramref name="sink"/> is the flow sink there, the transcript at the idle line.
     /// </summary>
-    private async Task HandleBrowserAtIdleAsync(string args, CancellationToken cancellationToken)
+    private async Task HandleBrowserAsync(string args, INoticeSink sink, CancellationToken cancellationToken)
     {
-        var words = args.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (_browserWindow is { } window && ClearKind(words) == Viewer.BrowserClear.All)
+        var line = BrowserCommand.Parse(args);
+        if (line.Error is { } error)
         {
-            if (!await ConfirmAsync(BotCheckText.ClearAllQuestion, cancellationToken).ConfigureAwait(false))
+            sink.Error(error);
+            return;
+        }
+
+        switch (line.Verb)
+        {
+            case BrowserVerb.List:
+                await ShowBrowserLinksAsync(sink, cancellationToken).ConfigureAwait(false);
+                return;
+            case BrowserVerb.ClearList:
+                await ClearBrowserLinksAsync(sink, cancellationToken).ConfigureAwait(false);
+                return;
+            case BrowserVerb.Save when line.Url is { } address:
+                SaveBrowserLink(address.AbsoluteUri, line.Name, sink);
+                return;
+            case BrowserVerb.Unsave:
             {
-                _flow.Notice(KeptNotice);
+                var links = BrowserLinksNow();
+                if (links.Resolve(line.Text) is not { } link)
+                {
+                    Show(BrowserLinkText.NotSaved(line.Text, links.List().Count), sink);
+                    return;
+                }
+
+                Show(BrowserLinkText.Refusal(links.Remove(link.Url), line.Text) ?? BrowserLinkText.Removed(link), sink);
+                _browserWindow?.LinksChanged();
+                return;
+            }
+        }
+
+        if (_browserWindow is not { } window)
+        {
+            sink.Error(BotCheckText.BrowserNeedsWindows);
+            return;
+        }
+
+        switch (line.Verb)
+        {
+            case BrowserVerb.Open:
+                OpenInBrowser(line.Url ?? BrowserAddress.Home(_effective().WebBrowserHomePage), sink);
+                return;
+            case BrowserVerb.OpenSaved:
+            {
+                var links = BrowserLinksNow();
+                if (links.Resolve(line.Text) is { } link && Uri.TryCreate(link.Url, UriKind.Absolute, out var url))
+                {
+                    OpenInBrowser(url, sink);
+                }
+                else
+                {
+                    Show(BrowserLinkText.NotSaved(line.Text, links.List().Count), sink);
+                }
+
                 return;
             }
 
-            _ = ClearBrowserAsync(window, Viewer.BrowserClear.All);
-            return;
-        }
+            case BrowserVerb.Save:
+                await SaveCurrentPageAsync(window, sink).ConfigureAwait(false);
+                return;
+            case BrowserVerb.Clear when line.Clear == BrowserClear.All:
+                // All asks first (sign-ins go), on the pane where there is one, at the idle line or on the watcher under a reply.
+                if (!await ConfirmAsync(BotCheckText.ClearAllQuestion, cancellationToken).ConfigureAwait(false))
+                {
+                    sink.Notice(KeptNotice);
+                    return;
+                }
 
-        HandleBrowser(args, atIdle: true);
+                _ = ClearBrowserAsync(window, BrowserClear.All);
+                return;
+            case BrowserVerb.Clear:
+                _ = ClearBrowserAsync(window, BrowserClear.History);
+                return;
+        }
     }
-
-    private void HandleBrowser(string args, bool atIdle)
-    {
-        if (_browserWindow is not { } window)
-        {
-            _flow.Error(BotCheckText.BrowserNeedsWindows);
-            return;
-        }
-
-        // A bare /browser goes to Web browser home page (later on 2026-10-13, with the window's navigation bar), the blank page without one.
-        string text = args.Trim();
-        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length > 0 && string.Equals(words[0], BotCheckText.ClearWord, StringComparison.OrdinalIgnoreCase))
-        {
-            HandleBrowserClear(window, words, atIdle);
-            return;
-        }
-
-        Uri? url = text.Length == 0 ? Viewer.BrowserAddress.Home(_effective().WebBrowserHomePage) : null;
-        if (text.Length > 0 && (url = WebFetcher.ParseUrl(text)) is null)
-        {
-            _flow.Error(BotCheckText.NotAUrl(text));
-            return;
-        }
-
-        _flow.Notice(BotCheckText.Opened(url?.AbsoluteUri ?? Viewer.BrowserPage.Blank));
-        _ = BrowseAsync(window, url);
-    }
-
-    /// <summary>The clear <c>/browser clear …</c>'s words ask for (<c>clear history</c>, <c>clear all</c>); null for anything else.</summary>
-    private static Viewer.BrowserClear? ClearKind(string[] words) =>
-        words.Length != 2 || !string.Equals(words[0], BotCheckText.ClearWord, StringComparison.OrdinalIgnoreCase) ? null
-        : string.Equals(words[1], BotCheckText.ClearHistoryWord, StringComparison.OrdinalIgnoreCase) ? Viewer.BrowserClear.History
-        : string.Equals(words[1], BotCheckText.ClearAllWord, StringComparison.OrdinalIgnoreCase) ? Viewer.BrowserClear.All
-        : null;
 
     /// <summary>
-    /// <c>/browser clear history|all</c> (later on 2026-10-13, the user's ask): the loaded profile's Browser window data cleared — its
-    /// history and list of visits, or everything (cookies and sign-ins too; the cookies the web tools took from the window forgotten as
-    /// well, <see cref="WebFetcher.ForgetAdopted"/>). <c>all</c> asks first at the idle line (<see cref="HandleBrowserAtIdleAsync"/>) and
-    /// is refused under a reply. The window opens hidden for it when none is; the clear runs on its own task and says how it went through
-    /// the flow sink.
+    /// The one open every caller goes through (later on 2026-10-13): <c>/browser [url]</c>, <c>/browser &lt;n&gt;</c>, the saved links'
+    /// pane and the Web tools page's Open browser button. The window on <paramref name="url"/>, the <see cref="BotCheckText.Opened"/> line
+    /// returned (and said through <paramref name="sink"/> when there is one). While a visit runs (<see cref="_visit"/>) the open window
+    /// goes there and its close is the first visit's to report, so two opens never give two close notices or hand the cookies over twice.
     /// </summary>
-    private void HandleBrowserClear(Viewer.IBrowserWindow window, string[] words, bool atIdle)
+    private string OpenInBrowser(Uri? url, INoticeSink? sink)
     {
-        if (ClearKind(words) is not { } clear)
+        string opened = BotCheckText.Opened(url?.AbsoluteUri ?? BrowserPage.Blank);
+        if (_browserWindow is not { } window)
         {
-            _flow.Error(BotCheckText.ClearUsage);
-            return;
+            sink?.Error(BotCheckText.BrowserNeedsWindows);
+            return "Error: " + BotCheckText.BrowserNeedsWindows;
         }
 
-        if (clear == Viewer.BrowserClear.All && !atIdle)
+        sink?.Notice(opened);
+        lock (_browserGate)
         {
-            _flow.Error(BotCheckText.ClearAllAtIdle);
-            return;
+            if (_visit is { IsCompleted: false })
+            {
+                _ = window.BrowseAsync(url);   // the same window, gone to the page; its close is the first visit's to report
+                return opened;
+            }
+
+            _visit = BrowseAsync(window, url);
         }
 
-        _ = ClearBrowserAsync(window, clear);
+        return opened;
     }
 
-    private async Task ClearBrowserAsync(Viewer.IBrowserWindow window, Viewer.BrowserClear kind)
+    private readonly Lock _browserGate = new();
+
+    /// <summary>The loaded profile's saved links: the one made for its directory, or a new one once a profile switch moved it.</summary>
+    private BrowserLinks BrowserLinksNow()
+    {
+        var links = _browserLinks;
+        if (links is null || !string.Equals(links.Directory, Path.GetFullPath(_settings.ProfileDirectory), StringComparison.OrdinalIgnoreCase))
+        {
+            links = new BrowserLinks(_settings.ProfileDirectory, _time);
+            _browserLinks = links;
+        }
+
+        return links;
+    }
+
+    private void SaveBrowserLink(string url, string? name, INoticeSink sink)
+    {
+        var outcome = BrowserLinksNow().Add(url, name, out var saved);
+        Show(BrowserLinkText.Refusal(outcome) ?? (outcome == BrowserLinkOutcome.AlreadySaved ? BrowserLinkText.AlreadySaved(saved!) : BrowserLinkText.Saved(saved!)), sink);
+        _browserWindow?.LinksChanged();
+    }
+
+    // A bare /browser save: the page the open window shows, asked for and waited on (at most CurrentPageWait), its title as the name.
+    private async Task SaveCurrentPageAsync(IBrowserWindow window, INoticeSink sink)
+    {
+        (string Url, string? Title)? page;
+        try
+        {
+            page = await window.CurrentPageAsync().WaitAsync(CurrentPageWait, _time).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            page = null;
+        }
+
+        if (page is not { } shown)
+        {
+            sink.Error(BrowserLinkText.NothingToSave);
+            return;
+        }
+
+        SaveBrowserLink(shown.Url, BrowserLinks.UsableTitle(shown.Title, shown.Url), sink);
+    }
+
+    /// <summary>
+    /// <c>/browser list</c> (later on 2026-10-13): the saved links on <see cref="BrowserLinksMenu"/>'s pane, Enter opening one in the
+    /// Browser window; without the pane, the rows as notices through <paramref name="sink"/>.
+    /// </summary>
+    private Task ShowBrowserLinksAsync(INoticeSink sink, CancellationToken cancellationToken)
+    {
+        if (_pane.Enabled)
+        {
+            Func<BrowserLink, string>? open = _browserWindow is null ? null
+                : link => Uri.TryCreate(link.Url, UriKind.Absolute, out var url) ? OpenInBrowser(url, sink: null) : "Error: " + BrowserLinkText.NotWeb;
+            Action changed = () => _browserWindow?.LinksChanged();
+            return new BrowserLinksMenu(BrowserLinksNow, sink, _menuPane, open, _input, changed, _time.LocalTimeZone).ShowAsync(cancellationToken);
+        }
+
+        PrintBrowserLinks(BrowserLinksNow().List(), sink);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>The saved links as notices: the count, then a numbered line each (<see cref="BrowserLinkText.PrintedRow"/>); none says so.</summary>
+    internal static void PrintBrowserLinks(IReadOnlyList<BrowserLink> links, INoticeSink sink)
+    {
+        if (links.Count == 0)
+        {
+            sink.Notice(BrowserLinkText.NoneSaved);
+            return;
+        }
+
+        sink.Notice(BrowserLinkText.Caption(links.Count));
+        for (int i = 0; i < links.Count; i++)
+        {
+            sink.Notice(BrowserLinkText.PrintedRow(i + 1, links[i]));
+        }
+    }
+
+    /// <summary><c>/browser list --clear</c> (later on 2026-10-13): one yes/no, then every saved link taken off; none saved is said, asked nothing.</summary>
+    private async Task ClearBrowserLinksAsync(INoticeSink sink, CancellationToken cancellationToken)
+    {
+        var links = BrowserLinksNow();
+        int count = links.List().Count;
+        if (count == 0)
+        {
+            sink.Notice(BrowserLinkText.NoneSaved);
+            return;
+        }
+
+        if (!await ConfirmAsync(BrowserLinkText.ClearPrompt(count), cancellationToken).ConfigureAwait(false))
+        {
+            sink.Notice(KeptNotice);
+            return;
+        }
+
+        var outcome = links.Clear(out int cleared);
+        Show(BrowserLinkText.Refusal(outcome) ?? (cleared == 0 ? BrowserLinkText.NoneSaved : BrowserLinkText.Cleared(cleared)), sink);
+        _browserWindow?.LinksChanged();
+    }
+
+    // The clear on its own task, its answer through the flow sink (it may land while a reply runs).
+    private async Task ClearBrowserAsync(IBrowserWindow window, BrowserClear kind)
     {
         try
         {
@@ -108,12 +251,12 @@ internal sealed partial class ChatScreen
                 return;
             }
 
-            if (kind == Viewer.BrowserClear.All)
+            if (kind == BrowserClear.All)
             {
                 _web.Fetcher.ForgetAdopted();
             }
 
-            _flow.Notice(kind == Viewer.BrowserClear.All ? BotCheckText.ClearedAll : BotCheckText.ClearedHistory);
+            _flow.Notice(kind == BrowserClear.All ? BotCheckText.ClearedAll : BotCheckText.ClearedHistory);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -122,7 +265,7 @@ internal sealed partial class ChatScreen
         }
     }
 
-    private async Task BrowseAsync(Viewer.IBrowserWindow window, Uri? url)
+    private async Task BrowseAsync(IBrowserWindow window, Uri? url)
     {
         try
         {
