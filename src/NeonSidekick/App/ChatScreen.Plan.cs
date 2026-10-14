@@ -678,6 +678,15 @@ internal sealed partial class ChatScreen
         string? path = _plan.Path;
         if (loop.Pending)
         {
+            // A message queued under the reply goes first, as it does between passes (2026-10-14, the review: the first pass went
+            // ahead of it, and the loop then stopped for it after that pass).
+            if (onItsOwn && path is not null && QueueDrains && _queue.Count > 0)
+            {
+                _plan.StopClosing();
+                _transcript.Notice(PlanText.GapsYieldedNotice);
+                return null;
+            }
+
             if (onItsOwn && path is not null)
             {
                 return BeginGapPass(loop, path, ReadPlanBody(path));

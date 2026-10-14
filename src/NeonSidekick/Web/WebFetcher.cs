@@ -183,8 +183,13 @@ public sealed class WebFetcher
     /// <summary>The cookie scopes (a cookie's <see cref="BrowserCookie.Domain"/>) the browser handed cookies for, and the browser that earned them: what the client claims there.</summary>
     private readonly ConcurrentDictionary<string, Earned> _earned = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Every cookie <see cref="Adopt"/> put in the jar (later on 2026-10-13), so <see cref="ForgetAdopted"/> can take them out again; under its own lock.</summary>
-    private readonly List<BrowserCookie> _adopted = [];
+    /// <summary>
+    /// Every cookie the Browser window's hand-offs put in the jar (later on 2026-10-13), by name, scope and path, so <see cref="ForgetAdopted"/>
+    /// can take them out again; under its own lock. The headless browser's are not here (2026-10-14, the review: they were, so a
+    /// <c>/browser clear all</c> or a profile switch dropped the headless leg's clearances too, and a run under the browser mode grew the
+    /// list with every page).
+    /// </summary>
+    private readonly HashSet<(string Name, string Domain, string Path)> _adopted = [];
 
     /// <summary>The earliest each host may be asked again (<see cref="PaceAsync"/>), under <see cref="_paceGate"/>.</summary>
     private readonly Dictionary<string, DateTimeOffset> _nextSlot = new(StringComparer.OrdinalIgnoreCase);
@@ -923,7 +928,7 @@ public sealed class WebFetcher
     {
         if (_cookies is not null && dump.Cookies is { Count: > 0 } cookies)
         {
-            Adopt(cookies, _browser.Identify(options.BrowserPath), url);
+            Take(cookies, _browser.Identify(options.BrowserPath), url, fromWindow: false);
         }
     }
 
@@ -937,6 +942,12 @@ public sealed class WebFetcher
     {
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(url);
+        return Take(cookies, identity, url, fromWindow: true);
+    }
+
+    // The two hand-offs' one body; the window's cookies and claims are marked so ForgetAdopted takes back those alone.
+    private int Take(IReadOnlyList<BrowserCookie>? cookies, BrowserIdentity identity, Uri url, bool fromWindow)
+    {
         if (_cookies is null || cookies is not { Count: > 0 })
         {
             return 0;
@@ -948,16 +959,22 @@ public sealed class WebFetcher
             return 0;
         }
 
-        lock (_adopted)
+        if (fromWindow)
         {
-            _adopted.AddRange(taken);
+            lock (_adopted)
+            {
+                foreach (var cookie in taken)
+                {
+                    _adopted.Add(AdoptedKey(cookie.Name, cookie.Domain, cookie.Path.StartsWith('/') ? cookie.Path : "/"));
+                }
+            }
         }
 
         var scopes = taken.GroupBy(c => c.Domain.ToLowerInvariant()).ToList();
         foreach (var scope in scopes)
         {
             DateTimeOffset? until = scope.Any(c => c.Expires <= 0) ? null : DateTimeOffset.UnixEpoch.AddSeconds(scope.Max(c => c.Expires));
-            _earned[scope.Key] = new Earned(scope.First(), identity, until);
+            _earned[scope.Key] = new Earned(scope.First(), identity, until, fromWindow);
         }
 
         DiagnosticLog.Info(Category, $"{url}: {taken.Count.ToString(CultureInfo.InvariantCulture)} of the browser's cookies handed to the HTTP client, which claims {identity.BrandName} {identity.Major.ToString(CultureInfo.InvariantCulture)} on {string.Join(", ", scopes.Select(s => s.Key))} while they last.");
@@ -967,20 +984,27 @@ public sealed class WebFetcher
     /// <summary>
     /// The Browser window's cookies taken back out of the jar (later on 2026-10-13: <c>/browser clear all</c>, and a profile switch, the
     /// window's data being each profile's own): every cookie <see cref="Adopt"/> put there expired, and every Edge claim it earned
-    /// dropped, so the client goes back to claiming the headless browser's brand there. Cookies from plain fetches stay. Returns how
-    /// many cookies went.
+    /// dropped, so the client goes back to claiming the headless browser's brand there. Cookies from plain fetches and from the headless
+    /// browser stay, with the headless browser's claims. Returns how many cookies went.
     /// </summary>
     public int ForgetAdopted()
     {
-        BrowserCookie[] adopted;
+        HashSet<(string Name, string Domain, string Path)> adopted;
         lock (_adopted)
         {
             adopted = [.. _adopted];
             _adopted.Clear();
         }
 
-        _earned.Clear();
-        if (_cookies is null || adopted.Length == 0)
+        foreach (var entry in _earned)
+        {
+            if (entry.Value.FromWindow)
+            {
+                _earned.TryRemove(entry);
+            }
+        }
+
+        if (_cookies is null || adopted.Count == 0)
         {
             return 0;
         }
@@ -988,9 +1012,7 @@ public sealed class WebFetcher
         int gone = 0;
         foreach (Cookie cookie in _cookies.GetAllCookies())
         {
-            if (!cookie.Expired && adopted.Any(a => string.Equals(a.Name, cookie.Name, StringComparison.Ordinal)
-                && string.Equals(a.Domain.TrimStart('.'), cookie.Domain.TrimStart('.'), StringComparison.OrdinalIgnoreCase)
-                && string.Equals(a.Path.StartsWith('/') ? a.Path : "/", cookie.Path, StringComparison.Ordinal)))
+            if (!cookie.Expired && adopted.Contains(AdoptedKey(cookie.Name, cookie.Domain, cookie.Path)))
             {
                 cookie.Expired = true;
                 gone++;
@@ -1061,7 +1083,10 @@ public sealed class WebFetcher
     }
 
     /// <summary>A scope the browser's cookies were taken for (one of them, for <see cref="BrowserCookie.AppliesTo"/>), the browser, and when the last of them expires (null: a session cookie).</summary>
-    private sealed record Earned(BrowserCookie Scope, BrowserIdentity Identity, DateTimeOffset? Until);
+    private sealed record Earned(BrowserCookie Scope, BrowserIdentity Identity, DateTimeOffset? Until, bool FromWindow);
+
+    private static (string Name, string Domain, string Path) AdoptedKey(string name, string domain, string path) =>
+        (name, domain.TrimStart('.').ToLowerInvariant(), path);
 
     /// <param name="executable">The browser the default engine's fallback found, right after the HTTP leg; that leg took the host's
     /// turn, so this run only marks it (code review, 2026-10-11: it waited up to a second more for nothing). Null: located here, paced.</param>

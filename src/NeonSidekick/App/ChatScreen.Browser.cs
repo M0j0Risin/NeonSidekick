@@ -187,12 +187,13 @@ internal sealed partial class ChatScreen
     }
 
     // A bare /browser save: the page the open window shows, asked for and waited on (at most BrowserLinks.CurrentPageWait), its title as the name.
+    // Never a bot check's page (2026-10-14, the review: web_save_link's current had the guard, this did not).
     private async Task SaveCurrentPageAsync(IBrowserWindow window, INoticeSink sink)
     {
         (string Url, string? Title)? page;
         try
         {
-            page = await window.CurrentPageAsync().WaitAsync(BrowserLinks.CurrentPageWait, _time).ConfigureAwait(false);
+            page = window.Unavailable() is not null ? null : await window.CurrentPageAsync().WaitAsync(BrowserLinks.CurrentPageWait, _time).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {

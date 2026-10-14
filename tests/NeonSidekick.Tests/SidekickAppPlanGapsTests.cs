@@ -51,6 +51,24 @@ public partial class SidekickAppTests
     }
 
     [Fact]
+    public async Task Headless_PlanGaps_AnAdvisorReviewer_WithNoAdvisorOffered_IsTheModelOnEveryPass()
+    {
+        // 2026-10-14, the review: the first pass named the model, passes 2..N the advisor asked for.
+        ServerOn1234("llama");
+        _chat.Enqueue(HeadlessPresentPlan());
+        _chat.EnqueueText("Saved.");
+        _chat.Enqueue(HeadlessPresentGaps("p2", "Test it"));
+        _chat.EnqueueText("Pass 1 done.");
+        _chat.Enqueue(HeadlessPresentGaps("p3"));
+        _chat.EnqueueText("Nothing left.");
+
+        await Headless("/plan Add a guide\n/plan gaps advisor\n");
+
+        Assert.Equal(PlanText.GapPassMessage(HeadlessPlanPath, 1, 5, PlanReviewer.Model), HeadlessLastUser(_chat.Requests[2]));
+        Assert.Equal(PlanText.GapPassMessage(HeadlessPlanPath, 2, 5, PlanReviewer.Model), HeadlessLastUser(_chat.Requests[4]));
+    }
+
+    [Fact]
     public async Task Headless_PlanGaps_StopsAtTheLimit()
     {
         ServerOn1234("llama");

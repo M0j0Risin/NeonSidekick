@@ -74,6 +74,21 @@ public sealed partial class ChatScreenTests
         Assert.Empty(SavedLinks().List());
     }
 
+    /// <summary>A bare save while a bot check waits in the window (2026-10-14, the review): the check's page is never saved.</summary>
+    [Fact]
+    public async Task BrowserLinks_ABareSave_WhileABotCheckWaits_SavesNothing()
+    {
+        _browserWindow = new FakeBrowserWindow { Current = ("https://example.com/", "Just a moment..."), UnavailableReason = BrowserText.BotCheckWaiting };
+        PushLine("/browser save");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(BrowserLinkText.NothingToSave, output);
+        Assert.Empty(SavedLinks().List());
+        Assert.Equal(0, _browserWindow.CurrentAsks);
+    }
+
     /// <summary>Off Windows (no Browser window) the list still works; opening says the window needs Windows.</summary>
     [Fact]
     public async Task BrowserLinks_WithNoWindow_TheListWorks_OpeningSaysWhy()

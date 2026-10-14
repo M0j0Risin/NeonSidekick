@@ -381,6 +381,30 @@ public class WebFetcherTests
     }
 
     [Fact]
+    public async Task ForgetAdopted_LeavesTheHeadlessBrowsersCookies_AndItsClaim()
+    {
+        // 2026-10-14, the review: ForgetAdopted (/browser clear all, a profile switch) is the Browser window's; it took the headless leg's too.
+        var jar = new CookieContainer();
+        var fetcher = new WebFetcher(new HttpClient(_http), _browser, (host, _) => Task.FromResult(_dns[host]), jar);
+        var agents = new List<string>();
+        bool cleared = false;
+        _http.Map("https://example.com/", (r, _) => { agents.Add(r.Headers.UserAgent.ToString()); return Task.FromResult(cleared ? Html(HttpStatusCode.OK, Article) : Html(HttpStatusCode.Forbidden, Cloudflare)); });
+        _browser.Html = Article;
+        _browser.Identity = new BrowserIdentity(BrowserBrand.Edge, 155, BrowserPlatform.Windows);
+        _browser.FinalUrl = "https://example.com/";
+        _browser.Cookies.Add(new BrowserCookie("cf_clearance", "abc", ".example.com", "/", -1, true, true));
+
+        await fetcher.FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
+        Assert.Equal(0, fetcher.ForgetAdopted());
+        cleared = true;
+        var again = await fetcher.FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
+
+        Assert.Equal(WebText.HttpEngine, again.Engine);
+        Assert.Equal("cf_clearance=abc", jar.GetCookieHeader(new Uri("https://example.com/")));
+        Assert.Equal(_browser.Identity.UserAgent, agents[^1]);   // still Edge there
+    }
+
+    [Fact]
     public async Task TheBrowsersCookies_GoIntoTheJar_AndTheClientClaimsThatBrowserOnTheirHosts()
     {
         // 2026-10-11, the user's ask: a clearance the browser earned lets the client in next time, as the browser it was earned by.

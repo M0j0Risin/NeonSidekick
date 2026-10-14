@@ -1544,8 +1544,10 @@ public sealed class SidekickApp
     /// After a headless turn while a gap-closing loop runs (2026-10-13), the screen's <c>TakeGapPass</c> without a pane or a queue:
     /// the pass judged and said into <paramref name="lines"/>, then the next pass's message (sent as the next line), or null once
     /// the loop is over — a convergence or a stop short naming <c>/plan approve</c>, since there is no pane to put the plan back on.
+    /// Each pass names the model as the reviewer when no advisor is offered, as the first does (2026-10-14, the review: passes 2..N said
+    /// the reviewer asked for, against the directive's "review it yourself").
     /// </summary>
-    private static string? HeadlessGapAfterTurn(Plans.PlanSession plan, WorkingDirectory files, IReadOnlyList<string> tools, bool cancelled, List<string> lines)
+    private string? HeadlessGapAfterTurn(Plans.PlanSession plan, WorkingDirectory files, IReadOnlyList<string> tools, bool cancelled, List<string> lines)
     {
         if (plan.Closing is not { Pending: false } loop)
         {
@@ -1564,7 +1566,7 @@ public sealed class SidekickApp
         if (stop is not { } reason)
         {
             loop.BeginPass(body);
-            return Plans.PlanText.GapPassMessage(path!, loop.Pass, loop.Limit, loop.Reviewer);
+            return Plans.PlanText.GapPassMessage(path!, loop.Pass, loop.Limit, HeadlessAdvisorsOffered() ? loop.Reviewer : Plans.PlanReviewer.Model);
         }
 
         plan.StopClosing();

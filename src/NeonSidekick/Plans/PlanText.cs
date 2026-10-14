@@ -170,6 +170,9 @@ public static class PlanText
 
     public const string GapsDroppedNotice = Glyph + " The gap review was chosen but the reply was stopped: /plan gaps starts it.";
 
+    /// <summary>Close gaps… chosen inside a reply while a message of the user's was queued (2026-10-14): the message goes first.</summary>
+    public const string GapsYieldedNotice = Glyph + " The gap review was chosen but your message goes first: /plan gaps starts it.";
+
     /// <summary>Headless (2026-10-13): no confirm to ask on, so every advisor call would be refused.</summary>
     public const string GapsConfirmFallbackNotice = Glyph + " Advisor confirm is on and headless cannot ask, so the model reviews the plan alone.";
 

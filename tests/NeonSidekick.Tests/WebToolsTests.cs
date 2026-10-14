@@ -184,6 +184,11 @@ public sealed class WebToolsTests : IDisposable
         Assert.Empty(_opened);
         Assert.Equal(WebText.NotHttp("ftp://x.example/"), await open.InvokeAsync(Args(("url", "ftp://x.example/")), CancellationToken.None));
         Assert.Single(window);
+
+        // A bad first link (2026-10-14, the review): said so, and the first good one opened in its place.
+        answer = (string)(await open.InvokeAsync(Args(("urls", Json("[\"ftp://x.example/\", \"https://d.example/\", \"https://e.example/\"]"))), CancellationToken.None))!;
+        Assert.Equal(WebText.NotHttp("ftp://x.example/") + "\n" + WebText.OpenedInWindow("https://d.example/") + "\n" + WebText.OneAtATime(["https://e.example/"]), answer);
+        Assert.Equal(new Uri("https://d.example/"), window[^1]);
     }
 
     [Fact]

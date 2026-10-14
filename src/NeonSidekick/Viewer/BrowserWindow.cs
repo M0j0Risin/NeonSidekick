@@ -58,6 +58,10 @@ public static class BrowserWindow
 
     private static string ProfileNow() => ProfileDirectory?.Invoke() ?? Path.Combine(Path.GetTempPath(), "NeonSidekick");
 
+    /// <summary>Whether <paramref name="profile"/> is the loaded profile's folder.</summary>
+    internal static bool IsLoaded(string profile) =>
+        string.Equals(Path.GetFullPath(profile), Path.GetFullPath(ProfileNow()), StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// The results page for words typed in the address box (<c>Program</c>: <see cref="BrowserAddress.SearchUrl"/> over the settings in
     /// force, so a <c>Web search method</c> change counts at once); DuckDuckGo's until it is set. Called on the window's thread.
@@ -328,13 +332,16 @@ internal sealed unsafe partial class BrowserWindowThread
     private volatile bool _noHarvest;
     private volatile bool _alive = true;
 
-    /// <param name="linksDirectory">The profile folder whose saved links the ☆ menu shows (later on 2026-10-13); null: none (the smoke).</param>
+    /// <param name="linksDirectory">The profile folder whose saved links the ☆ menu shows (later on 2026-10-13), and whose privacy the window keeps
+    /// (2026-10-14); null: none (the smoke).</param>
     public BrowserWindowThread(string userDataFolder, BrowserIdentity identity, string? historyFile = null, bool forClear = false, string? linksDirectory = null)
     {
         _userDataFolder = userDataFolder;
         _identity = identity;
         _historyFile = historyFile;
         _forClear = forClear;
+        _profile = linksDirectory;
+        _privacy = BrowserWindow.PrivacyNow();
         _links = linksDirectory is null ? null : new BrowserLinks(linksDirectory);
     }
 

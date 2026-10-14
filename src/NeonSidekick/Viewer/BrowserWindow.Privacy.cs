@@ -27,15 +27,37 @@ internal sealed unsafe partial class BrowserWindowThread
 
     private readonly string? _historyFile;
     private readonly bool _forClear;
+    private readonly string? _profile;
     private readonly List<Action> _whenUsable = [];
     private readonly List<TaskCompletionSource<string?>> _pendingClears = [];
     private ContextMenuWindow? _menu;
     private IReadOnlyList<BrowserHistoryEntry> _history = [];
+    // The list the open history menu showed (2026-10-14, the review: a row picked by its place in the live list went to another page
+    // when a visit was recorded while the menu was open), as the links menu keeps _menuLinks.
+    private IReadOnlyList<BrowserHistoryEntry> _menuHistory = [];
     private bool _historyDirty;
     private bool _openClearing;
     private bool _closeClearing;
     private bool _closeCleared;
     private bool _skipCloseClear;
+    private BrowserPrivacyKind _privacy;
+
+    /// <summary>
+    /// The window's own profile's <c>Web browser privacy</c>: the setting in force while that profile is loaded, else the last value
+    /// read while it was (2026-10-14, the review: a profile switch closes the old window after the store has loaded the new profile, and
+    /// that close read the new profile's privacy, so keep-history's list was deleted under the other's clear-history). The setting is read
+    /// before the profile, so a switch between the two reads is seen as a switch and the remembered value kept.
+    /// </summary>
+    private BrowserPrivacyKind PrivacyNow()
+    {
+        var now = BrowserWindow.PrivacyNow();
+        if (_profile is null || BrowserWindow.IsLoaded(_profile))
+        {
+            _privacy = now;
+        }
+
+        return _privacy;
+    }
 
     /// <summary>The view made, and any clear as it opened done: pages and clears may go.</summary>
     private bool Usable => _created && !_openClearing;
@@ -129,7 +151,7 @@ internal sealed unsafe partial class BrowserWindowThread
     // first page, which waits for it. False when there is nothing to wait for.
     private bool StartOpenClear()
     {
-        if (_forClear || BrowserWindow.PrivacyNow() != BrowserPrivacyKind.ClearHistory)
+        if (_forClear || PrivacyNow() != BrowserPrivacyKind.ClearHistory)
         {
             return false;
         }
@@ -162,7 +184,7 @@ internal sealed unsafe partial class BrowserWindowThread
     private bool StartCloseClear()
     {
         if (_closeCleared || _closeClearing || _skipCloseClear || _host is not { IsCreated: true } host
-            || BrowserWindow.PrivacyNow() != BrowserPrivacyKind.ClearHistory)
+            || PrivacyNow() != BrowserPrivacyKind.ClearHistory)
         {
             return false;
         }
@@ -233,7 +255,7 @@ internal sealed unsafe partial class BrowserWindowThread
     private void HistoryChanged()
     {
         _historyDirty = true;
-        if (_historyFile is not null && BrowserWindow.PrivacyNow() == BrowserPrivacyKind.KeepHistory)
+        if (_historyFile is not null && PrivacyNow() == BrowserPrivacyKind.KeepHistory)
         {
             SetTimer(_hwnd, HistorySaveTimer, HistorySaveDelayMs, IntPtr.Zero);
         }
@@ -241,7 +263,7 @@ internal sealed unsafe partial class BrowserWindowThread
 
     private void SaveHistory()
     {
-        if (_historyDirty && _historyFile is { } file && BrowserWindow.PrivacyNow() == BrowserPrivacyKind.KeepHistory && BrowserHistory.Save(file, _history))
+        if (_historyDirty && _historyFile is { } file && PrivacyNow() == BrowserPrivacyKind.KeepHistory && BrowserHistory.Save(file, _history))
         {
             _historyDirty = false;
         }
@@ -256,7 +278,7 @@ internal sealed unsafe partial class BrowserWindowThread
             return;
         }
 
-        if (BrowserWindow.PrivacyNow() == BrowserPrivacyKind.KeepHistory)
+        if (PrivacyNow() == BrowserPrivacyKind.KeepHistory)
         {
             SaveHistory();
         }
@@ -290,7 +312,8 @@ internal sealed unsafe partial class BrowserWindowThread
         var button = _layout.History;
         var corner = new Point { X = button.Left, Y = button.Bottom };
         ClientToScreen(_hwnd, &corner);
-        var items = BrowserHistory.MenuItems(_history, TimeProvider.System.GetUtcNow(), TimeZoneInfo.Local);
+        _menuHistory = _history;
+        var items = BrowserHistory.MenuItems(_menuHistory, TimeProvider.System.GetUtcNow(), TimeZoneInfo.Local);
         _menu.Open(items, corner.X, corner.Y, MenuStyle.For(NeonSidekick.UI.Theme.Current, _chrome.Themed()), keyboard);
     }
 
@@ -307,9 +330,9 @@ internal sealed unsafe partial class BrowserWindowThread
             return;
         }
 
-        if (command >= 1 && command <= _history.Count)
+        if (command >= 1 && command <= _menuHistory.Count)
         {
-            Go(_history[command - 1].Url);
+            Go(_menuHistory[command - 1].Url);
             _host?.Focus();
         }
     }

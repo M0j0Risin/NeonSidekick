@@ -143,34 +143,53 @@ public sealed class OpenUrlTool : AIFunction
         return sb.ToString();
     }
 
-    /// <summary>The first link in the Browser window (or the default browser with the reason when it cannot take it), the rest named as not opened.</summary>
+    /// <summary>
+    /// The first web link in the Browser window (or the default browser with the reason when it cannot take it), any before it that are
+    /// not web links said so, the rest named as not opened (2026-10-14, the review: only the first was tried, so a bad first link left
+    /// a good second one unopened).
+    /// </summary>
     private string OpenInWindow(IReadOnlyList<string> urls)
     {
-        string first;
-        if (WebFetcher.ParseUrl(urls[0]) is not { } parsed)
+        var lines = new List<string>(3);
+        int at = 0;
+        Uri? parsed = null;
+        for (; at < urls.Count && (parsed = WebFetcher.ParseUrl(urls[at])) is null; at++)
         {
-            first = WebText.NotHttp(urls[0].Trim());
-        }
-        else if (_openInWindow!(parsed) is not { } reason)
-        {
-            NeonSidekick.Diagnostics.DiagnosticLog.Info(WebFetcher.Category, "Opened in the Browser window: " + parsed.AbsoluteUri);
-            first = WebText.OpenedInWindow(parsed.AbsoluteUri);
-        }
-        else
-        {
-            try
-            {
-                _web.OpenUrl(parsed.AbsoluteUri);
-                NeonSidekick.Diagnostics.DiagnosticLog.Info(WebFetcher.Category, "Opened in the browser (the Browser window could not take it: " + reason + "): " + parsed.AbsoluteUri);
-                first = WebText.WindowFellBack(parsed.AbsoluteUri, reason);
-            }
-            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or PlatformNotSupportedException)
-            {
-                first = WebText.OpenFailed(parsed.AbsoluteUri, ex.Message);
-            }
+            lines.Add(WebText.NotHttp(urls[at].Trim()));
         }
 
-        return urls.Count == 1 ? first : first + "\n" + WebText.OneAtATime(urls.Skip(1).Select(u => u.Trim()).ToList());
+        if (parsed is not null)
+        {
+            lines.Add(OpenOneInWindow(parsed));
+            at++;
+        }
+
+        if (at < urls.Count)
+        {
+            lines.Add(WebText.OneAtATime(urls.Skip(at).Select(u => u.Trim()).ToList()));
+        }
+
+        return string.Join('\n', lines);
+    }
+
+    private string OpenOneInWindow(Uri parsed)
+    {
+        if (_openInWindow!(parsed) is not { } reason)
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Info(WebFetcher.Category, "Opened in the Browser window: " + parsed.AbsoluteUri);
+            return WebText.OpenedInWindow(parsed.AbsoluteUri);
+        }
+
+        try
+        {
+            _web.OpenUrl(parsed.AbsoluteUri);
+            NeonSidekick.Diagnostics.DiagnosticLog.Info(WebFetcher.Category, "Opened in the browser (the Browser window could not take it: " + reason + "): " + parsed.AbsoluteUri);
+            return WebText.WindowFellBack(parsed.AbsoluteUri, reason);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or PlatformNotSupportedException)
+        {
+            return WebText.OpenFailed(parsed.AbsoluteUri, ex.Message);
+        }
     }
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

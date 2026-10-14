@@ -106,6 +106,10 @@ public sealed class BrowserHistoryTests : IDisposable
         Assert.Empty(BrowserHistory.Load(file));
         File.WriteAllText(file, "{ \"version\": 1, \"visits\": [{ \"url\": \"file:///C:/\", \"title\": \"x\", \"at\": \"2026-10-13T18:00:00+00:00\" }, { \"url\": \"https://a.example/\", \"title\": \"A\", \"at\": \"2026-10-13T18:00:00+00:00\" }] }");
         Assert.Equal(["https://a.example/"], BrowserHistory.Load(file).Select(e => e.Url));   // only web pages come back
+        File.WriteAllText(file, "{ \"version\": 1, \"visits\": null }");
+        Assert.Empty(BrowserHistory.Load(file));
+        File.WriteAllText(file, "{ \"version\": 1, \"visits\": [null, { \"url\": \"https://a.example/\", \"title\": \"A\", \"at\": \"2026-10-13T18:00:00+00:00\" }] }");
+        Assert.Equal(["https://a.example/"], BrowserHistory.Load(file).Select(e => e.Url));   // a null entry skipped (2026-10-14)
 
         Assert.True(BrowserHistory.Delete(file));
         Assert.False(File.Exists(file));

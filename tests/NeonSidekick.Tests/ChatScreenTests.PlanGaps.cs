@@ -92,6 +92,24 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task PlanGaps_ChosenOnThePane_AMessageQueuedUnderTheReply_GoesFirst()
+    {
+        // 2026-10-14, the review: the first pass went ahead of a message queued under the reply.
+        PlanFixture([[Keys.Char('g'), Keys.Enter]], "/plan Add a guide", "/exit");
+        _chat.Enqueue(PresentPlanCall());           // 0: presented; Close gaps…
+        _chat.EnqueueText("Closing the gaps.");     // 1: a message typed under it
+        _chat.EnqueueText("Noted.");                // 2: the message, no pass
+        PushLineDuringTurn(2, "Use xUnit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Equal("Use xUnit", LastUserText(_chat.Requests[2]));
+        Assert.Contains(PlanText.GapsYieldedNotice, output);
+        Assert.DoesNotContain("A gap review is running", _chat.Requests[2][0].Text);
+    }
+
+    [Fact]
     public async Task PlanGaps_AtTheLimit_ThePaneComesBack_WithWhatIsLeft()
     {
         _settings.Update(d => d.PlanGapPasses = 1);

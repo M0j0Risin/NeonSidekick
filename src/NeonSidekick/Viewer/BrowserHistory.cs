@@ -116,7 +116,8 @@ public static class BrowserHistory
                 return [];
             }
 
-            return file.Visits.Where(v => VideoPage.IsWebLink(v.Url)).Select(v => v with { Title = v.Title ?? "" }).Take(Cap).ToList();
+            // A null list or entry (a hand edit) is none, as BrowserLinks reads them (2026-10-14, the review: it threw on the window's thread).
+            return (file.Visits ?? []).Where(v => v is not null && VideoPage.IsWebLink(v.Url)).Select(v => v with { Title = v.Title ?? "" }).Take(Cap).ToList();
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
