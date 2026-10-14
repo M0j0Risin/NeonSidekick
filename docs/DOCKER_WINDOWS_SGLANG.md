@@ -1,7 +1,6 @@
 # SGLang Examples (Windows)
 
-Working `docker run` commands for serving models with [SGLang](https://github.com/sgl-project/sglang) on
-Windows 11, through Docker Desktop on WSL2 (Ubuntu).
+Working `docker run` commands for serving models with [SGLang](https://github.com/sgl-project/sglang) on Windows 11, through Docker Desktop on WSL2 (Ubuntu).
 
 > **Tested on:** NVIDIA RTX 5090 (32 GB VRAM), 64 GB system RAM.
 
@@ -13,14 +12,15 @@ Not for Macs: Docker servers need Windows and an NVIDIA GPU. Back to the [README
 - A Hugging Face token: replace `YOUR_HUGGING_FACE_TOKEN` in each command
 - Run the commands from a WSL (Ubuntu) shell, not PowerShell; they use `~` and `\` line continuations
 
-Every example serves on port `30000`, so only one can run at a time. Each container name records the model,
-drafter, GPU count and context length.
+Every example serves on port `30000`, so only one can run at a time. Each container name records the model, drafter, GPU count and context length.
 
 ## Using them in NeonSidekick
 
-Each container can be a `/server` choice: tick it in *Docker server containers* on `/settings` › Servers › Docker and
-turn on *Docker servers enabled*. The app stops the running one before starting the one you pick, so the
-shared port is never a problem. See [Docker servers](TOOLS.md#docker-servers).
+1. Run an example's command once to create its container (the first run downloads the model). From then on the app starts and stops it.
+2. On `/settings` › Servers › Docker, turn on *Docker servers enabled* and tick the container in *Docker server containers*. The list shows containers whose image or command has one of the *Docker server match words* (`sglang` is one by default).
+3. Pick the container in `/server`, or start the app with `--url docker:<container>`.
+
+The app starts the container you pick and stops the other ticked ones first, so the shared port is never a problem. See [Docker servers](TOOLS.md#docker-servers).
 
 ## Models
 

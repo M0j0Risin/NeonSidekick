@@ -1,12 +1,27 @@
 # Slash commands
 
-Every command and its forms. The [README](../README.md#useful-first-commands) has the few to start with; in the app, `/help` lists them all.
+Every command and its forms, grouped by topic, then the details of the longer ones. Back to the [README](../README.md#useful-first-commands); in the app, `/help` lists them all.
 
-Type `/` to list every command; after a command and a space, the app offers its arguments where it can. `//` is a shortcut for `/settings`. Forms are written as: words typed as they are, `<placeholders>` to fill in, `[optional]` parts, and `a|b` for a choice. See also [Keyboard shortcuts](SETTINGS.md#keyboard-shortcuts) and [Commands typed during a reply](SETTINGS.md#commands-typed-during-a-reply).
+Type `/` to list the commands; after a command and a space, the app offers its arguments. `//` is a shortcut for `/settings`.
+
+Forms are written as: words typed as they are, `<placeholders>` to fill in, `[optional]` parts, and `a|b` for a choice.
+
+Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands that work while a reply runs under [Commands typed during a reply](INTERFACE.md#commands-typed-during-a-reply).
 
 ## Contents
 
 - [All commands](#all-commands)
+  - [Help and the app](#help-and-the-app)
+  - [Conversation](#conversation)
+  - [Models and servers](#models-and-servers)
+  - [Profiles and settings](#profiles-and-settings)
+  - [Files and folders](#files-and-folders)
+  - [Pictures, camera and screen](#pictures-camera-and-screen)
+  - [Voice](#voice)
+  - [Web and video](#web-and-video)
+  - [Integrations](#integrations)
+  - [Display and windows](#display-and-windows)
+  - [Automation](#automation)
 - [Command details](#command-details)
   - [Plan mode](#plan-mode)
   - [Bot conversations](#bot-conversations)
@@ -16,232 +31,241 @@ Type `/` to list every command; after a command and a space, the app offers its 
   - [Loops](#loops)
   - [Benchmark tests](#benchmark-tests)
   - [Imagine options](#imagine-options)
-  - [Folder picker](#folder-picker)
-  - [File browser](#file-browser)
-  - [Picture viewer](#picture-viewer)
-  - [Thumbnail browser](#thumbnail-browser)
-  - [Log window](#log-window)
-  - [Process window](#process-window)
   - [Camera](#camera)
   - [Screen capture](#screen-capture)
-  - [Pasting a picture](#pasting-a-picture)
   - [Profiles](#profiles)
   - [Desktop shortcuts](#desktop-shortcuts)
   - [Custom themes](#custom-themes)
   - [Voice presets](#voice-presets)
-  - [Pane keys](#pane-keys)
+- The app's windows, pasting a picture, the folder picker and the file browser: [Using the app](INTERFACE.md).
 
 ## All commands
 
+### Help and the app
+
 | Command | What it does |
 |---|---|
-| `/about` | Shows the version, repository, runtime, folders, components, the embedded models (with Hugging Face links) and licence. |
-| `/avatar` | Opens the emoji picker for the profile's *Model avatar* (see [The avatar picker](SETTINGS.md#the-avatar-picker)). |
-| `/avatar <emoji>` | Sets the avatar to that emoji (typed, or pasted from Win+.). |
-| `/avatar <words>` | Opens the picker searching for the words; headless, sets the best match. |
-| `/avatar clear` | Removes the avatar: replies open with ● again and the window title shows the name alone. |
-| `/avatar model [<emoji>\|<words>\|clear]` | The same, naming the *Model avatar* outright. |
-| `/avatar user [<emoji>\|<words>\|clear]` | Your *User avatar*, the emoji that opens each line you send: bare opens the picker, an emoji sets it, words search, `clear` puts › back. |
-| `/advisor` | Lists the advisors with their roles, server kind and model. See [Advisor](#advisor). |
-| `/advisor <name> <question>` | Asks one advisor (by profile name or a word of its role) on its own profile's server; the answer joins the conversation. |
-| `/claude <message>` | Sends the message to Claude Code and streams its reply. See [Claude Code from the chat](#claude-code-from-the-chat). |
-| `/claude new` | Starts a new Claude conversation. |
-| `/clear` | Starts a new conversation and clears the screen. |
-| `/cmd <command>` | Runs a shell line yourself in the working directory, in the *Shell default shell*, under the same checks as the model's. See [Your own shell line](#your-own-shell-line). |
-| `/cmd --shell <shell> <command>` | The same in another shell (`powershell`, `cmd` or `bash`; on a Mac `zsh`, `bash` or `powershell`). |
-| `/cmd --bg <command>` | The same, run in the background while you chat; its output is reported when it ends. |
-| `/keycheck` | Lists the app's key chords and whether another program holds each as a global hotkey (a held chord never reaches the app). On a Mac it also names macOS shortcuts and a terminal whose Option key types characters. `/help`'s Keys tab shows the same list with its *⌨ key check* button (`k`). |
-| `/compact [<focus>]` | Shrinks the context; a focus tells the summary what to keep. |
-| `/copy [<n>\|all] [--thinking]` | Copies the last reply (the last *n*, or the whole transcript) as Markdown; `--thinking` includes the thinking. |
-| `/cwd [<path>\|~\|browse]` | Shows or changes the working directory (a path completes as you type). `~` returns to the profile's `files\`; `browse` opens the [folder picker](#folder-picker). |
-| `/camera` | Opens the camera pane: Space takes the photo, `r` retakes, Enter attaches it as `[Image #N]`, ESC drops it. See [Camera](#camera). |
-| `/camera snap` | Takes a photo at once and puts it on the input line. |
-| `/camera list` | Lists the cameras, the chosen one marked. |
-| `/camera use <n>\|<name>` | Chooses the camera by number or name (*Camera device*). |
-| `/camera live` | Shows the camera live in its own window until you close it or `/camera off`. |
-| `/camera watch [<seconds>\|off]` | Looks every *Camera watch interval* (or the seconds given); a changed picture rides your next message. Never on at startup. |
-| `/camera off` | Ends live view and watch mode. |
-| `/camera view` | Opens the picture viewer on *Camera output folder*. |
-| `/camera thumbs` | Opens the thumbnail browser on *Camera output folder*. |
-| `/screen` | Captures the monitor the app is on and puts it on the input line as `[Image #N]`. The argument list offers the targets, monitors and windows. See [Screen capture](#screen-capture). |
-| `/screen all\|desktop` | Captures every monitor as one picture. |
-| `/screen monitor:<n>` | Captures monitor n (`monitor <n>` works too). |
-| `/screen window:<id>\|<title-words>` | Captures one window, even when another covers it: by id, or words of its title or program. |
-| `/screen behind` | Captures the window right behind the app's own (the one you were just in). |
-| `/screen list` | Lists the monitors and windows, front to back, with the target that names each. |
-| `/screen view` | Opens the picture viewer on *Screen output folder*. |
-| `/screen thumbs` | Opens the thumbnail browser on *Screen output folder*. |
-| `/docker` | Lists the containers in a pane; Enter offers stop, restart or pause (asking first), start, logs and more, and `l` shows only the LLM servers. On a Mac: Docker Desktop, OrbStack, Colima or Rancher Desktop. |
-| `/docker ps [<filter>]` | Lists the containers, or those whose name or image holds the filter. |
-| `/docker status` | Docker Desktop's and the engine's versions, with container counts. |
-| `/docker logs <container> [<lines>]` | A container's last lines (50 by default, up to 2000). |
-| `/docker stats [<container>]` | CPU, memory, network and disk use of one or every running container. |
-| `/docker start\|stop\|restart\|pause\|unpause <container>` | Acts on one container (name, part of one, or id). Nothing is asked and *Docker writes* doesn't apply, but every change is logged. |
-| `/draft` | Writes the next message in your editor; it is sent when you save and close. |
-| `/echo <text>` | Prints a line as a reply (spoken when speech is on). |
+| `/help` | The commands (everyday ones on Basic, the rest on Advanced) and the keys; on the Keys tab, `k` swaps in `/keycheck`'s list. |
+| `/about` | The version, runtime, folders, components, the embedded models' Hugging Face pages and the license. |
+| `/keycheck` | Lists the app's key chords and whether another program holds each (a held chord never reaches the app). On a Mac it also names macOS shortcuts and an Option key that types characters. |
 | `/exit` | Exits the app. |
-| `/explore [<folder>]` | Opens the working directory in your file browser. |
-| `/browse [<folder>]` | Browses the working directory as a tree in a pane; Enter on a file opens it in its default app. See [File browser](#file-browser). |
-| `/browser [<url>]` | Opens the page (or *Web browser home page*) in the Browser window, for you to sign in to a site or get past its bot check; when you close it, its cookies go to the web tools. Windows only. See [The Browser window](TOOLS.md#the-browser-window). |
-| `/browser clear history\|all` | Clears the Browser window's history (`history`), or everything it keeps for this profile, cookies and sign-ins too (`all`, after a yes). Your saved links stay. |
-| `/browser <n>` | Opens saved link *n* (its number in `/browser list`) in the Browser window. |
-| `/browser save [<url> [<name>]]` | Saves a link: the address, the words after it as its name; with no address, the page the Browser window shows. |
-| `/browser list` | The saved links in a pane; Enter or a double-click opens one in the Browser window, `a` adds, `n` renames, `e` changes the address, `d` removes, `c` clears all (each removal asks), Shift+↑↓ moves. The toolbar's ⭐ opens it too. |
-| `/browser list --clear` | Removes every saved link, after a yes (headless: at once). |
-| `/browser unsave <n>\|<url>` | Removes one saved link, by its number or its address. |
-| `/gituser [force]` | Writes *GitLib user email* and *GitLib user name* into the repository's config; an existing `[user]` stays unless `force`. Needs *GitLib tools* on. |
-| `/ha` | Home Assistant at a glance: lights on per room, the TV, temperatures, motion, low batteries and to-do lists. |
-| `/ha on\|off\|toggle <name> [<brightness>]` | Switches a room, light, switch or the TV (`/ha on den 40%`, `/ha off kitchen and hallway`). |
-| `/ha scene <name>` | Activates a scene (`/ha scene den relax`). |
-| `/ha tv on\|off\|mute\|unmute\|up\|down` | Controls the only media player. |
-| `/ha tv vol\|volume <level>` | Sets its volume, 0 to 100. |
-| `/ha tv source <name>` | Switches its source (`/ha tv source hdmi 2`). |
-| `/ha states [<filter>]` | Lists entities and their states, filtered by domain, name or id; an entity id shows all its attributes. |
-| `/ha say <sentence>` | Hands a sentence to Home Assistant's Assist agent. |
-| `/header [on\|off]` | Shows or hides the banner (*Show header*) from the next clear; alone, flips it. |
-| `/help` | The commands (Basic and Advanced tabs) and the keys. The Keys tab's *⌨ key check* button (`k`) swaps in `/keycheck`'s list, and pressed again shows the keys. |
-| `/homebar [on\|off]` | Hides the home bar or shows it again with the items it had (Ctrl+W); the first time, with nothing picked, opens the picker. See [Home bar](SETTINGS.md#home-bar). |
-| `/homebar edit` | The home bar's picker: the bar's order in three groups, pinned left, center or right (Shift+←/→ pins, Shift+↑↓, Shift+Home/End, Delete) and the rooms and devices to add, and the shopping list's 🛒 (its Shopping tab, open without Home Assistant too). |
-| `/homebar tap\|show <item>` | What a double-click and a right-click on a chip do, by its item (`entity:light.desk`, `area:kitchen`) or its name. |
-| `/homebar name <item> = <alias>` | Shows an item's chip under a name of your own (`/homebar name Den PC Monitor = PC`); nothing after `=` shows the chip's emoji alone (no name, no value: a room's 🏠 without its count), and `default` puts its own name back. The chip's label only. |
-| `/homebar emoji <item> = <emoji>` | Shows an item's chip with an emoji of your own in place of its glyph (`/homebar emoji Den Lamp = 🛋️`); nothing after `=`, or `default`, puts its own back. One emoji only. It stays fixed, so a lock's 🔒/🔓 no longer follows its state. |
-| `/learn [<note>]` | Writes or improves a skill in the background from the last turn. |
-| `/learn sessions [<n>\|<search>]` | The same from stored sessions: the newest 5, the newest n (up to 20), or those a search finds. |
-| `/log` | Opens the [log window](#log-window). Works without `--log`. |
-| `/log file` | Opens the `--log` file in your editor (only when started with `--log <path>`). |
-| `/log path` | Copies the `--log` file's path (only when started with `--log <path>`). |
-| `/loop <count>\|infinite [<delay>] <message>` | Sends the message that many times, or until ESC or Ctrl+C, waiting for each reply. See [Loops](#loops). |
-| `/loop <count>\|infinite [<delay>] /imagine\|/read <arguments>` | Runs `/imagine` or `/read` itself each pass. |
-| `/plan <requirement>` | Researches with read-only tools and presents a plan before anything changes. See [Plan mode](#plan-mode). |
-| `/botchat [<profile> ...] [--] [<topic>]` | Lets profiles talk to each other until you stop them; `--` makes the rest the topic. See [Bot conversations](#bot-conversations). |
-| `/botchat --resume [<line>]` | Carries on the last bot conversation (Ctrl+Alt+B, or double-click 👥 on the hint row). |
-| `/botchat --kill` | Stops the extra embedded servers the bots started (Ctrl+Alt+K, or double-click 🧟 on the hint row). |
-| `/expand` | Unfolds every tool run, code block, diff and thinking block, from here on. Ctrl+O switches between this and `/collapse`. |
-| `/collapse` | Folds them again. |
-| `/find [<words>]` | Finds words in the transcript, every match marked (keys under [Pane keys](#pane-keys)). Ctrl+Shift+F runs it too once Windows Terminal's own find is unbound. |
-| `/mcp` | Connects MCP servers and switches their tools. On the Tools tab typing filters the list, and with two or more servers a second strip picks one server's tools. |
-| `/memory` | Lists memories in a pane. Enter (or a double-click) on one offers **edit** (change its text on the input row), **disable** (keep it, greyed out, but don't offer it to the model; **enable** offers it again) and **forget** (asks). `a` (*+ add*) types a new memory. **mode: …** (`m`) steps *Memory mode*: read-write, read-only, off. |
-| `/memory read-write\|read-only\|off\|on` | Sets *Memory mode* (`on` is read-write). |
-| `/memory forget\|edit` | `forget` forgets all, after a confirmation; `edit` opens `memory.json` in your editor. |
-| `/model [<id>]` | Picks or sets the model; type to filter the list. On the embedded LLM, lists the installed models. |
-| `/msgclear` | Clears the profile's message history (the ↑/↓ recall), after a confirmation. |
-| `/new` | Starts a new conversation without clearing the screen. |
-| `/open <file>` | Opens a file from the working directory in its default app (not a folder). |
-| `/perfbar [off\|text\|gauge\|led]` | Hides the performance bar or shows it again; a look name sets that look. |
-| `/perfbar edit` | The *Performance bar* checklist: the meters, their order, and each one pinned left, center or right (Shift+←/→). |
-| `/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]` | Prints a file from the working directory (see [Printing](TOOLS.md#printing)); the printer matches by name or part of one. *Print action policy* never applies. On a Mac a PDF prints as it is (no landscape) and Office files are refused. |
-| `/print reply [<options>]` | Prints the last reply as formatted Markdown. |
-| `/print printers` | Lists the printers, marking the system default and *Print default printer*. `/print` alone shows its usage and the list. |
-| `/pdf <file> [to=<path>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF from Markdown, text, code, HTML or a picture, beside the file unless `to=` says (see [Making PDFs](TOOLS.md#making-pdfs)). On a Mac only the browser makes it. |
-| `/pdf <url> [to=<path>] [overwrite]` | Makes a PDF of a web page; *Web browser network mode* still applies. |
-| `/pdf reply [<options>]` | Makes a PDF of the last reply. |
-| `/process` | Lists the background processes, the model's and your `/cmd --bg` ones, in a pane. Enter opens one in the [process window](#process-window), `k` stops it (asks), `f` steps the filter: all, running only, ended only. While any run, **▶ n** at the right of the rule under the input line counts them; a double-click there opens this list. |
-| `/process <id>` | Shows one process's output live in the [process window](#process-window) (any unique start of the id; Tab completes it). |
-| `/profile [<name>]` | Switches profiles: a picker, or straight to the one named. See [Profiles](#profiles). |
-| `/profile add\|delete <name>` | Creates a profile (from this profile's settings, memories and saved prompts) or deletes one. |
-| `/profile rename <name> <new-name>` | Renames a profile. |
-| `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its avatar, URLs, paths and keys unless `--all`. |
-| `/profile push\|pull <name>` | Copies every setting but the working directory to (`push`) or from (`pull`) another profile; a pull clears the conversation. |
-| `/profile push\|pull keys <name>` | Copies the LLM, Anthropic, OpenAI, Home Assistant and YouTube API keys, after a confirmation; a key unset in the source clears the target's. Keys set only by environment variable aren't copied. |
-| `/profile push\|pull servers <name>` | Copies the server settings (URL, model, reasoning, sampling, and the embedded, Docker, Anthropic, OpenAI, Claude Code and `/claude` rows), replacing the target's, after a confirmation. Saved values only. |
-| `/profile push\|pull allowed <name> [overwrite]` | Copies *Shell allowed commands* (added, or replacing with `overwrite`). |
-| `/profile push\|pull history <name> [overwrite]` | Copies the message history; refused when the target has *Keep message history* off. |
-| `/profile push\|pull memory <name> [overwrite]` | Copies the memories, after a confirmation: added (duplicates skipped), or replacing the target's with `overwrite`. |
-| `/profile push\|pull prompts <name> [overwrite]` | Copies the saved prompts (`/prompts`), after a confirmation: added (ones the target has skipped), or replacing the target's with `overwrite`. |
-| `/profile push\|pull policestrings <name> [overwrite]` | Copies *Shell police forbidden strings* (added, or replacing with `overwrite`). |
-| `/profile push\|pull persona <name> [overwrite]` | Copies `persona.md` (the personality), after a confirmation; an existing one is replaced only with `overwrite`. |
-| `/profile push\|pull operata <name> [overwrite]` | The same for `operata.md` (the operating rules). |
-| `/profile push\|pull vocalia <name> [overwrite]` | The same for `vocalia.md` (the spoken-reply directive). |
-| `/profile push\|pull avatar user\|model <name>` | Copies the *User avatar* or the *Model avatar*, replacing the target's, after a confirmation. |
-| `/profile edit\|reload` | `edit` opens `profile.json`; `reload` reads it back and reconnects what changed. |
-| `/prompts` | Your saved prompts, the messages you send often, in a pane; Enter or a double-click puts one on the draft line in place of what is there (the old draft goes to the history: Up brings it back). `a` adds, `s` saves the draft, `e` edits (a prompt of several lines in your draft editor), `d` removes, `c` clears all (each removal asks), Shift+↑↓ moves. The toolbar's 📣 and Ctrl+Alt+W open it too, keeping the draft for `s`. Each profile has its own list (`prompts.json`); the model can't see it. |
-| `/prompts <n>` | Puts saved prompt *n* (its number in the pane) on the draft line. |
-| `/prompts save <text>` | Saves the rest of the line as a prompt; a pasted block of several lines too. |
-| `/prompts list [--clear]` | Prints the saved prompts, numbered; `--clear` removes them all, after a yes (headless: at once). |
-| `/prompts remove <n>` | Removes one saved prompt. |
-| `/queue [clear]` | Lists the queued messages: Enter removes one (asks), `c` clears all, and `s` sends the next one now while the queue is held or under *Queue mode* `manual`. `m` (**mode: …**) and `k` (**cancel: …**) on the title row step *Queue mode* and *Queue cancel mode* to their next value, on the empty queue too. The toolbar's ⏳ opens it. `/queue clear` drops them without the pane. `/queue mode automatic\|manual\|disabled` sets *Queue mode*, and `/queue cancel hold\|drain\|empty` sets *Queue cancel mode*, at once (during a reply too). |
-| `/read [<file> [<n>]\|<n>]` | Reads a text file aloud; alone it resumes, and a number starts at that sentence. On an empty line Space pauses or plays and ←/→ step a sentence. |
-| `/reasoning [none\|low\|medium\|high\|xhigh]` | Picks the reasoning effort. |
-| `/rewind [<n>]` | Goes back to an earlier message: it and everything after leave the conversation and the stored session, and its text returns to the input row. Tool changes are not undone; compacted messages can't be picked. |
-| `/remember <text>` | Adds a memory. |
-| `/rename [<name>]` | Renames the current session; alone, opens the rename box. |
-| `/sampling` | Edits the per-model sampling in a pane. See [Sampling per model](SETTINGS.md#sampling-per-model). |
-| `/sampling <field> <value>\|clear` | Sets or clears one of the connected model's values. |
-| `/sampling extra <json>\|clear` | Sets or clears its extra request body. |
-| `/sampling clear` | Clears every override of the connected model. |
-| `/server [<url>\|embedded\|claude-code\|docker\|docker:<container>]` | Picks an LLM server (found ones, the Anthropic and OpenAI APIs, Claude Code, embedded models, chosen Docker containers on Windows) or sets one by URL, then the model and reasoning. The words go straight to that server; a container serves its own model. |
-| `/sessions [<id>]` | Lists the stored sessions, or restores one with its pictures. |
-| `/sessions purge <id>\|all` | Deletes one stored session, or every one. |
-| `/sessions purge older <age>` | Deletes sessions older than an age: days (`30`) or a duration (`12h`, `1d 6h`). |
-| `/sessions title [<text>]` | Renames the current session; alone, opens a box with the current name. |
-| `/settings`, `//` | Edits the settings. A letter typed on a tab searches every setting. |
-| `/settings <words>` | Searches every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by name, tab or description; Enter edits the row found. |
-| `/settings changed` | Lists the settings that differ from their defaults; Enter edits, `r` puts one back to its default. |
-| `/shopping` | The shopping list in a pane, in the active store's aisle order, ticked items last (see [Shopping list](TOOLS.md#shopping-list)). Without the pane (and headless) it prints. |
-| `/shopping add [<items>]` | Adds comma-separated items (`/shopping add milk, 2 eggs, bread x2`); an item already there gets the quantity added. Alone, opens the add page with past purchases. |
-| `/shopping check\|uncheck\|remove <item>` | Ticks, unticks or removes an item, by name or by the number `/shopping list` shows beside it (the active store's list). |
-| `/shopping rename <item> to <new-name>` | Renames an item, keeping its quantity and tick; a name already on the list merges the two. |
-| `/shopping list [<store>]` | Prints the list in the active (or named) store's order. |
-| `/shopping clear [all]` | Removes the ticked items; `all` empties the list after a yes (headless: at once). |
-| `/shopping store [<name>]` | Lists the stores and the active one's layout; with a name, makes that store active. |
-| `/shopping store rename <name> to <new-name>` | Renames a store and its reference folder. The stores' manager (`/tools` › Home › Shopping › *Shopping stores*, or the pane's `⇄ store`) does this too. |
-| `/shopping store add\|remove <name>` | Adds a store (its folder under `db\shopping\reference` is made), or removes one and its layout after a yes (headless: at once); the folder stays. |
-| `/shopping export [<store>] [verbose]` | Writes the items left to buy to a new timestamped file in the working directory (`shopping-list-20261011-162530.md`): one line per aisle, or with `verbose` a heading per aisle and a checkbox per item. |
-| `/shopping print [<store>] [verbose]` | Prints the same list with `/print`'s printer and font settings. |
-| `/shopping reindex [<store>]` | Re-reads the store's reference documents (also done whenever a file changes). |
-| `/shortcut [<profile>] [--log]` | Puts a desktop shortcut that starts the app on this profile (or the one named); `--log` adds a log. On a Mac it is a `.command` file. See [Desktop shortcuts](#desktop-shortcuts). |
-| `/skills` | Lists the skills and edits the skill, reflection and project-file settings. The Offered tab shows each skill's version (🔒 [locked](SETTINGS.md#locking-a-skill), ⛔ [disabled](SETTINGS.md#disabling-a-skill)) and when it last changed; a second strip picks the scope, and typing filters. Its last sub-tab, **loaded**, lists the skills loaded into this conversation now, and keeps up while it is open (a reply loading one, a compact dropping one). |
-| `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. `--global` is refused while *Global skills* is off. Refused during a reply. See [Installing skills](SETTINGS.md#installing-skills). |
-| `/skills purge list\|commit <age>` | `list` shows the skills unused for that long; `commit` deletes them after a yes/no. See [Skill records and purging unused skills](SETTINGS.md#skill-records-and-purging-unused-skills). |
+
+### Conversation
+
+| Command | What it does |
+|---|---|
+| `/new` | Starts a new conversation, keeping the screen. |
+| `/clear` | Starts a new conversation and clears the screen. |
 | `/splash` | Starts a new conversation and shows the splash screen. |
-| `/stt [on\|off]` | Toggles voice input. |
-| `/stt wake [on\|off]` | Toggles the wake word (off turns the interrupt off too). |
-| `/stt interrupt [on\|off]` | Toggles the wake-word interrupt during a spoken reply; needs the wake word on. |
+| `/compact [<focus>]` | Shrinks the context (*LLM compact mode*); a focus tells the summary what to keep. |
+| `/rewind [<n>]` | Goes back to an earlier message after a yes: it and everything after leave the conversation and stored session, its text back on the input row. What tools changed stays. |
+| `/copy [<n>\|all] [--thinking]` | Copies the last reply, the last *n*, or the whole transcript as Markdown; `--thinking` adds the thinking. |
+| `/draft` | Writes the next message in your editor; it is sent when you save and close. |
+| `/echo <text>` | Prints a line as a reply, spoken when *TTS output* is on. |
+| `/find [<words>]` | Finds words in the transcript, every match marked. |
+| `/expand`, `/collapse` | Unfold every tool run, code block, diff and thinking block from here on, or fold them again. |
+| `/queue [clear]` | Lists the messages queued during a reply, to remove, clear or send them; `clear` drops them all. |
+| `/queue mode automatic\|manual\|off` | Sets *Queue mode*: queued messages go when the reply ends, wait for **➤ send**, or aren't kept. |
+| `/queue cancel hold\|drain\|empty` | Sets *Queue cancel mode*: after a canceled reply, keep the queue, send the next, or drop them all. |
+| `/prompts` | Your saved prompts, kept per profile (`prompts.json`) and never shown to the model; Enter puts one on the draft line, the old draft going to the input history. |
+| `/prompts <n>`, `/prompts save <text>`, `/prompts remove <n>` | Puts prompt *n* on the draft line, saves the rest of the line (a pasted block too), or removes prompt *n*. |
+| `/prompts list [--clear]` | Prints the prompts, numbered; `--clear` removes them all after a yes (headless: at once). |
+| `/sessions [<id>]` | Lists the stored sessions, or restores one with its pictures (`#12` works too). |
+| `/sessions purge <id>\|all`, `/sessions purge older <age>` | Deletes one stored session, every one, or those older than an age (`30` days, `12h`, `1d 6h`). |
+| `/sessions title [<text>]`, `/rename [<name>]` | Renames the current session; alone, opens a box with its name. |
+| `/memory` | Lists the memories, to edit, disable (kept, never offered to the model), forget or add one. |
+| `/memory read-write\|read-only\|off\|on` | Sets *Memory mode* (`on` is read-write). |
+| `/memory forget\|edit` | Forgets every memory after a yes, or opens `memory.json` in your editor. |
+| `/remember <text>` | Adds a memory; refused while *Memory mode* is `off`. |
+| `/msgclear` | Clears this profile's message history (what ↑/↓ recall) after a yes. |
+| `/usage` | Token usage and performance, with rows for `/claude`, `/botchat` and the advisors; `~` marks an estimate. |
+
+### Models and servers
+
+| Command | What it does |
+|---|---|
+| `/server [<url>\|embedded\|claude-code\|docker\|docker:<container>]` | Picks a server (found ones, the Anthropic and OpenAI APIs, Claude Code, embedded models, Docker containers) or sets one by URL, then the model and reasoning. A word picks that kind; Docker servers need Windows. |
+| `/model [<id>]` | Picks a model from the server's list, or sets one by id; on the embedded model, the installed ones. |
+| `/reasoning [none\|low\|medium\|high\|xhigh]` | Picks or sets the reasoning effort (*LLM reasoning*). |
+| `/sampling` | Edits the per-model sampling in a pane; see [Sampling per model](SETTINGS.md#sampling-per-model). |
+| `/sampling <field> <value>\|clear` | Sets or clears one of the connected model's values: `temperature`, `top_p`, `top_k`, `min_p`, `presence_penalty`, `frequency_penalty` or `repetition_penalty`. |
+| `/sampling extra <json>\|clear`, `/sampling clear` | Sets or clears the extra request body, or clears every override of the connected model. |
+| `/advisor` | Lists the advisors with their roles, server kinds and models. See [Advisor](#advisor). |
+| `/advisor <name> <question>` | Asks one advisor, by profile name or a word of its role; the answer joins the conversation. |
+
+### Profiles and settings
+
+| Command | What it does |
+|---|---|
+| `/profile [<name>]` | Switches profiles: a picker, or the one named. See [Profiles](#profiles). |
+| `/profile add\|delete <name>`, `/profile rename <name> <new-name>` | Creates a profile (from this one's settings, memories and saved prompts), deletes one, or renames one. |
+| `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its URLs, paths, keys and avatars unless `--all`. |
+| `/profile push\|pull <name>` | Copies every setting but the working directory to (`push`) or from (`pull`) another profile; a pull clears the conversation. |
+| `/profile push\|pull keys <name>` | Copies the five API keys; one the source lacks is cleared in the target, and one set only by a variable isn't copied. |
+| `/profile push\|pull servers <name>` | Copies the server settings (server, model, reasoning, sampling, the Embedded, Docker, Anthropic and OpenAI tabs but the keys), replacing the target's. |
+| `/profile push\|pull allowed <name> [overwrite]`, `/profile push\|pull policestrings <name> [overwrite]` | Copies *Shell allowed commands* or *Shell police forbidden strings*: added to the target's, or replacing them with `overwrite`. |
+| `/profile push\|pull history <name> [overwrite]`, `/profile push\|pull memory <name> [overwrite]`, `/profile push\|pull prompts <name> [overwrite]` | Copies the message history, the memories or the saved prompts, the same way; history is refused while the target has *Keep message history* off. |
+| `/profile push\|pull persona <name> [overwrite]`, `/profile push\|pull operata <name> [overwrite]`, `/profile push\|pull vocalia <name> [overwrite]` | Copies `persona.md`, `operata.md` (the operating rules) or `vocalia.md` (the spoken-reply directive); one already there is replaced only with `overwrite`. |
+| `/profile push\|pull avatar user\|model <name>` | Copies the *User avatar* or the *Model avatar*. |
+| `/profile edit\|reload` | Opens `profile.json` in your editor, or reads it back and reconnects what changed. |
+| `/settings`, `//` | Opens the settings; a letter typed on a tab searches them all. |
+| `/settings <words>` | Searches every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by name, tab or description. |
+| `/settings changed` | Lists the settings that differ from their defaults, to edit one or put it back. |
+| `/tools` | Switches the model's tools on or off, each group's settings on its own tab. See [TOOLS.md](TOOLS.md). |
+| `/tools <group>` | Opens one group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` or `shopping`. |
+| `/tools shell allowed`, `/tools shell police` | Opens *Shell allowed commands* (which also steps *Shell command policy*), or *Shell police* and its forbidden strings. |
+| `/skills` | Lists the skills, to move, rename, edit, revert, lock, disable or delete one, and their settings. Its **loaded** tab shows the skills in this conversation. |
+| `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. See [Installing skills](SETTINGS.md#installing-skills). |
+| `/skills purge list\|commit <age>` | Lists the skills unused for that long, or deletes them after a yes. See [Skill records](SETTINGS.md#skill-records-and-purging-unused-skills). |
+| `/mcp` | Connects MCP servers and switches their tools on or off. |
 | `/sys` | Shows the system prompt and the tools sent to the model. |
-| `/sys persona [reset]` | Edits `persona.md` (the personality) in your editor, or resets it after a yes. |
-| `/sys operata [reset]` | The same for `operata.md` (the operating rules); a missing file is created from the rules in use now. |
-| `/sys vocalia [reset]` | The same for `vocalia.md` (the voice directive, empty by default, added to every spoken reply); reset removes it. |
-| `/terminal [<folder>]` | Opens a new terminal (Windows Terminal; on a Mac Terminal or iTerm2) in the working directory or a folder under it. Ctrl+. (Ctrl+] on a Mac). |
-| `/test [<id>\|reasoning\|structured\|long\|all\|history]` | Runs benchmark tests against the connected model; alone, lists them with their last verdicts. See [Benchmark tests](#benchmark-tests). |
-| `/theme [<name>]` | Switches the colour theme, built-in or [custom](#custom-themes); alone, opens a picker with a live preview. Nothing changes until Enter. |
-| `/theme export <name> [<new-name>]` | Writes a theme to the `themes` folder as a file to edit (see [Custom themes](#custom-themes)). |
-| `/timer [<duration> [<name>]]` | Lists timers, or starts one (`10m`, `90s`, `1h30m`). |
-| `/timer stop <name>\|all` | Stops one timer, or every one. |
-| `/toolbar [on\|off]` | Hides the toolbar or shows it again. |
-| `/toolbar edit` | The *Tool bar* checklist: the items, the side each is pinned to (left or right), and their order. |
-| `/tools` | Switches the model's tools on or off and edits each group's settings, one tab per group. On the Offered tab, typing filters the list. |
-| `/tools <group>` | Opens one group's page: `shell`, `ask`, `files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` or `shopping`. The toolbar's tool items run it; the pages' buttons are under [Pane keys](#pane-keys). |
-| `/tools shell allowed` | Opens *Shell allowed commands*: Enter removes a prefix (asks), `o`/`a`/`y` switch *Shell command policy* to off, ask or yolo, typing filters. The toolbar's lock or Ctrl+Alt+L. |
-| `/tools shell police` | Opens *Shell police*; `s` opens its forbidden strings. The toolbar's officer or Ctrl+Alt+O. |
-| `/tree [<path>]` | Shows a tree of the working directory in a pane (hidden entries per *File browser/tree mode*; `.git` only when named). |
-| `/tts [on\|off]` | Toggles speech output. |
-| `/usage` | Token usage and performance; `/claude`, `/botchat` and the advisors get rows of their own. `~` marks an estimate. |
-| `/vault [<path>]` | Shows a tree of the *Obsidian vault* (or a folder in it), like `/tree`. |
-| `/view <image>\|<folder>` | Opens an image (or a folder's newest picture) in the [picture viewer](#picture-viewer). |
+| `/sys persona [reset]`, `/sys operata [reset]`, `/sys vocalia [reset]` | Edits `persona.md`, `operata.md` (the operating rules) or `vocalia.md` (added to every spoken reply) in your editor, or resets it after a yes. |
+| `/avatar` | Opens the emoji picker for the *Model avatar*; see [The avatar picker](INTERFACE.md#the-avatar-picker). |
+| `/avatar <emoji>`, `/avatar <words>`, `/avatar clear` | Sets that emoji, opens the picker searching for the words (headless: sets the best match), or clears it (replies open with ● again). |
+| `/avatar model [<emoji>\|<words>\|clear]` | The same, naming the *Model avatar* outright. |
+| `/avatar user`, `/avatar user <emoji>\|<words>`, `/avatar user clear` | The same for your *User avatar*, the emoji that opens each line you send (› when cleared). |
+| `/shortcut [<profile>] [--log]` | Puts a shortcut on the desktop that starts the app on this profile, or the one named; `--log` adds a log. See [Desktop shortcuts](#desktop-shortcuts). |
+
+### Files and folders
+
+| Command | What it does |
+|---|---|
+| `/cwd [<path>\|~\|browse]` | Shows or changes the working directory (a missing folder is created); `~` is the profile's `files` folder, `browse` the [folder picker](INTERFACE.md#folder-picker). |
+| `/tree [<path>]` | A tree of the working directory in a pane; hidden entries per *File browser/tree mode*, `.git` only when named. |
+| `/browse [<folder>]` | Browses the working directory as a tree; Enter opens a file in its default app. See [File browser](INTERFACE.md#file-browser). |
+| `/explore [<folder>]` | Opens the working directory, or a folder in it, in your file browser. |
+| `/open <file>` | Opens a file from the working directory in its default app. |
+| `/vault [<path>]` | A tree of the *Obsidian vault*, like `/tree`; needs *Obsidian tools* on. |
+| `/terminal [<folder>]` | Opens a terminal there: Windows Terminal (else a console window), or on a Mac Terminal or iTerm2. |
+| `/cmd <command>` | Runs a shell line yourself, in the *Shell default shell*, under the model's checks; the model sees it. See [Your own shell line](#your-own-shell-line). |
+| `/cmd --shell <shell> <command>` | The same in another shell: `powershell`, `cmd` or `bash` (on a Mac `zsh`, `bash` or `powershell`). |
+| `/cmd --bg <command>` | The same in the background; its output is shown when it ends. |
+| `/process`, `/process <id>` | Lists the background processes (the model's and your `/cmd --bg` ones), or opens one in the [process window](INTERFACE.md#the-process-window). |
+
+### Pictures, camera and screen
+
+| Command | What it does |
+|---|---|
+| `/view <image>\|<folder>` | Opens an image, or a folder's newest picture, in the [picture viewer](INTERFACE.md#the-picture-viewer). |
 | `/view <image> --chat` | Draws it in the transcript instead. |
-| `/view <image>\|<folder> --thumbs` | Opens the folder as thumbnails beside the viewer, in step with it (see [Thumbnail browser](#thumbnail-browser)). The flag can be first or last. |
-| `/imagine [<workflow>] <prompt> [-- <negative>\|--no-negative]` | Generates a picture on ComfyUI from your prompt exactly as typed. See [Imagine options](#imagine-options). |
-| `/imagine <prompt> [--seed <n>] [--size <w>x<h>] [--steps <n>] [--count <n>]` | Its seed, size, steps and count. |
-| `/imagine <prompt> [--cfg <x>] [--denoise <x>] [--image <path>] [--image2 <path>] [--image3 <path>]` | Its guidance, denoise strength and up to three input pictures. |
-| `/comfy` | The ComfyUI server's status, the workflows found, skipped files and where workflows go. |
-| `/comfy edit json\|markdown\|md <workflow>` | Opens a workflow's graph, or its `.md` (created if missing), in your editor. |
-| `/comfy offered` | Lists the workflows offered to the model. |
-| `/comfy view` | Opens the picture viewer on the output folder. |
-| `/comfy thumbs` | Opens the thumbnail browser on the output folder. |
-| `/comfy purge` | Deletes everything in the output folder after a yes/no (refused when it is the profile's `images` folder itself). |
-| `/window` | Shows the terminal window's size. |
+| `/view <image>\|<folder> --thumbs` | Opens the folder in the [thumbnail browser](INTERFACE.md#the-thumbnail-browser), in step with the viewer. |
+| `/camera`, `/camera snap` | Opens the camera pane to take a photo, or takes one at once, and puts it on the input line. See [Camera](#camera). |
+| `/camera list`, `/camera use <n>\|<name>` | Lists the cameras, or chooses one by number or name (*Camera device*). |
+| `/camera live` | Shows the camera live in the [camera window](INTERFACE.md#the-camera-window) until you close it. |
+| `/camera watch [<seconds>\|off]` | Looks every *Camera watch interval (s)* (or 2–3600 seconds); a changed picture rides your next message. |
+| `/camera off` | Ends live view and watch mode. |
+| `/camera view`, `/camera thumbs` | Opens the picture viewer or the thumbnail browser on *Camera output folder*. |
+| `/screen` | Captures the app's monitor onto the input line; *Screen tools* and *Screen policy* don't apply. See [Screen capture](#screen-capture). |
+| `/screen all\|desktop`, `/screen monitor:<n>` | Captures every monitor as one picture, or monitor *n*. |
+| `/screen window:<id>\|<title-words>` | Captures one window, even when covered, by id or words of its title or program. |
+| `/screen behind` | Captures the window right behind the app's own. |
+| `/screen list` | Lists the monitors and windows, front to back, with their targets. |
+| `/screen view`, `/screen thumbs` | Opens the picture viewer or the thumbnail browser on *Screen output folder*. |
+
+### Voice
+
+| Command | What it does |
+|---|---|
+| `/tts [on\|off]` | Turns speech output on or off (*TTS output*). |
+| `/stt [on\|off]` | Turns voice input on or off (*STT input*). |
+| `/stt wake [on\|off]` | Turns the wake word on or off; off turns the interrupt off too. |
+| `/stt interrupt [on\|off]` | Turns the wake-word interrupt during a spoken reply on or off; needs the wake word. |
+| `/read [<file> [<n>]\|<n>]` | Reads a text file aloud; alone it resumes, a number starts at that sentence. Space pauses and ←/→ step a sentence. |
+
+### Web and video
+
+* **The Browser window** (Windows only): its bar, history and saved links are in [Using the app](INTERFACE.md#the-browser-window), its bot checks in [TOOLS.md](TOOLS.md#the-browser-window).
+* **YouTube:** saved videos and quota are in [TOOLS.md](TOOLS.md#youtube), the window's keys in [The video window](INTERFACE.md#the-video-window). On a Mac, playing needs macOS 14 or later.
+
+| Command | What it does |
+|---|---|
+| `/browser [<url>]` | Opens a page (or *Web browser home page*) in the Browser window, to sign in or pass a bot check; on close its cookies go to the web tools. Windows only. |
+| `/browser clear history\|all` | Clears its history, or after a yes everything it keeps (cookies and sign-ins too); saved links stay. Windows only. |
+| `/browser <n>` | Opens saved link *n* in the Browser window. Windows only. |
+| `/browser save [<url> [<name>]]` | Saves a link (the words after the address name it), or with no address the page the window shows. |
+| `/browser list`, `/browser list --clear` | The saved links in a pane; `--clear` removes them all after a yes (headless: at once). |
+| `/browser unsave <n>\|<url>` | Removes one saved link. |
 | `/youtube`, `/youtube status` | Says what the video window is playing. |
-| `/youtube <words>` | Searches YouTube (needs a *YouTube API key*; 100 quota units a search) and opens a picker; Enter plays a video. `/youtube search <words>` searches even words that start like a command. |
-| `/youtube play <id>\|<link> [<time>]` | Plays a video from the time given (`90`, `1:30`) or the link's own; no key needed (on a Mac, macOS 14+). See [YouTube](TOOLS.md#youtube) for the window's keys. |
-| `/youtube search [--switches] <words>` | Searches with switches: `--playlists`, `--channels`, `--order relevance\|date\|views\|rating\|title`, `--length short\|medium\|long`, `--since today\|week\|month\|year\|<date>`, `--region <cc>`, `--lang <code>`, `--live`, `--captions`, `--safe none\|moderate\|strict`. Defaults come from `/tools` › Apps › YouTube. |
-| `/youtube play <playlist>\|<link> [<n>]` | Plays a public playlist (or a channel's uploads) from entry n; no key needed. Entries the player refuses are skipped. |
-| `/youtube next\|previous`, `/youtube entry <n>` | The playlist's next or previous video (`prev` too), or its video n. |
-| `/youtube playlist [<id>\|<link>]` | A playlist's videos in a pane (needs a key: 1 unit, plus 1 per 50 videos); Enter plays from there, `s` saves a video. Alone, the playlist playing. |
-| `/youtube play\|resume`, `pause`, `seek <time>`, `volume <level>`, `mute\|unmute`, `close` | Drive the video window: resume, pause, go to a time, set the volume (0–100), mute or unmute, close it. |
-| `/youtube save [<id>\|<link>]` | Saves the video playing (or the one named) to this profile's `youtube.json`; it later resumes a few seconds before where you left it. |
-| `/youtube list` | The saved videos in a pane, each with where it was left; Enter plays, `d` removes one, `c` clears all (each asks), Shift+↑↓ moves one (the list's numbers follow). |
-| `/youtube list --clear` | Removes every saved video, after a yes (headless: at once). |
-| `/youtube unsave <n>\|<id>\|<link>` | Removes a saved video by its number, id or link. |
+| `/youtube <words>`, `/youtube search <words>` | Searches YouTube and opens a picker (a *YouTube API key*, 100 quota units a search); `search` takes words that start like a verb. |
+| `/youtube search [--switches] <words>` | Searches with `--playlists`, `--channels`, `--order relevance\|date\|views\|rating\|title`, `--length short\|medium\|long`, `--since today\|week\|month\|year\|<date>`, `--region <cc>`, `--lang <code>`, `--live`, `--captions`, `--safe none\|moderate\|strict`. |
+| `/youtube play <id>\|<link> [<time>]` | Plays a video from the time given or the link's own; no key needed. |
+| `/youtube play <playlist>\|<link> [<n>]` | Plays a public playlist, or a channel's uploads, from entry *n*; no key needed. |
+| `/youtube next\|previous`, `/youtube entry <n>` | Plays the playlist's next, previous or *n*th video. |
+| `/youtube playlist [<id>\|<link>]` | A playlist's videos in a pane (a key: 1 unit, plus 1 per 50 videos); alone, the one playing. |
+| `/youtube play\|resume`, `/youtube pause`, `/youtube seek <time>`, `/youtube volume <level>`, `/youtube mute\|unmute`, `/youtube close` | Resume, pause, seek, set the volume (0–100), mute or unmute, or close the window. |
+| `/youtube save [<id>\|<link>]` | Saves the video playing, or the one named, to this profile's saved videos. |
+| `/youtube list`, `/youtube list --clear` | The saved videos in a pane; `--clear` removes them all after a yes (headless: at once). |
+| `/youtube unsave <n>\|<id>\|<link>` | Removes one saved video. |
+
+### Integrations
+
+| Command | What it does |
+|---|---|
+| `/docker` | The containers in a pane, to stop, restart or pause (each asks), start, read logs and more. On a Mac: Docker Desktop, OrbStack, Colima or Rancher Desktop. See [Docker](TOOLS.md#docker). |
+| `/docker ps [<filter>]`, `/docker status` | Lists the containers (or those whose name or image holds the filter), or the versions and container counts. |
+| `/docker logs <container> [<lines>]` | A container's last lines (50, up to 2000). |
+| `/docker stats [<container>]` | CPU, memory, network and disk use of one or every running container. |
+| `/docker start\|stop\|restart\|pause\|unpause <container>` | Acts on one container. Nothing is asked and *Docker writes* doesn't apply; every change is logged. |
+| `/ha` | Home Assistant at a glance: lights on per room, the TV, temperatures, motion, low batteries, to-do lists. See [Home Assistant](TOOLS.md#home-assistant). |
+| `/ha on\|off\|toggle <name> [<brightness>]` | Switches a room, light, switch or the TV (`/ha on den 40%`, `/ha off kitchen and hallway`). |
+| `/ha scene <name>` | Activates a scene. |
+| `/ha tv on\|off\|mute\|unmute\|up\|down`, `/ha tv vol\|volume <level>`, `/ha tv source <name>` | Controls the only media player, sets its volume (0–100) or its source. |
+| `/ha states [<filter>]` | Lists entities and their states; an entity id shows all its attributes. |
+| `/ha say <sentence>` | Hands a sentence to *Home Assistant Assist agent*. |
+| `/imagine [<workflow>] <prompt> [-- <negative>\|--no-negative]` | Makes a picture on ComfyUI from your prompt as typed. See [Imagine options](#imagine-options). |
+| `/imagine <prompt> [--seed <n>] [--size <w>x<h>] [--steps <n>] [--count <n>]`, `/imagine <prompt> [--cfg <x>] [--denoise <x>] [--image <path>] [--image2 <path>] [--image3 <path>]` | Sets the seed, size, steps, count, guidance, denoise strength and up to three input pictures. |
+| `/comfy`, `/comfy offered` | The ComfyUI server's status and workflows, or the workflows offered to the model. See [ComfyUI](TOOLS.md#comfyui). |
+| `/comfy edit json\|markdown\|md <workflow>` | Opens a workflow's graph, or its `.md` (made if missing), in your editor. |
+| `/comfy view`, `/comfy thumbs` | Opens the picture viewer or the thumbnail browser on the output folder. |
+| `/comfy purge` | Deletes everything in the output folder for good, after a yes. |
+| `/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]` | Prints a file (*Print action policy* never applies). On a Mac a PDF prints as it is and Office files are refused. See [Printing](TOOLS.md#printing). |
+| `/print reply [<options>]`, `/print printers` | Prints the last reply, or lists the printers. |
+| `/pdf <file> [to=<path>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF of a file, beside it unless `to=` says (*PDF engine*; on a Mac, a browser). See [Making PDFs](TOOLS.md#making-pdfs). |
+| `/pdf <url> [to=<path>] [overwrite]`, `/pdf reply [<options>]` | Makes a PDF of a web page (*Web browser network mode* applies) or of the last reply. |
+| `/claude <message>`, `/claude new` | Asks Claude Code and streams its reply, or starts a new Claude Code conversation. See [Claude Code from the chat](#claude-code-from-the-chat). |
+| `/gituser [force]` | Writes *GitLib user email* and *GitLib user name* into the repository's config; `force` replaces a `[user]` already there. Needs *GitLib tools*. |
+| `/shopping` | The shopping list in a pane, in the active store's aisle order; headless, it prints. See [Shopping list](TOOLS.md#shopping-list). |
+| `/shopping add [<items>]` | Adds comma-separated items (`milk, 2 eggs, bread x2`); alone, the add page with past purchases. |
+| `/shopping check\|uncheck\|remove <item>`, `/shopping rename <item> to <new-name>` | Ticks, unticks, removes or renames an item, by name or number. |
+| `/shopping list [<store>]`, `/shopping print [<store>] [verbose]` | Prints the list in a store's order to the screen, or to the printer. |
+| `/shopping export [<store>] [verbose]` | Writes what's left to buy to a new `shopping-list-<time>.md` in the working directory. |
+| `/shopping clear [all]` | Removes the ticked items; `all` empties the list after a yes (headless: at once). |
+| `/shopping store [<name>]`, `/shopping store rename <name> to <new-name>`, `/shopping store add\|remove <name>` | Lists the stores or shops at one, renames one, or adds or removes one (after a yes; its folder stays). |
+| `/shopping reindex [<store>]` | Reads a store's reference documents again. |
+
+### Display and windows
+
+| Command | What it does |
+|---|---|
+| `/theme [<name>]` | Switches the color theme (*Theme*); alone, a picker with a live preview. |
+| `/theme export <name> [<new-name>]` | Writes a theme to a file to edit. See [Custom themes](#custom-themes). |
+| `/header [on\|off]` | Shows or hides the banner (*Show header*) from the next clear. |
+| `/toolbar [on\|off]`, `/toolbar edit` | Hides or shows the [toolbar](INTERFACE.md#the-toolbar), or opens its checklist (*Tool bar*). |
+| `/perfbar [off\|text\|gauge\|led]`, `/perfbar edit` | Hides or shows the [performance bar](INTERFACE.md#the-performance-bar) in a look, or opens its checklist (*Performance bar*). |
+| `/homebar [on\|off]`, `/homebar edit` | Hides or shows the [home bar](INTERFACE.md#the-home-bar), or opens its picker. |
+| `/homebar tap <item>`, `/homebar show <item>` | Does what a double-click or a right-click on a chip does; unlocking and opening ask first. |
+| `/homebar name <item> = <alias>`, `/homebar emoji <item> = <emoji>` | Gives a chip a name or emoji of your own (nothing after `=` shows the emoji alone); `default` puts its own back. See [The home bar](INTERFACE.md#the-home-bar). |
+| `/log` | Opens the [log window](INTERFACE.md#the-log-window). |
+| `/log file`, `/log path` | Opens the `--log` file in your editor, or copies its path (only when started with `--log`). |
+| `/window` | Shows the terminal window's size. |
+
+### Automation
+
+| Command | What it does |
+|---|---|
+| `/plan <requirement>` | Has the model research with read-only tools and present a plan before anything changes. See [Plan mode](#plan-mode). |
+| `/plan [show]`, `/plan <detail>` | While planning, says where the plan stands, or adds detail. |
+| `/plan approve [--fresh]` | Approves the plan by typing (you may edit the file first); `--fresh` clears the context first. |
+| `/plan cancel` | Leaves plan mode; the file is kept, marked `cancelled`. |
+| `/plan save [<name>]` | Keeps a reply that looks like a plan as the plan. |
+| `/plan gaps [model\|advisor\|any]` | Reviews the plan pass after pass until no gaps are left. |
+| `/plan open <name>`, `/plan open` | Picks a plan up again (approving runs only the unticked steps), or lists the plans. |
+| `/botchat [<profile> ...] [--] [<topic>]` | Lets profiles talk to each other until you stop them. See [Bot conversations](#bot-conversations). |
+| `/botchat --resume [<line>]`, `/botchat --kill` | Carries on the last bot conversation, or stops the extra embedded servers the bots started. |
+| `/loop <count>\|infinite [<delay>] <message>`, `/loop <count>\|infinite [<delay>] /imagine\|/read <arguments>` | Sends a message, or runs `/imagine` or `/read`, that many times or until ESC. See [Loops](#loops). |
+| `/test [<id>\|reasoning\|structured\|long\|all\|history]` | Runs benchmark tests against the connected model. See [Benchmark tests](#benchmark-tests). |
+| `/learn [<note>]`, `/learn sessions [<n>\|<search>]` | Writes or improves a skill in the background from the last turn, or from stored sessions (the newest 5, *n* up to 20, or a search). Needs *Agent skills* and *LLM offer tools* on. |
+| `/timer [<duration> [<name>]]`, `/timer stop <name>\|all` | Lists or starts timers (`10m`, `1h30m`; a bare number is minutes; up to 24 hours), or stops one or all. |
 
 ## Command details
 
@@ -249,76 +273,69 @@ Type `/` to list every command; after a command and a space, the app offers its 
 
 `/plan <requirement>` has the model research and present a plan before anything changes. It needs *LLM offer tools* and is refused during a reply.
 
-* **Tools:** read-only ones only (files, git reads, web, database reads, the vault, sessions, `ask_user`…) plus `present_plan`. Anything that writes, runs or starts something, and every MCP tool, waits for approval.
-* **Advisors:** while `neon_advisor` is offered, the model consults the relevant [advisors](#advisor) first and says which advice it followed.
-* **The plan** is printed and saved as `.neon/plans/<name>.md` in the working directory. 📝 shows while planning.
-* **Approving:** the pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Keep refining…** (`r`), **Close gaps…** (`g`) or **Cancel plan** (`c`). Approval runs a turn with every tool, ticking the plan's checkboxes; the file ends `done`, or `incomplete` with its progress.
-* **Closing gaps:** **Close gaps…** (or `/plan gaps`) reviews the plan pass after pass before it comes back to you. Each pass is one turn: the model rereads the plan, closes what would make whoever carries it out guess, fail or stop to ask (a missing step, a choice left open, a file assumed but not read, no way to verify; wording and style don't count), asks you about a decision only you can make, and saves a revision listing the gaps it closed. Only a pass that finds none brings the approval pane back, its caption saying how many passes it took. With advisors offered, a second page asks who reviews: **model** (`m`, alone), **advisor** (`a`, an advisor whose role fits best finds the gaps each pass) or **any** (`y`, the model, consulting advisors where a role fits); with *Advisor confirm* on, each advisor call asks first. The loop stops early, saying why, at *Plan gap passes* (the pane comes back), when a pass changes nothing or repeats the last pass's gaps (the pane comes back), when a pass saves no revision, when you type a message under a pass, or on ESC; `/plan gaps` starts a fresh review.
+* **Tools:** only read-only ones (files, git reads, web, database reads, sessions, `ask_user`…) plus `present_plan`. Anything that writes, runs or starts something, and every MCP tool, waits for approval.
+* **Advisors:** while `neon_advisor` is offered, the model consults the relevant [advisors](#advisor) first.
+* **The plan** is saved as `.neon/plans/<name>.md` in the working directory; 📝 shows while planning.
+* **Approving:** the pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Keep refining…** (`r`), **Close gaps…** (`g`) and **Cancel plan** (`c`). The run ticks the plan's steps; the file ends `done`, or `incomplete`.
+* **Closing gaps:** **Close gaps…** (or `/plan gaps`) reviews the plan pass by pass. Each pass is one turn that fixes what would make the work stall (a missing step, an open choice, an unread file) and saves a revision.
+* **Who reviews:** with advisors offered, the model alone (`m`), an advisor whose role fits (`a`), or the model consulting advisors (`y`).
+* **When it stops:** at a pass with no gaps (the approval pane comes back), at *Plan gap passes*, when a pass changes nothing or repeats itself, when you type a message, or on ESC.
 * `/new`, `/clear` and a profile switch leave plan mode.
-
-| Command | What it does |
-|---|---|
-| `/plan`, `/plan show` | Says where the plan stands. |
-| `/plan <detail>` | Adds detail. |
-| `/plan approve [--fresh]` | Approves by typing instead (you may edit the file first). |
-| `/plan cancel` | Leaves plan mode; the file is kept, marked `cancelled`. |
-| `/plan save [<name>]` | Keeps a reply that looks like a plan as the plan, and brings up the approval pane. |
-| `/plan gaps [model\|advisor\|any]` | Reviews the presented plan pass after pass until no gaps are left, as **Close gaps…** does; `model` is the default. |
-| `/plan open <name>` | Picks a plan up again; `/plan approve` then runs only the unticked steps. |
-| `/plan open` | Lists the plans with status and progress. |
 
 ### Bot conversations
 
-`/botchat [<profile> ...] [--] [<topic>]` lets profiles talk to each other until you stop them.
+`/botchat` lets profiles talk to each other until you stop them. Its settings are on `/settings` › Client › [Botchat](SETTINGS.md#botchat).
 
-* **Cast:** the profiles named, or all of them; the current one joins and speaks first.
-* **Topic:** the first word that isn't a profile starts it (`/botchat ada max the best pizza`); after `--`, the rest is the topic. Without one, the bots pick. With *Botchat recent context* on, the bots also see this chat's last 10 messages.
-* **Turns:** each bot speaks in its persona and, with speech on, its own voice. A bot named in the last line speaks next, else a random one. Bots use this profile's LLM, or their own under *Botchat LLM mode* `multi` (a bot whose server fails sits out).
-* **Tools:** pictures ([Botchat pictures](SETTINGS.md#botchat-pictures)), the chat's tools or *Botchat limited tools*, skills and memory, per the *Botchat* settings. Advisors are never offered. Bots on the Claude Code server have no tools.
-* **Joining in:** a line you type joins before the next reply. With *STT input* on, push-to-talk cuts in and listens (with TTS off, the wake phrase does too).
-* **Stopping:** ESC stops the voice, then cuts the current bot short, then ends the chat. Ctrl+Alt+B ends it at once; `/exit`, `/clear` and `/new` end it first.
-* **Resume:** `/botchat --resume [<line>]`, Ctrl+Alt+B or a double-click on 👥 continues the last chat.
-* **Embedded bots:** see *Botchat embedded mode*. `/botchat --kill`, Ctrl+Alt+K or a double-click on 🧟 stops the leftover extra servers.
-* Pronouns come from each profile's first TTS voice (`am_`, `bm_`… male, else female). The chat is saved as its own session under *Session logging*, and its tokens are a *Botchat* row on `/usage`.
+* **Cast:** the profiles named, or all of them; the loaded one speaks first.
+* **Topic:** the first word that isn't a profile starts it (`/botchat ada max the best pizza`); after `--`, the rest is the topic. Without one, the bots pick.
+* **Turns:** each bot speaks in its persona and, with speech on, its own voice. A bot named in the last line speaks next, else a random one.
+* **Servers:** bots use this profile's server, or their own under *Botchat LLM mode* `multi`. `/botchat --kill` stops the extra embedded servers (*Botchat embedded mode*).
+* **Tools:** pictures ([Botchat pictures](SETTINGS.md#botchat-pictures)), tools, skills and memory, per the Botchat settings. Advisors are never offered; bots on the Claude Code server get no tools.
+* **Joining in:** a line you type joins before the next reply; with *STT input* on, push-to-talk cuts in.
+* **Stopping:** ESC stops the voice, then the current bot, then the chat. `/botchat --resume` carries on.
+* Each bot's pronouns come from its first TTS voice (`am_`, `bm_`… male, else female). The chat is saved as its own session under *Session logging*.
 
 ### Claude Code from the chat
 
-`/claude <message>` runs the `claude` CLI headless in the working directory.
+`/claude <message>` runs the `claude` CLI headless in the working directory. Its settings are on `/settings` › Servers › [Anthropic](SETTINGS.md#anthropic).
 
-* The reply streams in under Claude's name, each tool on a dim line, with a cost footer; with speech on, it is spoken.
-* The pair joins the conversation tagged `[to Claude]` and `[Claude]`, so the local model can build on it. Claude doesn't see the local conversation.
-* Each session has one Claude conversation, resumed by the next `/claude`. `/claude new`, `/clear`, `/new` and a profile switch start another.
+* The reply streams in under Claude's name, each tool on a dim line, with a cost footer.
+* The pair joins the conversation tagged `[to Claude]` and `[Claude]`, so the local model can build on it; Claude doesn't see the local conversation.
+* Each session keeps one Claude conversation; `/claude new`, `/clear`, `/new` and a profile switch start another.
 * *Claude Code command permissions* sets what Claude may do; anything more is denied, never asked.
-* ESC or Ctrl+C stops it. Works with no LLM server; refused during a reply. Your own Claude Code setup (sign-in, `CLAUDE.md`, skills, MCP servers, hooks) applies.
+* It works with no LLM server; ESC stops it. Your own Claude Code setup (sign-in, `CLAUDE.md`, skills, MCP servers, hooks) applies.
 
 ### Advisor
 
-`/advisor <name> <question>` asks one of the profiles set up under `/settings` › Advisors ([SETTINGS.md](SETTINGS.md#advisors)), as the model's `neon_advisor` does.
+`/advisor <name> <question>` asks one of the profiles under `/settings` › [Advisors](SETTINGS.md#advisors), as the model's `neon_advisor` does.
 
-* It answers on its own profile's server and model, with its persona and role, and may use the read-only tools (the ones plan mode keeps) for up to *Advisor max tool iterations* rounds.
-* Your question goes with the conversation's last 10 messages, whatever *Advisor context* says (that setting is for the model's calls).
-* The transcript shows the question, its tool calls, its answer and a footer with its model and tokens. The pair joins the conversation tagged `[to dba]` and `[dba]`, and the advisor remembers it for next time.
-* Works whether *Advisors enabled* is on or off, never asking first. ESC stops it. Headless, the answer prints as `dba: …`.
-* A bare `/advisor` lists each advisor with its server kind (`claudecode`, `embedded`, `docker`, `anthropic`, `openai`, `http` or `scan`) and model; one whose profile is gone is marked `(missing)`.
+* It answers on its own profile's server and model, in its persona and role, with the read-only tools for up to *Advisor max tool iterations* rounds.
+* Your question goes with the conversation's last 10 messages, whatever *Advisor context* says.
+* The pair joins the conversation tagged with its name (`[to dba]`, `[dba]`), and the advisor remembers it for next time.
+* It works whether *Advisors enabled* is on or off and never asks first. Headless, the answer prints as `dba: …`.
+* A bare `/advisor` shows each one's server kind (`claudecode`, `embedded`, `docker`, `anthropic`, `openai`, `http` or `scan`); a deleted profile is `(missing)`.
 
 ### Your own shell line
 
-`/cmd <command>` runs a line you type in the working directory, as the model's `run_command` would, and draws its output as it prints.
+`/cmd <command>` runs a line you type in the working directory, as the model's `run_command` would.
 
-* **The same checks as the model's.** *Shell command policy* `off` refuses it; the shell police (👮) refuse what they refuse under any policy; under `ask`, a line not on *Shell allowed commands* goes to the approval pane.
-* **The wait** is *Shell default timeout (s)*, at most *Shell max timeout (s)*; ESC kills the line and everything it started. Output past *Shell output max chars* stops being drawn, and the whole of it goes to `.shell\cmd_<id>.log`.
-* **The model sees it:** the line and its output join the conversation, tagged `[I ran in the shell (<shell>)]` and `[shell output]`.
-* **In the background:** `/cmd --bg <command>` passes the same checks, then gives the chat back at once, with no timeout. `/process` lists it, and Ctrl+K twice in its window stops it; closing the app kills it and what it started, even what it left running after it ended, and so does a crash or a force quit. When it ends, its output is shown and joins the conversation. You may run up to 16 at a time, apart from the model's.
-* Plan mode does not stop it. Not in headless mode, where the line goes to the model as text.
+* **The same checks:** *Shell command policy* `off` refuses it, the shell police refuse what they always refuse, and under `ask` a line not on *Shell allowed commands* asks.
+* **Time:** *Shell default timeout (s)*, at most *Shell max timeout (s)*. ESC stops the line and everything it started.
+* **Output** past *Shell output max chars* isn't drawn; the whole goes to a log in the working directory's `.shell` folder.
+* **The model sees it**, tagged `[I ran in the shell (<shell>)]` and `[shell output]`.
+* **In the background:** `/cmd --bg` gives the chat back at once, with no timeout, up to 16 at a time. Ctrl+K twice in its process window stops it.
+* Closing the app stops a background line and all it started, even after a crash. On a Mac, a program that starts its own session can slip away.
+* Plan mode doesn't stop `/cmd`. Headless has none: the line goes to the model as text.
 
 ### Loops
 
-* A delay after the count waits after each reply: `/loop infinite 1m check the build` (up to 24 hours). ESC or Ctrl+C stops the loop; a cancelled or failed turn ends it.
-* The message may be `/imagine …` or `/read …`, run with no model in between (`/loop infinite 5s /imagine score_9, 1girl`). No other command can be looped.
+* A delay waits after each reply: `/loop infinite 1m check the build`. It is one word (`30s`, `5m`, `1h30m`, never a bare number), up to 24 hours.
+* ESC or Ctrl+C stops the loop; a canceled or failed turn ends it.
+* `/imagine …` and `/read …` run with no model in between (`/loop infinite 5s /imagine score_9, 1girl`). No other command can be looped.
 
 ### Benchmark tests
 
-`/test <name>` runs the nine tests of the companion LLMTester project against the connected model. Each is one request, graded in code.
+`/test <id>` runs one of the nine tests from the companion LLMTester project, each one request graded in code.
 
 | Id | Test | Passes when |
 |---|---|---|
@@ -332,174 +349,70 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `multihop` | Multi-Hop Synthesis (Long Context) | two facts at 10% and 90% depth are combined into `mangoes1998` |
 | `saturation` | Context Saturation (Long Context) | the server accepts a prompt that fills the whole context window |
 
-* `/test reasoning`, `structured` and `long` run a group; `/test all` runs everything, saturation last.
-* Each test sends only its own messages (no system prompt, history or tools), with the model's own sampling and reasoning. The structured tests are skipped over the Anthropic API.
-* A run starts as `/clear` leaves things and shows one line per test, then a table of time, tokens and tok/s. ESC stops it.
-* The last 50 runs are saved in the profile's `tests.json`; `/test history` lists them. Nothing enters the conversation.
+* `/test reasoning`, `structured` and `long` run a group; `/test all` runs everything, saturation last. Alone, `/test` lists the tests and their last verdicts.
+* A test sends only its own messages (no system prompt, history or tools). The structured tests are skipped over the Anthropic API.
+* The last 50 runs are saved in the profile's `tests.json` (`/test history`). Nothing enters the conversation.
 
 ### Imagine options
 
-* It runs behind the input line, so you can keep chatting. 🖼️ (🎨 from a picture) shows on the hint row until it is done; double-click it to cancel.
+* It runs behind the input line, so you can keep chatting; double-click 🖼️ on the hint row to cancel.
 * The picture is drawn in the transcript, saved in *ComfyUI output folder*, and sent to the model with your next message.
 * The first word names the workflow when it matches one; otherwise an offered workflow is used.
-* `-- <negative>` sets the negative prompt; `--no-negative` sends none, not even the workflow's default.
-* `--count` is capped by *ComfyUI max images per call*. `--image2` and `--image3` feed multi-picture workflows (`/imagine faceswap --image a.png --image2 b.png`).
-* `/loop 10 30s /imagine …` repeats it in the foreground; ESC ends the loop.
-
-### Folder picker
-
-`/cwd browse`, and the *Working directory* and *Obsidian vault* rows, open a folder tree on the directory in use.
-
-* `⌂ profile` (the profile's `files\`) and `▣ images` (its `images\`) sit above the drives.
-* Space, → and ← open and close folders; `-` collapses all. Only Enter chooses.
-
-### File browser
-
-`/browse [<folder>]` opens a tree rooted at the working directory, folders first, then files.
-
-* Space, → and ← open and close folders; `-` collapses all.
-* Enter on a file opens it in its default app; the pane stays open until ESC.
-* What is listed follows *File browser/tree mode*; `.git` folders and links are left out.
-
-### Picture viewer
-
-The picture viewer is a window of its own (on a Mac it needs the desktop; over SSH `/view` draws in the transcript). It opens from:
-
-* **A double-click on a picture in the transcript.** *Image viewer* can send these to another program instead.
-* **`/view <image or folder>`**, following new pictures in the folder.
-* **`/comfy view`** or the strip's **🎞️**, **`/camera view`** and **`/screen view`**, on those output folders.
-
-| Key | Action |
-|---|---|
-| ← / →, the wheel, or click **<** / **>** | Newer / older picture (the newest is at the left; reaching it follows new pictures again) |
-| Home / End | Newest / oldest picture |
-| Right-click, the Apps key or Shift+F10 | The picture menu |
-| F11 or double-click | Toggle full screen |
-| Drag the picture | Copy it wherever you drop it (never a move) |
-| Del, Del (within 2 s) | Permanently delete the shown picture |
-| F9, ↑ / ↓, F10 | Slide show: start or stop (5 s a slide), a second more or less per slide, folder or random order |
-| Esc | Stop the slide show, then leave full screen, then close |
-| Tab | Bring the terminal to the front |
-| Any other Ctrl or Alt chord | Runs in the chat as if pressed there (Ctrl+Alt+U closes the viewer) |
-
-* It wears the theme unless *Themed external windows* is off, reopens where it was closed, and closes with the app.
-* Opened by its chord it stays behind the terminal's keyboard focus; typed, it comes to the front. However it closes (its chord, Esc, Alt+F4, ×), the terminal gets the focus back if the window had it. The log, thumbnail, camera and video windows do the same.
-* It, the thumbnail browser and the ComfyUI picture strip follow each other's selection.
-* **The picture menu** rotates and flips, recolours (greyscale, sepia, negative, polaroid), resizes, converts (PNG, JPEG, GIF, BMP), shrinks the file under a size, and strips metadata losslessly; then copies the path, shows it in Explorer, attaches it to the chat, prints, or deletes it (permanent, no confirmation). *Image edit mode* decides whether an edit writes `photo-edited.png` beside the picture or replaces it.
-* **On a Mac** it is an AppKit window with the same keys, plus ⌫ for Del, ⌘W to close and ⌃⌘F for full screen (F11 is macOS's Show Desktop); Control-click is a right-click, and *Show in Finder* replaces *Show in Explorer*.
-* The camera's live view (`/camera live`) is a separate window: it answers F11, double-click and Esc, and Ctrl+Alt+V closes it.
-
-### Thumbnail browser
-
-`/view <folder or image> --thumbs`, `/comfy thumbs` (or the toolbar's **🪟**), `/camera thumbs` and `/screen thumbs` open a folder's pictures as thumbnails in a window of their own, oldest first.
-
-* A click on a thumbnail moves the picture viewer to it; the viewer's keys move the selection here.
-* New pictures go on the end; nothing already shown moves.
-* The thumbnails are sized to fit the window; + and − (or Ctrl+wheel) change the size, F5 fits them again.
-* A right-click opens the same picture menu as the viewer, with *Open in the viewer* first.
-* **On a Mac** the keys are the same, plus ⌫ for Del, ⌘= and ⌘− (or a pinch) for the size, ⌃⌘F for full screen and ⌘W to close.
-
-| Key | Action |
-|---|---|
-| Click / double-click or Enter | Select (the viewer follows) / open in the viewer |
-| Arrows, PgUp / PgDn, Home / End | Move the selection |
-| The wheel, the scroll bar | Scroll |
-| + / − or Ctrl+wheel | Bigger / smaller thumbnails |
-| F5 | Re-read the folder and fit the thumbnails |
-| Del, Del (within 2 s) | Permanently delete the selected picture |
-| F11 or double-click between thumbnails | Toggle full screen |
-| Esc | Close the menu, then leave full screen, then close |
-| Tab | Bring the terminal to the front |
-| Any other Ctrl or Alt chord | Runs in the chat as if pressed there |
-
-Like the viewer, it follows the theme, reopens where it was closed, and closes with the app.
-
-### Log window
-
-`/log` opens this run's diagnostic log in a window of its own, every line from the start, with or without `--log`. It keeps the newest 20,000 lines, coloured by level.
-
-* At the bottom it follows new lines; scroll up and it holds still (the title says *paused*).
-* Drag to select (Shift+click extends), Ctrl+A selects all, Ctrl+C copies.
-
-| Key | Action |
-|---|---|
-| ↑ / ↓, PgUp / PgDn, the wheel | Scroll; reaching the bottom follows again |
-| Ctrl+Home | The first line |
-| Ctrl+End or Ctrl+E | The last line, following again |
-| Ctrl+A / Ctrl+C | Select everything / copy the selection |
-| F11 or double-click | Toggle full screen |
-| Esc | Leave full screen, then close |
-| Tab | Bring the terminal to the front |
-| Any other Ctrl or Alt chord | Runs in the chat as if pressed there (Ctrl+G closes this window) |
-
-Like the viewer, it follows the theme, reopens where it was closed, and closes with the app. **On a Mac** selecting and copying are the Mac's (⌘A, ⌘C), ⌘↑/⌘↓ go to the top or bottom, ⌃⌘F is full screen, and ⌘W or Esc closes it; Ctrl+C goes to the chat.
-
-### Process window
-
-`/process <id>` shows a background process's output live: the log window's look and keys over its last 5,000 lines, stderr in the warning colour, the title its id, command and state (`running`, `exited 0`, `stopped by you`). `/process` alone (or the toolbar's ⚡) lists the processes; Enter or a double-click opens one here.
-
-* **Stopping:** Ctrl+K twice within 3 seconds stops the process and everything it started; the model hears of it on its next turn. The `/process` list's `k` does the same after a yes/no.
-
-Otherwise it is read-only. It reopens where it was closed and closes with the app.
+* `-- <negative>` sets the negative prompt; `--no-negative` sends none, not even the workflow's own.
+* Flags go anywhere; a value with spaces goes in double quotes. `--count` is capped by *ComfyUI max images per call*.
+* `--image` takes a path or a pasted picture's label (`"[Image #1]"`); `--image2` and `--image3` feed several-picture workflows (`/imagine faceswap --image a.png --image2 b.png`).
 
 ### Camera
 
-A USB or built-in webcam through Windows' Media Foundation or, on a Mac (macOS 14 or later), AVFoundation; nothing to install.
+A USB or built-in webcam, through Media Foundation on Windows or AVFoundation on a Mac (macOS 14 or later); nothing to install. The model's camera tool is in [TOOLS.md](TOOLS.md#camera).
 
-* **One shared stream:** the camera pane, the live view, a botchat and watch mode share one open camera, which closes a few seconds after the last lets go.
-* **📷 on the hint row** shows while the camera is on; double-click it to end live view and watch mode.
-* **Photos** are JPEGs in *Camera output folder* under the profile's `images` folder (`camera_images` by default), named by time; a retaken or declined one is deleted. Botchat and watch pictures aren't saved (double-clicking a watch thumbnail saves it to the folder's `.watch` subfolder, cleared when watch mode stops).
+* **The pane:** Space takes the photo, `r` retakes, Enter attaches it as `[Image #N]`, ESC drops it. Under *Camera preview* `live`, a window shows the shot as you frame it.
+* **One stream:** the pane, live view, botchat and watch mode share the camera, which closes a few seconds after the last lets go. 📷 shows on the hint row while it is on.
+* **Photos** are JPEGs in *Camera output folder* under the profile's `images` folder; a retaken or dropped one is deleted. Botchat and watch pictures aren't saved.
 * **Stored sessions** keep a line instead of the picture unless *Camera keep in sessions* is on.
-* **Watching** compares each picture on your machine with the last one the model saw, and sends it only when enough changed.
-* **Failures** say why: Windows' camera privacy setting is off, another app has the camera, it was unplugged, or Media Foundation is missing (Windows N needs the Media Feature Pack).
-* **On a Mac** the camera permission is your terminal's: the first photo makes macOS ask; if refused, turn the terminal on in System Settings › Privacy & Security › Camera. A MacBook's own camera is off while its lid is closed. An iPhone works as a Continuity Camera.
+* **Watching** compares each picture, on your machine, with the last one the model saw, and sends it only when enough changed.
+* **On Windows** a failure says why: the camera privacy setting, another app holding it, unplugged, or no Media Foundation (Windows N needs the Media Feature Pack).
+* **On a Mac** the permission is your terminal's: macOS asks at the first photo; a refusal is changed in System Settings › Privacy & Security › Camera. A MacBook's camera is off while its lid is closed; an iPhone works as a Continuity Camera.
+* **Known issue:** the pane's "The camera is opening…" stays until the next key after the camera is on.
 
 ### Screen capture
 
-A monitor, every monitor or one window, through Windows' GDI or, on a Mac (macOS 14 or later), ScreenCaptureKit; nothing to install.
+A monitor, every monitor or one window, through GDI on Windows or ScreenCaptureKit on a Mac (macOS 14 or later); nothing to install. The model's screen tools are in [TOOLS.md](TOOLS.md#screen).
 
-* **Targets:** `screen` (the monitor the app is on, the default), `all`, `monitor:N`, `window:<id or title words>` (or its process name) and `behind` (the window right behind the app's).
+* **Targets:** `screen` (the app's monitor, the default), `all`, `monitor:N`, `window:<id or title words>` and `behind` (the window right behind the app's).
 * **A window** comes out whole even when covered; a minimized one must be restored first. Protected video comes out black.
-* **Screenshots** are JPEGs in *Screen output folder* under the profile's `images` folder (`screen_images` by default), at most 2048 pixels on the longer side.
-* **Asking:** under *Screen policy* `ask` the pane shows what would be captured and why; *Allow for this session* lasts until the session ends.
-* **Stored sessions** keep a line instead of the picture unless *Screen keep in sessions* is on: a screenshot can hold anything on the screen.
-* **On a Mac** the terminal needs the *Screen Recording* permission (System Settings › Privacy & Security › Screen & System Audio Recording; quit and reopen the terminal after). Without it nothing is captured and `/screen list` shows only the monitors. Windows on another desktop or minimized aren't listed; `behind` is the window behind the terminal.
-
-### Pasting a picture
-
-A picture on the clipboard goes onto the input line as `[Image #n]` with a right-click on the input line, Alt+V, or Ctrl+V where the terminal passes it (Windows Terminal keeps Ctrl+V for text). With no picture, the text is pasted.
-
-When the message is sent, the picture is saved in *Pasted images folder* under the profile's `images` folder, and the model is told its path so it can edit it or use it as a ComfyUI input later.
-
-**On a Mac** Cmd+V pastes text only; use Ctrl+V, Option+V (with Option as Meta) or a right-click. A picture *file* copied in Finder pastes as its path and is attached by name.
+* **Screenshots** are JPEGs in *Screen output folder* under the profile's `images` folder, at most 2048 pixels on the longer side.
+* **Asking:** under *Screen policy* `ask`, the model's capture shows on a pane first; **Allow for this session** lasts until the session ends.
+* **Stored sessions** keep a line instead of the picture unless *Screen keep in sessions* is on: a screenshot can hold anything.
+* **On a Mac** the terminal needs the Screen Recording permission (System Settings › Privacy & Security › Screen & System Audio Recording; reopen the terminal after). Without it nothing is captured.
+* On a Mac, windows on another desktop or minimized aren't listed, and `behind` is the window behind the terminal.
 
 ### Profiles
 
-* A name is 1 to 32 letters, digits, `-` or `_`, and can't be one of the verbs. The default profile is `neon`.
-* A name starting with `_` is temporary: left off the picker, and the next launch opens `neon` (the profile is kept).
-* `--profile <name>` (or `NEONSIDEKICK_PROFILE`) opens a profile for one launch only. An unknown name exits with code 2.
-* A reset keeps the URLs, model, API keys, paths, *Web search method* and *Claude Code executable*; `--all` resets those too. `neon` can only be reset while loaded.
-* `push` and `pull` ask first and copy only `profile.json` (the target keeps its working directory); a pull clears the conversation.
-* The API keys in `profile.json` are encrypted (DPAPI on Windows, the Keychain on a Mac); a key typed in by hand is encrypted at the next load. Only the same user on the same machine can read them.
+* A name is 1 to 32 letters, digits, `-` or `_`, and not one of `/profile`'s words (`add`, `push`, `keys`…). The default profile is `neon`.
+* A name starting with `_` is temporary: off the picker, and the next launch opens `neon` (the profile is kept).
+* `--profile <name>` (or `NEONSIDEKICK_PROFILE`) opens a profile for one launch; an unknown name exits with code 2.
+* A reset keeps the URLs, model, API keys, paths, *Web search method*, *Claude Code executable* and avatars unless `--all`. `neon` can only be reset while loaded.
+* `push` and `pull` ask first; the bare forms copy only `profile.json`.
+* The API keys in `profile.json` are encrypted (DPAPI on Windows, a key in the Keychain on a Mac), one typed in by hand at the next load. Only you, on this machine, can read them.
 
 ### Desktop shortcuts
 
-`/shortcut` writes a shortcut (`.lnk`) to your desktop that starts this `NeonSidekick.exe` on a profile:
+`/shortcut` puts `NeonSidekick (<profile>).lnk` on your desktop, starting this `NeonSidekick.exe` in its own folder:
 
 | Typed | The shortcut runs |
 |---|---|
 | `/shortcut` | `NeonSidekick.exe --profile <loaded profile>` |
 | `/shortcut jason --log` | `NeonSidekick.exe --profile jason --log "<exe folder>\logs\neon-jason-{ts}.log"` |
 
-* It is called `NeonSidekick (<profile>)` and replaces one already there. It starts in the exe's folder; the app's working directory is still the profile's.
-* `{ts}` becomes each launch's start time, so every run gets its own log.
+* One already there is replaced. `{ts}` becomes each launch's start time, so every run gets its own log.
 * It points at the running exe, so make it from the copy you mean to keep. Headless has no `/shortcut`.
-* **The first start offers one** (*No*, *Yes* or *Yes, with a log*). It asks once; set `"ShortcutOffered": false` in the home's `settings.json` to be asked again.
-* **On a Mac** it writes `NeonSidekick (<profile>).command` to your Desktop: a zsh script Finder runs in a terminal, with the same forms (the log goes to `logs/` beside the app). It opens in iTerm2 when the app runs there, otherwise Terminal.
+* **The first start offers one** (**No**, **Yes** or **Yes, with a log (--log)**) once; set `"ShortcutOffered": false` in the home's `settings.json` to be asked again.
+* **On a Mac** it is `NeonSidekick (<profile>).command`, with the app's icon: a zsh script Finder opens in iTerm2 when the app runs there, else Terminal. The log goes to `logs/` beside the app.
 
 ### Custom themes
 
-The sixty built-in themes are JSON files in the repo's [`assets/themes`](../assets/themes), one folder per category; the default is `collider`. [`Theme Atlas.html`](../assets/themes/Theme%20Atlas.html) previews them all (`dotnet run tools/ThemeAtlas.cs` rebuilds it after a change).
+The sixty built-in themes are JSON files in [`assets/themes`](../assets/themes), one folder per category; the default is `collider`. [`Theme Atlas.html`](../assets/themes/Theme%20Atlas.html) previews them all.
 
 | Folder | Themes |
 |--------|--------|
@@ -509,11 +422,11 @@ The sixty built-in themes are JSON files in the repo's [`assets/themes`](../asse
 | `elements` | abyssal, magma, opal, oxide, prism, radium, temper |
 | `machines` | circuit, collider, commodore, glitch, heartbeat, infrared, mainframe, netrunner, nixie, nostromo, vhs, vinyl |
 | `nights` | cyberpunk, kowloon, lighthouse, miami, sakura, synthwave, witchhour |
-| `solid` | blueprint, carbon, chalkboard, espresso, fieldradio, glacier, matcha, signal, ultraviolet, velvet (one colour, no gradient) |
+| `solid` | blueprint, carbon, chalkboard, espresso, fieldradio, glacier, matcha, signal, ultraviolet, velvet (one color, no gradient) |
 
-Your own themes are JSON files in the home's `themes` folder (and subfolders one level deep), shared by every profile and listed with the built-ins. They are re-read whenever a theme list opens. A file named like a built-in replaces it.
+Your own are JSON files in the home's `themes` folder (and subfolders one level deep), shared by every profile. They are read again whenever a theme list opens; a file named like a built-in replaces it.
 
-The easiest start is `/theme export <name> [<new-name>]`, which writes any theme to `themes/<new-name>.json` with every colour filled in (default `<name>-custom`; it never overwrites).
+Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.json` (`<name>-custom` by default) with every color filled in, and never overwrites a file.
 
 ```jsonc
 {
@@ -533,15 +446,14 @@ The easiest start is `/theme export <name> [<new-name>]`, which writes any theme
 }
 ```
 
-* **All fifteen colours** are required; a file missing one is skipped with a warning.
-* **Names** are 1 to 32 lower-case letters, digits, `-` or `_`, starting with a letter or digit, and not `export`.
-* **Colours** are `#RRGGBB` or `#RGB`. Comments and trailing commas are allowed.
-* **Gradient** (the banner title and its rule, 2 to 16 stops) is optional; left out, it is made from the theme's colours.
-* **Problems** show as warnings when a theme list opens: a broken file is skipped, a misspelled key or bad style ignored.
+* **Colors:** all fifteen are required, as `#RRGGBB` or `#RGB`; a file missing one is skipped. Comments and trailing commas are allowed.
+* **Names:** 1 to 32 lower-case letters, digits, `-` or `_`, starting with a letter or digit, and not `export`.
+* **Gradient** (the banner title and its rule, 2 to 16 stops) is optional; left out, it comes from the theme's colors.
+* **Problems** show as warnings when a theme list opens: a broken file is skipped, a misspelled key or a bad style ignored.
 
-**Colour roles** (`colors`):
+**Color roles** (`colors`):
 
-| Role | What it colours |
+| Role | What it colors |
 |------|-----------------|
 | `primary` | The main accent: headings, borders, keywords. |
 | `secondary` | The counter-accent: your lines, the spinner, table headers, inline code, the selection. |
@@ -553,26 +465,24 @@ The easiest start is `/theme export <name> [<new-name>]`, which writes any theme
 | `ink` | Body text. |
 | `dim` | Dim text and the hint row. |
 | `dimmer` | A step darker: the input row's ghost text. |
-| `bg` | The background (unless *Themed background* is off), the viewer. |
+| `bg` | The background (unless *Themed background* is off), the picture viewer. |
 | `panelBg` | Code blocks, the highlighted menu row. |
 | `good` | Success, enabled, connected. |
 | `bad` | Failure, error. |
 | `warn` | A warning. |
 
-**Style changes** (`styles`): each entry can set `fg` and `bg` (a hex colour or a role name like `"dim"`) and turn `bold`, `italic`, `underline`, `dim` or `strikethrough` on or off.
+**Styles** (`styles`): each can set `fg` and `bg` (a hex color or a role name like `"dim"`) and turn `bold`, `italic`, `underline`, `dim` or `strikethrough` on or off. Some follow another unless set (`user` follows `accentSecondary`, `assistant` follows `body`).
 
 * **Text:** `body`, `dimText`, `accent`, `accentSecondary`, `accentTertiary`, `label`, `errorText`, `goodText`, `warnText`.
 * **Screen:** `user`, `assistant`, `systemText`, `sectionHeading`, `border`, `tableHeader`, `spinner`, `paneRule`, `hint`, `trailerMark`, `pasteLabel`, `placeholder`, `selectedText`.
-* **Menus:** `menuHighlight`, `menuHighlightDim`, `menuDisabled`, `menuFooter`.
-* **Replies:** `markdownBold`, `markdownItalic`, `markdownCode`, `markdownCodeBlock`, `markdownCodeLabel`, `thinking`, `markdownHeading1`, `markdownHeading`, `markdownBullet`, `markdownQuoteBar`, `markdownQuote`, `markdownLinkUrl`, `markdownRule`.
+* **Menus and help:** `menuHighlight`, `menuHighlightDim`, `menuDisabled`, `menuFooter`, `helpForm` (`/help`'s forms), `helpSlot` (their placeholders).
+* **Replies:** `markdownBold`, `markdownItalic`, `markdownCode`, `markdownCodeBlock`, `markdownCodeLabel`, `thinking`, `markdownHeading1`, `markdownHeading`, `markdownHeading3`, `markdownBullet`, `markdownQuoteBar`, `markdownQuote`, `markdownLinkUrl`, `markdownRule`.
 * **Code highlighting:** `codeKeyword`, `codeType`, `codeString`, `codeNumber`, `codeComment`, `codePunctuation`, `codeFunction`, `codeVariable`, `codeAttribute`, `codeTag`, `codeHeading`, `codeInserted`, `codeDeleted`.
-* **File diffs:** `diffAdded`, `diffRemoved` (only `bg` counts).
-
-Some styles follow another unless set themselves (for example `user` follows `accentSecondary`, `assistant` follows `body`).
+* **File diffs:** `diffAdded`, `diffRemoved` (the background is the slab under the line).
 
 ### Voice presets
 
-*TTS voice preset* (`/settings` › Voice › TTS) picks from the seven built-ins and your own: JSON files in the home's `voices` folder (and subfolders one level deep), one per preset, named for it. A file named like a built-in replaces it. Changes apply without a restart.
+*TTS voice preset* (`/settings` › Voice › [TTS](SETTINGS.md#tts)) picks from the seven built-ins (amanda, neon, richard, hunter, larry, jack, willow) and your own. Yours are JSON files in the home's `voices` folder (and subfolders one level deep), named for the preset; one named like a built-in replaces it. Changes apply without a restart.
 
 ```jsonc
 {
@@ -586,60 +496,13 @@ Some styles follow another unless set themselves (for example `user` follows `ac
 
 A file that doesn't parse or has a value out of range is skipped with a warning.
 
-Forty-one more presets come with the repo in [`assets/voices`](../assets/voices): copy a file, or a whole folder, into your `voices` folder. [`Voice Atlas.html`](../assets/voices/Voice%20Atlas.html) plays a sample of each.
+Forty-one more come with the repo in [`assets/voices`](../assets/voices): copy a file, or a whole folder, into your `voices` folder. [`Voice Atlas.html`](../assets/voices/Voice%20Atlas.html) plays a sample of each.
 
 | Folder | Presets |
 |--------|---------|
 | `narrators` | ada, edmund, iris, margot, silas, walter (unhurried, for long answers) |
-| `brisk` | dash, kit, pepper, rex, sloane, zara (quick, 1.3-1.45x) |
+| `brisk` | dash, kit, pepper, rex, sloane, zara (quick, 1.3–1.45×) |
 | `british` | alfie, beatrice, ellis, harriet, poppy, rupert |
 | `characters` | aria, atlas, jinx, maven, nick, wren |
 | `duets` | ash, morgan, quinn, river, rowan, sage (a female and a male voice blended) |
 | `accents` | amelie, arjun, beatriz, giulia, kenji, lucia, marco, mateo, mei, priya, yuki (an English voice with another language's accent) |
-
-### Pane keys
-
-In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes or goes back a page. Key letters act at once (on a filtering pane, until you type). A remove always asks first.
-
-| Pane | Keys |
-|---|---|
-| `/memory` | Enter: edit · disable/enable · forget (asks) · `a` add · `m` steps *Memory mode* |
-| `/queue` | Enter removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) · `m` Queue mode · `k` Queue cancel mode |
-| `/rewind` | Enter rewinds to before the message |
-| `/sessions` | Enter opens · type to filter |
-| `/process` | Enter opens the window · `k` kills (asks) · `f` steps the filter: all, running, ended |
-| `/skills` › a skill | Enter on a row: move (between the profile and global skills while *Global skills* is on, or a profile skill to another profile, asks), rename, edit, revert, lock/unlock, disable/enable, delete (asks) |
-| `/skills` › a skill › `revert` | Enter puts the version back · `d` removes it (asks) · `c` clear all (asks) |
-| `/docker` | Enter opens · `r` refresh · `l` LLM servers only (*Docker server containers*) · type to filter |
-| `/shopping` | Enter / Space tick or untick · `i` add · `p` place at an aisle or section · `n` rename · `r` remove · `a` tick all · `c` clear ticked · `s` stores · `+` / `-` quantity |
-| `/shopping`'s add page (`i`, or `/shopping add` alone) | Enter on the first row types new items · Enter on a past item adds it again · `x` forgets it · type to filter |
-| *Shopping stores* (`/shopping`'s `s`) | Enter shops there (the first row adds a store) · `l` layout · `n` rename · `r` remove (asks) · `f` open its folder · `i` reindex |
-| A store's layout (*Shopping stores*' `l`) | Tabs **Aisles**, **Sections**, **Facts** and **Guesses** (the model's), ←/→ between them; Enter on a row to rename, move or remove |
-| `/youtube list` | Enter plays · `d` remove (asks) · `c` clear all (asks) · Shift+↑↓ / Shift+Home/End move · Delete remove (asks) · type to filter, Shift+letter starts a filter with `d` or `c` |
-| `/prompts` | Enter or double-click puts it on the draft line · `a` add · `s` save the draft · `e` edit (several lines: in the draft editor) · `d` remove (asks) · `c` clear all (asks) · Shift+↑↓ / Shift+Home/End move · Delete remove (asks) · type to filter, Shift+letter starts a filter with a button's letter |
-| `/browser list` | Enter or double-click opens in the Browser window · `a` add · `n` name · `e` address · `d` remove (asks) · `c` clear all (asks) · Shift+↑↓ / Shift+Home/End move · Delete remove (asks) · type to filter, Shift+letter starts a filter with a button's letter |
-| `/youtube <words>`, `/youtube playlist` | Enter plays · `s` save the highlighted video |
-| `/tools shell` (*Shell command policy*) | `c` the allowed commands · `p` the police |
-| `/tools shell allowed` (*Shell allowed commands*) | Enter removes (asks) · `p` steps *Shell command policy*: off, ask, yolo (asks; a no goes on to off) · type to filter |
-| *Shell police forbidden strings* | the top row adds · Enter removes (asks) · `r` restore defaults (asks) |
-| `/tools shell police` | `s` the forbidden strings |
-| `/tools web` | `m` steps *Web browser mode*: auto, http, browser · `o` opens the Browser window (Windows) |
-| `/tools files` | `b` *File browser/tree mode* |
-| `/tools image` | `e` *Image edit mode* |
-| `/tools obsidian` | `v` *Obsidian vault* |
-| `/tools advisors` | `a` *Advisor list* |
-| `/tools print` | `p` *Print default printer* |
-| `/tools camera` | `w` watch · `l` live · `s` snap · `c` screen |
-| The camera pane | Space takes · `r` retake · Enter attaches · ESC drops |
-| `/settings changed` | Enter edits · `r` back to default |
-| `/toolbar edit`, `/perfbar edit` | Enter or Space flips · Shift+↑/↓ move · Shift+Home/End top or bottom · Delete unchecks · `a` all · `n` none · `d` default |
-| `/toolbar edit` (and *Hint bar*) | Shift+←/→ pins the item to the other side; Shift+↑/↓ crosses into the other group at its edge |
-| `/homebar edit`, On the bar | Shift+↑/↓ move · Shift+Home/End top or bottom · Delete removes · Enter the same as a list, Rename on the bar…, Default name, Change emoji… and Default emoji |
-| `/homebar edit`, the other tabs | Space or Enter adds or removes · type to filter |
-| A room's pane on the home bar | Space switches a device · Enter its actions |
-| *Embedded models* | `s` size: any, 8GB, 16GB · `i` show: all, installed, uninstalled · `d` drafter · `o` sort · `x` uncensored |
-| `/server`, `/model` | Enter chooses · type to filter |
-| The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · ESC denies |
-| A database write's approval | `d` deny · `o` once · `s` session · `v` the whole statement · ESC denies |
-| `/find` (the transcript) | type to find · Enter or F3 older · Shift+Enter or Shift+F3 newer (Shift+F3 on a Mac) · PgUp/PgDn scroll · ESC done |
-| Info panes (`/help`, `/sys`, `/about`, `/tree`…) | ↑/↓ PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find, Enter or F3 next, Shift+Enter or Shift+F3 previous (Shift+F3 on a Mac) · ESC closes |

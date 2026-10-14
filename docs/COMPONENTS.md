@@ -15,18 +15,18 @@ What Neon Sidekick is built on. Back to the [README](../README.md).
 * `Npgsql`
 * `Microsoft.ML.OnnxRuntime`
 * `KokoroSharp` (with `espeak-ng`, for the voices' pronunciation)
-* `Whisper.net`
+* `Whisper.net` (with its native `whisper.cpp` runtimes)
 * `Silero VAD`
 * `Vosk`
 * `PhotoSauce.MagicScaler`
 * `Markdig`
-* `LibGit2Sharp`
-* `Microsoft.Web.WebView2` (Windows)
+* `LibGit2Sharp` (with its native `libgit2`)
+* `Microsoft.Web.WebView2` (Windows: its loader DLL, for the video window and the Browser window)
 * `llama.cpp` (`llama-server`, downloaded on first use of the embedded LLM)
 * `pdf.js` (Mozilla, Apache-2.0; `pdfjs-dist` 4.10.38, embedded: reads stores' PDFs for the shopping list in the headless browser)
 * Unicode's `emoji-test.txt` and CLDR's English annotations (the avatar picker's emoji, names and keywords) and CLDR's `windowsZones.xml` (the clock tools' time zones), under the [Unicode License v3](https://www.unicode.org/license.txt)
 
 ## System libraries
 
-* **Windows:** WinMM (sound), WIC (pictures), Media Foundation (camera), GDI and DWM (screen capture, the app's windows), the print spooler, NVML, PDH and DXGI (performance bar), DPAPI and Credential Manager (secrets), the WebView2 Runtime (YouTube).
-* **macOS:** AudioToolbox and Core Audio (sound), ImageIO (pictures), AVFoundation (camera), ScreenCaptureKit (screen capture), AppKit (the app's windows), WebKit (YouTube), IOKit and Metal (performance bar), Security (the Keychain).
+* **Windows:** WinMM (sound), WIC (pictures), Media Foundation (camera), GDI and DWM (screen capture, the app's windows), the print spooler, NVML, PDH and DXGI (performance bar), DPAPI and Credential Manager (secrets), the WebView2 Runtime (YouTube and the Browser window).
+* **macOS:** AudioToolbox and Core Audio (sound), ImageIO (pictures), AVFoundation (camera), ScreenCaptureKit (screen capture), AppKit (the app's windows), WebKit (YouTube), IOKit and Metal (performance bar), Security (the Keychain), CUPS and PDFKit (printing), NetFS (network shares), Carbon (`/keycheck`).
