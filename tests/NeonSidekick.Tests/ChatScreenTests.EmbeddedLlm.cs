@@ -494,9 +494,10 @@ public partial class ChatScreenTests
     /// <summary>
     /// The Connect a model page's Docker row (2026-10-05, the user's ask), after the embedded one: the Docker tab of /settings on its
     /// container checklist; with containers chosen, Docker servers is switched on, the page says how /server starts one and
-    /// leaves the input row to the user (2026-10-06, the code review's catch: it showed the page again over the hint).
+    /// leaves the input row to the user (2026-10-06, the code review's catch: it showed the page again over the hint). Windows only
+    /// since 2026-10-14: the row is there only where Docker servers can run (<c>DockerEndpoint.Here</c>).
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task Startup_TheDockerRow_OpensTheContainerChecklist_AndSwitchesDockerServersOn()
     {
         _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "off"; d.LlmUrl = ""; d.DockerServers = false; d.DockerServerContainers = ["vllm_b"]; });
@@ -514,6 +515,27 @@ public partial class ChatScreenTests
         Assert.Contains(DockerServerText.ConnectHint, output);
         Assert.DoesNotContain(ChatScreen.ConnectTitle, output[output.IndexOf(DockerServerText.ConnectHint, StringComparison.Ordinal)..]);   // the page not shown again after the hint
         Assert.Null(_session.Endpoint);
+    }
+
+    /// <summary>
+    /// The Unix twin of <see cref="Startup_TheDockerRow_OpensTheContainerChecklist_AndSwitchesDockerServersOn"/> (2026-10-14, the
+    /// user's ask): a Mac's Connect a model page has no Docker row, since its containers could never serve there.
+    /// </summary>
+    [UnixFact]
+    public async Task Startup_OffWindows_TheConnectPage_HasNoDockerRow()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "off"; d.LlmUrl = ""; d.DockerServerContainers = ["vllm_b"]; });
+        UsePane();
+        UseEmbedded(new FakeEmbeddedLlm());
+        var input = new ScriptedInput();
+        input.Push(Keys.Escape);                          // the page: not now
+        PushLine(input, "/exit");
+
+        string output = await RunAsync(input);
+
+        Assert.Contains(ChatScreen.ConnectTitle, output);
+        Assert.DoesNotContain("Connect Docker container", output);
+        Assert.Contains("Use the Anthropic API", output);
     }
 
     [Fact]

@@ -47,9 +47,11 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The page's rows for this screen: every way to a model that is offered here — a scan, a URL, the embedded catalog (where the
-    /// embedded model can run), a Docker container (2026-10-05), the two APIs, Claude Code — each with what it does, then <c>Not now</c>. Pinned.
+    /// embedded model can run), a Docker container (2026-10-05; only where Docker servers can run since 2026-10-14, the user's ask:
+    /// a Mac offered it and led to a checklist whose containers could never serve), the two APIs, Claude Code — each with what it
+    /// does, then <c>Not now</c>. Pinned.
     /// </summary>
-    public static IReadOnlyList<(ConnectChoice Choice, string Label, string Note)> ConnectRows(bool embedded)
+    public static IReadOnlyList<(ConnectChoice Choice, string Label, string Note)> ConnectRows(bool embedded, bool docker)
     {
         var rows = new List<(ConnectChoice, string, string)>
         {
@@ -61,7 +63,10 @@ internal sealed partial class ChatScreen
             rows.Add((ConnectChoice.Embedded, "Download an embedded model", "selected GGUF models from Hugging Face"));
         }
 
-        rows.Add((ConnectChoice.Docker, "Connect Docker container", "a vLLM or SGLang container in Docker Desktop"));
+        if (docker)
+        {
+            rows.Add((ConnectChoice.Docker, "Connect Docker container", "a vLLM or SGLang container in Docker Desktop"));
+        }
 
         rows.Add((ConnectChoice.Anthropic, "Use the Anthropic API", "your API key, billed per message"));
         rows.Add((ConnectChoice.OpenAI, "Use the OpenAI API", "your API key, billed per message"));
@@ -88,7 +93,7 @@ internal sealed partial class ChatScreen
 
         while (_session.Endpoint is null)
         {
-            var rows = ConnectRows(EmbeddedAvailable);
+            var rows = ConnectRows(EmbeddedAvailable, DockerEndpoint.Here);
             int width = rows.Max(r => r.Label.Length) + 2;
             var page = new MenuPage(ConnectTitle, rows.Select(r => ConnectRow(r.Label, r.Note, width)).ToList(), ConnectKeys);
             MenuPick? pick;

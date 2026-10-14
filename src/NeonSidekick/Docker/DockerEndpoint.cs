@@ -115,11 +115,17 @@ public static class DockerEndpoint
         return (effective.DockerServerContainers ?? []).Select(n => (n ?? "").Trim()).Where(IsName).Distinct(StringComparer.Ordinal).ToList();
     }
 
-    /// <summary>Whether Docker servers are offered at all: the switch on, on Windows (the engine's pipe), and at least one container chosen.</summary>
+    /// <summary>
+    /// Whether this machine can run Docker servers at all: Windows only (2026-10-14, one place for the check <see cref="Offered"/> and
+    /// the Connect a model page share): Docker Desktop on a Mac passes no GPU to containers, so vLLM and SGLang cannot serve there.
+    /// </summary>
+    public static bool Here => OperatingSystem.IsWindows();
+
+    /// <summary>Whether Docker servers are offered at all: the switch on, on Windows (<see cref="Here"/>), and at least one container chosen.</summary>
     public static bool Offered(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return effective.DockerServers && OperatingSystem.IsWindows() && ChosenNames(effective).Count > 0;
+        return effective.DockerServers && Here && ChosenNames(effective).Count > 0;
     }
 
     /// <summary>Whether <paramref name="effective"/>'s URL names a chosen container while Docker servers are offered.</summary>
