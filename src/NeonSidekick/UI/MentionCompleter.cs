@@ -53,6 +53,10 @@ public sealed record MentionList(int Start, int End, string Query, IReadOnlyList
         int count = Matches.Count;
         return this with { Cursor = ((Cursor + step) % count + count) % count };
     }
+
+    /// <summary>The highlight moved by <paramref name="step"/> rows, stopping at either end (2026-10-14: the wheel and the more row's pages, as the menus' wheel never wraps).</summary>
+    public MentionList Step(int step) =>
+        Matches.Count == 0 ? this : this with { Cursor = Math.Clamp(Cursor + step, 0, Matches.Count - 1) };
 }
 
 /// <summary>
@@ -244,6 +248,18 @@ public static class MentionCompleter
     }
 
     /// <summary>
+    /// The matches in view over <paramref name="capacity"/> rows (<see cref="MenuPane.Viewport"/>): the first and how many, one row fewer
+    /// for a truncated path list's note. <see cref="Rows"/>' and <see cref="WordRows"/>' layout, and what a click on the drawn list is
+    /// measured against (2026-10-14). Pure.
+    /// </summary>
+    public static (int First, int Shown) View(MentionList list, int capacity)
+    {
+        ArgumentNullException.ThrowIfNull(list);
+        int room = Math.Max(1, capacity - (!list.IsWordList && list.Truncated ? 1 : 0));
+        return MenuPane.Viewport(list.Matches.Count, list.Cursor, room, list.First);
+    }
+
+    /// <summary>
     /// The list as overlay rows (markup): the matches in view — <see cref="MenuPane.Viewport"/>
     /// over <paramref name="capacity"/> rows, one fewer when the list is truncated — with
     /// <see cref="MenuPane.Pointer"/> and the menu highlight on the cursor's row, the
@@ -254,8 +270,7 @@ public static class MentionCompleter
     public static (IReadOnlyList<string> Rows, int First) Rows(MentionList list, int capacity)
     {
         ArgumentNullException.ThrowIfNull(list);
-        int room = Math.Max(1, capacity - (list.Truncated ? 1 : 0));
-        var (first, shown) = MenuPane.Viewport(list.Matches.Count, list.Cursor, room, list.First);
+        var (first, shown) = View(list, capacity);
         var rows = new List<string>(shown + 2);
         for (int i = 0; i < shown; i++)
         {
@@ -293,7 +308,7 @@ public static class MentionCompleter
             throw new ArgumentException("A word list carries a note per match.", nameof(list));
         }
 
-        var (first, shown) = MenuPane.Viewport(list.Matches.Count, list.Cursor, Math.Max(1, capacity), list.First);
+        var (first, shown) = View(list, capacity);
         int width = 0;
         for (int i = 0; i < shown; i++)
         {

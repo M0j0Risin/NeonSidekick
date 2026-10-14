@@ -51,7 +51,7 @@ public static class HelpCommands
         ]),
         new("/browse",
         [
-            new("/browse [<folder>]", "Browse the working directory, or a folder in it, as a tree in a pane (Tab completes the folder). Space, → and ← open and close folders, `-` collapses all, and Enter opens or closes a folder, or opens a file in its default app with the pane left open. Hidden, system and dot entries show only when *File browser/tree mode* is `show-hidden`; `.git` folders are left out. Works while a reply runs."),
+            new("/browse [<folder>]", "Browse the working directory, or a folder in it, as a tree in a pane (Tab completes the folder). Space, → and ← open and close folders, `-` collapses all, and Enter (or a double-click on a name) opens or closes a folder, or opens a file in its default app with the pane left open. Hidden, system and dot entries show only when *File browser/tree mode* is `show-hidden`; `.git` folders are left out. Works while a reply runs."),
         ]),
         new("/browser",
         [
@@ -146,7 +146,7 @@ public static class HelpCommands
         ]),
         new("/find",
         [
-            new("/find [<words>]", "Find words in the transcript: a find row opens over the input row, every match is marked, and the transcript scrolls to the newest. Typing changes the words; Enter or F3 goes to the next match up (older), Shift+Enter or Shift+F3 back down, PgUp/PgDn scroll. Folded blocks that hold a match open, and fold again when the find ends. ESC ends it at the bottom of the transcript. Ctrl+Shift+F runs it too."),
+            new("/find [<words>]", "Find words in the transcript: a find row opens over the input row, every match is marked, and the transcript scrolls to the newest. Typing changes the words, and a paste (Ctrl+V or a right-click) adds its first line; Enter or F3 goes to the next match up (older), Shift+Enter or Shift+F3 back down, PgUp/PgDn scroll. Folded blocks that hold a match open, and fold again when the find ends. ESC, or a double-click outside it, ends it at the bottom of the transcript. Ctrl+Shift+F runs it too."),
         ]),
         new("/gituser",
         [
@@ -241,7 +241,7 @@ public static class HelpCommands
         ]),
         new("/perfbar",
         [
-            new("/perfbar [off|text|gauge|led]", "Show or hide the performance bar (*Performance bar*). Alone, it hides the bar or shows it again with its last meters (CPU, RAM, GPU and VRAM the first time); `off` hides it, and a look (`text`, `gauge`, `led`) sets that look and shows the bar. Works while a reply runs; the toolbar's 📈 and Ctrl+F run it too."),
+            new("/perfbar [off|text|gauge|led]", "Show or hide the performance bar (*Performance bar*). Alone, it hides the bar or shows it again with its last meters (CPU, RAM, GPU and VRAM the first time); `off` hides it, and a look (`text`, `gauge`, `led`) sets that look and shows the bar. Works while a reply runs; Ctrl+F runs it too."),
             new("/perfbar edit", "Choose the bar's meters, their order and their sides on the *Performance bar* checklist. Enter or Space checks a meter, Shift+←/→ pins it a group over (left, center, right), Shift+↑/↓ moves it, Shift+Home/End to its group's top or bottom, Delete unchecks; `a`, `n` and `d` pick all, none or the default."),
         ]),
         new("/plan",

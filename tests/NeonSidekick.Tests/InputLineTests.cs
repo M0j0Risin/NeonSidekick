@@ -2018,6 +2018,7 @@ public class InputLineTests : IDisposable
     {
         Assert.Equal(1_000_000, InputLine.DraftWordPairKey(0));
         Assert.Equal(1_000_042, InputLine.DraftWordPairKey(42));
+        Assert.Equal(2_000_042, InputLine.ListPairKey(42));   // the completion list's (2026-10-14), above every draft's word
         Assert.True(InputLine.DraftWordPairKey(0) > InputLine.HintPairKey(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "", 500)));
     }
 
@@ -2768,7 +2769,7 @@ public class InputLineTests : IDisposable
         ["b"] = ["test/bling.txt"],
     };
 
-    private (InputLine Line, ScriptedInput Keys, ScreenPane Pane, List<string> Asked) MentionLine(bool truncated = false)
+    private (InputLine Line, ScriptedInput Keys, ScreenPane Pane, List<string> Asked) MentionLine(bool truncated = false, Func<string?>? clipboard = null)
     {
         _console.Profile.Height = 12;
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100), new ManualTimeProvider());
@@ -2781,10 +2782,100 @@ public class InputLineTests : IDisposable
             return new MentionResult(FileOutcome.Ok, Tree.TryGetValue(query, out var paths) ? paths : [], truncated);
         }
 
-        return (new InputLine(pane, new KeySource(scripted, TimeSpan.FromMilliseconds(1)), mentions: Complete), scripted, pane, asked);
+        return (new InputLine(pane, new KeySource(scripted, TimeSpan.FromMilliseconds(1)), clipboard, mentions: Complete), scripted, pane, asked);
     }
 
     private static string Highlighted(string path) => MenuPane.Pointer + path;
+
+    // The list's first row on the buffer: the overlay's rows over the input row at 100.
+    private static int ListTop(ScreenPane pane) => 100 - pane.OverlayRows;
+
+    /// <summary>The mouse on the completion list (2026-10-14, the user's ask): a click highlights a match, a second on it applies it, as Enter does.</summary>
+    [Fact]
+    public async Task TheList_AClickHighlights_ASecondApplies()
+    {
+        var (line, keys, pane, _) = MentionLine();
+        int waits = 0;
+        keys.Push(Chars("@t"));
+        keys.OnWait = () =>
+        {
+            switch (waits++)
+            {
+                case 0:
+                    keys.PushClick(5, ListTop(pane) + 1);   // test/thing.txt: highlighted
+                    break;
+                case 1:
+                    Assert.True(pane.OverlayOpen);
+                    Assert.Contains(Highlighted("test/thing.txt"), _console.Output);
+                    keys.PushClick(9, ListTop(pane) + 1);   // the pair: applied
+                    break;
+                case 2:
+                    Assert.False(pane.OverlayOpen);
+                    keys.Push(Keys.Enter);
+                    break;
+            }
+        };
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply));
+
+        Assert.Equal("@test/thing.txt", submitted.Text);
+    }
+
+    /// <summary>Two clicks on two matches are two firsts: nothing applied. A right-click on the list pastes nothing (2026-10-14).</summary>
+    [Fact]
+    public async Task TheList_ClicksOnTwoMatches_ApplyNothing_ARightClickPastesNothing()
+    {
+        var (line, keys, pane, _) = MentionLine(clipboard: () => "PASTE");
+        int waits = 0;
+        keys.Push(Chars("@t"));
+        keys.OnWait = () =>
+        {
+            switch (waits++)
+            {
+                case 0:
+                    keys.PushClick(5, ListTop(pane) + 1).PushClick(5, ListTop(pane) + 2);   // thing, then top: two firsts
+                    keys.PushClick(5, ListTop(pane), MouseButton.Right);                     // no paste over the list
+                    break;
+                case 1:
+                    Assert.True(pane.OverlayOpen);
+                    Assert.Contains(Highlighted("top.txt"), _console.Output);
+                    keys.Push(Keys.Escape, Keys.Enter);
+                    break;
+            }
+        };
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply));
+
+        Assert.Equal("@t", submitted.Text);
+    }
+
+    /// <summary>The wheel over the list moves the highlight a row a notch, never wrapping (2026-10-14); off it, the list stays.</summary>
+    [Fact]
+    public async Task TheList_TheWheelOverIt_MovesTheHighlight_StoppingAtTheEnds()
+    {
+        var (line, keys, pane, _) = MentionLine();
+        int waits = 0;
+        keys.Push(Chars("@t"));
+        keys.OnWait = () =>
+        {
+            switch (waits++)
+            {
+                case 0:
+                    // Up twice from the first (wrapping would land on top.txt, then thing), then down once: thing.
+                    keys.PushWheel(1, 5, ListTop(pane)).PushWheel(1, 5, ListTop(pane)).PushWheel(-1, 5, ListTop(pane));
+                    keys.PushWheel(1, 5, 20);                // off the list: the transcript's, the list kept
+                    break;
+                case 1:
+                    Assert.True(pane.OverlayOpen);
+                    keys.Push(Keys.Enter, Keys.Enter);
+                    break;
+            }
+        };
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply));
+
+        Assert.Equal("@test/thing.txt", submitted.Text);
+    }
 
     [Fact]
     public async Task Mentions_AnAtWordOpensTheList_AndEnterAppliesThePick_NotSends()

@@ -176,12 +176,28 @@ public sealed class FolderPane
                         }
                         else
                         {
-                            // The name: the cursor; a second click on the same row within the interval opens or closes it.
+                            // The name: the cursor; a second click on the same row within the interval is Enter (2026-10-14, the user's
+                            // ask: it opened or closed the node alone): the picker's pick, /browse's file opened, /browse's folder opened
+                            // or closed. The picker's folders open and close on the glyph's side, Space and the arrows.
                             MoveTo(row);
                             if (_clicks.Second(row))
                             {
-                                Toggle();
+                                if (open is null)
+                                {
+                                    return node.Path;
+                                }
+
+                                Enter(open);
                             }
+                        }
+                    }
+                    else if (at - HeaderRows == _shown && _shown < tree.Visible.Count)
+                    {
+                        // The more row (2026-10-14, the user's ask): its ▲ a page up, its ▼ (or the count after it) a page down, as the keys.
+                        _clicks.Reset();
+                        if (MenuPane.MoreStep(click.X, MenuPane.NoPointer, _first, _shown, tree.Visible.Count) is int dir)
+                        {
+                            MoveTo(Clamp(_cursor + dir * Math.Max(1, _shown)));
                         }
                     }
                     else
@@ -218,18 +234,7 @@ public sealed class FolderPane
                         return tree.Visible.Count == 0 ? null : tree.Visible[_cursor].Path;
                     }
 
-                    if (tree.Visible.Count > 0 && tree.Visible[_cursor] is { IsFile: true } file)
-                    {
-                        var (line, error) = open(file.Path);
-                        _status = line;
-                        _statusIsNote = !error;
-                        Show();
-                    }
-                    else
-                    {
-                        Toggle();
-                    }
-
+                    Enter(open);
                     continue;
                 }
 
@@ -288,6 +293,24 @@ public sealed class FolderPane
 
         _cursor = row;
         Show();
+    }
+
+    // /browse's Enter, and a double-click on a name (2026-10-14): a file opened, its line on the path row in the error colour when it
+    // failed; a folder opened or closed as Space does.
+    private void Enter(Func<string, (string Line, bool Error)> open)
+    {
+        var tree = _tree!;
+        if (tree.Visible.Count > 0 && tree.Visible[_cursor] is { IsFile: true } file)
+        {
+            var (line, error) = open(file.Path);
+            _status = line;
+            _statusIsNote = !error;
+            Show();
+        }
+        else
+        {
+            Toggle();
+        }
     }
 
     // Space, or a click on the glyph: the node opens or closes; a refused read leaves the notice.

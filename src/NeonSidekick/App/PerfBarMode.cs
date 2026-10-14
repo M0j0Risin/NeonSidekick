@@ -25,7 +25,8 @@ public sealed record PerfToggle(List<string>? Items, List<string>? LastItems, st
 /// call), with the sampler's history only it read; a profile that saved it reads as <see cref="Default"/>. Until 2026-09-30 the setting <c>Show performance bar</c> was one of these or <c>off</c>, the
 /// switch and the look in one word; since, the meters shown are a checklist (<see cref="PerfBarItems"/>, the user's ask)
 /// and the look is <see cref="AppSettingsData.PerformanceBarLook"/>, picked by <c>/perfbar &lt;look&gt;</c> (on the same page's title row too until 2026-10-12, the user's call: those buttons and their
-/// glyphs went). <c>off</c> is a
+/// glyphs went) and, since 2026-10-14 (the user's ask, the Queue pane's mode button's shape), the page's one <see cref="LookButton"/>, stepping
+/// through <see cref="Names"/>. <c>off</c> is a
 /// <c>/perfbar</c> word alone (<see cref="Words"/>). <see cref="Parse"/> is the one place the saved look becomes the enum: a
 /// hand-edited value that is none of them reads as <see cref="Default"/> without a warning, a display setting as the meters'
 /// list is (a <c>Resolve</c> that warned once went later on 2026-09-30, the review's catch: nothing but a test called it).
@@ -68,6 +69,15 @@ public static class PerfBarMode
         TryParse(text, out var style);
         return style;
     }
+
+    /// <summary>The Performance bar page's look button (2026-10-14, the user's ask, as the Queue pane's mode button): the look in force, <c>look: led</c>; a press steps to the next. Pinned.</summary>
+    public static string LookButton(PerfBarStyle style) => "look: " + Name(style);
+
+    /// <summary>The key that is <see cref="LookButton"/>.</summary>
+    public const char LookKey = 'l';
+
+    /// <summary>The look after <paramref name="style"/> in <see cref="Names"/>' order (text, gauge, led), the last wrapping to the first. Pure.</summary>
+    public static PerfBarStyle Next(PerfBarStyle style) => Parse(Names[(Array.IndexOf(Names, Name(style)) + 1) % Names.Length]);
 
     /// <summary>The saved word for <paramref name="style"/>.</summary>
     public static string Name(PerfBarStyle style) => style switch

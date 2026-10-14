@@ -476,14 +476,17 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// Under the unseen reply's spinner the toolbar's 📈 toggles the performance bar while the bot still writes (2026-10-10, the lesson of
-    /// <c>/advisor</c>'s fix: the spinner alone was awaited, so a quick act waited for the reply's end).
+    /// Under the unseen reply's spinner the toolbar's 📄 opens the log window while the bot still writes (2026-10-10, the lesson of
+    /// <c>/advisor</c>'s fix: the spinner alone was awaited, so a quick act waited for the reply's end). The 📈's /perfbar until it was
+    /// retired (2026-10-14).
     /// </summary>
     [Fact]
-    public async Task BotChat_Sync_UnderTheUnseenReply_TheToolbarsRisingChart_TogglesTheBar_BeforeTheReply()
+    public async Task BotChat_Sync_UnderTheUnseenReply_TheToolbarsLog_OpensTheWindow_BeforeTheReply()
     {
         BotPicturesFixture();
-        _settings.Update(d => d.ToolbarItems = ["profile", "perf"]);
+        int opened = 0;
+        _openLogWindow = () => opened++;
+        _settings.Update(d => d.ToolbarItems = ["profile", "log"]);
         LoadOnThePane();
         _chat.EnqueueText(DogReply);
         _chat.EnqueueText("a dog surfing a wave");
@@ -496,9 +499,9 @@ public partial class ChatScreenTests
         {
             if (_chat.Requests.Count == 1 && i == 0)
             {
-                input.PushClick(3, 103);   // 📈 on the toolbar: /perfbar, a quick act run while neon's reply is held
+                input.PushClick(3, 103);   // 📄 on the toolbar: /log, a quick act run while neon's reply is held
                 input.PushClick(3, 103);
-                await UntilAsync(() => Output.Contains(Perf.PerfText.BarNotice("led"), StringComparison.Ordinal), ct);
+                await UntilAsync(() => Output.Contains(Viewer.LogViewText.WindowOpenedNotice, StringComparison.Ordinal), ct);
                 toggledUnderTheReply = true;
             }
             else if (_chat.Requests.Count == 3 && i == 1)
@@ -515,6 +518,7 @@ public partial class ChatScreenTests
         string output = await RunAsync(input);
 
         Assert.True(toggledUnderTheReply);
+        Assert.Equal(1, opened);
         Assert.Contains("● " + DogReply, output);
     }
 

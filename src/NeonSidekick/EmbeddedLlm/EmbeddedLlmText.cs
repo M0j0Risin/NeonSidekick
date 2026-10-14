@@ -56,23 +56,18 @@ public static class EmbeddedLlmText
     public const string ToolsGlyph = "🛠️";
 
     /// <summary>
-    /// The uncensored column's mark for an uncensored build (later on 2026-09-29, the user's pick; <see cref="UncensoredKind.Uncensored"/>):
-    /// the broken chain, a ZWJ sequence Windows Terminal draws as one glyph in two cells (<see cref="UI.TextCells"/> counts it so).
+    /// The uncensored column's mark for an uncensored build (later on 2026-09-29, the user's pick; <see cref="EmbeddedModel.Uncensored"/>):
+    /// the broken chain, a ZWJ sequence Windows Terminal draws as one glyph in two cells (<see cref="UI.TextCells"/> counts it so). Every
+    /// uncensored build since 2026-10-14 (the user's ask): HauhauCS's "Aggressive" ones wore the crossed swords after it (<c>⛓️‍💥⚔️</c>, from
+    /// 2026-10-02; <c>💢</c> from later on 2026-09-29), retired with the kind that told them apart.
     /// </summary>
     public const string UncensoredGlyph = "⛓️‍💥";
-
-    /// <summary>
-    /// The uncensored column's mark for an aggressive build (<see cref="UncensoredKind.Aggressive"/>): the broken chain with the
-    /// crossed swords after it (2026-10-02, the user's pick; <c>💢</c> from later on 2026-09-29). Four cells: the chain's two and
-    /// <c>⚔️</c>'s two (a Neutral symbol with its selector). The column is the last, so its width moves no other.
-    /// </summary>
-    public const string AggressiveGlyph = UncensoredGlyph + "⚔️";
 
     /// <summary>
     /// The capability columns that follow <paramref name="detail"/> (the drafter's, 2026-09-29; vision's and tools' later
     /// that day, the user's ask; the uncensored one later still): the padding to <paramref name="detailWidth"/> cells, then a
     /// slot each for <see cref="DrafterGlyph"/>, <see cref="VisionGlyph"/>, <see cref="ToolsGlyph"/> and
-    /// <see cref="UncensoredGlyph"/> or <see cref="AggressiveGlyph"/> — two blanks and the glyph, or four blanks, so each mark
+    /// <see cref="UncensoredGlyph"/> — two blanks and the glyph, or four blanks, so each mark
     /// keeps its column down the list — with the trailing blanks cut; empty for a row that is no embedded model (a scanned
     /// server's) or one that has none of them.
     /// </summary>
@@ -83,13 +78,7 @@ public static class EmbeddedLlmText
             return "";
         }
 
-        string uncensored = model.UncensoredKind switch
-        {
-            UncensoredKind.Aggressive => AggressiveGlyph,
-            UncensoredKind.Uncensored => UncensoredGlyph,
-            _ => "",
-        };
-        string slots = Slot(model.HasMtp, DrafterGlyph) + Slot(model.Vision, VisionGlyph) + Slot(model.ToolCalls, ToolsGlyph) + Slot(uncensored.Length > 0, uncensored);
+        string slots = Slot(model.HasMtp, DrafterGlyph) + Slot(model.Vision, VisionGlyph) + Slot(model.ToolCalls, ToolsGlyph) + Slot(model.Uncensored, UncensoredGlyph);
         slots = slots.TrimEnd(' ');
         return slots.Length == 0 ? "" : new string(' ', Math.Max(0, detailWidth - UI.TextCells.Width(detail ?? ""))) + slots;
 

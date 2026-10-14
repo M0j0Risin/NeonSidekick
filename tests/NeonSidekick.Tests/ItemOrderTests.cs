@@ -198,8 +198,8 @@ public class ItemOrderTests
     public void TheToolbarsOrder_IsEveryItemFree_ThePathAndTheNameRightByDefault()
     {
         Assert.Equal(ToolbarItems.DefaultOrder, ToolbarItems.Order(null));   // with its dividers since 2026-10-13 (three later that day)
-        var order = ToolbarItems.Order(["path", "perf", "settings"]);
-        Assert.Equal(["path", "model", "perf", "settings"], order.Take(4));   // the model after the path, its neighbour
+        var order = ToolbarItems.Order(["path", "shoppinglist", "settings"]);
+        Assert.Equal(["path", "model", "shoppinglist", "settings"], order.Take(4));   // the model after the path, its neighbour
         Assert.Equal(ToolbarItems.Names.Length, order.Count);
         var sides = ToolbarItems.Sides(null, null);
         Assert.Equal([ToolbarItems.Path, ToolbarItems.Model], sides.Right);
@@ -241,7 +241,7 @@ public class ItemOrderTests
     [Fact]
     public void ACopy_KeepsBothOrders_ApartFromTheSource()
     {
-        var source = new AppSettingsData { ToolbarOrder = ["perf"], PerformanceBarOrder = ["ram"], ToolbarRight = ["perf"], StatusBarRight = ["usage"], HomeBarLeft = ["area:den"], HomeBarRight = ["shopping:list"], PerformanceBarLeft = ["cpu"], PerformanceBarRight = ["proc"] };
+        var source = new AppSettingsData { ToolbarOrder = ["log"], PerformanceBarOrder = ["ram"], ToolbarRight = ["log"], StatusBarRight = ["usage"], HomeBarLeft = ["area:den"], HomeBarRight = ["shopping:list"], PerformanceBarLeft = ["cpu"], PerformanceBarRight = ["proc"] };
         var copy = AppSettings.Copy(source);
         Assert.Equal(["cpu"], copy.PerformanceBarLeft);
         Assert.Equal(["proc"], copy.PerformanceBarRight);
@@ -251,8 +251,8 @@ public class ItemOrderTests
         Assert.Equal(["shopping:list"], copy.HomeBarRight);
         Assert.NotSame(source.HomeBarLeft, copy.HomeBarLeft);
         Assert.NotSame(source.HomeBarRight, copy.HomeBarRight);
-        Assert.Equal(["perf"], copy.ToolbarOrder);
-        Assert.Equal(["perf"], copy.ToolbarRight);
+        Assert.Equal(["log"], copy.ToolbarOrder);
+        Assert.Equal(["log"], copy.ToolbarRight);
         Assert.Equal(["usage"], copy.StatusBarRight);
         Assert.NotSame(source.ToolbarRight, copy.ToolbarRight);
         Assert.NotSame(source.StatusBarRight, copy.StatusBarRight);

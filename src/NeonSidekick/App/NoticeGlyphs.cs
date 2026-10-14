@@ -41,7 +41,7 @@ public static class NoticeGlyphs
     public const string Profile = ChatScreen.ProfileToolGlyph + " ";   // the toolbar's ID card since later on 2026-09-29, one source
 
     /// <summary>The performance bar (<c>/perfbar</c>, later on 2026-09-29).</summary>
-    public const string Perf = ChatScreen.PerfToolGlyph + " ";
+    public const string Perf = NeonSidekick.Perf.PerfText.Glyph + " ";   // the toolbar's 📈 until it was retired (2026-10-14)
 
     /// <summary><c>operata.md</c>, the operating rules.</summary>
     public const string Operata = "📋 ";

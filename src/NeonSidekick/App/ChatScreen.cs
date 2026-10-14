@@ -903,6 +903,8 @@ internal sealed partial class ChatScreen
     private EmbeddedLlm.EmbeddedModel? _downloading;
     private readonly ChatLog _log = new();
     private readonly Func<string, bool> _copy;
+    // The clipboard's text (2026-10-14): the input line's paste, and a right-click into a menu's filter, an info pane's find or /find's.
+    private readonly Func<string?>? _clipboardText;
     private readonly Action<string>? _setTitle;
     private readonly TimeProvider _time;
 
@@ -1287,6 +1289,7 @@ internal sealed partial class ChatScreen
         _skillTools = SkillTools(_catalog, roots, () => { var e = _effective(); return e.AgentSkills && e.ExternalSkills; }, new SkillFileAccess(_time), _skillRecords);
         _project = new ProjectFile(() => _files.Root);
         _copy = copyToClipboard ?? (_ => false);
+        _clipboardText = clipboard;
         // Everything the screen shows goes through the pane: the transcript flows above it, the
         // input row and the hint line stay on the window's last rows. The profile's name is in the
         // window title (WindowTitle), not on the row (2026-09-15).
@@ -1427,9 +1430,9 @@ internal sealed partial class ChatScreen
             mouse(true);
             holdWheel?.Invoke(true);
         };
-        _info = new InfoPane(_pane, keys, menuMouse);
+        _info = new InfoPane(_pane, keys, menuMouse, clipboard);
         _folderPane = new FolderPane(_pane, keys, menuMouse);
-        _menuPane = new MenuPane(_pane, keys, menuMouse);
+        _menuPane = new MenuPane(_pane, keys, menuMouse, clipboard);
         // The question tool's pane and the tool itself: built always (the /sys Tools tab
         // lists it either way), offered only while the setting Ask user and the pane say so (RunTurnAsync).
         _questionMenu = new QuestionMenu(_menuPane, _input);
@@ -1591,8 +1594,8 @@ internal sealed partial class ChatScreen
     /// column after it moved by three. Two more fixed glyphs later on 2026-09-29 (the user's ask): the ID card
     /// <c>/profile</c>'s notices already wore, between the gear and the tools, whose double-click is <c>/profile</c> (the
     /// picker; under a reply nothing, the command waiting for the reply and a click getting no notice), and the rising chart
-    /// after the Usage chart, whose double-click is <c>/perfbar</c> — the performance bar shown or hidden; every column after
-    /// the gear moved by three, after the Usage chart by six.
+    /// after the Usage chart, whose double-click was <c>/perfbar</c> — the performance bar shown or hidden (retired on 2026-10-14,
+    /// the user's ask: /perfbar and Ctrl+F stay); every column after the gear moved by three, after the Usage chart by six.
     /// </summary>
     public const string SettingsToolGlyph = "⚙️";
     public const string ProfileToolGlyph = "🪪";
@@ -1605,7 +1608,6 @@ internal sealed partial class ChatScreen
     public const string SysToolGlyph = "🎭";
     public const string SessionsToolGlyph = "💬";
     public const string UsageToolGlyph = "📊";
-    public const string PerfToolGlyph = Perf.PerfText.Glyph;
     public const string MemoryToolGlyph = "💾";
 
     /// <summary>
@@ -1922,7 +1924,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/perfbar</c> (later on 2026-09-29, the user's ask; the toolbar's 📈 word): one body for the idle line and the turn —
+    /// <c>/perfbar</c> (later on 2026-09-29, the user's ask; the toolbar's 📈 word until 2026-10-14, Ctrl+F's): one body for the idle line and the turn —
     /// display only, nothing reconnects, and the pane's tick adds or drops the row. Bare it hides the bar, keeping its meters,
     /// or brings them back (<see cref="PerfBarMode.Toggle"/>, the checklist's since 2026-09-30); <c>off</c> hides it; a look
     /// sets it and shows the bar. The saved profile's, as <c>/tts</c> reads it: the bar has no variable.
@@ -2222,7 +2224,6 @@ internal sealed partial class ChatScreen
         SysToolGlyph => SlashCommands.SysWord,
         SessionsToolGlyph => SlashCommands.SessionsWord,
         UsageToolGlyph => SlashCommands.UsageWord,
-        PerfToolGlyph => SlashCommands.PerfWord,
         MemoryToolGlyph => SlashCommands.MemoryWord,
         QueueToolGlyph => SlashCommands.QueueWord,   // 2026-10-13: the /queue pane
         AskToolGlyph => ToolsText.SwitchLine(ToolbarItems.Ask),
@@ -12787,7 +12788,7 @@ internal sealed partial class ChatScreen
                     return false;
                 }
 
-                await new TranscriptFind(_pane, _keys).RunAsync(args.Trim(), cancellationToken).ConfigureAwait(false);
+                await new TranscriptFind(_pane, _keys, _clipboardText).RunAsync(args.Trim(), cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Tools when args.Trim().Length > 0:

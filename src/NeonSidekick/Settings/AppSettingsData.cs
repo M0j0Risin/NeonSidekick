@@ -453,7 +453,7 @@ public sealed class AppSettingsData
     public List<string>? PerformanceBarItems { get; set; }
 
     /// <summary>
-    /// The meters a bare <c>/perfbar</c> (or the toolbar's 📈) brings back after it hid the bar (2026-09-30): what was checked when
+    /// The meters a bare <c>/perfbar</c> (or Ctrl+F) brings back after it hid the bar (2026-09-30): what was checked when
     /// it hid it; null until then, when <see cref="App.PerfBarItems.Defaults"/> (CPU, RAM, GPU and VRAM) come back. No settings
     /// row, no variable.
     /// </summary>

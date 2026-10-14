@@ -287,6 +287,43 @@ public class InfoPaneTests : IDisposable
 
     private static string Numbered(int count) => string.Join("\n", Enumerable.Range(1, count).Select(i => "line" + i));
 
+    /// <summary>The more row pages (2026-10-14, the user's ask): the strip at 100, the spacer 101, lines 1–5 from 102, the more row at 107; its count a page down.</summary>
+    [Fact]
+    public async Task AClickOnTheMoreRow_PagesDown()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        input.PushClick(0, 107);                         // no ▲ on the first page: nothing
+        input.PushClick(5, 107);                         // the count, the ▼'s side: lines 6–10
+        input.Push(Keys.Escape);
+
+        await new InfoPane(pane, keys).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20))], 0, CancellationToken.None);
+
+        Assert.Contains("\nline6\nline7\nline8\nline9\nline10\n" + MenuPane.MoreHint(5, 5, 20) + "\n", Output);
+        Assert.Contains("\nline1\n", Output);   // the first page drew before the page down
+    }
+
+    /// <summary>A paste and a right-click go onto the find (2026-10-14, the user's call): the first line of each, the matches marked.</summary>
+    [Fact]
+    public async Task APaste_AndARightClick_GoOntoTheFind()
+    {
+        _console.Profile.Width = 120;
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        input.PushPaste("al\nignored");                 // the first line: "al"
+        input.PushClick(5, 103, MouseButton.Right);      // the clipboard's "pha": "alpha"
+        input.Push(Keys.Escape, Keys.Escape);
+
+        await new InfoPane(pane, keys, clipboard: () => "pha").ShowAsync("/sys", [Lines("/sys", "alpha", "beta", "gamma alpha")], 0, CancellationToken.None);
+
+        int al = Output.IndexOf(InfoPane.FindHint("al", 0, 2), StringComparison.Ordinal);
+        int alpha = Output.IndexOf(InfoPane.FindHint("alpha", 0, 2), al, StringComparison.Ordinal);
+        Assert.True(al > 0 && alpha > al, Output);
+        Assert.DoesNotContain("ignored", Output);
+    }
+
     [Fact]
     public async Task ContentTallerThanTheWindow_IsCut_WithTheMoreRow()
     {

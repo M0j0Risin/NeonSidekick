@@ -22,6 +22,55 @@ public class TranscriptFindTests : IDisposable
 
     private ScreenPane Pane() => new(_console, new ScreenGeometry(() => null), _time) { Hint = () => "idle" };
 
+    /// <summary>Two clicks off the find close it, as every pane's do (2026-10-14, the user's ask); one is nothing, and ESC ends that one.</summary>
+    [Fact]
+    public async Task TwoClicksOffTheFind_CloseIt_OneIsNothing()
+    {
+        using var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100), _time) { Hint = () => "idle" };
+        pane.Show();
+        Fill(pane);
+        var input = new ScriptedInput();
+        var keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
+        input.PushClick(5, 60).Push(Keys.Escape);
+
+        await new TranscriptFind(pane, keys).RunAsync("", CancellationToken.None);
+
+        Assert.Null(pane.TakeDismissHit());
+        bool waited = false;
+        input.OnWait = () => { waited = true; input.Push(Keys.Escape); };   // still open after the pair: ESC, and the test fails
+        input.PushClick(5, 60).PushClick(5, 60);
+
+        await new TranscriptFind(pane, keys).RunAsync("", CancellationToken.None);
+
+        Assert.False(waited);
+        Assert.False(pane.OverlayOpen);
+    }
+
+    /// <summary>A paste and a right-click go onto the find (2026-10-14, the user's call): the first line of each; a clipboard with no text is nothing.</summary>
+    [Fact]
+    public async Task APaste_AndARightClick_GoOntoTheFind()
+    {
+        using var pane = Pane();
+        pane.Show();
+        Fill(pane);
+        var input = new ScriptedInput();
+        string? clip = "le 3\nmore";
+        input.PushPaste("app\nzzz");                    // "app": both apples
+        input.PushClick(5, 5, MouseButton.Right);        // "apple 3": the 30th alone
+        input.Push(Keys.Escape);
+
+        await new TranscriptFind(pane, new KeySource(input, TimeSpan.FromMilliseconds(1)), () => clip).RunAsync("", CancellationToken.None);
+
+        int both = _console.Output.IndexOf(TranscriptFind.Hint(1, 2), StringComparison.Ordinal);
+        int one = _console.Output.IndexOf(TranscriptFind.Hint(1, 1), both, StringComparison.Ordinal);
+        Assert.True(both > 0 && one > both, _console.Output);
+        Assert.DoesNotContain("zzz", _console.Output);
+        clip = null;
+        input.PushClick(5, 5, MouseButton.Right).Push(Keys.Escape);   // a picture alone: nothing
+        await new TranscriptFind(pane, new KeySource(input, TimeSpan.FromMilliseconds(1)), () => clip).RunAsync("", CancellationToken.None);
+        Assert.False(pane.OverlayOpen);
+    }
+
     /// <summary>Forty lines, "apple" on the 5th and the 30th (store rows 4 and 29).</summary>
     private static void Fill(ScreenPane pane)
     {

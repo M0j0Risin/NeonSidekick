@@ -3182,13 +3182,17 @@ internal sealed partial class SettingsMenu
 
     private const int DividerIndex = 3;
 
+    /// <summary>The Performance bar checklist's look button's index (2026-10-14): after <see cref="DefaultChecklistButtons"/>, where the tool bar's divider is.</summary>
+    private const int LookIndex = 3;
+
     /// <summary>
     /// Show performance bar's hint: <see cref="ToolbarToggleKeys"/>' words, the same page since 2026-10-12 (the user's ask), without
     /// the side (2026-10-13: the bar stays centred). From
     /// 2026-09-30 the page's title row also held the looks (<c>t / g / l = look</c> in the hint, a radio button per look after
-    /// default); they went the same day, and <c>/perfbar &lt;look&gt;</c> is the one way to pick it. Pinned.
+    /// default); they went on 2026-10-12, and since 2026-10-14 (the user's ask) one button after default steps through them
+    /// (<see cref="PerfBarMode.LookButton"/>, <c>l = look</c>), as the Queue pane's mode button does. Pinned.
     /// </summary>
-    public const string PerfBarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · Shift+←→ = side · a = all · n = none · d = default · ESC = back";   // the side since later on 2026-10-13 (the user's ask: pinned left, center or right)
+    public const string PerfBarToggleKeys = "Space = on or off · Shift+↑↓ = move · Shift+←→ = side · a = all · n = none · d = default · l = look · ESC = back";   // Enter left unnamed since the look came (2026-10-14), to keep one row, as the tool bar's   // the side since later on 2026-10-13 (the user's ask: pinned left, center or right)
 
     /// <summary>The Hint bar checklist's hint (2026-10-12): the toolbar's keys, the same string until the tool bar's dividers (2026-10-13). Pinned.</summary>
     public const string StatusBarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · Shift+←→ = side · a = all · n = none · d = default · ESC = back";

@@ -15,7 +15,8 @@ namespace NeonSidekick.App;
 /// Seventeen more on 2026-10-03 (the user's ask, their glyphs and names): the tool switches, each opening its group's switch
 /// (<c>/tools &lt;group&gt;</c>) and drawn on the off slab while it is off, and the log and the two viewers, each opening its
 /// window or closing it as its chord does; the user's order with them, the chart moved behind the log, and later that day
-/// behind the two viewers, the last glyph on the row and the checklist. Two more on 2026-10-04 (the user's ask): 🧮 Themes after
+/// behind the two viewers, the last glyph on the row and the checklist (📈 Performance, retired on 2026-10-14, the user's ask: the
+/// performance bar keeps /perfbar and Ctrl+F; a saved <c>perf</c> is an unknown word, dropped as any is). Two more on 2026-10-04 (the user's ask): 🧮 Themes after
 /// the profile (<c>/theme</c>'s picker) and 🪟 the Comfy thumb viewer after the Comfy viewer (<c>/comfy thumbs</c>, opening or
 /// closing the thumbnail browser) — 🪟 was SQL's until then, which took 🛢️. One more on 2026-10-05 (the user's ask): ⚡ Process
 /// after the log, <c>/process</c>'s list of the model's background processes (a pane, not a window). 📺 YouTube in the Camera live
@@ -40,7 +41,6 @@ public static class ToolbarItems
     public const string Sys = "sys";
     public const string Sessions = "sessions";
     public const string Usage = "usage";
-    public const string Perf = "perf";         // later on 2026-09-29, the user's ask: 📈, the performance bar shown or hidden
     public const string Memory = "memory";
     public const string Queue = "queue";       // 2026-10-13, the user's ask: ⏳, the /queue pane, after the disk (checked by default)
     public const string Ask = "ask";           // 2026-10-09, the user's ask: 🙋, the Ask user switch (/tools ask), between the disk and the lock
@@ -83,7 +83,7 @@ public static class ToolbarItems
     /// <summary>
     /// Every item in strip order, the path last (it sits at the row's right). The order is the user's (2026-10-03): the panes,
     /// the disk, the lock and the officer, the tool switches, the log, the two viewers, the chart (the last glyph, later on
-    /// 2026-10-03, the user's ask); Themes after Profile and the Comfy thumb viewer after the Comfy viewer (2026-10-04); Process
+    /// 2026-10-03, the user's ask; retired on 2026-10-14); Themes after Profile and the Comfy thumb viewer after the Comfy viewer (2026-10-04); Process
     /// after the log (2026-10-05); YouTube where the Camera live viewer was (2026-10-08), after the Comfy thumb viewer later that day
     /// (the user's ask); Ask between the disk and the lock (2026-10-09, the user's ask); Image after Files (2026-10-10, the user's ask); Advisors after
     /// the Claude Code advisor (later that day, the profile advisors), after Web once that one was retired (later still); Queue after
@@ -94,7 +94,7 @@ public static class ToolbarItems
     [
         Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Prompts, Queue, Ask, CmdList, Police,
         Shell, Files, Image, Web, Advisors, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
-        Log, Process, ComfyView, ComfyThumbs, YouTube, BrowserLinks, ShoppingList, Perf, Path, Model,
+        Log, Process, ComfyView, ComfyThumbs, YouTube, BrowserLinks, ShoppingList, Path, Model,
     ];
 
     /// <summary>
@@ -123,7 +123,6 @@ public static class ToolbarItems
         Sys => ChatScreen.SysToolGlyph,
         Sessions => ChatScreen.SessionsToolGlyph,
         Usage => ChatScreen.UsageToolGlyph,
-        Perf => ChatScreen.PerfToolGlyph,
         Memory => ChatScreen.MemoryToolGlyph,
         Queue => ChatScreen.QueueToolGlyph,
         Ask => ChatScreen.AskToolGlyph,
@@ -170,7 +169,6 @@ public static class ToolbarItems
         Sys => "System prompt",
         Sessions => "Sessions",
         Usage => "Usage",
-        Perf => "Performance",
         Memory => "Memory",
         Queue => "Queue",
         Ask => "Ask",
@@ -221,7 +219,6 @@ public static class ToolbarItems
         Sys => "/sys",
         Sessions => "/sessions",
         Usage => "/usage",
-        Perf => "/perfbar",
         Memory => "/memory",
         Queue => SlashCommands.QueueWord,
         CmdList => ToolsText.ShellSubLine(ToolsText.ShellAllowedWord),

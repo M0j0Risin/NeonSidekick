@@ -243,20 +243,20 @@ public partial class SettingsMenuTests
     }
 
     [Fact]
-    public void TheUncensoredColumn_MarksEachKind_ANormalModelBlank()
+    public void TheUncensoredColumn_MarksEveryUncensoredBuild_ANormalModelBlank()
     {
-        // Later on 2026-09-29 (the user's picks): ⛓️‍💥 an uncensored build after 🛠️; an aggressive one ⛓️‍💥⚔️ since 2026-10-02 (💢 until then).
+        // Later on 2026-09-29 (the user's picks): ⛓️‍💥 an uncensored build after 🛠️; an aggressive one wore ⛓️‍💥⚔️ from 2026-10-02 (💢 until
+        // then) until 2026-10-14 (the user's ask: one mark for every uncensored build).
         Assert.Equal("⛓️‍💥", EmbeddedLlmText.UncensoredGlyph);
-        Assert.Equal("⛓️‍💥⚔️", EmbeddedLlmText.AggressiveGlyph);
-        Assert.Equal(4, TextCells.Width(EmbeddedLlmText.AggressiveGlyph));   // the chain's two cells and the swords' two
         Assert.Equal(2, TextCells.Width(EmbeddedLlmText.UncensoredGlyph));   // one glyph in two cells, as Windows Terminal draws the ZWJ sequence
         var balanced = EmbeddedModelCatalog.Find("gemma-4-12b-qat-uncensored")!;
         var aggressive = EmbeddedModelCatalog.Find("gemma-4-e2b-uncensored")!;
         var normal = EmbeddedModelCatalog.Find("gemma-4-12b")!;
         Assert.Equal(Marks + "  ⛓️‍💥", EmbeddedLlmText.CapabilityColumns(balanced, "", 0));
-        Assert.EndsWith("  👁️  🛠️  ⛓️‍💥⚔️", EmbeddedLlmText.CapabilityColumns(aggressive, "", 0));
+        Assert.EndsWith("  👁️  🛠️  ⛓️‍💥", EmbeddedLlmText.CapabilityColumns(aggressive, "", 0));   // HauhauCS's "Aggressive" build: the one mark
         Assert.Equal(Marks, EmbeddedLlmText.CapabilityColumns(normal, "", 0));
-        Assert.EndsWith("  ⛓️‍💥⚔️", SettingsMenu.EmbeddedModelLabel(aggressive, EmbeddedModelState.Absent));
+        Assert.EndsWith("  ⛓️‍💥", SettingsMenu.EmbeddedModelLabel(aggressive, EmbeddedModelState.Absent));
+        Assert.DoesNotContain("⚔️", SettingsMenu.EmbeddedModelLabel(aggressive, EmbeddedModelState.Absent));
     }
 
     [Fact]

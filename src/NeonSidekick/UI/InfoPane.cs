@@ -112,6 +112,9 @@ public sealed class InfoPane
     private int _shown;
     private int _count;
     private int _stripRows = 1;
+    // Whether the last draw put the more row under the content (2026-10-14: a click on it pages).
+    private bool _moreShown;
+    private readonly Func<string?>? _clipboard;
     private int _width = int.MaxValue;
 
     // The tallest tab's content lines and the width they were laid out at (2026-10-01): every tab is padded to it, so the
@@ -143,11 +146,13 @@ public sealed class InfoPane
     private bool _seek;
 
     /// <param name="mouse">Takes (true) or hands back (false) the console's mouse; null when the screen has none to take.</param>
-    public InfoPane(ScreenPane pane, KeySource keys, Action<bool>? mouse = null)
+    /// <param name="clipboard">The clipboard's text a right-click pastes into the find (2026-10-14, the user's call); null = a right-click is nothing.</param>
+    public InfoPane(ScreenPane pane, KeySource keys, Action<bool>? mouse = null, Func<string?>? clipboard = null)
     {
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
         _keys = keys ?? throw new ArgumentNullException(nameof(keys));
         _mouse = mouse;
+        _clipboard = clipboard;
         _clicks = new DoubleClick(pane.Time);
     }
 
@@ -469,8 +474,9 @@ public sealed class InfoPane
                 if (input is InputEvent.Click click)
                 {
                     // A left click on the × at the corner is ESC (2026-09-18), one on a tab's title
-                    // that tab, a second off the pane within the interval the close too; the label,
-                    // a gap, the content, a right click and a drag are nothing.
+                    // that tab, a second off the pane within the interval the close too, one on the more row's ▲ or ▼ a page
+                    // (2026-10-14); a right click pastes the clipboard's text into the find (2026-10-14, Ctrl+V's paste too); the
+                    // label, a gap, the content and a drag are nothing.
                     if (click.Button == MouseButton.Left && _pane.TryHitClose(click.X, click.Y))
                     {
                         return;
@@ -492,7 +498,19 @@ public sealed class InfoPane
                     _clicks.Reset();
                     var shown = Shown(tabs);
                     var toggle = tabs[active].Toggle;
-                    if (click.Button == MouseButton.Left && _pane.TryHitOverlay(click.X, click.Y, out int at) && at < _stripRows
+                    if (click.Button == MouseButton.Right && _clipboard?.Invoke() is { } clip && MenuFilter.Pasted(_find, clip) is { } clipped)
+                    {
+                        _find = clipped;
+                        _findMoved = true;
+                        redraw = true;
+                    }
+                    else if (click.Button == MouseButton.Left && _pane.TryHitOverlay(click.X, click.Y, out int moreAt) && _moreShown && moreAt == _stripRows + 1 + _shown
+                        && MenuPane.MoreStep(click.X, "", _first, _shown, _count) is int dir)
+                    {
+                        // The more row (2026-10-14, the user's ask): its ▲ a page up, its ▼ (or the count after it) a page down, as the keys.
+                        first = Math.Clamp(_first + dir * Math.Max(1, _shown), 0, Math.Max(0, _count - _shown));
+                    }
+                    else if (click.Button == MouseButton.Left && _pane.TryHitOverlay(click.X, click.Y, out int at) && at < _stripRows
                         && TabAt(label, toggle is null ? shown : [.. shown, toggle.Title], _width, click.X, at) is int hit)
                     {
                         // The toggle's title is the one past the tabs' (2026-10-12).
@@ -516,6 +534,19 @@ public sealed class InfoPane
                     // A notch away from the user scrolls up, like ↑ three times; clamped like the keys.
                     _clicks.Reset();
                     first = Math.Clamp(_first - wheel.Notches * WheelLines, 0, Math.Max(0, _count - _shown));
+                }
+                else if (input is InputEvent.Paste paste)
+                {
+                    // Into the find (2026-10-14, the user's call: dropped until then): its first line, the typed find's cap.
+                    _clicks.Reset();
+                    if (MenuFilter.Pasted(_find, paste.Text) is not { } pasted)
+                    {
+                        continue;
+                    }
+
+                    _find = pasted;
+                    _findMoved = true;
+                    redraw = true;
                 }
                 else if (input is not InputEvent.Key { Info: var k })
                 {
@@ -766,6 +797,7 @@ public sealed class InfoPane
         }
 
         bool more = _shown < _count;
+        _moreShown = more;
         int pad = Math.Min(Math.Max(_tallest, _count), Math.Max(0, capacity)) - (_shown + (more ? 1 : 0));
 
         // The spacer is a space, not an empty Text: Rows adds a line break only after a child that

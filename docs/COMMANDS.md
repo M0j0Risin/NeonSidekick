@@ -133,7 +133,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 |---|---|
 | `/cwd [<path>\|~\|browse]` | Shows or changes the working directory (a missing folder is created); `~` is the profile's `files` folder, `browse` the [folder picker](INTERFACE.md#folder-picker). |
 | `/tree [<path>]` | A tree of the working directory in a pane; hidden entries per *File browser/tree mode*, `.git` only when named. |
-| `/browse [<folder>]` | Browses the working directory as a tree; Enter opens a file in its default app. See [File browser](INTERFACE.md#file-browser). |
+| `/browse [<folder>]` | Browses the working directory as a tree; Enter or a double-click opens a file in its default app. See [File browser](INTERFACE.md#file-browser). |
 | `/explore [<folder>]` | Opens the working directory, or a folder in it, in your file browser. |
 | `/open <file>` | Opens a file from the working directory in its default app. |
 | `/vault [<path>]` | A tree of the *Obsidian vault*, like `/tree`; needs *Obsidian tools* on. |

@@ -36,11 +36,16 @@ public sealed class TranscriptFind
 
     private readonly ScreenPane _pane;
     private readonly KeySource _keys;
+    private readonly Func<string?>? _clipboard;
+    private readonly DoubleClick _clicks;
 
-    public TranscriptFind(ScreenPane pane, KeySource keys)
+    /// <param name="clipboard">The clipboard's text a right-click pastes into the find (2026-10-14, the user's call); null = a right-click is nothing.</param>
+    public TranscriptFind(ScreenPane pane, KeySource keys, Func<string?>? clipboard = null)
     {
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
         _keys = keys ?? throw new ArgumentNullException(nameof(keys));
+        _clipboard = clipboard;
+        _clicks = new DoubleClick(pane.Time);
     }
 
     /// <summary>
@@ -116,6 +121,46 @@ public sealed class TranscriptFind
                 if (input is InputEvent.Click { Button: MouseButton.Left } click && _pane.TryHitClose(click.X, click.Y))
                 {
                     return;
+                }
+
+                if (input is InputEvent.Click { Button: MouseButton.Left } outside && _pane.TryHitOutside(outside.X, outside.Y))
+                {
+                    // Two off the pane within the interval close it, as every pane's do (2026-10-14, the user's ask: only the × did), on the
+                    // same part, the dismiss kept for the screen's close-or-switch.
+                    if (_clicks.Second(_pane.OutsideKey(outside.X, outside.Y)))
+                    {
+                        _pane.Dismiss(outside.X, outside.Y);
+                        return;
+                    }
+
+                    continue;
+                }
+
+                if (input is InputEvent.Drag or InputEvent.Release)
+                {
+                    // A jiggle between the two presses of a double-click keeps the pair, as does the release between them.
+                    continue;
+                }
+
+                _clicks.Reset();
+                string? pastedText = input switch
+                {
+                    InputEvent.Paste paste => paste.Text,
+                    InputEvent.Click { Button: MouseButton.Right } => _clipboard?.Invoke(),
+                    _ => null,
+                };
+                if (pastedText is not null)
+                {
+                    // A paste, Ctrl+V's or a right-click's (2026-10-14, the user's call: neither landed): its first line onto the find, the
+                    // typed find's cap (MenuFilter.Pasted, the menus' filter's rule).
+                    if (MenuFilter.Pasted(find, pastedText) is { } grown)
+                    {
+                        find = grown;
+                        Search();
+                        Show();
+                    }
+
+                    continue;
                 }
 
                 if (input is not InputEvent.Key { Info: var k })

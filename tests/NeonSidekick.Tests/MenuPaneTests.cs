@@ -938,6 +938,64 @@ public class MenuPaneTests : IDisposable
         menu.Close();
     }
 
+    /// <summary>The more row pages (2026-10-14, the user's ask): no ▲ on the first page, so its cell is nothing; the ▼'s side a page down.</summary>
+    [Fact]
+    public async Task AClickOnTheMoreRow_Pages_ABlankArrowIsNothing()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var menu = new MenuPane(pane, keys);
+        var rows = Enumerable.Range(1, 10).Select(i => "row " + i).ToArray();
+        // Opened on row 1: rows 1–5 at 102–106, the more row "  ▼ 1–5 of 10" at 107 ("▲"'s place a space).
+        input.PushClick(2, 107);                         // the ▲'s blank: nothing
+        input.PushClick(6, 107);                         // the count, the ▼'s side: a page down, row 6
+        input.Push(Keys.Enter);
+
+        Assert.Equal(new MenuPick(0, 5), await menu.PickAsync(Page(rows), 0, CancellationToken.None));
+        Assert.Contains(MenuPane.MoreHint(0, 5, 10), Output);
+        menu.Close();
+    }
+
+    /// <summary>A right-click on a page with a filter pastes the clipboard's first line there, as Ctrl+V's paste does (2026-10-14, the user's call); without a filter it is nothing.</summary>
+    [Fact]
+    public async Task ARightClick_PastesIntoTheFilter_OnlyWhereThereIsOne()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var menu = new MenuPane(pane, keys, clipboard: () => "fox\nbar");
+        input.PushClick(5, 102, MouseButton.Right);
+
+        var picked = await menu.PickAsync(Page("one", "two") with { Filter = "" }, 0, CancellationToken.None);
+
+        Assert.Equal("fox", picked!.Value.Filter);
+        input.PushClick(5, 102, MouseButton.Right);      // no filter on this page: nothing
+        input.Push(Keys.Enter);
+        Assert.Equal(new MenuPick(0, 0), await menu.PickAsync(Page("one", "two"), 0, CancellationToken.None));
+        menu.Close();
+    }
+
+    [Theory]
+    [InlineData(0, 2, null)]    // the first page: no ▲, the pointer's blank and its cell are nothing
+    [InlineData(0, 3, 1)]       // the ▼
+    [InlineData(0, 12, 1)]      // the count after it
+    [InlineData(5, 0, -1)]      // a middle page: the lead and the ▲ page up
+    [InlineData(5, 2, -1)]
+    [InlineData(5, 3, 1)]
+    [InlineData(15, 3, null)]   // the last page: no ▼
+    [InlineData(15, 1, -1)]
+    public void MoreStep_IsTheArrowsColumns(int first, int x, int? step) =>
+        Assert.Equal(step, MenuPane.MoreStep(x, MenuPane.NoPointer, first, 5, 20));
+
+    [Fact]
+    public void MoreStep_WithNoLead_StartsAtColumnZero()
+    {
+        Assert.Equal(-1, MenuPane.MoreStep(0, "", 5, 5, 20));   // the info panes' row: the ▲ at 0
+        Assert.Equal(1, MenuPane.MoreStep(1, "", 5, 5, 20));
+        Assert.Null(MenuPane.MoreStep(0, "", 0, 5, 20));
+    }
+
     // ── The mouse ───────────────────────────────────────────────────────────
 
     /// <summary>A pane whose cursor row the geometry reports (the click's frame) over a scripted source that carries clicks.</summary>
@@ -1110,7 +1168,7 @@ public class MenuPaneTests : IDisposable
         var rows = Enumerable.Range(1, 10).Select(i => "row " + i).ToArray();
         // Opened on row 10: the viewport shows rows 6–10 (buffer rows 102–106), the more row at 107.
         input.PushClick(0, 103);                         // the second shown row = "row 7"
-        input.PushClick(0, 107);                         // the more row: nothing
+        input.PushClick(30, 107);                        // the more row past its text, no ▼ on the last page: nothing (its ▲ pages since 2026-10-14)
         input.Push(Keys.Enter);
 
         Assert.Equal(new MenuPick(0, 6), await menu.PickAsync(Page(rows), 9, CancellationToken.None));

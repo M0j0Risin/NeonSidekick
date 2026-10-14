@@ -425,7 +425,7 @@ public class TextCellsTests
     [InlineData("\U0001F468‍\U0001F469‍\U0001F467", 2)]   // 👨‍👩‍👧: the family, three pairs joined, two cells
     [InlineData("\U0001F4A2", 2)]                // 💢: a pair alone (the aggressive build's mark until 2026-10-02)
     [InlineData("⚔️", 2)]              // ⚔️: the crossed swords, Neutral bare, two cells with the selector
-    [InlineData("⛓️‍💥⚔️", 4)]   // ⛓️‍💥⚔️ (2026-10-02): the aggressive build's mark, the chain and the swords side by side
+    [InlineData("⛓️‍💥⚔️", 4)]   // ⛓️‍💥⚔️: the chain and the swords side by side (the aggressive build's mark from 2026-10-02 until 2026-10-14)
     public void Width_CountsCells(string text, int cells)
     {
         Assert.Equal(cells, TextCells.Width(text));

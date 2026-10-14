@@ -766,9 +766,10 @@ public sealed class KeySource : IAnsiConsoleInput
                         }
                     }
 
-                    if (editor is not null && e is not (null or InputEvent.Wheel or InputEvent.Click))
+                    if (editor is not null && e is not (null or InputEvent.Click) && (e is not InputEvent.Wheel || editor.ListOpen))
                     {
-                        // The live row (2026-09-25): a key, a paste, a drag or a release (2026-09-28) edits the draft as at the idle line.
+                        // The live row (2026-09-25): a key, a paste, a drag or a release (2026-09-28) edits the draft as at the idle line; a
+                        // wheel notch too while its completion list is open (2026-10-14: over the list it moves the highlight, off it the transcript scrolls).
                         if (!await FeedAsync(editor, e, onLine, stop).ConfigureAwait(false))
                         {
                             return accepted ? Interrupt.Accept : Interrupt.None;

@@ -1231,9 +1231,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(HintsBarMode.Off, SettingsMenu.FieldValue(SettingsField.HintsBar, new AppSettingsData { HintsBar = " OFF " }, _settings.ProfileDirectory));
         Assert.Equal(HintsBarMode.Auto, SettingsMenu.FieldValue(SettingsField.HintsBar, new AppSettingsData { HintsBar = "nonsense" }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.HintsBar) || SettingsMenu.IsLlmField(SettingsField.HintsBar));
-        Assert.Equal("13 of 42", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults (📣 since 2026-10-14; ⏳ since 2026-10-13, of 40 with it; 🌄 since 2026-10-10): 5 of 13 from later on 2026-09-29, 3 from 2026-10-02; of 30 and 7 from 2026-10-03; 10 since 2026-10-05; of 39 with Model name, 2026-10-12
+        Assert.Equal("13 of 41", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults (📣 since 2026-10-14; ⏳ since 2026-10-13, of 40 with it; 🌄 since 2026-10-10): 5 of 13 from later on 2026-09-29, 3 from 2026-10-02; of 30 and 7 from 2026-10-03; 10 since 2026-10-05; of 39 with Model name, 2026-10-12
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [] }, _settings.ProfileDirectory));
-        Assert.Equal("3 of 42", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = ["usage", "PATH", " tools ", "nonsense"] }, _settings.ProfileDirectory));
+        Assert.Equal("3 of 41", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = ["usage", "PATH", " tools ", "nonsense"] }, _settings.ProfileDirectory));
         Assert.Equal("all", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [.. ToolbarItems.Names] }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ToolbarItems) || SettingsMenu.IsLlmField(SettingsField.ToolbarItems) || SettingsMenu.IsTtsField(SettingsField.ToolbarItems) || SettingsMenu.IsVoiceField(SettingsField.ToolbarItems));
         // Welcome splash (2026-09-18): the General tab's row before Show working directory (the user's order), no reconnect; a picker since 2026-09-24.
@@ -3343,7 +3343,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\neon\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     13 of 42\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
+        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     13 of 41\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
         Assert.DoesNotContain("File /tree max entries", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -3367,7 +3367,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"/profiles/neon/files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     13 of 42\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
+        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     13 of 41\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
         Assert.DoesNotContain("File /tree max entries", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -4773,9 +4773,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("[ ] 📂  Working directory path", Output);
         Assert.Contains("[ ] 🔌  MCP", Output);
         Assert.Contains("[ ] 🪪  Profile", Output);
-        Assert.Contains("[ ] 📈  Performance", Output);
-        Assert.Contains("  · Tool bar: 12 of 42", Output);   // "Toolbar" until later on 2026-10-12
-        Assert.Contains("  · Tool bar: 11 of 42", Output);
+        Assert.DoesNotContain("📈  Performance", Output);   // retired (2026-10-14)
+        Assert.Contains("  · Tool bar: 12 of 41", Output);   // "Toolbar" until later on 2026-10-12
+        Assert.Contains("  · Tool bar: 11 of 41", Output);
         pane.Dispose();
     }
 
@@ -4842,10 +4842,11 @@ public partial class SettingsMenuTests : IDisposable
     /// <summary>
     /// Show performance bar as a checklist (2026-09-30, the user's ask): Enter flips a meter and saves at once, in the bar's
     /// order; N unchecks every meter, which saves the empty list — no bar (null until 2026-10-02, when null became the four).
-    /// The looks were title-row buttons (T, G, L) until 2026-10-12 (the user's call): G is nothing now, the look kept.
+    /// The looks were title-row buttons (T, G, L) until 2026-10-12 (the user's call): G is nothing now. Since 2026-10-14 (the user's ask)
+    /// one button steps them, L: text to gauge here, saved with the row's notice.
     /// </summary>
     [Fact]
-    public async Task OnThePane_ShowPerformanceBar_ChecksMeters_TheLookIsNoButton()
+    public async Task OnThePane_ShowPerformanceBar_ChecksMeters_TheLookButtonSteps()
     {
         _settings.Update(d => { d.PerformanceBarItems = []; d.PerformanceBarLook = "text"; });   // from no bar (the four show by default since 2026-10-02)
         var (menu, pane) = PaneMenu();
@@ -4853,19 +4854,23 @@ public partial class SettingsMenuTests : IDisposable
         Push(Keys.Enter);
         Push(Keys.Down, Keys.Enter);            // RAM
         Push(Keys.Up, Keys.Enter);              // CPU
-        Push(Keys.Char('g'));                   // no look button: the look stays text
+        Push(Keys.Char('g'));                   // no button of its own: the look stays text
+        Push(Keys.Char('l'));                   // the look button: text to gauge (2026-10-14)
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["cpu", "ram"], _settings.Current.PerformanceBarItems);
-        Assert.Equal("text", _settings.Current.PerformanceBarLook);
+        Assert.Equal("gauge", _settings.Current.PerformanceBarLook);
         Assert.Contains(SettingsMenu.PerfBarToggleKeys, Output);
         Assert.Contains(SettingsMenu.SelectAllButton, Output);
+        Assert.Contains(PerfBarMode.LookButton(PerfBarStyle.Text), Output);
+        Assert.Contains(PerfBarMode.LookButton(PerfBarStyle.Gauge), Output);   // the page again, the button on the new look
         Assert.Contains("  · Performance bar: CPU, RAM · text", Output);
+        Assert.Contains("  · Performance bar: CPU, RAM · gauge", Output);
         Assert.DoesNotContain("◔ gauge", Output);
         Assert.DoesNotContain("t / g / l", Output);
-        Assert.Equal(SettingsMenu.PerfBarToggleKeys, SettingsMenu.StatusBarToggleKeys);   // the sides since later on 2026-10-13: the hint bar's keys; the tool bar's name + too
+        Assert.Contains("l = look", SettingsMenu.PerfBarToggleKeys);   // the hint bar's keys and the look (2026-10-14); the tool bar's name + too
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
@@ -4877,7 +4882,7 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Empty(_settings.Current.PerformanceBarItems!);   // none saves as the empty list (null is the four since 2026-10-02)
-        Assert.Equal("text", _settings.Current.PerformanceBarLook);   // the look stays for the next meter checked
+        Assert.Equal("gauge", _settings.Current.PerformanceBarLook);   // the look the button left stays for the next meter checked
         pane.Dispose();
     }
 
@@ -5158,7 +5163,7 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Null(_settings.Current.ToolbarItems);
-        Assert.Contains("  · Tool bar: 13 of 42", Output);
+        Assert.Contains("  · Tool bar: 13 of 41", Output);
         pane.Dispose();
     }
 

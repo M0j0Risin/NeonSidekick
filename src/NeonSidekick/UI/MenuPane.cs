@@ -416,6 +416,21 @@ public sealed class MenuPane : INoticeSink
             count.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
     /// <summary>
+    /// Which way a click on a <see cref="MoreHint"/> row pages (2026-10-14, the user's ask: the row took no click), drawn at column 0
+    /// after <paramref name="lead"/>: −1 left of the <c>▼</c>'s column while the <c>▲</c> is drawn (the lead and the <c>▲</c>), +1 on
+    /// the <c>▼</c> or the count after it while the <c>▼</c> is drawn, null otherwise — the arrows touch, so each one's target is its cell
+    /// and its outer side. The menus, the folder pane, the info panes and the input line's completion list share it. Pure.
+    /// </summary>
+    public static int? MoreStep(int x, string lead, int first, int shown, int count)
+    {
+        ArgumentNullException.ThrowIfNull(lead);
+        bool up = first > 0;
+        bool down = first + shown < count;
+        int downAt = TextCells.Width(lead) + TextCells.Width(up ? "▲" : " ");
+        return x < downAt ? (up && x >= 0 ? -1 : null) : down ? +1 : null;
+    }
+
+    /// <summary>
     /// A <see cref="MenuFooter"/> laid out for <paramref name="width"/> cells: its text wrapped (<see cref="CaptionRows"/>) to the
     /// <see cref="FooterRows"/> its last line leaves, then that line cut to the width. Pure.
     /// </summary>
@@ -513,12 +528,15 @@ public sealed class MenuPane : INoticeSink
     private readonly ScreenPane _pane;
     private readonly KeySource _keys;
     private readonly Action<bool>? _mouse;
+    private readonly Func<string?>? _clipboard;
     private readonly DoubleClick _clicks;
     private readonly List<(NoticeKind Kind, string Text)> _status = new();
     private MenuPage? _page;
     private int _cursor;
     private int _first;
     private int _shown;
+    // Whether the last draw put the more row under the shown rows (2026-10-14: a click on it pages).
+    private bool _moreShown;
     private int _captionRows;
     private int _stripRows = 1;
     private int _subRows;
@@ -532,11 +550,14 @@ public sealed class MenuPane : INoticeSink
     private IReadOnlyList<MenuGridLine> _lines = [];
 
     /// <param name="mouse">Takes (true) or hands back (false) the console's mouse; null when the screen has none to take.</param>
-    public MenuPane(ScreenPane pane, KeySource keys, Action<bool>? mouse = null)
+    /// <param name="clipboard">The clipboard's text a right-click pastes into a page's filter (2026-10-14, the user's call: Ctrl+V's paste already
+    /// landed there); null = a right-click is nothing.</param>
+    public MenuPane(ScreenPane pane, KeySource keys, Action<bool>? mouse = null, Func<string?>? clipboard = null)
     {
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
         _keys = keys ?? throw new ArgumentNullException(nameof(keys));
         _mouse = mouse;
+        _clipboard = clipboard;
         _clicks = new DoubleClick(pane.Time);
     }
 
@@ -597,10 +618,19 @@ public sealed class MenuPane : INoticeSink
         ConsoleKey.RightArrow => page.StopFrom(from + 1, +1, wrap: true),
         ConsoleKey.UpArrow => MenuGrid.Vertical(_lines, from, -1, wrap: true),
         ConsoleKey.DownArrow => MenuGrid.Vertical(_lines, from, +1, wrap: true),
-        ConsoleKey.PageUp => MenuGrid.Vertical(_lines, from, -1, wrap: false, Math.Max(1, _shown - 1)),
-        ConsoleKey.PageDown => MenuGrid.Vertical(_lines, from, +1, wrap: false, Math.Max(1, _shown - 1)),
+        ConsoleKey.PageUp => PagedFrom(page, from, -1),
+        ConsoleKey.PageDown => PagedFrom(page, from, +1),
         _ => null,
     };
+
+    /// <summary>
+    /// Where a page up (<paramref name="dir"/> −1) or down (+1) takes the cursor from <paramref name="from"/>: a grid's view of lines, the
+    /// same column, stopping at the ends; a list's view of rows onto a stop the way it went. PgUp/PgDn and the more row's arrows (2026-10-14).
+    /// </summary>
+    private int PagedFrom(MenuPage page, int from, int dir) =>
+        page.Grid is not null ? MenuGrid.Vertical(_lines, from, dir, wrap: false, Math.Max(1, _shown - 1))
+        : dir > 0 ? page.StopFrom(Math.Min(Math.Max(0, page.Rows.Count - 1), from + Math.Max(1, _shown)), +1)
+        : page.StopFrom(Math.Max(0, from - Math.Max(1, _shown)), -1);
 
     /// <summary>A status line: the transcript's glyph and colour for the kind. Escaped.</summary>
     public static string StatusMarkup(NoticeKind kind, string text) => kind switch
@@ -760,12 +790,20 @@ public sealed class MenuPane : INoticeSink
                 {
                     // A left click on a shown row is the arrow keys' move, a second on the same row
                     // within DoubleClick.Interval is Enter (2026-09-18), one on a tab's title the
-                    // tab keys'; the label, a gap in the strip, the status, the more row, a slot-less
-                    // miss, a right click and a drag are nothing — but two left clicks off the pane
+                    // tab keys', one on the more row's ▲ or ▼ PgUp's or PgDn's (2026-10-14); the label, a gap in the strip, the status, a
+                    // slot-less miss and a drag are nothing, and a right click is too but on a page with a filter, where it pastes the
+                    // clipboard's text as Ctrl+V does (2026-10-14) — but two left clicks off the pane
                     // (the transcript, a rule, the hint row) within the interval dismiss every level.
                     if (click.Button != MouseButton.Left)
                     {
                         _clicks.Reset();
+                        if (click.Button == MouseButton.Right && page.Filter is { } clipFilter && _clipboard?.Invoke() is { } clip
+                            && MenuFilter.Pasted(clipFilter, clip) is { } clipped)
+                        {
+                            _status.Clear();
+                            return new MenuPick(page.Tab, _cursor, Filter: clipped, Sub: page.Sub);
+                        }
+
                         continue;
                     }
 
@@ -821,6 +859,16 @@ public sealed class MenuPane : INoticeSink
                     {
                         // The side column (2026-10-02): it shows, it picks nothing.
                         _clicks.Reset();
+                    }
+                    else if (_moreShown && count > 0 && at - Header == _shown)
+                    {
+                        // The more row (2026-10-14, the user's ask): its ▲ a page up, its ▼ (or the count after it) a page down, as the keys.
+                        _clicks.Reset();
+                        var (moreFirst, moreShown, moreCount) = page.Grid is not null ? MenuGrid.CellSpan(_lines, _first, _shown) : (_first, _shown, count);
+                        if (MoreStep(click.X, NoPointer, moreFirst, moreShown, moreCount) is int dir)
+                        {
+                            MoveTo(PagedFrom(page, _cursor, dir));
+                        }
                     }
                     else if (page.Grid is { } grid)
                     {
@@ -1032,8 +1080,8 @@ public sealed class MenuPane : INoticeSink
                     case ConsoleKey.DownArrow or ConsoleKey.UpArrow: next = 0; break;
                     case ConsoleKey.Home: next = page.StopFrom(0, +1); break;
                     case ConsoleKey.End: next = page.StopFrom(count - 1, -1); break;
-                    case ConsoleKey.PageDown: next = page.StopFrom(Math.Min(Math.Max(0, count - 1), _cursor + Math.Max(1, _shown)), +1); break;
-                    case ConsoleKey.PageUp: next = page.StopFrom(Math.Max(0, _cursor - Math.Max(1, _shown)), -1); break;
+                    case ConsoleKey.PageDown: next = PagedFrom(page, _cursor, +1); break;
+                    case ConsoleKey.PageUp: next = PagedFrom(page, _cursor, -1); break;
                     case ConsoleKey.Backspace when page.BackspaceRow is { } none && none >= 0 && none < count: next = none; break;
                 }
 
@@ -1391,6 +1439,7 @@ public sealed class MenuPane : INoticeSink
             (_first, _shown) = Viewport(page.Rows.Count, _cursor, capacity, _first);
             more = _shown < page.Rows.Count;
         }
+        _moreShown = more;
         // The second strip (2026-10-10) is drawn in the header but counts in the tab's body height: the padding is the less by it.
         int pad = Math.Min(TabBodyRows(page, Width, captionMax) - _subRows, _captionRows + Math.Max(0, capacity)) - (_captionRows + _shown + (more ? 1 : 0));
         if (_sideWidth > 0)

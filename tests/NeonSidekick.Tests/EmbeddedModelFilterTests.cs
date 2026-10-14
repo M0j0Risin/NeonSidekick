@@ -108,12 +108,6 @@ public class EmbeddedModelFilterTests
         Assert.All(uncensored, m => Assert.Contains("HauhauCS", m.Repository, StringComparison.Ordinal));   // every one is a HauhauCS build
         Assert.All(EmbeddedModelCatalog.Models.Where(m => m.Repository.StartsWith("HauhauCS/", StringComparison.Ordinal)), m => Assert.True(m.Uncensored, m.Id));
 
-        // Aggressive exactly where the repository's own name says so (later on 2026-09-29): HauhauCS's E2B/E4B, Qwen3.6 35B A3B and Qwen3.8 27B.
-        Assert.Equal(
-            ["gemma-4-e2b-uncensored", "gemma-4-e4b-uncensored", "qwen3.6-35b-a3b-uncensored", "qwen3.8-27b-uncensored", "qwen3.8-27b-uncensored-q5"],
-            EmbeddedModelCatalog.Models.Where(m => m.UncensoredKind == UncensoredKind.Aggressive).Select(m => m.Id).Order(StringComparer.Ordinal));
-        Assert.All(uncensored.Where(m => m.UncensoredKind != UncensoredKind.Aggressive), m => Assert.Equal(UncensoredKind.Uncensored, m.UncensoredKind));
-        Assert.All(EmbeddedModelCatalog.Models.Where(m => !m.Uncensored), m => Assert.Equal(UncensoredKind.None, m.UncensoredKind));
 
         var filter = new EmbeddedModelFilter(null, true);
         Assert.True(filter.Matches(Model("B Uncensored", 1_000_000_000)));

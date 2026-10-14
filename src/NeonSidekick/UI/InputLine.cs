@@ -394,6 +394,12 @@ public sealed partial class InputLine
     public static int DraftWordPairKey(int wordStart) => 1_000_000 + wordStart;
 
     /// <summary>
+    /// What two clicks on the completion list must share to pair into its pick (2026-10-14, the user's ask: the list took no click): the
+    /// match's index, above every <see cref="DraftWordPairKey"/> a draft holds, so a press on the list and one on the draft never pair. Pinned.
+    /// </summary>
+    public static int ListPairKey(int index) => 2_000_000 + index;
+
+    /// <summary>
     /// What two clicks on the draft's gutter (the prompt glyph, or a continuation row's indent) must share to pair into the whole
     /// draft's selection (2026-10-12, the user's ask): above every <see cref="HintPairKey"/> and below <see cref="DraftWordPairKey"/>'s
     /// first, so a press on the glyph and one on the first letter never pair. Pinned.

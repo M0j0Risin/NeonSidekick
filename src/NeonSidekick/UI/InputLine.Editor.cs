@@ -114,6 +114,8 @@ public sealed partial class InputLine
         // The completion list (@-mention, command, argument, #skill, $tool, %connection, ^workflow): open while `_list` is
         // set; `_dismissed` is the word ESC closed it on, so a cursor move over the same word does not bring it straight back.
         private MentionList? _list;
+        // How many matches the drawn list shows (2026-10-14, the mouse on the list): its rows from the overlay's first, then the more row.
+        private int _listShown;
         private (int Start, string Query)? _dismissed;
         private ReadOptions _o = new();
         // The empty-line hooks a live read keeps (2026-09-28, SetLiveHooks): the picture strip's keys under a reply.
@@ -423,10 +425,17 @@ public sealed partial class InputLine
             if (input is InputEvent.Wheel wheel)
             {
                 // The wheel scrolls the transcript region (the app holds the mouse for the
-                // screen, 2026-09-17), the draft and the list untouched — unless a pane is open
+                // screen, 2026-09-17), the draft untouched — unless a pane is open
                 // over the line (a settings slot under a menu: the pane is modal, the notch is
-                // nothing there). Never the cancel the null key below means.
-                if (!pane.OverlayOpen)
+                // nothing there). Never the cancel the null key below means. Over an open completion list it moves the
+                // highlight a row a notch, never wrapping, and off it the transcript scrolls, as a menu's wheel does (2026-10-14,
+                // the user's ask; the list counted as a pane until then, and the notch was nothing).
+                if (_list is { } listed && pane.TryHitOverlay(wheel.X, wheel.Y, out _))
+                {
+                    _list = listed.Step(-wheel.Notches);
+                    ShowList();
+                }
+                else if (_list is not null || !pane.OverlayOpen)
                 {
                     pane.ScrollWheel(wheel.Notches);
                 }
@@ -960,6 +969,11 @@ public sealed partial class InputLine
             var pane = _line._pane;
             var hintClicks = _line._hintClicks;
             EndPictureDrag();
+            if (_list is { } open && pane.TryHitOverlay(click.X, click.Y, out int listRow))
+            {
+                return ClickList(open, listRow, click);
+            }
+
             // A left click on the area puts the cursor under it and anchors a selection there
             // (a drag extends it); a right click pastes there, over the selection if any.
             // Neither is typing: the draft, the history and the push-to-talk rule see nothing.
@@ -1196,6 +1210,37 @@ public sealed partial class InputLine
             }
 
             _anchor = -1;
+        }
+
+        // A click on the open completion list (2026-10-14, the user's ask: it took no click, the draft's paste or nothing): a left one on a
+        // match is the arrows' move, a second on the same match within the interval its pick (Enter's), as a menu's rows are; one on the
+        // more row pages (MenuPane.MoreStep); the truncated note, a right click (no paste over the list) and anything else are nothing.
+        // Idle and under a reply alike: ahead of the live read's decline.
+        private EditOutcome ClickList(MentionList open, int row, InputEvent.Click click)
+        {
+            var hintClicks = _line._hintClicks;
+            _anchor = -1;
+            if (click.Button == MouseButton.Left && row < _listShown)
+            {
+                int index = open.First + row;
+                _list = open with { Cursor = index };
+                ShowList();
+                if (hintClicks.Second(ListPairKey(index)))
+                {
+                    ApplyMention(_list);
+                }
+
+                return EditOutcome.Handled;
+            }
+
+            hintClicks.Reset();
+            if (click.Button == MouseButton.Left && row == _listShown && MenuPane.MoreStep(click.X, MenuPane.NoPointer, open.First, _listShown, open.Matches.Count) is int page)
+            {
+                _list = open.Step(page * Math.Max(1, _listShown));
+                ShowList();
+            }
+
+            return EditOutcome.Handled;
         }
 
         // The line's own paste (a right click, Ctrl+V, Alt+V): the picture on the clipboard first,
@@ -1458,6 +1503,7 @@ public sealed partial class InputLine
             var pane = _line._pane;
             int height = pane.Profile.Height > 0 ? pane.LayoutHeight : MenuPane.DefaultHeight;   // less the toolbar's row (2026-09-21)
             int capacity = Math.Min(MentionCompleter.MaxRows, ScreenPane.MaxOverlayRows(height, pane.InputRows));
+            _listShown = MentionCompleter.View(_list!, capacity).Shown;
             if (_list!.IsWordList)
             {
                 // A command or skill row is cut at the edge with an ellipsis, never wrapped.
@@ -1469,7 +1515,9 @@ public sealed partial class InputLine
 
             var (rows, first) = MentionCompleter.Rows(_list, capacity);
             _list = _list with { First = first };
-            pane.ShowOverlay(new Rows(rows.Select(r => new Markup(r).Overflow(Overflow.Ellipsis))), MentionCompleter.Hint, input: true);
+            // One row per match whatever its length (FittedMarkup, 2026-10-14, as the menus' rows): a path with a space wrapped onto a second
+            // row before, and a click on the list then landed a row off.
+            pane.ShowOverlay(new Rows(rows.Select(r => new FittedMarkup(r))), MentionCompleter.Hint, input: true);
         }
 
         // The highlighted word in place of the typed one — a command or a skill name with a space

@@ -230,12 +230,14 @@ public partial class ChatScreenTests
         Assert.DoesNotContain("  · " + ChatScreen.CancelledNotice, output);
     }
 
-    /// <summary>Under <c>/advisor</c> the toolbar's 📈 toggles the performance bar while the advisor is still asked (2026-10-10): a quick act runs then, not at the idle line.</summary>
+    /// <summary>Under <c>/advisor</c> the toolbar's 📄 opens the log window while the advisor is still asked (2026-10-10): a quick act runs then, not at the idle line. The 📈's /perfbar until it was retired (2026-10-14).</summary>
     [Fact]
-    public async Task AdvisorCommand_UnderTheAsk_TheToolbarsRisingChart_TogglesTheBar_BeforeTheAnswer()
+    public async Task AdvisorCommand_UnderTheAsk_TheToolbarsLog_OpensTheWindow_BeforeTheAnswer()
     {
         AdvisorProfiles(on: false);
-        _settings.Update(d => d.ToolbarItems = ["profile", "perf"]);
+        int opened = 0;
+        _openLogWindow = () => opened++;
+        _settings.Update(d => d.ToolbarItems = ["profile", "log"]);
         LoadOnThePane();
         _chat.EnqueueText("Index the foreign key.");
         var input = WhenIdle(
@@ -246,9 +248,9 @@ public partial class ChatScreenTests
         {
             if (i == 0)
             {
-                input.PushClick(3, 103);   // 📈 on the toolbar: /perfbar, a quick act run while the advisor is asked
+                input.PushClick(3, 103);   // 📄 on the toolbar: /log, a quick act run while the advisor is asked
                 input.PushClick(3, 103);
-                await UntilAsync(() => Output.Contains(Perf.PerfText.BarNotice("led"), StringComparison.Ordinal), ct);
+                await UntilAsync(() => Output.Contains(Viewer.LogViewText.WindowOpenedNotice, StringComparison.Ordinal), ct);
                 toggledUnderTheAsk = true;
             }
         };
@@ -256,6 +258,7 @@ public partial class ChatScreenTests
         string output = await RunAsync(input);
 
         Assert.True(toggledUnderTheAsk);
+        Assert.Equal(1, opened);
         Assert.Contains(TranscriptRenderer.ToolAnswerIndent + "Index the foreign key.\n", output);
     }
 }

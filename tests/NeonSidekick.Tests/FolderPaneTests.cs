@@ -235,9 +235,12 @@ public class FolderPaneTests : IDisposable
 
     // ── The mouse ───────────────────────────────────────────────────────────
 
-    /// <summary>A click on the glyph's side toggles the node; one on the name moves the cursor, a second there within the interval toggles it too (Explorer's double-click, the user's call later on 2026-09-21) — only Enter chooses.</summary>
+    /// <summary>
+    /// A click on the glyph's side toggles the node; one on the name moves the cursor, and a second there within the interval is Enter: the
+    /// picker chooses it (2026-10-14, the user's ask; it opened or closed the node, Explorer's double-click, from later on 2026-09-21).
+    /// </summary>
     [Fact]
-    public async Task AClickOnTheGlyph_TogglesTheNode_OneOnTheName_MovesTheCursor_ASecondTogglesIt_OnlyEnterChooses()
+    public async Task AClickOnTheGlyph_TogglesTheNode_OneOnTheName_MovesTheCursor_ASecondChooses()
     {
         var (picker, screen, input) = Picker();
         using var _ = screen;
@@ -245,23 +248,52 @@ public class FolderPaneTests : IDisposable
         input.PushClick(12, 103);                        // Users' name: the cursor
         input.PushClick(4, 103);                         // Users' glyph: open, the cursor stays
         input.PushClick(14, 104);                        // alice's name: the cursor
-        input.PushClick(15, 104);                        // again: the pair opens alice — empty, so nothing shows under it
-        input.PushClick(14, 103);                        // Users' name: the cursor
-        input.PushClick(14, 103);                        // the pair: Users closed
-        input.PushClick(14, 103);                        // a third within the interval: a first again
-        input.PushClick(14, 103);                        // the pair: Users open
-        input.Push(Keys.Enter);
+        input.PushClick(15, 104);                        // again: the pair chooses alice
 
-        Assert.Equal(P(C, "Users"), await picker.PickAsync(new FolderTree(Disks()), 0, CancellationToken.None));
+        Assert.Equal(P(C, "Users", "alice"), await picker.PickAsync(new FolderTree(Disks()), 0, CancellationToken.None));
 
         Assert.Contains("\n" + C + "\n" + Open(true, 0, C) + "\n" + Closed(false, 1, "Users") + "\n", Output);
         Assert.Contains("\n" + P(C, "Users") + "\n" + Open(false, 0, C) + "\n" + Closed(true, 1, "Users") + "\n", Output);
         Assert.Contains("\n" + P(C, "Users") + "\n" + Open(false, 0, C) + "\n" + Open(true, 1, "Users") + "\n" + Closed(false, 2, "alice") + "\n", Output);
         Assert.Contains("\n" + P(C, "Users", "alice") + "\n" + Open(false, 0, C) + "\n" + Open(false, 1, "Users") + "\n" + Closed(true, 2, "alice") + "\n", Output);
-        Assert.Contains("\n" + P(C, "Users", "alice") + "\n" + Open(false, 0, C) + "\n" + Open(false, 1, "Users") + "\n" + Leaf(true, 2, "alice") + "\n", Output);
-        Assert.Contains("\n" + P(C, "Users") + "\n" + Open(false, 0, C) + "\n" + Closed(true, 1, "Users") + "\n" + Closed(false, 1, "Windows") + "\n", Output);
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
         Assert.False(screen.OverlayOpen);
+    }
+
+    /// <summary><c>/browse</c> (2026-10-14, the user's ask): a double-click on a file's name opens it, as Enter does, the pane left open; one on a folder's opens it.</summary>
+    [Fact]
+    public async Task Browse_ADoubleClickOnAFile_OpensIt_OnAFolder_OpensTheFolder()
+    {
+        var (browser, screen, input) = Picker();
+        using var _ = screen;
+        var tree = new FolderTree(Disks().AddFiles(C, "notes.txt"), withFiles: true);
+        int users = tree.ExpandTo(P(C, "Users"));      // C:\ at 102, Users 103, Windows 104, notes.txt 105
+        var opened = new List<string>();
+        input.PushClick(14, 105);                        // notes.txt's name: the cursor
+        input.PushClick(14, 105);                        // the pair: opened
+        input.PushClick(14, 103);                        // Users' name: the cursor
+        input.PushClick(14, 103);                        // the pair: Users open
+        input.Push(Keys.Escape);
+
+        await browser.BrowseAsync(tree, users, path => { opened.Add(path); return ("opened " + Path.GetFileName(path), false); }, CancellationToken.None);
+
+        Assert.Equal([P(C, "notes.txt")], opened);
+        Assert.Contains("opened notes.txt", Output);
+        Assert.Contains(Open(true, 1, "Users") + "\n" + Closed(false, 2, "alice") + "\n", Output);
+    }
+
+    /// <summary>The more row pages (2026-10-14, the user's ask): the ▼'s side a page down, the cursor five rows on.</summary>
+    [Fact]
+    public async Task AClickOnTheMoreRow_PagesDown()
+    {
+        var (picker, screen, input) = Picker();
+        using var _ = screen;
+        var tree = new FolderTree(new FakeFolders().Root(C).Add(C, [.. Enumerable.Range(0, 10).Select(i => "f" + i)]));
+        int first = tree.ExpandTo(P(C, "f0"));          // the cursor on f0 (row 1); five rows in view from 102, the more row at 107
+        input.PushClick(6, 107);                         // the count, the ▼'s side: a page down, f5
+        input.Push(Keys.Enter);
+
+        Assert.Equal(P(C, "f5"), await picker.PickAsync(tree, first, CancellationToken.None));
     }
 
     [Fact]

@@ -4,7 +4,7 @@ The screen, the input line, panes, keys, the bars and the app's own windows. Bac
 
 ## Contents
 
-- [Words used here](#words-used-here) · [The screen](#the-screen) · [The input line](#the-input-line) · [Panes](#panes) · [Keyboard shortcuts](#keyboard-shortcuts) · [Commands typed during a reply](#commands-typed-during-a-reply)
+- [Words used here](#words-used-here) · [The screen](#the-screen) · [The input line](#the-input-line) ([completion lists](#completion-lists)) · [Panes](#panes) · [Keyboard shortcuts](#keyboard-shortcuts) · [Commands typed during a reply](#commands-typed-during-a-reply)
 - [The hints bar](#the-hints-bar) · [The status bar](#the-status-bar) · [The toolbar](#the-toolbar) · [The performance bar](#the-performance-bar) · [The home bar](#the-home-bar) · [Bar checklists](#bar-checklists) · [The avatar picker](#the-avatar-picker) · [The welcome splash](#the-welcome-splash)
 - [The app's windows](#the-apps-windows): [picture viewer](#the-picture-viewer) · [picture menu](#the-picture-menu) · [thumbnail browser](#the-thumbnail-browser) · [log](#the-log-window) · [process](#the-process-window) · [camera](#the-camera-window) · [video](#the-video-window) · [Browser](#the-browser-window)
 
@@ -39,7 +39,7 @@ From top to bottom:
 * **Enter** sends; Ctrl+Enter starts a new line. ↑/↓ walk earlier messages and move through a wrapped draft.
 * **Copy and paste:** Ctrl+A or a drag selects, Ctrl+C copies, Ctrl+X cuts. A right-click or Alt+V pastes, pictures too.
 * **Ctrl+C** with nothing selected stops the speech, else cancels the reply; twice at an idle line, it exits.
-* **Lists:** `/` commands, `@` files, `#` skills, `$` tools, `%` database connections, `^` ComfyUI workflows, `*` UNC shares. They work inside a command's text too, except in `/read`, `/view`, `/print` and `/pdf`.
+* **Lists:** `/` commands, `@` files, `#` skills, `$` tools, `%` database connections, `^` ComfyUI workflows, `*` UNC shares. They work inside a command's text too, except in `/read`, `/view`, `/print` and `/pdf`. See [Completion lists](#completion-lists).
 * **Drop a picture** from the picture strip or the transcript onto the input row to attach it (**🖼️ drop on line**).
 * **During a reply** Enter queues the message. ESC stops the speech, then closes an open list, then cancels the reply; it never clears your draft.
 * **At the idle line** ESC clears the draft (↑ brings it back); ESC twice on an empty line opens `/rewind`.
@@ -53,16 +53,24 @@ From top to bottom:
 * Sent, the picture is saved in *Pasted images folder* under the profile's `images` folder, and the model gets its path.
 * **On a Mac** Cmd+V pastes text only; use Ctrl+V, Option+V (with Option as Meta) or a right-click. A picture file copied in Finder is attached by name.
 
+### Completion lists
+
+A list opens over the input line as you type `/` at the start, a command's argument, or `@`, `#`, `$`, `%`, `^` or `*` before a word.
+
+* **Keys:** ↑/↓ move the highlight, Enter or Tab applies it, ESC closes the list (it stays closed for that word).
+* **Mouse:** a click highlights a row, a double-click applies it. The wheel over the list moves the highlight; elsewhere it scrolls the transcript. A click on the `▲▼` row pages.
+* A right-click on the list does nothing (no paste), and a click off the list leaves it open.
+
 ## Panes
 
 * **Keys:** ←/→ switch tabs, ↑/↓ move, Enter edits or toggles, Space flips an on/off row, ESC closes or goes back a page.
 * **Second row of tabs** (`/settings`, `/tools`, `/skills`' Offered, `/mcp`'s Tools): ←/→ walk every one into the next tab; Tab and Shift+Tab jump a whole tab.
 * **Under the list:** the row's description and default. A number after a tab's name (`Client³`) counts its settings changed from the default.
 * **Height:** a pane keeps its height while it opens a value picker, a yes/no, a folder browse or details, so its title stays put; a taller details page gives the height back when it closes.
-* **Type to filter** on `/sessions`, `/server`, `/model`, `/docker`, the saved lists, the allowed commands and the Offered tabs; the first ESC clears it. Where a pane has lettered buttons, a letter presses its button and Shift+letter starts a filter.
-* **Find** on the read-only panes (`/help`, `/sys`, `/about`, `/tree`, `/docker logs`…): type to mark every match; Enter or F3 goes to the next, Shift+Enter or Shift+F3 back (Shift+F3 on a Mac).
+* **Type to filter** on `/sessions`, `/server`, `/model`, `/docker`, the saved lists, the allowed commands and the Offered tabs; the first ESC clears it. Where a pane has lettered buttons, a letter presses its button and Shift+letter starts a filter. A paste (Ctrl+V or a right-click) adds its first line, up to 40 characters.
+* **Find** on the read-only panes (`/help`, `/sys`, `/about`, `/tree`, `/docker logs`…): type to mark every match; Enter or F3 goes to the next, Shift+Enter or Shift+F3 back (Shift+F3 on a Mac). A paste (Ctrl+V or a right-click) adds its first line, up to 40 characters.
 * **Asking first:** a remove asks, with No on the cursor; `y` or `n` answers.
-* **Mouse:** a click moves the cursor, a double-click picks a row or tab. On the input line a double-click selects a word, on the `›` the whole draft. The × at the top right is ESC; a double-click outside a pane closes it.
+* **Mouse:** a click moves the cursor, a double-click picks a row or tab. A click on the `▲▼` row under a long list pages up (`▲`) or down (`▼`). On the input line a double-click selects a word, on the `›` the whole draft. The × at the top right is ESC; a double-click outside a pane closes it.
 * **On a Mac**, to select terminal text with the mouse, hold Fn (Terminal.app) or Option (iTerm2), or toggle the app's mouse with Cmd+R in Terminal.app.
 
 ### Pane keys
@@ -76,7 +84,7 @@ In every list ↑/↓ move, Enter or a double-click picks, ESC closes; key lette
 | `/queue` | Enter removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) · `m` *Queue mode* · `k` *Queue cancel mode* |
 | `/rewind` | Enter rewinds to before the message |
 | `/sessions` | Enter opens · type to filter |
-| `/find` | type to find · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · ESC done |
+| `/find` | type to find · a paste or right-click adds its first line · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · ESC or a double-click outside done |
 | Info panes (`/help`, `/sys`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find · ESC closes |
 | **Saved lists** | |
 | `/youtube list` | Enter plays |
@@ -116,11 +124,11 @@ In every list ↑/↓ move, Enter or a double-click picks, ESC closes; key lette
 
 ### Folder picker
 
-`/cwd browse` and the *Working directory (cwd)* and *Obsidian vault* rows open a folder tree. `⌂ profile` (the profile's `files` folder) and `▣ images` sit above the drives. Space, → and ← open and close folders, `-` collapses all, and only Enter chooses.
+`/cwd browse` and the *Working directory (cwd)* and *Obsidian vault* rows open a folder tree. `⌂ profile` (the profile's `files` folder) and `▣ images` sit above the drives. Space, → and ← open and close folders (so does a click on a folder's glyph), `-` collapses all, and Enter or a double-click on a name chooses.
 
 ### File browser
 
-`/browse [<folder>]` opens a tree of the working directory, folders first. Space, → and ← open and close folders, `-` collapses all, and Enter opens a file in its default app. *File browser/tree mode* decides what is listed; `.git` folders and links are left out.
+`/browse [<folder>]` opens a tree of the working directory, folders first. Space, → and ← open and close folders, `-` collapses all, and Enter or a double-click opens a file in its default app. *File browser/tree mode* decides what is listed; `.git` folders and links are left out.
 
 ## Keyboard shortcuts
 
@@ -245,7 +253,6 @@ Glyphs under the status bar (*Tool bar*), each shown while it is checked there. 
 | 📄 ⚡ | always | the [log window](#the-log-window); `/process` |
 | 🎞️ 🪟 | always | the [picture viewer](#the-picture-viewer); the [thumbnail browser](#the-thumbnail-browser) (ComfyUI's folder) |
 | 📺 ⭐ 🛒 | always | `/youtube list`, `/browser list`, `/shopping` |
-| 📈 | always | `/perfbar` |
 | the working directory (`~` for your user folder) | pinned right | `/cwd browse` |
 | **Model name** and its glyph | pinned right, with a server connected | `/server`; the glyph `/reasoning` |
 | blank space | — | `/settings` |
@@ -255,7 +262,7 @@ Glyphs under the status bar (*Tool bar*), each shown while it is checked there. 
 
 ## The performance bar
 
-Meters updated once a second (*Performance bar*): **CPU**, **RAM**, **GPU**, **VRAM** (**GMEM** on a Mac), **NET**, **NET↓**, **NET↑** and **PROC**. `/perfbar text`, `gauge` or `led` picks the look; `/perfbar`, Ctrl+F or 📈 hides it.
+Meters updated once a second (*Performance bar*): **CPU**, **RAM**, **GPU**, **VRAM** (**GMEM** on a Mac), **NET**, **NET↓**, **NET↑** and **PROC**. `/perfbar text`, `gauge` or `led` picks the look, as does the checklist's **look:** button (`l`, stepping text → gauge → led); `/perfbar` or Ctrl+F hides it.
 
 * Values turn amber from 60 % and red from 85 %. A meter the machine can't read is left out.
 * NET is the share of the link speed; NET↓ and NET↑ are bits per second. They follow the busiest adapter with a gateway.
@@ -291,6 +298,7 @@ The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar 
 * Space or Enter checks or unchecks; Delete unchecks (on the home bar, takes off). `a`, `n` and `d` pick all, none or the default; `d` also puts back the default order, sides and dividers. None checked hides the toolbar or the performance bar.
 * Shift+←/→ (or Alt+←/→) pins the item to the other side. The performance and home bars have three groups, so it moves a group over (left ↔ center ↔ right).
 * Shift+↑/↓ (or Alt+↑/↓) moves it a place, crossing into the next group at the edge; Shift+Home/End moves it to its group's top or bottom.
+* **Performance bar:** **look:** on the title row (`l`) steps the look: text, gauge, led.
 * **Status bar:** the Spinner is always on; it can't be unchecked, only moved. The row reads `default`, `all`, `none`, or the left group's sections, `|`, then the right group's.
 * **Tool bar dividers:** `+` (*+ divider* on the title row) puts a dim `│` after the item under the cursor. It moves like an item, Delete takes it out, and Enter or Space does nothing on it. It shows only between two visible items of its side. The default has three: `⚙️ 🛠️ 🎓 │ 💾 📣 ⏳ │ 🔒 👮 🐚 │ 📁 🌄 🌐`.
 

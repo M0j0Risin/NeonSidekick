@@ -1,6 +1,5 @@
 using NeonSidekick.App;
 using NeonSidekick.Llm;
-using NeonSidekick.Perf;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
 
@@ -100,25 +99,27 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task UnderTheLoad_TheToolbarsRisingChart_TogglesTheBar_BeforeTheModelIsUp()
+    public async Task UnderTheLoad_TheToolbarsLog_OpensTheWindow_BeforeTheModelIsUp()
     {
         var embedded = OnTheEmbeddedE2b();
-        _settings.Update(d => d.ToolbarItems = ["profile", "perf"]);
+        int opened = 0;
+        _openLogWindow = () => opened++;
+        _settings.Update(d => d.ToolbarItems = ["profile", "log"]);   // 📄; the 📈's /perfbar until it was retired (2026-10-14)
         LoadOnThePane();
         var input = WhenIdle(i => PushLine(i, "/exit"));
         bool toggledUnderTheLoad = false;
         embedded.StartGate = async ct =>
         {
-            input.PushClick(3, 103);   // 📈 on the toolbar: /perfbar, a quick act run while the load waits
+            input.PushClick(3, 103);   // 📄 on the toolbar: /log, a quick act run while the load waits
             input.PushClick(3, 103);
-            await UntilAsync(() => Output.Contains(PerfText.BarNotice("led"), StringComparison.Ordinal), ct);   // the default look, led since 2026-10-02
+            await UntilAsync(() => Output.Contains(Viewer.LogViewText.WindowOpenedNotice, StringComparison.Ordinal), ct);
             toggledUnderTheLoad = true;
         };
 
         string output = await RunAsync(input);
 
         Assert.True(toggledUnderTheLoad);
-        Assert.Equal(["cpu", "ram", "gpu", "vram"], _settings.Current.PerformanceBarItems);
+        Assert.Equal(1, opened);
         Assert.NotNull(_session.Assistant);
         Assert.NotNull(embedded.Running);
     }

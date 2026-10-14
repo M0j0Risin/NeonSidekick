@@ -3,17 +3,6 @@ using NeonSidekick.Speech;
 namespace NeonSidekick.EmbeddedLlm;
 
 /// <summary>
-/// How uncensored a model is (later on 2026-09-29, the user's ask, for the model lists' fourth column): not at all, an
-/// uncensored build, or an aggressive one — HauhauCS's own word in the repository's name ("Aggressive", beside "Balanced").
-/// </summary>
-public enum UncensoredKind
-{
-    None,
-    Uncensored,
-    Aggressive,
-}
-
-/// <summary>
 /// How a model drafts (2026-09-30, when Muse Glimmer joined): <see cref="Mtp"/> — Gemma 4's <c>mtp-*.gguf</c> heads or
 /// Qwen3.8's NextN head in the weights, <c>--spec-type draft-mtp</c> — or <see cref="DFlash"/>, Muse Glimmer's
 /// block-diffusion drafter file (an architecture-<c>dflash</c> GGUF that proposes 16 tokens a pass),
@@ -76,17 +65,7 @@ public sealed record EmbeddedModel(
     /// says so — every HauhauCS build in the catalog carries "Uncensored" in <see cref="Display"/>, Gemma and Qwen alike, and
     /// no other does. A new uncensored model keeps the word in its name.
     /// </summary>
-    public bool Uncensored => Display.Contains("Uncensored", StringComparison.Ordinal);
-
-    /// <summary>
-    /// Which uncensored build it is (later on 2026-09-29, the user's ask: "based on the original name"): <see cref="UncensoredKind.Aggressive"/>
-    /// when the repository's name says "Aggressive" (HauhauCS's E2B/E4B, Qwen3.6 35B A3B and Qwen3.8 27B), else
-    /// <see cref="UncensoredKind.Uncensored"/> for an uncensored one (the "Balanced" builds), else none.
-    /// </summary>
-    public UncensoredKind UncensoredKind =>
-        !Uncensored ? UncensoredKind.None
-        : Repository.Contains("Aggressive", StringComparison.Ordinal) ? UncensoredKind.Aggressive
-        : UncensoredKind.Uncensored;
+    public bool Uncensored => Display.Contains("Uncensored", StringComparison.Ordinal);   // one mark for every such build since 2026-10-14 (the user's ask): the aggressive kind, ⛓️‍💥⚔️, retired
 }
 
 /// <summary>

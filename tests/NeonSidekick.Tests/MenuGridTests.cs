@@ -107,7 +107,11 @@ public sealed class MenuGridTests
     {
         Assert.Equal("🦊", MenuFilter.Pasted("", " 🦊"));
         Assert.Equal("fox 🦊", MenuFilter.Pasted("fox", " 🦊"));
-        Assert.Equal("a b", MenuFilter.Pasted("a", "\nb"));
+        Assert.Equal("ab", MenuFilter.Pasted("a", "\nb"));   // the first line that is not blank (2026-10-14; "a b", the lines joined, until then)
+        Assert.Equal("first", MenuFilter.Pasted("", "first\r\nsecond"));
+        Assert.Equal("x", MenuFilter.Pasted("", "\n\n  x\ny"));
+        Assert.Equal("a b", MenuFilter.Pasted("", "a\tb"));   // a tab, as every control character, a space
+        Assert.Null(MenuFilter.Pasted("", "\r\n \n\t"));
         Assert.Null(MenuFilter.Pasted("", "   "));
         Assert.Null(MenuFilter.Pasted(new string('x', MenuFilter.MaxLength), "y"));
         Assert.Null(MenuFilter.Pasted(new string('x', MenuFilter.MaxLength - 1), "👨‍👩‍👧"));   // never half an emoji: the whole one is past the cap

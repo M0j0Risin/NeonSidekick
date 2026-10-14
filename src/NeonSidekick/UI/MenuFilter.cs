@@ -62,14 +62,17 @@ public static class MenuFilter
 
     /// <summary>
     /// The filter after <paramref name="text"/> is pasted onto it (2026-10-10, the avatar picker: an emoji from Windows' emoji panel or the
-    /// clipboard): line breaks read as spaces, the blanks leading an empty filter dropped, cut to <see cref="MaxLength"/> between text
-    /// elements; null when nothing of it is left or the filter is full. Pure.
+    /// clipboard): its first line that is not blank alone (2026-10-14, the user's call, when the finds took a paste too: a copied paragraph
+    /// searches for its opening words; every line joined by spaces until then), any other control character a space, the blanks leading an
+    /// empty filter dropped, cut to <see cref="MaxLength"/> between text elements; null when nothing of it is left or the filter is full. The
+    /// menus' filter, the info panes' find and <c>/find</c>'s, one rule. Pure.
     /// </summary>
     public static string? Pasted(string filter, string text)
     {
         ArgumentNullException.ThrowIfNull(filter);
         ArgumentNullException.ThrowIfNull(text);
-        string flat = text.ReplaceLineEndings(" ");
+        string line = text.ReplaceLineEndings("\n").Split('\n').FirstOrDefault(l => !string.IsNullOrWhiteSpace(l)) ?? "";
+        string flat = string.Concat(line.Select(c => char.IsControl(c) ? ' ' : c));
         string joined = filter.Length == 0 ? flat.TrimStart() : filter + flat;
         while (joined.Length > MaxLength)
         {

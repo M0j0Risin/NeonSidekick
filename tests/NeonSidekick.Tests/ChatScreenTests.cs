@@ -9773,7 +9773,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(strip, ChatScreen.ToolbarStripFor(items, CommandPolicyMode.Ask, shown.ShellPolice));   // the same text either way
         Assert.True(ChatScreen.ToolbarItemOff("advisors", new AppSettingsData { Advisors = false }));
         Assert.False(ChatScreen.ToolbarItemOff("advisors", new AppSettingsData { Advisors = true }));
-        Assert.All(new[] { "settings", "themes", "cmdlist", "police", "log", "comfyview", "comfythumbs", "youtube", "shoppinglist", "perf", "path" }, id => Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { MemoryMode = "off", ShellCommandPolicy = "off" })));
+        Assert.All(new[] { "settings", "themes", "cmdlist", "police", "log", "comfyview", "comfythumbs", "youtube", "shoppinglist", "path" }, id => Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { MemoryMode = "off", ShellCommandPolicy = "off" })));
         // The disk on the slab while Memory is off (later on 2026-10-03, the user's ask: always drawn, telling which).
         Assert.True(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { MemoryMode = "off" }));
         Assert.False(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { MemoryMode = "read-only" }));   // 2026-10-04: read-only is still memory
@@ -11177,7 +11177,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("/tools shell allowed", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.CmdYoloToolGlyph, 21)));
         Assert.Equal("/tools shell police", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.PoliceToolGlyph, 24)));
         Assert.Equal("/profile", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.ProfileToolGlyph, 3)));   // later on 2026-09-29
-        Assert.Equal("/perfbar", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.PerfToolGlyph, 24)));   // the officer is /police since later on 2026-09-22 (it named nothing until then)
+        Assert.Null(ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, "📈", 24)));   // the rising chart was /perfbar until it was retired (2026-10-14)
         Assert.Null(ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, "🧰", 0)));
         Assert.Equal("/cwd browse", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Path, "", 200)));
         Assert.Equal("/settings", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Row, "", -1)));
@@ -11459,9 +11459,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("⚙️ 🔓", ChatScreen.ToolbarStripFor(Items("cmdlist", "settings"), CommandPolicyMode.Yolo, true));   // strip order, not the list's
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("cmdlist", "police"), CommandPolicyMode.Off, true));
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("path"), CommandPolicyMode.Ask, true));
-        Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 📣 ⏳ 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒 📈", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03)
+        Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 📣 ⏳ 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03); 📈 last until it was retired (2026-10-14)
         Assert.Equal("🐚 🌐", ChatScreen.ToolbarStripFor(Items("web", "shell"), CommandPolicyMode.Off, true));   // the switches always drawn, the shell under off too
-        Assert.Equal("🪪 📈", ChatScreen.ToolbarStripFor(Items("perf", "profile"), CommandPolicyMode.Ask, true));   // strip order (later on 2026-09-29)
+        Assert.Equal("🪪 📄", ChatScreen.ToolbarStripFor(Items("log", "profile"), CommandPolicyMode.Ask, true));   // strip order (later on 2026-09-29; the rising chart's pair until 2026-10-14)
     }
 
     /// <summary>
@@ -11531,7 +11531,7 @@ public partial class ChatScreenTests : IDisposable
         // 2026-09-29; the ID card and the rising chart later that day; the tool switches, the log and the viewers in the user's
         // order, the rising chart behind the log, 2026-10-03, and behind the viewers later that day.
         const string Panes = "⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊";   // 🧮 Themes 2026-10-04
-        const string Rest = "🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒 📈";   // 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04; 🛒 the shopping list after 📺, 2026-10-11
+        const string Rest = "🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒";   // 📈 last until it was retired (2026-10-14); 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04; 🛒 the shopping list after 📺, 2026-10-11
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 " + Rest, ChatScreen.ToolbarStrip);   // the disk always drawn since later on 2026-10-03 (the user's ask); 🙋 after it, 2026-10-09; 📣 after the disk since 2026-10-14
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, false));
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🔒 🥷 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, false));   // the ninja while the police is off (2026-10-02, the user's ask)
@@ -11549,11 +11549,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("🥷", ChatScreen.NinjaToolGlyph);
         Assert.Equal("  " + ChatScreen.PoliceToolGlyph + " ", TranscriptRenderer.PoliceGlyph);   // the officer the refusal line wears
         Assert.Equal("/usage", ChatScreen.ToolbarWord(ChatScreen.UsageToolGlyph));
-        // The ID card and the rising chart (later on 2026-09-29, the user's ask): the profile picker, the performance bar.
+        // The ID card (later on 2026-09-29, the user's ask): the profile picker. The rising chart beside it, the performance bar, was retired on 2026-10-14.
         Assert.Equal("🪪", ChatScreen.ProfileToolGlyph);
-        Assert.Equal("📈", ChatScreen.PerfToolGlyph);
         Assert.Equal("/profile", ChatScreen.ToolbarWord(ChatScreen.ProfileToolGlyph));
-        Assert.Equal("/perfbar", ChatScreen.ToolbarWord(ChatScreen.PerfToolGlyph));
+        Assert.Null(ChatScreen.ToolbarWord("📈"));
         Assert.Equal(ChatScreen.ProfileToolGlyph + " Profile", SettingsMenu.ProfileTitle);   // the picker wears the toolbar's glyph
         Assert.Equal(ChatScreen.ProfileToolGlyph + " ", NoticeGlyphs.Profile);
         Assert.Equal(ChatScreen.UsageToolGlyph + " Usage", UsageText.Label);   // the pane wears the toolbar's glyph
@@ -11604,7 +11603,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.ToolbarWord(ChatScreen.TtsGlyph));
         Assert.Null(ChatScreen.ToolbarWord(""));
         string[] glyphs = ChatScreen.ToolbarStrip.Split(' ');
-        Assert.Equal(38, glyphs.Length);   // 📣 later still on 2026-10-13 (the saved prompts); ⭐ later on 2026-10-13 (the saved links); ⏳ 2026-10-13 (the queue); 🛒 2026-10-11 (the shopping list); ✴️ gone later on 2026-10-10 (the Claude Code advisor tool retired); 🦉 2026-10-10 (the advisors); 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04, 🧮 and 🪟 later that day, ⚡ 2026-10-05, 🙋 2026-10-09, 🌄 2026-10-10
+        Assert.Equal(37, glyphs.Length);   // 📈 gone 2026-10-14 (the performance item retired); 📣 later still on 2026-10-13 (the saved prompts); ⭐ later on 2026-10-13 (the saved links); ⏳ 2026-10-13 (the queue); 🛒 2026-10-11 (the shopping list); ✴️ gone later on 2026-10-10 (the Claude Code advisor tool retired); 🦉 2026-10-10 (the advisors); 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04, 🧮 and 🪟 later that day, ⚡ 2026-10-05, 🙋 2026-10-09, 🌄 2026-10-10
         for (int i = 0; i < glyphs.Length; i++)
         {
             Assert.Equal(2, TextCells.Width(glyphs[i]));

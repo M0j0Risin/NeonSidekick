@@ -168,7 +168,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Equal(["off", "2 of 42", "off", "2 of 42", "2 of 42"], shown);   // 38 until ✴️ went (2026-10-10), 38 again with 🛒 (2026-10-11), 39 with Model name (2026-10-12)
+        Assert.Equal(["off", "2 of 41", "off", "2 of 41", "2 of 41"], shown);   // 41 since 📈 went (2026-10-14); 38 until ✴️ went (2026-10-10), 38 again with 🛒 (2026-10-11), 39 with Model name (2026-10-12)
         Assert.Contains(ToolbarItems.Notice(false), output);
         Assert.Contains(ToolbarItems.Notice(true), output);
         Assert.Contains(ToolbarItems.UsageError, output);
@@ -178,29 +178,27 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// The toolbar's 🪪 and 📈 (later on 2026-09-29, the user's ask), checked alone: the ID card at column 0 opens the profile
-    /// picker, the rising chart at 3 shows the performance bar in its look — no transcript row for either.
+    /// The toolbar's 🪪 (later on 2026-09-29, the user's ask), checked alone: the ID card at column 0 opens the profile picker, no
+    /// transcript row. The rising chart beside it, the performance bar shown or hidden, was retired on 2026-10-14 (the user's ask);
+    /// /perfbar and Ctrl+F stay.
     /// </summary>
     [Fact]
-    public async Task ToolbarItems_TheIdCard_OpensTheProfilePicker_AndTheRisingChart_TogglesTheBar()
+    public async Task ToolbarItems_TheIdCard_OpensTheProfilePicker()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = ["profile", "perf"]; });
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = ["profile"]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);   // the toolbar at 103
         StepsWhenIdle(
             input => { input.PushClick(0, 103); input.PushClick(1, 103); },   // 🪪: the profile picker
             Key(Keys.Escape),
-            input => { input.PushClick(3, 103); input.PushClick(3, 103); },   // 📈: the bar on, its four first meters in the default look (led since 2026-10-02)
             Line("/exit"));
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ProfileToolGlyph + " " + ChatScreen.PerfToolGlyph, "", 239), output);
+        Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ProfileToolGlyph, "", 239), output);
         Assert.Contains(Titled(SettingsMenu.ProfileTitle), output);
-        Assert.Equal(["cpu", "ram", "gpu", "vram"], _settings.Current.PerformanceBarItems);
-        Assert.Contains(PerfText.BarNotice("led"), output);   // the default look, led since 2026-10-02
-        Assert.All(new[] { "/profile", "/perfbar" }, word => Assert.DoesNotContain("› " + word, output));
+        Assert.DoesNotContain("› /profile", output);
         Assert.Empty(_chat.Requests);
     }
 }

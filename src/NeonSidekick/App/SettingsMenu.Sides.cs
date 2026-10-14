@@ -119,7 +119,8 @@ internal sealed partial class SettingsMenu
         Func<AppSettingsData, bool> IsDefault,
         IReadOnlySet<string>? Fixed = null,
         string? FixedNotice = null,
-        bool Dividers = false);
+        bool Dividers = false,
+        bool Look = false);
 
     /// <summary>The Tool bar's checklist (<see cref="EditToolbarItemsAsync"/>).</summary>
     private static readonly SidedChecklist ToolbarChecklist = new(
@@ -173,7 +174,8 @@ internal sealed partial class SettingsMenu
         d => { d.PerformanceBarItems = PerfBarItems.Save(PerfBarItems.Defaults.ToHashSet(StringComparer.Ordinal)); d.PerformanceBarOrder = null; d.PerformanceBarLeft = null; d.PerformanceBarRight = null; },
         d => PerfBarItems.Resolve(d.PerformanceBarItems).SetEquals(PerfBarItems.Defaults)
             && PerfBarItems.Sides(d.PerformanceBarOrder, d.PerformanceBarLeft, d.PerformanceBarRight) is var sides
-            && sides.Left.Count == 0 && sides.Right.Count == 0 && PerfBarItems.SaveOrder(sides.All) is null);
+            && sides.Left.Count == 0 && sides.Right.Count == 0 && PerfBarItems.SaveOrder(sides.All) is null,
+        Look: true);
 
     /// <summary>
     /// A checklist in two groups (or three, the performance bar's) under the settings list (2026-10-13): Enter or Space flips the cursor's item and saves at once, the
@@ -192,7 +194,10 @@ internal sealed partial class SettingsMenu
             var all = sides.All;
             var (rows, headings) = SidedRows(sides, id => list.Label(id, on.Contains(id)));
             var page = new MenuPage(Crumb(FieldName(list.Field)), rows, list.Hint) { SpaceToggles = true, Headings = headings };
-            var picked = await PickSidedChecklistAsync(page, SidedRowOf(sides, Math.Clamp(index, 0, all.Count - 1)), list.Dividers ? DividerChecklistButtons : DefaultChecklistButtons, cancellationToken).ConfigureAwait(false);
+            var buttons = list.Dividers ? DividerChecklistButtons
+                : list.Look ? [.. DefaultChecklistButtons, new(PerfBarMode.LookButton(PerfBarMode.Parse(saved.PerformanceBarLook)), PerfBarMode.LookKey)]
+                : DefaultChecklistButtons;
+            var picked = await PickSidedChecklistAsync(page, SidedRowOf(sides, Math.Clamp(index, 0, all.Count - 1)), buttons, cancellationToken).ConfigureAwait(false);
             if (picked is not { } pick)
             {
                 if (!changed)
@@ -213,6 +218,14 @@ internal sealed partial class SettingsMenu
                 }
 
                 continue;   // the default checks, order and sides already: nothing to save
+            }
+
+            if (pick.Button == LookIndex && list.Look)
+            {
+                // The look button (2026-10-14, the user's ask, the Queue pane's mode button): the next look, saved with the row's notice.
+                Apply(list.Field, d => d.PerformanceBarLook = PerfBarMode.Name(PerfBarMode.Next(PerfBarMode.Parse(d.PerformanceBarLook))));
+                changed = true;
+                continue;
             }
 
             if (pick.Button == DividerIndex && list.Dividers)
