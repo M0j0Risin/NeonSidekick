@@ -52,6 +52,12 @@ public sealed class TranscriptRenderer : INoticeSink
     public const string AssistantGlyph = "● ";
 
     /// <summary>
+    /// The glyph the manual's own answer to <c>/help &lt;words&gt;</c> opens with (2026-10-14, the user's pick): the help pane's ❓
+    /// (<see cref="InfoPane.Title"/>), so the block never reads as the model's words. Three cells, as an avatar's.
+    /// </summary>
+    public const string HelpGlyph = "❓ ";
+
+    /// <summary>
     /// The glyph a profile's reply opens with (2026-10-10, the user's ask): its avatar and a space when it has one
     /// (<see cref="Emojis.AvatarRules"/>; three cells, the reply's lines under it indented to match), else <see cref="AssistantGlyph"/>.
     /// A <c>/botchat</c> bot and <c>/claude</c> keep <see cref="AssistantGlyph"/>: their speaker line says whose the reply is. Pure.

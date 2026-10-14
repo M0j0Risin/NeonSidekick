@@ -51,7 +51,7 @@ Not offered headless.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `neon_help` | `query?, kind?` | Neon Sidekick's own manual: commands, settings (effect, default, place), panes and keys, narrowed by `kind` (`any`, `command`, `setting`, `pane`, `keys`). It never reads your current settings. |
+| `neon_help` | `query?, kind?` | Neon Sidekick's own manual: commands, settings (effect, default, place), panes and keys, narrowed by `kind` (`any`, `command`, `setting`, `pane`, `keys`). It never reads your current settings. `/help <words>` asks the model to use it. |
 
 ## Core
 

@@ -35,7 +35,7 @@ NeonSidekick.exe --headless < job.txt > run_output.txt                    # one 
 
 ```
 NeonSidekick 0.5.2
-Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name] | gaps [model|advisor|any]); /skills add <source> [--global|--profile] [--yes] installs a skill; /claude <message> asks Claude Code; /rewind [n] goes back n messages; /exit or EOF exits.
+Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name] | gaps [model|advisor|any]); /skills add <source> [--global|--profile] [--yes] installs a skill; /claude <message> asks Claude Code; /help <words> looks something up in the app's manual; /rewind [n] goes back n messages; /exit or EOF exits.
 LLM: http://127.0.0.1:1234/v1 model=qwen3-30b-a3b (configured)
 You: Neon: The capital of France is Paris.
 You: Neon: 
@@ -75,6 +75,7 @@ They need no server unless the row says so.
 | `/youtube …` | Searches (needs a *YouTube API key*) and lists playlists and saved videos; playing a video is an error. |
 | `/camera list`, `/screen list` | List the cameras, or the monitors and windows; other forms are errors. On a Mac they need macOS 14 or later. |
 | `/avatar …` | Prints or sets the *Model avatar* (`user`: your *User avatar*); words pick the best match. |
+| `/help <words>` | Asks the model to look the words up in the app's manual (`neon_help`). With no server, or `neon_help` off, it prints the manual's own answer (after a `[notice]` when a server is there). |
 
 - Case doesn't matter. `/exit`, `/new`, `/clear` and `/splash` must be alone on the line: `/new please` goes to the model as text.
 - With no server, messages and the commands that need one get `Neon: [error] No LLM server. Set NEONSIDEKICK_LLM_URL and restart.`
@@ -94,7 +95,7 @@ Any other `/…` line is sent to the model as a message, so `/model gemma` switc
 | `/remember`, `/memory`, `/sessions`, `/imagine`, `/process`, `/tree`, `/vault` | Ask the model: it has the memory, session, ComfyUI, `process`, file and Obsidian tools when they're on. |
 | `/loop` | Repeat the line, or loop in the script. |
 | `/usage` | `--log` records the run. |
-| `/learn`, `/timer`, `/tts`, `/stt`, `/read`, `/echo`, `/sys`, `/keycheck`, `/copy`, `/draft`, `/view`, `/explore`, `/open`, `/browse`, `/terminal`, `/shortcut`, `/theme`, `/perfbar`, `/homebar`, `/toolbar`, `/header`, `/window`, `/expand`, `/collapse`, `/find`, `/queue`, `/rename`, `/help`, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat` | Not available: they need the screen, sound, an editor, the clipboard or a confirmation. |
+| `/learn`, `/timer`, `/tts`, `/stt`, `/read`, `/echo`, `/sys`, `/keycheck`, `/copy`, `/draft`, `/view`, `/explore`, `/open`, `/browse`, `/terminal`, `/shortcut`, `/theme`, `/perfbar`, `/homebar`, `/toolbar`, `/header`, `/window`, `/expand`, `/collapse`, `/find`, `/queue`, `/rename`, `/help` alone, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat` | Not available: they need the screen, sound, an editor, the clipboard or a confirmation. |
 
 ## Flags in headless runs
 

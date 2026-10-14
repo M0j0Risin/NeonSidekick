@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using NeonSidekick.App;
 using NeonSidekick.Help;
 using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
@@ -103,5 +104,88 @@ public partial class ChatScreenTests
         Assert.Contains(NeonHelpTool.ToolName, _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(NeonHelpTool.ToolName, OfferedNames());
         Assert.DoesNotContain(Assistant.HelpRule, _chat.Requests[0][0].Text!, StringComparison.Ordinal);
+    }
+
+    // /help <words> (2026-10-14, the user's ask): the model looks the words up with neon_help, or the manual answers itself.
+
+    [Fact]
+    public void HelpAskPrompt_IsPinned()
+    {
+        // What the model reads: the words first, in quotes, then what to do with them.
+        Assert.Equal(
+            "Look up \"claude\" in NeonSidekick's own manual with neon_help (search again with other words if the first answer misses) and answer from what it returns.",
+            HelpText.AskPrompt(" claude "));
+    }
+
+    [Fact]
+    public async Task HelpWithWords_AModelConnected_AsksItToLookThemUp()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.Enqueue(FakeChatClient.Call("c1", NeonHelpTool.ToolName, new Dictionary<string, object?> { [NeonHelpTool.QueryArgument] = "claude" }));
+        _chat.EnqueueText("/claude sends a message to Claude Code.");
+        PushLine("/help claude");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(HelpText.AskPrompt("claude"), _chat.Requests[0].Last(m => m.Role == ChatRole.User).Text);
+        Assert.Contains(NeonHelpTool.ToolName, OfferedNames());
+        Assert.Contains("sends a message to Claude Code", output, StringComparison.Ordinal);
+        Assert.DoesNotContain(ChatScreen.NoArgumentError("/help"), output, StringComparison.Ordinal);
+        Assert.DoesNotContain(HelpText.NotAskedNotice, output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HelpWithWords_NeonHelpSwitchedOff_TheManualAnswers_AfterTheNotice()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = [NeonHelpTool.ToolName]; });
+        PushLine("/help claude");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Empty(_chat.Requests);
+        int notice = output.IndexOf(HelpText.NotAskedNotice, StringComparison.Ordinal);
+        int answer = output.IndexOf(TranscriptRenderer.HelpGlyph, StringComparison.Ordinal);
+        Assert.True(notice >= 0 && notice < answer, $"notice {notice}, answer {answer}");
+        Assert.Contains("Command /claude:", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HelpWithWords_ToolsOff_TheManualAnswers_AfterTheNotice()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmOfferTools = false; });
+        PushLine("/help claude");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Empty(_chat.Requests);
+        Assert.Contains(HelpText.NotAskedNotice, output, StringComparison.Ordinal);
+        Assert.Contains("Command /claude:", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HelpWithWords_NoModel_TheManualAnswers_WithNoNotice()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "off"; d.LlmUrl = ""; });
+        PushLine("/help claude");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Empty(_chat.Requests);
+        Assert.DoesNotContain(HelpText.NotAskedNotice, output, StringComparison.Ordinal);
+        Assert.DoesNotContain(ChatScreen.NoAssistantError, output, StringComparison.Ordinal);
+        Assert.Contains(TranscriptRenderer.HelpGlyph + "Command /claude:", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HelpLookupOffered_NeedsTheToolsAndNeonHelp()
+    {
+        var none = new HashSet<string>(StringComparer.Ordinal);
+        Assert.True(ChatScreen.HelpLookupOffered(offerTools: true, none));
+        Assert.False(ChatScreen.HelpLookupOffered(offerTools: false, none));
+        Assert.False(ChatScreen.HelpLookupOffered(offerTools: true, new HashSet<string>(StringComparer.Ordinal) { NeonHelpTool.ToolName }));
     }
 }

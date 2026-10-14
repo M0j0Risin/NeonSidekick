@@ -46,6 +46,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | Command | What it does |
 |---|---|
 | `/help` | The commands (everyday ones on Basic, the rest on Advanced) and the keys; on the Keys tab, `k` swaps in `/keycheck`'s list. |
+| `/help <words>` | Asks the model to look the words up in the app's manual (`neon_help`) and answer. With no model, or `neon_help` off on `/tools`, the manual's own answer shows instead. During a reply, it waits. |
 | `/about` | The version, runtime, folders, components, the embedded models' Hugging Face pages and the license. |
 | `/keycheck` | Lists the app's key chords and whether another program holds each (a held chord never reaches the app). On a Mac it also names macOS shortcuts and an Option key that types characters. |
 | `/exit` | Exits the app. |

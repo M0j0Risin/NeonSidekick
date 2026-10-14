@@ -2686,6 +2686,32 @@ internal sealed partial class ChatScreen
     ];
 
     /// <summary>
+    /// <c>/help &lt;words&gt;</c> (2026-10-14, the user's ask: <c>/help claude</c> was refused, and <c>$neon_help claude</c> typed by hand got
+    /// the answer). With a model connected and <c>neon_help</c> offered (<see cref="HelpLookupOffered"/>), the words go to the model as
+    /// <see cref="Help.HelpText.AskPrompt"/>, the typed line already echoed, as <c>/plan</c>'s requirement is sent. Otherwise the manual
+    /// answers itself: <see cref="Help.NeonHelp.Answer"/> drawn as a reply under <see cref="TranscriptRenderer.HelpGlyph"/>, never in the
+    /// history (the <c>/skills add</c> preview's shape), after <see cref="Help.HelpText.NotAskedNotice"/> when a model was there to ask.
+    /// </summary>
+    private async Task<bool> HelpLookupAsync(string words, CancellationToken cancellationToken)
+    {
+        var effective = _effective();
+        if (_session.Assistant is not null && HelpLookupOffered(effective.LlmOfferTools, TurnDisabled(effective)))
+        {
+            return await RunMessageAsync(Help.HelpText.AskPrompt(words), [], cancellationToken).ConfigureAwait(false);
+        }
+
+        if (_session.Assistant is not null)
+        {
+            _transcript.Notice(Help.HelpText.NotAskedNotice);
+        }
+
+        _transcript.BeginAssistant(StyledReply(effective.TranscriptMarkdown, _pane.Enabled), TranscriptRenderer.HelpGlyph);
+        _transcript.AppendDelta(Help.NeonHelp.Answer(words));
+        _transcript.EndAssistant();
+        return false;
+    }
+
+    /// <summary>
     /// A Commands tab: <see cref="SlashCommands.HelpEntries"/> as two columns, A to Z with no blank rows (2026-09-27,
     /// the user's call; the groups with a blank row between them until then; <c>/log</c> joined only under <c>--log</c> from
     /// 2026-09-22 until 2026-10-02). Since later on 2026-09-27 the entries are split over two tabs:
@@ -4673,7 +4699,8 @@ internal sealed partial class ChatScreen
     /// here: their argument is a path list, <see cref="ArgumentPaths"/>. Since 2026-10-04 (the user's report and audit) also
     /// <c>/screen</c>'s words, monitors and windows, <c>/server</c>'s words (<see cref="ServerItems"/>), <c>/model</c>'s installed
     /// embedded models while the embedded server is in use (read from disk, no probe), <c>/log file</c> under <c>--log</c> and
-    /// <c>/claude new</c>; since 2026-10-10 <c>/advisor</c>'s advisors by profile name, the first word only. Pure.
+    /// <c>/claude new</c>; since 2026-10-10 <c>/advisor</c>'s advisors by profile name, the first word only; since 2026-10-14 <c>/help</c>'s
+    /// command names, once a letter is typed. Pure.
     /// </summary>
     public static IReadOnlyList<CompletionItem> ArgumentItems(string command, string argText, ArgumentSources sources)
     {
@@ -4960,6 +4987,13 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Learn:
                 return MentionCompleter.Matches([new(LearnSessionsWord, LearnSessionsNote)], argText);
+
+            case SlashCommand.Help:
+                // The command names without the slash, neon_help's command lookup (2026-10-14): only once a letter is typed, since
+                // Enter on an open list takes its pick and the bare /help must still open the pane; nothing after a space (free words).
+                return argText.Length == 0 || argText.Contains(' ', StringComparison.Ordinal)
+                    ? []
+                    : MentionCompleter.Matches(SlashCommands.Completions.Select(item => item with { Text = item.Text.TrimStart('/') }).ToList(), argText);
 
             case SlashCommand.Skills:
                 // add (2026-09-26): the source after it is free text — a search, a repository, a URL — never looked up per keystroke.
@@ -5706,6 +5740,14 @@ internal sealed partial class ChatScreen
     /// by name. Shared with headless.
     /// </summary>
     public static IReadOnlyList<AIFunction> HelpTools() => new AIFunction[] { new NeonHelpTool() };
+
+    /// <summary>
+    /// Whether <c>/help &lt;words&gt;</c> may hand its words to the model (2026-10-14): the turn offers tools at all and <c>neon_help</c> is not
+    /// switched off in <paramref name="disabled"/> — the screen's turn set (<see cref="TurnDisabled"/>), the saved one headless, as
+    /// <c>/sys</c> counts the Help group. Otherwise the manual answers itself. Shared with headless. Pure.
+    /// </summary>
+    public static bool HelpLookupOffered(bool offerTools, IReadOnlySet<string> disabled) =>
+        offerTools && !disabled.Contains(NeonHelpTool.ToolName);
 
     /// <summary>The timer tools, offered on every interactive turn (headless has none: nothing there could deliver the alert).</summary>
     public static IReadOnlyList<AIFunction> TimerTools(TimerBoard board) => new AIFunction[]
@@ -12359,6 +12401,9 @@ internal sealed partial class ChatScreen
 
         switch (command)
         {
+            case SlashCommand.Help when args.Length > 0:
+                return await HelpLookupAsync(args, cancellationToken).ConfigureAwait(false);
+
             case SlashCommand.Help:
                 if (_pane.Enabled)
                 {

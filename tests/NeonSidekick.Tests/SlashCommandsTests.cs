@@ -341,12 +341,21 @@ public class SlashCommandsTests
     [InlineData("/splash again", "again")]   // 2026-09-19
     [InlineData("/usage reset", "reset")]
     [InlineData("/about x", "x")]
-    [InlineData("/help me", "me")]
     [InlineData("/window 80", "80")]
     [InlineData("/draft notes.txt", "notes.txt")]   // 2026-09-19: the editor is the argument, never a file
     public void Parse_AKnownCommandWithAnArgumentItDoesNotTake_IsOverloaded(string line, string args)
     {
         Assert.Equal((SlashCommand.Overloaded, args), SlashCommands.Parse(line));
+    }
+
+    // /help <words> (2026-10-14, the user's ask): no longer Overloaded; the words are what the model looks up.
+    [Theory]
+    [InlineData("/help claude", "claude")]
+    [InlineData("/help  how do I change the voice ", "how do I change the voice")]
+    [InlineData("/HELP me", "me")]
+    public void Parse_HelpWithWords_IsHelp(string line, string args)
+    {
+        Assert.Equal((SlashCommand.Help, args), SlashCommands.Parse(line));
     }
 
     [Fact]
@@ -357,6 +366,7 @@ public class SlashCommandsTests
             SlashCommand.Compact, SlashCommand.Server, SlashCommand.Model, SlashCommand.Reasoning, SlashCommand.Sampling, SlashCommand.Theme, SlashCommand.Avatar,   // /avatar [emoji|words|clear] 2026-10-10; /theme [name] 2026-09-23; /sampling [field value] 2026-09-28
             SlashCommand.Tts, SlashCommand.Voice, SlashCommand.Read, SlashCommand.View, SlashCommand.Imagine, SlashCommand.Comfy, SlashCommand.Echo,   // /imagine 2026-09-24
             SlashCommand.Learn,
+            SlashCommand.Help,   // /help <words> 2026-10-14: the model looks them up with neon_help
             SlashCommand.Sys,   // /sys persona|operata|vocalia 2026-10-09: /persona, /operata and /vocalia (here since 2026-09-16) folded in
             SlashCommand.Remember, SlashCommand.Memory, SlashCommand.Profile, SlashCommand.Prompts, SlashCommand.Timer,   // /srvcopy, /cmdcopy and /keycopy here until 2026-10-09 (folded into /profile push|pull); /memory 2026-09-22 (forget, then copy <profile> [overwrite], the folded /memcopy)
             SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Explore, SlashCommand.Open, SlashCommand.Browse, SlashCommand.Browser, SlashCommand.Terminal, SlashCommand.Shortcut, SlashCommand.Copy, SlashCommand.Session, SlashCommand.Rename, SlashCommand.GitUser,   // /browser [url] 2026-10-13; /shortcut [profile] [--log] 2026-10-07; /vault [path] 2026-09-23; /terminal [folder] 2026-10-03; /rename [name] 2026-10-05

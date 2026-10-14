@@ -31,7 +31,7 @@ public sealed class SidekickApp
     public const string Name = "NeonSidekick";
 
     /// <summary>The second line of headless output.</summary>
-    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name] | gaps [model|advisor|any]); /skills add <source> [--global|--profile] [--yes] installs a skill; /claude <message> asks Claude Code; /rewind [n] goes back n messages; /exit or EOF exits.";
+    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name] | gaps [model|advisor|any]); /skills add <source> [--global|--profile] [--yes] installs a skill; /claude <message> asks Claude Code; /help <words> looks something up in the app's manual; /rewind [n] goes back n messages; /exit or EOF exits.";
 
     /// <summary>Printed once when discovery under <paramref name="scope"/> found nothing. Pinned by tests; shared with the chat screen.</summary>
     public static string HeadlessNoServerLine(ScanScope scope) => LlmSession.HeadlessNoServerLine(scope);
@@ -1205,6 +1205,26 @@ public sealed class SidekickApp
                 {
                     await HeadlessTestAsync(session, testArgs, ForgetConversationAsync, cancellationToken).ConfigureAwait(false);
                     continue;
+                }
+
+                // /help <words> (2026-10-14), as the screen does: the model looks the words up with neon_help, or with no model (or the
+                // tool off) the manual answers itself, ahead of the server check. A bare /help still goes on as the text it is.
+                if (SlashCommands.Parse(text) is (SlashCommand.Help, { Length: > 0 } helpWords))
+                {
+                    if (assistant is not null && ChatScreen.HelpLookupOffered(EffectiveSettings.LlmOfferTools, ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled)))
+                    {
+                        text = Help.HelpText.AskPrompt(helpWords);
+                    }
+                    else
+                    {
+                        if (assistant is not null)
+                        {
+                            await HeadlessNoticeLineAsync("[notice] " + Help.HelpText.NotAskedNotice).ConfigureAwait(false);
+                        }
+
+                        await HeadlessLineAsync(HeadlessReplyPrefix + Help.NeonHelp.Answer(helpWords)).ConfigureAwait(false);
+                        continue;
+                    }
                 }
 
                 if (assistant is null)

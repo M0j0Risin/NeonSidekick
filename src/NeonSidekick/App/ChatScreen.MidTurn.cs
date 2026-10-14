@@ -161,7 +161,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// What a line does while a reply runs, by command (the user's lists, 2026-09-15): the info
-    /// panes, <c>/settings</c>, <c>/memory</c> every way (2026-09-22: <c>forget</c>'s confirmation
+    /// panes (the bare <c>/help</c>; <c>/help &lt;words&gt;</c> waits since 2026-10-14, a message or a block in the transcript), <c>/settings</c>, <c>/memory</c> every way (2026-09-22: <c>forget</c>'s confirmation
     /// is a pane as the list is, and so was <c>copy &lt;profile&gt;</c>'s until it became <c>/profile push|pull memory</c>
     /// on 2026-10-13 — so the word never changes the class; the standalone
     /// <c>/forget</c> was a pane too, and <c>/memcopy</c> was refused until the word folded in),
@@ -189,7 +189,8 @@ internal sealed partial class ChatScreen
     public static MidTurnClass MidTurnPolicy(SlashCommand command, bool hasArgs) => command switch
     {
         SlashCommand.None => MidTurnClass.Message,
-        SlashCommand.Help or SlashCommand.Settings or SlashCommand.Sys or SlashCommand.Memory
+        SlashCommand.Help => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,   // /help <words> (2026-10-14): a message to the model, or the manual's block in the transcript the turn owns
+        SlashCommand.Settings or SlashCommand.Sys or SlashCommand.Memory
             or SlashCommand.Usage or SlashCommand.About or SlashCommand.MsgClear or SlashCommand.Mcp or SlashCommand.Tools
             or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Browse
             or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.KeyCheck or SlashCommand.YouTube or SlashCommand.Shopping => MidTurnClass.Pane,

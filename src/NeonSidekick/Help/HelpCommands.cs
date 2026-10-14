@@ -170,6 +170,7 @@ public static class HelpCommands
         new("/help",
         [
             new("/help", "Show the commands and keys: everyday commands on Basic, the rest on Advanced, then Keys. The Keys tab's **⌨ key check** button (`k`) swaps in `/keycheck`'s list, and pressed again shows the keys. Ctrl+H runs it too."),
+            new("/help <words>", "Ask the model to look the words up in the app's manual (`neon_help`) and answer (`/help claude`, `/help change the voice`). With no model connected, or the tool off, the manual's own answer shows instead. During a reply, it runs when the reply ends."),
         ]),
         new("/homebar",
         [

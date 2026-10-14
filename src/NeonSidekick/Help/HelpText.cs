@@ -67,6 +67,20 @@ public static class HelpText
     public static string MatchesHeading(string query) => $"Best matches for '{query}':";
 
     /// <summary>
+    /// What <c>/help &lt;words&gt;</c> sends the model (2026-10-14, the user's ask: <c>/help claude</c> was refused, and the user typed
+    /// <c>$neon_help claude</c> to get the answer): the words first, in quotes, so the stored message still reads as the question
+    /// in <c>/rewind</c> and a session search. Pinned.
+    /// </summary>
+    public static string AskPrompt(string words) =>
+        $"Look up \"{words.Trim()}\" in NeonSidekick's own manual with neon_help (search again with other words if the first answer misses) and answer from what it returns.";
+
+    /// <summary>
+    /// The notice ahead of the manual's own answer to <c>/help &lt;words&gt;</c> when a model is connected but not offered <c>neon_help</c>
+    /// (the tools off, or the tool off on <c>/tools</c>), so the user knows why the model was not asked (2026-10-14).
+    /// </summary>
+    public const string NotAskedNotice = "neon_help is off, so this is the manual's own answer; /tools turns it on.";
+
+    /// <summary>
     /// The overview: each pane with its tabs (<see cref="HelpLocation.Panes"/>), then every command's word on one line
     /// (<see cref="SlashCommands.HelpEntries"/>; a line on each is <see cref="CommandList"/>, which alone runs past 8,000
     /// characters — too much for a small model's context on a first look), then <see cref="OverviewTail"/>.

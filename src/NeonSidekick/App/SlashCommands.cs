@@ -409,7 +409,7 @@ public static class SlashCommands
             new("/gituser", "set the repository's git user"),
             new("/ha", "control Home Assistant"),
             new("/header", HeaderToggle.HelpSummary),
-            new("/help", "show the commands and keys"),
+            new("/help", "show commands and keys or look things up"),
             new("/imagine", "make a picture on ComfyUI"),
             new("/keycheck", "check which key chords are held"),
             new("/learn", "write or improve a skill"),
@@ -681,10 +681,11 @@ public static class SlashCommands
     /// <summary>
     /// Whether the command reads what follows it. The one list (pinned): a command not here given an
     /// argument parses as <see cref="SlashCommand.Overloaded"/>. <see cref="SlashCommand.None"/>,
-    /// <see cref="SlashCommand.Unknown"/> and <see cref="SlashCommand.Overloaded"/> take nothing.
+    /// <see cref="SlashCommand.Unknown"/> and <see cref="SlashCommand.Overloaded"/> take nothing. <c>/help &lt;words&gt;</c> since 2026-10-14
+    /// (the user's ask): the model looks the words up with <c>neon_help</c>, or the manual answers itself.
     /// </summary>
     public static bool TakesArgument(SlashCommand command) => command is
-        SlashCommand.Compact or SlashCommand.Server or SlashCommand.Model or SlashCommand.Reasoning or SlashCommand.Sampling or SlashCommand.Theme or SlashCommand.Avatar
+        SlashCommand.Help or SlashCommand.Compact or SlashCommand.Server or SlashCommand.Model or SlashCommand.Reasoning or SlashCommand.Sampling or SlashCommand.Theme or SlashCommand.Avatar
         or SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Read or SlashCommand.View or SlashCommand.Imagine or SlashCommand.Comfy or SlashCommand.Echo
         or SlashCommand.Learn
         or SlashCommand.Sys

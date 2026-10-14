@@ -13223,6 +13223,7 @@ public partial class ChatScreenTests : IDisposable
     [Theory]
     [InlineData(SlashCommand.None, false, MidTurnClass.Message)]
     [InlineData(SlashCommand.Help, false, MidTurnClass.Pane)]
+    [InlineData(SlashCommand.Help, true, MidTurnClass.Deferred)]   // /help <words> 2026-10-14: a message, or a block in the transcript the turn owns
     [InlineData(SlashCommand.Settings, false, MidTurnClass.Pane)]
     [InlineData(SlashCommand.Tools, false, MidTurnClass.Pane)]
     [InlineData(SlashCommand.Mcp, false, MidTurnClass.Pane)]
@@ -24372,8 +24373,14 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(ChatScreen.ArgumentItems("/model", "", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/remember", "", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/compact", "", sources));
-        Assert.Empty(ChatScreen.ArgumentItems("/help", "", sources));
+        Assert.Empty(ChatScreen.ArgumentItems("/help", "", sources));   // the bare /help's Enter must open the pane, never take a pick
         Assert.Empty(ChatScreen.ArgumentItems("/bogus", "", sources));
+
+        // /help <words> (2026-10-14): the command names without the slash once a letter is typed; an exact name or free words, nothing.
+        Assert.Contains(ChatScreen.ArgumentItems("/help", "cl", sources), item => item.Text == "claude");
+        Assert.All(ChatScreen.ArgumentItems("/help", "cl", sources), item => Assert.StartsWith("cl", item.Text, StringComparison.Ordinal));
+        Assert.Empty(ChatScreen.ArgumentItems("/help", "claude", sources));
+        Assert.Empty(ChatScreen.ArgumentItems("/help", "how do", sources));
     }
 
     [Fact]
