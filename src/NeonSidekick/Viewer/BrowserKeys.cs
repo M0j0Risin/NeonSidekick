@@ -18,11 +18,15 @@ public enum BrowserKeyAction
 
     /// <summary>The page's load stopped (Esc while one loads; otherwise Esc is the page's).</summary>
     Stop,
+
+    /// <summary>The history menu opened at its button (Ctrl+H, later on 2026-10-13).</summary>
+    History,
 }
 
 /// <summary>
 /// The Browser window's keys (2026-10-13): Ctrl+W closes it, F5 or Ctrl+R reloads, Alt+← goes back and Alt+→ forward, Ctrl+L, Alt+D
-/// or F6 goes to the address box, Esc stops a page that is loading (later the same day, with the navigation bar); nothing else is
+/// or F6 goes to the address box, Esc stops a page that is loading (later the same day, with the navigation bar), Ctrl+H opens the
+/// history menu (later still); nothing else is
 /// taken — unlike the video window, no chord goes to the chat (<c>TerminalHandoff.Take</c>), since a page's form wants Ctrl+C, Ctrl+V
 /// and the rest, and a page's own dialog Esc. Pure; pinned.
 /// </summary>
@@ -32,6 +36,7 @@ public static class BrowserKeys
     public const int VkR = 0x52;
     public const int VkL = 0x4C;
     public const int VkD = 0x44;
+    public const int VkH = 0x48;
     public const int VkF5 = 0x74;
     public const int VkF6 = 0x75;
     public const int VkLeft = 0x25;
@@ -49,6 +54,7 @@ public static class BrowserKeys
         VkD when alt && !control => BrowserKeyAction.Address,
         VkF6 when !control && !alt => BrowserKeyAction.Address,
         VkEscape when loading && !control && !alt => BrowserKeyAction.Stop,
+        VkH when control && !alt => BrowserKeyAction.History,
         _ => BrowserKeyAction.None,
     };
 }

@@ -419,6 +419,9 @@ internal sealed unsafe partial class BrowserWindowThread
             case BrowserToolItem.Home:
                 Go(BrowserWindow.HomeAddress());
                 break;
+            case BrowserToolItem.History:
+                OpenHistoryMenu(keyboard: false);
+                break;
             case BrowserToolItem.Go:
                 GoTyped();
                 break;
@@ -502,6 +505,11 @@ internal sealed unsafe partial class BrowserWindowThread
         }
 
         int key = (int)msg->wParam;
+        if ((msg->hwnd == _edit || msg->hwnd == _hwnd) && MenuKey(key))
+        {
+            return true;   // the history menu has the keys while it shows
+        }
+
         if (msg->hwnd == _edit)
         {
             bool control = GetKeyState(VkControl) < 0, alt = GetKeyState(VkMenu) < 0;

@@ -31,7 +31,8 @@ namespace NeonSidekick.Viewer;
 /// 48 get_DocumentTitle; ICoreWebView2_4 75 add_DownloadStarting; ICoreWebView2_7 80 PrintToPdf; the navigation-completed arguments
 /// 3 get_IsSuccess, and their second interface's 6 get_HttpStatusCode; the download-starting arguments 5 put_Cancel, 9 put_Handled.
 /// Its navigation bar's (later the same day, the same header): ICoreWebView2 13 add_HistoryChanged, 38 get_CanGoBack,
-/// 39 get_CanGoForward, 41 GoForward, 43 Stop; ICoreWebView2Controller 12 MoveFocus.</para>
+/// 39 get_CanGoForward, 41 GoForward, 43 Stop; ICoreWebView2Controller 12 MoveFocus. Its privacy (later still): ICoreWebView2_13
+/// 105 get_Profile; ICoreWebView2Profile2 10 ClearBrowsingData, 12 ClearBrowsingDataAll.</para>
 ///
 /// <para>The <c>add_*</c> calls' registration tokens are not kept: <see cref="ControllerClose"/> drops every handler with the
 /// view, and nothing is ever unsubscribed earlier. Every string WebView2 hands out is <c>CoTaskMemAlloc</c>'d and freed here
@@ -80,6 +81,12 @@ internal static unsafe partial class WebViewNative
     internal static readonly Guid IidWebView2_7 = new("79C24D83-09A3-45AE-9418-487F32A58740");
     internal static readonly Guid IidPrintToPdfCompleted = new("CCF1EF04-FD8E-4D5F-B2DE-0983E41B8C36");
     internal static readonly Guid IidHistoryChanged = new("C79A420C-EFD9-4058-9295-3E8B4BCAB645");
+    internal static readonly Guid IidWebView2_13 = new("F75F09A8-667E-4983-88D6-C8773F315E84");
+    internal static readonly Guid IidProfile2 = new("FA740D4B-5EAE-4344-A8AD-74BE31925397");
+    internal static readonly Guid IidClearBrowsingDataCompleted = new("E9710A06-1D1D-49B2-8234-226F35846AE5");
+
+    /// <summary><c>COREWEBVIEW2_BROWSING_DATA_KINDS</c>: the browsing history and the download history, the Browser window's "history".</summary>
+    internal const int BrowsingDataHistory = 0x1000 | 0x200;
 
     /// <summary><c>COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY</c>: the virtual host's files are the top-level page's alone.</summary>
     internal const int HostAccessDeny = 0;
@@ -137,6 +144,9 @@ internal static unsafe partial class WebViewNative
     private const int GetCanGoForwardSlot = 39;
     private const int GoForwardSlot = 41;
     private const int StopSlot = 43;
+    private const int GetProfileSlot = 105;
+    private const int ClearBrowsingDataSlot = 10;
+    private const int ClearBrowsingDataAllSlot = 12;
     private const int AddDocumentTitleChangedSlot = 46;
     private const int GetDocumentTitleSlot = 48;
     private const int AddDownloadStartingSlot = 75;
@@ -332,6 +342,23 @@ internal static unsafe partial class WebViewNative
     internal static bool CanGoBack(nint webView) => GetFlag(webView, GetCanGoBackSlot);
 
     internal static bool CanGoForward(nint webView) => GetFlag(webView, GetCanGoForwardSlot);
+
+    /// <summary><c>ICoreWebView2_13.get_Profile</c>: the view's profile (an <c>ICoreWebView2Profile</c>, AddRef'd), or zero.</summary>
+    internal static int GetProfile(nint webView13, out nint profile)
+    {
+        nint result;
+        int hr = ((delegate* unmanaged<nint, nint*, int>)Slot(webView13, GetProfileSlot))(webView13, &result);
+        profile = hr >= 0 ? result : 0;
+        return hr;
+    }
+
+    /// <summary><c>ICoreWebView2Profile2.ClearBrowsingData(kinds, handler)</c>: the data of <paramref name="kinds"/> cleared; <paramref name="handler"/> gets the HRESULT (<see cref="WebViewHandler.Done"/>).</summary>
+    internal static int ClearBrowsingData(nint profile2, int kinds, nint handler) =>
+        ((delegate* unmanaged<nint, int, nint, int>)Slot(profile2, ClearBrowsingDataSlot))(profile2, kinds, handler);
+
+    /// <summary><c>ICoreWebView2Profile2.ClearBrowsingDataAll(handler)</c>: everything the profile keeps.</summary>
+    internal static int ClearBrowsingDataAll(nint profile2, nint handler) =>
+        ((delegate* unmanaged<nint, nint, int>)Slot(profile2, ClearBrowsingDataAllSlot))(profile2, handler);
 
     private static bool GetFlag(nint instance, int slot)
     {

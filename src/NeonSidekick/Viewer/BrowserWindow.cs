@@ -11,7 +11,8 @@ namespace NeonSidekick.Viewer;
 /// The Browser window (2026-10-13, the user's ask: the YouTube work's WebView2 used to let a person past a bot check the headless
 /// browser cannot clear): a real browser page in a window of the app's own, a plain Win32 window on its own thread hosting WebView2
 /// (<see cref="WebViewHost"/> with <see cref="WebViewProfile.Browser"/>), the video window's twin and kept apart from it — its own
-/// class, title, place (<see cref="Position"/>) and profile (<see cref="BrowserPage.UserDataFolder"/>, kept between runs).
+/// class, title, place (<see cref="Position"/>) and profile (<see cref="BrowserPage.UserDataFolder"/>, kept between runs; the loaded
+/// app profile's own since later on 2026-10-13, <see cref="ProfileDirectory"/>).
 ///
 /// <para>Two uses. A web tool's bot check (<see cref="IBrowserWindow.SolveAsync"/>): the window opens on the address and comes to the
 /// front, the user solves the check, and once the page has settled with no check showing (<see cref="BrowserWatch"/>) its DOM, the
@@ -41,8 +42,21 @@ public static class BrowserWindow
     /// <summary>Told the window's corner as it closes, on its thread. It must not block.</summary>
     public static Action<int, int>? Placed { get; set; }
 
-    /// <summary>The app's home (<c>Program</c>): the window's WebView2 profile lives in <c>&lt;home&gt;\webview2-browser</c>.</summary>
-    public static string? Home { get; set; }
+    /// <summary>
+    /// The loaded app profile's folder (<c>Program</c>), read at each open: the window's WebView2 profile lives in
+    /// <c>&lt;profile&gt;\webview2-browser</c> (the home's until later on 2026-10-13, the user's pick: each profile its own history,
+    /// cookies, sign-ins and solved checks; the home's old folder is left as it was), its list of visits in
+    /// <c>&lt;profile&gt;\browser-history.json</c>. Null (the smoke, a test) is a temp folder.
+    /// </summary>
+    public static Func<string>? ProfileDirectory { get; set; }
+
+    /// <summary>The setting <c>Browser privacy</c> as it is now (<c>Program</c>), read when it acts; <c>clear-history</c> until it is set.</summary>
+    public static Func<BrowserPrivacyKind>? Privacy { get; set; }
+
+    /// <summary>The privacy in force now.</summary>
+    internal static BrowserPrivacyKind PrivacyNow() => Privacy?.Invoke() ?? BrowserPrivacyKind.ClearHistory;
+
+    private static string ProfileNow() => ProfileDirectory?.Invoke() ?? Path.Combine(Path.GetTempPath(), "NeonSidekick");
 
     /// <summary>
     /// The results page for words typed in the address box (<c>Program</c>: <see cref="BrowserAddress.SearchUrl"/> over the settings in
@@ -66,28 +80,44 @@ public static class BrowserWindow
     public static IBrowserWindow Window { get; } = new WindowsBrowserWindow();
 
     /// <summary>The open window, else a new one started; throws <see cref="InvalidOperationException"/> with the reason when none can be had.</summary>
-    internal static BrowserWindowThread Open()
+    internal static BrowserWindowThread Open() => Open(forClear: false).Window;
+
+    /// <summary>
+    /// The loaded profile's open window, else a new one started (<paramref name="forClear"/>: for a clear alone, hidden, no clear of its
+    /// own as it opens), and whether it was started now. A window open on another profile's folder (a race with the profile switch,
+    /// which closes it) is closed first, nothing handed over. Throws <see cref="InvalidOperationException"/> when none can be had.
+    /// </summary>
+    internal static (BrowserWindowThread Window, bool Started) Open(bool forClear)
     {
         lock (s_startGate)
         {
+            string profile = ProfileNow();
+            string folder = BrowserPage.UserDataFolder(profile);
+            BrowserWindowThread? stale = null;
             lock (s_gate)
             {
                 if (s_open is { Alive: true } open)
                 {
-                    return open;
+                    if (string.Equals(open.UserDataFolder, folder, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return (open, false);
+                    }
+
+                    stale = open;
+                    s_open = null;
                 }
             }
 
+            stale?.Close();
             var identity = CheckRuntime();
-            string home = Home ?? Path.Combine(Path.GetTempPath(), "NeonSidekick");
-            var window = new BrowserWindowThread(BrowserPage.UserDataFolder(home), identity);
+            var window = new BrowserWindowThread(folder, identity, Path.Combine(profile, BrowserHistory.FileName), forClear);
             window.Start();
             lock (s_gate)
             {
                 s_open = window;
             }
 
-            return window;
+            return (window, true);
         }
     }
 
@@ -157,6 +187,29 @@ public static class BrowserWindow
         }
 
         public bool Close() => BrowserWindow.Close();
+
+        public async Task<string?> ClearAsync(BrowserClear kind)
+        {
+            BrowserWindowThread window;
+            bool started;
+            try
+            {
+                (window, started) = await Task.Run(() => Open(forClear: true)).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex)
+            {
+                // No window to clear Chromium's data with: the profile's list of visits goes all the same.
+                string file = Path.Combine(ProfileNow(), BrowserHistory.FileName);
+                if (File.Exists(file))
+                {
+                    BrowserHistory.Delete(file);
+                }
+
+                return ex.Message;
+            }
+
+            return await window.ClearAsync(kind, closeAfter: started).ConfigureAwait(false);
+        }
     }
 }
 
@@ -168,6 +221,9 @@ internal sealed unsafe partial class BrowserWindowThread
     private static readonly IntPtr PollTimer = 1;
     private static readonly IntPtr HarvestTimer = 2;
     private static readonly IntPtr LingerTimer = 3;
+    private static readonly IntPtr HistorySaveTimer = 4;
+    private static readonly IntPtr CloseClearTimer = 5;
+    private static readonly IntPtr OpenClearTimer = 6;
 
     /// <summary>
     /// How long a bot check's window stays, hidden, after its check is through before it closes: a turn's next check (another site, a
@@ -212,13 +268,18 @@ internal sealed unsafe partial class BrowserWindowThread
     private volatile bool _noHarvest;
     private volatile bool _alive = true;
 
-    public BrowserWindowThread(string userDataFolder, BrowserIdentity identity)
+    public BrowserWindowThread(string userDataFolder, BrowserIdentity identity, string? historyFile = null, bool forClear = false)
     {
         _userDataFolder = userDataFolder;
         _identity = identity;
+        _historyFile = historyFile;
+        _forClear = forClear;
     }
 
     public bool Alive => _alive;
+
+    /// <summary>The WebView2 user data folder the window runs on: its profile's.</summary>
+    public string UserDataFolder => _userDataFolder;
 
     /// <summary>The thread started and the window made (the WebView follows on its own); throws with the reason when it could not be.</summary>
     public void Start()
@@ -421,6 +482,8 @@ internal sealed unsafe partial class BrowserWindowThread
             ShowTitle();
 
             Directory.CreateDirectory(_userDataFolder);
+            _menu = new ContextMenuWindow(_hwnd, MenuChosenMessage);
+            LoadHistory();
             _host = new WebViewHost(_hwnd)
             {
                 Created = OnCreated,
@@ -461,6 +524,7 @@ internal sealed unsafe partial class BrowserWindowThread
         finally
         {
             _alive = false;
+            _menu?.Close();
             _host?.Close();
             if (!_started && _hwnd != IntPtr.Zero)
             {
@@ -501,6 +565,8 @@ internal sealed unsafe partial class BrowserWindowThread
                 : BotCheckResult.Ended(BotCheckEnd.GaveUp, ""));
         }
 
+        EndClears(_failure ?? BrowserText.Closed);
+
         SettleVisits(_failure is { } why ? BrowserVisit.Empty with { Failure = why } : BrowserVisit.Empty);
     }
 
@@ -523,6 +589,19 @@ internal sealed unsafe partial class BrowserWindowThread
                 KillTimer(hwnd, HarvestTimer);
                 EndVisit([]);
                 return IntPtr.Zero;
+            case WmTimer when wParam == HistorySaveTimer:
+                KillTimer(hwnd, HistorySaveTimer);
+                SaveHistory();
+                return IntPtr.Zero;
+            case WmTimer when wParam == CloseClearTimer:
+                EndCloseClear("did not answer in time");
+                return IntPtr.Zero;
+            case WmTimer when wParam == OpenClearTimer:
+                EndOpenClear();
+                return IntPtr.Zero;
+            case MenuChosenMessage:
+                RunHistoryCommand((int)wParam);
+                return IntPtr.Zero;
             case WmTimer when wParam == LingerTimer:
                 KillTimer(hwnd, LingerTimer);
                 if (_job is null && _visited is null)
@@ -532,28 +611,42 @@ internal sealed unsafe partial class BrowserWindowThread
 
                 return IntPtr.Zero;
             case WmSize:
+                _menu?.Close();
                 LayOutBar();
                 _host?.Resize();
                 return IntPtr.Zero;
             case WmMove:
+                _menu?.Close();
                 _host?.ParentMoved();
                 break;
             case WmActivate:
+                if (((long)wParam & 0xFFFF) == 0)
+                {
+                    _menu?.Close();   // another window took the keyboard: the menu goes, as Windows' own does
+                }
+
                 ApplyStyle();   // a /theme change reaches the window the next time it is focused
                 break;
             case WmClose:
+                _menu?.Close();
                 if (StartHarvest())
                 {
                     return IntPtr.Zero;   // the cookies first; the close comes again once they are read
                 }
 
-                TerminalHandoff.ReturnFocus(hwnd);
-                _chrome.RememberPosition(BrowserWindow.Placed);
                 if (_job is { } job)
                 {
                     Finish(job, BotCheckResult.Ended(BotCheckEnd.GaveUp, job.Request.Url.AbsoluteUri), close: false);
                 }
 
+                if (StartCloseClear())
+                {
+                    return IntPtr.Zero;   // then the history, under clear-history; the close comes again once it is cleared
+                }
+
+                TerminalHandoff.ReturnFocus(hwnd);
+                _chrome.RememberPosition(BrowserWindow.Placed);
+                KeepHistoryAtClose();
                 _host?.Close();
                 DestroyWindow(hwnd);
                 return IntPtr.Zero;
@@ -586,16 +679,32 @@ internal sealed unsafe partial class BrowserWindowThread
     private void OnCreated()
     {
         _created = true;
+        if (!StartOpenClear())
+        {
+            BecomeUsable();
+        }
+    }
+
+    // The view made and any clear as it opened done: the page asked for meanwhile, then the work that waited for a view.
+    private void BecomeUsable()
+    {
         if (_waitingUrl is { } url)
         {
             _waitingUrl = null;
             _host!.Navigate(url);
         }
+
+        var waiting = _whenUsable.ToArray();
+        _whenUsable.Clear();
+        foreach (var work in waiting)
+        {
+            work();
+        }
     }
 
     private void Go(string url)
     {
-        if (_created)
+        if (Usable)
         {
             _host!.Navigate(url);
         }
@@ -883,6 +992,11 @@ internal sealed unsafe partial class BrowserWindowThread
     {
         SetBarState(_barState with { Loading = false });
         ReadHistory();
+        if (ok)
+        {
+            RecordVisit();
+        }
+
         if (_job is { } job && BrowserPage.HostOf(_host?.Source) is not null)
         {
             job.Watch.Navigated(ok, status);
@@ -892,6 +1006,7 @@ internal sealed unsafe partial class BrowserWindowThread
     private void OnTitleChanged(string title)
     {
         _pageTitle = title;
+        RetitleVisit(title);
         ShowTitle();
     }
 
@@ -945,6 +1060,11 @@ internal sealed unsafe partial class BrowserWindowThread
     {
         bool control = GetKeyState(VkControl) < 0;
         bool alt = GetKeyState(VkMenu) < 0;
+        if (MenuKey(virtualKey))
+        {
+            return true;   // the history menu has the keys while it shows (from the page too); a chord goes on as usual
+        }
+
         switch (BrowserKeys.ActionFor(virtualKey, control, alt, _barState.Loading))
         {
             case BrowserKeyAction.Close:
@@ -964,6 +1084,9 @@ internal sealed unsafe partial class BrowserWindowThread
                 return true;
             case BrowserKeyAction.Stop:
                 _host?.Stop();
+                return true;
+            case BrowserKeyAction.History:
+                OpenHistoryMenu(keyboard: true);
                 return true;
             default:
                 return false;

@@ -24,9 +24,10 @@ public sealed class BrowserToolbarTests
         Assert.Equal(new BarRect(38, 4, 70, 36), layout.Forward);
         Assert.Equal(new BarRect(72, 4, 104, 36), layout.Reload);
         Assert.Equal(new BarRect(106, 4, 138, 36), layout.Home);
-        Assert.Equal(new BarRect(148, 6, 720, 34), layout.Field);
-        Assert.Equal(new BarRect(149, 7, 177, 33), layout.Padlock);
-        Assert.Equal(new BarRect(177, 7, 715, 33), layout.Address);
+        Assert.Equal(new BarRect(140, 4, 172, 36), layout.History);   // later on 2026-10-13
+        Assert.Equal(new BarRect(182, 6, 720, 34), layout.Field);
+        Assert.Equal(new BarRect(183, 7, 211, 33), layout.Padlock);
+        Assert.Equal(new BarRect(211, 7, 715, 33), layout.Address);
         Assert.Equal(new BarRect(722, 4, 754, 36), layout.Go);
         Assert.Equal(new BarRect(764, 4, 796, 36), layout.Open);   // the margin at the right
     }
@@ -38,6 +39,7 @@ public sealed class BrowserToolbarTests
 
         Assert.Equal(60, layout.Height);
         Assert.Equal(new BarRect(6, 6, 54, 54), layout.Back);
+        Assert.Equal(new BarRect(210, 6, 258, 54), layout.History);
         Assert.Equal(48, layout.Go.Width);
         Assert.Equal(1194, layout.Open.Right);
         Assert.Equal(42, layout.Field.Height);
@@ -66,6 +68,7 @@ public sealed class BrowserToolbarTests
         }
 
         Assert.Null(layout.HitTest(37, 20));    // between back and forward
+        Assert.Null(layout.HitTest(176, 20));   // between history and the field
         Assert.Null(layout.HitTest(300, 20));   // the field: the box's
         Assert.Null(layout.HitTest(20, 2));     // above the buttons
         Assert.Null(layout.HitTest(20, 100));   // the page
@@ -138,11 +141,12 @@ public sealed class BrowserToolbarTests
     [Fact]
     public void Glyphs_AreSegoeMdl2Assets_AsEdgesOwn()
     {
-        Assert.Equal(["\uE72B", "\uE72A", "\uE72C", "\uE711", "\uE80F", "\uE72E", "\uE7BA", "\uE751", "\uE8A7"],
+        Assert.Equal(["\uE72B", "\uE72A", "\uE72C", "\uE711", "\uE80F", "\uE81C", "\uE72E", "\uE7BA", "\uE751", "\uE8A7"],
             [BrowserToolbar.BackGlyph, BrowserToolbar.ForwardGlyph, BrowserToolbar.ReloadGlyph, BrowserToolbar.StopGlyph, BrowserToolbar.HomeGlyph,
-             BrowserToolbar.LockGlyph, BrowserToolbar.NotSecureGlyph, BrowserToolbar.GoGlyph, BrowserToolbar.OpenGlyph]);
+             BrowserToolbar.HistoryGlyph, BrowserToolbar.LockGlyph, BrowserToolbar.NotSecureGlyph, BrowserToolbar.GoGlyph, BrowserToolbar.OpenGlyph]);
         Assert.Equal("Segoe MDL2 Assets", BrowserToolbar.GlyphFace);
-        Assert.Equal(["Back", "Forward", "Reload", "Home", "Go", "Open in your browser"], BrowserBarLayout.Buttons.Select(OnHttps.Name));
+        Assert.Equal(["Back", "Forward", "Reload", "Home", "History", "Go", "Open in your browser"], BrowserBarLayout.Buttons.Select(OnHttps.Name));
+        Assert.True(BrowserBarState.Initial.Enabled(BrowserToolItem.History));   // never off: an empty list opens its one dim row
     }
 
     // ── Pointer ─────────────────────────────────────────────────────────────
@@ -297,5 +301,7 @@ public sealed class BrowserToolbarTests
         Assert.Equal(BrowserKeyAction.None, BrowserKeys.ActionFor(BrowserKeys.VkD, control: false, alt: false));   // typing a d
         Assert.Equal(BrowserKeyAction.Stop, BrowserKeys.ActionFor(BrowserKeys.VkEscape, control: false, alt: false, loading: true));
         Assert.Equal(BrowserKeyAction.None, BrowserKeys.ActionFor(BrowserKeys.VkEscape, control: false, alt: false));   // the page's Esc
+        Assert.Equal(BrowserKeyAction.History, BrowserKeys.ActionFor(BrowserKeys.VkH, control: true, alt: false));   // later on 2026-10-13
+        Assert.Equal(BrowserKeyAction.None, BrowserKeys.ActionFor(BrowserKeys.VkH, control: false, alt: false));
     }
 }

@@ -2618,6 +2618,14 @@ public sealed class AppSettingsData
     public string WebBrowserHomePage { get; set; } = "";
 
     /// <summary>
+    /// What the Browser window keeps of the pages it went to (later on 2026-10-13, the user's ask and name): one of
+    /// <see cref="Viewer.BrowserPrivacy.Names"/> — <c>keep-history</c> (Chromium's history and the window's own list in the profile's
+    /// <c>browser-history.json</c>) or <c>clear-history</c> (the default: both cleared when the window closes). Cookies and sign-ins stay
+    /// either way. Read at each close; anything else reads as <see cref="Viewer.BrowserPrivacy.Default"/>. No variable.
+    /// </summary>
+    public string BrowserPrivacy { get; set; } = Viewer.BrowserPrivacy.Default;
+
+    /// <summary>
     /// How many hits a <c>web_search</c> without <c>max_results</c> returns:
     /// <see cref="MinWebSearchMaxResults"/> to <see cref="MaxWebSearchMaxResults"/>; the argument overrides
     /// it up to the same cap, and a hand-edited value is clamped. No variable.

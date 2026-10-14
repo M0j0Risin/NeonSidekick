@@ -310,6 +310,7 @@ if (OperatingSystem.IsWindows())
 {
     NeonSidekick.Viewer.BrowserWindow.SearchUrl = words => NeonSidekick.Viewer.BrowserAddress.SearchUrl(app.EffectiveSettings, words);
     NeonSidekick.Viewer.BrowserWindow.HomePage = () => app.EffectiveSettings.WebBrowserHomePage;
+    NeonSidekick.Viewer.BrowserWindow.Privacy = () => NeonSidekick.Viewer.BrowserPrivacy.Resolve(app.EffectiveSettings);   // Browser privacy, read when it acts
 }
 
 // The app's own windows hand back what they have no use for (2026-10-03): TAB brings the terminal forward, found now, while
@@ -401,7 +402,7 @@ if (OperatingSystem.IsWindows())
     };
 
     // The Browser window (2026-10-13, the bot checks) likewise: a place of its own, its WebView2 profile under the home.
-    NeonSidekick.Viewer.BrowserWindow.Home = home;
+    NeonSidekick.Viewer.BrowserWindow.ProfileDirectory = () => settings.ProfileDirectory;   // the loaded profile's own browser (later on 2026-10-13)
     NeonSidekick.Viewer.BrowserWindow.Position = () => settings.Current is { BrowserWindowLeft: int x, BrowserWindowTop: int y } ? (x, y) : null;
     NeonSidekick.Viewer.BrowserWindow.Placed = (x, y) =>
     {

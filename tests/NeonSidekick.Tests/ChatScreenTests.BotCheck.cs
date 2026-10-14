@@ -1,6 +1,7 @@
 using System.Net;
 using NeonSidekick.App;
 using NeonSidekick.Llm.Tools;
+using NeonSidekick.Settings;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
 using NeonSidekick.Viewer;
@@ -183,6 +184,85 @@ public partial class ChatScreenTests
         Assert.Contains(SettingsMenu.OpenedBrowserNotice, output);
         Assert.Contains(BotCheckText.Opened(BrowserPage.Blank), output);
         Assert.Equal("auto", _settings.Current.WebBrowserMode);
+    }
+
+    /// <summary><c>/browser clear history</c> (later on 2026-10-13): no question, the window's clear, the notice.</summary>
+    [Fact]
+    public async Task BrowserClear_History_ClearsWithNoQuestion()
+    {
+        _browserWindow = new FakeBrowserWindow();
+        PushLine("/browser clear history");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal([BrowserClear.History], _browserWindow.Clears);
+        Assert.Contains(BotCheckText.ClearedHistory, output);
+        Assert.DoesNotContain(BotCheckText.ClearAllQuestion, output);
+    }
+
+    /// <summary><c>/browser clear all</c> asks first at the idle line: a yes clears everything, a no keeps it.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BrowserClear_All_AsksFirst(bool yes)
+    {
+        _browserWindow = new FakeBrowserWindow();
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(
+            Line("/browser clear all"),
+            input => input.Push(yes ? [Keys.Down, Keys.Enter] : [Keys.Enter]),   // the cursor starts on No
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(BotCheckText.ClearAllQuestion, output);
+        if (yes)
+        {
+            Assert.Equal([BrowserClear.All], _browserWindow.Clears);
+            Assert.Contains(BotCheckText.ClearedAll, output);
+        }
+        else
+        {
+            Assert.Empty(_browserWindow.Clears);
+            Assert.Contains(ChatScreen.KeptNotice, output);
+        }
+    }
+
+    /// <summary>A bare or wrong word after clear is the usage; a failed clear says why.</summary>
+    [Fact]
+    public async Task BrowserClear_Usage_AndAFailure()
+    {
+        _browserWindow = new FakeBrowserWindow { ClearAnswer = BrowserText.ClearDuringCheck };
+        PushLine("/browser clear");
+        PushLine("/browser clear bogus");
+        PushLine("/browser clear history");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, output.Split(BotCheckText.ClearUsage).Length - 1);
+        Assert.Contains(BotCheckText.ClearFailed(BrowserText.ClearDuringCheck), output);
+        Assert.Equal([BrowserClear.History], _browserWindow.Clears);
+        Assert.Equal("Usage: /browser clear history|all — history clears the pages the Browser window visited; all also clears its cookies and sign-ins", BotCheckText.ClearUsage);
+        Assert.Equal("The Browser window was not cleared: x.", BotCheckText.ClearFailed("x"));
+    }
+
+    /// <summary>A profile switch closes the Browser window, its data being each profile's own (later on 2026-10-13).</summary>
+    [Fact]
+    public async Task ProfileSwitch_ClosesTheBrowserWindow()
+    {
+        _browserWindow = new FakeBrowserWindow();
+        _settings.Update(d => d.TtsOutput = false);
+        Profiles.Create(_dir, "work", AppSettings.Copy(_settings.Current));
+        PushLine("/profile work");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.True(_browserWindow.Closes >= 1);
     }
 
     [Fact]

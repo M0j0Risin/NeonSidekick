@@ -81,6 +81,8 @@ internal sealed unsafe partial class WebViewHost
     private nint _webView3;
     private nint _webView4;
     private nint _webView7;
+    private nint _webView13;
+    private nint _profile2;
     private bool _closed;
 
     public WebViewHost(nint parent) => _parent = parent;
@@ -287,6 +289,55 @@ internal sealed unsafe partial class WebViewHost
         }
     }
 
+    /// <summary>
+    /// The browser's data cleared (later on 2026-10-13, the Browser window's privacy): its history (<see cref="BrowserClear.History"/>:
+    /// the browsing and download history) or everything its profile keeps (<see cref="BrowserClear.All"/>: cookies, sign-ins, autofill,
+    /// cache, storage, history, site settings). <paramref name="done"/> gets the HRESULT on this thread. False when it could not start (no
+    /// view yet; a runtime without <c>ICoreWebView2_13</c> or <c>ICoreWebView2Profile2</c>, which every evergreen one since 1.0.1185 has).
+    /// </summary>
+    public bool ClearBrowsingData(BrowserClear kind, Action<int> done)
+    {
+        OnThread();
+        ArgumentNullException.ThrowIfNull(done);
+        if (_webView == 0)
+        {
+            return false;
+        }
+
+        if (_profile2 == 0)
+        {
+            if (_webView13 == 0 && QueryInterface(_webView, IidWebView2_13, out _webView13) < 0)
+            {
+                return false;
+            }
+
+            if (GetProfile(_webView13, out nint profile) < 0 || profile == 0)
+            {
+                return false;
+            }
+
+            int asked = QueryInterface(profile, IidProfile2, out _profile2);
+            WebViewNative.Release(profile);
+            if (asked < 0)
+            {
+                return false;
+            }
+        }
+
+        nint handler = WebViewHandler.Done(IidClearBrowsingDataCompleted, done);
+        try
+        {
+            int hr = kind == BrowserClear.All
+                ? WebViewNative.ClearBrowsingDataAll(_profile2, handler)
+                : WebViewNative.ClearBrowsingData(_profile2, BrowsingDataHistory, handler);
+            return hr >= 0;
+        }
+        finally
+        {
+            WebViewHandler.Release(handler);
+        }
+    }
+
     /// <summary>The keyboard to the page (the Browser window's address box done with: Enter, Esc).</summary>
     public void Focus()
     {
@@ -415,13 +466,15 @@ internal sealed unsafe partial class WebViewHost
             ControllerClose(_controller);
         }
 
+        WebViewNative.Release(_profile2);
+        WebViewNative.Release(_webView13);
         WebViewNative.Release(_webView7);
         WebViewNative.Release(_webView4);
         WebViewNative.Release(_webView3);
         WebViewNative.Release(_webView);
         WebViewNative.Release(_controller);
         WebViewNative.Release(_environment);
-        _webView7 = _webView4 = _webView3 = _webView = _controller = _environment = 0;
+        _profile2 = _webView13 = _webView7 = _webView4 = _webView3 = _webView = _controller = _environment = 0;
         if (browserExited is not null && environment5 == 0)
         {
             browserExited();

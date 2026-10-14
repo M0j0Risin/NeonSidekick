@@ -12464,7 +12464,7 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Browser:
-                HandleBrowser(args);
+                await HandleBrowserAtIdleAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Terminal:
@@ -13253,6 +13253,14 @@ internal sealed partial class ChatScreen
         BindProfile();
         // The new profile's working directory: its camera .watch folder cleared as it loads (2026-10-02).
         ClearWatchFolder();
+        // The Browser window's data is each profile's own (later on 2026-10-13): the old profile's window closed with nothing handed
+        // over (its cookies stay in its own folder), and the cookies its windows gave the web tools taken back out.
+        if (_browserWindow is { } browser)
+        {
+            _ = Task.Run(browser.Close, CancellationToken.None);
+        }
+
+        _web.Fetcher.ForgetAdopted();
         DiagnosticLog.Debug(AppSettings.Category, AppSettings.NotDefaultLogLine(SettingsDiff.NotDefault(_effective())));
         // The new profile's theme (2026-09-23) before the wipe below, so the fresh screen wears it.
         ThemeName.Apply(_effective(), _settings.ThemesDirectory);

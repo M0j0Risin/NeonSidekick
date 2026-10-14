@@ -183,6 +183,9 @@ public sealed class WebFetcher
     /// <summary>The cookie scopes (a cookie's <see cref="BrowserCookie.Domain"/>) the browser handed cookies for, and the browser that earned them: what the client claims there.</summary>
     private readonly ConcurrentDictionary<string, Earned> _earned = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Every cookie <see cref="Adopt"/> put in the jar (later on 2026-10-13), so <see cref="ForgetAdopted"/> can take them out again; under its own lock.</summary>
+    private readonly List<BrowserCookie> _adopted = [];
+
     /// <summary>The earliest each host may be asked again (<see cref="PaceAsync"/>), under <see cref="_paceGate"/>.</summary>
     private readonly Dictionary<string, DateTimeOffset> _nextSlot = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _paceGate = new();
@@ -945,6 +948,11 @@ public sealed class WebFetcher
             return 0;
         }
 
+        lock (_adopted)
+        {
+            _adopted.AddRange(taken);
+        }
+
         var scopes = taken.GroupBy(c => c.Domain.ToLowerInvariant()).ToList();
         foreach (var scope in scopes)
         {
@@ -954,6 +962,43 @@ public sealed class WebFetcher
 
         DiagnosticLog.Info(Category, $"{url}: {taken.Count.ToString(CultureInfo.InvariantCulture)} of the browser's cookies handed to the HTTP client, which claims {identity.BrandName} {identity.Major.ToString(CultureInfo.InvariantCulture)} on {string.Join(", ", scopes.Select(s => s.Key))} while they last.");
         return taken.Count;
+    }
+
+    /// <summary>
+    /// The Browser window's cookies taken back out of the jar (later on 2026-10-13: <c>/browser clear all</c>, and a profile switch, the
+    /// window's data being each profile's own): every cookie <see cref="Adopt"/> put there expired, and every Edge claim it earned
+    /// dropped, so the client goes back to claiming the headless browser's brand there. Cookies from plain fetches stay. Returns how
+    /// many cookies went.
+    /// </summary>
+    public int ForgetAdopted()
+    {
+        BrowserCookie[] adopted;
+        lock (_adopted)
+        {
+            adopted = [.. _adopted];
+            _adopted.Clear();
+        }
+
+        _earned.Clear();
+        if (_cookies is null || adopted.Length == 0)
+        {
+            return 0;
+        }
+
+        int gone = 0;
+        foreach (Cookie cookie in _cookies.GetAllCookies())
+        {
+            if (!cookie.Expired && adopted.Any(a => string.Equals(a.Name, cookie.Name, StringComparison.Ordinal)
+                && string.Equals(a.Domain.TrimStart('.'), cookie.Domain.TrimStart('.'), StringComparison.OrdinalIgnoreCase)
+                && string.Equals(a.Path.StartsWith('/') ? a.Path : "/", cookie.Path, StringComparison.Ordinal)))
+            {
+                cookie.Expired = true;
+                gone++;
+            }
+        }
+
+        DiagnosticLog.Info(Category, $"{gone.ToString(CultureInfo.InvariantCulture)} of the Browser window's cookies taken back out of the HTTP client.");
+        return gone;
     }
 
     /// <summary>

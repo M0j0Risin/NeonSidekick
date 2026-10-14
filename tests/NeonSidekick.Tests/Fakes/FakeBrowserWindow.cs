@@ -6,7 +6,8 @@ namespace NeonSidekick.Tests.Fakes;
 /// <summary>
 /// The Browser window without WebView2 (2026-10-13): every bot check and <c>/browser</c> visit recorded; a check answers
 /// <see cref="Answer"/> at once (cleared with <see cref="Html"/> by default), or with <see cref="Hold"/> waits until its token is
-/// cancelled and ends as given up, noting the cancel; a visit answers <see cref="Visit"/>.
+/// cancelled and ends as given up, noting the cancel; a visit answers <see cref="Visit"/>; a clear (later on 2026-10-13) is recorded and
+/// answers <see cref="ClearAnswer"/>; every <see cref="Close"/> is counted.
 /// </summary>
 public sealed class FakeBrowserWindow : IBrowserWindow
 {
@@ -48,7 +49,24 @@ public sealed class FakeBrowserWindow : IBrowserWindow
         return Task.FromResult(Visit);
     }
 
-    public bool Close() => false;
+    public List<BrowserClear> Clears { get; } = new();
+
+    /// <summary>What a clear answers: null (done) by default, else why it failed.</summary>
+    public string? ClearAnswer { get; set; }
+
+    public int Closes { get; private set; }
+
+    public bool Close()
+    {
+        Closes++;
+        return false;
+    }
+
+    public Task<string?> ClearAsync(BrowserClear kind)
+    {
+        Clears.Add(kind);
+        return Task.FromResult(ClearAnswer);
+    }
 
     /// <summary>A check cleared to <paramref name="html"/> with one clearance cookie for the host, as Edge 155.</summary>
     public static BotCheckResult Cleared(BotCheckRequest request, string? html) =>

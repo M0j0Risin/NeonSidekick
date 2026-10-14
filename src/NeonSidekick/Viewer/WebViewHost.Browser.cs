@@ -31,7 +31,8 @@ internal sealed unsafe partial class WebViewHost
     /// the page printed by WebView2 (PrintToPdf, the fourth handler shape), a navigation to <c>file:</c> refused, and a download started
     /// and cancelled. Since the navigation bar (later the same day): the bar's address box (a stock EDIT child) and a tooltip made in the
     /// probe's window, the box's text set and read back, and a history entry (<c>location.hash</c>) seen through <c>HistoryChanged</c>,
-    /// gone back from, and the way forward seen. No network: every step stays on the blank page. Skipped (and passed) where no WebView2
+    /// gone back from, and the way forward seen; then the history cleared through the profile (<c>ICoreWebView2_13</c>,
+    /// <c>ICoreWebView2Profile2.ClearBrowsingData</c>, the fifth handler shape; later still). No network: every step stays on the blank page. Skipped (and passed) where no WebView2
     /// Runtime is installed; a missing loader fails.
     /// </summary>
     public static (bool Ok, string Detail) ProbeBrowser(TimeSpan timeout)
@@ -270,7 +271,25 @@ internal sealed unsafe partial class WebViewHost
             if (Host!.CanGoForward)
             {
                 _cookieStarted = true;
+                ClearHistory();
+            }
+        }
+
+        private void ClearHistory()
+        {
+            _step = "the history's clear";
+            if (!Host!.ClearBrowsingData(BrowserClear.History, hr =>
+            {
+                if (hr < 0)
+                {
+                    Finish(false, $"ClearBrowsingData answered 0x{hr.ToString("X8", CultureInfo.InvariantCulture)}");
+                    return;
+                }
+
                 SetCookie();
+            }))
+            {
+                Finish(false, "ClearBrowsingData could not start (no ICoreWebView2_13 or ICoreWebView2Profile2)");
             }
         }
 
@@ -351,7 +370,7 @@ internal sealed unsafe partial class WebViewHost
 
         public bool OnDownloadStarting(string? source)
         {
-            Finish(true, $"runtime {version}; the bar's address box and a tooltip; the blank page's navigation and address, its DOM, a history entry gone back from, {_cookies.ToString(CultureInfo.InvariantCulture)} cookie set and read over DevTools, a PDF of {_pdfBytes.ToString(CultureInfo.InvariantCulture)} B, a file: navigation refused, a download cancelled");
+            Finish(true, $"runtime {version}; the bar's address box and a tooltip; the blank page's navigation and address, its DOM, a history entry gone back from and cleared, {_cookies.ToString(CultureInfo.InvariantCulture)} cookie set and read over DevTools, a PDF of {_pdfBytes.ToString(CultureInfo.InvariantCulture)} B, a file: navigation refused, a download cancelled");
             return true;
         }
 

@@ -2,14 +2,14 @@ namespace NeonSidekick.Viewer;
 
 /// <summary>
 /// Where the Browser window keeps its profile and what it may show (2026-10-13, the bot checks: a page the web tools could not get
-/// past, shown to the user to solve). Its WebView2 profile is <c>&lt;home&gt;\webview2-browser</c>, kept between runs (the user's call),
+/// past, shown to the user to solve). Its WebView2 profile is <c>&lt;profile&gt;\webview2-browser</c> (the home's until later that day), kept between runs (the user's call),
 /// so a solved check's clearance, and a site the user signed in to there, are remembered next time — a folder of its own beside the
 /// video window's <see cref="VideoPage.UserDataFolder"/>, since one user data folder admits one browser, and only with the same
 /// options. Pure, portable.
 /// </summary>
 public static class BrowserPage
 {
-    /// <summary>The folder under the home WebView2 keeps the Browser window's profile in: <c>&lt;home&gt;\webview2-browser</c>.</summary>
+    /// <summary>The folder under the profile WebView2 keeps the Browser window's profile in: <c>&lt;profile&gt;\webview2-browser</c>.</summary>
     public const string FolderName = "webview2-browser";
 
     /// <summary>The window's size at 96 DPI before the user changes it: room for a check's widget and the page behind it.</summary>
@@ -19,10 +19,15 @@ public static class BrowserPage
     /// <summary>The blank page a bare <c>/browser</c> opens.</summary>
     public const string Blank = "about:blank";
 
-    public static string UserDataFolder(string home)
+    /// <summary>
+    /// The window's WebView2 profile for the app profile in <paramref name="profileDirectory"/>: <c>&lt;profile&gt;\webview2-browser</c>
+    /// (later on 2026-10-13, the user's pick: each profile its own history, cookies, sign-ins and solved checks; the home's
+    /// <c>webview2-browser</c> until then, left as it was).
+    /// </summary>
+    public static string UserDataFolder(string profileDirectory)
     {
-        ArgumentNullException.ThrowIfNull(home);
-        return Path.Combine(home, FolderName);
+        ArgumentNullException.ThrowIfNull(profileDirectory);
+        return Path.Combine(profileDirectory, FolderName);
     }
 
     /// <summary>

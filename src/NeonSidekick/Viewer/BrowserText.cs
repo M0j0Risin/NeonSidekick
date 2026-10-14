@@ -40,6 +40,7 @@ public static class BrowserText
     public const string ReloadName = "Reload";
     public const string StopName = "Stop";
     public const string HomeName = "Home";
+    public const string HistoryName = "History";
     public const string GoName = "Go";
     public const string OpenName = "Open in your browser";
     public const string SecureName = "Secure";
@@ -47,6 +48,15 @@ public static class BrowserText
 
     /// <summary>The log line for an address the box would not go to (a refused scheme, a path on this machine). Pinned.</summary>
     public static string Refused(string text) => $"the Browser window goes to web pages only, not {text}";
+
+    /// <summary>A clear asked for while a bot check waits in the window (later on 2026-10-13): refused, the check's cookies wanted. Pinned.</summary>
+    public const string ClearDuringCheck = "a bot check is waiting in the Browser window; solve it or give it up, then clear";
+
+    /// <summary>A clear the runtime refused to start (no <c>ICoreWebView2Profile2</c>). Pinned.</summary>
+    public const string ClearUnsupported = "this WebView2 Runtime cannot clear its data; update it (Windows Update does)";
+
+    /// <summary>A clear that failed with its HRESULT. Pinned.</summary>
+    public static string ClearFailed(int hr) => $"the Browser window's data was not cleared (WebView2 0x{hr.ToString("X8", CultureInfo.InvariantCulture)})";
 
     /// <summary>A page that did not load at all (no name, no answer): the detail of a <see cref="Web.BotCheckEnd.Refused"/> with no status. Pinned.</summary>
     public const string DidNotLoad = "the page did not load";

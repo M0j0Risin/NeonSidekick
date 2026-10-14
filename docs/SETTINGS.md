@@ -674,6 +674,7 @@ The tools most profiles use and the pane's own options, in four tabs: Ask, Web, 
 | Web browser path | The Chromium-based browser for headless fetches and making PDFs; empty finds Edge, Chrome or Brave. | empty (found) |
 | Web browser botcheck window | What a bot check the web tools can't get past does: `ask` asks on the pane, then opens the page in the Browser window for you to solve; `automatic` opens it without asking; `off` never does. See [The Browser window](TOOLS.md#the-browser-window). Windows only. | `ask` |
 | Web browser home page | Where the Browser window's home button and a bare `/browser` go: a web address (`example.com`, `localhost:3000`), or empty for the blank page. Windows only. | empty |
+| Browser privacy | `keep-history` keeps the pages the Browser window visited, in its history menu too; `clear-history` clears them when the window closes. Cookies and sign-ins stay either way (`/browser clear all` removes them). Each profile has its own. Windows only. | `clear-history` |
 | Web browser network mode | Where a fetch may reach: `internet` (public addresses), `lan` (this machine and the LAN) or `both`. | `internet` |
 | Web search method | `duckduckgo` (built in) or `searxng`. | `duckduckgo` |
 | Web SearXNG URL | The SearXNG instance, for `searxng`. | empty |

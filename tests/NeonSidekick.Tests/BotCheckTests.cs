@@ -228,7 +228,7 @@ public sealed class BotCheckTests : IDisposable
     [Fact]
     public void Page_TheFolder_TheIdentity_TheKeys_AndTheTitle()
     {
-        Assert.Equal(Path.Combine("home", "webview2-browser"), BrowserPage.UserDataFolder("home"));
+        Assert.Equal(Path.Combine("profiles", "work", "webview2-browser"), BrowserPage.UserDataFolder(Path.Combine("profiles", "work")));   // the profile's own since later on 2026-10-13
         Assert.Equal(new BrowserIdentity(BrowserBrand.Edge, 155, BrowserIdentity.CurrentPlatform), BrowserPage.IdentityOf("155.0.3485.66"));
         Assert.Equal(BrowserIdentity.FallbackMajor, BrowserPage.IdentityOf(null).Major);
         Assert.Equal(BrowserIdentity.FallbackMajor, BrowserPage.IdentityOf("12.0").Major);
@@ -291,6 +291,28 @@ public sealed class BotCheckTests : IDisposable
         Assert.Equal("cf_clearance=solved", _jar.GetCookieHeader(new Uri("https://example.com/")));
         Assert.Equal(solved.Identity.UserAgent, Assert.Single(agents));
         Assert.Equal(0, _web.Fetcher.Adopt([], solved.Identity, request.Url));
+    }
+
+    /// <summary>
+    /// <c>/browser clear all</c> and a profile switch (later on 2026-10-13): the window's cookies taken back out of the jar and its Edge
+    /// claim dropped; a cookie a plain fetch set stays.
+    /// </summary>
+    [Fact]
+    public async Task Fetcher_ForgetAdopted_TakesTheWindowsCookiesOut_AndKeepsAPlainFetchs()
+    {
+        var agents = new List<string>();
+        _http.Map("https://example.com/", (r, _) => { agents.Add(r.Headers.UserAgent.ToString()); return Task.FromResult(Html(HttpStatusCode.OK, Article)); });
+        _jar.Add(new Uri("https://example.com/"), new Cookie("plain", "kept", "/"));
+        var request = new BotCheckRequest(new Uri("https://example.com/"), BotCheckUse.Fetch, "HTTP 403");
+        var solved = FakeBrowserWindow.Cleared(request, Article);
+        _web.Fetcher.FromWindow(request.Url, solved);
+
+        Assert.Equal(1, _web.Fetcher.ForgetAdopted());
+        Assert.Equal(0, _web.Fetcher.ForgetAdopted());   // nothing left to forget
+        await _web.Fetcher.FetchAsync(new Uri("https://example.com/"), WebAccess.Options(_settings), CancellationToken.None);
+
+        Assert.Equal("plain=kept", _jar.GetCookieHeader(new Uri("https://example.com/")));
+        Assert.NotEqual(solved.Identity.UserAgent, Assert.Single(agents));   // no longer Edge there
     }
 
     [Fact]

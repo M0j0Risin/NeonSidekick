@@ -80,10 +80,31 @@ public static class BotCheckText
     // ---- /browser ----
 
     /// <summary><c>/browser</c>'s usage line. Pinned.</summary>
-    public const string BrowserUsage = "Usage: /browser [url] — opens the page (or a blank one) in the Browser window; its cookies go to the web tools when you close it";
+    public const string BrowserUsage = "Usage: /browser [url] — opens the page (or Web browser home page) in the Browser window; its cookies go to the web tools when you close it. /browser clear history|all clears what it keeps";
 
     /// <summary>A <c>/browser</c> argument that is no web address. Pinned.</summary>
     public static string NotAUrl(string text) => $"'{text}' is not an http or https address. " + BrowserUsage;
+
+    /// <summary>The words after <c>/browser clear</c> (later on 2026-10-13). Pinned.</summary>
+    public const string ClearWord = "clear";
+    public const string ClearHistoryWord = "history";
+    public const string ClearAllWord = "all";
+
+    /// <summary>A <c>/browser clear</c> without <c>history</c> or <c>all</c>. Pinned.</summary>
+    public const string ClearUsage = "Usage: /browser clear history|all — history clears the pages the Browser window visited; all also clears its cookies and sign-ins";
+
+    /// <summary>The question before <c>/browser clear all</c>: sign-ins go. Pinned.</summary>
+    public const string ClearAllQuestion = "Clear everything the Browser window keeps for this profile — history, cookies and sign-ins?";
+
+    /// <summary>The notices after a clear. Pinned.</summary>
+    public const string ClearedHistory = "Cleared the Browser window's history.";
+    public const string ClearedAll = "Cleared everything the Browser window kept: history, cookies and sign-ins.";
+
+    /// <summary>A <c>/browser clear all</c> under a reply: its question waits for the idle line. Pinned.</summary>
+    public const string ClearAllAtIdle = "/browser clear all asks first; run it at the idle line.";
+
+    /// <summary>A clear that could not be done, with why. Pinned.</summary>
+    public static string ClearFailed(string why) => "The Browser window was not cleared: " + why + ".";
 
     /// <summary>The notice as the window opens. Pinned.</summary>
     public static string Opened(string url) => "Opened " + url + " in the Browser window; close it to hand its cookies to the web tools.";

@@ -244,7 +244,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount], TabFields(ToolsText.OptionsTabTitle));
         Assert.Equal([SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds], TabFields(ToolsText.HomeAssistantTabTitle));   // the switch, the server and its token, the test, the policy, Assist's agent, the timeout (2026-09-28)   // the fold's count under the switch (2026-09-22, the user's place), the code fold's under it
         Assert.Equal([SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine], TabFields(ToolsText.PrintTabTitle));   // the switch, the policy, the printer, the size (later on 2026-09-28); the PDF engine (2026-10-03)
-        Assert.Equal([SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes], TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01); the botcheck window under the path (2026-10-13), the home page under it (later that day)
+        Assert.Equal([SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes], TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01); the botcheck window under the path (2026-10-13), the home page under it (later that day)
         Assert.Equal([SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults], TabFields(ToolsText.FileMenuTitle));   // the five picture rows on the Image menu since 2026-10-10; the pasted pictures' folder last (2026-10-09); image_edit's three before it (2026-10-04); the search cap (2026-10-01), the view_image cap before it (2026-09-19); the browser mode under the folder mode, 2026-09-21
         Assert.Equal([SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls], TabFields(ToolsText.ShellTabTitle));   // the policy (the switch) first, then the list, the shell, the caps, then execute_code's four (2026-09-21; the bridge switch later that day; the police toggle third, 2026-09-22; prefer native under it, 2026-09-26; the forbidden strings under the police, 2026-10-03)
         Assert.Equal([SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], TabFields(ToolsText.AskTabTitle));
@@ -1846,8 +1846,8 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));   // read at the next turn: nothing to reconnect
 
         Assert.False(_settings.Current.WebTools);
-        // The ten rows padded to the tab's own column (29 since the botcheck window's row, 2026-10-13), the toggle's notice on the status line under the strip.
-        AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.WebTabTitle, "▸ Web tools                    on\n  Web browser mode             auto\n  Web browser path             (auto: msedge.exe)\n  Web browser botcheck window  ask\n  Web browser home page        (blank page)\n  Web browser network mode     internet\n  Web search method            duckduckgo\n  Web SearXNG URL              (not set)\n  Web search max results       20 results\n  Web download max (MB)        50 MB\n"), 100);
+        // The eleven rows padded to the tab's own column (29 since the botcheck window's row, 2026-10-13), the toggle's notice on the status line under the strip.
+        AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.WebTabTitle, "▸ Web tools                    on\n  Web browser mode             auto\n  Web browser path             (auto: msedge.exe)\n  Web browser botcheck window  ask\n  Web browser home page        (blank page)\n  Browser privacy              clear-history\n  Web browser network mode     internet\n  Web search method            duckduckgo\n  Web SearXNG URL              (not set)\n  Web search max results       20 results\n  Web download max (MB)        50 MB\n"), 100);
         Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.CoreTabTitle) + "\n  · Web tools: off\n" + Heading("── Browser") + "\n▸ Web tools                    off\n", Output);
         pane.Dispose();
     }
@@ -2130,12 +2130,32 @@ public partial class ToolsMenuTests : IDisposable
     }
 
     [Fact]
+    public async Task OnThePane_BrowserPrivacy_IsUnderTheHomePage_APicker()
+    {
+        // Later on 2026-10-13 (the user's ask and name): keep-history or clear-history, the default.
+        var (menu, pane, _) = PaneMenu();
+        Push(ToTab(ToolsText.WebTabTitle));
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the sixth row: the picker, on clear-history
+        Push(Keys.Up, Keys.Enter);                                                  // keep-history
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal("keep-history", _settings.Current.BrowserPrivacy);
+        Assert.Contains("\n  keep-history  keeps the pages it visited, in its history menu too\n▸ clear-history clears its history when the window closes; cookies and sign-ins stay\n", Output);
+        Assert.Contains("  · Browser privacy: keep-history\n", Output);
+        Assert.Equal("Browser privacy", SettingsMenu.FieldName(SettingsField.BrowserPrivacy));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.BrowserPrivacy));
+        pane.Dispose();
+    }
+
+    [Fact]
     public async Task OnThePane_WebDownloadMax_IsTheWebTabsLastRow_Typed_OutOfRangeRefused()
     {
         // 2026-10-01, the user's ask: 1 to 102400 MB, 50 by default (the constant until then).
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.WebTabTitle));   // Web
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the tenth row (the botcheck window's and the home page's since 2026-10-13), after the search count: the typed slot with "50"
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the eleventh row (the botcheck window's, the home page's and Browser privacy's since 2026-10-13), after the search count: the typed slot with "50"
         Push(Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);   // refused: 0
         Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Char('2'), Keys.Char('0'), Keys.Char('0'), Keys.Char('0'), Keys.Enter);   // 2000
         Push(Keys.Escape);

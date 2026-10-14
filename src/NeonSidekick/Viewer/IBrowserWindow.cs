@@ -31,6 +31,13 @@ public interface IBrowserWindow
     /// </summary>
     Task<BrowserVisit> BrowseAsync(Uri? url);
 
-    /// <summary>The open window closed without handing anything over (the app's exit); true when one was open.</summary>
+    /// <summary>The open window closed without handing anything over (the app's exit, a profile switch); true when one was open.</summary>
     bool Close();
+
+    /// <summary>
+    /// The loaded profile's browser data cleared (<c>/browser clear history|all</c>, later on 2026-10-13): the history (and the window's
+    /// own list of visits) or everything its profile keeps. With no window open one is started hidden for it and closed after. Null when
+    /// done, else why not: no window could be had, a bot check waits in it, the runtime refused.
+    /// </summary>
+    Task<string?> ClearAsync(BrowserClear kind);
 }

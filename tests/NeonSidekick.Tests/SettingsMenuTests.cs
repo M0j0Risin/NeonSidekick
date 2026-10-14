@@ -953,6 +953,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.BotChatImageMentionMode,   // 2026-10-13, the Botchat tab under the img2img mode
                 SettingsField.WebBrowserBotcheckWindow,   // later on 2026-10-13, /tools › Core › Web under the browser path
                 SettingsField.WebBrowserHomePage,   // later still on 2026-10-13, under the botcheck window: the Browser window's home
+                SettingsField.BrowserPrivacy,       // later still on 2026-10-13, under the home page: keep-history or clear-history
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1295,7 +1296,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.DoesNotContain(ToolsMenuTests.TabFields(ToolsText.FileMenuTitle), f => SettingsMenu.FieldName(f).Contains("safe edits", StringComparison.OrdinalIgnoreCase));   // gone 2026-10-01
         Assert.Equal(ToolsMenuTests.TabFields(ToolsText.FileMenuTitle).Max(f => SettingsMenu.FieldName(f).Length) + 2, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.FileMenuTitle)));
         // The web rows (2026-09-15): the Web tab (titled Browser until later that day; /tools' last from 2026-09-19, third since later on 2026-09-21), in this order, none a reconnect — one toggle, three pickers (the network mode in the LAN switch's slot since 2026-09-18; the search method above the URL it governs), two typed rows that may be empty, a typed count.
-        Assert.Equal(new[] { SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes }, ToolsMenuTests.TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01)
+        Assert.Equal(new[] { SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes }, ToolsMenuTests.TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01)
         // The shell rows (2026-09-21): the Shell tab (between Git and Web that day, between Files and Ask since later on) — the policy (the group's switch, a picker), the allowed list, the default shell (a picker), then the three typed caps,
         // the languages, their timeout, the tool bridge (the tab's one toggle, later that day) above the tool-call cap it governs; none a reconnect. The outside-paths police (2026-09-22) sits third, under the list it guards beside.
         // Shell prefer native tools (2026-09-26) sits under the police, the other guard in front of the gate; the forbidden strings (2026-10-03) between them, the police's own list.
