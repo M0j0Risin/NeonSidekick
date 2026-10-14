@@ -37,6 +37,19 @@ public class DraftFileTests : IDisposable
         Assert.Equal(11 + 32 + 4, Path.GetFileName(path).Length);   // the prefix, a 32-hex GUID, the extension
     }
 
+    /// <summary>The overload with a text (2026-10-13, /prompts' editor round trip): the prompt in the file, its line breaks the platform's.</summary>
+    [Fact]
+    public void Create_WithAText_WritesItFirst_ItsLineBreaksThePlatforms()
+    {
+        string path = DraftFile.Create(_dir, "one\ntwo");
+
+        Assert.StartsWith(DraftFile.FilePrefix, Path.GetFileName(path));
+        Assert.Equal("one" + Environment.NewLine + "two", File.ReadAllText(path));
+        Assert.False(DraftFile.IsBlank(File.ReadAllText(path)));
+        Assert.True(DraftFile.TryDelete(path));
+        Assert.False(File.Exists(path));
+    }
+
     [Fact]
     public void CommandLine_IsTheCmdSCForm_WithTheOuterQuotesItStrips()
     {

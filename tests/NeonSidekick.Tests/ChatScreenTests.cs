@@ -7078,7 +7078,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("A profile named \"x\" already exists; /profile x switches to it.", ChatScreen.ProfileExistsError("x"));
         Assert.Equal("(🪪 created profile \"x\" from the current settings)", ChatScreen.ProfileCreatedNotice("x"));
         Assert.Equal("(🪪 created profile \"x\" from the current settings)", ChatScreen.ProfileCreatedNotice("x", Array.Empty<string>()));
-        Assert.Equal("(🪪 created profile \"x\" from the current settings, memories, persona, operating rules, voice directive, MCP servers)", ChatScreen.ProfileCreatedNotice("x", Profiles.SidekickFiles));
+        Assert.Equal("(🪪 created profile \"x\" from the current settings, memories, persona, operating rules, voice directive, MCP servers, saved prompts)", ChatScreen.ProfileCreatedNotice("x", Profiles.SidekickFiles));
         Assert.Equal("(🪪 created profile \"x\" from the current settings, persona, voice directive)", ChatScreen.ProfileCreatedNotice("x", new[] { PersonaFile.FileName, VocaliaFile.FileName }));
         Assert.Equal("(🪪 deleted profile \"x\")", ChatScreen.ProfileDeletedNotice("x"));
         Assert.Equal("Could not change profiles: why", ChatScreen.ProfileFailedError("why"));
@@ -7392,6 +7392,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Profile_Add_CopiesTheSettingsAndTheMemories_NeverThePromptFiles()
     {
         FurnishedDefaultProfile();
+        new NeonSidekick.Prompts.SavedPrompts(ProfileDir(Profiles.DefaultName)).Add("Summarize this.", out _);   // the saved prompts come along too (2026-10-13)
         _chat.EnqueueText("Hello.");
         PushLine("/profile add work");
         PushLine("hi");
@@ -7400,9 +7401,9 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("  · " + ChatScreen.ProfileCreatedNotice("work", Profiles.BasicSidekickFiles), output);
-        Assert.Contains("(🪪 created profile \"work\" from the current settings, memories)", output);
+        Assert.Contains("(🪪 created profile \"work\" from the current settings, memories, saved prompts)", output);
         Assert.Equal("work", _settings.ProfileName);
-        Assert.Equal(new[] { MemoryStore.FileName, Profiles.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order());   // sessions.db from the turn sits under db\sessions (2026-10-10), never copied
+        Assert.Equal(new[] { MemoryStore.FileName, Profiles.FileName, NeonSidekick.Prompts.SavedPrompts.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order());   // sessions.db from the turn sits under db\sessions (2026-10-10), never copied
         var request = Assert.Single(_chat.Requests);
         string prompt = request[0].Text!;
         Assert.DoesNotContain("Rex", prompt);
@@ -8365,6 +8366,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Profile_Reset_AnotherOne_Y_TouchesOnlyThatProfile()
     {
         WorkProfile();
+        new NeonSidekick.Prompts.SavedPrompts(ProfileDir("work")).Add("Summarize this.", out _);   // every sidekick file, the saved prompts since 2026-10-13
         _settings.Update(d => d.LlmModel = "default-model");
         _memory.Add("Their name is Chris.");
         _chat.EnqueueText("Hello.");
@@ -11426,7 +11428,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("⚙️ 🔓", ChatScreen.ToolbarStripFor(Items("cmdlist", "settings"), CommandPolicyMode.Yolo, true));   // strip order, not the list's
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("cmdlist", "police"), CommandPolicyMode.Off, true));
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("path"), CommandPolicyMode.Ask, true));
-        Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 ⏳ 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒 📈", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03)
+        Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 ⏳ 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 📣 🛒 📈", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03)
         Assert.Equal("🐚 🌐", ChatScreen.ToolbarStripFor(Items("web", "shell"), CommandPolicyMode.Off, true));   // the switches always drawn, the shell under off too
         Assert.Equal("🪪 📈", ChatScreen.ToolbarStripFor(Items("perf", "profile"), CommandPolicyMode.Ask, true));   // strip order (later on 2026-09-29)
     }
@@ -11498,7 +11500,7 @@ public partial class ChatScreenTests : IDisposable
         // 2026-09-29; the ID card and the rising chart later that day; the tool switches, the log and the viewers in the user's
         // order, the rising chart behind the log, 2026-10-03, and behind the viewers later that day.
         const string Panes = "⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊";   // 🧮 Themes 2026-10-04
-        const string Rest = "🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒 📈";   // 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04; 🛒 the shopping list after 📺, 2026-10-11
+        const string Rest = "🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 📣 🛒 📈";   // 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04; 🛒 the shopping list after 📺, 2026-10-11
         Assert.Equal(Panes + " 💾 ⏳ 🙋 " + Rest, ChatScreen.ToolbarStrip);   // the disk always drawn since later on 2026-10-03 (the user's ask); 🙋 after it, 2026-10-09
         Assert.Equal(Panes + " 💾 ⏳ 🙋 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, false));
         Assert.Equal(Panes + " 💾 ⏳ 🙋 🔒 🥷 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, false));   // the ninja while the police is off (2026-10-02, the user's ask)
@@ -11571,7 +11573,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.ToolbarWord(ChatScreen.TtsGlyph));
         Assert.Null(ChatScreen.ToolbarWord(""));
         string[] glyphs = ChatScreen.ToolbarStrip.Split(' ');
-        Assert.Equal(37, glyphs.Length);   // ⭐ later on 2026-10-13 (the saved links); ⏳ 2026-10-13 (the queue); 🛒 2026-10-11 (the shopping list); ✴️ gone later on 2026-10-10 (the Claude Code advisor tool retired); 🦉 2026-10-10 (the advisors); 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04, 🧮 and 🪟 later that day, ⚡ 2026-10-05, 🙋 2026-10-09, 🌄 2026-10-10
+        Assert.Equal(38, glyphs.Length);   // 📣 later still on 2026-10-13 (the saved prompts); ⭐ later on 2026-10-13 (the saved links); ⏳ 2026-10-13 (the queue); 🛒 2026-10-11 (the shopping list); ✴️ gone later on 2026-10-10 (the Claude Code advisor tool retired); 🦉 2026-10-10 (the advisors); 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04, 🧮 and 🪟 later that day, ⚡ 2026-10-05, 🙋 2026-10-09, 🌄 2026-10-10
         for (int i = 0; i < glyphs.Length; i++)
         {
             Assert.Equal(2, TextCells.Width(glyphs[i]));
@@ -11774,9 +11776,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 56)]   // Ctrl+Shift+F (/find) on 2026-10-13; Ctrl+J (the emoji picker, Windows alone) later still on 2026-10-12; Ctrl+W (the home bar; Ctrl+Alt+W for a few hours) on 2026-10-12; Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G (plain Ctrl+G since 2026-10-12), U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
-    [InlineData(true, false, 57)]
-    [InlineData(true, true, 58)]   // the word moves and deletes joined (2026-10-04)
+    [InlineData(false, false, 57)]   // Ctrl+Alt+W (/prompts) on 2026-10-13; Ctrl+Shift+F (/find) on 2026-10-13; Ctrl+J (the emoji picker, Windows alone) later still on 2026-10-12; Ctrl+W (the home bar; Ctrl+Alt+W for a few hours) on 2026-10-12; Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G (plain Ctrl+G since 2026-10-12), U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
+    [InlineData(true, false, 58)]
+    [InlineData(true, true, 59)]   // the word moves and deletes joined (2026-10-04)
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon", mac: false);   // Windows' list on any machine (2026-10-07)
@@ -11843,7 +11845,7 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+W", "show or hide the home bar", "/homebar"),   // 2026-10-12, the user's pick (Ctrl+Alt+W for a few hours)
             new("Ctrl+Y", "open the system prompt pane", "/sys"),   // from Ctrl+Alt+Y on 2026-10-03, the user's ask
             new("Ctrl+Z", "open the theme picker", "/theme"),   // 2026-10-04, the user's ask
-        ], rows[^40..^18]);
+        ], rows[^41..^19]);
 
         // The command chords after them (2026-09-30), one block A to Z by the letter since the pane chords joined later that day.
         Assert.Equal(
@@ -11865,8 +11867,9 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+Alt+T", "open the tools pane", "/tools"),
             new("Ctrl+Alt+U", "show or hide the ComfyUI picture viewer", "/comfy view"),   // 2026-10-02, the user's ask
             new("Ctrl+Alt+V", "show or hide the camera's live view", "/camera live"),   // 2026-10-02, the user's ask
+            new("Ctrl+Alt+W", "open the saved prompts pane", "/prompts"),   // 2026-10-13, the user's pick
             new("Ctrl+Alt+X", "unload the embedded model at once (press twice)"),   // 2026-10-01, the user's place
-        ], rows[^18..]);
+        ], rows[^19..]);
 
         // Every chord's command is the one it runs, and a row with none runs none: Ctrl+L (the learning's cancel, 2026-10-04) and
         // the kill switch (2026-10-01). The ESC ESC and wake rows name a command they do not type for you.
@@ -11928,7 +11931,7 @@ public partial class ChatScreenTests : IDisposable
         string[] advanced = CommandsTabLines(advanced: true);
         var basicEntries = SlashCommands.HelpEntries.Where(SlashCommands.IsBasic).ToArray();
         var advancedEntries = SlashCommands.HelpEntries.Where(e => !SlashCommands.IsBasic(e)).ToArray();
-        Assert.Equal(32, basicEntries.Length);   // /avatar 2026-10-11; /msgclear 2026-10-10; /wake gone 2026-10-09 (into /stt); /rename 2026-10-05; seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
+        Assert.Equal(33, basicEntries.Length);   // /prompts 2026-10-13; /avatar 2026-10-11; /msgclear 2026-10-10; /wake gone 2026-10-09 (into /stt); /rename 2026-10-05; seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
         Assert.Equal(SlashCommands.HelpEntries.Count, basicEntries.Length + advancedEntries.Length);
         // Three columns since 2026-10-05 (the user's ask): label, description, forms — each further form on a line of its own.
         Assert.Equal(basicEntries.SelectMany(HelpRows), basic.Select(l => l.TrimEnd()));
@@ -11937,7 +11940,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(
         [
             "/about", "/avatar", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/msgclear", "/new", "/perfbar", "/profile",
-            "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/toolbar", "/tools", "/tree", "/tts",
+            "/prompts", "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/toolbar", "/tools", "/tree", "/tts",
         ], basicEntries.Select(e => e.Command));
         Assert.DoesNotContain(basic, string.IsNullOrWhiteSpace);
         Assert.DoesNotContain(advanced, string.IsNullOrWhiteSpace);
@@ -24254,8 +24257,8 @@ public partial class ChatScreenTests : IDisposable
         // push and pull (2026-09-28): every profile but the loaded one, default included (the user's call); nothing after the name.
         // The section words first (2026-10-09), then after a section the names, and after a list section's name overwrite.
         Assert.Equal(["pull", "push"], Texts(ChatScreen.ArgumentItems("/profile", "pu", sources)));
-        Assert.Equal(["push keys", "push servers", "push allowed", "push history", "push memory", "push policestrings", "push persona", "push operata", "push vocalia", "push avatar user", "push avatar model", "push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
-        Assert.Equal(["pull keys", "pull servers", "pull allowed", "pull history", "pull memory", "pull policestrings", "pull persona", "pull operata", "pull vocalia", "pull avatar user", "pull avatar model", "pull chef", "pull neon"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
+        Assert.Equal(["push keys", "push servers", "push allowed", "push history", "push memory", "push prompts", "push policestrings", "push persona", "push operata", "push vocalia", "push avatar user", "push avatar model", "push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
+        Assert.Equal(["pull keys", "pull servers", "pull allowed", "pull history", "pull memory", "pull prompts", "pull policestrings", "pull persona", "pull operata", "pull vocalia", "pull avatar user", "pull avatar model", "pull chef", "pull neon"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
         // The avatars (2026-10-12, the user's ask): two words, then the profiles, nothing after the name.
         Assert.Equal(["push avatar user", "push avatar model"], Texts(ChatScreen.ArgumentItems("/profile", "push avatar ", sources)));
         Assert.Equal([new CompletionItem("push avatar user chef", "user avatar: neon → chef"), new CompletionItem("push avatar user work", "user avatar: neon → work")], ChatScreen.ArgumentItems("/profile", "push avatar user ", sources));
@@ -24440,7 +24443,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("switch to it", ChatScreen.SwitchToProfileNote);
         Assert.Equal("settings: neon → gonzo", ChatScreen.ProfileCopyNote(ChatScreen.ProfileSettingsSubject, "neon", "gonzo"));   // 2026-10-10
         Assert.Equal(
-            ["API keys", "server settings", "allowed commands", "message history", "memory", "forbidden strings", "persona.md", "operata.md", "vocalia.md", "user avatar", "model avatar"],
+            ["API keys", "server settings", "allowed commands", "message history", "memory", "saved prompts", "forbidden strings", "persona.md", "operata.md", "vocalia.md", "user avatar", "model avatar"],
             ChatScreen.ProfileSectionWords.Select(item => ChatScreen.ProfileSectionSubject(item.Section)));
         Assert.Equal("delete it", ChatScreen.ProfileDeleteNote);
         Assert.Equal("rename it", ChatScreen.ProfileRenameNote);

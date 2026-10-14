@@ -21,7 +21,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 * **Second strip:** some tabs hold tabs of their own, shown as a second row under the first: `/settings`' Client, Servers and Voice, `/tools`' groups, `/skills`' Offered, and `/mcp`'s Tools with two or more servers connected. ←/→ walk through every one and on into the next tab; Tab and Shift+Tab jump a whole tab.
 * **Under the list:** the highlighted row's description and default, or on a list pane the details the row has no room for.
 * **Tabs:** the current tab is underlined; a small number after a name (`Client³`) counts its settings changed from the default. A tab's rows sit under headings the cursor skips, and may drop the tab's name (*Botchat LLM mode* reads *LLM mode*).
-* **Type to filter:** on `/sessions`, `/server`, `/model`, `/docker`, `/youtube list`, `/browser list`, the allowed commands and the Offered tabs, typing narrows the list. Backspace erases; the first ESC clears it. Where the pane has lettered buttons (`d` remove, `r` refresh…), a plain letter presses its button while nothing is typed; start a filter with Shift+letter.
+* **Type to filter:** on `/sessions`, `/server`, `/model`, `/docker`, `/youtube list`, `/browser list`, `/prompts`, the allowed commands and the Offered tabs, typing narrows the list. Backspace erases; the first ESC clears it. Where the pane has lettered buttons (`d` remove, `r` refresh…), a plain letter presses its button while nothing is typed; start a filter with Shift+letter.
 * **Find:** on the read-only panes (`/help`, `/sys`, `/about`, `/tree`, `/docker logs`…) typing finds and marks every match. Enter or F3 goes to the next, Shift+Enter or Shift+F3 to the one before (Shift+F3 on a Mac); the first ESC clears the find. A word wrapped across two rows isn't found.
 * **Lists:** removing anything asks first, with No on the cursor. A list cut by the window ends in `▲▼ 13–25 of 58`. On `/tools` Offered, a group that is off says why on its heading.
 * **Mouse:** a click moves the cursor; a double-click picks a row or tab (on the input line, selects a word; on the `›` before it, the whole draft). The × at the top right works like ESC, and a double-click outside a pane closes it. A double-click on a picture in the transcript opens the [picture viewer](COMMANDS.md#picture-viewer).
@@ -76,6 +76,7 @@ Each shortcut runs its command as if typed; a draft on the row stays.
 | Ctrl+Alt+T | `/tools` | opens over the reply |
 | Ctrl+Alt+U | `/comfy view`: opens or closes the picture viewer (it opens behind, the keyboard left in the terminal) | at once |
 | Ctrl+Alt+V | `/camera live`: opens or closes the camera's window (it never takes the keyboard) | at once |
+| Ctrl+Alt+W | `/prompts`: the saved prompts, the draft kept for the pane's save draft | opens over the reply |
 | Ctrl+Alt+X ×2 | unloads the embedded model (see below) | at once |
 | F9 | `/camera snap`: a photo, attached to the line | waits for the reply |
 | F10 | `/screen`: a capture of the app's monitor, attached to the line | waits for the reply |
@@ -144,6 +145,7 @@ In a pane opened over the reply, the rows that would disturb it (a reconnect, th
 | 🪟 | always | `/comfy thumbs`, the thumbnail browser on the ComfyUI output folder |
 | 📺 | always | `/youtube list`, the saved videos |
 | ⭐ | always | `/browser list`, the Browser window's saved links |
+| 📣 | always | `/prompts`, the saved prompts (the draft kept for the pane's save draft) |
 | 🛒 | always | `/shopping`, the shopping list's checklist |
 | 📈 | always | `/perfbar`: hides or shows the performance bar |
 | working directory (pinned right by default) | always | `/cwd browse` |

@@ -21,11 +21,18 @@ public static class DraftFile
     /// <paramref name="directory"/> and returns its full path; the id is a fresh GUID, so two apps
     /// drafting at once never share one. Throws what <see cref="File.WriteAllText(string, string)"/> throws.
     /// </summary>
-    public static string Create(string directory)
+    public static string Create(string directory) => Create(directory, "");
+
+    /// <summary>
+    /// <see cref="Create(string)"/> with <paramref name="initialText"/> written in it first (2026-10-13: a saved prompt of several lines
+    /// edited in the editor, <c>/prompts</c>' pane), its line breaks the platform's so Notepad shows them.
+    /// </summary>
+    public static string Create(string directory, string initialText)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+        ArgumentNullException.ThrowIfNull(initialText);
         string path = Path.Combine(directory, FilePrefix + Guid.NewGuid().ToString("N") + Extension);
-        File.WriteAllText(path, "");
+        File.WriteAllText(path, initialText.Replace("\n", Environment.NewLine, StringComparison.Ordinal));
         return path;
     }
 

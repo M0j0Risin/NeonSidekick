@@ -200,7 +200,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Skills => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Cwd => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Quick,
         SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Copy
-            or SlashCommand.Remember or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browser or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Log or SlashCommand.Timer or SlashCommand.Expand or SlashCommand.Collapse or SlashCommand.Window
+            or SlashCommand.Remember or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browser or SlashCommand.Prompts or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Log or SlashCommand.Timer or SlashCommand.Expand or SlashCommand.Collapse or SlashCommand.Window
             or SlashCommand.Perf or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Unknown or SlashCommand.Overloaded => MidTurnClass.Quick,
         SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Rewind or SlashCommand.Exit => MidTurnClass.Cancel,
         _ => MidTurnClass.Deferred,
@@ -239,6 +239,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Toolbar when ToolbarItems.IsEdit(args) => MidTurnClass.Pane,   // /toolbar edit (2026-10-12): the checklist on the watcher; a toggle stays quick
         SlashCommand.Perf when PerfBarMode.IsEdit(args) => MidTurnClass.Pane,       // /perfbar edit, the same
         SlashCommand.Browser when BrowserCommand.IsPane(args) => MidTurnClass.Pane,   // later on 2026-10-13: the saved links' pane, a question, a bare save
+        SlashCommand.Prompts when PromptsCommand.IsPane(args) => MidTurnClass.Pane,   // 2026-10-13: the saved prompts' pane, list --clear's question
         _ => MidTurnPolicy(command, args.Length > 0),
     };
 
@@ -271,6 +272,20 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool> OnMidTurnLineAsync(KeySource.WatchedLine line, CancellationTokenSource turnCts, CancellationToken paneToken)
     {
+        if (PromptsCommand.SavesPaste(line.Line) && line.Line is { } pasted)
+        {
+            // /prompts save with a pasted block (2026-10-13, the user's pick): the one line holding a paste read as the command it reads as,
+            // saved on the turn task as a quick save is, never queued or sent; its pictures are left out, as any command's are.
+            var (_, pastedArgs) = ParseLine(pasted.Text);
+            if (pasted.Images.Count > 0)
+            {
+                Post(() => _transcript.Notice(ImagesIgnoredNotice(pasted.Images.Count)));
+            }
+
+            Post(() => HandlePromptsAsync(pastedArgs, _flow, paneToken));
+            return true;
+        }
+
         if (line.Text is not { } text)
         {
             // A paste in the line: never a command (the README's rule); queued like a message
@@ -285,6 +300,15 @@ internal sealed partial class ChatScreen
             // ladder. The chord alone: a typed /botchat --resume still waits for the chat's end, as every /botchat does.
             RequestBotEnd();
             return true;
+        }
+
+        // A line typed on the live row, which empties itself once the hook takes it (KeySource.FeedAsync); a chord carries a line too but
+        // is never emptied, and a clicked word has none. /prompts puts a prompt on that row, so it must know (2026-10-13).
+        bool typed = !line.Chord && line.Line is not null;
+        if (command == SlashCommand.Prompts && PromptsCommand.Fills(args))
+        {
+            // /prompts <n> (2026-10-13): on the watcher, ahead of the policy and the load, so the fill lands before the row would empty.
+            return FillFromNumberMidTurn(args, typed);
         }
 
         bool load = LoadRunning;
@@ -344,13 +368,28 @@ internal sealed partial class ChatScreen
                 Post(() => closes && CloseByChord(command, args) ? Task.CompletedTask : ByChord(line.Chord, () => HandleQuickAsync(command, args, text, paneToken)));   // a chord's window opens behind the terminal's focus (2026-10-13)
                 return true;
             default:
-                if (await RunPaneAsync(command, args, paneToken).ConfigureAwait(false) is { } chord)
+                string? chord;
+                _promptPick = null;
+                _promptsRowIsCommand = typed;
+                try
+                {
+                    chord = await RunPaneAsync(command, args, paneToken).ConfigureAwait(false);
+                }
+                finally
+                {
+                    _promptsRowIsCommand = false;
+                }
+
+                // A prompt picked on /prompts' pane (2026-10-13), reached by its own line or by a switch from another pane: on the draft
+                // now, the hook answering "kept" for a typed line so the live row does not empty itself over it.
+                bool taken = TakePromptPick(typed);
+                if (chord is not null)
                 {
                     // A chord pressed in the pane that names no pane (2026-10-01): offered as the live row's chord is.
                     await OnMidTurnLineAsync(KeySource.ChordLine(chord), turnCts, paneToken).ConfigureAwait(false);
                 }
 
-                return true;
+                return taken;
         }
     }
 
@@ -619,6 +658,11 @@ internal sealed partial class ChatScreen
                 // window's answer waited on, on the watcher with the reply streaming on (BrowserCommand.IsPane).
                 await HandleBrowserAsync(args, _flow, cancellationToken).ConfigureAwait(false);
                 break;
+            case SlashCommand.Prompts:
+                // /prompts and list --clear (2026-10-13): the pane or the question on the watcher; a pick is only kept (_promptPick), the
+                // hook putting it on the draft after this phase (OnMidTurnLineAsync), and no draft editor runs here.
+                await HandlePromptsAsync(args, _flow, cancellationToken, onWatcher: true).ConfigureAwait(false);
+                break;
             case SlashCommand.Docker:
                 // /docker (2026-10-02, /ha's way): the engine call on the watcher, the reply streaming on; the bare word lists rather than opening the pane.
                 await HandleDockerMidTurnAsync(args, cancellationToken).ConfigureAwait(false);
@@ -680,6 +724,10 @@ internal sealed partial class ChatScreen
                 // /browser (2026-10-13): the Browser window is its own thread, as the log window's; an open, a save of an address, an
                 // unsave and the history's clear return at once. The pane, the questions and a bare save are panes (later on 2026-10-13).
                 await HandleBrowserAsync(args, _flow, cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.Prompts:
+                // /prompts save, remove and list (2026-10-13): the file and the flow sink, nothing the draft holds (<n> fills on the watcher).
+                await HandlePromptsAsync(args, _flow, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Terminal:
                 HandleTerminal(args);

@@ -108,7 +108,7 @@ public enum SlashCommand
     /// </summary>
     Header,
 
-    /// <summary><c>/profile</c>: pick, switch to, add, delete, rename or reset a profile; since 2026-09-21 <c>edit</c> opens its <c>profile.json</c> and <c>reload</c> reads it back; since 2026-09-28 <c>push</c> and <c>pull</c> copy the settings between profiles, and since 2026-10-09 one section of them (<c>keys</c>, <c>servers</c>, <c>commands</c>, <c>history</c>, <c>policestrings</c>: the user's ask, <c>/keycopy</c>, <c>/srvcopy</c> and <c>/cmdcopy</c> folded in, each gaining a pull).</summary>
+    /// <summary><c>/profile</c>: pick, switch to, add, delete, rename or reset a profile; since 2026-09-21 <c>edit</c> opens its <c>profile.json</c> and <c>reload</c> reads it back; since 2026-09-28 <c>push</c> and <c>pull</c> copy the settings between profiles, and since 2026-10-09 one section of them (<c>keys</c>, <c>servers</c>, <c>commands</c>, <c>history</c>, <c>policestrings</c>: the user's ask, <c>/keycopy</c>, <c>/srvcopy</c> and <c>/cmdcopy</c> folded in, each gaining a pull; <c>prompts</c> on 2026-10-13, the saved prompts).</summary>
     Profile,
 
     /// <summary><c>/timer</c>: list the timers, start one, stop one or all.</summary>
@@ -147,6 +147,13 @@ public enum SlashCommand
     /// need no window, so they work headless and off Windows. The window itself is Windows only, never headless.
     /// </summary>
     Browser,
+
+    /// <summary>
+    /// <c>/prompts</c> (2026-10-13, the user's ask: messages sent often, kept per profile and put on the draft line): the saved prompts'
+    /// pane, <c>/prompts &lt;n&gt;</c> (that prompt on the draft), <c>save &lt;text&gt;</c>, <c>remove &lt;n&gt;</c> and <c>list [--clear]</c>
+    /// (<c>PromptsCommand</c>). The model has no tool for them. Headless, the list and a prompt are printed.
+    /// </summary>
+    Prompts,
 
     /// <summary>
     /// <c>/terminal</c> (2026-10-03, the user's ask: "similar to /explore"): a new Windows Terminal window in the working
@@ -421,6 +428,7 @@ public static class SlashCommands
             new(Viewer.ProcessWindowText.Word, "watch the model's background processes"),
             new("/print", "print a file or the last reply"),
             new("/profile", "switch or manage profiles"),
+            new("/prompts", "saved prompts for the draft line"),
             new("/queue", "manage the queued messages"),
             new("/reasoning", "pick or set the reasoning effort"),
             new("/remember", "add a memory"),
@@ -454,13 +462,13 @@ public static class SlashCommands
     /// <summary>
     /// The commands on <c>/help</c>'s <see cref="BasicTabTitle"/> tab (2026-09-27, the user's list): the everyday ones, so the
     /// first tab is a short list (it fit without scrolling until 2026-10-03, when <c>/about</c>, <c>/explore</c>, <c>/perfbar</c>,
-    /// <c>/stt</c>, <c>/toolbar</c>, <c>/tts</c> and <c>/wake</c> came over from the advanced tab, the user's pick; <c>/wake</c> folded into <c>/stt</c> on 2026-10-09; <c>/msgclear</c> came over on 2026-10-10 and <c>/avatar</c> on 2026-10-11, the user's picks). Every other command (<c>/log</c> among them) is on
+    /// <c>/stt</c>, <c>/toolbar</c>, <c>/tts</c> and <c>/wake</c> came over from the advanced tab, the user's pick; <c>/wake</c> folded into <c>/stt</c> on 2026-10-09; <c>/msgclear</c> came over on 2026-10-10 and <c>/avatar</c> on 2026-10-11, the user's picks; <c>/prompts</c> on 2026-10-13, offered in its review and kept). Every other command (<c>/log</c> among them) is on
     /// <see cref="AdvancedTabTitle"/>. Only the pane is split: <see cref="HelpText"/>, <see cref="Completions"/> and
     /// <see cref="LabelWidth"/> stay the one A-to-Z list. Pinned.
     /// </summary>
     public static readonly IReadOnlySet<string> BasicCommands = new HashSet<string>(StringComparer.Ordinal)
     {
-        "/about", "/avatar", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/msgclear", "/new", "/perfbar", "/profile",
+        "/about", "/avatar", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/msgclear", "/new", "/perfbar", "/profile", "/prompts",
         "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/toolbar", "/tools", "/tree", "/tts",
     };
 
@@ -540,7 +548,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -614,6 +622,7 @@ public static class SlashCommands
             "/toolbar" => SlashCommand.Toolbar,
             "/header" => SlashCommand.Header,
             "/profile" => SlashCommand.Profile,
+            "/prompts" => SlashCommand.Prompts,
             "/timer" => SlashCommand.Timer,
             "/cwd" => SlashCommand.Cwd,
             "/tree" => SlashCommand.Tree,
@@ -679,7 +688,7 @@ public static class SlashCommands
         or SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Read or SlashCommand.View or SlashCommand.Imagine or SlashCommand.Comfy or SlashCommand.Echo
         or SlashCommand.Learn
         or SlashCommand.Sys
-        or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.Profile or SlashCommand.Timer
+        or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.Profile or SlashCommand.Prompts or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browse or SlashCommand.Browser or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Cmd or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
         or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind

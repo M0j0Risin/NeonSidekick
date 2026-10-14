@@ -213,6 +213,7 @@ public class KeysTests
     [Theory]
     [InlineData(ConsoleKey.U, '\x15', "/comfy view")]
     [InlineData(ConsoleKey.V, '\x16', "/camera live")]
+    [InlineData(ConsoleKey.W, '\x17', "/prompts")]   // 2026-10-13
     public void ShortcutLine_TheWindowChords_AreTheirLines_AndAnAltGrCharacterStaysACharacter(ConsoleKey key, char control, string line)
     {
         // 2026-10-02 (the user's ask): the picture viewer and the camera's live view (and the log window, on plain Ctrl+G since

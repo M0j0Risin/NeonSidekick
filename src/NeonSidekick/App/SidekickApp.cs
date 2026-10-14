@@ -1042,6 +1042,18 @@ public sealed class SidekickApp
                     continue;
                 }
 
+                // /prompts (2026-10-13): the saved prompts, ahead of the server check so the model never gets the line. No pane and no
+                // draft line here: the list and a prompt are printed, save, remove and list --clear (at once) work (PromptsCommand.Headless).
+                if (SlashCommands.Parse(text) is (SlashCommand.Prompts, var promptsArgs))
+                {
+                    foreach (string promptsRow in PromptsCommand.Headless(new Prompts.SavedPrompts(_settings.ProfileDirectory, _time), promptsArgs))
+                    {
+                        await HeadlessLineAsync(promptsRow.StartsWith("Error: ", StringComparison.Ordinal) ? "[error] " + promptsRow["Error: ".Length..] : promptsRow).ConfigureAwait(false);
+                    }
+
+                    continue;
+                }
+
                 // /camera (2026-10-02): ahead of the server check too; headless lists the cameras and nothing else.
                 if (SlashCommands.Parse(text) is (SlashCommand.Camera, var cameraArgs))
                 {

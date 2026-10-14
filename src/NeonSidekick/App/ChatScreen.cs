@@ -112,6 +112,12 @@ public enum ProfileSection
     /// </summary>
     Memory,
 
+    /// <summary>
+    /// <c>prompts [overwrite]</c> (2026-10-13, the user's ask): the saved prompts in <c>prompts.json</c>, appended (a text there already
+    /// skipped) or replaced (<c>SavedPrompts.Import</c>). Not <c>Prompts</c>: <see cref="ChatScreen.IsPromptFileSection"/> means the prompt files.
+    /// </summary>
+    SavedPrompts,
+
     /// <summary><c>policestrings [overwrite]</c> (2026-10-09, the user's ask): <c>Shell police forbidden strings</c>, added or replaced.</summary>
     PoliceStrings,
 
@@ -413,7 +419,7 @@ internal sealed partial class ChatScreen
 
     /// <summary><c>/find</c> without the screen to scroll (2026-10-07). Pinned.</summary>
     public const string FindNeedsPaneNotice = "/find needs the interactive screen.";
-    public const string ProfileUsageError = "/profile takes nothing (pick), a name, add <name>, delete <name>, rename <name> <new-name>, reset [name], push|pull [keys|servers|allowed|history|memory|policestrings|persona|operata|vocalia] <name> [overwrite], edit or reload.";
+    public const string ProfileUsageError = "/profile takes nothing (pick), a name, add <name>, delete <name>, rename <name> <new-name>, reset [name], push|pull [keys|servers|allowed|history|memory|prompts|policestrings|persona|operata|vocalia] <name> [overwrite], edit or reload.";
 
     // The /loop words and lines (2026-09-21, the user's ask). Pinned.
     public const string LoopInfiniteWord = "infinite";
@@ -1687,6 +1693,15 @@ internal sealed partial class ChatScreen
     public const string BrowserLinksToolLine = BrowserCommand.Word + " " + BrowserCommand.ListWord;
 
     /// <summary>
+    /// The saved prompts' item (2026-10-13, the user's ask and pick: a megaphone, what is said often): <see cref="PromptsToolLine"/>,
+    /// the saved prompts' pane, after ⭐; off by default. A double-click keeps the draft, so the pane's save draft has it.
+    /// </summary>
+    public const string PromptsToolGlyph = "📣";
+
+    /// <summary>The line the saved prompts' item runs (2026-10-13): the bare <c>/prompts</c>, the pane.</summary>
+    public const string PromptsToolLine = PromptsCommand.Word;
+
+    /// <summary>
     /// The shopping list's item (2026-10-11, the user's ask): a cart, <see cref="ShoppingToolLine"/>, the list's checklist pane — a pane like
     /// 📺's, after it; the Shopping tools switch's glyph after the printer earlier that day, whose page <c>/tools shopping</c> still opens. Pinned.
     /// </summary>
@@ -2231,6 +2246,7 @@ internal sealed partial class ChatScreen
         ComfyThumbsToolGlyph => ComfyThumbsToolLine,
         YouTubeToolGlyph => YouTubeToolLine,
         BrowserLinksToolGlyph => BrowserLinksToolLine,
+        PromptsToolGlyph => PromptsToolLine,
         ShoppingToolGlyph => ShoppingToolLine,
         _ => null,
     };
@@ -2653,6 +2669,7 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+Alt+T", "open the tools pane", "/tools"));
         rows.Add(new("Ctrl+Alt+U", "show or hide the ComfyUI picture viewer", "/comfy view"));
         rows.Add(new("Ctrl+Alt+V", "show or hide the camera's live view", "/camera live"));
+        rows.Add(new("Ctrl+Alt+W", "open the saved prompts pane", PromptsCommand.Word));   // 2026-10-13, the user's pick
         rows.Add(new("Ctrl+Alt+X", "unload the embedded model at once (press twice)"));
         return rows.ToArray();
     }
@@ -3161,8 +3178,10 @@ internal sealed partial class ChatScreen
     private bool TakeIntoQueue(SubmittedLine line, bool fromDraft)
     {
         string label = line.Label.Trim();
+        // /prompts save with a pasted block (2026-10-13, the user's pick) is the one line holding a paste read as a command, not queued.
         if (QueueModeNow() != Queueing.Manual || label.Length == 0
-            || (!fromDraft && line.CommandText is { } command && ParseLine(command).Command != SlashCommand.None))
+            || (!fromDraft && line.CommandText is { } command && ParseLine(command).Command != SlashCommand.None)
+            || (!fromDraft && PromptsCommand.SavesPaste(line)))
         {
             return false;
         }
@@ -4580,6 +4599,7 @@ internal sealed partial class ChatScreen
         ProfileSection.Commands => "allowed commands",
         ProfileSection.History => "message history",
         ProfileSection.Memory => "memory",
+        ProfileSection.SavedPrompts => "saved prompts",
         ProfileSection.PoliceStrings => "forbidden strings",
         ProfileSection.AvatarUser => "user avatar",
         ProfileSection.AvatarModel => "model avatar",
@@ -5012,6 +5032,10 @@ internal sealed partial class ChatScreen
             case SlashCommand.Browser:
                 // The saved links' verbs and clear (later on 2026-10-13); an address is free text.
                 return BrowserCommand.Complete(argText);
+
+            case SlashCommand.Prompts:
+                // The saved prompts' verbs (2026-10-13); save's text is free text.
+                return PromptsCommand.Complete(argText);
 
             case SlashCommand.Shopping:
                 // The verbs (2026-10-11), then the stores' names and the list's lines.
@@ -7879,6 +7903,10 @@ internal sealed partial class ChatScreen
         {
             await CopyMemorySectionAsync(home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
         }
+        else if (action.Section == ProfileSection.SavedPrompts)
+        {
+            await CopySavedPromptsSectionAsync(home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
+        }
         else if (IsPromptFileSection(action.Section))
         {
             var file = action.Section switch
@@ -9630,6 +9658,7 @@ internal sealed partial class ChatScreen
         ("allowed", ProfileSection.Commands, "Shell allowed commands, added (or replaced with overwrite)"),
         ("history", ProfileSection.History, "the message history, added (or replaced with overwrite)"),
         ("memory", ProfileSection.Memory, "the memories, added (or replaced with overwrite)"),   // 2026-10-13, /memory copy's
+        ("prompts", ProfileSection.SavedPrompts, "the saved prompts, added (or replaced with overwrite)"),   // 2026-10-13, /prompts' list
         ("policestrings", ProfileSection.PoliceStrings, "Shell police forbidden strings, added (or replaced with overwrite)"),
         ("persona", ProfileSection.Persona, "persona.md, the persona (overwrite replaces the target's)"),
         ("operata", ProfileSection.Operata, "operata.md, the operating rules (overwrite replaces the target's)"),
@@ -9661,7 +9690,7 @@ internal sealed partial class ChatScreen
     /// copy refuses to replace one already there without it. Keys and servers are mirrored, so replacing is all they do.
     /// </summary>
     public static bool SectionTakesOverwrite(ProfileSection section) =>
-        section is ProfileSection.Commands or ProfileSection.History or ProfileSection.Memory or ProfileSection.PoliceStrings || IsPromptFileSection(section);
+        section is ProfileSection.Commands or ProfileSection.History or ProfileSection.Memory or ProfileSection.SavedPrompts or ProfileSection.PoliceStrings || IsPromptFileSection(section);
 
     /// <summary>Whether a section is one of the prompt files (2026-10-10): persona, operata, vocalia.</summary>
     public static bool IsPromptFileSection(ProfileSection section) =>
@@ -9740,7 +9769,7 @@ internal sealed partial class ChatScreen
     public static string ProfileCreatedNotice(string name) => $"({NoticeGlyphs.Profile}created profile \"{name}\" from the current settings)";
 
     /// <summary>
-    /// The created notice naming what came along (the memories, <see cref="Profiles.BasicSidekickFiles"/>; the prompt files too under
+    /// The created notice naming what came along (the memories and, since 2026-10-13, the saved prompts, <see cref="Profiles.BasicSidekickFiles"/>; the prompt files too under
     /// <c>New profile mode</c>'s <c>advanced</c>, retired 2026-10-10):
     /// <paramref name="copiedFiles"/> is <see cref="Profiles.CopySidekickFiles"/>'s answer, each file
     /// in <see cref="Profiles.Describe"/>'s word. Nothing copied reads like <see cref="ProfileCreatedNotice(string)"/>.
@@ -12512,6 +12541,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Browser:
                 await HandleBrowserAsync(args, _transcript, cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.Prompts:
+                await HandlePromptsAsync(args, _transcript, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Terminal:

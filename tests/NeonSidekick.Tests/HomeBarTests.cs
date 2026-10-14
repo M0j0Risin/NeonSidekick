@@ -562,11 +562,11 @@ public sealed class HomeBarTests
     // ─── keys and the pane ──────────────────────────────────────────────────────
 
     [Fact]
-    public void CtrlW_IsTheHomeBar_InBothSpellings_AndCtrlAltW_IsNothingNow()
+    public void CtrlW_IsTheHomeBar_InBothSpellings_AndCtrlAltW_IsThePromptsNow()
     {
         Assert.Equal("/homebar", Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.W, shift: false, alt: false, control: true)));
         Assert.Equal("/homebar", Keys.ShortcutLine(new ConsoleKeyInfo('\x17', ConsoleKey.W, shift: false, alt: false, control: true)));
-        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\x17', ConsoleKey.W, shift: false, alt: true, control: true)));
+        Assert.Equal("/prompts", Keys.ShortcutLine(new ConsoleKeyInfo('\x17', ConsoleKey.W, shift: false, alt: true, control: true)));   // the saved prompts since 2026-10-13
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('w', ConsoleKey.W, shift: false, alt: false, control: false)));
     }
 

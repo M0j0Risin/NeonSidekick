@@ -33,16 +33,16 @@ public static class Profiles
     /// <summary>
     /// The sidekick's own files beside <see cref="FileName"/>, in the order <see cref="CopySidekickFiles"/>
     /// takes them: the memories, the persona, the operating rules, the voice directive, the MCP servers
-    /// (2026-09-20). Literals; <c>ProfilesTests</c> pins each to its owner's <c>FileName</c>.
+    /// (2026-09-20), the saved prompts (2026-10-13). Literals; <c>ProfilesTests</c> pins each to its owner's <c>FileName</c>.
     /// </summary>
-    public static readonly string[] SidekickFiles = { "memory.json", "persona.md", "operata.md", "vocalia.md", "mcp.json" };
+    public static readonly string[] SidekickFiles = { "memory.json", "persona.md", "operata.md", "vocalia.md", "mcp.json", "prompts.json" };
 
     /// <summary>
     /// The subset of <see cref="SidekickFiles"/> <c>/profile add</c> copies: the memories alone (the user's call 2026-09-15, then the
     /// <c>basic</c> mode of <c>New profile mode</c>). Since 2026-10-10 (the user's call) it is the only way: the setting and its
-    /// <c>advanced</c> mode (the persona, operating rules and voice directive too) were retired; <c>/profile push|pull</c> copies those.
+    /// <c>advanced</c> mode (the persona, operating rules and voice directive too) were retired; <c>/profile push|pull</c> copies those. The saved prompts came along too from 2026-10-13 (the user's pick).
     /// </summary>
-    public static readonly string[] BasicSidekickFiles = { "memory.json" };
+    public static readonly string[] BasicSidekickFiles = { "memory.json", "prompts.json" };
 
     /// <summary>
     /// The <c>/profile</c> subcommand words (<c>edit</c> and <c>reload</c> since 2026-09-21, <c>push</c> and <c>pull</c> since 2026-09-28,
@@ -50,7 +50,7 @@ public static class Profiles
     /// reads as a profile called keys); a profile cannot be called any of them, so <c>/profile add</c> is never a switch and
     /// <c>/profile reset</c> is always the loaded one.
     /// </summary>
-    public static readonly string[] ReservedNames = { "add", "allowed", "delete", "edit", "history", "keys", "memory", "operata", "persona", "policestrings", "pull", "push", "reload", "rename", "reset", "servers", "vocalia" };
+    public static readonly string[] ReservedNames = { "add", "allowed", "delete", "edit", "history", "keys", "memory", "operata", "persona", "policestrings", "prompts", "pull", "push", "reload", "rename", "reset", "servers", "vocalia" };
 
     /// <summary>The wording for a name <see cref="IsValidName"/> refuses. Pinned.</summary>
     public const string NameError = "must be 1 to 32 letters, digits, - or _ (and not add, delete, edit, pull, push, reload, rename or reset)";
@@ -266,6 +266,7 @@ public static class Profiles
         "operata.md" => "operating rules",
         "vocalia.md" => "voice directive",
         "mcp.json" => "MCP servers",
+        "prompts.json" => "saved prompts",
         _ => "",
     };
 

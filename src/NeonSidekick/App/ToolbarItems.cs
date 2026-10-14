@@ -75,6 +75,7 @@ public static class ToolbarItems
     public const string ComfyThumbs = "comfythumbs"; // 2026-10-04, the user's ask: 🪟, /comfy thumbs
     public const string YouTube = "youtube";         // 2026-10-08, the user's ask: 📺, /youtube list (a pane; after 🪟 later that day)
     public const string BrowserLinks = "browserlinks";   // later on 2026-10-13, the user's ask: ⭐, /browser list (a pane), after 📺, off by default
+    public const string Prompts = "prompts";             // 2026-10-13, the user's ask: 📣, /prompts (a pane), after ⭐, off by default
     public const string ShoppingList = "shoppinglist"; // 2026-10-11, the user's ask: 🛒, /shopping's list (a pane), after 📺; the Shopping tools switch (id shopping, after Print) until later that day
     public const string Path = "path";
     public const string Model = "model";   // 2026-10-12, the user's ask: the model's name (its reasoning glyph after it since later that day); after the path by default, and free to move past it
@@ -86,13 +87,13 @@ public static class ToolbarItems
     /// after the log (2026-10-05); YouTube where the Camera live viewer was (2026-10-08), after the Comfy thumb viewer later that day
     /// (the user's ask); Ask between the disk and the lock (2026-10-09, the user's ask); Image after Files (2026-10-10, the user's ask); Advisors after
     /// the Claude Code advisor (later that day, the profile advisors), after Web once that one was retired (later still); Queue after
-    /// Memory (2026-10-13, the user's ask); Saved links after YouTube (later that day, the user's ask). Pinned.
+    /// Memory (2026-10-13, the user's ask); Saved links after YouTube (later that day, the user's ask); Saved prompts after Saved links (later still). Pinned.
     /// </summary>
     public static readonly string[] Names =
     [
         Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Queue, Ask, CmdList, Police,
         Shell, Files, Image, Web, Advisors, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
-        Log, Process, ComfyView, ComfyThumbs, YouTube, BrowserLinks, ShoppingList, Perf, Path, Model,
+        Log, Process, ComfyView, ComfyThumbs, YouTube, BrowserLinks, Prompts, ShoppingList, Perf, Path, Model,
     ];
 
     /// <summary>
@@ -149,6 +150,7 @@ public static class ToolbarItems
         ComfyThumbs => ChatScreen.ComfyThumbsToolGlyph,
         YouTube => ChatScreen.YouTubeToolGlyph,
         BrowserLinks => ChatScreen.BrowserLinksToolGlyph,
+        Prompts => ChatScreen.PromptsToolGlyph,
         ShoppingList => ChatScreen.ShoppingToolGlyph,
         Path => FolderText.FolderGlyph,
         _ => "",
@@ -195,6 +197,7 @@ public static class ToolbarItems
         ComfyThumbs => "Comfy thumb viewer",
         YouTube => "YouTube",
         BrowserLinks => "Saved links",
+        Prompts => "Saved prompts",
         ShoppingList => "Shopping list",
         Path => "Working directory path",
         Model => "Model name",
@@ -227,6 +230,7 @@ public static class ToolbarItems
         ComfyThumbs => ChatScreen.ComfyThumbsToolLine,
         YouTube => ChatScreen.YouTubeToolLine,
         BrowserLinks => ChatScreen.BrowserLinksToolLine,
+        Prompts => ChatScreen.PromptsToolLine,
         ShoppingList => ChatScreen.ShoppingToolLine,
         Path => "/cwd browse",
         Model => SlashCommands.ServerWord,

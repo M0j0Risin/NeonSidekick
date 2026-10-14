@@ -156,6 +156,8 @@ public static class Keys
     /// (<c>ChatScreen.RequestBotEnd</c>, the chord alone; the typed line still waits), and Ctrl+Alt+K waits for the chat's end, as typed.
     /// On 2026-10-12 (the user's ask) <c>/log</c> moved to plain Ctrl+G and Ctrl+Alt+G went: its BEL counts as no character, as it
     /// did there. Nothing in the app used Ctrl+G; Windows Terminal leaves it alone, and macOS's Terminal sends BEL, which this reads.
+    /// On 2026-10-13 (the user's pick) Ctrl+Alt+W is <c>/prompts</c>, the saved prompts' pane, free since <c>/homebar</c> moved to Ctrl+W:
+    /// its ETB counts as no character. A chord keeps the draft, so the pane's save draft has it.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -231,6 +233,7 @@ public static class Keys
             (ConsoleKey.O, '\0' or '\x0f') => "/tools shell police",
             (ConsoleKey.U, '\0' or '\x15') => "/comfy view",
             (ConsoleKey.V, '\0' or '\x16') => "/camera live",
+            (ConsoleKey.W, '\0' or '\x17') => "/prompts",   // 2026-10-13, the user's pick (free since /homebar went to Ctrl+W)
             (ConsoleKey.A, '\0' or '\x01') when OperatingSystem.IsMacOS() => "/memory",
             _ => null,
         };

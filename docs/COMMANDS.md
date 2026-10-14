@@ -138,7 +138,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/process` | Lists the background processes, the model's and your `/cmd --bg` ones, in a pane. Enter opens one in the [process window](#process-window), `k` stops it (asks), `f` steps the filter: all, running only, ended only. While any run, **▶ n** at the right of the rule under the input line counts them; a double-click there opens this list. |
 | `/process <id>` | Shows one process's output live in the [process window](#process-window) (any unique start of the id; Tab completes it). |
 | `/profile [<name>]` | Switches profiles: a picker, or straight to the one named. See [Profiles](#profiles). |
-| `/profile add\|delete <name>` | Creates a profile (from this profile's settings and memories) or deletes one. |
+| `/profile add\|delete <name>` | Creates a profile (from this profile's settings, memories and saved prompts) or deletes one. |
 | `/profile rename <name> <new-name>` | Renames a profile. |
 | `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its avatar, URLs, paths and keys unless `--all`. |
 | `/profile push\|pull <name>` | Copies every setting but the working directory to (`push`) or from (`pull`) another profile; a pull clears the conversation. |
@@ -147,12 +147,18 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/profile push\|pull allowed <name> [overwrite]` | Copies *Shell allowed commands* (added, or replacing with `overwrite`). |
 | `/profile push\|pull history <name> [overwrite]` | Copies the message history; refused when the target has *Keep message history* off. |
 | `/profile push\|pull memory <name> [overwrite]` | Copies the memories, after a confirmation: added (duplicates skipped), or replacing the target's with `overwrite`. |
+| `/profile push\|pull prompts <name> [overwrite]` | Copies the saved prompts (`/prompts`), after a confirmation: added (ones the target has skipped), or replacing the target's with `overwrite`. |
 | `/profile push\|pull policestrings <name> [overwrite]` | Copies *Shell police forbidden strings* (added, or replacing with `overwrite`). |
 | `/profile push\|pull persona <name> [overwrite]` | Copies `persona.md` (the personality), after a confirmation; an existing one is replaced only with `overwrite`. |
 | `/profile push\|pull operata <name> [overwrite]` | The same for `operata.md` (the operating rules). |
 | `/profile push\|pull vocalia <name> [overwrite]` | The same for `vocalia.md` (the spoken-reply directive). |
 | `/profile push\|pull avatar user\|model <name>` | Copies the *User avatar* or the *Model avatar*, replacing the target's, after a confirmation. |
 | `/profile edit\|reload` | `edit` opens `profile.json`; `reload` reads it back and reconnects what changed. |
+| `/prompts` | Your saved prompts, the messages you send often, in a pane; Enter or a double-click puts one on the draft line in place of what is there (the old draft goes to the history: Up brings it back). `a` adds, `s` saves the draft, `e` edits (a prompt of several lines in your draft editor), `d` removes, `c` clears all (each removal asks), Shift+↑↓ moves. The toolbar's 📣 and Ctrl+Alt+W open it too, keeping the draft for `s`. Each profile has its own list (`prompts.json`); the model can't see it. |
+| `/prompts <n>` | Puts saved prompt *n* (its number in the pane) on the draft line. |
+| `/prompts save <text>` | Saves the rest of the line as a prompt; a pasted block of several lines too. |
+| `/prompts list [--clear]` | Prints the saved prompts, numbered; `--clear` removes them all, after a yes (headless: at once). |
+| `/prompts remove <n>` | Removes one saved prompt. |
 | `/queue [clear]` | Lists the queued messages: Enter removes one (asks), `c` clears all, and `s` sends the next one now while the queue is held or under *Queue mode* `manual`. `m` (**mode: …**) and `k` (**cancel: …**) on the title row step *Queue mode* and *Queue cancel mode* to their next value, on the empty queue too. The toolbar's ⏳ opens it. `/queue clear` drops them without the pane. `/queue mode automatic\|manual\|disabled` sets *Queue mode*, and `/queue cancel hold\|drain\|empty` sets *Queue cancel mode*, at once (during a reply too). |
 | `/read [<file> [<n>]\|<n>]` | Reads a text file aloud; alone it resumes, and a number starts at that sentence. On an empty line Space pauses or plays and ←/→ step a sentence. |
 | `/reasoning [none\|low\|medium\|high\|xhigh]` | Picks the reasoning effort. |
@@ -610,6 +616,7 @@ In every list pane ↑/↓ move, Enter (or a double-click) picks, and ESC closes
 | *Shopping stores* (`/shopping`'s `s`) | Enter shops there (the first row adds a store) · `l` layout · `n` rename · `r` remove (asks) · `f` open its folder · `i` reindex |
 | A store's layout (*Shopping stores*' `l`) | Tabs **Aisles**, **Sections**, **Facts** and **Guesses** (the model's), ←/→ between them; Enter on a row to rename, move or remove |
 | `/youtube list` | Enter plays · `d` remove (asks) · `c` clear all (asks) · Shift+↑↓ / Shift+Home/End move · Delete remove (asks) · type to filter, Shift+letter starts a filter with `d` or `c` |
+| `/prompts` | Enter or double-click puts it on the draft line · `a` add · `s` save the draft · `e` edit (several lines: in the draft editor) · `d` remove (asks) · `c` clear all (asks) · Shift+↑↓ / Shift+Home/End move · Delete remove (asks) · type to filter, Shift+letter starts a filter with a button's letter |
 | `/browser list` | Enter or double-click opens in the Browser window · `a` add · `n` name · `e` address · `d` remove (asks) · `c` clear all (asks) · Shift+↑↓ / Shift+Home/End move · Delete remove (asks) · type to filter, Shift+letter starts a filter with a button's letter |
 | `/youtube <words>`, `/youtube playlist` | Enter plays · `s` save the highlighted video |
 | `/tools shell` (*Shell command policy*) | `c` the allowed commands · `p` the police |

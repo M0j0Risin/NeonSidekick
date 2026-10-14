@@ -2,6 +2,7 @@ using System.Text.Json;
 using NeonSidekick.Llm;
 using NeonSidekick.Mcp;
 using NeonSidekick.Memory;
+using NeonSidekick.Prompts;
 using NeonSidekick.Settings;
 
 namespace NeonSidekick.Tests;
@@ -68,7 +69,7 @@ public class ProfilesTests : IDisposable
         Assert.False(Profiles.IsValidName("edit"));
         Assert.False(Profiles.IsValidName("Reload"));
         Assert.False(Profiles.IsValidName("push"));   // 2026-09-28
-        Assert.All(new[] { "keys", "SERVERS", "allowed", "history", "memory", "policestrings" }, word => Assert.False(Profiles.IsValidName(word)));   // push and pull's sections, 2026-10-09
+        Assert.All(new[] { "keys", "SERVERS", "allowed", "history", "memory", "prompts", "policestrings" }, word => Assert.False(Profiles.IsValidName(word)));   // push and pull's sections, 2026-10-09
         Assert.True(Profiles.IsValidName("keys2"));
         Assert.False(Profiles.IsValidName("PULL"));
         Assert.Equal("\"work\" is the current profile; switch to another (/profile <name>) before deleting it.", Profiles.CurrentUndeletable("work"));
@@ -170,13 +171,14 @@ public class ProfilesTests : IDisposable
     public void SidekickFiles_AreTheOwnersFileNames_InOrder_EachWithAWord()
     {
         Assert.Equal(
-            new[] { MemoryStore.FileName, PersonaFile.FileName, OperataFile.FileName, VocaliaFile.FileName, McpConfigFile.FileName },
+            new[] { MemoryStore.FileName, PersonaFile.FileName, OperataFile.FileName, VocaliaFile.FileName, McpConfigFile.FileName, SavedPrompts.FileName },
             Profiles.SidekickFiles);
         Assert.Equal("memories", Profiles.Describe("memory.json"));
         Assert.Equal("persona", Profiles.Describe("persona.md"));
         Assert.Equal("operating rules", Profiles.Describe("operata.md"));
         Assert.Equal("voice directive", Profiles.Describe("vocalia.md"));
         Assert.Equal("MCP servers", Profiles.Describe("mcp.json"));
+        Assert.Equal("saved prompts", Profiles.Describe("prompts.json"));
         Assert.Equal("", Profiles.Describe(Profiles.FileName));
     }
 
@@ -213,15 +215,18 @@ public class ProfilesTests : IDisposable
         Profiles.Create(_dir, "neon", new AppSettingsData());
         string source = Profiles.Directory(_dir, "neon");
         new MemoryStore(source).Add("They like tea.");
+        new SavedPrompts(source).Add("Summarize this.", out _);
         File.WriteAllText(Path.Combine(source, PersonaFile.FileName), "You are Rex.");
         Profiles.Create(_dir, "work", new AppSettingsData());
 
         var copied = Profiles.CopySidekickFiles(source, _dir, "work", Profiles.BasicSidekickFiles);
 
-        Assert.Equal(new[] { MemoryStore.FileName }, copied);
+        // The memories and, since 2026-10-13, the saved prompts: a new profile starts with both.
+        Assert.Equal(new[] { MemoryStore.FileName, SavedPrompts.FileName }, copied);
         Assert.Equal(
-            new[] { MemoryStore.FileName, Profiles.FileName }.Order(),
+            new[] { MemoryStore.FileName, SavedPrompts.FileName, Profiles.FileName }.Order(),
             Directory.GetFiles(Profiles.Directory(_dir, "work")).Select(Path.GetFileName).Order());
+        Assert.Equal(["Summarize this."], new SavedPrompts(Profiles.Directory(_dir, "work")).List().Select(p => p.Text));
         Assert.Empty(Profiles.CopySidekickFiles(source, _dir, "work2", Array.Empty<string>()));   // nothing named, nothing copied — the directory is made
         Assert.True(Directory.Exists(Profiles.Directory(_dir, "work2")));
     }
@@ -272,6 +277,7 @@ public class ProfilesTests : IDisposable
         File.WriteAllText(Path.Combine(dir, OperataFile.FileName), "Answer in haiku.");
         File.WriteAllText(Path.Combine(dir, VocaliaFile.FileName), "Speak like a pirate.");
         File.WriteAllText(Path.Combine(dir, McpConfigFile.FileName), McpConfigFile.EmptyText);
+        new SavedPrompts(dir).Add("Summarize this.", out _);
         Directory.CreateDirectory(Path.Combine(dir, "files", ".trash"));
         File.WriteAllText(Path.Combine(dir, "files", "notes.txt"), "kept");
         File.WriteAllText(Path.Combine(dir, "files", ".trash", "old.txt"), "kept too");
