@@ -58,6 +58,7 @@ From top to bottom:
 * **Keys:** ←/→ switch tabs, ↑/↓ move, Enter edits or toggles, Space flips an on/off row, ESC closes or goes back a page.
 * **Second row of tabs** (`/settings`, `/tools`, `/skills`' Offered, `/mcp`'s Tools): ←/→ walk every one into the next tab; Tab and Shift+Tab jump a whole tab.
 * **Under the list:** the row's description and default. A number after a tab's name (`Client³`) counts its settings changed from the default.
+* **Height:** a pane keeps its height while it opens a value picker, a yes/no, a folder browse or details, so its title stays put; a taller details page gives the height back when it closes.
 * **Type to filter** on `/sessions`, `/server`, `/model`, `/docker`, the saved lists, the allowed commands and the Offered tabs; the first ESC clears it. Where a pane has lettered buttons, a letter presses its button and Shift+letter starts a filter.
 * **Find** on the read-only panes (`/help`, `/sys`, `/about`, `/tree`, `/docker logs`…): type to mark every match; Enter or F3 goes to the next, Shift+Enter or Shift+F3 back (Shift+F3 on a Mac).
 * **Asking first:** a remove asks, with No on the cursor; `y` or `n` answers.

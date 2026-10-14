@@ -156,7 +156,7 @@ public class SessionsMenuTests : IDisposable
 
         Assert.Equal(a, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Contains("\n" + Titled(SessionsMenu.RowTitle(_store.Load(a)!.Summary)) + "\n \n▸ restore  load it into the transcript and go on from there\n  rename   give it a new title\n  purge    remove it and its turns for good\n" + Rule(100) + "\n" + SessionsMenu.RowKeys + "\n", _console.Output);
+        HeldRows.AssertContains("\n" + Titled(SessionsMenu.RowTitle(_store.Load(a)!.Summary)) + "\n \n▸ restore  load it into the transcript and go on from there\n  rename   give it a new title\n  purge    remove it and its turns for good\n", Rule(100) + "\n" + SessionsMenu.RowKeys + "\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         Assert.Equal(b, _store.List(0)[0].Id);   // nothing changed in the store
         pane.Dispose();
@@ -191,7 +191,7 @@ public class SessionsMenuTests : IDisposable
         Assert.Null(await menu.ShowAsync(CancellationToken.None));
 
         // The slot under the row page with the edit keys (the pre-filled title is typed into it in place, not part of the draw).
-        Assert.Contains("\n▸ rename   give it a new title\n  purge    remove it and its turns for good\n› \n" + Rule(100) + "\n" + SettingsMenu.EditKeys, _console.Output);
+        HeldRows.AssertContains("\n▸ rename   give it a new title\n  purge    remove it and its turns for good\n", "› \n" + Rule(100) + "\n" + SettingsMenu.EditKeys, _console.Output);
         Assert.Contains("\n" + Titled(SessionsMenu.Title) + "\n  · " + SessionsMenu.RenamedNotice("Vosk notes") + "\n▸ " + Row(a, "2026-09-11 14:05", 1, "Vosk notes") + "\n", _console.Output);
         var summary = _store.Load(a)!.Summary;
         Assert.Equal(("Vosk notes", TitleSource.User), (summary.Title, summary.TitleSource));
@@ -277,7 +277,7 @@ public class SessionsMenuTests : IDisposable
 
         Assert.Null(await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Contains("\n" + Titled(SessionsMenu.PurgePrompt(new SessionSummary(b, _time.GetUtcNow(), _time.GetUtcNow(), "second", TitleSource.FirstLine, "llama", 1))) + "\n \n▸ No\n  Yes\n" + Rule(100) + "\n" + SettingsMenu.ConfirmKeys, _console.Output);
+        HeldRows.AssertContains("\n" + Titled(SessionsMenu.PurgePrompt(new SessionSummary(b, _time.GetUtcNow(), _time.GetUtcNow(), "second", TitleSource.FirstLine, "llama", 1))) + "\n \n▸ No\n  Yes\n", Rule(100) + "\n" + SettingsMenu.ConfirmKeys, _console.Output);
         Assert.Contains("\n" + Titled(SessionsMenu.Title) + "\n  · " + SessionsMenu.PurgedNotice(b) + "\n▸ " + Row(a, "2026-09-11 14:05", 1, "first") + "\n", _console.Output);
         Assert.Equal([b], _purged);
         Assert.Null(_store.Load(b));

@@ -359,9 +359,14 @@ public partial class SettingsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["gemma-4-e2b"], embedded.Removes);
-        Assert.Contains(EmbeddedLlmText.RemoveQuestion(EmbeddedModelCatalog.Find("gemma-4-e2b")!), Output);
+        string question = EmbeddedLlmText.RemoveQuestion(EmbeddedModelCatalog.Find("gemma-4-e2b")!);
+        Assert.Contains(question, Output);
         Assert.Contains(EmbeddedLlmText.Removed(EmbeddedModelCatalog.Find("gemma-4-e2b")!), Output);
         Assert.Null(menu.TakePendingEmbeddedModel());
+        // The yes/no asked inside the visit (2026-10-14, ConfirmAsync's close: false): the pane never closed under it — the input
+        // line comes back once, at the settings' own close, not between the question and the catalog.
+        string after = Output[Output.IndexOf(question, StringComparison.Ordinal)..];
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(after, "\n› \n"));
         pane.Dispose();
     }
 

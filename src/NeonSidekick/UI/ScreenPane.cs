@@ -262,6 +262,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int _paneRows = PaneRows;
     private int _overlayRows;
 
+    // The pane's held height (2026-10-14, the user's ask: /tools › Core › Ask user's two-row picker dropped the title from the
+    // window's top to its bottom, and ESC threw it back up): the tallest pane a titled overlay has drawn since it opened, and
+    // the Menus max height word it was drawn under. Draw pads a shorter page with blank rows under its content up to it, so
+    // the top rule stays where the pane that opened the picker had it. CloseOverlay, a height change and a new Menus max
+    // height reset it; RestoreOverlay puts back the one a nested pane's mark took (OverlayMark).
+    private int _paneFloor;
+    private string? _floorMenuHeight;
+
     // The overlay the last draw put on the screen (Draw is the only writer): the cursor's depth
     // is a fact about what is drawn, and a shape change lifts from the OLD shape before it draws
     // the new one — ShowOverlay and CloseOverlay set _overlay before the lift [scar 2026-09-13].
@@ -381,6 +389,33 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int _stripCloseColumn = -1;
 
     private sealed record Overlay(IRenderable Content, string Hint, bool Input, bool Close);
+
+    /// <summary>
+    /// The overlay on show, taken by a pane that opens over it (2026-10-14: <see cref="InfoPane"/>, <see cref="FolderPane"/>) and
+    /// handed to <see cref="RestoreOverlay"/> when it closes: the overlay itself, the pane's held height, the Menus max height
+    /// word it was held under and the window's height then. The default is none (no overlay was up). Opaque.
+    /// </summary>
+    public readonly record struct OverlayMark
+    {
+        internal OverlayMark(object overlay, int floor, string? menuHeight, int height)
+        {
+            Shown = overlay;
+            Floor = floor;
+            MenuHeight = menuHeight;
+            Height = height;
+        }
+
+        /// <summary>An overlay was up when the mark was taken.</summary>
+        public bool IsSome => Shown is not null;
+
+        internal object? Shown { get; }
+
+        internal int Floor { get; }
+
+        internal string? MenuHeight { get; }
+
+        internal int Height { get; }
+    }
 
     // Where the last dismissing double-click landed (Dismiss(x, y)), until TakeDismissHit.
     private OffPaneHit? _dismissHit;
@@ -2158,7 +2193,19 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
     }
 
-    /// <summary>The overlay's content rows drawn by the last redraw, 0 without one (tests).</summary>
+    /// <summary>The pane's rows as the last redraw laid them out, rules, bars and all: the window's height less it is the upper rule's row, the scroll's row over it aside (tests, 2026-10-14).</summary>
+    public int DrawnRows
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _paneRows;
+            }
+        }
+    }
+
+    /// <summary>The overlay's rows drawn by the last redraw — its content and the held height's blank rows under it (2026-10-14) — 0 without one (tests).</summary>
     public int OverlayRows
     {
         get
@@ -3393,6 +3440,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// With <paramref name="close"/> the first row ends in the <see cref="CloseGlyph"/> (a menu, an
     /// info pane — never the input line's completion list, which has no title row) and
     /// <see cref="TryHitClose"/> answers a click on it. Disabled: nothing.
+    /// <para>A titled overlay holds the pane's height until it closes (2026-10-14, the user's ask): a shorter one shown in
+    /// its place (a menu's value picker, a yes/no, a page with fewer rows) gets blank rows under its content up to the
+    /// tallest pane drawn since it opened, so the top rule stays put; a taller one grows the pane and is held from then on.
+    /// <see cref="CloseOverlay"/> ends the hold, as do a change of the window's height and a new Menus max height.</para>
     /// </summary>
     public void ShowOverlay(IRenderable content, string hint, bool input = false, bool close = false)
     {
@@ -3408,6 +3459,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             // A pane opening is a natural redraw (2026-10-14): a Hints bar row held blank may go with it. A pane shown again (a
             // menu's key, the completion list's next letter) is not.
             _hintsCollapseDue |= _overlay is null;
+            if (_overlay is null)
+            {
+                // A visit starts from its own height (2026-10-14).
+                _paneFloor = 0;
+                _floorMenuHeight = null;
+            }
+
             _overlay = new Overlay(content, hint, input, close);
             _dismissHit = null;
             Redraw();
@@ -3425,6 +3483,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         lock (_gate)
         {
             Dismissed = false;
+            _paneFloor = 0;   // the visit's held height goes with it (2026-10-14), a stray close with nothing open too
+            _floorMenuHeight = null;
             if (_overlay is null)
             {
                 return;
@@ -3434,6 +3494,59 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             // redraw (2026-10-14): the Hints bar's row goes with its keys unless another hint stands.
             _overlay = null;
             _hintsCollapseDue = true;
+            Redraw();
+        }
+    }
+
+    /// <summary>
+    /// The overlay on show and the pane's held height, for a pane that opens over it to hand back with
+    /// <see cref="RestoreOverlay"/> (2026-10-14); none without one, or without the pane.
+    /// </summary>
+    public OverlayMark CurrentOverlay
+    {
+        get
+        {
+            if (!Enabled)
+            {
+                return default;
+            }
+
+            lock (_gate)
+            {
+                return _overlay is { } shown ? new OverlayMark(shown, _paneFloor, _floorMenuHeight, Height) : default;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The pane as <paramref name="mark"/> found it (2026-10-14, the user's ask: a pane opened over a menu — the approval's
+    /// details, <c>/settings</c>' folder browse — collapsed it to the input line for a frame as it closed, and the menu then
+    /// grew back): with none, <see cref="CloseOverlay"/>; otherwise the overlay it took, drawn again at the height the
+    /// mark held (the user's pick: a taller details pane gives the height back, the opener's title on its own row again),
+    /// unless the window's height changed meanwhile, when the page sets it afresh. A dismissing double-click is cleared as
+    /// <see cref="CloseOverlay"/> clears it, so it closes the nested pane alone — never answering the pane under it (the
+    /// approval's ESC is Deny). The Hints bar's row and the dismissing click's place are left as they are. Disabled: nothing.
+    /// </summary>
+    public void RestoreOverlay(OverlayMark mark)
+    {
+        if (!mark.IsSome)
+        {
+            CloseOverlay();
+            return;
+        }
+
+        if (!Enabled)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            Dismissed = false;
+            _overlay = (Overlay)mark.Shown!;
+            bool same = mark.Height == Height;
+            _paneFloor = same ? mark.Floor : 0;
+            _floorMenuHeight = same ? mark.MenuHeight : null;
             Redraw();
         }
     }
@@ -5104,6 +5217,25 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         _homeRows = homeRows;
         _stripRows = stripRows;
 
+        // The held height (2026-10-14, the user's ask): a titled overlay shorter than the tallest pane drawn since it opened gets
+        // blank rows under its content (over the input slot of a typed edit) up to it, within the overlay's cap, so the top rule
+        // stays where it was. The whole pane is counted, not the overlay alone: a bar switched off meanwhile, or the scroll's row
+        // going below, is taken up by one more blank row. A new Menus max height starts the hold afresh.
+        int heldRows = 0;
+        bool held = _overlay is { Close: true } && overlayLines is not null;
+        if (held)
+        {
+            string word = _menuHeight();
+            if (_floorMenuHeight is not null && !string.Equals(word, _floorMenuHeight, StringComparison.Ordinal))
+            {
+                _paneFloor = 0;
+            }
+
+            _floorMenuHeight = word;
+        }
+
+        HoldHeight();
+
         // Scrolled: the anchor against the region this pane leaves; at or past the last window it
         // is the bottom after all (a taller pane, a store that shrank) — and the scroll's row goes.
         IReadOnlyList<SegmentLine>? window = null;
@@ -5123,11 +5255,39 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 window = null;
                 _paneRows -= scrollRows;
                 scrollRows = 0;
+                HoldHeight();
                 region = RegionRows(_paneRows);
             }
         }
 
         _scrollRows = scrollRows;
+        if (held)
+        {
+            for (int i = 0; i < heldRows; i++)
+            {
+                overlayLines!.Insert(overlayRows - heldRows + i, new SegmentLine());
+            }
+
+            _paneFloor = Math.Max(_paneFloor, _paneRows);
+        }
+
+        // The blank rows the hold adds: as many as reach the floor, within what the overlay may take over the input rows.
+        void HoldHeight()
+        {
+            if (!held)
+            {
+                return;
+            }
+
+            int room = MaxOverlayRows(h - barRows - scrollRows, shown?.Rows.Count ?? 0) - overlayRows;
+            int more = Math.Min(_paneFloor - _paneRows, room);
+            if (more > 0)
+            {
+                overlayRows += more;
+                heldRows += more;
+                _paneRows += more;
+            }
+        }
 
         _inner.Cursor.Show(false);
 
@@ -7188,6 +7348,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 _col = 0;
                 _lineFull = false;
                 _hintsCollapseDue = true;   // a resize redraws all: a Hints bar row held blank goes with it (2026-10-14)
+                if (h != _lastHeight)
+                {
+                    // The held height was counted over the old height (2026-10-14): the page on show sets it afresh.
+                    _paneFloor = 0;
+                }
+
                 Draw();
                 EndSync();
                 return;

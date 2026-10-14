@@ -280,7 +280,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 * **Approving:** the pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Keep refining…** (`r`), **Close gaps…** (`g`) and **Cancel plan** (`c`). The run ticks the plan's steps; the file ends `done`, or `incomplete`.
 * **Closing gaps:** **Close gaps…** (or `/plan gaps`) reviews the plan pass by pass. Each pass is one turn that fixes what would make the work stall (a missing step, an open choice, an unread file) and saves a revision.
 * **Who reviews:** with advisors offered, the model alone (`m`), an advisor whose role fits (`a`), or the model consulting advisors (`y`).
-* **When it stops:** at a pass with no gaps (the approval pane comes back), at *Plan gap passes*, when a pass changes nothing or repeats itself, when you type a message, or on ESC.
+* **When it stops:** at a pass with no gaps (the approval pane comes back), at *LLM plan gap passes*, when a pass changes nothing or repeats itself, when you type a message, or on ESC.
 * `/new`, `/clear` and a profile switch leave plan mode.
 
 ### Bot conversations

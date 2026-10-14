@@ -414,7 +414,8 @@ public sealed class InfoPane
 
     /// <summary>
     /// Shows the pane under <paramref name="label"/> on <paramref name="tabs"/>[<paramref name="initial"/>]
-    /// and reads keys until ESC, the token, or the end of input; the pane is closed on every path.
+    /// and reads keys until ESC, the token, or the end of input; on every path the pane is closed, or the one it opened over
+    /// handed back as it was (2026-10-14, <see cref="ScreenPane.RestoreOverlay"/>).
     /// </summary>
     public async Task ShowAsync(string label, IReadOnlyList<InfoTab> tabs, int initial, CancellationToken cancellationToken)
     {
@@ -444,6 +445,9 @@ public sealed class InfoPane
         _findMoved = false;
         _seek = false;
         _clicks.Reset();
+        // The pane under this one, if any (2026-10-14: a command's details over its approval, a menu's): handed back as it was
+        // when this closes, its height and all, instead of the input line for a frame.
+        var under = _pane.CurrentOverlay;
         _mouse?.Invoke(true);
         try
         {
@@ -636,7 +640,7 @@ public sealed class InfoPane
         }
         finally
         {
-            _pane.CloseOverlay();
+            _pane.RestoreOverlay(under);
             _mouse?.Invoke(false);
         }
     }

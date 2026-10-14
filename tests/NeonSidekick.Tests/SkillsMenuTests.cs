@@ -592,8 +592,8 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("▸ profile  " + _roots.Profile) + "\n" + Fitted("  global   " + _roots.Global) + "\n  move     send it to another profile's skills\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n" + Rule(100) + "\n" + SkillsMenu.ScopeKeys + "\n", Output);   // delete always offered since 2026-09-23
-        Assert.Contains("\n" + Titled(SkillsMenu.MovePrompt("haiku", SkillScope.Profile, SkillScope.Global)) + "\n \n▸ No\n  Yes\n" + Rule(100) + "\n" + SettingsMenu.ConfirmKeys + "\n", Output);
+        HeldRows.AssertContains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("▸ profile  " + _roots.Profile) + "\n" + Fitted("  global   " + _roots.Global) + "\n  move     send it to another profile's skills\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n", Rule(100) + "\n" + SkillsMenu.ScopeKeys + "\n", Output);   // delete always offered since 2026-09-23
+        HeldRows.AssertContains("\n" + Titled(SkillsMenu.MovePrompt("haiku", SkillScope.Profile, SkillScope.Global)) + "\n \n▸ No\n  Yes\n", Rule(100) + "\n" + SettingsMenu.ConfirmKeys + "\n", Output);
         Assert.Contains("\n" + Titled(Strip) + "\n" + Scopes + "\n  · " + SkillsMenu.MovedNotice("haiku", SkillScope.Global) + "\n" + SkillsHead(1) + "\n▸ haiku  global   Writes haiku.\n", Output);
         Assert.False(Exists(SkillScope.Profile, "haiku"));
         Assert.True(Exists(SkillScope.Global, "haiku"));
@@ -622,7 +622,7 @@ public class SkillsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         string work = SkillsMenu.ProfileSkillsRoot(_dir, "work");
-        Assert.Contains("\n" + Titled(SkillsMenu.MoveToTitle("haiku")) + "\n \n" + Fitted("▸ ada   " + SkillsMenu.ProfileSkillsRoot(_dir, "ada")) + "\n" + Fitted("  work  " + work) + "\n" + Rule(100) + "\n" + SkillsMenu.ScopeKeys + "\n", Output);
+        HeldRows.AssertContains("\n" + Titled(SkillsMenu.MoveToTitle("haiku")) + "\n \n" + Fitted("▸ ada   " + SkillsMenu.ProfileSkillsRoot(_dir, "ada")) + "\n" + Fitted("  work  " + work) + "\n", Rule(100) + "\n" + SkillsMenu.ScopeKeys + "\n", Output);
         Assert.Contains("\n" + Titled(SkillsMenu.MoveToPrompt("haiku", "work")) + "\n \n▸ No\n  Yes\n", Output);
         Assert.Contains("\n  · " + SkillsMenu.MovedToNotice("haiku", "work") + "\n", Output);
         Assert.True(File.Exists(Path.Combine(work, "haiku", SkillCatalog.FileName)));
@@ -904,7 +904,7 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n▸ rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n› \n" + Rule(100) + "\n" + SettingsMenu.EditKeys, Output);
+        HeldRows.AssertContains("\n▸ rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n", "› \n" + Rule(100) + "\n" + SettingsMenu.EditKeys, Output);
         Assert.Contains("\n" + Titled(Strip) + "\n" + Scopes + "\n  · " + SkillsMenu.RenamedNotice("haiku", "my-haiku") + "\n" + SkillsHead(1) + "\n▸ my-haiku  profile  Writes haiku.\n", Output);
         Assert.False(Directory.Exists(Path.Combine(_roots.Profile, "haiku")));
         Assert.True(Exists(SkillScope.Profile, "my-haiku"));

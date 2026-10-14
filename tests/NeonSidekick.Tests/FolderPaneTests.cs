@@ -146,7 +146,9 @@ public class FolderPaneTests : IDisposable
 
         Assert.Contains("\n" + P(C, "Users", "bob") + "\n" + Open(false, 0, C) + "\n" + Open(false, 1, "Users") + "\n" + Closed(false, 2, "alice") + "\n" + Closed(true, 2, "bob") + "\n" + Closed(false, 1, "Windows") + "\n", Output);
         Assert.Contains("\n" + P(C, "Windows") + "\n" + Open(false, 0, C) + "\n", Output);
-        Assert.Contains("\n" + C + "\n" + Closed(true, 0, C) + "\n" + SecondRoot() + Rule(40), Output);
+        // The tree closed is four rows shorter than the one it was opened on: the pane holds its height (2026-10-14), the
+        // blank rows under the roots, so the title stays on its row.
+        Assert.Contains("\n" + C + "\n" + Closed(true, 0, C) + "\n" + SecondRoot() + "\n\n\n\n" + Rule(40), Output);
     }
 
     [Fact]
@@ -280,7 +282,9 @@ public class FolderPaneTests : IDisposable
         string? picked = await picker.PickAsync(tree, bob, CancellationToken.None);
 
         Assert.Equal(Windows ? D : C, picked);
-        Assert.Contains("\n" + C + "\n" + Closed(true, 0, C) + "\n" + SecondRoot() + Rule(40), Output);
+        // The tree closed is four rows shorter than the one it was opened on: the pane holds its height (2026-10-14), the
+        // blank rows under the roots, so the title stays on its row.
+        Assert.Contains("\n" + C + "\n" + Closed(true, 0, C) + "\n" + SecondRoot() + "\n\n\n\n" + Rule(40), Output);
         Assert.True(FolderPane.ButtonAt(12));
         Assert.True(FolderPane.ButtonAt(27));
         Assert.False(FolderPane.ButtonAt(11));

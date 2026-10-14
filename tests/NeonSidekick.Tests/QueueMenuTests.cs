@@ -212,7 +212,7 @@ public class QueueMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         // The re-shown list: the notice where the spacer was, the cursor on the row that slid up, the numbers fresh.
-        Assert.Contains("\n" + Titled(Strip) + "\n  · (⏳ removed: two)\n  " + Row(0, "one") + "\n▸ " + Row(1, "three") + "\n" + MenuLayout.Footer(new MenuFooter("three", "2 of 2"), 100) + Rule(100) + "\n" + QueueMenu.Keys + "\n", _console.Output);
+        HeldRows.AssertContains("\n" + Titled(Strip) + "\n  · (⏳ removed: two)\n  " + Row(0, "one") + "\n▸ " + Row(1, "three") + "\n" + MenuLayout.Footer(new MenuFooter("three", "2 of 2"), 100), Rule(100) + "\n" + QueueMenu.Keys + "\n", _console.Output);
         Assert.Equal(flow, pane.FlowRow);   // the notice was a status line, not a transcript line
         Assert.False(pane.OverlayOpen);
         Assert.Equal(new[] { "one", "three" }, Labels());

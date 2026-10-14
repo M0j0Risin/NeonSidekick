@@ -105,7 +105,7 @@ internal sealed partial class SettingsMenu
 
                     break;
                 case RemoveStoreIndex:
-                    if (await ConfirmAsync(ShoppingText.RemoveStorePrompt(shop, store.Placements(shop.Id).Count), cancellationToken).ConfigureAwait(false))
+                    if (await ConfirmAsync(ShoppingText.RemoveStorePrompt(shop, store.Placements(shop.Id).Count), cancellationToken, close: false).ConfigureAwait(false))
                     {
                         string answer = list.RemoveStore(shop);
                         Say(answer);

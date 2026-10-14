@@ -885,4 +885,80 @@ public class InfoPaneTests : IDisposable
         Assert.Equal(plain, marked[3].Style);
         Assert.Same(line, TextFind.Mark(line, [], 2, -1));
     }
+
+    /// <summary>
+    /// Opened over a menu (2026-10-14, the user's ask: a command's details over its approval, a menu's): the pane held at the menu's
+    /// height while it shows, and on ESC the menu handed back as it was, with no input line between — the pane never closed.
+    /// </summary>
+    [Fact]
+    public async Task OverAMenu_IsHeldAtItsHeight_AndEscHandsTheMenuBack()
+    {
+        using var pane = Pane();
+        pane.Show();
+        pane.ShowOverlay(new Rows(Enumerable.Range(0, 6).Select(i => new Markup("menu " + i))), "menu keys", close: true);
+        int menu = pane.DrawnRows;
+        int closes = Count(Output, "\n› \n");
+        _console.Input.PushKey(Keys.Escape);
+
+        await new InfoPane(pane, Source()).ShowAsync("/details", [Tab("/details", "first")], 0, CancellationToken.None);
+
+        Assert.Contains(Titled("/details") + "\n \nfirst\n\n\n\n" + Rule(40), Output);   // three rows held blank under it
+        Assert.True(pane.OverlayOpen);
+        Assert.Equal(menu, pane.DrawnRows);
+        Assert.Equal(closes, Count(Output, "\n› \n"));   // the input line never came between
+        Assert.EndsWith("menu 5\n" + Rule(40) + "\nmenu keys", Output);
+    }
+
+    /// <summary>Taller than the menu it opened over (the user's pick, 2026-10-14): it grows the pane, and ESC gives the menu its own height back.</summary>
+    [Fact]
+    public async Task OverAShorterMenu_GrowsThePane_AndEscGivesTheHeightBack()
+    {
+        using var pane = Pane();
+        pane.Show();
+        pane.ShowOverlay(new Markup("Deny"), "approval keys", close: true);
+        int approval = pane.DrawnRows;
+        _console.Input.PushKey(Keys.Escape);
+
+        await new InfoPane(pane, Source()).ShowAsync("/details", [Tab("/details", "first\nsecond\nthird")], 0, CancellationToken.None);
+
+        Assert.Contains("\nthird\n" + Rule(40), Output);
+        Assert.Equal(approval, pane.DrawnRows);
+        Assert.EndsWith("Deny" + new string(' ', 40 - 2 - 4) + ScreenPane.CloseGlyph + "\n" + Rule(40) + "\napproval keys", Output);
+    }
+
+    /// <summary>
+    /// A double-click off the pane while the approval's details are up (2026-10-14): the details go, the question stays unanswered —
+    /// never the approval's ESC, which is Deny — and its next pick is the one that counts.
+    /// </summary>
+    [Fact]
+    public async Task ADoubleClickOffTheApprovalsDetails_ClosesThemAlone_TheQuestionStillUnanswered()
+    {
+        using var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100), _time) { Hint = () => "idle" };
+        pane.Show();
+        var input = new ScriptedInput();
+        var keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
+        var info = new InfoPane(pane, keys);
+        var approval = new NeonSidekick.App.CommandApprovalMenu(new MenuPane(pane, keys),
+            (label, lines, ct) => info.ShowAsync(label, [new InfoTab(label, () => new Text(string.Join('\n', lines)))], 0, ct));
+        input.Push(Keys.Char(NeonSidekick.Shell.ShellText.ViewKey));   // the whole command
+        input.PushClick(5, 50).PushClick(5, 50);                        // two clicks on the transcript, off the details
+        input.Push(Keys.Down, Keys.Enter);                              // Allow once
+
+        var choice = await approval.AskAsync(new NeonSidekick.Shell.CommandRequest("run_command", "dir", ["dir"]), CancellationToken.None);
+
+        Assert.Equal(NeonSidekick.Shell.CommandChoice.Once, choice);
+        Assert.False(pane.Dismissed);
+        Assert.False(pane.OverlayOpen);
+    }
+
+    private static int Count(string text, string part)
+    {
+        int count = 0;
+        for (int at = text.IndexOf(part, StringComparison.Ordinal); at >= 0; at = text.IndexOf(part, at + 1, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
+    }
 }

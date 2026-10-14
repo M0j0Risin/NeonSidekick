@@ -127,9 +127,9 @@ Settings every server reads, whatever its kind.
 | LLM show thinking | Streams a reasoning model's thinking as a dim block, folded to one line when the answer starts (click it, Ctrl+O or `/expand`). Thinking is never spoken or logged. | on |
 | LLM offer tools | Whether the model gets any tools. Turn it off for chat templates with no tool role. A change starts a new conversation. | on |
 | LLM max tool iterations | Tool round trips one message may make (1–10000). | 10000 |
-| Plan gap passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs before the plan comes back with gaps left (0–20; 0 is no cap, or 20 headless). ESC stops it. | 5 |
 | LLM request timeout (s) | The longest one HTTP request may take (up to 3600). | 3600 |
 | LLM turn timeout (s) | The longest one whole turn may take, tool calls included (up to 21600). | 21600 |
+| LLM plan gap passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs before the plan comes back with gaps left (0–20; 0 is no cap, or 20 headless). ESC stops it. | 5 |
 | LLM context length | The context window in tokens, for the usage percentage. 0 takes the server's figure. | 0 (the server's) |
 | LLM mid-turn usage | The status bar's usage during a reply: `estimate` (live, marked `~`) or `last-known` (the last finished request's figures). | `last-known` |
 | LLM max turns | User turns the model sees before the oldest drop off (1–500). `auto` keeps them all while auto compact can run, else 24. | `auto` |

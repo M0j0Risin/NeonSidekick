@@ -252,7 +252,7 @@ public static class HelpCommands
             new("/plan approve [--fresh]", "While planning, approve the presented plan by typing instead of on the pane (you may edit the file first)."),
             new("/plan cancel", "While planning, leave plan mode; the file is kept, marked `canceled`."),
             new("/plan save [<name>]", "While planning, keep a reply that looks like a plan as the plan when the model never called `present_plan` (a notice says so), and bring up the approval pane."),
-            new("/plan gaps [model|advisor|any]", "While planning, review the presented plan pass after pass until a pass finds no gaps, then bring the approval pane back; the pane's *Close gaps…* does the same. `model` reviews alone (the default), `advisor` has an advisor find the gaps each pass, `any` consults advisors where a role fits. ESC stops it; *Plan gap passes* caps the passes."),
+            new("/plan gaps [model|advisor|any]", "While planning, review the presented plan pass after pass until a pass finds no gaps, then bring the approval pane back; the pane's *Close gaps…* does the same. `model` reviews alone (the default), `advisor` has an advisor find the gaps each pass, `any` consults advisors where a role fits. ESC stops it; *LLM plan gap passes* caps the passes."),
             new("/plan open <name>", "Pick a plan up again, in or out of plan mode (names complete from `.neon/plans/`). Plan mode turns on over that file, the file goes back to `draft`, and the model reads it and asks what should change; `/plan approve` then carries out only the unticked steps."),
             new("/plan open", "List the plans with their status and progress in a pane."),
         ]),

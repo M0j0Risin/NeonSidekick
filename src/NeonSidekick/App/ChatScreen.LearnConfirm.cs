@@ -161,7 +161,10 @@ internal sealed partial class ChatScreen
                 while (!ask.Answer.Task.IsCompleted)
                 {
                     var page = new MenuPage(LearnAskTitle(ask.Proposal), LearnAskRows, LearnAskKeys) { Caption = LearnAskCaption(ask.Proposal) };
-                    int? picked = await _menu.ChooseAsync(page, withdrawn.Token).ConfigureAwait(false);
+                    // One visit for the whole ask (2026-10-14, the user's ask): the pane stays open between the question and View, so
+                    // the details open over it and give it back at its own height on ESC (ScreenPane.RestoreOverlay), where
+                    // ChooseAsync closed it at each answer and both jumped. The finally below closes it.
+                    int? picked = (await _menuPane.PickAsync(page, 0, withdrawn.Token).ConfigureAwait(false))?.Row;
                     if (picked == 1)
                     {
                         string detail = LearnAskDetail(ask.Proposal);

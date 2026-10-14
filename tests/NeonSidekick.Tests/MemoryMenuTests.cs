@@ -223,7 +223,7 @@ public class MemoryMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         // The re-shown list: the notice where the spacer was, the cursor on the row that slid up.
-        Assert.Contains("\n" + Titled(MemoryMenu.Title) + "\n  · (💾 removed: two)\n  " + rows[0] + "\n▸ " + rows[2] + "\n" + MenuLayout.Footer(new MenuFooter("three"), 100) + Rule(100) + "\n" + MemoryMenu.PlainKeys + "\n", _console.Output);
+        HeldRows.AssertContains("\n" + Titled(MemoryMenu.Title) + "\n  · (💾 removed: two)\n  " + rows[0] + "\n▸ " + rows[2] + "\n" + MenuLayout.Footer(new MenuFooter("three"), 100), Rule(100) + "\n" + MemoryMenu.PlainKeys + "\n", _console.Output);
         Assert.Equal(flow, pane.FlowRow);   // the notice was a status line, not a transcript line
         Assert.False(pane.OverlayOpen);
         Assert.Equal(new[] { "one", "three" }, new MemoryStore(_dir).Snapshot());

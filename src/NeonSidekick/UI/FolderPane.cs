@@ -74,7 +74,7 @@ public sealed class FolderPane
     /// <summary>
     /// Shows <paramref name="tree"/> with row <paramref name="cursor"/> highlighted and reads
     /// keys until Enter (the highlighted node's full path), ESC, the token, or the end of input
-    /// (null); the pane is closed on every path.
+    /// (null); on every path the pane is closed, or the one it opened over handed back (2026-10-14).
     /// </summary>
     public Task<string?> PickAsync(FolderTree tree, int cursor, CancellationToken cancellationToken) =>
         RunAsync(tree, cursor, FolderText.Title, FolderText.Hint, open: null, cancellationToken);
@@ -84,7 +84,7 @@ public sealed class FolderPane
     /// <paramref name="cursor"/> highlighted, Enter on a file handing its full path to <paramref name="open"/> — the line it answers
     /// shown on the path row, in the error colour when <c>Error</c> — and the pane staying open, so another can be opened; Enter on a
     /// folder opens or closes it as Space does. Every other key is the picker's. Ends on ESC, the token or the end of input; the pane
-    /// is closed on every path.
+    /// is closed on every path, or the one it opened over handed back (2026-10-14).
     /// </summary>
     public Task BrowseAsync(FolderTree tree, int cursor, Func<string, (string Line, bool Error)> open, CancellationToken cancellationToken)
     {
@@ -107,6 +107,9 @@ public sealed class FolderPane
         _first = 0;
         _status = null;
         _clicks.Reset();
+        // The pane under this one, if any (2026-10-14: /settings' working-directory browse over its menu): handed back as it was
+        // when this closes, its height and all, instead of the input line for a frame.
+        var under = _pane.CurrentOverlay;
         _mouse?.Invoke(true);
         try
         {
@@ -268,7 +271,7 @@ public sealed class FolderPane
         finally
         {
             _tree = null;
-            _pane.CloseOverlay();
+            _pane.RestoreOverlay(under);
             _mouse?.Invoke(false);
         }
     }

@@ -1504,7 +1504,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
         [SettingsField.LlmUrl, SettingsField.LlmModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
-         SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.PlanGapPasses, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
+         SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.PlanGapPasses,
          SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType,
          SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs],
         [SettingsField.LlmScanMode, SettingsField.LlmApiKey,
@@ -2082,7 +2082,7 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmPictureKeep => "LLM max images",
         SettingsField.LlmPictureMegabytes => "LLM max images (MB)",
         SettingsField.LlmMaxToolIterations => "LLM max tool iterations",
-        SettingsField.PlanGapPasses => "Plan gap passes",
+        SettingsField.PlanGapPasses => "LLM plan gap passes",
         SettingsField.ImageThumbnailSize => "Image thumbnail size",
         SettingsField.FileTreeMaxLength => "File /tree max entries",
         SettingsField.FileTreeShowSizes => "File /tree show sizes",
@@ -4029,14 +4029,19 @@ internal sealed partial class SettingsMenu
     /// the title, <see cref="ConfirmRows"/> with the cursor on <c>No</c>, <see cref="ConfirmKeys"/> in
     /// the hint, <see cref="ConfirmHotkeys"/> moving the cursor. True only for an Enter on <c>Yes</c>;
     /// ESC, the token and no keyboard are no. The pane
-    /// closes with the answer, so what follows goes to the transcript. Callers check <see cref="CanShowMenus"/>
-    /// first and fall back to a typed confirmation where menus cannot open.
+    /// closes with the answer, so what follows goes to the transcript — unless <paramref name="close"/> is false (2026-10-14,
+    /// the user's ask: removing a store or an embedded model closed the menu it was asked from, and the menu then grew back
+    /// from the input line): a question asked from inside a visit, whose host closes the pane, the page held at the visit's
+    /// height (<see cref="PickProfileAsync(string, string, bool, CancellationToken)"/>'s split). Callers check
+    /// <see cref="CanShowMenus"/> first and fall back to a typed confirmation where menus cannot open.
     /// </summary>
-    public async Task<bool> ConfirmAsync(string question, CancellationToken cancellationToken)
+    public async Task<bool> ConfirmAsync(string question, CancellationToken cancellationToken, bool close = true)
     {
         ArgumentNullException.ThrowIfNull(question);
         var page = new MenuPage(question, ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
-        int? picked = await PickOnceAsync(page, 0, cancellationToken).ConfigureAwait(false);
+        int? picked = close
+            ? await PickOnceAsync(page, 0, cancellationToken).ConfigureAwait(false)
+            : await PickAsync(page, 0, cancellationToken).ConfigureAwait(false);
         return picked == 1;
     }
 
@@ -7843,7 +7848,7 @@ internal sealed partial class SettingsMenu
             return;
         }
 
-        if (!await ConfirmAsync(question, cancellationToken).ConfigureAwait(false))
+        if (!await ConfirmAsync(question, cancellationToken, close: false).ConfigureAwait(false))
         {
             return;
         }

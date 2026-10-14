@@ -335,7 +335,7 @@ internal sealed class SamplingMenu
                 var shown = pick.Tab == page.Tab ? page : Page(map, keys, tab, claudeApi, server, openAIApi);
                 if (cursor == ClearRow)
                 {
-                    if (Entry(map, key) is { IsEmpty: false } && await _menu.ConfirmAsync(SamplingText.ClearQuestion(key), cancellationToken).ConfigureAwait(false))
+                    if (Entry(map, key) is { IsEmpty: false } && await _menu.ConfirmAsync(SamplingText.ClearQuestion(key), cancellationToken, close: false).ConfigureAwait(false))
                     {
                         ClearAll(key);
                     }

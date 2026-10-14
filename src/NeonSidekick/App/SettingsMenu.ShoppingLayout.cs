@@ -118,7 +118,7 @@ internal sealed partial class SettingsMenu
                         case 0 when await TypeStoreNameAsync(page, pick.Row, section.Name, cancellationToken).ConfigureAwait(false) is { } renamed && renamed != section.Name:
                             Say(list.RenameSection(section, renamed));
                             break;
-                        case 1 when await ConfirmAsync(ShoppingText.RemoveSectionPrompt(section), cancellationToken).ConfigureAwait(false):
+                        case 1 when await ConfirmAsync(ShoppingText.RemoveSectionPrompt(section), cancellationToken, close: false).ConfigureAwait(false):
                             Say(list.RemoveSection(shop, section));
                             break;
                     }
@@ -192,7 +192,7 @@ internal sealed partial class SettingsMenu
                 Say(list.MoveLocation(shop, location, up: false));
                 break;
             case 4:
-                if (await ConfirmAsync(ShoppingText.RemoveLocationPrompt(location, facts.Count(f => f.LocationId == location.Id)), cancellationToken).ConfigureAwait(false))
+                if (await ConfirmAsync(ShoppingText.RemoveLocationPrompt(location, facts.Count(f => f.LocationId == location.Id)), cancellationToken, close: false).ConfigureAwait(false))
                 {
                     Say(list.RemoveLocation(shop, location));
                 }

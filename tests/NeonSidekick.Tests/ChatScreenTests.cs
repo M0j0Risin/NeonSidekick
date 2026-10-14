@@ -6650,7 +6650,7 @@ public partial class ChatScreenTests : IDisposable
         // The highlighted memory in full under the list since 2026-10-07: the footer band.
         Assert.Contains(rule + "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n \n▸ " + rows[0] + "\n  " + rows[1] + "\n" + MenuLayout.Footer(new MenuFooter("Their name is Chris."), 240) + rule + "\n" + MemoryMenu.SwitchKeys + "\n", output);   // the keys on the Hints bar (2026-10-14)
         // Re-shown after the removal with the notice as the status line, not a transcript line.
-        Assert.Contains("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n  · (💾 removed: Their name is Chris.)\n▸ " + rows[1] + "\n" + MenuLayout.Footer(new MenuFooter("They live in Leeds."), 240) + rule + "\n", output);
+        HeldRows.AssertContains("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n  · (💾 removed: Their name is Chris.)\n▸ " + rows[1] + "\n" + MenuLayout.Footer(new MenuFooter("They live in Leeds."), 240), rule + "\n", output);
         Assert.DoesNotContain(SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys), output);
         Assert.Equal(new[] { "They live in Leeds." }, new MemoryStore(_settings.ProfileDirectory).Snapshot());
         Assert.Empty(_chat.Requests);
@@ -21593,6 +21593,76 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(ChatScreen.LearnAskRows[2], output);
         Assert.Contains(done, output);
         Assert.Equal(keep, File.Exists(Path.Combine(ProfileSkills, "greeting", SkillCatalog.FileName)));
+    }
+
+    /// <summary>
+    /// View, then ESC (2026-10-14, the user's ask): the ask holds one visit, so the details open over the question and ESC hands it
+    /// back as it was — no input line drawn between, where the question closed at View and opened again from nothing after it.
+    /// </summary>
+    [Fact]
+    public async Task WithGeometry_ConfirmNew_View_ThenEsc_BringsTheQuestionBack_WithNoInputLineBetween()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ReflectionConfirmMode = "new"; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("Hello.");
+        _chat.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, CreateSkillArgs("greeting")));
+        string title = ChatScreen.LearnAskTitle(new SkillProposal(SkillChangeKind.New, SkillEditorTool.CreateAction, "greeting"));
+        const string Details = "↑/↓ PgUp/PgDn = scroll";   // the details pane's hint (InfoPane.SingleTabHintText)
+        int step = 0;
+        int detailsAt = -1;
+        var input = Scripted();
+        input.OnWait = () =>
+        {
+            switch (step)
+            {
+                case 0: step++; PushLine(input, "hi"); break;
+                case 1: step++; PushLine(input, "/learn keep the greeting"); break;
+                case 2:
+                    if (Output.Contains(title, StringComparison.Ordinal))
+                    {
+                        step++;
+                        input.Push(Keys.Down, Keys.Enter);                       // View
+                    }
+
+                    break;
+                case 3:
+                    if (Output.IndexOf(Details, StringComparison.Ordinal) is var at and >= 0)
+                    {
+                        step++;
+                        detailsAt = at;
+                        input.Push(Keys.Escape);                                 // back to the question
+                    }
+
+                    break;
+                case 4:
+                    if (Output.IndexOf(ChatScreen.LearnAskRows[2], detailsAt, StringComparison.Ordinal) >= 0)
+                    {
+                        step++;
+                        input.Push(Keys.Enter);                                  // Keep: the question opens on it again
+                    }
+
+                    break;
+                case 5:
+                    if (_session.Learning is { IsCompleted: true })
+                    {
+                        step++;
+                        PushLine(input, "/exit");
+                    }
+
+                    break;
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.True(detailsAt >= 0);
+        string after = output[detailsAt..];
+        int question = after.IndexOf(ChatScreen.LearnAskRows[2], StringComparison.Ordinal);
+        int line = after.IndexOf("\n› ", StringComparison.Ordinal);
+        Assert.True(question >= 0);
+        Assert.True(line < 0 || question < line, "the input line was drawn between the details and the question");
+        Assert.True(File.Exists(Path.Combine(ProfileSkills, "greeting", SkillCatalog.FileName)));
     }
 
     /// <summary>

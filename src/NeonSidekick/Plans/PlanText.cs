@@ -177,7 +177,7 @@ public static class PlanText
     public const string GapsConfirmFallbackNotice = Glyph + " Advisor confirm is on and headless cannot ask, so the model reviews the plan alone.";
 
     /// <summary>Headless (2026-10-13): no ESC to stop a loop with no limit.</summary>
-    public static string GapsHeadlessCapNotice(int cap) => $"{Glyph} Plan gap passes is 0 (no limit), but headless has no ESC: at most {N(cap)} passes.";
+    public static string GapsHeadlessCapNotice(int cap) => $"{Glyph} LLM plan gap passes is 0 (no limit), but headless has no ESC: at most {N(cap)} passes.";
 
     /// <summary>The --log line of a pass: its gaps whole, and whether it asked an advisor.</summary>
     public static string PassLogLine(int pass, int revision, IReadOnlyList<string> gaps, bool advisorAsked)
