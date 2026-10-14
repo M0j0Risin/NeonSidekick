@@ -125,15 +125,16 @@ public class LlmSessionTests
     {
         // 2026-10-10 (the profile advisors): the main connect and a link that borrows its server build for the loaded
         // profile (null); a link to the profile's own server builds for that profile, so its caps and headers go with it.
+        // 2026-10-13: and every link says it is one, so on the Claude Code server it gets a process of its own.
         ServerOn1234("llama");
         _http.Map("http://127.0.0.1:8000/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("qwen"));
-        var told = new List<AppSettingsData?>();
+        var told = new List<ChatClientFor>();
         using var session = new LlmSession(
             new LlmEndpointProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)),
             new ContextLengthProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)),
-            (LlmEndpoint _, LlmTimeouts _, AppSettingsData? profile) =>
+            (LlmEndpoint _, LlmTimeouts _, ChatClientFor owner) =>
             {
-                told.Add(profile);
+                told.Add(owner);
                 return new FakeChatClient();
             });
         Assert.True(await session.ConnectAsync(Scanning, CancellationToken.None));
@@ -148,9 +149,11 @@ public class LlmSessionTests
         using (borrowed)
         {
             Assert.Equal(3, told.Count);
-            Assert.Null(told[0]);
-            Assert.Same(own, told[1]);
-            Assert.Null(told[2]);
+            Assert.Equal(default, told[0]);   // the main connect: no profile, not linked
+            Assert.Same(own, told[1].Profile);
+            Assert.True(told[1].Linked);
+            Assert.Null(told[2].Profile);   // borrowed: the loaded profile's settings, but still a link
+            Assert.True(told[2].Linked);
         }
     }
 

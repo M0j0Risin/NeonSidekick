@@ -25,9 +25,7 @@ public sealed class FakeAdvisorHost : IAdvisorHost
 
     public string? Warning { get; set; }
 
-    /// <summary>What the links say of their server (2026-10-10, a Claude Code advisor): whether it takes tools, whether it keeps the conversation.</summary>
-    public bool LinkTools { get; set; } = true;
-
+    /// <summary>What the links say of their server (2026-10-10, a Claude Code advisor): whether it keeps the conversation.</summary>
     public bool LinkSession { get; set; }
 
     public bool ThrowOnRead { get; set; }
@@ -64,7 +62,7 @@ public sealed class FakeAdvisorHost : IAdvisorHost
         {
             SystemPrompts.Add(history.SystemPrompt);
             return new Assistant(client, history, LlmTimeouts.Default);
-        }, profile.Settings.LlmModel, Warning, LinkTools, LinkSession);
+        }, profile.Settings.LlmModel, Warning, LinkSession);
         return Task.FromResult<(AdvisorLink?, string?)>((link, null));
     }
 

@@ -791,7 +791,7 @@ Under *Advisors enabled*. Advisors are other profiles of this home, each in a ro
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `neon_advisor` | `advisor, question, context?` | Asks one advisor, by profile or role, for its view. It answers on its own server and model, under its own persona and role, and may call this chat's read-only tools for up to *Advisor max tool iterations* round trips. The transcript shows the question, its tools, the answer and its model and tokens. Each advisor keeps a thread for the session. Offered while an advisor is listed; plan mode keeps it, and there the model is asked to consult advisors whose role fits before presenting a plan. An advisor on the Claude Code server answers text-only unless it is the first listed there and this chat is on another server. |
+| `neon_advisor` | `advisor, question, context?` | Asks one advisor, by profile or role, for its view. It answers on its own server and model, under its own persona and role, and may call this chat's read-only tools for up to *Advisor max tool iterations* round trips. The transcript shows the question, its tools, the answer and its model and tokens. Each advisor keeps a thread for the session. Offered while an advisor is listed; plan mode keeps it, and there the model is asked to consult advisors whose role fits before presenting a plan. An advisor on the Claude Code server runs in a `claude` process of its own, beside this chat's, with the read-only tools; the process stays until the conversation ends or this chat's server or model changes. |
 
 ### Plan
 

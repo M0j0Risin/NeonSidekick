@@ -25,6 +25,9 @@ public sealed class FakeClaudeServerHost : IClaudeServerHost
     /// <summary>How many times <see cref="Stop"/> stopped a running CLI.</summary>
     public int Stops { get; private set; }
 
+    /// <summary>How many times the host was disposed (2026-10-13: a client that owns its host disposes it).</summary>
+    public int Disposals { get; private set; }
+
     /// <summary>Sees each written line (after it is recorded); the CLI's answer goes in through <see cref="Feed"/>.</summary>
     public Func<string, Task>? OnWrite { get; set; }
 
@@ -117,6 +120,7 @@ public sealed class FakeClaudeServerHost : IClaudeServerHost
 
     public ValueTask DisposeAsync()
     {
+        Disposals++;
         Stop();
         return ValueTask.CompletedTask;
     }

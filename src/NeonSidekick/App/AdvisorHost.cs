@@ -11,6 +11,9 @@ namespace NeonSidekick.App;
 /// (<see cref="LlmSession.LinkAsync(AppSettingsData, BotEmbeddedMode, CancellationToken)"/>) under <c>Advisor embedded mode</c>.
 /// A link is kept for the advisor's later calls while the session's server, the advisor's <c>profile.json</c> and the mode are
 /// as they were; otherwise, or after <see cref="Forget"/>, it is disposed and made again. Disposed with the screen (or headless).
+/// An advisor on the Claude Code server runs its turns with the tools under its thread's conversation, on a <c>claude</c> process
+/// of its own beside the chat's (2026-10-13, the user's ask; until then one advisor held the chat's process, and only while the
+/// chat was elsewhere): disposing its link stops that process, so the drops dispose outside the lock and side by side.
 /// </summary>
 internal sealed class AdvisorHost : IAdvisorHost, IDisposable
 {
@@ -50,94 +53,87 @@ internal sealed class AdvisorHost : IAdvisorHost, IDisposable
         BotChatMultiEmbedded.TryParse(_effective().AdvisorEmbedded, out var mode);
         DateTime written = WrittenAt(profile.Name);
         var main = _session.Endpoint;
+        Kept? stale = null;
         lock (_gate)
         {
             if (_links.TryGetValue(profile.Name, out var kept))
             {
                 if (ReferenceEquals(kept.Main, main) && kept.Written == written && kept.Mode == mode)
                 {
-                    return (Wrap(kept.Link, profile.Name), null);
+                    return (Wrap(kept.Link), null);
                 }
 
                 _links.Remove(profile.Name);
-                kept.Link.Dispose();
+                stale = kept;
             }
         }
 
+        stale?.Link.Dispose();
         var (link, problem) = await _session.LinkAsync(profile.Settings, mode, cancellationToken).ConfigureAwait(false);
         if (link is null)
         {
             return (null, problem);
         }
 
+        Kept? raced;
         lock (_gate)
         {
-            if (_links.Remove(profile.Name, out var raced))
-            {
-                raced.Link.Dispose();
-            }
-
+            _links.Remove(profile.Name, out raced);
             _links[profile.Name] = new Kept(link, main, written, mode);
         }
 
-        return (Wrap(link, profile.Name), null);
+        raced?.Link.Dispose();
+        return (Wrap(link), null);
     }
 
     public void Forget(string profile)
     {
+        Kept? kept;
         lock (_gate)
         {
-            if (_links.Remove(profile, out var kept))
-            {
-                kept.Link.Dispose();
-            }
+            _links.Remove(profile, out kept);
         }
+
+        kept?.Link.Dispose();
     }
 
     /// <summary>Every link dropped: a profile switch, or the end. The host stays usable; the next call links anew.</summary>
     public void Dispose() => Reset();
 
-    /// <summary>Every link dropped (2026-10-10): the session forgotten — <c>/new</c>, <c>/clear</c>, a profile switch.</summary>
+    /// <summary>
+    /// Every link dropped (2026-10-10): the session forgotten — <c>/new</c>, <c>/clear</c>, a profile switch. Disposed outside the
+    /// lock and side by side (2026-10-13): a Claude Code advisor's link stops its process, which may take up to
+    /// <see cref="Claude.ClaudeServerHost.StopGrace"/>, so the wait is the slowest one's, not the sum. Each still stops before this
+    /// returns, so a later link resuming the same session never meets the old process.
+    /// </summary>
     public void Reset()
     {
+        List<Kept> dropped;
         lock (_gate)
         {
-            foreach (var kept in _links.Values)
-            {
-                kept.Link.Dispose();
-            }
-
+            dropped = [.. _links.Values];
             _links.Clear();
         }
+
+        if (dropped.Count == 1)
+        {
+            dropped[0].Link.Dispose();
+        }
+        else if (dropped.Count > 1)
+        {
+            Task.WhenAll(dropped.Select(kept => Task.Run(kept.Link.Dispose))).GetAwaiter().GetResult();
+        }
     }
 
-    private AdvisorLink Wrap(BotLink link, string profile)
+    /// <summary>
+    /// <paramref name="link"/> as an advisor's: on the Claude Code server (2026-10-10; every advisor there since 2026-10-13, the user's
+    /// ask) its turns run with the tools under its thread's conversation, on its link's own process (<see cref="SidekickApp.ClaudeHostFor"/>).
+    /// </summary>
+    private AdvisorLink Wrap(BotLink link)
     {
         string? warning = link.SharedEmbedded is var (wanted, running) ? AdvisorText.SharedEmbeddedWarning(wanted, running) : null;
-        if (!Claude.ClaudeCliEndpoint.IsClaudeCli(link.Endpoint.BaseUrl))
-        {
-            return new AdvisorLink(history => _session.CreateAssistant(history, link), ModelOf(link.Endpoint), warning);
-        }
-
-        // On the Claude Code server (2026-10-10, the user's rules, AdvisorClaudeGate): the one advisor that may hold the server — the
-        // chat elsewhere, the first listed on it — runs its turns there with the tools; any other answers text-only, one-shot.
-        bool masterOnClaudeCode = Claude.ClaudeCliEndpoint.IsClaudeCli(_session.Endpoint?.BaseUrl);
-        string? holder = AdvisorClaudeGate.Holder(AdvisorRoster.Entries(_effective().AdvisorList), OnClaudeCode, masterOnClaudeCode);
-        string? textOnly = AdvisorClaudeGate.TextOnlyReason(profile, holder, masterOnClaudeCode);
-        return new AdvisorLink(history => _session.CreateAssistant(history, link), ModelOf(link.Endpoint), textOnly ?? warning, Tools: textOnly is null, Session: textOnly is null);
-    }
-
-    /// <summary>Whether listed advisor <paramref name="profile"/>'s saved server is the Claude Code server; a profile that cannot be read is not.</summary>
-    private bool OnClaudeCode(string profile)
-    {
-        try
-        {
-            return Read(profile) is { } advisor && Claude.ClaudeCliEndpoint.IsClaudeCli(advisor.Settings.LlmUrl);
-        }
-        catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
+        return new AdvisorLink(history => _session.CreateAssistant(history, link), ModelOf(link.Endpoint), warning,
+            Session: Claude.ClaudeCliEndpoint.IsClaudeCli(link.Endpoint.BaseUrl));
     }
 
     /// <summary>The model a link answers on as the footer names it: the embedded catalog's name, else the id.</summary>

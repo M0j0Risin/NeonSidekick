@@ -50,14 +50,14 @@ public class ClaudeCliServerTests
         return (lines[..(stop + 1)], lines[(stop + 1)..(end + 1)], lines[(end + 1)..]);
     }
 
-    private static ClaudeCliChatClient Client(IClaudeServerHost host, Func<ProcessLaunchCapture, IAsyncEnumerable<ClaudeEvent>>? oneShot = null, ProcessLaunchCapture? capture = null) =>
-        new(LlmSession.ClaudeCliEndpointOf("haiku"), host, new ClaudeCliContext(() => @"C:\tools\claude.exe", @"C:\home\claude-cli",
+    private static ClaudeCliChatClient Client(IClaudeServerHost host, Func<ProcessLaunchCapture, IAsyncEnumerable<ClaudeEvent>>? oneShot = null, ProcessLaunchCapture? capture = null, string model = "haiku", bool ownsHost = false) =>
+        new(LlmSession.ClaudeCliEndpointOf(model), host, new ClaudeCliContext(() => @"C:\tools\claude.exe", @"C:\home\claude-cli",
             oneShot is null ? null : (launch, prompt, _) =>
             {
                 capture!.Launch = launch;
                 capture.Prompt = prompt;
                 return oneShot(capture);
-            }), TimeSpan.FromMinutes(1));
+            }), TimeSpan.FromMinutes(1), ownsHost);
 
     public sealed class ProcessLaunchCapture
     {
@@ -530,6 +530,73 @@ public class ClaudeCliServerTests
     }
 
     [Fact]
+    public async Task Client_OwningItsHost_StopsAndDisposesItWithItself_TheChatsHostStays()
+    {
+        // 2026-10-13: a linked profile's client (an advisor's) owns a host of its own; the chat's client never disposes the app's.
+        var (_, _, second) = ToolTurns();
+        await using var owned = new FakeClaudeServerHost();
+        await using var shared = new FakeClaudeServerHost();
+        foreach (var host in new[] { owned, shared })
+        {
+            host.OnWrite = _ =>
+            {
+                host.Feed(second);
+                return Task.CompletedTask;
+            };
+        }
+
+        var advisorClient = Client(owned, ownsHost: true);
+        var chatClient = Client(shared);
+        await RunAsync(new Assistant(advisorClient, new ConversationHistory("advise"), LlmTimeouts.Default) { ConversationId = SessionId }, "q");
+        await RunAsync(new Assistant(chatClient, new ConversationHistory("chat"), LlmTimeouts.Default) { ConversationId = "chat-session" }, "q");
+        Assert.True(owned.Running && shared.Running);
+
+        advisorClient.Dispose();
+        chatClient.Dispose();
+
+        Assert.Equal((1, 1, false), (owned.Stops, owned.Disposals, owned.Running));
+        Assert.Equal((0, 0, true), (shared.Stops, shared.Disposals, shared.Running));   // an idle CLI is the app's and stays
+    }
+
+    [Fact]
+    public async Task Client_AnAdvisorsTurn_InsideTheChatsToolCall_RunsOnItsOwnHost_AndTheChatsCliCarriesOn()
+    {
+        // 2026-10-13, the user's case: the chat on the Claude Code server (opus) asks an advisor there (haiku). The advisor's turn runs
+        // whole while the chat's CLI waits on the MCP call; neither host is restarted, and the call gets the advisor's answer.
+        await using var chatHost = new FakeClaudeServerHost();
+        await using var advisorHost = new FakeClaudeServerHost();
+        var answer = new TaskCompletionSource<ClaudeToolAnswer>();
+        PlayToolTurn(chatHost, answer);
+        var (_, _, second) = ToolTurns();
+        advisorHost.OnWrite = line =>
+        {
+            if (IsUserLine(line))
+            {
+                advisorHost.Feed(second);
+            }
+
+            return Task.CompletedTask;
+        };
+
+        using var advisorClient = Client(advisorHost, model: "haiku", ownsHost: true);
+        var advisor = new Assistant(advisorClient, new ConversationHistory("advise"), LlmTimeouts.Default) { ConversationId = "advisor-session" };
+        var consult = new NestedTurnTool(async token => Reply(await RunAsync(advisor, "what do you think?", token)));
+        using var chatClient = Client(chatHost, model: "opus");
+        var chat = new Assistant(chatClient, new ConversationHistory("be brief"), LlmTimeouts.Default, tools: [consult]) { ConversationId = SessionId };
+
+        var events = await RunAsync(chat, "Call the echo tool with hi");
+
+        var got = await answer.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(got.IsError);
+        Assert.Equal(consult.Answers.Single(), got.Text);   // the advisor's reply, not a cancelled call
+        Assert.NotEqual(ClaudeCliText.CallCancelled, got.Text);
+        Assert.Equal("echo: hi", Reply(events));   // the chat's turn ran on to its end
+        Assert.Equal(("opus", 0), (Assert.Single(chatHost.Starts).Launch.Model, chatHost.Stops));
+        Assert.Equal(("haiku", "advisor-session", 0), (Assert.Single(advisorHost.Starts).Launch.Model, advisorHost.Starts[0].Launch.SessionId, advisorHost.Stops));
+        Assert.True(chatHost.Running && advisorHost.Running);
+    }
+
+    [Fact]
     public void Flatten_AConversation_IsLabelledLines()
     {
         var messages = new List<ChatMessage>
@@ -742,6 +809,34 @@ public class ClaudeCliServerTests
     }
 
     [Fact]
+    public void ClaudeHostFor_TheChatGetsTheRunsHost_ALinkANewOneItOwns()
+    {
+        // 2026-10-13: an advisor (or a bot) on the Claude Code server never shares the chat's process.
+        var main = new FakeClaudeServerHost();
+        var made = new List<IClaudeServerHost>();
+        IClaudeServerHost Make()
+        {
+            var host = new FakeClaudeServerHost();
+            made.Add(host);
+            return host;
+        }
+
+        var (chat, chatOwns) = SidekickApp.ClaudeHostFor(default, main, Make);
+        Assert.Same(main, chat);
+        Assert.False(chatOwns);
+        Assert.Empty(made);
+        var ex = Assert.Throws<InvalidOperationException>(() => SidekickApp.ClaudeHostFor(default, null, Make));
+        Assert.Equal(ClaudeCliText.NotRunningError, ex.Message);
+
+        var (own, owns) = SidekickApp.ClaudeHostFor(new ChatClientFor(new AppSettingsData(), Linked: true), main, Make);
+        var (borrowed, alsoOwns) = SidekickApp.ClaudeHostFor(new ChatClientFor(null, Linked: true), main, Make);
+        Assert.True(owns && alsoOwns);
+        Assert.Equal([own, borrowed], made);   // one each, never the chat's
+        Assert.NotSame(own, borrowed);
+        Assert.DoesNotContain(main, made);
+    }
+
+    [Fact]
     public async Task Session_AnotherServerPicked_StopsTheCli()
     {
         await using var rig = new SessionRig();
@@ -751,5 +846,27 @@ public class ClaudeCliServerTests
 
         Assert.Equal(1, rig.Host.Stops);
         Assert.False(rig.Host.Running);
+    }
+
+    /// <summary>A tool under the fixture's call name, <c>echo</c>, whose call runs a whole other turn: an advisor consulted mid-turn.</summary>
+    private sealed class NestedTurnTool(Func<CancellationToken, Task<string>> turn) : AIFunction
+    {
+        private static readonly JsonElement Schema = ToolSchema.Parse(
+            """{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}""");
+
+        public List<string> Answers { get; } = [];
+
+        public override string Name => "echo";
+
+        public override string Description => "Asks an advisor.";
+
+        public override JsonElement JsonSchema => Schema;
+
+        protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+        {
+            string reply = await turn(cancellationToken);
+            Answers.Add(reply);
+            return reply;
+        }
     }
 }

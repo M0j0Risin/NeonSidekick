@@ -88,18 +88,6 @@ public static class AdvisorText
     /// </summary>
     public static string SharedEmbeddedWarning(string wanted, string running) => $"wanted {wanted}, answered on the running {running}";
 
-    /// <summary>A Claude Code advisor's footer note while the chat itself is on the Claude Code server (2026-10-10, the user's rule). Pinned.</summary>
-    public const string MasterOnClaudeCodeNote = "no tools: this chat is on the Claude Code server";
-
-    /// <summary>A Claude Code advisor's footer note while another holds the server's tools (2026-10-10, the user's rule: the first listed keeps them). Pinned.</summary>
-    public static string OtherClaudeCodeNote(string holder) => $"no tools: {holder} is the Claude Code advisor with tools";
-
-    /// <summary>
-    /// The list editor's mark on a Claude Code advisor: whether it gets the tools. Pinned. ("Claude Code, tools" until 2026-10-10, when
-    /// the row came to name every advisor's server kind, <see cref="AdvisorServer.ClaudeCode"/> among them.)
-    /// </summary>
-    public static string ClaudeCodeMark(bool tools) => tools ? "tools" : "text only";
-
     /// <summary>A listed advisor whose profile is gone. Pinned.</summary>
     public const string MissingMark = "(missing)";
 

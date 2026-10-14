@@ -66,8 +66,8 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// One row of the list editor: the profile padded, then dim its role and what it runs on (2026-10-10, the user's ask): the role
     /// padded to <paramref name="roleWidth"/> (cut past it), <c>· docker · Qwen3-32B</c> from <paramref name="facts"/>, then
-    /// <paramref name="mark"/> — on the Claude Code server whether it gets the tools (<see cref="AdvisorText.ClaudeCodeMark"/>), or
-    /// <see cref="AdvisorText.UnreadableMark"/>. A profile no longer in the home says so in their place. With <paramref name="avatar"/>
+    /// <paramref name="mark"/> — <see cref="AdvisorText.UnreadableMark"/> (and until 2026-10-13 a Claude Code advisor's <c>tools</c> or
+    /// <c>text only</c>). A profile no longer in the home says so in their place. With <paramref name="avatar"/>
     /// (later on 2026-10-10, the user's ask) the profile's avatar leads the row as it leads a profile picker's
     /// (<see cref="ProfilePickerRow"/>): the emoji and a space, or three blanks for "" so the names stand in one column; null leads with nothing. Pinned.
     /// </summary>
@@ -95,18 +95,11 @@ internal sealed partial class SettingsMenu
         entries.Count == 0 ? 0 : Math.Min(AdvisorRoleWidth, entries.Max(e => e.Role.Length == 0 ? "(no role)".Length : e.Role.Length));
 
     /// <summary>
-    /// The mark of each listed advisor (2026-10-10): on the Claude Code server whether it gets the tools (<see cref="AdvisorClaudeGate"/>),
-    /// an unreadable profile said so; null for the rest.
+    /// The mark of a listed advisor (2026-10-10): an unreadable profile said so; null for the rest. (Until 2026-10-13 a Claude Code
+    /// advisor was marked <c>tools</c> or <c>text only</c>, one holding the chat's process; every one has its own since.)
     /// </summary>
-    private Func<AdvisorEntry, string?> AdvisorMarks(IReadOnlyList<AdvisorEntry> entries)
-    {
-        var onClaudeCode = entries.Where(e => AdvisorFactsOf(e.Profile).Facts?.Kind == AdvisorServer.ClaudeCode).Select(e => e.Profile).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        bool master = Claude.ClaudeCliEndpoint.IsClaudeCli(_settings.Current.LlmUrl);
-        string? holder = AdvisorClaudeGate.Holder(entries, onClaudeCode.Contains, master);
-        return entry => onClaudeCode.Contains(entry.Profile) ? AdvisorText.ClaudeCodeMark(AdvisorRoster.SameProfile(entry.Profile, holder))
-            : AdvisorFactsOf(entry.Profile) is { Exists: true, Facts: null } ? AdvisorText.UnreadableMark
-            : null;
-    }
+    private string? AdvisorMark(AdvisorEntry entry) =>
+        AdvisorFactsOf(entry.Profile) is { Exists: true, Facts: null } ? AdvisorText.UnreadableMark : null;
 
     /// <summary>Each advisor's profile as last read, with the write time it was read at (2026-10-10).</summary>
     private readonly Dictionary<string, (DateTime Written, bool Exists, AdvisorServerFacts? Facts)> _advisorFacts = new(StringComparer.OrdinalIgnoreCase);
@@ -213,13 +206,12 @@ internal sealed partial class SettingsMenu
             var entries = AdvisorRoster.Entries(_settings.Current.AdvisorList);
             int width = entries.Count == 0 ? 0 : Math.Min(24, entries.Max(e => e.Profile.Length) + 2);
             int roleWidth = AdvisorRoleColumn(entries);
-            var marks = AdvisorMarks(entries);
             IReadOnlyList<string> rows = [Markup.Escape(AddAdvisorRow), .. entries.Select(e =>
             {
                 var (exists, facts) = AdvisorFactsOf(e.Profile);
                 // Each advisor's avatar ahead of its name (later on 2026-10-10, the user's ask), as the profile pickers show theirs; a
                 // missing profile none (its file would read as the defaults, the robot).
-                return AdvisorRow(e, exists, width, facts, roleWidth, marks(e), exists ? ProfileAvatar(e.Profile) : "");
+                return AdvisorRow(e, exists, width, facts, roleWidth, AdvisorMark(e), exists ? ProfileAvatar(e.Profile) : "");
             })];
             var page = new MenuPage(Crumb(title), rows, AdvisorListKeys);
             if (await PickAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { } index)

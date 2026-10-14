@@ -64,7 +64,7 @@ public sealed class SidekickApp
     private readonly LlmEndpointProbe _probe;
     private readonly ContextLengthProbe _contextProbe;
     private readonly ServerSamplingProbe _samplingProbe;
-    private readonly Func<LlmEndpoint, LlmTimeouts, AppSettingsData?, IChatClient> _chatClientFactory;
+    private readonly Func<LlmEndpoint, LlmTimeouts, ChatClientFor, IChatClient> _chatClientFactory;
     private readonly Func<PcmFormat, IAudioPlayback> _playbackFactory;
     private readonly Func<SynthesizerRequest, ISpeechSynthesizer> _synthesizerFactory;
     private readonly Func<PcmFormat, IAudioCapture> _captureFactory;
@@ -173,7 +173,7 @@ public sealed class SidekickApp
     /// <param name="mcpTransport">What an MCP server's config becomes on the wire (<see cref="McpSession.DefaultTransport"/> in the app; tests a pipe into an in-process server); null = the app's.</param>
     /// <param name="frames">Where the screen's frames are held and let go as one write (2026-09-29, the rows' flicker at a turn's end): <c>Program.cs</c> passes the <see cref="UI.FrameWriter"/> it made stdout; null (tests) holds nothing.</param>
     /// <param name="embeddedLlm">Makes the embedded model's service for one run (2026-09-29): <c>Program.cs</c> passes <see cref="EmbeddedLlm.EmbeddedLlmService.Create"/> on Windows x64, tests a fake; null offers no embedded model.</param>
-    /// <param name="claudeServer">Makes the Claude Code server's process host for one run (2026-09-30): null makes the app's own (<see cref="Claude.ClaudeServerHost"/>, which starts nothing until a turn asks), tests a fake.</param>
+    /// <param name="claudeServer">Makes the Claude Code server's process host for one run (2026-09-30), and one more for each linked profile's client, an advisor's or a bot's (2026-10-13, <see cref="ClaudeHostFor"/>): null makes the app's own (<see cref="Claude.ClaudeServerHost"/>, which starts nothing until a turn asks), tests a fake.</param>
     public SidekickApp(
         IAnsiConsole console,
         AppSettings settings,
@@ -2522,22 +2522,23 @@ public sealed class SidekickApp
     /// <summary>
     /// The production chat client for <paramref name="endpoint"/> (2026-09-27): the Anthropic API's own client on its host
     /// (<see cref="Llm.Anthropic.ClaudeApi.IsClaudeApi(Uri?)"/>), with the output cap and caching the effective settings
-    /// hold at the connect; the Claude CLI's (<see cref="Claude.ClaudeCliChatClient"/>, 2026-09-30) over this run's one
-    /// process on its sentinel; the OpenAI API's (<see cref="Llm.OpenAIPlatform.OpenAIApiChatClient"/>, 2026-10-03, the Responses API) on its host, with
+    /// hold at the connect; the Claude CLI's (<see cref="Claude.ClaudeCliChatClient"/>, 2026-09-30) on its sentinel, over this
+    /// run's one process for the chat and a process of its own for a link (<see cref="ClaudeHostFor"/>, 2026-10-13); the OpenAI API's (<see cref="Llm.OpenAIPlatform.OpenAIApiChatClient"/>, 2026-10-03, the Responses API) on its host, with
     /// the output cap, organization and project held at the connect; the OpenAI-compatible one everywhere else. Every connect and every <c>/botchat</c> link
-    /// comes through here, so the provider is the URL's wherever it came from. <paramref name="profile"/> (2026-10-10, for the
+    /// comes through here, so the provider is the URL's wherever it came from. <paramref name="owner"/>'s profile (2026-10-10, for the
     /// profile advisors) is the linked profile whose own server this is: its caps, headers and reasoning estimate rather than
     /// the loaded profile's; null is the loaded profile, read live as before.
     /// </summary>
-    private IChatClient DefaultChatClient(LlmEndpoint endpoint, LlmTimeouts timeouts, AppSettingsData? profile)
+    private IChatClient DefaultChatClient(LlmEndpoint endpoint, LlmTimeouts timeouts, ChatClientFor owner)
     {
+        var profile = owner.Profile;
         if (Claude.ClaudeCliEndpoint.IsClaudeCli(endpoint.BaseUrl))
         {
-            var host = _claudeServer ?? throw new InvalidOperationException(Claude.ClaudeCliText.NotRunningError);
+            var (host, owns) = ClaudeHostFor(owner, _claudeServer, _claudeServerFactory);
             var context = new Claude.ClaudeCliContext(
                 () => Claude.ClaudeExecutable.Locate((profile ?? EffectiveSettings).ClaudeCodeExecutable, _environment.System, File.Exists),
                 ClaudeCliDirectory);
-            return new Claude.ClaudeCliChatClient(endpoint, host, context, timeouts.Request);
+            return new Claude.ClaudeCliChatClient(endpoint, host, context, timeouts.Request, ownsHost: owns);
         }
 
         if (Llm.OpenAIPlatform.OpenAIApi.IsOpenAIApi(endpoint.BaseUrl))
@@ -2556,6 +2557,22 @@ public sealed class SidekickApp
 
         var effective = profile ?? EffectiveSettings;
         return new Llm.Anthropic.AnthropicChatClient(endpoint, timeouts.Request, effective.AnthropicApiMaxTokens, effective.AnthropicApiPromptCaching, time: _time);
+    }
+
+    /// <summary>
+    /// The Claude Code server's process a client is built over (2026-10-13, the user's ask: a chat on the Claude Code server
+    /// consulting an advisor there with the tools): the chat's is this run's one host, <paramref name="main"/>, which the app
+    /// owns; a link's (an advisor, a <c>/botchat</c> bot) is a new one from <paramref name="make"/>, owned by its client and
+    /// stopped with it. One process holds one conversation, and a launch that differs restarts it, so an advisor over the
+    /// chat's would stop the chat's CLI mid-call (until then, <c>AdvisorClaudeGate</c> let only one advisor hold it, and only
+    /// while the chat was elsewhere). A bot's host never starts: its requests are all one-shots. Pure.
+    /// </summary>
+    internal static (Claude.IClaudeServerHost Host, bool Owns) ClaudeHostFor(ChatClientFor owner, Claude.IClaudeServerHost? main, Func<Claude.IClaudeServerHost> make)
+    {
+        ArgumentNullException.ThrowIfNull(make);
+        return owner.Linked
+            ? (make(), true)
+            : (main ?? throw new InvalidOperationException(Claude.ClaudeCliText.NotRunningError), false);
     }
 
     public string? OverriddenBy(SettingsField field) => field switch

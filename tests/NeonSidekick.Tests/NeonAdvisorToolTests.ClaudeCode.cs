@@ -8,45 +8,12 @@ using NeonSidekick.Settings;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// A Claude Code advisor (2026-10-10, the user's rules): the first listed on the Claude Code server, with the chat elsewhere, runs its turns
-/// on the server with the tools under its thread's conversation; any other answers text-only, told so, its footer saying why.
+/// A Claude Code advisor (2026-10-10): its turns run under its thread's conversation, with the tools. Every one since 2026-10-13 (the
+/// user's ask), on a process of its own beside the chat's; until then only the first listed, with the chat elsewhere, and the rest
+/// text-only (<c>AdvisorClaudeGate</c>, retired).
 /// </summary>
 public partial class NeonAdvisorToolTests
 {
-    [Fact]
-    public void TheGate_TheFirstListed_AndNoneWhileTheChatIsOnClaudeCode()
-    {
-        IReadOnlyList<AdvisorEntry> entries = [new("ux"), new("dba"), new("qa")];
-        bool OnClaudeCode(string profile) => profile is "dba" or "qa";
-
-        Assert.Equal("dba", AdvisorClaudeGate.Holder(entries, OnClaudeCode, masterOnClaudeCode: false));
-        Assert.Null(AdvisorClaudeGate.Holder(entries, OnClaudeCode, masterOnClaudeCode: true));
-        Assert.Null(AdvisorClaudeGate.Holder(entries, _ => false, masterOnClaudeCode: false));
-
-        Assert.Null(AdvisorClaudeGate.TextOnlyReason("DBA", "dba", masterOnClaudeCode: false));
-        Assert.Equal("no tools: dba is the Claude Code advisor with tools", AdvisorClaudeGate.TextOnlyReason("qa", "dba", masterOnClaudeCode: false));
-        Assert.Equal("no tools: this chat is on the Claude Code server", AdvisorClaudeGate.TextOnlyReason("dba", null, masterOnClaudeCode: true));
-        Assert.Equal("tools", AdvisorText.ClaudeCodeMark(tools: true));
-        Assert.Equal("text only", AdvisorText.ClaudeCodeMark(tools: false));
-    }
-
-    [Fact]
-    public async Task ATextOnlyLink_IsOfferedNoTools_ToldSo_AndItsFooterSaysWhy()
-    {
-        _host.LinkTools = false;
-        _host.Warning = AdvisorText.OtherClaudeCodeNote("ux");
-        var client = _host.Add("dba");
-        client.EnqueueText("from what I know");
-
-        Assert.Equal("from what I know", await Ask(Tool(), "dba", "q"));
-
-        Assert.Null(client.Options.Single()?.Tools);
-        Assert.Contains(AdvisorText.Framing("neon", "database architect", tools: false), Assert.Single(_host.SystemPrompts));
-        Assert.DoesNotContain("RULES", _host.SystemPrompts[0]);
-        Assert.Contains("answered dba from what I know on dba-model (no tools: ux is the Claude Code advisor with tools)", _view.Lines);
-        Assert.Null(client.Options[0]?.ConversationId);
-    }
-
     [Fact]
     public async Task ASessionLink_NamesTheThreadsConversation_KeepsTheToolsInTheLastRound_AndTheIdGoesWithTheThread()
     {
@@ -77,9 +44,10 @@ public partial class NeonAdvisorToolTests
     }
 
     [Fact]
-    public void TheListEditorsRow_MarksAClaudeCodeAdvisor()
+    public void TheListEditorsRow_NamesAClaudeCodeAdvisor_WithNoMark()
     {
-        Assert.Equal(Spectre.Console.Markup.Escape("dba  ") + NeonSidekick.UI.Theme.DimMarkup("architect    · claudecode · sonnet · tools"),
-            SettingsMenu.AdvisorRow(new AdvisorEntry("dba", "architect"), exists: true, 5, new AdvisorServerFacts(AdvisorServer.ClaudeCode, "sonnet"), 12, AdvisorText.ClaudeCodeMark(tools: true)));
+        // No `tools` or `text only` since 2026-10-13: every Claude Code advisor runs with the tools on a process of its own.
+        Assert.Equal(Spectre.Console.Markup.Escape("dba  ") + NeonSidekick.UI.Theme.DimMarkup("architect    · claudecode · sonnet"),
+            SettingsMenu.AdvisorRow(new AdvisorEntry("dba", "architect"), exists: true, 5, new AdvisorServerFacts(AdvisorServer.ClaudeCode, "sonnet"), 12));
     }
 }

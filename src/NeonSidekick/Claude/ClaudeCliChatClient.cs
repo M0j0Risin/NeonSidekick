@@ -43,8 +43,10 @@ public sealed record ClaudeCliContext(
 /// so nothing it says lands in the chat's session.</para>
 ///
 /// <para><b>A cancel interrupts.</b> ESC mid-reply sends the CLI's interrupt and waits a moment for its <c>result</c>; a
-/// CLI that does not answer in time is stopped, and the next turn resumes the session on a new one. The host is the app's,
-/// not this client's: a reconnect that builds a new client keeps the process.</para>
+/// CLI that does not answer in time is stopped, and the next turn resumes the session on a new one. The chat's host is the
+/// app's, not this client's: a reconnect that builds a new client keeps the process. A linked profile's client (an advisor, a
+/// <c>/botchat</c> bot; 2026-10-13) owns a host of its own instead, stopped and disposed with it, so an advisor on the Claude
+/// Code server never stops the chat's process.</para>
 /// </summary>
 public sealed class ClaudeCliChatClient : IChatClient
 {
@@ -52,6 +54,7 @@ public sealed class ClaudeCliChatClient : IChatClient
     public static readonly TimeSpan InterruptGrace = TimeSpan.FromSeconds(3);
 
     private readonly IClaudeServerHost _host;
+    private readonly bool _ownsHost;
     private readonly ClaudeCliContext _context;
     private readonly TimeSpan _requestTimeout;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -67,13 +70,15 @@ public sealed class ClaudeCliChatClient : IChatClient
     private bool _takesInterrupt;
 
     /// <param name="endpoint">The Claude CLI endpoint: its model id is the <c>--model</c> word.</param>
-    /// <param name="host">The app's CLI process, shared by every client built over it.</param>
+    /// <param name="host">The CLI process: the app's, shared by every chat client built over it, or this client's own.</param>
     /// <param name="context">Where the CLI is and runs, and how a one-shot request runs.</param>
     /// <param name="requestTimeout">How long one response may take; the CLI is interrupted past it.</param>
-    public ClaudeCliChatClient(LlmEndpoint endpoint, IClaudeServerHost host, ClaudeCliContext context, TimeSpan requestTimeout)
+    /// <param name="ownsHost">The host is this client's (2026-10-13, a linked profile's): stopped and disposed with it.</param>
+    public ClaudeCliChatClient(LlmEndpoint endpoint, IClaudeServerHost host, ClaudeCliContext context, TimeSpan requestTimeout, bool ownsHost = false)
     {
         Endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
         _host = host ?? throw new ArgumentNullException(nameof(host));
+        _ownsHost = ownsHost;
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _requestTimeout = requestTimeout > TimeSpan.Zero ? requestTimeout : Timeout.InfiniteTimeSpan;
         _onToolCall = OnToolCallAsync;
@@ -160,8 +165,8 @@ public sealed class ClaudeCliChatClient : IChatClient
 
     private async Task StartAsync(Turn turn, IReadOnlyList<AIContent> content, CancellationToken cancellationToken)
     {
-        // The chat's client takes the MCP calls: claimed per turn, so a /botchat bot's client over the same host (whose
-        // requests are all one-shots) never takes them from it.
+        // The chat's client takes the MCP calls: claimed per turn, so another client over the same host never takes them from
+        // it. (A linked profile's client has had a host of its own since 2026-10-13; a test may still share one.)
         _host.OnToolCall = _onToolCall;
         if (await _host.EnsureRunningAsync(turn.Launch, turn.Resume, turn.Tools, cancellationToken).ConfigureAwait(false))
         {
@@ -523,7 +528,8 @@ public sealed class ClaudeCliChatClient : IChatClient
 
     /// <summary>
     /// The client goes (a reconnect, the exit): a turn it left mid-way stops the CLI, whose next start resumes the
-    /// session; an idle CLI is the host's and stays.
+    /// session; an idle CLI is the host's and stays. A host this client owns (2026-10-13, an advisor's) goes with it: the CLI
+    /// stopped here and now, so a later client resuming the same session never meets it, and the MCP listener closed after.
     /// </summary>
     public void Dispose()
     {
@@ -536,6 +542,14 @@ public sealed class ClaudeCliChatClient : IChatClient
         if (ReferenceEquals(_host.OnToolCall, _onToolCall))
         {
             _host.OnToolCall = null;
+        }
+
+        if (_ownsHost)
+        {
+            _host.Stop();
+            _ = _host.DisposeAsync().AsTask().ContinueWith(
+                closing => DiagnosticLog.Warn(ClaudeText.Category, ClaudeCliText.HostDisposeFailedLog(closing.Exception!.GetBaseException())),
+                CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
 
         _gate.Dispose();

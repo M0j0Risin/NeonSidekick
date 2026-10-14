@@ -68,7 +68,7 @@ internal sealed class LlmSession : IDisposable
     private readonly ContextLengthProbe _contextProbe;
     private readonly ServerSamplingProbe? _samplingProbe;
     private (string Key, ServerSampling? Found)? _serverSampling;
-    private readonly Func<LlmEndpoint, LlmTimeouts, AppSettingsData?, IChatClient> _factory;
+    private readonly Func<LlmEndpoint, LlmTimeouts, ChatClientFor, IChatClient> _factory;
     private readonly TimeProvider _time;
     private readonly IEmbeddedLlm? _embedded;
     private readonly IClaudeServerHost? _claudeServer;
@@ -118,10 +118,11 @@ internal sealed class LlmSession : IDisposable
 
     /// <summary>
     /// The session over a <paramref name="factory"/> that is told whose settings the client is for (2026-10-10, for the profile
-    /// advisors): null for the loaded profile (the main connect, and a link that borrows its server), else the linked profile —
-    /// so a bot's or an advisor's client carries its own profile's output caps and headers, not the loaded one's.
+    /// advisors): <see cref="ChatClientFor.Profile"/> null for the loaded profile (the main connect, and a link that borrows its
+    /// server), else the linked profile — so a bot's or an advisor's client carries its own profile's output caps and headers, not
+    /// the loaded one's. <see cref="ChatClientFor.Linked"/> (2026-10-13) tells a link's client from the main one's.
     /// </summary>
-    public LlmSession(LlmEndpointProbe probe, ContextLengthProbe contextProbe, Func<LlmEndpoint, LlmTimeouts, AppSettingsData?, IChatClient> factory, TimeProvider? time = null, ServerSamplingProbe? samplingProbe = null, IEmbeddedLlm? embedded = null,
+    public LlmSession(LlmEndpointProbe probe, ContextLengthProbe contextProbe, Func<LlmEndpoint, LlmTimeouts, ChatClientFor, IChatClient> factory, TimeProvider? time = null, ServerSamplingProbe? samplingProbe = null, IEmbeddedLlm? embedded = null,
         IClaudeServerHost? claudeServer = null, Func<AppSettingsData, bool>? claudeCliOffered = null, IDockerServers? dockerServers = null)
     {
         _embedded = embedded;
@@ -136,7 +137,7 @@ internal sealed class LlmSession : IDisposable
         Meter = new StreamMeter(_time);
     }
 
-    private static Func<LlmEndpoint, LlmTimeouts, AppSettingsData?, IChatClient> Wrap(Func<LlmEndpoint, LlmTimeouts, IChatClient> factory)
+    private static Func<LlmEndpoint, LlmTimeouts, ChatClientFor, IChatClient> Wrap(Func<LlmEndpoint, LlmTimeouts, IChatClient> factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
         return (endpoint, timeouts, _) => factory(endpoint, timeouts);
@@ -753,7 +754,7 @@ internal sealed class LlmSession : IDisposable
 
         try
         {
-            _client = _factory(Endpoint, Timeouts, null);
+            _client = _factory(Endpoint, Timeouts, default);
             Assistant = new Assistant(_client, History, Timeouts, time: _time, reasoning: ReasoningLevel.Resolve(effective)) { Meter = Meter, Sampling = LlmSampling.Resolve(effective, endpoint.ModelId) };
             return true;
         }
@@ -897,7 +898,7 @@ internal sealed class LlmSession : IDisposable
         try
         {
             // The client is told the profile (2026-10-10): its own server takes its own caps and headers; a borrowed one the loaded profile's.
-            return (new BotLink(_factory(endpoint, timeouts, borrowed ? null : profile), endpoint, timeouts, ReasoningLevel.Resolve(profile), LlmSampling.Resolve(profile, endpoint.ModelId)) { SharedEmbedded = shared }, null);
+            return (new BotLink(_factory(endpoint, timeouts, new ChatClientFor(borrowed ? null : profile, Linked: true)), endpoint, timeouts, ReasoningLevel.Resolve(profile), LlmSampling.Resolve(profile, endpoint.ModelId)) { SharedEmbedded = shared }, null);
         }
         catch (Exception ex)
         {
@@ -1193,6 +1194,15 @@ internal sealed class LlmSession : IDisposable
         _titlingCts = null;
     }
 }
+
+/// <summary>
+/// Whom a chat client is built for (2026-10-13, the user's ask: a Claude Code advisor beside a chat on the Claude Code server).
+/// <see cref="Profile"/>: the linked profile whose own server it is, its caps and headers the client's; null for the loaded
+/// profile (the main connect, and a link that borrows its server). <see cref="Linked"/>: a link's client (an advisor, a
+/// <c>/botchat</c> bot), never the main one — on the Claude Code server it gets a process of its own, so it never stops the
+/// chat's (<see cref="SidekickApp.ClaudeHostFor"/>). A struct, so <c>default</c> is the main chat.
+/// </summary>
+internal readonly record struct ChatClientFor(AppSettingsData? Profile, bool Linked);
 
 /// <summary>
 /// A <c>/botchat</c> bot's own LLM (<see cref="LlmSession.LinkAsync"/>, 2026-09-25): the client over its endpoint, and the

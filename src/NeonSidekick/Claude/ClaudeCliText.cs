@@ -135,6 +135,9 @@ public static class ClaudeCliText
 
     public const string StoppedMidTurnLog = "Claude Code server: a turn left mid-way did not end on an interrupt; stopping the CLI (the next turn resumes the session)";
 
+    /// <summary>A linked profile's own host (2026-10-13) failed to close its MCP listener after its CLI stopped.</summary>
+    public static string HostDisposeFailedLog(Exception ex) => "Claude Code server: an advisor's or bot's process host did not close cleanly: " + ex.Message;
+
     public static string SessionLostLog(string id) => $"Claude Code server: session {id} could not be resumed; starting it over with the conversation so far";
 
     public static string SessionInUseLog(string id) => $"Claude Code server: session {id} exists already; resuming it";

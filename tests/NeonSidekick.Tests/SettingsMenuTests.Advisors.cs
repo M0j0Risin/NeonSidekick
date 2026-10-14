@@ -155,7 +155,8 @@ public partial class SettingsMenuTests
         Assert.Contains("doug — expert .NET solution architect · docker · Qwen3.8-27B", Output);
         Assert.Contains("einstein — UX designer · claudecode · sonnet", Output);
         Assert.Contains("doug      expert .NET solution architect · docker · Qwen3.8-27B", Output);
-        Assert.Contains("einstein  " + "UX designer".PadRight("expert .NET solution architect".Length) + " · claudecode · sonnet · tools", Output);
+        Assert.Contains("einstein  " + "UX designer".PadRight("expert .NET solution architect".Length) + " · claudecode · sonnet", Output);
+        Assert.DoesNotContain("· tools", Output);   // no tools/text-only mark since 2026-10-13: every Claude Code advisor has its own process
         // Each led by its profile's avatar (later on 2026-10-10): doug wears the default robot, einstein its owl.
         Assert.Contains(NeonSidekick.Emojis.AvatarRules.DefaultAvatar + " doug      expert", Output);
         Assert.Contains("🦉 einstein  UX designer", Output);

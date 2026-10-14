@@ -528,7 +528,7 @@ Other profiles this one consults, each in a role you give it: `neon_advisor` for
 | Advisor embedded mode | For an advisor on another embedded model than the one running. `parent-server`: it answers on the running model. `multi-server`: an extra `llama-server` for its model. | `parent-server` |
 
 * **Servers:** a blank *LLM URL* in the advisor's profile borrows this chat's server. An embedded advisor needs *Embedded servers enabled*.
-* **On the Claude Code server** only one advisor at a time gets tools; any other answers text-only. The *Advisor list* marks which.
+* **On the Claude Code server** each advisor runs in a `claude` process of its own, beside this chat's, with the read-only tools. The process stays until the conversation ends (`/new`, `/clear`, a profile switch, exit) or this chat's server or model changes; the next question resumes it.
 
 ### Voice
 
