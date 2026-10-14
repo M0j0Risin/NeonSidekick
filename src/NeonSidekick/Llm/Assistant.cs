@@ -182,7 +182,7 @@ public sealed class Assistant
     public const string WebRule =
         "For anything on the web — current facts, news, prices, documentation, a page the user names — search with " + NeonSidekick.Llm.Tools.WebSearchTool.ToolName +
         " and read a page with " + NeonSidekick.Llm.Tools.WebFetchTool.ToolName + " (" + NeonSidekick.Llm.Tools.WebFetchTool.OffsetArgument + " continues a long one); say what you looked at. " +
-        "To open a page for the user in their browser — when they ask to open, show or see a link rather than have it read out — call " + NeonSidekick.Llm.Tools.OpenUrlTool.ToolName + ".";
+        "To open a page for the user — when they ask to open, show or see a link rather than have it read out — call " + NeonSidekick.Llm.Tools.OpenUrlTool.ToolName + ".";
 
     /// <summary>
     /// The sentence the default rules gain while the web tools AND the file tools are offered

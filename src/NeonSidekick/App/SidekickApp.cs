@@ -735,7 +735,7 @@ public sealed class SidekickApp
         _headlessSkillRecords = new SkillRecords(skillStore, () => SkillRoots.For(_settings, _externalSkills), _time);
         var skills = BuildSkills(files, _headlessSkillRecords);
         // The web tools need no console either; the setting Web tools decides per turn.
-        var webTools = ChatScreen.WebTools(_web, files, () => EffectiveSettings);
+        var webTools = ChatScreen.WebTools(_web, files, () => EffectiveSettings, links: new Llm.Tools.WebLinkHooks(() => new Viewer.BrowserLinks(_settings.ProfileDirectory, _time), _time));
         var git = new Git.GitAccess(files, _time);
         var gitTools = ChatScreen.GitTools(git, () => EffectiveSettings);
         var vaultTools = ChatScreen.ObsidianTools(new Obsidian.ObsidianVault(() => EffectiveSettings.ObsidianVault, _time), () => EffectiveSettings);

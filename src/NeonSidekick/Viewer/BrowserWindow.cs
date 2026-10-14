@@ -69,7 +69,8 @@ public static class BrowserWindow
 
     /// <summary>
     /// What the bar's open button hands the page to: the user's default browser (<see cref="Llm.PersonaFile.OpenInBrowser"/>, the
-    /// counted process-start site, as <see cref="VideoWindow.OpenLink"/>), web addresses only. Called on the window's thread.
+    /// counted process-start site, as <see cref="VideoWindow.OpenLink"/>), web addresses only. Called on the window's thread. Never follows
+    /// <c>Web open links in</c> (later still on 2026-10-13): under <c>browser-window</c> it would hand the page back to this window.
     /// </summary>
     public static Action<string> OpenLink { get; set; } = Llm.PersonaFile.OpenInBrowser;
 
@@ -172,21 +173,65 @@ public static class BrowserWindow
 
     private sealed class WindowsBrowserWindow : IBrowserWindow
     {
+        // The bot checks under way (later still on 2026-10-13): counted here, around the whole solve, rather than read off the window
+        // thread's job, so the gap between the call and the job's start counts too.
+        private int _solving;
+
+        // Why the runtime could not be had, once found: a runtime does not arrive mid-run, so it is not asked again.
+        private string? _runtimeFailure;
+
         public async Task<BotCheckResult> SolveAsync(BotCheckRequest request, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(request);
-            BrowserWindowThread window;
+            Interlocked.Increment(ref _solving);
             try
             {
-                // Off the caller's thread: a new window's start waits up to 10 s for its thread.
-                window = await Task.Run(Open, cancellationToken).ConfigureAwait(false);
+                BrowserWindowThread window;
+                try
+                {
+                    // Off the caller's thread: a new window's start waits up to 10 s for its thread.
+                    window = await Task.Run(Open, cancellationToken).ConfigureAwait(false);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return BotCheckResult.Ended(BotCheckEnd.Unavailable, request.Url.AbsoluteUri, ex.Message);
+                }
+
+                return await window.SolveAsync(request, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _solving);
+            }
+        }
+
+        public string? Unavailable()
+        {
+            if (Volatile.Read(ref _solving) > 0)
+            {
+                return BrowserText.BotCheckWaiting;
+            }
+
+            if (Volatile.Read(ref _runtimeFailure) is { } failure)
+            {
+                return failure;
+            }
+
+            if (OpenNow() is not null)
+            {
+                return null;
+            }
+
+            try
+            {
+                CheckRuntime();
+                return null;
             }
             catch (InvalidOperationException ex)
             {
-                return BotCheckResult.Ended(BotCheckEnd.Unavailable, request.Url.AbsoluteUri, ex.Message);
+                Volatile.Write(ref _runtimeFailure, ex.Message);
+                return ex.Message;
             }
-
-            return await window.SolveAsync(request, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task<BrowserVisit> BrowseAsync(Uri? url)

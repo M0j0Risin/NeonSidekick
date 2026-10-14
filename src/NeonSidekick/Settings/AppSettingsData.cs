@@ -2639,6 +2639,15 @@ public sealed class AppSettingsData
     public string BrowserPrivacy { get; set; } = Viewer.BrowserPrivacy.Default;
 
     /// <summary>
+    /// Where a link the model opens goes (later still on 2026-10-13, the user's ask and name): one of <see cref="Web.OpenLinksIn.Names"/> —
+    /// <c>default-browser</c> (the default: the user's own browser, as before) or <c>browser-window</c> (the app's Browser window, one page
+    /// at a time; the default browser when no window can be had now: headless, macOS, no WebView2 runtime, a bot check waiting in it).
+    /// <c>open_url</c> alone follows it (the user's call); the other links the app opens keep the default browser. Read at each call;
+    /// anything else reads as <see cref="Web.OpenLinksIn.Default"/>. No variable.
+    /// </summary>
+    public string WebOpenLinksIn { get; set; } = Web.OpenLinksIn.Default;
+
+    /// <summary>
     /// How many hits a <c>web_search</c> without <c>max_results</c> returns:
     /// <see cref="MinWebSearchMaxResults"/> to <see cref="MaxWebSearchMaxResults"/>; the argument overrides
     /// it up to the same cap, and a hand-edited value is clamped. No variable.

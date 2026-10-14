@@ -162,6 +162,61 @@ public static class BrowserLinkText
     /// <summary>A bare <c>/browser save</c> with no web page open in the Browser window.</summary>
     public const string NothingToSave = "The Browser window is not open on a web page to save. " + Usage;
 
+    // ── The tools (later still on 2026-10-13: web_links and web_save_link) ──
+
+    /// <summary>
+    /// Whether <paramref name="link"/> stays under the model's <paramref name="filter"/>: every word of it (split on blanks) in its name or
+    /// address, case folded, in any order. The pane's <see cref="Matches"/> reads its filter as one phrase, as it is typed; a model writes
+    /// words. A blank filter keeps every link. Pure.
+    /// </summary>
+    public static bool MatchesWords(string? filter, BrowserLink link)
+    {
+        ArgumentNullException.ThrowIfNull(link);
+        string[] words = (filter ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return words.All(word => (link.Name ?? "").Contains(word, StringComparison.OrdinalIgnoreCase) || link.Url.Contains(word, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>A row of <c>web_links</c>: <c>3. News — https://example.com/ · saved 2026-10-13 18:00</c>, the number its place in the whole list.</summary>
+    public static string ToolRow(int number, BrowserLink link, TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(zone);
+        return PrintedRow(number, link) + " · saved " + Sessions.SessionText.Moment(link.Added, zone);
+    }
+
+    /// <summary><c>web_links</c>' first line: how many links, and how many of them the filter kept.</summary>
+    public static string ToolCaption(int total, int matched, string? filter) =>
+        string.IsNullOrWhiteSpace(filter)
+            ? $"{Links(total)}, numbered as web_save_link takes them:"
+            : $"{matched.ToString(CultureInfo.InvariantCulture)} of {Links(total)} match \"{filter.Trim()}\", numbered as web_save_link takes them:";
+
+    /// <summary>The line past <c>web_links</c>' cap.</summary>
+    public static string ToolMore(int more) =>
+        $"{more.ToString(CultureInfo.InvariantCulture)} more not shown; give a filter to narrow the list.";
+
+    /// <summary><c>web_links</c> with nothing saved.</summary>
+    public const string NoneSavedForModel = "No saved links yet; web_save_link saves one when the user asks.";
+
+    /// <summary><c>web_links</c> with a filter nothing matched.</summary>
+    public static string NoneMatch(string filter, int total) =>
+        $"None of the {Links(total)} matches \"{filter.Trim()}\"; web_links with no filter lists them all.";
+
+    /// <summary>What names no saved link, for the model: its number or address, and where the list is.</summary>
+    public static string NotSavedForModel(string? text) =>
+        ErrorPrefix + $"\"{text}\" is no saved link: give its address, or its number in web_links' list.";
+
+    /// <summary>An add of an address saved already: its name, and the rename that changes it (only a missing name was filled).</summary>
+    public static string AlreadySavedForModel(BrowserLink link) =>
+        link.Name is { Length: > 0 } ? $"{link.Url} is saved already, as {Name(link)}; web_save_link with action rename changes its name." : $"{link.Url} is saved already.";
+
+    /// <summary>An action that is none of add, remove, rename.</summary>
+    public static string NotAnAction(string action) => ErrorPrefix + $"\"{action}\" is not an action: use add, remove or rename.";
+
+    /// <summary><c>current</c> with no web page to read: no window open, a page that is no web page, or a bot check in it.</summary>
+    public const string NothingCurrent = ErrorPrefix + "The Browser window is not open on a web page; give the link's address instead.";
+
+    /// <summary>An address the tool cannot save or find: not a web address.</summary>
+    public static string NotAWebAddress(string text) => ErrorPrefix + $"\"{text}\" is not a web address. " + NotWeb;
+
     // ── The window's ☆ menu ──────────────────────────────────────────────────
 
     public const string SaveThisPage = "Save this page";

@@ -145,6 +145,19 @@ public static class WebText
     public static string OpenedHeader(int count) => $"Opened {count.ToString(CultureInfo.InvariantCulture)} links in your browser:";
     public static string OpenedLine(string url) => "- " + url;
 
+    /// <summary>A link opened in the Browser window under <c>Web open links in</c> <c>browser-window</c> (later still on 2026-10-13): the model's line, not the user's cookie notice.</summary>
+    public static string OpenedInWindow(string url) => $"Opened {url} in the app's Browser window";
+
+    /// <summary>The links past the first under <c>browser-window</c>: the window shows one page at a time, so they were not opened.</summary>
+    public static string OneAtATime(IReadOnlyList<string> rest)
+    {
+        ArgumentNullException.ThrowIfNull(rest);
+        return "The Browser window shows one page at a time, so these were not opened: " + string.Join(", ", rest);
+    }
+
+    /// <summary>A link that went to the default browser because the Browser window could not take it now (<see cref="Viewer.IBrowserWindow.Unavailable"/>).</summary>
+    public static string WindowFellBack(string url, string reason) => $"Opened {url} in your browser instead: {reason}";
+
     /// <summary>What no headless browser adds to a blocked http result under the <c>default</c> mode. Pinned.</summary>
     public const string NoBrowserToTry = "; no headless browser was found to try instead";
 

@@ -91,6 +91,11 @@ public sealed class FakeBrowserWindow : IBrowserWindow
 
     public void LinksChanged() => LinksChangedCount++;
 
+    /// <summary>What <see cref="Unavailable"/> answers (later still on 2026-10-13): null (a page can be opened) by default, else why not.</summary>
+    public string? UnavailableReason { get; set; }
+
+    public string? Unavailable() => UnavailableReason;
+
     public List<BrowserClear> Clears { get; } = new();
 
     /// <summary>What a clear answers: null (done) by default, else why it failed.</summary>

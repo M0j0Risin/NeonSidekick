@@ -849,7 +849,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("[tool] save_memory -> remembered: They live in Leeds.", output);
         Assert.Contains("Noted.", output);
         Assert.Contains("Neon: Leeds.", output);
-        Assert.Equal(12 + FileToolNames.All.Length + GitToolNames.All.Length + ShellToolNames.All.Length, _chat.Options[0]!.Tools!.Count);   // clock ×3, neon_help, the files, the git tools (2026-09-20), the four web tools, the two memory tools, skill_editor, session_manager
+        Assert.Equal(14 + FileToolNames.All.Length + GitToolNames.All.Length + ShellToolNames.All.Length, _chat.Options[0]!.Tools!.Count);   // clock ×3, neon_help, the files, the git tools (2026-09-20), the six web tools (the saved links' two later still on 2026-10-13), the two memory tools, skill_editor, session_manager
         Assert.Equal(SkilledPrompt(false, new[] { "Their name is Chris." }, web: true), _chat.Requests[0][0].Text);
         // The list rides the opening recall_memory pair, the last of the three (2026-09-17), and the
         // pair is kept current: the save of the first turn is in the second turn's result, in place.
@@ -940,7 +940,7 @@ public partial class SidekickAppTests : IDisposable
         string output = await Headless("hello\n");
 
         Assert.Equal(
-            (string[])["get_current_time", "shift_date", "date_difference", "neon_help", .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "save_memory", "recall_memory", "skill_editor", "session_manager"],
+            (string[])["get_current_time", "shift_date", "date_difference", "neon_help", .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "web_links", "web_save_link", "save_memory", "recall_memory", "skill_editor", "session_manager"],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         var request = _chat.Requests[0];
         Assert.Equal(SkilledPrompt(false, [], web: true, files: false), request[0].Text);
@@ -970,7 +970,7 @@ public partial class SidekickAppTests : IDisposable
         string output = await Headless("a haiku\n");
 
         Assert.Equal(
-            (string[])["get_current_time", "shift_date", "date_difference", "neon_help", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "download_file", "save_memory", "recall_memory", "load_skill", "skill_editor", "session_manager"],
+            (string[])["get_current_time", "shift_date", "date_difference", "neon_help", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "web_links", "web_save_link", "download_file", "save_memory", "recall_memory", "load_skill", "skill_editor", "session_manager"],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         var haiku = new Skill("haiku", "Writes haiku.", SkillScope.Profile, skills);
         Assert.Equal(Assistant.SystemPrompt(false, [], web: true, project: new ProjectNotes("AGENTS.md", "The notes."), skills: [haiku], sessions: true, timers: false, git: true, shell: true, native: true, help: true), _chat.Requests[0][0].Text);
@@ -996,7 +996,7 @@ public partial class SidekickAppTests : IDisposable
         await Headless("hello\n");
 
         Assert.Equal(
-            (string[])["get_current_time", "shift_date", "date_difference", "neon_help", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "download_file", "skill_editor", "session_manager"],
+            (string[])["get_current_time", "shift_date", "date_difference", "neon_help", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "web_links", "web_save_link", "download_file", "skill_editor", "session_manager"],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         Assert.Equal(SkilledPrompt(false, null, web: true), _chat.Requests[0][0].Text);
     }

@@ -64,6 +64,12 @@ public sealed class BrowserLinks
     /// <summary>The longest name kept, whether typed or taken from a page's title.</summary>
     public const int NameLength = 200;
 
+    /// <summary>
+    /// How long a bare <c>/browser save</c> or <c>web_save_link</c>'s <c>current</c> waits for the window to say what it shows (later on
+    /// 2026-10-13; on <c>ChatScreen</c> until the tools came, later still that day).
+    /// </summary>
+    public static readonly TimeSpan CurrentPageWait = TimeSpan.FromSeconds(2);
+
     /// <summary>The menu: the links on its root, the overflow submenus, the rows in each, how long a label's name may be.</summary>
     public const int RootRows = 15;
     public const int MaxSubmenus = 7;

@@ -671,12 +671,13 @@ The tools most profiles use and the pane's own options, in four tabs: Ask, Web, 
 
 | Setting | What it does | Default |
 |---|---|---|
-| Web tools | Offers `web_search`, `web_fetch`, `open_url` and `download_file`. Its page's title row steps *Web browser mode* (`m`) and, on Windows, opens the Browser window (`o`). | off |
+| Web tools | Offers `web_search`, `web_fetch`, `open_url`, `web_links`, `web_save_link` and `download_file`; the link tools read and change the profile's saved links, the ones `/browser list` shows. Its page's title row steps *Web browser mode* (`m`) and, on Windows, opens the Browser window (`o`). | off |
 | Web browser mode | `auto` uses HTTP and falls back to a headless browser for a blocked or empty page; `http` never falls back; `browser` uses the browser for every page. | `auto` |
 | Web browser path | The Chromium-based browser for headless fetches and making PDFs; empty finds Edge, Chrome or Brave. | empty (found) |
 | Web browser botcheck window | What a bot check the web tools can't get past does: `ask` asks on the pane, then opens the page in the Browser window for you to solve; `automatic` opens it without asking; `off` never does. See [The Browser window](TOOLS.md#the-browser-window). Windows only. | `ask` |
 | Web browser home page | Where the Browser window's home button and a bare `/browser` go: a web address (`example.com`, `localhost:3000`), or empty for the blank page. Windows only. | empty |
 | Web browser privacy | `keep-history` keeps the pages the Browser window visited, in its history menu too; `clear-history` clears them when the window closes. Cookies and sign-ins stay either way (`/browser clear all` removes them). Each profile has its own. Windows only. | `clear-history` |
+| Web open links in | Where a link the model opens with `open_url` goes: `default-browser` or `browser-window`. `browser-window` opens it in the app's Browser window, one page at a time; with no window to open (headless, a Mac, no WebView2 runtime, a bot check waiting in it) the link goes to your default browser. Other links the app opens always use your default browser. | `default-browser` |
 | Web browser network mode | Where a fetch may reach: `internet` (public addresses), `lan` (this machine and the LAN) or `both`. | `internet` |
 | Web search method | `duckduckgo` (built in) or `searxng`. | `duckduckgo` |
 | Web SearXNG URL | The SearXNG instance, for `searxng`. | empty |

@@ -49,4 +49,11 @@ public interface IBrowserWindow
 
     /// <summary>The saved links changed outside the window (the pane): its ☆ is read again. Nothing with no window open.</summary>
     void LinksChanged();
+
+    /// <summary>
+    /// Why a page cannot be put in the window now, or null when it can (later still on 2026-10-13, <c>Web open links in</c>): no WebView2
+    /// runtime or loader (<see cref="BrowserText.NoRuntime"/>, <see cref="BrowserText.NoLoader"/>), or a bot check waiting in it
+    /// (<see cref="BrowserText.BotCheckWaiting"/>: an open would end it as given up). Starts no window; cheap enough for every call.
+    /// </summary>
+    string? Unavailable();
 }

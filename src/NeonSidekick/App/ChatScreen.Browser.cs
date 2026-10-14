@@ -1,4 +1,5 @@
 using NeonSidekick.Diagnostics;
+using NeonSidekick.Llm.Tools;
 using NeonSidekick.UI;
 using NeonSidekick.Viewer;
 using NeonSidekick.Web;
@@ -9,9 +10,6 @@ namespace NeonSidekick.App;
 
 internal sealed partial class ChatScreen
 {
-    /// <summary>How long a bare <c>/browser save</c> waits for the window to say what it shows (later on 2026-10-13).</summary>
-    public static readonly TimeSpan CurrentPageWait = TimeSpan.FromSeconds(2);
-
     // The loaded profile's saved links (later on 2026-10-13): the one made for its directory, or a new one once a profile switch moved it.
     private BrowserLinks? _browserLinks;
 
@@ -142,6 +140,32 @@ internal sealed partial class ChatScreen
 
     private readonly Lock _browserGate = new();
 
+    /// <summary>
+    /// What the saved-link tools reach (later still on 2026-10-13): the loaded profile's links and, with a Browser window, the page it shows
+    /// — none while it cannot say, a bot check's page never — and the ☆ menu's refresh. macOS has no window: the links alone.
+    /// </summary>
+    private WebLinkHooks WebLinkHooksFor() => _browserWindow is not { } window
+        ? new WebLinkHooks(BrowserLinksNow, _time)
+        : new WebLinkHooks(BrowserLinksNow, _time,
+            () => window.Unavailable() is null ? window.CurrentPageAsync() : Task.FromResult<(string Url, string? Title)?>(null),
+            window.LinksChanged);
+
+    /// <summary>
+    /// Where <c>open_url</c> puts a link under <c>Web open links in</c> <c>browser-window</c> (later still on 2026-10-13): why the window
+    /// cannot take it now (<see cref="IBrowserWindow.Unavailable"/>; the tool then hands it to the default browser), else the one open
+    /// every caller uses, <see cref="OpenInBrowser"/>, and null. The tool's own line tells the model; the user sees the window.
+    /// </summary>
+    private string? OpenForTool(Uri url)
+    {
+        if (_browserWindow?.Unavailable() is { } reason)
+        {
+            return reason;
+        }
+
+        OpenInBrowser(url, sink: null);
+        return null;
+    }
+
     /// <summary>The loaded profile's saved links: the one made for its directory, or a new one once a profile switch moved it.</summary>
     private BrowserLinks BrowserLinksNow()
     {
@@ -162,13 +186,13 @@ internal sealed partial class ChatScreen
         _browserWindow?.LinksChanged();
     }
 
-    // A bare /browser save: the page the open window shows, asked for and waited on (at most CurrentPageWait), its title as the name.
+    // A bare /browser save: the page the open window shows, asked for and waited on (at most BrowserLinks.CurrentPageWait), its title as the name.
     private async Task SaveCurrentPageAsync(IBrowserWindow window, INoticeSink sink)
     {
         (string Url, string? Title)? page;
         try
         {
-            page = await window.CurrentPageAsync().WaitAsync(CurrentPageWait, _time).ConfigureAwait(false);
+            page = await window.CurrentPageAsync().WaitAsync(BrowserLinks.CurrentPageWait, _time).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {

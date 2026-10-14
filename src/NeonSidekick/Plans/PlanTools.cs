@@ -28,6 +28,8 @@ public static class PlanTools
         "gitlib_status", "gitlib_log", "gitlib_show", "gitlib_diff", "gitlib_blame",
         // web
         "web_search", "web_fetch",
+        // the saved links (later still on 2026-10-13): the list reads the profile's browser-links.json
+        "web_links",
         // SQL: read-only by three layers already
         "sql_connections", "sql_tables", "sql_columns", "sql_describe", "sql_indexes", "sql_relationships", "sql_query",
         // Oracle: read-only by four layers already (2026-09-30)
@@ -75,6 +77,8 @@ public static class PlanTools
         "gitlib_stage", "gitlib_commit", "gitlib_stash", "gitlib_discard", "gitlib_delete", "gitlib_branch",
         "run_command", "process", "execute_code",
         "download_file", "open_url",
+        // the saved links (later still on 2026-10-13): a link saved, removed or renamed
+        "web_save_link",
         "vault_write", "vault_properties", "vault_move", "vault_delete", "vault_daily",
         "save_memory", "skill_editor",
         "generate_image",

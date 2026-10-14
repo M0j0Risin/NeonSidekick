@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using NeonSidekick.Settings;
 using NeonSidekick.Web;
 
 namespace NeonSidekick.Llm.Tools;
@@ -12,6 +13,13 @@ namespace NeonSidekick.Llm.Tools;
 /// apply: it is the user's own browser opening the page, not the app reading it. One link answers
 /// <c>Opened … in your browser</c>; several a header and a line each, a bad one its <c>Error:</c>
 /// line in place. Offered under the setting <c>Web tools</c> with the other two.
+///
+/// <para><b>The Browser window</b> (later still on 2026-10-13, the user's ask: <c>Web open links in</c>, <see cref="OpenLinksIn"/>): under
+/// <c>browser-window</c>, with a window hook given (the screen on Windows), a link opens in the app's Browser window instead, through the
+/// one open every caller uses (<c>ChatScreen.OpenInBrowser</c>: one close notice per visit, the cookies handed over on close). The window
+/// shows one page at a time, so only the first link opens and the rest are named as not opened (the user's pick), and the schema offers
+/// <c>url</c> alone. When the window cannot take it now — no runtime, a bot check waiting in it — the link goes to the default browser
+/// with the reason. Headless and macOS give no hook: the default browser, as before.</para>
 /// </summary>
 public sealed class OpenUrlTool : AIFunction
 {
@@ -33,20 +41,48 @@ public sealed class OpenUrlTool : AIFunction
         }
         """);
 
-    private readonly WebAccess _web;
+    /// <summary>The schema under <c>browser-window</c>: one link, the window showing one page at a time.</summary>
+    private static readonly JsonElement WindowSchema = ToolSchema.Parse(
+        """
+        {
+          "type": "object",
+          "properties": {
+            "url": { "type": "string", "description": "The link to open (http or https)." }
+          }
+        }
+        """);
 
-    public OpenUrlTool(WebAccess web)
+    /// <summary>The description under <c>browser-window</c>. Pinned: the model reads it.</summary>
+    public const string WindowDescription =
+        "Opens a web page for the user in the app's Browser window, on their screen; the window shows one page at a time. " +
+        "Use it when they ask to open, show or see a link rather than to have it read out.";
+
+    private readonly WebAccess _web;
+    private readonly Func<AppSettingsData>? _effective;
+    private readonly Func<Uri, string?>? _openInWindow;
+
+    /// <param name="web">The default browser's opener (<see cref="WebAccess.OpenUrl"/>).</param>
+    /// <param name="effective">The settings in force, read at each call for <c>Web open links in</c>; null keeps the default browser.</param>
+    /// <param name="openInWindow">Opens a link in the Browser window and returns null, or returns why it cannot now (<c>IBrowserWindow.Unavailable</c>)
+    /// without opening; null (headless, macOS) keeps the default browser.</param>
+    public OpenUrlTool(WebAccess web, Func<AppSettingsData>? effective = null, Func<Uri, string?>? openInWindow = null)
     {
         _web = web ?? throw new ArgumentNullException(nameof(web));
+        _effective = effective;
+        _openInWindow = openInWindow;
     }
 
     public override string Name => ToolName;
 
-    public override string Description =>
-        "Opens a web page in the user's own browser, on their screen. Use it when they ask to open, show or see a link rather than to have it read out; " +
-        "one link in url, or up to " + MaxUrls.ToString(System.Globalization.CultureInfo.InvariantCulture) + " in urls.";
+    public override string Description => InWindow
+        ? WindowDescription
+        : "Opens a web page in the user's own browser, on their screen. Use it when they ask to open, show or see a link rather than to have it read out; " +
+          "one link in url, or up to " + MaxUrls.ToString(System.Globalization.CultureInfo.InvariantCulture) + " in urls.";
 
-    public override JsonElement JsonSchema => Schema;
+    public override JsonElement JsonSchema => InWindow ? WindowSchema : Schema;
+
+    /// <summary>Whether links go to the Browser window now: <c>Web open links in</c> is <c>browser-window</c> and there is a window to ask.</summary>
+    private bool InWindow => _openInWindow is not null && _effective is not null && OpenLinksIn.Resolve(_effective()) == OpenLinksInKind.BrowserWindow;
 
     /// <summary>Opens each link and describes what happened. The argument reading is <see cref="InvokeCoreAsync"/>'s.</summary>
     public string Open(IReadOnlyList<string> urls)
@@ -60,6 +96,11 @@ public sealed class OpenUrlTool : AIFunction
         if (urls.Count > MaxUrls)
         {
             return WebText.TooManyLinks;
+        }
+
+        if (InWindow)
+        {
+            return OpenInWindow(urls);
         }
 
         var lines = new List<string>(urls.Count);
@@ -100,6 +141,36 @@ public sealed class OpenUrlTool : AIFunction
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>The first link in the Browser window (or the default browser with the reason when it cannot take it), the rest named as not opened.</summary>
+    private string OpenInWindow(IReadOnlyList<string> urls)
+    {
+        string first;
+        if (WebFetcher.ParseUrl(urls[0]) is not { } parsed)
+        {
+            first = WebText.NotHttp(urls[0].Trim());
+        }
+        else if (_openInWindow!(parsed) is not { } reason)
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Info(WebFetcher.Category, "Opened in the Browser window: " + parsed.AbsoluteUri);
+            first = WebText.OpenedInWindow(parsed.AbsoluteUri);
+        }
+        else
+        {
+            try
+            {
+                _web.OpenUrl(parsed.AbsoluteUri);
+                NeonSidekick.Diagnostics.DiagnosticLog.Info(WebFetcher.Category, "Opened in the browser (the Browser window could not take it: " + reason + "): " + parsed.AbsoluteUri);
+                first = WebText.WindowFellBack(parsed.AbsoluteUri, reason);
+            }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or PlatformNotSupportedException)
+            {
+                first = WebText.OpenFailed(parsed.AbsoluteUri, ex.Message);
+            }
+        }
+
+        return urls.Count == 1 ? first : first + "\n" + WebText.OneAtATime(urls.Skip(1).Select(u => u.Trim()).ToList());
     }
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

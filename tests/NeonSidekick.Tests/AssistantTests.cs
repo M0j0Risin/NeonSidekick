@@ -195,7 +195,7 @@ public class AssistantTests
     {
         Assert.Equal(
             "For anything on the web — current facts, news, prices, documentation, a page the user names — search with web_search and read a page with web_fetch (offset continues a long one); say what you looked at. " +
-            "To open a page for the user in their browser — when they ask to open, show or see a link rather than have it read out — call open_url.",
+            "To open a page for the user — when they ask to open, show or see a link rather than have it read out — call open_url.",
             Assistant.WebRule);
         // The download sentence (2026-09-18) rides the web rule only with the file tools on: download_file writes the sandbox.
         Assert.Equal(

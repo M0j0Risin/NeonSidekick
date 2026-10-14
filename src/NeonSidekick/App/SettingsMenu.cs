@@ -1062,6 +1062,9 @@ public enum SettingsField
 
     /// <summary>A toggle: whether this profile reads the global skills, <c>&lt;home&gt;\skills</c> (<see cref="Settings.AppSettingsData.GlobalSkills"/>); off, it sees and writes only its own. The Options tab of <c>/skills</c>, right under <see cref="AgentSkills"/> (2026-10-13, the user's ask, name and default); no reconnect (read at each scan). Last in the enum, as every newcomer.</summary>
     GlobalSkills,
+
+    /// <summary>A picker over <see cref="Web.OpenLinksIn.Names"/>: where a link the model opens goes, the default browser or the Browser window (<see cref="Settings.AppSettingsData.WebOpenLinksIn"/>). The Web tab, right under <see cref="BrowserPrivacy"/> (later still on 2026-10-13, the user's ask and name); no reconnect (read at each call). Last in the enum, as every newcomer.</summary>
+    WebOpenLinksIn,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1554,7 +1557,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
     [
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
-        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
+        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
         [SettingsField.ImageTools, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
@@ -2240,6 +2243,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebBrowserBotcheckWindow => "Web browser botcheck window",
         SettingsField.WebBrowserHomePage => "Web browser home page",
         SettingsField.BrowserPrivacy => "Web browser privacy",
+        SettingsField.WebOpenLinksIn => "Web open links in",
         SettingsField.WebBrowserNetworkMode => "Web browser network mode",
         SettingsField.WebSearxngUrl => "Web SearXNG URL",
         SettingsField.WebSearchMaxResults => "Web search max results",
@@ -2605,6 +2609,7 @@ internal sealed partial class SettingsMenu
             SettingsField.WebBrowserMode => data.WebBrowserMode,
             SettingsField.WebBrowserBotcheckWindow => data.WebBrowserBotcheckWindow,
             SettingsField.BrowserPrivacy => data.BrowserPrivacy,
+            SettingsField.WebOpenLinksIn => data.WebOpenLinksIn,
             SettingsField.WebBrowserHomePage => string.IsNullOrWhiteSpace(data.WebBrowserHomePage) ? BlankHomePageLabel : data.WebBrowserHomePage,
             SettingsField.WebBrowserPath => string.IsNullOrWhiteSpace(data.WebBrowserPath) ? AutoBrowserLabel(locatedBrowser) : data.WebBrowserPath,
             SettingsField.DraftEditor => string.IsNullOrWhiteSpace(data.DraftEditor) ? DefaultDraftEditorLabel : data.DraftEditor,
@@ -3512,6 +3517,10 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the Web browser privacy picker (later on 2026-10-13): the mode and its hint, padded to fourteen (<c>clear-history</c> is thirteen). Pinned.</summary>
     public static string BrowserPrivacyLabel(string name) =>
         Markup.Escape(name.PadRight(14)) + Theme.DimMarkup(Viewer.BrowserPrivacy.Describe(name));
+
+    /// <summary>One row of the Web open links in picker (later still on 2026-10-13): the choice and its hint, padded to sixteen (<c>default-browser</c> is fifteen).</summary>
+    public static string WebOpenLinksInLabel(string name) =>
+        Markup.Escape(name.PadRight(16)) + Theme.DimMarkup(Web.OpenLinksIn.Describe(name));
 
     /// <summary>One row of the network-mode picker: the mode and its hint (padded to nine: <c>internet</c> is eight, since <c>local_area_network</c> became <c>lan</c> on 2026-10-13). Pinned.</summary>
     public static string NetworkModeLabel(string name) =>
@@ -4891,6 +4900,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.BrowserPrivacy)
         {
             return await PickBrowserPrivacyAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.WebOpenLinksIn)
+        {
+            return await PickWebOpenLinksInAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.WebBrowserNetworkMode)
@@ -7935,6 +7949,23 @@ internal sealed partial class SettingsMenu
 
         string name = names[index];
         Apply(SettingsField.BrowserPrivacy, d => d.BrowserPrivacy = name);
+        return true;
+    }
+
+    /// <summary>The Web open links in picker (later still on 2026-10-13): one <see cref="WebOpenLinksInLabel"/> row per <see cref="Web.OpenLinksIn.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickWebOpenLinksInAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = Web.OpenLinksIn.Names;
+        string current = Web.OpenLinksIn.TryParse(saved.WebOpenLinksIn, out var kind) ? Web.OpenLinksIn.Name(kind) : Web.OpenLinksIn.Default;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.WebOpenLinksIn)), names.Select(WebOpenLinksInLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, current)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.WebOpenLinksIn, d => d.WebOpenLinksIn = name);
         return true;
     }
 

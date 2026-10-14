@@ -1179,7 +1179,7 @@ internal sealed partial class ChatScreen
         _timers = new TimerBoard(time, SignalAlert);
         _jobs = new BackgroundJobs(SignalAlert, time);
         _timerTools = TimerTools(_timers);
-        _webTools = WebTools(_web, _files, _effective, SolveBotCheckAsync);
+        _webTools = WebTools(_web, _files, _effective, SolveBotCheckAsync, WebLinkHooksFor(), _browserWindow is null ? null : OpenForTool);
         // The git tools (2026-09-20) sit on the same sandbox: the repository is looked for from a sandbox path, never above the root.
         _git = new GitAccess(_files, time);
         _gitTools = GitTools(_git, _effective);
@@ -5756,15 +5756,27 @@ internal sealed partial class ChatScreen
     /// on as well, since it writes the sandbox (<see cref="WebToolsFor"/>). Each reads the settings in
     /// force at the call, so a mode, a browser path, the network mode or a SearXNG URL typed in
     /// <c>/settings</c> applies at the next call. <paramref name="botCheck"/> (2026-10-13) shows a bot check the tools cannot get past
-    /// to the user in the Browser window; null in headless, where nobody can be asked.
+    /// to the user in the Browser window; null in headless, where nobody can be asked. With <paramref name="links"/> (later still on 2026-10-13)
+    /// the saved-link tools, <c>web_links</c> and <c>web_save_link</c>, come after <c>open_url</c> (<c>download_file</c> stays last for
+    /// <see cref="WebToolsFor"/>); <paramref name="openInWindow"/> is where <c>open_url</c> puts a link under <c>Web open links in</c>
+    /// <c>browser-window</c> (the screen on Windows; null keeps the default browser).
     /// </summary>
-    public static IReadOnlyList<AIFunction> WebTools(WebAccess web, WorkingDirectory files, Func<AppSettingsData> effective, BotCheckSolver? botCheck = null) => new AIFunction[]
+    public static IReadOnlyList<AIFunction> WebTools(WebAccess web, WorkingDirectory files, Func<AppSettingsData> effective, BotCheckSolver? botCheck = null, WebLinkHooks? links = null, Func<Uri, string?>? openInWindow = null)
     {
-        new WebSearchTool(web, effective, botCheck),
-        new WebFetchTool(web, effective, botCheck),
-        new OpenUrlTool(web),
-        new DownloadFileTool(web, files, effective, botCheck),
-    };
+        var tools = new List<AIFunction>
+        {
+            new WebSearchTool(web, effective, botCheck),
+            new WebFetchTool(web, effective, botCheck),
+            new OpenUrlTool(web, effective, openInWindow),
+        };
+        if (links is not null)
+        {
+            tools.AddRange([new WebLinksTool(links), new WebSaveLinkTool(links)]);
+        }
+
+        tools.Add(new DownloadFileTool(web, files, effective, botCheck));
+        return tools;
+    }
 
     /// <summary>
     /// <paramref name="webTools"/> as a turn offers them: whole with the file tools on, less
@@ -6291,6 +6303,7 @@ internal sealed partial class ChatScreen
         WebSearchTool.ToolName,
         WebFetchTool.ToolName,
         OpenUrlTool.ToolName,
+        WebSaveLinkTool.ToolName,
         DownloadFileTool.ToolName,
         ConvertToPdfTool.ToolName,
         SessionManagerTool.ToolName,

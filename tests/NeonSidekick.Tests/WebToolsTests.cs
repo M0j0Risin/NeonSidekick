@@ -152,6 +152,93 @@ public sealed class WebToolsTests : IDisposable
         Assert.Empty(_opened);
     }
 
+    // ── open_url under Web open links in (later still on 2026-10-13) ────────
+
+    [Fact]
+    public async Task Open_InTheWindow_GoesThere_NotToTheBrowser()
+    {
+        var window = new List<Uri>();
+        var open = new OpenUrlTool(_web, () => _settings, url => { window.Add(url); return null; });
+
+        // The default: the browser, as before, whatever hook is given.
+        Assert.Equal(WebText.OpenedOne("https://example.com/a"), await open.InvokeAsync(Args(("url", "https://example.com/a")), CancellationToken.None));
+        Assert.Empty(window);
+
+        _settings.WebOpenLinksIn = OpenLinksIn.BrowserWindow;
+        Assert.Equal(WebText.OpenedInWindow("https://example.com/b"), await open.InvokeAsync(Args(("url", "example.com/b")), CancellationToken.None));
+        Assert.Equal([new Uri("https://example.com/b")], window);
+        Assert.Equal(["https://example.com/a"], _opened);
+    }
+
+    [Fact]
+    public async Task Open_InTheWindow_SeveralLinks_OpensTheFirst_AndNamesTheRest()
+    {
+        var window = new List<Uri>();
+        _settings.WebOpenLinksIn = OpenLinksIn.BrowserWindow;
+        var open = new OpenUrlTool(_web, () => _settings, url => { window.Add(url); return null; });
+
+        string answer = (string)(await open.InvokeAsync(Args(("urls", Json("[\"https://a.example/\", \"https://b.example/\", \" c.example \"]"))), CancellationToken.None))!;
+
+        Assert.Equal(WebText.OpenedInWindow("https://a.example/") + "\n" + WebText.OneAtATime(["https://b.example/", "c.example"]), answer);
+        Assert.Equal([new Uri("https://a.example/")], window);
+        Assert.Empty(_opened);
+        Assert.Equal(WebText.NotHttp("ftp://x.example/"), await open.InvokeAsync(Args(("url", "ftp://x.example/")), CancellationToken.None));
+        Assert.Single(window);
+    }
+
+    [Fact]
+    public async Task Open_InTheWindow_WhenItCannotTakeIt_GoesToTheBrowser_WithTheReason()
+    {
+        _settings.WebOpenLinksIn = OpenLinksIn.BrowserWindow;
+        var open = new OpenUrlTool(_web, () => _settings, _ => NeonSidekick.Viewer.BrowserText.BotCheckWaiting);
+
+        Assert.Equal(WebText.WindowFellBack("https://example.com/", NeonSidekick.Viewer.BrowserText.BotCheckWaiting), await open.InvokeAsync(Args(("url", "https://example.com/")), CancellationToken.None));
+        Assert.Equal(["https://example.com/"], _opened);
+
+        // No hook at all (headless, macOS): the browser, the browser's own description and schema.
+        var headless = new OpenUrlTool(_web, () => _settings);
+        Assert.Equal(WebText.OpenedOne("https://example.com/x"), await headless.InvokeAsync(Args(("url", "https://example.com/x")), CancellationToken.None));
+        Assert.True(headless.JsonSchema.GetProperty("properties").TryGetProperty("urls", out _));
+    }
+
+    [Fact]
+    public void Open_DescriptionAndSchema_FollowTheSetting()
+    {
+        var open = new OpenUrlTool(_web, () => _settings, _ => null);
+        Assert.True(open.JsonSchema.GetProperty("properties").TryGetProperty("urls", out _));
+        Assert.Contains("in the user's own browser", open.Description);
+
+        _settings.WebOpenLinksIn = OpenLinksIn.BrowserWindow;
+        Assert.False(open.JsonSchema.GetProperty("properties").TryGetProperty("urls", out _));
+        Assert.Equal("Opens a web page for the user in the app's Browser window, on their screen; the window shows one page at a time. Use it when they ask to open, show or see a link rather than to have it read out.", open.Description);
+
+        _settings.WebOpenLinksIn = "nonsense";
+        Assert.Contains("in the user's own browser", open.Description);
+    }
+
+    [Fact]
+    public void OpenLinksIn_Words_AndDefault_ArePinned()
+    {
+        Assert.Equal("default-browser", OpenLinksIn.Default);
+        Assert.Equal(["default-browser", "browser-window"], OpenLinksIn.Names);
+        Assert.Equal(OpenLinksIn.Default, new AppSettingsData().WebOpenLinksIn);
+        Assert.True(OpenLinksIn.TryParse(" Browser-Window ", out var kind));
+        Assert.Equal(OpenLinksInKind.BrowserWindow, kind);
+        Assert.False(OpenLinksIn.TryParse("window", out _));
+        Assert.Equal(OpenLinksInKind.DefaultBrowser, OpenLinksIn.Resolve(new AppSettingsData { WebOpenLinksIn = "window" }));
+        Assert.All(OpenLinksIn.Names, name => Assert.NotEmpty(OpenLinksIn.Describe(name)));
+    }
+
+    [Fact]
+    public void WebTools_WithTheLinkHooks_AreSix_DownloadLast()
+    {
+        var hooks = new WebLinkHooks(() => new NeonSidekick.Viewer.BrowserLinks(_dir, _time), _time);
+        var all = App.ChatScreen.WebTools(_web, _files, () => _settings, links: hooks);
+
+        Assert.Equal(["web_search", "web_fetch", "open_url", "web_links", "web_save_link", "download_file"], all.Select(t => t.Name));
+        Assert.Equal(["web_search", "web_fetch", "open_url", "web_links", "web_save_link"], App.ChatScreen.WebToolsFor(all, filesEnabled: false).Select(t => t.Name));
+    }
+
 
     // ── web_search ──────────────────────────────────────────────────────────
 

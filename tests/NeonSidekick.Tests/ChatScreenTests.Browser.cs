@@ -61,7 +61,7 @@ public sealed partial class ChatScreenTests
                 }
 
                 await Task.Delay(100);
-                _time.Advance(ChatScreen.CurrentPageWait + TimeSpan.FromSeconds(1));
+                _time.Advance(NeonSidekick.Viewer.BrowserLinks.CurrentPageWait + TimeSpan.FromSeconds(1));
             });
         }
 

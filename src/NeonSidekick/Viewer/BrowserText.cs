@@ -34,6 +34,9 @@ public static class BrowserText
     /// <summary>The window closed while a page it was asked for still waited (the app's exit, a failure). Pinned.</summary>
     public const string Closed = "the Browser window closed";
 
+    /// <summary>Why a link the model opens is not put in the window now (later still on 2026-10-13, <see cref="IBrowserWindow.Unavailable"/>): it would end the check.</summary>
+    public const string BotCheckWaiting = "a bot check is waiting in the Browser window";
+
     /// <summary>The bar's names (2026-10-13, the navigation bar), its tooltips' words. Pinned.</summary>
     public const string BackName = "Back";
     public const string ForwardName = "Forward";
