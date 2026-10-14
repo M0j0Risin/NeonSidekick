@@ -1694,7 +1694,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The saved prompts' item (2026-10-13, the user's ask and pick: a megaphone, what is said often): <see cref="PromptsToolLine"/>,
-    /// the saved prompts' pane, after ⭐; off by default. A double-click keeps the draft, so the pane's save draft has it.
+    /// the saved prompts' pane, after ⭐ and off by default until 2026-10-14 (the user's ask: after 💾, checked by default). A double-click keeps the draft, so the pane's save draft has it.
     /// </summary>
     public const string PromptsToolGlyph = "📣";
 

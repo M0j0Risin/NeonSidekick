@@ -211,7 +211,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(ChatScreen.SkillsToolGlyph + " " + ScreenPane.DividerGlyph + " " + ChatScreen.MemoryToolGlyph + " " + ChatScreen.QueueToolGlyph + " " + ScreenPane.DividerGlyph + " ", output);   // 🎓 │ 💾 ⏳ │ (later still on 2026-10-13)
+        Assert.Contains(ChatScreen.SkillsToolGlyph + " " + ScreenPane.DividerGlyph + " " + ChatScreen.MemoryToolGlyph + " " + ChatScreen.PromptsToolGlyph + " " + ChatScreen.QueueToolGlyph + " " + ScreenPane.DividerGlyph + " ", output);   // 🎓 │ 💾 ⏳ │ (later still on 2026-10-13), 🎓 │ 💾 📣 ⏳ │ since 2026-10-14
         Assert.Contains(ChatScreen.ShellToolGlyph + " " + ScreenPane.DividerGlyph + " " + ChatScreen.FilesToolGlyph, output);
     }
 

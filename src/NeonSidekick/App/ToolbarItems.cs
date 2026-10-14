@@ -75,7 +75,7 @@ public static class ToolbarItems
     public const string ComfyThumbs = "comfythumbs"; // 2026-10-04, the user's ask: 🪟, /comfy thumbs
     public const string YouTube = "youtube";         // 2026-10-08, the user's ask: 📺, /youtube list (a pane; after 🪟 later that day)
     public const string BrowserLinks = "browserlinks";   // later on 2026-10-13, the user's ask: ⭐, /browser list (a pane), after 📺, off by default
-    public const string Prompts = "prompts";             // 2026-10-13, the user's ask: 📣, /prompts (a pane), after ⭐, off by default
+    public const string Prompts = "prompts";             // 2026-10-13, the user's ask: 📣, /prompts (a pane), after ⭐, off by default; after 💾 and checked by default since 2026-10-14 (the user's ask)
     public const string ShoppingList = "shoppinglist"; // 2026-10-11, the user's ask: 🛒, /shopping's list (a pane), after 📺; the Shopping tools switch (id shopping, after Print) until later that day
     public const string Path = "path";
     public const string Model = "model";   // 2026-10-12, the user's ask: the model's name (its reasoning glyph after it since later that day); after the path by default, and free to move past it
@@ -87,24 +87,26 @@ public static class ToolbarItems
     /// after the log (2026-10-05); YouTube where the Camera live viewer was (2026-10-08), after the Comfy thumb viewer later that day
     /// (the user's ask); Ask between the disk and the lock (2026-10-09, the user's ask); Image after Files (2026-10-10, the user's ask); Advisors after
     /// the Claude Code advisor (later that day, the profile advisors), after Web once that one was retired (later still); Queue after
-    /// Memory (2026-10-13, the user's ask); Saved links after YouTube (later that day, the user's ask); Saved prompts after Saved links (later still). Pinned.
+    /// Memory (2026-10-13, the user's ask); Saved links after YouTube (later that day, the user's ask); Saved prompts after Saved links (later still), after Memory
+    /// since 2026-10-14 (the user's ask). Pinned.
     /// </summary>
     public static readonly string[] Names =
     [
-        Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Queue, Ask, CmdList, Police,
+        Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Prompts, Queue, Ask, CmdList, Police,
         Shell, Files, Image, Web, Advisors, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
-        Log, Process, ComfyView, ComfyThumbs, YouTube, BrowserLinks, Prompts, ShoppingList, Perf, Path, Model,
+        Log, Process, ComfyView, ComfyThumbs, YouTube, BrowserLinks, ShoppingList, Perf, Path, Model,
     ];
 
     /// <summary>
-    /// What a profile that never chose shows (2026-10-05, the user's pick): Settings, Tools, Skills, Memory, Queue (2026-10-13, the user's pick), Shell allowed
+    /// What a profile that never chose shows (2026-10-05, the user's pick): Settings, Tools, Skills, Memory, Saved prompts (2026-10-14, the user's ask),
+    /// Queue (2026-10-13, the user's pick), Shell allowed
     /// commands, Shell police, the Shell, Files, Image (2026-10-10, the user's ask) and Web switches and the path — the lock and the officer still only under a
     /// policy other than off. Tools, Shell allowed commands, Shell police, the three switches and the path from 2026-10-03; Shell
     /// allowed commands, Shell police and the path from 2026-10-02; Settings, Tools, Skills, Sessions and the path from later on
     /// 2026-09-29, every item before; a profile that saved the defaults as null follows. In <see cref="Names"/> order, which
     /// <see cref="Save"/> compares by. Pinned.
     /// </summary>
-    public static readonly string[] Defaults = [Settings, Tools, Skills, Memory, Queue, CmdList, Police, Shell, Files, Image, Web, Path];
+    public static readonly string[] Defaults = [Settings, Tools, Skills, Memory, Prompts, Queue, CmdList, Police, Shell, Files, Image, Web, Path];
 
     /// <summary>
     /// The glyph an item draws on the checklist (the lock's closed one for <see cref="CmdList"/>; the folder for the path
@@ -304,8 +306,8 @@ public static class ToolbarItems
     }
 
     /// <summary>
-    /// The default order (2026-10-13, the user's ask: <c>⚙️ 🛠️ 🎓 | 💾 ⏳ | 🔒 👮 🐚 | 📁 🌄 🌐</c>): <see cref="Names"/> with a divider ahead of
-    /// Memory (later still that day, the user's ask; after Usage, so 💾 ⏳ stay together when System prompt, Sessions or Usage is checked), one after
+    /// The default order (2026-10-13, the user's ask: <c>⚙️ 🛠️ 🎓 | 💾 📣 ⏳ | 🔒 👮 🐚 | 📁 🌄 🌐</c>, 📣 since 2026-10-14): <see cref="Names"/> with a divider ahead of
+    /// Memory (later still that day, the user's ask; after Usage, so 💾 📣 ⏳ stay together when System prompt, Sessions or Usage is checked), one after
     /// Queue (ahead of Ask, unchecked by default; after Memory until Queue came later that day) and one after Shell, numbered from the left. A
     /// divider whose neighbours are hidden is not drawn (<see cref="ItemOrder.ShownDividers"/>). Pinned.
     /// </summary>

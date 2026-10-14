@@ -185,8 +185,8 @@ public class ItemOrderTests
         Assert.Equal(1, at);
 
         Assert.Equal([ToolbarItems.Usage, "divider:1", ToolbarItems.Memory], ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Usage).Take(3));   // ahead of 💾 (later still on 2026-10-13)
-        string[] memoryOn = [.. ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Memory).Take(4)];
-        Assert.Equal([ToolbarItems.Memory, ToolbarItems.Queue, "divider:2", ToolbarItems.Ask], memoryOn);   // ⏳ ahead of the divider since 2026-10-13
+        string[] memoryOn = [.. ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Memory).Take(5)];
+        Assert.Equal([ToolbarItems.Memory, ToolbarItems.Prompts, ToolbarItems.Queue, "divider:2", ToolbarItems.Ask], memoryOn);   // ⏳ ahead of the divider since 2026-10-13, 📣 after 💾 since 2026-10-14
         Assert.Equal([ToolbarItems.Shell, "divider:3", ToolbarItems.Files], ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Shell).Take(3));
         Assert.Equal(ToolbarItems.Names.Length + 3, ToolbarItems.DefaultOrder.Length);
         Assert.Null(ToolbarItems.SaveOrder(ToolbarItems.DefaultOrder));

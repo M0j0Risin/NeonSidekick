@@ -220,6 +220,7 @@ Glyphs under the hint row (*Tool bar*), each shown while it is checked there. A 
 |---|---|---|
 | ⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 | always | `/settings`, `/profile`, `/theme`, `/tools`, `/mcp`, `/skills`, `/sys`, `/sessions`, `/usage` |
 | 💾 | slab while *Memory mode* is `off` | `/memory` |
+| 📣 | always | `/prompts` |
 | ⏳ | slab while *Queue mode* is `off` | `/queue` |
 | 🙋 | slab while *Ask user* is off | `/tools ask` |
 | 🔒 / 🔓 | *Shell command policy* `ask` / `yolo` (none under `off`) | `/tools shell allowed` |
@@ -228,7 +229,7 @@ Glyphs under the hint row (*Tool bar*), each shown while it is checked there. A 
 | 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | slab while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` |
 | 📄 ⚡ | always | the [log window](#the-log-window); `/process` |
 | 🎞️ 🪟 | always | the [picture viewer](#the-picture-viewer); the [thumbnail browser](#the-thumbnail-browser) (ComfyUI's folder) |
-| 📺 ⭐ 📣 🛒 | always | `/youtube list`, `/browser list`, `/prompts`, `/shopping` |
+| 📺 ⭐ 🛒 | always | `/youtube list`, `/browser list`, `/shopping` |
 | 📈 | always | `/perfbar` |
 | the working directory (`~` for your user folder) | pinned right | `/cwd browse` |
 | **Model name** and its glyph | pinned right, with a server connected | `/server`; the glyph `/reasoning` |
@@ -276,7 +277,7 @@ The *Hint bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar ed
 * Shift+←/→ (or Alt+←/→) pins the item to the other side. The performance and home bars have three groups, so it moves a group over (left ↔ center ↔ right).
 * Shift+↑/↓ (or Alt+↑/↓) moves it a place, crossing into the next group at the edge; Shift+Home/End moves it to its group's top or bottom.
 * **Hint bar:** the Spinner is always on; it can't be unchecked, only moved. The row reads `default`, `all`, `none`, or the left group's sections, `|`, then the right group's.
-* **Tool bar dividers:** `+` (*+ divider* on the title row) puts a dim `│` after the item under the cursor. It moves like an item, Delete takes it out, and Enter or Space does nothing on it. It shows only between two visible items of its side. The default has three: `⚙️ 🛠️ 🎓 │ 💾 ⏳ │ 🔒 👮 🐚 │ 📁 🌄 🌐`.
+* **Tool bar dividers:** `+` (*+ divider* on the title row) puts a dim `│` after the item under the cursor. It moves like an item, Delete takes it out, and Enter or Space does nothing on it. It shows only between two visible items of its side. The default has three: `⚙️ 🛠️ 🎓 │ 💾 📣 ⏳ │ 🔒 👮 🐚 │ 📁 🌄 🌐`.
 
 *Toolbar order* orders the four bars the same way: Shift+↑/↓ (or Alt+↑/↓) moves the bar under the cursor, Shift+Home/End to the top or bottom, `d` puts the default back, and the screen redraws at once. A bar that is off keeps its place.
 
