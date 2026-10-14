@@ -50,6 +50,13 @@ public sealed class Assistant
     /// </summary>
     public static readonly string DefaultPersona = ReadDefaultPersona();
 
+    /// <summary>
+    /// <see cref="DefaultPersona"/>'s first line, the identity sentence (2026-10-13, the user's call): <c>/botchat</c> cuts it from
+    /// a bot's persona (<see cref="App.BotChat.BotPersona(string?)"/>), since <see cref="App.BotChat.Rules"/> names the bot itself and
+    /// a bot told "You are Neon" and then "You are ada" had two identities. Main chat and <c>neon_advisor</c> keep it.
+    /// </summary>
+    public static readonly string DefaultIdentity = DefaultPersona.Split('\n', 2)[0];
+
     /// <summary>The manifest name <c>assets/prompts/persona.md</c> is embedded under.</summary>
     public const string DefaultPersonaResourceName = "prompts/persona.md";
 

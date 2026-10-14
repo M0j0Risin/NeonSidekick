@@ -228,7 +228,23 @@ public class BotChatTests
         Assert.StartsWith("You are Ada, a pirate.", prompt, StringComparison.Ordinal);
         Assert.EndsWith(BotChat.Rules("ada", ["default"], "ships"), prompt, StringComparison.Ordinal);
         Assert.DoesNotContain(Assistant.DefaultPersona, prompt, StringComparison.Ordinal);
-        Assert.StartsWith(Assistant.DefaultPersona, BotChat.SystemPrompt(null, "neon", ["ada"], "", false, null, false), StringComparison.Ordinal);
+        string fallback = BotChat.SystemPrompt(null, "neon", ["ada"], "", false, null, false);
+        Assert.StartsWith(Assistant.DefaultPersona[Assistant.DefaultIdentity.Length..].TrimStart('\n'), fallback, StringComparison.Ordinal);
+        Assert.DoesNotContain("You are Neon", fallback, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BotPersona_CutsTheDefaultIdentityLine_Only()
+    {
+        string seeded = Assistant.DefaultIdentity + "\n\nTalk like a sailor.\nKeep it short.";
+
+        Assert.Equal("Talk like a sailor.\nKeep it short.", BotChat.BotPersona(seeded));
+        Assert.Equal("You are Ada, a pirate.", BotChat.BotPersona("You are Ada, a pirate."));
+        Assert.Equal(BotChat.BotPersona(null), BotChat.BotPersona(Assistant.DefaultIdentity));
+        Assert.Equal(BotChat.BotPersona(null), BotChat.BotPersona("  "));
+        Assert.DoesNotContain(Assistant.DefaultIdentity, BotChat.BotPersona(null), StringComparison.Ordinal);
+        string longer = Assistant.DefaultIdentity + " Also a poet.";
+        Assert.Equal(longer, BotChat.BotPersona(longer));
     }
 
     [Fact]

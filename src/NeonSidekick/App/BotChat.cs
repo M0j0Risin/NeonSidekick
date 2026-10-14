@@ -245,13 +245,31 @@ public static partial class BotChat
     /// <paramref name="skills"/> (<c>Botchat skills enabled</c>, 2026-09-27, or <c>Botchat limited skills</c> since 2026-10-04: the
     /// main chat's catalog — the starting profile's, the global (while its Global skills is on) and the external skills, never the speaker's own profile's) the
     /// load-only skills block (<see cref="Skills.SkillsPrompt.LoadOnlySection"/>) goes before the rules. With none of them the
-    /// prompt is as before, byte for byte. The preloaded skills' block of 2026-09-27 went on 2026-10-04 (the user's call). Pure.
+    /// prompt is as before, byte for byte. The preloaded skills' block of 2026-09-27 went on 2026-10-04 (the user's call). The
+    /// persona goes through <see cref="BotPersona"/> first (2026-10-13), so a bot on the default persona is not "Neon". Pure.
     /// </summary>
     public static string SystemPrompt(string? persona, string speaker, IReadOnlyList<string> others, string topic, bool speechOutput, string? voiceDirective, bool markdown, string? pronouns = null, bool images = false, IReadOnlyList<Skills.Skill>? skills = null, bool camera = false, TurnRules? tools = null, IReadOnlyList<string>? memories = null, bool memorySave = true, IReadOnlyList<string>? recent = null) =>
-        Assistant.BotSystemPrompt(speechOutput, persona, voiceDirective, markdown, tools, memories, memorySave)
+        Assistant.BotSystemPrompt(speechOutput, BotPersona(persona), voiceDirective, markdown, tools, memories, memorySave)
         + (skills is { Count: > 0 } ? "\n\n" + Skills.SkillsPrompt.LoadOnlySection(skills) : "")
         + "\n\n" + Rules(speaker, others, topic, pronouns, images, camera, memory: memories is not null)
         + (recent is { Count: > 0 } ? "\n\n" + RecentSection(recent) : "");
+
+    /// <summary>
+    /// A bot's persona without the default identity line (2026-10-13, the user's call: a bot on the default persona was told
+    /// "You are Neon" and then <see cref="Rules"/>' "You are ada", two identities). Blank is <see cref="Assistant.DefaultPersona"/>;
+    /// a persona opening with <see cref="Assistant.DefaultIdentity"/> on a line of its own (the default, or a <c>persona.md</c>
+    /// seeded from it by <c>/sys persona</c>) loses that line and the blank lines after it, and one that is nothing else is the
+    /// default less its first line. Any other persona is untouched. The text arrives LF-folded and trimmed (<see cref="PromptFile.Read"/>). Pure.
+    /// </summary>
+    public static string BotPersona(string? persona)
+    {
+        string text = string.IsNullOrWhiteSpace(persona) ? Assistant.DefaultPersona : persona.Trim();
+        string identity = Assistant.DefaultIdentity;
+        if (!text.StartsWith(identity, StringComparison.Ordinal) || (text.Length > identity.Length && text[identity.Length] is not '\n' and not '\r'))
+            return text;
+        string rest = text[identity.Length..].TrimStart('\r', '\n');
+        return rest.Length > 0 ? rest : Assistant.DefaultPersona[identity.Length..].TrimStart('\n');
+    }
 
     /// <summary>
     /// The main chat's last messages in a bot's system prompt (2026-10-10, <c>Botchat recent context</c>): what the user and their assistant
