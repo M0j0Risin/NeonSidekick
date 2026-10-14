@@ -46,8 +46,8 @@ public static class HelpCommands
         new("/botchat",
         [
             new("/botchat [<profile> ...] [--] [<topic>]", "Let profiles talk to each other, each in its own persona, until you stop them. Leading words that name profiles are the cast (every profile when none is named; the loaded one speaks first); the first other word starts the topic, and `--` makes everything after it the topic. Its settings are on `/settings` › Client › Botchat."),
-            new("/botchat --resume [<line>]", "Carry on the last bot conversation, with an optional line of your own first. Ctrl+Alt+B or a double-click on the hint row's 👥 resumes it without a line; during a bot conversation, Ctrl+Alt+B ends it at once."),
-            new("/botchat --kill", "Stop the extra embedded servers the bots started (Ctrl+Alt+K, or a double-click on the hint row's 🧟 while any run)."),
+            new("/botchat --resume [<line>]", "Carry on the last bot conversation, with an optional line of your own first. Ctrl+Alt+B or a double-click on the status bar's 👥 resumes it without a line; during a bot conversation, Ctrl+Alt+B ends it at once."),
+            new("/botchat --kill", "Stop the extra embedded servers the bots started (Ctrl+Alt+K, or a double-click on the status bar's 🧟 while any run)."),
         ]),
         new("/browse",
         [
@@ -183,7 +183,7 @@ public static class HelpCommands
         ]),
         new("/imagine",
         [
-            new("/imagine [<workflow>] <prompt> [-- <negative>|--no-negative]", "Generate a picture on ComfyUI from your own prompt, sent exactly as typed, with no model in between. The first word is the workflow when it names one; a workflow that takes no prompt runs without one. It renders behind the input line and is drawn when done; double-click 🖼️ on the hint row to cancel."),
+            new("/imagine [<workflow>] <prompt> [-- <negative>|--no-negative]", "Generate a picture on ComfyUI from your own prompt, sent exactly as typed, with no model in between. The first word is the workflow when it names one; a workflow that takes no prompt runs without one. It renders behind the input line and is drawn when done; double-click 🖼️ on the status bar to cancel."),
             new("/imagine <prompt> [--seed <n>] [--size <w>x<h>] [--steps <n>] [--count <n>]", "Set the seed, size, steps and picture count (at most *ComfyUI max images per call*). The size's `x` may be `X` or `*`. Flags go anywhere on the line, in any case; a value with spaces goes in double quotes."),
             new("/imagine <prompt> [--cfg <x>] [--denoise <x>] [--image <path>] [--image2 <path>] [--image3 <path>]", "Set the guidance and denoise strength, and up to three input pictures (a path, or a pasted picture's label such as `\"[Image #1]\"`); `--image2` needs `--image`, and `--image3` needs `--image2`."),
         ]),
@@ -303,7 +303,7 @@ public static class HelpCommands
         ]),
         new("/read",
         [
-            new("/read [<file> [<n>]|<n>]", "Read a text file from the working directory aloud as a reply. Alone, it resumes; a number starts from that sentence (a file named only with digits is typed `./5`). On an empty line, Space pauses and resumes, and ←/→ step a sentence back or forward (while paused they only move the position, and Space or `/read` plays from there). The hint row shows the keys that apply: `← → ␣ pause`, `← → ␣ play` or `␣ replay`."),
+            new("/read [<file> [<n>]|<n>]", "Read a text file from the working directory aloud as a reply. Alone, it resumes; a number starts from that sentence (a file named only with digits is typed `./5`). On an empty line, Space pauses and resumes, and ←/→ step a sentence back or forward (while paused they only move the position, and Space or `/read` plays from there). The hints bar shows the keys that apply: `← → ␣ pause`, `← → ␣ play` or `␣ replay`."),
         ]),
         new("/reasoning",
         [

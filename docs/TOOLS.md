@@ -791,4 +791,4 @@ Offered only in [plan mode](COMMANDS.md#plan-mode).
 
 ## MCP servers
 
-Under *MCP servers enabled*. Each connected server is a tool group, its tools named `<server>__<tool>` (`gateway__get_current_time`). Servers connect in the background (🔌 on the hint row); a reply started meanwhile gets those already connected. `/mcp` switches servers and single tools.
+Under *MCP servers enabled*. Each connected server is a tool group, its tools named `<server>__<tool>` (`gateway__get_current_time`). Servers connect in the background (🔌 on the status bar); a reply started meanwhile gets those already connected. `/mcp` switches servers and single tools.

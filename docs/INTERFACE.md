@@ -5,7 +5,7 @@ The screen, the input line, panes, keys, the bars and the app's own windows. Bac
 ## Contents
 
 - [Words used here](#words-used-here) · [The screen](#the-screen) · [The input line](#the-input-line) · [Panes](#panes) · [Keyboard shortcuts](#keyboard-shortcuts) · [Commands typed during a reply](#commands-typed-during-a-reply)
-- [The hint row](#the-hint-row) · [The toolbar](#the-toolbar) · [The performance bar](#the-performance-bar) · [The home bar](#the-home-bar) · [Bar checklists](#bar-checklists) · [The avatar picker](#the-avatar-picker) · [The welcome splash](#the-welcome-splash)
+- [The hints bar](#the-hints-bar) · [The status bar](#the-status-bar) · [The toolbar](#the-toolbar) · [The performance bar](#the-performance-bar) · [The home bar](#the-home-bar) · [Bar checklists](#bar-checklists) · [The avatar picker](#the-avatar-picker) · [The welcome splash](#the-welcome-splash)
 - [The app's windows](#the-apps-windows): [picture viewer](#the-picture-viewer) · [picture menu](#the-picture-menu) · [thumbnail browser](#the-thumbnail-browser) · [log](#the-log-window) · [process](#the-process-window) · [camera](#the-camera-window) · [video](#the-video-window) · [Browser](#the-browser-window)
 
 ## Words used here
@@ -31,7 +31,7 @@ From top to bottom:
 * **The upper rule:** the session's name (a double-click renames it), **⤡** (a click folds or unfolds everything, like Ctrl+O), and a 🎞️ that brings a closed picture strip back.
 * **[The input line](#the-input-line).** A dim ☺ at its right end opens the emoji picker (*Emoji picker*).
 * **The lower rule:** **▶ n** counts the background processes still running; a double-click opens `/process`.
-* **Four bars**, in *Toolbar order*: [hint row](#the-hint-row), [toolbar](#the-toolbar), [performance bar](#the-performance-bar), [home bar](#the-home-bar). A short window drops the home bar first, then the performance bar, then the toolbar.
+* **Five bars**, in *Toolbar order*: [hints bar](#the-hints-bar) (while there is a hint), [status bar](#the-status-bar), [toolbar](#the-toolbar), [performance bar](#the-performance-bar), [home bar](#the-home-bar). A short window drops the home bar first, then the performance bar, then the toolbar; the hints bar goes last.
 
 ## The input line
 
@@ -109,7 +109,7 @@ In every list ↑/↓ move, Enter or a double-click picks, ESC closes; key lette
 | A store's layout (`l`) | tabs **Aisles**, **Sections**, **Facts**, **Guesses** · Enter renames, moves or removes |
 | **Settings and bars** | |
 | `/settings changed` | Enter edits · `r` back to default |
-| `/toolbar edit`, `/perfbar edit`, *Hint bar* | see [Bar checklists](#bar-checklists) |
+| `/toolbar edit`, `/perfbar edit`, *Status bar* | see [Bar checklists](#bar-checklists) |
 | `/homebar edit` | **On the bar**: see [Bar checklists](#bar-checklists); Enter for rename and emoji · other tabs: Space or Enter adds or removes, type to filter |
 | A room's pane on the home bar | Space switches a device · Enter its actions |
 
@@ -187,11 +187,25 @@ Each runs its command as if typed, and keeps your draft. The last column is what
 
 In a pane over a reply, rows that would disturb it (a reconnect, the profile, the working directory, the theme, a session, a skill's page, an MCP server) answer *(not while a reply runs)* until the reply ends.
 
-## The hint row
+## The hints bar
 
-The row under the input line (*Hint bar*). [Bar checklists](#bar-checklists) moves and pins its sections:
+The keys that apply just now, on a row of their own over the status bar (*Hints bar*). It shows one hint at a time, the first of:
 
-* **Left by default:** **Status** (🔊 🎤 👂 ✋, 🧠, 🏷️…), **Spinner** (during a reply, with its clock and **esc to stop**; always on), **Queued**, **Keys** (what the arrows do just now), **Timers**, **Reading** (`/read`, `/echo`) and **Usage** (context and tokens).
+1. The kill switch's warning (Ctrl+Alt+X, press again to unload).
+2. A waiting second press: Ctrl+C to exit, ESC to rewind, Delete for a splash picture.
+3. An open pane's keys.
+4. What the arrows do just now: the splash's pages, the picture strip, `/read`'s keys.
+
+* **auto** (the default): the bar takes a row when a hint comes and keeps it, blank, until you send, a reply ends, a pane opens or closes, the window is resized, or 10 seconds pass with no hint and no key. Typing never moves the input line.
+* **always** keeps the row; **off** puts the hints back at the end of the status bar's left group.
+* During a reply it shows only a pane's keys or the kill switch's warning; **esc to stop** stays on the status bar.
+* A double-click on it opens `/settings`. It moves with the other bars in *Toolbar order*.
+
+## The status bar
+
+The row under the hints bar (*Status bar*). [Bar checklists](#bar-checklists) moves and pins its sections:
+
+* **Left by default:** **Status** (🔊 🎤 👂 ✋, 🧠, 🏷️…), **Spinner** (during a reply, with its clock and **esc to stop**; always on), **Queued**, **Timers**, **Reading** (`/read`, `/echo`) and **Usage** (context and tokens).
 * **Right by default:** **Model** (name and reasoning glyph) and **Working directory** (off by default).
 * During a reply the busy row keeps the same sides.
 * **Narrow window:** the model's name and the path shrink, then go; then the right group gives way, then the left. The spinner goes last.
@@ -214,7 +228,7 @@ The row under the input line (*Hint bar*). [Bar checklists](#bar-checklists) mov
 
 ## The toolbar
 
-Glyphs under the hint row (*Tool bar*), each shown while it is checked there. A click says what a glyph is; a double-click or a right-click opens it. A tool group that is off sits on a dark slab.
+Glyphs under the status bar (*Tool bar*), each shown while it is checked there. A click says what a glyph is; a double-click or a right-click opens it. A tool group that is off sits on a dark slab.
 
 | Toolbar item | Shown | Opens |
 |---|---|---|
@@ -271,15 +285,15 @@ Chips for Home Assistant rooms and devices and the shopping list (*Home bar*); s
 
 ## Bar checklists
 
-The *Hint bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar edit`) checklists, and the home bar's **On the bar**, share these keys:
+The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar edit`) checklists, and the home bar's **On the bar**, share these keys:
 
 * Space or Enter checks or unchecks; Delete unchecks (on the home bar, takes off). `a`, `n` and `d` pick all, none or the default; `d` also puts back the default order, sides and dividers. None checked hides the toolbar or the performance bar.
 * Shift+←/→ (or Alt+←/→) pins the item to the other side. The performance and home bars have three groups, so it moves a group over (left ↔ center ↔ right).
 * Shift+↑/↓ (or Alt+↑/↓) moves it a place, crossing into the next group at the edge; Shift+Home/End moves it to its group's top or bottom.
-* **Hint bar:** the Spinner is always on; it can't be unchecked, only moved. The row reads `default`, `all`, `none`, or the left group's sections, `|`, then the right group's.
+* **Status bar:** the Spinner is always on; it can't be unchecked, only moved. The row reads `default`, `all`, `none`, or the left group's sections, `|`, then the right group's.
 * **Tool bar dividers:** `+` (*+ divider* on the title row) puts a dim `│` after the item under the cursor. It moves like an item, Delete takes it out, and Enter or Space does nothing on it. It shows only between two visible items of its side. The default has three: `⚙️ 🛠️ 🎓 │ 💾 📣 ⏳ │ 🔒 👮 🐚 │ 📁 🌄 🌐`.
 
-*Toolbar order* orders the four bars the same way: Shift+↑/↓ (or Alt+↑/↓) moves the bar under the cursor, Shift+Home/End to the top or bottom, `d` puts the default back, and the screen redraws at once. A bar that is off keeps its place.
+*Toolbar order* orders the five bars the same way: Shift+↑/↓ (or Alt+↑/↓) moves the bar under the cursor, Shift+Home/End to the top or bottom, `d` puts the default back, and the screen redraws at once. A bar that is off keeps its place.
 
 ## The avatar picker
 

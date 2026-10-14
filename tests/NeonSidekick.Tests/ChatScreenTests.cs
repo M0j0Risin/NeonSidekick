@@ -157,8 +157,8 @@ public partial class ChatScreenTests : IDisposable
         // without them, so the fixture saves the order bare; the divider tests opt back in (ToolbarOrder null).
         _settings.Update(d => d.ToolbarOrder = [.. ToolbarItems.Names]);
         // Status leads the hint bar by default since later on 2026-10-13 (the user's ask), the spinner after it: the busy-row tests pin
-        // their columns with the spinner first, so the fixture saves that order; the default's test opts back in (HintBarOrder null).
-        _settings.Update(d => d.HintBarOrder = [HintBarItems.Spinner, .. HintBarItems.Names.Where(id => id != HintBarItems.Spinner)]);
+        // their columns with the spinner first, so the fixture saves that order; the default's test opts back in (StatusBarOrder null).
+        _settings.Update(d => d.StatusBarOrder = [StatusBarItems.Spinner, .. StatusBarItems.Names.Where(id => id != StatusBarItems.Spinner)]);
         // The performance bar shows by default since 2026-10-02 (the user's ask): the same row-counting reason, the same opt-out; the
         // bar's tests opt in.
         _settings.Update(d => d.PerformanceBarItems = []);
@@ -864,19 +864,20 @@ public partial class ChatScreenTests : IDisposable
             {
                 hintsSeen = Count(Output, ChatScreen.ExitHint);
                 Assert.True(hintsSeen >= 1, "the hint row after the first press:\n" + Output);
-                // The window passes: the pane's tick re-reads the hint and redraws the row (the
-                // hint row alone, no rule) as the plain line again — the fixture has no usage to show.
+                // The window passes: the pane's tick re-reads the hint and the Hints bar's row goes blank (2026-10-14; until then
+                // the hint row was redrawn as the plain line again).
                 int before = Output.Length;
                 _time.Advance(ChatScreen.ExitConfirmWindow + TimeSpan.FromSeconds(1));
                 Assert.DoesNotContain(ChatScreen.ExitHint, Output[before..]);
-                Assert.Contains(Row(""), Output[before..]);
                 input.Push(Keys.CtrlC);   // a first again: the hint, not the exit
             },
             Line("/exit"));
 
         string output = await RunAsync();
 
-        Assert.Contains(Row(ChatScreen.ExitHint), output);
+        // The hint on the Hints bar's row, the Status bar under it left as it was (the model at its right edge).
+        Assert.Contains("\n" + ChatScreen.ExitHint + "\n" + Row(""), output);
+        Assert.DoesNotContain(Row(ChatScreen.ExitHint), output);
         Assert.True(Count(output, ChatScreen.ExitHint) > hintsSeen, "the third press armed again");
         Assert.Contains("› /exit", output);   // the run ended by the command, never by the key
         Assert.Single(_chat.Requests);
@@ -2926,9 +2927,13 @@ public partial class ChatScreenTests : IDisposable
             && lines.Skip(first).Take(MenuPane.FooterRows).All(l => l.StartsWith(MenuPane.NoPointer, StringComparison.Ordinal) && TextCells.Width(l) == _console.Profile.Width);
     }
 
-    private int HintRowUnderPane() => 100 + OverlayRowsDrawn() + 1;
+    /// <summary>The Hints bar's row under an open pane (2026-10-14): the pane's keys stand there, over the Status bar, unless the setting is off.</summary>
+    private int HintsUnderPane => HintsBarMode.Resolve(_settings.Current.HintsBar) == HintsBarStyle.Off ? 0 : 1;
 
-    private int ToolbarUnderPane() => 100 + OverlayRowsDrawn() + 2;
+    /// <summary>The Status bar (the hint row until 2026-10-14) under an open pane: under the lower rule and the Hints bar's row.</summary>
+    private int HintRowUnderPane() => 100 + OverlayRowsDrawn() + 1 + HintsUnderPane;
+
+    private int ToolbarUnderPane() => 100 + OverlayRowsDrawn() + 2 + HintsUnderPane;
 
     /// <summary>
     /// <see cref="ToolbarUnderPane"/> once the pane titled <paramref name="title"/> is the one drawn last (2026-09-26):
@@ -6643,7 +6648,7 @@ public partial class ChatScreenTests : IDisposable
         string rule = new(ScreenPane.RuleGlyph, 240);
         // The list in the pane: the title, a spacer, the rows with the pointer, the keys on the hint row.
         // The highlighted memory in full under the list since 2026-10-07: the footer band.
-        Assert.Contains(rule + "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n \n▸ " + rows[0] + "\n  " + rows[1] + "\n" + MenuLayout.Footer(new MenuFooter("Their name is Chris."), 240) + rule + "\n" + Row(MemoryMenu.SwitchKeys) + "\n", output);
+        Assert.Contains(rule + "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n \n▸ " + rows[0] + "\n  " + rows[1] + "\n" + MenuLayout.Footer(new MenuFooter("Their name is Chris."), 240) + rule + "\n" + MemoryMenu.SwitchKeys + "\n", output);   // the keys on the Hints bar (2026-10-14)
         // Re-shown after the removal with the notice as the status line, not a transcript line.
         Assert.Contains("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n  · (💾 removed: Their name is Chris.)\n▸ " + rows[1] + "\n" + MenuLayout.Footer(new MenuFooter("They live in Leeds."), 240) + rule + "\n", output);
         Assert.DoesNotContain(SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys), output);
@@ -7004,7 +7009,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("read-write", _settings.Current.MemoryMode);
         Assert.Contains("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n \n▸ " + MemoryMenu.EmptyNotice + "\n", output);
         Assert.Contains("\n" + Titled(MemoryPaneTitle(MemoryAccess.Disabled)) + "\n", output);
-        Assert.Contains(Row(MemoryMenu.EmptySwitchKeys), output);
+        Assert.Contains("\n" + MemoryMenu.EmptySwitchKeys + "\n", output);   // on the Hints bar (2026-10-14)
         int readOnly = output.IndexOf(Saved("read-only"), StringComparison.Ordinal);
         int off = output.IndexOf(Saved("off"), readOnly, StringComparison.Ordinal);
         Assert.True(readOnly > 0 && off > readOnly && output.IndexOf(Saved("read-write"), off, StringComparison.Ordinal) > off, output);
@@ -10458,7 +10463,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(Row(Theme.SpinnerFrames[0] + " " + ScreenPane.BusyText(ChatScreen.ThinkingLabel, TimeSpan.Zero) + ScreenPane.HintSeparator + ScreenPane.StopHint + ScreenPane.HintSeparator + strip), output);   // the stop hint after the spinner (later on 2026-10-13)
         // (The startup connect's spinner ran before speech was connected, so it has no strip — only the reply's is checked.)
         // The info pane's hint keeps it too, and the idle line has it as before.
-        AssertPaneEnds(output, rule + "\n" + Row(InfoPane.HintText, strip: strip));
+        AssertPaneEnds(output, rule + "\n" + InfoPane.HintText + "\n" + Row(ChatScreen.HintLine(null), strip: strip));   // the keys on the Hints bar, the strip on the Status bar under them (2026-10-14)
         Assert.Contains(rule + "\n" + Row(ChatScreen.HintLine(null), strip: strip), output);
     }
 
@@ -10469,7 +10474,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task WithGeometry_TheDefaultHintBar_PutsTheStatusAheadOfTheSpinner()
     {
-        _settings.Update(d => d.HintBarOrder = null);
+        _settings.Update(d => d.StatusBarOrder = null);
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText("Hello there.");
@@ -10504,7 +10509,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab
-        _console.Profile.Height = 128;   // /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
+        _console.Profile.Height = 129;   // the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);   // Advanced, since later on 2026-09-27
@@ -10524,7 +10529,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n \n/advisor ", output);   // /advisor first since 2026-10-10, /botchat until then; /about first until 2026-10-03, when it moved to the basic tab
         Assert.Contains(HelpRow("/timer", Entry("/timer").Summary) + new string(' ', SlashCommands.DescriptionWidth + SlashCommands.HelpColumnGap - Entry("/timer").Summary.Length) + "/timer [<duration> [<name>]]", output);
         Assert.Contains("\n" + new string(' ', SlashCommands.LabelWidth + SlashCommands.DescriptionWidth + 2 * SlashCommands.HelpColumnGap) + "/timer stop <name>|all", output);
-        AssertPaneEnds(output, rule + "\n" + Row(InfoPane.HintText));
+        AssertPaneEnds(output, rule + "\n" + InfoPane.HintText);   // the pane's keys on the Hints bar (2026-10-14)
         // → showed the Keys tab, with the keys that apply (voice off: no push-to-talk row).
         Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n \nEnter", output);
         // The label column follows the widest key ("Ctrl+Backspace / Delete", 23 cells, since 2026-10-04; on a Mac, 2026-10-07,
@@ -10571,12 +10576,12 @@ public partial class ChatScreenTests : IDisposable
         // The list in the pane under the rule, its tab strip and its own hint; the toggle and the save on its status line.
         const string strip = SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ";   // the Client group since later on 2026-10-10; six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
         Assert.Contains(rule + "\n" + Titled(strip) + "\n" + Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["Chat", "Sessions", "Botchat"], 0, 240)[0]) + "\n \n" + HeadingRow("── Who and where") + "\n▸ Profile", output);   // the Client group's second strip (later on 2026-10-10)
-        AssertPaneEnds(output, rule + "\n" + Row(SettingsMenu.SettingsTabKeys));
+        AssertPaneEnds(output, rule + "\n" + SettingsMenu.SettingsTabKeys);   // on the Hints bar (2026-10-14)
         Assert.Contains("\n" + Titled(strip) + "\n" + Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["Chat", "Sessions", "Botchat"], 0, 240)[0]) + "\n  · Memory mode: read-only\n", output);
         string servers = Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["Common", "Http", "Embedded", "Docker", "Anthropic", "OpenAI"], 0, 240)[0]);   // the Servers group's second strip (2026-10-10)
         Assert.Contains("\n" + Titled(strip) + "\n" + servers + "\n  · 🖥️ LLM model: qwen3\n", output);
         // The typed edit ran in the pane: the edit keys in the hint row, no › line in the transcript.
-        Assert.Contains(rule + "\n" + Row(SettingsMenu.EditKeys), output);
+        Assert.Contains(rule + "\n" + SettingsMenu.EditKeys + "\n", output);   // on the Hints bar (2026-10-14)
         Assert.DoesNotContain("› qwen3", output);
         Assert.DoesNotContain("  · 🖥️ LLM model: qwen3", output.Replace("\n" + Titled(strip) + "\n" + servers + "\n  · 🖥️ LLM model: qwen3", ""));
         Assert.DoesNotContain(SettingsMenu.PromptTitle(SettingsMenu.Title, SettingsMenu.TitleKeys), output);
@@ -10626,7 +10631,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("Also sent", output);
         Assert.DoesNotContain("Opening clock call", output);
         Assert.DoesNotContain("Request — ", output);
-        AssertPaneEnds(output, rule + "\n" + Row(InfoPane.HintText));
+        AssertPaneEnds(output, rule + "\n" + InfoPane.HintText);   // the pane's keys on the Hints bar (2026-10-14)
         // → the Tools tab: every group, the memory group offered.
         Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n \n" + HeadingRow("── Clock · 3"), output);
         Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
@@ -10667,7 +10672,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("Also sent", output);
         Assert.DoesNotContain("Opening clock call", output);
         Assert.DoesNotContain("Request — ", output);
-        AssertPaneEnds(output, rule + "\n" + Row(InfoPane.HintText));
+        AssertPaneEnds(output, rule + "\n" + InfoPane.HintText);   // the pane's keys on the Hints bar (2026-10-14)
         // → the Tools tab: every group, the memory group offered.
         Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n \n" + HeadingRow("── Clock · 3"), output);
         Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
@@ -10687,9 +10692,9 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task WithGeometry_MenusMaxHeight_CapsTheInfoPane()
     {
-        // 2026-10-01, the user's ask: the screen hands the pane the saved word. Three quarters of 24 rows less the two rules
-        // and the hint is 15 content rows, and /sys's tabs are taller than that, so both fill it exactly. Named, since the
-        // default became full-screen later that day.
+        // 2026-10-01, the user's ask: the screen hands the pane the saved word. Three quarters of 23 rows (24 less the Hints bar's
+        // row, held for the pane's keys since 2026-10-14) less the two rules and the Status bar is 14 content rows (15 until then),
+        // and /sys's tabs are taller than that, so both fill it exactly. Named, since the default became full-screen later that day.
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "three-quarters"; });
         _console.Profile.Height = 24;
         _geometry = new ScreenGeometry(() => null);
@@ -10703,10 +10708,10 @@ public partial class ChatScreenTests : IDisposable
         string strip = rule + "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         int top = output.IndexOf(strip, StringComparison.Ordinal);
         Assert.True(top >= 0, output);
-        int bottom = output.IndexOf("\n" + rule + "\n" + Row(InfoPane.HintText) + "\n", top, StringComparison.Ordinal);
+        int bottom = output.IndexOf("\n" + rule + "\n" + InfoPane.HintText + "\n", top, StringComparison.Ordinal);
         Assert.True(bottom > top, output);
-        Assert.Equal(15, output[(top + rule.Length + 1)..bottom].Split('\n').Length);
-        Assert.Matches("\n[ ▲][ ▼] \\d+–\\d+ of \\d+\n" + System.Text.RegularExpressions.Regex.Escape(rule + "\n" + Row(InfoPane.HintText) + "\n"), output);
+        Assert.Equal(14, output[(top + rule.Length + 1)..bottom].Split('\n').Length);
+        Assert.Matches("\n[ ▲][ ▼] \\d+–\\d+ of \\d+\n" + System.Text.RegularExpressions.Regex.Escape(rule + "\n" + InfoPane.HintText + "\n"), output);
     }
 
     [Fact]
@@ -10735,7 +10740,7 @@ public partial class ChatScreenTests : IDisposable
         string rule = new(ScreenPane.RuleGlyph, 240);
         // 12 rows: 8 overlay rows, 6 of content, one of them the more row: the first page is five lines.
         Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n \n" + HeadingRow("── Persona ── persona.md (24 chars)") + "\n  You are Rex, a [pirate].\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);
-        Assert.Matches("\n[ ▲][ ▼] \\d+–\\d+ of \\d+\n" + System.Text.RegularExpressions.Regex.Escape(rule + "\n" + Row(InfoPane.HintText, strip: ChatScreen.TtsGlyph)) + PaneEndPattern, output);   // speech on here: the strip stays under the pane's hint
+        Assert.Matches("\n[ ▲][ ▼] \\d+–\\d+ of \\d+\n" + System.Text.RegularExpressions.Regex.Escape(rule + "\n" + InfoPane.HintText + "\n" + Row(ChatScreen.HintLine(null), strip: ChatScreen.TtsGlyph)) + PaneEndPattern, output);   // speech on here: the strip stays under the pane's hint
         Assert.DoesNotContain("── Memory ── read-write", output[..output.IndexOf("\n ▼ 1–", StringComparison.Ordinal)]);
         // Paged to the end: the memory on the way, the voice directive last (speech on); the list rides the opening call, never the Prompt tab (2026-09-26).
         Assert.Contains("── Memory ── read-write, directive (the list rides the opening recall_memory call) ─", output);
@@ -10831,7 +10836,7 @@ public partial class ChatScreenTests : IDisposable
         // The About tab: the title with the live version, the copyright, the runtime as this test process runs (the JIT), the loaded profile's folders.
         Assert.Contains(strip.TrimEnd() + "\n\nNeonSidekick " + SidekickApp.Version + "\n" + AboutText.CopyrightLine + "\n" + AboutText.RepositoryLine + "\n\nRuntime      " + RuntimeInformation.FrameworkDescription + " · JIT · ", output);
         Assert.Contains("\nHome         " + _settings.StorageDirectory + "\nProfile      " + _settings.ProfileDirectory + "\nModels       " + _settings.ModelsDirectory + "\n\nLLM servers  any OpenAI-compatible /v1 endpoint", output);
-        AssertPaneEnds(output, rule + "\n" + Row(InfoPane.HintText));
+        AssertPaneEnds(output, rule + "\n" + InfoPane.HintText);   // the pane's keys on the Hints bar (2026-10-14)
         // → the Components tab, → the Models tab, → the Licence tab.
         Assert.Contains(strip.TrimEnd() + "\n\nComponent", output);
         Assert.Contains("\nSpectre.Console", output);
@@ -12470,7 +12475,7 @@ public partial class ChatScreenTests : IDisposable
         // The Statistics tab after the reply: the Context section (no window from the stub's server), then the three scopes, the last reply's with its timings.
         Assert.Contains(strip + HeadingRow("── Context ── unknown") + "\n  Window               unknown\n  In use               25\n\n" + HeadingRow("── Last reply") + "\n  Total                25\n  Prompt               10\n  Completion           15\n  Reasoning            —\n  Requests             1\n  Time to first token  0.5 s\n  Speed                3.0 tok/s\n\n" + HeadingRow("── This conversation") + "\n  Total                25\n", output);
         Assert.Contains("\n" + HeadingRow("── Since launch") + "\n  Total                25\n  Prompt               10\n  Completion           15\n  Reasoning            —\n  Requests             1\n  Time to first token  0.5 s\n  Speed                3.0 tok/s\n", output);
-        Assert.Contains(rule + "\n" + Row(InfoPane.SingleTabHintText) + "\n", output);
+        Assert.Contains(rule + "\n" + InfoPane.SingleTabHintText + "\n", output);   // on the Hints bar (2026-10-14)
         // Nothing went to the transcript: the pane held it all.
         Assert.DoesNotContain("  · Tokens —", output);
         Assert.DoesNotContain("  · " + UsageText.NothingCounted, output);
@@ -12580,7 +12585,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(rule + "\n" + Row(ChatScreen.HintLine(null, "25 / 100 · 25% · 3 tok/s")), output);
         // After /clear: the window stays, the context in use went with the history; the hint row's share with it.
         Assert.Contains(strip + HeadingRow("── Context ── loaded_context_length on /api/v0/models") + "\n  Window               100\n\n" + HeadingRow("── Last reply") + "\n  Total                25\n", output);
-        Assert.Contains(rule + "\n" + Row(InfoPane.SingleTabHintText) + "\n", output);
+        Assert.Contains(rule + "\n" + InfoPane.SingleTabHintText + "\n", output);   // on the Hints bar (2026-10-14)
     }
 
     [Fact]
@@ -13333,7 +13338,8 @@ public partial class ChatScreenTests : IDisposable
         int pane = output.IndexOf("\n" + Titled(UsageText.Label) + "\n", StringComparison.Ordinal);
         Assert.True(pane > 0);
         // The first delta has streamed by then: the row reads the writing stage.
-        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, InfoPane.SingleTabHintText), output);
+        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, ScreenPane.StopHint), output);
+        Assert.Contains("\n" + InfoPane.SingleTabHintText + "\n", output);   // the pane's keys on the Hints bar over it (2026-10-14)
         Assert.True(pane < output.LastIndexOf("three.", StringComparison.Ordinal));
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
@@ -13580,7 +13586,8 @@ public partial class ChatScreenTests : IDisposable
         // The pane over the reply: the strip, the question, its keys after the spinner's count.
         Assert.Contains("\n" + Titled("Questions │ Color · Q2 · Submit ") + "\nWhich color?\n \n▸ ( ) red\n  ( ) blue\n  ( ) Other…\n", output);
         // The tool runs while the pane asks: its name is the spinner's stage, as any tool's.
-        Assert.Contains(" " + ScreenPane.BusyRow(AskUserTool.ToolName, TimeSpan.Zero, QuestionMenu.SingleKeys), output);
+        Assert.Contains("\n" + QuestionMenu.SingleKeys + "\n", output);   // the pane's keys on the Hints bar (2026-10-14)
+        Assert.Contains(" " + ScreenPane.BusyRow(AskUserTool.ToolName, TimeSpan.Zero, ScreenPane.StopHint), output);   // the way out with the spinner
         Assert.Contains("\n  Q1 Color — blue\n  Q2 — cheese, olives\n▸ Submit\n", output);
         // The answers, one dim line each, then the reply; never a 🛠️ line with the tool's name or its arguments.
         Assert.Contains("🛠️ Which color? — blue\n", output);
@@ -14831,7 +14838,9 @@ public partial class ChatScreenTests : IDisposable
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
         int pane = output.IndexOf("\n" + Titled(QueueStripNow(send: false)) + "\n\n▸ 1  later\n", StringComparison.Ordinal);   // the spacer row trimmed; the mode buttons since 2026-10-13
         Assert.True(pane > 0, "the Queue pane opened over the streaming reply");
-        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, QueueMenu.Keys), output);   // the count hidden under the pane's hint
+        // The pane's keys on the Hints bar (2026-10-14; until then on the busy row, the count hidden under them), the way out with the spinner.
+        Assert.Contains("\n" + QueueMenu.Keys + "\n", output);
+        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, ScreenPane.StopHint), output);
         Assert.True(pane < output.LastIndexOf("three.", StringComparison.Ordinal));
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Equal(2, _chat.Requests.Count);   // the reply ran on, then the drain
@@ -16398,10 +16407,16 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync(input);
 
+        // The keys on the Hints bar (2026-10-14; they led the hint row until then), the reading's own line on the Status bar.
         string join = ChatScreen.HintJoin;
-        Assert.Contains(SpeakReading.PlayingKeys + join + SpeakReading.ReadingLine("notes.txt", 1, 2), output);
-        Assert.Contains(SpeakReading.PausedKeys + join + SpeakReading.StoppedLine("notes.txt", 1, 2), output);
-        Assert.Contains(SpeakReading.ReplayKeys + join + SpeakReading.ReadLine("notes.txt", 2), output);
+        Assert.Contains(SpeakReading.PlayingKeys, output);
+        Assert.Contains(SpeakReading.ReadingLine("notes.txt", 1, 2), output);
+        Assert.Contains(SpeakReading.PausedKeys, output);
+        Assert.Contains(SpeakReading.StoppedLine("notes.txt", 1, 2), output);
+        Assert.Contains(SpeakReading.ReplayKeys, output);
+        Assert.Contains(SpeakReading.ReadLine("notes.txt", 2), output);
+        Assert.DoesNotContain(SpeakReading.PlayingKeys + join, output);
+        Assert.DoesNotContain(SpeakReading.ReplayKeys + join, output);
     }
 
     [Fact]
@@ -18037,7 +18052,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(2, _splashLoads.Count);
         Assert.Equal(2, Refreshes(output));                   // the walk, then the sent line's wipe
         string rule = new(ScreenPane.RuleGlyph, 240);
-        Assert.Contains(rule + "\n" + Row(ChatScreen.SplashHint), output);   // the hint alone: no usage yet, no timer
+        Assert.Contains(rule + "\n" + ChatScreen.SplashHint + "\n" + Row(""), output);   // the hint on the Hints bar (2026-10-14), the Status bar bare: no usage yet, no timer
         Assert.Equal("hello", UserText(Assert.Single(_chat.Requests)));
     }
 
@@ -18353,8 +18368,9 @@ public partial class ChatScreenTests : IDisposable
                 hintsBefore = Count(Output, ChatScreen.SplashHint);
                 _settings.Update(d => d.WelcomeSplashMode = "off");
                 int mark = Output.Length;
-                _time.Advance(ScreenPane.Tick);   // the tick re-reads the hint: the row again without it
-                Assert.Equal(Row(ChatScreen.HintLine(null)), Output[mark..]);
+                _time.Advance(ScreenPane.Tick);   // the tick re-reads the hint: the Hints bar's row again without it (2026-10-14), held blank
+                Assert.DoesNotContain(ChatScreen.SplashHint, Output[mark..]);
+                Assert.DoesNotContain(InputLine.PromptGlyph, Output[mark..]);   // in place: the pane not drawn again (the row held, 2026-10-14)
                 input.Push(Keys.Right); input.Push(Keys.Left); input.Push(Keys.Enter);
             },
             input => { hintsAfter = Count(Output, ChatScreen.SplashHint); PushLine(input, "/exit"); });
@@ -23864,7 +23880,7 @@ public partial class ChatScreenTests : IDisposable
         string rule = new(ScreenPane.RuleGlyph, 240);
         using var store = OpenSessions();
         var summary = store.Load(id)!.Summary;
-        Assert.Contains(rule + "\n" + Titled(SessionsMenu.Title) + "\n \n▸ #" + id + "  " + SessionText.Moment(summary.UpdatedAt, _time.LocalTimeZone) + "  1 turn  How do I wire the Vosk model?\n" + MenuLayout.Footer(SessionsMenu.Footer(summary, current: false, _time.LocalTimeZone), 240) + rule + "\n" + Row(SessionsMenu.Keys) + "\n", output);   // the session whole under the list (2026-10-07)
+        Assert.Contains(rule + "\n" + Titled(SessionsMenu.Title) + "\n \n▸ #" + id + "  " + SessionText.Moment(summary.UpdatedAt, _time.LocalTimeZone) + "  1 turn  How do I wire the Vosk model?\n" + MenuLayout.Footer(SessionsMenu.Footer(summary, current: false, _time.LocalTimeZone), 240) + rule + "\n" + SessionsMenu.Keys + "\n", output);   // the keys on the Hints bar (2026-10-14)   // the session whole under the list (2026-10-07)
         Assert.Contains("\n" + Titled(SessionsMenu.RowTitle(summary)) + "\n \n▸ restore  ", output);
         Assert.Contains("  · " + ChatScreen.SessionRestoredNotice(summary, _time.LocalTimeZone), output);
         Assert.Contains("Pass the folder to the detector.", output);

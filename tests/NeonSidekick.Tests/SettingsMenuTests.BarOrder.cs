@@ -2,6 +2,7 @@ using NeonSidekick.App;
 using NeonSidekick.Settings;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
+using Spectre.Console;
 
 namespace NeonSidekick.Tests;
 
@@ -88,8 +89,8 @@ public partial class SettingsMenuTests
     }
 
     /// <summary>
-    /// Toolbar order (2026-10-12, the user's ask): the Chat tab's row after Show home bar; its page lists the four bars in their
-    /// order, a bar that is off marked so; the move keys save at once; Enter, Space and Delete save nothing; default (D, the
+    /// Toolbar order (2026-10-12, the user's ask): the Chat tab's row after Show home bar; its page lists the bars in their
+    /// order (five since 2026-10-14, the Hints bar first), a bar that is off marked so; the move keys save at once; Enter, Space and Delete save nothing; default (D, the
     /// title row's one button — the user's ask: a way back on the page) puts the order back, and again saves nothing.
     /// </summary>
     [Fact]
@@ -103,18 +104,19 @@ public partial class SettingsMenuTests
         var (menu, pane) = PaneMenu();
         Down(fields.IndexOf(SettingsField.BarOrder));
         Push(Keys.Enter);
-        Push(ShiftDown);                        // the hint bar under the toolbar
+        Push(Keys.Down);                        // past the Hints bar to the Status bar
+        Push(ShiftDown);                        // the Status bar under the toolbar
         Push(ShiftDown);                        // and under the performance bar
         Push(Keys.Enter, Keys.Char(' '), DeleteKey);   // nothing to check: nothing saved
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal([PaneBars.Toolbar, PaneBars.Perf, PaneBars.Hint, PaneBars.Home], _settings.Current.BarOrder);
+        Assert.Equal([PaneBars.Hints, PaneBars.Toolbar, PaneBars.Perf, PaneBars.Status, PaneBars.Home], _settings.Current.BarOrder);
         Assert.Contains(SettingsMenu.BarOrderKeys, Output);
         Assert.Contains(SettingsMenu.DefaultsButton, Output);
         Assert.Contains("Home bar         " + PaneBars.OffMark + PaneBars.Describe(PaneBars.Home), Output);
-        Assert.Contains("  · Toolbar order: Tool bar, Performance bar, Hint bar, Home bar", Output);   // "Toolbar" until later on 2026-10-12
+        Assert.Contains("  · Toolbar order: Hints bar, Tool bar, Performance bar, Status bar, Home bar", Output);   // "Toolbar" until later on 2026-10-12
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
@@ -132,18 +134,18 @@ public partial class SettingsMenuTests
     }
 
     /// <summary>
-    /// The Tool bars section (2026-10-12, the user's ask): under Screen's rows, the bars by their new names — Hint bar (later that day),
-    /// Tool bar ("Toolbar" until later that day), Performance bar, Home bar and Order, the last <c>Toolbar order</c> everywhere but
+    /// The Tool bars section (2026-10-12, the user's ask): under Screen's rows, the bars by their new names — Hints bar and Status bar
+    /// (2026-10-14; Hint bar from later on 2026-10-12), Tool bar ("Toolbar" until later that day), Performance bar, Home bar and Order, the last <c>Toolbar order</c> everywhere but
     /// here — and Order's page under that name.
     /// </summary>
     [Fact]
-    public async Task OnThePane_TheToolBarsSection_HoldsTheFourRows_OrderShortOnThePane()
+    public async Task OnThePane_TheToolBarsSection_HoldsTheBarRows_OrderShortOnThePane()
     {
         var fields = SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList();
-        Assert.Equal(fields.IndexOf(SettingsField.MenuMaxHeight) + 1, fields.IndexOf(SettingsField.HintBarItems));
+        Assert.Equal(fields.IndexOf(SettingsField.MenuMaxHeight) + 1, fields.IndexOf(SettingsField.HintsBar));
         Assert.Equal(
-            [SettingsField.HintBarItems, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder],
-            fields.Skip(fields.IndexOf(SettingsField.HintBarItems)).Take(5));
+            [SettingsField.HintsBar, SettingsField.StatusBarItems, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder],
+            fields.Skip(fields.IndexOf(SettingsField.HintsBar)).Take(6));
 
         var (menu, pane) = PaneMenu();
         Down(fields.IndexOf(SettingsField.BarOrder));
@@ -151,7 +153,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 120) + "\n  Hint bar                     " + HintBarItems.DefaultValue + "\n  Tool bar                     ", Output);
+        Assert.Contains("  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 120) + "\n  Hints bar                    " + HintsBarMode.Default + "\n  Status bar                   " + StatusBarItems.DefaultValue + "\n  Tool bar                     ", Output);
         Assert.Contains("\n  Performance bar              ", Output);
         Assert.Contains("\n  Home bar                     ", Output);
         Assert.Contains("\n▸ Order                        " + PaneBars.DefaultValue + "\n" + MenuLayout.Heading("Outside apps", 120), Output);
@@ -161,17 +163,59 @@ public partial class SettingsMenuTests
         pane.Dispose();
     }
 
+    /// <summary>
+    /// Hints bar (2026-10-14, the user's ask): a picker of auto, always and off, the word in force under the cursor; auto saves as
+    /// null (the default); off marks the bar <c>off · </c> on the Order page, first there, where it keeps its place.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_HintsBar_PicksItsMode_OffMarksItOnTheOrderPage()
+    {
+        var fields = SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList();
+        var (menu, pane) = PaneMenu();
+        Down(fields.IndexOf(SettingsField.HintsBar));
+        Push(Keys.Enter, Keys.Down, Keys.Enter);   // auto under the cursor: always
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(HintsBarMode.Always, _settings.Current.HintsBar);
+        Assert.Contains(Markup.Remove(SettingsMenu.HintsBarLabel(HintsBarMode.Off)), Output);
+        pane.Dispose();
+
+        (menu, pane) = PaneMenu();
+        Down(fields.IndexOf(SettingsField.HintsBar));
+        Push(Keys.Enter, Keys.Down, Keys.Enter);   // always under the cursor: off
+        Down(fields.IndexOf(SettingsField.BarOrder) - fields.IndexOf(SettingsField.HintsBar));
+        Push(Keys.Enter, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(HintsBarMode.Off, _settings.Current.HintsBar);
+        Assert.Contains("▸ " + "Hints bar".PadRight(PaneBars.TitleWidth) + PaneBars.OffMark + PaneBars.Describe(PaneBars.Hints), Output);   // first on the page, the cursor on it
+        pane.Dispose();
+
+        (menu, pane) = PaneMenu();
+        Down(fields.IndexOf(SettingsField.HintsBar));
+        Push(Keys.Enter, Keys.Up, Keys.Up, Keys.Enter, Keys.Escape);   // off under the cursor: auto
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Null(_settings.Current.HintsBar);   // the default saves as null
+        pane.Dispose();
+    }
+
 
     /// <summary>
-    /// Hint bar (2026-10-12, the user's ask: the other bars' checklist for the hint bar): its sections in the row's order, Shift+End
+    /// Status bar (Hint bar until 2026-10-14, its Keys gone to the Hints bar; 2026-10-12, the user's ask: the other bars' checklist for
+    /// the hint bar): its sections in the row's order, Shift+End
     /// moves one to the bottom with the cursor, Space unchecks it there, each saved at once; <c>d</c> puts every section and the
     /// order back (null both), a second <c>d</c> saves nothing.
     /// </summary>
     [Fact]
-    public async Task OnThePane_HintBar_ChecksAndMovesItsSections_DefaultPutsThemBack()
+    public async Task OnThePane_StatusBar_ChecksAndMovesItsSections_DefaultPutsThemBack()
     {
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.HintBarItems));
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.StatusBarItems));
         Push(Keys.Enter);                       // the checklist, on Status (the left group's first; its heading above is no stop)
         Push(ShiftEnd);                         // Status to the bottom of its group, the cursor with it
         Push(Keys.Char(' '));                   // and off
@@ -179,21 +223,21 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(["spinner", "queued", "keys", "timers", "reading", "usage", "status", "model", "cwd"], _settings.Current.HintBarOrder);   // the left group's bottom (2026-10-13)
-        Assert.Equal(["spinner", "queued", "keys", "timers", "reading", "usage", "model"], _settings.Current.HintBarItems);
-        Assert.Null(_settings.Current.HintBarRight);
+        Assert.Equal(["spinner", "queued", "timers", "reading", "usage", "status", "model", "cwd"], _settings.Current.StatusBarOrder);   // the left group's bottom (2026-10-13)
+        Assert.Equal(["spinner", "queued", "timers", "reading", "usage", "model"], _settings.Current.StatusBarItems);
+        Assert.Null(_settings.Current.StatusBarRight);
         Assert.Contains("[x] Status    ", Output);
         Assert.Contains("[ ] Status    ", Output);
         Assert.Contains(SettingsMenu.PinnedLeftHeading, Output);
         Assert.Contains(SettingsMenu.PinnedRightHeading, Output);
-        Assert.Contains(SettingsMenu.HintBarToggleKeys, Output);
-        Assert.Contains(GroupBreadcrumb(SettingsTab.Chat, "Hint bar") + " ", Output);
-        Assert.Contains("  · Hint bar: Queued, Keys, Timers, Reading, Usage | Model", Output);
+        Assert.Contains(SettingsMenu.StatusBarToggleKeys, Output);
+        Assert.Contains(GroupBreadcrumb(SettingsTab.Chat, "Status bar") + " ", Output);
+        Assert.Contains("  · Status bar: Queued, Timers, Reading, Usage | Model", Output);
         pane.Dispose();
 
         // Shift+→ pins the cursor's section right, at the right group's start; Shift+← back to the left group's end (2026-10-13).
         (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.HintBarItems));
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.StatusBarItems));
         Push(Keys.Enter);                       // on Spinner
         Push(Keys.Down);                        // Queued
         Push(ShiftRight);
@@ -201,26 +245,26 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(["queued", "model", "cwd"], _settings.Current.HintBarRight);
-        Assert.Equal(["spinner", "keys", "timers", "reading", "usage", "status", "queued", "model", "cwd"], _settings.Current.HintBarOrder);
-        Assert.Contains("  · Hint bar: Keys, Timers, Reading, Usage | Queued, Model", Output);
+        Assert.Equal(["queued", "model", "cwd"], _settings.Current.StatusBarRight);
+        Assert.Equal(["spinner", "timers", "reading", "usage", "status", "queued", "model", "cwd"], _settings.Current.StatusBarOrder);
+        Assert.Contains("  · Status bar: Timers, Reading, Usage | Queued, Model", Output);
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.HintBarItems));
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.StatusBarItems));
         Push(Keys.Enter);                       // on Spinner
-        Push(Keys.Down);                        // Keys
+        Push(Keys.Down);                        // Timers
         Push(ShiftEnd, ShiftDown);              // the left group's bottom, then over the gap: the right group's first
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(["queued", "keys", "model", "cwd"], _settings.Current.HintBarRight);   // saved in the sections' own order
-        Assert.Equal(["spinner", "timers", "reading", "usage", "status", "keys", "queued", "model", "cwd"], _settings.Current.HintBarOrder);
+        Assert.Equal(["queued", "timers", "model", "cwd"], _settings.Current.StatusBarRight);   // saved in the sections' own order
+        Assert.Equal(["spinner", "reading", "usage", "status", "timers", "queued", "model", "cwd"], _settings.Current.StatusBarOrder);
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.HintBarItems));
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.StatusBarItems));
         Push(Keys.Enter);
         Push(Keys.Char('d'));                   // the default sections, the row's own order
         Push(Keys.Char('d'));                   // again: nothing to save
@@ -228,22 +272,22 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Null(_settings.Current.HintBarItems);
-        Assert.Null(_settings.Current.HintBarOrder);
-        Assert.Null(_settings.Current.HintBarRight);   // the sides back too
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(Output, "  · Hint bar: " + HintBarItems.DefaultValue));
+        Assert.Null(_settings.Current.StatusBarItems);
+        Assert.Null(_settings.Current.StatusBarOrder);
+        Assert.Null(_settings.Current.StatusBarRight);   // the sides back too
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(Output, "  · Status bar: " + StatusBarItems.DefaultValue));
         pane.Dispose();
     }
 
     /// <summary>
-    /// The spinner on the hint bar's checklist (2026-10-13, the user's ask: "mandatory and can't be disabled, but it can be moved"):
+    /// The spinner on the Status bar's checklist (the hint bar's until 2026-10-14; 2026-10-13, the user's ask: "mandatory and can't be disabled, but it can be moved"):
     /// checked, first; Space, Enter and Delete leave it on with the notice; select none keeps it; Shift+→ pins it right.
     /// </summary>
     [Fact]
-    public async Task OnThePane_HintBar_TheSpinnerStaysOn_ButMoves()
+    public async Task OnThePane_StatusBar_TheSpinnerStaysOn_ButMoves()
     {
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.HintBarItems));
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.StatusBarItems));
         Push(Keys.Enter, Keys.Down);            // on Spinner, after Status
         Push(Keys.Char(' '), Keys.Enter, DeleteKey);   // off, thrice: it stays
         Push(Keys.Char('n'));                   // select none: every section but the spinner
@@ -252,9 +296,9 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(["spinner"], _settings.Current.HintBarItems);
-        Assert.Equal(["spinner", "model", "cwd"], _settings.Current.HintBarRight);
-        Assert.Equal(3, Output.Split(HintBarItems.SpinnerFixedNotice).Length - 1);
+        Assert.Equal(["spinner"], _settings.Current.StatusBarItems);
+        Assert.Equal(["spinner", "model", "cwd"], _settings.Current.StatusBarRight);
+        Assert.Equal(3, Output.Split(StatusBarItems.SpinnerFixedNotice).Length - 1);
         Assert.Contains("[x] Spinner   ", Output);
         Assert.DoesNotContain("[ ] Spinner", Output);
         pane.Dispose();

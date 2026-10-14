@@ -138,23 +138,23 @@ internal sealed partial class SettingsMenu
             && App.ToolbarItems.SaveRight(App.ToolbarItems.ResolveRight(d.ToolbarRight)) is null,
         Dividers: true);
 
-    /// <summary>The Hint bar's checklist (<see cref="EditHintBarAsync"/>).</summary>
-    private static readonly SidedChecklist HintBarChecklist = new(
-        SettingsField.HintBarItems,
-        HintBarToggleKeys,
-        App.HintBarItems.Names,
-        App.HintBarItems.Defaults,
-        d => App.HintBarItems.Resolve(d.HintBarItems),
-        d => App.HintBarItems.Sides(d.HintBarOrder, d.HintBarRight),
-        App.HintBarItems.Label,
-        (d, on) => d.HintBarItems = App.HintBarItems.Save(on),
-        (d, sides) => { d.HintBarOrder = App.HintBarItems.SaveOrder(sides.All); d.HintBarRight = App.HintBarItems.SaveRight(sides.Right); },
-        d => { d.HintBarItems = null; d.HintBarOrder = null; d.HintBarRight = null; },
-        d => App.HintBarItems.Resolve(d.HintBarItems).SetEquals(App.HintBarItems.Defaults)
-            && App.HintBarItems.SaveOrder(App.HintBarItems.Sides(d.HintBarOrder, d.HintBarRight).All) is null
-            && App.HintBarItems.SaveRight(App.HintBarItems.ResolveRight(d.HintBarRight)) is null,
-        App.HintBarItems.Fixed,
-        App.HintBarItems.SpinnerFixedNotice);
+    /// <summary>The Status bar's checklist (<see cref="EditStatusBarAsync"/>; the Hint bar's until 2026-10-14).</summary>
+    private static readonly SidedChecklist StatusBarChecklist = new(
+        SettingsField.StatusBarItems,
+        StatusBarToggleKeys,
+        App.StatusBarItems.Names,
+        App.StatusBarItems.Defaults,
+        d => App.StatusBarItems.Resolve(d.StatusBarItems),
+        d => App.StatusBarItems.Sides(d.StatusBarOrder, d.StatusBarRight),
+        App.StatusBarItems.Label,
+        (d, on) => d.StatusBarItems = App.StatusBarItems.Save(on),
+        (d, sides) => { d.StatusBarOrder = App.StatusBarItems.SaveOrder(sides.All); d.StatusBarRight = App.StatusBarItems.SaveRight(sides.Right); },
+        d => { d.StatusBarItems = null; d.StatusBarOrder = null; d.StatusBarRight = null; },
+        d => App.StatusBarItems.Resolve(d.StatusBarItems).SetEquals(App.StatusBarItems.Defaults)
+            && App.StatusBarItems.SaveOrder(App.StatusBarItems.Sides(d.StatusBarOrder, d.StatusBarRight).All) is null
+            && App.StatusBarItems.SaveRight(App.StatusBarItems.ResolveRight(d.StatusBarRight)) is null,
+        App.StatusBarItems.Fixed,
+        App.StatusBarItems.SpinnerFixedNotice);
 
     /// <summary>
     /// The Performance bar's checklist (<see cref="EditPerfBarAsync"/>; later on 2026-10-13, in three groups, center the default):

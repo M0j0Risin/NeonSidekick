@@ -56,11 +56,12 @@ The app itself, this side of the connection.
 | Show header | Shows the banner at startup and after `/clear`, `/splash`, `/theme` and a profile switch. `/header` and Ctrl+Alt+H flip it. | on |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
 | Menus max height | How much of the window a pane may take: `half`, `three-quarters` or `full`. Longer lists scroll. | `full` |
-| Hint bar | Which sections the hint row shows, their order, and which side each is pinned to. Enter opens the checklist; see [The hint row](INTERFACE.md#the-hint-row) and [Bar checklists](INTERFACE.md#bar-checklists). | `default`: every section but Working directory; Model and Working directory pinned right |
+| Hints bar | Whether the keys' hints get a bar of their own over the status bar: `auto` (a row while there is a hint, held until the next send), `always` or `off` (on the status bar). See [The hints bar](INTERFACE.md#the-hints-bar). | `auto` |
+| Status bar | Which sections the status bar shows, their order, and which side each is pinned to. Enter opens the checklist; see [The status bar](INTERFACE.md#the-status-bar) and [Bar checklists](INTERFACE.md#bar-checklists). | `default`: every section but Working directory; Model and Working directory pinned right |
 | Tool bar | Which glyphs the toolbar shows, their order, and which side each is pinned to. Enter (or `/toolbar edit`) opens the checklist; see [The toolbar](INTERFACE.md#the-toolbar). | Settings, Tools, Skills, Memory, Saved prompts, Queue, Shell allowed commands, Shell police, Shell, Files, Image, Web, path (13 of 42), with three dividers |
 | Performance bar | Which meters the performance bar shows, and where. Enter (or `/perfbar edit`) opens the checklist; `/perfbar text`, `gauge` or `led` picks the look. See [The performance bar](INTERFACE.md#the-performance-bar). | CPU, RAM, GPU, VRAM, `led` |
 | Home bar | Home Assistant rooms and devices, and the shopping list's 🛒, as chips on a row of their own. Enter (or `/homebar edit`) opens the [picker](INTERFACE.md#the-home-bar). | off |
-| Toolbar order | The order of the four bars under the input line (**Order** on the pane). Enter opens the list; Shift+↑/↓ moves a bar. | `default` (hint row, toolbar, performance bar, home bar) |
+| Toolbar order | The order of the five bars under the input line (**Order** on the pane). Enter opens the list; Shift+↑/↓ moves a bar. | `default` (hints bar, status bar, toolbar, performance bar, home bar) |
 | Draft editor | The program `/draft` opens (`code --wait`, `notepad`…); it must wait for the file to close. | empty (the system's editor for `.txt` files) |
 | Image viewer | Where a double-clicked picture opens: empty for the built-in [picture viewer](INTERFACE.md#the-picture-viewer), `system` for the system's app, or a command the path is added to (`mspaint`). | empty (the picture viewer) |
 
@@ -108,7 +109,7 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 * **`automatic`:** after each reply the model writes an image prompt and the app draws it. The bots get no tool. With skills on, the prompt writer may load a skill first ("use the pony-prompts skill for pictures").
 * **`autonomous`:** the bots get `generate_image`, limited to those workflows. A call a bot writes out as text still runs, and a call that fails is drawn by the app.
 * **Reworks:** once there's a picture and an image → image workflow, the prompt writer chooses between a new picture and a rework.
-* **Async on:** 🖼️ (🎨 for a rework) shows on the hint row while a picture renders. **Async off:** ESC on a held reply cuts that bot short; ESC under the picture's spinner skips the picture.
+* **Async on:** 🖼️ (🎨 for a rework) shows on the status bar while a picture renders. **Async off:** ESC on a held reply cuts that bot short; ESC under the picture's spinner skips the picture.
 
 ### Servers
 
@@ -130,7 +131,7 @@ Settings every server reads, whatever its kind.
 | LLM request timeout (s) | The longest one HTTP request may take (up to 3600). | 3600 |
 | LLM turn timeout (s) | The longest one whole turn may take, tool calls included (up to 21600). | 21600 |
 | LLM context length | The context window in tokens, for the usage percentage. 0 takes the server's figure. | 0 (the server's) |
-| LLM mid-turn usage | The hint row's usage during a reply: `estimate` (live, marked `~`) or `last-known` (the last finished request's figures). | `last-known` |
+| LLM mid-turn usage | The status bar's usage during a reply: `estimate` (live, marked `~`) or `last-known` (the last finished request's figures). | `last-known` |
 | LLM max turns | User turns the model sees before the oldest drop off (1–500). `auto` keeps them all while auto compact can run, else 24. | `auto` |
 | LLM auto compact (%) | How full the context may get before the next message compacts it first (1–100; 0 is off). | 90 |
 | LLM compact mode | What `/compact` does: `summary` folds older turns into a summary the model writes; `prune` swaps their bulky tool results for stubs. | `summary` |
@@ -181,9 +182,9 @@ Until you set something, sampling is left to the server and the model's defaults
 
 A model the app downloads and runs itself on llama.cpp's `llama-server`, for when no other server is around. It runs on Windows x64 and on Apple Silicon Macs.
 
-* **Install:** pick *Install* on **Embedded models**. It downloads in the background (📥 on the hint row; a double-click pauses it), then switches to the model. With no URL, no scan and nothing installed, the app opens straight to this list.
+* **Install:** pick *Install* on **Embedded models**. It downloads in the background (📥 on the status bar; a double-click pauses it), then switches to the model. With no URL, no scan and nothing installed, the app opens straight to this list.
 * **Use:** `/server` and the startup picker list one **Embedded** row per installed model; `/model` picks between them.
-* **Loading:** the hint row shows `🦙 loading <model>`; Ctrl+C or a double-click on the spinner cancels.
+* **Loading:** the status bar shows `🦙 loading <model>`; Ctrl+C or a double-click on the spinner cancels.
 * **Each row** shows the size, the state (`installed`, `download`, `partial · 42%`) and the quantization, then ⚡ a drafter, 👁️ images, 🛠️ tool calls, and ⛓️‍💥 an uncensored build.
 * **The title row's buttons** combine: **size** (`s`: any, up to 8GB, up to 16GB), **show** (`i`: all, installed, uninstalled), **drafter** (`d`), **sort** (`o`: name or size) and **uncensored** (`x`: only the uncensored builds, hidden otherwise).
 
@@ -315,7 +316,7 @@ Speech out (TTS) and voice in (STT).
 
 #### TTS
 
-Speech output sets up in the background (🔈 on the hint row); replies are text only until it's ready.
+Speech output sets up in the background (🔈 on the status bar); replies are text only until it's ready.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -331,7 +332,7 @@ Speech output sets up in the background (🔈 on the hint row); replies are text
 
 #### STT
 
-Voice input sets up in the background (🎙️ on the hint row).
+Voice input sets up in the background (🎙️ on the status bar).
 
 | Setting | What it does | Default |
 |---|---|---|

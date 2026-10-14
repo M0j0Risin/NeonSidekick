@@ -1135,8 +1135,8 @@ internal sealed partial class ChatScreen
         _renderScreen = renderScreen ?? throw new ArgumentNullException(nameof(renderScreen));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         // The Hint bar resolved once a change (2026-10-13, the code review): the row's funcs read it every frame.
-        _hintBar = HintBarStateOf(_settings.Current);
-        _settings.Changed += saved => Volatile.Write(ref _hintBar, HintBarStateOf(saved));
+        _hintBar = StatusBarStateOf(_settings.Current);
+        _settings.Changed += saved => Volatile.Write(ref _hintBar, StatusBarStateOf(saved));
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
         _overriddenBy = overriddenBy ?? throw new ArgumentNullException(nameof(overriddenBy));
         _session = session ?? throw new ArgumentNullException(nameof(session));
@@ -1305,7 +1305,7 @@ internal sealed partial class ChatScreen
             // jobs (LlmSession.IsLearning / IsTitling), nothing pushed.
             // The jobs behind the line (2026-09-29) after the pictures; a switch whose setup runs shows its job's glyph, not
             // its own (a click on 🎤 or 🔊 turns it off).
-            Strip = () => !HintOn(HintBarItems.Status) ? "" : CameraStrip(_camera.Live, PlanStrip(_plan.Active, BotChatStrip(BotChatResumable, BotExtrasIdle, StripGlyphs(_session.IsLearning, _session.IsTitling, _pendingPictures.Glyph, _speech.Enabled && !_jobs.Running(BackgroundJobKind.Speech), _voice.Enabled && !_jobs.Running(BackgroundJobKind.Voice), _voice.WakeReady, _voice.InterruptReady, _jobs.Strip())))),
+            Strip = () => !HintOn(StatusBarItems.Status) ? "" : CameraStrip(_camera.Live, PlanStrip(_plan.Active, BotChatStrip(BotChatResumable, BotExtrasIdle, StripGlyphs(_session.IsLearning, _session.IsTitling, _pendingPictures.Glyph, _speech.Enabled && !_jobs.Running(BackgroundJobKind.Speech), _voice.Enabled && !_jobs.Running(BackgroundJobKind.Voice), _voice.WakeReady, _voice.InterruptReady, _jobs.Strip())))),
             // The model at the row's right edge, from the live connection: empty until one lands;
             // the reasoning glyph after it in its own colour, none with the model.
             // The session's name at the right edge of the rule above the input row (2026-09-18, the user's
@@ -1315,23 +1315,28 @@ internal sealed partial class ChatScreen
             // The running processes' count on the lower rule (2026-10-12, the user's ask): ▶ 3, nothing while none run.
             LowerRuleTitle = () => ProcessWindowText.RuleTitle(_processes.Running),
             // The model and its mark while the Hint bar's Model is checked (2026-10-12).
-            Trailer = () => HintOn(HintBarItems.Model) ? ModelLabel(_session.Endpoint?.ModelId) : "",
-            TrailerMark = () => HintOn(HintBarItems.Model) ? ModelMark(_session.Endpoint?.ModelId, _effective().LlmReasoning) : "",
+            Trailer = () => HintOn(StatusBarItems.Model) ? ModelLabel(_session.Endpoint?.ModelId) : "",
+            TrailerMark = () => HintOn(StatusBarItems.Model) ? ModelMark(_session.Endpoint?.ModelId, _effective().LlmReasoning) : "",
             // The queued count after the row's lead in both states (2026-09-18): the pane draws it
             // and records where, so a double-click on it can open /queue mid-turn and at idle.
-            Queued = () => _queue.Count is > 0 and var queued && HintOn(HintBarItems.Queued) ? QueuedHintPart(queued) : "",
+            Queued = () => _queue.Count is > 0 and var queued && HintOn(StatusBarItems.Queued) ? QueuedHintPart(queued) : "",
             // The tally as HintText carries it (2026-09-21): the pane finds it in the drawn row and
             // records where, so a double-click on it (or on the spinner under a turn) opens /usage.
-            Usage = () => HintOn(HintBarItems.Usage) ? UsageText.HintPart(_session.Usage, _session.ContextLength) ?? "" : "",
+            Usage = () => HintOn(StatusBarItems.Usage) ? UsageText.HintPart(_session.Usage, _session.ContextLength) ?? "" : "",
             // The tally on the busy row too (2026-09-25, the user's ask), as LLM mid-turn usage says: re-read on every
             // tick, so the estimate moves with the stream and a flipped setting shows at once. TryParse, not Resolve: the
             // draw must not warn on a hand-edited word, the turn's start does. None under a /botchat turn — not tallied.
-            BusyUsage = () => _botTurnRunning || !HintOn(HintBarItems.Usage) ? "" : UsageText.BusyHintPart(_session.Usage, _session.ContextLength, MidTurnUsageMode.TryParse(_effective().LlmMidTurnUsage, out var mode) ? mode : MidTurnUsage.LastKnown, _session.Meter.Read()) ?? "",
+            BusyUsage = () => _botTurnRunning || !HintOn(StatusBarItems.Usage) ? "" : UsageText.BusyHintPart(_session.Usage, _session.ContextLength, MidTurnUsageMode.TryParse(_effective().LlmMidTurnUsage, out var mode) ? mode : MidTurnUsage.LastKnown, _session.Meter.Read()) ?? "",
             // A ComfyUI generation's label after the tally (2026-09-25, the user's call): /imagine, a botchat picture and the model's generate_image alike.
             // Either kind since 2026-09-26: 🖼️ text-to-image, 🎨 image-to-image.
             LabelAfterUsage = ComfyText.IsGeneratingLabel,
             // "esc to stop" at the busy row's end while the turn runs (2026-10-04, the UI review), not under a menu's own spinner.
             StopHintShown = () => _turnRunning,
+            // The Hints bar (2026-10-14, the user's ask: the keys on a row of their own over the Status bar): the setting, cached as
+            // the Status bar's is, and the screen's two rungs of its ladder, the armed prompt and the keys' lead.
+            HintsBar = () => Volatile.Read(ref _hintBar).HintsBar,
+            ArmedHint = ArmedHint,
+            KeysHint = KeysLead,
             // How a sent line is kept (2026-10-04, the UI review: User line style).
             UserLineStyle = () => _effective().UserLineStyle,
             // What a sent line opens with: the user avatar, else › (2026-10-12, the user's ask).
@@ -2418,12 +2423,12 @@ internal sealed partial class ChatScreen
     /// frame, and the effective settings are a deep copy each read): the checked sections and the two groups, made again by
     /// <see cref="AppSettings.Changed"/>. No variable or flag overrides these settings, so the saved ones are the ones in force.
     /// </summary>
-    private sealed record HintBarState(IReadOnlySet<string> On, ItemOrder.Sided Sides);
+    private sealed record StatusBarState(IReadOnlySet<string> On, ItemOrder.Sided Sides, string HintsBar);
 
-    private HintBarState _hintBar;
+    private StatusBarState _hintBar;
 
-    private static HintBarState HintBarStateOf(AppSettingsData saved) =>
-        new(HintBarItems.Resolve(saved.HintBarItems), HintBarItems.Sides(saved.HintBarOrder, saved.HintBarRight));
+    private static StatusBarState StatusBarStateOf(AppSettingsData saved) =>
+        new(StatusBarItems.Resolve(saved.StatusBarItems), StatusBarItems.Sides(saved.StatusBarOrder, saved.StatusBarRight), HintsBarMode.Name(HintsBarMode.Resolve(saved.HintsBar)));
 
     /// <summary>Whether the Hint bar's section <paramref name="id"/> is checked in the settings in force (2026-10-12).</summary>
     private bool HintOn(string id) => Volatile.Read(ref _hintBar).On.Contains(id);
@@ -2432,7 +2437,7 @@ internal sealed partial class ChatScreen
     /// The standing hint row's parts in the Hint bar's order (2026-10-12, the user's ask: its sections on or off and in any order;
     /// <see cref="ScreenPane.HintLayout"/>): the strip, the queued part, the keys' lead, the timers, the reading, the tally — which stood
     /// aside while a timer or a reading showed until 2026-10-13 (the user's ask: shown whatever stands) — the model and (later that day) the working directory. Since 2026-10-13
-    /// (the user's ask) each on the side it is pinned to (<see cref="HintBarItems.Sides"/>; <see cref="ScreenPane.HintSlot.AtRight"/>), in
+    /// (the user's ask) each on the side it is pinned to (<see cref="StatusBarItems.Sides"/>; <see cref="ScreenPane.HintSlot.AtRight"/>), in
     /// that side's order. An armed exit, rewind or splash delete takes every text section's place at the left group's end, after the strip
     /// and the queued part; the model and the working directory pinned right keep their places meanwhile. The tally is its own slot
     /// (<see cref="ScreenPane.HintSlot.UsageOf"/>, empty under an armed hint), so the busy row puts its own there. Each section unchecked is left out.
@@ -2443,17 +2448,21 @@ internal sealed partial class ChatScreen
         var on = bar.On;
         var sides = bar.Sides;
         var slots = new List<ScreenPane.HintSlot>(sides.Left.Count + sides.Right.Count + 1);
-        string? armed = ArmedHint();
-        string? timers = armed is null && on.Contains(HintBarItems.Timers) ? TimerText.StatusLine(_timers.Snapshot()) : null;
-        string? reading = armed is null && on.Contains(HintBarItems.Reading) ? ReadingHintPart() : null;
+        // The Hints bar (2026-10-14) takes the armed prompt and the keys' lead while it has a row; off, or on a window with no row
+        // for it, they stay here as the hint row had them, the keys at the left group's end.
+        bool hintsBar = _pane.HintsBarShown;
+        string? armed = hintsBar ? null : ArmedHint();
+        string? keys = hintsBar || armed is not null ? null : KeysLead();
+        string? timers = armed is null && on.Contains(StatusBarItems.Timers) ? TimerText.StatusLine(_timers.Snapshot()) : null;
+        string? reading = armed is null && on.Contains(StatusBarItems.Reading) ? ReadingHintPart() : null;
         foreach (string id in sides.Left)
         {
             Add(id, right: false);
         }
 
-        if (armed is not null)
+        if ((armed ?? keys) is { Length: > 0 } lead)
         {
-            slots.Add(ScreenPane.HintSlot.Of(armed));   // the left group's end
+            slots.Add(ScreenPane.HintSlot.Of(lead));   // the left group's end
         }
 
         foreach (string id in sides.Right)
@@ -2472,17 +2481,16 @@ internal sealed partial class ChatScreen
 
             ScreenPane.HintSlot? slot = id switch
             {
-                HintBarItems.Spinner => ScreenPane.HintSlot.Spinner,   // later on 2026-10-13: where the busy row puts its spinner; nothing at rest
-                HintBarItems.Status => ScreenPane.HintSlot.Strip,
-                HintBarItems.Queued => ScreenPane.HintSlot.Queued,
+                StatusBarItems.Spinner => ScreenPane.HintSlot.Spinner,   // later on 2026-10-13: where the busy row puts its spinner; nothing at rest
+                StatusBarItems.Status => ScreenPane.HintSlot.Strip,
+                StatusBarItems.Queued => ScreenPane.HintSlot.Queued,
                 // An armed hint takes the text sections' place; the model and the working directory pinned right keep theirs (2026-10-13).
-                HintBarItems.Model when armed is null || right => ScreenPane.HintSlot.Model,
-                HintBarItems.WorkingDirectory when armed is null || right => ScreenPane.HintSlot.Path(WorkingDirectoryLabel(_effective())),   // --cwd may override it
-                HintBarItems.Keys when armed is null && KeysLead() is { Length: > 0 } keys => ScreenPane.HintSlot.Of(keys),
-                HintBarItems.Timers when !string.IsNullOrEmpty(timers) => ScreenPane.HintSlot.TimersOf(timers),   // its own zone since 2026-10-13: a double-click asks to cancel them all
-                HintBarItems.Reading when !string.IsNullOrEmpty(reading) => ScreenPane.HintSlot.Of(reading),
+                StatusBarItems.Model when armed is null || right => ScreenPane.HintSlot.Model,
+                StatusBarItems.WorkingDirectory when armed is null || right => ScreenPane.HintSlot.Path(WorkingDirectoryLabel(_effective())),   // --cwd may override it
+                StatusBarItems.Timers when !string.IsNullOrEmpty(timers) => ScreenPane.HintSlot.TimersOf(timers),   // its own zone since 2026-10-13: a double-click asks to cancel them all
+                StatusBarItems.Reading when !string.IsNullOrEmpty(reading) => ScreenPane.HintSlot.Of(reading),
                 // The tally stands beside the timers and the reading since 2026-10-13 (the user's ask); only an armed hint takes its place.
-                HintBarItems.Usage => ScreenPane.HintSlot.UsageOf(armed is null ? UsageText.HintPart(_session.Usage, _session.ContextLength) ?? "" : ""),
+                StatusBarItems.Usage => ScreenPane.HintSlot.UsageOf(armed is null ? UsageText.HintPart(_session.Usage, _session.ContextLength) ?? "" : ""),
                 _ => null,
             };
             if (slot is { } placed)
@@ -10993,7 +11001,7 @@ internal sealed partial class ChatScreen
     /// puts back under it.
     /// </summary>
     private ThumbnailBox SplashArea() =>
-        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.FlowRow + _splashReserve + ScreenPane.PaneRows + _pane.InputRows + _pane.BarRowsDrawn);
+        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.FlowRow + _splashReserve + ScreenPane.PaneRows + _pane.InputRows + _pane.ReservedBarRows);   // the Hints bar counted: the arrows' hint brings it (2026-10-14)
 
     /// <summary>
     /// The tiled splash (2026-09-24, the user's ask: <c>Welcome splash</c> <c>tiled</c>): page

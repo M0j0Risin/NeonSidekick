@@ -356,7 +356,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 
 ### Imagine options
 
-* It runs behind the input line, so you can keep chatting; double-click 🖼️ on the hint row to cancel.
+* It runs behind the input line, so you can keep chatting; double-click 🖼️ on the status bar to cancel.
 * The picture is drawn in the transcript, saved in *ComfyUI output folder*, and sent to the model with your next message.
 * The first word names the workflow when it matches one; otherwise an offered workflow is used.
 * `-- <negative>` sets the negative prompt; `--no-negative` sends none, not even the workflow's own.
@@ -368,7 +368,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 A USB or built-in webcam, through Media Foundation on Windows or AVFoundation on a Mac (macOS 14 or later); nothing to install. The model's camera tool is in [TOOLS.md](TOOLS.md#camera).
 
 * **The pane:** Space takes the photo, `r` retakes, Enter attaches it as `[Image #N]`, ESC drops it. Under *Camera preview* `live`, a window shows the shot as you frame it.
-* **One stream:** the pane, live view, botchat and watch mode share the camera, which closes a few seconds after the last lets go. 📷 shows on the hint row while it is on.
+* **One stream:** the pane, live view, botchat and watch mode share the camera, which closes a few seconds after the last lets go. 📷 shows on the status bar while it is on.
 * **Photos** are JPEGs in *Camera output folder* under the profile's `images` folder; a retaken or dropped one is deleted. Botchat and watch pictures aren't saved.
 * **Stored sessions** keep a line instead of the picture unless *Camera keep in sessions* is on.
 * **Watching** compares each picture, on your machine, with the last one the model saw, and sends it only when enough changed.
@@ -464,7 +464,7 @@ Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.jso
 | `warm` | Numbers. |
 | `tint` | A soft accent: `$variables`. |
 | `ink` | Body text. |
-| `dim` | Dim text and the hint row. |
+| `dim` | Dim text, the status bar and the hints bar. |
 | `dimmer` | A step darker: the input row's ghost text. |
 | `bg` | The background (unless *Themed background* is off), the picture viewer. |
 | `panelBg` | Code blocks, the highlighted menu row. |

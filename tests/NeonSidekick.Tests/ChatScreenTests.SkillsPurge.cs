@@ -71,7 +71,7 @@ public partial class ChatScreenTests
         Assert.Contains("· " + ChatScreen.KeptNotice, output);
         Assert.True(Directory.Exists(old));
         Assert.Contains("· " + SkillRecordText.NoneNotice(TimeSpan.FromDays(90)), output);
-        Assert.Equal(3, output.Split("✗ " + SkillRecordText.SkillsUsageError).Length - 1);
+        Assert.Equal(3, LastTranscript(output).Split("✗ " + SkillRecordText.SkillsUsageError).Length - 1);   // the transcript once: a pane that pushed it off writes it back
         using var store = OpenSkillRecords();
         Assert.Equal("old-skill", Assert.Single(store.All()).Folder);
     }

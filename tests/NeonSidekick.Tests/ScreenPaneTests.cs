@@ -5020,7 +5020,7 @@ public partial class ScreenPaneTests : IDisposable
     public void BarOrder_DrawsTheRowsInItsOrder_TheirClicksFollow_AChangeRedrawsThePane()
     {
         _cursorTop = 100;
-        IReadOnlyList<PaneBar> order = [PaneBar.Toolbar, PaneBar.Perf, PaneBar.Hint, PaneBar.Home];
+        IReadOnlyList<PaneBar> order = [PaneBar.Toolbar, PaneBar.Perf, PaneBar.Status, PaneBar.Home];
         using var pane = Pane();
         pane.Hint = () => "idle";
         pane.Toolbar = () => new ScreenPane.ToolbarParts("🔧", @"D:\x");

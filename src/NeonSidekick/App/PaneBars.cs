@@ -13,22 +13,26 @@ namespace NeonSidekick.App;
 /// Tool bars since, this one <c>Order</c> on the pane) shows or hides it, and one that
 /// is off keeps its place for when it comes back. A short window still drops the home bar first, then the performance bar, then
 /// the toolbar, wherever they sit. <see cref="Order"/> is <see cref="ItemOrder.Resolve"/>, so an unknown word is dropped without a
-/// warning and a missing id goes back beside its neighbour. Pure.
+/// warning and a missing id goes back beside its neighbour. Since 2026-10-14 (the user's ask) the hint bar is two: the Hints bar,
+/// first by default and as free to move as the rest, and the Status bar (the hint bar's word <c>hint</c> retired with no
+/// migration: a saved order that named it gets both at its top). Pure.
 /// </summary>
 public static class PaneBars
 {
-    public const string Hint = "hint";
+    public const string Hints = "hints";   // 2026-10-14
+    public const string Status = "status";   // "hint" until 2026-10-14
     public const string Toolbar = "toolbar";
     public const string Perf = "perf";
     public const string Home = "home";
 
     /// <summary>Every bar in the default order, top to bottom. Pinned.</summary>
-    public static readonly string[] Names = [Hint, Toolbar, Perf, Home];
+    public static readonly string[] Names = [Hints, Status, Toolbar, Perf, Home];
 
     /// <summary>A bar's name on the page and in the row's value. Pinned.</summary>
     public static string Title(string id) => id switch
     {
-        Hint => "Hint bar",
+        Hints => "Hints bar",
+        Status => "Status bar",   // "Hint bar" until 2026-10-14
         Toolbar => "Tool bar",   // "Toolbar" until 2026-10-12, the user's name for its row and here
         Perf => "Performance bar",
         Home => "Home bar",
@@ -41,7 +45,8 @@ public static class PaneBars
     /// </summary>
     public static string Describe(string id) => id switch
     {
-        Hint => "always shown; the busy row under a reply",
+        Hints => "key hints, shown while there is one",
+        Status => "always shown; the busy row under a reply",
         Toolbar => "the panes' glyphs and the path",
         Perf => "the meters",
         Home => "Home Assistant's chips",
@@ -58,12 +63,13 @@ public static class PaneBars
     /// <summary>A bar that is off on the page: it keeps its place, it just is not drawn. Pinned.</summary>
     public const string OffMark = "off · ";
 
-    /// <summary>Whether <paramref name="id"/>'s own setting shows it under <paramref name="data"/>: the hint bar always; the others while something is on them.</summary>
+    /// <summary>Whether <paramref name="id"/>'s own setting shows it under <paramref name="data"/>: the Status bar always; the Hints bar unless <c>Hints bar</c> is off (2026-10-14); the others while something is on them.</summary>
     public static bool Shown(string id, AppSettingsData data)
     {
         ArgumentNullException.ThrowIfNull(data);
         return id switch
         {
+            Hints => HintsBarMode.Resolve(data.HintsBar) != HintsBarStyle.Off,
             Toolbar => App.ToolbarItems.Resolve(data.ToolbarItems).Count > 0,
             Perf => PerfBarItems.Resolve(data.PerformanceBarItems).Count > 0,
             Home => App.HomeBarItems.Resolve(data.HomeBarItems).Count > 0,
@@ -80,10 +86,11 @@ public static class PaneBars
     /// <summary>The pane's order for <paramref name="saved"/> (<see cref="ScreenPane.BarOrder"/>): <see cref="Order"/> as <see cref="PaneBar"/>s.</summary>
     public static IReadOnlyList<PaneBar> Bars(IReadOnlyList<string>? saved) => Order(saved).Select(id => id switch
     {
+        Hints => PaneBar.Hints,
         Toolbar => PaneBar.Toolbar,
         Perf => PaneBar.Perf,
         Home => PaneBar.Home,
-        _ => PaneBar.Hint,
+        _ => PaneBar.Status,
     }).ToList();
 
     /// <summary>The <c>Toolbar order</c> row's value: <see cref="DefaultValue"/> for the default order, else the names top to bottom. Pinned.</summary>

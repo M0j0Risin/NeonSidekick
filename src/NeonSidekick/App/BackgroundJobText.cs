@@ -36,10 +36,10 @@ public static class BackgroundJobText
 
     /// <summary>The notice as an embedded download starts behind the line.</summary>
     public static string DownloadStarted(EmbeddedModel model) =>
-        $"{DownloadGlyph} downloading {model.Display} in the background; double-click {DownloadGlyph} on the hint row to pause";
+        $"{DownloadGlyph} downloading {model.Display} in the background; double-click {DownloadGlyph} on the status bar to pause";
 
     /// <summary>The same model picked again while it downloads.</summary>
-    public static string AlreadyDownloading(EmbeddedModel model) => $"{model.Display} is already downloading ({DownloadGlyph} on the hint row)";
+    public static string AlreadyDownloading(EmbeddedModel model) => $"{model.Display} is already downloading ({DownloadGlyph} on the status bar)";
 
     /// <summary>A download that finished after another server was picked: installed, not switched to.</summary>
     public static string InstalledNotSwitched(EmbeddedModel model) => $"{model.Display} installed; pick it in /server to use it";
@@ -49,5 +49,5 @@ public static class BackgroundJobText
         "voice input is still setting up (" + VoiceGlyph + (string.IsNullOrEmpty(progress) ? "" : " " + progress) + ")";
 
     /// <summary>A <c>/mcp</c> action that would wait for the wave to finish.</summary>
-    public const string McpStillConnecting = "the MCP servers are still connecting; try again once " + McpGlyph + " leaves the hint row";
+    public const string McpStillConnecting = "the MCP servers are still connecting; try again once " + McpGlyph + " leaves the status bar";
 }

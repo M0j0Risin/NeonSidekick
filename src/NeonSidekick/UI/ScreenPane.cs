@@ -226,6 +226,20 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     // The alert is a flash (2026-10-04, the copy's "copied 142 characters"): drawn in the hint's style, not the warning's.
     private bool _alertFlash;
 
+    // The Hints bar (2026-10-14, the user's ask: the hint row split in two, the keys on a row of their own over the Status bar):
+    // its saved word (HintsBarMode; off here, the pane as it was, until the screen says), the screen's two rungs of the ladder (the
+    // armed prompt, the keys' lead), the rows the last draw gave it (0 or 1, Draw the only writer, as _toolbarRows), its text as
+    // drawn (null = no row; the tick's comparison), whether a collapse is due (a send, a turn's end, a pane opened or closed, a
+    // resize, the idle timeout: the held row goes at the next draw) and the UTC tick its row's quiet began — no hint, no key, at
+    // rest — 0 while it has a hint.
+    private Func<string> _hintsBar = static () => HintsBarMode.Off;
+    private Func<string?> _armedHint = static () => null;
+    private Func<string?> _keysHint = static () => null;
+    private int _hintsRows;
+    private string? _shownHints;
+    private bool _hintsCollapseDue;
+    private long _hintsQuietSince;
+
     // When the top busy label last changed (2026-10-04): the step's own clock beside the turn's.
     private long _stageSince;
 
@@ -772,6 +786,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return new OffPaneHit(null, ToolbarHitNow(x));
             }
 
+            if (_busyLabel is null && _hintsRows > 0 && y == top + HintsRowBelowCursor)
+            {
+                return new OffPaneHit(new HintHit(HintZone.Row, "", -1), null);   // the Hints bar's text (2026-10-14): /settings, as the Status bar's
+            }
+
             if (_busyLabel is null && y == top + HintRowBelowCursor)
             {
                 return new OffPaneHit(HintHitAt(_hintStrip, _hintStripColumn, _trailerColumn, _trailerEnd, _markColumn, _markEnd, _hintPathColumn, _hintPathCells, -1, 0, -1, 0, -1, 0, x), null);
@@ -1072,10 +1091,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         set => _barOrder = value ?? throw new ArgumentNullException(nameof(value));
     }
 
-    /// <summary>The hint row, the toolbar, the performance bar, the home bar: the order until 2026-10-12, and the default.</summary>
-    public static readonly IReadOnlyList<PaneBar> DefaultBarOrder = [PaneBar.Hint, PaneBar.Toolbar, PaneBar.Perf, PaneBar.Home];
+    /// <summary>The Hints bar, the Status bar, the toolbar, the performance bar, the home bar: the default (the hint row, the toolbar, the performance bar, the home bar until 2026-10-14).</summary>
+    public static readonly IReadOnlyList<PaneBar> DefaultBarOrder = [PaneBar.Hints, PaneBar.Status, PaneBar.Toolbar, PaneBar.Perf, PaneBar.Home];
 
-    /// <summary><see cref="BarOrder"/>'s answer as the draw takes it: each bar once, the first of a repeat, a missing one at the end in <see cref="DefaultBarOrder"/>'s order.</summary>
+    /// <summary>
+    /// <see cref="BarOrder"/>'s answer as the draw takes it: each bar once, the first of a repeat, a missing one at the end in
+    /// <see cref="DefaultBarOrder"/>'s order (the screen's order comes mended already, <see cref="App.PaneBars.Bars"/>).
+    /// </summary>
     private static IReadOnlyList<PaneBar> Bars(IReadOnlyList<PaneBar>? order)
     {
         var bars = (order ?? DefaultBarOrder).Distinct().Where(DefaultBarOrder.Contains).ToList();
@@ -1083,10 +1105,68 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         return bars;
     }
 
-    /// <summary>The rows every bar under the hint row took in the last draw (the toolbar, the performance bar, the home bar): what the thumbnail sizing adds.</summary>
+    /// <summary>The rows every bar under the lower rule but the Status bar took in the last draw (the Hints bar, the toolbar, the performance bar, the home bar).</summary>
     public int BarRowsDrawn
     {
         get { lock (_gate) { return BarRows; } }
+    }
+
+    /// <summary>
+    /// The rows the bars under the lower rule but the Status bar take with the Hints bar's row counted whenever it may have one
+    /// (2026-10-14): what a picture sized ahead of its draw leaves room for (the splash, <c>/imagine</c>'s), so the bar coming
+    /// with its hint never pushes the picture's top row off. <see cref="LayoutHeight"/> counts the same rows.
+    /// </summary>
+    public int ReservedBarRows
+    {
+        get { lock (_gate) { return ReservedBarRowsFor(Height); } }
+    }
+
+    /// <summary>
+    /// The setting <c>Hints bar</c>'s saved word (2026-10-14, <see cref="HintsBarMode"/>): read on every draw and on the tick.
+    /// <see cref="HintsBarMode.Off"/> by default, the pane as it was: no Hints bar, the hints on the Status bar.
+    /// </summary>
+    public Func<string> HintsBar
+    {
+        get => _hintsBar;
+        set => _hintsBar = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
+    /// The screen's armed prompt (2026-10-14: the second Ctrl+C's exit, a rewind, a splash picture's delete): the Hints bar's second
+    /// rung, after the kill switch's alert. Read at rest only; null (the default) for none.
+    /// </summary>
+    public Func<string?> ArmedHint
+    {
+        get => _armedHint;
+        set => _armedHint = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
+    /// The screen's keys' lead (2026-10-14: the <c>/read</c> keys, the splash's or the picture strip's arrows): the Hints bar's last
+    /// rung, after an open pane's keys. Read at rest only, as the hint row had it; null (the default) for none.
+    /// </summary>
+    public Func<string?> KeysHint
+    {
+        get => _keysHint;
+        set => _keysHint = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>How long a held Hints bar row stays blank with no hint and no key pressed, at rest, before it goes (2026-10-14). Pinned.</summary>
+    public static readonly TimeSpan HintsIdle = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Whether the hints go to the Hints bar rather than the Status bar (2026-10-14): the pane is enabled, <see cref="HintsBar"/> is not
+    /// <c>off</c> and the window has a row for it. The screen leaves its armed prompt and keys off the Status bar's layout while true.
+    /// </summary>
+    public bool HintsBarShown
+    {
+        get { lock (_gate) { return HintsReservedFor(Height) > 0; } }
+    }
+
+    /// <summary>The rows the Hints bar took in the last draw: 1 while drawn, else 0.</summary>
+    public int HintsRows
+    {
+        get { lock (_gate) { return _hintsRows; } }
     }
 
     /// <summary>
@@ -1386,7 +1466,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The strip the provider answers now is not the drawn one: it came or went, changed, or its highlight did.</summary>
     private bool StripChanged()
     {
-        if (StripRowsFor(Width, Height, BarRowsFor(Height)) != _stripRows)
+        if (StripRowsFor(Width, Height, ReservedBarRowsFor(Height)) != _stripRows)
         {
             return true;
         }
@@ -1493,24 +1573,61 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// The window height less the toolbar's row when <see cref="Toolbar"/> answers one: what an
     /// overlay host lays out against (the menus, the info and folder panes, the completion list),
     /// since <see cref="MaxOverlayRows"/> and <see cref="MaxInputRows"/> are counted over the rows
-    /// the toolbar leaves. The provider, not the drawn count: the host lays out BEFORE the draw.
+    /// the toolbar leaves. The provider, not the drawn count: the host lays out BEFORE the draw. The Hints bar's row is counted
+    /// whenever it may have one (2026-10-14, <see cref="ReservedBarRows"/>): every pane brings its keys, so the bar is up with it.
     /// </summary>
-    public int LayoutHeight => Height - BarRowsFor(Height);
+    public int LayoutHeight => Height - ReservedBarRowsFor(Height);
 
-    /// <summary>The rows the toolbar takes in a window of <paramref name="height"/>: one when <see cref="Toolbar"/> answers and the window keeps a transcript row over the smallest pane, else none.</summary>
-    private int ToolbarRowsFor(int height) => _toolbar() is not null && height >= PaneRows + 2 ? 1 : 0;
+    /// <summary>
+    /// The rows the Hints bar takes in a window of <paramref name="height"/> (2026-10-14): one while <see cref="HintsBar"/> is not
+    /// <c>off</c>, the window keeps a transcript row over the smallest pane, and the bar is <c>always</c>, has a hint, or holds the
+    /// row it was drawn with and no collapse is due; else none. First in the short window's chain: the other bars give way to it.
+    /// </summary>
+    private int HintsRowsFor(int height)
+    {
+        if (HintsReservedFor(height) == 0)
+        {
+            return 0;
+        }
 
-    /// <summary>The rows the performance bar takes in a window of <paramref name="height"/>: one when <see cref="Perf"/> answers and the window keeps a transcript row over the smallest pane and the toolbar, else none.</summary>
-    private int PerfRowsFor(int height) => _perf(Math.Max(1, Width - 1)) is not null && height >= PaneRows + 2 + ToolbarRowsFor(height) ? 1 : 0;
+        return HintsBarMode.Resolve(_hintsBar()) == HintsBarStyle.Always || HintsText() is not null || (_hintsRows > 0 && !_hintsCollapseDue) ? 1 : 0;
+    }
+
+    /// <summary>The row the Hints bar may take in a window of <paramref name="height"/> (2026-10-14): one while enabled, not <c>off</c>, and the window keeps a transcript row over the smallest pane.</summary>
+    private int HintsReservedFor(int height) =>
+        Enabled && HintsBarMode.Resolve(_hintsBar()) != HintsBarStyle.Off && height >= PaneRows + 2 ? 1 : 0;
+
+    /// <summary>The rows the toolbar takes in a window of <paramref name="height"/> over <paramref name="hints"/> Hints bar rows: one when <see cref="Toolbar"/> answers and the window keeps a transcript row over the smallest pane and them, else none.</summary>
+    private int ToolbarRowsFor(int height, int hints) => _toolbar() is not null && height >= PaneRows + 2 + hints ? 1 : 0;
+
+    /// <summary>The rows the performance bar takes in a window of <paramref name="height"/>: one when <see cref="Perf"/> answers and the window keeps a transcript row over the smallest pane, the Hints bar and the toolbar, else none.</summary>
+    private int PerfRowsFor(int height, int hints) => _perf(Math.Max(1, Width - 1)) is not null && height >= PaneRows + 2 + hints + ToolbarRowsFor(height, hints) ? 1 : 0;
 
     /// <summary>The rows the home bar takes in a window of <paramref name="height"/> (2026-10-12): one when <see cref="Home"/> answers and the window keeps a transcript row over the smallest pane and the other bars, else none.</summary>
-    private int HomeRowsFor(int height) => _home(Math.Max(1, Width - 1)) is not null && height >= PaneRows + 2 + ToolbarRowsFor(height) + PerfRowsFor(height) ? 1 : 0;
+    private int HomeRowsFor(int height, int hints) => _home(Math.Max(1, Width - 1)) is not null && height >= PaneRows + 2 + hints + ToolbarRowsFor(height, hints) + PerfRowsFor(height, hints) ? 1 : 0;
 
-    /// <summary>The rows under the hint row in a window of <paramref name="height"/>: the toolbar's, the performance bar's and the home bar's.</summary>
-    private int BarRowsFor(int height) => ToolbarRowsFor(height) + PerfRowsFor(height) + HomeRowsFor(height);
+    /// <summary>The rows under the lower rule but the Status bar in a window of <paramref name="height"/>, the Hints bar's counted while it may have one.</summary>
+    private int ReservedBarRowsFor(int height)
+    {
+        int hints = HintsReservedFor(height);
+        return hints + ToolbarRowsFor(height, hints) + PerfRowsFor(height, hints) + HomeRowsFor(height, hints);
+    }
 
-    /// <summary>The rows under the hint row as last drawn.</summary>
-    private int BarRows => _toolbarRows + _perfRows + _homeRows;
+    /// <summary>The rows under the lower rule but the Status bar as last drawn.</summary>
+    private int BarRows => _hintsRows + _toolbarRows + _perfRows + _homeRows;
+
+    /// <summary>
+    /// The Hints bar's text now (2026-10-14, the ladder, <see cref="HintsBarMode.Pick"/>): the kill switch's alert (a flash stays on the
+    /// Status bar), then at rest the armed prompt, then an open pane's keys, then at rest the keys' lead; null for none.
+    /// </summary>
+    private string? HintsText() => HintsBarMode.Pick(
+        _alertHint is { } alert && !_alertFlash ? alert : null,
+        _busyLabel is null ? _armedHint() : null,
+        _overlay?.Hint,
+        _busyLabel is null ? _keysHint() : null);
+
+    /// <summary>An open pane's keys stand on the Status bar (the hint row's way): a pane is open and the Hints bar has no row (2026-10-14).</summary>
+    private bool OverlayOnStatus => _overlay is not null && _hintsRows == 0;
 
     /// <summary>
     /// A short glyph after the trailer, <see cref="MarkSeparator"/> between, drawn in
@@ -3288,6 +3405,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
+            // A pane opening is a natural redraw (2026-10-14): a Hints bar row held blank may go with it. A pane shown again (a
+            // menu's key, the completion list's next letter) is not.
+            _hintsCollapseDue |= _overlay is null;
             _overlay = new Overlay(content, hint, input, close);
             _dismissHit = null;
             Redraw();
@@ -3310,8 +3430,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return;
             }
 
-            // The drawn rows stay until the redraw: the lift steps up over them (Draw resets them).
+            // The drawn rows stay until the redraw: the lift steps up over them (Draw resets them). A pane closing is a natural
+            // redraw (2026-10-14): the Hints bar's row goes with its keys unless another hint stands.
             _overlay = null;
+            _hintsCollapseDue = true;
             Redraw();
         }
     }
@@ -3370,6 +3492,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _busyLabel = label;
             RedrawHint();
             RefreshGhost();
+            RefreshHintsLocked();   // the keys' lead and an armed prompt are the rest's (2026-10-14): the held row goes blank
         }
 
         return new BusyScope(this, slot);
@@ -3410,8 +3533,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
 
             _busyLabel = _busyLabels.Count > 0 ? _busyLabels[^1] : null;
+            // A turn's end is a natural redraw (2026-10-14): a Hints bar row held blank through it goes, unless the keys come back.
+            _hintsCollapseDue |= _busyLabel is null;
             RedrawHint();
             RefreshGhost();
+            RefreshHintsLocked();
         }
     }
 
@@ -3648,6 +3774,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
             _alertHint = text;
             RedrawHint();
+            RefreshHintsLocked();   // the kill switch's alert is the Hints bar's (2026-10-14), a flash the Status bar's
         }
     }
 
@@ -3667,6 +3794,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
+            // The Hints bar first (2026-10-14): an armed Ctrl+C shows at once, the bar's row coming with it if none stands.
+            if (RefreshHintsLocked())
+            {
+                return;
+            }
+
             if (_busyLabel is null && HintChanged())
             {
                 RedrawHint();
@@ -3880,6 +4013,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
 
             ResetInputRow();
+            // A sent line is a natural redraw (2026-10-14): a Hints bar row held blank goes with the write that follows.
+            _hintsCollapseDue = true;
             // A sent line is the bottom: the flow comes back under the window before the line joins it.
             if (_top >= 0)
             {
@@ -3945,6 +4080,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         _text = text;
         _cursor = Math.Clamp(cursor, 0, text.Length);
         _anchor = anchor < 0 || anchor == _cursor ? -1 : Math.Min(anchor, text.Length);
+        _hintsQuietSince = _time.GetUtcNow().UtcTicks;   // a key: the Hints bar's idle clock starts again (2026-10-14)
         _labels = labels ?? Array.Empty<(int, int)>();
         if (!_drawn || _batch > 0 || _modal > 0 || _overlay is { Input: false })
         {
@@ -3965,6 +4101,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             RewriteInputRows(shown);
             // A hint that reads the draft (the splash hint, 2026-09-20) follows it on the same
             // key, not at the next tick; under an overlay's slot the standing hint is the overlay's.
+            // The Hints bar's first (2026-10-14): a row that comes with the hint reshapes the pane.
+            if (RefreshHintsLocked())
+            {
+                return;
+            }
+
             if (_busyLabel is null && HintChanged())
             {
                 RedrawHint();
@@ -4329,6 +4471,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return true;
             }
 
+            if (_hintsRows > 0 && y == top + HintsRowBelowCursor)
+            {
+                // The Hints bar (2026-10-14): plain text from edge to edge, as the Status bar's own text — no glyph, tally or timers.
+                hit = new HintHit(HintZone.Row, "", -1);
+                return true;
+            }
+
             if (y != top + HintRowBelowCursor)
             {
                 return false;
@@ -4678,7 +4827,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         {
             if (_drawn && _batch == 0 && _modal == 0)
             {
-                RedrawHint();
+                if (!RefreshHintsLocked())   // the Hints bar too (2026-10-14)
+                {
+                    RedrawHint();
+                }
             }
             else
             {
@@ -4866,24 +5018,28 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         // The toolbar (2026-09-21) takes the screen's last row when the provider answers and the
         // window keeps a transcript row over the smallest pane; the caps below count over the
         // rows it leaves, and the offsets under the cursor add it (HintRowBelowCursor).
+        // The Hints bar (2026-10-14) first of the bars in a short window's chain: its row while it has a hint, is always, or holds
+        // the row it was drawn with and no collapse is due — a due one is spent by this draw.
+        int hintsRows = HintsRowsFor(h);
+        _hintsCollapseDue = false;
         var toolbar = _toolbar();
-        int toolbarRows = toolbar is not null && h >= PaneRows + 2 ? 1 : 0;
+        int toolbarRows = toolbar is not null && h >= PaneRows + 2 + hintsRows ? 1 : 0;
 
         // The performance bar (2026-09-29) under the toolbar, the last row, when the window keeps a transcript row over
         // the smallest pane and the toolbar; from here on the bars count as one (barRows) wherever the toolbar did alone.
         var perf = _perf(Math.Max(1, w - 1));
-        int perfRows = perf is not null && h >= PaneRows + 2 + toolbarRows ? 1 : 0;
+        int perfRows = perf is not null && h >= PaneRows + 2 + hintsRows + toolbarRows ? 1 : 0;
 
         // The home bar (2026-10-12) under the performance bar, the last row, when the window keeps a transcript row over the
         // smallest pane and the other bars: in a short window it goes first.
         var home = _home(Math.Max(1, w - 1));
-        int homeRows = home is not null && h >= PaneRows + 2 + toolbarRows + perfRows ? 1 : 0;
-        int barRows = toolbarRows + perfRows + homeRows;
+        int homeRows = home is not null && h >= PaneRows + 2 + hintsRows + toolbarRows + perfRows ? 1 : 0;
+        int barRows = hintsRows + toolbarRows + perfRows + homeRows;
 
         // The picture strip (later still on 2026-09-24) over the upper rule, under a rule of its own (2026-09-25): its rows,
         // the rule's with them, count into the pane's, so the
         // padding, the lift and the region leave room for it; the input rows are capped over what it leaves.
-        int stripRows = StripRowsFor(w, h, barRows);
+        int stripRows = StripRowsFor(w, h, ReservedBarRowsFor(h));   // the Hints bar counted while it may come (2026-10-14): the strip's own arrows bring it
         var strip = stripRows > 0 ? _pictureStrip() : null;
         List<SegmentLine>? stripLines = null;
         bool stripHighlight = _text.Length == 0;
@@ -4942,6 +5098,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
 
         _paneRows = 3 + overlayRows + (shown?.Rows.Count ?? 0) + barRows + stripRows + scrollRows;
+        _hintsRows = hintsRows;
         _toolbarRows = toolbarRows;
         _perfRows = perfRows;
         _homeRows = homeRows;
@@ -5207,6 +5364,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         {
             int rows = bar switch
             {
+                PaneBar.Hints => hintsRows,
                 PaneBar.Toolbar => toolbarRows,
                 PaneBar.Perf => perfRows,
                 PaneBar.Home => homeRows,
@@ -5225,6 +5383,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             first = false;
             switch (bar)
             {
+                case PaneBar.Hints:
+                    WriteHintsRow();
+                    break;
                 case PaneBar.Toolbar:
                     WriteToolbarRow(toolbar!.Value, w);
                     break;
@@ -5238,6 +5399,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                     WriteHintRow();
                     break;
             }
+        }
+
+        if (hintsRows == 0)
+        {
+            _shownHints = null;
         }
 
         if (toolbarRows == 0)
@@ -5368,7 +5534,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// </summary>
     private void Overpaint()
     {
-        if (_drawnScrolled || _top >= 0 || _blank || _store.Reshaped)
+        // A Hints bar row coming or going under a reply (2026-10-14: the kill switch's alert, a held row's collapse) is a shape
+        // change: lifted and drawn, never painted over.
+        if (_drawnScrolled || _top >= 0 || _blank || _store.Reshaped || HintsRowsFor(Height) != _hintsRows)
         {
             Lift();
             Draw();
@@ -5682,10 +5850,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private int CursorDepth => !_drawnOverlay ? _cursorRow : _drawnInput ? _overlayRows + _cursorRow : 0;
 
     /// <summary>How many rows under the terminal's cursor the first row under the lower rule sits, as last drawn: over the rows under the cursor and the rule; the hint row there by default.</summary>
-    private int FirstBarRowBelowCursor => _paneRows - 2 - _toolbarRows - _perfRows - _homeRows - _stripRows - _scrollRows - CursorDepth;
+    private int FirstBarRowBelowCursor => _paneRows - 2 - BarRows - _stripRows - _scrollRows - CursorDepth;
 
-    /// <summary>How many rows under the terminal's cursor the hint row sits, as last drawn: the first under the lower rule, or wherever <see cref="BarOrder"/> put it (2026-10-12).</summary>
-    private int HintRowBelowCursor => RowBelowCursor(PaneBar.Hint);
+    /// <summary>How many rows under the terminal's cursor the Status bar (the hint row until 2026-10-14) sits, as last drawn: under the Hints bar's row, or wherever <see cref="BarOrder"/> put it (2026-10-12).</summary>
+    private int HintRowBelowCursor => RowBelowCursor(PaneBar.Status);
+
+    /// <summary>How many rows under the terminal's cursor the Hints bar sits, as last drawn (2026-10-14): the first under the lower rule by default.</summary>
+    private int HintsRowBelowCursor => RowBelowCursor(PaneBar.Hints);
 
     /// <summary>How many rows under the terminal's cursor the pane's last row sits, as last drawn: whichever row the order put last (the home bar by default, when drawn).</summary>
     private int LastRowBelowCursor => _paneRows - 2 - _stripRows - _scrollRows - CursorDepth;
@@ -5718,6 +5889,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
             down += drawn switch
             {
+                PaneBar.Hints => _hintsRows,
                 PaneBar.Toolbar => _toolbarRows,
                 PaneBar.Perf => _perfRows,
                 PaneBar.Home => _homeRows,
@@ -5849,7 +6021,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>The upper rule's <see cref="StripReopen"/> label, or null: one answered, no overlay up and room in the window for the strip it brings back.</summary>
     private string? ReopenWanted() =>
-        _overlay is null && _stripReopen() is { Length: > 0 } label && StripFits(Width, Height, BarRowsFor(Height)) ? label : null;
+        _overlay is null && _stripReopen() is { Length: > 0 } label && StripFits(Width, Height, ReservedBarRowsFor(Height)) ? label : null;
 
     /// <summary>
     /// Whether the upper rule's buttons wanted now are not what the drawn rule shows: a run came to fold, or the last fold
@@ -5965,7 +6137,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private void WriteHintRow()
     {
         int max = Math.Max(1, Width - 1);
-        if ((_dragHint ?? _alertHint) is { } whole)
+        if (StatusWhole() is { } whole)
         {
             // A picture on its way to the line (2026-09-28): the row is the drag's alone, in the strip button's style, no zones.
             // An alert (2026-10-01, the kill switch's first press) the same, in the warning's style.
@@ -6010,13 +6182,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             string queued = StandingQueued();
             // The tally beside the label (2026-09-25), where the standing row would have it: not under an overlay's hint (nor
             // under the scroll's until 2026-10-01, when it went to a row of its own).
-            string usage = _overlay is null ? _busyUsage() : "";
+            string usage = !OverlayOnStatus ? _busyUsage() : "";
             var elapsed = _time.GetElapsedTime(_busySince);
             TimeSpan? step = _stageSince != _busySince && _stepClockShown() ? _time.GetElapsedTime(_stageSince) : null;
             // A label that trails the tally (LabelAfterUsage, the ComfyUI generation's) swaps the two; nothing else moves.
             bool after = usage.Length > 0 && _labelAfterUsage(label);
-            // The way out named at the row's end (2026-10-04) while the screen's turn runs and no pane's keys stand there instead.
-            string hint = Spaced(_overlay?.Hint ?? (_stopHintShown() ? StopHint : ""));
+            // The way out named at the row's end (2026-10-04) while the screen's turn runs and no pane's keys stand there instead
+            // (a pane's keys are the Hints bar's while it has a row, 2026-10-14).
+            string hint = Spaced((OverlayOnStatus ? _overlay!.Hint : null) ?? (_stopHintShown() ? StopHint : ""));
             string unfitted = " " + HintRow(HintRow(Labelled(BusyText(label, elapsed, step), usage, after), queued), hint);
             string labelled = " " + Labelled(BusyText(label, elapsed, step), usage, after);
             // Read once (2026-10-01): an embedded download's strip turns with the clock, and two reads astride a frame
@@ -6070,7 +6243,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             ApplyHintZones(laid, max);
             // The usage zone: the tally where the screen's hint put it — nowhere under an overlay's hint, or when the exit hint
             // stands in its place (the timers too until 2026-10-13); a layout of text slots (the tests') has it found by its text.
-            string usage = _overlay is null ? _usage() : "";
+            string usage = !OverlayOnStatus ? _usage() : "";
             if (laid.Find(HintPartKind.Usage) is null && usage.Length > 0 && laid.Parts.FirstOrDefault(part => part.Kind == HintPartKind.Text && part.Text.Contains(Spaced(usage), StringComparison.Ordinal)) is { Text.Length: > 0 } holder)
             {
                 int at = holder.Text.IndexOf(Spaced(usage), StringComparison.Ordinal);
@@ -6261,7 +6434,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>The overlay's hint while one is open, else the screen's — scrolled too since 2026-10-01, the scroll's hint on a row of its own (<see cref="ScrolledRow"/>).</summary>
-    private string StandingHint() => Spaced(_overlay is { } overlay ? overlay.Hint : _hint());
+    private string StandingHint() => Spaced(OverlayOnStatus ? _overlay!.Hint : _hint());
 
     /// <summary>
     /// A hint's text with a space after each emoji the terminal paints over the cell after it (<see cref="TextCells.SpaceSelectorSequences"/>;
@@ -6296,7 +6469,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>The queued part while the row is the screen's own — nothing under an overlay's hint (2026-09-18; under the scroll's until 2026-10-01).</summary>
-    private string StandingQueued() => _overlay is null ? _queued() : "";
+    private string StandingQueued() => !OverlayOnStatus ? _queued() : "";
 
     /// <summary>The scroll's row (2026-10-01) on the cursor's row: <see cref="ScrolledRow"/> in the hint's style, the rest of the row erased; the text remembered for the tick.</summary>
     private void WriteScrollRow(int width)
@@ -6387,7 +6560,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     {
         string strip = _strip();
         var model = new HintPart(HintPartKind.Model, _trailer(), _trailerMark());
-        if (_overlay is not null || _hintLayout is not { } layout)
+        if (OverlayOnStatus || _hintLayout is not { } layout)
         {
             return ([new(HintPartKind.Strip, strip), new(HintPartKind.Queued, StandingQueued()), new(HintPartKind.Text, StandingHint())], [model]);
         }
@@ -6441,14 +6614,15 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// </summary>
     private (List<HintPart> Left, List<HintPart> Right, string Unit, bool After, string Usage, string BusyLabel) BusyParts(string label, Func<IReadOnlyList<HintSlot>> layout, string frame)
     {
-        string usage = _overlay is null ? _busyUsage() : "";
+        string usage = !OverlayOnStatus ? _busyUsage() : "";
         var elapsed = _time.GetElapsedTime(_busySince);
         TimeSpan? step = _stageSince != _busySince && _stepClockShown() ? _time.GetElapsedTime(_stageSince) : null;
         bool after = usage.Length > 0 && _labelAfterUsage(label);
         string busyText = BusyText(label, elapsed, step);
         string unit = frame + " " + Labelled(busyText, after ? usage : "", after);
         var spinner = new HintPart(HintPartKind.Spinner, unit);
-        var hint = new HintPart(HintPartKind.Text, Spaced(_overlay?.Hint ?? (_stopHintShown() ? StopHint : "")));
+        // An open pane's keys while the Hints bar has no row; the stop hint otherwise (2026-10-14: the keys are the bar's).
+        var hint = new HintPart(HintPartKind.Text, Spaced((OverlayOnStatus ? _overlay!.Hint : null) ?? (_stopHintShown() ? StopHint : "")));
         var left = new List<HintPart>();
         var right = new List<HintPart>();
         var model = new HintPart(HintPartKind.Model, _trailer(), _trailerMark());
@@ -6837,6 +7011,63 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         RedrawRow(HintRowBelowCursor, WriteHintRow);
     }
 
+    /// <summary><see cref="RedrawHint"/> for the Hints bar (2026-10-14): its row again, in place; nothing while none is drawn.</summary>
+    private void RedrawHints()
+    {
+        if (!_drawn || _batch > 0 || _modal > 0 || _hintsRows == 0)
+        {
+            return;
+        }
+
+        RedrawRow(HintsRowBelowCursor, WriteHintsRow);
+    }
+
+    /// <summary>
+    /// The Hints bar after its text may have changed (2026-10-14), under the gate: the whole pane again when its row comes or goes
+    /// (true), else its row again in place when the text moved. Nothing while lifted, batched or modal: the draw that ends them reads it.
+    /// </summary>
+    private bool RefreshHintsLocked()
+    {
+        if (!_drawn || _batch > 0 || _modal > 0)
+        {
+            return false;
+        }
+
+        if (HintsRowsFor(Height) != _hintsRows)
+        {
+            Redraw();
+            return true;
+        }
+
+        // A collapse due with the row still wanted (a turn's end with the keys back) is spent here: the natural moment passed,
+        // and a flag left standing would take the row at some later, unnatural one — when the hint goes mid-typing.
+        _hintsCollapseDue = false;
+        if (HintsChanged())
+        {
+            RedrawHints();
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The Hints bar's row (2026-10-14, the user's picks: one hint, the ladder's, plain and dim, cut at the edge; the kill switch's
+    /// alert in the warning's style): blank while the row is held with nothing to say. The text remembered for the tick.
+    /// </summary>
+    private void WriteHintsRow()
+    {
+        string? text = HintsText();
+        string shown = Fit(Spaced(text ?? ""), Math.Max(1, Width - 1));
+        bool alert = text is not null && _alertHint is not null && !_alertFlash && string.Equals(text, _alertHint, StringComparison.Ordinal);
+        _inner.Write(new RawText(shown, alert ? Theme.WarnText : Theme.Hint));
+        _inner.Write(EraseLineEnd);
+        _shownHints = shown;
+        if (text is not null)
+        {
+            _hintsQuietSince = 0;   // a hint: no quiet to count
+        }
+    }
+
     /// <summary><see cref="RedrawHint"/> for the toolbar (2026-09-21): its row again, in place, one under the hint row; nothing while none is drawn.</summary>
     private void RedrawToolbar()
     {
@@ -6956,6 +7187,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 _row = 0;
                 _col = 0;
                 _lineFull = false;
+                _hintsCollapseDue = true;   // a resize redraws all: a Hints bar row held blank goes with it (2026-10-14)
                 Draw();
                 EndSync();
                 return;
@@ -7009,10 +7241,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return;
             }
 
-            if (ToolbarRowsFor(h) != _toolbarRows || PerfRowsFor(h) != _perfRows || HomeRowsFor(h) != _homeRows || !Bars(_barOrder()).SequenceEqual(_drawnBars))
+            HintsIdleCheck();
+            int hints = HintsRowsFor(h);
+            if (hints != _hintsRows || ToolbarRowsFor(h, hints) != _toolbarRows || PerfRowsFor(h, hints) != _perfRows || HomeRowsFor(h, hints) != _homeRows || !Bars(_barOrder()).SequenceEqual(_drawnBars))
             {
-                // The toolbar, the performance bar or the home bar came or went (the screen's settings, a window at the
-                // edge), or their order changed (Toolbar order, 2026-10-12): the whole pane again — its shape changed.
+                // The Hints bar (2026-10-14), the toolbar, the performance bar or the home bar came or went (a hint, the screen's
+                // settings, a window at the edge), or their order changed (Toolbar order, 2026-10-12): the whole pane again — its
+                // shape changed.
                 if (_busyLabel is not null)
                 {
                     _frame++;
@@ -7065,6 +7300,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 RedrawScrollRow();
             }
 
+            if (HintsChanged())
+            {
+                // Another hint on the row the Hints bar holds (2026-10-14): the row again, in place.
+                RedrawHints();
+            }
+
             if (_busyLabel is not null)
             {
                 _frame++;
@@ -7079,6 +7320,43 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
     }
 
+    /// <summary>
+    /// The Hints bar's idle timeout (2026-10-14): while it has a hint, or a key was pressed, the clock starts again; at rest, with
+    /// neither for <see cref="HintsIdle"/>, a held blank row is due to go — the tick's shape check then lifts and draws without it.
+    /// Never under a reply (the row held blank through a turn comes back to the keys at its end in place) nor under <c>always</c>.
+    /// </summary>
+    private void HintsIdleCheck()
+    {
+        long now = _time.GetUtcNow().UtcTicks;
+        if (_hintsRows == 0 || HintsText() is not null || _busyLabel is not null)
+        {
+            _hintsQuietSince = 0;
+            return;
+        }
+
+        // The quiet starts at the first tick that sees it (a lifted or modal stretch skips the tick, so a time the hint was
+        // last seen could be long past by then and the row would go the moment its hint did).
+        if (_hintsQuietSince == 0)
+        {
+            _hintsQuietSince = now;
+        }
+
+        if (HintsBarMode.Resolve(_hintsBar()) == HintsBarStyle.Auto && now - _hintsQuietSince >= HintsIdle.Ticks)
+        {
+            _hintsCollapseDue = true;
+        }
+    }
+
+    /// <summary>The Hints bar's text now is not the drawn one, its row standing (a presence change is <see cref="HintsRowsFor"/> against the drawn rows).</summary>
+    private bool HintsChanged() =>
+        _hintsRows > 0 && !string.Equals(Fit(Spaced(HintsText() ?? ""), Math.Max(1, Width - 1)), _shownHints, StringComparison.Ordinal);
+
+    /// <summary>
+    /// The Status bar's whole text while it stands in for the sections (2026-10-14: the drag, a flash, and the kill switch's alert
+    /// while the Hints bar has no row to put it on), or null.
+    /// </summary>
+    private string? StatusWhole() => _dragHint ?? (_alertHint is { } alert && (_alertFlash || _hintsRows == 0) ? alert : null);
+
     /// <summary>The toolbar <see cref="Toolbar"/> answers now is not the drawn one (its text, or its off slabs since 2026-10-03 — a presence change is <see cref="ToolbarRowsFor"/> against the drawn rows).</summary>
     private bool ToolbarChanged() => _toolbarRows > 0 && _toolbar() is { } toolbar
         && (!string.Equals(LayToolbar(toolbar, Math.Max(1, Width - 1)).Row(Math.Max(1, Width - 1)), _shownToolbar, StringComparison.Ordinal)
@@ -7092,7 +7370,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>The standing hint (the overlay's while one is open) with the trailer is not what the hint row shows.</summary>
     private bool HintChanged() =>
-        !string.Equals((_dragHint ?? _alertHint) is { } whole ? Fit(Spaced(whole), Math.Max(1, Width - 1)) : PlaceStanding(Math.Max(1, Width - 1)).Text, _shownHint, StringComparison.Ordinal);
+        !string.Equals(StatusWhole() is { } whole ? Fit(Spaced(whole), Math.Max(1, Width - 1)) : PlaceStanding(Math.Max(1, Width - 1)).Text, _shownHint, StringComparison.Ordinal);
 
     private void ColumnZero() => _inner.Cursor.Move(CursorDirection.Left, Width);
 

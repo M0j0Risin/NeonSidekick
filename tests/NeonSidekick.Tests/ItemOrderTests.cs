@@ -127,7 +127,7 @@ public class ItemOrderTests
         Assert.Equal([], ItemOrder.SaveRight([], Names, ["d"]));
 
         Assert.True(ToolbarItems.ResolveRight(null).SetEquals([ToolbarItems.Path, ToolbarItems.Model]));   // the row as it was
-        Assert.True(HintBarItems.ResolveRight(null).SetEquals([HintBarItems.Model, HintBarItems.WorkingDirectory]));
+        Assert.True(StatusBarItems.ResolveRight(null).SetEquals([StatusBarItems.Model, StatusBarItems.WorkingDirectory]));
     }
 
     private static void AssertSides(string[] left, string[] right, int index, (ItemOrder.Sided Groups, int Index) moved)
@@ -241,7 +241,7 @@ public class ItemOrderTests
     [Fact]
     public void ACopy_KeepsBothOrders_ApartFromTheSource()
     {
-        var source = new AppSettingsData { ToolbarOrder = ["perf"], PerformanceBarOrder = ["ram"], ToolbarRight = ["perf"], HintBarRight = ["usage"], HomeBarLeft = ["area:den"], HomeBarRight = ["shopping:list"], PerformanceBarLeft = ["cpu"], PerformanceBarRight = ["proc"] };
+        var source = new AppSettingsData { ToolbarOrder = ["perf"], PerformanceBarOrder = ["ram"], ToolbarRight = ["perf"], StatusBarRight = ["usage"], HomeBarLeft = ["area:den"], HomeBarRight = ["shopping:list"], PerformanceBarLeft = ["cpu"], PerformanceBarRight = ["proc"] };
         var copy = AppSettings.Copy(source);
         Assert.Equal(["cpu"], copy.PerformanceBarLeft);
         Assert.Equal(["proc"], copy.PerformanceBarRight);
@@ -253,31 +253,37 @@ public class ItemOrderTests
         Assert.NotSame(source.HomeBarRight, copy.HomeBarRight);
         Assert.Equal(["perf"], copy.ToolbarOrder);
         Assert.Equal(["perf"], copy.ToolbarRight);
-        Assert.Equal(["usage"], copy.HintBarRight);
+        Assert.Equal(["usage"], copy.StatusBarRight);
         Assert.NotSame(source.ToolbarRight, copy.ToolbarRight);
-        Assert.NotSame(source.HintBarRight, copy.HintBarRight);
+        Assert.NotSame(source.StatusBarRight, copy.StatusBarRight);
         Assert.Equal(["ram"], copy.PerformanceBarOrder);
         Assert.NotSame(source.ToolbarOrder, copy.ToolbarOrder);
         Assert.NotSame(source.PerformanceBarOrder, copy.PerformanceBarOrder);
     }
 
     /// <summary>
-    /// Toolbar order (2026-10-12, the user's ask): the four bars under the lower rule, null their default order; a saved order
-    /// mended as the others are; the row's value; the pane's <see cref="PaneBar"/>s; a copy keeps it apart.
+    /// Toolbar order (2026-10-12, the user's ask): the bars under the lower rule, null their default order; a saved order
+    /// mended as the others are; the row's value; the pane's <see cref="PaneBar"/>s; a copy keeps it apart. Since 2026-10-14 the
+    /// hint bar is the Hints bar and the Status bar: a saved order that named <c>hint</c> gets both at its top (no migration).
     /// </summary>
     [Fact]
-    public void TheBarsOrder_IsTheFourBars_DefaultForNull_TheRowNamesThem()
+    public void TheBarsOrder_IsTheFiveBars_DefaultForNull_TheRowNamesThem()
     {
-        Assert.Equal(["hint", "toolbar", "perf", "home"], PaneBars.Order(null));
-        Assert.Equal(["perf", "home", "hint", "toolbar"], PaneBars.Order([" PERF ", "spark", "hint"]));   // toolbar after hint, home after perf
+        Assert.Equal(["hints", "status", "toolbar", "perf", "home"], PaneBars.Order(null));
+        Assert.Equal(["hints", "perf", "home", "status", "toolbar"], PaneBars.Order([" PERF ", "spark", "status"]));   // hints first, toolbar after status, home after perf
+        Assert.Equal(["hints", "status", "toolbar", "perf", "home"], PaneBars.Order(["toolbar", "perf", "hint", "home"]));   // the old word dropped: both at the top
+        Assert.Equal(["hints", "status", "perf", "toolbar", "home"], PaneBars.Order(["perf", "toolbar", "hint", "home"]));
         Assert.Null(PaneBars.SaveOrder(PaneBars.Order(null)));
         Assert.Equal(PaneBars.DefaultValue, PaneBars.Value(null));
-        Assert.Equal(PaneBars.DefaultValue, PaneBars.Value(["hint", "toolbar"]));
-        Assert.Equal("Tool bar, Performance bar, Hint bar, Home bar", PaneBars.Value(["toolbar", "perf", "hint", "home"]));   // "Toolbar" until later on 2026-10-12
-        Assert.Equal([PaneBar.Toolbar, PaneBar.Perf, PaneBar.Hint, PaneBar.Home], PaneBars.Bars(["toolbar", "perf", "hint", "home"]));
+        Assert.Equal(PaneBars.DefaultValue, PaneBars.Value(["status", "toolbar"]));
+        Assert.Equal("Hints bar, Tool bar, Performance bar, Status bar, Home bar", PaneBars.Value(["toolbar", "perf", "status", "home"]));
+        Assert.Equal([PaneBar.Hints, PaneBar.Toolbar, PaneBar.Perf, PaneBar.Status, PaneBar.Home], PaneBars.Bars(["toolbar", "perf", "status", "home"]));
         Assert.Equal(ScreenPane.DefaultBarOrder, PaneBars.Bars(null));
 
-        Assert.True(PaneBars.Shown(PaneBars.Hint, new AppSettingsData()));
+        Assert.True(PaneBars.Shown(PaneBars.Status, new AppSettingsData()));
+        Assert.True(PaneBars.Shown(PaneBars.Hints, new AppSettingsData()));
+        Assert.True(PaneBars.Shown(PaneBars.Hints, new AppSettingsData { HintsBar = HintsBarMode.Always }));
+        Assert.False(PaneBars.Shown(PaneBars.Hints, new AppSettingsData { HintsBar = HintsBarMode.Off }));
         Assert.False(PaneBars.Shown(PaneBars.Home, new AppSettingsData()));
         Assert.False(PaneBars.Shown(PaneBars.Perf, new AppSettingsData { PerformanceBarItems = [] }));
         Assert.True(PaneBars.Shown(PaneBars.Perf, new AppSettingsData()));   // the default four

@@ -378,29 +378,38 @@ public sealed class AppSettingsData
     public List<string>? ToolbarItems { get; set; }
 
     /// <summary>
-    /// The hint bar's sections (2026-10-12, the user's ask: the other bars' checklist for the hint bar): the ids of
-    /// <see cref="App.HintBarItems.Names"/> — status, queued, keys, timers, reading, usage and model — that the standing hint row
-    /// draws. Null (the default) is every one, the row as it always was; an empty list leaves the row to the alerts and the busy
-    /// row's spinner. Read on every pane draw and on its tick. No variable.
+    /// The Status bar's sections (2026-10-12, the user's ask: the other bars' checklist for the hint bar; the hint bar's
+    /// <c>HintBarItems</c> until 2026-10-14, when it became the Status bar and its keys went to the Hints bar, no migration): the ids
+    /// of <see cref="App.StatusBarItems.Names"/> — status, queued, timers, reading, usage and model — that the standing row draws.
+    /// Null (the default) is every one; an empty list leaves the row to the alerts and the busy row's spinner. Read on every pane
+    /// draw and on its tick. No variable.
     /// </summary>
-    public List<string>? HintBarItems { get; set; }
+    public List<string>? StatusBarItems { get; set; }
 
     /// <summary>
-    /// The hint bar's order (2026-10-12, the user's ask: its sections in any order): every id of <see cref="App.HintBarItems.Names"/>,
-    /// checked or not, in the order the standing row draws them (<see cref="App.HintBarItems.Order"/>), each side's since 2026-10-13
-    /// (<see cref="HintBarRight"/>). Null (the default) is the row's own order, which the checklist's <c>⊡ default</c> puts
+    /// The Hints bar (2026-10-14, the user's ask: the keys' hints on a row of their own over the Status bar): <c>auto</c> (null, the
+    /// default) gives it a row while there is a hint and holds it until the next send, turn end, menu or resize, or 10 s with no hint
+    /// and no key; <c>always</c> keeps the row; <c>off</c> puts the hints back on the Status bar (<see cref="UI.HintsBarMode"/>). Read on
+    /// every pane draw and on its tick. No variable.
+    /// </summary>
+    public string? HintsBar { get; set; }
+
+    /// <summary>
+    /// The Status bar's order (the hint bar's until 2026-10-14) (2026-10-12, the user's ask: its sections in any order): every id of <see cref="App.StatusBarItems.Names"/>,
+    /// checked or not, in the order the standing row draws them (<see cref="App.StatusBarItems.Order"/>), each side's since 2026-10-13
+    /// (<see cref="StatusBarRight"/>). Null (the default) is the row's own order, which the checklist's <c>⊡ default</c> puts
     /// back with the checks. No settings row of its own, no variable.
     /// </summary>
-    public List<string>? HintBarOrder { get; set; }
+    public List<string>? StatusBarOrder { get; set; }
 
     /// <summary>
-    /// The hint bar's sections pinned right (2026-10-13, the user's ask: any section pinned left or right, the sort free within each
-    /// side): ids of <see cref="App.HintBarItems.Names"/>, checked or not; every other one is pinned left. The standing row and the busy
-    /// row both draw the left group from the left edge and the right group at the right edge, each in <see cref="HintBarOrder"/>'s order.
-    /// Null (the default) is <see cref="App.HintBarItems.RightDefaults"/> — the model and the working directory, the row as it was —
+    /// The Status bar's sections pinned right (the hint bar's until 2026-10-14) (2026-10-13, the user's ask: any section pinned left or right, the sort free within each
+    /// side): ids of <see cref="App.StatusBarItems.Names"/>, checked or not; every other one is pinned left. The standing row and the busy
+    /// row both draw the left group from the left edge and the right group at the right edge, each in <see cref="StatusBarOrder"/>'s order.
+    /// Null (the default) is <see cref="App.StatusBarItems.RightDefaults"/> — the model and the working directory, the row as it was —
     /// which the checklist's <c>⊡ default</c> puts back; an empty list pins nothing right. No settings row of its own, no variable.
     /// </summary>
-    public List<string>? HintBarRight { get; set; }
+    public List<string>? StatusBarRight { get; set; }
 
     /// <summary>
     /// The items a bare <c>/toolbar</c> (or Ctrl+T, or <c>/toolbar on</c>) brings back after it hid the toolbar (later on 2026-09-30,
@@ -534,9 +543,10 @@ public sealed class AppSettingsData
     public Dictionary<string, string>? HomeBarGlyphs { get; set; }
 
     /// <summary>
-    /// The order of the four rows under the pane's lower rule (2026-10-12, the user's ask: "freely arrange the order" of the hint
+    /// The order of the rows under the pane's lower rule (2026-10-12, the user's ask: "freely arrange the order" of the hint
     /// bar, the toolbar, the performance bar and the home bar, the hint bar under the performance bar for one): every id of
-    /// <see cref="App.PaneBars.Names"/> (<c>hint</c>, <c>toolbar</c>, <c>perf</c>, <c>home</c>) top to bottom
+    /// <see cref="App.PaneBars.Names"/> (<c>hints</c>, <c>status</c>, <c>toolbar</c>, <c>perf</c>, <c>home</c>; the hint bar's
+    /// <c>hint</c> until 2026-10-14, when it split into the Hints bar and the Status bar, no migration) top to bottom
     /// (<see cref="App.PaneBars.Order"/>). Null (the default) is that order, the pane's until then, which the row's <c>⊡ default</c>
     /// puts back. The order alone: each bar's own row shows or hides it, and one that is off keeps its place. The row is
     /// <c>Toolbar order</c> (the user's name; <see cref="ToolbarOrder"/> is the toolbar's own items). Read on every pane tick. No variable.

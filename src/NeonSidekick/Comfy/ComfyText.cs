@@ -333,7 +333,7 @@ public static class ComfyText
     /// user's report: the line was held until it ended), so the missing spinner reads as running, and how to stop it. Led by
     /// <c>✨ imagining</c> since later that day (the user's wording; it read <c>generating behind the input line</c>). Pinned.
     /// </summary>
-    public const string ImagineInBackground = "(✨ imagining: the picture shows here when it is done; double-click the 🖼️ / 🎨 on the hint row to cancel)";
+    public const string ImagineInBackground = "(✨ imagining: the picture shows here when it is done; double-click the 🖼️ / 🎨 on the status bar to cancel)";
 
     /// <summary><c>/imagine</c> with both a negative after <c>--</c> and <c>--no-negative</c> (later on 2026-09-24). Pinned.</summary>
     public const string NegativeAndNoNegative = "give a negative after -- or --no-negative, not both";

@@ -119,7 +119,9 @@ public partial class ChatScreenTests
 
         // The pane over the reply: the title, the command as the caption, the four rows with Deny under the cursor, the keys.
         Assert.Contains("\n" + Titled(ShellText.ApprovalTitle + ApprovalButtons) + "\ncmd › echo hi\n \n▸ Deny\n  Allow once\n  Allow \"echo\" for this session\n  Allow \"echo\" always (saved to the profile)\n", output);
-        Assert.Contains(" " + ScreenPane.BusyRow(RunCommandTool.ToolName, TimeSpan.Zero, ShellText.ApprovalKeys), output);
+        // The pane's keys on the Hints bar's row (2026-10-14), the way out after the spinner on the Status bar under it.
+        Assert.Contains("\n" + ShellText.ApprovalKeys + "\n", output);
+        Assert.Contains(" " + ScreenPane.BusyRow(RunCommandTool.ToolName, TimeSpan.Zero, ScreenPane.StopHint), output);
         // The quiet note: the result's header, never the tool's name or the output.
         Assert.Contains("🛠️ exit 0 in 0.0 s (cmd): echo hi\n", output);
         Assert.DoesNotContain("🛠️ " + RunCommandTool.ToolName, output);
@@ -145,7 +147,9 @@ public partial class ChatScreenTests
 
         // The pane over the reply: the title, the command as the caption, the four rows with Deny under the cursor, the keys.
         Assert.Contains("\n" + Titled(ShellText.ApprovalTitle + ApprovalButtons) + "\nzsh › echo hi\n \n▸ Deny\n  Allow once\n  Allow \"echo\" for this session\n  Allow \"echo\" always (saved to the profile)\n", output);
-        Assert.Contains(" " + ScreenPane.BusyRow(RunCommandTool.ToolName, TimeSpan.Zero, ShellText.ApprovalKeys), output);
+        // The pane's keys on the Hints bar's row (2026-10-14), the way out after the spinner on the Status bar under it.
+        Assert.Contains("\n" + ShellText.ApprovalKeys + "\n", output);
+        Assert.Contains(" " + ScreenPane.BusyRow(RunCommandTool.ToolName, TimeSpan.Zero, ScreenPane.StopHint), output);
         // The quiet note: the result's header, never the tool's name or the output.
         Assert.Contains("🛠️ exit 0 in 0.0 s (zsh): echo hi\n", output);
         Assert.DoesNotContain("🛠️ " + RunCommandTool.ToolName, output);

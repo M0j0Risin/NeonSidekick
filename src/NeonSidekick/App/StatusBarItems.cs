@@ -4,27 +4,29 @@ using Spectre.Console;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// The setting <c>Hint bar</c> (2026-10-12, the user's ask: the other bars' checklist for the hint bar, its sections on or off and
-/// in any order): one id per section of the standing hint row, saved in <see cref="Settings.AppSettingsData.HintBarItems"/> (null
+/// The setting <c>Status bar</c> (<c>Hint bar</c> until 2026-10-14, when the hint row split into the Status bar and a Hints bar of
+/// its own, <see cref="UI.HintsBarMode"/>, the user's ask; 2026-10-12, the user's ask: the other bars' checklist for the hint bar, its
+/// sections on or off and in any order): one id per section of the standing row, saved in <see cref="Settings.AppSettingsData.StatusBarItems"/> (null
 /// is <see cref="Defaults"/>, the row as it always was; an empty list leaves the row to the alerts and the busy row) and ordered by
-/// <see cref="Settings.AppSettingsData.HintBarOrder"/> (<see cref="ItemOrder"/>, null <see cref="Names"/>' order). The model's name
+/// <see cref="Settings.AppSettingsData.StatusBarOrder"/> (<see cref="ItemOrder"/>, null <see cref="Names"/>' order). The model's name
 /// is free in the flow (the user's pick). Working directory (later that day, the user's ask: the tool bar's path on the hint row,
 /// after Model, off by default) is free the same way; until 2026-10-13 the two shared the right edge while they ended the checked order.
 /// Since 2026-10-13 (the user's ask: any section pinned left or right, the sort free within each side) every section is pinned to a
-/// side (<see cref="Sides"/> over <see cref="Settings.AppSettingsData.HintBarRight"/>; <see cref="RightDefaults"/> the model and the
+/// side (<see cref="Sides"/> over <see cref="Settings.AppSettingsData.StatusBarRight"/>; <see cref="RightDefaults"/> the model and the
 /// working directory, the row as it was), and the busy row follows the sides too. Later that day (the user's ask: "could the
 /// spinner in the hint row also be one of the moveable options? … mandatory and can't be disabled, but it can be moved") the busy
 /// row's spinner, its label and clock and the stop hint after them are the <see cref="Spinner"/> section: after Status by default (first until later that day, the user's ask), always
 /// on (<see cref="Fixed"/>), on either side in any place, drawn under a reply alone. The whole-row prompts (the drag, an alert, the
 /// armed exit, rewind and splash delete) are no sections: they show whatever is checked. Under a reply the checks hold (no strip,
-/// queued count, tally or model while off). A display setting, so an unknown word is dropped without a warning. Pure.
+/// queued count, tally or model while off). The Keys section (the arrows' and the <c>/read</c> keys' lead) went to the Hints bar on
+/// 2026-10-14, with the armed prompts; a saved <c>keys</c> is dropped as any unknown word. A display setting, so an unknown word is
+/// dropped without a warning. Pure.
 /// </summary>
-public static class HintBarItems
+public static class StatusBarItems
 {
     public const string Spinner = "spinner";   // 2026-10-13, the user's ask: always on, movable
     public const string Status = "status";
     public const string Queued = "queued";
-    public const string Keys = "keys";
     public const string Timers = "timers";
     public const string Reading = "reading";
     public const string Usage = "usage";
@@ -35,10 +37,10 @@ public static class HintBarItems
     /// Every section in the row's own order, the one it always had, the working directory after the model; the spinner second
     /// (2026-10-13; first until later that day, the user's ask: Status first by default, the spinner after it). Pinned.
     /// </summary>
-    public static readonly string[] Names = [Status, Spinner, Queued, Keys, Timers, Reading, Usage, Model, WorkingDirectory];
+    public static readonly string[] Names = [Status, Spinner, Queued, Timers, Reading, Usage, Model, WorkingDirectory];
 
     /// <summary>What a profile that never chose shows: every section but the working directory (the user's pick), the row as it was. Pinned.</summary>
-    public static readonly string[] Defaults = [Status, Spinner, Queued, Keys, Timers, Reading, Usage, Model];
+    public static readonly string[] Defaults = [Status, Spinner, Queued, Timers, Reading, Usage, Model];
 
     /// <summary>The sections that are always on (2026-10-13, the user's ask): the spinner, which moves but never goes. Pinned.</summary>
     public static readonly IReadOnlySet<string> Fixed = new HashSet<string>(StringComparer.Ordinal) { Spinner };
@@ -55,7 +57,6 @@ public static class HintBarItems
         Spinner => "Spinner",
         Status => "Status",
         Queued => "Queued",
-        Keys => "Keys",
         Timers => "Timers",
         Reading => "Reading",
         Usage => "Usage",
@@ -70,7 +71,6 @@ public static class HintBarItems
         Spinner => "turn activity spinner, info and stop hint: always on",
         Status => "status icons: 🔊 🎤 👂 ✋, 🧠, 🏷️…",
         Queued => "queue status when messages are queued",
-        Keys => "additional key hints",
         Timers => "timer info while timer(s) active",
         Reading => "reading info while reading is active (/read or /echo)",
         Usage => "context and usage info",
@@ -116,7 +116,7 @@ public static class HintBarItems
     /// <summary>What saves for <paramref name="order"/>: null for <see cref="Names"/>' own order (<see cref="ItemOrder.Save"/>).</summary>
     public static List<string>? SaveOrder(IReadOnlyList<string> order) => ItemOrder.Save(order, Names);
 
-    /// <summary>The sections <paramref name="saved"/> (<see cref="Settings.AppSettingsData.HintBarRight"/>) pins right: <see cref="RightDefaults"/> for null.</summary>
+    /// <summary>The sections <paramref name="saved"/> (<see cref="Settings.AppSettingsData.StatusBarRight"/>) pins right: <see cref="RightDefaults"/> for null.</summary>
     public static IReadOnlySet<string> ResolveRight(IReadOnlyList<string>? saved) => ItemOrder.ResolveRight(saved, Names, RightDefaults);
 
     /// <summary>What saves for the right group: null for exactly <see cref="RightDefaults"/>.</summary>
@@ -126,7 +126,7 @@ public static class HintBarItems
     public static ItemOrder.Sided Sides(IReadOnlyList<string>? order, IReadOnlyList<string>? right) => ItemOrder.Split(Order(order), ResolveRight(right));
 
     /// <summary>
-    /// The <c>Hint bar</c> row's value: <see cref="DefaultValue"/> for the defaults in the default order and sides, <see cref="AllValue"/>
+    /// The <c>Status bar</c> row's value: <see cref="DefaultValue"/> for the defaults in the default order and sides, <see cref="AllValue"/>
     /// for every section in them, <see cref="NoneValue"/> with none but the always-on spinner, else the checked names in order — since
     /// 2026-10-13 the left group's, then <see cref="SidesSeparator"/> and the right group's while any is checked there; the spinner
     /// named only away from its own place (later that day): on the left, right after Status or leading the group. Pinned.

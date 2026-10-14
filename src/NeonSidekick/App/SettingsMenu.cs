@@ -578,11 +578,18 @@ public enum SettingsField
     BarOrder,
 
     /// <summary>
-    /// The hint bar's sections and their order (<see cref="Settings.AppSettingsData.HintBarItems"/>, <see cref="Settings.AppSettingsData.HintBarOrder"/>;
-    /// 2026-10-12, the user's ask): a checklist with the move keys (<see cref="EditHintBarAsync"/>). The first row under Tool bars; no
-    /// reconnect (read at each pane draw).
+    /// The Status bar's sections and their order (<see cref="Settings.AppSettingsData.StatusBarItems"/>, <see cref="Settings.AppSettingsData.StatusBarOrder"/>;
+    /// 2026-10-12, the user's ask; <c>Hint bar</c> until 2026-10-14): a checklist with the move keys (<see cref="EditStatusBarAsync"/>).
+    /// The second row under Tool bars, after Hints bar; no reconnect (read at each pane draw).
     /// </summary>
-    HintBarItems,
+    StatusBarItems,
+
+    /// <summary>
+    /// Picked: <c>auto</c>, <c>always</c> or <c>off</c> (<see cref="Settings.AppSettingsData.HintsBar"/>, 2026-10-14, the user's ask:
+    /// the keys' hints on a bar of their own; <see cref="UI.HintsBarMode"/>). The first row under Tool bars, as the bar is first by
+    /// default; no reconnect (the pane reads it at every tick).
+    /// </summary>
+    HintsBar,
 
     /// <summary>
     /// Typed: off or 50 to 99 % of the biggest GPU's dedicated memory for the embedded server
@@ -1489,7 +1496,7 @@ internal sealed partial class SettingsMenu
          SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker,
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle,
          SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.MenuMaxHeight,
-         SettingsField.HintBarItems, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder,
+         SettingsField.HintsBar, SettingsField.StatusBarItems, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder,
          SettingsField.DraftEditor, SettingsField.ImageEditor],
         [SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays,
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
@@ -2322,7 +2329,8 @@ internal sealed partial class SettingsMenu
         SettingsField.ShowHeader => "Show header",   // the user's name (2026-10-01)
         SettingsField.MenuMaxHeight => "Menus max height",   // the user's name (2026-10-01)
         SettingsField.ShowWorkingDirectory => "Working directory in header",
-        SettingsField.HintBarItems => "Hint bar",   // 2026-10-12, the user's name
+        SettingsField.HintsBar => "Hints bar",   // 2026-10-14, the user's name
+        SettingsField.StatusBarItems => "Status bar",   // "Hint bar" until 2026-10-14 (2026-10-12, the user's name)
         SettingsField.ToolbarItems => "Tool bar",   // the user's names (2026-10-12): "Show toolbar", "Show performance bar" and "Show home bar" until then, this one "Toolbar" for a few hours
         SettingsField.ShowPerformanceBar => "Performance bar",
         SettingsField.ShowHomeBar => "Home bar",
@@ -2688,7 +2696,8 @@ internal sealed partial class SettingsMenu
             SettingsField.SessionTool => OnOff(data.SessionTool),
             SettingsField.ShowHeader => OnOff(data.ShowHeader),
             SettingsField.ShowWorkingDirectory => OnOff(data.ShowWorkingDirectory),
-            SettingsField.HintBarItems => App.HintBarItems.Value(data.HintBarItems, data.HintBarOrder, data.HintBarRight),
+            SettingsField.StatusBarItems => App.StatusBarItems.Value(data.StatusBarItems, data.StatusBarOrder, data.StatusBarRight),
+            SettingsField.HintsBar => UI.HintsBarMode.Name(UI.HintsBarMode.Resolve(data.HintsBar)),
             SettingsField.ToolbarItems => App.ToolbarItems.Value(data.ToolbarItems),
             SettingsField.ShowPerformanceBar => PerfBarItems.Value(data.PerformanceBarItems, data.PerformanceBarLook, data.PerformanceBarOrder, data.PerformanceBarLeft, data.PerformanceBarRight),
             SettingsField.ShowHomeBar => HomeBarItems.Value(data.HomeBarItems, null),
@@ -3182,7 +3191,7 @@ internal sealed partial class SettingsMenu
     public const string PerfBarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · Shift+←→ = side · a = all · n = none · d = default · ESC = back";   // the side since later on 2026-10-13 (the user's ask: pinned left, center or right)
 
     /// <summary>The Hint bar checklist's hint (2026-10-12): the toolbar's keys, the same string until the tool bar's dividers (2026-10-13). Pinned.</summary>
-    public const string HintBarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · Shift+←→ = side · a = all · n = none · d = default · ESC = back";
+    public const string StatusBarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · Shift+←→ = side · a = all · n = none · d = default · ESC = back";
 
     /// <summary>The Toolbar order page's hint (2026-10-12): the move keys and default, nothing to check. Pinned.</summary>
     public const string BarOrderKeys = "Shift+↑↓ = move · Shift+Home/End = top or bottom · d = default · ESC = back";
@@ -3586,6 +3595,10 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the welcome-splash picker: the mode and its hint (padded to nine: <c>fullsize</c> and <c>disabled</c> are eight). Pinned.</summary>
     public static string WelcomeSplashModeLabel(string name) =>
         Markup.Escape(name.PadRight(9)) + Theme.DimMarkup(UI.SplashMode.Describe(name));
+
+    /// <summary>One row of the Hints bar picker (2026-10-14): the word and its note (padded to eight: <c>always</c> is six).</summary>
+    public static string HintsBarLabel(string name) =>
+        Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(UI.HintsBarMode.Describe(name));
 
     /// <summary>One row of the menus-max-height picker: the height and its hint (padded to fifteen: <c>three-quarters</c> is fourteen). Pinned.</summary>
     public static string MenuMaxHeightLabel(string name) =>
@@ -4952,9 +4965,9 @@ internal sealed partial class SettingsMenu
             return await EditToolbarItemsAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        if (field == SettingsField.HintBarItems)
+        if (field == SettingsField.StatusBarItems)
         {
-            return await EditHintBarAsync(cancellationToken).ConfigureAwait(false);
+            return await EditStatusBarAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.SessionNamingMode)
@@ -5096,6 +5109,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.WelcomeSplash)
         {
             return await PickWelcomeSplashModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.HintsBar)
+        {
+            return await PickHintsBarAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.MenuMaxHeight)
@@ -8494,15 +8512,15 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The hint bar's checklist under the settings list (2026-10-12, the user's ask: the other bars' checklist for the hint bar):
-    /// one <see cref="App.HintBarItems.Label"/> row per section in the row's order (<see cref="App.HintBarItems.Order"/>), Enter or
+    /// one <see cref="App.StatusBarItems.Label"/> row per section in the row's order (<see cref="App.StatusBarItems.Order"/>), Enter or
     /// Space flipping it and saving at once; Shift+↑↓ moves the cursor's section a place, Shift+Home/End to the top or the bottom,
     /// Delete unchecks it; select all, select none and default (every section but the working directory, the row's own order) on the title row. The list is
     /// re-shown until ESC, the row redrawing under it. Since 2026-10-13 (the user's ask) two groups, pinned left and pinned right
     /// (<see cref="EditSidedChecklistAsync"/>). True when anything changed.
     /// </summary>
-    private async Task<bool> EditHintBarAsync(CancellationToken cancellationToken)
+    private async Task<bool> EditStatusBarAsync(CancellationToken cancellationToken)
     {
-        return await EditSidedChecklistAsync(HintBarChecklist, cancellationToken).ConfigureAwait(false);
+        return await EditSidedChecklistAsync(StatusBarChecklist, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -8989,6 +9007,25 @@ internal sealed partial class SettingsMenu
 
         string name = UI.SplashMode.Names[index];
         Apply(SettingsField.WelcomeSplash, d => d.WelcomeSplashMode = name);
+        return true;
+    }
+
+    /// <summary>
+    /// The Hints bar picker under the settings list (2026-10-14): one <see cref="HintsBarLabel"/> row per <see cref="UI.HintsBarMode.Names"/>
+    /// entry, the word in force under the cursor (a hand-edited word, the default's). The pane follows at its next tick.
+    /// </summary>
+    private async Task<bool> PickHintsBarAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        string current = UI.HintsBarMode.Name(UI.HintsBarMode.Resolve(saved.HintsBar));
+        var page = new MenuPage(Crumb(FieldName(SettingsField.HintsBar)), UI.HintsBarMode.Names.Select(HintsBarLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Array.IndexOf(UI.HintsBarMode.Names, current), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = UI.HintsBarMode.Names[index];
+        Apply(SettingsField.HintsBar, d => d.HintsBar = name == UI.HintsBarMode.Default ? null : name);
         return true;
     }
 

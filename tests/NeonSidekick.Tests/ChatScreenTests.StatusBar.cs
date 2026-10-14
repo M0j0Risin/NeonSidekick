@@ -15,7 +15,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task HintBar_TheModelPinnedLeftFirst_LeadsTheRow_AndADoubleClickRunsTheServerFlow()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.LlmUrl = "http://127.0.0.1:1234/v1"; d.LlmModel = "llama"; d.HintBarOrder = ["model", "status", "queued", "keys", "timers", "reading", "usage"]; d.HintBarRight = ["cwd"]; });
+        _settings.Update(d => { d.TtsOutput = false; d.LlmUrl = "http://127.0.0.1:1234/v1"; d.LlmModel = "llama"; d.StatusBarOrder = ["model", "status", "queued", "keys", "timers", "reading", "usage"]; d.StatusBarRight = ["cwd"]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -44,7 +44,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task HintBar_ADoubleClickOnTheTimers_AsksAndCancelsThemAll()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.HintBarItems = ["timers", "usage"]; d.ToolbarItems = []; });
+        _settings.Update(d => { d.TtsOutput = false; d.StatusBarItems = ["timers", "usage"]; d.ToolbarItems = []; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 120;
         _geometry = new ScreenGeometry(() => null, () => 100);   // an empty line: row 100, the rule 101, the hint row 102
@@ -69,7 +69,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task HintBar_AnUncheckedSection_IsLeftOut()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.HintBarItems = ["status", "queued", "keys", "timers", "reading", "usage"]; });
+        _settings.Update(d => { d.TtsOutput = false; d.StatusBarItems = ["status", "queued", "keys", "timers", "reading", "usage"]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 120;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -178,7 +178,7 @@ public partial class ChatScreenTests
     [WindowsFact]
     public async Task HintBar_TheWorkingDirectory_SharesTheRightEdge_AndADoubleClickBrowses()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.HintBarItems = [.. HintBarItems.Names]; d.ToolbarItems = []; });
+        _settings.Update(d => { d.TtsOutput = false; d.StatusBarItems = [.. StatusBarItems.Names]; d.ToolbarItems = []; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -193,7 +193,7 @@ public partial class ChatScreenTests
         string model = ScreenPane.TrailerText("llama", ChatScreen.ModelMark("llama", _settings.Current.LlmReasoning));
         Assert.Contains(model + ScreenPane.ToolbarModelSeparator + cwd, output);
         Assert.Contains(Titled(FolderText.Title + " │ " + FolderText.CollapseAllButton + " "), output);
-        Assert.Null(HintBarItems.Save(HintBarItems.Resolve(null).ToHashSet()));   // off by default
+        Assert.Null(StatusBarItems.Save(StatusBarItems.Resolve(null).ToHashSet()));   // off by default
     }
 
     /// <summary>
@@ -222,7 +222,7 @@ public partial class ChatScreenTests
     [WindowsFact]
     public async Task HintBar_TheSpinnerPinnedRight_StandsAtTheRightUnderAReply()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.HintBarRight = [HintBarItems.Spinner, HintBarItems.Model, HintBarItems.WorkingDirectory]; d.ToolbarItems = []; });
+        _settings.Update(d => { d.TtsOutput = false; d.StatusBarRight = [StatusBarItems.Spinner, StatusBarItems.Model, StatusBarItems.WorkingDirectory]; d.ToolbarItems = []; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -235,5 +235,45 @@ public partial class ChatScreenTests
         string line = output.Split('\n').Last(l => l.Contains(spinner, StringComparison.Ordinal));
         Assert.True(TextCells.Width(line[..line.IndexOf(spinner, StringComparison.Ordinal)]) > 150, line);   // at the right, not at column 0
         Assert.Contains(spinner + ScreenPane.HintSeparator + "llama", line);
+    }
+
+    /// <summary>
+    /// The Hints bar (2026-10-14, the user's ask): the first Ctrl+C's hint on a row of its own over the Status bar, which keeps the
+    /// model; a double-click on that row opens /settings, as the other bars' plain text does.
+    /// </summary>
+    [Fact]
+    public async Task HintsBar_TheFirstCtrlC_HasARowOfItsOwn_ADoubleClickThereOpensTheSettings()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = []; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // an empty line: row 100, the rule 101, the Hints bar 102 (while it has a row), the Status bar 103
+        StepsWhenIdle(
+            Key(Keys.CtrlC),
+            input => { input.PushClick(5, 102); input.PushClick(5, 102); },   // the Hints bar's text: the settings
+            Key(Keys.Escape),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains("\n" + ChatScreen.ExitHint + "\n" + Row(""), output);
+        Assert.Contains("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n", output);
+        Assert.DoesNotContain("› /settings", output);
+    }
+
+    /// <summary>The Hints bar off (2026-10-14): the first Ctrl+C's hint on the Status bar, in the text sections' place, as the hint row had it.</summary>
+    [Fact]
+    public async Task HintsBar_Off_TheFirstCtrlC_StandsOnTheStatusBar()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = []; d.HintsBar = HintsBarMode.Off; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        StepsWhenIdle(Key(Keys.CtrlC), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(Row(ChatScreen.ExitHint), output);
+        Assert.DoesNotContain("\n" + ChatScreen.ExitHint + "\n", output);
     }
 }

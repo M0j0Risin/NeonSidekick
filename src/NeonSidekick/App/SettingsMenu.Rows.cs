@@ -15,7 +15,7 @@ internal sealed partial class SettingsMenu
     /// tab ran the Claude Code server, <c>/claude</c> and the Anthropic API together with nothing saying whose row was whose, and
     /// the rest wanted the same look): Anthropic's Claude Code (the executable both read), Claude Code server, <c>/claude</c>
     /// command and Anthropic API; Embedded, Docker, OpenAI, TTS, STT, Sessions and Advisors in runs of their own, a few rows moved
-    /// to sit under theirs (<see cref="TabFields"/>). Chat's Tool bars (2026-10-12, the user's ask) holds the four bar rows under
+    /// to sit under theirs (<see cref="TabFields"/>). Chat's Tool bars (2026-10-12, the user's ask) holds the bar rows under
     /// Screen. Pinned.
     /// </summary>
     public static readonly IReadOnlyDictionary<SettingsTab, IReadOnlyList<(SettingsField First, string Title)>> TabSections =
@@ -27,7 +27,7 @@ internal sealed partial class SettingsMenu
                 (SettingsField.QueueMode, "Input line"),
                 (SettingsField.TranscriptMarkdown, "Transcript"),
                 (SettingsField.Theme, "Screen"),
-                (SettingsField.HintBarItems, "Tool bars"),   // the Hint bar its first row since later on 2026-10-12
+                (SettingsField.HintsBar, "Tool bars"),   // the Hints bar its first row since 2026-10-14 (the Hint bar since later on 2026-10-12)
                 (SettingsField.DraftEditor, "Outside apps"),
             ],
             [SettingsTab.Common] =
