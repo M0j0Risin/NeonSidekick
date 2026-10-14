@@ -350,4 +350,28 @@ public partial class ChatScreenTests
         Assert.Single(_chat.Requests);
         Assert.DoesNotContain(ChatScreen.ConnectCancelledNotice(NoticeGlyphs.Llm), output);
     }
+
+    [Fact]
+    public async Task UnderTheLoad_TheCommandList_Opens_AndEscClosesIt()
+    {
+        // 2026-10-14, the user's report: the startup's load ran its live row before the first idle read, so the row had no
+        // completion lists. The screen is read while the load is still held: the idle line's /exit opens the list of its own.
+        var embedded = OnTheEmbeddedE2b();
+        LoadOnThePane();
+        var input = WhenIdle(i => PushLine(i, "/exit"));
+        string underTheLoad = "";
+        embedded.StartGate = async ct =>
+        {
+            input.Push(Keys.Char('/'), Keys.Char('h'), Keys.Char('e'), Keys.Escape, Keys.Ctrl(ConsoleKey.A), Keys.Backspace);
+            await UntilAsync(() => !input.IsAvailable, ct);
+            await Task.Delay(60, ct);   // the watcher takes the keys
+            underTheLoad = _console.Output;
+        };
+
+        string output = await RunAsync(input);
+
+        Assert.Contains(MentionCompleter.Hint, underTheLoad);
+        Assert.DoesNotContain(ChatScreen.ConnectCancelledNotice(NoticeGlyphs.Llm), output);
+        Assert.NotNull(embedded.Running);
+    }
 }

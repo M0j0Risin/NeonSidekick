@@ -193,6 +193,17 @@ public sealed partial class InputLine
             _liveEmptyEnter = emptyEnter;
         }
 
+        /// <summary>
+        /// The line options <see cref="BeginLive"/> takes from the last idle read — the completion lists' folder action and the paste
+        /// preview — set ahead of any read (2026-10-14, the user's report: the startup's embedded load runs its live row before the
+        /// first idle read, so the row had no lists and no preview). Every idle read sets them again; a setting changed under the
+        /// load reaches the row at the next one, as under a reply.
+        /// </summary>
+        public void SetLineOptions(MentionFolderAction mentions, int pastePreview)
+        {
+            _o = _o with { Mentions = mentions, PastePreview = pastePreview };
+        }
+
         /// <summary>Ctrl+C under a reply (2026-09-25): the selection copied, as at idle — true when there was one (a failed copy says so); false with none.</summary>
         public bool TryCopySelection()
         {

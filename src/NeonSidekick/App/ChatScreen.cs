@@ -951,6 +951,9 @@ internal sealed partial class ChatScreen
     /// </summary>
     private InputLine.Editor? LiveEditor => _pane.Enabled ? _input.Chat : null;
 
+    /// <summary>The chat line's paste preview rows, <c>Paste preview lines</c> held to what a preview can show: the idle read's, and the startup's seed of the live row (2026-10-14).</summary>
+    private int PastePreviewRows() => Math.Clamp(_effective().PastePreviewLines, 0, PasteBlocks.MaxPreviewLines);
+
     /// <summary>The line hook of a watch that runs no command (a spinner's, 2026-09-25): a line sent there waits for the idle line. Null without the pane.</summary>
     private Func<KeySource.WatchedLine, Task<bool>>? LiveLineHook => _pane.Enabled ? PendLineAsync : null;
 
@@ -10041,6 +10044,9 @@ internal sealed partial class ChatScreen
             // The first start's desktop shortcut offer (2026-10-09): first of all, before the LLM's connect (the user's call the
             // same day), so it never waits behind a scan, a server picker or the Connect page.
             await OfferShortcutAsync(cancellationToken).ConfigureAwait(false);
+            // The chat line's options ahead of the first idle read (2026-10-14, the user's report): the startup's embedded load
+            // runs its live row before it, and that row had no completion lists.
+            _input.Chat.SetLineOptions(MentionFolderMode.Resolve(_effective()), PastePreviewRows());
             await ConnectLlmAsync(cancellationToken, quiet: true, startup: true).ConfigureAwait(false);
             await ConnectSpeechAsync(cancellationToken, quiet: true).ConfigureAwait(false);
             await ConnectVoiceAsync(cancellationToken, quiet: true).ConfigureAwait(false);
@@ -10579,7 +10585,7 @@ internal sealed partial class ChatScreen
                 alert: alert.Token,
                 multiline: true,
                 mentions: MentionFolderMode.Resolve(_effective()),
-                pastePreview: Math.Clamp(_effective().PastePreviewLines, 0, PasteBlocks.MaxPreviewLines),
+                pastePreview: PastePreviewRows(),
                 softEscape: StopTailFirst,
                 interrupt: InterruptFirst,
                 intercept: TypoInterceptAsync,
