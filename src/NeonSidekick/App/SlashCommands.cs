@@ -399,7 +399,7 @@ public static class SlashCommands
             new("/compact", "shrink the conversation's context"),
             new("/copy", "copy replies to the clipboard"),
             new("/cwd", "show or change the working directory"),
-            new("/docker", "manage Docker Desktop's containers"),
+            new("/docker", "manage the Docker engine's containers"),
             new("/draft", "write the next message in your editor"),
             new("/echo", "print a line as a reply"),
             new("/exit", "exit the app"),

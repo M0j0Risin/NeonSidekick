@@ -150,7 +150,7 @@ public sealed record SidekickOptions(
         "  --version      print the version and exit\n" +
         "  -h, --help     this text\n" +
         "\n" +
-        "Exit codes: 0 done, 2 bad argument or unknown profile, 3 headless run in which a shell command was refused\n" +
+        "Exit codes: 0 done, 1 a check failed, 2 bad argument or unknown profile, 3 headless run in which a shell command was refused\n" +
         "\n" +
         "Keys: ESC = cancel/back";
 

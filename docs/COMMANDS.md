@@ -103,7 +103,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/profile push\|pull <name>` | Copies every setting but the working directory to (`push`) or from (`pull`) another profile; a pull clears the conversation. |
 | `/profile push\|pull keys <name>` | Copies the five API keys; one the source lacks is cleared in the target, and one set only by a variable isn't copied. |
 | `/profile push\|pull servers <name>` | Copies the server settings (server, model, reasoning, sampling, the Embedded, Docker, Anthropic and OpenAI tabs but the keys), replacing the target's. |
-| `/profile push\|pull allowed <name> [overwrite]`, `/profile push\|pull policestrings <name> [overwrite]` | Copies *Shell allowed commands* or *Shell police forbidden strings*: added to the target's, or replacing them with `overwrite`. |
+| `/profile push\|pull allowed <name> [overwrite]`, `/profile push\|pull policestrings <name> [overwrite]` | Copies *Shell allowed commands* or *Shell police forbidden strings*, after a yes: added to the target's, or replacing them with `overwrite`. |
 | `/profile push\|pull history <name> [overwrite]`, `/profile push\|pull memory <name> [overwrite]`, `/profile push\|pull prompts <name> [overwrite]` | Copies the message history, the memories or the saved prompts, the same way; history is refused while the target has *Keep message history* off. |
 | `/profile push\|pull persona <name> [overwrite]`, `/profile push\|pull operata <name> [overwrite]`, `/profile push\|pull vocalia <name> [overwrite]` | Copies `persona.md`, `operata.md` (the operating rules) or `vocalia.md` (the spoken-reply directive); one already there is replaced only with `overwrite`. |
 | `/profile push\|pull avatar user\|model <name>` | Copies the *User avatar* or the *Model avatar*. |
@@ -182,9 +182,9 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/browser [<url>]` | Opens a page (or *Web browser home page*) in the Browser window, to sign in or pass a bot check; on close its cookies go to the web tools. Windows only. |
 | `/browser clear history\|all` | Clears its history, or after a yes everything it keeps (cookies and sign-ins too); saved links stay. Windows only. |
 | `/browser <n>` | Opens saved link *n* in the Browser window. Windows only. |
-| `/browser save [<url> [<name>]]` | Saves a link (the words after the address name it), or with no address the page the window shows. |
+| `/browser save [<url> [<name>]]` | Saves a link (the words after the address name it), or with no address the page the window shows. Headless, give the address. |
 | `/browser list`, `/browser list --clear` | The saved links in a pane; `--clear` removes them all after a yes (headless: at once). |
-| `/browser unsave <n>\|<url>` | Removes one saved link. |
+| `/browser unsave <n>\|<url>` | Removes one saved link. Works headless too. |
 | `/youtube`, `/youtube status` | Says what the video window is playing. |
 | `/youtube <words>`, `/youtube search <words>` | Searches YouTube and opens a picker (a *YouTube API key*, 100 quota units a search); `search` takes words that start like a verb. |
 | `/youtube search [--switches] <words>` | Searches with `--playlists`, `--channels`, `--order relevance\|date\|views\|rating\|title`, `--length short\|medium\|long`, `--since today\|week\|month\|year\|<date>`, `--region <cc>`, `--lang <code>`, `--live`, `--captions`, `--safe none\|moderate\|strict`. |

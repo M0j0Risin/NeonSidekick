@@ -13,8 +13,8 @@ namespace NeonSidekick.Settings;
 /// Nothing else in the process calls <c>Environment.GetEnvironmentVariable</c>; tests hand this
 /// class a dictionary lookup and never mutate process state.</para>
 ///
-/// <para>Numeric values are parsed with <see cref="CultureInfo.InvariantCulture"/> (the build is
-/// <c>InvariantGlobalization</c>). A value that fails to parse is logged and ignored, never
+/// <para>Numeric values are parsed with <see cref="CultureInfo.InvariantCulture"/> (explicitly: <c>InvariantGlobalization</c> is
+/// off since 2026-09-23, and <c>App/CulturePin</c> pins every culture first). A value that fails to parse is logged and ignored, never
 /// thrown and never clamped: a bad variable should cost the override, not the launch.</para>
 /// </summary>
 public sealed class EnvironmentOverrides

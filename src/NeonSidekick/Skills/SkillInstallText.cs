@@ -19,7 +19,7 @@ public static class SkillInstallText
     /// <summary>The completion note for <see cref="AddWord"/>.</summary>
     public const string AddNote = "install a skill from skills.sh or GitHub: search words, owner/repo[/skill] or a URL";
 
-    public const string UsageError = "Usage: /skills add <search words | owner/repo[/skill] | github url | zip url> [--global] [--yes]";
+    public const string UsageError = "Usage: /skills add <search words | owner/repo[/skill] | github url | zip url> [--global | --profile] [--yes]";
 
     public static string BadRepoError(string text) => $"'{text}' is not a GitHub repository: owner/repo or owner/repo/skill";
 

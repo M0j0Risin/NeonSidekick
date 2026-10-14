@@ -31,7 +31,7 @@ public sealed class SidekickApp
     public const string Name = "NeonSidekick";
 
     /// <summary>The second line of headless output.</summary>
-    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name] | gaps [model|advisor|any]); /skills add <source> [--global] [--yes] installs a skill; /claude <message> asks Claude Code; /rewind [n] goes back n messages; /exit or EOF exits.";
+    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name] | gaps [model|advisor|any]); /skills add <source> [--global|--profile] [--yes] installs a skill; /claude <message> asks Claude Code; /rewind [n] goes back n messages; /exit or EOF exits.";
 
     /// <summary>Printed once when discovery under <paramref name="scope"/> found nothing. Pinned by tests; shared with the chat screen.</summary>
     public static string HeadlessNoServerLine(ScanScope scope) => LlmSession.HeadlessNoServerLine(scope);

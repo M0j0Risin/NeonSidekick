@@ -130,7 +130,7 @@ public sealed record EmbeddedModel(
 /// block's attention and MLP) and differ only in the output head, the token embedding and the NextN head
 /// (<see cref="EmbeddedModel.MtpHead"/>, in the weights like Unsloth's); HIGHEST keeps the MLP of layers 0–55 in NVFP4 and
 /// the rest in Q8_0/BF16. NVFP4 wants the CUDA build on a Blackwell GPU (sm_120; the pinned CUDA 13.4 build covers it,
-/// <see cref="LlamaRelease"/>) — nothing gates the rows by GPU, the README says so. Its projector is Unsloth's BF16 one,
+/// <see cref="LlamaRelease"/>) — nothing gates the rows by GPU; the README names the Blackwell cards they are for. Its projector is Unsloth's BF16 one,
 /// byte for byte. Sampling as Qwen's card (the repository's card repeats it).</para>
 ///
 /// <para>On 2026-09-30 (the user's pick) Meta's Muse Glimmer 30B joined — a dense 30B with its own perception encoder —
