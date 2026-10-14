@@ -19,7 +19,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The Home Assistant tools (2026-09-28): the three reads (overview, states, history), the four typed acts (lights, scene,
-    /// media, to-do), the generic service call and Assist — the acts behind <paramref name="confirm"/> for what the policy asks
+    /// media, to-do), the generic service call and Assist — the acts and Assist behind <paramref name="confirm"/> for what the policy asks
     /// about (null where nothing can ask: headless). Shared with headless.
     /// </summary>
     public static IReadOnlyList<AIFunction> HomeAssistantTools(HaSession ha, Func<string, CancellationToken, Task<bool?>>? confirm, TimeZoneInfo? zone = null) =>
@@ -32,7 +32,7 @@ internal sealed partial class ChatScreen
         new HaMediaTool(ha, confirm),
         new HaTodoTool(ha, confirm),
         new HaCallServiceTool(ha, confirm),
-        new HaAssistTool(ha),
+        new HaAssistTool(ha, confirm),
     ];
 
     /// <summary>The Home Assistant tools' names: their result's first line is the transcript's note (<see cref="HaText.Note"/>).</summary>

@@ -754,11 +754,11 @@ The household's tools.
 | Home Assistant URL | Your server (`http://localhost:8123`, or one on your LAN). | empty |
 | Home Assistant API key | A long-lived access token (your Home Assistant profile › Security), saved encrypted. Empty clears it. | empty |
 | Home Assistant test connection | Asks the server for its version with the saved URL and token. | — |
-| Home Assistant action policy | `off`: read only. `ask`: lights, scenes, media and to-do lists run, and anything else (a switch, a script, an automation) asks first, refused headless. `allow`: everything runs. `/ha` never asks. | `ask` |
+| Home Assistant action policy | `off`: read only. `ask`: lights, scenes, media and to-do lists run, and anything else (a switch, a script, an automation, a sentence for Assist) asks first, refused headless. `allow`: everything runs. `/ha` never asks. | `ask` |
 | Home Assistant Assist agent | The conversation agent `ha_assist` and `/ha say` use. | empty (Home Assistant's default) |
 | Home Assistant timeout (s) | How long one request may take (2–60). | 10 |
 
-The services that run unasked under `ask` can be changed in `profile.json` (`HomeAssistantSafeServices`).
+The services that run unasked under `ask` can be changed in `profile.json` (`HomeAssistantSafeServices`); `conversation.process` there lets `ha_assist` run unasked.
 
 #### Shopping
 

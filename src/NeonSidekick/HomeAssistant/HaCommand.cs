@@ -119,7 +119,7 @@ public static class HaCommand
                     return HaCommandResult.Error(HaText.Usage);
                 }
 
-                string answer = await HaAssistTool.AskAsync(ha, rest, cancellationToken, judged: false).ConfigureAwait(false);
+                string answer = await HaAssistTool.AskAsync(ha, rest, cancellationToken).ConfigureAwait(false);
                 return answer.StartsWith("Error:", StringComparison.Ordinal) ? HaCommandResult.Error(answer) : HaCommandResult.Of(answer);
 
             default:

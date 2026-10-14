@@ -7,8 +7,10 @@ namespace NeonSidekick.Llm.Tools;
 /// <summary>
 /// <c>ha_assist(text)</c> (2026-09-28, the user's call: Assist as a fallback): a sentence handed to Home Assistant's own
 /// conversation agent (<c>Home Assistant Assist agent</c>, empty = the default) — "turn on the kitchen lights", "what is the
-/// temperature in the bathroom?" — for when the typed tools do not fit. Assist reaches only the entities exposed to it, so
-/// under <c>ask</c> it runs without the pane; under <c>off</c> it is refused, since it may act.
+/// temperature in the bathroom?" — for when the typed tools do not fit. Judged as the service it is, <c>conversation.process</c>:
+/// refused under <c>off</c>, run under <c>allow</c>, and under <c>ask</c> the sentence waits for the user's yes on the pane unless
+/// <c>HomeAssistantSafeServices</c> names it (2026-10-14, the user's ask, found by the docs pass: it ran unasked under <c>ask</c>,
+/// while Assist may unlock a door or open a garage as readily as it answers a question; headless, with nobody to ask, refuses).
 /// </summary>
 public sealed class HaAssistTool : HaTool
 {
@@ -26,7 +28,11 @@ public sealed class HaAssistTool : HaTool
         }
         """);
 
-    public HaAssistTool(HaSession ha) : base(ha, confirm: null)
+    /// <summary>Assist's service, the name the policy and the safe list judge it by.</summary>
+    public const string Domain = "conversation";
+    public const string Service = "process";
+
+    public HaAssistTool(HaSession ha, Func<string, CancellationToken, Task<bool?>>? confirm) : base(ha, confirm)
     {
     }
 
@@ -45,22 +51,27 @@ public sealed class HaAssistTool : HaTool
             return HaText.Missing(TextArgument);
         }
 
-        return await AskAsync(Ha, text, cancellationToken, judged: true).ConfigureAwait(false);
+        if (!HaSession.Configured(Effective))
+        {
+            return HaText.NotConfigured;
+        }
+
+        if (await GateAsync(Domain, Service, HaText.AssistQuestion(text), cancellationToken).ConfigureAwait(false) is { } refused)
+        {
+            return refused;
+        }
+
+        return await AskAsync(Ha, text, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Assist's answer to <paramref name="text"/>. <paramref name="judged"/> (the model's call) refuses under policy <c>off</c>;
-    /// <c>/ha say</c> is the user's own and passes false. The snapshot is marked stale after, since Assist may have acted.
+    /// Assist's answer to <paramref name="text"/>, unjudged: the tool gates first, and <c>/ha say</c> is the user's own. The
+    /// snapshot is marked stale after, since Assist may have acted.
     /// </summary>
-    public static async Task<string> AskAsync(HaSession ha, string text, CancellationToken cancellationToken, bool judged)
+    public static async Task<string> AskAsync(HaSession ha, string text, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(ha);
         ArgumentNullException.ThrowIfNull(text);
-        if (judged && HaPolicy.Resolve(ha.Effective.HomeAssistantActionPolicy) == HaPolicy.Off)
-        {
-            return HaText.PolicyOff;
-        }
-
         if (ha.Client() is not { } client)
         {
             return HaText.NotConfigured;

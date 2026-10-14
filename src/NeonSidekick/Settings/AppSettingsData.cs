@@ -3049,7 +3049,8 @@ public sealed class AppSettingsData
     /// <summary>
     /// The services that run without asking under <c>ask</c> (2026-09-28): <c>domain.service</c> entries, <c>domain.*</c>
     /// for a whole domain. Null = <see cref="HomeAssistant.HaPolicy.DefaultSafeServices"/> (the lights, a scene, the TV's
-    /// power, volume, source and playback, the to-do lists). profile.json only, no row. No variable.
+    /// power, volume, source and playback, the to-do lists); <c>conversation.process</c> lets <c>ha_assist</c> run unasked (2026-10-14).
+    /// profile.json only, no row. No variable.
     /// </summary>
     public List<string>? HomeAssistantSafeServices { get; set; }
 

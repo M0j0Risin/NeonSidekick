@@ -555,14 +555,51 @@ public sealed class HomeAssistantTests : IDisposable
     {
         _stub.Map(Server + "/api/conversation/process", HttpStatusCode.OK, """{"response":{"response_type":"action_done","speech":{"plain":{"speech":"Turned off the lights"}}},"conversation_id":"x"}""");
         _settings.HomeAssistantAssistAgent = "conversation.google_ai";
-        var tool = new HaAssistTool(_ha);
+        var tool = new HaAssistTool(_ha, Answer(true));
 
         Assert.Equal("Assist (action done): Turned off the lights", await Invoke(tool, ("text", "turn off the kitchen")));
         Assert.Equal("""{"text":"turn off the kitchen","agent_id":"conversation.google_ai"}""", _stub.Requests[^1].Body);
 
         _settings.HomeAssistantActionPolicy = HaPolicy.Off;
         Assert.Equal(HaText.PolicyOff, await Invoke(tool, ("text", "turn off the kitchen")));
-        Assert.Equal("Assist (action done): Turned off the lights", await HaAssistTool.AskAsync(_ha, "turn off the kitchen", CancellationToken.None, judged: false));
+        Assert.Single(_asked);
+        Assert.Equal("Assist (action done): Turned off the lights", await HaAssistTool.AskAsync(_ha, "turn off the kitchen", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Assist_UnderAsk_WaitsForTheUsersYes_UnlessAllowedOrListedSafe()
+    {
+        _stub.Map(Server + "/api/conversation/process", HttpStatusCode.OK, """{"response":{"response_type":"action_done","speech":{"plain":{"speech":"Unlocked the front door"}}},"conversation_id":"x"}""");
+        int Sent() => _stub.Requests.Count(r => r.Uri.AbsolutePath == "/api/conversation/process");
+
+        // Nobody to ask (headless), nothing asked, or a no: Assist is never reached.
+        Assert.Equal(HaText.NotAsked, await Invoke(new HaAssistTool(_ha, null), ("text", "unlock the front door")));
+        Assert.Equal(HaText.NotAsked, await Invoke(new HaAssistTool(_ha, Answer(null)), ("text", "unlock the front door")));
+        Assert.Equal(HaText.Declined, await Invoke(new HaAssistTool(_ha, Answer(false)), ("text", "unlock the front door")));
+        Assert.Equal(0, Sent());
+        Assert.Equal("Let the model tell Home Assistant's Assist \"unlock the front door\"?", _asked[^1]);
+
+        Assert.Equal("Assist (action done): Unlocked the front door", await Invoke(new HaAssistTool(_ha, Answer(true)), ("text", "unlock the front door")));
+        Assert.Equal(1, Sent());
+
+        // Allowed, or conversation.process on the safe list: it runs unasked.
+        _asked.Clear();
+        _settings.HomeAssistantActionPolicy = HaPolicy.Allow;
+        Assert.StartsWith("Assist", await Invoke(new HaAssistTool(_ha, Answer(false)), ("text", "unlock the front door")));
+        _settings.HomeAssistantActionPolicy = HaPolicy.Ask;
+        _settings.HomeAssistantSafeServices = ["light.*", "conversation.process"];
+        Assert.StartsWith("Assist", await Invoke(new HaAssistTool(_ha, Answer(false)), ("text", "unlock the front door")));
+        Assert.Empty(_asked);
+        Assert.Equal(3, Sent());
+    }
+
+    [Fact]
+    public async Task Assist_NotConfigured_SaysSo_BeforeAsking()
+    {
+        _settings.HomeAssistantUrl = "";
+
+        Assert.Equal(HaText.NotConfigured, await Invoke(new HaAssistTool(_ha, Answer(true)), ("text", "turn off the kitchen")));
+        Assert.Empty(_asked);
     }
 
     [Fact]

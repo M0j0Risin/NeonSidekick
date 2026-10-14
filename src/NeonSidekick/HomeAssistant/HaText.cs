@@ -94,6 +94,10 @@ public static class HaText
         return $"Let the model run {domain}.{service}{on}{with} in Home Assistant?";
     }
 
+    /// <summary>The question on the pane before an asked <c>ha_assist</c>: the sentence Assist would act on. Pinned.</summary>
+    public static string AssistQuestion(string text) =>
+        $"Let the model tell Home Assistant's Assist \"{Clip(Single(text), 200)}\"?";
+
     // ─── results ────────────────────────────────────────────────────────────────
 
     /// <summary>The transcript's one-line note for a result: its first line.</summary>

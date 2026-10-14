@@ -33,7 +33,14 @@ public abstract class HaTool : AIFunction
     /// Whether <paramref name="domain"/>.<paramref name="service"/> on <paramref name="targets"/> may run: null when it may,
     /// else the refusal (policy off, the user's no, nobody to ask).
     /// </summary>
-    protected async Task<string?> GateAsync(string domain, string service, IReadOnlyList<HaEntity> targets, string? data, CancellationToken cancellationToken)
+    protected Task<string?> GateAsync(string domain, string service, IReadOnlyList<HaEntity> targets, string? data, CancellationToken cancellationToken) =>
+        GateAsync(domain, service, HaText.ConfirmQuestion(domain, service, targets.Count == 0 ? "" : HaText.Names(targets), data), cancellationToken);
+
+    /// <summary>
+    /// The gate with the pane's question given: <see cref="HaPolicy.Judge"/> on <paramref name="domain"/>.<paramref name="service"/>,
+    /// then, for an asked call, <paramref name="question"/> through <c>confirm</c>. Null when it may run, else the refusal.
+    /// </summary>
+    protected async Task<string?> GateAsync(string domain, string service, string question, CancellationToken cancellationToken)
     {
         switch (HaPolicy.Judge(Effective, domain, service))
         {
@@ -43,7 +50,6 @@ public abstract class HaTool : AIFunction
                 return HaText.PolicyOff;
         }
 
-        string question = HaText.ConfirmQuestion(domain, service, targets.Count == 0 ? "" : HaText.Names(targets), data);
         bool? yes = _confirm is null ? null : await _confirm(question, cancellationToken).ConfigureAwait(false);
         return yes switch
         {
