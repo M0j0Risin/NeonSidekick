@@ -799,7 +799,7 @@ Offered in [plan mode](COMMANDS.md#plan-mode).
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `present_plan` | `title, markdown, name?` | Plan mode only. Saves the plan as `.neon/plans/<name>.md` with a `status` / `revision` / `requirement` header, prints it and asks for approval; revisions overwrite the same file. The result is your verdict. Headless, the plan is saved and `/plan approve` starts it. `status` is `draft`, `approved`, `cancelled`, `done` or `incomplete`. |
+| `present_plan` | `title, markdown, name?, gaps?` | Plan mode only. Saves the plan as `.neon/plans/<name>.md` with a `status` / `revision` / `requirement` header, prints it and asks for approval; revisions overwrite the same file. The result is your verdict. Headless, the plan is saved and `/plan approve` starts it. `status` is `draft`, `approved`, `cancelled`, `done` or `incomplete`. During a gap review (**Close gaps…**, `/plan gaps`), `gaps` lists the gaps the revision closed, one line each, and the pane is not shown; a revision with `gaps` empty ends the review and asks for approval (an unchanged plan adds no revision). |
 
 ## MCP servers
 

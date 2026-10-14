@@ -29,7 +29,7 @@ executable is on `PATH`; from a checkout, use `dotnet run --project src/NeonSide
 
 ```
 NeonSidekick 0.5.2
-Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name]); /skills add <source> [--global] [--yes] installs a skill; /claude <message> asks Claude Code; /rewind [n] goes back n messages; /exit or EOF exits.
+Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name] | gaps [model|advisor|any]); /skills add <source> [--global] [--yes] installs a skill; /claude <message> asks Claude Code; /rewind [n] goes back n messages; /exit or EOF exits.
 LLM: http://127.0.0.1:1234/v1 model=qwen3-30b-a3b (configured)
 You: Neon: Here is what I found…
 [tool] web_search {"query":"…"}
@@ -57,7 +57,7 @@ You:
 | `/splash` | Same as `/clear`. |
 | `/rewind [n]` | Goes back n messages (1 by default) at once, printing the dropped message as a `[notice]` to send again. Tool changes are not undone (a `[notice]` names those tools). No server needed. |
 | `/compact [focus]` | Shrinks the conversation now; a focus steers the summary. Needs a server. |
-| `/plan <requirement>` | Plan mode, as in the TUI (see [Plan mode](COMMANDS.md#plan-mode)). With no pane, the plan is saved as `.neon/plans/<name>.md` and a `[notice]` names it; then `/plan approve [--fresh]`, `cancel`, `show`, `save [<name>]` or `open [<name>]`. Needs *LLM offer tools* and a server. |
+| `/plan <requirement>` | Plan mode, as in the TUI (see [Plan mode](COMMANDS.md#plan-mode)). With no pane, the plan is saved as `.neon/plans/<name>.md` and a `[notice]` names it; then `/plan approve [--fresh]`, `cancel`, `show`, `save [<name>]`, `open [<name>]` or `gaps [model\|advisor\|any]`. `/plan gaps` runs the gap review with no input between passes (each pass echoed as a `You:` line), and ends with a `[notice]` naming `/plan approve`; with no ESC, *Plan gap passes* 0 means 20, and with *Advisor confirm* on the model reviews alone (no advisor call could be confirmed). Needs *LLM offer tools* and a server. |
 | `/claude <message>` | Sends the message to Claude Code (see [Claude Code from the chat](COMMANDS.md#claude-code-from-the-chat)); the reply follows `Claude: `, with a `[notice]` for the cost. Nothing is ever asked: what *Claude Code command permissions* doesn't allow is denied. No server needed. |
 | `/ha [on\|off\|toggle <name> [n%] \| scene <name> \| tv … \| states [filter] \| say <sentence>]` | Drives Home Assistant, printing each answer line (see `/ha` in [All commands](COMMANDS.md#all-commands)); *Home Assistant action policy* doesn't apply. Needs *Home Assistant URL* and *API key*; no server needed. |
 | `/avatar [model\|user] [<emoji>\|<words>\|clear]` | Bare, prints the profile's *Model avatar* (with `user`, your *User avatar*); an emoji or words set it, `clear` clears it. No server needed. |

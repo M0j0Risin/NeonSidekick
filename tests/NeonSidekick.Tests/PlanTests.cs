@@ -272,6 +272,16 @@ public class PlanTests : IDisposable
     [InlineData("cancel", false, "NotPlanning")]
     [InlineData("add a guide", false, "Enter")]
     [InlineData("show me the code", false, "Enter")]
+    // /plan gaps (2026-10-13): alone or with one word, the open rule; several words stay detail or a requirement.
+    [InlineData("gaps", true, "CloseGaps")]
+    [InlineData("GAPS Advisor", true, "CloseGaps")]
+    [InlineData("gaps any", true, "CloseGaps")]
+    [InlineData("gaps model", true, "CloseGaps")]
+    [InlineData("gaps advsior", true, "UnknownReviewer")]
+    [InlineData("gaps in the error handling need covering", true, "Detail")]
+    [InlineData("gaps", false, "NotPlanning")]
+    [InlineData("gaps model", false, "NotPlanning")]
+    [InlineData("gaps in the error handling", false, "Enter")]
     public void ParsePlanArgs_SubcommandsOnlyWhole(string args, bool planning, string expected) =>
         Assert.Equal(expected, ChatScreen.ParsePlanArgs(args, planning).ToString());
 
@@ -299,7 +309,7 @@ public class PlanTests : IDisposable
         var properties = _tool.JsonSchema.GetProperty("properties");
 
         Assert.Equal(PresentPlanTool.ToolName, _tool.Name);
-        Assert.Equal([PresentPlanTool.TitleArgument, PresentPlanTool.NameArgument, PresentPlanTool.MarkdownArgument], properties.EnumerateObject().Select(p => p.Name));
+        Assert.Equal([PresentPlanTool.TitleArgument, PresentPlanTool.NameArgument, PresentPlanTool.MarkdownArgument, PresentPlanTool.GapsArgument], properties.EnumerateObject().Select(p => p.Name));
         Assert.Equal([PresentPlanTool.TitleArgument, PresentPlanTool.MarkdownArgument], _tool.JsonSchema.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
     }
 

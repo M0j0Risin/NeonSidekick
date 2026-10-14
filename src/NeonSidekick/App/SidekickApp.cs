@@ -31,7 +31,7 @@ public sealed class SidekickApp
     public const string Name = "NeonSidekick";
 
     /// <summary>The second line of headless output.</summary>
-    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name]); /skills add <source> [--global] [--yes] installs a skill; /claude <message> asks Claude Code; /rewind [n] goes back n messages; /exit or EOF exits.";
+    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name] | gaps [model|advisor|any]); /skills add <source> [--global] [--yes] installs a skill; /claude <message> asks Claude Code; /rewind [n] goes back n messages; /exit or EOF exits.";
 
     /// <summary>Printed once when discovery under <paramref name="scope"/> found nothing. Pinned by tests; shared with the chat screen.</summary>
     public static string HeadlessNoServerLine(ScanScope scope) => LlmSession.HeadlessNoServerLine(scope);
@@ -811,8 +811,10 @@ public sealed class SidekickApp
         // Plan mode (2026-09-26): no pane to approve on, so a presented plan is saved and the user approves it with
         // /plan approve; the saved line is printed once the turn is over, never inside the streamed reply.
         var plan = new Plans.PlanSession();
-        var presentPlan = new Llm.Tools.PresentPlanTool(plan, files, _time, (_, _) => Task.FromResult(new Plans.PlanVerdict(Plans.PlanChoice.Saved)));
+        var presentPlan = new Llm.Tools.PresentPlanTool(plan, files, _time, (_, _) => Task.FromResult(new Plans.PlanVerdict(Plans.PlanChoice.Saved)), () => HeadlessGapLimit(EffectiveSettings.PlanGapPasses));
         var planState = new HeadlessPlanState();
+        // The gap-closing loop's next pass (2026-10-13): sent as the next line without reading stdin, since headless has no pane to chain on.
+        string? gapTurn = null;
         _liveSession = session;
         try
         {
@@ -877,15 +879,25 @@ public sealed class SidekickApp
                 _headlessAtLineStart = false;
 
                 string? line;
-                try
+                if (gapTurn is { } pass)
                 {
-                    line = await _headlessInput.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+                    // The gap-closing loop's next pass (2026-10-13), echoed as if typed.
+                    gapTurn = null;
+                    line = pass;
+                    await _headlessOutput.WriteAsync(pass + Environment.NewLine).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                else
                 {
-                    // Ctrl+C. The line was never going to be answered.
-                    DiagnosticLog.Info(ChatScreen.AppCategory, HeadlessExitLogLine(ChatScreen.ExitByAppToken));
-                    break;
+                    try
+                    {
+                        line = await _headlessInput.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        // Ctrl+C. The line was never going to be answered.
+                        DiagnosticLog.Info(ChatScreen.AppCategory, HeadlessExitLogLine(ChatScreen.ExitByAppToken));
+                        break;
+                    }
                 }
                 // A real console echoed the user's Enter; a pipe did not, and that is the caller's
                 // rendering problem, not ours.
@@ -1252,7 +1264,11 @@ public sealed class SidekickApp
                 if (plan.Active && plan.Path is { } planPath && plan.Revision > planState.RevisionShown)
                 {
                     planState.RevisionShown = plan.Revision;
-                    await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.SavedNotice(planPath, plan.Revision) + " — /plan approve [--fresh] starts it").ConfigureAwait(false);
+                    // A gap-closing pass's revision is said by the pass's own notice below (2026-10-13), not here every pass.
+                    if (plan.Closing is not { Pending: false, Converged: false })
+                    {
+                        await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.SavedNotice(planPath, plan.Revision) + " — /plan approve [--fresh] starts it").ConfigureAwait(false);
+                    }
                 }
 
                 // Round two (2026-09-26), as the screen does after a turn: a plan being carried out marked done or incomplete,
@@ -1260,6 +1276,14 @@ public sealed class SidekickApp
                 foreach (string planLine in HeadlessPlanAfterTurn(plan, planState, files, turn.Reply, turn.Trace.ToolNames, turn.Cancelled))
                 {
                     await HeadlessNoticeLineAsync("[notice] " + planLine).ConfigureAwait(false);
+                }
+
+                // The gap-closing loop after the pass (2026-10-13): its notices, then the next pass queued as the next line, or the loop over.
+                var gapLines = new List<string>();
+                gapTurn = HeadlessGapAfterTurn(plan, files, turn.Trace.ToolNames, turn.Cancelled, gapLines);
+                foreach (string gapLine in gapLines)
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + gapLine.Trim()).ConfigureAwait(false);
                 }
 
                 if (EffectiveSettings.SessionLogging)
@@ -1393,6 +1417,37 @@ public sealed class SidekickApp
             case ChatScreen.PlanCommand.NotPlanning:
                 await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.NotPlanningError).ConfigureAwait(false);
                 return null;
+            case ChatScreen.PlanCommand.UnknownReviewer:
+                await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.UnknownReviewerError(rest)).ConfigureAwait(false);
+                return null;
+
+            case ChatScreen.PlanCommand.CloseGaps:
+            {
+                if (plan.Path is not { } path)
+                {
+                    await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.NothingPresentedError).ConfigureAwait(false);
+                    return null;
+                }
+
+                var reviewer = rest.Length == 0 ? Plans.PlanReviewer.Model : Plans.PlanText.ParseReviewer(rest) ?? Plans.PlanReviewer.Model;
+                if (reviewer != Plans.PlanReviewer.Model && HeadlessAdvisorsOffered() && EffectiveSettings.AdvisorConfirm)
+                {
+                    // No confirm seam headless: every advisor call would be refused, so the model reviews alone.
+                    reviewer = Plans.PlanReviewer.Model;
+                    await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.GapsConfirmFallbackNotice).ConfigureAwait(false);
+                }
+
+                if (EffectiveSettings.PlanGapPasses <= 0)
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.GapsHeadlessCapNotice(Settings.AppSettingsData.MaxPlanGapPasses)).ConfigureAwait(false);
+                }
+
+                var loop = plan.StartClosing(reviewer, HeadlessGapLimit(EffectiveSettings.PlanGapPasses));
+                loop.BeginPass(Plans.PlanFiles.ReadWhole(files, path) is { } text ? Plans.PlanDocument.Body(text) : null);
+                state.Draft = null;
+                return Plans.PlanText.GapPassMessage(path, loop.Pass, loop.Limit, HeadlessAdvisorsOffered() ? loop.Reviewer : Plans.PlanReviewer.Model);
+            }
+
             case ChatScreen.PlanCommand.Show:
                 foreach (string line in Plans.PlanText.ShowLines(plan))
                 {
@@ -1464,6 +1519,51 @@ public sealed class SidekickApp
             default:
                 return args;
         }
+    }
+
+    /// <summary>Headless has no ESC (2026-10-13): a gap-closing loop with no limit stops at the most the setting allows.</summary>
+    private static int HeadlessGapLimit(int passes) => passes <= 0 ? Settings.AppSettingsData.MaxPlanGapPasses : passes;
+
+    /// <summary>Whether a headless turn offers <c>neon_advisor</c>: Advisors enabled, one listed, the tool not off on <c>/tools</c>.</summary>
+    private bool HeadlessAdvisorsOffered() =>
+        ChatScreen.AdvisorsOffered(EffectiveSettings) && !ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled).Contains(Llm.Tools.NeonAdvisorTool.ToolName);
+
+    /// <summary>
+    /// After a headless turn while a gap-closing loop runs (2026-10-13), the screen's <c>TakeGapPass</c> without a pane or a queue:
+    /// the pass judged and said into <paramref name="lines"/>, then the next pass's message (sent as the next line), or null once
+    /// the loop is over — a convergence or a stop short naming <c>/plan approve</c>, since there is no pane to put the plan back on.
+    /// </summary>
+    private static string? HeadlessGapAfterTurn(Plans.PlanSession plan, WorkingDirectory files, IReadOnlyList<string> tools, bool cancelled, List<string> lines)
+    {
+        if (plan.Closing is not { Pending: false } loop)
+        {
+            return null;
+        }
+
+        string? path = plan.Path;
+        string? body = path is not null && Plans.PlanFiles.ReadWhole(files, path) is { } text ? Plans.PlanDocument.Body(text) : null;
+        var stop = loop.Next(!cancelled, userSpoke: false, body);
+        if (loop.PassGaps.Count > 0)
+        {
+            DiagnosticLog.Info(ChatScreen.AppCategory, Plans.PlanText.PassLogLine(loop.Pass, plan.Revision, loop.PassGaps, tools.Contains(Llm.Tools.NeonAdvisorTool.ToolName, StringComparer.Ordinal)));
+            lines.AddRange(Plans.PlanText.PassNoticeLines(loop.Pass, loop.Limit, plan.Revision, loop.PassGaps));
+        }
+
+        if (stop is not { } reason)
+        {
+            loop.BeginPass(body);
+            return Plans.PlanText.GapPassMessage(path!, loop.Pass, loop.Limit, loop.Reviewer);
+        }
+
+        plan.StopClosing();
+        const string Approve = " — /plan approve [--fresh] starts it";
+        lines.Add(reason switch
+        {
+            Plans.PlanGapStop.Converged => Plans.PlanText.ConvergedNotice(path ?? "", loop.Pass, loop.Closed) + Approve,
+            Plans.PlanGapStop.Limit or Plans.PlanGapStop.Stalled => Plans.PlanText.GapStopNotice(reason, loop.Pass, loop.Closed) + Approve,
+            _ => Plans.PlanText.GapStopNotice(reason, loop.Pass, loop.Closed),
+        });
+        return null;
     }
 
     /// <summary>Headless plan mode's own state beside the session (2026-09-26, round two): the plan being carried out, the ticked count last said, an unpresented plan reply and the revision last announced.</summary>

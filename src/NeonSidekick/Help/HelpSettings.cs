@@ -57,6 +57,7 @@ public static class HelpSettings
         SettingsField.LlmPictureMegabytes => "The most megabytes of pictures one request carries, as sent (0–1000; 0 = no cap). Past it, the oldest pictures leave until half the figure is left, as with *LLM max images*. If a server still drops a request with pictures as it is sent, the app takes out half of them and tries once more.",
         SettingsField.LlmOfferTools => "Whether the model gets any tools at all. Turn it off for chat templates with no tool role. Changing it starts a new conversation.",
         SettingsField.LlmMaxToolIterations => "How many tool round trips one message may make before the turn stops (1–10000).",
+        SettingsField.PlanGapPasses => "How many passes plan mode's *Close gaps…* review may run before the plan goes back to the approval pane with gaps still reported (0–20 passes; 0 = no cap). ESC stops a review at any pass. Headless has no ESC, so 0 means 20 there.",
         SettingsField.ImageThumbnailSize => "The size of the transcript's picture thumbnails: `tiny`, `small`, `medium`, `large`, `xlarge` or `fullsize`. In columns × rows: `tiny` 32×8, `small` 48×12, `medium` 64×16, `large` 80×20, `xlarge` 96×24; `fullsize` draws each picture as large as the transcript allows, stacked.",
         SettingsField.FileTreeMaxLength => "How many entries `/tree` prints before it stops (1–10000).",
         SettingsField.FileTreeShowSizes => "`/tree` shows each file's size.",

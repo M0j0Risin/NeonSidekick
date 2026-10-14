@@ -13,23 +13,31 @@ namespace NeonSidekick.App;
 /// what should change (<see cref="MenuPane.EditAsync"/>, the question pane's Other row); ESC in the slot
 /// goes back to the rows. ESC on the rows, the token and no keyboard are Keep refining with nothing
 /// said. Runs on the watcher task through <see cref="ChatScreen"/>'s pane request.
+/// <para>Close gaps… (2026-10-13, the user's ask, <c>g</c>) sends the plan through the gap-closing loop: while advisors are offered
+/// it opens a second page for who reviews (model, advisor, any; ESC back to the rows), else the model reviews.</para>
 /// </summary>
 public sealed class PlanApprovalMenu
 {
     private readonly MenuPane _pane;
     private readonly InputLine _input;
+    private readonly Func<bool> _advisorsOffered;
 
-    public PlanApprovalMenu(MenuPane pane, InputLine input)
+    /// <param name="advisorsOffered">Whether the turn would offer <c>neon_advisor</c>: the reviewer page is shown only then.</param>
+    public PlanApprovalMenu(MenuPane pane, InputLine input, Func<bool>? advisorsOffered = null)
     {
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
         _input = input ?? throw new ArgumentNullException(nameof(input));
+        _advisorsOffered = advisorsOffered ?? (() => false);
     }
 
     /// <summary>The hotkeys: the rows' letters, lower case.</summary>
-    public static readonly IReadOnlyDictionary<char, int> Hotkeys = new Dictionary<char, int> { ['a'] = 0, ['f'] = 1, ['r'] = 2, ['c'] = 3 };
+    public static readonly IReadOnlyDictionary<char, int> Hotkeys = new Dictionary<char, int> { ['a'] = 0, ['f'] = 1, ['r'] = 2, ['g'] = 3, ['c'] = 4 };
 
     /// <summary>The choice each row stands for, by index.</summary>
-    public static readonly IReadOnlyList<PlanChoice> Choices = [PlanChoice.Approve, PlanChoice.ApproveFresh, PlanChoice.Refine, PlanChoice.Cancel];
+    public static readonly IReadOnlyList<PlanChoice> Choices = [PlanChoice.Approve, PlanChoice.ApproveFresh, PlanChoice.Refine, PlanChoice.CloseGaps, PlanChoice.Cancel];
+
+    /// <summary>The reviewer page's hotkeys: model, advisor, any.</summary>
+    public static readonly IReadOnlyDictionary<char, int> ReviewerHotkeys = new Dictionary<char, int> { ['m'] = 0, ['a'] = 1, ['y'] = 2 };
 
     /// <summary>The row the cursor starts on: Keep refining.</summary>
     public const int StartRow = 2;
@@ -40,8 +48,20 @@ public sealed class PlanApprovalMenu
         Markup.Escape(PlanText.ApproveRow),
         Markup.Escape(PlanText.ApproveFreshRow),
         Markup.Escape(PlanText.RefineRow),
+        Markup.Escape(PlanText.CloseGapsRow),
         Markup.Escape(PlanText.CancelRow),
     ];
+
+    /// <summary>The reviewer page for <paramref name="plan"/>: who looks for the gaps.</summary>
+    public static MenuPage ReviewerPage(PlanPresentation plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        return new MenuPage(PlanText.ReviewerTitle, PlanText.ReviewerRows.Select(Markup.Escape).ToList(), PlanText.ReviewerKeys)
+        {
+            Caption = PlanText.Caption(plan),
+            Hotkeys = ReviewerHotkeys,
+        };
+    }
 
     /// <summary>The page for <paramref name="plan"/>.</summary>
     public static MenuPage Page(PlanPresentation plan)
@@ -75,6 +95,28 @@ public sealed class PlanApprovalMenu
                 }
 
                 var choice = Choices[picked.Row];
+                if (choice == PlanChoice.CloseGaps)
+                {
+                    if (!_advisorsOffered())
+                    {
+                        return new PlanVerdict(PlanChoice.CloseGaps, Reviewer: PlanReviewer.Model);
+                    }
+
+                    var reviewer = await _pane.PickAsync(ReviewerPage(plan), 0, cancellationToken).ConfigureAwait(false);
+                    if (reviewer is { Row: >= 0 and <= (int)PlanReviewer.Any } who)
+                    {
+                        return new PlanVerdict(PlanChoice.CloseGaps, Reviewer: (PlanReviewer)who.Row);
+                    }
+
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        return new PlanVerdict(PlanChoice.Refine);
+                    }
+
+                    // ESC on the reviewer page: back to the rows.
+                    continue;
+                }
+
                 if (choice != PlanChoice.Refine)
                 {
                     return new PlanVerdict(choice);

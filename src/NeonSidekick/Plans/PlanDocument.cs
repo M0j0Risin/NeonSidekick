@@ -51,13 +51,24 @@ public static class PlanDocument
         ArgumentNullException.ThrowIfNull(header);
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(markdown);
+        return HeaderText(header) + "\n" + SavedBody(title, markdown) + "\n";
+    }
+
+    /// <summary>
+    /// The body <see cref="Render"/> writes for <paramref name="markdown"/>: a heading from <paramref name="title"/> when it has none.
+    /// What <see cref="Body"/> reads back from the file, so the gap-closing loop (2026-10-13) can tell an unchanged plan from a revision.
+    /// </summary>
+    public static string SavedBody(string title, string markdown)
+    {
+        ArgumentNullException.ThrowIfNull(title);
+        ArgumentNullException.ThrowIfNull(markdown);
         string body = Body(markdown);
         if (!body.StartsWith('#'))
         {
             body = "# " + title.Trim() + "\n\n" + body;
         }
 
-        return HeaderText(header) + "\n" + body.TrimEnd() + "\n";
+        return body.TrimEnd();
     }
 
     /// <summary>The front-matter block alone, fences included, ending in a newline.</summary>

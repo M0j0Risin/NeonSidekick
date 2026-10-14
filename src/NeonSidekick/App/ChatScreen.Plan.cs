@@ -46,6 +46,12 @@ internal sealed partial class ChatScreen
 
         /// <summary><c>/plan save [name]</c> while planning: the last reply kept as the plan.</summary>
         Save,
+
+        /// <summary><c>/plan gaps [model|advisor|any]</c> while planning (2026-10-13): the gap-closing loop; the reviewer word is the rest.</summary>
+        CloseGaps,
+
+        /// <summary><c>/plan gaps &lt;word&gt;</c> with a word that names no reviewer; the word is the rest.</summary>
+        UnknownReviewer,
     }
 
     /// <summary>The <c>/plan</c> list while planning: the subcommands, each with its note. Pinned.</summary>
@@ -56,7 +62,16 @@ internal sealed partial class ChatScreen
         new(PlanText.CancelWord, "leave plan mode; the plan file is kept, marked cancelled"),
         new(PlanText.OpenWord, "pick up a plan under .neon/plans/: /plan open <name>, or alone to list them"),
         new(PlanText.SaveWord, "keep the last reply as the plan and ask for approval: /plan save [name]"),
+        new(PlanText.GapsWord, "review the presented plan pass after pass until no gaps are left: /plan gaps [model|advisor|any]"),
         new(PlanText.ShowWord, "where the plan stands"),
+    ];
+
+    /// <summary>The <c>/plan gaps</c> list (2026-10-13): the reviewer words, each with its note. Pinned.</summary>
+    public static readonly IReadOnlyList<CompletionItem> PlanGapsReviewers =
+    [
+        new(PlanText.GapsWord + " " + PlanText.ReviewerWord(PlanReviewer.Model), "the planning model reviews alone"),
+        new(PlanText.GapsWord + " " + PlanText.ReviewerWord(PlanReviewer.Advisor), "an advisor whose role fits best finds the gaps each pass"),
+        new(PlanText.GapsWord + " " + PlanText.ReviewerWord(PlanReviewer.Any), "the model reviews, asking advisors only where a role fits"),
     ];
 
     /// <summary>The <c>/plan</c> list outside plan mode: <c>open</c> alone — the rest is a requirement, free text.</summary>
@@ -103,6 +118,18 @@ internal sealed partial class ChatScreen
         {
             rest = after;
             return PlanCommand.Save;
+        }
+
+        // /plan gaps (2026-10-13): alone or with one word, the open rule; several words stay detail (or a requirement) as before.
+        if (first == PlanText.GapsWord && !after.Contains(' ', StringComparison.Ordinal) && !after.Contains('\t', StringComparison.Ordinal))
+        {
+            if (!planning)
+            {
+                return PlanCommand.NotPlanning;
+            }
+
+            rest = after;
+            return after.Length == 0 || PlanText.ParseReviewer(after) is not null ? PlanCommand.CloseGaps : PlanCommand.UnknownReviewer;
         }
 
         string words = string.Join(' ', args.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
@@ -182,6 +209,17 @@ internal sealed partial class ChatScreen
 
             case PlanCommand.Save:
                 return await SavePlanReplyAsync(rest.Length == 0 ? null : rest, cancellationToken).ConfigureAwait(false);
+
+            case PlanCommand.UnknownReviewer:
+                _transcript.Error(PlanText.UnknownReviewerError(rest));
+                return false;
+
+            case PlanCommand.CloseGaps when _plan.Path is null:
+                _transcript.Error(PlanText.NothingPresentedError);
+                return false;
+
+            case PlanCommand.CloseGaps:
+                return await StartGapsAsync(rest.Length == 0 ? PlanReviewer.Model : PlanText.ParseReviewer(rest) ?? PlanReviewer.Model, cancellationToken).ConfigureAwait(false);
 
             case PlanCommand.Usage:
                 _transcript.Error(PlanText.UsageError);
@@ -283,7 +321,7 @@ internal sealed partial class ChatScreen
         }
 
         var result = verdict ?? new PlanVerdict(PlanChoice.Refine);
-        DiagnosticLog.Info(AppCategory, PlanVerdictLogLine(result.Choice));
+        DiagnosticLog.Info(AppCategory, PlanVerdictLogLine(result.Choice, result.Reviewer));
         switch (result.Choice)
         {
             case PlanChoice.Cancel:
@@ -299,6 +337,10 @@ internal sealed partial class ChatScreen
 
     /// <summary><c>present_plan: approve</c> for the --log file. Pinned.</summary>
     public static string PlanVerdictLogLine(PlanChoice choice) => PlanVerdictLogPrefix + choice.ToString().ToLowerInvariant();
+
+    /// <summary><see cref="PlanVerdictLogLine(PlanChoice)"/> with the reviewer of a Close gaps… (2026-10-13): <c>present_plan: closegaps (advisor)</c>. Pinned.</summary>
+    public static string PlanVerdictLogLine(PlanChoice choice, PlanReviewer? reviewer) =>
+        PlanVerdictLogLine(choice) + (reviewer is { } who ? " (" + PlanText.ReviewerWord(who) + ")" : "");
 
     /// <summary>
     /// After a turn (<see cref="RunMessageAsync"/>): whether an approval given on the pane is to be carried out now —
@@ -535,7 +577,17 @@ internal sealed partial class ChatScreen
         SavePlanState();
         _transcript.Notice(PlanText.SavedNotice(saved.Path, saved.Revision));
         var verdict = _pane.Enabled ? await _planMenu.AskAsync(saved, cancellationToken).ConfigureAwait(false) : null;
-        DiagnosticLog.Info(AppCategory, PlanVerdictLogLine(verdict?.Choice ?? PlanChoice.Saved));
+        return await ActOnVerdictAsync(saved, verdict, PlanText.SavedFeedbackMessage, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// A verdict given on the approval pane at the idle line (<c>/plan save</c>'s, and a gap review's that stopped short, 2026-10-13)
+    /// acted on as the tool's would be: approve carries the plan out, cancel ends plan mode, Close gaps… starts the loop, changes
+    /// asked for are sent as the next message (<paramref name="feedbackMessage"/> words it); ESC, no feedback or no pane leave it saved.
+    /// </summary>
+    private async Task<bool> ActOnVerdictAsync(PlanPresentation plan, PlanVerdict? verdict, Func<string, string, string> feedbackMessage, CancellationToken cancellationToken)
+    {
+        DiagnosticLog.Info(AppCategory, PlanVerdictLogLine(verdict?.Choice ?? PlanChoice.Saved, verdict?.Reviewer));
         switch (verdict?.Choice)
         {
             case PlanChoice.Approve:
@@ -545,8 +597,10 @@ internal sealed partial class ChatScreen
             case PlanChoice.Cancel:
                 CancelPlan();
                 return false;
+            case PlanChoice.CloseGaps:
+                return await StartGapsAsync(verdict.Reviewer ?? PlanReviewer.Model, cancellationToken).ConfigureAwait(false);
             case PlanChoice.Refine when verdict?.Feedback is { } feedback:
-                string message = PlanText.SavedFeedbackMessage(saved.Path, feedback);
+                string message = feedbackMessage(plan.Path, feedback);
                 _transcript.User(message);
                 return await RunMessageAsync(message, [], cancellationToken).ConfigureAwait(false);
             default:
@@ -558,6 +612,131 @@ internal sealed partial class ChatScreen
 
                 return false;
         }
+    }
+
+    // ── The gap-closing loop (2026-10-13, the user's ask: Close gaps… on the approval pane, /plan gaps) ──
+
+    /// <summary>What a turn of the loop leaves to do once it ends: the next pass's message to send, or the pane to put the plan back on.</summary>
+    private sealed record GapAfterTurn(string? Message, PlanPresentation? Pane);
+
+    /// <summary>
+    /// Whether <c>neon_advisor</c> is what the turn would offer (2026-10-13): <c>Advisors enabled</c>, an advisor listed, and the tool
+    /// not off on <c>/tools</c> — the test the directive's advisors bullet uses. The reviewer page is shown only then.
+    /// </summary>
+    private bool PlanAdvisorsOffered()
+    {
+        var effective = _effective();
+        return AdvisorsOffered(effective) && Without(_neonAdvisorTools, TurnDisabled(effective)).Count > 0;
+    }
+
+    /// <summary>A fresh loop for <paramref name="reviewer"/> over the presented plan, its first pass sent: <c>/plan gaps</c> and an idle-line verdict.</summary>
+    private async Task<bool> StartGapsAsync(PlanReviewer reviewer, CancellationToken cancellationToken)
+    {
+        if (_plan.Path is not { } path)
+        {
+            _transcript.Error(PlanText.NothingPresentedError);
+            return false;
+        }
+
+        var loop = _plan.StartClosing(reviewer, _effective().PlanGapPasses);
+        return await SendGapPassAsync(BeginGapPass(loop, path, ReadPlanBody(path)), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>The next pass begun over <paramref name="body"/>: its one-line message (the reviewer the model alone when no advisor is offered).</summary>
+    private GapAfterTurn BeginGapPass(PlanGapLoop loop, string path, string? body)
+    {
+        loop.BeginPass(body);
+        var reviewer = PlanAdvisorsOffered() ? loop.Reviewer : PlanReviewer.Model;
+        return new GapAfterTurn(PlanText.GapPassMessage(path, loop.Pass, loop.Limit, reviewer), null);
+    }
+
+    /// <summary>A pass's message sent as a turn, the <see cref="CarryOutPlanAsync"/> shape.</summary>
+    private async Task<bool> SendGapPassAsync(GapAfterTurn pass, CancellationToken cancellationToken)
+    {
+        string message = pass.Message!;
+        _transcript.User(message);
+        return await RunMessageAsync(message, [], cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>The plan file's body, header aside; null when it cannot be read.</summary>
+    private string? ReadPlanBody(string path) => PlanFiles.ReadWhole(_files, path) is { } text ? PlanDocument.Body(text) : null;
+
+    /// <summary>
+    /// After a turn (<see cref="RunMessageAsync"/>, ahead of <see cref="TakePlanApproval"/>) while a loop runs: a loop chosen on the pane
+    /// sends its first pass once the reply ended on its own; a pass is judged (<see cref="PlanGapLoop.Next"/>), said, and either followed
+    /// by the next or stopped — a convergence said (the pane was shown inside the turn), a limit or a stall putting the plan back on the
+    /// pane at the idle line, anything else saying how to go on. Null when nothing follows.
+    /// </summary>
+    private GapAfterTurn? TakeGapPass(TurnOutcome outcome)
+    {
+        if (_plan.Closing is not { } loop)
+        {
+            return null;
+        }
+
+        bool onItsOwn = outcome == TurnOutcome.Continue && !_lastTurnCancelled && !_lastTurnFailed;
+        string? path = _plan.Path;
+        if (loop.Pending)
+        {
+            if (onItsOwn && path is not null)
+            {
+                return BeginGapPass(loop, path, ReadPlanBody(path));
+            }
+
+            _plan.StopClosing();
+            _transcript.Notice(PlanText.GapsDroppedNotice);
+            return null;
+        }
+
+        string? body = path is null ? null : ReadPlanBody(path);
+        var stop = loop.Next(onItsOwn, QueueDrains && _queue.Count > 0, body);
+        if (loop.PassGaps.Count > 0)
+        {
+            bool advisorAsked = _lastTrace is { } trace && trace.ToolNames.Contains(Llm.Tools.NeonAdvisorTool.ToolName, StringComparer.Ordinal);
+            DiagnosticLog.Info(AppCategory, PlanText.PassLogLine(loop.Pass, _plan.Revision, loop.PassGaps, advisorAsked));
+            foreach (string line in PlanText.PassNoticeLines(loop.Pass, loop.Limit, _plan.Revision, loop.PassGaps))
+            {
+                _transcript.Notice(line);
+            }
+        }
+
+        if (stop is not { } reason)
+        {
+            return BeginGapPass(loop, path!, body);
+        }
+
+        _plan.StopClosing();
+        if (reason == PlanGapStop.Converged)
+        {
+            _transcript.Notice(PlanText.ConvergedNotice(path ?? "", loop.Pass, loop.Closed));
+            return null;
+        }
+
+        _transcript.Notice(PlanText.GapStopNotice(reason, loop.Pass, loop.Closed));
+        if (reason is not (PlanGapStop.Limit or PlanGapStop.Stalled) || path is null)
+        {
+            return null;
+        }
+
+        if (_pane.Enabled)
+        {
+            return new GapAfterTurn(null, new PlanPresentation(_plan.Title ?? PlanDocument.FirstHeading(body ?? "") ?? path, path, _plan.Revision, body ?? "") { Note = PlanText.StoppedNote(reason, loop.Pass, loop.PassGaps.Count) });
+        }
+
+        // No pane to put it back on: where the plan stands, /plan approve the way on.
+        foreach (var line in PlanText.ShowLines(_plan))
+        {
+            _transcript.Notice(line);
+        }
+
+        return null;
+    }
+
+    /// <summary>A loop that stopped short (its limit, a stall): the plan back on the approval pane at the idle line, the verdict acted on.</summary>
+    private async Task<bool> AskStoppedPlanAsync(PlanPresentation plan, CancellationToken cancellationToken)
+    {
+        var verdict = await _planMenu.AskAsync(plan, cancellationToken).ConfigureAwait(false);
+        return await ActOnVerdictAsync(plan, verdict, PlanText.RevisionFeedbackMessage, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

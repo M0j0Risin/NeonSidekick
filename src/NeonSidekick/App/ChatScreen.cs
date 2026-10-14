@@ -1427,11 +1427,11 @@ internal sealed partial class ChatScreen
         // The allow pane's whole-statement view (2026-10-07): the info pane over the question, as the shell approval's.
         _cameraMenu = new CameraMenu(_menuPane, (label, lines, ct) => _info.ShowAsync(label, [new InfoTab(label, () => new Spectre.Console.Text(string.Join('\n', lines)))], 0, ct));
         _askTools = AskTools(AskUserAsync, _effective);
-        _planMenu = new PlanApprovalMenu(_menuPane, _input);
+        _planMenu = new PlanApprovalMenu(_menuPane, _input, PlanAdvisorsOffered);
         // /skills add (2026-09-26): its picks and install question on the same pane, the network through the web tools' fetcher.
         _skillInstallMenu = new SkillInstallMenu(_menuPane);
         _skillInstall = new SkillInstallFlow(new SkillHub(_web.Fetcher));
-        _presentPlan = new PresentPlanTool(_plan, _files, time, PresentPlanAsync);
+        _presentPlan = new PresentPlanTool(_plan, _files, time, PresentPlanAsync, () => _effective().PlanGapPasses);
         // Menus read console.Input themselves; over the key source they also see type-ahead.
         _flow = new FlowSink(this);
         _queuedClicks = new DoubleClick(_pane.Time);
@@ -4992,6 +4992,13 @@ internal sealed partial class ChatScreen
                 if (argText.StartsWith(openHead, StringComparison.OrdinalIgnoreCase) && sources.Plans is { } plans)
                 {
                     return MentionCompleter.Matches(plans().Select(p => new CompletionItem(openHead + p.Text, p.Note)).ToList(), argText);
+                }
+
+                // /plan gaps <reviewer> (2026-10-13): the three words while planning.
+                string gapsHead = PlanText.GapsWord + " ";
+                if (sources.Planning && argText.StartsWith(gapsHead, StringComparison.OrdinalIgnoreCase))
+                {
+                    return MentionCompleter.Matches(PlanGapsReviewers, argText);
                 }
 
                 // The subcommands while planning; before, only open — the rest of the argument is the requirement, free text.
@@ -15065,6 +15072,9 @@ internal sealed partial class ChatScreen
                 return outcome == TurnOutcome.Exit;
             }
 
+            // The gap-closing loop after the turn (2026-10-13), ahead of the approval: a converged loop is said and cleared before
+            // the approval its pane gave goes ahead; otherwise the next pass, or the plan back on the pane, is acted on below.
+            var gapPass = TakeGapPass(outcome);
             // Plan mode after the turn (2026-09-26): an approval given on the pane is carried out below once the reply
             // ended on its own, dropped with a notice otherwise; a cancel on the pane has ended plan mode already.
             bool planApproved = TakePlanApproval(outcome, out bool planFresh);
@@ -15102,7 +15112,18 @@ internal sealed partial class ChatScreen
 
             if (outcome == TurnOutcome.Continue)
             {
+                if (gapPass is { Message: not null } next)
+                {
+                    // No reflection between passes (2026-10-13): the tally keeps growing and the loop's last turn reflects on it all.
+                    return await SendGapPassAsync(next, cancellationToken).ConfigureAwait(false);
+                }
+
                 MaybeLearn(focus: null, forced: false, cancellationToken);
+                if (gapPass is { Pane: { } stopped })
+                {
+                    return await AskStoppedPlanAsync(stopped, cancellationToken).ConfigureAwait(false);
+                }
+
                 return planApproved && await CarryOutPlanAsync(planFresh, cancellationToken).ConfigureAwait(false);
             }
 

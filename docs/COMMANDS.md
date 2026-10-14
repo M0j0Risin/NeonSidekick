@@ -246,7 +246,8 @@ Type `/` to list every command; after a command and a space, the app offers its 
 * **Tools:** read-only ones only (files, git reads, web, database reads, the vault, sessions, `ask_user`…) plus `present_plan`. Anything that writes, runs or starts something, and every MCP tool, waits for approval.
 * **Advisors:** while `neon_advisor` is offered, the model consults the relevant [advisors](#advisor) first and says which advice it followed.
 * **The plan** is printed and saved as `.neon/plans/<name>.md` in the working directory. 📝 shows while planning.
-* **Approving:** the pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Keep refining…** (`r`) or **Cancel plan** (`c`). Approval runs a turn with every tool, ticking the plan's checkboxes; the file ends `done`, or `incomplete` with its progress.
+* **Approving:** the pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Keep refining…** (`r`), **Close gaps…** (`g`) or **Cancel plan** (`c`). Approval runs a turn with every tool, ticking the plan's checkboxes; the file ends `done`, or `incomplete` with its progress.
+* **Closing gaps:** **Close gaps…** (or `/plan gaps`) reviews the plan pass after pass before it comes back to you. Each pass is one turn: the model rereads the plan, closes what would make whoever carries it out guess, fail or stop to ask (a missing step, a choice left open, a file assumed but not read, no way to verify; wording and style don't count), asks you about a decision only you can make, and saves a revision listing the gaps it closed. Only a pass that finds none brings the approval pane back, its caption saying how many passes it took. With advisors offered, a second page asks who reviews: **model** (`m`, alone), **advisor** (`a`, an advisor whose role fits best finds the gaps each pass) or **any** (`y`, the model, consulting advisors where a role fits); with *Advisor confirm* on, each advisor call asks first. The loop stops early, saying why, at *Plan gap passes* (the pane comes back), when a pass changes nothing or repeats the last pass's gaps (the pane comes back), when a pass saves no revision, when you type a message under a pass, or on ESC; `/plan gaps` starts a fresh review.
 * `/new`, `/clear` and a profile switch leave plan mode.
 
 | Command | What it does |
@@ -256,6 +257,7 @@ Type `/` to list every command; after a command and a space, the app offers its 
 | `/plan approve [--fresh]` | Approves by typing instead (you may edit the file first). |
 | `/plan cancel` | Leaves plan mode; the file is kept, marked `cancelled`. |
 | `/plan save [<name>]` | Keeps a reply that looks like a plan as the plan, and brings up the approval pane. |
+| `/plan gaps [model\|advisor\|any]` | Reviews the presented plan pass after pass until no gaps are left, as **Close gaps…** does; `model` is the default. |
 | `/plan open <name>` | Picks a plan up again; `/plan approve` then runs only the unticked steps. |
 | `/plan open` | Lists the plans with status and progress. |
 

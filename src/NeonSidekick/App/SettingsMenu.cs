@@ -1065,6 +1065,9 @@ public enum SettingsField
 
     /// <summary>A picker over <see cref="Web.OpenLinksIn.Names"/>: where a link the model opens goes, the default browser or the Browser window (<see cref="Settings.AppSettingsData.WebOpenLinksIn"/>). The Web tab, right under <see cref="BrowserPrivacy"/> (later still on 2026-10-13, the user's ask and name); no reconnect (read at each call). Last in the enum, as every newcomer.</summary>
     WebOpenLinksIn,
+
+    /// <summary>Typed: the most passes plan mode's gap-closing loop runs, 0 to 20, 0 for no limit (<see cref="Settings.AppSettingsData.PlanGapPasses"/>). On the Common tab under <see cref="LlmMaxToolIterations"/> (2026-10-13), last here so the flat list's rows above keep their places; read when a loop starts.</summary>
+    PlanGapPasses,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1317,6 +1320,10 @@ internal sealed partial class SettingsMenu
     private static string TimeoutRangeError(double max) =>
         "must be more than 0 and at most " + max.ToString(CultureInfo.InvariantCulture) + " seconds";
 
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.PlanGapPasses"/> (2026-10-13). Pinned.</summary>
+    public static readonly string PlanGapPassesRangeError =
+        "must be " + AppSettingsData.MinPlanGapPasses.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxPlanGapPasses.ToString(CultureInfo.InvariantCulture) + " passes (0 for no limit)";
+
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.LlmMaxToolIterations"/>. Pinned.</summary>
     public static readonly string MaxToolIterationsRangeError =
         "must be " + AppSettingsData.MinToolIterations.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxToolIterationsCap.ToString(CultureInfo.InvariantCulture) + " round trips";
@@ -1490,7 +1497,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
         [SettingsField.LlmUrl, SettingsField.LlmModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
-         SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
+         SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.PlanGapPasses, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
          SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType,
          SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs],
         [SettingsField.LlmScanMode, SettingsField.LlmApiKey,
@@ -2068,6 +2075,7 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmPictureKeep => "LLM max images",
         SettingsField.LlmPictureMegabytes => "LLM max images (MB)",
         SettingsField.LlmMaxToolIterations => "LLM max tool iterations",
+        SettingsField.PlanGapPasses => "Plan gap passes",
         SettingsField.ImageThumbnailSize => "Image thumbnail size",
         SettingsField.FileTreeMaxLength => "File /tree max entries",
         SettingsField.FileTreeShowSizes => "File /tree show sizes",
@@ -2415,6 +2423,7 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmPictureKeep => data.LlmPictureKeep > 0 ? ComfyPictures(data.LlmPictureKeep) : NoCapLabel,
             SettingsField.LlmPictureMegabytes => data.LlmPictureMegabytes > 0 ? data.LlmPictureMegabytes.ToString(CultureInfo.InvariantCulture) + " MB" : NoCapLabel,
             SettingsField.LlmMaxToolIterations => RoundTrips(data.LlmMaxToolIterations),
+            SettingsField.PlanGapPasses => GapPasses(data.PlanGapPasses),
             SettingsField.ImageThumbnailSize => data.ImageThumbnailSize,
             SettingsField.FileTreeMaxLength => Entries(data.FileTreeMaxLength),
             SettingsField.FileTreeShowSizes => OnOff(data.FileTreeShowSizes),
@@ -3715,6 +3724,7 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmAutoCompactPercent => data.LlmAutoCompactPercent.ToString(CultureInfo.InvariantCulture),
         SettingsField.LlmMaxTurns => data.LlmMaxTurns > 0 ? data.LlmMaxTurns.ToString(CultureInfo.InvariantCulture) : LlmMaxTurnsAutoLabel,
         SettingsField.LlmMaxToolIterations => data.LlmMaxToolIterations.ToString(CultureInfo.InvariantCulture),
+        SettingsField.PlanGapPasses => data.PlanGapPasses.ToString(CultureInfo.InvariantCulture),
         SettingsField.FileTreeMaxLength => data.FileTreeMaxLength.ToString(CultureInfo.InvariantCulture),
         SettingsField.WorkingDirectory => data.WorkingDirectory,
         SettingsField.WebBrowserPath => data.WebBrowserPath,
@@ -5475,6 +5485,16 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.LlmMaxToolIterations = rounds);
+                return true;
+
+            case SettingsField.PlanGapPasses:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int passes) || passes < AppSettingsData.MinPlanGapPasses || passes > AppSettingsData.MaxPlanGapPasses)
+                {
+                    Sink.Error($"{FieldName(field)} {PlanGapPassesRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.PlanGapPasses = passes);
                 return true;
 
             case SettingsField.FileTreeMaxLength:
@@ -9428,6 +9448,9 @@ internal sealed partial class SettingsMenu
 
     /// <summary><c>100 round trips</c>, <c>1 round trip</c>: the tool-iteration cap as the row shows it.</summary>
     public static string RoundTrips(int value) => value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " round trip" : " round trips");
+
+    /// <summary><c>5 passes</c>, <c>1 pass</c>, <see cref="NoCapLabel"/> for 0: <see cref="AppSettingsData.PlanGapPasses"/> as the row shows it (2026-10-13).</summary>
+    public static string GapPasses(int value) => value <= 0 ? NoCapLabel : value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " pass" : " passes");
 
     /// <summary><c>500 entries</c>, <c>1 entry</c>: the <c>/tree</c> cap as the row shows it.</summary>
     public static string Entries(int value) => value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " entry" : " entries");

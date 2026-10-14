@@ -821,6 +821,7 @@ public sealed class AppSettings : IDisposable
         LlmContextLength = source.LlmContextLength,
         LlmMidTurnUsage = source.LlmMidTurnUsage,
         LlmMaxToolIterations = source.LlmMaxToolIterations,
+        PlanGapPasses = source.PlanGapPasses,
         LlmModel = source.LlmModel,
         LlmOfferTools = source.LlmOfferTools,
         LlmReasoning = source.LlmReasoning,

@@ -20,13 +20,25 @@ public enum PlanChoice
 
     /// <summary>Saved with nobody to ask (headless): the user approves with <c>/plan approve</c>.</summary>
     Saved,
+
+    /// <summary>
+    /// Not approved yet: the plan goes through the gap-closing loop first (2026-10-13, <see cref="PlanGapLoop"/>), the reviewer
+    /// in <see cref="PlanVerdict.Reviewer"/>; it comes back to the pane once a pass finds no gaps.
+    /// </summary>
+    CloseGaps,
 }
 
-/// <summary>The user's answer to a presented plan, with what they want changed when they said.</summary>
-public sealed record PlanVerdict(PlanChoice Choice, string? Feedback = null);
+/// <summary>The user's answer to a presented plan, with what they want changed when they said, and the reviewer of a <see cref="PlanChoice.CloseGaps"/>.</summary>
+public sealed record PlanVerdict(PlanChoice Choice, string? Feedback = null, PlanReviewer? Reviewer = null);
 
-/// <summary>A plan as <c>present_plan</c> saved it, for the approval pane.</summary>
-public sealed record PlanPresentation(string Title, string Path, int Revision, string Markdown);
+/// <summary>
+/// A plan as <c>present_plan</c> saved it, for the approval pane; <see cref="Note"/> is a line the pane shows after the caption
+/// (2026-10-13: how the gap-closing loop ended).
+/// </summary>
+public sealed record PlanPresentation(string Title, string Path, int Revision, string Markdown)
+{
+    public string? Note { get; init; }
+}
 
 /// <summary>What <see cref="NeonSidekick.App.ChatScreen.PrepareTurn"/> needs of plan mode for one turn: the directive and the tool that presents the plan.</summary>
 public sealed record PlanTurn(string Directive, AIFunction Tool)
@@ -64,6 +76,18 @@ public sealed class PlanSession
 
     /// <summary>An approval given on the pane, waiting for its turn to end: <see cref="PlanChoice.Approve"/> or <see cref="PlanChoice.ApproveFresh"/>.</summary>
     public PlanChoice? Approved { get; private set; }
+
+    /// <summary>
+    /// The gap-closing loop while one runs (2026-10-13, <see cref="PlanGapLoop"/>): from the <c>Close gaps…</c> choice or
+    /// <c>/plan gaps</c> until it stops. Never kept in the session row and never restored, as <see cref="Approved"/>.
+    /// </summary>
+    public PlanGapLoop? Closing { get; private set; }
+
+    /// <summary>A fresh loop for <paramref name="reviewer"/>, at most <paramref name="limit"/> passes (0 for no limit); one already running is replaced.</summary>
+    public PlanGapLoop StartClosing(PlanReviewer reviewer, int limit) => Closing = new PlanGapLoop(reviewer, limit);
+
+    /// <summary>The loop over, however it ended.</summary>
+    public void StopClosing() => Closing = null;
 
     /// <summary>Plan mode on for <paramref name="requirement"/>; a plan in progress is forgotten (its file stays).</summary>
     public void Enter(string requirement)
@@ -119,6 +143,7 @@ public sealed class PlanSession
         Revision = 0;
         Created = null;
         Approved = null;
+        Closing = null;
     }
 
     /// <summary>The session row's copy; null while plan mode is off.</summary>
@@ -155,6 +180,8 @@ public sealed class PlanSession
         string requirement = Requirement;
         string? path = Path;
         int revision = Revision;
-        return new PlanTurn(PlanText.Directive(requirement, path, revision), tool) { WithAdvisors = advisors => PlanText.Directive(requirement, path, revision, advisors) };
+        // A pass of the gap-closing loop under way (2026-10-13): its rules ride in the directive, so a compaction cannot lose them.
+        var gap = Closing is { Pending: false, Converged: false } loop ? new PlanGapState(loop.Pass, loop.Limit, loop.Reviewer) : null;
+        return new PlanTurn(PlanText.Directive(requirement, path, revision, null, gap), tool) { WithAdvisors = advisors => PlanText.Directive(requirement, path, revision, advisors, gap) };
     }
 }

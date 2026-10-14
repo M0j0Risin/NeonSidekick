@@ -761,6 +761,19 @@ public sealed class AppSettingsData
     public const int MaxToolIterationsCap = 10000;
 
     /// <summary>
+    /// The most passes plan mode's gap-closing loop may run (2026-10-13, the user's ask and pick: a <c>Close gaps…</c> choice on
+    /// the plan's approval pane, and <c>/plan gaps</c>, review the plan pass after pass until one finds no gaps). With gaps still
+    /// reported after the last pass, the loop stops and the plan goes back to the pane. <see cref="MinPlanGapPasses"/> to
+    /// <see cref="MaxPlanGapPasses"/>; 0 is no limit on the screen (ESC stops it) and <see cref="MaxPlanGapPasses"/> headless, which
+    /// has no ESC. Read when a loop starts. The Common tab of <c>/settings</c>, under <see cref="LlmMaxToolIterations"/>. No variable.
+    /// </summary>
+    public int PlanGapPasses { get; set; } = DefaultPlanGapPasses;
+
+    public const int MinPlanGapPasses = 0;
+    public const int MaxPlanGapPasses = 20;
+    public const int DefaultPlanGapPasses = 5;
+
+    /// <summary>
     /// Model id sent with every request. Empty means "the first chat model the server lists".
     /// vLLM and SGLang require an exact match with <c>--served-model-name</c>.
     /// </summary>
