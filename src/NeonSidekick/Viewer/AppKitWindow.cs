@@ -431,7 +431,7 @@ internal abstract class AppKitWindow
         }
 
         SendVoid(Window, Sel("center"));
-        DiagnosticLog.Debug("Viewer", $"A {width:0}x{height:0} window opens centred (no place saved, or none on a screen now).");
+        DiagnosticLog.Debug("Viewer", $"A {width:0}x{height:0} window opens centered (no place saved, or none on a screen now).");
     }
 
     // The corner told to the app: the frame it had before full screen when it closes full screen.

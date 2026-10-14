@@ -28,7 +28,7 @@ public class CompactTypeTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("both")]
-    [InlineData("summarise")]
+    [InlineData("summarize")]
     public void TryParse_RejectsAnythingElse(string? text)
     {
         Assert.False(CompactType.TryParse(text, out _));
@@ -44,7 +44,7 @@ public class CompactTypeTests
             Assert.NotEqual("", CompactType.Describe(name));
         }
 
-        Assert.Equal("summarise the older turns into one message, keep the recent ones", CompactType.Describe("summary"));
+        Assert.Equal("summarize the older turns into one message, keep the recent ones", CompactType.Describe("summary"));
         Assert.Equal("stub the bulky tool results in the older turns, keep every turn", CompactType.Describe("prune"));
         Assert.Equal("", CompactType.Describe("both"));
     }

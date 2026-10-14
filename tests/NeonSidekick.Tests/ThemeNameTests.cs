@@ -46,7 +46,7 @@ public class ThemeNameTests
         Assert.Equal("particle collision", ThemeName.Describe("collider"));
         Assert.Equal("green phosphor", ThemeName.Describe("netrunner"));
         Assert.Equal("amber phosphor", ThemeName.Describe("nostromo"));
-        Assert.Equal("greyscale", ThemeName.Describe("noir"));
+        Assert.Equal("grayscale", ThemeName.Describe("noir"));
         Assert.Equal("colorful", ThemeName.Describe("cyberpunk"));
         Assert.Equal("pastel", ThemeName.Describe("vaporwave"));
         Assert.Equal("blue phosphor", ThemeName.Describe("mainframe"));

@@ -103,7 +103,7 @@ public sealed record ThemePalette(
         ArgumentNullException.ThrowIfNull(colors);
         if (colors.Length != ThemeKeys.Colors.Count)
         {
-            throw new ArgumentException($"Expected {ThemeKeys.Colors.Count} colours, got {colors.Length}.", nameof(colors));
+            throw new ArgumentException($"Expected {ThemeKeys.Colors.Count} colors, got {colors.Length}.", nameof(colors));
         }
 
         return new ThemePalette(name, description, colors[0], colors[1], colors[2], colors[3], colors[4], colors[5], colors[6],

@@ -345,8 +345,8 @@ public readonly record struct MemoryAction(MemoryActionKind Kind, MemoryAccess M
 /// </summary>
 internal sealed partial class ChatScreen
 {
-    public const string CancelledNotice = "(cancelled)";
-    public const string WithdrawnNotice = "(cancelled — your message is back on the line)";
+    public const string CancelledNotice = "(canceled)";
+    public const string WithdrawnNotice = "(canceled — your message is back on the line)";
     public const string SpeechStoppedNotice = "(" + NoticeGlyphs.Tts + "speech stopped)";   // the speaker since 2026-09-22
     /// <summary>The hint row after one Ctrl+C with nothing to copy, stop or cancel; the next within <see cref="ExitConfirmWindow"/> exits (2026-09-17).</summary>
     public const string ExitHint = "Press Ctrl+C again to exit";
@@ -382,7 +382,7 @@ internal sealed partial class ChatScreen
     /// <c>(🖥️ cancelled)</c> the LLM, <c>(🔊 cancelled)</c> speech, <c>(🎤 cancelled)</c> voice,
     /// <c>(🔌 cancelled)</c> MCP. Pinned.
     /// </summary>
-    public static string ConnectCancelledNotice(string glyph) => "(" + glyph + "cancelled)";
+    public static string ConnectCancelledNotice(string glyph) => "(" + glyph + "canceled)";
     public const string HeardNothingNotice = "(" + NoticeGlyphs.Stt + "heard nothing)";   // the microphone since 2026-09-22
     public const string VoiceDiscardedNotice = "(" + NoticeGlyphs.Stt + "discarded)";
     public const string ThinkingLabel = "thinking";
@@ -3192,7 +3192,7 @@ internal sealed partial class ChatScreen
 
     /// <summary><c>Queue cancel mode hold applied after a cancelled reply (2 waiting)</c> — only with something queued. Pinned.</summary>
     public static string QueueCancelLogLine(QueueCancel mode, int waiting) =>
-        string.Create(CultureInfo.InvariantCulture, $"Queue cancel mode {QueueCancelMode.Name(mode)} applied after a cancelled reply ({waiting} waiting)");
+        string.Create(CultureInfo.InvariantCulture, $"Queue cancel mode {QueueCancelMode.Name(mode)} applied after a canceled reply ({waiting} waiting)");
 
     /// <summary>
     /// A double-click on the hint row's timers (2026-10-13, the user's ask): <see cref="TimerText.CancelAllPrompt"/>, then on a yes every
@@ -3396,7 +3396,7 @@ internal sealed partial class ChatScreen
     public const string LearnQueuedNotice = "(" + LearnGlyph + "learning from this turn follows the one running)";
 
     /// <summary>After a double-click on the strip's brain (2026-09-18): the running reflection cancelled, the one waiting in the slot untouched. Pinned.</summary>
-    public const string LearnCancelledNotice = "(" + LearnGlyph + "learning cancelled)";
+    public const string LearnCancelledNotice = "(" + LearnGlyph + "learning canceled)";
 
     /// <summary>The refusal for <c>/learn</c> with no turn to learn from. Pinned.</summary>
     public const string LearnNoTurnError = "Nothing to learn from yet; send a message first.";
@@ -6977,7 +6977,7 @@ internal sealed partial class ChatScreen
     public const string DraftEmptyNotice = "(nothing sent: the draft is empty)";
 
     /// <summary>ESC or Ctrl+C under the wait: the editor stays open, the file is gone, nothing sent. Pinned.</summary>
-    public const string DraftCancelledNotice = "(draft cancelled; nothing sent)";
+    public const string DraftCancelledNotice = "(draft canceled; nothing sent)";
 
     /// <summary>The screen was built with no editor seam (tests, a host with none). Pinned.</summary>
     public const string DraftUnavailableError = "/draft needs an editor; not available here.";
@@ -7001,7 +7001,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>The reasons <see cref="DraftDroppedLogLine"/> names. Pinned.</summary>
     public const string DraftEmptyReason = "empty";
-    public const string DraftCancelledReason = "cancelled";
+    public const string DraftCancelledReason = "canceled";
 
     /// <summary>
     /// <c>/draft</c> (2026-09-19, the user's ask): an empty <see cref="DraftFile"/> in the temp
@@ -9902,11 +9902,11 @@ internal sealed partial class ChatScreen
         return cancelled ? TurnCancelledByCommandLog : null;
     }
 
-    public const string TurnCancelledByKeysLog = "Turn cancelled by the keys (ESC or Ctrl+C) after the model's first event.";
+    public const string TurnCancelledByKeysLog = "Turn canceled by the keys (ESC or Ctrl+C) after the model's first event.";
     public const string TurnWithdrawnLog = "Turn withdrawn: the keys before the model's first event; the message goes back to the line.";
     public const string TurnInterruptedLog = "Turn interrupted by the wake phrase.";
     public const string TurnEndedByAppTokenLog = "Turn ended by the app token.";
-    public const string TurnCancelledByCommandLog = "Turn cancelled by a mid-turn command.";
+    public const string TurnCancelledByCommandLog = "Turn canceled by a mid-turn command.";
 
     /// <summary>The first ESC over a reply being heard (the log's Debug line; the transcript's is <see cref="SpeechStoppedNotice"/>).</summary>
     public const string SpeechStoppedLogLine = "Speech stopped by the first ESC; the text streamed on.";

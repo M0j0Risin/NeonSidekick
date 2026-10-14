@@ -36,7 +36,7 @@ public static class ConversationCompactor
         "Do not answer the user, do not add commentary, and do not mention that this is a summary.";
 
     /// <summary>The line that asks for the summary, closing the summariser's request. Pinned.</summary>
-    public const string SummaryRequestLine = "Summarise the conversation above.";
+    public const string SummaryRequestLine = "Summarize the conversation above.";
 
     /// <summary>What goes before the summary in the message the history keeps. Pinned.</summary>
     public const string SummaryPreamble = "The conversation so far was compacted into this summary; continue as if you remembered it:\n\n";

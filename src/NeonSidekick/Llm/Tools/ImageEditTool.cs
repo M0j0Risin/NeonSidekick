@@ -91,21 +91,21 @@ public sealed class ImageEditTool : FileTool
             "crop_height": { "type": "integer", "minimum": 1, "description": "Crop: the height." },
             "rotate": { "type": "integer", "enum": [0, 90, 180, 270], "description": "Turn clockwise by quarter turns only (no other angles)." },
             "flip": { "type": "string", "enum": ["none", "horizontal", "vertical"], "description": "Mirror, after the turn." },
-            "filter": { "type": "string", "enum": ["none", "grey", "sepia", "negative", "polaroid"], "description": "A colour preset." },
+            "filter": { "type": "string", "enum": ["none", "gray", "sepia", "negative", "polaroid"], "description": "A color preset." },
             "brightness": { "type": "integer", "minimum": -100, "maximum": 100, "description": "Brighter (+) or darker (-)." },
             "contrast": { "type": "integer", "minimum": -100, "maximum": 100, "description": "More (+) or less (-) contrast." },
-            "saturation": { "type": "integer", "minimum": -100, "maximum": 100, "description": "More vivid (+) or greyer (-); -100 is greyscale." },
-            "hue": { "type": "integer", "minimum": -180, "maximum": 180, "description": "Rotate every colour's hue by these degrees: 120 turns red to green." },
-            "tint": { "type": "string", "description": "Colour the picture toward this colour (#rrggbb or a name), keeping light and dark." },
+            "saturation": { "type": "integer", "minimum": -100, "maximum": 100, "description": "More vivid (+) or grayer (-); -100 is grayscale." },
+            "hue": { "type": "integer", "minimum": -180, "maximum": 180, "description": "Rotate every color's hue by these degrees: 120 turns red to green." },
+            "tint": { "type": "string", "description": "Color the picture toward this color (#rrggbb or a name), keeping light and dark." },
             "tint_amount": { "type": "integer", "minimum": 0, "maximum": 100, "description": "How strong the tint is, in percent. Default 50." },
             "blur": { "type": "number", "minimum": 0, "maximum": 100, "description": "Gaussian blur radius in pixels." },
             "sharpen": { "type": "boolean", "description": "true: sharpen firmly; false: no sharpening at all. Default: a light sharpen after a resize." },
             "pad": { "type": "integer", "minimum": 0, "maximum": 4096, "description": "A border of this many pixels on every side, in background." },
-            "background": { "type": "string", "description": "The colour for pad, fit pad, and transparency in jpeg/bmp: #rrggbb, #aarrggbb, or a name (white, black, transparent…). Default white." },
+            "background": { "type": "string", "description": "The color for pad, fit pad, and transparency in jpeg/bmp: #rrggbb, #aarrggbb, or a name (white, black, transparent…). Default white." },
             "metadata": { "type": "string", "enum": ["none", "basic", "all"], "description": "What metadata the result keeps: none (default unless the user set otherwise), basic (author, copyright, date taken, camera), all (basic and the GPS location: where it was taken). none with nothing else strips jpeg, png, webp and gif losslessly." },
             "dpi": { "type": "integer", "minimum": 1, "maximum": 10000, "description": "The DPI written into the file, for printing. Default: the source's." },
-            "chroma": { "type": "string", "enum": ["auto", "420", "422", "444"], "description": "jpeg only: chroma subsampling. 444 keeps text and sharp colour edges crisp." },
-            "colors": { "type": "integer", "minimum": 2, "maximum": 256, "description": "png or gif: a palette of at most this many colours, for a much smaller file." },
+            "chroma": { "type": "string", "enum": ["auto", "420", "422", "444"], "description": "jpeg only: chroma subsampling. 444 keeps text and sharp color edges crisp." },
+            "colors": { "type": "integer", "minimum": 2, "maximum": 256, "description": "png or gif: a palette of at most this many colors, for a much smaller file." },
             "dither": { "type": "string", "enum": ["auto", "none", "diffuse"], "description": "With a palette (gif, or png with colors): dithering." },
             "interlace": { "type": "boolean", "description": "png only: interlaced, so it shows coarse first while loading." },
             "view": { "type": "boolean", "description": "Also attach the written picture to the next message so you can check it." }
@@ -140,8 +140,8 @@ public sealed class ImageEditTool : FileTool
     /// <summary>The description. Pinned.</summary>
     public const string DescriptionText =
         "Edits a picture in the working directory and writes the result as a new file: resize (up or down), crop, rotate by quarter turns, flip, " +
-        "colour (filter, brightness, contrast, saturation, hue, tint), blur, sharpen, a border, and conversion between png, jpeg, gif, bmp and tiff (jxl and heif where Windows has them; webp and avif read only). " +
-        "Every step runs in one pass, in this order: crop, resize, rotate, flip, colour, blur, border; then one encode. " +
+        "color (filter, brightness, contrast, saturation, hue, tint), blur, sharpen, a border, and conversion between png, jpeg, gif, bmp and tiff (jxl and heif where Windows has them; webp and avif read only). " +
+        "Every step runs in one pass, in this order: crop, resize, rotate, flip, color, blur, border; then one encode. " +
         "Metadata is dropped unless asked for, the EXIF orientation is baked in, and enlarging is interpolation, not AI. " +
         "metadata: none on its own strips the metadata losslessly from jpeg, png, webp and gif (the pixels are copied, not re-encoded; the orientation is kept; " +
         "data after the picture, such as a motion photo's video, goes too). " +

@@ -14,7 +14,7 @@ public static class ImageText
     public const string SourceTooBig = "Error: the picture is over 200 MB or 100 megapixels; too large to edit";
     public const string NotAnImage = "Error: the file could not be read as a picture";
     public const string ScaleAndSize = "Error: give \"scale\" or \"width\"/\"height\", not both";
-    public const string NothingToDo = "Error: nothing to do: give a size, crop, rotate, flip, a colour step, pad, or a format to convert to";
+    public const string NothingToDo = "Error: nothing to do: give a size, crop, rotate, flip, a color step, pad, or a format to convert to";
     public const string NoPathError = "Error: give \"path\" (one picture) or \"paths\" (several)";
     public const string CropIncomplete = "Error: a crop needs all four of crop_x, crop_y, crop_width and crop_height";
     public const string OverwriteSource = "Error: that would write over the source picture; pass \"overwrite\": true to replace it, or give another \"to\"";
@@ -70,7 +70,7 @@ public static class ImageText
 
     public static string CannotFit(long maxKb, long smallest, ImageFormat format) =>
         "Error: could not get under " + N(maxKb) + " KB, so nothing was written; the smallest tried was " + FileText.Size(smallest)
-        + (format.Lossy ? "" : OperatingSystem.IsMacOS() ? ". Try a lossy format such as jpeg" : ". Try \"colors\" (fewer colours) or a lossy format such as jpeg");
+        + (format.Lossy ? "" : OperatingSystem.IsMacOS() ? ". Try a lossy format such as jpeg" : ". Try \"colors\" (fewer colors) or a lossy format such as jpeg");
 
     public static string Failed(string detail) => "Error: the picture could not be edited: " + detail;
 
@@ -84,7 +84,7 @@ public static class ImageText
         "Error: '" + given.Trim() + "' is not between " + N(min) + " and " + N(max) + " for '" + argument + "'";
 
     public static string BadColour(string argument, string given) =>
-        "Error: '" + given.Trim() + "' is not a colour for '" + argument + "'; give #rrggbb, #aarrggbb or a name such as white, black or transparent";
+        "Error: '" + given.Trim() + "' is not a color for '" + argument + "'; give #rrggbb, #aarrggbb or a name such as white, black or transparent";
 
     public static string Rotation(string given) => "Error: '" + given.Trim() + "' is not 0, 90, 180 or 270 for 'rotate'; only quarter turns";
 

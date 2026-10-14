@@ -126,7 +126,7 @@ internal sealed partial class ChatScreen
         };
 
     /// <summary>The ask's pane closed under the user because the reflection was cancelled meanwhile (2026-10-13, the code review). Pinned.</summary>
-    public const string LearnAskWithdrawnNotice = "(" + LearnGlyph + "the reflection was cancelled: nothing was written)";
+    public const string LearnAskWithdrawnNotice = "(" + LearnGlyph + "the reflection was canceled: nothing was written)";
 
     /// <summary>
     /// The loop top's turn for the asks (2026-10-12): each waiting one on the pane — its title, the summary as caption, Keep / View / Discard;

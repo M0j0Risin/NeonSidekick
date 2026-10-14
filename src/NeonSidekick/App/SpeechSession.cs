@@ -43,7 +43,7 @@ internal sealed class SpeechSession : IDisposable
     public const string TailSilencedWarning = "A new reply started while the last one was still playing; the tail was silenced.";
 
     /// <summary>The detail after a connect cancelled by the caller (Ctrl+C under the spinner, 2026-09-17): what the status line and the TTS tab say until the next connect.</summary>
-    public const string ConnectCancelledDetail = "cancelled";
+    public const string ConnectCancelledDetail = "canceled";
 
     private readonly Func<SynthesizerRequest, ISpeechSynthesizer> _synthesizerFactory;
     private readonly Func<PcmFormat, IAudioPlayback> _playbackFactory;

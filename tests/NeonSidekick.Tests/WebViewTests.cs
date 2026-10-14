@@ -291,7 +291,7 @@ public unsafe class WebViewTests : IDisposable
         Assert.True(check.Passed, check.Detail);
         if (!check.Detail.StartsWith("skipped: ", StringComparison.Ordinal))
         {
-            Assert.Matches("^runtime \\d+\\.\\d+\\.\\d+\\.\\d+; the bar's address box and a tooltip; the blank page's navigation and address, its DOM, a history entry gone back from and cleared, 1 cookie set and read over DevTools, a PDF of \\d+ B, a file: navigation refused, a download cancelled$", check.Detail);
+            Assert.Matches("^runtime \\d+\\.\\d+\\.\\d+\\.\\d+; the bar's address box and a tooltip; the blank page's navigation and address, its DOM, a history entry gone back from and cleared, 1 cookie set and read over DevTools, a PDF of \\d+ B, a file: navigation refused, a download canceled$", check.Detail);
         }
     }
 

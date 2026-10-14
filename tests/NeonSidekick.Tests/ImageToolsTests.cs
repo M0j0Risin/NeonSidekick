@@ -78,7 +78,7 @@ public sealed class ImageToolsTests : IDisposable
         Assert.Equal([0, 90, 180, 270], Edit.JsonSchema.GetProperty("properties").GetProperty("rotate").GetProperty("enum").EnumerateArray().Select(e => e.GetInt32()));
         Assert.Equal(ImageFormats.All.Select(f => f.Name), Edit.JsonSchema.GetProperty("properties").GetProperty("format").GetProperty("enum").EnumerateArray().Select(e => e.GetString()));
         Assert.Contains("never write a script", ImageEditTool.DescriptionText);
-        Assert.Contains("in this order: crop, resize, rotate, flip, colour, blur, border", ImageEditTool.DescriptionText);
+        Assert.Contains("in this order: crop, resize, rotate, flip, color, blur, border", ImageEditTool.DescriptionText);
     }
 
     [Fact]
@@ -120,8 +120,8 @@ public sealed class ImageToolsTests : IDisposable
     {
         Put("cat.bmp", ImageFixtures.Quadrants(8, 8));
 
-        Assert.Equal(ImageText.OverwriteSource, await Text(Edit, ("path", "cat.bmp"), ("to", "cat.bmp"), ("filter", "grey")));
-        Starts("wrote cat.bmp (BMP, 8×8, ", await Text(Edit, ("path", "cat.bmp"), ("to", "cat.bmp"), ("filter", "grey"), ("overwrite", true)));
+        Assert.Equal(ImageText.OverwriteSource, await Text(Edit, ("path", "cat.bmp"), ("to", "cat.bmp"), ("filter", "gray")));
+        Starts("wrote cat.bmp (BMP, 8×8, ", await Text(Edit, ("path", "cat.bmp"), ("to", "cat.bmp"), ("filter", "gray"), ("overwrite", true)));
         var pixel = ImageFixtures.Pixel(Get("cat.bmp"), 1, 1);
         Assert.True(pixel.R == pixel.G && pixel.G == pixel.B);
     }
@@ -187,8 +187,8 @@ public sealed class ImageToolsTests : IDisposable
         Assert.True(Get("low.jpg").Length < Get("high.jpg").Length);
 
         _settings.ImageEditMetadata = "all";
-        await Text(Edit, ("path", "geo.jpg"), ("to", "kept.jpg"), ("filter", "grey"));
-        await Text(Edit, ("path", "geo.jpg"), ("to", "dropped.jpg"), ("filter", "grey"), ("metadata", "none"));
+        await Text(Edit, ("path", "geo.jpg"), ("to", "kept.jpg"), ("filter", "gray"));
+        await Text(Edit, ("path", "geo.jpg"), ("to", "dropped.jpg"), ("filter", "gray"), ("metadata", "none"));
         Assert.True(ImageFixtures.HasGps(Get("kept.jpg")));
         Assert.False(ImageFixtures.HasGps(Get("dropped.jpg")));
     }
@@ -300,7 +300,7 @@ public sealed class ImageToolsTests : IDisposable
         Starts("wrote " + Rel("p/cat.png") + " (PNG", converted);
         Ends("; deleted " + Rel("p/cat.bmp") + " (Image edit mode: overwrite-original)", converted);
         Assert.False(Exists("p/cat.bmp"));
-        Starts("wrote " + Rel("p/copy.png"), await Text(Edit, ("path", "p/cat.png"), ("to", "p/copy.png"), ("filter", "grey")));
+        Starts("wrote " + Rel("p/copy.png"), await Text(Edit, ("path", "p/cat.png"), ("to", "p/copy.png"), ("filter", "gray")));
         Assert.True(Exists("p/cat.png"));
         Assert.Equal(ImageEditTool.DescriptionText + " " + ImageText.OverwriteModeSentence, Edit.Description);
 

@@ -150,7 +150,7 @@ public class AboutTextTests
     public void TitleAndCopyright()
     {
         Assert.Equal("NeonSidekick 0.2.0", AboutText.TitleLine(Facts));
-        Assert.Equal("© 2026 Christopher Nelson · GNU GPL v3 (the Licence tab)", AboutText.CopyrightLine);
+        Assert.Equal("© 2026 Christopher Nelson · GNU GPL v3 (the License tab)", AboutText.CopyrightLine);
         Assert.Equal("NeonSidekick on GitHub · https://github.com/M0j0Risin/NeonSidekick", AboutText.RepositoryLine);   // 2026-10-04
     }
 
@@ -205,7 +205,7 @@ public class AboutTextTests
         var first = AboutText.ModelRepositories[0];
         Assert.Equal("  " + first.Name + "  " + string.Join(" · ", first.Quants), lines[models + 2]);
         Assert.Equal("    " + first.Url, lines[models + 3]);
-        int license = Array.IndexOf(lines, "Licence");
+        int license = Array.IndexOf(lines, "License");
         Assert.Equal(models + 2 + 2 * AboutText.ModelRepositories.Count, license);
         Assert.Equal("                      GNU GENERAL PUBLIC LICENSE", lines[license + 1]);   // the FSF's own centring, verbatim
         Assert.Equal("  <https://www.gnu.org/licenses/why-not-lgpl.html>.", lines[^1]);
@@ -220,7 +220,7 @@ public class AboutTextTests
         console.Write(AboutText.AboutTab(Facts));
 
         string output = string.Join("\n", console.Output.Split('\n').Select(l => l.TrimEnd()));
-        Assert.StartsWith("NeonSidekick 0.2.0\n© 2026 Christopher Nelson · GNU GPL v3 (the Licence tab)\nNeonSidekick on GitHub · https://github.com/M0j0Risin/NeonSidekick\n\nRuntime      .NET 10.0.0 · native AOT · x64\nOS           Microsoft Windows 10.0.26200\nExecutable   D:\\Apps\\NeonSidekick\\NeonSidekick.exe\n\nHome         C:\\Users\\chris\\.neonsidekick\nProfile      C:\\Users\\chris\\.neonsidekick\\profiles\\default\nModels       C:\\Users\\chris\\.neonsidekick\\models\n\nLLM servers  any OpenAI-compatible /v1 endpoint", output);
+        Assert.StartsWith("NeonSidekick 0.2.0\n© 2026 Christopher Nelson · GNU GPL v3 (the License tab)\nNeonSidekick on GitHub · https://github.com/M0j0Risin/NeonSidekick\n\nRuntime      .NET 10.0.0 · native AOT · x64\nOS           Microsoft Windows 10.0.26200\nExecutable   D:\\Apps\\NeonSidekick\\NeonSidekick.exe\n\nHome         C:\\Users\\chris\\.neonsidekick\nProfile      C:\\Users\\chris\\.neonsidekick\\profiles\\default\nModels       C:\\Users\\chris\\.neonsidekick\\models\n\nLLM servers  any OpenAI-compatible /v1 endpoint", output);
         Assert.Contains("\nSpeech       " + AboutText.SpeechLine + "\n", output);
     }
 
@@ -234,10 +234,10 @@ public class AboutTextTests
         Assert.Equal(AboutText.Components.Count + 1, lines.Length);
         Assert.StartsWith("Component", lines[0]);
         Assert.Contains("Version", lines[0]);
-        Assert.Contains("Licence", lines[0]);
+        Assert.Contains("License", lines[0]);
         Assert.EndsWith("Role", lines[0]);
         Assert.Matches(@"^Spectre\.Console\s+0\.57\.2\s+MIT\s+the terminal UI", lines[1]);
-        Assert.Matches(@"^Vosk\s+0\.3\.38\s+Apache-2\.0\s+the wake-word recogniser", lines[18]);   // the two LibGit2Sharp rows since 2026-09-20, the two SQL rows since 2026-09-23, the Oracle and MySQL rows since 2026-09-30, Npgsql since 2026-10-04
+        Assert.Matches(@"^Vosk\s+0\.3\.38\s+Apache-2\.0\s+the wake-word recognizer", lines[18]);   // the two LibGit2Sharp rows since 2026-09-20, the two SQL rows since 2026-09-23, the Oracle and MySQL rows since 2026-09-30, Npgsql since 2026-10-04
     }
 
     [Fact]

@@ -615,7 +615,7 @@ public sealed class ImageEditorTests
         Assert.Null(none);
         Assert.StartsWith("Error: could not get under 1 KB, so nothing was written; the smallest tried was ", error);
         // A Mac's ImageIO takes no palette (2026-10-07), so the hint names only the lossy format there.
-        Assert.EndsWith(OperatingSystem.IsMacOS() ? ". Try a lossy format such as jpeg" : ". Try \"colors\" (fewer colours) or a lossy format such as jpeg", error);
+        Assert.EndsWith(OperatingSystem.IsMacOS() ? ". Try a lossy format such as jpeg" : ". Try \"colors\" (fewer colors) or a lossy format such as jpeg", error);
     }
 
     // ---- the rest ----

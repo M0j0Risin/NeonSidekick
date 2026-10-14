@@ -92,6 +92,8 @@ public sealed class ImageOutputTests
         Assert.True(ImageWords.TryParseInterpolation("bicubic", out string name) && name == "cubic");
         Assert.True(ImageWords.TryParseDither("diffuse", out var dither) && dither == PhotoSauce.MagicScaler.DitherMode.ErrorDiffusion);
         Assert.True(ImageColor.TryParseFilter("grayscale", out var filter) && filter == ImageFilter.Grey);
+        Assert.True(ImageColor.TryParseFilter("grey", out filter) && filter == ImageFilter.Grey);   // the advertised word until 2026-10-14
+        Assert.True(ImageWords.TryParseAnchor("centre", out anchor) && anchor == ImageAnchor.Center);
         Assert.Equal(ImageMetadataPolicy.Basic, ImageWords.MetadataOf("Basic"));
         Assert.Equal(ImageMetadataPolicy.None, ImageWords.MetadataOf("everything"));   // unknown is the safe reading
         Assert.Equal("all", ImageWords.MetadataName("ALL"));

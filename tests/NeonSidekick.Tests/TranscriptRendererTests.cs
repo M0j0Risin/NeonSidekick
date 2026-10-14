@@ -122,20 +122,20 @@ public class TranscriptRendererTests : IDisposable
     {
         _t.BeginAssistant();
         _t.AppendDelta("partial");
-        _t.Notice("(cancelled)");
+        _t.Notice("(canceled)");
         _t.EndAssistant();
 
-        Assert.Equal(new[] { "● partial", "  · (cancelled)" }, _console.Lines);
+        Assert.Equal(new[] { "● partial", "  · (canceled)" }, _console.Lines);
     }
 
     [Fact]
     public void Notice_AfterABareGlyph_ContinuesTheGlyphLine()
     {
         _t.BeginAssistant();
-        _t.Notice("(cancelled)");
+        _t.Notice("(canceled)");
         _t.EndAssistant();
 
-        Assert.Equal(new[] { "● (cancelled)" }, _console.Lines);
+        Assert.Equal(new[] { "● (canceled)" }, _console.Lines);
     }
 
     [Fact]
@@ -245,10 +245,10 @@ public class TranscriptRendererTests : IDisposable
     public void ToolNotes_IsOneDimLinePerLine_BlankLinesSkipped()
     {
         _t.BeginAssistant();
-        _t.ToolNotes("Which colour? — blue\n\nToppings? — cheese, olives\n");
+        _t.ToolNotes("Which color? — blue\n\nToppings? — cheese, olives\n");
         _t.AppendDelta("Blue it is.");
         _t.EndAssistant();
-        Assert.Equal(new[] { "● 🛠️ Which colour? — blue", "  🛠️ Toppings? — cheese, olives", "Blue it is." }, _console.Lines);
+        Assert.Equal(new[] { "● 🛠️ Which color? — blue", "  🛠️ Toppings? — cheese, olives", "Blue it is." }, _console.Lines);
     }
 
     /// <summary>
@@ -466,10 +466,10 @@ public class TranscriptRendererTests : IDisposable
         _t.BeginAssistant();
         _t.AppendDelta("cut");
         _t.AppendDelta("\n");
-        _t.Notice("(cancelled)");
+        _t.Notice("(canceled)");
         _t.EndAssistant();
 
-        Assert.Equal("● cut\n  · (cancelled)\n\n", Output);
+        Assert.Equal("● cut\n  · (canceled)\n\n", Output);
     }
 
     [Fact]
@@ -730,11 +730,11 @@ public class TranscriptRendererTests : IDisposable
         s.T.BeginAssistant(markdown: true);
         s.Tick();
 
-        s.T.Notice("(cancelled)");
+        s.T.Notice("(canceled)");
         s.T.EndAssistant();
 
         Assert.False(s.Pane.LiveOpen);
-        InOrder(s.Output, "  · (cancelled)\n", "\n" + s.PaneAfter(2));   // the glyph only ever on the reply's text (2026-10-04)
+        InOrder(s.Output, "  · (canceled)\n", "\n" + s.PaneAfter(2));   // the glyph only ever on the reply's text (2026-10-04)
         Assert.Equal(2, s.Pane.FlowRow);
     }
 
@@ -745,10 +745,10 @@ public class TranscriptRendererTests : IDisposable
         s.T.BeginAssistant(markdown: true);
         s.T.AppendDelta("Half");
 
-        s.T.Notice("(cancelled)");
+        s.T.Notice("(canceled)");
         s.T.EndAssistant();
 
-        InOrder(s.Output, "● Half\n", TranscriptRenderer.NoticeGlyph + "(cancelled)\n", "\n" + s.PaneAfter(3));
+        InOrder(s.Output, "● Half\n", TranscriptRenderer.NoticeGlyph + "(canceled)\n", "\n" + s.PaneAfter(3));
         Assert.Equal(3, s.Pane.FlowRow);
     }
 

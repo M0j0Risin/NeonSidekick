@@ -242,7 +242,7 @@ public static class ComfyFamilies
             "pony (Pony Diffusion XL): start with \"score_9, score_8_up, score_7_up\", then one source tag (source_anime, source_cartoon, source_furry, source_pony); " +
             "no rating_ tag unless the user asks for one. Then comma-separated, well-known Danbooru tags — subject and count (1girl, solo), hair, eyes, body, clothing, " +
             "pose, expression, setting, lighting, composition, art style — the ones that matter most weighted up, (tag:1.2) to (tag:1.4), and the ones to keep faint " +
-            "weighted down, (tag:0.8). A short descriptive phrase only where no Danbooru tag is specific enough (a particular object, pattern, colour combination or " +
+            "weighted down, (tag:0.8). A short descriptive phrase only where no Danbooru tag is specific enough (a particular object, pattern, color combination or " +
             "arrangement), never full sentences.",
         ComfyFamily.Sdxl =>
             "sdxl: a short phrase for the subject and scene, then comma-separated details — medium, style, lighting, composition, " +
@@ -259,12 +259,12 @@ public static class ComfyFamilies
             "no score_ or source_ tags, no sentences; (tag:1.2) to weight.",
         ComfyFamily.Flux2 =>
             "flux2 (FLUX.2 dev): detailed natural-language prose, as long and structured as the scene needs — subject first, then setting, composition, lighting, camera and style; " +
-            "exact colours as hex (#1E90FF); text to render in \"quotes\"; a JSON-structured prompt is fine for a complex scene; no tag lists, no weights, no negative.",
+            "exact colors as hex (#1E90FF); text to render in \"quotes\"; a JSON-structured prompt is fine for a complex scene; no tag lists, no weights, no negative.",
         ComfyFamily.Flux2Klein =>
             "flux2klein (FLUX.2 Klein): clear natural-language prose, a few sentences — subject, setting, lighting, camera and style; text to render in \"quotes\"; " +
             "no tag lists, no weights; no negative (the distilled model ignores it).",
         ComfyFamily.Krea2 =>
-            "krea2 (Krea 2): one rich descriptive paragraph — subject, style and medium, composition, lighting, colour and mood spelled out; art-style words welcome; " +
+            "krea2 (Krea 2): one rich descriptive paragraph — subject, style and medium, composition, lighting, color and mood spelled out; art-style words welcome; " +
             "no tag lists, no weights, no negative (turbo, CFG 1).",
         ComfyFamily.ZImage =>
             "zimage (Z-Image Turbo): a concise natural-language description, English or Chinese — subject, scene, light and camera; text to render in \"quotes\"; " +
@@ -287,7 +287,7 @@ public static class ComfyFamilies
             "a negative prompt is used on Full.",
         ComfyFamily.Ideogram4 =>
             "ideogram4 (Ideogram 4): a JSON object — \"high_level_description\"; \"style_description\" with \"aesthetics\", \"lighting\", \"photo\", \"medium\" and " +
-            "\"color_palette\" (hex colours); \"compositional_deconstruction\" with a \"background\" and \"elements\" (each a \"type\", a \"bbox\" and a \"desc\"; text elements " +
+            "\"color_palette\" (hex colors); \"compositional_deconstruction\" with a \"background\" and \"elements\" (each a \"type\", a \"bbox\" and a \"desc\"; text elements " +
             "quote their exact words). Plain prose works too (its magic prompt expands it). Strong at typography; no negative.",
         ComfyFamily.Sd15 =>
             "sd15 (Stable Diffusion 1.5): comma-separated tags and short phrases, the most important first, quality tags (masterpiece, best quality), " +

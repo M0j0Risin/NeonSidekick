@@ -185,7 +185,7 @@ public sealed class KokoroInProcessSynthesizer : ISpeechSynthesizer
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return VoiceListResult.Missing("cancelled");
+            return VoiceListResult.Missing("canceled");
         }
         catch (DllNotFoundException ex)
         {
@@ -281,7 +281,7 @@ public sealed class KokoroInProcessSynthesizer : ISpeechSynthesizer
         int even = pcm.Length & ~1;
         if (even != pcm.Length)
         {
-            DiagnosticLog.Debug(Category, "The synthesised audio ended on a half sample; dropped one byte.");
+            DiagnosticLog.Debug(Category, "The synthesized audio ended on a half sample; dropped one byte.");
         }
 
         var buffer = new byte[PieceBytes];

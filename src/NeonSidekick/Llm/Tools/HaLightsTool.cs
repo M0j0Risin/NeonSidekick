@@ -38,9 +38,9 @@ public sealed class HaLightsTool : HaTool
           "type": "object",
           "properties": {
             "target": { "type": "string", "description": "Which lights: a room (Den), a light's name (Den Corner Lamp), an entity id, several joined with commas, or all." },
-            "action": { "type": "string", "enum": ["on", "off", "toggle"], "description": "on (the default; also to change brightness or colour), off or toggle." },
+            "action": { "type": "string", "enum": ["on", "off", "toggle"], "description": "on (the default; also to change brightness or color), off or toggle." },
             "brightness_pct": { "type": "integer", "description": "Brightness 0 to 100 (on only)." },
-            "color_name": { "type": "string", "description": "A CSS colour name such as red, warmwhite, blue, orange (on only)." },
+            "color_name": { "type": "string", "description": "A CSS color name such as red, warmwhite, blue, orange (on only)." },
             "color_temp_kelvin": { "type": "integer", "description": "White temperature 1500 (warm) to 9000 (cool) (on only)." },
             "transition": { "type": "number", "description": "Seconds to fade over, 0 to 300." }
           },
@@ -55,7 +55,7 @@ public sealed class HaLightsTool : HaTool
     public override string Name => ToolName;
 
     public override string Description =>
-        "Turns Home Assistant lights on, off or toggles them by room, name or id, optionally setting brightness, a colour or a white temperature. " +
+        "Turns Home Assistant lights on, off or toggles them by room, name or id, optionally setting brightness, a color or a white temperature. " +
         "A room name uses the room's group light.";
 
     public override JsonElement JsonSchema => Schema;

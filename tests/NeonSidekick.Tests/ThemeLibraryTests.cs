@@ -116,7 +116,7 @@ public sealed class ThemeLibraryTests
             Assert.True(theme.Description == entry.GetProperty("d").GetString(), theme.Name + ": another description" + Rerun);
             var colors = entry.GetProperty("c");
             Assert.True(ThemeKeys.Colors.Select((role, i) => colors.GetProperty(role).GetString() == Theme.ToHex(theme.ColorOf((ThemeColorSlot)i))).All(same => same),
-                theme.Name + ": other colours" + Rerun);
+                theme.Name + ": other colors" + Rerun);
             Assert.True(entry.GetProperty("gr").EnumerateArray().Select(s => s.GetString()).SequenceEqual(theme.GradientStops.Select(Theme.ToHex)),
                 theme.Name + ": another gradient" + Rerun);
         }

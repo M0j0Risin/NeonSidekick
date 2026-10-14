@@ -21,7 +21,7 @@ public class CompactionTextTests
     public void TheThreeOutcomes_OpenWithTheClamp()
     {
         Assert.Equal("(🗜️ nothing to compact)", CompactionText.NothingToCompact);
-        Assert.Equal("(🗜️ compact cancelled)", CompactionText.Cancelled);
+        Assert.Equal("(🗜️ compact canceled)", CompactionText.Cancelled);
         Assert.Equal("🗜️ Compact failed: ", CompactionText.FailedPrefix);
     }
 

@@ -415,6 +415,6 @@ public sealed class BenchTests : IDisposable
         Assert.Contains("| Nested JSON Extraction (Structured Output) | – skipped |  |  |  |  |", table);
         Assert.EndsWith("**1/2 passed** · qwen", table);
         run.Cancelled = true;
-        Assert.EndsWith("**1/2 passed** · qwen · cancelled", BenchText.Summary(run));
+        Assert.EndsWith("**1/2 passed** · qwen · canceled", BenchText.Summary(run));
     }
 }

@@ -76,7 +76,7 @@ public static class PrintText
 
     public static string Failed(string printer, string detail) => $"Error: printing to '{printer}' failed: {detail.Trim()}";
 
-    public static string PrinterCancelled(string printer) => $"Error: '{printer}' asked where to save the file, and the dialog was cancelled; nothing was printed";
+    public static string PrinterCancelled(string printer) => $"Error: '{printer}' asked where to save the file, and the dialog was canceled; nothing was printed";
 
     public static string ShellFailed(string file, string detail) => $"Error: Windows could not start printing {file}: {detail.Trim()}";
 
@@ -246,7 +246,7 @@ public static class PrintText
     public const string Working = "Printing";
 
     /// <summary>A <c>/print</c> cancelled by ESC or Ctrl+C (2026-10-08): a job half sent was withdrawn, so nothing prints. Pinned.</summary>
-    public const string Cancelled = "(print cancelled)";
+    public const string Cancelled = "(print canceled)";
 
     public const string ReplyWord = "reply";
 

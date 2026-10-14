@@ -59,7 +59,7 @@ internal sealed partial class ChatScreen
     [
         new(PlanText.ApproveWord, "approve the presented plan and carry it out here"),
         new(PlanText.ApproveWord + " " + PlanText.FreshSwitch, "approve it and carry it out in a new conversation"),
-        new(PlanText.CancelWord, "leave plan mode; the plan file is kept, marked cancelled"),
+        new(PlanText.CancelWord, "leave plan mode; the plan file is kept, marked canceled"),
         new(PlanText.OpenWord, "pick up a plan under .neon/plans/: /plan open <name>, or alone to list them"),
         new(PlanText.SaveWord, "keep the last reply as the plan and ask for approval: /plan save [name]"),
         new(PlanText.GapsWord, "review the presented plan pass after pass until no gaps are left: /plan gaps [model|advisor|any]"),

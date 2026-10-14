@@ -122,7 +122,7 @@ public static class FileText
 
     /// <summary>The arguments hold <c>\'</c> or <c>\"</c> and the matched text does not (2026-09-19). Pinned.</summary>
     public static string EscapeDriftQuote(string path, char quote) =>
-        $"Error: old_text and new_text hold \\{quote} but the matched text in '{path}' does not; the backslash is a serialisation artefact — read the file again and pass both without it";
+        $"Error: old_text and new_text hold \\{quote} but the matched text in '{path}' does not; the backslash is a serialization artifact — read the file again and pass both without it";
 
     /// <summary>Every backslash run in <c>old_text</c> is twice the file's (2026-09-19). Pinned.</summary>
     public static string EscapeDriftDoubled(string path) =>

@@ -495,7 +495,7 @@ internal sealed class MacLineWindow : AppKitWindow
             SendVoidRectNint(view, Sel("cacheDisplayInRect:toBitmapImageRep:"), bounds, rep);
             bool hidden = SendBool(window.Window, Sel("isVisible")) == 0;
             bool ok = length == "a warning\nan error\n".Length && hidden && window._title == ProbeFeed.TitleText;
-            return (ok, $"a hidden window's text view took {length} characters in two levels' colours and drew them; the title followed the feed");
+            return (ok, $"a hidden window's text view took {length} characters in two levels' colors and drew them; the title followed the feed");
         }
         finally
         {

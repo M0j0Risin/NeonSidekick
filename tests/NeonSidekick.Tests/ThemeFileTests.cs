@@ -213,7 +213,7 @@ public sealed class ThemeFileTests : IDisposable
         Assert.Equal([ThemeText.BaseIgnored("noir")], ProblemsOf("based.json"));   // loads, its own colours: synthwave's here, not noir's
         Assert.Equal(ShippedThemes.Synthwave.Colors(), User("based").Colors());
         Assert.Equal(
-            "skipped: it does not set secondary, tertiary (a theme sets all 15 colours; /theme export writes a full file)",
+            "skipped: it does not set secondary, tertiary (a theme sets all 15 colors; /theme export writes a full file)",
             ThemeText.MissingColors(["secondary", "tertiary"]));
     }
 

@@ -133,7 +133,7 @@ public sealed class Assistant
     /// off</c>, the model reasoned about a switch it cannot reach). Pinned.
     /// </summary>
     public const string FileRule =
-        "The user's working directory — also called the cwd, the current directory or the current working directory — is a folder on this computer where you may read, search, write and organise files with the file tools " +
+        "The user's working directory — also called the cwd, the current directory or the current working directory — is a folder on this computer where you may read, search, write and organize files with the file tools " +
         "(" + NeonSidekick.Llm.Tools.GetWorkingDirectoryTool.ToolName + " gives its path); every path you pass is relative to it and the file tools reach nothing outside it; " +
         NeonSidekick.Llm.Tools.DeleteTool.ToolName + " removes a file or a folder for good, with everything in it.";
 
@@ -144,7 +144,7 @@ public sealed class Assistant
     /// byte-identical. Pinned.
     /// </summary>
     public const string FileRuleWithoutDelete =
-        "The user's working directory — also called the cwd, the current directory or the current working directory — is a folder on this computer where you may read, search, write and organise files with the file tools " +
+        "The user's working directory — also called the cwd, the current directory or the current working directory — is a folder on this computer where you may read, search, write and organize files with the file tools " +
         "(" + NeonSidekick.Llm.Tools.GetWorkingDirectoryTool.ToolName + " gives its path); every path you pass is relative to it and the file tools reach nothing outside it.";
 
     /// <summary>
@@ -1710,13 +1710,13 @@ public sealed class Assistant
 
                             projected -= done.Saved;
                             DiagnosticLog.Info(Category, string.Create(CultureInfo.InvariantCulture,
-                                $"Context at {at}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s); summarised {(thisTurn ? "this turn's earlier iterations" : "the turns before this one")}: {compacted.MessagesBefore} messages → {compacted.MessagesAfter}, about {guard.PercentOf(Math.Max(projected, 0))}% now."));
+                                $"Context at {at}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s); summarized {(thisTurn ? "this turn's earlier iterations" : "the turns before this one")}: {compacted.MessagesBefore} messages → {compacted.MessagesAfter}, about {guard.PercentOf(Math.Max(projected, 0))}% now."));
                             yield return new TurnEvent.Compacted(compacted, at, thisTurn);
                         }
 
                         if (guard.Tripped(projected))
                         {
-                            DiagnosticLog.Info(Category, $"Context still near {guard.PercentOf(projected)}% after the mid-turn compact: nothing more to summarise; the server's limit answers.");
+                            DiagnosticLog.Info(Category, $"Context still near {guard.PercentOf(projected)}% after the mid-turn compact: nothing more to summarize; the server's limit answers.");
                         }
                     }
                 }
@@ -1770,7 +1770,7 @@ public sealed class Assistant
     public const string TurnCompleted = "completed";
     public const string TurnStopped = "stopped";
     public const string TurnFailed = "failed";
-    public const string TurnCancelled = "cancelled";
+    public const string TurnCancelled = "canceled";
 
     /// <summary>The suffix on an opening call's <c>Tool call</c> line: seeded, not the model's.</summary>
     public const string OpeningSuffix = " (opening)";
@@ -1807,7 +1807,7 @@ public sealed class Assistant
 
     /// <summary>A request cut by the token: <c>Request 2 cancelled after 3.2 s: 140 chars received</c>. Pinned.</summary>
     public static string RequestCancelledLogLine(int iteration, TimeSpan elapsed, int chars) =>
-        string.Create(CultureInfo.InvariantCulture, $"Request {iteration} cancelled after {elapsed.TotalSeconds:F1} s: {chars} chars received");
+        string.Create(CultureInfo.InvariantCulture, $"Request {iteration} canceled after {elapsed.TotalSeconds:F1} s: {chars} chars received");
 
     private static string Plural(int count, string noun) =>
         string.Create(CultureInfo.InvariantCulture, $"{count} {noun}{(count == 1 ? "" : "s")}");

@@ -32,12 +32,12 @@ public class ClaudeApiTests
     [Fact]
     public void Write_LiftsTheSystemMessages_AndCarriesTheRequiredFields()
     {
-        var body = Body([new(ChatRole.System, "You are Neon."), new(ChatRole.User, "hi"), new(ChatRole.System, "Summarise.")], maxTokens: 4096);
+        var body = Body([new(ChatRole.System, "You are Neon."), new(ChatRole.User, "hi"), new(ChatRole.System, "Summarize.")], maxTokens: 4096);
 
         Assert.Equal("claude-sonnet-5", body.GetProperty("model").GetString());
         Assert.Equal(4096, body.GetProperty("max_tokens").GetInt32());
         Assert.True(body.GetProperty("stream").GetBoolean());
-        Assert.Equal("You are Neon.\n\nSummarise.", body.GetProperty("system").GetString());
+        Assert.Equal("You are Neon.\n\nSummarize.", body.GetProperty("system").GetString());
         Assert.Equal(["user"], Roles(body));
         Assert.False(body.TryGetProperty("tools", out _));
         Assert.False(body.TryGetProperty("cache_control", out _));

@@ -39,7 +39,7 @@ public sealed class LivePrinterTests
     private static PrintJob Job(MacPrintSpooler spooler, string printer)
     {
         using var surface = spooler.Open(printer, landscape: false, out string error) ?? throw new InvalidOperationException(error);
-        var pages = PrintLayout.Markdown(new MarkdigParser().Parse("# Held\n\nA NeonSidekick test job, held and cancelled."), surface.Page, surface, 10);
+        var pages = PrintLayout.Markdown(new MarkdigParser().Parse("# Held\n\nA NeonSidekick test job, held and canceled."), surface.Page, surface, 10);
         return new PrintJob(printer, "NeonSidekick held test", PrintLayout.WithHeaders(pages, "held.md", "", surface.Page, surface));
     }
 

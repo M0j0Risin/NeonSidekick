@@ -1280,7 +1280,7 @@ public class AssistantTests
             "You do not know the current date or time; call get_current_time when a question depends on it, " +
             "and use shift_date or date_difference for calendar arithmetic instead of counting yourself. " +
             "For a countdown, use start_timer, stop_timer and list_timers; never guess what is left on a timer. " +
-            "The user's working directory — also called the cwd, the current directory or the current working directory — is a folder on this computer where you may read, search, write and organise files with the file tools " +
+            "The user's working directory — also called the cwd, the current directory or the current working directory — is a folder on this computer where you may read, search, write and organize files with the file tools " +
             "(get_working_directory gives its path); every path you pass is relative to it and the file tools reach nothing outside it; delete removes a file or a folder for good, with everything in it.",
             Assistant.DefaultSystemPrompt);   // the picture sentence its own rule since 2026-10-10 (Assistant.ImageRule), with the Image tools
         Assert.Equal("To look at a picture (png, jpg, gif, webp, bmp) in the working directory call view_image (several at once with paths); read_file cannot read one.", Assistant.ImageRule);
@@ -1752,7 +1752,7 @@ public class AssistantTests
         var request = Assert.Single(client.Requests);
         Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.User }, request.Select(m => m.Role));
         Assert.Equal(ConversationCompactor.SummaryInstruction, request[0].Text);
-        Assert.Equal("Summarise the conversation above. Pay particular attention to: the greeting", request[3].Text);
+        Assert.Equal("Summarize the conversation above. Pay particular attention to: the greeting", request[3].Text);
         var options = Assert.Single(client.Options);
         Assert.Null(options!.Tools);                                        // the tools of a turn are not offered
         Assert.Equal(ReasoningEffort.None, options.Reasoning!.Effort);      // whatever the turns ask for
@@ -2018,7 +2018,7 @@ public class AssistantTests
     // ── The mid-turn context guard (2026-09-15) ─────────────────────────────
 
     private const string SdkTimeoutMessage =
-        "The operation was cancelled because it exceeded the configured timeout of 0:01:15. The default timeout can be adjusted by passing a custom ClientPipelineOptions.NetworkTimeout value to the client's constructor. See https://aka.ms/net/scm/configure/networktimeout for more information.";
+        "The operation was canceled because it exceeded the configured timeout of 0:01:15. The default timeout can be adjusted by passing a custom ClientPipelineOptions.NetworkTimeout value to the client's constructor. See https://aka.ms/net/scm/configure/networktimeout for more information.";
 
     private static string LongText(int length) => new('x', length);
 
@@ -2282,13 +2282,13 @@ public class AssistantTests
         var (client, history, assistant) = HeavyArguments();
         client.Enqueue(FakeChatClient.Text("unused"));
         client.EnqueueText("done");
-        client.BeforeUpdateOf = (request, _, _) => request == 2 ? Task.FromException(new HttpRequestException("summariser down")) : Task.CompletedTask;
+        client.BeforeUpdateOf = (request, _, _) => request == 2 ? Task.FromException(new HttpRequestException("summarizer down")) : Task.CompletedTask;
 
         var events = await Run(assistant, "go");
 
         var failure = events.OfType<TurnEvent.Notice>().Single(n => n.IsError);
         Assert.StartsWith(Assistant.CompactFailedPrefix, failure.Text);
-        Assert.Contains("summariser down", failure.Text);
+        Assert.Contains("summarizer down", failure.Text);
         Assert.Empty(events.OfType<TurnEvent.Compacted>());
         Assert.Equal(new[] { "done" }, Deltas(events));
         // The history as the prune left it: the first call still there, no note on the user's message.
@@ -2705,9 +2705,9 @@ public class AssistantTests
             NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
         }
 
-        Assert.Contains(lines, e => e.Level == NeonSidekick.Diagnostics.DiagnosticLevel.Debug && System.Text.RegularExpressions.Regex.IsMatch(e.Message, @"^Request 1 cancelled after \d+\.\d s: 3 chars received$"));
+        Assert.Contains(lines, e => e.Level == NeonSidekick.Diagnostics.DiagnosticLevel.Debug && System.Text.RegularExpressions.Regex.IsMatch(e.Message, @"^Request 1 canceled after \d+\.\d s: 3 chars received$"));
         var ended = Assert.Single(lines, e => e.Message.StartsWith("Turn 1 ended", StringComparison.Ordinal));
-        Assert.Matches(@"^Turn 1 ended after \d+\.\d s: 1 request, 0 tool calls, 3 chars, cancelled$", ended.Message);
+        Assert.Matches(@"^Turn 1 ended after \d+\.\d s: 1 request, 0 tool calls, 3 chars, canceled$", ended.Message);
     }
 
     [Fact]
@@ -2767,10 +2767,10 @@ public class AssistantTests
         Assert.Equal("Turn 1 started: \"hi\"", Assistant.TurnStartedLogLine(1, "hi", 0, 0));
         Assert.Equal("Turn 3 ended after 12.4 s: 2 requests, 3 tool calls, 512 chars, completed", Assistant.TurnEndedLogLine(3, TimeSpan.FromSeconds(12.41), 2, 3, 512, Assistant.TurnCompleted));
         Assert.Equal("Turn 1 ended after 0.0 s: 1 request, 1 tool call, 0 chars, stopped", Assistant.TurnEndedLogLine(1, TimeSpan.Zero, 1, 1, 0, Assistant.TurnStopped));
-        Assert.Equal(["completed", "stopped", "failed", "cancelled"], new[] { Assistant.TurnCompleted, Assistant.TurnStopped, Assistant.TurnFailed, Assistant.TurnCancelled });
+        Assert.Equal(["completed", "stopped", "failed", "canceled"], new[] { Assistant.TurnCompleted, Assistant.TurnStopped, Assistant.TurnFailed, Assistant.TurnCancelled });
         Assert.Equal("Request 2: 14 messages, 19 tools, reasoning medium", Assistant.RequestLogLine(2, 14, 19, ReasoningEffort.Medium));
         Assert.Equal("Request 1: 1 message, no tools, reasoning default", Assistant.RequestLogLine(1, 1, 0, null));
-        Assert.Equal("Request 2 cancelled after 3.2 s: 140 chars received", Assistant.RequestCancelledLogLine(2, TimeSpan.FromSeconds(3.24), 140));
+        Assert.Equal("Request 2 canceled after 3.2 s: 140 chars received", Assistant.RequestCancelledLogLine(2, TimeSpan.FromSeconds(3.24), 140));
         Assert.Equal("Tool result read_file: 1,234 chars, 2 pictures in 12 ms — \"line one\"", Assistant.ToolResultLogLine("read_file", "line one\nline two" + new string('x', 1217), 2, TimeSpan.FromMilliseconds(12.4)));
         Assert.Equal("Tool edit_file answered an error: Error: nothing matched", Assistant.ToolErrorLogLine("edit_file", "Error: nothing matched\ndetail"));
     }

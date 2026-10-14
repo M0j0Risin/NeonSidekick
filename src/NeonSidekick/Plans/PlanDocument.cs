@@ -39,7 +39,7 @@ public static class PlanDocument
     public static string Word(PlanStatus status) => status switch
     {
         PlanStatus.Approved => "approved",
-        PlanStatus.Cancelled => "cancelled",
+        PlanStatus.Cancelled => "canceled",
         PlanStatus.Done => "done",
         PlanStatus.Incomplete => "incomplete",
         _ => "draft",
@@ -318,7 +318,7 @@ public static class PlanDocument
     {
         "draft" => PlanStatus.Draft,
         "approved" => PlanStatus.Approved,
-        "cancelled" => PlanStatus.Cancelled,
+        "canceled" or "cancelled" => PlanStatus.Cancelled, // written cancelled until 2026-10-14 (American since, the user's ask); old files still read
         "done" => PlanStatus.Done,
         "incomplete" => PlanStatus.Incomplete,
         _ => null,

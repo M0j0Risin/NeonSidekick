@@ -645,7 +645,7 @@ internal sealed partial class ChatScreen
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
-                    DiagnosticLog.Debug("YouTube", "/youtube under the reply was cancelled as the reply ended.");
+                    DiagnosticLog.Debug("YouTube", "/youtube under the reply was canceled as the reply ended.");
                 }
 
                 break;

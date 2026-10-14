@@ -412,7 +412,7 @@ public class EmbeddedLlmLiveTests
             var picture = ImageFile.Load(SmokeChecks.SolidBmp(64, 64), "red.bmp", out string? error);
             Assert.True(picture is not null, error);
             var seen = await client.GetResponseAsync(
-                [new ChatMessage(ChatRole.User, [new TextContent("What one colour fills this picture? Answer with the colour alone."), new DataContent(picture.Bytes, picture.MediaType)])],
+                [new ChatMessage(ChatRole.User, [new TextContent("What one color fills this picture? Answer with the color alone."), new DataContent(picture.Bytes, picture.MediaType)])],
                 new ChatOptions { MaxOutputTokens = 1024 });
             string thought = string.Concat(seen.Messages.SelectMany(m => m.Contents).OfType<TextReasoningContent>().Select(r => r.Text));
             Assert.False(string.IsNullOrWhiteSpace(seen.Text), $"no answer: finish {seen.FinishReason}, output {seen.Usage?.OutputTokenCount}, thinking {thought.Length} chars: {thought[..Math.Min(200, thought.Length)]}");

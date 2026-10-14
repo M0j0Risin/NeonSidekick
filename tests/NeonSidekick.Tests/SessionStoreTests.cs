@@ -193,7 +193,7 @@ public class SessionStoreTests : IDisposable
     {
         long a = Begin("a");
         _store.AppendTurn(a, "How do I wire the Vosk model into the wake word?", "You pass the model's folder to the detector.", 0, [], [], 0, 0, 0, false);
-        _store.AppendTurn(a, "and the vosk grammar?", "The grammar is a JSON list of phrases the Vosk recogniser accepts.", 1, [], [], 0, 0, 0, false);
+        _store.AppendTurn(a, "and the vosk grammar?", "The grammar is a JSON list of phrases the Vosk recognizer accepts.", 1, [], [], 0, 0, 0, false);
         long b = Begin("b");
         _store.AppendTurn(b, "What is for dinner?", "Pasta, since the pantry has nothing else.", 0, [], [], 0, 0, 0, false);
         long c = Begin("c");
@@ -539,7 +539,7 @@ public class SessionStoreTests : IDisposable
     {
         Assert.Equal("Session 12 begun: \"first line\"", SessionStore.BegunLogLine(12, "first line\nmore"));
         Assert.Equal("Session 12: turn appended", SessionStore.AppendedLogLine(12, false));
-        Assert.Equal("Session 12: turn appended (cancelled)", SessionStore.AppendedLogLine(12, true));
+        Assert.Equal("Session 12: turn appended (canceled)", SessionStore.AppendedLogLine(12, true));
         Assert.Equal("Session 12: history saved (24,000 chars)", SessionStore.HistorySavedLogLine(12, 24000));
         Assert.Equal("Session 12 titled by the model: \"a-slug\"", SessionStore.TitledLogLine(12, "a-slug", TitleSource.Model));
         Assert.Equal("Session 12 titled by the user: \"My chat\"", SessionStore.TitledLogLine(12, "My chat", TitleSource.User));

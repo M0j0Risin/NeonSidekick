@@ -364,8 +364,8 @@ public sealed class ComfyTests : IDisposable
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => running);
         Assert.False(_studio.Busy);
-        Assert.Equal("(image generation cancelled)", ComfyText.Drained(1));
-        Assert.Equal("(3 image generations cancelled)", ComfyText.Drained(3));
+        Assert.Equal("(image generation canceled)", ComfyText.Drained(1));
+        Assert.Equal("(3 image generations canceled)", ComfyText.Drained(3));
     }
 
     [WindowsFact]

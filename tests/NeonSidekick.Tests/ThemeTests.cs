@@ -111,7 +111,7 @@ public class ThemeTests
     {
         var noir = ShippedThemes.Noir;
         Color[] rest = [noir.Primary, noir.Secondary, noir.Tertiary, noir.Deep, noir.Highlight, noir.Warm, noir.Tint, noir.Ink, noir.Dim, noir.Dimmer, noir.Bg, noir.PanelBg, noir.Good, noir.Warn, .. noir.GradientStops];
-        Assert.All(rest, c => Assert.True(c.R == c.G && c.G == c.B, $"{Theme.ToHex(c)} is not a grey"));
+        Assert.All(rest, c => Assert.True(c.R == c.G && c.G == c.B, $"{Theme.ToHex(c)} is not a gray"));
         Assert.True(noir.Bad.R > noir.Bad.G && noir.Bad.R > noir.Bad.B);   // the user's call: grey plus a muted red for errors
     }
 

@@ -290,7 +290,7 @@ public class NeonHelpTests
     [Fact]
     public void ABadKind_IsAnErrorSentence()
     {
-        Assert.Equal("Unknown kind 'colour'; use any, command, setting, pane or keys.", Invoke("x", "colour"));
+        Assert.Equal("Unknown kind 'color'; use any, command, setting, pane or keys.", Invoke("x", "color"));
     }
 
     [Fact]

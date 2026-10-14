@@ -49,7 +49,7 @@ You:
 - `You: ` is printed before each line is read, even from a pipe, so a reply often starts `You: Neon: `.
 - `[tool]` lines trace tool calls and their results, which may run over several lines. A conversation's opening calls (clock, working directory, memory) print before `Neon: `.
 - `[notice]`, `[warning]`, `[error]` and `[category] message` lines are notices and diagnostics (warnings and errors only; `--log` has the rest). Thinking is never printed.
-- Each **line** of input is one message; blank lines are skipped. Ctrl+C ends the run, and a reply cut short ends with `(cancelled)`.
+- Each **line** of input is one message; blank lines are skipped. Ctrl+C ends the run, and a reply cut short ends with `(canceled)`.
 
 ## Slash commands in headless mode
 

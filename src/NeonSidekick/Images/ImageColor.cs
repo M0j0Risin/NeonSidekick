@@ -28,7 +28,7 @@ public static class ImageColor
     public const float LumaR = 0.299f, LumaG = 0.587f, LumaB = 0.114f;
 
     /// <summary>The choices <c>filter</c> takes. Pinned.</summary>
-    public const string FilterChoices = "none, grey, sepia, negative, polaroid";
+    public const string FilterChoices = "none, gray, sepia, negative, polaroid";
 
     /// <summary>A <c>filter</c> word (<c>gray</c>, <c>greyscale</c>, <c>grayscale</c> and <c>invert</c> too); false for anything else. Pure.</summary>
     public static bool TryParseFilter(string text, out ImageFilter filter)

@@ -36,7 +36,7 @@ internal sealed class VoiceSession : IDisposable
     public const string UnpackingLabel = "unpacking vosk model…";
 
     /// <summary>The detail after a connect cancelled by the caller (Ctrl+C under the spinner, 2026-09-17): unavailable with this reason until the next connect, never "off" while enabled.</summary>
-    public const string ConnectCancelledDetail = "cancelled";
+    public const string ConnectCancelledDetail = "canceled";
 
     private enum State
     {

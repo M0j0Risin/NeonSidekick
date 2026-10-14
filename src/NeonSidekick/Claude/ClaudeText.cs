@@ -112,7 +112,7 @@ public static class ClaudeText
 
     public static string ExitedLog(int code) => "Exited " + code.ToString(CultureInfo.InvariantCulture);
 
-    public const string KilledLog = "Killed (cancelled)";
+    public const string KilledLog = "Killed (canceled)";
 
     public static string UnreadableLineLog(string why) => "A stream line that is not JSON was skipped: " + why;
 

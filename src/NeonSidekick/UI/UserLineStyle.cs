@@ -23,9 +23,9 @@ public static class UserLineStyle
     /// <summary>The menu hint next to a style. Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        Quiet => "the › in the user colour, your words in the body's",
+        Quiet => "the › in the user color, your words in the body's",
         Slab => "your line on a faint slab",
-        Bold => "your line bold in the user colour",
+        Bold => "your line bold in the user color",
         _ => "",
     };
 

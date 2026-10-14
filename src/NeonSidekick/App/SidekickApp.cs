@@ -1736,7 +1736,7 @@ public sealed class SidekickApp
             }
         }
 
-        DiagnosticLog.Info("Test", $"/test {args}: {run.Passed}/{run.Counted} passed on {run.Model}{(run.Cancelled ? ", cancelled" : "")}.");
+        DiagnosticLog.Info("Test", $"/test {args}: {run.Passed}/{run.Counted} passed on {run.Model}{(run.Cancelled ? ", canceled" : "")}.");
     }
 
     private async Task<(string Outcome, IReadOnlyList<string> Details)> CompactHeadlessAsync(LlmSession session, Assistant assistant, string? focus, int? autoPercent, CancellationToken cancellationToken)
@@ -1845,7 +1845,7 @@ public sealed class SidekickApp
                 await WriteHeadlessPrefixAsync().ConfigureAwait(false);
             }
 
-            await HeadlessNoticeLineAsync("(cancelled)").ConfigureAwait(false);
+            await HeadlessNoticeLineAsync("(canceled)").ConfigureAwait(false);
         }
 
         await EnsureHeadlessLineStartAsync().ConfigureAwait(false);
@@ -1928,7 +1928,7 @@ public sealed class SidekickApp
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                await HeadlessNoticeLineAsync("(cancelled)").ConfigureAwait(false);
+                await HeadlessNoticeLineAsync("(canceled)").ConfigureAwait(false);
                 AddClaudeExchange(session, args, reply);
                 return new HeadlessClaudeTurn(claudeSessionId, reply.Length > 0 ? reply.ToString() : null, default, true);
             }
@@ -2223,7 +2223,7 @@ public sealed class SidekickApp
         {
             if (_liveSession?.Embedded is { } embedded && embedded.Kill() is { Count: > 0 } killed)
             {
-                DiagnosticLog.Info(ChatScreen.AppCategory, "Signalled to exit: unloaded " + string.Join(", ", killed) + ".");
+                DiagnosticLog.Info(ChatScreen.AppCategory, "Signaled to exit: unloaded " + string.Join(", ", killed) + ".");
             }
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

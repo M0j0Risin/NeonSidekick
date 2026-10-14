@@ -828,9 +828,9 @@ public sealed class SessionStore : IDisposable
     public static string BegunLogLine(long id, string title) =>
         string.Create(CultureInfo.InvariantCulture, $"Session {id} begun: {LogText.Quoted(title)}");
 
-    /// <summary><c>Session 12: turn appended</c> / <c>… (cancelled)</c>. Pinned.</summary>
+    /// <summary><c>Session 12: turn appended</c> / <c>… (canceled)</c>. Pinned.</summary>
     public static string AppendedLogLine(long id, bool cancelled) =>
-        string.Create(CultureInfo.InvariantCulture, $"Session {id}: turn appended{(cancelled ? " (cancelled)" : "")}");
+        string.Create(CultureInfo.InvariantCulture, $"Session {id}: turn appended{(cancelled ? " (canceled)" : "")}");
 
     /// <summary><c>Session 12: rewound to turn 3 (2 turns removed)</c> (2026-09-30, <c>/rewind</c>). Pinned.</summary>
     public static string TruncatedLogLine(long id, int keepThrough, int removed) =>

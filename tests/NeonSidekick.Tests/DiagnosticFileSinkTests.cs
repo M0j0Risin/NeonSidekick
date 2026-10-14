@@ -24,11 +24,11 @@ public class DiagnosticFileSinkTests : IDisposable
     [Fact]
     public void Format_IsInvariant_AndPinned()
     {
-        var evt = new DiagnosticEvent(new DateTime(2026, 9, 11, 13, 5, 7, 123, DateTimeKind.Utc), DiagnosticLevel.Debug, "Wake", "Wake recogniser heard: neon", null);
-        Assert.Equal("2026-09-11 13:05:07.123 [Debug] Wake: Wake recogniser heard: neon", DiagnosticFileSink.Format(evt));
+        var evt = new DiagnosticEvent(new DateTime(2026, 9, 11, 13, 5, 7, 123, DateTimeKind.Utc), DiagnosticLevel.Debug, "Wake", "Wake recognizer heard: neon", null);
+        Assert.Equal("2026-09-11 13:05:07.123 [Debug] Wake: Wake recognizer heard: neon", DiagnosticFileSink.Format(evt));
 
         var withException = evt with { Level = DiagnosticLevel.Error, Exception = new InvalidOperationException("boom") };
-        Assert.Equal("2026-09-11 13:05:07.123 [Error] Wake: Wake recogniser heard: neon (InvalidOperationException: boom)", DiagnosticFileSink.Format(withException));
+        Assert.Equal("2026-09-11 13:05:07.123 [Error] Wake: Wake recognizer heard: neon (InvalidOperationException: boom)", DiagnosticFileSink.Format(withException));
     }
 
     [Fact]

@@ -2287,13 +2287,13 @@ public class InputLineTests : IDisposable
     {
         var (line, keys) = PaneLine();
         string block = Block(5);
-        keys.Push(Chars("Summarise: ")).PushPaste(block).Push(Chars(" please")).Push(Keys.Enter);
+        keys.Push(Chars("Summarize: ")).PushPaste(block).Push(Chars(" please")).Push(Keys.Enter);
 
         var result = await line.ReadAsync(multiline: true);
 
-        string expected = "Summarise: " + block.Replace("\r\n", "\n") + " please";
+        string expected = "Summarize: " + block.Replace("\r\n", "\n") + " please";
         Assert.Equal(expected, Assert.IsType<InputResult.Submitted>(result).Text);
-        Assert.Contains("Summarise: [Pasted text #1 +5 lines]", _console.Output);   // the 40-column transcript wraps " please" onto the next row
+        Assert.Contains("Summarize: [Pasted text #1 +5 lines]", _console.Output);   // the 40-column transcript wraps " please" onto the next row
         Assert.DoesNotContain("line 3", _console.Output);
         Assert.Equal(1, line.Pastes.Count);
         // The history keeps the token: Up recalls the same line and Enter sends the block again.

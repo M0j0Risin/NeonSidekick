@@ -124,7 +124,7 @@ internal sealed partial class ChatScreen
             }
         }
 
-        DiagnosticLog.Info("Test", $"/test {args}: {run.Passed}/{run.Counted} passed on {run.Model}{(run.Cancelled ? ", cancelled" : "")}.");
+        DiagnosticLog.Info("Test", $"/test {args}: {run.Passed}/{run.Counted} passed on {run.Model}{(run.Cancelled ? ", canceled" : "")}.");
         DrainDiagnostics();
     }
 

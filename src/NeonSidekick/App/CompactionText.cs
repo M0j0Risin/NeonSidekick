@@ -21,7 +21,7 @@ public static class CompactionText
     public const string CompactGlyph = Assistant.CompactGlyph;
 
     public const string NothingToCompact = "(" + CompactGlyph + "nothing to compact)";
-    public const string Cancelled = "(" + CompactGlyph + "compact cancelled)";
+    public const string Cancelled = "(" + CompactGlyph + "compact canceled)";
 
     /// <summary>The prefix of a failure's error line: <c>🗜️ Compact failed: </c> + <c>Assistant.Explain</c> (<see cref="Assistant.CompactFailedPrefix"/>, the mid-turn guard's too).</summary>
     public const string FailedPrefix = Assistant.CompactFailedPrefix;

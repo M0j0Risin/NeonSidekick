@@ -23,7 +23,7 @@ public static partial class SmokeChecks
             string? missing =
                 !body.Contains("<table>", StringComparison.Ordinal) ? "no table"
                 : !body.Contains("task-list-item", StringComparison.Ordinal) ? "no task list"
-                : !body.Contains("tk-keyword", StringComparison.Ordinal) ? "the code was not coloured"
+                : !body.Contains("tk-keyword", StringComparison.Ordinal) ? "the code was not colored"
                 : body.Contains("<script", StringComparison.Ordinal) ? "raw HTML got through"
                 : !body.Contains("[image: alt]", StringComparison.Ordinal) ? "the missing picture's alt text is not there"
                 : !page.Contains(PdfHtml.PolicyMeta, StringComparison.Ordinal) ? "the page has no policy"

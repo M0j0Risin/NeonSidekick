@@ -321,7 +321,7 @@ public sealed class RunCommandTool : AIFunction
             {
                 // ESC ended the turn: the child goes with it.
                 session.Kill();
-                DiagnosticLog.Info(ShellKinds.Category, ShellText.RunLogLine(request.Kind, command, "cancelled after " + ShellText.Elapsed(session.Elapsed), session.Output.TotalChars));
+                DiagnosticLog.Info(ShellKinds.Category, ShellText.RunLogLine(request.Kind, command, "canceled after " + ShellText.Elapsed(session.Elapsed), session.Output.TotalChars));
                 throw;
             }
 

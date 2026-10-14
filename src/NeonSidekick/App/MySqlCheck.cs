@@ -97,7 +97,7 @@ internal static class MySqlCheck
             try
             {
                 var run = await Run([SlowQuery], 120, cancel.Token).ConfigureAwait(false);
-                (ok, detail) = (false, "not cancelled: " + run.Outcome);
+                (ok, detail) = (false, "not canceled: " + run.Outcome);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {

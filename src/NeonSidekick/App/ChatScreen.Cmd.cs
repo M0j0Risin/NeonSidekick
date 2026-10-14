@@ -357,7 +357,7 @@ internal sealed partial class ChatScreen
                 _transcript.Warning(header);
             }
 
-            string outcome = cancelled ? "cancelled after " + ShellText.Elapsed(session.Elapsed)
+            string outcome = cancelled ? "canceled after " + ShellText.Elapsed(session.Elapsed)
                 : exited ? "exit " + (session.ExitCode ?? -1).ToString(CultureInfo.InvariantCulture) + " in " + ShellText.Elapsed(session.Elapsed)
                 : "timed out after " + ShellText.Elapsed(timeout);
             DiagnosticLog.Info(ShellKinds.Category, ShellText.CmdLogLine(request.Kind, request.Command, outcome, body.Length));

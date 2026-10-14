@@ -156,13 +156,13 @@ public class QueueMenuTests : IDisposable
     [Fact]
     public async Task OnThePane_APastedLine_ShowsItsLabel()
     {
-        Seed("summarise [Pasted text +8 lines]");
+        Seed("summarize [Pasted text +8 lines]");
         var (menu, pane) = PaneMenu();
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n▸ " + Row(0, "summarise [Pasted text +8 lines]") + "\n", _console.Output);
+        Assert.Contains("\n▸ " + Row(0, "summarize [Pasted text +8 lines]") + "\n", _console.Output);
         pane.Dispose();
     }
 

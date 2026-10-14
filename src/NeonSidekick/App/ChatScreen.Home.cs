@@ -145,7 +145,7 @@ internal sealed partial class ChatScreen
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // The turn's end took the keys back (the interrupt's listen, the exit): the call is dropped, as a pane is closed.
-            DiagnosticLog.Debug(HaText.Category, "/ha under the reply was cancelled as the reply ended.");
+            DiagnosticLog.Debug(HaText.Category, "/ha under the reply was canceled as the reply ended.");
             return;
         }
 

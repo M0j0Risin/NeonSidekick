@@ -180,7 +180,7 @@ internal static unsafe class MacKeychain
     /// <summary>The sentence for a Keychain status. Pinned in shape.</summary>
     public static string Describe(int status) => status switch
     {
-        ErrSecUserCanceled => "the Keychain prompt was cancelled",
+        ErrSecUserCanceled => "the Keychain prompt was canceled",
         ErrSecAuthFailed => "the Keychain refused the sign-in",
         ErrSecInteractionNotAllowed => "the Keychain is locked and cannot ask here",
         _ => "the Keychain refused it (OSStatus " + status.ToString(CultureInfo.InvariantCulture) + ")",

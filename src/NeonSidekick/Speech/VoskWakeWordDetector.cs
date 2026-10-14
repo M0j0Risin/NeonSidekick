@@ -54,7 +54,7 @@ public sealed class VoskWakeWordDetector : IWakeWordDetector
         _modelDirectory = modelDirectory;
         _phrase = WakeWordMatch.NormalizePhrase(phrase);
         _ownsModel = true;
-        _logName = "Wake recogniser";
+        _logName = "Wake recognizer";
     }
 
     /// <summary>A fork: its own recogniser over the parent's model, which it never frees.</summary>
@@ -64,7 +64,7 @@ public sealed class VoskWakeWordDetector : IWakeWordDetector
         _modelDirectory = modelDirectory;
         _phrase = phrase;
         _ownsModel = false;
-        _logName = "Echo probe recogniser";
+        _logName = "Echo probe recognizer";
         _recognizer = CreateRecognizer(model);
     }
 
@@ -211,7 +211,7 @@ public sealed class VoskWakeWordDetector : IWakeWordDetector
             catch (Exception ex)
             {
                 _recognizer = null;
-                DiagnosticLog.Warn(Category, "Wake-word recogniser could not be reset: " + Assistant.Explain(ex), ex);
+                DiagnosticLog.Warn(Category, "Wake-word recognizer could not be reset: " + Assistant.Explain(ex), ex);
             }
         }
     }

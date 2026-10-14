@@ -113,7 +113,7 @@ public static class YouTubeCommand
         ("--length", "videos short (under 4 min), medium or long (over 20)", YouTubeSearchFilters.Lengths),
         ("--since", "published since today, week, month, year or a date", YouTubeSearchFilters.Recent.Select(r => r.Word).ToList()),
         ("--region", "a two-letter country code (US, GB)", []),
-        ("--lang", "a language code to favour (en, es)", []),
+        ("--lang", "a language code to favor (en, es)", []),
         ("--live", "live broadcasts only", []),
         ("--captions", "videos with captions only", []),
         ("--safe", "safe search: none, moderate, strict", YouTubeSearchFilters.SafeSearches),

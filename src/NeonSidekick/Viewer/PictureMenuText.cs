@@ -14,8 +14,8 @@ public static class PictureMenuText
     public const string Rotate180 = "Rotate 180°";
     public const string FlipHorizontal = "Flip horizontally";
     public const string FlipVertical = "Flip vertically";
-    public const string Colour = "Colour";
-    public const string Grey = "Greyscale";
+    public const string Colour = "Color";
+    public const string Grey = "Grayscale";
     public const string Sepia = "Sepia";
     public const string Negative = "Negative";
     public const string Polaroid = "Polaroid";

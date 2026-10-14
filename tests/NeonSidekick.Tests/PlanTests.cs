@@ -147,6 +147,9 @@ public class PlanTests : IDisposable
         string approved = PlanDocument.WithStatus("# Mine\n", PlanStatus.Cancelled, T0, "req");
 
         Assert.Equal(PlanStatus.Cancelled, PlanDocument.TryParse(approved)!.Status);
+        Assert.Contains("\nstatus: canceled\n", approved);
+        // Written "cancelled" until 2026-10-14: an older file still reads.
+        Assert.Equal(PlanStatus.Cancelled, PlanDocument.TryParse(approved.Replace("status: canceled", "status: cancelled", StringComparison.Ordinal))!.Status);
         Assert.EndsWith("\n# Mine\n", approved);
         Assert.Null(PlanDocument.TryParse("# no header"));
         Assert.Null(PlanDocument.TryParse("---\nstatus: sideways\n---\n"));

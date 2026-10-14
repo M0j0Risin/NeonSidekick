@@ -78,7 +78,7 @@ public static class ClaudeCliText
     }
 
     /// <summary>An MCP call answered when the turn it belonged to ended first (an interrupt, a failure). Pinned.</summary>
-    public const string CallCancelled = "Error: the turn was cancelled before this tool ran.";
+    public const string CallCancelled = "Error: the turn was canceled before this tool ran.";
 
     /// <summary>A call the loop gave no result for. Pinned.</summary>
     public const string NoResultError = "Error: the app returned no result for this call.";

@@ -256,7 +256,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/plan <requirement>` | Has the model research with read-only tools and present a plan before anything changes. See [Plan mode](#plan-mode). |
 | `/plan [show]`, `/plan <detail>` | While planning, says where the plan stands, or adds detail. |
 | `/plan approve [--fresh]` | Approves the plan by typing (you may edit the file first); `--fresh` clears the context first. |
-| `/plan cancel` | Leaves plan mode; the file is kept, marked `cancelled`. |
+| `/plan cancel` | Leaves plan mode; the file is kept, marked `canceled`. |
 | `/plan save [<name>]` | Keeps a reply that looks like a plan as the plan. |
 | `/plan gaps [model\|advisor\|any]` | Reviews the plan pass after pass until no gaps are left. |
 | `/plan open <name>`, `/plan open` | Picks a plan up again (approving runs only the unticked steps), or lists the plans. |

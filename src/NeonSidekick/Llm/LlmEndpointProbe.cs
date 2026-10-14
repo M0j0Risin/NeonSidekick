@@ -196,7 +196,7 @@ public sealed class LlmEndpointProbe
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return ProbeResult.Missing("cancelled");
+            return ProbeResult.Missing("canceled");
         }
         catch (OperationCanceledException)
         {

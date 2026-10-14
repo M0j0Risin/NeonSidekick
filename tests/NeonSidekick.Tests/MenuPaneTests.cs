@@ -1569,7 +1569,7 @@ public class MenuPaneTests : IDisposable
     private static MenuPage Questions(int tab = 0) => MenuPage.Tabbed(
         "Questions",
         [
-            new MenuTab("One", ["( ) red", "( ) blue"]) { Caption = "Which colour do you like best of all?", Hint = "Enter = choose" },
+            new MenuTab("One", ["( ) red", "( ) blue"]) { Caption = "Which color do you like best of all?", Hint = "Enter = choose" },
             new MenuTab("Two", [Markup.Escape("[ ] a"), Markup.Escape("[ ] b"), Markup.Escape("[ ] c")]) { Caption = "Toppings?" },
             new MenuTab("Submit", ["One — (no answer)", "Submit"]),
         ],
@@ -1580,7 +1580,7 @@ public class MenuPaneTests : IDisposable
     public void Tabbed_TakesTheTabsCaptionAndHint_TheBaseHintKept()
     {
         var page = Questions();
-        Assert.Equal("Which colour do you like best of all?", page.Caption);
+        Assert.Equal("Which color do you like best of all?", page.Caption);
         Assert.Equal("Enter = choose", page.Hint);
         Assert.Equal("Enter = pick · ←/→ tabs · ESC = back", page.BaseHint);
         Assert.Equal("Toppings?", Questions(1).Caption);
@@ -1605,7 +1605,7 @@ public class MenuPaneTests : IDisposable
         Assert.Equal(new MenuPick(1, 2), await menu.PickAsync(Questions(), 0, CancellationToken.None));
 
         // The strip, the caption row (37 cells fit the 40), the spacer, the rows, the tab's own hint.
-        Assert.Contains(Rule(40) + "\n" + Titled("Questions │ One · Two · Submit ") + "\nWhich colour do you like best of all?\n \n▸ ( ) red\n  ( ) blue\n \n" + Rule(40) + "\nEnter = choose\n", Output);
+        Assert.Contains(Rule(40) + "\n" + Titled("Questions │ One · Two · Submit ") + "\nWhich color do you like best of all?\n \n▸ ( ) red\n  ( ) blue\n \n" + Rule(40) + "\nEnter = choose\n", Output);
         // The switch: the other tab's caption, its cursor on the page's row for it (2), the base hint.
         Assert.Contains("\n" + Titled("Questions │ One · Two · Submit ") + "\nToppings?\n \n  [ ] a\n  [ ] b\n▸ [ ] c\n" + Rule(40) + "\nEnter = pick · ←/→ tabs · ESC = back", Output);
         menu.Close();
@@ -1768,7 +1768,7 @@ public class MenuPaneTests : IDisposable
     [Fact]
     public void CaptionRows_WrapOnWords_CutAnOverWideWord_AndJoinTheRestIntoTheLastRow()
     {
-        Assert.Equal(["Which colour do you", "like best?"], MenuPane.CaptionRows("Which colour  do you\nlike best?", 20, 3));
+        Assert.Equal(["Which color do you", "like best?"], MenuPane.CaptionRows("Which color  do you\nlike best?", 20, 3));
         Assert.Equal(["short"], MenuPane.CaptionRows("short", 20, 3));
         Assert.Empty(MenuPane.CaptionRows("   ", 20, 3));
         Assert.Empty(MenuPane.CaptionRows("x", 0, 3));

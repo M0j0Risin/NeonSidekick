@@ -76,7 +76,7 @@ public static class AboutText
     public const string AboutTabTitle = "General";
     public const string ComponentsTabTitle = "Components";
     public const string ModelsTabTitle = "Models";
-    public const string LicenseTabTitle = "Licence";
+    public const string LicenseTabTitle = "License";
 
     /// <summary>The Models tab's first line (2026-10-09). Pinned.</summary>
     public const string ModelsCaption = "The embedded LLM's catalog (/settings › Servers › Embedded), each from its Hugging Face repository, pinned to a commit:";
@@ -95,7 +95,7 @@ public static class AboutText
     /// <summary>The second line of the About tab.</summary>
     public const string Copyright = "© 2026 Christopher Nelson";
     public const string LicenseName = "GNU GPL v3";
-    public const string LicenseNote = "(the Licence tab)";
+    public const string LicenseNote = "(the License tab)";
 
     /// <summary>
     /// The third line of the About tab (2026-10-04, the user's ask: the repository's name and link on the General tab): plain
@@ -131,7 +131,7 @@ public static class AboutText
     /// <summary>The Components tab's column headings.</summary>
     public const string ComponentHeading = "Component";
     public const string VersionHeading = "Version";
-    public const string LicenseHeading = "Licence";
+    public const string LicenseHeading = "License";
     public const string RoleHeading = "Role";
 
     /// <summary>The version cell of a part that is not versioned here: the Whisper and Vosk models (one file per size or name).</summary>
@@ -168,7 +168,7 @@ public static class AboutText
         new("Kokoro-82M in-process", "1.0", "Apache-2.0", "the TTS model in-process, downloaded on first use"),
         new("Whisper.net", "1.9.1", "MIT", "whisper.cpp bindings: speech-to-text and the Silero VAD in-process"),
         new("Whisper ggml models", Unversioned, "MIT", "OpenAI's Whisper weights, downloaded on first use"),
-        new("Vosk", "0.3.38", "Apache-2.0", "the wake-word recogniser in-process"),
+        new("Vosk", "0.3.38", "Apache-2.0", "the wake-word recognizer in-process"),
         new("Vosk models", Unversioned, "Apache-2.0", "wake-word models, downloaded on first use"),
         new("Silero VAD", "6.2.0", "MIT", "the voice-activity model, downloaded on first use"),
         new("PhotoSauce.MagicScaler", "0.15.0", "MIT", OperatingSystem.IsMacOS() ? "image decode, edit and downscale through Apple's ImageIO codecs" : "image decode and downscale through Windows' WIC codecs" + WindowsOnlyNote),

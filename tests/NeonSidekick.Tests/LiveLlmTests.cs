@@ -55,7 +55,7 @@ public class LiveLlmTests
 
             var deltas = new List<string>();
             var notices = new List<TurnEvent.Notice>();
-            await foreach (var evt in assistant.RunTurnAsync("What colour is [Image #1]? Answer with one word.", [image]))
+            await foreach (var evt in assistant.RunTurnAsync("What color is [Image #1]? Answer with one word.", [image]))
             {
                 if (evt is TurnEvent.TextDelta d) deltas.Add(d.Text);
                 if (evt is TurnEvent.Notice n) notices.Add(n);
@@ -71,7 +71,7 @@ public class LiveLlmTests
             string reply = string.Concat(deltas);
             Assert.False(string.IsNullOrWhiteSpace(reply));
             string[] colours = ["pink", "magenta", "purple", "violet", "red", "fuchsia", "rose"];
-            Assert.True(colours.Any(reply.ToLowerInvariant().Contains), "not a colour: " + reply);
+            Assert.True(colours.Any(reply.ToLowerInvariant().Contains), "not a color: " + reply);
         }
         finally
         {

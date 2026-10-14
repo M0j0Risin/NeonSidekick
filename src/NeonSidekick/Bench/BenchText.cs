@@ -128,7 +128,7 @@ public static class BenchText
 
     /// <summary>The line after ESC: how far the run got.</summary>
     public static string Cancelled(int done, int count) =>
-        string.Create(CultureInfo.InvariantCulture, $"Test run cancelled after {done}/{count}.");
+        string.Create(CultureInfo.InvariantCulture, $"Test run canceled after {done}/{count}.");
 
     /// <summary>The line after a save that failed.</summary>
     public const string NotSaved = "The run could not be saved to tests.json; see the log.";
@@ -170,7 +170,7 @@ public static class BenchText
         string settings = Settings(run);
         return string.Create(CultureInfo.InvariantCulture, $"**{run.Passed}/{run.Counted} passed** · {run.Model}")
             + (settings.Length > 0 ? " · " + settings : "")
-            + (run.Cancelled ? " · cancelled" : "");
+            + (run.Cancelled ? " · canceled" : "");
     }
 
     /// <summary>What <see cref="BenchRun.Reasoning"/> says when the requests carried no reasoning effort: the server chose.</summary>
@@ -276,7 +276,7 @@ public static class BenchText
                 .Append(" | ").Append(Cell(run.Model))
                 .Append(" | ").Append(run.Reasoning ?? "")
                 .Append(" | ").Append(run.Sampling is { } sampling ? Cell(sampling.Length > 0 ? sampling : ServerSampling) : "")
-                .Append(" | ").Append(string.Create(CultureInfo.InvariantCulture, $"{run.Passed}/{run.Counted}")).Append(run.Cancelled ? " (cancelled)" : "")
+                .Append(" | ").Append(string.Create(CultureInfo.InvariantCulture, $"{run.Passed}/{run.Counted}")).Append(run.Cancelled ? " (canceled)" : "")
                 .Append(" | ").Append(tests)
                 .Append(" |\n");
         }

@@ -31,7 +31,7 @@ public static class ThemeText
     public static string Duplicate(string name, string otherShown) => $"skipped: {otherShown} already names a theme \"{name}\"";
     /// <summary>A file that leaves colour roles unset or unusable (2026-10-05: a theme stands alone, every role its own).</summary>
     public static string MissingColors(IReadOnlyList<string> roles) =>
-        string.Create(CultureInfo.InvariantCulture, $"skipped: it does not set {string.Join(", ", roles)} (a theme sets all {ThemeKeys.Colors.Count} colours; /theme export writes a full file)");
+        string.Create(CultureInfo.InvariantCulture, $"skipped: it does not set {string.Join(", ", roles)} (a theme sets all {ThemeKeys.Colors.Count} colors; /theme export writes a full file)");
 
     /// <summary>An embedded theme file not in exactly one category folder of <c>assets/themes</c> (<see cref="ThemeLibrary"/>).</summary>
     public const string NotInCategory = "skipped: a built-in theme sits in one category folder of assets/themes";
@@ -40,10 +40,10 @@ public static class ThemeText
     public static string NoDefault(string name) => $"The default theme \"{name}\" did not load; a plain stand-in is in force.";
 
     /// <summary>A file that still names a base (read until 2026-10-05).</summary>
-    public static string BaseIgnored(string baseName) => $"\"base\": \"{baseName}\" is no longer read, ignored (a theme sets every colour itself)";
-    public static string UnknownColor(string key) => $"\"{key}\" is not a colour role, ignored (roles: {string.Join(", ", ThemeKeys.Colors)})";
+    public static string BaseIgnored(string baseName) => $"\"base\": \"{baseName}\" is no longer read, ignored (a theme sets every color itself)";
+    public static string UnknownColor(string key) => $"\"{key}\" is not a color role, ignored (roles: {string.Join(", ", ThemeKeys.Colors)})";
     public static string UnknownStyle(string key) => $"\"{key}\" is not a style, ignored";
-    public static string BadColor(string where, string? value) => $"{where}: \"{value}\" is not a colour (#RRGGBB, #RGB or a role), ignored";
+    public static string BadColor(string where, string? value) => $"{where}: \"{value}\" is not a color (#RRGGBB, #RGB or a role), ignored";
     public static string BadGradient(int count) =>
         string.Create(CultureInfo.InvariantCulture, $"the gradient has {count} stops; it takes 2 to {ThemeFile.MaxGradientStops}, ignored");
 
@@ -56,7 +56,7 @@ public static class ThemeText
 
     // ── The pickers' preview (2026-10-02, the user's ask; ThemePreview) ──────
     // A small mock screen in the highlighted theme, the Theme Atlas's in brief: words that put every role on show.
-    public const string PreviewUser = "› give the banner one colour per letter";
+    public const string PreviewUser = "› give the banner one color per letter";
     public const string PreviewHeading = "Letter-perfect gradients";
     public const string PreviewProse1 = "Each letter takes a ";
     public const string PreviewProseBold = "stop";
@@ -65,7 +65,7 @@ public static class ThemeText
     public const string PreviewProse3 = ", the ";
     public const string PreviewProseItalic = "last";
     public const string PreviewProse4 = " one too.";
-    public const string PreviewBullet = "stop 0 colours the rule's left end";
+    public const string PreviewBullet = "stop 0 colors the rule's left end";
     public const string PreviewQuote = "The rule samples five points.";
     public const string PreviewCodeLabel = "csharp";
     // A file edit's diff (2026-10-03, the user's ask): the note an edit_file of line 3 writes, then the code block's last line

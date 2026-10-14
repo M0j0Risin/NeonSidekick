@@ -1301,7 +1301,7 @@ public partial class ChatScreenTests : IDisposable
         StepsWhenIdle(
             input =>
             {
-                foreach (char c in "summarise ")
+                foreach (char c in "summarize ")
                 {
                     input.Push(Keys.Char(c));
                 }
@@ -1315,9 +1315,9 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("● " + ChatScreen.WithdrawnNotice, output);
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal("summarise " + block.Replace("\r\n", "\n"), UserText(_chat.Requests[1]));
+        Assert.Equal("summarize " + block.Replace("\r\n", "\n"), UserText(_chat.Requests[1]));
         // The label was committed twice: the first send and the re-send of the restored draft.
-        Assert.True(output.Split("› summarise [Pasted text #1 +8 lines]\n").Length >= 3, output);
+        Assert.True(output.Split("› summarize [Pasted text #1 +8 lines]\n").Length >= 3, output);
         Assert.DoesNotContain("● first", output);
         Assert.Contains("● second", output);
     }
@@ -9433,7 +9433,7 @@ public partial class ChatScreenTests : IDisposable
         // The block behind the token is this session's alone (PasteBlocks): recalled after a restart it would expand to nothing.
         _settings.Update(d => d.TtsOutput = false);
         var input = new ScriptedInput();
-        foreach (char c in "summarise ")
+        foreach (char c in "summarize ")
         {
             input.Push(Keys.Char(c));
         }
@@ -10825,7 +10825,7 @@ public partial class ChatScreenTests : IDisposable
         string raw = await RunAsync();
 
         string rule = new(ScreenPane.RuleGlyph, 240);
-        string strip = rule + "\n" + Titled(AboutText.Label + " │ General · Components · Models · Licence ") + "\n \n";   // Models since 2026-10-09
+        string strip = rule + "\n" + Titled(AboutText.Label + " │ General · Components · Models · License ") + "\n \n";   // Models since 2026-10-09
         // The grid pads its cells to the widest value: compare with the row ends trimmed.
         string output = string.Join("\n", raw.Split('\n').Select(l => l.TrimEnd()));
         // The About tab: the title with the live version, the copyright, the runtime as this test process runs (the JIT), the loaded profile's folders.
@@ -10858,8 +10858,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · Components\n", output);
         Assert.Contains("  ·   Vosk 0.3.38 · Apache-2.0 · ", output);
         Assert.Contains("  · Models\n  ·   " + AboutText.ModelsCaption + "\n", output);
-        Assert.Contains("\n  ·     " + AboutText.ModelRepositories[^1].Url + "\n  · Licence\n", output);
-        Assert.Contains("  · Licence\n  ·                       GNU GENERAL PUBLIC LICENSE\n", output);
+        Assert.Contains("\n  ·     " + AboutText.ModelRepositories[^1].Url + "\n  · License\n", output);
+        Assert.Contains("  · License\n  ·                       GNU GENERAL PUBLIC LICENSE\n", output);
         Assert.DoesNotContain(InfoPane.HintText, output);
     }
 
@@ -12665,7 +12665,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("  · (🗜️ compacted: 10 messages → 9)\n", output);
         Assert.Equal(ConversationCompactor.SummaryRequest("the second question"), _chat.Requests[2][^1].Text);
-        Assert.Equal("Summarise the conversation above. Pay particular attention to: the second question", _chat.Requests[2][^1].Text);
+        Assert.Equal("Summarize the conversation above. Pay particular attention to: the second question", _chat.Requests[2][^1].Text);
     }
 
     [Fact]
@@ -12777,7 +12777,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · (🗜️ compact cancelled)\n", output);
+        Assert.Contains("  · (🗜️ compact canceled)\n", output);
         Assert.DoesNotContain("(compacted:", output);
         var next = _chat.Requests[3];
         Assert.Equal("a", next[1].Text);   // nothing was swapped
@@ -13532,7 +13532,7 @@ public partial class ChatScreenTests : IDisposable
 
     // ── ask_user (2026-09-15): the model's questions on the pane, mid-turn ──
 
-    private const string TwoQuestionsJson = """[{"question":"Which colour?","title":"Colour","options":["red","blue"]},{"question":"Toppings?","type":"multi","options":["cheese","olives","ham"]}]""";
+    private const string TwoQuestionsJson = """[{"question":"Which color?","title":"Color","options":["red","blue"]},{"question":"Toppings?","type":"multi","options":["cheese","olives","ham"]}]""";
 
     /// <summary>
     /// The pane on, the model's first reply a call to <c>ask_user</c> with two questions, the
@@ -13575,12 +13575,12 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         // The pane over the reply: the strip, the question, its keys after the spinner's count.
-        Assert.Contains("\n" + Titled("Questions │ Colour · Q2 · Submit ") + "\nWhich colour?\n \n▸ ( ) red\n  ( ) blue\n  ( ) Other…\n", output);
+        Assert.Contains("\n" + Titled("Questions │ Color · Q2 · Submit ") + "\nWhich color?\n \n▸ ( ) red\n  ( ) blue\n  ( ) Other…\n", output);
         // The tool runs while the pane asks: its name is the spinner's stage, as any tool's.
         Assert.Contains(" " + ScreenPane.BusyRow(AskUserTool.ToolName, TimeSpan.Zero, QuestionMenu.SingleKeys), output);
-        Assert.Contains("\n  Q1 Colour — blue\n  Q2 — cheese, olives\n▸ Submit\n", output);
+        Assert.Contains("\n  Q1 Color — blue\n  Q2 — cheese, olives\n▸ Submit\n", output);
         // The answers, one dim line each, then the reply; never a 🛠️ line with the tool's name or its arguments.
-        Assert.Contains("🛠️ Which colour? — blue\n", output);
+        Assert.Contains("🛠️ Which color? — blue\n", output);
         Assert.Contains("  🛠️ Toppings? — cheese, olives\n", output);
         Assert.Contains("Blue, cheese and olives.", output);
         Assert.DoesNotContain("🛠️ " + AskUserTool.ToolName, output);
@@ -13592,7 +13592,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(SkilledPrompt(false, Array.Empty<string>(), web: true, ask: AskLimits.Default, markdown: true), _chat.Requests[1][0].Text);
         var result = Assert.Single(_chat.Requests[1][^1].Contents.OfType<FunctionResultContent>());
         Assert.Equal("c1", result.CallId);
-        Assert.Equal("Which colour? — blue\nToppings? — cheese, olives", result.Result);
+        Assert.Equal("Which color? — blue\nToppings? — cheese, olives", result.Result);
         Assert.Equal(1, _session.History.TurnCount);
     }
 
@@ -13620,7 +13620,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("🛠️ Which colour? — blue\n", output);
+        Assert.Contains("🛠️ Which color? — blue\n", output);
         Assert.Contains("  🛠️ Toppings? — cheese, olives\n", output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Equal(0, Refreshes(output));
@@ -14882,7 +14882,7 @@ public partial class ChatScreenTests : IDisposable
         {
             if (_chat.Requests.Count == 1 && i == 1)
             {
-                foreach (char c in "summarise ")
+                foreach (char c in "summarize ")
                 {
                     _scripted!.Push(Keys.Char(c));
                 }
@@ -14900,10 +14900,10 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal("summarise " + block.Replace("\r\n", "\n"), _chat.Requests[1][^1].Text);
+        Assert.Equal("summarize " + block.Replace("\r\n", "\n"), _chat.Requests[1][^1].Text);
         Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, ScreenPane.StopHint) + ScreenPane.HintSeparator + ChatScreen.QueuedHintPart(1), output);   // the stop hint after the spinner (2026-10-13)
         int firstReplyEnd = output.IndexOf("three.", StringComparison.Ordinal);
-        int sentRow = output.LastIndexOf("› summarise [Pasted text #1 +8 lines]\n  row 1\n  row 2\n", StringComparison.Ordinal);
+        int sentRow = output.LastIndexOf("› summarize [Pasted text #1 +8 lines]\n  row 1\n  row 2\n", StringComparison.Ordinal);
         Assert.True(firstReplyEnd >= 0 && sentRow > firstReplyEnd, "the pasted line's row, with its preview, is written when it is sent");
         Assert.Contains("Second.", output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
@@ -19957,7 +19957,7 @@ public partial class ChatScreenTests : IDisposable
             if (i == 0 && _chat.Requests.Count == 1)
             {
                 // Typed ahead while the first reply streams: a question, the block, Enter.
-                foreach (char c in "summarise ")
+                foreach (char c in "summarize ")
                 {
                     input.Push(Keys.Char(c));
                 }
@@ -19973,9 +19973,9 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync(input);
 
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal("summarise " + block.Replace("\r\n", "\n"), _chat.Requests[1].Last(m => m.Role == ChatRole.User).Text);
+        Assert.Equal("summarize " + block.Replace("\r\n", "\n"), _chat.Requests[1].Last(m => m.Role == ChatRole.User).Text);
         // The transcript: the label, then the block's start under it (Paste preview lines, 25 by default: the eight rows whole).
-        Assert.Contains("› summarise [Pasted text #1 +8 lines]\n  row 1\n  row 2\n", output);
+        Assert.Contains("› summarize [Pasted text #1 +8 lines]\n  row 1\n  row 2\n", output);
         Assert.Contains("  row 8\n", output);
         Assert.DoesNotContain("more line", output);
         Assert.Contains("● second", output);
@@ -19984,14 +19984,14 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>The preview is cut at the setting and closed by the count it left out; at 0 the transcript keeps the label alone.</summary>
     [Theory]
     [InlineData(3, "  row 1\n  row 2\n  row 3\n  [… +5 more lines]\n", "row 4")]
-    [InlineData(0, "› summarise [Pasted text #1 +8 lines]\n", "row 1")]
+    [InlineData(0, "› summarize [Pasted text #1 +8 lines]\n", "row 1")]
     public async Task ALongPaste_ShowsPastePreviewLines_UnderTheLabel(int lines, string shown, string hidden)
     {
         _settings.Update(d => { d.TtsOutput = false; d.PastePreviewLines = lines; });
         string block = string.Join("\r\n", Enumerable.Range(1, 8).Select(i => $"row {i}"));
         _chat.EnqueueText("done");
         var input = new ScriptedInput();
-        foreach (char c in "summarise ")
+        foreach (char c in "summarize ")
         {
             input.Push(Keys.Char(c));
         }
@@ -20002,8 +20002,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync(input);
 
-        Assert.Equal("summarise " + block.Replace("\r\n", "\n"), UserText(_chat.Requests[0]));
-        Assert.Contains("› summarise [Pasted text #1 +8 lines]\n", output);
+        Assert.Equal("summarize " + block.Replace("\r\n", "\n"), UserText(_chat.Requests[0]));
+        Assert.Contains("› summarize [Pasted text #1 +8 lines]\n", output);
         Assert.Contains(shown, output);
         Assert.DoesNotContain(hidden, output);
     }
@@ -20306,7 +20306,7 @@ public partial class ChatScreenTests : IDisposable
     {
         Assert.Equal("drafting in your editor…  save and close to send   ESC = cancel", ChatScreen.DraftingLabel);
         Assert.Equal("(nothing sent: the draft is empty)", ChatScreen.DraftEmptyNotice);
-        Assert.Equal("(draft cancelled; nothing sent)", ChatScreen.DraftCancelledNotice);
+        Assert.Equal("(draft canceled; nothing sent)", ChatScreen.DraftCancelledNotice);
         Assert.Equal("/draft needs an editor; not available here.", ChatScreen.DraftUnavailableError);
         Assert.Equal("Could not open the draft: boom", ChatScreen.DraftFailedError("boom"));
         Assert.Equal("Draft opened: neon-draft-1.txt in the shell's default editor", ChatScreen.DraftOpenedLogLine("neon-draft-1.txt", ""));
@@ -20314,7 +20314,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("Draft sent: 1 line, 1 char", ChatScreen.DraftSentLogLine(1, 1));
         Assert.Equal("Draft sent: 3 lines, 120 chars", ChatScreen.DraftSentLogLine(3, 120));
         Assert.Equal("Draft dropped: neon-draft-1.txt (empty)", ChatScreen.DraftDroppedLogLine("neon-draft-1.txt", ChatScreen.DraftEmptyReason));
-        Assert.Equal("Draft dropped: neon-draft-1.txt (cancelled)", ChatScreen.DraftDroppedLogLine("neon-draft-1.txt", ChatScreen.DraftCancelledReason));
+        Assert.Equal("Draft dropped: neon-draft-1.txt (canceled)", ChatScreen.DraftDroppedLogLine("neon-draft-1.txt", ChatScreen.DraftCancelledReason));
         // Never mid-turn: it would send a message the running turn cannot take.
         Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Draft, hasArgs: false));
     }
@@ -23308,7 +23308,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("(🧠 learning stopped: the model kept calling tools without writing a skill)", ChatScreen.LearnExhaustedNotice);
         Assert.Equal("(🧠 learning failed: ", ChatScreen.LearnFailedPrefix);
         Assert.Equal("(🧠 learning from this turn follows the one running)", ChatScreen.LearnQueuedNotice);
-        Assert.Equal("(🧠 learning cancelled)", ChatScreen.LearnCancelledNotice);
+        Assert.Equal("(🧠 learning canceled)", ChatScreen.LearnCancelledNotice);
         Assert.Equal("Reflection paused for the turn; it runs again after the reply.", ChatScreen.LearnPausedLogLine);   // 2026-09-24
         Assert.Equal("The paused reflection waits in the slot to run again.", ChatScreen.LearnResumedLogLine);
         Assert.Equal("The paused reflection had already finished; it does not run again.", ChatScreen.LearnPauseMissedLogLine);
@@ -24601,11 +24601,11 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void ScreenLogLines_ArePinned()
     {
-        Assert.Equal("Turn cancelled by the keys (ESC or Ctrl+C) after the model's first event.", ChatScreen.TurnCancelledByKeysLog);
+        Assert.Equal("Turn canceled by the keys (ESC or Ctrl+C) after the model's first event.", ChatScreen.TurnCancelledByKeysLog);
         Assert.Equal("Turn withdrawn: the keys before the model's first event; the message goes back to the line.", ChatScreen.TurnWithdrawnLog);
         Assert.Equal("Turn interrupted by the wake phrase.", ChatScreen.TurnInterruptedLog);
         Assert.Equal("Turn ended by the app token.", ChatScreen.TurnEndedByAppTokenLog);
-        Assert.Equal("Turn cancelled by a mid-turn command.", ChatScreen.TurnCancelledByCommandLog);
+        Assert.Equal("Turn canceled by a mid-turn command.", ChatScreen.TurnCancelledByCommandLog);
         Assert.Equal("Speech stopped by the first ESC; the text streamed on.", ChatScreen.SpeechStoppedLogLine);
         Assert.Equal("Tail stopped by ESC.", ChatScreen.TailStoppedLogLine);
         Assert.Equal("App", ChatScreen.AppCategory);
@@ -24619,7 +24619,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("Mid-turn command /compact: Deferred", ChatScreen.MidTurnCommandLogLine("/compact", MidTurnClass.Deferred));
         Assert.Equal("Session 12 restored: 6 turns", ChatScreen.SessionRestoredLogLine(12, 6));
         Assert.Equal("Session 3 restored: 1 turn", ChatScreen.SessionRestoredLogLine(3, 1));
-        Assert.Equal("Queue cancel mode hold applied after a cancelled reply (2 waiting)", ChatScreen.QueueCancelLogLine(QueueCancel.Hold, 2));
+        Assert.Equal("Queue cancel mode hold applied after a canceled reply (2 waiting)", ChatScreen.QueueCancelLogLine(QueueCancel.Hold, 2));
         Assert.Equal("Listen discarded (ESC).", ChatScreen.ListenDiscardedLogLine);
         Assert.Equal("Interrupt switched off for this session: two interruptions in a row heard nothing.", ChatScreen.InterruptDisabledLogLine);
         Assert.Equal("ask_user: 2 questions answered", ChatScreen.AskUserAnsweredLogLine(2));

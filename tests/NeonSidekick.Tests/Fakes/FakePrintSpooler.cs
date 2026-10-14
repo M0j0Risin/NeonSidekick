@@ -58,7 +58,7 @@ public sealed class FakePrintSpooler : IPrintSpooler
         Started?.Invoke();
         if (WaitForCancel && !cancellationToken.WaitHandle.WaitOne(TimeSpan.FromSeconds(30)))
         {
-            throw new TimeoutException("the print was never cancelled");
+            throw new TimeoutException("the print was never canceled");
         }
 
         if (!FinishAnyway)

@@ -326,9 +326,9 @@ public class ConversationCompactorTests
     [Fact]
     public void Wording_IsPinned()
     {
-        Assert.Equal("Summarise the conversation above.", ConversationCompactor.SummaryRequest(null));
-        Assert.Equal("Summarise the conversation above.", ConversationCompactor.SummaryRequest("  "));
-        Assert.Equal("Summarise the conversation above. Pay particular attention to: the file list", ConversationCompactor.SummaryRequest(" the file list "));
+        Assert.Equal("Summarize the conversation above.", ConversationCompactor.SummaryRequest(null));
+        Assert.Equal("Summarize the conversation above.", ConversationCompactor.SummaryRequest("  "));
+        Assert.Equal("Summarize the conversation above. Pay particular attention to: the file list", ConversationCompactor.SummaryRequest(" the file list "));
         Assert.Equal("(a 4,312-character result, pruned by /compact)", ConversationCompactor.PrunedStub(4312));
         Assert.Equal("(a picture from view_image, pruned by /compact)", ConversationCompactor.PrunedImageStub(1));
         Assert.Equal("(2 pictures from view_image, pruned by /compact)", ConversationCompactor.PrunedImageStub(2));

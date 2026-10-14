@@ -50,7 +50,7 @@ public static class CompactType
     /// <summary>The menu hint next to a type. Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "summary" => "summarise the older turns into one message, keep the recent ones",
+        "summary" => "summarize the older turns into one message, keep the recent ones",
         "prune" => "stub the bulky tool results in the older turns, keep every turn",
         _ => "",
     };

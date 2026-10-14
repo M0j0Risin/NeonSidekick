@@ -603,7 +603,7 @@ public class TextToolCallFilterTests
 
     [Theory]
     [InlineData("{\"prompt\": \"a dog\"}\nNice.")]                                    // one key
-    [InlineData("{\"prompt\": \"a dog\", \"colour\": \"red\"}\nNice.")]               // a key the tool has not
+    [InlineData("{\"prompt\": \"a dog\", \"color\": \"red\"}\nNice.")]               // a key the tool has not
     [InlineData("{\"name\": \"draw_picture\", \"arguments\": {\"prompt\": \"a\"}}\nNice.")]   // a tool not caught here
     [InlineData("{ not json, at all }\nNice.")]
     [InlineData("I like {\"prompt\": \"a\", \"seed\": 7} mid-line.")]                 // not at a line's start

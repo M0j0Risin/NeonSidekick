@@ -46,9 +46,9 @@ public class QueueCancelModeTests
             Assert.NotEqual("", QueueCancelMode.Describe(name));
         }
 
-        Assert.Equal("a cancelled reply holds the queue; your next message runs first, then it resumes", QueueCancelMode.Describe("hold"));
-        Assert.Equal("a cancelled reply sends the next queued message at once", QueueCancelMode.Describe("drain"));
-        Assert.Equal("a cancelled reply drops every queued message", QueueCancelMode.Describe("empty"));
+        Assert.Equal("a canceled reply holds the queue; your next message runs first, then it resumes", QueueCancelMode.Describe("hold"));
+        Assert.Equal("a canceled reply sends the next queued message at once", QueueCancelMode.Describe("drain"));
+        Assert.Equal("a canceled reply drops every queued message", QueueCancelMode.Describe("empty"));
         Assert.Equal("", QueueCancelMode.Describe("keep"));
     }
 

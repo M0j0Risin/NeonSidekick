@@ -150,7 +150,7 @@ Under *Image tools* (`/tools image`, or the toolbar's 🌄), whether *File tools
 `image_edit` uses the system's own codecs and encodes once, so a JPEG loses quality only once.
 
 * **Size:** `width` and/or `height`, or `scale`. With both, `fit` is `contain`, `cover` (cuts at `anchor`), `pad`, `stretch` or `shrink` (never enlarges).
-* **Geometry and color:** a crop needs all four `crop_*` values; `rotate` takes 90, 180 or 270; `filter` is `grey`, `sepia`, `negative` or `polaroid`.
+* **Geometry and color:** a crop needs all four `crop_*` values; `rotate` takes 90, 180 or 270; `filter` is `gray`, `sepia`, `negative` or `polaroid`.
 * **Formats on Windows:** writes PNG, JPEG, GIF, BMP and TIFF (JPEG XL and HEIF with Windows' extensions). WebP and AVIF read but don't write.
 * **On a Mac:** reads HEIC/HEIF, TIFF, WebP, AVIF and JPEG XL; writes PNG, JPEG, GIF, BMP, TIFF and HEIF (no JPEG XL); refuses `chroma`, `colors` and `dither`.
 * **`max_kb`** lowers the quality, then the size, until the file fits.
@@ -786,7 +786,7 @@ Offered only in [plan mode](COMMANDS.md#plan-mode).
 |---|---|---|
 | `present_plan` | `title, name?, markdown, gaps?` | Saves the plan as `.neon/plans/<name>.md`, prints it and asks for your approval. Revisions overwrite the file. |
 
-* The header's `status` is `draft`, `approved`, `cancelled`, `done` or `incomplete`. Headless, the plan is saved and `/plan approve` starts it.
+* The header's `status` is `draft`, `approved`, `canceled`, `done` or `incomplete`. Headless, the plan is saved and `/plan approve` starts it.
 * In a gap review (`/plan gaps`), `gaps` lists what a revision closed; an empty `gaps` ends the review and asks for approval.
 
 ## MCP servers

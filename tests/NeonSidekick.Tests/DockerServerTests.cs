@@ -232,7 +232,7 @@ public sealed class DockerServerTests : IDisposable
     public async Task ACancel_EndsTheSwitch()
     {
         using var cancel = new CancellationTokenSource();
-        _answer = (_, _) => { cancel.Cancel(); return ProbeResult.Missing("cancelled"); };
+        _answer = (_, _) => { cancel.Cancel(); return ProbeResult.Missing("canceled"); };
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => _host.SwitchToAsync("vllm_b", _settings, null, cancel.Token));
     }
 

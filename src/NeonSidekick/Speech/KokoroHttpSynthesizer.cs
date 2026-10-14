@@ -175,7 +175,7 @@ public sealed class KokoroHttpSynthesizer : ISpeechSynthesizer
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return VoiceListResult.Missing("cancelled");
+            return VoiceListResult.Missing("canceled");
         }
         catch (OperationCanceledException)
         {

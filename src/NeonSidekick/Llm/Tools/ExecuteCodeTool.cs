@@ -309,7 +309,7 @@ public sealed class ExecuteCodeTool : AIFunction
                 catch (OperationCanceledException)
                 {
                     session.Kill();
-                    DiagnosticLog.Info(ShellKinds.Category, ShellText.ScriptLogLine(name, firstLine, "cancelled after " + ShellText.Elapsed(session.Elapsed), bridge?.Calls, session.Output.TotalChars));
+                    DiagnosticLog.Info(ShellKinds.Category, ShellText.ScriptLogLine(name, firstLine, "canceled after " + ShellText.Elapsed(session.Elapsed), bridge?.Calls, session.Output.TotalChars));
                     throw;
                 }
 

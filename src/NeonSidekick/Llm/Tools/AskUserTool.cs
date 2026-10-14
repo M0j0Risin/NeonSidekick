@@ -89,7 +89,7 @@ public sealed class AskUserTool : AIFunction
         $"Asks the user 1 to {N(limits.MaxQuestions)} multiple-choice questions on screen and waits for the answers. " +
         "Use it when you need a decision, a preference or a clarification with a short list of answers before going on. " +
         $"Each question has {N(MinOptions)} to {N(limits.MaxChoices)} short options; the user can also type their own answer. " +
-        "Call it as {\"questions\": [{\"question\": \"Which colour?\", \"type\": \"single\", \"options\": [\"red\", \"blue\"]}]} — questions is always a list, even for one question. " +
+        "Call it as {\"questions\": [{\"question\": \"Which color?\", \"type\": \"single\", \"options\": [\"red\", \"blue\"]}]} — questions is always a list, even for one question. " +
         "If the result says the questions were not answered, the user declined: go on without them and do not ask again unless asked.";
 
     public override JsonElement JsonSchema

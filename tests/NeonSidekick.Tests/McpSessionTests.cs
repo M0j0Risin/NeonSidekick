@@ -154,8 +154,8 @@ public class McpSessionTests : IAsyncDisposable
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => wave);
 
         Assert.Equal(McpState.Failed, session.Servers[0].State);
-        Assert.Equal("cancelled", session.Servers[0].Detail);
-        Assert.Equal(["🔌 MCP: docker failed: cancelled"], session.WarningLines());
+        Assert.Equal("canceled", session.Servers[0].Detail);
+        Assert.Equal(["🔌 MCP: docker failed: canceled"], session.WarningLines());
     }
 
     [Fact]

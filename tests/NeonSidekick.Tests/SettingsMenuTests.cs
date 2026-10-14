@@ -996,7 +996,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmToolCompactType));
         Assert.Equal("LLM tool compact mode", SettingsMenu.FieldName(SettingsField.LlmToolCompactType));
         Assert.Equal("compact", SettingsMenu.FieldValue(SettingsField.LlmToolCompactType, data, _settings.ProfileDirectory));
-        Assert.Equal("compact [#9A8BB8]prune, then summarise if the turn is still over the share[/]", SettingsMenu.ToolCompactTypeLabel("compact"));
+        Assert.Equal("compact [#9A8BB8]prune, then summarize if the turn is still over the share[/]", SettingsMenu.ToolCompactTypeLabel("compact"));
         Assert.Equal("stop", SettingsMenu.FieldValue(SettingsField.LlmToolCompactType, new AppSettingsData { LlmToolCompactType = "stop" }, _settings.ProfileDirectory));
         Assert.Equal("prune   [#9A8BB8]stub this turn's older tool results and carry on[/]", SettingsMenu.ToolCompactTypeLabel("prune"));
         Assert.Equal("stop    [#9A8BB8]end the turn with a notice; /compact or /clear first[/]", SettingsMenu.ToolCompactTypeLabel("stop"));
@@ -1036,7 +1036,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("auto", SettingsMenu.EditableValue(SettingsField.LlmMaxTurns, data));
         Assert.Equal("50", SettingsMenu.EditableValue(SettingsField.LlmMaxTurns, new AppSettingsData { LlmMaxTurns = 50 }));
         Assert.Equal("must be auto (0) or 1 to 500 turns", SettingsMenu.LlmMaxTurnsRangeError);
-        Assert.Equal("summary [#9A8BB8]summarise the older turns into one message, keep the recent ones[/]", SettingsMenu.CompactTypeLabel("summary"));
+        Assert.Equal("summary [#9A8BB8]summarize the older turns into one message, keep the recent ones[/]", SettingsMenu.CompactTypeLabel("summary"));
         Assert.Equal("prune   [#9A8BB8]stub the bulky tool results in the older turns, keep every turn[/]", SettingsMenu.CompactTypeLabel("prune"));
         // The context length: an LLM row (a reconnect), typed, 0 for the server's own figure.
         Assert.True(SettingsMenu.IsLlmField(SettingsField.LlmContextLength));
@@ -1180,9 +1180,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("automatic [#9A8BB8]messages sent during a reply are queued and sent when it ends[/]", SettingsMenu.QueueModeLabel("automatic"));
         Assert.Equal("manual    [#9A8BB8]messages are always queued and sent one at a time with ➤ send on /queue[/]", SettingsMenu.QueueModeLabel("manual"));
         Assert.Equal("off       [#9A8BB8]no queue: a line sent during a reply goes when it ends, unlisted[/]", SettingsMenu.QueueModeLabel("off"));
-        Assert.Equal("hold  [#9A8BB8]a cancelled reply holds the queue; your next message runs first, then it resumes[/]", SettingsMenu.QueueCancelModeLabel("hold"));
-        Assert.Equal("drain [#9A8BB8]a cancelled reply sends the next queued message at once[/]", SettingsMenu.QueueCancelModeLabel("drain"));
-        Assert.Equal("empty [#9A8BB8]a cancelled reply drops every queued message[/]", SettingsMenu.QueueCancelModeLabel("empty"));
+        Assert.Equal("hold  [#9A8BB8]a canceled reply holds the queue; your next message runs first, then it resumes[/]", SettingsMenu.QueueCancelModeLabel("hold"));
+        Assert.Equal("drain [#9A8BB8]a canceled reply sends the next queued message at once[/]", SettingsMenu.QueueCancelModeLabel("drain"));
+        Assert.Equal("empty [#9A8BB8]a canceled reply drops every queued message[/]", SettingsMenu.QueueCancelModeLabel("empty"));
         // Show header (2026-10-01, the user's ask): a toggle under Welcome splash, on by default, no reconnect (read at each banner draw).
         Assert.True(SettingsMenu.IsToggle(SettingsField.ShowHeader));
         Assert.Equal("Show header", SettingsMenu.FieldName(SettingsField.ShowHeader));
@@ -1917,7 +1917,7 @@ public partial class SettingsMenuTests : IDisposable
         // The column is the longest built-in's name and a space (ten at least); sixty built-ins since 2026-10-05.
         int width = Math.Max(10, ThemeName.Names.Max(n => n.Length) + 1);
         Assert.Equal("synthwave".PadRight(width) + "[#9A8BB8]neon sunset[/]", SettingsMenu.ThemeLabel("synthwave"));
-        Assert.Equal("noir".PadRight(width) + "[#9A8BB8]greyscale[/]", SettingsMenu.ThemeLabel("noir"));
+        Assert.Equal("noir".PadRight(width) + "[#9A8BB8]grayscale[/]", SettingsMenu.ThemeLabel("noir"));
         Assert.StartsWith("No theme named \"matrix\". /theme takes abyssal, akira, ", SettingsMenu.ThemeNameError("matrix"));
         Assert.EndsWith($" or {ThemeName.Names[^1]}, or nothing to pick from a list.", SettingsMenu.ThemeNameError("matrix"));
         Assert.Equal("No theme named \"matrix\". /theme takes noir, nostromo or synthwave, or nothing to pick from a list.", SettingsMenu.ThemeNameError("matrix", ["noir", "nostromo", "synthwave"]));
@@ -1925,7 +1925,7 @@ public partial class SettingsMenuTests : IDisposable
         // A user theme's longer name widens the column (2026-10-01).
         var mine = ShippedThemes.Synthwave with { Name = "a-much-longer-name", Description = "mine", SourcePath = "x.json" };
         IReadOnlyList<ThemePalette> themes = [.. ShippedThemes.All, mine];
-        Assert.Equal("noir" + new string(' ', 15) + "[#9A8BB8]greyscale[/]", SettingsMenu.ThemeLabel("noir", themes));
+        Assert.Equal("noir" + new string(' ', 15) + "[#9A8BB8]grayscale[/]", SettingsMenu.ThemeLabel("noir", themes));
         Assert.Equal("a-much-longer-name [#9A8BB8]mine[/]", SettingsMenu.ThemeLabel("a-much-longer-name", themes));
         Assert.Equal("Theme: netrunner", SettingsMenu.SavedNotice(SettingsField.Theme, new AppSettingsData { Theme = "netrunner" }, _settings.ProfileDirectory));
     }
@@ -2275,7 +2275,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("  · 🖥️ LLM tool compact mode: stop", Output);
         Assert.Contains("end the turn with a notice; /compact or /clear first", Output);
         Assert.Contains("no check; the server's own limit answers", Output);
-        Assert.Contains("prune, then summarise if the turn is still over the share", Output);
+        Assert.Contains("prune, then summarize if the turn is still over the share", Output);
     }
 
     [Fact]
@@ -5185,9 +5185,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("hold", _settings.Current.QueueCancelMode);
         Assert.Contains(Breadcrumb("Queue cancel mode"), Output);
         Assert.Contains("  · Queue cancel mode: hold", Output);
-        Assert.Contains("a cancelled reply holds the queue; your next message runs first, then it resumes", Output);
-        Assert.Contains("a cancelled reply sends the next queued message at once", Output);
-        Assert.Contains("a cancelled reply drops every queued message", Output);
+        Assert.Contains("a canceled reply holds the queue; your next message runs first, then it resumes", Output);
+        Assert.Contains("a canceled reply sends the next queued message at once", Output);
+        Assert.Contains("a canceled reply drops every queued message", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 

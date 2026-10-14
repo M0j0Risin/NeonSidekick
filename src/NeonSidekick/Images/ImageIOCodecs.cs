@@ -453,7 +453,7 @@ public static class ImageIOCodecs
                 return (pixels, ImageIONative.Bgrx);
             }
 
-            throw new NotSupportedException("The ImageIO encoder takes BGRA, BGR or grey pixels.");
+            throw new NotSupportedException("The ImageIO encoder takes BGRA, BGR or gray pixels.");
         }
 
         private void AddOptions(nint properties, Func<nint, nint> keep)

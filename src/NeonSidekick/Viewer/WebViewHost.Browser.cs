@@ -370,7 +370,7 @@ internal sealed unsafe partial class WebViewHost
 
         public bool OnDownloadStarting(string? source)
         {
-            Finish(true, $"runtime {version}; the bar's address box and a tooltip; the blank page's navigation and address, its DOM, a history entry gone back from and cleared, {_cookies.ToString(CultureInfo.InvariantCulture)} cookie set and read over DevTools, a PDF of {_pdfBytes.ToString(CultureInfo.InvariantCulture)} B, a file: navigation refused, a download cancelled");
+            Finish(true, $"runtime {version}; the bar's address box and a tooltip; the blank page's navigation and address, its DOM, a history entry gone back from and cleared, {_cookies.ToString(CultureInfo.InvariantCulture)} cookie set and read over DevTools, a PDF of {_pdfBytes.ToString(CultureInfo.InvariantCulture)} B, a file: navigation refused, a download canceled");
             return true;
         }
 

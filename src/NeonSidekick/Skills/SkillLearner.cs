@@ -483,7 +483,7 @@ public static class SkillLearner
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            DiagnosticLog.Info(SkillCatalog.Category, "Reflection cancelled.");
+            DiagnosticLog.Info(SkillCatalog.Category, "Reflection canceled.");
             return new SkillLearnResult(SkillLearnOutcome.Cancelled, null, "", usage, requests);
         }
         catch (Exception ex)

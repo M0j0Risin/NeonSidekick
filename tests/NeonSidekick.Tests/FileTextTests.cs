@@ -39,8 +39,8 @@ public class FileTextTests
         Assert.EndsWith("\n  line 1: a\n  … and 2 more", FileText.EditAmbiguous("a.txt", 3, [new MatchLocation(1, "a")]), StringComparison.Ordinal);
         Assert.Equal("  … and 7 more", FileText.AmbiguousMore(7));
         Assert.Equal("Error: old_text matched 2 places in 'a.txt' only approximately; replace_all needs the text as it is in the file — copy it exactly, spacing included", FileText.ApproximateAll("a.txt", 2));
-        Assert.Equal("Error: old_text and new_text hold \\' but the matched text in 'a.txt' does not; the backslash is a serialisation artefact — read the file again and pass both without it", FileText.EscapeDriftQuote("a.txt", '\''));
-        Assert.Equal("Error: old_text and new_text hold \\\" but the matched text in 'a.txt' does not; the backslash is a serialisation artefact — read the file again and pass both without it", FileText.EscapeDriftQuote("a.txt", '"'));
+        Assert.Equal("Error: old_text and new_text hold \\' but the matched text in 'a.txt' does not; the backslash is a serialization artifact — read the file again and pass both without it", FileText.EscapeDriftQuote("a.txt", '\''));
+        Assert.Equal("Error: old_text and new_text hold \\\" but the matched text in 'a.txt' does not; the backslash is a serialization artifact — read the file again and pass both without it", FileText.EscapeDriftQuote("a.txt", '"'));
         Assert.Equal("Error: every backslash run in old_text is twice as long as in 'a.txt'; read the file again and pass old_text and new_text with the backslashes as the file has them", FileText.EscapeDriftDoubled("a.txt"));
         Assert.Equal(FileText.EscapeDriftQuote("a.txt", '\''), FileText.EscapeDriftSentence("a.txt", nameof(EscapeDrift.QuoteSingle)));
         Assert.Equal(FileText.EscapeDriftQuote("a.txt", '"'), FileText.EscapeDriftSentence("a.txt", nameof(EscapeDrift.QuoteDouble)));

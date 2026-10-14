@@ -38,7 +38,7 @@ public class NoticeGlyphsTests
     [Fact]
     public void ConnectCancelled_WearsTheConnectsGlyph()
     {
-        Assert.Equal("(🖥️ cancelled)", ChatScreen.ConnectCancelledNotice(NoticeGlyphs.Llm));
-        Assert.Equal("(🔌 cancelled)", ChatScreen.ConnectCancelledNotice(NoticeGlyphs.Mcp));
+        Assert.Equal("(🖥️ canceled)", ChatScreen.ConnectCancelledNotice(NoticeGlyphs.Llm));
+        Assert.Equal("(🔌 canceled)", ChatScreen.ConnectCancelledNotice(NoticeGlyphs.Mcp));
     }
 }

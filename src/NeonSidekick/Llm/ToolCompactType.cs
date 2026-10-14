@@ -78,7 +78,7 @@ public static class ToolCompactType
     /// <summary>The menu hint next to a type. Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "compact" => "prune, then summarise if the turn is still over the share",
+        "compact" => "prune, then summarize if the turn is still over the share",
         "prune" => "stub this turn's older tool results and carry on",
         "stop" => "end the turn with a notice; /compact or /clear first",
         "off" => "no check; the server's own limit answers",

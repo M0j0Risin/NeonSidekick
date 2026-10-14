@@ -138,7 +138,7 @@ public partial class ChatScreenTests
         _chat.EnqueueText("Closing the gaps.");
         _chat.EnqueueText("Which test framework do you use?");      // pass 1: a question in prose, no revision
         _chat.Enqueue(PresentGapsCall("p2", PlanMarkdown));          // /plan gaps: pass 1 again, nothing left; cancelled on the pane
-        _chat.EnqueueText("Cancelled.");
+        _chat.EnqueueText("Canceled.");
 
         string output = await RunAsync();
 
@@ -171,7 +171,7 @@ public partial class ChatScreenTests
         _chat.Enqueue(PresentPlanCall());
         _chat.EnqueueText("Closing the gaps.");
         _chat.Enqueue(PresentGapsCall("p2", PlanMarkdown));
-        _chat.EnqueueText("Cancelled.");
+        _chat.EnqueueText("Canceled.");
 
         string output = await RunAsync();
 
@@ -190,7 +190,7 @@ public partial class ChatScreenTests
         _chat.Enqueue(PresentPlanCall());
         _chat.EnqueueText("Closing the gaps.");
         _chat.Enqueue(PresentGapsCall("p2", PlanMarkdown));
-        _chat.EnqueueText("Cancelled.");
+        _chat.EnqueueText("Canceled.");
 
         string output = await RunAsync();
 

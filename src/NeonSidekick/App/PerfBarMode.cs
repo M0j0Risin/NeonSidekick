@@ -82,7 +82,7 @@ public static class PerfBarMode
     {
         OffWord => "hide the performance bar",
         "text" => "the meters as numbers",
-        "gauge" => "a bar per meter, coloured by load",
+        "gauge" => "a bar per meter, colored by load",
         "led" => "ten segments per meter along the theme's gradient",
         EditWord => "choose the bar's meters and their order",
         _ => "",

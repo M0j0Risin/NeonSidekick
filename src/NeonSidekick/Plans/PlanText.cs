@@ -71,7 +71,7 @@ public static class PlanText
 
     public static string CancelledNotice(string? path) => path is null
         ? $"{Glyph} Plan mode off; nothing was saved."
-        : $"{Glyph} Plan mode off; {path} is kept, marked cancelled.";
+        : $"{Glyph} Plan mode off; {path} is kept, marked canceled.";
 
     public static string LeftOnResetNotice(string? path) => path is null
         ? $"{Glyph} Plan mode off with the conversation."
@@ -314,7 +314,7 @@ public static class PlanText
     public const string ToolDescription =
         "Saves the plan as a Markdown file under .neon/plans/ in the working directory and asks the user to approve it. " +
         "Call it only in plan mode, with the whole plan each time (it replaces the previous revision). " +
-        "The result says whether the user approved, wants changes (with their feedback), or cancelled.";
+        "The result says whether the user approved, wants changes (with their feedback), or canceled.";
 
     public const string NotPlanningResult = "Error: plan mode is not on; there is no plan to present";
     public const string MarkdownRequired = "Error: markdown is required: the whole plan as Markdown";
@@ -329,10 +329,10 @@ public static class PlanText
         : $"The plan is saved to {path} but the user wants changes: \"{Flatten(feedback)}\". Revise the plan and call present_plan again.";
 
     public static string SavedResult(string path) =>
-        $"The plan is saved to {path}. The user reads it and approves it with /plan approve, or sends changes. Summarise the plan in two or three lines and stop.";
+        $"The plan is saved to {path}. The user reads it and approves it with /plan approve, or sends changes. Summarize the plan in two or three lines and stop.";
 
     public static string CancelledResult(string path) =>
-        $"The user cancelled the plan ({path} is kept, marked cancelled). Plan mode is off. Acknowledge in one short line and do nothing else.";
+        $"The user canceled the plan ({path} is kept, marked canceled). Plan mode is off. Acknowledge in one short line and do nothing else.";
 
     public static string CouldNotSaveResult(string detail) => $"Error: the plan could not be saved: {detail}";
 

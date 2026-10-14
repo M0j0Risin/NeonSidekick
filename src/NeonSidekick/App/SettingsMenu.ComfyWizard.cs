@@ -64,7 +64,7 @@ internal sealed partial class SettingsMenu
         "sd15         Stable Diffusion 1.5: tags and weights",
         "illustrious  Illustrious XL / NoobAI: quality tags, then Danbooru tags",
         "juggernaut   Juggernaut XL: photographic sentences, low CFG",
-        "flux2        FLUX.2 dev: long prose, hex colours, no negative (split model: import)",
+        "flux2        FLUX.2 dev: long prose, hex colors, no negative (split model: import)",
         "flux2klein   FLUX.2 Klein: prose, 4 steps at CFG 1 (split model: import)",
         "krea2        Krea 2 Turbo: one rich paragraph, 8 steps at CFG 1 (split model: import)",
         "zimage       Z-Image Turbo: concise prose, 8 steps at CFG 1 (split model: import)",

@@ -405,7 +405,7 @@ public sealed class ThumbsTests
         new("Open", 1),
         ContextMenuItem.Separator,
         new("Rotate", Children: [new("Right", 10), new("Off", 11, Enabled: false), new("Left", 12)]),
-        new("Colour", Children: [new("Grey", 20)]),
+        new("Color", Children: [new("Gray", 20)]),
         new("Delete", 3),
         new("note", Enabled: false),
     ];

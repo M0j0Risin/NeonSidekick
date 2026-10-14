@@ -37,7 +37,7 @@ public static class McpText
     public static string TimedOut(int seconds) => "timed out after " + seconds.ToString(CultureInfo.InvariantCulture) + " s";
 
     /// <summary>A connect the user cancelled (Ctrl+C under the spinner); the same word the speech session uses.</summary>
-    public const string Cancelled = "cancelled";
+    public const string Cancelled = "canceled";
 
     /// <summary><c>1 server</c> / <c>2 servers</c>.</summary>
     public static string Servers(int count) => count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " server" : " servers");

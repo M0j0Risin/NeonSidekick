@@ -24,7 +24,7 @@ public class AskUserToolTests
 
     private const string TwoQuestions = """
         [
-          { "question": "Which colour?", "title": "Colour", "options": ["red", "blue"] },
+          { "question": "Which color?", "title": "Color", "options": ["red", "blue"] },
           { "question": "Toppings?", "type": "multi", "options": ["cheese", "olives", "ham"] }
         ]
         """;
@@ -122,13 +122,13 @@ public class AskUserToolTests
     [Fact]
     public async Task Invoke_HandsTheQuestionsToTheSeam_AndAnswersOneLinePerQuestion()
     {
-        var colour = new AskQuestion("Which colour?", "Colour", false, ["red", "blue"]);
+        var colour = new AskQuestion("Which color?", "Color", false, ["red", "blue"]);
         var toppings = new AskQuestion("Toppings?", null, true, ["cheese", "olives", "ham"]);
         _answers = [new AskAnswer(colour, ["blue"]), new AskAnswer(toppings, ["cheese", "olives"])];
 
         object? answer = await InvokeAsync(TwoQuestions);
 
-        Assert.Equal("Which colour? — blue\nToppings? — cheese, olives", answer);
+        Assert.Equal("Which color? — blue\nToppings? — cheese, olives", answer);
         // A record over a list compares by reference: the fields are compared flat.
         var asked = Assert.Single(_asked);
         static (string, string?, bool, string) Flat(AskQuestion q) => (q.Question, q.Title, q.Multi, string.Join("|", q.Options));
@@ -158,13 +158,13 @@ public class AskUserToolTests
         _answers = [];
         await InvokeAsync("""
             [
-              { "question": "  Which\ncolour? ", "title": "  ", "type": " MULTI ", "options": [" red ", "light\r\nblue"] },
+              { "question": "  Which\ncolor? ", "title": "  ", "type": " MULTI ", "options": [" red ", "light\r\nblue"] },
               { "question": "Size?", "options": ["s", "m"] }
             ]
             """);
 
         var asked = Assert.Single(_asked);
-        Assert.Equal("Which colour?", asked[0].Question);
+        Assert.Equal("Which color?", asked[0].Question);
         Assert.Null(asked[0].Title);
         Assert.True(asked[0].Multi);
         Assert.Equal(["red", "light blue"], asked[0].Options);
@@ -223,13 +223,13 @@ public class AskUserToolTests
         _answers = [];
         var arguments = new AIFunctionArguments(new Dictionary<string, object?>
         {
-            ["question"] = Json("\"Which colour?\""),
+            ["question"] = Json("\"Which color?\""),
             ["type"] = Json("\"multi\""),
             ["options"] = Json("[\"red\", \"blue\"]"),
         });
         await _tool.InvokeAsync(arguments, CancellationToken.None);
         var asked = Assert.Single(_asked).Single();
-        Assert.Equal(("Which colour?", true, "red|blue"), (asked.Question, asked.Multi, string.Join("|", asked.Options)));
+        Assert.Equal(("Which color?", true, "red|blue"), (asked.Question, asked.Multi, string.Join("|", asked.Options)));
 
         // Neither questions nor question: the sentence names the keys that were sent.
         _asked.Clear();
@@ -244,13 +244,13 @@ public class AskUserToolTests
         _answers = [];
         await InvokeAsync("""
             [
-              { "text": "Colour?", "multi": true, "choices": ["red", "blue"] },
+              { "text": "Color?", "multi": true, "choices": ["red", "blue"] },
               { "question": "Size?", "multiple": "true", "options": "['s', 'm', 'l']" },
               { "question": "How many?", "options": [1, 2, true] }
             ]
             """);
         var asked = Assert.Single(_asked);
-        Assert.Equal(("Colour?", true, "red|blue"), (asked[0].Question, asked[0].Multi, string.Join("|", asked[0].Options)));
+        Assert.Equal(("Color?", true, "red|blue"), (asked[0].Question, asked[0].Multi, string.Join("|", asked[0].Options)));
         Assert.Equal(("Size?", true, "s|m|l"), (asked[1].Question, asked[1].Multi, string.Join("|", asked[1].Options)));
         Assert.Equal(("How many?", false, "1|2|true"), (asked[2].Question, asked[2].Multi, string.Join("|", asked[2].Options)));
     }
@@ -267,7 +267,7 @@ public class AskUserToolTests
     [Fact]
     public void Description_ShowsTheShape()
     {
-        Assert.Contains("Call it as {\"questions\": [{\"question\": \"Which colour?\", \"type\": \"single\", \"options\": [\"red\", \"blue\"]}]} — questions is always a list, even for one question.", _tool.Description);
+        Assert.Contains("Call it as {\"questions\": [{\"question\": \"Which color?\", \"type\": \"single\", \"options\": [\"red\", \"blue\"]}]} — questions is always a list, even for one question.", _tool.Description);
     }
 
     [Fact]
@@ -283,7 +283,7 @@ public class AskUserToolTests
         Assert.Equal("(nothing)", AskUserText.SentKeys([]));
         Assert.Equal("no questions key; the arguments were a, b", AskUserText.SentKeys(["a", "b"]));
         Assert.Equal("cheese, olives", AskUserText.AnswerText(["cheese", "olives"]));
-        Assert.Equal("Which colour? — blue", AskUserText.AnswerLine("Which colour?", "blue"));
+        Assert.Equal("Which color? — blue", AskUserText.AnswerLine("Which color?", "blue"));
         var q = new AskQuestion("Q?", null, false, ["a", "b"]);
         Assert.Equal("Q? — a\nQ? — b", AskUserText.ResultText([new AskAnswer(q, ["a"]), new AskAnswer(q, ["b"])]));
         Assert.Equal("Error: question 3: type must be single or multi, not 'x'.", AskUserText.BadType(3, " x "));

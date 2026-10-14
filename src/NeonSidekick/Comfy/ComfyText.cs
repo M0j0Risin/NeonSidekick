@@ -316,17 +316,17 @@ public static class ComfyText
         string.Equals(label, GeneratingLabel, StringComparison.Ordinal) || string.Equals(label, TextToImageLabel, StringComparison.Ordinal);
 
     /// <summary>A generation the user stopped (ESC). Pinned.</summary>
-    public const string Cancelled = "(image generation cancelled)";
+    public const string Cancelled = "(image generation canceled)";
 
     /// <summary>The notice after the hint row's double-click on the 🖼️ / 🎨 (2026-09-28): <see cref="Cancelled"/> for one, the count for more. Pinned.</summary>
     public static string Drained(int count) =>
-        count <= 1 ? Cancelled : $"({count.ToString(CultureInfo.InvariantCulture)} image generations cancelled)";
+        count <= 1 ? Cancelled : $"({count.ToString(CultureInfo.InvariantCulture)} image generations canceled)";
 
     /// <summary>
     /// <c>generate_image</c>'s answer when the user cancelled the pictures from the hint row (2026-09-28, the user's call: the
     /// pictures stop, the reply goes on), so the model neither retries nor says it failed. Pinned.
     /// </summary>
-    public const string CancelledByUser = "Error: the user cancelled this image generation. Do not generate it again unless the user asks.";
+    public const string CancelledByUser = "Error: the user canceled this image generation. Do not generate it again unless the user asks.";
 
     /// <summary>
     /// <c>/imagine</c>'s notice when its generation outlasts the half-second grace and goes behind the input line (2026-10-04, the

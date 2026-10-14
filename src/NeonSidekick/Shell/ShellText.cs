@@ -669,7 +669,7 @@ public static class ShellText
 
     /// <summary><c>cancelled after 2.1 s (powershell, killed): ping -n 30 127.0.0.1</c>: a line ESC stopped. Pinned.</summary>
     public static string CmdCancelledHeader(string kind, TimeSpan elapsed, string label) =>
-        $"cancelled after {Elapsed(elapsed)} ({kind}, killed): {label}";
+        $"canceled after {Elapsed(elapsed)} ({kind}, killed): {label}";
 
     /// <summary>
     /// A <c>/cmd --bg</c> line started (2026-10-11): <c>started proc_3f2a1b in the background (powershell, pid 1234): npm run build;

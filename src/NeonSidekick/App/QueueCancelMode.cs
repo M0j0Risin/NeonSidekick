@@ -56,9 +56,9 @@ public static class QueueCancelMode
     /// <summary>The menu hint next to a mode. Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "hold" => "a cancelled reply holds the queue; your next message runs first, then it resumes",
-        "drain" => "a cancelled reply sends the next queued message at once",
-        "empty" => "a cancelled reply drops every queued message",
+        "hold" => "a canceled reply holds the queue; your next message runs first, then it resumes",
+        "drain" => "a canceled reply sends the next queued message at once",
+        "empty" => "a canceled reply drops every queued message",
         _ => "",
     };
 
