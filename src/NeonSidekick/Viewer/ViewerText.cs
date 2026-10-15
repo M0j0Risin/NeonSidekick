@@ -81,8 +81,11 @@ public static class ViewerText
     /// <summary><c>/view</c> of a PDF the Browser window could not take: it went to its own program, and why. Pinned.</summary>
     public static string PdfInDefaultApp(string file, string why) => $"(📄 {file} opened in its own program: {why.Trim().TrimEnd('.')})";
 
-    /// <summary>Why a PDF goes to its own program where there is no Browser window at all. Pinned.</summary>
-    public static string NoBrowserWindow => OperatingSystem.IsMacOS() ? "the Browser window needs Windows" : "no Browser window here";
+    /// <summary>
+    /// Why a PDF goes to its own program where there is no Browser window at all. A Mac read "the Browser window needs Windows" until
+    /// 2026-10-15 (no message tells a Mac user that something needs Windows, 2026-10-11, the user's ask). Pinned.
+    /// </summary>
+    public const string NoBrowserWindow = "no Browser window here";
 
     /// <summary>The viewer's keys, the line under <see cref="Opened"/> (later on 2026-09-27): newest at the left since 2026-10-03,
     /// TAB back to the terminal; the wheel and the right-click menu since 2026-10-04. Pinned.</summary>

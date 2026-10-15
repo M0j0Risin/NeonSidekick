@@ -42,7 +42,7 @@ You need a Mac with Apple Silicon (M1 or later). Download and unpack the Mac pac
 | Printing | Works (CUPS) | Office files are refused ([Printing](TOOLS.md#printing)). |
 | PDFs: `convert_to_pdf`, `/pdf`, `read_pdf`, `pdf_edit`, attaching | Works, browser only | Making, reading, editing and attaching a PDF need Edge, Chrome, Brave or Chromium in `/Applications`, or the one *Web browser path* names. The `printer` engine (Microsoft Print to PDF) needs Windows. |
 | Docker tools and `/docker` | Works | Docker Desktop, OrbStack, Colima or Rancher Desktop ([Docker on a Mac](TOOLS.md#docker-on-a-mac)). CPU and memory figures are the Linux VM's. |
-| Event logs: the event-log tools and `/eventlog` | Not available | They read Windows' own event logs; a Mac has none. The group is never offered, 🪵 stays on the slab, and `/eventlog` says it needs Windows. |
+| Event logs: the event-log tools and `/eventlog` | Not available | They read Windows' own event logs; a Mac has none. The group is never offered, 🪵 stays on the slab, and `/eventlog` says there are no event logs to read. |
 | Docker servers | Not available | Docker Desktop on a Mac passes no GPU to containers; the embedded model is the Mac's local server instead. |
 | UNC shares and outside folders | Works | A share is `smb://server/share`, mounted under `/Volumes` while the app runs ([UNC shares on a Mac](TOOLS.md#unc-shares-on-a-mac)). |
 | `/keycheck` | Works | Finds macOS's own shortcuts, apps' exclusive hotkeys and the terminal's Option key. Most apps' shared hotkeys don't show. |

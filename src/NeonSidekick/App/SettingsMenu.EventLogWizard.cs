@@ -48,7 +48,7 @@ internal sealed partial class SettingsMenu
     public const string EventLogWizardTestRow = "Test the computer";
     public const string EventLogWizardHostRequired = "A host is required.";
     public const string EventLogWizardCancelledNotice = "No computer added.";
-    public const string EventLogWizardNoTest = "There is no event log to test against here (it needs Windows).";
+    public const string EventLogWizardNoTest = "There are no event logs here to test against.";
 
     /// <summary>The first page's row for <c>local</c> when no file holds it yet. Pinned.</summary>
     public const string EventLogWizardLocalRow = "local  (this PC, built in)";

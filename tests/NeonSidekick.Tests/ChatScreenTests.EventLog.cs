@@ -107,14 +107,14 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task EventLog_WithNoReader_SaysItNeedsWindows()
+    public async Task EventLog_WithNoReader_SaysThereAreNone()
     {
         _settings.Update(d => d.TtsOutput = false);
         StepsWhenIdle(Line("/eventlog"), Line("/exit"));
 
         string output = await RunAsync();
 
-        Assert.Contains(EventLogText.NeedsWindows, output);
+        Assert.Contains(EventLogText.NoneHere, output);
     }
 
     [WindowsFact]

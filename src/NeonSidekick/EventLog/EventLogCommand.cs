@@ -260,7 +260,7 @@ public static class EventLogCommand
         ArgumentNullException.ThrowIfNull(args);
         if (!OperatingSystem.IsWindows() || access.System is null)
         {
-            return EventLogCommandResult.Error(EventLogText.NeedsWindows);
+            return EventLogCommandResult.Error(EventLogText.NoneHere);
         }
 
         var now = access.Time.GetUtcNow();

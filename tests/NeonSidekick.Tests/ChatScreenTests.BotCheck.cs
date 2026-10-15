@@ -266,13 +266,13 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task BrowserCommand_WithNoWindow_SaysItNeedsWindows()
+    public async Task BrowserCommand_WithNoWindow_SaysThereIsNone()
     {
         PushLine("/browser https://example.com/");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains(BotCheckText.BrowserNeedsWindows, output);
+        Assert.Contains(BotCheckText.BrowserNotHere, output);
     }
 }

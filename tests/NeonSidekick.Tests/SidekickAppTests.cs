@@ -358,7 +358,7 @@ public partial class SidekickAppTests : IDisposable
     public async Task Headless_EventLog_PrintsTheRows_AndSaysWhenThereAreNoLogs()
     {
         string away = await Headless("/eventlog\n");
-        Assert.Contains("[error] " + NeonSidekick.EventLog.EventLogText.NeedsWindows, away);
+        Assert.Contains("[error] " + NeonSidekick.EventLog.EventLogText.NoneHere, away);
         if (!OperatingSystem.IsWindows())
         {
             return;

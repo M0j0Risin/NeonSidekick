@@ -188,7 +188,7 @@ internal sealed class BrowserLinksMenu
                 }
                 else
                 {
-                    Say(_open is null ? ErrorPrefix + BotCheckText.BrowserNeedsWindows : _open(link));
+                    Say(_open is null ? ErrorPrefix + BotCheckText.BrowserNotHere : _open(link));
                 }
             }
         }

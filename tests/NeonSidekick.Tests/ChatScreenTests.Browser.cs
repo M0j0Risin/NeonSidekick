@@ -104,7 +104,7 @@ public sealed partial class ChatScreenTests
 
         Assert.Contains("Saved \"Ex\" (https://example.com/).", output);
         Assert.Contains(BrowserLinkText.Caption(1), output);
-        Assert.Contains(BotCheckText.BrowserNeedsWindows, output);
+        Assert.Contains(BotCheckText.BrowserNotHere, output);
         Assert.Single(SavedLinks().List());
     }
 

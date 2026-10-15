@@ -5604,7 +5604,7 @@ internal sealed partial class ChatScreen
             // Docker reaches a Mac's engine over its socket since 2026-10-11, so only a system with no transport would say it.
             SettingsField.DockerTools => Docker.DockerSocket.Here != Docker.DockerTransport.None ? null : !effective.DockerTools ? ToolsText.SwitchOffReason(field) : ToolsText.NeedsWindowsReason,
             // The event logs are Windows' alone (2026-10-15): the switch first, then the system.
-            SettingsField.EventLogTools => !effective.EventLogTools ? ToolsText.SwitchOffReason(field) : !OperatingSystem.IsWindows() || _eventLog.System is null ? ToolsText.WindowsOnlyReason : null,
+            SettingsField.EventLogTools => !effective.EventLogTools ? ToolsText.SwitchOffReason(field) : !OperatingSystem.IsWindows() || _eventLog.System is null ? ToolsText.NoEventLogsReason : null,
             SettingsField.PrintTools => PrintText.Supported ? null : !effective.PrintTools ? ToolsText.SwitchOffReason(field) : ToolsText.NeedsWindowsReason,   // a Mac prints since 2026-10-08
             SettingsField.SqliteTools => !effective.SqliteTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoSqliteDatabaseReason,
             SettingsField.ComfyTools => !effective.ComfyTools ? ToolsText.SwitchOffReason(field) : Comfy.ComfyStudio.ServerOf(effective) is null ? ToolsText.NoComfyUrlReason : ToolsText.NoWorkflowReason,

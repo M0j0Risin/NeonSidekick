@@ -228,8 +228,11 @@ public static class EventLogText
 
     // ── Computers ───────────────────────────────────────────────────────────
 
-    /// <summary>The refusal off Windows. Pinned.</summary>
-    public const string NeedsWindows = "Error: the event logs are Windows' own; there are none to read here.";
+    /// <summary>
+    /// The refusal off Windows (2026-10-15). "the event logs are Windows' own" until later that day: no message tells a Mac user that
+    /// something needs Windows (2026-10-11, the user's ask). Pinned.
+    /// </summary>
+    public const string NoneHere = "Error: there are no event logs to read here.";
 
     public static string UnknownComputer(string name, string offered) =>
         $"Error: no computer named '{name}' is ticked in Event log computers offered" + (offered.Length > 0 ? $"; the ticked ones are: {offered}." : "; none is ticked.");

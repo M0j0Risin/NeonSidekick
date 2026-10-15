@@ -361,8 +361,11 @@ public static class ToolsText
     /// </summary>
     public const string NeedsWindowsReason = "it needs Windows or a Mac";
 
-    /// <summary>Why a Windows-alone group (the event logs, 2026-10-15) is not offered elsewhere; <see cref="NeedsWindowsReason"/> says "or a Mac". Pinned.</summary>
-    public const string WindowsOnlyReason = "it needs Windows";
+    /// <summary>
+    /// Why the event-log group is not offered off Windows (2026-10-15). "it needs Windows" until later that day: no message tells a Mac
+    /// user that something needs Windows (2026-10-11, the user's ask), so it says what is missing here instead. Pinned.
+    /// </summary>
+    public const string NoEventLogsReason = "there are no event logs to read here";
 
     /// <summary>The YouTube group off with its switch on (2026-10-05): no key to search with and no video window to play in.</summary>
     public const string NoYouTubeReason = "no YouTube API key is set and there is no video window";

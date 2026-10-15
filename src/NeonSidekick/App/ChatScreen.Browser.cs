@@ -65,7 +65,7 @@ internal sealed partial class ChatScreen
 
         if (_browserWindow is not { } window)
         {
-            sink.Error(BotCheckText.BrowserNeedsWindows);
+            sink.Error(BotCheckText.BrowserNotHere);
             return;
         }
 
@@ -119,8 +119,8 @@ internal sealed partial class ChatScreen
         string opened = BotCheckText.Opened(url?.AbsoluteUri ?? BrowserPage.Blank);
         if (_browserWindow is not { } window)
         {
-            sink?.Error(BotCheckText.BrowserNeedsWindows);
-            return "Error: " + BotCheckText.BrowserNeedsWindows;
+            sink?.Error(BotCheckText.BrowserNotHere);
+            return "Error: " + BotCheckText.BrowserNotHere;
         }
 
         sink?.Notice(opened);

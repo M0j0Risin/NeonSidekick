@@ -171,7 +171,7 @@ public sealed class EventLogAccess
         ArgumentNullException.ThrowIfNull(work);
         if (System is not { } system)
         {
-            return EventLogResult<T>.Failed(EventLogText.NeedsWindows);
+            return EventLogResult<T>.Failed(EventLogText.NoneHere);
         }
 
         using var timeout = new CancellationTokenSource(source.Remote ? RemoteTimeout : LocalTimeout, Time);

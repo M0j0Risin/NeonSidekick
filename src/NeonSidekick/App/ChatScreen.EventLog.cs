@@ -62,7 +62,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/eventlog</c>'s argument list (2026-10-15): the logs, the working directory's <c>.evtx</c> files and the term keys; the ticked
-    /// computers after <c>computer:</c>. Empty off Windows, where <c>/eventlog</c> says it needs Windows.
+    /// computers after <c>computer:</c>. Empty off Windows, where <c>/eventlog</c> says there are none to read.
     /// </summary>
     private IReadOnlyList<UI.CompletionItem> EventLogChoices(string argText)
     {
@@ -84,7 +84,7 @@ internal sealed partial class ChatScreen
     {
         if (!OperatingSystem.IsWindows() || _eventLog.System is null)
         {
-            sink.Error(EventLogText.NeedsWindows);
+            sink.Error(EventLogText.NoneHere);
             return;
         }
 

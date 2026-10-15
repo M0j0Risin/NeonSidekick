@@ -686,11 +686,11 @@ public sealed class EventLogTests : IDisposable
     }
 
     [Fact]
-    public async Task NoReader_SaysItNeedsWindows()
+    public async Task NoReader_SaysThereAreNone()
     {
         string answer = await Call(new EventLogSearchTool(new EventLogAccess(null, () => _catalog, () => null, Files, _time), () => _settings), ("log", "System"));
 
-        Assert.Equal(EventLogText.NeedsWindows, answer);
+        Assert.Equal(EventLogText.NoneHere, answer);
     }
 
     [Fact]

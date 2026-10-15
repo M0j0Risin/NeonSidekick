@@ -26,7 +26,7 @@ internal static class EventLogCheck
         var checks = new List<SmokeCheck>();
         if (system is null)
         {
-            checks.Add(new SmokeCheck("eventlog:computer", false, EventLogText.NeedsWindows));
+            checks.Add(new SmokeCheck("eventlog:computer", false, EventLogText.NoneHere));
             return Report(console, checks);
         }
 

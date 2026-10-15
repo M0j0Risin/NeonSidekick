@@ -1,5 +1,4 @@
 using NeonSidekick.App;
-using NeonSidekick.Files;
 using NeonSidekick.Shell;
 using NeonSidekick.UI;
 
@@ -9,17 +8,38 @@ namespace NeonSidekick.Tests;
 public partial class ChatScreenTests
 {
     /// <summary>
-    /// A blank cell of the 240-wide toolbar for a twin's "the blanks open /settings" click: halfway between the widest strip of
-    /// glyphs (every item, the policy's lock and the police) and the working directory, which the toolbar puts flush right. The
-    /// tests click 120 on Windows; a macOS temp path (<c>/var/folders/…/T/NeonSidekick.Tests/…/profiles/default/files</c>) reaches
-    /// past it, and a click there opens the folders. Fails, rather than clicking a glyph or the path, should no blank be left.
+    /// A blank cell of the 240-wide toolbar for a twin's "the blanks open /settings" click: the middle of the widest run of blanks on
+    /// the toolbar row drawn last (the row that starts with ⚙️), the second of two where the path, cut to fit, leaves only the two. The tests click a fixed cell on Windows; a macOS temp path
+    /// (<c>/var/folders/…/T/NeonSidekick.Tests/…/profiles/default/files</c>) reaches past it, and a click there opens the folders.
+    /// Read off the row since 2026-10-15: it was worked out from <see cref="ChatScreen.ToolbarStripFor(CommandPolicyMode, bool)"/>,
+    /// which draws no dividers (three by default since 2026-10-13) and so fell short of the drawn strip, the more so once 🪵 joined
+    /// it. Fails, rather than clicking a glyph or the path, should no run of two blanks be left.
     /// </summary>
     private int ToolbarBlank()
     {
-        int stripEnd = new[] { ChatScreen.ToolbarStrip, ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), ChatScreen.ToolbarStripFor(CommandPolicyMode.Yolo, true) }.Max(TextCells.Width);
-        int pathStart = 239 - TextCells.Width(WorkingDirectory.Resolve("", _settings.ProfileDirectory));
-        int blank = (stripEnd + pathStart) / 2;
-        Assert.True(blank > stripEnd + 1 && blank < pathStart - 1, $"no blank between the glyphs (to {stripEnd}) and the working directory (from {pathStart})");
-        return blank;
+        string row = Output.Split('\n').Last(l => l.StartsWith(ChatScreen.SettingsToolGlyph, StringComparison.Ordinal)).TrimEnd('\r');
+        int start = -1, length = 0;
+        for (int i = 0; i < row.Length;)
+        {
+            if (row[i] != ' ')
+            {
+                i++;
+                continue;
+            }
+
+            int run = i;
+            while (i < row.Length && row[i] == ' ')
+            {
+                i++;
+            }
+
+            if (i < row.Length && i - run > length)
+            {
+                (start, length) = (run, i - run);   // a run that ends the row is past the path: not between the strip and it
+            }
+        }
+
+        Assert.True(length >= 2, $"no blank between the glyphs and the working directory on the toolbar row: '{row}'");
+        return TextCells.Width(row[..(start + length / 2)]);
     }
 }
