@@ -8,14 +8,16 @@ internal sealed partial class ChatScreen
 {
     /// <summary>
     /// <c>/pdf …</c> (2026-10-03): <see cref="PdfCommand.RunAsync"/> under a spinner, its sentence a notice (a failure's an
-    /// error). The user's own hand: no switch asked, nothing added to the conversation.
+    /// error). The user's own hand: no switch asked, nothing added to the conversation. Since 2026-10-14 its edit verbs too
+    /// (<c>merge</c>, <c>extract</c>, <c>delete</c>, <c>rotate</c>), through <c>pdf_edit</c>'s <see cref="PdfEditing"/>, under their own spinner.
     /// </summary>
     private async Task HandlePdfAsync(string args, CancellationToken cancellationToken)
     {
         string result;
         try
         {
-            result = await _transcript.WithSpinnerAsync(PdfText.Working, () => PdfCommand.RunAsync(_pdf, args, () => _log.LastReply, cancellationToken)).ConfigureAwait(false);
+            string spinner = PdfCommand.ParseEdit(args, _pdfEditing.IsFile).Request is null ? PdfText.Working : PdfText.Editing;
+            result = await _transcript.WithSpinnerAsync(spinner, () => PdfCommand.RunAsync(_pdf, args, () => _log.LastReply, cancellationToken, _pdfEditing)).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

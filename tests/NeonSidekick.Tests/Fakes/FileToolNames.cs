@@ -6,9 +6,9 @@ namespace NeonSidekick.Tests.Fakes;
 public static class FileToolNames
 {
     /// <summary>
-    /// Every file tool, the PDF converter last: fourteen since 2026-10-10, when <c>view_image</c>, <c>image_info</c> and <c>image_edit</c>
-    /// became a group of their own (<see cref="ImageToolNames"/>, the user's ask); fifteen since 2026-10-14, <c>read_pdf</c> after
-    /// <c>read_file</c> (the PDF plan).
+    /// Every file tool, the PDF converter and editor last: fourteen since 2026-10-10, when <c>view_image</c>, <c>image_info</c> and
+    /// <c>image_edit</c> became a group of their own (<see cref="ImageToolNames"/>, the user's ask); fifteen since 2026-10-14, <c>read_pdf</c>
+    /// after <c>read_file</c> (the PDF plan); sixteen later that day, <c>pdf_edit</c> after <c>convert_to_pdf</c>.
     /// </summary>
     public static readonly string[] All =
     [
@@ -27,13 +27,14 @@ public static class FileToolNames
         UnzipTool.ToolName,
         OpenTool.ToolName,
         ConvertToPdfTool.ToolName,
+        PdfEditTool.ToolName,
     ];
 
     /// <summary>
-    /// The thirteen <c>ChatScreen.FileTools</c> builds without a PDF converter and a PDF reader (the tests that build the list alone;
+    /// The thirteen <c>ChatScreen.FileTools</c> builds without a PDF converter, reader and editor (the tests that build the list alone;
     /// 2026-10-03). An explicit list since 2026-10-14 (the PDF plan's gap 33): <c>read_pdf</c> is optional too, and not last.
     /// </summary>
-    public static readonly string[] WithoutPdf = [.. All.Where(n => n is not ConvertToPdfTool.ToolName and not ReadPdfTool.ToolName)];
+    public static readonly string[] WithoutPdf = [.. All.Where(n => n is not ConvertToPdfTool.ToolName and not ReadPdfTool.ToolName and not PdfEditTool.ToolName)];
 
     /// <summary>The file tools and then the picture tools, as a turn offers both groups (2026-10-10): what the file tools' list was until then, in the new order.</summary>
     public static readonly string[] WithImages = [.. All, .. ImageToolNames.All];

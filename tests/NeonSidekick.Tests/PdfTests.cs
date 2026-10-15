@@ -516,10 +516,10 @@ public sealed class PdfTests : IDisposable
     [Fact]
     public void Tool_IsAFileTool_NotForPlanMode_AndQuiet()
     {
-        var tools = ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, pdf: _pdf, reading: new PdfReading(_browser, () => _browser.Executable));
+        var tools = ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, pdf: _pdf, reading: new PdfReading(_browser, () => _browser.Executable), editing: new PdfEditing(_browser, _files, () => _browser.Executable));
         Assert.Equal(FileToolNames.All, tools.Select(t => t.Name));
-        Assert.Equal(ConvertToPdfTool.ToolName, FileToolNames.All[^1]);
-        Assert.Equal([.. FileToolNames.All.Where(n => n != ReadPdfTool.ToolName)], ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, pdf: _pdf).Select(t => t.Name));   // read_pdf only with a reader (2026-10-14)
+        Assert.Equal([ConvertToPdfTool.ToolName, PdfEditTool.ToolName], FileToolNames.All[^2..]);   // pdf_edit after it (later on 2026-10-14)
+        Assert.Equal([.. FileToolNames.All.Where(n => n is not ReadPdfTool.ToolName and not PdfEditTool.ToolName)], ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, pdf: _pdf).Select(t => t.Name));   // read_pdf only with a reader, pdf_edit with an editor (2026-10-14)
         Assert.Equal(FileToolNames.WithoutPdf, ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings).Select(t => t.Name));
         Assert.Contains(ConvertToPdfTool.ToolName, PlanTools.Mutating);
         Assert.DoesNotContain(ConvertToPdfTool.ToolName, PlanTools.ReadOnly);

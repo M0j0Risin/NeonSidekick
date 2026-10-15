@@ -83,7 +83,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **ComfyUI:** pictures from your own workflows (text-to-image, image-to-image, face swaps), or `/imagine` with your own prompt.
 * **Picture editing:** resize, crop, rotate, recolor, convert or strip metadata, by the model or with a right-click in the viewer.
 * **YouTube:** search (with your API key) and play videos in the app's video window; saved videos resume where you left off.
-* **Printing & PDFs:** `/print` to any installed printer, on Windows or a Mac, and `/pdf` from Markdown, text, pictures or a web page.
+* **Printing & PDFs:** `/print` to any installed printer, on Windows or a Mac, and `/pdf` from Markdown, text, pictures or a web page. The model reads PDFs (local or on the web), you can attach one to a message or `/view` it, and PDFs can be merged, cut, turned and filled in.
 * **Claude Code:** `/claude` messages your installed Claude Code, or use it as the chat's server.
 * **Bot chat:** `/botchat` lets your profiles talk to each other in their own voices, optionally illustrated by ComfyUI.
 

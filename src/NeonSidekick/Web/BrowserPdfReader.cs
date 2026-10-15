@@ -12,6 +12,13 @@ public sealed record PdfPageRead(int Number, string Text, byte[]? Png, int Width
 public sealed record PdfOutlineItem(string Title, int Level, int? Page);
 
 /// <summary>
+/// One AcroForm field (2026-10-14, the PDF plan's gap 98): its full name, pdf.js's kind (<c>text</c>, <c>checkbox</c>, <c>radiobutton</c>,
+/// <c>combobox</c>, <c>listbox</c>, <c>button</c>, <c>signature</c>), its value now, the values it takes (a check box's on value, a radio
+/// group's, a choice's display texts: what <c>pdf_edit</c>'s <c>fill_form</c> matches), its page, and whether it is read-only.
+/// </summary>
+public sealed record PdfFormField(string Name, string Kind, string Value, IReadOnlyList<string> Options, int? Page, bool ReadOnly);
+
+/// <summary>
 /// What <see cref="IHeadlessBrowser.ReadPdfAsync"/> read (2026-10-11): the pages it got to (at most <see cref="PdfReadOptions.MaxPages"/>,
 /// or those of <see cref="PdfReadOptions.Pages"/>), how many the file has, and why it stopped short (<see cref="Detail"/>, empty when it
 /// read them all). Not <see cref="Ok"/> when it read none of the pages asked for (a read that asked for none is Ok once the file opened).
@@ -29,13 +36,19 @@ public sealed record PdfRead(bool Ok, string Detail, int PageCount, IReadOnlyLis
 
     /// <summary>The printed page labels, one per page, when <see cref="PdfReadOptions.Labels"/> asked (empty for a PDF without any); null when not asked.</summary>
     public IReadOnlyList<string>? Labels { get; init; }
+
+    /// <summary>The form's fields when <see cref="PdfReadOptions.Fields"/> asked (empty for a PDF without a form); null when not asked.</summary>
+    public IReadOnlyList<PdfFormField>? Fields { get; init; }
+
+    /// <summary>Whether the form is XFA alone (pdf.js's <c>isPureXfa</c>), read with the fields.</summary>
+    public bool PureXfa { get; init; }
 }
 
 /// <summary>
 /// How a PDF is read: the most pages, the longest side of a page's picture in pixels, and whether pictures are drawn at all — and since
 /// 2026-10-14 (the PDF plan's gaps 44 and 94) which pages exactly (<see cref="Pages"/>, physical numbers; one past the end is left out),
 /// which of them are drawn (<see cref="PicturePages"/>, null = every page read when <see cref="Pictures"/>), and whether the outline and
-/// the page labels are read in the same run.
+/// the page labels are read in the same run; later that day (gap 98) the form's fields too.
 /// </summary>
 public sealed record PdfReadOptions(
     int MaxPages = 40,
@@ -44,7 +57,8 @@ public sealed record PdfReadOptions(
     IReadOnlyList<int>? Pages = null,
     IReadOnlyList<int>? PicturePages = null,
     bool Outline = false,
-    bool Labels = false)
+    bool Labels = false,
+    bool Fields = false)
 {
     public static readonly PdfReadOptions Default = new();
 
@@ -208,6 +222,60 @@ public static partial class BrowserPdfReader
     /// <summary>The expression that reads the printed page labels (2026-10-14, the PDF plan's gap 92); it answers <c>{ l: [labels] }</c>, empty without them.</summary>
     public static string LabelsExpression() =>
         "(async () => { const l = await globalThis.__neonPdf.getPageLabels(); return { l: Array.isArray(l) ? l.map(x => String(x || '')) : [] }; })()";
+
+    /// <summary>The most form fields the page sends back (gap 98).</summary>
+    public const int MaxFields = 500;
+
+    /// <summary>
+    /// The expression that reads the form's fields (2026-10-14, the PDF plan's gaps 25 and 98): <c>getFieldObjects()</c>, one entry a name
+    /// from its first widget that has a kind, a radio group's options and value from all its widgets, a choice's display texts; and
+    /// <c>isPureXfa</c>. It answers <c>{ f: [{ n, t, v, o, p, r }], x }</c>, <c>f</c> empty for a PDF without a form.
+    /// </summary>
+    public static string FieldsExpression() =>
+        "(async () => { const doc = globalThis.__neonPdf; const objs = (await doc.getFieldObjects()) || {}; const out = []; " +
+        "for (const [name, widgets] of Object.entries(objs)) { if (out.length >= " + MaxFields.ToString(CultureInfo.InvariantCulture) + ") { break; } " +
+        "const list = Array.isArray(widgets) ? widgets : []; const w = list.find(x => x && x.type) || list[0] || {}; let opts = []; let v = w.value; " +
+        "if (w.type === 'radiobutton') { opts = list.map(x => x.exportValues).filter(x => typeof x === 'string' && x.length > 0); " +
+        "const on = list.find(x => x.value && x.value !== 'Off'); v = on ? on.value : 'Off'; } " +
+        "else if (w.type === 'checkbox') { opts = [w.exportValues].filter(x => typeof x === 'string' && x.length > 0); } " +
+        "else if (Array.isArray(w.items)) { opts = w.items.map(i => String(i.displayValue ?? i.exportValue ?? '')); } " +
+        "out.push({ n: String(name), t: String(w.type || ''), v: v == null ? '' : (Array.isArray(v) ? v.map(String).join(', ') : String(v)), " +
+        "o: [...new Set(opts)], p: typeof w.page === 'number' && w.page >= 0 ? w.page + 1 : 0, r: w.editable === false || w.readOnly === true }); } " +
+        "return { f: out, x: !!doc.isPureXfa }; })()";
+
+    /// <summary>An answer of <see cref="FieldsExpression"/> read: the fields (empty for any other shape) and whether the form is XFA alone.</summary>
+    public static (IReadOnlyList<PdfFormField> Fields, bool PureXfa) ReadFields(JsonElement value)
+    {
+        var fields = new List<PdfFormField>();
+        if (value.ValueKind != JsonValueKind.Object)
+        {
+            return (fields, false);
+        }
+
+        bool xfa = value.TryGetProperty("x", out var x) && x.ValueKind == JsonValueKind.True;
+        if (!value.TryGetProperty("f", out var list) || list.ValueKind != JsonValueKind.Array)
+        {
+            return (fields, xfa);
+        }
+
+        foreach (var item in list.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty("n", out var n) || n.ValueKind != JsonValueKind.String)
+            {
+                continue;
+            }
+
+            string Text(string key) => item.TryGetProperty(key, out var e) && e.ValueKind == JsonValueKind.String ? e.GetString() ?? "" : "";
+            var options = item.TryGetProperty("o", out var o) && o.ValueKind == JsonValueKind.Array
+                ? [.. o.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString() ?? "")]
+                : new List<string>();
+            int page = item.TryGetProperty("p", out var p) && p.TryGetInt32(out int pv) ? pv : 0;
+            bool readOnly = item.TryGetProperty("r", out var r) && r.ValueKind == JsonValueKind.True;
+            fields.Add(new PdfFormField(n.GetString() ?? "", Text("t"), Text("v"), options, page > 0 ? page : null, readOnly));
+        }
+
+        return (fields, xfa);
+    }
 
     /// <summary>An answer of <see cref="LabelsExpression"/> read; empty for any other shape.</summary>
     public static IReadOnlyList<string> ReadLabels(JsonElement value) =>

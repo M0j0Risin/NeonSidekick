@@ -45,6 +45,9 @@ public interface IHeadlessBrowser
 
     /// <summary><paramref name="pdf"/>'s pages read through <paramref name="executable"/> (2026-10-11): each page's text and picture, by pdf.js in the page (<see cref="BrowserPdfReader"/>).</summary>
     Task<PdfRead> ReadPdfAsync(string executable, byte[] pdf, PdfReadOptions options, CancellationToken cancellationToken);
+
+    /// <summary><paramref name="job"/>'s PDFs edited through <paramref name="executable"/> (2026-10-14): merged, cut, turned or filled in, by pdf-lib in the page (<see cref="BrowserPdfEditor"/>).</summary>
+    Task<PdfEdit> EditPdfAsync(string executable, PdfEditJob job, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -614,7 +617,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
                 detail = await run.FailureAsync("it read no page", cancellationToken).ConfigureAwait(false);
             }
 
-            return new PdfRead(ok, detail, read.PageCount, read.Pages) { InJob = run.InJob, Outline = read.Outline, Labels = read.Labels };
+            return new PdfRead(ok, detail, read.PageCount, read.Pages) { InJob = run.InJob, Outline = read.Outline, Labels = read.Labels, Fields = read.Fields, PureXfa = read.PureXfa };
         }
         finally
         {
@@ -624,6 +627,199 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
 
     /// <summary>A locked PDF's detail (2026-10-14, the PDF plan's gap 2). Pinned.</summary>
     public const string PdfLockedDetail = "the PDF asks for a password";
+
+    /// <summary>The longest an edit may take (2026-10-14): the browser's start, pdf-lib's load, the inputs, the edit and the read back.</summary>
+    public static readonly TimeSpan PdfEditTimeout = TimeSpan.FromSeconds(120);
+
+    /// <summary>
+    /// <paramref name="job"/> run as <see cref="BrowserPdfEditor"/> describes (2026-10-14, the PDF plan's phase 4b): the PDF reads' own
+    /// network-less profile and arguments, one run at a time with the other browser work, within <see cref="PdfEditTimeout"/>. Every
+    /// input is held to <see cref="BrowserPdfReader.MaxBytes"/> and all of them to <see cref="BrowserPdfEditor.MaxOutputBytes"/> before
+    /// the browser starts (gap 68). The new file is judged by its bytes: there, the size the page said, and starting <c>%PDF</c>.
+    /// </summary>
+    public async Task<PdfEdit> EditPdfAsync(string executable, PdfEditJob job, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        ArgumentNullException.ThrowIfNull(job);
+        if (job.Inputs.Count == 0)
+        {
+            return new PdfEdit(false, "no PDF to edit", null, 0);
+        }
+
+        if (job.Inputs.Any(i => i.Length > BrowserPdfReader.MaxBytes) || job.Inputs.Sum(i => (long)i.Length) > BrowserPdfEditor.MaxOutputBytes)
+        {
+            return new PdfEdit(false, $"the PDFs are over {BrowserPdfEditor.MaxOutputBytes / (1024 * 1024)} MB together, or one is over {BrowserPdfReader.MaxBytes / (1024 * 1024)} MB", null, 0);
+        }
+
+        if (BrowserPdfEditor.LibraryText() is not { } library)
+        {
+            return new PdfEdit(false, "this build carries no pdf-lib", null, 0);
+        }
+
+        await _oneAtATime.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var state = new PdfEditState();
+            var blank = new Uri("about:blank");
+            var run = await RunProcessAsync(executable, blank, _pdfUserData, PdfReadArguments, PdfEditTimeout, (process, userData, token) => WatchEditAsync(process, userData, library, job, state, token), cancellationToken).ConfigureAwait(false);
+            if (run.StartError is not null)
+            {
+                return new PdfEdit(false, run.StartError, null, 0);
+            }
+
+            DiagnosticLog.Debug(Category, $"{run.Summary}, a PDF edit ({job.Op}) of {job.Inputs.Count.ToString(CultureInfo.InvariantCulture)} file(s)" + (state.Output is null ? "" : $", {state.Output.Length.ToString(CultureInfo.InvariantCulture)} B made") + (state.Failure is null ? "" : $"; {state.Failure}") + run.StderrTail);
+            if (state.Outcome is { } refused)
+            {
+                return refused with { InJob = run.InJob };
+            }
+
+            if (state.Output is { } output)
+            {
+                return new PdfEdit(true, "", output, state.PageCount) { InJob = run.InJob, Pages = state.Pages };
+            }
+
+            string detail = state.Failure ?? (run.TimedOut ? $"stopped after {Llm.LlmTimeouts.Format(PdfEditTimeout)}" : await run.FailureAsync("it made no PDF", cancellationToken).ConfigureAwait(false));
+            return new PdfEdit(false, detail, null, 0) { InJob = run.InJob };
+        }
+        finally
+        {
+            _oneAtATime.Release();
+        }
+    }
+
+    /// <summary>What <see cref="WatchEditAsync"/> got to: the new file, or a refusal the caller words, or why it failed.</summary>
+    private sealed class PdfEditState
+    {
+        public byte[]? Output;
+        public int PageCount;
+        public IReadOnlyList<int> Pages = [];
+        public PdfEdit? Outcome;
+        public string? Failure;
+    }
+
+    /// <summary>
+    /// Edits over DevTools (2026-10-14, <see cref="BrowserPdfEditor"/>): pdf-lib evaluated, each input loaded, the pages worked out from the
+    /// first input's count, the edit made and saved, the new file read back in chunks, then the browser closed — true when it must still be
+    /// killed, false when it exited, <see cref="WatchPdfAsync"/>'s contract.
+    /// </summary>
+    private static async Task<bool> WatchEditAsync(Process process, string userData, string library, PdfEditJob job, PdfEditState state, CancellationToken cancellationToken)
+    {
+        await using var client = new DevToolsClient();
+        try
+        {
+            var endpoint = await DevToolsClient.WaitForEndpointAsync(userData, () => process.HasExited, cancellationToken).ConfigureAwait(false);
+            await client.ConnectAsync(endpoint, cancellationToken).ConfigureAwait(false);
+            string? session;
+            while ((session = await AttachAsync(client, cancellationToken).ConfigureAwait(false)) is null)
+            {
+                await Task.Delay(DomSettle.PollInterval, cancellationToken).ConfigureAwait(false);
+            }
+
+            await EditInPageAsync(client, session, library, job, state, cancellationToken).ConfigureAwait(false);
+            await client.NotifyAsync("Browser.close", cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is DevToolsException or System.Net.WebSockets.WebSocketException or IOException or JsonException or InvalidOperationException)
+        {
+            state.Failure = ex.Message;
+            return true;
+        }
+
+        using var grace = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        grace.CancelAfter(CloseGrace);
+        try
+        {
+            await process.WaitForExitAsync(grace.Token).ConfigureAwait(false);
+            return false;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return true;
+        }
+    }
+
+    // The steps in the page, each failure noted in the state and the rest skipped.
+    private static async Task EditInPageAsync(DevToolsClient client, string session, string library, PdfEditJob job, PdfEditState state, CancellationToken cancellationToken)
+    {
+        var (loaded, loadError) = await EvaluateAwaitAsync(client, session, BrowserPdfEditor.LoadExpression(library), cancellationToken).ConfigureAwait(false);
+        if (loaded is not { } answer || !BrowserPdfEditor.Loaded(answer))
+        {
+            state.Failure = "pdf-lib did not load: " + (loadError ?? "PDFLib missing");
+            return;
+        }
+
+        int firstCount = 0;
+        for (int i = 0; i < job.Inputs.Count; i++)
+        {
+            var (opened, openError) = await EvaluateAwaitAsync(client, session, BrowserPdfEditor.InputExpression(Convert.ToBase64String(job.Inputs[i]), preserveXfa: job.Op == PdfEditOp.FillForm), cancellationToken).ConfigureAwait(false);
+            if (opened is { } locked && BrowserPdfEditor.IsLocked(locked))
+            {
+                state.Outcome = new PdfEdit(false, PdfLockedDetail, null, 0) { LockedInput = i };
+                return;
+            }
+
+            if (opened is not { } doc || BrowserPdfEditor.PageCountOf(doc) is not { } count)
+            {
+                state.Failure = "not a PDF pdf-lib can open: " + (openError ?? "no page count");
+                return;
+            }
+
+            if (i == 0)
+            {
+                firstCount = count;
+            }
+        }
+
+        var (pages, refusal) = job.PagesFor(firstCount);
+        if (pages is null)
+        {
+            state.Outcome = new PdfEdit(false, refusal ?? "no pages", null, firstCount) { Refused = refusal };
+            return;
+        }
+
+        var (ran, runError) = await EvaluateAwaitAsync(client, session, BrowserPdfEditor.RunExpression(job.Op, pages, job.Angle, job.Fields, job.Flatten), cancellationToken).ConfigureAwait(false);
+        if (ran is not { } result)
+        {
+            state.Failure = "the edit failed: " + (runError ?? "no answer");
+            return;
+        }
+
+        var (pageCount, size, notMade) = BrowserPdfEditor.ReadRun(result);
+        if (notMade is not null)
+        {
+            state.Outcome = notMade;
+            return;
+        }
+
+        if (size > BrowserPdfEditor.MaxOutputBytes)
+        {
+            state.Failure = $"the new PDF would be over {BrowserPdfEditor.MaxOutputBytes / (1024 * 1024)} MB";
+            return;
+        }
+
+        var bytes = new byte[size];
+        for (int start = 0; start < size; start += BrowserPdfEditor.ChunkBytes)
+        {
+            int length = Math.Min(BrowserPdfEditor.ChunkBytes, size - start);
+            var (chunk, chunkError) = await EvaluateAwaitAsync(client, session, BrowserPdfEditor.ChunkExpression(start, length), cancellationToken).ConfigureAwait(false);
+            if (chunk is not { } c || BrowserPdfEditor.ReadChunk(c) is not { } part || part.Length != length)
+            {
+                state.Failure = "the new PDF could not be read back: " + (chunkError ?? "a chunk came back wrong");
+                return;
+            }
+
+            part.CopyTo(bytes, start);
+        }
+
+        if (!Files.PdfFile.HasPdfHeader(bytes))
+        {
+            state.Failure = "the edit made a file that is not a PDF";
+            return;
+        }
+
+        state.Output = bytes;
+        state.PageCount = pageCount;
+        state.Pages = pages;
+    }
 
     /// <summary>
     /// Why a read that ended well read fewer pages than it set out to: the first N of a file's pages under <see cref="PdfReadOptions.MaxPages"/>
@@ -650,6 +846,8 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         public readonly List<PdfPageRead> Pages = [];
         public IReadOnlyList<PdfOutlineItem>? Outline;
         public IReadOnlyList<string>? Labels;
+        public IReadOnlyList<PdfFormField>? Fields;
+        public bool PureXfa;
         public string? Failure;
     }
 
@@ -707,6 +905,13 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
                     {
                         var (labels, _) = await EvaluateAwaitAsync(client, session, BrowserPdfReader.LabelsExpression(), cancellationToken).ConfigureAwait(false);
                         read.Labels = labels is { } l ? BrowserPdfReader.ReadLabels(l) : [];
+                    }
+
+                    if (options.Fields)
+                    {
+                        // The form's fields (2026-10-14, the PDF plan's gap 98): read_pdf's fields: true, what pdf_edit's fill_form takes.
+                        var (fields, _) = await EvaluateAwaitAsync(client, session, BrowserPdfReader.FieldsExpression(), cancellationToken).ConfigureAwait(false);
+                        (read.Fields, read.PureXfa) = fields is { } f ? BrowserPdfReader.ReadFields(f) : ([], false);
                     }
 
                     var wanted = options.PagesOf(pages);

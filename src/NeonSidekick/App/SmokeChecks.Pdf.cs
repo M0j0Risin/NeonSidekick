@@ -126,6 +126,55 @@ public static partial class SmokeChecks
         }
     }
 
+    /// <summary>
+    /// <c>pdf:edit</c> (2026-10-14, the PDF plan's phase 4b and gap 87): where Edge, Chrome or Brave is installed, pdf-lib out of the
+    /// binary's resources, evaluated into the PDF reads' network-less page: page 1 of <c>pdf:cmap</c>'s two-page PDF taken out into a new
+    /// PDF, that one turned 90°, and the result read back with pdf.js — one page, its text, drawn wider than tall — none of which
+    /// <c>dotnet test</c> proves on the published exe (a trimmed or missing resource, the evaluate's object tail, the chunked read back).
+    /// Without a browser it passes and says so. The folders go.
+    /// </summary>
+    public static SmokeCheck ProbePdfEdit()
+    {
+        const string name = "pdf:edit";
+        string folder = ProbeProfileFolder();
+        var browser = new HeadlessBrowser(folder);
+        if (browser.Locate("") is not { } executable)
+        {
+            return new SmokeCheck(name, true, "skipped: no Edge, Chrome or Brave");
+        }
+
+        try
+        {
+            var extracted = browser.EditPdfAsync(executable, new PdfEditJob(PdfEditOp.Extract, [CMapProbePdf()], _ => ([1], null)), CancellationToken.None).GetAwaiter().GetResult();
+            var turned = extracted.Output is { } one
+                ? browser.EditPdfAsync(executable, new PdfEditJob(PdfEditOp.Rotate, [one], count => ([.. Enumerable.Range(1, count)], null), Angle: 90), CancellationToken.None).GetAwaiter().GetResult()
+                : extracted;
+            var read = turned.Output is { } pdf
+                ? browser.ReadPdfAsync(executable, pdf, new PdfReadOptions(MaxSide: 400), CancellationToken.None).GetAwaiter().GetResult()
+                : null;
+            var page = read?.Pages.FirstOrDefault();
+            string wrong =
+                BrowserPdfEditor.LibraryText() is null ? "this build carries no pdf-lib"
+                : !extracted.Ok ? "the extract failed: " + extracted.Detail
+                : !turned.Ok ? "the turn failed: " + turned.Detail
+                : read is not { Ok: true } ? "the result could not be read: " + read?.Detail
+                : read.PageCount != 1 || page is null ? $"the result has {read.PageCount} pages, not 1"
+                : page.Text != "front" ? "the result's text is '" + page.Text + "', not page 1's"
+                : page.Width <= page.Height ? $"the page was not turned ({page.Width}x{page.Height})"
+                : BrowserLeftovers(turned.InJob, HeadlessBrowser.PdfFolderFor(folder)) ?? "";
+            return new SmokeCheck(name, wrong.Length == 0, wrong.Length > 0 ? wrong : $"{PdfText.BrowserName(executable)} took page 1 of 2 out with pdf-lib, turned it 90° and read it back ({page!.Width}x{page.Height}){LeftNothing}");
+        }
+        catch (Exception ex)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            Files.WorkingDirectory.DeleteDirectoryQuietly(folder);
+            Files.WorkingDirectory.DeleteDirectoryQuietly(HeadlessBrowser.PdfFolderFor(folder));
+        }
+    }
+
     /// <summary>What a passing browser probe adds on Windows, where the job and the held folder are checked.</summary>
     private static string LeftNothing => OperatingSystem.IsWindows() ? "; in the app's job, nothing left holding its profile folder" : "";
 

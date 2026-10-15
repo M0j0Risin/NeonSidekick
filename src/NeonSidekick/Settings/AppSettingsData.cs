@@ -1765,7 +1765,8 @@ public sealed class AppSettingsData
     /// sentences and no <c>get_working_directory</c> call opens the conversation (the user's own
     /// <c>/cwd</c>, <c>/tree</c> and <c>/explore</c> keep working). The row is the one
     /// switch (<c>/files</c> went 2026-09-18). Off by default since 2026-09-29 (the user's call, with the other tool
-    /// groups and the scan: a fresh profile offers the model nothing it did not turn on). No variable.
+    /// groups and the scan: a fresh profile offers the model nothing it did not turn on). No variable. Sixteen since 2026-10-14 (the PDF
+    /// plan): <c>read_pdf</c> and <c>pdf_edit</c> joined, the picture tools having left for <see cref="ImageTools"/> on 2026-10-10.
     /// </summary>
     public bool FileTools { get; set; }
 
@@ -2634,7 +2635,7 @@ public sealed class AppSettingsData
     /// <summary>
     /// The Chromium executable the headless leg runs, or empty to find Edge, Chrome or Brave in their
     /// standard folders (<see cref="Web.HeadlessBrowser.Candidates"/>); the same browser makes PDFs and, since 2026-10-14,
-    /// reads them (<c>read_pdf</c>, the PDF plan). No variable.
+    /// reads and edits them (<c>read_pdf</c>, <c>pdf_edit</c>, the PDF plan). No variable.
     /// </summary>
     public string WebBrowserPath { get; set; } = "";
 
@@ -3109,7 +3110,8 @@ public sealed class AppSettingsData
     /// What makes a PDF for <c>convert_to_pdf</c> and <c>/pdf</c> (2026-10-03, the user's ask): one of <see cref="Pdf.PdfEngine.Names"/> —
     /// <c>auto</c> (the default: Edge, Chrome or Brave, else Microsoft Print to PDF, which also takes over when the browser fails),
     /// <c>browser</c> (the browser or nothing) or <c>printer</c> (Microsoft Print to PDF always: Markdown, text and pictures only).
-    /// Anything else reads as <c>auto</c>. The Print tab of <c>/tools</c>. No variable.
+    /// Anything else reads as <c>auto</c>. The Print tab of <c>/tools</c>. No variable. Editing a PDF (<c>pdf_edit</c> and <c>/pdf</c>'s
+    /// edits, 2026-10-14) needs the browser whatever this says: Microsoft Print to PDF cannot change one.
     /// </summary>
     public string PdfEngine { get; set; } = Pdf.PdfEngine.Default;
 

@@ -430,7 +430,7 @@ public static class SlashCommands
             new("/perfbar", "show or hide the performance bar"),
             new(HomeAssistant.HomeBarText.Command, "show, hide or edit the home bar"),
             new("/plan", "plan before doing"),
-            new("/pdf", "make a PDF of a file, page or reply"),
+            new("/pdf", "make PDFs, or merge, cut or turn them"),
             new(Viewer.ProcessWindowText.Word, "watch the model's background processes"),
             new("/print", "print a file or the last reply"),
             new("/profile", "switch or manage profiles"),

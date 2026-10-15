@@ -27,6 +27,17 @@ public class SmokeChecksTests
         Assert.True(check.Detail.StartsWith("skipped", StringComparison.Ordinal) || check.Detail.Contains("read page 2 of 2, Japanese through", StringComparison.Ordinal), check.Detail);
     }
 
+    /// <summary><c>pdf:edit</c> (2026-10-14, the PDF plan's gap 87): page 1 taken out and turned with pdf-lib, read back wider than tall; skipped, passing, with no browser.</summary>
+    [WindowsFact]
+    public void ProbePdfEdit_TakesAPageOut_AndTurnsIt()
+    {
+        var check = SmokeChecks.ProbePdfEdit();
+
+        Assert.Equal("pdf:edit", check.Name);
+        Assert.True(check.Passed, check.Detail);
+        Assert.True(check.Detail.StartsWith("skipped", StringComparison.Ordinal) || check.Detail.Contains("took page 1 of 2 out with pdf-lib, turned it 90° and read it back", StringComparison.Ordinal), check.Detail);
+    }
+
     [Fact]
     public void ProbeWhisperVad_Passes_WithoutAModel()
     {

@@ -69,7 +69,7 @@ They need no server unless the row says so.
 | `/skills add <source> [--global\|--profile] [--yes]` | [Installs a skill](SETTINGS.md#installing-skills); without `--yes` it only previews, and several matches print as ids to type back. |
 | `/ha …`, `/docker …` | Drive Home Assistant and Docker directly; *Home Assistant action policy* and *Docker writes* don't apply. |
 | `/shopping …` | The [shopping list](TOOLS.md#shopping-list); the bare word prints it, and `clear all` and `store remove` act at once. |
-| `/print …`, `/pdf …` | [Print](TOOLS.md#printing) or [make a PDF](TOOLS.md#making-pdfs) of a file, a web page (`/pdf`) or the last reply; *Print action policy* doesn't apply. On a Mac, `/pdf` has only the `browser` engine. |
+| `/print …`, `/pdf …` | [Print](TOOLS.md#printing) or [make a PDF](TOOLS.md#making-pdfs) of a file, a web page (`/pdf`) or the last reply; *Print action policy* doesn't apply. On a Mac, `/pdf` has only the `browser` engine. `/pdf merge\|extract\|delete\|rotate` [edit PDFs](TOOLS.md#editing-pdfs) here too. |
 | `/test …` | Runs the [benchmark tests](COMMANDS.md#benchmark-tests), a `[notice]` per test. The listing and `history` need no server; a run does. |
 | `/prompts …`, `/browser save\|list\|unsave …` | The saved prompts and saved links: listed, printed, added or removed. `list --clear` empties a list at once. Other `/browser` forms are errors. |
 | `/youtube …` | Searches (needs a *YouTube API key*) and lists playlists and saved videos; playing a video is an error. |

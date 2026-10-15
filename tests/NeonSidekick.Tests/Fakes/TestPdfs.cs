@@ -84,7 +84,46 @@ public static class TestPdfs
         return Build(objects, " /Encrypt 5 0 R /ID [<" + Convert.ToHexString(id) + "> <" + Convert.ToHexString(id) + ">]");
     }
 
-    private static readonly byte[] Padding = Convert.FromHexString("28BF4E5E4E758A4164004E56FFFA01082E2E00B6D0683E802F0CA9FE6453697A");
+    /// <summary>
+    /// One page with an AcroForm (2026-10-14, the PDF plan's phase 4b): a text field <c>name</c>, a check box <c>agree</c> (on value
+    /// <c>Yes</c>, with both appearances) and a drop-down <c>color</c> of red, green and blue, all in Helvetica.
+    /// </summary>
+    public static byte[] Form()
+    {
+        var objects = new List<string>
+        {
+            "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [5 0 R 6 0 R 7 0 R] /DA (/Helv 0 Tf 0 g) /DR << /Font << /Helv 8 0 R >> >> >> >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 8 0 R >> >> /Contents 4 0 R /Annots [5 0 R 6 0 R 7 0 R] >>",
+            Stream("BT /F1 12 Tf 72 740 Td (Form) Tj ET"),
+            "<< /Type /Annot /Subtype /Widget /FT /Tx /T (name) /Rect [72 700 300 720] /P 3 0 R /DA (/Helv 12 Tf 0 g) /F 4 >>",
+            "<< /Type /Annot /Subtype /Widget /FT /Btn /T (agree) /Rect [72 650 90 668] /P 3 0 R /V /Off /AS /Off /AP << /N << /Yes 9 0 R /Off 10 0 R >> >> /F 4 >>",
+            "<< /Type /Annot /Subtype /Widget /FT /Ch /Ff 131072 /T (color) /Opt [(red) (green) (blue)] /Rect [72 600 200 620] /P 3 0 R /DA (/Helv 12 Tf 0 g) /F 4 >>",
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            Appearance("0 g 4 4 10 10 re f"),
+            Appearance(""),
+        };
+        return Build(objects, "");
+    }
+
+    /// <summary>One page whose form is XFA alone (2026-10-14, gap 25): an AcroForm with no fields and an <c>/XFA</c> stream.</summary>
+    public static byte[] XfaOnly()
+    {
+        var objects = new List<string>
+        {
+            "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [] /XFA 5 0 R >> >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>",
+            Stream("q Q"),
+            Stream("<xdp:xdp xmlns:xdp=\"http://ns.adobe.com/xdp/\"></xdp:xdp>"),
+        };
+        return Build(objects, "");
+    }
+
+    private static string Appearance(string content) =>
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 18 18] /Length " + N(Encoding.ASCII.GetByteCount(content)) + " >>\nstream\n" + content + "\nendstream";
+
+    private static readonly byte[] Padding =Convert.FromHexString("28BF4E5E4E758A4164004E56FFFA01082E2E00B6D0683E802F0CA9FE6453697A");
 
     private static byte[] Padded(string password) => [.. Encoding.ASCII.GetBytes(password).Take(32), .. Padding.Take(32 - Math.Min(32, password.Length))];
 

@@ -24,6 +24,9 @@ namespace NeonSidekick.Llm.Tools;
 /// stored session and a trimmed request name the page instead. <c>find</c> lists the pages holding every word with a line each
 /// (<see cref="PdfFind"/>, gap 93), reading the whole text once. <c>share</c> (or a full <c>\\server\share</c> path) reads a PDF on an
 /// offered UNC share where it is: the stamp and the bytes under the share's sign-in, the browser outside it.</para>
+///
+/// <para><c>fields: true</c> (later on 2026-10-14, the PDF plan's gap 98) lists a form's fields instead — each name, kind, value and the
+/// values it takes, what <c>pdf_edit</c>'s <c>fill_form</c> sets — cached with the texts under the file's stamp.</para>
 /// </summary>
 public sealed class ReadPdfTool : FileTool
 {
@@ -31,6 +34,7 @@ public sealed class ReadPdfTool : FileTool
     public const string PagesArgument = "pages";
     public const string PicturesArgument = "pictures";
     public const string FindArgument = "find";
+    public const string FieldsArgument = "fields";
     public const string ShareArgument = UncTool.ShareArgument;
 
     /// <summary>The most pages one call reads for its text (the rest are the next call's).</summary>
@@ -51,7 +55,8 @@ public sealed class ReadPdfTool : FileTool
             "path": { "type": "string", "description": "The PDF to read, relative to the working directory{{(shares ? " (or to the share when share is given)" : "")}}." },
             "pages": { "type": "string", "description": "Which pages, by physical page number from 1: \"3\", \"2-5\", \"5-\" (to the end) or \"1,3,7-9\". Leave it out to start at page 1 with the PDF's outline; after a partial read, call again with the pages its header names as next." },
             "pictures": { "type": "boolean", "description": "true also sends the pages themselves as pictures (a scan, a chart, a form, a page with no text), a few per call." },
-            "find": { "type": "string", "description": "Words to look for: lists the pages that hold every word, with a line from each, instead of the text. Combine with pages to search only those." }{{(shares ? ShareProperty : "")}}
+            "find": { "type": "string", "description": "Words to look for: lists the pages that hold every word, with a line from each, instead of the text. Combine with pages to search only those." },
+            "fields": { "type": "boolean", "description": "true lists the PDF's form fields instead of its text: each name, kind, value and the values it takes, for pdf_edit's fill_form." }{{(shares ? ShareProperty : "")}}
           },
           "required": ["path"]
         }
@@ -68,7 +73,7 @@ public sealed class ReadPdfTool : FileTool
         "Reads a PDF under the working directory (the user's cwd / current directory): its text page by page, starting with the outline of its bookmarks when no pages are given. " +
         "pages takes physical page numbers (\"3\", \"2-5\", \"5-\", \"1,3,7-9\"); a page's printed number shows beside it when it differs. " +
         "A long PDF comes back in part, its header naming the pages to read next. find lists the pages that hold every word given. " +
-        "pictures: true sends the pages as pictures too (for a scan, a chart or a form; it needs a model that sees pictures). read_file cannot read a PDF.";
+        "pictures: true sends the pages as pictures too (for a scan, a chart or a form; it needs a model that sees pictures). fields: true lists a form's fields. read_file cannot read a PDF.";
 
     private const string ShareDescription = " With share, or a full \\\\server\\share path, it reads a PDF on that UNC share where it is.";
 
@@ -109,11 +114,21 @@ public sealed class ReadPdfTool : FileTool
             return FileText.BadBoolean(PicturesArgument, raw);
         }
 
+        if (ReadFlag(arguments, FieldsArgument, out raw) is not { } fields)
+        {
+            return FileText.BadBoolean(FieldsArgument, raw);
+        }
+
         string find = ToolArguments.ReadString(arguments, FindArgument).Trim();
         string spec = ToolArguments.ReadString(arguments, PagesArgument).Trim().Trim('"');
         if (find.Length > 0 && pictures)
         {
             return PdfText.FindNoPictures;
+        }
+
+        if (fields && (find.Length > 0 || pictures || spec.Length > 0))
+        {
+            return PdfText.FieldsAlone;
         }
 
         PdfPageRange? range = null;
@@ -122,14 +137,14 @@ public sealed class ReadPdfTool : FileTool
             return bad;
         }
 
-        var request = new Request(spec, range, pictures, find, ViewImageTool.LimitOf(_effective()));
+        var request = new Request(spec, range, pictures, find, ViewImageTool.LimitOf(_effective()), fields);
         string? share = ToolArguments.ReadString(arguments, ShareArgument).Trim() is { Length: > 0 } named ? named : null;
         return share is null && !OnAShare(path)
             ? await ReadLocalAsync(path, request, cancellationToken).ConfigureAwait(false)
             : await ReadOnShareAsync(share, path, request, cancellationToken).ConfigureAwait(false);
     }
 
-    private sealed record Request(string Spec, PdfPageRange? Range, bool Pictures, string Find, int PictureLimit);
+    private sealed record Request(string Spec, PdfPageRange? Range, bool Pictures, string Find, int PictureLimit, bool Fields = false);
 
     private async Task<object?> ReadLocalAsync(string path, Request request, CancellationToken cancellationToken)
     {
@@ -188,6 +203,13 @@ public sealed class ReadPdfTool : FileTool
     /// <summary>The read asked of <see cref="PdfReading"/> for the request, then the answer composed from what it holds.</summary>
     private async Task<object?> AnswerAsync(PdfDocKey key, string display, Func<CancellationToken, Task<(byte[]? Bytes, string? Error)>> bytes, Request request, Func<string, string> scope, CancellationToken cancellationToken)
     {
+        if (request.Fields)
+        {
+            // The form alone (gap 98): no page's text, the fields cached with the document.
+            var form = await _reading.ReadAsync(key, display, bytes, new PdfAsk([], [], Outline: false, Labels: false, MaxPages: 0, Fields: true), cancellationToken).ConfigureAwait(false);
+            return scope(form.Error ?? PdfText.FieldList(display, form.Fields ?? [], form.PureXfa));
+        }
+
         bool finding = request.Find.Length > 0;
         IReadOnlyList<int>? pages = request.Range?.Resolve(request.Range.First + PdfReading.MaxPagesPerRead - 1);
         var pictures = !request.Pictures ? [] : (pages ?? [.. Enumerable.Range(1, request.PictureLimit)]).Take(request.PictureLimit).ToList();

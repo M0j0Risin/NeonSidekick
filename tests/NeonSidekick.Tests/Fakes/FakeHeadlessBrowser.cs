@@ -95,6 +95,11 @@ public sealed class FakeHeadlessBrowser : IHeadlessBrowser
 
     public bool PdfLocked { get; set; }
 
+    /// <summary>The form a read answers when asked for its fields (2026-10-14, gap 98), and whether it is XFA alone.</summary>
+    public List<PdfFormField> PdfFields { get; } = new();
+
+    public bool PdfPureXfa { get; set; }
+
     public int? PdfStopAfter { get; set; }
 
     public string PdfStopDetail { get; set; } = "stopped after 2 min";
@@ -141,6 +146,42 @@ public sealed class FakeHeadlessBrowser : IHeadlessBrowser
         {
             Outline = options.Outline ? PdfOutline.ToList() : null,
             Labels = options.Labels ? PdfLabels.ToList() : null,
+            Fields = options.Fields ? PdfFields.ToList() : null,
+            PureXfa = options.Fields && PdfPureXfa,
         });
+    }
+
+    /// <summary>
+    /// What a PDF edit answers (2026-10-14, the PDF plan's phase 4b): every job recorded in <see cref="EditJobs"/>; the pages worked out
+    /// from <see cref="EditPageCount"/> through the job's own rule (its refusal answered as the real run answers it); then
+    /// <see cref="EditOutcome"/> when set (a locked input, a form's refusal, a failure), else <see cref="EditBytes"/> made, of
+    /// <see cref="EditResultPages"/> pages.
+    /// </summary>
+    public List<PdfEditJob> EditJobs { get; } = new();
+
+    public int EditPageCount { get; set; } = 3;
+
+    public int EditResultPages { get; set; } = 2;
+
+    public PdfEdit? EditOutcome { get; set; }
+
+    public byte[] EditBytes { get; set; } = Encoding.ASCII.GetBytes("%PDF-1.7 edited by the fake");
+
+    public Task<PdfEdit> EditPdfAsync(string executable, PdfEditJob job, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        EditJobs.Add(job);
+        if (EditOutcome is { LockedInput: not null } locked)
+        {
+            return Task.FromResult(locked);
+        }
+
+        var (pages, error) = job.PagesFor(EditPageCount);
+        if (pages is null)
+        {
+            return Task.FromResult(new PdfEdit(false, error ?? "no pages", null, EditPageCount) { Refused = error });
+        }
+
+        return Task.FromResult(EditOutcome ?? new PdfEdit(true, "", EditBytes, EditResultPages) { Pages = pages });
     }
 }

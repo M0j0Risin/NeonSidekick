@@ -187,9 +187,10 @@ public static class PdfPlan
     /// The output's path, relative to the working directory: <paramref name="to"/> when it names a file (<c>.pdf</c> added when it
     /// has another extension or none), else a name made from the source — <c>notes.md</c> → <c>notes.pdf</c> beside it, a URL →
     /// its host and last segment, Markdown text → <c>reply-2026-10-03-1405.pdf</c> — inside the folder <paramref name="to"/> names,
-    /// or beside the source file, or at the top. Pure; <paramref name="isFolder"/> asks the sandbox.
+    /// or beside the source file, or at the top. Pure; <paramref name="isFolder"/> asks the sandbox. <paramref name="suffix"/> (2026-10-14,
+    /// the PDF plan's gap 66: an edit names its file after its source's, <c>report-p2-5.pdf</c>) goes after a source file's name.
     /// </summary>
-    public static string OutputFor(string? to, string? sourceRelative, Uri? url, string? title, DateTimeOffset now, Func<string, bool> isFolder)
+    public static string OutputFor(string? to, string? sourceRelative, Uri? url, string? title, DateTimeOffset now, Func<string, bool> isFolder, string suffix = "")
     {
         ArgumentNullException.ThrowIfNull(isFolder);
         string target = (to ?? "").Trim();
@@ -203,7 +204,7 @@ public static class PdfPlan
         string folder;
         if (sourceRelative is not null)
         {
-            name = Path.GetFileNameWithoutExtension(sourceRelative);
+            name = Path.GetFileNameWithoutExtension(sourceRelative) + suffix;
             string? parent = Path.GetDirectoryName(sourceRelative);
             folder = target.Length > 0 ? target : (string.IsNullOrEmpty(parent) ? "" : parent.Replace('\\', '/'));
         }

@@ -289,6 +289,10 @@
          BSD-3-Clause (assets\pdfjs\cmaps\LICENSE), about 1.2 MB. Without them a PDF whose fonts use a predefined CMap (most Chinese,
          Japanese and Korean ones) read blank; BrowserPdfReader hands them to pdf.js from memory, nothing fetched. -->
     <EmbeddedResource Include="..\..\assets\pdfjs\cmaps\*.bcmap" LogicalName="pdfjs/cmaps/%(Filename)%(Extension)" Visible="false" />
+    <!-- pdf-lib (2026-10-14, the PDF plan's phase 4b: pdf_edit and /pdf's edits): @cantoo/pdf-lib 2.11.1's UMD build, MIT, as
+         published (assets\pdflib\README.md has the version, the integrity and what it bundles). Web/BrowserPdfEditor evaluates it in
+         the headless browser's blank page; nothing is written to disk. -->
+    <EmbeddedResource Include="..\..\assets\pdflib\pdf-lib.min.js" LogicalName="pdflib/pdf-lib.min.js" Visible="false" />
   </ItemGroup>
 
   <!--

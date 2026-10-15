@@ -688,6 +688,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>The PDFs read for the model (2026-10-14, the PDF plan's phase 1): <c>read_pdf</c>'s reader and its page-text cache.</summary>
     private readonly PdfReading _pdfReading;
+    private readonly PdfEditing _pdfEditing;
     private readonly IReadOnlyList<AIFunction> _webTools;
     private readonly GitAccess _git;
     private readonly IReadOnlyList<AIFunction> _gitTools;
@@ -1191,7 +1192,9 @@ internal sealed partial class ChatScreen
         _pdf = new PdfConverter(_web.Browser, _web.Fetcher, _print, _files, _effective, _time, botCheck: SolveBotCheckAsync);
         // The PDF reader (2026-10-14, the PDF plan): read_pdf's texts cached for the run, the web tools' browser reading them.
         _pdfReading = new PdfReading(_web.Browser, () => _web.Browser.Locate(_effective().WebBrowserPath));
-        _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf, _images, OpenPictureForModel, _pdfReading);
+        // The PDF editor (2026-10-14, the PDF plan's phase 4b): pdf_edit and /pdf's edits, pdf-lib in the same browser.
+        _pdfEditing = new PdfEditing(_web.Browser, _files, () => _web.Browser.Locate(_effective().WebBrowserPath), _time);
+        _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf, _images, OpenPictureForModel, _pdfReading, _pdfEditing);
         _imageTools = ImageTools(_files, _effective, _images, () => _settings.ProfileSplashDirectory);
         _timers = new TimerBoard(time, SignalAlert);
         _jobs = new BackgroundJobs(SignalAlert, time);
@@ -5241,7 +5244,7 @@ internal sealed partial class ChatScreen
 
         if (kind == SlashCommand.Pdf)
         {
-            return PrintPaths(argText, sources, PdfVerbs);
+            return IsPdfEditLine(argText) ? PdfEditPaths(argText, sources) : PrintPaths(argText, sources, PdfVerbs);
         }
 
         if (kind == SlashCommand.Cwd)
@@ -5384,8 +5387,47 @@ internal sealed partial class ChatScreen
     /// <summary>The words <c>/print</c> takes in place of a path.</summary>
     private static readonly string[] PrintVerbs = [PrintText.ReplyWord, PrintText.PrintersWord];
 
-    /// <summary>The words <c>/pdf</c> takes in place of a path (2026-10-03).</summary>
-    private static readonly string[] PdfVerbs = [PdfCommand.ReplyWord];
+    /// <summary>The words <c>/pdf</c> takes in place of a path (2026-10-03), its edit verbs too since 2026-10-14.</summary>
+    private static readonly string[] PdfVerbs = [PdfCommand.ReplyWord, .. PdfCommand.EditVerbs];
+
+    /// <summary>Whether a <c>/pdf</c> line starts with an edit verb and a space (2026-10-14): its paths are <see cref="PdfEditPaths"/>' then, never the converter's list.</summary>
+    private static bool IsPdfEditLine(string argText) =>
+        argText.IndexOf(' ', StringComparison.Ordinal) is > 0 and var space && PdfCommand.IsEditVerb(argText[..space]);
+
+    /// <summary>
+    /// <c>/pdf</c>'s path list after an edit verb (2026-10-14, the PDF plan's gap 37): the PDFs and folders of the working directory for the
+    /// word being typed, a pick keeping what came before it (a pick replaces the whole argument, as <c>/view --chat</c>'s does). After
+    /// <c>merge</c> every word is a PDF, so the list comes back for each; after any other verb one path is all, and once it is followed by a
+    /// space the options follow (null: <see cref="PdfCommand.Complete"/>'s word list). An option being typed is the word list's too. Only
+    /// for a line <see cref="IsPdfEditLine"/> says starts with a verb. Pure over <paramref name="sources"/>.
+    /// </summary>
+    private static MentionResult? PdfEditPaths(string argText, ArgumentSources sources)
+    {
+        int firstSpace = argText.IndexOf(' ', StringComparison.Ordinal);
+        if (sources.AnyFiles is not { } files)
+        {
+            return null;
+        }
+
+        bool merge = string.Equals(argText[..firstSpace], PdfEditPlan.MergeWord, StringComparison.OrdinalIgnoreCase);
+        string rest = argText[(firstSpace + 1)..];
+        int cut = merge ? rest.LastIndexOf(' ') : -1;
+        string prefix = argText[..(firstSpace + 1)] + (cut >= 0 ? rest[..(cut + 1)] : "");
+        string word = cut >= 0 ? rest[(cut + 1)..] : rest;
+        if (word.Contains('=', StringComparison.Ordinal) || (!merge && word.Contains(' ', StringComparison.Ordinal) && files(word.TrimEnd()).Paths.Count == 0) || (!merge && word.EndsWith(' ')))
+        {
+            return null;   // the options' word list
+        }
+
+        var found = files(word);
+        var listed = found.Paths.Where(p => p.EndsWith('/') || PdfFile.IsPdfPath(p)).ToList();
+        if (listed.Count == 1 && string.Equals(listed[0], word, StringComparison.OrdinalIgnoreCase))
+        {
+            return new MentionResult(FileOutcome.Ok, [], false);   // typed in full: the list closes
+        }
+
+        return found with { Paths = [.. listed.Select(p => prefix + p)] };
+    }
 
     /// <summary>The themes for <c>/theme</c>'s list, the user's read afresh (2026-10-01); their problems are said when a picker opens, not per keystroke.</summary>
     private IReadOnlyList<CompletionItem> ThemeChoices() =>
@@ -5808,14 +5850,16 @@ internal sealed partial class ChatScreen
     /// (2026-10-03) adds <c>convert_to_pdf</c> last; null = without it (the tests that count the rest). Sixteen without it from
     /// 2026-10-04 (<c>view_image</c> fifth, <c>image_info</c> and <c>image_edit</c> after <c>open</c>) until 2026-10-10, when the three
     /// became a group of their own (<see cref="ImageTools"/>, the user's ask): thirteen since, fifteen with <c>read_pdf</c>
-    /// (2026-10-14, given <paramref name="reading"/>) and <c>convert_to_pdf</c>.
+    /// (2026-10-14, given <paramref name="reading"/>) and <c>convert_to_pdf</c>, sixteen with <c>pdf_edit</c> after it (later that day,
+    /// given <paramref name="editing"/>).
     /// </summary>
     /// <param name="images">The profile's images folder (2026-10-09): the picture tools read (and <c>image_edit</c> writes) a full path there, and <c>search_files</c> and <c>file_info</c> read one (later that day, the user's call: the model could not list it to find the newest pictures); null = the working directory alone.</param>
     /// <param name="openPicture"><c>open</c>'s picture, opened where a double-click would (2026-10-11, <see cref="OpenTool"/>); null = the <paramref name="openFile"/> like any file (headless).</param>
     /// <param name="reading">The PDF reader (2026-10-14, the PDF plan's phase 1): adds <c>read_pdf</c> right after <c>read_file</c>; null = without it (the tests that count the rest, as <paramref name="pdf"/>).</param>
-    public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null, PdfConverter? pdf = null, WorkingDirectory? images = null, Func<string, string>? openPicture = null, PdfReading? reading = null)
+    /// <param name="editing">The PDF editor (2026-10-14, the PDF plan's phase 4b): adds <c>pdf_edit</c> last, after <c>convert_to_pdf</c>; null = without it.</param>
+    public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null, PdfConverter? pdf = null, WorkingDirectory? images = null, Func<string, string>? openPicture = null, PdfReading? reading = null, PdfEditing? editing = null)
     {
-        var tools = new List<AIFunction>(15)
+        var tools = new List<AIFunction>(16)
         {
             new GetWorkingDirectoryTool(files, isDefault),
             new SearchFilesTool(files, effective, images),
@@ -5844,6 +5888,11 @@ internal sealed partial class ChatScreen
         if (pdf is not null)
         {
             tools.Add(new ConvertToPdfTool(files, pdf, effective));
+        }
+
+        if (editing is not null)
+        {
+            tools.Add(new PdfEditTool(files, editing));
         }
 
         return tools;
@@ -6433,6 +6482,7 @@ internal sealed partial class ChatScreen
         WebSaveLinkTool.ToolName,
         DownloadFileTool.ToolName,
         ConvertToPdfTool.ToolName,
+        PdfEditTool.ToolName,
         SessionManagerTool.ToolName,
         GetCurrentTimeTool.ToolName,
         ShiftDateTool.ToolName,

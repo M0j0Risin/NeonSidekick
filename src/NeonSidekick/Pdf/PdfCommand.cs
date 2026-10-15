@@ -17,10 +17,101 @@ public sealed record PdfArguments(string Target, string? To, PdfPaperSize? Paper
 /// </list>
 /// Web tools need not be on — the user asked — but <c>Web browser network mode</c> still judges a web page. A path with spaces
 /// needs no quotes (every word that is not an option is the path); a <c>to=</c> with spaces does.
+/// <para>
+/// Since 2026-10-14 (the PDF plan's phase 4b, gap 37) it edits PDFs too, through <see cref="PdfEditing"/>, <c>pdf_edit</c>'s door:
+/// <list type="bullet">
+/// <item><c>/pdf merge a.pdf "b c.pdf" … [to=…] [overwrite]</c> — every word that is not an option is a PDF (quote one with spaces), or <c>paths=a.pdf,b.pdf</c>;</item>
+/// <item><c>/pdf extract|delete &lt;file&gt; pages=2-5 [to=…] [overwrite]</c>;</item>
+/// <item><c>/pdf rotate &lt;file&gt; angle=90|180|270 [pages=…] [to=…] [overwrite]</c>.</item>
+/// </list>
+/// The first word is a verb unless a file of that name is in the working directory (<c>/pdf merge</c> makes a PDF of a file called
+/// <c>merge</c> when there is one). A form is the model's to fill (<c>fill_form</c>): its values need the field names read first.
+/// </para>
 /// </summary>
 public static class PdfCommand
 {
     public const string ReplyWord = PrintText.ReplyWord;
+
+    /// <summary>The edit verbs, in the order the help and the completion list them.</summary>
+    public static readonly IReadOnlyList<string> EditVerbs = [PdfEditPlan.MergeWord, PdfEditPlan.ExtractWord, PdfEditPlan.DeleteWord, PdfEditPlan.RotateWord];
+
+    public const string PagesWord = "pages=";
+
+    public const string AngleWord = "angle=";
+
+    public const string PathsWord = "paths=";
+
+    /// <summary>Whether <paramref name="word"/> is an edit verb.</summary>
+    public static bool IsEditVerb(string word) => EditVerbs.Any(v => string.Equals(v, word, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The edit a line asks for (2026-10-14, gap 37): null with no error when its first word is no verb, or names a file there
+    /// (<paramref name="isFile"/>); null with the refusal for a line that is an edit but a wrong one. Pure over <paramref name="isFile"/>.
+    /// </summary>
+    public static (PdfEditRequest? Request, string? Error) ParseEdit(string args, Func<string, bool> isFile)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        ArgumentNullException.ThrowIfNull(isFile);
+        var words = PrintCommand.Words(args).ToList();
+        if (words.Count == 0 || !IsEditVerb(words[0]) || isFile(words[0]) || !PdfEditPlan.TryAction(words[0], out var op))
+        {
+            return (null, null);
+        }
+
+        string? to = null;
+        string? pages = null;
+        int angle = 0;
+        bool overwrite = false;
+        var paths = new List<string>();
+        var target = new List<string>();
+        foreach (string word in words.Skip(1))
+        {
+            if (word.StartsWith(PdfText.ToWord, StringComparison.OrdinalIgnoreCase))
+            {
+                to = word[PdfText.ToWord.Length..];
+            }
+            else if (word.StartsWith(PagesWord, StringComparison.OrdinalIgnoreCase))
+            {
+                pages = word[PagesWord.Length..];
+            }
+            else if (word.StartsWith(AngleWord, StringComparison.OrdinalIgnoreCase))
+            {
+                string given = word[AngleWord.Length..];
+                if (!int.TryParse(given, System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out angle))
+                {
+                    return (null, PdfText.BadAngleText(given));
+                }
+            }
+            else if (word.StartsWith(PathsWord, StringComparison.OrdinalIgnoreCase))
+            {
+                paths.AddRange(word[PathsWord.Length..].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            }
+            else if (string.Equals(word, PdfText.OverwriteWord, StringComparison.OrdinalIgnoreCase))
+            {
+                overwrite = true;
+            }
+            else if (word.Contains('=', StringComparison.Ordinal) || string.Equals(word, PrintText.LandscapeWord, StringComparison.OrdinalIgnoreCase))
+            {
+                return (null, PdfText.NotAnEditOption(word, words[0].ToLowerInvariant()));
+            }
+            else
+            {
+                target.Add(word);
+            }
+        }
+
+        // A merge's words are each a PDF; any other edit's are one path, spaces and all, as /pdf's own target is.
+        if (op == Web.PdfEditOp.Merge)
+        {
+            paths.InsertRange(0, target);
+        }
+        else if (target.Count > 0)
+        {
+            paths.Insert(0, string.Join(' ', target));
+        }
+
+        return (new PdfEditRequest(op, paths, pages, angle, null, false, to, overwrite), null);
+    }
 
     /// <summary><paramref name="args"/> taken apart. Pure.</summary>
     public static PdfArguments Parse(string args)
@@ -70,13 +161,28 @@ public static class PdfCommand
 
     /// <summary>
     /// Runs one <c>/pdf</c> line; <paramref name="lastReply"/> is the last reply's text for <c>/pdf reply</c>. The result is the
-    /// converter's sentence (an <c>Error:</c> one on failure), or the usage.
+    /// converter's sentence (an <c>Error:</c> one on failure), or the usage. With <paramref name="editing"/> (2026-10-14) a line whose first
+    /// word is an edit verb is <see cref="PdfEditing"/>'s; without it, as before, the verb is a file's name.
     /// </summary>
-    public static async Task<string> RunAsync(PdfConverter converter, string args, Func<string?> lastReply, CancellationToken cancellationToken)
+    public static async Task<string> RunAsync(PdfConverter converter, string args, Func<string?> lastReply, CancellationToken cancellationToken, PdfEditing? editing = null)
     {
         ArgumentNullException.ThrowIfNull(converter);
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(lastReply);
+        if (editing is not null)
+        {
+            var (edit, editError) = ParseEdit(args, editing.IsFile);
+            if (editError is not null)
+            {
+                return editError;
+            }
+
+            if (edit is not null)
+            {
+                return await editing.EditAsync(edit, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
         var parsed = Parse(args);
         if (parsed.Error is not null)
         {
@@ -127,10 +233,16 @@ public static class PdfCommand
         int cut = argText.LastIndexOf(' ');
         if (cut < 0)
         {
-            return MentionCompleter.Matches([new(ReplyWord, PdfText.ReplyNote)], argText);
+            return MentionCompleter.Matches([new(ReplyWord, PdfText.ReplyNote), .. EditVerbs.Select(v => new CompletionItem(v, PdfText.VerbNote(v)))], argText);
         }
 
         string head = argText[..(cut + 1)];
+        string first = head.Split(' ', 2)[0];
+        if (IsEditVerb(first))
+        {
+            return MentionCompleter.Matches(EditOptions(head, first.ToLowerInvariant()), argText);
+        }
+
         var items = new List<CompletionItem>();
         if (!head.Contains(PdfText.ToWord, StringComparison.OrdinalIgnoreCase))
         {
@@ -153,5 +265,32 @@ public static class PdfCommand
         }
 
         return MentionCompleter.Matches(items, argText);
+    }
+
+    // An edit's options not given yet (2026-10-14): pages= for all but a merge, the turns for rotate, then to= and overwrite.
+    private static List<CompletionItem> EditOptions(string head, string verb)
+    {
+        var items = new List<CompletionItem>();
+        if (verb != PdfEditPlan.MergeWord && !head.Contains(PagesWord, StringComparison.OrdinalIgnoreCase))
+        {
+            items.Add(new CompletionItem(head + PagesWord, verb == PdfEditPlan.RotateWord ? "pages=2-5, every page when left out" : "pages=2-5, \"5-\" to the end, or 1,3,7-9"));
+        }
+
+        if (verb == PdfEditPlan.RotateWord && !head.Contains(AngleWord, StringComparison.OrdinalIgnoreCase))
+        {
+            items.AddRange(PdfEditPlan.Angles.Select(a => new CompletionItem(head + AngleWord + a.ToString(System.Globalization.CultureInfo.InvariantCulture), "turn " + a.ToString(System.Globalization.CultureInfo.InvariantCulture) + "° clockwise")));
+        }
+
+        if (!head.Contains(PdfText.ToWord, StringComparison.OrdinalIgnoreCase))
+        {
+            items.Add(new CompletionItem(head + PdfText.ToWord, "to=out.pdf, or a folder"));
+        }
+
+        if (!head.Contains(" " + PdfText.OverwriteWord, StringComparison.OrdinalIgnoreCase))
+        {
+            items.Add(new CompletionItem(head + PdfText.OverwriteWord, "replace a PDF already there"));
+        }
+
+        return items;
     }
 }

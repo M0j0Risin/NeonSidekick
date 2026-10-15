@@ -138,7 +138,7 @@ public enum SettingsField
     /// <summary>Whether the voice pickers speak <see cref="SettingsMenu.VoicePreviewText"/> in the highlighted voice, and the mix and speed rows the blend at the value they just saved (<see cref="Settings.AppSettingsData.TtsVoicePreview"/>). On the TTS tab, last; a toggle on by default, no reconnect (read at the next pick or save).</summary>
     TtsVoicePreview,
 
-    /// <summary>Whether a turn offers the file tools (seventeen with convert_to_pdf since the image tools, 2026-10-04; fifteen once those became their own group, 2026-10-10, with read_pdf, 2026-10-14; <see cref="Settings.AppSettingsData.FileTools"/>). The Files tab's first row (2026-09-15); a toggle, no reconnect (read at each turn).</summary>
+    /// <summary>Whether a turn offers the file tools (seventeen with convert_to_pdf since the image tools, 2026-10-04; fifteen once those became their own group, 2026-10-10, with read_pdf, 2026-10-14, sixteen with pdf_edit later that day; <see cref="Settings.AppSettingsData.FileTools"/>). The Files tab's first row (2026-09-15); a toggle, no reconnect (read at each turn).</summary>
     FileTools,
 
     /// <summary>A picker over <see cref="Web.SearchMethod.Names"/>: which engine <c>web_search</c> asks (<see cref="Settings.AppSettingsData.WebSearchMethod"/>). On the Web tab above <see cref="WebSearxngUrl"/> (2026-09-15); no reconnect (read at each search).</summary>

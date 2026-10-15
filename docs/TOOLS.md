@@ -121,7 +121,7 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 | `search_files` | `text?, path?, files?, regex?, context?, output?, order?, limit?, depth?` | Searches text files for a word, phrase or regex. Without `text`, lists a folder, a tree (`depth` 2–4), matching names or the newest files, also in the `images` folder. |
 | `file_info` | `path` | A file's size, time, lines, words, line ending and BOM, or a folder's counts and size; also whether something exists. |
 | `read_file` | `path, start_line?, max_lines?` | Reads a text file or part of it (a negative `start_line` counts from the end). |
-| `read_pdf` | `path, pages?, pictures?, find?, share?` | Reads a PDF's text page by page; `find` lists the pages holding some words, `pictures` sends the pages as pictures. See [Reading PDFs](#reading-pdfs). |
+| `read_pdf` | `path, pages?, pictures?, find?, fields?, share?` | Reads a PDF's text page by page; `find` lists the pages holding some words, `pictures` sends the pages as pictures, `fields` lists a form's fields. See [Reading PDFs](#reading-pdfs). |
 | `write_file` | `path, content, mode?` | Writes a text file: `create` (default), `overwrite` or `append`. Without a mode it replaces only a file the model read whole, wrote or patched in this conversation, unchanged since. |
 | `patch_file` | `path, old_text, new_text, replace_all?` | Replaces `old_text` once (or everywhere, with `replace_all`), tolerating spacing, indentation and quote differences. |
 | `create_directory` | `path` | Creates a folder and any missing parents. |
@@ -132,6 +132,7 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 | `unzip` | `path, to?, overwrite?` | Extracts a `.zip` into a folder, all or nothing. Off in a new profile. |
 | `open` | `path?, share?` | Opens a file in its own program, a picture where *Image viewer* says, or a folder in Explorer (Finder on a Mac); `share` opens one on a UNC share. |
 | `convert_to_pdf` | `path?, url?, markdown?, title?, to?, overwrite?, landscape?, paper?` | Makes a PDF from one of a file, a web page (needs *Web tools*) or Markdown; see [Making PDFs](#making-pdfs). |
+| `pdf_edit` | `action, path?, paths?, pages?, angle?, fields?, flatten?, to?, overwrite?` | Merges PDFs, takes pages out into a new one, leaves pages out, turns pages, or fills in a form, into a new PDF; see [Editing PDFs](#editing-pdfs). |
 
 * In the `images` folder, `open` opens only pictures and folders. A `runas` UNC share can't be opened.
 
@@ -143,11 +144,23 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 * **Printed numbers:** a page whose printed number differs shows it beside its own, `--- page 14 (printed "xii") ---`.
 * **`find`:** the pages holding every word (any case or accent), up to 20 with a line each; the first search reads the whole text once.
 * **`pictures`:** the pages as pictures, at most *File view image max images* a call, for a scan, a chart or a form; a model that can't see pictures gets nothing from them. A saved session keeps a line naming each page, not the picture.
+* **`fields`:** a form's fields instead of its text: each name, kind, value now and the values it takes, which `pdf_edit`'s `fill_form` sets. An XFA form says so.
 * **Limits:** 32 MB; a locked PDF is refused. Chinese, Japanese and Korean text reads with pdf.js's own CMaps, built in.
 * **On a share:** `share`, or a full `\\server\share` path, reads a PDF on an offered UNC share where it is.
 * The text is cached until the file changes, so a second call on the same PDF starts no browser.
 * The browser reads the PDF on a page cut off from the network, in a profile of its own (`%TEMP%\NeonSidekick\browser-pdf`, `$TMPDIR/NeonSidekick/browser-pdf` on a Mac), never the one that keeps the web tools' cookies.
 * **On the web:** `web_fetch` reads a PDF link the same way, its outline and first 40 pages, and pages through it as through a long page; `download_file` then `read_pdf` reads the rest or draws its pages. A PDF up to 32 MB, its download allowed 2 minutes. Under *Web browser mode* `browser` a PDF is still fetched over HTTP: headless Chromium would only download it. Past a bot check, the Browser window hands its cookies over and the PDF is fetched again.
+
+#### Editing PDFs
+
+`pdf_edit` and `/pdf merge|extract|delete|rotate` change PDFs in the working directory with pdf-lib, in the same headless browser and network-less page as [reading](#reading-pdfs). They need Edge, Chrome, Brave or (on a Mac) Chromium whatever *PDF engine* says.
+
+* **`merge`:** the PDFs in `paths` joined in order (20 at most, 64 MB together).
+* **`extract`:** the pages given copied into a new PDF. **`delete`:** the PDF without them; never every page.
+* **`rotate`:** pages turned by `angle` (90, 180, 270; -90 the other way), every page when `pages` is left out.
+* **`fill_form`:** each field in `fields` set by name (`read_pdf` with `fields: true` lists them): text, `true`/`false` for a check box, an option for a choice or radio group, a list for a multi-choice list. A name the form doesn't have, or an option it doesn't offer, is refused with the real ones and nothing is written. `flatten: true` bakes the values into the pages. Only AcroForm fields: an XFA form is refused.
+* **Output:** a new PDF beside the first, named for what was done (`report-p2-5.pdf`, `a-merged.pdf`, `report-edited.pdf`, `report-rotated.pdf`, `form-filled.pdf`; `-2`, `-3`… when taken), or `to`. The original is replaced only when `to` names it with `overwrite`.
+* **Limits:** each PDF up to 32 MB; a PDF locked with a password is refused, never decrypted. Local only: a PDF on a UNC share is copied in first (`unc_fetch`).
 
 ### Image
 
@@ -678,7 +691,7 @@ Under *Print tools*. `/print` and these tools print on any installed printer (on
 
 `/pdf` and `convert_to_pdf` make a PDF in the working directory.
 
-* **Sources:** Markdown (pictures from the working directory only), text and code, a picture, an HTML file (scripts removed), or a web page (when *Web browser network mode* allows it). A PDF, local or a link, is refused with a pointer to `read_pdf`, `web_fetch` or `download_file`.
+* **Sources:** Markdown (pictures from the working directory only), text and code, a picture, an HTML file (scripts removed), or a web page (when *Web browser network mode* allows it). A PDF, local or a link, is refused with a pointer to `read_pdf`, `pdf_edit`, `web_fetch` or `download_file`.
 * **Pages:** US Letter by default (`paper` `a4` or `legal`), portrait unless `landscape`; a web page keeps its own layout.
 * **The engine** (*PDF engine*): Edge, Chrome, Brave or (on a Mac) Chromium. On Windows without one, Microsoft Print to PDF draws Markdown, text and pictures in black and white; on a Mac only the browser works.
 * **Output:** beside the source (`example.com-intro.pdf` for a page), or `to`; an existing PDF is replaced only with `overwrite`.

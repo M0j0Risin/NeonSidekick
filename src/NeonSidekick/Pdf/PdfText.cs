@@ -25,8 +25,8 @@ public static class PdfText
     /// <summary>A web address that is a PDF already (2026-10-14, the PDF plan's gaps 15 and 23). Pinned.</summary>
     public static string UrlIsPdf(string url) => $"Error: {url} is a PDF already; download_file saves it, and web_fetch reads it";
 
-    /// <summary>A PDF given to make a PDF of; it names what reads one instead (2026-10-14, the PDF plan's gap 75). Pinned.</summary>
-    public static string AlreadyPdf(string file) => $"Error: {file} is a PDF already; read_pdf reads it";
+    /// <summary>A PDF given to make a PDF of; it names what reads and edits one instead (2026-10-14, the PDF plan's gap 75). Pinned.</summary>
+    public static string AlreadyPdf(string file) => $"Error: {file} is a PDF already; read_pdf reads it, and pdf_edit merges, cuts, turns or fills one";
 
     public static string NotConvertible(string file) =>
         $"Error: {file} is not a file the sidekick can make a PDF of; it takes Markdown, text and code, HTML and pictures";
@@ -93,9 +93,23 @@ public static class PdfText
     public const string Working = "Making a PDF";
 
     public const string Usage =
-        "Usage: /pdf <file|https://url> [to=<out.pdf>] [paper=letter|a4|legal] [landscape] [overwrite] · /pdf reply [options] for the last reply";
+        "Usage: /pdf <file|https://url> [to=<out.pdf>] [paper=letter|a4|legal] [landscape] [overwrite] · /pdf reply [options] for the last reply · " +
+        "/pdf merge <file> <file>… · /pdf extract|delete <file> pages=2-5 · /pdf rotate <file> angle=90|180|270 [pages=…], each with [to=…] [overwrite]";
 
     public const string ReplyNote = "make a PDF of the last reply";
+
+    /// <summary>An edit verb's line in <c>/pdf</c>'s word list (2026-10-14).</summary>
+    public static string VerbNote(string verb) => verb switch
+    {
+        PdfEditPlan.MergeWord => "join PDFs into one",
+        PdfEditPlan.ExtractWord => "copy pages into a new PDF",
+        PdfEditPlan.DeleteWord => "a PDF without some pages",
+        _ => "turn pages",
+    };
+
+    /// <summary>A word an edit does not take (2026-10-14). Pinned.</summary>
+    public static string NotAnEditOption(string word, string verb) =>
+        $"Error: '{word}' is not for /pdf {verb}; it takes pages=, angle= (rotate), paths= (merge), to= and overwrite";
 
     public const string ToWord = "to=";
 
@@ -129,6 +143,58 @@ public static class PdfText
     /// <summary>Pages that all lie past the end. Pinned.</summary>
     public static string PastTheEnd(string path, int pageCount, string spec) =>
         $"Error: '{path}' has {Pages(pageCount)}; pages \"{spec}\" names none of them";
+
+    /// <summary><c>fields</c> asked with pages, find or pictures (gap 98). Pinned.</summary>
+    public const string FieldsAlone = "Error: fields lists the form's fields and reads no page; leave out pages, find and pictures with it";
+
+    /// <summary>The most fields <c>read_pdf</c> lists.</summary>
+    public const int MaxFieldLines = 200;
+
+    /// <summary>
+    /// A form's fields for <c>read_pdf</c> (gap 98): a header naming how many and what sets them, then a line each — the name, its kind, its
+    /// value (<c>empty</c> for none), the values it takes, its page — or why there is nothing to fill. Pinned.
+    /// </summary>
+    public static string FieldList(string path, IReadOnlyList<Web.PdfFormField> fields, bool pureXfa)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+        if (pureXfa)
+        {
+            return $"{path}: an XFA form; pdf_edit cannot fill it (it fills AcroForm fields)";
+        }
+
+        if (fields.Count == 0)
+        {
+            return $"{path} has no form fields";
+        }
+
+        var sb = new System.Text.StringBuilder($"{path}: {fields.Count.ToString(CultureInfo.InvariantCulture)} form field{(fields.Count == 1 ? "" : "s")} (pdf_edit's fill_form sets them by name)");
+        foreach (var field in fields.Take(MaxFieldLines))
+        {
+            sb.Append("\n- ").Append(field.Name).Append(": ").Append(field.Kind.Length > 0 ? field.Kind : "field").Append(", ")
+              .Append(field.Value.Length > 0 ? "\"" + field.Value + "\"" : "empty");
+            if (field.Options.Count > 0)
+            {
+                sb.Append(field.Kind == "checkbox" ? "; on value " : "; one of ").Append(string.Join(", ", field.Options.Select(o => "\"" + o + "\"")));
+            }
+
+            if (field.ReadOnly)
+            {
+                sb.Append("; read-only");
+            }
+
+            if (field.Page is { } page)
+            {
+                sb.Append(" (page ").Append(page.ToString(CultureInfo.InvariantCulture)).Append(')');
+            }
+        }
+
+        if (fields.Count > MaxFieldLines)
+        {
+            sb.Append("\n(and ").Append((fields.Count - MaxFieldLines).ToString(CultureInfo.InvariantCulture)).Append(" more)");
+        }
+
+        return sb.ToString();
+    }
 
     /// <summary><c>find</c> asked together with <c>pictures</c> (gap 96). Pinned.</summary>
     public const string FindNoPictures = "Error: find lists the pages that hold the words and draws none; read one of them with pages and pictures";
@@ -270,6 +336,96 @@ public static class PdfText
 
     /// <summary>A PDF's read for <c>/read</c> stopped by ESC before it spoke (gap 38). Pinned.</summary>
     public const string ReadAloudStopped = "(reading the PDF stopped)";
+
+    // ─── editing (2026-10-14, the PDF plan's phase 4b: pdf_edit and /pdf's edits) ──
+
+    /// <summary>A merge with fewer than two PDFs. Pinned.</summary>
+    public const string MergeNeedsTwo = "Error: merge takes two or more PDFs in paths, in the order to join them";
+
+    public static string MergeTooMany(int max) => $"Error: merge takes {max.ToString(CultureInfo.InvariantCulture)} PDFs at most";
+
+    /// <summary>Any other edit given no PDF or several. Pinned.</summary>
+    public static string OnePdf(string action) => $"Error: {action} takes one PDF in path";
+
+    /// <summary>An extract or delete without pages. Pinned.</summary>
+    public static string PagesNeeded(string action) => $"Error: {action} needs pages: \"3\", \"2-5\", \"5-\" (to the end) or \"1,3,7-9\"";
+
+    /// <summary>An argument the action does not take. Pinned.</summary>
+    public static string NotFor(string argument, string action) => $"Error: {argument} is not for {action}";
+
+    /// <summary>A turn by another angle. Pinned.</summary>
+    public static string BadAngle(int angle) =>
+        $"Error: angle takes 90, 180 or 270 (clockwise; -90 turns the other way), not {angle.ToString(CultureInfo.InvariantCulture)}";
+
+    /// <summary>An angle that is no number. Pinned.</summary>
+    public static string BadAngleText(string raw) => $"Error: '{raw.Trim()}' is not a number of degrees for 'angle'; give 90, 180 or 270";
+
+    /// <summary><c>fields</c> that is not one object of names and values. Pinned.</summary>
+    public static string BadFields(string raw) =>
+        $"Error: fields takes one object of field names and their values, like {{\"name\": \"Ada\", \"agree\": true}}, not '{raw.Trim()}'";
+
+    /// <summary>A field's value that is not text, a number, true or false, or a list. Pinned.</summary>
+    public static string BadFieldValue(string name) =>
+        $"Error: the value for '{name}' is not text, a number, true or false, or a list of options";
+
+    /// <summary>A form fill with no values. Pinned.</summary>
+    public const string FieldsNeeded = "Error: fill_form needs fields: each field's name and its value, as read_pdf with fields: true lists them";
+
+    /// <summary>A delete of every page. Pinned.</summary>
+    public static string CannotDeleteAll(string path, int pageCount) =>
+        $"Error: that would delete every page of '{path}' ({Pages(pageCount)}); a PDF keeps one page at least";
+
+    /// <summary>No browser to edit with: pdf-lib runs in one whatever <c>PDF engine</c> says. Pinned.</summary>
+    public static string NoBrowserToEdit => OperatingSystem.IsMacOS()
+        ? "Error: editing a PDF needs Edge, Chrome, Brave or Chromium in /Applications, and none was found; set Web browser path"
+        : "Error: editing a PDF needs Edge, Chrome or Brave, and none was found; set Web browser path";
+
+    public static string TooBigToEdit(string path) =>
+        $"Error: '{path}' is over {(Web.BrowserPdfReader.MaxBytes / (1024 * 1024)).ToString(CultureInfo.InvariantCulture)} MB, too large to edit";
+
+    public static string TooBigTogether(int mb) => $"Error: the PDFs come to over {mb.ToString(CultureInfo.InvariantCulture)} MB together, too large to merge";
+
+    /// <summary>An input locked with a password (gap 14): refused, never decrypted. Pinned.</summary>
+    public static string LockedToEdit(string path) => $"Error: '{path}' is locked with a password and cannot be edited";
+
+    /// <summary>A form that is XFA alone (gap 25). Pinned.</summary>
+    public static string XfaForm(string path) =>
+        $"Error: '{path}' is an XFA form, which pdf_edit cannot fill (it fills AcroForm fields); fill it in Adobe Acrobat or Reader";
+
+    /// <summary>A PDF with no form. Pinned.</summary>
+    public static string NoFormFields(string path) => $"Error: '{path}' has no form fields to fill";
+
+    /// <summary>Names the form does not have, with the ones it does (40 at most). Pinned.</summary>
+    public static string UnknownFields(string path, IReadOnlyList<string> unknown, IReadOnlyList<string> names) =>
+        $"Error: '{path}' has no field {string.Join(", ", unknown.Select(n => "'" + n + "'"))}; its fields are "
+        + string.Join(", ", names.Take(40).Select(n => "'" + n + "'")) + (names.Count > 40 ? $" and {(names.Count - 40).ToString(CultureInfo.InvariantCulture)} more (read_pdf with fields: true lists them)" : "");
+
+    /// <summary>Values a field would not take, each with why; nothing was written. Pinned.</summary>
+    public static string BadFieldValues(string path, IReadOnlyList<Web.PdfFieldRefusal> refusals) =>
+        $"Error: nothing was written; '{path}' would not take " + string.Join("; ", refusals.Select(r =>
+            r.Options.Count > 0 ? $"'{r.Name}', which takes one of {string.Join(", ", r.Options.Select(o => "'" + o + "'"))}"
+            : r.TakesNone ? $"'{r.Name}', which takes no value (a button or a signature)"
+            : $"'{r.Name}' ({r.Error.Trim()})"));
+
+    public static string EditFailed(string browser, string detail) => $"Error: {browser} could not edit the PDF: {detail.Trim()}";
+
+    /// <summary>
+    /// A PDF edited: <c>Wrote report-p2-5.pdf (4 pages, 40 KB): pages 2–5 of report.pdf</c> (<c>Replaced</c> over a file). The first word and
+    /// the name are what the transcript's note shows.
+    /// </summary>
+    public static string Edited(WriteResult result, int pageCount, string what)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        if (result.Outcome != FileOutcome.Ok)
+        {
+            return FileText.Error(result.Outcome, result.Relative, "write", result.Detail);
+        }
+
+        return (result.Replaced ? "Replaced " : "Wrote ") + result.Relative + " (" + Pages(pageCount) + ", " + FileText.Size(result.Bytes) + "): " + what;
+    }
+
+    /// <summary><c>/pdf</c>'s spinner while an edit runs.</summary>
+    public const string Editing = "Editing the PDF";
 
     /// <summary><c>3 pages</c>, <c>1 page</c>.</summary>
     public static string Pages(int count) => count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " page" : " pages");

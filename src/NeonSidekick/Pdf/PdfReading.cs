@@ -10,9 +10,10 @@ public sealed record PdfDocKey(string Full, long Length, DateTime Written);
 
 /// <summary>
 /// What a read asks for: <see cref="Pages"/> (physical numbers; null = the first <see cref="MaxPages"/>), every page with
-/// <see cref="AllPages"/> (<c>find</c>'s), the pages to draw (<see cref="PicturePages"/>, never cached), and the outline and labels.
+/// <see cref="AllPages"/> (<c>find</c>'s), the pages to draw (<see cref="PicturePages"/>, never cached), the outline and labels, and
+/// (2026-10-14, gap 98) the form's fields.
 /// </summary>
-public sealed record PdfAsk(IReadOnlyList<int>? Pages, IReadOnlyList<int> PicturePages, bool Outline, bool Labels, bool AllPages = false, int MaxPages = 40);
+public sealed record PdfAsk(IReadOnlyList<int>? Pages, IReadOnlyList<int> PicturePages, bool Outline, bool Labels, bool AllPages = false, int MaxPages = 40, bool Fields = false);
 
 /// <summary>
 /// A read's answer: the document's page count, the text of every page held for it now (the cache's, a copy), the pictures drawn this time,
@@ -28,6 +29,11 @@ public sealed record PdfPages(
     string Detail)
 {
     public bool Locked { get; init; }
+
+    /// <summary>The form's fields when asked (gap 98; empty without a form), and whether the form is XFA alone.</summary>
+    public IReadOnlyList<PdfFormField>? Fields { get; init; }
+
+    public bool PureXfa { get; init; }
 
     /// <summary>The printed label of <paramref name="page"/>, when the PDF has labels.</summary>
     public string? LabelOf(int page) => Labels is { Count: > 0 } labels && page >= 1 && page <= labels.Count ? labels[page - 1] : null;
@@ -70,6 +76,8 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
         public Dictionary<int, string> Texts { get; } = [];
         public IReadOnlyList<PdfOutlineItem>? Outline { get; set; }
         public IReadOnlyList<string>? Labels { get; set; }
+        public IReadOnlyList<PdfFormField>? Fields { get; set; }
+        public bool PureXfa { get; set; }
         public long Chars { get; set; }
         public long Used { get; set; }
     }
@@ -102,7 +110,7 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
         {
             var held = Take(key);
             var plan = Plan(held, ask);
-            if (held is not null && plan.Pages.Count == 0 && !plan.Outline && !plan.Labels && ask.PicturePages.Count == 0 && !plan.Unknown)
+            if (held is not null && plan.Pages.Count == 0 && !plan.Outline && !plan.Labels && !plan.Fields && ask.PicturePages.Count == 0 && !plan.Unknown)
             {
                 return Answer(held, [], "");
             }
@@ -129,7 +137,8 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
                 Pages: plan.Unknown && ask.Pages is null ? null : [.. plan.Pages.Union(ask.PicturePages).Order()],
                 PicturePages: ask.PicturePages,
                 Outline: plan.Outline,
-                Labels: plan.Labels);
+                Labels: plan.Labels,
+                Fields: plan.Fields);
             var read = await browser.ReadPdfAsync(exe, data, options, cancellationToken).ConfigureAwait(false);
             if (read.Locked)
             {
@@ -157,20 +166,21 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
         }
     }
 
-    /// <summary>What a read needs: the pages whose text is not held, whether the count is not known yet, and the outline and labels if missing.</summary>
-    private static (IReadOnlyList<int> Pages, bool Unknown, bool Outline, bool Labels) Plan(Document? held, PdfAsk ask)
+    /// <summary>What a read needs: the pages whose text is not held, whether the count is not known yet, and the outline, labels and fields if missing.</summary>
+    private static (IReadOnlyList<int> Pages, bool Unknown, bool Outline, bool Labels, bool Fields) Plan(Document? held, PdfAsk ask)
     {
         bool outline = ask.Outline && held?.Outline is null;
         bool labels = ask.Labels && held?.Labels is null;
+        bool fields = ask.Fields && held?.Fields is null;
         if (held is null || held.PageCount < 0)
         {
-            return (ask.Pages ?? [], true, outline, labels);
+            return (ask.Pages ?? [], true, outline, labels, fields);
         }
 
         IEnumerable<int> wanted = ask.AllPages
             ? Enumerable.Range(1, held.PageCount)
             : ask.Pages is { } pages ? pages.Where(p => p <= held.PageCount) : Enumerable.Range(1, Math.Min(held.PageCount, ask.MaxPages));
-        return ([.. wanted.Where(p => !held.Texts.ContainsKey(p))], false, outline, labels);
+        return ([.. wanted.Where(p => !held.Texts.ContainsKey(p))], false, outline, labels, fields);
     }
 
     private Document? Take(PdfDocKey key)
@@ -217,6 +227,12 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
 
             document.Outline ??= read.Outline;
             document.Labels ??= read.Labels;
+            if (document.Fields is null && read.Fields is not null)
+            {
+                document.Fields = read.Fields;   // a form filled is a new file, a new stamp: read again (gap 98)
+                document.PureXfa = read.PureXfa;
+            }
+
             document.Used = ++_tick;
             Evict(key.Full);
             return document;
@@ -251,7 +267,7 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
     {
         lock (_lock)
         {
-            return new PdfPages(null, document.PageCount, new Dictionary<int, string>(document.Texts), pictures, document.Outline, document.Labels, detail);
+            return new PdfPages(null, document.PageCount, new Dictionary<int, string>(document.Texts), pictures, document.Outline, document.Labels, detail) { Fields = document.Fields, PureXfa = document.PureXfa };
         }
     }
 

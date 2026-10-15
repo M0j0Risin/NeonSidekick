@@ -732,7 +732,9 @@ public sealed class SidekickApp
         files.ImagesFolder = () => images.Root;
         // read_pdf (2026-10-14, the PDF plan): headless too, through the web tools' browser.
         var pdfReading = new Pdf.PdfReading(_web.Browser, () => _web.Browser.Locate(EffectiveSettings.WebBrowserPath));
-        var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings, unc, pdf, images, reading: pdfReading);
+        // pdf_edit (2026-10-14, the PDF plan's phase 4b): headless too, pdf-lib in the same browser.
+        var pdfEditing = new Pdf.PdfEditing(_web.Browser, files, () => _web.Browser.Locate(EffectiveSettings.WebBrowserPath), _time);
+        var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings, unc, pdf, images, reading: pdfReading, editing: pdfEditing);
         // The picture tools (2026-10-10): their own group, Image tools the switch.
         var imageTools = ChatScreen.ImageTools(files, () => EffectiveSettings, images, () => _settings.ProfileSplashDirectory);
         // The app's own manual beside the clock (2026-10-02): it reads documentation only, so headless offers it too.
@@ -1206,10 +1208,10 @@ public sealed class SidekickApp
                     continue;
                 }
 
-                // /pdf (2026-10-03): ahead of the server check too — only /pdf reply needs a reply.
+                // /pdf (2026-10-03): ahead of the server check too — only /pdf reply needs a reply. Its edits too (2026-10-14).
                 if (SlashCommands.Parse(text) is (SlashCommand.Pdf, var pdfArgs))
                 {
-                    string pdfResult = await Pdf.PdfCommand.RunAsync(pdf, pdfArgs, () => LastReplyText(assistant?.History.Messages), cancellationToken).ConfigureAwait(false);
+                    string pdfResult = await Pdf.PdfCommand.RunAsync(pdf, pdfArgs, () => LastReplyText(assistant?.History.Messages), cancellationToken, pdfEditing).ConfigureAwait(false);
                     await HeadlessLineAsync((pdfResult.StartsWith("Error:", StringComparison.Ordinal) ? "[error] " : "") + pdfResult).ConfigureAwait(false);
                     continue;
                 }

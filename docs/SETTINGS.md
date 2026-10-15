@@ -467,7 +467,7 @@ The tools most profiles use, and the pane's own options.
 |---|---|---|
 | Web tools | Offers `web_search`, `web_fetch`, `open_url`, `web_links`, `web_save_link` and `download_file`. The link tools read and change the profile's saved links (see [Web](TOOLS.md#web)). | off |
 | Web browser mode | `auto` uses HTTP and falls back to a headless browser for a blocked or empty page; `http` never falls back; `browser` uses the browser for every page, a PDF excepted (fetched over HTTP). | `auto` |
-| Web browser path | The Chromium-based browser for headless fetches and for making and reading PDFs. Empty finds Edge, Chrome or Brave. | empty (found) |
+| Web browser path | The Chromium-based browser for headless fetches and for making, reading and editing PDFs. Empty finds Edge, Chrome or Brave. | empty (found) |
 | Web browser botcheck window | A bot check the web tools can't pass: `ask` asks, then opens it in the Browser window for you to solve; `automatic` opens it unasked; `off` never does. Windows only. | `ask` |
 | Web browser home page | Where the Browser window's home button and a bare `/browser` go: a web address (`example.com`, `localhost:3000`), or empty for a blank page. Windows only. | empty |
 | Web browser privacy | `keep-history` keeps the pages the Browser window visited, for its history menu; `clear-history` clears them when it closes. Cookies and sign-ins stay either way (`/browser clear all` removes them). Windows only. | `clear-history` |
@@ -530,7 +530,7 @@ The file tools and the places beyond the working directory they reach.
 
 | Setting | What it does | Default |
 |---|---|---|
-| File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, read_pdf, convert_to_pdf…), which reach only the working directory. | off |
+| File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, read_pdf, convert_to_pdf, pdf_edit…), which reach only the working directory. | off |
 | File /tree max entries | Entries `/tree` prints before it stops (1–10000). | 500 |
 | File /tree show sizes | `/tree` shows file sizes. | on |
 | File @-mention folder mode | Picking a folder from the `@` list: `remain` opens it in the list; `apply` writes `@folder/` and closes the list. | `remain` |
@@ -725,7 +725,7 @@ The printer, camera and screen tools.
 | Print action policy | `off`: list printers only. `ask`: each print waits for your yes (refused headless). `allow`: prints without asking. `/print` never asks. | `ask` |
 | Print default printer | Where a print goes when none is named. | empty (the system default) |
 | Print font size (pt) | The body text size for printed listings and Markdown (6–24). | 10 |
-| PDF engine | What makes PDFs for `convert_to_pdf` and `/pdf`: `auto` (a Chromium browser, else Microsoft Print to PDF), `browser` or `printer`. On a Mac only the browser makes PDFs. See [Making PDFs](TOOLS.md#making-pdfs). | `auto` |
+| PDF engine | What makes PDFs for `convert_to_pdf` and `/pdf`: `auto` (a Chromium browser, else Microsoft Print to PDF), `browser` or `printer`. On a Mac only the browser makes PDFs. Editing a PDF needs the browser whatever this says. See [Making PDFs](TOOLS.md#making-pdfs). | `auto` |
 
 #### Camera
 

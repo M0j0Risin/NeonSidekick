@@ -40,7 +40,7 @@ You need a Mac with Apple Silicon (M1 or later). Download and unpack the Mac pac
 | `/terminal` | Works | A new Terminal window, or a new tab in iTerm2. |
 | `/shortcut` | Works | A `.command` file on the Desktop that opens in iTerm2 or Terminal. |
 | Printing | Works (CUPS) | Office files are refused ([Printing](TOOLS.md#printing)). |
-| PDFs: `convert_to_pdf`, `/pdf`, `read_pdf`, attaching | Works, browser only | Making, reading and attaching a PDF need Edge, Chrome, Brave or Chromium in `/Applications`, or the one *Web browser path* names. The `printer` engine (Microsoft Print to PDF) needs Windows. |
+| PDFs: `convert_to_pdf`, `/pdf`, `read_pdf`, `pdf_edit`, attaching | Works, browser only | Making, reading, editing and attaching a PDF need Edge, Chrome, Brave or Chromium in `/Applications`, or the one *Web browser path* names. The `printer` engine (Microsoft Print to PDF) needs Windows. |
 | Docker tools and `/docker` | Works | Docker Desktop, OrbStack, Colima or Rancher Desktop ([Docker on a Mac](TOOLS.md#docker-on-a-mac)). CPU and memory figures are the Linux VM's. |
 | Docker servers | Not available | Docker Desktop on a Mac passes no GPU to containers; the embedded model is the Mac's local server instead. |
 | UNC shares and outside folders | Works | A share is `smb://server/share`, mounted under `/Volumes` while the app runs ([UNC shares on a Mac](TOOLS.md#unc-shares-on-a-mac)). |

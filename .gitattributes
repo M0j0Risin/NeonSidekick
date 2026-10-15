@@ -1,3 +1,5 @@
 # pdf.js (2026-10-11, the shopping list's reference PDFs): the two builds are embedded byte for byte as pdfjs-dist published them
 # (assets/pdfjs/README.md records the version and integrity), so no checkout may turn their line endings into CRLF.
 assets/pdfjs/*.mjs -text
+# pdf-lib (2026-10-14, pdf_edit): the same for its build (assets/pdflib/README.md).
+assets/pdflib/*.js -text
