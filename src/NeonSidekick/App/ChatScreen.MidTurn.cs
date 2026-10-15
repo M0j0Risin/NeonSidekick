@@ -241,6 +241,9 @@ internal sealed partial class ChatScreen
         SlashCommand.Perf when PerfBarMode.IsEdit(args) => MidTurnClass.Pane,       // /perfbar edit, the same
         SlashCommand.Browser when BrowserCommand.IsPane(args) => MidTurnClass.Pane,   // later on 2026-10-13: the saved links' pane, a question, a bare save
         SlashCommand.Prompts when PromptsCommand.IsPane(args) => MidTurnClass.Pane,   // 2026-10-13: the saved prompts' pane, list --clear's question
+        // /webui (later on 2026-10-15, the user's ask): the pane over the reply, its buttons acting at once; copy at once; on, off and reset still wait.
+        SlashCommand.WebUi when args.Trim().Length == 0 => MidTurnClass.Pane,
+        SlashCommand.WebUi when string.Equals(args.Trim(), "copy", StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
         _ => MidTurnPolicy(command, args.Length > 0),
     };
 
@@ -667,6 +670,10 @@ internal sealed partial class ChatScreen
                 // /eventlog (2026-10-15): the pane on the watcher, the reply streaming on, its reads as at the idle line; an ask is kept for after.
                 await HandleEventLogAsync(args, _flow, cancellationToken, onWatcher: true).ConfigureAwait(false);
                 break;
+            case SlashCommand.WebUi:
+                // /webui (later on 2026-10-15): the pane on the watcher, its lines through the flow sink.
+                await ShowWebUiMidTurnAsync(_flow, cancellationToken).ConfigureAwait(false);
+                break;
         }
     }
 
@@ -744,6 +751,10 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Timer:
                 HandleTimer(args);
+                break;
+            case SlashCommand.WebUi:
+                // /webui copy alone reaches here (later on 2026-10-15): the link to the clipboard, a notice on the turn task.
+                await WebUiCommandAsync(args, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Window:
                 // The window's size in the reply (later on 2026-09-27): read-only.

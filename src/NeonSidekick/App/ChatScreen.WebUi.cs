@@ -379,7 +379,8 @@ internal sealed partial class ChatScreen
         _webUiTokenPlain = fresh;
         if (announce)
         {
-            _transcript.Notice(WebUiText.TokenMintedNotice);
+            // Queued for the screen's task (later on 2026-10-15): the /webui pane mints here from the watcher under a reply too.
+            _webUi.Notice(WebUiText.TokenMintedNotice);
         }
 
         return fresh;
@@ -543,7 +544,7 @@ internal sealed partial class ChatScreen
         switch (args.Trim().ToLowerInvariant())
         {
             case "":
-                await ShowWebUiAsync(cancellationToken).ConfigureAwait(false);
+                await ShowWebUiAsync(_transcript, onWatcher: false, cancellationToken).ConfigureAwait(false);
                 return;
             case "on":
             case "off":
@@ -562,7 +563,7 @@ internal sealed partial class ChatScreen
                 _transcript.Notice(_copy(link.Url) ? WebUiText.CopiedNotice : WebUiText.CopyFailedError);
                 return;
             case "reset":
-                if (await ResetWebUiTokenAsync(cancellationToken).ConfigureAwait(false))
+                if (await ResetWebUiTokenAsync(_transcript, cancellationToken).ConfigureAwait(false))
                 {
                     ReconcileWebUi();
                 }
@@ -578,26 +579,44 @@ internal sealed partial class ChatScreen
     /// <c>/webui reset</c> and the pane's reset button (later on 2026-10-14): after a yes, a new token and its notice (true); on a no, kept (false).
     /// The caller reconciles, so the server signs in with the new one.
     /// </summary>
-    private async Task<bool> ResetWebUiTokenAsync(CancellationToken cancellationToken)
+    private async Task<bool> ResetWebUiTokenAsync(INoticeSink sink, CancellationToken cancellationToken)
     {
         if (!await ConfirmAsync(WebUiText.ResetQuestion, cancellationToken).ConfigureAwait(false))
         {
-            _transcript.Notice(KeptNotice);
+            sink.Notice(KeptNotice);
             return false;
         }
 
         MintWebUiToken(announce: false);
-        _transcript.Notice(WebUiText.ResetNotice);
+        sink.Notice(WebUiText.ResetNotice);
         return true;
+    }
+
+    /// <summary>
+    /// <c>/webui</c>'s pane over a reply (later on 2026-10-15, the user's ask: it waited for the reply's end), on the watcher: as at the idle line,
+    /// its buttons acting at once (the server restarted under the reply; the user's pick), its lines through <paramref name="sink"/> (posted to the
+    /// turn task) and the server's own notices left to the turn's act drain. Without a server in this build, the idle line's error, through the sink.
+    /// </summary>
+    private async Task ShowWebUiMidTurnAsync(INoticeSink sink, CancellationToken cancellationToken)
+    {
+        if (!_webUiController.Available)
+        {
+            sink.Error(WebUiText.NotAvailableError);
+            return;
+        }
+
+        await ShowWebUiAsync(sink, onWatcher: true, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
     /// <c>/webui</c>'s pane: on or off, the port, the reach and a tab per address with its QR code and link (the token in them, never in the
     /// transcript but without a pane). Three buttons lead the strip (2026-10-14, the user's ask, <see cref="InfoAction"/>): <c>enabled</c>/<c>disabled</c>
     /// switches <i>Web UI</i>, <c>lan</c>/<c>local</c> <i>Web UI reach</i>, and <c>reset</c> makes a new token after a yes (<c>/webui reset</c>);
-    /// pressed, the setting is saved, the server starts, stops or restarts on it, and the pane opens again on what changed.
+    /// pressed, the setting is saved, the server starts, stops or restarts on it, and the pane opens again on what changed. Its lines go through
+    /// <paramref name="sink"/>; <paramref name="onWatcher"/> (over a reply, later on 2026-10-15) leaves the server's queued notices to the turn
+    /// task's act drain, the transcript's one writer under a reply.
     /// </summary>
-    private async Task ShowWebUiAsync(CancellationToken cancellationToken)
+    private async Task ShowWebUiAsync(INoticeSink sink, bool onWatcher, CancellationToken cancellationToken)
     {
         while (true)
         {
@@ -609,7 +628,7 @@ internal sealed partial class ChatScreen
             {
                 foreach (string line in lines.Where(l => l.Length > 0))
                 {
-                    _transcript.Notice(line);
+                    sink.Notice(line);
                 }
 
                 return;
@@ -645,16 +664,16 @@ internal sealed partial class ChatScreen
                 case WebUiText.EnabledKey:
                     bool on = !effective.WebUi;
                     _settings.Update(d => d.WebUi = on);
-                    _transcript.Notice(SettingsMenu.SavedNotice(SettingsField.WebUi, _settings.Current, _settings.ProfileDirectory));
+                    sink.Notice(SettingsMenu.SavedNotice(SettingsField.WebUi, _settings.Current, _settings.ProfileDirectory));
                     break;
                 case WebUiText.ReachKey:
                     string next = WebUiReach.Name(audience == WebUiAudience.Local ? WebUiAudience.LocalAreaNetwork : WebUiAudience.Local);
                     _settings.Update(d => d.WebUiReach = next);
-                    _transcript.Notice(SettingsMenu.SavedNotice(SettingsField.WebUiReach, _settings.Current, _settings.ProfileDirectory));
+                    sink.Notice(SettingsMenu.SavedNotice(SettingsField.WebUiReach, _settings.Current, _settings.ProfileDirectory));
                     break;
                 case WebUiText.ResetKey:
                     // A no keeps the token and the server as they are; the pane opens again either way.
-                    if (!await ResetWebUiTokenAsync(cancellationToken).ConfigureAwait(false))
+                    if (!await ResetWebUiTokenAsync(sink, cancellationToken).ConfigureAwait(false))
                     {
                         continue;
                     }
@@ -668,7 +687,10 @@ internal sealed partial class ChatScreen
             var wanted = WebUiWantedNow();
             _webUiAsked = wanted;
             await ReconcileWebUiQuietlyAsync(wanted).ConfigureAwait(false);
-            PrintWebNotices();
+            if (!onWatcher)
+            {
+                PrintWebNotices();
+            }
         }
     }
 
