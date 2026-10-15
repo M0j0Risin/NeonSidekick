@@ -280,7 +280,7 @@ internal sealed partial class ChatScreen
             var (_, pastedArgs) = ParseLine(pasted.Text);
             if (pasted.Images.Count > 0)
             {
-                Post(() => _transcript.Notice(ImagesIgnoredNotice(pasted.Images.Count)));
+                Post(() => _transcript.Notice(ImagesIgnoredNotice(pasted.Images)));
             }
 
             Post(() => HandlePromptsAsync(pastedArgs, _flow, paneToken));

@@ -319,7 +319,7 @@ public static class HelpCommands
         ]),
         new("/rewind",
         [
-            new("/rewind [<n>]", "Go back to an earlier message. A list of the messages you sent opens (the cursor on the last, or n back); after a yes, the picked message and everything after it leave the conversation, and its text returns to the input row, pictures and pasted blocks included, to edit and send again. A stored session loses the same turns. Only the conversation rewinds: what a tool changed (files written, commands run, commits) stays, and the yes/no names those tools. Messages compacted into a summary cannot be picked. ESC twice on an empty input line opens it too."),
+            new("/rewind [<n>]", "Go back to an earlier message. A list of the messages you sent opens (the cursor on the last, or n back); after a yes, the picked message and everything after it leave the conversation, and its text returns to the input row, pictures, PDFs and pasted blocks included, to edit and send again. A stored session loses the same turns. Only the conversation rewinds: what a tool changed (files written, commands run, commits) stays, and the yes/no names those tools. Messages compacted into a summary cannot be picked. ESC twice on an empty input line opens it too."),
         ]),
         new("/sampling",
         [

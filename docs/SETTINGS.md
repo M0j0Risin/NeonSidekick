@@ -148,8 +148,8 @@ Settings every server reads, whatever its kind.
 | LLM compact keep recent | Recent user turns a compact keeps word for word (0–24). | 2 |
 | LLM compact show summary | After a compact, shows the summary (or the pruned results) and how many messages were kept. | off |
 | LLM tool compact mode | What happens when one turn's tool calls fill the context to the auto-compact share: `compact` (prune, then summarize), `prune`, `stop` the turn, or `off` (no check). | `compact` |
-| LLM max images | The most pictures one request carries (0–500; 0 is no cap). Past it the oldest leave the conversation, and `view_image` can show one again. | 20 |
-| LLM max images (MB) | The most megabytes of pictures one request carries (0–1000; 0 is no cap). Past it the oldest leave. | 24 |
+| LLM max images | The most pictures one request carries, an attached PDF counting as one (0–500; 0 is no cap). Past it the oldest leave the conversation, and `view_image` can show one again; a PDF leaves its text. | 20 |
+| LLM max images (MB) | The most megabytes of pictures and attached PDFs one request carries (0–1000; 0 is no cap), and what one message may attach. Past it the oldest leave. | 24 |
 | LLM fun verbs | The thinking spinner shows a random verb in place of `thinking` / `writing`. | off |
 
 #### Http

@@ -77,6 +77,11 @@ public static class ClaudeServerInput
 
                         images.Add(data);
                         break;
+                    case DataContent data when ConversationHistory.IsDocument(data) && message.Role == ChatRole.User:
+                        // An attached PDF (2026-10-14, the PDF plan's phase 3): its text, as a local server reads it; the CLI's own
+                        // document block is a later spike.
+                        text.Add(ConversationHistory.DocumentText(data) ?? "");
+                        break;
                     case TextContent { Text.Length: > 0 } words when message.Role == ChatRole.User:
                         text.Add(words.Text);
                         break;
@@ -130,9 +135,11 @@ public static class ClaudeServerInput
         var lines = new List<string>();
         foreach (var message in earlier)
         {
-            if (message.Role == ChatRole.User && !ConversationHistory.IsImageCarrier(message) && !string.IsNullOrWhiteSpace(message.Text))
+            // An attached PDF's text rides its message here too (2026-10-14): a session started over keeps what the PDF said.
+            string said = message.Role == ChatRole.User ? string.Join("\n", new[] { message.Text }.Concat(message.Contents.Select(ConversationHistory.DocumentText).OfType<string>()).Where(t => !string.IsNullOrWhiteSpace(t))) : "";
+            if (message.Role == ChatRole.User && !ConversationHistory.IsImageCarrier(message) && said.Length > 0)
             {
-                lines.Add(ClaudeCliText.PreambleUser(message.Text));
+                lines.Add(ClaudeCliText.PreambleUser(said));
             }
             else if (message.Role == ChatRole.Assistant && !string.IsNullOrWhiteSpace(message.Text))
             {

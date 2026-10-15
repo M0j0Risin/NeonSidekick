@@ -3,6 +3,7 @@ using NeonSidekick.Camera;
 using NeonSidekick.Comfy;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
+using NeonSidekick.Pdf;
 using NeonSidekick.UI;
 
 namespace NeonSidekick.App;
@@ -38,6 +39,23 @@ internal sealed partial class ChatScreen
         ImageAttachment[]? changed = null;
         for (int i = 0; i < images.Count; i++)
         {
+            // An attached PDF (2026-10-14, the PDF plan's gap 27): its label names its file in the sent text, so the model, an advisor or a
+            // later turn can read_pdf it — the working directory's relative path when it is inside it, the full one otherwise.
+            if (images[i].IsDocument && pastes.DocumentNumberOf(images[i]) is int document)
+            {
+                string drafted = PdfText.DocumentLabel(document, Path.GetFileName(images[i].Path));
+                string where = _files.Contains(images[i].Path) && _files.Resolve(images[i].Path, forWrite: false, out string inside) == FileOutcome.Ok
+                    ? _files.Relative(inside)
+                    : images[i].Path;
+                int found = text.IndexOf(drafted, StringComparison.Ordinal);
+                if (found >= 0)
+                {
+                    text = string.Concat(text.AsSpan(0, found), PdfText.DocumentSentLabel(document, where), text.AsSpan(found + drafted.Length));
+                }
+
+                continue;
+            }
+
             if (pastes.NumberOf(images[i]) is not int number || SavePasted(number) is not { } saved)
             {
                 continue;

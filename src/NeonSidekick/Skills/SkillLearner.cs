@@ -224,6 +224,10 @@ public static class SkillLearner
             {
                 switch (content)
                 {
+                    case DataContent document when ConversationHistory.IsDocument(document):
+                        // An attached PDF (2026-10-14): named, not its text; the reflection learns from what was done with it.
+                        contents.Add(new TextContent("[an attached PDF: " + (document.Name ?? "") + "]"));
+                        break;
                     case DataContent:
                         break;
                     case FunctionResultContent result when result.Result is string text && text.Length > cap:

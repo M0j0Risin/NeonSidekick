@@ -44,7 +44,7 @@ public sealed record RewindReplay(string UserText, string ReplyText, int ToolCal
 /// <para>Only the conversation rewinds. Files a tool wrote, commands it ran and commits it made stay as they are, and
 /// <see cref="RewindCut.ChangingTools"/> names the tools that may have done so (the user's pick: conversation only, with a warning).</para>
 /// </summary>
-public static class ConversationRewind
+public static partial class ConversationRewind
 {
     /// <summary>Whether <paramref name="message"/> is a compact's summary turn (<see cref="ConversationCompactor.SummaryPreamble"/>).</summary>
     public static bool IsSummary(ChatMessage message)
@@ -95,6 +95,23 @@ public static class ConversationRewind
         ArgumentNullException.ThrowIfNull(message);
         return message.Contents.OfType<DataContent>().Where(d => d.HasTopLevelMediaType("image")).ToList();
     }
+
+    /// <summary>The attached PDFs <paramref name="message"/> carries, in order (2026-10-14, the PDF plan's gap 49): their files go back on the line.</summary>
+    public static IReadOnlyList<DataContent> Documents(ChatMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return message.Contents.OfType<DataContent>().Where(ConversationHistory.IsDocument).ToList();
+    }
+
+    /// <summary>Where <paramref name="text"/> holds an attached PDF's label (<see cref="Pdf.PdfText.DocumentLabel"/>, <c>[PDF #2 report.pdf]</c>), in order.</summary>
+    public static IReadOnlyList<(int Start, int Length)> DocumentLabels(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return [.. DocumentLabelPattern().Matches(text).Select(m => (m.Index, m.Length))];
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\[PDF #\d+ [^\]\r\n]+\]", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    private static partial System.Text.RegularExpressions.Regex DocumentLabelPattern();
 
     /// <summary>
     /// Where <paramref name="text"/> holds a picture's label (<see cref="UI.PasteBlocks.ImageLabel"/>, <c>[Image #3]</c>), in order:

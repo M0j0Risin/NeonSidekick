@@ -210,6 +210,61 @@ public static class PdfText
             ? $"(page {page.ToString(CultureInfo.InvariantCulture)} of {file}; read_pdf with pictures reads it again)"
             : $"(a page of {file}; read_pdf with pictures reads it again)";
 
+    // ─── attaching (2026-10-14, the PDF plan's phase 3) ─────────────────────────
+
+    /// <summary>
+    /// An attached PDF as an endpoint that takes no PDF reads it: a line naming it and where it came from, then its pages under their
+    /// headings, then what was left. Pinned.
+    /// </summary>
+    public static string AttachedText(string name, string path, Files.PdfDocumentText read)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        string head = read.Empty
+            ? $"(the PDF {name}, attached from {path}: no text could be read{(read.Problem is { Length: > 0 } problem ? " (" + problem.Trim() + ")" : "")})"
+            : $"(the PDF {name}, attached from {path}: its text, {(read.PagesRead >= read.PageCount ? Pages(read.PageCount) : $"pages 1–{read.PagesRead.ToString(CultureInfo.InvariantCulture)} of {read.PageCount.ToString(CultureInfo.InvariantCulture)}")})";
+        string tail = !read.Empty && read.PagesRead < read.PageCount
+            ? $"\n(the rest is not attached; read_pdf reads it, pages \"{(read.PagesRead + 1).ToString(CultureInfo.InvariantCulture)}-\")"
+            : "";
+        return read.Empty ? head : head + "\n" + read.Text + tail;
+    }
+
+    /// <summary>The send's spinner while an attached PDF's text is still being read (gap 17). Pinned.</summary>
+    public const string ReadingAttached = "Reading the attached PDF";
+
+    /// <summary>The send given up under that spinner (ESC, the Web UI's Stop): the draft is kept. Pinned.</summary>
+    public const string AttachWaitStopped = "(the message was not sent: its PDF was still being read; the draft is kept)";
+
+    /// <summary>A locked PDF on the line (gap 84): no endpoint can read it. Pinned.</summary>
+    public static string AttachedLocked(string name) => $"{name} is locked with a password, so it can't be sent; take it off the line and send again";
+
+    /// <summary>A PDF with no text on the line for an endpoint that takes no PDF. Pinned.</summary>
+    public static string NoTextForThisServer(string name) =>
+        $"{name} has no text to send (a scan, or it could not be read), and this server takes text only; take it off the line, or ask the model to look at its pages with read_pdf and pictures";
+
+    /// <summary>A PDF past what the Anthropic API reads of one (100 pages): sent all the same. Pinned.</summary>
+    public static string ManyPagesWarning(string name, int pages) =>
+        $"{name} has {pages.ToString(CultureInfo.InvariantCulture)} pages; the Anthropic API reads at most 100 of a PDF";
+
+    /// <summary>A PDF over what one request may carry (gaps 18, 51), refused when it is pasted. Pinned.</summary>
+    public static string TooBigToAttach(string name, long bytes, long cap) =>
+        $"{name} is {Web.WebText.Size(bytes)}; the line's pictures and PDFs may come to {Web.WebText.Size(cap)} (LLM max images (MB)), so it was left as its path";
+
+    /// <summary>What an attached PDF's text is cut to for a server whose window it would fill (gap 43): the note after the cut. Pinned.</summary>
+    public static string AttachedCut(string name) => $"\n(the text of {name} was cut to fit this server's window; read_pdf reads the rest)";
+
+    /// <summary>The draft's label for an attached PDF. Pinned.</summary>
+    public static string DocumentLabel(int number, string name) => $"[PDF #{number} {name}]";
+
+    /// <summary>The label a sent PDF carries in the text (gap 27): the file's path, so the model, an advisor or a later turn can read_pdf it. Pinned.</summary>
+    public static string DocumentSentLabel(int number, string path) => $"[PDF #{number}, from {path}]";
+
+    /// <summary>A PDF part taken out of a request to keep it small (gap 18): its text stays, cut to <see cref="LeftOutChars"/>. Pinned.</summary>
+    public static string DocumentLeftOut(string text) =>
+        "(an attached PDF taken out to keep the request small; its text was:)\n" + (text.Length > LeftOutChars ? text[..LeftOutChars] + "…" : text);
+
+    /// <summary>How much of an attached PDF's text stays when the PDF is taken out of a request, or goes into a summary.</summary>
+    public const int LeftOutChars = 4_000;
+
     /// <summary><c>/read</c>'s spinner while a PDF is read for speech (2026-10-14, the PDF plan's gap 38). Pinned.</summary>
     public const string ReadingAloudLabel = "Reading the PDF";
 

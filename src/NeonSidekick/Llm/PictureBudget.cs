@@ -19,8 +19,11 @@ namespace NeonSidekick.Llm;
 /// its file (<see cref="ConversationHistory.PathKey"/>) so the model can look again with <c>view_image</c>; the message
 /// keeps its tags, so a carrier is still one. Pure.</para>
 /// </summary>
-public readonly record struct PictureBudget(int Pictures, int Megabytes)
+public readonly record struct PictureBudget(int Pictures, int Megabytes, bool DocumentsAsText = false)
 {
+    // DocumentsAsText (2026-10-14, the PDF plan's gap 82): the endpoint gets an attached PDF as its text (a local server, the Claude Code
+    // server), so a PDF weighs its text there, not its bytes; set where the budget is built at each turn, from the turn's own endpoint.
+
     /// <summary><c>LLM picture keep</c>'s default: twenty pictures, ~20k tokens on a vision model that charges ~1,000 each.</summary>
     public const int DefaultPictures = 20;
 
@@ -51,18 +54,26 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes)
     public static string LeftOutFor(DataContent picture)
     {
         ArgumentNullException.ThrowIfNull(picture);
-        return ConversationHistory.PdfPage(picture) is { } page ? Pdf.PdfText.PageNotKept(page.File, page.Page) : LeftOut(ConversationHistory.PicturePath(picture));
+        // An attached PDF taken out (gap 18) leaves its text, cut: text is cheap beside its bytes and keeps what it said.
+        return ConversationHistory.DocumentText(picture) is { } text ? Pdf.PdfText.DocumentLeftOut(text)
+            : ConversationHistory.PdfPage(picture) is { } page ? Pdf.PdfText.PageNotKept(page.File, page.Page)
+            : LeftOut(ConversationHistory.PicturePath(picture));
     }
 
-    /// <summary>The bytes a picture costs on the wire: its data as base64, which is what a data URL or a media block carries.</summary>
-    public static long WireBytes(DataContent picture)
+    /// <summary>
+    /// The bytes a picture costs on the wire: its data as base64, which is what a data URL or a media block carries. An attached PDF
+    /// (2026-10-14) the same, or its text's bytes when <paramref name="documentsAsText"/> (the endpoint gets the text).
+    /// </summary>
+    public static long WireBytes(DataContent picture, bool documentsAsText = false)
     {
         ArgumentNullException.ThrowIfNull(picture);
-        return (picture.Data.Length + 2L) / 3 * 4;
+        return documentsAsText && ConversationHistory.DocumentText(picture) is { } text
+            ? System.Text.Encoding.UTF8.GetByteCount(text)
+            : (picture.Data.Length + 2L) / 3 * 4;
     }
 
     /// <summary>The pictures <paramref name="messages"/> carry (user-role messages only, where a picture can ride) and their <see cref="WireBytes"/>.</summary>
-    public static (int Pictures, long Bytes) Measure(IEnumerable<ChatMessage> messages)
+    public static (int Pictures, long Bytes) Measure(IEnumerable<ChatMessage> messages, bool documentsAsText = false)
     {
         ArgumentNullException.ThrowIfNull(messages);
         int pictures = 0;
@@ -79,7 +90,7 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes)
                 if (content is DataContent picture)
                 {
                     pictures++;
-                    bytes += WireBytes(picture);
+                    bytes += WireBytes(picture, documentsAsText);
                 }
             }
         }
@@ -95,7 +106,7 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes)
     public PictureTrim Apply(IReadOnlyList<ChatMessage> messages)
     {
         ArgumentNullException.ThrowIfNull(messages);
-        var (pictures, bytes) = Measure(messages);
+        var (pictures, bytes) = Measure(messages, DocumentsAsText);
         bool overCount = Pictures > 0 && pictures > Pictures;
         bool overBytes = Megabytes > 0 && bytes > Megabytes * 1_000_000L;
         if (!overCount && !overBytes)
@@ -105,7 +116,7 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes)
 
         int keepPictures = Pictures > 0 ? Pictures / 2 : int.MaxValue;
         long keepBytes = Megabytes > 0 ? Megabytes * 1_000_000L / 2 : long.MaxValue;
-        return TakeOut(messages, keepPictures, keepBytes);
+        return TakeOut(messages, keepPictures, keepBytes, DocumentsAsText);
     }
 
     /// <summary>
@@ -115,7 +126,7 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes)
     /// other parts and its tags as they were; every other message is the same instance. The retry after a dropped
     /// request asks for this directly, with half what that request carried.
     /// </summary>
-    public static PictureTrim TakeOut(IReadOnlyList<ChatMessage> messages, int keepPictures, long keepBytes)
+    public static PictureTrim TakeOut(IReadOnlyList<ChatMessage> messages, int keepPictures, long keepBytes, bool documentsAsText = false)
     {
         ArgumentNullException.ThrowIfNull(messages);
         ArgumentOutOfRangeException.ThrowIfNegative(keepPictures);
@@ -129,9 +140,10 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes)
             }
         }
 
-        var (pictures, bytes) = Measure(messages);
+        var (pictures, bytes) = Measure(messages, documentsAsText);
         var result = new List<ChatMessage>(messages);
         int taken = 0;
+        int documents = 0;
         long takenBytes = 0;
         for (int i = 0; i < newest && (pictures > keepPictures || bytes > keepBytes); i++)
         {
@@ -146,11 +158,12 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes)
             {
                 if (content is DataContent picture && (pictures > keepPictures || bytes > keepBytes))
                 {
-                    long size = WireBytes(picture);
+                    long size = WireBytes(picture, documentsAsText);
                     contents.Add(new TextContent(LeftOutFor(picture)));
                     pictures--;
                     bytes -= size;
                     taken++;
+                    documents += ConversationHistory.IsDocument(picture) ? 1 : 0;
                     takenBytes += size;
                     continue;
                 }
@@ -163,7 +176,7 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes)
             result[i] = rebuilt;
         }
 
-        return new PictureTrim(result, taken, takenBytes);
+        return new PictureTrim(result, taken, takenBytes) { Documents = documents };
     }
 
     /// <summary>A size for the operator: <c>31 MB</c> (decimal megabytes, rounded; <c>0.4 MB</c> under one). Pinned.</summary>
@@ -181,9 +194,21 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes)
     /// defaults to text presentation, which Windows Terminal draws two cells wide in one, so it ran into the count — the
     /// picture viewer's fix of 2026-09-27, <c>ViewerText.Opened</c>).
     /// </summary>
-    public static string TakenOutNotice(int pictures, long bytes) =>
-        "🖼️ " + pictures.ToString(CultureInfo.InvariantCulture) + (pictures == 1 ? " older picture" : " older pictures") + " taken out (" + FormatMegabytes(bytes) + ") to keep the request small";
+    public static string TakenOutNotice(int pictures, long bytes, int documents = 0)
+    {
+        // Pictures and PDFs counted apart (2026-10-14, the PDF plan's gap 83): "2 older pictures and 1 PDF".
+        int images = pictures - documents;
+        string what = documents == 0
+            ? images.ToString(CultureInfo.InvariantCulture) + (images == 1 ? " older picture" : " older pictures")
+            : (images > 0 ? images.ToString(CultureInfo.InvariantCulture) + (images == 1 ? " older picture and " : " older pictures and ") : "")
+              + documents.ToString(CultureInfo.InvariantCulture) + (images > 0 ? "" : " older") + (documents == 1 ? " PDF" : " PDFs");
+        return "🖼️ " + what + " taken out (" + FormatMegabytes(bytes) + ") to keep the request small";
+    }
 }
 
 /// <summary>What <see cref="PictureBudget.Apply"/> or <see cref="PictureBudget.TakeOut"/> made: the messages, and the pictures taken out and their wire bytes.</summary>
-public sealed record PictureTrim(List<ChatMessage> Messages, int Pictures, long Bytes);
+public sealed record PictureTrim(List<ChatMessage> Messages, int Pictures, long Bytes)
+{
+    /// <summary>How many of <see cref="Pictures"/> were attached PDFs (2026-10-14).</summary>
+    public int Documents { get; init; }
+}

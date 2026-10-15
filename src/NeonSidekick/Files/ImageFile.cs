@@ -27,6 +27,17 @@ public sealed record ImageAttachment(string Path, byte[] Bytes, string MediaType
     /// page instead of its bytes, and a picture taken out of a request names the page (the PDF is still on disk to draw again).
     /// </summary>
     public string? PdfPage { get; init; }
+
+    /// <summary>
+    /// An attached PDF's text (2026-10-14, the PDF plan's phase 3 and gap 39): the read started when it was pasted, carried as the task so
+    /// a message sent or queued before it ends hands the read over rather than cancelling it; the send awaits it. Null for a picture.
+    /// One attachment list for both (the plan's choice): a PDF is an attachment with <see cref="PdfFile.MediaType"/>, its whole file in
+    /// <see cref="Bytes"/> and no size, so the input line, the queue and the turn carry it as they carry a picture.
+    /// </summary>
+    public Task<PdfDocumentText>? DocumentText { get; init; }
+
+    /// <summary>Whether this attachment is a PDF rather than a picture.</summary>
+    public bool IsDocument => MediaType == PdfFile.MediaType;
 }
 
 /// <summary>
@@ -122,12 +133,12 @@ public static class ImageFile
     /// image extension, fully qualified, and a file that exists. Anything else is text — two
     /// paths included; <see cref="TryPastedPaths"/> is the rule for a list.
     /// </summary>
-    public static bool TryPastedPath(string paste, out string path)
+    public static bool TryPastedPath(string paste, out string path, bool documents = false)
     {
         ArgumentNullException.ThrowIfNull(paste);
         path = "";
         string candidate = paste.Trim();
-        if (candidate.Contains('\n') || candidate.Contains('\r') || !TryPath(candidate, out string found))
+        if (candidate.Contains('\n') || candidate.Contains('\r') || !TryPath(candidate, out string found, documents))
         {
             return false;
         }
@@ -141,9 +152,10 @@ public static class ImageFile
     /// line, or several on a line each in quotes or without a space (the terminal's forms for a
     /// drop of several files), every one by the rule of <see cref="TryPastedPath"/>. A line is
     /// tried whole first, so an unquoted path with a space still reads as one. One line that is
-    /// neither a path nor a run of paths makes the whole block text; blank lines are skipped.
+    /// neither a path nor a run of paths makes the whole block text; blank lines are skipped. With <paramref name="documents"/>
+    /// (2026-10-14, the PDF plan's phase 3: the input line attaches PDFs) a <c>.pdf</c> path counts as one too.
     /// </summary>
-    public static bool TryPastedPaths(string paste, out IReadOnlyList<string> paths)
+    public static bool TryPastedPaths(string paste, out IReadOnlyList<string> paths, bool documents = false)
     {
         ArgumentNullException.ThrowIfNull(paste);
         var found = new List<string>();
@@ -156,7 +168,7 @@ public static class ImageFile
                 continue;
             }
 
-            if (TryPath(line, out string one))
+            if (TryPath(line, out string one, documents))
             {
                 found.Add(one);
                 continue;
@@ -164,7 +176,7 @@ public static class ImageFile
 
             foreach (var token in Tokens(line))
             {
-                if (!TryPath(token, out string path))
+                if (!TryPath(token, out string path, documents))
                 {
                     found.Clear();
                     return false;
@@ -211,8 +223,8 @@ public static class ImageFile
         return tokens;
     }
 
-    // One trimmed line or token as a path: the quotes off, an image extension, fully qualified, a file that exists.
-    private static bool TryPath(string candidate, out string path)
+    // One trimmed line or token as a path: the quotes off, an image extension (or a PDF's, with documents), fully qualified, a file that exists.
+    private static bool TryPath(string candidate, out string path, bool documents = false)
     {
         path = "";
         candidate = candidate.Trim();
@@ -221,7 +233,7 @@ public static class ImageFile
             candidate = candidate[1..^1].Trim();
         }
 
-        if (candidate.Length == 0 || candidate.Contains('"') || !IsImagePath(candidate) || !System.IO.Path.IsPathFullyQualified(candidate))
+        if (candidate.Length == 0 || candidate.Contains('"') || !(IsImagePath(candidate) || (documents && PdfFile.IsPdfPath(candidate))) || !System.IO.Path.IsPathFullyQualified(candidate))
         {
             // A bare "photo.png" inside a sentence must never resolve against the process's own directory.
             return false;

@@ -1364,7 +1364,7 @@ public sealed class Assistant
             var trimmed = _history.ApplyPictureBudget(PictureBudget);
             if (trimmed.Pictures > 0)
             {
-                string notice = PictureBudget.TakenOutNotice(trimmed.Pictures, trimmed.Bytes);
+                string notice = PictureBudget.TakenOutNotice(trimmed.Pictures, trimmed.Bytes, trimmed.Documents);
                 DiagnosticLog.Info(Category, notice);
                 yield return new TurnEvent.Notice(notice, IsError: false);
             }

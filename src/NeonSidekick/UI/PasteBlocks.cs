@@ -57,12 +57,16 @@ public sealed partial class PasteBlocks
     private readonly Dictionary<char, char> _literals = new();
     private int _texts;
     private int _images;
+    private int _documents;
 
     /// <summary>Blocks held so far this session, text and images together.</summary>
     public int Count => _blocks.Count;
 
-    /// <summary>Images held so far this session.</summary>
+    /// <summary>Images held so far this session (an attached PDF is not one: <see cref="DocumentCount"/>).</summary>
     public int ImageCount => _images;
+
+    /// <summary>PDFs held so far this session (2026-10-14, the PDF plan's phase 3), numbered on their own.</summary>
+    public int DocumentCount => _documents;
 
     /// <summary>True when a pasted (normalised) block is too long for the line and becomes a token.</summary>
     public static bool Collapses(string text)
@@ -216,6 +220,35 @@ public sealed partial class PasteBlocks
     }
 
     /// <summary>
+    /// Keeps an attached PDF (2026-10-14, the PDF plan's phase 3: <paramref name="document"/>, an attachment of <see cref="PdfFile.MediaType"/>
+    /// with its read under way) and returns its token: drawn as <see cref="Pdf.PdfText.DocumentLabel"/> (<c>[PDF #1 report.pdf]</c>), numbered
+    /// on its own so the pictures' <c>[Image #N]</c> keep theirs.
+    /// </summary>
+    public char AddDocument(ImageAttachment document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        lock (_blocks)
+        {
+            return Keep(new Block(++_documents, null, document, SourcePath: document.Path));
+        }
+    }
+
+    /// <summary>A held picture (not a PDF) by its number.</summary>
+    private static bool IsPicture(Block b) => b.Image is { IsDocument: false };
+
+    /// <summary>The number of the attached PDF <paramref name="document"/> is; null for any other attachment.</summary>
+    public int? DocumentNumberOf(ImageAttachment document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        lock (_blocks)
+        {
+            // The very attachment, else one of the same file (the send may carry a copy whose text it cut to fit, gap 43).
+            return (_blocks.Find(b => ReferenceEquals(b.Image, document) && b.Image.IsDocument)
+                ?? _blocks.FindLast(b => b.Image is { IsDocument: true } held && held.Path == document.Path))?.Number;
+        }
+    }
+
+    /// <summary>
     /// The <paramref name="number"/>th pasted picture as it was before any downscale (later still on 2026-09-24, the
     /// user's ask: a paste as <c>generate_image</c>'s input): a clipboard picture's own bytes with no name (the saver
     /// stamps one), or a dropped file read again under its own name. Null for no such picture, one kept without a source, or a dropped file that is gone
@@ -226,7 +259,7 @@ public sealed partial class PasteBlocks
         Block? block;
         lock (_blocks)
         {
-            block = _blocks.Find(b => b.Image is not null && b.Number == number);
+            block = _blocks.Find(b => IsPicture(b) && b.Number == number);
         }
 
         if (block is null)
@@ -260,7 +293,7 @@ public sealed partial class PasteBlocks
         ArgumentNullException.ThrowIfNull(image);
         lock (_blocks)
         {
-            return _blocks.Find(b => ReferenceEquals(b.Image, image))?.Number;
+            return _blocks.Find(b => ReferenceEquals(b.Image, image) && IsPicture(b))?.Number;
         }
     }
 
@@ -272,7 +305,7 @@ public sealed partial class PasteBlocks
     {
         lock (_blocks)
         {
-            return _blocks.Find(b => b.Image is not null && b.Number == number) is { Original: not null, SourcePath: null };
+            return _blocks.Find(b => IsPicture(b) && b.Number == number) is { Original: not null, SourcePath: null };
         }
     }
 
@@ -302,17 +335,23 @@ public sealed partial class PasteBlocks
     public static string SavedLabel(int number, string path) => $"[Image #{number}, saved as {path}]";
 
     /// <summary>
-    /// <paramref name="text"/> with every <see cref="SavedLabel"/> put back as its <see cref="ImageLabel"/>: a sent message read back as
-    /// it was typed (<c>/rewind</c>'s draft, a withdrawn line). Pure.
+    /// <paramref name="text"/> with every <see cref="SavedLabel"/> put back as its <see cref="ImageLabel"/>, and since 2026-10-14 every sent PDF's
+    /// <see cref="Pdf.PdfText.DocumentSentLabel"/> as its draft label (the PDF plan's gap 49): a sent message read back as it was typed
+    /// (<c>/rewind</c>'s draft, a withdrawn line). Pure.
     /// </summary>
     public static string WithoutSavedPaths(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return SavedLabelPattern().Replace(text, "[Image #$1]");
+        string pictures = SavedLabelPattern().Replace(text, "[Image #$1]");
+        return SentDocumentPattern().Replace(pictures, m => Pdf.PdfText.DocumentLabel(
+            int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture), Path.GetFileName(m.Groups[2].Value.Trim())));
     }
 
     [GeneratedRegex(@"\[Image #(\d+), saved as [^\]\r\n]*\]", RegexOptions.CultureInvariant)]
     private static partial Regex SavedLabelPattern();
+
+    [GeneratedRegex(@"\[PDF #(\d+), from ([^\]\r\n]*)\]", RegexOptions.CultureInvariant)]
+    private static partial Regex SentDocumentPattern();
 
     private char Keep(Block block)
     {
@@ -328,15 +367,19 @@ public sealed partial class PasteBlocks
         }
     }
 
-    /// <summary>The text a token stands for (an image token's is its label); null for a character that is not one of this store's tokens.</summary>
-    public string? BlockOf(char c) => TryIndex(c, out int i) ? _blocks[i].Glyph is { } glyph ? glyph.ToString() : _blocks[i].Text ?? ImageLabel(_blocks[i].Number) : null;
+    /// <summary>The text a token stands for (an image token's is its label, a PDF's its label too); null for a character that is not one of this store's tokens.</summary>
+    public string? BlockOf(char c) => TryIndex(c, out int i) ? _blocks[i].Glyph is { } glyph ? glyph.ToString() : _blocks[i].Text ?? AttachmentLabel(_blocks[i]) : null;
+
+    /// <summary>An attachment's label: a picture's <see cref="ImageLabel"/>, a PDF's <see cref="Pdf.PdfText.DocumentLabel"/>.</summary>
+    private static string AttachmentLabel(Block block) =>
+        block.Image is { IsDocument: true } document ? Pdf.PdfText.DocumentLabel(block.Number, Path.GetFileName(document.Path)) : ImageLabel(block.Number);
 
     /// <summary>The image a token stands for; null for a text token or a character that is not one of this store's tokens.</summary>
     public ImageAttachment? ImageOf(char c) => TryIndex(c, out int i) ? _blocks[i].Image : null;
 
     /// <summary>The label a token is drawn as; null for a character that is not one of this store's tokens.</summary>
     public string? LabelOf(char c) =>
-        TryIndex(c, out int i) ? _blocks[i].Glyph is { } glyph ? glyph.ToString() : _blocks[i].Text is { } text ? Label(_blocks[i].Number, text) : ImageLabel(_blocks[i].Number) : null;
+        TryIndex(c, out int i) ? _blocks[i].Glyph is { } glyph ? glyph.ToString() : _blocks[i].Text is { } text ? Label(_blocks[i].Number, text) : AttachmentLabel(_blocks[i]) : null;
 
     /// <summary>
     /// The draft with every token replaced by its label: the transcript's line. <paramref name="unbreakable"/>

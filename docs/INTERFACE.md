@@ -48,11 +48,14 @@ From top to bottom:
 * **Tool calls** show as `🛠️ read_file notes.md` with the result under them (`→ 4 lines`, ✗ when it failed). Long results fold once the run ends; Ctrl+O or `/expand` opens them.
 * **During `/read`** (📖): Space on an empty line pauses and resumes; ←/→ step a sentence.
 
-### Pasting a picture
+### Pasting a picture or a PDF
 
 * A right-click or Alt+V puts a copied picture on the line as `[Image #n]`; so does Ctrl+V where the terminal passes it (Windows Terminal keeps Ctrl+V for text). With no picture, the text is pasted.
 * Sent, the picture is saved in *Pasted images folder* under the profile's `images` folder, and the model gets its path.
-* **On a Mac** Cmd+V pastes text only; use Ctrl+V, Option+V (with Option as Meta) or a right-click. A picture file copied in Finder is attached by name.
+* **A PDF** dropped on the line (or its path pasted) is attached as `[PDF #n report.pdf]`; on a `/command` line it stays its path. Its text is read in the background with your browser; sending waits for it under *Reading the attached PDF*, and ESC there keeps the draft.
+  * The Anthropic and OpenAI APIs get the PDF itself (Anthropic reads 100 pages at most; a longer one is warned of). Other servers get its text, its first 100 pages: a scan or a locked PDF is refused there, and a text longer than half the model's window is cut, the rest left to `read_pdf`.
+  * The line's pictures and PDFs together may come to *LLM max images (MB)*. The model gets the PDF's path in the sent text, and a saved session keeps its text, not the file.
+* **On a Mac** Cmd+V pastes text only; use Ctrl+V, Option+V (with Option as Meta) or a right-click. A picture or PDF file copied in Finder is attached by name.
 
 ### Completion lists
 

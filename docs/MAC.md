@@ -40,7 +40,7 @@ You need a Mac with Apple Silicon (M1 or later). Download and unpack the Mac pac
 | `/terminal` | Works | A new Terminal window, or a new tab in iTerm2. |
 | `/shortcut` | Works | A `.command` file on the Desktop that opens in iTerm2 or Terminal. |
 | Printing | Works (CUPS) | Office files are refused ([Printing](TOOLS.md#printing)). |
-| PDFs: `convert_to_pdf`, `/pdf`, `read_pdf` | Works, browser only | Making and reading a PDF need Edge, Chrome, Brave or Chromium in `/Applications`, or the one *Web browser path* names. The `printer` engine (Microsoft Print to PDF) needs Windows. |
+| PDFs: `convert_to_pdf`, `/pdf`, `read_pdf`, attaching | Works, browser only | Making, reading and attaching a PDF need Edge, Chrome, Brave or Chromium in `/Applications`, or the one *Web browser path* names. The `printer` engine (Microsoft Print to PDF) needs Windows. |
 | Docker tools and `/docker` | Works | Docker Desktop, OrbStack, Colima or Rancher Desktop ([Docker on a Mac](TOOLS.md#docker-on-a-mac)). CPU and memory figures are the Linux VM's. |
 | Docker servers | Not available | Docker Desktop on a Mac passes no GPU to containers; the embedded model is the Mac's local server instead. |
 | UNC shares and outside folders | Works | A share is `smb://server/share`, mounted under `/Volumes` while the app runs ([UNC shares on a Mac](TOOLS.md#unc-shares-on-a-mac)). |
@@ -63,7 +63,7 @@ You need a Mac with Apple Silicon (M1 or later). Download and unpack the Mac pac
 * **A microphone that sends only silence** gets one warning. A MacBook's microphone and camera are off with the lid closed: open the lid or pick another input in System Settings › Sound.
 * **Echo.** Interrupting a reply by voice works with headphones and with a MacBook's own speakers; *STT interrupt echo guard (%)* keeps the reply's own words from counting.
 * **The [video window](INTERFACE.md#the-video-window)** opens a link in the player in your default browser. Its cookies and cache are in `~/Library/WebKit/NeonSidekick/WebsiteDataStore/`; delete that folder to clear them.
-* **Copy and paste.** Cmd+V is the terminal's paste, text only. The app's paste (Ctrl+V, Option+V or a right-click on the input line) takes a picture first, such as a screenshot copied with ⌃⇧⌘4; a file copied in Finder pastes as its path. A right-click into a pane's filter or find pastes the first copied file's path; on Windows, files copied in Explorer paste nothing there.
+* **Copy and paste.** Cmd+V is the terminal's paste, text only. The app's paste (Ctrl+V, Option+V or a right-click on the input line) takes a picture first, such as a screenshot copied with ⌃⇧⌘4; a file copied in Finder pastes as its path, which attaches a picture or a PDF. A right-click into a pane's filter or find pastes the first copied file's path; on Windows, files copied in Explorer paste nothing there.
 * **Stand-in keys.** A Mac terminal can't send some chords, so Ctrl+D opens `/model`, Ctrl+] `/terminal` and Ctrl+Option+A `/memory`, and Option+Delete deletes a word. See [Keyboard shortcuts](INTERFACE.md#keyboard-shortcuts).
 * **No key for these.** Type `/find` (a Mac terminal sends Ctrl+Shift+F as Ctrl+F, which is `/perfbar`), and use Shift+F3 to go back in a find. Click the ☺ for the emoji picker (Ctrl+J arrives as a line break).
 * **Editors.** `/sys persona` and the like open the file in its default app. For `/draft`, set *Draft editor* to a command that waits, such as `code --wait` or `open -W -t`; vim can't share the terminal with the app.

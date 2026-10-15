@@ -1,6 +1,17 @@
 namespace NeonSidekick.Files;
 
 /// <summary>
+/// An attached PDF's text, read once when it was pasted (2026-10-14, the PDF plan's phase 3): its pages under their headings, how many
+/// the file has and how many were read, whether it is locked, and why there is none (<see cref="Problem"/>: no browser, a failed read).
+/// What an endpoint that takes no PDF (a local server, the Claude Code server) is sent in its place, and what a stored session keeps.
+/// </summary>
+public sealed record PdfDocumentText(string Text, int PageCount, int PagesRead, bool Locked = false, string? Problem = null)
+{
+    /// <summary>No text at all: a scan, a failed read, a lock.</summary>
+    public bool Empty => Text.Trim().Length == 0;
+}
+
+/// <summary>
 /// What makes a file a PDF (2026-10-14, the PDF plan's foundations), in two strengths. <see cref="LooksLikePdf"/> is the strict one,
 /// <c>%PDF-</c> and a digit at the very first byte: it is what <see cref="WorkingDirectory.LooksBinary"/> adds to its NUL probe, so a PDF
 /// whose first 8 KB hold no NUL is never read as text (its raw syntax went to the model until then, and Windows' <c>print_file</c>
@@ -13,6 +24,9 @@ public static class PdfFile
 {
     /// <summary>The extension a PDF is known by.</summary>
     public const string Extension = ".pdf";
+
+    /// <summary>A PDF's media type.</summary>
+    public const string MediaType = "application/pdf";
 
     /// <summary>How far into a file <see cref="HasPdfHeader"/> looks for the header: junk ahead of it is allowed up to here.</summary>
     public const int HeaderWindow = 1024;

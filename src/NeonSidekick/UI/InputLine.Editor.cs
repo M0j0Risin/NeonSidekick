@@ -1342,7 +1342,7 @@ public sealed partial class InputLine
         // into one; a field takes one paragraph.
         private async Task InsertPasteAsync(string pasted)
         {
-            string inserted = await _line.PasteBlockAsync(pasted, _o.Multiline).ConfigureAwait(false);
+            string inserted = await _line.PasteBlockAsync(pasted, _o.Multiline, command: _text.ToString().TrimStart().StartsWith('/')).ConfigureAwait(false);
             if (inserted.Length > 0)
             {
                 Insert(inserted);

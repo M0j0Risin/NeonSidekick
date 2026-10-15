@@ -117,7 +117,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        var response = await _wrapped.GetResponseAsync(WithReasoningBack(messages, PreservesThinking(options)), WithRawFields(options), cancellationToken).ConfigureAwait(false);
+        var response = await _wrapped.GetResponseAsync(WithReasoningBack(ConversationHistory.DocumentsAsText(messages), PreservesThinking(options)), WithRawFields(options), cancellationToken).ConfigureAwait(false);
         if (response.Usage is { } usage)
         {
             var thinking = new StringBuilder();
@@ -151,7 +151,8 @@ public sealed class OpenAICompatibleChatClient : IChatClient
         // and what a server left in <think> tags (a filter of its own that only watches; the update goes on unchanged).
         var thinking = new StringBuilder();
         ThinkTagFilter? tags = null;
-        await foreach (var update in _wrapped.GetStreamingResponseAsync(WithReasoningBack(messages, PreservesThinking(options)), WithRawFields(options), cancellationToken).ConfigureAwait(false))
+        // An attached PDF goes as its text (2026-10-14, the PDF plan's phase 3): the adapter would send a file part this wire's servers refuse.
+        await foreach (var update in _wrapped.GetStreamingResponseAsync(WithReasoningBack(ConversationHistory.DocumentsAsText(messages), PreservesThinking(options)), WithRawFields(options), cancellationToken).ConfigureAwait(false))
         {
             FillTopLevelReasoningTokens(update);
             FillReasoningField(update);

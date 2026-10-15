@@ -1430,6 +1430,8 @@ internal sealed partial class ChatScreen
             ShowToolbarNote(tool.Glyph);
         };
         _input.PictureFile = DroppedPictureOf;
+        // A dropped or pasted PDF attached to the message (2026-10-14, the PDF plan's phase 3).
+        _input.DocumentLoader = LoadAttachedPdf;
         // The picture strip's keys under a reply too (2026-09-28, the user's report); the splash is gone before any turn.
         _input.Chat.SetLiveHooks(StepPictureStrip, OpenStripPicture);
         _mouse = mouse;
@@ -2618,7 +2620,8 @@ internal sealed partial class ChatScreen
             new("Ctrl+A", "select all the text on the line"),
             new("Ctrl+C", "copy the selection · stop the speech · cancel the reply · press twice to exit"),
             new("Ctrl+X", "cut the selection"),
-            mac ? new("Ctrl+V / Alt+V", "paste text or pictures (Cmd+V is the terminal's: text only)") : new("Alt+V", "paste text or pictures"),
+            // A PDF copied in Finder pastes as its path, which attaches it (2026-10-14, the PDF plan's gap 77).
+            mac ? new("Ctrl+V / Alt+V", "paste text, pictures or PDFs (Cmd+V is the terminal's: text only)") : new("Alt+V", "paste text or pictures"),
             // The transcript's scroll together (2026-10-05).
             new("PgUp / PgDn", "scroll the transcript a page at a time"),
             new("Ctrl+Home", "scroll to the top of the transcript"),
@@ -12307,6 +12310,25 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>The notice when a /command was sent with pictures on the line: they go with a message only. Pinned.</summary>
+    /// <summary>
+    /// <see cref="ImagesIgnoredNotice(int)"/> over the line's attachments (2026-10-14, the PDF plan's gap 26): pictures and PDFs counted apart,
+    /// <c>(1 image and 1 PDF were ignored: …)</c>; the pictures' wording alone when there is no PDF. Pinned.
+    /// </summary>
+    public static string ImagesIgnoredNotice(IReadOnlyList<ImageAttachment> attachments)
+    {
+        ArgumentNullException.ThrowIfNull(attachments);
+        int documents = attachments.Count(a => a.IsDocument);
+        int pictures = attachments.Count - documents;
+        if (documents == 0)
+        {
+            return ImagesIgnoredNotice(pictures);
+        }
+
+        string pdfs = documents == 1 ? "1 PDF" : documents.ToString(CultureInfo.InvariantCulture) + " PDFs";
+        string all = pictures == 0 ? pdfs : UsageText.Plural(pictures, "image", "images") + " and " + pdfs;
+        return pictures + documents == 1 ? $"(the PDF was ignored: a /command takes none)" : $"({all} were ignored: a /command takes none)";
+    }
+
     public static string ImagesIgnoredNotice(int count) =>
         count == 1 ? "(the image was ignored: a /command takes none)" : $"({count.ToString(CultureInfo.InvariantCulture)} images were ignored: a /command takes none)";
 
@@ -12498,7 +12520,7 @@ internal sealed partial class ChatScreen
 
         if (command != SlashCommand.None && images.Count > 0)
         {
-            _transcript.Notice(ImagesIgnoredNotice(images.Count));
+            _transcript.Notice(ImagesIgnoredNotice(images));
         }
 
         switch (command)
@@ -13708,7 +13730,7 @@ internal sealed partial class ChatScreen
 
                 if (images.Count > 0)
                 {
-                    _transcript.Notice(ImagesIgnoredNotice(images.Count));
+                    _transcript.Notice(ImagesIgnoredNotice(images));
                 }
 
                 await RunLoopedCommandAsync(command, commandArgs, count, delay, cancellationToken).ConfigureAwait(false);
@@ -15224,9 +15246,29 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        if (images.Count > 0 && _session.EmbeddedServer is { Vision: false } blind)
+        // An attached PDF's text read and checked before anything else (2026-10-14, the PDF plan's phase 3): null to go on.
+        if (images.Any(i => i.IsDocument))
         {
-            // The embedded model without its vision projector (2026-09-29): llama-server would refuse the image anyway.
+            var (ready, refused) = await ReadyAttachedPdfsAsync(text, images, cancellationToken).ConfigureAwait(false);
+            if (ready is null)
+            {
+                if (refused is not null)
+                {
+                    _transcript.Error(refused);
+                }
+
+                // The draft back on the row, its tokens as they were, so a PDF can be taken off and the line sent again.
+                _restoreDraft = _sentDraft ?? PasteBlocks.WithoutSavedPaths(text);
+                _input.Chat.Load(_restoreDraft, prependToCurrent: true);
+                return false;
+            }
+
+            images = ready;
+        }
+
+        if (images.Any(i => !i.IsDocument) && _session.EmbeddedServer is { Vision: false } blind)
+        {
+            // The embedded model without its vision projector (2026-09-29): llama-server would refuse the image anyway. A PDF goes as text.
             _transcript.Error(EmbeddedLlm.EmbeddedLlmText.NoVisionError);
             return false;
         }
@@ -15740,7 +15782,8 @@ internal sealed partial class ChatScreen
         // The shells found are checked per turn (2026-09-21), so the schema and the run agree: since 2026-10-12 the cache is revalidated, not
         // walked again (Interpreters.Revalidate); /tools opening walks the PATH afresh, so an install during the session still shows.
         // The picture budget (2026-10-03), a bot's turn too: read at each turn, so an edit lands at the next request.
-        assistant.PictureBudget = new PictureBudget(effective.LlmPictureKeep, effective.LlmPictureMegabytes);
+        // An attached PDF weighs its text where the endpoint gets text (2026-10-14, the PDF plan's gap 82); a bot's turn carries none.
+        assistant.PictureBudget = new PictureBudget(effective.LlmPictureKeep, effective.LlmPictureMegabytes, DocumentsAsText: bot is null && !ApiKeys.IsHostedApi(_session.Endpoint?.BaseUrl));
 
         // A /botchat turn's prompt and tool list are its own, set by HandleBotChatAsync (BotChat.TurnTools).
         if (bot is null)
@@ -16197,7 +16240,8 @@ internal sealed partial class ChatScreen
         var ids = new List<int>(images.Count);
         foreach (var image in images)
         {
-            if (ImageThumbnail.Read(image, box.Columns, box.MaxRows) is { } thumbnail)
+            // An attached PDF has no thumbnail (2026-10-14): its label on the line says what it is.
+            if (!image.IsDocument && ImageThumbnail.Read(image, box.Columns, box.MaxRows) is { } thumbnail)
             {
                 tiles.Add(thumbnail);
                 ids.Add(RegisterPicture(image, sandbox));

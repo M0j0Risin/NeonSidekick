@@ -323,6 +323,32 @@ internal sealed partial class ChatScreen
             }
         }
 
+        // An attached PDF's label back as its token (2026-10-14, the PDF plan's gap 49): its file loaded again (the cache answers its text at
+        // once); one gone or unreadable leaves the label as text.
+        var documents = ConversationRewind.Documents(picked);
+        if (documents.Count > 0)
+        {
+            var withDocuments = new StringBuilder(line.Length);
+            int at = 0;
+            int nextDocument = 0;
+            foreach (var (start, length) in ConversationRewind.DocumentLabels(line))
+            {
+                withDocuments.Append(line, at, start - at);
+                at = start + length;
+                if (nextDocument < documents.Count && ConversationHistory.PicturePath(documents[nextDocument++]) is { } path
+                    && LoadAttachedPdf(path) is ({ } document, _))
+                {
+                    withDocuments.Append(_input.Pastes.AddDocument(document));
+                }
+                else
+                {
+                    withDocuments.Append(line, start, length);
+                }
+            }
+
+            line = withDocuments.Append(line, at, line.Length - at).ToString();
+        }
+
         var images = ConversationRewind.Images(picked);
         if (images.Count == 0)
         {

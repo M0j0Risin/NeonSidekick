@@ -63,10 +63,28 @@ public sealed class ConversationHistory
     /// </summary>
     public const string SourceKey = "neon.imageSource";
 
-    /// <summary>An attachment's image part: its bytes and type, its path under <see cref="PathKey"/>, marked <see cref="CameraKey"/> when it came off the camera.</summary>
+    /// <summary>
+    /// An attachment's image part: its bytes and type, its path under <see cref="PathKey"/>, marked <see cref="CameraKey"/> when it came off the
+    /// camera. A PDF (2026-10-14, the PDF plan's phase 3) is the same native part — what the Anthropic and OpenAI APIs take as a document —
+    /// named with its file's name (gap 52: the OpenAI API's <c>input_file</c> needs one), its text under <see cref="DocumentTextKey"/> for the
+    /// endpoints that take none (<see cref="DocumentsAsText"/>); its read is done by then (the send awaits it).
+    /// </summary>
     public static DataContent ImagePart(ImageAttachment image)
     {
         ArgumentNullException.ThrowIfNull(image);
+        if (image.IsDocument)
+        {
+            string name = System.IO.Path.GetFileName(image.Path);
+            var document = new DataContent(image.Bytes, image.MediaType) { Name = name.Length > 0 ? name : "document.pdf" };
+            var read = image.DocumentText is { IsCompletedSuccessfully: true } done ? done.Result : new PdfDocumentText("", 0, 0);
+            document.AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                [PathKey] = image.Path,
+                [DocumentTextKey] = Pdf.PdfText.AttachedText(document.Name, image.Path, read),
+            };
+            return document;
+        }
+
         var part = new DataContent(image.Bytes, image.MediaType);
         if (!string.IsNullOrWhiteSpace(image.Path))
         {
@@ -89,6 +107,41 @@ public sealed class ConversationHistory
         }
 
         return part;
+    }
+
+    /// <summary>
+    /// The additional property an attached PDF's part carries (2026-10-14, the PDF plan's phase 3): its text as an endpoint that takes no
+    /// PDF reads it (<see cref="Pdf.PdfText.AttachedText"/>), and what a stored session, a summary or a trimmed request keeps. Never on the wire.
+    /// </summary>
+    public const string DocumentTextKey = "neon.documentText";
+
+    /// <summary>Whether <paramref name="content"/> is an attached PDF's part.</summary>
+    public static bool IsDocument(AIContent content) => content is DataContent data && data.MediaType == PdfFile.MediaType;
+
+    /// <summary>An attached PDF's text (<see cref="DocumentTextKey"/>); null for any other part.</summary>
+    public static string? DocumentText(AIContent content) =>
+        IsDocument(content) && content.AdditionalProperties?.TryGetValue(DocumentTextKey, out var text) == true ? text as string ?? "" : null;
+
+    /// <summary>
+    /// <paramref name="messages"/> with every attached PDF's part as its text (2026-10-14, the PDF plan's phase 3): what an endpoint that takes
+    /// no PDF is sent — an OpenAI-compatible server (Microsoft.Extensions.AI's adapter would send a chat-completions <c>file</c> part,
+    /// which llama-server refuses), the Claude Code server. A message without one is the same instance; the history is never changed.
+    /// </summary>
+    public static IEnumerable<ChatMessage> DocumentsAsText(IEnumerable<ChatMessage> messages)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        foreach (var message in messages)
+        {
+            if (!message.Contents.Any(IsDocument))
+            {
+                yield return message;
+                continue;
+            }
+
+            var copy = message.Clone();
+            copy.Contents = [.. message.Contents.Select(c => IsDocument(c) ? new TextContent(DocumentText(c) ?? "") : c)];
+            yield return copy;
+        }
     }
 
     /// <summary>

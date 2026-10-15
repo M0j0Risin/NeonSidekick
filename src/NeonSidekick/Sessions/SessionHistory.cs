@@ -224,6 +224,12 @@ public static class SessionHistory
                 case DataContent data when !keepScreen && ConversationHistory.ScreenPath(data) is { } screenPath:
                     stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = Screen.ScreenText.NotKept(screenPath) });
                     break;
+                // An attached PDF (2026-10-14, the PDF plan's gaps 12 and 50): its text as a text part — never its bytes (the session is
+                // written whole at every save), and a resumed session reads what the PDF said, the session search finds its words. Simpler
+                // than the plan's stub refilled from the file: a restore stays pure, and a moved or changed PDF never matters.
+                case DataContent data when ConversationHistory.DocumentText(data) is { } pdf:
+                    stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = pdf });
+                    break;
                 // A PDF page's picture (2026-10-14, the PDF plan's gap 21): a line naming the page, never its bytes — the session is
                 // written whole at every save, and the PDF is still on disk for read_pdf to draw again. No keep switch.
                 case DataContent data when ConversationHistory.PdfPage(data) is { } pdfPage:

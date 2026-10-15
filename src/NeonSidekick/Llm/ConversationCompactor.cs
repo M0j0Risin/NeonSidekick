@@ -150,6 +150,10 @@ public static class ConversationCompactor
                     case FunctionResultContent { Result: { } other }:
                         chars += other.ToString()?.Length ?? 0;
                         break;
+                    case DataContent document when ConversationHistory.DocumentText(document) is { } pdf:
+                        // An attached PDF (2026-10-14, the PDF plan's gap 4) weighs its text, not one picture's tokens.
+                        chars += pdf.Length;
+                        break;
                     case DataContent:
                         pictures++;
                         break;
@@ -535,6 +539,10 @@ public static class ConversationCompactor
                         string name = result.CallId is { } id && names.TryGetValue(id, out var found) ? found : UnknownTool;
                         string output = result.Result?.ToString() ?? "";
                         parts.Add("[" + name + " returned] " + (output.Length <= maxResultChars ? output : output[..maxResultChars] + LeanCut(output.Length - maxResultChars)));
+                        break;
+                    case DataContent document when ConversationHistory.DocumentText(document) is { } pdf:
+                        // An attached PDF (2026-10-14, the PDF plan's gap 5): its text, cut, so the summary keeps what it said.
+                        parts.Add(pdf.Length <= Pdf.PdfText.LeftOutChars ? pdf : pdf[..Pdf.PdfText.LeftOutChars] + LeanCut(pdf.Length - Pdf.PdfText.LeftOutChars));
                         break;
                     case DataContent:
                         parts.Add(LeanPicture);

@@ -447,6 +447,13 @@ public sealed partial class InputLine
     public Func<int, DroppedPicture?>? PictureFile { get; set; }
 
     /// <summary>
+    /// What a dropped or pasted <c>.pdf</c> path becomes (2026-10-14, the PDF plan's phase 3): the screen's loader, which reads the file,
+    /// checks it and starts its text's read in the background, answering the attachment at once (or the sentence why not, the path
+    /// then staying text). Null — headless, a field, a test without one — and a PDF's path is text, as before.
+    /// </summary>
+    public Func<string, (ImageAttachment? Document, string? Error)>? DocumentLoader { get; set; }
+
+    /// <summary>
     /// The sent line as the transcript keeps it, in <paramref name="style"/> (<see cref="UserLineStyle"/>) (2026-10-04, the UI review: always bold in the
     /// secondary colour until then, whatever a theme's <c>user</c> style said): <c>quiet</c> the glyph in <see cref="Theme.User"/> and the
     /// words in <see cref="Theme.Body"/>, <c>slab</c> the whole on <see cref="Theme.MenuHighlight"/>'s fill, <c>bold</c> the whole in
@@ -716,7 +723,7 @@ public sealed partial class InputLine
     /// keeps the block's line breaks, holds a long block behind a token and reads a dropped image file into one; a field
     /// takes one paragraph.
     /// </summary>
-    private async Task<string> PasteBlockAsync(string pasted, bool multiline)
+    private async Task<string> PasteBlockAsync(string pasted, bool multiline, bool command = false)
     {
         string block = multiline ? PasteText.Normalize(pasted) : PasteText.Flatten(pasted);
         if (block.Length == 0)
@@ -724,7 +731,10 @@ public sealed partial class InputLine
             return "";
         }
 
-        if (multiline && ImageFile.TryPastedPaths(block, out var paths))
+        // A PDF is an attachment only on a message's line (2026-10-14, the PDF plan's gap 42): dropped on a /command line (/print, /open,
+        // /pdf, /view, /read) it stays its path, as it always was, since a command keeps no attachment.
+        bool documents = DocumentLoader is not null && !command;
+        if (multiline && ImageFile.TryPastedPaths(block, out var paths, documents))
         {
             // One token per file, a space between; a file that cannot be read stays as its
             // path (the notice says why), so nothing dropped is lost from the line.
@@ -734,6 +744,25 @@ public sealed partial class InputLine
                 foreach (var path in paths)
                 {
                     string? error = null;
+                    if (documents && PdfFile.IsPdfPath(path))
+                    {
+                        // A PDF (2026-10-14): attached at once, its text read in the background; the send waits for it.
+                        var (document, refused) = await Task.Run(() => DocumentLoader!(path)).ConfigureAwait(false);
+                        if (document is not null)
+                        {
+                            pieces.Add(_pastes.AddDocument(document).ToString());
+                            continue;
+                        }
+
+                        if (refused is not null)
+                        {
+                            _notices?.Notice(refused);
+                        }
+
+                        pieces.Add(_pastes.Literals(path));
+                        continue;
+                    }
+
                     var image = await Task.Run(() => ImageFile.Load(path, out error)).ConfigureAwait(false);
                     if (image is not null)
                     {
