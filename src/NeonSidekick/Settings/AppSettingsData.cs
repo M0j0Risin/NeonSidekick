@@ -3180,27 +3180,45 @@ public sealed class AppSettingsData
     public string WebUiReach { get; set; } = NeonSidekick.WebUi.WebUiReach.Default;
 
     /// <summary>
+    /// Whether the Web UI has its Chat tab (2026-10-15, the user's call: on by default): on, the page at <c>/</c> is the chat — the transcript, the
+    /// composer, the PC's questions answered from the phone; off, there is no Chat tab: <c>/</c> goes to the first tab that is on (Home, then
+    /// Shopping) or, with none on, to a page that says so, and the chat's APIs answer 404 (its event stream ends). The PC is unchanged. Read at
+    /// each request. No variable.
+    /// </summary>
+    public bool WebUiChatControls { get; set; } = true;
+
+    /// <summary>
     /// Whether the Web UI's page may run slash commands (later on 2026-10-14, the user's call: off by default): on, the page sends the commands
     /// <c>App/WebCommands</c> allows — the ones that run, the pickers it shows as cards, the lists — and its dropdown completes them; off, a
-    /// command from the page is refused naming this setting, and the dropdown offers the mentions alone. Read at each request, so a change
-    /// needs no restart. No variable.
+    /// command from the page is refused naming this setting, and the dropdown offers the mentions alone. The Chat tab's alone
+    /// (<see cref="WebUiChatControls"/>). Read at each request, so a change needs no restart. No variable.
     /// </summary>
     public bool WebUiCommands { get; set; }
 
     /// <summary>
     /// Whether the Web UI's dropdown shows the <c>%</c> and <c>*</c> connections' notes in full (later on 2026-10-14, the user's call: on by default):
-    /// off, it lists their names alone. The dropdown only: the chat shows whatever the model says. Read at each request. No variable.
+    /// off, it lists their names alone. The dropdown only: the chat shows whatever the model says. The Chat tab's alone (<see cref="WebUiChatControls"/>).
+    /// Read at each request. No variable.
     /// </summary>
     public bool WebUiConnectionDetails { get; set; } = true;
 
     /// <summary>
-    /// Whether the Web UI's Home tab may act (2026-10-15, the user's call: off by default): on, its tiles toggle, its sheets run a device's
-    /// actions, its scenes run, <i>Ask the house</i> asks Home Assistant's Assist and the video remote plays and pauses the PC's YouTube window —
-    /// the home bar's own confirms (an unlock, a garage, gate or door opening, a disarm) still asked on the page. Off, the tab is read-only:
-    /// states, meters, now playing. It gates the Home tab alone; <c>/ha</c> from the chat is <see cref="WebUiCommands"/>'s. Read at each
-    /// request. No variable.
+    /// Whether the Web UI has its Home tab (2026-10-15, the user's call: off by default): on, the tab shows the home bar's tiles, and they
+    /// toggle, its sheets run a device's actions, its scenes run, <i>Ask the house</i> asks Home Assistant's Assist and the video remote plays
+    /// and pauses the PC's YouTube window — the home bar's own confirms (an unlock, a garage, gate or door opening, a disarm) still asked on the
+    /// page. Off, there is no Home tab (later that day, the user's call: a read-only tab whose taps did nothing went; its link is hidden, its
+    /// page goes to <c>/</c> and its APIs answer 404). It gates the Home tab alone; <c>/ha</c> from the chat is <see cref="WebUiCommands"/>'s.
+    /// Read at each request. No variable.
     /// </summary>
     public bool WebUiHomeControls { get; set; }
+
+    /// <summary>
+    /// Whether the Web UI has its Shopping tab (2026-10-15, the user's call: off by default, so the tab is gone after the upgrade until it is
+    /// turned on): on, the tab shows the shopping list, ticks its lines and changes the store; off, there is no Shopping tab (its link is hidden,
+    /// its page goes to <c>/</c> and its APIs answer 404). The PC's <c>/shopping</c> and the shopping tools are unchanged. Read at each request.
+    /// No variable.
+    /// </summary>
+    public bool WebUiShoppingControls { get; set; }
 
     /// <summary>
     /// Whether the Web UI's pages wear the profile's theme (2026-10-15, the user's call: on by default): on, their accents, tones and grounds are

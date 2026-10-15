@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using NeonSidekick.Diagnostics;
@@ -58,6 +59,13 @@ internal sealed partial class ChatScreen
             Tick = HomeWebTick,
             // The pages wear the profile's theme (2026-10-15), per request.
             ProfileTheme = () => _effective().WebUiProfileTheme,
+            // Each tab only while its controls are on (later on 2026-10-15), per request.
+            TabsNow = WebTabsNow,
+            // The PC's picture strip in the page's drawer (later on 2026-10-15).
+            StripKey = WebStripKey,
+            StripView = WebStripNow,
+            StripHolds = _pictureStrip.Holds,
+            StripSelect = WebStripSelect,
         };
         return (session, new WebUiController(webUiHost, session));
     }
@@ -73,6 +81,8 @@ internal sealed partial class ChatScreen
         _pane.BusyChanged += _webUi.StatusNudge;
         _webUi.PictureSource = WebPictureSourceOf;
         _webUi.Feed.PictureReleased += ForgetWebPicture;
+        // The strip's every change to the page's drawer (later on 2026-10-15), throttled and deduped by the session.
+        _pictureStrip.Changed += _webUi.StripNudge;
         _pane.Committed = text => _webUi.Feed.Add(FeedKind.User, text);
     }
 
@@ -149,6 +159,121 @@ internal sealed partial class ChatScreen
                 _pictures[id] = source with { Bytes = null };
             }
         }
+    }
+
+    // ── The page's picture strip (later on 2026-10-15) ──────────────────────
+
+    /// <summary>Each strip picture's addresses, built once: an id's describe never changes, so a highlight move re-sends with no file read.</summary>
+    private readonly ConcurrentDictionary<int, WebPicture> _stripWebPictures = new();
+
+    private int _webStripPick = -1;
+    private int _webStripPicking;
+
+    /// <summary>The strip's key: the setting, its version and whether it holds any, read with no file access (the session's tick reads it each second).</summary>
+    private string WebStripKey() =>
+        (_effective().ComfyPictureStrip ? "on" : "off") + "|" + _pictureStrip.Version.ToString(CultureInfo.InvariantCulture) + "|" + (_pictureStrip.Count > 0 ? "some" : "none");
+
+    /// <summary>
+    /// The strip as the page's drawer shows it (any thread): its pictures newest first and the PC's highlight, or null while <i>ComfyUI picture strip</i>
+    /// is off or it holds none. The PC's × is the PC's own: the page's drawer follows the setting alone.
+    /// </summary>
+    private WebStrip? WebStripNow()
+    {
+        var (ids, selected) = _pictureStrip.Snapshot();
+        if (ids.Count == 0)
+        {
+            _stripWebPictures.Clear();
+            return null;
+        }
+
+        if (!_effective().ComfyPictureStrip)
+        {
+            return null;
+        }
+
+        var pictures = new List<WebPicture>(ids.Count);
+        foreach (int id in ids)
+        {
+            if (_stripWebPictures.TryGetValue(id, out var known))
+            {
+                pictures.Add(known);
+            }
+            else if (WebPictureOf(id) is { } made)
+            {
+                _stripWebPictures[id] = made;
+                pictures.Add(made);
+            }
+        }
+
+        if (_stripWebPictures.Count > ids.Count * 2)
+        {
+            var held = ids.ToHashSet();
+            foreach (int gone in _stripWebPictures.Keys.Where(k => !held.Contains(k)).ToList())
+            {
+                _stripWebPictures.TryRemove(gone, out _);
+            }
+        }
+
+        return pictures.Count == 0 ? null : new WebStrip(pictures, selected);
+    }
+
+    /// <summary>
+    /// A strip picture picked on the page (a Kestrel thread): checked here, then handed to a pool thread, the latest pick winning, so a request never
+    /// waits on the pane or a viewer. False while <i>ComfyUI picture strip</i> is off or the strip no longer holds it.
+    /// </summary>
+    private bool WebStripSelect(int id)
+    {
+        if (!_effective().ComfyPictureStrip || !_pictureStrip.Holds(id))
+        {
+            return false;
+        }
+
+        Volatile.Write(ref _webStripPick, id);
+        if (Interlocked.Exchange(ref _webStripPicking, 1) == 0)
+        {
+            ThreadPool.QueueUserWorkItem(_ => DrainWebStripPicks());
+        }
+
+        return true;
+    }
+
+    private void DrainWebStripPicks()
+    {
+        while (true)
+        {
+            int id = Interlocked.Exchange(ref _webStripPick, -1);
+            if (id >= 0)
+            {
+                try
+                {
+                    SelectStripFromWeb(id);
+                }
+                catch (Exception e) when (e is not OutOfMemoryException)
+                {
+                    DiagnosticLog.Warn(WebUiCategory, "Web UI: the strip's pick did not reach the PC: " + e.Message);
+                }
+            }
+
+            Volatile.Write(ref _webStripPicking, 0);
+            if (Volatile.Read(ref _webStripPick) < 0 || Interlocked.Exchange(ref _webStripPicking, 1) != 0)
+            {
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The page's pick on the PC (a pool thread): the tile highlighted as a click on the strip highlights it, and an open viewer and thumbnail
+    /// browser moved to it — always, unlike the PC's own click, which moves nothing on the tile already highlighted: a viewer opened since follows too.
+    /// </summary>
+    private void SelectStripFromWeb(int id)
+    {
+        if (_pictureStrip.Highlight(entry => entry == id))
+        {
+            _pane.RedrawStrip();
+        }
+
+        FollowInViewer();
     }
 
     /// <summary>For the tests: the bytes picture <paramref name="id"/> keeps, or null.</summary>
@@ -297,7 +422,21 @@ internal sealed partial class ChatScreen
             WebUiText.Version,
             WebUiAssets.Current,
             // The theme's name (2026-10-15): a /theme at the PC re-links the page's sheet; empty while the pages keep their own look.
-            effective.WebUiProfileTheme ? Theme.Current.Name : "");
+            effective.WebUiProfileTheme ? Theme.Current.Name : "",
+            // The tabs on (later on 2026-10-15): the page hides the others' links, and leaves a tab that went off.
+            effective.WebUiChatControls,
+            effective.WebUiHomeControls,
+            effective.WebUiShoppingControls);
+    }
+
+    /// <summary>
+    /// The Web UI's tabs on now (later on 2026-10-15, the user's call: a tab exists only while its controls are on): <i>Web UI chat controls</i>,
+    /// <i>home controls</i>, <i>shopping controls</i>. Any thread.
+    /// </summary>
+    private WebTabs WebTabsNow()
+    {
+        var effective = _effective();
+        return new WebTabs(effective.WebUiChatControls, effective.WebUiHomeControls, effective.WebUiShoppingControls);
     }
 
     /// <summary>

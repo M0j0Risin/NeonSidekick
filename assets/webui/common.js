@@ -1,7 +1,8 @@
 // NeonSidekick's Web UI, what every page shares (2026-10-15): the element maker, the sentence under the page, the JSON post (the header no
 // cross-site form can send; a 401 signs in again, a 429's sentence is the app's), the connection dot, the poll that rests while the page is
 // hidden, the self-reload after an upgrade (once per tag), the Chat badge on the other tabs and the theme's re-link. Loaded first, before the
-// page's own script; nothing here runs on its own but the theme's and the badge's wiring the page asks for.
+// page's own script; nothing here runs on its own but the theme's and the badge's wiring the page asks for. Later on 2026-10-15: the tabs on
+// (a tab exists only while its controls are on at the PC), so the nav hides the others and a page whose tab went off goes to /.
 'use strict';
 
 const Neon = (() => {
@@ -41,6 +42,7 @@ const Neon = (() => {
       let j = null;
       try { j = await r.json(); } catch { /* none */ }
       if (r.status === 401) location.reload();
+      if (r.status === 404 && j && j.tabOff) leave();
       return { ok: r.ok, status: r.status, message: j && j.message, asText: !!(j && j.asText), use: j && j.use, json: j };
     } catch {
       return { ok: false, status: 0, message: 'The app could not be reached.' };
@@ -60,11 +62,56 @@ const Neon = (() => {
       if (useEtag && r.headers.get('ETag')) etags.set(path, r.headers.get('ETag'));
       let j = null;
       try { j = await r.json(); } catch { /* none */ }
+      if (r.status === 404 && j && j.tabOff) leave();
       return { ok: r.ok, status: r.status, json: j };
     } catch {
       connected(false);
       return { ok: false, status: 0, json: null };
     }
+  }
+
+  // ── The tabs (later on 2026-10-15) ──
+  // Each tab exists only while its controls are on at the PC: the nav shows the ones on, and a page whose own tab went off (its body's
+  // data-tab) goes to /, which the server sends on to a tab that is on. The nav starts hidden so a link to a tab that is off never flashes;
+  // it shows once the tabs are known, or after 2 seconds whatever happens, so a page that can't reach the PC still has its links.
+  let leaving = false;
+  function leave() {
+    if (leaving) return;
+    leaving = true;
+    location.replace('/');
+  }
+
+  function navReady() {
+    const nav = document.querySelector('header.top nav');
+    if (nav) nav.classList.add('ready');
+  }
+  setTimeout(navReady, 2000);
+
+  function tabOf(href) {
+    return href === '/' ? 'chat' : href === '/home' ? 'home' : href === '/shopping' ? 'shopping' : null;
+  }
+
+  // True when the page leaves (its own tab is off), so the caller draws nothing more.
+  function tabs(chat, home, shopping) {
+    const on = { chat: chat !== false, home: home !== false, shopping: shopping !== false };
+    for (const a of document.querySelectorAll('header.top nav a')) {
+      const tab = tabOf(a.getAttribute('href'));
+      if (tab) a.classList.toggle('hidden', !on[tab]);
+    }
+    navReady();
+    const here = document.body.dataset.tab;
+    if (here && on[here] === false) {
+      leave();
+      return true;
+    }
+    return false;
+  }
+
+  // The phone's keyboard over the page's bottom (later on 2026-10-15): an iPhone doesn't shrink the layout viewport for it, so what is fixed
+  // to the bottom moves up by this much. Pure, so a test can give it a viewport of its own.
+  function keyboardInset(innerHeight, viewport) {
+    if (!viewport) return 0;
+    return Math.max(0, Math.round(innerHeight - viewport.height - (viewport.offsetTop || 0)));
   }
 
   function connected(on) {
@@ -126,10 +173,13 @@ const Neon = (() => {
     if (!p) return;
     if (staleAssets(p.assets)) return;
     theme(p.theme);
-    const waiting = (p.asks || 0) + (p.waitingAtPc ? 1 : 0);
+    if (tabs(p.chatTab, p.homeTab, p.shoppingTab)) return;
+    // With Chat off the PC's questions are the PC's alone: no dot, no count, no (n), no vibration.
+    const chatOn = p.chatTab !== false;
+    const waiting = chatOn ? (p.asks || 0) + (p.waitingAtPc ? 1 : 0) : 0;
     const link = document.getElementById('chat-link');
     if (link) {
-      link.classList.toggle('busy', !!p.busy && waiting === 0);
+      link.classList.toggle('busy', chatOn && !!p.busy && waiting === 0);
       link.classList.toggle('asking', waiting > 0);
       link.dataset.badge = waiting > 0 ? String(waiting) : '';
     }
@@ -140,5 +190,5 @@ const Neon = (() => {
     lastAsks = waiting;
   }
 
-  return { el, say, post, get, connected, poll, staleAssets, theme, pulse };
+  return { el, say, post, get, connected, poll, staleAssets, theme, pulse, tabs, leave, keyboardInset };
 })();

@@ -168,6 +168,23 @@ public static class WebUiText
     /// <summary>An API call without the cookie.</summary>
     public const string SignInNeeded = "Sign in first: open the link /webui shows in the app.";
 
+    /// <summary>An API of the Chat tab while <i>Web UI chat controls</i> is off (later on 2026-10-15); the page goes to <c>/</c>.</summary>
+    public const string ChatTabOff = "The Chat tab is off: Web UI chat controls in /settings › Client › Web UI turns it on.";
+
+    /// <summary>An API of the Home tab while <i>Web UI home controls</i> is off (later on 2026-10-15).</summary>
+    public const string HomeTabOff = "The Home tab is off: Web UI home controls in /settings › Client › Web UI turns it on.";
+
+    /// <summary>An API of the Shopping tab while <i>Web UI shopping controls</i> is off (later on 2026-10-15); bare <c>/shopping</c> from the page too.</summary>
+    public const string ShoppingTabOff = "The Shopping tab is off: Web UI shopping controls in /settings › Client › Web UI turns it on.";
+
+    /// <summary>The sentence for a tab that is off.</summary>
+    public static string TabOff(WebTab tab) => tab switch
+    {
+        WebTab.Chat => ChatTabOff,
+        WebTab.Home => HomeTabOff,
+        _ => ShoppingTabOff,
+    };
+
     /// <summary>A POST without JSON and the header.</summary>
     public const string PostRefused = "Refused: not from the Web UI's own page.";
 
@@ -185,6 +202,9 @@ public static class WebUiText
     /// <summary>A form that opens a window or a pane only the PC has, and the form that works here when there is one.</summary>
     public static string OpensPane(string word, string? works) =>
         word + " opens a pane or a window at the PC, so it runs there." + (works is null ? "" : " Here: " + works + ".");
+
+    /// <summary><c>/loop</c> over a command the page refuses (later on 2026-10-15): that command's own reason.</summary>
+    public static string LoopRefused(string reason) => "/loop: " + reason;
 
     /// <summary>A command whose tools are switched off.</summary>
     public static string Needs(string word, string setting) => word + " needs " + setting + " on (/tools).";
@@ -280,9 +300,40 @@ public static class WebUiText
     /// <summary>The usage card's title (2026-10-15).</summary>
     public const string UsageTitle = "Usage";
 
+    /// <summary>The ✕ inside the page's message box (later on 2026-10-15): its label.</summary>
+    public const string ClearDraft = "Clear the draft";
+
+    /// <summary>The page's line after the ✕, with <see cref="Undo"/>.</summary>
+    public const string DraftCleared = "Draft cleared.";
+
+    /// <summary>The floating ↕'s labels (later on 2026-10-15): every fold opened, or closed again.</summary>
+    public const string ExpandAll = "Expand all";
+
+    public const string CollapseAll = "Collapse all";
+
+    /// <summary>The floating ⤒ and ⤓ (later on 2026-10-15).</summary>
+    public const string ToTop = "To the top";
+
+    public const string ToBottom = "To the bottom";
+
+    /// <summary>The floating 🎞️ and the drawer's region (later on 2026-10-15).</summary>
+    public const string StripButton = "Pictures";
+
+    /// <summary>The drawer's head for one picture, and for more (<c>{0}</c> the count): two words, as the page can't decline a noun.</summary>
+    public const string StripOne = "1 picture";
+
+    public const string StripMany = "{0} pictures";
+
+    /// <summary>The drawer's ✕.</summary>
+    public const string CloseStrip = "Close the pictures";
+
+    /// <summary>A strip picture the page picked that the strip no longer holds, or with the strip off.</summary>
+    public const string NoSuchPicture = "That picture is no longer in the strip.";
+
     /// <summary>The page's own words, sent with every snapshot.</summary>
     public static readonly WebWords Words = new(PictureGone, PictureTooLarge, OpenOriginal, SendAsMessage, UseLine, DraftFilled, Undo, Working, CloseChoice,
-        UI.TranscriptRenderer.NoReplyText, UI.ThinkingFoldText.LiveBare, EntryGone);
+        UI.TranscriptRenderer.NoReplyText, UI.ThinkingFoldText.LiveBare, EntryGone,
+        ClearDraft, DraftCleared, ExpandAll, CollapseAll, ToTop, ToBottom, StripButton, StripOne, StripMany, CloseStrip);
 
     /// <summary>A folded entry whose text the page asked for after the transcript let it go (2026-10-15).</summary>
     public const string EntryGone = "(no longer available)";
@@ -298,8 +349,11 @@ public static class WebUiText
 
     // ── The Home tab (2026-10-15) ─────────────────────────────────────────────
 
-    /// <summary>Every Home action while <i>Web UI home controls</i> is off.</summary>
-    public const string HomeControlsOff = "The Home tab only shows: Web UI home controls in /settings › Client › Web UI lets it act.";
+    /// <summary>
+    /// Every Home action while <i>Web UI home controls</i> is off: a page from before the switch (later on 2026-10-15, the tab itself goes with the
+    /// setting, so the host answers its 404 first; this is the backstop's 403).
+    /// </summary>
+    public const string HomeControlsOff = HomeTabOff;
 
     /// <summary>A tile, an action or a scene gone or changed since the page read it.</summary>
     public const string HomeChanged = "That changed since the page read it: look again.";

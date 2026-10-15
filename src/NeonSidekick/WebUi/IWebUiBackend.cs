@@ -104,6 +104,12 @@ public interface IWebUiBackend
     /// <summary>What the Chat badge reads on the other tabs (2026-10-15).</summary>
     WebPulse Pulse();
 
+    /// <summary>Which tabs are on (later on 2026-10-15), read at each request: a tab that is off has no page and its APIs answer 404.</summary>
+    WebTabs Tabs();
+
+    /// <summary>A strip picture picked on the page (later on 2026-10-15): the PC's highlight and open viewer move to it; not found when gone.</summary>
+    WebReply SelectStripPicture(WebStripSelect request, IPAddress? remote);
+
     /// <summary><c>/theme.css</c> (2026-10-15): the profile's theme, empty while <i>Web UI profile theme</i> is off.</summary>
     string ThemeCss();
 

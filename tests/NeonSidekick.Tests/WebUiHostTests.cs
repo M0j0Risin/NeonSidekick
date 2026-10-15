@@ -13,7 +13,7 @@ namespace NeonSidekick.Tests;
 /// The Web UI's server (2026-10-14): a real Kestrel on loopback port 0 over a fake backend — the cookie gate, the sign-in, the headers, the
 /// posts' cross-site guard, the event stream, the static files.
 /// </summary>
-public sealed class WebUiHostTests : IAsyncLifetime
+public sealed partial class WebUiHostTests : IAsyncLifetime
 {
     private readonly FakeWebUiBackend _backend = new();
     private readonly string _token = WebUiAuth.NewToken();

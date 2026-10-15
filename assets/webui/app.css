@@ -45,7 +45,9 @@ header.top {
 
 header.top .who { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
 header.top .who .model { display: block; font-weight: 400; color: var(--dim); font-size: 12px; }
-header.top nav { display: flex; gap: 4px; }
+/* Hidden until the tabs are known (later on 2026-10-15, common.js's Neon.tabs), its height kept so nothing jumps. */
+header.top nav { display: flex; gap: 4px; visibility: hidden; }
+header.top nav.ready { visibility: visible; }
 header.top nav a {
   color: var(--dim);
   text-decoration: none;
@@ -144,6 +146,7 @@ main { flex: 1; padding: 12px 16px 16px; max-width: 900px; width: 100%; margin: 
   background: var(--panel);
 }
 .entry.pictures .tile img { display: block; max-width: 100%; height: auto; max-height: 320px; object-fit: contain; }
+.entry.pictures .tile img.original { max-width: min(100%, 320px); }   /* a thumbnail the server could not make: the original, scaled down */
 .entry.pictures .tile.fallback { padding: 10px 12px; color: var(--dim); font-size: 14px; text-align: left; }
 
 .overlay {
@@ -217,6 +220,76 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 .hidden { display: none !important; }
 
 .compose { display: flex; gap: 8px; align-items: flex-end; }
+/* The ✕ that clears the draft (later on 2026-10-15), inside the box at its right; the box keeps its text clear of it. */
+.draft-box { position: relative; flex: 1; min-width: 0; display: flex; }
+.draft-box textarea { padding-right: 40px; }
+.clear-draft {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--dim);
+}
+
+/* The floating buttons (later on 2026-10-15): expand or collapse every fold, to the top, the picture strip, to the bottom. Faded until touched,
+   at the transcript's right edge (the column is 900px at most), the bottom pair above the footer and the phone's keyboard. */
+.floaters {
+  position: fixed;
+  right: max(12px, calc((100vw - 900px) / 2 + 12px));
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.floaters.top { top: calc(var(--head-h, 56px) + 8px); }
+.floaters.bottom { bottom: calc(var(--foot-h, 120px) + var(--kb, 0px) + 8px); }
+.float {
+  pointer-events: auto;
+  position: relative;
+  width: 36px;
+  height: 36px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+.float::after { content: ""; position: absolute; inset: -4px; }   /* a 44px target */
+.float:hover, .float:focus-visible, .float:active, .float.on { opacity: 1; }
+.float.on { box-shadow: 0 0 0 2px var(--accent); }
+.float .new-dot { position: absolute; top: 2px; right: 2px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
+@media (max-width: 420px) { #log { padding-right: 28px; } }
+
+/* The picture strip (later on 2026-10-15): the PC's ComfyUI strip in a drawer over the status row, newest left, the PC's pick outlined. */
+.strip { display: flex; flex-direction: column; gap: 6px; }
+.strip-bar { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--dim); }
+.strip-bar span { flex: 1; min-width: 0; }
+.strip-bar button { min-height: 32px; padding: 2px 10px; }
+.strip-row { display: flex; gap: 6px; overflow-x: auto; scroll-snap-type: x proximity; padding: 3px; }
+.strip-tile {
+  flex: none;
+  scroll-snap-align: start;
+  height: 72px;
+  min-height: 0;
+  min-width: 48px;
+  max-width: 160px;
+  padding: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel-2);
+}
+.strip-tile img { display: block; height: 72px; width: auto; max-width: 160px; object-fit: cover; }
+.strip-tile.selected { box-shadow: 0 0 0 3px var(--accent); }
+.strip-tile.fallback { padding: 4px 8px; font-size: 12px; color: var(--dim); white-space: normal; text-align: left; }
 
 /* The status row (2026-10-15): the PC's spinner, its label and clocks on the left, the usage on the right, one slim line. */
 .status { display: flex; align-items: center; gap: 10px; font-size: 13px; line-height: 20px; color: var(--dim); min-height: 20px; }

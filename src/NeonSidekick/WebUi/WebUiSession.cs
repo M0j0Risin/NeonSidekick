@@ -53,6 +53,12 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     private readonly ITimer _statusTrail;
     private readonly TimeProvider _time;
     private readonly object _statusGate = new();
+    private readonly ITimer _stripTrail;
+    private readonly object _stripGate = new();
+    private string _lastStrip = "";
+    private long _stripAt;
+    private bool _stripSent;
+    private bool _stripTrailing;
     private string _lastState = "";
     private string _lastStatus = "";
     private long _statusAt;
@@ -78,6 +84,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         _time = time ?? TimeProvider.System;
         _sampler = _time.CreateTimer(_ => SampleState(), null, StateInterval, StateInterval);
         _statusTrail = _time.CreateTimer(_ => TrailingStatus(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        _stripTrail = _time.CreateTimer(_ => TrailingStrip(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
     }
 
     /// <summary>The transcript as the pages see it.</summary>
@@ -140,7 +147,101 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// <summary>The screen's picture by id (under its own lock), asked only for an id the feed holds; null for none.</summary>
     public Func<int, WebPictureSource?>? PictureSource { get; set; }
 
-    public WebPictureSource? Picture(int id) => Feed.Holds(id) ? PictureSource?.Invoke(id) : null;
+    /// <summary>
+    /// Picture <paramref name="id"/> while the transcript or the strip holds it (later on 2026-10-15: a strip picture whose transcript entry was
+    /// trimmed or replayed away still loads in the drawer).
+    /// </summary>
+    public WebPictureSource? Picture(int id) => Feed.Holds(id) || (StripHolds?.Invoke(id) ?? false) ? PictureSource?.Invoke(id) : null;
+
+    // ── The picture strip (later on 2026-10-15) ─────────────────────────────
+
+    /// <summary>The strip's key now, cheap and with no file read (the setting, the strip's version, whether it is empty); null: no strip at all.</summary>
+    public Func<string>? StripKey { get; set; }
+
+    /// <summary>The strip as the page's drawer shows it, or null while <i>ComfyUI picture strip</i> is off or it is empty.</summary>
+    public Func<WebStrip?>? StripView { get; set; }
+
+    /// <summary>Whether the strip holds picture <paramref name="id"/> (thread-safe).</summary>
+    public Func<int, bool>? StripHolds { get; set; }
+
+    /// <summary>The PC's highlight and viewer moved to a strip picture, handed off the request's thread; false when the strip doesn't hold it or is off.</summary>
+    public Func<int, bool>? StripSelect { get; set; }
+
+    public WebReply SelectStripPicture(WebStripSelect request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return StripSelect?.Invoke(request.Id) == true ? WebReply.Ok : new WebReply(WebOutcome.NotFound, WebUiText.NoSuchPicture);
+    }
+
+    /// <summary>
+    /// The strip changed (its <c>Changed</c>, on the thread that changed it) or the session's tick: the strip now, or, inside <see cref="StatusThrottle"/>
+    /// of the last send, once more when the window ends. Deduped on its key, so the tick costs nothing while nothing changed. Never blocks.
+    /// </summary>
+    public void StripNudge()
+    {
+        if (Events.Count == 0 || StripKey is null)
+        {
+            return;
+        }
+
+        long now = _time.GetTimestamp();
+        lock (_stripGate)
+        {
+            if (_stripTrailing)
+            {
+                return;
+            }
+
+            var since = _time.GetElapsedTime(_stripAt, now);
+            if (_stripSent && since < StatusThrottle)
+            {
+                _stripTrailing = true;
+                _stripTrail.Change(StatusThrottle - since, Timeout.InfiniteTimeSpan);
+                return;
+            }
+
+            _stripAt = now;
+            _stripSent = true;
+        }
+
+        PublishStrip();
+    }
+
+    private void TrailingStrip()
+    {
+        lock (_stripGate)
+        {
+            _stripTrailing = false;
+            _stripAt = _time.GetTimestamp();
+        }
+
+        try
+        {
+            PublishStrip();
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            DiagnosticLog.Debug(Category, "Web UI: the picture strip could not be read: " + e.Message);
+        }
+    }
+
+    /// <summary>The strip now, to every page, when its key differs from what they have; the pictures built only then.</summary>
+    public void PublishStrip()
+    {
+        if (Events.Count == 0 || StripKey is null)
+        {
+            return;
+        }
+
+        string key = StripKey();
+        if (key == Interlocked.Exchange(ref _lastStrip, key))
+        {
+            return;
+        }
+
+        var strip = StripView?.Invoke();
+        Events.Publish(new WebEvent("strip", new Lazy<string>(JsonSerializer.Serialize(strip, WebUiJsonContext.Default.WebStrip))));
+    }
 
     /// <summary>A picture as an entry carries it: its three addresses under this run's tag. Pure but for the tag.</summary>
     public WebPicture Describe(int id, string name, int width, int height, bool tooLarge)
@@ -175,12 +276,17 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// <summary>The screen's chores on the session's 1-second tick whether or not a page streams (2026-10-15: the Home tab's lease running out).</summary>
     public Action? Tick { get; set; }
 
-    /// <summary>What the Chat badge reads (2026-10-15): the state's busy and waiting, the asks open, the theme, the files' tag.</summary>
+    /// <summary>What the Chat badge reads (2026-10-15): the state's busy and waiting, the asks open, the theme, the files' tag, and the tabs on.</summary>
     public WebPulse Pulse()
     {
         var state = _state();
-        return new WebPulse(state.Busy, Asks.OpenAsks().Count, state.WaitingAtPc, state.Theme, WebUiAssets.Current);
+        return new WebPulse(state.Busy, Asks.OpenAsks().Count, state.WaitingAtPc, state.Theme, WebUiAssets.Current, state.ChatTab, state.HomeTab, state.ShoppingTab);
     }
+
+    /// <summary>Which tabs are on, read per request (later on 2026-10-15, the screen's settings); null: every one.</summary>
+    public Func<WebTabs>? TabsNow { get; set; }
+
+    public WebTabs Tabs() => TabsNow?.Invoke() ?? WebTabs.All;
 
     /// <summary>Wakes the screen's idle line: a message or a notice is waiting (the screen's <c>SignalAlert</c>, and its act signal under a botchat).</summary>
     public Action? Nudge { get; set; }
@@ -339,7 +445,8 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     public WebSnapshot Snapshot()
     {
         // The connecting page's own copy: the other pages' last state stays what the sampler compares with.
-        return new WebSnapshot(Feed.Snapshot(WebUiMarkdown.ToHtml, defer: true), Asks.OpenAsks().Select(View).ToList(), _state(), WebUiText.Words, TakeDrafts(), StatusNow?.Invoke().Status);
+        return new WebSnapshot(Feed.Snapshot(WebUiMarkdown.ToHtml, defer: true), Asks.OpenAsks().Select(View).ToList(), _state(), WebUiText.Words, TakeDrafts(), StatusNow?.Invoke().Status,
+            StripView?.Invoke());
     }
 
     public void SignedIn(IPAddress? remote)
@@ -529,6 +636,8 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
             Tick?.Invoke();
             PublishState();
             PublishStatus();
+            // A flip of ComfyUI picture strip changes nothing in the strip itself: the tick reads its key (free when nothing changed).
+            PublishStrip();
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
@@ -627,6 +736,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     {
         _sampler.Dispose();
         _statusTrail.Dispose();
+        _stripTrail.Dispose();
         _completing.Dispose();
     }
 }

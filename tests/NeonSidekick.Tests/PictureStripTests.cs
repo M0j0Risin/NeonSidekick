@@ -7,7 +7,7 @@ using Spectre.Console.Testing;
 namespace NeonSidekick.Tests;
 
 /// <summary>The picture strip over the pane's upper rule (later still on 2026-09-24): the model, its window and drawing, and the pane around it.</summary>
-public class PictureStripTests : IDisposable
+public partial class PictureStripTests : IDisposable
 {
     private readonly TestConsole _console = new TestConsole().Interactive();
     private readonly ManualTimeProvider _time = new();

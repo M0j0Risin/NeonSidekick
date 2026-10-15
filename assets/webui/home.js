@@ -1,12 +1,12 @@
 // NeonSidekick's Web UI, the Home tab (2026-10-15): the home bar's items as tiles over Home Assistant's live states, a room's or a device's
 // sheet, the scenes, Ask the house, and the cards (the PC's YouTube window, its meters, the model). Read every 1.5 seconds while visible (a 304
-// when nothing changed), every 300 ms for a moment after a tap. Acting needs Web UI home controls at the PC; a tap that asks (an unlock, a garage,
-// gate or door, a disarm) asks here first. Every word is the app's (the tab's words come with each read).
+// when nothing changed), every 300 ms for a moment after a tap. The tab exists only while Web UI home controls is on at the PC (later on
+// 2026-10-15: a read-only tab whose taps did nothing went); a tap that asks (an unlock, a garage, gate or door, a disarm) asks here first.
+// Every word is the app's (the tab's words come with each read).
 'use strict';
 
 const { el, say, post } = Neon;
 const statusEl = document.getElementById('ha-status');
-const offEl = document.getElementById('controls-off');
 const tilesEl = document.getElementById('tiles');
 const scenesEl = document.getElementById('scenes');
 const askEl = document.getElementById('ask');
@@ -44,8 +44,6 @@ async function load() {
 function render() {
   statusEl.textContent = home.statusText || '';
   statusEl.classList.toggle('hidden', !home.statusText);
-  offEl.textContent = words.controlsOff;
-  offEl.classList.toggle('hidden', home.controls);
   renderTiles();
   renderScenes();
   renderAsk();

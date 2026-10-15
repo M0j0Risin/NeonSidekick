@@ -38,6 +38,12 @@ public sealed class WebQuestionAnswer
     public string? Other { get; set; }
 }
 
+/// <summary>A picture of the strip picked on the page (later on 2026-10-15): the PC's highlight and its open viewer move to it.</summary>
+public sealed class WebStripSelect
+{
+    public int Id { get; set; }
+}
+
 /// <summary>A shopping line ticked (<see cref="On"/>) or unticked.</summary>
 public sealed class WebCheckRequest
 {
@@ -57,6 +63,38 @@ public sealed record WebResult(bool Ok, string? Message = null, bool AsText = fa
 
     /// <summary>The question the page asks for <see cref="NeedsConfirm"/>, the home bar's own.</summary>
     public string? Prompt { get; init; }
+
+    /// <summary>
+    /// A 404 because the API's tab is off (later on 2026-10-15): the page goes to <c>/</c>, which sends it to a tab that is on. A plain 404 (a sheet
+    /// whose device went) carries none.
+    /// </summary>
+    public bool? TabOff { get; init; }
+}
+
+/// <summary>The Web UI's tabs and whether each is on (later on 2026-10-15): <i>Web UI chat controls</i>, <i>home controls</i>, <i>shopping controls</i>.</summary>
+public readonly record struct WebTabs(bool Chat, bool Home, bool Shopping)
+{
+    /// <summary>Every tab on: a backend that says nothing of its tabs.</summary>
+    public static WebTabs All => new(true, true, true);
+
+    /// <summary>Whether <paramref name="tab"/> is on.</summary>
+    public bool Has(WebTab tab) => tab switch
+    {
+        WebTab.Chat => Chat,
+        WebTab.Home => Home,
+        _ => Shopping,
+    };
+
+    /// <summary>The page <c>/</c> sends a browser to with Chat off: the first tab on in the nav's order (Home, then Shopping), or null for none.</summary>
+    public string? FirstOtherPage => Home ? "/home" : Shopping ? "/shopping" : null;
+}
+
+/// <summary>A tab of the Web UI's pages.</summary>
+public enum WebTab
+{
+    Chat,
+    Home,
+    Shopping,
 }
 
 /// <summary>
@@ -156,7 +194,7 @@ public sealed record WebHomePc(int? Cpu, int? Ram, int? Gpu, int? Vram, string? 
 public sealed record WebHomeModel(string Model, string Server, int? Context, bool Loading, bool Busy, WebUsage? Usage);
 
 /// <summary>What the Chat badge on the other tabs reads (2026-10-15): a reply running, the asks open, what the PC waits on, the theme's name, the files' tag.</summary>
-public sealed record WebPulse(bool Busy, int Asks, string? WaitingAtPc, string Theme, string Assets);
+public sealed record WebPulse(bool Busy, int Asks, string? WaitingAtPc, string Theme, string Assets, bool ChatTab = true, bool HomeTab = true, bool ShoppingTab = true);
 
 /// <summary>The Home tab's own words, the app's like every other.</summary>
 public sealed record WebHomeWords(
@@ -271,13 +309,22 @@ public sealed record WebState(
     string? WaitingAtPc,
     string Version,
     string Assets = "",
-    string Theme = "");
+    string Theme = "",
+    bool ChatTab = true,
+    bool HomeTab = true,
+    bool ShoppingTab = true);
 
 /// <summary>
 /// What a page gets on (re)connecting: the transcript, the open asks, the state, the app's words the page shows of its own, the drafts held for
 /// it, and the status row (2026-10-15).
 /// </summary>
-public sealed record WebSnapshot(IReadOnlyList<WebEntry> Entries, IReadOnlyList<WebAskView> Asks, WebState State, WebWords? Words = null, IReadOnlyList<string>? Drafts = null, WebStatus? Status = null);
+public sealed record WebSnapshot(IReadOnlyList<WebEntry> Entries, IReadOnlyList<WebAskView> Asks, WebState State, WebWords? Words = null, IReadOnlyList<string>? Drafts = null, WebStatus? Status = null, WebStrip? Strip = null);
+
+/// <summary>
+/// The PC's picture strip as the page's drawer shows it (later on 2026-10-15): its ComfyUI pictures newest first and the one the PC has
+/// highlighted. Always whole, so an event sent twice or out of order with the snapshot changes nothing.
+/// </summary>
+public sealed record WebStrip(IReadOnlyList<WebPicture> Pictures, int? Selected);
 
 /// <summary>
 /// The page's status row (2026-10-15): the PC's spinner label (the turn's stage, a fun verb, a tool, a load), the milliseconds since it started
@@ -296,7 +343,8 @@ public sealed record WebUsageCard(string Title, IReadOnlyList<string> Lines);
 /// The words the page puts on its own (later on 2026-10-14), the app's like every other: a picture's fallbacks (after the file's name alone),
 /// the overlay's link, a refused command's two offers (<see cref="UseLine"/> before the line), and a draft filled by a command with its undo.
 /// </summary>
-public sealed record WebWords(string PictureGone, string PictureTooLarge, string OpenOriginal, string SendAsMessage = "", string UseLine = "", string DraftFilled = "", string Undo = "", string Working = "", string Close = "", string NoReply = "", string ThinkingLive = "", string Gone = "");
+public sealed record WebWords(string PictureGone, string PictureTooLarge, string OpenOriginal, string SendAsMessage = "", string UseLine = "", string DraftFilled = "", string Undo = "", string Working = "", string Close = "", string NoReply = "", string ThinkingLive = "", string Gone = "",
+    string ClearDraft = "", string DraftCleared = "", string ExpandAll = "", string CollapseAll = "", string ToTop = "", string ToBottom = "", string StripButton = "", string StripOne = "", string StripMany = "", string CloseStrip = "");
 
 /// <summary>The open asks, whole (an <c>asks</c> event).</summary>
 public sealed record WebAsks(IReadOnlyList<WebAskView> Asks);
@@ -369,6 +417,8 @@ public sealed class WebStoreRequest
 [JsonSerializable(typeof(WebTextBack))]
 [JsonSerializable(typeof(WebState))]
 [JsonSerializable(typeof(WebSnapshot))]
+[JsonSerializable(typeof(WebStrip))]
+[JsonSerializable(typeof(WebStripSelect))]
 [JsonSerializable(typeof(WebWords))]
 [JsonSerializable(typeof(WebStatus))]
 [JsonSerializable(typeof(WebUsageCard))]

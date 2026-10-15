@@ -26,16 +26,19 @@ public static class WebUiAssets
     /// <summary>The page a browser without the cookie gets.</summary>
     public const string SignInPage = "signin.html";
 
+    /// <summary>The page <c>/</c> shows with every tab off (later on 2026-10-15): it names the settings and goes to <c>/</c> once one is on.</summary>
+    public const string NoTabsPage = "notabs.html";
+
     /// <summary>Every file, by the name it is served as (the path less its slash).</summary>
     public static readonly IReadOnlyList<string> Names =
-        [ChatPage, ShoppingPage, HomePage, SignInPage, "app.css", "common.js", "chat.js", "shopping.js", "home.js", "signin.js", "favicon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
+        [ChatPage, ShoppingPage, HomePage, SignInPage, NoTabsPage, "app.css", "common.js", "chat.js", "shopping.js", "home.js", "signin.js", "notabs.js", "favicon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
     /// <summary>
     /// The files served without the cookie (a signed-out page loads them too): the style, the scripts, the icon. Never a page or an API.
     /// <c>common.js</c> since 2026-10-15, the pages' shared helpers.
     /// </summary>
     public static bool IsStatic(string name) =>
-        name is "app.css" or "common.js" or "chat.js" or "shopping.js" or "home.js" or "signin.js" or "favicon.svg" or "icon-192.png" or "icon-512.png" or "apple-touch-icon.png";
+        name is "app.css" or "common.js" or "chat.js" or "shopping.js" or "home.js" or "signin.js" or "notabs.js" or "favicon.svg" or "icon-192.png" or "icon-512.png" or "apple-touch-icon.png";
 
     private static readonly Lazy<IReadOnlyDictionary<string, WebAsset>> s_assets = new(Load);
 

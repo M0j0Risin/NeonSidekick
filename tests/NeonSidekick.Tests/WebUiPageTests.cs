@@ -11,7 +11,7 @@ namespace NeonSidekick.Tests;
 /// tiles and asks, the Chat badge and the theme's re-link, the pasted sign-in. Every wait polls with a time limit. No browser installed: each test
 /// returns, as the PDF tests do.
 /// </summary>
-public sealed class WebUiPageTests : IAsyncLifetime
+public sealed partial class WebUiPageTests : IAsyncLifetime
 {
     private readonly FakeWebUiBackend _backend = new();
     private readonly string _token = WebUiAuth.NewToken();
@@ -217,20 +217,6 @@ public sealed class WebUiPageTests : IAsyncLifetime
         await page.EvalAsync("history.back()");
         await page.WaitAsync("document.getElementById('sheet-back').classList.contains('hidden')", "Back closing the sheet");
         Assert.Equal(2, (await page.EvalAsync("document.querySelectorAll('.meter').length")).GetInt32());   // CPU and RAM; the GPU's unread
-    }
-
-    [WindowsFact]
-    public async Task Home_WithControlsOff_TheTilesDoNothing_AndTheLineNamesTheSetting()
-    {
-        _backend.Home = new Home { Controls = false };
-        if (await SignedInAsync("/home") is not { } page)
-        {
-            return;
-        }
-
-        await page.WaitAsync("!document.getElementById('controls-off').classList.contains('hidden')", "the controls-off line");
-        Assert.Equal(WebUiText.HomeControlsOff, await page.TextAsync("document.getElementById('controls-off').textContent"));
-        Assert.True((await page.EvalAsync("document.getElementById('ask').classList.contains('hidden')")).GetBoolean());
     }
 
     // ── Common ──────────────────────────────────────────────────────────────

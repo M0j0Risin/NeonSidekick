@@ -94,6 +94,34 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
 
     public WebPulse Pulse() => PulseNow;
 
+    private readonly object _tabsGate = new();
+    private WebTabs _tabs = WebTabs.All;
+
+    /// <summary>The tabs on (later on 2026-10-15), every one by default; a test may flip them while a stream is open.</summary>
+    public WebTabs TabsOn
+    {
+        get { lock (_tabsGate) { return _tabs; } }
+        set { lock (_tabsGate) { _tabs = value; } }
+    }
+
+    public WebTabs Tabs() => TabsOn;
+
+    /// <summary>The strip's picks from the page (later on 2026-10-15), and the ids the strip holds (a pick of any other is not found).</summary>
+    public ConcurrentQueue<int> StripPicks { get; } = new();
+
+    public ConcurrentDictionary<int, bool> StripIds { get; } = new();
+
+    public WebReply SelectStripPicture(WebStripSelect request, IPAddress? remote)
+    {
+        if (!StripIds.ContainsKey(request.Id))
+        {
+            return new WebReply(WebOutcome.NotFound, WebUiText.NoSuchPicture);
+        }
+
+        StripPicks.Enqueue(request.Id);
+        return Reply;
+    }
+
     public string Css { get; set; } = ":root { --accent: #123456; }\n";
 
     public string ThemeCss() => Css;

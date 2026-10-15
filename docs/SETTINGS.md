@@ -113,16 +113,18 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 
 #### Web UI
 
-A browser front end for this profile: the chat, its questions and the shopping list, from a phone on the home network. See [the Web UI](INTERFACE.md#web-ui).
+A browser front end for this profile: the chat, its questions, the house and the shopping list, from a phone on the home network. Each tab shows only while its controls are on. See [the Web UI](INTERFACE.md#web-ui).
 
 | Setting | What it does | Default |
 |---|---|---|
 | Web UI | Serves the pages for this profile. `/webui` shows the sign-in link. A profile switch hands the server to the other profile's settings. Refused while a reply runs. | off |
 | Web UI port | The TCP port it listens on (1024–65535). A port in use, or one Windows reserves, keeps it off with a notice. Changing it signs browsers out. | 8765 |
 | Web UI reach | `local` (localhost only) or `lan` (your home network and your tailnet). Either way a browser signs in with `/webui`'s link. | `lan` |
-| Web UI commands | Lets the page run slash commands: the ones that work from a phone run, `/model`, `/reasoning` and `/rewind` show as cards, the lists show on the page, and its dropdown completes commands. See [Commands from the page](INTERFACE.md#commands-from-the-page). Off, the page sends messages alone. | off |
-| Web UI connection details | Shows the `%` and `*` connections' notes (their server and database) in the page's dropdown. Off, it names them alone. The dropdown only: the chat shows what the model says. | on |
-| Web UI home controls | Lets the Home tab act: tiles toggle, sheets run a device's actions, scenes run, *Ask the house* asks Assist, the video remote plays and pauses. Unlocking, opening a garage, gate or door, and disarming still ask on the page. Off, the tab only shows. `/ha` from the chat follows *Web UI commands*. | off |
+| Web UI chat controls | Shows the Chat tab: the transcript, the message line, and the PC's questions answered from the phone. Off, there is no Chat tab: the page opens on Home, else Shopping, or says none is on. The PC is unchanged. | on |
+| Web UI commands | The Chat tab only. Lets the page run slash commands: the ones that work from a phone run, `/model`, `/reasoning` and `/rewind` show as cards, the lists show on the page, and its dropdown completes commands. See [Commands from the page](INTERFACE.md#commands-from-the-page). Off, the page sends messages alone. | off |
+| Web UI connection details | The Chat tab only. Shows the `%` and `*` connections' notes (their server and database) in the page's dropdown. Off, it names them alone. The dropdown only: the chat shows what the model says. | on |
+| Web UI home controls | Shows the Home tab and lets it act: tiles toggle, sheets run a device's actions, scenes run, *Ask the house* asks Assist, the video remote plays and pauses. Unlocking, opening a garage, gate or door, and disarming still ask on the page. Off, there is no Home tab. `/ha` from the chat follows *Web UI commands*. | off |
+| Web UI shopping controls | Shows the Shopping tab: the list, its lines ticked and the store changed from the phone. Off (the default since it was added), there is no Shopping tab; `/shopping` at the PC is unchanged. | off |
 | Web UI profile theme | Dresses the pages in the profile's theme, following a `/theme` at once. Off, they keep their own look. | on |
 
 ### Servers
@@ -626,7 +628,7 @@ Windows only. See [Event logs](TOOLS.md#event-logs).
 | ComfyUI max images per call | The most pictures one `generate_image` call or `/imagine --count` makes (1–16). | 5 |
 | ComfyUI reinforce negatives | When the model writes the prompt, adds a few tags to the negative where the image model tends to drift. | on |
 | ComfyUI show prompts | Shows the `prompt:`, `negative:` and `params:` lines under each picture. | on |
-| ComfyUI picture strip | Keeps the session's pictures as thumbnails above the input line. With the line empty, ←/→ highlight one and Enter opens it; **×** hides the strip until **🎞️** on the rule brings it back. | on |
+| ComfyUI picture strip | Keeps the session's pictures as thumbnails above the input line. With the line empty, ←/→ highlight one and Enter opens it; **×** hides the strip until **🎞️** on the rule brings it back. It also governs the Web UI's strip, the chat page's drawer under its own 🎞️. | on |
 | ComfyUI output folder | Where pictures are saved, under the profile's `images` folder. | `comfy_images` |
 
 #### YouTube

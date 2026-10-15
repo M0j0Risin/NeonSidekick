@@ -193,6 +193,8 @@ public class AppSettingsTests : IDisposable
         WebUiCommands = true,
         WebUiConnectionDetails = false,
         WebUiHomeControls = true,
+        WebUiChatControls = false,
+        WebUiShoppingControls = true,
         WebUiProfileTheme = false,
         WebUiToken = "dpapi:token",
     };
@@ -202,6 +204,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(
             (expected.WebUi, expected.WebUiPort, expected.WebUiReach, expected.WebUiCommands, expected.WebUiConnectionDetails, expected.WebUiHomeControls, expected.WebUiProfileTheme, expected.WebUiToken),
             (actual.WebUi, actual.WebUiPort, actual.WebUiReach, actual.WebUiCommands, actual.WebUiConnectionDetails, actual.WebUiHomeControls, actual.WebUiProfileTheme, actual.WebUiToken));
+        Assert.Equal((expected.WebUiChatControls, expected.WebUiShoppingControls), (actual.WebUiChatControls, actual.WebUiShoppingControls));
         Assert.Equal(expected.SchemaVersion, actual.SchemaVersion);
         Assert.Equal(expected.ModelAvatar, actual.ModelAvatar);
         Assert.Equal(expected.UserAvatar, actual.UserAvatar);
@@ -547,6 +550,8 @@ public class AppSettingsTests : IDisposable
             d.WebUiCommands = full.WebUiCommands;
             d.WebUiConnectionDetails = full.WebUiConnectionDetails;
             d.WebUiHomeControls = full.WebUiHomeControls;
+            d.WebUiChatControls = full.WebUiChatControls;
+            d.WebUiShoppingControls = full.WebUiShoppingControls;
             d.WebUiProfileTheme = full.WebUiProfileTheme;
             d.WebUiToken = full.WebUiToken;
         });
@@ -704,6 +709,8 @@ public class AppSettingsTests : IDisposable
                 d.WebUiCommands = full.WebUiCommands;
                 d.WebUiConnectionDetails = full.WebUiConnectionDetails;
                 d.WebUiHomeControls = full.WebUiHomeControls;
+                d.WebUiChatControls = full.WebUiChatControls;
+                d.WebUiShoppingControls = full.WebUiShoppingControls;
                 d.WebUiProfileTheme = full.WebUiProfileTheme;
                 d.WebUiToken = full.WebUiToken;
             });

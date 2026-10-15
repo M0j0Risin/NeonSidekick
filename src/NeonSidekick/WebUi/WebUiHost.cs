@@ -261,11 +261,7 @@ public sealed class WebUiHost : IWebUiHost
             bool signedIn = SignedIn(context);
             if (get && path is "/" or "/index.html" or "/shopping" or "/shopping.html" or "/home" or "/home.html")
             {
-                string page = !signedIn ? WebUiAssets.SignInPage
-                    : path.StartsWith("/shopping", StringComparison.Ordinal) ? WebUiAssets.ShoppingPage
-                    : path.StartsWith("/home", StringComparison.Ordinal) ? WebUiAssets.HomePage
-                    : WebUiAssets.ChatPage;
-                await AssetAsync(context, page).ConfigureAwait(false);
+                await PageAsync(context, path, signedIn).ConfigureAwait(false);
                 return;
             }
 
@@ -279,6 +275,13 @@ public sealed class WebUiHost : IWebUiHost
             if (!signedIn)
             {
                 await ResultAsync(context, StatusCodes.Status401Unauthorized, new WebResult(false, WebUiText.SignInNeeded)).ConfigureAwait(false);
+                return;
+            }
+
+            // A tab that is off (later on 2026-10-15) has no APIs: a 404 the page reads as "go to /", which sends it to a tab that is on.
+            if (TabOf(path) is { } tab && !_backend.Tabs().Has(tab))
+            {
+                await ResultAsync(context, StatusCodes.Status404NotFound, new WebResult(false, WebUiText.TabOff(tab)) { TabOff = true }).ConfigureAwait(false);
                 return;
             }
 
@@ -366,6 +369,7 @@ public sealed class WebUiHost : IWebUiHost
                     "/api/answer" => await ReadAsync(context, WebUiJsonContext.Default.WebAnswerRequest).ConfigureAwait(false) is { } answer ? _backend.Answer(answer, remote) : null,
                     "/api/shopping/check" => await ReadAsync(context, WebUiJsonContext.Default.WebCheckRequest).ConfigureAwait(false) is { } check ? _backend.Check(check, remote) : null,
                     "/api/shopping/store" => await ReadAsync(context, WebUiJsonContext.Default.WebStoreRequest).ConfigureAwait(false) is { } store ? _backend.UseStore(store, remote) : null,
+                    "/api/strip/select" => await ReadAsync(context, WebUiJsonContext.Default.WebStripSelect).ConfigureAwait(false) is { } pick ? _backend.SelectStripPicture(pick, remote) : null,
                     "/api/home/tap" or "/api/home/act" or "/api/home/scene" or "/api/home/say" or "/api/home/video" => await HomePostAsync(context, path, remote).ConfigureAwait(false),
                     _ => new WebReply(WebOutcome.NotFound),
                 };
@@ -404,6 +408,78 @@ public sealed class WebUiHost : IWebUiHost
                 response.StatusCode = StatusCodes.Status500InternalServerError;
             }
         }
+    }
+
+    /// <summary>
+    /// A page (later on 2026-10-15, each tab only while its controls are on): signed out, the sign-in page; a tab that is off goes to <c>/</c>; <c>/</c>
+    /// with Chat off goes to the first tab that is on, or, with none, the page that says so. A redirect is a 303 never cached.
+    /// </summary>
+    private async Task PageAsync(HttpContext context, string path, bool signedIn)
+    {
+        if (!signedIn)
+        {
+            await AssetAsync(context, WebUiAssets.SignInPage).ConfigureAwait(false);
+            return;
+        }
+
+        var tabs = _backend.Tabs();
+        if (path.StartsWith("/shopping", StringComparison.Ordinal) || path.StartsWith("/home", StringComparison.Ordinal))
+        {
+            bool shopping = path.StartsWith("/shopping", StringComparison.Ordinal);
+            if (shopping ? tabs.Shopping : tabs.Home)
+            {
+                await AssetAsync(context, shopping ? WebUiAssets.ShoppingPage : WebUiAssets.HomePage).ConfigureAwait(false);
+            }
+            else
+            {
+                SeeOther(context.Response, "/");
+            }
+
+            return;
+        }
+
+        if (tabs.Chat)
+        {
+            await AssetAsync(context, WebUiAssets.ChatPage).ConfigureAwait(false);
+        }
+        else if (tabs.FirstOtherPage is { } other)
+        {
+            SeeOther(context.Response, other);
+        }
+        else
+        {
+            await AssetAsync(context, WebUiAssets.NoTabsPage).ConfigureAwait(false);
+        }
+    }
+
+    private static void SeeOther(HttpResponse response, string location)
+    {
+        response.Headers.CacheControl = "no-store";
+        response.StatusCode = StatusCodes.Status303SeeOther;
+        response.Headers.Location = location;
+    }
+
+    /// <summary>
+    /// The tab an API belongs to (later on 2026-10-15), or null for one every page reads (<c>/api/pulse</c>). Chat's: the stream, a message, Stop, an
+    /// answer, the dropdown, the usage card, a deferred entry, a picture and the strip's select. Pure.
+    /// </summary>
+    public static WebTab? TabOf(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        if (path is "/api/shopping" || path.StartsWith("/api/shopping/", StringComparison.Ordinal))
+        {
+            return WebTab.Shopping;
+        }
+
+        if (path is "/api/home" || path.StartsWith("/api/home/", StringComparison.Ordinal))
+        {
+            return WebTab.Home;
+        }
+
+        return path is "/api/events" or "/api/send" or "/api/stop" or "/api/answer" or "/api/complete" or "/api/usage" or "/api/strip/select"
+            || path.StartsWith(EntryPrefix, StringComparison.Ordinal) || path.StartsWith(PicturePrefix, StringComparison.Ordinal)
+            ? WebTab.Chat
+            : null;
     }
 
     /// <summary>A Home tab post (2026-10-15): its body read, the tab's side asked; null for a body that does not read, a 404 with no tab.</summary>
@@ -644,6 +720,13 @@ public sealed class WebUiHost : IWebUiHost
             var reader = subscription.Reader;
             while (!token.IsCancellationRequested)
             {
+                // Chat turned off at the PC (later on 2026-10-15): the stream ends, a backgrounded page stops getting the transcript, and its
+                // reconnect reads the 404 that sends it on. Read before each batch and at each heartbeat.
+                if (!_backend.Tabs().Chat)
+                {
+                    break;
+                }
+
                 while (reader.TryRead(out var item))
                 {
                     await WriteEventAsync(response, item.Name, item.Json.Value, token).ConfigureAwait(false);

@@ -165,7 +165,16 @@ public sealed class WebCommandsTests
     [InlineData("/youtube", WebCommandKind.Refused)]
     [InlineData("/queue clear", WebCommandKind.Refused)]
     [InlineData("/botchat", WebCommandKind.Refused)]
-    [InlineData("/loop 5m hi", WebCommandKind.Refused)]
+    [InlineData("/loop 5m hi", WebCommandKind.Run)]   // later on 2026-10-15: the page's too
+    [InlineData("/loop 3 hi", WebCommandKind.Run)]
+    [InlineData("/loop infinite 5m check the queue", WebCommandKind.Run)]
+    [InlineData("/loop 3 /imagine a cat", WebCommandKind.Run)]
+    [InlineData("/loop 3 /read notes.txt", WebCommandKind.Refused)]
+    [InlineData("/loop", WebCommandKind.Run)]            // the PC's usage error lands on the page
+    [InlineData("/loop many hi", WebCommandKind.Run)]
+    [InlineData("/loop 3 /foo", WebCommandKind.Run)]     // the PC's unknown command
+    [InlineData("/loop 3 /model", WebCommandKind.Run)]   // the PC's "can't be looped"
+    [InlineData("/loop 3 /help", WebCommandKind.Run)]
     [InlineData("/server", WebCommandKind.Refused)]
     [InlineData("/usage", WebCommandKind.Refused)]
     [InlineData("/sampling", WebCommandKind.Refused)]
@@ -180,7 +189,22 @@ public sealed class WebCommandsTests
         Assert.Equal(WebUiText.OpensPane("/rename", "/rename <name>"), WebCommands.Check("/rename", On).Reason);
         Assert.Equal(WebUiText.OpensPane("/settings", null), WebCommands.Check("/settings", On).Reason);
         Assert.Equal(WebUiText.UseShoppingPage, WebCommands.Check("/shopping", On).Reason);
+        // The Shopping tab off (later on 2026-10-15): the setting that turns it on.
+        Assert.Equal(WebUiText.ShoppingTabOff, WebCommands.Check("/shopping", On with { ShoppingTab = false }).Reason);
+        Assert.Equal(WebUiText.ShoppingTabOff, WebCommands.Check("/shopping add", On with { ShoppingTab = false }).Reason);
+        Assert.Equal(WebCommandKind.Run, WebCommands.Check("/shopping add milk", On with { ShoppingTab = false }).Kind);   // adds from the chat whatever the tab
         Assert.Equal(WebUiText.PcOnly("/cwd <path>"), WebCommands.Check("/cwd D:\\work", On).Reason);
+    }
+
+    [Fact]
+    public void ALoopedCommand_IsRefusedWithItsOwnReason_AndNeverAsText()
+    {
+        var read = WebCommands.Check("/loop 3 1s /read notes.txt", On);
+
+        Assert.Equal(WebUiText.LoopRefused(WebCommands.Check("/read notes.txt", On).Reason!), read.Reason);
+        Assert.False(read.AsText);
+        Assert.Equal(WebUiText.CommandsOff, WebCommands.Check("/loop 3 hi", On with { Commands = false }).Reason);
+        Assert.True(WebCommands.Offers(App.SlashCommand.Loop));
     }
 
     [Fact]

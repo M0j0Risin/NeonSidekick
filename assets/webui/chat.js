@@ -5,6 +5,9 @@
 // Pictures (later on 2026-10-14): a picture entry carries the addresses the server built; the grid loads them lazily, three at a time, and a
 // tap opens the overlay (the middle size, swipe or ‹ › for the others, Back closes it). The page reloads itself when the app serves other
 // files than the ones it runs (an upgrade), once per tag.
+// Later on 2026-10-15: the tabs on (this page leaves when Chat is turned off), a ✕ that clears the draft with an Undo, the floating buttons
+// (expand or collapse every fold, to the top, to the bottom) and the PC's picture strip in a drawer from a 🎞️ button; the history entries
+// say what each holds, so Back, Esc and a late pop close the right thing.
 'use strict';
 
 const logEl = document.getElementById('log');
@@ -32,7 +35,12 @@ let words = {
   pictureGone: 'is no longer there.', pictureTooLarge: 'is too large to show here.', openOriginal: 'Open original',
   sendAsMessage: 'Send as a message', useLine: 'Use', draftFilled: 'Put on the draft.', undo: 'Undo', working: 'working', close: 'Close',
   noReply: '(no reply)', thinkingLive: '💭 thinking…', gone: '(no longer available)',
+  clearDraft: 'Clear the draft', draftCleared: 'Draft cleared.', expandAll: 'Expand all', collapseAll: 'Collapse all', toTop: 'To the top',
+  toBottom: 'To the bottom', stripButton: 'Pictures', stripOne: '1 picture', stripMany: '{0} pictures', closeStrip: 'Close the pictures',
 };
+// Expand all (later on 2026-10-15, the PC's Ctrl+O on the page alone): a mode while on, kept for the tab, so folds that arrive start open.
+let expandAll = false;
+try { expandAll = sessionStorage.getItem('neon.expandAll') === '1'; } catch { /* private mode */ }
 let state = null;
 let asks = [];
 let source = null;
@@ -108,8 +116,8 @@ function renderEntry(entry) {
       const body = el('div', 'run-body');
       node.appendChild(head);
       node.appendChild(body);
-      record.run = { head, body, keep: entry.keep || 0, units: [], ended: !!entry.ended, expanded: false, text: entry.text };
-      head.addEventListener('click', () => { record.run.expanded = !record.run.expanded; applyRun(record.run); });
+      record.run = { head, body, keep: entry.keep || 0, units: [], ended: !!entry.ended, expanded: expandAll, text: entry.text };
+      head.addEventListener('click', () => { record.run.expanded = !record.run.expanded; applyRun(record.run); floatSoon(); });
       applyRun(record.run);
       break;
     }
@@ -182,19 +190,47 @@ function foldedThinking(entry, record) {
   record.fold = box;
   // A reconnect's snapshot sent the summary alone (2026-10-15): the text read when it is opened, or a line saying it went.
   if (entry.deferred) whenOpened(box, entry.seq, whole => { text.textContent = whole.text; });
+  box.open = expandAll;
   return box;
 }
 
-// Reads a deferred entry the first time its fold opens; one the transcript let go says so.
+// Reads a deferred entry the first time its fold opens; one the transcript let go says so. Two reads at a time, the nearest the view first
+// (later on 2026-10-15: expand-all after a reconnect would start dozens at once and a send would queue behind them); a fold closed again
+// before its turn leaves the queue and is read when it opens again.
+const entryQueue = [];
+let entryReads = 0;
+const MaxEntryReads = 2;
+
 function whenOpened(details, seq, fill) {
   let asked = false;
-  details.addEventListener('toggle', async () => {
+  details.addEventListener('toggle', () => {
     if (!details.open || asked) return;
     asked = true;
-    const r = await Neon.get('/api/entry/' + seq, false);
-    if (r.ok && r.json) fill(r.json);
-    else details.appendChild(el('div', 'gone', words.gone || '(no longer available)'));
+    entryQueue.push({ details, seq, fill, again: () => { asked = false; } });
+    pumpEntries();
   });
+}
+
+function distanceFromView(node) {
+  const r = node.getBoundingClientRect();
+  return r.bottom < 0 ? -r.bottom : r.top > window.innerHeight ? r.top - window.innerHeight : 0;
+}
+
+function pumpEntries() {
+  while (entryReads < MaxEntryReads && entryQueue.length) {
+    entryQueue.sort((a, b) => distanceFromView(a.details) - distanceFromView(b.details));
+    const job = entryQueue.shift();
+    if (!job.details.isConnected) continue;
+    if (!job.details.open) { job.again(); continue; }
+    entryReads++;
+    Neon.get('/api/entry/' + job.seq, false).then(r => {
+      if (r.ok && r.json) job.fill(r.json);
+      else job.details.appendChild(el('div', 'gone', words.gone || '(no longer available)'));
+    }).finally(() => {
+      entryReads--;
+      pumpEntries();
+    });
+  }
 }
 
 // An edit's diff as the PC draws it: the head, the rows (a gap between two hunks), the cut's last line, folded past Diff collapse count.
@@ -214,7 +250,7 @@ function diffBlock(d, open) {
   if (d.more) rows.appendChild(el('div', 'diff-more', d.more));
   if (d.fold > 0) {
     const fold = el('details', 'diff-fold');
-    fold.open = !!open;
+    fold.open = !!open || expandAll;
     fold.appendChild(el('summary', null, d.foldSummary));
     fold.appendChild(rows);
     box.appendChild(fold);
@@ -240,6 +276,7 @@ function append(entry) {
   const was = nearBottom();
   renderEntry(entry);
   keepBottom(was);
+  floatSoon();
 }
 
 function delta(d) {
@@ -251,6 +288,7 @@ function delta(d) {
     record.body.textContent = record.text;
     if (record.kind === 'thinking') record.body.scrollTop = record.body.scrollHeight;   // the box follows the stream
     keepBottom(was);
+    floatSoon();
   } else if (d.at + d.text.length > record.text.length) {
     reconnect();   // a gap: start again from a snapshot
   }
@@ -259,6 +297,7 @@ function delta(d) {
 function end(e) {
   const record = entries.get(e.seq);
   if (!record) return;
+  floatSoon();
   if (record.run) {
     record.run.ended = true;
     keepPlace(record.el, () => applyRun(record.run));
@@ -288,7 +327,9 @@ function reset() {
   entries.clear();
   logEl.replaceChildren();
   loadQueue.length = 0;
-  closeOverlay();
+  entryQueue.length = 0;
+  if (shown && !shown.fromStrip) closeOverlay();
+  floatSoon();
 }
 
 function removeEntry(seq) {
@@ -296,6 +337,7 @@ function removeEntry(seq) {
   if (!record) return;
   record.el.remove();
   entries.delete(seq);
+  floatSoon();
 }
 
 // ── Pictures ──────────────────────────────────────────────────────────
@@ -354,22 +396,32 @@ function pictureTile(p) {
     img.height = p.height;
   }
   img.dataset.src = p.thumb;
+  img.dataset.full = p.full;
   tile.appendChild(img);
   tile.addEventListener('click', () => openOverlay(p.id));
   if (seen) seen.observe(img); else { loadQueue.push(img); pump(); }
   return tile;
 }
 
+// A picture that did not load: once more as its original (later on 2026-10-15: a Mac's server makes no thumbnails, and every browser draws
+// ComfyUI's PNGs), then its name.
 function pictureFailed(img) {
-  const tile = img.closest('.tile');
+  const tile = img.closest('.tile, .strip-tile');
   if (!tile) return;
+  if (img.dataset.full && !img.dataset.triedFull) {
+    img.dataset.triedFull = '1';
+    img.classList.add('original');
+    img.addEventListener('error', () => pictureFailed(img), { once: true });
+    img.src = img.dataset.full;
+    return;
+  }
   tile.classList.add('fallback');
-  tile.replaceChildren(document.createTextNode(img.alt + ' ' + words.pictureGone));
+  tile.replaceChildren(document.createTextNode(img.alt + (tile.classList.contains('tile') ? ' ' + words.pictureGone : '')));
 }
 
 // ── The overlay ───────────────────────────────────────────────────────
 
-let shown = null;   // { list, at }
+let shown = null;   // { list, at, fromStrip }
 
 function allPictures() {
   const list = [];
@@ -378,19 +430,26 @@ function allPictures() {
 }
 
 function openOverlay(id) {
-  const list = allPictures().filter(p => !p.tooLarge);
+  openOverlayOn(allPictures().filter(p => !p.tooLarge), id, false);
+}
+
+// The overlay over a list of pictures: the transcript's, or the strip's (fromStrip: each step moves the PC's viewer too). Its history entry
+// says the drawer is open under it, so a Back lands on the drawer and a late pop closes nothing else.
+function openOverlayOn(list, id, fromStrip) {
   const at = list.findIndex(p => p.id === id);
   if (at < 0) return;
   const wasOpen = shown !== null;
-  shown = { list, at };
+  shown = { list, at, fromStrip };
   showPicture();
   overlayEl.classList.remove('hidden');
-  if (!wasOpen) history.pushState({ overlay: true }, '');
+  if (!wasOpen) history.pushState({ overlay: true, drawer: drawerOpen }, '');
+  floatSoon();
 }
 
 function showPicture() {
   const p = shown.list[shown.at];
   overlayImg.alt = p.name;
+  delete overlayImg.dataset.tried;
   overlayImg.src = p.mid;
   overlayName.textContent = p.name;
   overlayOpen.textContent = words.openOriginal;
@@ -405,6 +464,7 @@ function step(by) {
   if (at < 0 || at >= shown.list.length) return;
   shown.at = at;
   showPicture();
+  if (shown.fromStrip) selectOnPc(shown.list[at].id, false);
 }
 
 // Every close goes through the history entry the open pushed, so Back, ✕, Esc and a tap end the same way.
@@ -417,9 +477,25 @@ function hideOverlay() {
   shown = null;
   overlayEl.classList.add('hidden');
   overlayImg.removeAttribute('src');
+  floatSoon();
 }
 
-window.addEventListener('popstate', () => { if (shown) hideOverlay(); });
+// The overlay's middle size is a re-encode the server can't make on a Mac: once more as the original.
+overlayImg.addEventListener('error', () => {
+  if (!shown || overlayImg.dataset.tried) return;
+  overlayImg.dataset.tried = '1';
+  overlayImg.src = shown.list[shown.at].full;
+});
+
+// Back, and every close that goes through the history: the page set to what the entry says it holds (later on 2026-10-15). An entry whose
+// panel went meanwhile (a new chat, a question arriving, the strip gone) is stepped over, so the next Back leaves the page as it should.
+window.addEventListener('popstate', settleHistory);
+function settleHistory() {
+  const st = history.state || {};
+  if (!st.overlay && shown) hideOverlay();
+  if (!st.drawer && drawerOpen) hideDrawer();
+  if (!shown && (st.overlay || (st.drawer && !drawerOpen))) history.back();
+}
 overlayClose.addEventListener('click', closeOverlay);
 overlayPrev.addEventListener('click', ev => { ev.stopPropagation(); step(-1); });
 overlayNext.addEventListener('click', ev => { ev.stopPropagation(); step(1); });
@@ -450,6 +526,7 @@ function staleAssets(tag) {
 // ── The state ─────────────────────────────────────────────────────────
 
 function applyState(s) {
+  if (Neon.tabs(s.chatTab, s.homeTab, s.shoppingTab)) return;   // Chat turned off at the PC: on to a tab that is on
   state = s;
   Neon.theme(s.theme);
   profileEl.textContent = (s.modelAvatar ? s.modelAvatar + ' ' : '') + s.profile + (s.planMode ? ' · plan' : '');
@@ -551,17 +628,20 @@ async function toggleUsage() {
   document.getElementById('usage-title').textContent = r.json.title;
   document.getElementById('usage-lines').textContent = (r.json.lines || []).join('\n');
   document.getElementById('usage-close').textContent = words.close || 'Close';
+  closeDrawer();   // one footer panel at a time
   usageCard.classList.remove('hidden');
+  floatSoon();
 }
 
 function closeUsage() {
   usageCard.classList.add('hidden');
+  floatSoon();
 }
 
 usageBtn.addEventListener('click', toggleUsage);
 document.getElementById('usage-close').addEventListener('click', closeUsage);
 document.addEventListener('keydown', ev => {
-  if (ev.key === 'Escape' && !usageCard.classList.contains('hidden')) { ev.preventDefault(); closeUsage(); }
+  if (ev.key === 'Escape' && !ev.defaultPrevented && !shown && !usageCard.classList.contains('hidden')) { ev.preventDefault(); closeUsage(); }
 });
 
 function updateTitle() {
@@ -575,8 +655,13 @@ function renderAsks(list) {
   asks = list || [];
   asksEl.replaceChildren();
   for (const ask of asks) asksEl.appendChild(askCard(ask));
-  if (asks.length > lastAskCount && navigator.vibrate) {
-    try { navigator.vibrate(200); } catch { /* not allowed */ }
+  if (asks.length > lastAskCount) {
+    // One footer panel at a time (later on 2026-10-15): the question the PC waits on closes the drawer. Under the overlay the drawer goes at
+    // once (it can't be seen) and its entry is stepped over when the overlay closes, so the picture isn't pulled away.
+    if (drawerOpen) { if (shown) hideDrawer(); else closeDrawer(); }
+    if (navigator.vibrate) {
+      try { navigator.vibrate(200); } catch { /* not allowed */ }
+    }
   }
   lastAskCount = asks.length;
   updateTitle();
@@ -728,6 +813,7 @@ function saveDraft() {
 function grow() {
   draft.style.height = 'auto';
   draft.style.height = Math.min(draft.scrollHeight, window.innerHeight * 0.4) + 'px';
+  syncClear();   // every change to the box, the script's too, passes here
 }
 
 function putBack(text) {
@@ -774,6 +860,302 @@ async function stop() {
   if (!r.ok) say(r.message);
 }
 
+// ── Clearing the draft (later on 2026-10-15) ──────────────────────────
+// A ✕ inside the box while it holds text; a tap empties it (its saved copy too) and offers Undo, which puts the text back only into an empty
+// box. The PC's draft is its own; nothing goes to the app.
+
+const clearBtn = document.getElementById('clear-draft');
+
+function syncClear() {
+  clearBtn.classList.toggle('hidden', !draft.value.trim());
+}
+
+clearBtn.addEventListener('pointerdown', ev => ev.preventDefault());   // the box keeps its focus, and the phone its keyboard
+clearBtn.addEventListener('click', () => {
+  const before = draft.value;
+  if (!before) return;
+  draft.value = '';
+  saveDraft();
+  grow();
+  hideList();
+  draft.focus();
+  sayWith(words.draftCleared || 'Draft cleared.', [{
+    label: words.undo || 'Undo',
+    run: () => {
+      if (draft.value) return;   // typed since: never overwritten
+      draft.value = before;
+      saveDraft();
+      grow();
+      draft.focus();
+    },
+  }]);
+});
+
+// ── The floating buttons (later on 2026-10-15) ────────────────────────
+// ↕ opens or closes every fold (a mode while on, as Ctrl+O at the PC), ⤒ and ⤓ go to the ends and hide at their end, 🎞️ opens the picture
+// strip. They sit at the transcript's right edge, the bottom pair above the footer and the phone's keyboard, and hide under the overlay and
+// the usage card.
+
+const rootEl = document.documentElement;
+const headerEl = document.querySelector('header.top');
+const footerEl = document.querySelector('footer.bottom');
+const expandBtn = document.getElementById('expand-all');
+const toTopBtn = document.getElementById('to-top');
+const toBottomBtn = document.getElementById('to-bottom');
+const stripBtn = document.getElementById('strip-button');
+const stripNew = document.getElementById('strip-new');
+const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
+let floatQueued = false;
+
+function measure() {
+  rootEl.style.setProperty('--head-h', headerEl.offsetHeight + 'px');
+  rootEl.style.setProperty('--foot-h', footerEl.offsetHeight + 'px');
+  rootEl.style.setProperty('--kb', Neon.keyboardInset(window.innerHeight, window.visualViewport) + 'px');
+  floatSoon();
+}
+
+function anyFold() {
+  return !!logEl.querySelector('details.think-fold, details.diff-fold, .run-head:not(.hidden)');
+}
+
+function floatSoon() {
+  if (floatQueued) return;
+  floatQueued = true;
+  requestAnimationFrame(() => {
+    floatQueued = false;
+    updateFloaters();
+  });
+}
+
+function updateFloaters() {
+  const blocked = !!shown || !usageCard.classList.contains('hidden');
+  const any = entries.size > 0;
+  const fits = document.body.scrollHeight <= window.innerHeight + 80;
+  expandBtn.classList.toggle('hidden', blocked || !any || !(expandAll || anyFold()));
+  toTopBtn.classList.toggle('hidden', blocked || !any || fits || window.scrollY <= 80);
+  toBottomBtn.classList.toggle('hidden', blocked || !any || fits || nearBottom());
+  stripBtn.classList.toggle('hidden', blocked || !strip || drawerOpen);
+}
+
+function paintExpand() {
+  expandBtn.classList.toggle('on', expandAll);
+  expandBtn.setAttribute('aria-pressed', expandAll ? 'true' : 'false');
+  const label = expandAll ? words.collapseAll : words.expandAll;
+  expandBtn.setAttribute('aria-label', label);
+  expandBtn.title = label;
+}
+
+// The line at the top of the view, so a change above it moves the view by as much.
+function topEntry() {
+  const top = headerEl.offsetHeight;
+  for (const child of logEl.children) if (child.getBoundingClientRect().bottom > top) return child;
+  return null;
+}
+
+function setAllFolds(open) {
+  for (const d of logEl.querySelectorAll('details.think-fold, details.diff-fold')) d.open = open;
+  for (const record of entries.values()) {
+    if (!record.run) continue;
+    record.run.expanded = open;
+    applyRun(record.run);
+  }
+}
+
+expandBtn.addEventListener('click', () => {
+  const was = nearBottom();
+  const anchor = topEntry();
+  const before = anchor ? anchor.getBoundingClientRect().top : 0;
+  expandAll = !expandAll;
+  try { sessionStorage.setItem('neon.expandAll', expandAll ? '1' : '0'); } catch { /* private mode */ }
+  setAllFolds(expandAll);
+  paintExpand();
+  if (was) keepBottom(true);
+  else if (anchor && anchor.isConnected) window.scrollBy(0, anchor.getBoundingClientRect().top - before);
+  floatSoon();
+});
+toTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: calm.matches ? 'auto' : 'smooth' }));
+toBottomBtn.addEventListener('click', () => window.scrollTo({ top: document.body.scrollHeight, behavior: calm.matches ? 'auto' : 'smooth' }));
+window.addEventListener('scroll', floatSoon, { passive: true });
+window.addEventListener('resize', measure);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', measure);
+  window.visualViewport.addEventListener('scroll', measure);
+}
+if ('ResizeObserver' in window) {
+  const sizes = new ResizeObserver(measure);
+  sizes.observe(footerEl);
+  sizes.observe(headerEl);
+}
+logEl.addEventListener('toggle', floatSoon, true);
+
+// ── The picture strip (later on 2026-10-15) ───────────────────────────
+// The PC's ComfyUI strip, newest first, while ComfyUI picture strip is on: a drawer over the status row from 🎞️ (a dot on it says a picture
+// came since it was last open). A tap opens the overlay over the strip's pictures and moves the PC's highlight and viewer there; each step in
+// the overlay does too, a fast swipe once. The PC's pick is outlined. One footer panel at a time: a question or the usage card closes it.
+
+const drawerEl = document.getElementById('strip');
+const stripHead = document.getElementById('strip-head');
+const stripRow = document.getElementById('strip-row');
+const stripClose = document.getElementById('strip-close');
+let strip = null;   // { pictures, selected }
+let drawerOpen = false;
+let stripKey = '';
+let selectTimer = null;
+
+function stripSeen() {
+  try { return sessionStorage.getItem('neon.stripSeen'); } catch { return null; }
+}
+
+function markSeen() {
+  if (!strip) return;
+  try { sessionStorage.setItem('neon.stripSeen', String(strip.pictures[0].id)); } catch { /* private mode */ }
+  stripNew.classList.add('hidden');
+}
+
+function applyStrip(st) {
+  strip = st && st.pictures && st.pictures.length ? st : null;
+  if (!strip) {
+    try { sessionStorage.removeItem('neon.stripSeen'); } catch { /* private mode */ }
+    if (shown && shown.fromStrip) closeOverlay();   // its pictures are gone too; the drawer's entry is stepped over after it
+    else if (drawerOpen) closeDrawer();
+    if (drawerOpen) hideDrawer();
+    stripRow.replaceChildren();
+    stripKey = '';
+    floatSoon();
+    return;
+  }
+  if (drawerOpen) markSeen();
+  stripNew.classList.toggle('hidden', drawerOpen || String(strip.pictures[0].id) === stripSeen());
+  renderStrip();
+  floatSoon();
+}
+
+function renderStrip() {
+  const n = strip.pictures.length;
+  stripHead.textContent = '🎞️ ' + (n === 1 ? words.stripOne : (words.stripMany || '{0}').replace('{0}', String(n)));
+  const key = strip.pictures.map(p => p.id).join(',');
+  if (key !== stripKey) {
+    const scrolled = stripRow.scrollLeft > 4 && stripKey !== '';
+    stripKey = key;
+    stripRow.replaceChildren(...strip.pictures.map(stripTile));
+    if (!scrolled) stripRow.scrollLeft = 0;
+  }
+  for (const tile of stripRow.children) {
+    const on = Number(tile.dataset.id) === strip.selected;
+    tile.classList.toggle('selected', on);
+    if (on) tile.setAttribute('aria-current', 'true'); else tile.removeAttribute('aria-current');
+  }
+}
+
+function stripTile(p) {
+  const b = el('button', 'strip-tile');
+  b.type = 'button';
+  b.dataset.id = String(p.id);
+  b.title = p.name;
+  b.setAttribute('aria-label', p.name);
+  if (p.tooLarge) {
+    b.classList.add('fallback');
+    b.textContent = p.name;
+  } else {
+    const img = el('img');
+    img.alt = p.name;
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.dataset.src = p.thumb;
+    img.dataset.full = p.full;
+    img.addEventListener('error', () => pictureFailed(img), { once: true });
+    if (drawerOpen) img.src = p.thumb;   // none loads until the drawer first opens
+    b.appendChild(img);
+  }
+  b.addEventListener('click', () => openStripPicture(p.id));
+  return b;
+}
+
+function openStripPicture(id) {
+  if (!strip) return;
+  openOverlayOn(strip.pictures.filter(p => !p.tooLarge), id, true);
+  selectOnPc(id, true);
+}
+
+// The PC's highlight and its open viewer moved to the picture: a tap at once, an overlay's step after 300 ms so a fast swipe moves it once.
+function selectOnPc(id, now) {
+  clearTimeout(selectTimer);
+  const go = () => post('/api/strip/select', { id: id });
+  if (now) go(); else selectTimer = setTimeout(go, 300);
+}
+
+function showDrawer(on) {
+  const was = nearBottom();
+  drawerOpen = on;
+  drawerEl.classList.toggle('hidden', !on);
+  if (on) for (const img of stripRow.querySelectorAll('img:not([src])')) img.src = img.dataset.src;
+  keepBottom(was);   // the footer grew or shrank: the last line stays in view
+  updateFloaters();
+}
+
+function openDrawer() {
+  if (!strip || drawerOpen) return;
+  closeUsage();
+  history.pushState({ drawer: true }, '');
+  showDrawer(true);
+  markSeen();
+  const first = stripRow.querySelector('button');
+  if (first) first.focus({ preventScroll: true });
+}
+
+function hideDrawer() {
+  if (!drawerOpen) return;
+  const focused = drawerEl.contains(document.activeElement);
+  showDrawer(false);
+  if (focused && !stripBtn.classList.contains('hidden')) stripBtn.focus({ preventScroll: true });
+}
+
+// ✕, Esc, a tap on the transcript, the usage card, a question: the drawer goes now, and its own history entry with it.
+function closeDrawer() {
+  if (!drawerOpen) return;
+  hideDrawer();
+  if (history.state && history.state.drawer && !history.state.overlay) history.back();
+}
+
+stripBtn.addEventListener('click', openDrawer);
+stripClose.addEventListener('click', closeDrawer);
+document.querySelector('main').addEventListener('click', ev => {
+  if (drawerOpen && !ev.target.closest('.tile')) closeDrawer();
+});
+stripRow.addEventListener('keydown', ev => {
+  if (shown || (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight')) return;
+  const tiles = [...stripRow.children];
+  const at = tiles.indexOf(document.activeElement);
+  if (at < 0) return;
+  const next = tiles[at + (ev.key === 'ArrowRight' ? 1 : -1)];
+  if (next) { ev.preventDefault(); next.focus(); }
+});
+// One Esc, the topmost thing: the dropdown stops it on the box, the overlay and the usage card take it first.
+document.addEventListener('keydown', ev => {
+  if (ev.key !== 'Escape' || ev.defaultPrevented || shown || !drawerOpen || !usageCard.classList.contains('hidden')) return;
+  ev.preventDefault();
+  closeDrawer();
+});
+
+// The app's words on the buttons (sent with every snapshot).
+function applyWords() {
+  clearBtn.setAttribute('aria-label', words.clearDraft);
+  clearBtn.title = words.clearDraft;
+  toTopBtn.setAttribute('aria-label', words.toTop);
+  toTopBtn.title = words.toTop;
+  toBottomBtn.setAttribute('aria-label', words.toBottom);
+  toBottomBtn.title = words.toBottom;
+  stripBtn.setAttribute('aria-label', words.stripButton);
+  stripBtn.title = words.stripButton;
+  stripClose.setAttribute('aria-label', words.closeStrip);
+  stripClose.title = words.closeStrip;
+  drawerEl.setAttribute('aria-label', words.stripButton);
+  paintExpand();
+}
+
+// A reload keeps the history's entries but not what they held: the current one is the page's own again.
+if (history.state && (history.state.overlay || history.state.drawer)) history.replaceState(null, '');
+
 // ── The stream ────────────────────────────────────────────────────────
 
 function connect() {
@@ -781,21 +1163,32 @@ function connect() {
   source.onopen = () => Neon.connected(true);
   source.onerror = () => {
     Neon.connected(false);
-    // Signed out (a new token, another profile): the page itself says how to sign in again.
-    fetch('/api/shopping', { credentials: 'same-origin', cache: 'no-store' }).then(r => { if (r.status === 401) location.reload(); }).catch(() => {});
+    // Signed out (a new token, another profile): the page itself says how to sign in again. Chat turned off (later on 2026-10-15): on to a
+    // tab that is on. The pulse answers whatever tab is on.
+    fetch('/api/pulse', { credentials: 'same-origin', cache: 'no-store' })
+      .then(async r => {
+        if (r.status === 401) { location.reload(); return; }
+        const p = r.ok ? await r.json() : null;
+        if (p && p.chatTab === false) Neon.leave();
+      })
+      .catch(() => {});
   };
   source.addEventListener('snapshot', ev => {
     const s = JSON.parse(ev.data);
     if (staleAssets(s.state.assets)) return;   // before drawing it
     if (s.words) words = s.words;
+    applyWords();
     applyState(s.state);
     applyStatus(s.status);
     reset();
     for (const entry of s.entries) renderEntry(entry);
     renderAsks(s.asks);
     for (const text of s.drafts || []) takeDraft(text);
+    applyStrip(s.strip);
     window.scrollTo(0, document.body.scrollHeight);
+    floatSoon();
   });
+  source.addEventListener('strip', ev => applyStrip(JSON.parse(ev.data)));
   source.addEventListener('append', ev => append(JSON.parse(ev.data)));
   source.addEventListener('delta', ev => delta(JSON.parse(ev.data)));
   source.addEventListener('end', ev => end(JSON.parse(ev.data)));
@@ -919,4 +1312,6 @@ draft.addEventListener('blur', () => setTimeout(hideList, 150));
 
 sendBtn.addEventListener('click', () => send(false));
 stopBtn.addEventListener('click', stop);
+applyWords();
+measure();
 connect();

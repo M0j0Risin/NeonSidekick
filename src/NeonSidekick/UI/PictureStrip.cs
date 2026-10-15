@@ -53,6 +53,12 @@ public sealed class PictureStrip
     /// <summary>The order key of the picture added last (kept or not), for a picture without a file; null after <see cref="Clear"/>.</summary>
     private (DateTime CreatedUtc, string Path)? _lastAdded;
 
+    /// <summary>
+    /// Raised after every change the drawing shows (later on 2026-10-15, the Web UI's strip): a picture, the highlight, a step, a clear, a close or
+    /// an open — after the lock is let go, on the thread that changed it (the turn's for an add, the line's for a step). A handler must not block.
+    /// </summary>
+    public event Action? Changed;
+
     /// <summary>The pictures held.</summary>
     public int Count
     {
@@ -104,11 +110,15 @@ public sealed class PictureStrip
             _selected = -1;
             _version++;
         }
+
+        Changed?.Invoke();
     }
 
     /// <summary>
     /// A closed strip shown again (2026-10-03, the user's ask: the × had left no way back short of another picture; the 🎞️ the
     /// upper rule carries while the strip is closed calls this), as it stood with nothing highlighted. Nothing unless <see cref="Closed"/>.
+    /// The highlight is let go here too (later on 2026-10-15): the Web UI's page may pick a picture while the strip is closed, and the strip
+    /// still opens with nothing highlighted.
     /// </summary>
     public void Open()
     {
@@ -120,8 +130,11 @@ public sealed class PictureStrip
             }
 
             _closed = false;
+            _selected = -1;
             _version++;
         }
+
+        Changed?.Invoke();
     }
 
     /// <summary>
@@ -144,11 +157,19 @@ public sealed class PictureStrip
     {
         ArgumentNullException.ThrowIfNull(tile);
         ArgumentNullException.ThrowIfNull(path);
+        int version;
         lock (_gate)
         {
+            version = _version;
             var created = createdUtc ?? (_lastAdded is { } last ? last.CreatedUtc.AddTicks(1) : DateTime.MinValue);
             _lastAdded = (created, path);
             Insert(tile, id, created, path);
+            version = _version - version;
+        }
+
+        if (version != 0)
+        {
+            Changed?.Invoke();
         }
     }
 
@@ -216,6 +237,8 @@ public sealed class PictureStrip
             _closed = false;
             _version++;
         }
+
+        Changed?.Invoke();
     }
 
     /// <summary>
@@ -234,8 +257,10 @@ public sealed class PictureStrip
 
             _selected = _selected < 0 ? 0 : Math.Clamp(_selected + Math.Sign(delta), -1, _entries.Count - 1);
             _version++;
-            return true;
         }
+
+        Changed?.Invoke();
+        return true;
     }
 
     /// <summary>
@@ -256,7 +281,27 @@ public sealed class PictureStrip
 
             _selected = index;
             _version++;
-            return true;
+        }
+
+        Changed?.Invoke();
+        return true;
+    }
+
+    /// <summary>Whether picture <paramref name="id"/> is in the strip (later on 2026-10-15: the Web UI serves and selects only the strip's).</summary>
+    public bool Holds(int id)
+    {
+        lock (_gate)
+        {
+            return _entries.Exists(e => e.Id == id);
+        }
+    }
+
+    /// <summary>The pictures' ids, newest first, and the highlighted one's (later on 2026-10-15, the Web UI's strip); one read under the lock.</summary>
+    public (IReadOnlyList<int> Ids, int? Selected) Snapshot()
+    {
+        lock (_gate)
+        {
+            return (_entries.Select(e => e.Id).ToList(), _selected >= 0 ? _entries[_selected].Id : null);
         }
     }
 

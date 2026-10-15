@@ -14,7 +14,7 @@
 <script src="/common.js" defer></script>
 <script src="/chat.js" defer></script>
 </head>
-<body>
+<body data-tab="chat">
 <header class="top">
   <div class="who"><span id="profile">NeonSidekick</span><span class="model" id="model"></span></div>
   <nav><a href="/" class="here">Chat</a><a href="/home">Home</a><a href="/shopping">Shopping</a></nav>
@@ -23,6 +23,14 @@
 <main>
   <div id="log" aria-live="polite"></div>
 </main>
+<div class="floaters top" id="floaters-top">
+  <button type="button" class="float hidden" id="expand-all" aria-pressed="false">↕</button>
+  <button type="button" class="float hidden" id="to-top">⤒</button>
+</div>
+<div class="floaters bottom" id="floaters-bottom">
+  <button type="button" class="float hidden" id="strip-button">🎞️<span class="new-dot hidden" id="strip-new"></span></button>
+  <button type="button" class="float hidden" id="to-bottom">⤓</button>
+</div>
 <footer class="bottom">
   <div class="inner">
     <div id="asks"></div>
@@ -35,12 +43,19 @@
     <div class="queued hidden" id="queued"></div>
     <div class="banner message hidden" id="message"></div>
     <div class="complete hidden" id="complete" role="listbox"></div>
+    <section class="strip hidden" id="strip" role="region" aria-labelledby="strip-head">
+      <div class="strip-bar"><span id="strip-head"></span><button type="button" id="strip-close">✕</button></div>
+      <div class="strip-row" id="strip-row"></div>
+    </section>
     <div class="status hidden" id="status">
       <span class="spin hidden" role="status" aria-live="polite"><span class="frame" aria-hidden="true"></span><span class="label"></span><span class="clock" aria-hidden="true"></span></span>
       <button type="button" class="usage hidden" id="usage"></button>
     </div>
     <div class="compose">
-      <textarea id="draft" rows="1" placeholder="Message…" enterkeyhint="send"></textarea>
+      <div class="draft-box">
+        <textarea id="draft" rows="1" placeholder="Message…" enterkeyhint="send"></textarea>
+        <button type="button" class="clear-draft hidden" id="clear-draft">✕</button>
+      </div>
       <button class="primary" id="send" title="Send">➤</button>
       <button class="stop hidden" id="stop" title="Stop">■</button>
     </div>

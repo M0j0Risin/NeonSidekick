@@ -342,6 +342,7 @@ Which commands the Web UI's page may send, and how each shows there: [Commands f
 * A delay waits after each reply: `/loop infinite 1m check the build`. It is one word (`30s`, `5m`, `1h30m`, never a bare number), up to 24 hours.
 * ESC or Ctrl+C stops the loop; a canceled or failed turn ends it.
 * `/imagine …` and `/read …` run with no model in between (`/loop infinite 5s /imagine score_9, 1girl`). No other command can be looped.
+* A loop runs from the Web UI's page too (with *Web UI commands* on); the page's Stop ends it, and `/read` can't be looped from there.
 
 ### Benchmark tests
 

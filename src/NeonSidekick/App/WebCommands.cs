@@ -29,8 +29,11 @@ public sealed record WebCommandVerdict(WebCommandKind Kind, string? Reason = nul
     public static readonly WebCommandVerdict List = new(WebCommandKind.List);
 }
 
-/// <summary>The settings a verdict reads: <i>Web UI commands</i>, and the switches <c>/tree</c> and <c>/vault</c> need.</summary>
-public readonly record struct WebCommandSettings(bool Commands, bool FileTools, bool ObsidianTools);
+/// <summary>
+/// The settings a verdict reads: <i>Web UI commands</i>, the switches <c>/tree</c> and <c>/vault</c> need, and whether the page has its Shopping
+/// tab (later on 2026-10-15: bare <c>/shopping</c> points at the tab, or at the setting while the tab is off).
+/// </summary>
+public readonly record struct WebCommandSettings(bool Commands, bool FileTools, bool ObsidianTools, bool ShoppingTab = true);
 
 /// <summary>
 /// Which slash commands the Web UI's page may run (later on 2026-10-14, the user's calls): a phone has no PC pane to answer and no PC window to
@@ -55,7 +58,6 @@ public static class WebCommands
         SlashCommand.YouTube,
         SlashCommand.Queue,
         SlashCommand.BotChat,
-        SlashCommand.Loop,
         SlashCommand.Sampling,
         SlashCommand.Server,
         SlashCommand.Usage,
@@ -69,7 +71,7 @@ public static class WebCommands
         SlashCommand.Timer, SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Browser, SlashCommand.Prompts,
         SlashCommand.Plan, SlashCommand.Process, SlashCommand.Learn, SlashCommand.Imagine, SlashCommand.Comfy, SlashCommand.HomeAssistant,
         SlashCommand.Docker, SlashCommand.EventLog, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.Shopping, SlashCommand.Print, SlashCommand.Pdf,
-        SlashCommand.Rename, SlashCommand.Claude, SlashCommand.Advisor, SlashCommand.Test, SlashCommand.Avatar,
+        SlashCommand.Rename, SlashCommand.Claude, SlashCommand.Advisor, SlashCommand.Test, SlashCommand.Avatar, SlashCommand.Loop,
     };
 
     /// <summary>Whether any form of <paramref name="command"/> may run from the page (the dropdown's commands).</summary>
@@ -132,7 +134,7 @@ public static class WebCommands
             SlashCommand.HomeAssistant => Is(first, "states") ? WebCommandVerdict.List : WebCommandVerdict.Run,
             SlashCommand.Docker => Is(first, "logs") ? WebCommandVerdict.List : WebCommandVerdict.Run,
             SlashCommand.EventLog => WebCommandVerdict.List,   // 2026-10-15: the events as a list card, /docker's way from a web line
-            SlashCommand.Shopping => text.Length == 0 || Is(text, "add") ? Refused(WebUiText.UseShoppingPage) : WebCommandVerdict.Run,
+            SlashCommand.Shopping => text.Length == 0 || Is(text, "add") ? Refused(settings.ShoppingTab ? WebUiText.UseShoppingPage : WebUiText.ShoppingTabOff) : WebCommandVerdict.Run,
             SlashCommand.Prompts => PromptsCommand.Parse(args).Verb is PromptsVerb.Pane or PromptsVerb.ClearList ? Pane(word, "/prompts list|<n>|save <text>|remove <n>") : WebCommandVerdict.Run,
             SlashCommand.Browser => BrowserCommand.Parse(args).Verb is BrowserVerb.Save or BrowserVerb.Unsave ? WebCommandVerdict.Run : Pane(word, "/browser save [<url> [<name>]]|unsave <n>"),
             SlashCommand.Camera => Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.List ? WebCommandVerdict.List : Pane(word, "/camera list"),
@@ -141,8 +143,33 @@ public static class WebCommands
             SlashCommand.Vault => settings.ObsidianTools ? WebCommandVerdict.List : Refused(WebUiText.Needs(word, "Obsidian tools")),
             SlashCommand.Process => text.Length == 0 ? WebCommandVerdict.List : Pane(word, "/process"),
             SlashCommand.Comfy => text.Length == 0 || Is(text, ChatScreen.ComfyOfferedWord) ? WebCommandVerdict.List : Pane(word, "/comfy or /comfy offered"),
+            SlashCommand.Loop => LoopVerdict(args, settings),
             _ => Pane(word, null),
         };
+    }
+
+    /// <summary>
+    /// <c>/loop</c> from the page (later on 2026-10-15, the user's ask; it was never the page's until then): a loop of messages runs; a looped
+    /// command is the page's own verdict on its inner line, but only for the commands the PC loops (<see cref="ChatScreen.LoopableCommands"/>:
+    /// <c>/imagine</c> runs, <c>/read</c> is refused with its own reason). Every other line runs and meets the PC's own checks — a usage error, an
+    /// unknown command, one that can't be looped — whose words land on the page; the page's <i>send as text</i> offer is never borrowed, as it
+    /// would send the whole <c>/loop</c> line to the model.
+    /// </summary>
+    private static WebCommandVerdict LoopVerdict(string args, WebCommandSettings settings)
+    {
+        if (!ChatScreen.TryParseLoopArgs(args, out _, out _, out string message) || !message.StartsWith('/'))
+        {
+            return WebCommandVerdict.Run;
+        }
+
+        var (inner, innerArgs) = SlashCommands.Parse(message);
+        if (!ChatScreen.LoopableCommands.Contains(inner))
+        {
+            return WebCommandVerdict.Run;
+        }
+
+        var verdict = Check(inner, innerArgs, message, settings);
+        return verdict.Allowed ? WebCommandVerdict.Run : Refused(WebUiText.LoopRefused(verdict.Reason ?? ""));
     }
 
     /// <summary><c>/learn</c>'s word for its stored sessions' form.</summary>

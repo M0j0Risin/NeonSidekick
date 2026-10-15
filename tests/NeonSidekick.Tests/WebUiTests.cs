@@ -11,7 +11,7 @@ namespace NeonSidekick.Tests;
 /// The Web UI's pure parts (2026-10-14): the transcript feed, the asks' broker, the session's messages and notices, the reach word, the
 /// sign-in's token and cookie, the reply's HTML, the shopping list's page, and the controller over a fake server.
 /// </summary>
-public sealed class WebUiTests : IDisposable
+public sealed partial class WebUiTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
     private readonly ManualTimeProvider _time = new();
@@ -1064,10 +1064,16 @@ public sealed class WebUiTests : IDisposable
 
         Assert.True(App.SettingsMenu.IsToggle(App.SettingsField.WebUi));
         Assert.Equal("must be a port from 1024 to 65535", App.SettingsMenu.WebUiPortRangeError);
-        Assert.Equal([App.SettingsField.WebUi, App.SettingsField.WebUiPort, App.SettingsField.WebUiReach, App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails,
-            App.SettingsField.WebUiHomeControls, App.SettingsField.WebUiProfileTheme], App.SettingsMenu.TabFields[(int)App.SettingsTab.WebUi]);
-        // The page's rows (later on 2026-10-14; the Home tab's and the theme's 2026-10-15) are read at each request: none restarts the server or is refused under a reply.
-        foreach (var field in new[] { App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails, App.SettingsField.WebUiHomeControls, App.SettingsField.WebUiProfileTheme })
+        Assert.Equal([App.SettingsField.WebUi, App.SettingsField.WebUiPort, App.SettingsField.WebUiReach, App.SettingsField.WebUiChatControls, App.SettingsField.WebUiCommands,
+            App.SettingsField.WebUiConnectionDetails, App.SettingsField.WebUiHomeControls, App.SettingsField.WebUiShoppingControls, App.SettingsField.WebUiProfileTheme],
+            App.SettingsMenu.TabFields[(int)App.SettingsTab.WebUi]);
+        // The page's rows (later on 2026-10-14; the Home tab's and the theme's 2026-10-15; the Chat and Shopping tabs' later that day) are read at each
+        // request: none restarts the server or is refused under a reply.
+        foreach (var field in new[]
+        {
+            App.SettingsField.WebUiChatControls, App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails, App.SettingsField.WebUiHomeControls,
+            App.SettingsField.WebUiShoppingControls, App.SettingsField.WebUiProfileTheme,
+        })
         {
             Assert.False(App.SettingsMenu.IsWebUiField(field));
             Assert.False(App.SettingsMenu.RefusedMidTurn(field));
@@ -1075,6 +1081,8 @@ public sealed class WebUiTests : IDisposable
         }
 
         Assert.Equal((false, true), (new Settings.AppSettingsData().WebUiCommands, new Settings.AppSettingsData().WebUiConnectionDetails));
+        // Later on 2026-10-15, the user's calls: Chat on, Home and Shopping off.
+        Assert.Equal((true, false, false), (new Settings.AppSettingsData().WebUiChatControls, new Settings.AppSettingsData().WebUiHomeControls, new Settings.AppSettingsData().WebUiShoppingControls));
         Assert.Equal("Web UI", App.SettingsMenu.TabTitles[(int)App.SettingsTab.WebUi]);
         var defaults = new Settings.AppSettingsData();
         Assert.Equal((false, 8765, "lan", ""), (defaults.WebUi, defaults.WebUiPort, defaults.WebUiReach, defaults.WebUiToken));

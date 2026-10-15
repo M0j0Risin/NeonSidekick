@@ -97,7 +97,7 @@ internal sealed partial class SettingsMenu
             [SettingsTab.WebUi] =
             [
                 (SettingsField.WebUi, "Server"),
-                (SettingsField.WebUiCommands, "The page"),
+                (SettingsField.WebUiChatControls, "The page"),
             ],
             [SettingsTab.Advisors] =
             [
