@@ -58,6 +58,7 @@ You need a Mac with Apple Silicon (M1 or later). Download and unpack the Mac pac
 * **GPU memory.** The GPU may use about two thirds of the Mac's memory (10.7 GB of 16 GB), so a 16 GB Mac suits the Gemma 4 E2B and E4B models best.
 * **The app's windows** have no Dock icon or menu bar. A window you open with a command takes the keyboard, while the video and camera windows, and one a chord opens behind, leave it with the terminal; Tab gives it back, and so does closing the last window.
 * **Window keys.** ⌘W closes, ⌃⌘F is full screen (F11 too, once macOS's Show Desktop shortcut is off) and ⌫ stands in for Del. A Control-click opens the [picture menu](INTERFACE.md#the-picture-menu), with *Show in Finder*. Every window's keys are in [The app's windows](INTERFACE.md#the-apps-windows).
+* **Deletes go to the Trash.** *File deletes to Recycle bin* reads *File deletes to Trash*; a volume with no Trash (a network or FAT volume) deletes directly. Not yet proven on a Mac.
 * **Printing** goes through CUPS onto the printer's default paper, in Helvetica Neue and Menlo, so a printout can wrap a little differently than on Windows.
 * **What prints.** A PDF goes to the printer as it is (no landscape). Word, Excel and other files are refused; print them from the program that made them.
 * **Thumbnails and the splash** are drawn in half blocks: full color in iTerm2, 256 colors (banded) in Terminal.app.

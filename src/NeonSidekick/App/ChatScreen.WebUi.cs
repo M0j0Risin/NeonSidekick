@@ -66,6 +66,12 @@ internal sealed partial class ChatScreen
             StripView = WebStripNow,
             StripHolds = _pictureStrip.Holds,
             StripSelect = WebStripSelect,
+            // The picture the PC's own hand moved to (later on 2026-10-15): the page's open view follows it.
+            PointNow = PcPointNow,
+            // The overlay's 🗑️ (later on 2026-10-15): the screen's own path for the id, File deletes to Recycle bin read now.
+            PictureDelete = WebDeletePicture,
+            // The page's saved prompts sheet (later on 2026-10-15): the loaded profile's, read at each opening.
+            PromptsNow = () => [.. SavedPromptsNow().List().Select(p => p.Text)],
         };
         return (session, new WebUiController(webUiHost, session));
     }
@@ -120,7 +126,9 @@ internal sealed partial class ChatScreen
 
         // An <img> cannot read a status code, so a file over the thumbnail's decode is marked when the entry is made.
         bool tooLarge = source.Bytes is null && source.FullPath is { } path && FileLength(path) > PictureServer.MaxDecodeBytes;
-        return _webUi.Describe(id, source.Name, source.Width, source.Height, tooLarge);
+        // Its file's key and whether the page may delete it (later on 2026-10-15): a picture with bytes only has neither.
+        string? key = source.FullPath is { } full ? WebPictureKey.Of(full) : null;
+        return _webUi.Describe(id, source.Name, source.Width, source.Height, tooLarge, key, deletable: source.FullPath is not null && !source.WebOnly);
     }
 
     private static long FileLength(string path)
@@ -140,7 +148,7 @@ internal sealed partial class ChatScreen
     {
         lock (_pictures)
         {
-            return id >= 0 && id < _pictures.Count && _pictures[id] is var source
+            return id >= 0 && id < _pictures.Count && !_webDeleted.Contains(id) && _pictures[id] is var source
                 ? new WebPictureSource(source.Name, source.FullPath, source.Bytes, source.MediaType)
                 : null;
         }
@@ -276,6 +284,152 @@ internal sealed partial class ChatScreen
         FollowInViewer();
     }
 
+    // ── The page's 🗑️ (later on 2026-10-15, the user's ask) ──────────────────
+    // A picture deleted from the page's full view, as the PC's viewer deletes one: the id's own registered file (never a path from the page), to
+    // the Recycle bin under File deletes to Recycle bin, else directly. The deleted file's every id stops being served (the server checks a file
+    // before its cache, but a picture registered with its bytes too would still draw), the strip drops it, the PC's hint row flashes, and an
+    // audit line names the picture alone. The viewer and the thumbnail browser see it leave through their watchers, which make no point.
+
+    /// <summary>How long a page's delete waits for the PC: the bin's call is quick, its cap is not.</summary>
+    internal static TimeSpan WebDeleteWait { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>The ids whose file the page deleted (under <c>_pictures</c>' lock): no longer served.</summary>
+    private readonly HashSet<int> _webDeleted = [];
+
+    private WebReply WebDeletePicture(int id, IPAddress? remote)
+    {
+        string? path;
+        string name;
+        lock (_pictures)
+        {
+            if (id < 0 || id >= _pictures.Count || _webDeleted.Contains(id))
+            {
+                return new WebReply(WebOutcome.NotFound, WebUiText.PictureNotHere);
+            }
+
+            var source = _pictures[id];
+            path = source.WebOnly ? null : source.FullPath;
+            name = source.Name;
+        }
+
+        if (path is null)
+        {
+            return new WebReply(WebOutcome.NotFound, WebUiText.PictureHasNoFile);
+        }
+
+        if (!File.Exists(path))
+        {
+            return new WebReply(WebOutcome.NotFound, WebUiText.PictureNotHere);
+        }
+
+        var bin = _effective().FileDeletesToRecycleBin ? _recycleBin : null;
+        var work = Task.Run(() => Files.FileDeletes.Remove(path, isDirectory: false, isLink: false, bin));
+        try
+        {
+            if (!work.Wait(WebDeleteWait))
+            {
+                return new WebReply(WebOutcome.Refused, WebUiText.StillDeleting(name));
+            }
+        }
+        catch (AggregateException e) when (e.InnerException is IOException or UnauthorizedAccessException)
+        {
+            return new WebReply(WebOutcome.Refused, WebUiText.PictureDeleteFailed(name, e.InnerException.Message));
+        }
+
+        var way = work.Result;
+        ForgetDeletedFile(path);
+        _webUi.FlashPc(WebUiText.PictureDeletedFlash(name, way));
+        DiagnosticLog.Info(WebUiCategory, WebUiText.PictureDeletedLogLine(name, way, remote));
+        return new WebReply(WebOutcome.Ok, WebUiText.PictureDeleted(name, way));
+    }
+
+    /// <summary>Every id registered for <paramref name="path"/> no longer served, and the strip without them.</summary>
+    private void ForgetDeletedFile(string path)
+    {
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var ids = new HashSet<int>();
+        lock (_pictures)
+        {
+            for (int i = 0; i < _pictures.Count; i++)
+            {
+                if (_pictures[i].FullPath is { } full && string.Equals(full, path, comparison))
+                {
+                    ids.Add(i);
+                    _webDeleted.Add(i);
+                }
+            }
+        }
+
+        foreach (int id in ids)
+        {
+            _stripWebPictures.TryRemove(id, out _);
+        }
+
+        if (_pictureStrip.Remove(ids.Contains))
+        {
+            _pane.RedrawStrip();
+        }
+    }
+
+    // ── The PC's point (later on 2026-10-15, the user's ask) ──────────────────
+    // The page's selection follows the PC's as the PC's follows the page's: a picture the PC's own hand moves to (a click or an arrow on the strip,
+    // the viewer's keys, a pick in the thumbnail browser, the viewer opened on a picture) is a point; the page's open full view follows it by the
+    // file's key. The page's own pick (SelectStripFromWeb) is no point, so the page never chases its own echo. The sequence lives as long as the
+    // screen, never reset: a page holding a higher one would otherwise ignore every point until the counter passed it.
+
+    private readonly object _pcPointGate = new();
+    private WebPoint? _pcPoint;
+    private long _pcPointSeq;
+
+    /// <summary>The PC pointed at <paramref name="fullPath"/> (any thread): the point recorded and the pages nudged. Null points at nothing.</summary>
+    private void PointAt(string? fullPath)
+    {
+        if (fullPath is null)
+        {
+            return;
+        }
+
+        string key;
+        try
+        {
+            key = WebPictureKey.Of(fullPath);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return;
+        }
+
+        lock (_pcPointGate)
+        {
+            _pcPoint = new WebPoint(key, ++_pcPointSeq);
+        }
+
+        _webUi.PointNudge();
+    }
+
+    /// <summary>The strip picture <paramref name="id"/>'s file, pointed at; nothing for an id with none.</summary>
+    private void PointAtPicture(int id)
+    {
+        string? path;
+        lock (_pictures)
+        {
+            path = id >= 0 && id < _pictures.Count ? _pictures[id].FullPath : null;
+        }
+
+        PointAt(path);
+    }
+
+    private WebPoint? PcPointNow()
+    {
+        lock (_pcPointGate)
+        {
+            return _pcPoint;
+        }
+    }
+
+    /// <summary>For the tests: the PC's last point.</summary>
+    internal WebPoint? PcPointForTests => PcPointNow();
+
     /// <summary>For the tests: the bytes picture <paramref name="id"/> keeps, or null.</summary>
     internal byte[]? PictureBytesForTests(int id)
     {
@@ -313,7 +467,7 @@ internal sealed partial class ChatScreen
         }
 
         _webUiAsked = wanted;
-        _ = ReconcileWebUiQuietlyAsync(wanted);
+        _webUiReconciling = ReconcileWebUiQuietlyAsync(wanted);
     }
 
     private async Task ReconcileWebUiQuietlyAsync(WebUiWanted wanted)
@@ -526,18 +680,29 @@ internal sealed partial class ChatScreen
         new("off", "stop it"),
         new("copy", "copy the sign-in link to the clipboard"),
         new("reset", "a new sign-in token: every browser signs in again"),
+        new("browser", "open the Web UI on this PC"),
     ];
+
+    /// <summary><c>/webui browser</c>'s flag's note for the completion list.</summary>
+    public const string ExternalNote = "in the default browser, whatever Web open links in says";
 
     /// <summary>
     /// <c>/webui [on|off|copy|reset]</c> (2026-10-14): bare, the pane with the state and the sign-in links (an info pane, so the token stays
     /// out of the transcript; printed as notices where there is no pane); <c>on</c>/<c>off</c> the switch, reconciled at once; <c>copy</c>
     /// the first link to the clipboard; <c>reset</c> a new token after a yes.
     /// </summary>
-    private async Task WebUiCommandAsync(string args, CancellationToken cancellationToken)
+    private async Task WebUiCommandAsync(string args, CancellationToken cancellationToken, INoticeSink? flow = null)
     {
+        var sink = flow ?? _transcript;
         if (!_webUiController.Available)
         {
-            _transcript.Error(WebUiText.NotAvailableError);
+            sink.Error(WebUiText.NotAvailableError);
+            return;
+        }
+
+        if (WebUiBrowserArgs(args) is { } external)
+        {
+            await OpenWebUiHereAsync(WebUiText.LoopbackHost, external, sink).ConfigureAwait(false);
             return;
         }
 
@@ -560,7 +725,7 @@ internal sealed partial class ChatScreen
                     return;
                 }
 
-                _transcript.Notice(_copy(link.Url) ? WebUiText.CopiedNotice : WebUiText.CopyFailedError);
+                sink.Notice(_copy(link.Url) ? WebUiText.CopiedNotice : WebUiText.CopyFailedError);
                 return;
             case "reset":
                 if (await ResetWebUiTokenAsync(_transcript, cancellationToken).ConfigureAwait(false))
@@ -573,6 +738,119 @@ internal sealed partial class ChatScreen
                 _transcript.Error(WebUiText.UsageError);
                 return;
         }
+    }
+
+    /// <summary>
+    /// A double-click on <paramref name="line"/> of an address's tab: when the line is the link (or, wrapped, a piece of it), that address opened on
+    /// this PC, behind the pane, which stays open.
+    /// </summary>
+    /// <summary>For the tests: the flow sink, a notice from any thread.</summary>
+    internal INoticeSink FlowForTests => _flow;
+
+    internal void OpenLinkLine(string url, string line, INoticeSink sink)
+    {
+        string piece = line.Trim();
+        if (piece.Length < 8 || !url.Contains(piece, StringComparison.Ordinal) || !Uri.TryCreate(url, UriKind.Absolute, out var parsed))
+        {
+            return;
+        }
+
+        _ = OpenWebUiQuietlyAsync(parsed.Host.Trim('[', ']'), sink);
+    }
+
+    private async Task OpenWebUiQuietlyAsync(string host, INoticeSink sink)
+    {
+        try
+        {
+            await OpenWebUiHereAsync(host, external: false, sink).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            DiagnosticLog.Warn(WebUiCategory, "Web UI: could not open it on this PC: " + e.Message);
+            sink.Error(e.Message);
+        }
+    }
+
+    /// <summary><c>/webui browser [--external]</c>'s arguments: whether <c>--external</c> is given; null for any other form. Pure.</summary>
+    public static bool? WebUiBrowserArgs(string args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        var words = args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0 || !string.Equals(words[0], "browser", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return words.Length switch
+        {
+            1 => false,
+            2 when string.Equals(words[1], WebUiText.ExternalFlag, StringComparison.OrdinalIgnoreCase) => true,
+            _ => null,
+        };
+    }
+
+    /// <summary>The server's reconcile in flight, if any: <c>/webui browser</c> just after <c>/webui on</c> waits for it.</summary>
+    private Task? _webUiReconciling;
+
+    /// <summary>How long <c>/webui browser</c> waits for a server still starting.</summary>
+    internal static TimeSpan BrowserServerWait { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// The Web UI opened on this PC at <paramref name="host"/> (later on 2026-10-15, the user's ask): <c>/webui browser</c> (127.0.0.1) and a
+    /// double-click on the pane's link (its tab's host). <i>Web open links in</i> <c>browser-window</c> (and not <paramref name="external"/>) opens
+    /// the app's Browser window with the usual sign-in link, or a one-time link under <i>Web browser privacy</i> <c>keep-history</c>, whose kept
+    /// history would hold the token; a window that can't take it now, and <c>default-browser</c>, go to the default browser, signed in as
+    /// <i>Web browser sign in mode</i> says. The notice and the log name where, never the link; the window hands none of its cookies over.
+    /// </summary>
+    private async Task OpenWebUiHereAsync(string host, bool external, INoticeSink sink)
+    {
+        var effective = _effective();
+        if (!effective.WebUi)
+        {
+            sink.Error(WebUiText.BrowserWebUiOff);
+            return;
+        }
+
+        if (!_webUiController.Serving && _webUiReconciling is { IsCompleted: false } pending)
+        {
+            try
+            {
+                await pending.WaitAsync(BrowserServerWait).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                // Still starting: said below.
+            }
+        }
+
+        if (!_webUiController.Serving)
+        {
+            sink.Error(WebUiText.BrowserNotServing(effective.WebUiPort));
+            return;
+        }
+
+        bool window = !external && Web.OpenLinksIn.Resolve(effective) == Web.OpenLinksInKind.BrowserWindow && _browserWindow is { } browser && browser.Unavailable() is null;
+        bool once = window
+            ? Viewer.BrowserPrivacy.Resolve(effective) == Viewer.BrowserPrivacyKind.KeepHistory
+            : Web.WebSignInMode.Resolve(effective) == Web.WebSignInModeKind.OneTimeLink;
+        string? link = once ? _webUiController.OneTimeLink(host) : WebUiAuth.SignInLink(host, _webUiController.Port, WebUiTokenNow(mint: false));
+        if (link is null || !Uri.TryCreate(link, UriKind.Absolute, out var url))
+        {
+            sink.Error(WebUiText.BrowserNotServing(_webUiController.Port));
+            return;
+        }
+
+        if (window)
+        {
+            OpenInBrowser(url, sink: null);   // its own line would name the link; the notice below names where
+        }
+        else
+        {
+            _web.OpenUrl(link);
+        }
+
+        sink.Notice(WebUiText.BrowserOpened(window));
+        DiagnosticLog.Info(WebUiCategory, WebUiText.BrowserOpenedLogLine(window, once));
     }
 
     /// <summary>
@@ -618,6 +896,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task ShowWebUiAsync(INoticeSink sink, bool onWatcher, CancellationToken cancellationToken)
     {
+        int shownTab = 0;
         while (true)
         {
             var effective = _effective();
@@ -640,6 +919,7 @@ internal sealed partial class ChatScreen
                 new(WebUiText.EnabledButton(effective.WebUi), WebUiText.EnabledKey, WebUiText.EnabledWord) { Lit = effective.WebUi },
                 new(WebUiText.ReachButton(audience), WebUiText.ReachKey, WebUiText.ReachWord),
                 new(WebUiText.ResetButton, WebUiText.ResetKey, WebUiText.ResetWord),
+                .. (links.Count == 0 ? Array.Empty<InfoAction>() : new[] { new InfoAction(WebUiText.CopyButton, WebUiText.CopyKey, WebUiText.CopyWord) }),
             ];
             IReadOnlyList<InfoTab> tabs;
             if (links.Count == 0)
@@ -652,15 +932,28 @@ internal sealed partial class ChatScreen
                 // One tab per address (2026-10-14, the user's ask): its QR code for the phone's camera, then the link itself; Tailscale's
                 // headed by its note (later that day, the user's ask).
                 string status = string.Join("\n", WebUiText.StatusLines(effective.WebUi, true, _webUiController.Port, audience));
+                // A double-click on the link opens it on this PC (later on 2026-10-15, the user's ask), as /webui browser does, at that tab's host.
                 tabs = [.. links.Select(link => new InfoTab(WebUiText.LinkTabTitle(link.Url), () => new Spectre.Console.Rows(
                     new Spectre.Console.Text(WebUiText.LinkTabText(status, link.Tailscale)),
                     new QrView(QrCode.Encode(link.Url)),
-                    new Spectre.Console.Text("\n" + link.Url + "\n\n" + WebUiText.TokenWarning))))];
+                    new Spectre.Console.Text("\n" + link.Url + "\n\n" + WebUiText.TokenWarning + "\n" + WebUiText.LinkOpenHint)))
+                {
+                    LineDoubleClicked = text => OpenLinkLine(link.Url, text, sink),
+                })];
             }
 
-            await _info.ShowAsync(WebUiText.PaneTitle, tabs, 0, cancellationToken, buttons).ConfigureAwait(false);
+            await _info.ShowAsync(WebUiText.PaneTitle, tabs, shownTab, cancellationToken, buttons).ConfigureAwait(false);
+            shownTab = _info.LastTab;
             switch (_info.Pressed?.Key)
             {
+                case WebUiText.CopyKey:
+                    // The shown tab's link (later on 2026-10-15, the user's ask), as /webui copy's; the pane opens again on the same tab.
+                    if (shownTab < links.Count)
+                    {
+                        sink.Notice(_copy(links[shownTab].Url) ? WebUiText.CopiedNotice : WebUiText.CopyFailedError);
+                    }
+
+                    continue;
                 case WebUiText.EnabledKey:
                     bool on = !effective.WebUi;
                     _settings.Update(d => d.WebUi = on);

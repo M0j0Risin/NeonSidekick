@@ -53,12 +53,10 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     private readonly ITimer _statusTrail;
     private readonly TimeProvider _time;
     private readonly object _statusGate = new();
-    private readonly ITimer _stripTrail;
-    private readonly object _stripGate = new();
+    private readonly WebThrottle _strip;
+    private readonly WebThrottle _point;
     private string _lastStrip = "";
-    private long _stripAt;
-    private bool _stripSent;
-    private bool _stripTrailing;
+    private long _lastPoint;
     private string _lastState = "";
     private string _lastStatus = "";
     private long _statusAt;
@@ -84,7 +82,8 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         _time = time ?? TimeProvider.System;
         _sampler = _time.CreateTimer(_ => SampleState(), null, StateInterval, StateInterval);
         _statusTrail = _time.CreateTimer(_ => TrailingStatus(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-        _stripTrail = _time.CreateTimer(_ => TrailingStrip(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        _strip = new WebThrottle(_time, StatusThrottle, PublishStrip, e => DiagnosticLog.Debug(Category, "Web UI: the picture strip could not be read: " + e.Message));
+        _point = new WebThrottle(_time, StatusThrottle, PublishPoint, e => DiagnosticLog.Debug(Category, "Web UI: the PC's picture could not be sent: " + e.Message));
     }
 
     /// <summary>The transcript as the pages see it.</summary>
@@ -167,6 +166,20 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// <summary>The PC's highlight and viewer moved to a strip picture, handed off the request's thread; false when the strip doesn't hold it or is off.</summary>
     public Func<int, bool>? StripSelect { get; set; }
 
+    /// <summary>The screen's delete of a picture it holds (later on 2026-10-15): its own path for the id; null: no deletes.</summary>
+    public Func<int, IPAddress?, WebReply>? PictureDelete { get; set; }
+
+    public WebReply DeletePicture(WebPictureDelete request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (PictureDelete is not { } delete || !(Feed.Holds(request.Id) || (StripHolds?.Invoke(request.Id) ?? false)))
+        {
+            return new WebReply(WebOutcome.NotFound, WebUiText.PictureNotHere);
+        }
+
+        return delete(request.Id, remote);
+    }
+
     public WebReply SelectStripPicture(WebStripSelect request, IPAddress? remote)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -184,45 +197,43 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
             return;
         }
 
-        long now = _time.GetTimestamp();
-        lock (_stripGate)
-        {
-            if (_stripTrailing)
-            {
-                return;
-            }
-
-            var since = _time.GetElapsedTime(_stripAt, now);
-            if (_stripSent && since < StatusThrottle)
-            {
-                _stripTrailing = true;
-                _stripTrail.Change(StatusThrottle - since, Timeout.InfiniteTimeSpan);
-                return;
-            }
-
-            _stripAt = now;
-            _stripSent = true;
-        }
-
-        PublishStrip();
+        _strip.Nudge();
     }
 
-    private void TrailingStrip()
+    // ── The PC's point (later on 2026-10-15) ────────────────────────────────
+
+    /// <summary>The picture the PC's own hand moved to last, or null before any (thread-safe, reads only).</summary>
+    public Func<WebPoint?>? PointNow { get; set; }
+
+    /// <summary>
+    /// The PC pointed at a picture (its strip, its viewer's keys, its thumbnail browser, the viewer opened on one; any thread): the point to every
+    /// page, at most one per <see cref="StatusThrottle"/> with a trailing send, so a held arrow key's last picture lands. Never blocks.
+    /// </summary>
+    public void PointNudge()
     {
-        lock (_stripGate)
+        if (Events.Count == 0 || PointNow is null)
         {
-            _stripTrailing = false;
-            _stripAt = _time.GetTimestamp();
+            return;
         }
 
-        try
+        _point.Nudge();
+    }
+
+    /// <summary>The point now, to every page, when it is newer than the one sent last.</summary>
+    public void PublishPoint()
+    {
+        if (PointNow?.Invoke() is not { } point)
         {
-            PublishStrip();
+            return;
         }
-        catch (Exception e) when (e is not OutOfMemoryException)
+
+        long last = Interlocked.Read(ref _lastPoint);
+        if (point.Seq <= last || Interlocked.CompareExchange(ref _lastPoint, point.Seq, last) != last)
         {
-            DiagnosticLog.Debug(Category, "Web UI: the picture strip could not be read: " + e.Message);
+            return;
         }
+
+        Events.Publish(new WebEvent("point", new Lazy<string>(JsonSerializer.Serialize(point, WebUiJsonContext.Default.WebPoint))));
     }
 
     /// <summary>The strip now, to every page, when its key differs from what they have; the pictures built only then.</summary>
@@ -244,10 +255,10 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     }
 
     /// <summary>A picture as an entry carries it: its three addresses under this run's tag. Pure but for the tag.</summary>
-    public WebPicture Describe(int id, string name, int width, int height, bool tooLarge)
+    public WebPicture Describe(int id, string name, int width, int height, bool tooLarge, string? key = null, bool deletable = false)
     {
         string root = "/api/picture/" + s_pictureRun + "/" + id.ToString(System.Globalization.CultureInfo.InvariantCulture) + "/";
-        return new WebPicture(id, name, root + "thumb", root + "mid", root + "full", width, height, tooLarge);
+        return new WebPicture(id, name, root + "thumb", root + "mid", root + "full", width, height, tooLarge, key, deletable);
     }
 
     /// <summary>
@@ -260,6 +271,25 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     public Func<IReadOnlyList<string>>? UsageLines { get; set; }
 
     public WebUsageCard Usage() => new(WebUiText.UsageTitle, UsageLines?.Invoke() ?? []);
+
+    /// <summary>The profile's saved prompts' texts in their order (later on 2026-10-15, reads only); null lists none.</summary>
+    public Func<IReadOnlyList<string>>? PromptsNow { get; set; }
+
+    public WebPrompts Prompts()
+    {
+        IReadOnlyList<string> texts;
+        try
+        {
+            texts = PromptsNow?.Invoke() ?? [];
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            DiagnosticLog.Debug(Category, "Web UI: the saved prompts could not be read: " + e.Message);
+            texts = [];
+        }
+
+        return new WebPrompts(NeonSidekick.Prompts.SavedPromptText.PaneTitle, [.. texts.Select((t, i) => new WebPrompt(i + 1, t))]);
+    }
 
     public WebEntry? Entry(long seq) => Feed.EntryOf(seq, WebUiMarkdown.ToHtml);
 
@@ -446,7 +476,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     {
         // The connecting page's own copy: the other pages' last state stays what the sampler compares with.
         return new WebSnapshot(Feed.Snapshot(WebUiMarkdown.ToHtml, defer: true), Asks.OpenAsks().Select(View).ToList(), _state(), WebUiText.Words, TakeDrafts(), StatusNow?.Invoke().Status,
-            StripView?.Invoke());
+            StripView?.Invoke(), PointNow?.Invoke());
     }
 
     public void SignedIn(IPAddress? remote)
@@ -473,7 +503,12 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         if (!request.AsText && SlashCommands.Parse(text) is var (command, args) && command != SlashCommand.None)
         {
             var verdict = WebCommands.Check(command, args, text, CommandSettings?.Invoke() ?? default);
-            DiagnosticLog.Info(Category, WebUiText.CommandLogLine(WebCommands.Word(text), remote, verdict.Allowed ? verdict.Kind.ToString().ToLowerInvariant() : "refused"));
+            DiagnosticLog.Info(Category, WebUiText.CommandLogLine(WebCommands.Word(text), remote, verdict.Kind == WebCommandKind.Refused ? "refused" : verdict.Kind.ToString().ToLowerInvariant()));
+            if (verdict.Kind == WebCommandKind.Page)
+            {
+                return new WebReply(WebOutcome.Ok, Open: verdict.Open);   // later on 2026-10-15: the page opens its own sheet, nothing queued for the PC
+            }
+
             if (!verdict.Allowed)
             {
                 return new WebReply(WebOutcome.Refused, verdict.Reason, verdict.AsText, verdict.Use);
@@ -736,7 +771,8 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     {
         _sampler.Dispose();
         _statusTrail.Dispose();
-        _stripTrail.Dispose();
+        _strip.Dispose();
+        _point.Dispose();
         _completing.Dispose();
     }
 }

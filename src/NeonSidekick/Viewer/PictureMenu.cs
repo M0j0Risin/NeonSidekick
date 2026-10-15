@@ -165,14 +165,17 @@ public static class PictureMenu
         }
     }
 
-    /// <summary>The picture deleted for good (the viewer's double-Del's way, no Recycle Bin, no confirmation — the user's call). True when it went.</summary>
+    /// <summary>
+    /// The picture deleted (the viewer's double-Del's way, no confirmation — the user's call): to the Recycle bin while <c>File deletes to
+    /// Recycle bin</c> is on (later on 2026-10-15; for good until then), else for good. True when it went.
+    /// </summary>
     internal static bool Delete(string path)
     {
         try
         {
-            File.Delete(path);
-            DiagnosticLog.Info("Viewer", $"Deleted {path} from the picture menu.");
-            Report(PictureMenuText.Deleted(Path.GetFileName(path)), false);
+            var way = PictureDeletes.Delete(path);
+            DiagnosticLog.Info("Viewer", $"Deleted {path} from the picture menu{PictureDeletes.LogTail(way)}.");
+            Report(PictureMenuText.Deleted(Path.GetFileName(path), way), false);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

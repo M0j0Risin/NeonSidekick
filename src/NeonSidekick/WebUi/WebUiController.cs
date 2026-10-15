@@ -128,6 +128,9 @@ public sealed class WebUiController : IAsyncDisposable
         }
     }
 
+    /// <summary>A one-time sign-in link on <paramref name="host"/> from the running server (later on 2026-10-15), or null while it serves none.</summary>
+    public string? OneTimeLink(string host) => Volatile.Read(ref _host)?.OneTimeLink(host);
+
     /// <summary>
     /// The sign-in links for <paramref name="token"/>: <c>localhost</c> under <c>local</c> (never Tailscale's), each chosen private IPv4 address under
     /// <c>lan</c>, Tailscale's marked (later on 2026-10-14).

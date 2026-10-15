@@ -138,7 +138,7 @@ public sealed class WebCommandsTests
     [InlineData("/learn sessions", WebCommandKind.Refused)]
     [InlineData("/shopping", WebCommandKind.Refused)]
     [InlineData("/shopping add", WebCommandKind.Refused)]
-    [InlineData("/prompts", WebCommandKind.Refused)]
+    [InlineData("/prompts", WebCommandKind.Page)]   // later on 2026-10-15: the page's own saved prompts sheet
     [InlineData("/prompts list --clear", WebCommandKind.Refused)]
     [InlineData("/browser", WebCommandKind.Refused)]
     [InlineData("/browser list", WebCommandKind.Refused)]

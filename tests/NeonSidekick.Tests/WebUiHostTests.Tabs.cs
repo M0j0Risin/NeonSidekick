@@ -59,6 +59,7 @@ public sealed partial class WebUiHostTests
     [Theory]
     [InlineData("/api/events", WebTab.Chat)]
     [InlineData("/api/usage", WebTab.Chat)]
+    [InlineData("/api/prompts", WebTab.Chat)]
     [InlineData("/api/entry/4", WebTab.Chat)]
     [InlineData("/api/picture/0123456789abcdef0123456789abcdef/1/thumb", WebTab.Chat)]
     [InlineData("/api/shopping", WebTab.Shopping)]
@@ -82,6 +83,7 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/answer", "{\"askId\":\"a\",\"choice\":\"b\"}", WebTab.Chat)]
     [InlineData("/api/complete", "{\"text\":\"/\",\"cursor\":1,\"seq\":1}", WebTab.Chat)]
     [InlineData("/api/strip/select", "{\"id\":1}", WebTab.Chat)]
+    [InlineData("/api/picture/delete", "{\"id\":1}", WebTab.Chat)]
     [InlineData("/api/shopping/check", "{\"id\":1,\"on\":true}", WebTab.Shopping)]
     [InlineData("/api/shopping/store", "{\"id\":1}", WebTab.Shopping)]
     [InlineData("/api/home/tap", "{\"ref\":\"x\"}", WebTab.Home)]
@@ -158,6 +160,45 @@ public sealed partial class WebUiHostTests
         Assert.Equal(HttpStatusCode.Forbidden, crossSite.StatusCode);
         Assert.Equal([7], _backend.StripPicks);
         Assert.Equal(WebRateBucket.Act, WebRateLimit.BucketOf("/api/strip/select", post: true));
+    }
+
+    [Fact]
+    public async Task ThePrompts_AreReadBehindTheCookie_AndASendsAnswerCarriesOpen()
+    {
+        _backend.PromptList.AddRange(["one", "two"]);
+        _backend.Reply = new WebReply(WebOutcome.Ok, Open: WebUiText.OpenPrompts);
+
+        using var prompts = await _client.SendAsync(Get("/api/prompts"));
+        using var unsigned = await _client.SendAsync(Get("/api/prompts", signedIn: false));
+        using var sent = await _client.SendAsync(Post("/api/send", "{\"id\":\"a\",\"text\":\"/prompts\"}"));
+
+        var sheet = JsonSerializer.Deserialize(await prompts.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebPrompts)!;
+        Assert.Equal([new WebPrompt(1, "one"), new WebPrompt(2, "two")], sheet.Items);
+        Assert.Equal("no-store", prompts.Headers.CacheControl?.ToString());
+        Assert.Equal(HttpStatusCode.Unauthorized, unsigned.StatusCode);
+        Assert.Equal(WebUiText.OpenPrompts, JsonSerializer.Deserialize(await sent.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebResult)!.Open);
+        Assert.Equal(WebTab.Chat, WebUiHost.TabOf("/api/prompts"));
+    }
+
+    [Fact]
+    public async Task ThePagesDelete_ReachesTheBackend_BehindTheCookieAndTheHeader_InTheActBucket()
+    {
+        using var deleted = await _client.SendAsync(Post("/api/picture/delete", "{\"id\":7}"));
+        using var unsigned = await _client.SendAsync(Post("/api/picture/delete", "{\"id\":7}", signedIn: false));
+        using var crossSite = await _client.SendAsync(Post("/api/picture/delete", "{\"id\":7}", csrf: false));
+        _backend.DeleteReply = new WebReply(WebOutcome.NotFound, WebUiText.PictureNotHere);
+        using var gone = await _client.SendAsync(Post("/api/picture/delete", "{\"id\":8}"));
+        using var get = await _client.SendAsync(Get("/api/picture/delete"));
+
+        Assert.Equal(HttpStatusCode.OK, deleted.StatusCode);
+        Assert.Contains(JsonSerializer.Serialize(_backend.DeleteMessage), await deleted.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.Unauthorized, unsigned.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, crossSite.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, gone.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, get.StatusCode);   // a GET names no picture
+        Assert.Equal([7, 8], _backend.Deleted);
+        Assert.Equal(WebRateBucket.Act, WebRateLimit.BucketOf("/api/picture/delete", post: true));
+        Assert.Equal(WebTab.Chat, WebUiHost.TabOf("/api/picture/delete"));
     }
 
     [Fact]

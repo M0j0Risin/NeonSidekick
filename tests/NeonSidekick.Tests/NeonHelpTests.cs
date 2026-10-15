@@ -234,7 +234,7 @@ public class NeonHelpTests
         Assert.Contains("\n- Oracle: Oracle tools, ", text);
         Assert.EndsWith("\nAsk for one menu (/tools sql) for its rows' defaults and what each does.", text, StringComparison.Ordinal);
         Assert.Equal("the menus Print, Camera (a second strip under the tab; ←/→ walk them)", HelpText.MenusTab(["Print", "Camera"]));
-        Assert.Equal([(ToolsText.CoreTabTitle, "Ask"), (ToolsText.CoreTabTitle, "Web"), (ToolsText.CoreTabTitle, "Shell"), (ToolsText.CoreTabTitle, "Options"), (ToolsText.FilesTabTitle, "File"), (ToolsText.FilesTabTitle, "Image")], HelpLocation.Menus("/tools").Take(6));   // the Standard group first since later on 2026-10-10, then Files; Shopping before Options on 2026-10-11 until it went to Home later that day
+        Assert.Equal([(ToolsText.CoreTabTitle, "Ask"), (ToolsText.CoreTabTitle, "Web"), (ToolsText.CoreTabTitle, "Shell"), (ToolsText.CoreTabTitle, ToolsText.TimersMenuTitle), (ToolsText.CoreTabTitle, "Options"), (ToolsText.FilesTabTitle, "File"), (ToolsText.FilesTabTitle, "Image")], HelpLocation.Menus("/tools").Take(7));   // Timers before Options since later on 2026-10-15   // the Standard group first since later on 2026-10-10, then Files; Shopping before Options on 2026-10-11 until it went to Home later that day
         Assert.Equal([(SettingsMenu.ClientTabTitle, "Chat"), (SettingsMenu.ClientTabTitle, "Sessions"), (SettingsMenu.ClientTabTitle, "Botchat"), (SettingsMenu.ClientTabTitle, SettingsMenu.WebUiTabTitle), (SettingsMenu.ServersTabTitle, "Common")], HelpLocation.Menus("/settings").Take(5));   // the Servers and Voice groups since 2026-10-10; Common and Http (the LLM tab) later that day; the Client group first later still; Web UI under Client since 2026-10-14
     }
 

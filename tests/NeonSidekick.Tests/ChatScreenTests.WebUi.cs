@@ -196,12 +196,24 @@ public partial class ChatScreenTests
         /// <summary>Every binding it was started on, in order.</summary>
         public List<WebUiBinding> Starts { get; } = [];
 
-        public Task StartAsync(WebUiBinding binding, CancellationToken cancellationToken)
+        /// <summary>How long a start takes (later on 2026-10-15: /webui browser waits for a server still starting).</summary>
+        public TimeSpan StartDelay { get; set; }
+
+        private int _codes;
+
+        public async Task StartAsync(WebUiBinding binding, CancellationToken cancellationToken)
         {
+            if (StartDelay > TimeSpan.Zero)
+            {
+                await Task.Delay(StartDelay, CancellationToken.None);
+            }
+
             Started = binding;
             Starts.Add(binding);
-            return Task.CompletedTask;
         }
+
+        /// <summary>A one-time link as the real host's reads (later on 2026-10-15), its code numbered.</summary>
+        public string? OneTimeLink(string host) => Started is null ? null : WebUiAuth.OnceLink(host, Port, "code" + Interlocked.Increment(ref _codes));
 
         public Task StopAsync()
         {
@@ -261,7 +273,7 @@ public partial class ChatScreenTests
         Assert.Contains(before, output);
         Assert.Contains(after, output);
         Assert.True(output.IndexOf(before, StringComparison.Ordinal) < output.IndexOf(after, StringComparison.Ordinal), output);
-        Assert.Contains(InfoPane.ButtonsHint([('e', "on/off"), ('l', "lan/local"), ('r', "new token")], tabs: false), output);
+        Assert.Contains(InfoPane.ButtonsHint([('e', "on/off"), ('l', "lan/local"), ('r', "new token"), ('c', "copy link")], tabs: false), output);   // copy later on 2026-10-15
         Assert.Equal("lan", WebUiText.ReachButton(WebUiAudience.LocalAreaNetwork));
         Assert.Equal("local", WebUiText.ReachButton(WebUiAudience.Local));
     }

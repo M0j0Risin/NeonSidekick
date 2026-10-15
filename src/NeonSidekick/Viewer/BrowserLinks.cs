@@ -40,6 +40,9 @@ public enum BrowserLinkOutcome
     /// <summary>A local PDF's copy the window shows (2026-10-14, <see cref="PdfView"/>): it is gone when the window closes.</summary>
     LocalCopy,
 
+    /// <summary>A Web UI sign-in link (later on 2026-10-15): it holds the token, so it is never saved.</summary>
+    SignInLink,
+
     /// <summary>The file is from a newer NeonSidekick: left alone, nothing written.</summary>
     Newer,
 
@@ -341,6 +344,7 @@ public sealed class BrowserLinks
     /// <summary>Why <paramref name="url"/> cannot be saved, or null when it can: a web address with no user name or password in it.</summary>
     public static BrowserLinkOutcome? Refused(string? url) =>
         PdfView.IsOurs(url) ? BrowserLinkOutcome.LocalCopy   // a staged PDF's copy (2026-10-14, the PDF plan's gap 65): gone when the window closes
+        : WebUi.WebUiAuth.IsSignInUrl(url) ? BrowserLinkOutcome.SignInLink   // a Web UI sign-in link (later on 2026-10-15): it holds the token
         : !VideoPage.IsWebLink(url) ? BrowserLinkOutcome.NotWeb
         : HasCredentials(url) ? BrowserLinkOutcome.Credentials
         : null;

@@ -63,7 +63,40 @@ public static class WebUiAuth
         };
 
     /// <summary>The cookie's name on <paramref name="port"/>: <c>neon_webui_8765</c>.</summary>
-    public static string CookieName(int port) => "neon_webui_" + port.ToString(CultureInfo.InvariantCulture);
+    public static string CookieName(int port) => CookiePrefix + port.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>Every Web UI cookie's name starts so (later on 2026-10-15): the Browser window never hands one to the web tools' jar.</summary>
+    public const string CookiePrefix = "neon_webui_";
+
+    /// <summary>The query word of a one-time code (later on 2026-10-15): <c>/signin?once=…</c>.</summary>
+    public const string OnceQuery = "once";
+
+    /// <summary>A one-time sign-in link for <paramref name="host"/> (later on 2026-10-15): good once, for a minute.</summary>
+    public static string OnceLink(string host, int port, string code) =>
+        "http://" + (host.Contains(':', StringComparison.Ordinal) ? "[" + host + "]" : host) + ":" + port.ToString(CultureInfo.InvariantCulture) + SignInPath + "?" + OnceQuery + "=" + code;
+
+    /// <summary>
+    /// Whether <paramref name="url"/> is a Web UI sign-in link (later on 2026-10-15): http, the path <c>/signin</c>, a token or a code in its query.
+    /// The Browser window keeps none in its list of visits or its saved links, and <c>web_links</c> never hands one to the model. Pure.
+    /// </summary>
+    public static bool IsSignInUrl(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var parsed) && parsed.Scheme == Uri.UriSchemeHttp
+        && string.Equals(parsed.AbsolutePath, SignInPath, StringComparison.Ordinal)
+        && (parsed.Query.Contains("t=", StringComparison.Ordinal) || parsed.Query.Contains(OnceQuery + "=", StringComparison.Ordinal));
+
+    /// <summary>A sign-in link with its token or code cut to <c>…</c> (later on 2026-10-15, the Browser window's log line); any other address as it is. Pure.</summary>
+    public static string Redacted(string url)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        if (!IsSignInUrl(url))
+        {
+            return url;
+        }
+
+        int query = url.IndexOf('?', StringComparison.Ordinal);
+        var parts = url[(query + 1)..].Split('&').Select(p => p.IndexOf('=', StringComparison.Ordinal) is int eq and > 0 && p[..eq] is "t" or OnceQuery ? p[..(eq + 1)] + "…" : p);
+        return url[..(query + 1)] + string.Join("&", parts);
+    }
 
     /// <summary>The sign-in link for <paramref name="host"/> (an address or <c>localhost</c>) and <paramref name="port"/>.</summary>
     public static string SignInLink(string host, int port, string token) =>

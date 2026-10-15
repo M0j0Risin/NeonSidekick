@@ -512,9 +512,10 @@ internal sealed class MacThumbsWindow : AppKitWindow
         }
 
         _deleteArm.Stop();
+        Files.DeleteWay way;
         try
         {
-            File.Delete(path);
+            way = PictureDeletes.Delete(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -523,7 +524,7 @@ internal sealed class MacThumbsWindow : AppKitWindow
             return;
         }
 
-        DiagnosticLog.Info("Viewer", $"Deleted {path} from the thumbnail browser.");
+        DiagnosticLog.Info("Viewer", $"Deleted {path} from the thumbnail browser{PictureDeletes.LogTail(way)}.");
         Removed(path);
     }
 

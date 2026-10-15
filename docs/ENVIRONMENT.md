@@ -124,6 +124,7 @@ Only for running the tests from source. Each live test is skipped unless its res
 * `NEONSIDEKICK_TEST_DOCKER_CONTAINER`: a running container to read (`mysql_dev`); `NEONSIDEKICK_TEST_DOCKER_PIPE` names another pipe (a socket's path on a Mac). Reads only.
 * `NEONSIDEKICK_TEST_EVENTLOG_COMPUTER`: a computer's host whose event logs are read over RPC as you (`localhost` is a loopback session). Windows only; reads only.
 * `NEONSIDEKICK_TEST_CAMERA`: `1` or a camera's name (the light comes on); `NEONSIDEKICK_TEST_CAMERA_OUT`: a folder to keep the test photo in.
+* `NEONSIDEKICK_TEST_RECYCLE`: `1` runs the real Recycle bin test (the Trash on a Mac), which leaves a temp file in it.
 * `NEONSIDEKICK_TEST_PRINTER`: a printer's CUPS queue name on a Mac (`Brother_HL_L2340D_series`). Jobs are held and canceled, so nothing prints.
 * `NEONSIDEKICK_TEST_HA_URL` with `NEONSIDEKICK_TEST_HA_TOKEN`: a Home Assistant to read from.
 * `NEONSIDEKICK_TEST_YOUTUBE_API_KEY`: a YouTube Data API key for the live search and playlist tests (about 103 quota units a run).

@@ -140,6 +140,10 @@ internal sealed partial class ChatScreen
 
     private readonly Lock _browserGate = new();
 
+    /// <summary>The page the window shows, never a Web UI sign-in link (later on 2026-10-15): the model is never handed the token.</summary>
+    private static async Task<(string Url, string? Title)?> CurrentPageNoSignInAsync(IBrowserWindow window) =>
+        await window.CurrentPageAsync().ConfigureAwait(false) is { } page && !WebUi.WebUiAuth.IsSignInUrl(page.Url) ? page : null;
+
     /// <summary>
     /// What the saved-link tools reach (later still on 2026-10-13): the loaded profile's links and, with a Browser window, the page it shows
     /// — none while it cannot say, a bot check's page never — and the ☆ menu's refresh. macOS has no window: the links alone.
@@ -147,7 +151,7 @@ internal sealed partial class ChatScreen
     private WebLinkHooks WebLinkHooksFor() => _browserWindow is not { } window
         ? new WebLinkHooks(BrowserLinksNow, _time)
         : new WebLinkHooks(BrowserLinksNow, _time,
-            () => window.Unavailable() is null ? window.CurrentPageAsync() : Task.FromResult<(string Url, string? Title)?>(null),
+            () => window.Unavailable() is null ? CurrentPageNoSignInAsync(window) : Task.FromResult<(string Url, string? Title)?>(null),
             window.LinksChanged);
 
     /// <summary>
@@ -303,7 +307,9 @@ internal sealed partial class ChatScreen
                 return;
             }
 
-            int taken = visit.Hosts.Count == 0 ? 0 : _web.Fetcher.Adopt(visit.Cookies, visit.Identity, new Uri("https://" + visit.Hosts[0] + "/"));
+            // The Web UI's own cookie never joins the web tools' jar (later on 2026-10-15, /webui browser): it is the sign-in token.
+            var cookies = visit.Cookies.Where(c => !c.Name.StartsWith(WebUi.WebUiAuth.CookiePrefix, StringComparison.Ordinal)).ToList();
+            int taken = visit.Hosts.Count == 0 ? 0 : _web.Fetcher.Adopt(cookies, visit.Identity, new Uri("https://" + visit.Hosts[0] + "/"));
             _flow.Notice(BotCheckText.Closed(taken, visit.Hosts));
         }
         catch (InvalidOperationException ex)

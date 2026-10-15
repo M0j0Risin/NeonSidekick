@@ -3234,4 +3234,29 @@ public sealed class AppSettingsData
     /// (<see cref="Profiles.CopySettings"/>); a plain <c>/profile reset</c> keeps it. profile.json only, no row. No variable.
     /// </summary>
     public string WebUiToken { get; set; } = "";
+
+    /// <summary>
+    /// Whether a turn offers the timer tools (later on 2026-10-15, the user's ask: the Timers tab on <c>/tools</c> › Core): on (the default,
+    /// as before) <c>start_timer</c>, <c>stop_timer</c> and <c>list_timers</c> stand beside the clock; off the model has none, its prompt drops
+    /// the timer sentence, and bots and advisors have none either. <c>/timer</c> and the timers already running are the user's own hand and
+    /// keep working. Read at each turn. No variable.
+    /// </summary>
+    public bool TimerTools { get; set; } = true;
+
+    /// <summary>
+    /// Whether deletes go to the Recycle bin (the Trash on a Mac; later on 2026-10-15, the user's ask: on by default, every delete was
+    /// permanent until then): the model's <c>delete</c> (headless too) and the picture viewer's, the thumbnail browser's and the picture menu's
+    /// deletes, and the Web UI's. Off, they delete directly. A drive with no bin (a network share, a removable drive) deletes directly either
+    /// way, and says so; something too big for the bin is deleted for good, as Windows does. <c>unc_delete</c> and the app's own clean-ups
+    /// are always direct. Read at each delete. No variable.
+    /// </summary>
+    public bool FileDeletesToRecycleBin { get; set; } = true;
+
+    /// <summary>
+    /// How <c>/webui browser</c> and a double-click on <c>/webui</c>'s link sign the default browser in (later on 2026-10-15, the user's ask and
+    /// words): one of <see cref="Web.WebSignInMode.Names"/> — <c>one-time-link</c> (the default: a link good once, for a minute, so the browser's
+    /// history keeps no token) or <c>url-with-token</c> (the usual sign-in link). The app's Browser window uses the usual link, or a one-time link
+    /// under <see cref="BrowserPrivacy"/> <c>keep-history</c>. Read at each open; anything else reads as the default. No variable.
+    /// </summary>
+    public string WebBrowserSignInMode { get; set; } = Web.WebSignInMode.Default;
 }

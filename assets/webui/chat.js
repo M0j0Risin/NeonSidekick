@@ -29,6 +29,8 @@ const overlayPrev = document.getElementById('overlay-prev');
 const overlayNext = document.getElementById('overlay-next');
 const overlayClose = document.getElementById('overlay-close');
 const overlayLive = document.getElementById('overlay-live');
+const overlayDelete = document.getElementById('overlay-delete');
+const overlayNote = document.getElementById('overlay-note');
 
 const desktop = window.matchMedia('(pointer: fine)').matches;
 const entries = new Map();   // seq → { el, body, kind, text, pictures }
@@ -384,6 +386,7 @@ function pictureTile(p) {
   const tile = el('button', 'tile');
   tile.type = 'button';
   tile.title = p.name;
+  if (p.key) tile.dataset.key = p.key;   // the 🗑️ finds a file's tiles by it
   if (p.tooLarge) {
     tile.classList.add('fallback');
     tile.textContent = p.name + ' ' + words.pictureTooLarge;
@@ -427,6 +430,26 @@ function pictureFailed(img) {
 
 let shown = null;   // { list, at, fromStrip }
 
+// ── The PC's point (later on 2026-10-15, the user's ask) ──
+// The page's selection follows the PC's as the PC's follows the page's: a point (a click or an arrow on the PC's strip, its viewer's keys, a pick
+// in its thumbnail browser, the viewer opened on a picture) moves an open full view to the picture with that file's key, as a step would; a view
+// on the newest moved to an older one holds there, and a point at the newest makes it live again (isLive reads the slot). A pick still pending
+// from a swipe is dropped, so the page never sends the PC back. A closed view, or a file the view doesn't hold, moves nothing. The sequence
+// only rises: a fresh page takes the snapshot's without moving; a reconnect follows one newer than it had.
+let lastPointSeq = null;
+
+function applyPoint(p) {
+  if (!p || (lastPointSeq !== null && p.seq <= lastPointSeq)) return;
+  lastPointSeq = p.seq;
+  if (!shown) return;
+  const at = shown.list.findIndex(x => x.key === p.key);
+  if (at < 0) return;
+  clearTimeout(selectTimer);
+  if (at === shown.at) return;
+  shown.at = at;
+  showPicture();
+}
+
 function allPictures() {
   const list = [];
   for (const record of entries.values()) for (const p of record.pictures || []) list.push(p);
@@ -436,7 +459,12 @@ function allPictures() {
 // The transcript's pictures newest first (later on 2026-10-15, the user's report: the view opened from the transcript ran oldest first, so its
 // live picture sat at the far right while the strip's and the PC's viewer keep it at the far left): ‹ newer, › older, live always the first.
 function transcriptPictures() {
-  return allPictures().filter(p => !p.tooLarge).reverse();
+  return allPictures().filter(p => !p.tooLarge && !(p.key && goneKeys.has(p.key))).reverse();
+}
+
+// The strip's pictures the overlay can show: none over the decode, none the page deleted.
+function stripPictures() {
+  return strip ? strip.pictures.filter(p => !p.tooLarge && !(p.key && goneKeys.has(p.key))) : [];
 }
 
 function openOverlay(id) {
@@ -452,12 +480,13 @@ function openOverlayOn(list, id, fromStrip) {
   shown = { list, at, fromStrip };
   showPicture();
   overlayEl.classList.remove('hidden');
-  if (!wasOpen) history.pushState({ overlay: true, drawer: drawerOpen }, '');
+  if (!wasOpen) history.pushState({ overlay: true, drawer: drawerOpen, prompts: promptsOpen }, '');
   floatSoon();
 }
 
 function showPicture() {
   const p = shown.list[shown.at];
+  if (armed && armed.id !== p.id) disarmDelete();   // a step, a swipe, a live swap, the PC's point: never a second tap on another picture
   overlayImg.alt = p.name;
   delete overlayImg.dataset.tried;
   overlayImg.src = p.mid;
@@ -473,7 +502,72 @@ function paintOverlayBar() {
   overlayNext.disabled = shown.at === shown.list.length - 1;
   overlayLive.textContent = words.live || 'live';
   overlayLive.classList.toggle('hidden', !isLive());
+  paintDelete();
 }
+
+// ── The 🗑️ (later on 2026-10-15, the user's ask) ──
+// The PC viewer's double-Del, on a phone: a picture with a file of its own shows 🗑️; the first tap arms it (red, its label says so) for 3 s, the
+// second on the same picture deletes it as File deletes to Recycle bin says. A step, a swipe, a live swap, the PC's point or the overlay closing
+// disarms it. Deleted, the view moves to the next older picture (the newer when it was the oldest) or closes; every tile of that file shows its
+// fallback, and the page keeps the file's key so no refresh puts it back (a snapshot starts the page over). Delete does it twice on a desktop.
+const goneKeys = new Set();
+let armed = null;   // { id, timer }
+let noteTimer = null;
+
+function paintDelete() {
+  const p = shown && shown.list[shown.at];
+  overlayDelete.classList.toggle('hidden', !(p && p.deletable));
+  const on = !!(armed && p && armed.id === p.id);
+  overlayDelete.classList.toggle('armed', on);
+  const label = on ? (words.deleteArmed || 'Tap again to delete') : (words.deletePicture || 'Delete');
+  overlayDelete.setAttribute('aria-label', label);
+  overlayDelete.title = label;
+}
+
+function disarmDelete() {
+  if (!armed) return;
+  clearTimeout(armed.timer);
+  armed = null;
+  if (shown) paintDelete();
+}
+
+function overlayNoteSay(text) {
+  clearTimeout(noteTimer);
+  overlayNote.textContent = text || '';
+  overlayNote.classList.toggle('hidden', !text);
+  if (text) noteTimer = setTimeout(() => overlayNote.classList.add('hidden'), 3000);
+}
+
+async function pressDelete() {
+  if (!shown) return;
+  const p = shown.list[shown.at];
+  if (!p || !p.deletable) return;
+  if (!armed || armed.id !== p.id) {
+    disarmDelete();
+    armed = { id: p.id, timer: setTimeout(disarmDelete, 3000) };
+    paintDelete();
+    return;
+  }
+  disarmDelete();
+  const r = await post('/api/picture/delete', { id: p.id });
+  overlayNoteSay(r.message);
+  if (!r.ok) return;
+  if (p.key) {
+    goneKeys.add(p.key);
+    for (const tile of document.querySelectorAll('.tile[data-key="' + p.key + '"]')) {
+      tile.classList.add('fallback');
+      tile.replaceChildren(document.createTextNode(p.name + ' ' + words.pictureGone));
+    }
+  }
+  if (!shown) return;
+  const list = shown.list.filter(x => x.id !== p.id && !(p.key && x.key === p.key));
+  if (!list.length) { closeOverlay(); return; }
+  shown.list = list;
+  shown.at = Math.min(shown.at, list.length - 1);
+  showPicture();
+}
+
+overlayDelete.addEventListener('click', ev => { ev.stopPropagation(); pressDelete(); });
 
 // ── Live (later on 2026-10-15) ──
 // As the PC's viewer: on the newest slot, the first (the far left, in the strip's order and the transcript's alike), the overlay follows new
@@ -487,7 +581,7 @@ let liveWait = 0;
 
 function refreshOverlay(waited) {
   if (!shown) return;
-  const list = shown.fromStrip ? (strip ? strip.pictures.filter(p => !p.tooLarge) : []) : transcriptPictures();
+  const list = shown.fromStrip ? stripPictures() : transcriptPictures();
   if (!list.length) {
     closeOverlay();
     return;
@@ -538,6 +632,8 @@ function closeOverlay() {
 }
 
 function hideOverlay() {
+  disarmDelete();
+  overlayNoteSay('');
   shown = null;
   overlayEl.classList.add('hidden');
   overlayImg.removeAttribute('src');
@@ -558,7 +654,8 @@ function settleHistory() {
   const st = history.state || {};
   if (!st.overlay && shown) hideOverlay();
   if (!st.drawer && drawerOpen) hideDrawer();
-  if (!shown && (st.overlay || (st.drawer && !drawerOpen))) history.back();
+  if (!st.prompts && promptsOpen) hidePrompts(false);
+  if (!shown && (st.overlay || (st.drawer && !drawerOpen) || (st.prompts && !promptsOpen))) history.back();
 }
 overlayClose.addEventListener('click', closeOverlay);
 overlayPrev.addEventListener('click', ev => { ev.stopPropagation(); step(-1); });
@@ -567,9 +664,11 @@ overlayEl.addEventListener('click', ev => { if (ev.target === overlayEl || ev.ta
 overlayOpen.addEventListener('click', ev => ev.stopPropagation());
 document.addEventListener('keydown', ev => {
   if (!shown) return;
-  if (ev.key === 'Escape') { ev.preventDefault(); closeOverlay(); }
+  if (ev.key === 'Escape' && armed) { ev.preventDefault(); disarmDelete(); }   // an armed 🗑️ first, then the overlay
+  else if (ev.key === 'Escape') { ev.preventDefault(); closeOverlay(); }
   else if (ev.key === 'ArrowLeft') step(-1);
   else if (ev.key === 'ArrowRight') step(1);
+  else if (ev.key === 'Delete') { ev.preventDefault(); pressDelete(); }
 });
 let touchX = null;
 overlayEl.addEventListener('touchstart', ev => { touchX = ev.touches.length === 1 ? ev.touches[0].clientX : null; }, { passive: true });
@@ -693,6 +792,7 @@ async function toggleUsage() {
   document.getElementById('usage-lines').textContent = (r.json.lines || []).join('\n');
   document.getElementById('usage-close').textContent = words.close || 'Close';
   closeDrawer();   // one footer panel at a time
+  closePrompts(false);
   usageCard.classList.remove('hidden');
   floatSoon();
 }
@@ -723,6 +823,7 @@ function renderAsks(list) {
     // One footer panel at a time (later on 2026-10-15): the question the PC waits on closes the drawer. Under the overlay the drawer goes at
     // once (it can't be seen) and its entry is stepped over when the overlay closes, so the picture isn't pulled away.
     if (drawerOpen) { if (shown) hideDrawer(); else closeDrawer(); }
+    if (promptsOpen) { if (shown) hidePrompts(false); else closePrompts(false); }
     if (navigator.vibrate) {
       try { navigator.vibrate(200); } catch { /* not allowed */ }
     }
@@ -777,7 +878,7 @@ function pickList(card, ask) {
   const box = el('div', 'pick');
   const filter = el('input');
   filter.type = 'search';
-  filter.placeholder = 'Filter';
+  filter.placeholder = words.filter || 'Filter';
   filter.autocomplete = 'off';
   const list = el('div', 'pick-list');
   const rows = [];
@@ -886,29 +987,148 @@ function putBack(text) {
   grow();
 }
 
-async function send(asText) {
-  const text = draft.value;
+function send(asText) {
+  return sendText(draft.value, { fromDraft: true, asText: asText });
+}
+
+// One send (later on 2026-10-15, out of send for the saved prompts' ➤): the pending id kept per text so a retry is one message; the draft
+// emptied only when the text came from it; a refusal's Send as a message re-sends the text refused, not whatever the box holds by then.
+async function sendText(text, opts) {
+  const fromDraft = !!(opts && opts.fromDraft);
+  const asText = !!(opts && opts.asText);
   if (!text.trim()) return;
   if (pendingText !== text) { pendingId = newId(); pendingText = text; }
   sendBtn.disabled = true;
-  const r = await post('/api/send', { id: pendingId, text: text, asText: !!asText });
+  const r = await post('/api/send', { id: pendingId, text: text, asText: asText });
   sendBtn.disabled = false;
   if (r.ok) {
-    if (draft.value === text) draft.value = '';
+    if (fromDraft && draft.value === text) draft.value = '';
     pendingId = null;
     pendingText = null;
-    hideList();
-    saveDraft();
-    grow();
+    if (fromDraft) {
+      hideList();
+      saveDraft();
+      grow();
+    }
     say('');
+    if (r.json && r.json.open === 'prompts') openPrompts();   // bare /prompts: the page's own sheet
     return;
   }
   // A refused command (later on 2026-10-14): the app's reason, and what it offers instead.
   const actions = [];
   if (r.use) actions.push({ label: words.useLine + ' ' + r.use, run: () => { draft.value = r.use + ' '; saveDraft(); grow(); draft.focus(); } });
-  if (r.asText) actions.push({ label: words.sendAsMessage, run: () => send(true) });
+  if (r.asText) actions.push({ label: words.sendAsMessage, run: () => sendText(text, { fromDraft: fromDraft, asText: true }) });
   sayWith(r.message || 'That message did not go through.', actions);
 }
+
+// ── The saved prompts (later on 2026-10-15, the user's ask) ───────────
+// 📣 at the box's left, and bare /prompts sent from the page, open the profile's saved prompts as a footer panel, read from the app each time it
+// opens. A tap on a row puts the prompt on the draft (ahead of what's there, with Undo); its ➤ sends it at once, as typed (a command meets the
+// page's command rules), the draft left alone. One footer panel at a time: the sheet, the drawer and the usage card replace each other — the
+// sheet and the drawer swap their history entry (replaceState), never back-then-push, whose late pop would take the new entry with it. Esc,
+// Back, ✕, a tap on the transcript or a question arriving close it; a picture tapped under it opens the overlay over it.
+
+const promptsBtn = document.getElementById('prompts-button');
+const promptsEl = document.getElementById('prompts');
+const promptsHead = document.getElementById('prompts-head');
+const promptsClose = document.getElementById('prompts-close');
+const promptsFilter = document.getElementById('prompts-filter');
+const promptsList = document.getElementById('prompts-list');
+let promptsOpen = false;
+let promptsOpening = false;
+
+function showPrompts(on) {
+  const was = nearBottom();
+  promptsOpen = on;
+  promptsEl.classList.toggle('hidden', !on);
+  keepBottom(was);
+  floatSoon();
+}
+
+function renderPrompts(sheet) {
+  promptsHead.textContent = sheet.title;
+  const items = sheet.items || [];
+  promptsFilter.value = '';
+  promptsFilter.placeholder = words.filter || 'Filter';
+  promptsFilter.setAttribute('aria-label', words.filter || 'Filter');
+  promptsFilter.classList.toggle('hidden', items.length <= 8);
+  const rows = [];
+  if (!items.length) {
+    promptsList.replaceChildren(el('div', 'prompts-none', words.promptsNone || 'No saved prompts yet.'));
+    return;
+  }
+  for (const item of items) {
+    const row = el('div', 'prompt-row');
+    const fill = el('button', 'prompt-text');
+    fill.type = 'button';
+    fill.title = item.text;
+    fill.appendChild(el('span', 'num', String(item.number)));
+    fill.appendChild(document.createTextNode(item.text));
+    fill.setAttribute('aria-label', item.number + ' ' + item.text);
+    fill.addEventListener('click', () => {
+      closePrompts(true);
+      takeDraft(item.text);
+      draft.focus();
+    });
+    const go = el('button', 'prompt-send', '➤');
+    go.type = 'button';
+    go.setAttribute('aria-label', words.promptsSend || 'Send this prompt');
+    go.title = words.promptsSend || 'Send this prompt';
+    go.addEventListener('click', () => {
+      closePrompts(false);
+      sendText(item.text, { fromDraft: false });
+    });
+    row.appendChild(fill);
+    row.appendChild(go);
+    rows.push({ row, text: item.text.toLowerCase() });
+  }
+  promptsList.replaceChildren(...rows.map(r => r.row));
+  promptsFilter.oninput = () => {
+    const q = promptsFilter.value.trim().toLowerCase();
+    for (const r of rows) r.row.classList.toggle('hidden', q.length > 0 && !r.text.includes(q));
+  };
+}
+
+async function openPrompts() {
+  if (promptsOpen || promptsOpening) return;
+  promptsOpening = true;
+  const r = await Neon.get('/api/prompts', false);
+  promptsOpening = false;
+  if (!r.ok || !r.json || promptsOpen) return;
+  closeUsage();
+  renderPrompts(r.json);
+  if (drawerOpen && !shown) {
+    hideDrawer();
+    history.replaceState({ prompts: true }, '');   // the drawer's entry becomes the sheet's
+  } else {
+    history.pushState({ prompts: true }, '');
+  }
+  showPrompts(true);
+  const first = promptsFilter.classList.contains('hidden') ? promptsList.querySelector('button') : promptsFilter;
+  if (first) first.focus({ preventScroll: true });
+}
+
+function hidePrompts(toBox) {
+  if (!promptsOpen) return;
+  const focused = promptsEl.contains(document.activeElement);
+  showPrompts(false);
+  if (focused && !toBox) promptsBtn.focus({ preventScroll: true });
+}
+
+// ✕, Esc, a tap on the transcript, a row's tap or ➤, a question arriving: the sheet goes now, and its own history entry with it.
+function closePrompts(toBox) {
+  if (!promptsOpen) return;
+  hidePrompts(toBox);
+  if (history.state && history.state.prompts && !history.state.overlay) history.back();
+}
+
+promptsBtn.addEventListener('click', () => { if (promptsOpen) closePrompts(false); else openPrompts(); });
+promptsClose.addEventListener('click', () => closePrompts(false));
+document.addEventListener('keydown', ev => {
+  if (ev.key !== 'Escape' || ev.defaultPrevented || shown || !promptsOpen || !usageCard.classList.contains('hidden')) return;
+  ev.preventDefault();
+  closePrompts(false);
+});
 
 // A text a command put on the draft (/prompts <n>, /rewind): ahead of what was there, with an undo.
 function takeDraft(text) {
@@ -992,7 +1212,7 @@ function floatSoon() {
 }
 
 function updateFloaters() {
-  const blocked = !!shown || !usageCard.classList.contains('hidden');
+  const blocked = !!shown || !usageCard.classList.contains('hidden') || promptsOpen;
   const any = entries.size > 0;
   const fits = document.body.scrollHeight <= window.innerHeight + 80;
   expandBtn.classList.toggle('hidden', blocked || !any || !(expandAll || anyFold()));
@@ -1105,17 +1325,30 @@ function renderStrip() {
     stripRow.replaceChildren(...strip.pictures.map(stripTile));
     if (!scrolled) stripRow.scrollLeft = 0;
   }
+  let outlined = null;
   for (const tile of stripRow.children) {
     const on = Number(tile.dataset.id) === strip.selected;
     tile.classList.toggle('selected', on);
-    if (on) tile.setAttribute('aria-current', 'true'); else tile.removeAttribute('aria-current');
+    if (on) { tile.setAttribute('aria-current', 'true'); outlined = tile; } else tile.removeAttribute('aria-current');
   }
+  // The PC's pick moved while the drawer is open (later on 2026-10-15): its tile scrolled into view.
+  if (drawerOpen && outlined && strip.selected !== lastOutlined) outlined.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: calm.matches ? 'auto' : 'smooth' });
+  lastOutlined = strip.selected;
+}
+
+let lastOutlined = null;
+
+// The drawer opening on the PC's pick (later on 2026-10-15): its tile in view at once, with no animation; none outlined opens at the newest.
+function scrollToOutlined() {
+  const tile = stripRow.querySelector('.strip-tile.selected');
+  if (tile) tile.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'instant' });
 }
 
 function stripTile(p) {
   const b = el('button', 'strip-tile');
   b.type = 'button';
   b.dataset.id = String(p.id);
+  if (p.key) b.dataset.key = p.key;
   b.title = p.name;
   b.setAttribute('aria-label', p.name);
   if (p.tooLarge) {
@@ -1138,7 +1371,7 @@ function stripTile(p) {
 
 function openStripPicture(id) {
   if (!strip) return;
-  openOverlayOn(strip.pictures.filter(p => !p.tooLarge), id, true);
+  openOverlayOn(stripPictures(), id, true);
   selectOnPc(id, true);
 }
 
@@ -1161,8 +1394,14 @@ function showDrawer(on) {
 function openDrawer() {
   if (!strip || drawerOpen) return;
   closeUsage();
-  history.pushState({ drawer: true }, '');
+  if (promptsOpen) {
+    hidePrompts(true);
+    history.replaceState({ drawer: true }, '');   // the sheet's entry becomes the drawer's
+  } else {
+    history.pushState({ drawer: true }, '');
+  }
   showDrawer(true);
+  scrollToOutlined();
   markSeen();
   const first = stripRow.querySelector('button');
   if (first) first.focus({ preventScroll: true });
@@ -1186,6 +1425,7 @@ stripBtn.addEventListener('click', openDrawer);
 stripClose.addEventListener('click', closeDrawer);
 document.querySelector('main').addEventListener('click', ev => {
   if (drawerOpen && !ev.target.closest('.tile')) closeDrawer();
+  if (promptsOpen && !ev.target.closest('.tile')) closePrompts(false);
 });
 stripRow.addEventListener('keydown', ev => {
   if (shown || (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight')) return;
@@ -1215,13 +1455,17 @@ function applyWords() {
   stripClose.setAttribute('aria-label', words.closeStrip);
   stripClose.title = words.closeStrip;
   drawerEl.setAttribute('aria-label', words.stripButton);
+  promptsBtn.setAttribute('aria-label', words.promptsButton || 'Saved prompts');
+  promptsBtn.title = words.promptsButton || 'Saved prompts';
+  promptsClose.setAttribute('aria-label', words.closePrompts || 'Close');
+  promptsClose.title = words.closePrompts || 'Close';
   overlayLive.setAttribute('aria-label', words.liveLabel || 'following new pictures');
   overlayLive.title = words.liveLabel || 'following new pictures';
   paintExpand();
 }
 
 // A reload keeps the history's entries but not what they held: the current one is the page's own again.
-if (history.state && (history.state.overlay || history.state.drawer)) history.replaceState(null, '');
+if (history.state && (history.state.overlay || history.state.drawer || history.state.prompts)) history.replaceState(null, '');
 
 // ── The stream ────────────────────────────────────────────────────────
 
@@ -1248,14 +1492,18 @@ function connect() {
     applyState(s.state);
     applyStatus(s.status);
     reset();
+    goneKeys.clear();   // the server's pictures are what they are now; a gone file's tile shows its fallback anyway
     for (const entry of s.entries) renderEntry(entry);
     renderAsks(s.asks);
     for (const text of s.drafts || []) takeDraft(text);
     applyStrip(s.strip);
+    // The PC's point: a fresh page takes its sequence without moving; a reconnect follows one newer than it had (the strip's view survives it).
+    if (lastPointSeq === null) lastPointSeq = s.point ? s.point.seq : 0; else applyPoint(s.point);
     window.scrollTo(0, document.body.scrollHeight);
     floatSoon();
   });
   source.addEventListener('strip', ev => applyStrip(JSON.parse(ev.data)));
+  source.addEventListener('point', ev => applyPoint(JSON.parse(ev.data)));
   source.addEventListener('append', ev => append(JSON.parse(ev.data)));
   source.addEventListener('delta', ev => delta(JSON.parse(ev.data)));
   source.addEventListener('end', ev => end(JSON.parse(ev.data)));

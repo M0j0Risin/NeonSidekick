@@ -473,7 +473,7 @@ public class AssistantTests
         Assert.Equal(Assistant.MarkdownRule, Assistant.DefaultRules(true, tools: false));
 
         // delete switched off on /tools (off in a fresh profile since 2026-09-20): the file rule loses its delete clause, nothing else moves.
-        Assert.Equal(Assistant.FileRuleWithoutDelete, Assistant.FileRule.Replace("; delete removes a file or a folder for good, with everything in it.", ".", StringComparison.Ordinal));
+        Assert.Equal(Assistant.FileRuleWithoutDelete, Assistant.FileRule.Replace("; delete removes a file or a folder, with everything in it; its description says whether it goes for good.", ".", StringComparison.Ordinal));
         Assert.DoesNotContain("delete", Assistant.FileRuleWithoutDelete, StringComparison.Ordinal);
         Assert.DoesNotContain("restore", Assistant.FileRuleWithoutDelete, StringComparison.Ordinal);
         Assert.Equal(Assistant.PlainTextRule + " " + Assistant.ToolRules + " " + Assistant.FileRuleWithoutDelete, Assistant.DefaultRules(false, tools: true, delete: false));
@@ -525,7 +525,7 @@ public class AssistantTests
         Assert.StartsWith("The user's working directory", Assistant.FileRule);
         Assert.Contains("get_working_directory", Assistant.FileRule);
         Assert.DoesNotContain("view_image", Assistant.FileRule);   // the picture sentence is Assistant.ImageRule since 2026-10-10
-        Assert.EndsWith("with everything in it.", Assistant.FileRule);
+        Assert.EndsWith("its description says whether it goes for good.", Assistant.FileRule);   // the description says where since later on 2026-10-15
         // The picture sentence rides with the Image tools (2026-10-10), after the file rule, with or without it.
         Assert.Equal(Assistant.OperatingRules + " " + Assistant.ImageRule, Assistant.DefaultRules(false, tools: true, images: true));
         Assert.Equal(Assistant.OperatingRulesWithoutFiles + " " + Assistant.ImageRule, Assistant.DefaultRules(false, tools: true, files: false, images: true));
@@ -1281,7 +1281,7 @@ public class AssistantTests
             "and use shift_date or date_difference for calendar arithmetic instead of counting yourself. " +
             "For a countdown, use start_timer, stop_timer and list_timers; never guess what is left on a timer. " +
             "The user's working directory — also called the cwd, the current directory or the current working directory — is a folder on this computer where you may read, search, write and organize files with the file tools " +
-            "(get_working_directory gives its path); every path you pass is relative to it and the file tools reach nothing outside it; delete removes a file or a folder for good, with everything in it.",
+            "(get_working_directory gives its path); every path you pass is relative to it and the file tools reach nothing outside it; delete removes a file or a folder, with everything in it; its description says whether it goes for good.",
             Assistant.DefaultSystemPrompt);   // the picture sentence its own rule since 2026-10-10 (Assistant.ImageRule), with the Image tools
         Assert.Equal("To look at a picture (png, jpg, gif, webp, bmp) in the working directory call view_image (several at once with paths); read_file cannot read one.", Assistant.ImageRule);
         Assert.Equal(10000, Assistant.DefaultMaxToolIterations);

@@ -244,6 +244,7 @@ internal sealed partial class ChatScreen
         // /webui (later on 2026-10-15, the user's ask): the pane over the reply, its buttons acting at once; copy at once; on, off and reset still wait.
         SlashCommand.WebUi when args.Trim().Length == 0 => MidTurnClass.Pane,
         SlashCommand.WebUi when string.Equals(args.Trim(), "copy", StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
+        SlashCommand.WebUi when WebUiBrowserArgs(args) is not null => MidTurnClass.Quick,   // later on 2026-10-15: /webui browser opens at once
         _ => MidTurnPolicy(command, args.Length > 0),
     };
 
@@ -753,8 +754,8 @@ internal sealed partial class ChatScreen
                 HandleTimer(args);
                 break;
             case SlashCommand.WebUi:
-                // /webui copy alone reaches here (later on 2026-10-15): the link to the clipboard, a notice on the turn task.
-                await WebUiCommandAsync(args, cancellationToken).ConfigureAwait(false);
+                // /webui copy and /webui browser reach here (later on 2026-10-15): their notices through the flow sink, on the turn task.
+                await WebUiCommandAsync(args, cancellationToken, _flow).ConfigureAwait(false);
                 break;
             case SlashCommand.Window:
                 // The window's size in the reply (later on 2026-09-27): read-only.

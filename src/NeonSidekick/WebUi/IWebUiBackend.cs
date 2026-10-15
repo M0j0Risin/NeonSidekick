@@ -17,7 +17,7 @@ public enum WebOutcome
 /// A post's outcome and its sentence for the page; for a refused command, its offers (<see cref="WebResult"/>); for a Home tap that asks first
 /// (2026-10-15), the question.
 /// </summary>
-public readonly record struct WebReply(WebOutcome Outcome, string? Message = null, bool AsText = false, string? Use = null, string? Prompt = null)
+public readonly record struct WebReply(WebOutcome Outcome, string? Message = null, bool AsText = false, string? Use = null, string? Prompt = null, string? Open = null)
 {
     public static WebReply Ok => new(WebOutcome.Ok);
 }
@@ -95,6 +95,9 @@ public interface IWebUiBackend
     /// <summary>The full <c>/usage</c> figures for the page's card (2026-10-15); reads only.</summary>
     WebUsageCard Usage();
 
+    /// <summary>The profile's saved prompts for the page's sheet (later on 2026-10-15); reads only.</summary>
+    WebPrompts Prompts();
+
     /// <summary>The Home tab (2026-10-15), or null in a build without one.</summary>
     IWebHome? Home { get; }
 
@@ -109,6 +112,12 @@ public interface IWebUiBackend
 
     /// <summary>A strip picture picked on the page (later on 2026-10-15): the PC's highlight and open viewer move to it; not found when gone.</summary>
     WebReply SelectStripPicture(WebStripSelect request, IPAddress? remote);
+
+    /// <summary>
+    /// The page's 🗑️ (later on 2026-10-15): picture <c>Id</c>'s file deleted as <i>File deletes to Recycle bin</i> says, by the screen's own path for
+    /// that id, never one from the page. NotFound for an id the transcript or the strip doesn't hold, or one with no file.
+    /// </summary>
+    WebReply DeletePicture(WebPictureDelete request, IPAddress? remote);
 
     /// <summary><c>/theme.css</c> (2026-10-15): the profile's theme, empty while <i>Web UI profile theme</i> is off.</summary>
     string ThemeCss();

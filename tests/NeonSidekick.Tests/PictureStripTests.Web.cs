@@ -57,6 +57,27 @@ public partial class PictureStripTests
     }
 
     [Fact]
+    public void Remove_DropsEveryIdTaken_KeepsASurvivingHighlight_AndLetsGoOfAGoneOne()
+    {
+        var strip = new PictureStrip();
+        Put(strip, Tile(4, 4), 5);
+        Put(strip, Tile(4, 4), 9);
+        Put(strip, Tile(4, 4), 7);
+        strip.Highlight(id => id == 5);
+        int changes = 0;
+        strip.Changed += () => changes++;
+
+        Assert.True(strip.Remove(id => id is 9 or 7));   // one file, registered twice (later on 2026-10-15, the page's delete)
+        Assert.Equal([5], strip.Snapshot().Ids);
+        Assert.Equal(5, strip.Snapshot().Selected);
+        Assert.Equal(1, changes);
+        Assert.False(strip.Remove(id => id == 42));
+        Assert.Equal(1, changes);
+        Assert.True(strip.Remove(id => id == 5));
+        Assert.Equal((0, (int?)null), (strip.Snapshot().Ids.Count, strip.Snapshot().Selected));
+    }
+
+    [Fact]
     public void Open_AfterAPickWhileClosed_ShowsNothingHighlighted()
     {
         var strip = new PictureStrip();

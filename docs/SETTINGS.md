@@ -478,6 +478,7 @@ The tools most profiles use, and the pane's own options.
 | Web browser home page | Where the Browser window's home button and a bare `/browser` go: a web address (`example.com`, `localhost:3000`), or empty for a blank page. Windows only. | empty |
 | Web browser privacy | `keep-history` keeps the pages the Browser window visited, for its history menu; `clear-history` clears them when it closes. Cookies and sign-ins stay either way (`/browser clear all` removes them). Windows only. | `clear-history` |
 | Web open links in | Where `open_url` links go: `default-browser`, or `browser-window` (the app's Browser window, one page at a time). With no window to open, as headless or on a Mac, they go to your default browser. | `default-browser` |
+| Web browser sign in mode | How `/webui browser` and a double-click on `/webui`'s link sign your default browser in to the Web UI: `one-time-link` (a link good once, for a minute, so the browser's history keeps no token) or `url-with-token` (the usual sign-in link, which the history and the browser's launch may keep). The Browser window uses the usual link, or a one-time link under *Web browser privacy* `keep-history`. | `one-time-link` |
 | Web browser network mode | Where a fetch may reach: `internet` (public addresses), `lan` (this machine and the LAN) or `both`. | `internet` |
 | Web search method | `duckduckgo` (built in) or `searxng`. | `duckduckgo` |
 | Web SearXNG URL | The SearXNG instance, for `searxng`. | empty |
@@ -515,6 +516,12 @@ The tools most profiles use, and the pane's own options.
 * **Package commands:** a command that only installs, removes or lists packages (`pip install …`, `npm install …`) isn't judged by the database rules.
 * **Prefer native tools:** a lone command an offered tool replaces comes back once a turn naming the tool (`cat` → `read_file`, `curl` → `web_fetch`, `sqlcmd` → `sql_query`…). Sent again, it goes to the approval pane.
 
+#### Timers
+
+| Setting | What it does | Default |
+|---|---|---|
+| Timer tools | Offers `start_timer`, `stop_timer` and `list_timers`. Off, the model has none and its prompt drops the timer sentence; `/timer` and timers already running keep working. `/tools timers` opens its on/off page. | on |
+
 #### Options
 
 | Setting | What it does | Default |
@@ -537,6 +544,7 @@ The file tools and the places beyond the working directory they reach.
 | Setting | What it does | Default |
 |---|---|---|
 | File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, read_pdf, convert_to_pdf, pdf_edit…), which reach only the working directory. | off |
+| File deletes to Recycle bin | What `delete`, the picture viewer, the thumbnail browser, the picture menu and the Web UI delete goes to the Recycle bin (*File deletes to Trash* on a Mac), where you can restore it. Off, they delete directly. A network share or removable drive has no bin, so a delete there is direct either way; something too big for the bin is deleted for good, as Windows does. A command's or script's own deletes aren't covered. | on |
 | File /tree max entries | Entries `/tree` prints before it stops (1–10000). | 500 |
 | File /tree show sizes | `/tree` shows file sizes. | on |
 | File @-mention folder mode | Picking a folder from the `@` list: `remain` opens it in the list; `apply` writes `@folder/` and closes the list. | `remain` |

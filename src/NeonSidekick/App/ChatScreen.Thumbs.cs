@@ -155,6 +155,8 @@ internal sealed partial class ChatScreen
         {
             HighlightStrip(path);
         }
+
+        PointAt(path);   // the browser's pick: a point for the page (later on 2026-10-15)
     }
 
     /// <summary>An open browser moved to <paramref name="path"/> quietly (the viewer's keys, the strip's arrows); nothing without one.</summary>

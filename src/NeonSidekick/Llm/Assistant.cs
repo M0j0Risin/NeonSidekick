@@ -127,7 +127,8 @@ public sealed class Assistant
     /// The two sentences of <see cref="OperatingRules"/> that name the file tools and the working
     /// directory: in the default rules while the setting <c>File tools</c> is on (the file tools
     /// offered), gone with them; a custom <c>operata.md</c> stands verbatim either way. Its <c>delete</c> clause
-    /// says the truth: a file or a folder goes for good (<c>FileRuleDeleteInPlace</c>'s words since 2026-09-20, under
+    /// says the truth (since later on 2026-10-15, with <c>File deletes to Recycle bin</c>, it leaves where to the tool's description, which
+    /// follows the setting); until then: a file or a folder goes for good (<c>FileRuleDeleteInPlace</c>'s words since 2026-09-20, under
     /// <c>File safe edits</c> off; the only form since 2026-10-01, when that setting, its <c>.trash</c> and <c>restore</c>
     /// went, the user's call). It names no trash and no setting (2026-09-21, the user's ask: told <c>File safe edits is
     /// off</c>, the model reasoned about a switch it cannot reach). Pinned.
@@ -135,7 +136,7 @@ public sealed class Assistant
     public const string FileRule =
         "The user's working directory — also called the cwd, the current directory or the current working directory — is a folder on this computer where you may read, search, write and organize files with the file tools " +
         "(" + NeonSidekick.Llm.Tools.GetWorkingDirectoryTool.ToolName + " gives its path); every path you pass is relative to it and the file tools reach nothing outside it; " +
-        NeonSidekick.Llm.Tools.DeleteTool.ToolName + " removes a file or a folder for good, with everything in it.";
+        NeonSidekick.Llm.Tools.DeleteTool.ToolName + " removes a file or a folder, with everything in it; its description says whether it goes for good.";
 
     /// <summary>
     /// <see cref="FileRule"/> without its <c>delete</c> clause: the default rules while

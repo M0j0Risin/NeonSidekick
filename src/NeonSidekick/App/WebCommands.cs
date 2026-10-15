@@ -11,6 +11,9 @@ public enum WebCommandKind
     Pick,
     List,
     Refused,
+
+    /// <summary>Opens on the page itself (later on 2026-10-15: bare <c>/prompts</c>, the page's saved prompts): answered by the session, never queued for the PC.</summary>
+    Page,
 }
 
 /// <summary>
@@ -19,14 +22,20 @@ public enum WebCommandKind
 /// </summary>
 public sealed record WebCommandVerdict(WebCommandKind Kind, string? Reason = null, bool AsText = false, string? Use = null)
 {
-    /// <summary>Whether the command may run from the page.</summary>
-    public bool Allowed => Kind != WebCommandKind.Refused;
+    /// <summary>Whether the command may run from the page at the PC (a <see cref="WebCommandKind.Page"/> line opens on the page instead, never queued).</summary>
+    public bool Allowed => Kind is not (WebCommandKind.Refused or WebCommandKind.Page);
+
+    /// <summary>What the page opens for a <see cref="WebCommandKind.Page"/> verdict (later on 2026-10-15): <c>prompts</c>.</summary>
+    public string? Open { get; init; }
 
     public static readonly WebCommandVerdict Run = new(WebCommandKind.Run);
 
     public static readonly WebCommandVerdict Pick = new(WebCommandKind.Pick);
 
     public static readonly WebCommandVerdict List = new(WebCommandKind.List);
+
+    /// <summary>Bare <c>/prompts</c> from the page (later on 2026-10-15): the page's own saved prompts sheet; refused with its reason if it ever reached the PC.</summary>
+    public static readonly WebCommandVerdict PromptsSheet = new(WebCommandKind.Page, WebUiText.OpensOnThePage) { Open = WebUiText.OpenPrompts };
 }
 
 /// <summary>
@@ -135,7 +144,12 @@ public static class WebCommands
             SlashCommand.Docker => Is(first, "logs") ? WebCommandVerdict.List : WebCommandVerdict.Run,
             SlashCommand.EventLog => WebCommandVerdict.List,   // 2026-10-15: the events as a list card, /docker's way from a web line
             SlashCommand.Shopping => text.Length == 0 || Is(text, "add") ? Refused(settings.ShoppingTab ? WebUiText.UseShoppingPage : WebUiText.ShoppingTabOff) : WebCommandVerdict.Run,
-            SlashCommand.Prompts => PromptsCommand.Parse(args).Verb is PromptsVerb.Pane or PromptsVerb.ClearList ? Pane(word, "/prompts list|<n>|save <text>|remove <n>") : WebCommandVerdict.Run,
+            SlashCommand.Prompts => PromptsCommand.Parse(args).Verb switch
+            {
+                PromptsVerb.Pane => WebCommandVerdict.PromptsSheet,   // later on 2026-10-15: the page's own sheet
+                PromptsVerb.ClearList => Pane(word, "/prompts list|<n>|save <text>|remove <n>"),
+                _ => WebCommandVerdict.Run,
+            },
             SlashCommand.Browser => BrowserCommand.Parse(args).Verb is BrowserVerb.Save or BrowserVerb.Unsave ? WebCommandVerdict.Run : Pane(word, "/browser save [<url> [<name>]]|unsave <n>"),
             SlashCommand.Camera => Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.List ? WebCommandVerdict.List : Pane(word, "/camera list"),
             SlashCommand.Screen => Is(text, "list") ? WebCommandVerdict.List : Pane(word, "/screen list"),

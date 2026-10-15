@@ -34,6 +34,12 @@ public interface IWebUiHost : IAsyncDisposable
 
     /// <summary>Stops serving: every event stream ends, open requests get <see cref="StopTimeout"/> to finish.</summary>
     Task StopAsync();
+
+    /// <summary>
+    /// A one-time sign-in link on <paramref name="host"/> (later on 2026-10-15, <see cref="WebUiOneTimeCodes"/>), or null while not serving: good once,
+    /// for a minute. A host without them (a test's) has none.
+    /// </summary>
+    string? OneTimeLink(string host) => null;
 }
 
 /// <summary>
@@ -97,9 +103,18 @@ public sealed class WebUiHost : IWebUiHost
         _time = time ?? TimeProvider.System;
         _allowRemote = allowRemote ?? Web.LanPolicy.IsPrivate;
         _limits = new WebRateLimit(_time);
+        _codes = new WebUiOneTimeCodes(_time);
     }
 
     public int Port { get; private set; }
+
+    private readonly WebUiOneTimeCodes _codes;
+
+    public string? OneTimeLink(string host)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        return _binding is null || _app is null ? null : WebUiAuth.OnceLink(host, Port, _codes.Mint());
+    }
 
     public async Task StartAsync(WebUiBinding binding, CancellationToken cancellationToken)
     {
@@ -134,6 +149,7 @@ public sealed class WebUiHost : IWebUiHost
 
         var app = builder.Build();
         ((IApplicationBuilder)app).Run(HandleAsync);
+        _codes.Clear();   // a restart leaves only dead codes (later on 2026-10-15)
         _binding = binding;
         _stopping = new CancellationTokenSource();
         try
@@ -159,6 +175,7 @@ public sealed class WebUiHost : IWebUiHost
         }
 
         _app = null;
+        _codes.Clear();
         await _stopping.CancelAsync().ConfigureAwait(false);
         using var wait = new CancellationTokenSource(StopTimeout, _time);
         try
@@ -316,6 +333,11 @@ public sealed class WebUiHost : IWebUiHost
                     case "/api/shopping":
                         await JsonAsync(context, StatusCodes.Status200OK, _backend.Shopping(), WebUiJsonContext.Default.WebShopping).ConfigureAwait(false);
                         return;
+                    case "/api/prompts":
+                        // The saved prompts sheet (later on 2026-10-15): read each time it opens.
+                        response.Headers.CacheControl = "no-store";
+                        await JsonAsync(context, StatusCodes.Status200OK, _backend.Prompts(), WebUiJsonContext.Default.WebPrompts).ConfigureAwait(false);
+                        return;
                     case "/api/usage":
                         // The usage card (2026-10-15): the /usage figures on the page alone.
                         await JsonAsync(context, StatusCodes.Status200OK, _backend.Usage(), WebUiJsonContext.Default.WebUsageCard).ConfigureAwait(false);
@@ -370,6 +392,7 @@ public sealed class WebUiHost : IWebUiHost
                     "/api/shopping/check" => await ReadAsync(context, WebUiJsonContext.Default.WebCheckRequest).ConfigureAwait(false) is { } check ? _backend.Check(check, remote) : null,
                     "/api/shopping/store" => await ReadAsync(context, WebUiJsonContext.Default.WebStoreRequest).ConfigureAwait(false) is { } store ? _backend.UseStore(store, remote) : null,
                     "/api/strip/select" => await ReadAsync(context, WebUiJsonContext.Default.WebStripSelect).ConfigureAwait(false) is { } pick ? _backend.SelectStripPicture(pick, remote) : null,
+                    PictureDeletePath => await ReadAsync(context, WebUiJsonContext.Default.WebPictureDelete).ConfigureAwait(false) is { } gone ? _backend.DeletePicture(gone, remote) : null,
                     "/api/home/tap" or "/api/home/act" or "/api/home/scene" or "/api/home/say" or "/api/home/video" => await HomePostAsync(context, path, remote).ConfigureAwait(false),
                     _ => new WebReply(WebOutcome.NotFound),
                 };
@@ -383,6 +406,7 @@ public sealed class WebUiHost : IWebUiHost
                 {
                     NeedsConfirm = done.Prompt is not null ? true : null,
                     Prompt = done.Prompt,
+                    Open = done.Open,
                 }).ConfigureAwait(false);
                 return;
             }
@@ -476,7 +500,7 @@ public sealed class WebUiHost : IWebUiHost
             return WebTab.Home;
         }
 
-        return path is "/api/events" or "/api/send" or "/api/stop" or "/api/answer" or "/api/complete" or "/api/usage" or "/api/strip/select"
+        return path is "/api/events" or "/api/send" or "/api/stop" or "/api/answer" or "/api/complete" or "/api/usage" or "/api/strip/select" or "/api/prompts"
             || path.StartsWith(EntryPrefix, StringComparison.Ordinal) || path.StartsWith(PicturePrefix, StringComparison.Ordinal)
             ? WebTab.Chat
             : null;
@@ -521,6 +545,9 @@ public sealed class WebUiHost : IWebUiHost
 
     /// <summary>Where a deferred entry is read whole: <c>/api/entry/{seq}</c> (2026-10-15).</summary>
     public const string EntryPrefix = "/api/entry/";
+
+    /// <summary>The page's 🗑️ (later on 2026-10-15): a post of the picture's id; a Chat API in the Act bucket.</summary>
+    public const string PictureDeletePath = "/api/picture/delete";
 
     /// <summary>Where the pictures are served: <c>/api/picture/{run}/{id}/{thumb|mid|full}</c>.</summary>
     public const string PicturePrefix = "/api/picture/";
@@ -572,6 +599,12 @@ public sealed class WebUiHost : IWebUiHost
     private async Task SignInAsync(HttpContext context)
     {
         var remote = context.Connection.RemoteIpAddress;
+        if (context.Request.Query.ContainsKey(WebUiAuth.OnceQuery))
+        {
+            await OnceSignInAsync(context).ConfigureAwait(false);
+            return;
+        }
+
         if (_binding is not { } binding || !WebUiAuth.Matches(context.Request.Query["t"].ToString(), binding.Token))
         {
             DiagnosticLog.Info(Category, WebUiText.SignInFailedLogLine(remote));
@@ -583,6 +616,35 @@ public sealed class WebUiHost : IWebUiHost
         SetCookie(context, binding);
         _backend.SignedIn(remote);
         // The token leaves the address bar (and the history's next entry) at once.
+        context.Response.StatusCode = StatusCodes.Status303SeeOther;
+        context.Response.Headers.Location = "/";
+    }
+
+    /// <summary>
+    /// A one-time code's sign-in (later on 2026-10-15, <c>/webui browser</c>): a GET takes the code, good or not, and a good one sets the cookie and
+    /// goes to <c>/</c>; a HEAD (a link checker, a preview) spends nothing and sets no cookie, so the browser's own GET after it still signs in.
+    /// A dead code gets the sign-in page with 403, as a wrong token does. The code is never logged.
+    /// </summary>
+    private async Task OnceSignInAsync(HttpContext context)
+    {
+        var remote = context.Connection.RemoteIpAddress;
+        context.Response.Headers.CacheControl = "no-store";
+        if (HttpMethods.IsHead(context.Request.Method))
+        {
+            await AssetAsync(context, WebUiAssets.SignInPage).ConfigureAwait(false);
+            return;
+        }
+
+        if (_binding is not { } binding || !_codes.Take(context.Request.Query[WebUiAuth.OnceQuery].ToString()))
+        {
+            DiagnosticLog.Info(Category, WebUiText.SignInFailedLogLine(remote));
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await AssetAsync(context, WebUiAssets.SignInPage, status: StatusCodes.Status403Forbidden).ConfigureAwait(false);
+            return;
+        }
+
+        SetCookie(context, binding);
+        _backend.SignedIn(remote);
         context.Response.StatusCode = StatusCodes.Status303SeeOther;
         context.Response.Headers.Location = "/";
     }

@@ -43,6 +43,11 @@
     <div class="queued hidden" id="queued"></div>
     <div class="banner message hidden" id="message"></div>
     <div class="complete hidden" id="complete" role="listbox"></div>
+    <section class="prompts hidden" id="prompts" role="region" aria-labelledby="prompts-head">
+      <div class="strip-bar"><span id="prompts-head"></span><button type="button" id="prompts-close">✕</button></div>
+      <input type="search" id="prompts-filter" class="hidden" autocomplete="off">
+      <div class="prompts-list" id="prompts-list"></div>
+    </section>
     <section class="strip hidden" id="strip" role="region" aria-labelledby="strip-head">
       <div class="strip-bar"><span id="strip-head"></span><button type="button" id="strip-close">✕</button></div>
       <div class="strip-row" id="strip-row"></div>
@@ -52,6 +57,7 @@
       <button type="button" class="usage hidden" id="usage"></button>
     </div>
     <div class="compose">
+      <button type="button" class="prompts-button" id="prompts-button">📣</button>
       <div class="draft-box">
         <textarea id="draft" rows="1" placeholder="Message…" enterkeyhint="send"></textarea>
         <button type="button" class="clear-draft hidden" id="clear-draft">✕</button>
@@ -66,8 +72,10 @@
     <span class="overlay-live hidden" id="overlay-live"></span>
     <span class="overlay-name" id="overlay-name" aria-live="polite"></span>
     <a id="overlay-open" target="_blank" rel="noopener noreferrer"></a>
+    <button type="button" class="overlay-delete hidden" id="overlay-delete" title="Delete" aria-label="Delete">🗑️</button>
     <button type="button" id="overlay-close" title="Close">✕</button>
   </div>
+  <div class="overlay-note hidden" id="overlay-note" role="status" aria-live="polite"></div>
   <img id="overlay-img" alt="">
   <button type="button" class="overlay-step prev" id="overlay-prev" title="Newer">‹</button>
   <button type="button" class="overlay-step next" id="overlay-next" title="Older">›</button>

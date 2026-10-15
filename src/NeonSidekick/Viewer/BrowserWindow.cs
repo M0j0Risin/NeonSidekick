@@ -1031,7 +1031,7 @@ internal sealed unsafe partial class BrowserWindowThread
         }
 
         string address = url?.AbsoluteUri ?? BrowserWindow.HomeAddress();
-        DiagnosticLog.Info("Browser", $"The Browser window on {address} for the user (/browser).");
+        DiagnosticLog.Info("Browser", $"The Browser window on {WebUi.WebUiAuth.Redacted(address)} for the user (/browser).");   // a Web UI sign-in link's token cut (later on 2026-10-15)
         Go(address);
         Show();
     }
@@ -1109,7 +1109,7 @@ internal sealed unsafe partial class BrowserWindowThread
         RefreshSaved();
         ShowAddress(source);
         // A staged PDF's host is no site (2026-10-14, the PDF plan's gap 59): no cookies to hand over for it.
-        if (_visited is not null && !PdfView.IsOurs(source) && BrowserPage.HostOf(source) is { } host)
+        if (_visited is not null && !PdfView.IsOurs(source) && !WebUi.WebUiAuth.IsSignInUrl(source) && BrowserPage.HostOf(source) is { } host)
         {
             _visited.Add(host);
         }

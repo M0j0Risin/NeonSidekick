@@ -22,6 +22,27 @@ public static class FileText
     /// <summary><c>patch_file</c> with <c>new_text</c> = <c>old_text</c> (2026-09-18; a model probed a file's tail with a no-op edit). Pinned.</summary>
     public const string EditSame = "Error: old_text and new_text are the same; nothing to change";
     public const string RootItself = "Error: that is the working directory itself";
+
+    /// <summary>
+    /// The bin's name on this system (later on 2026-10-15, <c>File deletes to Recycle bin</c>): "Recycle bin", or "Trash" on a Mac — the one
+    /// place the word is chosen (the setting's own name, its help, the delete sentences). Pinned.
+    /// </summary>
+    public static string RecycleBinName => OperatingSystem.IsMacOS() ? "Trash" : "Recycle bin";
+
+    /// <summary>A path the shell's bin cannot take (past <c>MAX_PATH</c>, or a long-path prefix): nothing deleted, the setting named. Pinned.</summary>
+    public static string RecycleTooLong => "the " + RecycleBinName + " can't take a path that long: turn off File deletes to " + RecycleBinName + " to delete it directly";
+
+    /// <summary>A path that is not a full one: the shell would delete it for good, so it is never called with one. Pinned.</summary>
+    public static string RecycleNeedsFullPath => "the " + RecycleBinName + " needs a full path";
+
+    /// <summary>The bin did not answer within its time: nothing deleted behind it. Pinned.</summary>
+    public static string RecycleNoAnswer => "the " + RecycleBinName + " didn't answer";
+
+    /// <summary>The shell reported the move cancelled. Pinned.</summary>
+    public static string RecycleCancelled => "the move to the " + RecycleBinName + " was cancelled";
+
+    /// <summary>The bin refused with a code, which is logged and named, never explained (the shell's are partly pre-Win32). Pinned.</summary>
+    public static string RecycleRefused(long code) => "the " + RecycleBinName + " refused it (code " + code.ToString(CultureInfo.InvariantCulture) + ")";
     /// <summary>A word argument outside its choices (<c>mode</c>, <c>output</c>, <c>order</c>; 2026-09-19). Pinned.</summary>
     public static string BadChoice(string argument, string raw, string choices) => $"Error: '{raw.Trim()}' is not one of {choices} for '{argument}'";
     /// <summary>A required path argument left out (2026-09-18: a `write_file` with `content` alone was told `'' is a folder`). Pinned.</summary>
@@ -812,7 +833,8 @@ public static class FileText
     /// <summary>
     /// A delete's sentence: what is gone, a folder with everything in it (2026-09-20). It names no setting (2026-09-21, the user's
     /// ask: the model reasoned about a switch it cannot reach); <c>Trashed</c> until 2026-10-01, when File safe edits, its
-    /// <c>.trash</c> and <c>restore</c> went (the user's call) and every delete became this one.
+    /// <c>.trash</c> and <c>restore</c> went (the user's call) and every delete became this one. Since later on 2026-10-15 it says
+    /// where it went: the Recycle bin (<c>File deletes to Recycle bin</c>), or deleted on a drive with no bin.
     /// </summary>
     public static string Deleted(DeleteResult result)
     {
@@ -827,7 +849,13 @@ public static class FileText
             return Error(result.Outcome, result.Relative, "delete", result.Detail);
         }
 
-        return "deleted " + (result.IsDirectory ? "the folder " + result.Relative + " and everything in it" : result.Relative);
+        string what = result.IsDirectory ? "the folder " + result.Relative + " and everything in it" : result.Relative;
+        return result.Way switch
+        {
+            DeleteWay.Recycled => "moved " + what + " to the " + RecycleBinName,
+            DeleteWay.DeletedNoBin => "deleted " + what + " (no " + RecycleBinName + " on that drive)",
+            _ => "deleted " + what,
+        };
     }
 
     public static string Zipped(ZipResult result)

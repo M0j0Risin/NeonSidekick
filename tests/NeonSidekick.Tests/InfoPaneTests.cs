@@ -304,6 +304,31 @@ public class InfoPaneTests : IDisposable
         Assert.Contains("\nline1\n", Output);   // the first page drew before the page down
     }
 
+    /// <summary>
+    /// A double-click on a content line (later on 2026-10-15, the user's ask: <c>/webui</c>'s link): the tab's handler told the line's text, the pane
+    /// still open; a single click, the strip and the spacer tell nothing; and the tab shown is the one <see cref="InfoPane.LastTab"/> names.
+    /// </summary>
+    [Fact]
+    public async Task ADoubleClickOnALine_TellsTheTab_AndThePaneStays()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var told = new List<string>();
+        input.PushClick(2, 104);                         // line3, once: nothing
+        input.PushClick(2, 101);                         // the spacer
+        input.PushClick(2, 101);                         // twice: nothing
+        input.PushClick(2, 103);                         // line2 ...
+        input.PushClick(2, 103);                         // ... twice: told
+        input.Push(Keys.Tab, Keys.Escape);               // still open: Tab moves to the second tab, ESC closes
+
+        var info = new InfoPane(pane, keys);
+        await info.ShowAsync(InfoPane.Title, [new InfoTab("One", () => new Text(Numbered(5))) { LineDoubleClicked = told.Add }, Tab("Two", "two")], 0, CancellationToken.None);
+
+        Assert.Equal(["line2"], told);
+        Assert.Equal(1, info.LastTab);
+    }
+
     /// <summary>A paste and a right-click go onto the find (2026-10-14, the user's call): the first line of each, the matches marked.</summary>
     [Fact]
     public async Task APaste_AndARightClick_GoOntoTheFind()

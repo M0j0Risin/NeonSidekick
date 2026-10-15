@@ -59,8 +59,8 @@ public enum ViewerAction
 /// new picture while live is shown; while held it is only counted, so browsing older pictures is never yanked away. A
 /// picture written again (ComfyUI never does, a hand copy may) moves to the newest. A deleted one leaves the list, the
 /// shown index kept on the same picture where it can be. FolderPictureViewer's double-Del delete, first left out, is
-/// here since later on 2026-09-27 (the user's call): Del twice deletes the shown picture — permanently, not to the
-/// Recycle Bin — the first Del arming it for <see cref="DeleteArmMilliseconds"/> with a hint in the title, and any other
+/// here since later on 2026-09-27 (the user's call): Del twice deletes the shown picture — to the Recycle bin under
+/// File deletes to Recycle bin (later on 2026-10-15; permanently until then) — the first Del arming it for <see cref="DeleteArmMilliseconds"/> with a hint in the title, and any other
 /// key, the shown picture changing or the time running out disarming it. Everything <see cref="PictureWindow"/> decides
 /// is decided here, so it is tested without a window. The slide show (later on 2026-09-27, the user's ask): F9 starts
 /// and stops it, it loops until stopped, <see cref="DefaultSlideSeconds"/> a slide with ↑ / ↓ a second more or less, the

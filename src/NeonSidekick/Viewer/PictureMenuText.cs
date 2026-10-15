@@ -51,8 +51,13 @@ public static class PictureMenuText
     /// <summary>The chat's line for an edit or an action that failed: the picture's name and the reason.</summary>
     public static string Failed(string name, string detail) => $"{name}: {detail}";
 
-    /// <summary>The chat's line for a picture the menu deleted.</summary>
-    public static string Deleted(string name) => $"(🖼️ deleted {name})";
+    /// <summary>The chat's line for a picture the menu deleted: to the Recycle bin (the Trash on a Mac), or for good (later on 2026-10-15).</summary>
+    public static string Deleted(string name, Files.DeleteWay way = Files.DeleteWay.Deleted) => way switch
+    {
+        Files.DeleteWay.Recycled => $"(🖼️ moved {name} to the {Files.FileText.RecycleBinName})",
+        Files.DeleteWay.DeletedNoBin => $"(🖼️ deleted {name}: no {Files.FileText.RecycleBinName} on that drive)",
+        _ => $"(🖼️ deleted {name})",
+    };
 
     /// <summary>The chat's line for a path the menu copied.</summary>
     public static string Copied(string path) => $"(🖼️ copied {path})";

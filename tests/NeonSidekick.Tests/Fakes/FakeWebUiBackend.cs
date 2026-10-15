@@ -84,6 +84,11 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
 
     public WebUsageCard Usage() => Card;
 
+    /// <summary>The saved prompts the sheet lists (later on 2026-10-15).</summary>
+    public List<string> PromptList { get; } = [];
+
+    public WebPrompts Prompts() => new(NeonSidekick.Prompts.SavedPromptText.PaneTitle, [.. PromptList.Select((t, i) => new WebPrompt(i + 1, t))]);
+
     public IWebHome? Home { get; set; }
 
     public Dictionary<long, WebEntry> Entries { get; } = [];
@@ -120,6 +125,19 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
 
         StripPicks.Enqueue(request.Id);
         return Reply;
+    }
+
+    /// <summary>The page's deletes (later on 2026-10-15), and the answer each gets (Ok with <see cref="DeleteMessage"/> unless set).</summary>
+    public ConcurrentQueue<int> Deleted { get; } = new();
+
+    public WebReply? DeleteReply { get; set; }
+
+    public string DeleteMessage { get; set; } = "Moved pic.png to the Recycle bin.";
+
+    public WebReply DeletePicture(WebPictureDelete request, IPAddress? remote)
+    {
+        Deleted.Enqueue(request.Id);
+        return DeleteReply ?? new WebReply(WebOutcome.Ok, DeleteMessage);
     }
 
     public string Css { get; set; } = ":root { --accent: #123456; }\n";

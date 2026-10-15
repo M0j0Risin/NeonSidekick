@@ -286,7 +286,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal("Operating rules — default", sections[1].Heading);
         Assert.Equal(Assistant.DefaultRules(false, tools: true), sections[1].Body);
         Assert.Contains(Assistant.FileRule, sections[1].Body, StringComparison.Ordinal);
-        Assert.Contains("delete removes a file or a folder for good", sections[1].Body, StringComparison.Ordinal);
+        Assert.Contains("delete removes a file or a folder, with everything in it; its description says whether it goes for good", sections[1].Body, StringComparison.Ordinal);
         Assert.DoesNotContain("trash", sections[1].Body, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(Assistant.FileRule, SystemPromptSummary.SystemPrompt(Facts()), StringComparison.Ordinal);
         Assert.Contains(Assistant.FileRuleWithoutDelete, SystemPromptSummary.PromptSections(Facts(disabled: ["delete"]))[1].Body, StringComparison.Ordinal);
@@ -1085,5 +1085,23 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal("Skills — on, none installed (global off)", Headings(Facts(catalog: []) with { GlobalSkills = false })[4]);
         Assert.Equal(Assistant.SystemPrompt(false, [], skills: [haiku, shared], globalSkills: false), SystemPromptSummary.SystemPrompt(facts));
         Assert.Contains(SkillsPrompt.EditorSentenceProfileOnly, SystemPromptSummary.SystemPrompt(facts), StringComparison.Ordinal);
+    }
+
+    /// <summary><c>Timer tools</c> off (later on 2026-10-15): the Timers group not offered, its switch named; the facts drop the timer sentence.</summary>
+    [Fact]
+    public void ToolGroups_TimerToolsOff_TheGroupNamesItsSwitch_AndTheFactsDropTheTimerRule()
+    {
+        var (clock, timers, files, memory) = Tools();
+
+        var off = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, timersEnabled: false).Single(g => g.Title.StartsWith(ToolsText.TimersMenuTitle, StringComparison.Ordinal));
+        var on = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true).Single(g => g.Title.StartsWith(ToolsText.TimersMenuTitle, StringComparison.Ordinal));
+
+        Assert.False(off.Offered);
+        Assert.Equal("Timers (3) — not offered: " + SystemPromptSummary.TimersOffSuffix, off.Title);
+        Assert.Equal(SettingsField.TimerTools, off.Switch);
+        Assert.True(on.Offered);
+        Assert.Equal("Timers (3)", on.Title);
+        Assert.False(Facts() with { TimersEnabled = false } is { Timers: true });
+        Assert.True(Facts().Timers);
     }
 }

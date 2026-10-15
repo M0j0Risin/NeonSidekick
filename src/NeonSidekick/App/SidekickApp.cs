@@ -88,6 +88,7 @@ public sealed class SidekickApp
     /// <summary>The screen for <c>screen_capture</c>, <c>screen_list</c> and <c>/screen</c> (2026-10-04); null off Windows.</summary>
     private readonly Screen.IScreenSystem? _screenSystem;
     private readonly EventLog.IEventLogSystem? _eventLogSystem;
+    private readonly Files.IRecycleBin? _recycleBin;
     private readonly Viewer.IVideoPlayer? _videoPlayer;
 
     /// <summary>The Browser window for bot checks and <c>/browser</c> (2026-10-13): <see cref="Viewer.BrowserWindow.Window"/> on Windows, null elsewhere and in headless.</summary>
@@ -239,8 +240,11 @@ public sealed class SidekickApp
         Viewer.IVideoPlayer? videoPlayer = null,
         Viewer.IBrowserWindow? browserWindow = null,
         Func<WebUi.IWebUiBackend, WebUi.IWebUiHost>? webUiHost = null,
-        EventLog.IEventLogSystem? eventLogSystem = null)
+        EventLog.IEventLogSystem? eventLogSystem = null,
+        Files.IRecycleBin? recycleBin = null)
     {
+        // The system's Recycle bin (later on 2026-10-15): the model's delete, headless too, while File deletes to Recycle bin is on.
+        _recycleBin = recycleBin;
         // The event logs (2026-10-15): WindowsEventLogSystem in the app on Windows, a fake in tests, none elsewhere.
         _eventLogSystem = eventLogSystem;
         _openProcessWindow = openProcessWindow;
@@ -734,6 +738,7 @@ public sealed class SidekickApp
         // The SQLite databases no file tool changes and the shell police guards while the SQLite tools are on (2026-10-05).
         files.Databases = () => EffectiveSettings.SqliteTools ? ChatScreen.SqliteDatabaseGuard(_settings.ProfileDirectory, _settings.StorageDirectory) : null;
         files.ServerDatabases = () => Shell.ServerDatabasePolice.For(EffectiveSettings, _settings.ProfileDirectory, _settings.StorageDirectory);
+        files.RecycleDeletes = () => EffectiveSettings.FileDeletesToRecycleBin ? _recycleBin : null;   // later on 2026-10-15
         // The UNC shares' door first (2026-10-01): open reaches the offered shares too.
         var unc = new Unc.UncAccess(() => Unc.UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.UncSharesOffered), _time);
         // The printing door before the file tools (2026-10-03): convert_to_pdf makes its PDFs with the web tools' headless browser or Microsoft Print to PDF.
@@ -2477,7 +2482,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as IMouseInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, recycleBin: _recycleBin);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

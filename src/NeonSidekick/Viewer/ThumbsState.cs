@@ -95,7 +95,7 @@ public enum ThumbChange
 /// <see cref="ThumbsWindow"/> decides is decided here, tested without a window. Pure; one thread (the window's).</para>
 ///
 /// <para>Since 2026-10-05 (the user's ask) Del twice deletes the selected picture as the viewer's double-Del does
-/// (<see cref="ViewerState.PressDelete"/>): permanently, not to the Recycle Bin, the first Del arming it for
+/// (<see cref="ViewerState.PressDelete"/>): to the Recycle bin under <c>File deletes to Recycle bin</c> (later on 2026-10-15; permanently until then), the first Del arming it for
 /// <see cref="ViewerState.DeleteArmMilliseconds"/> with the viewer's hint in the title, and any other key, a click, the selection
 /// moving or the time running out disarming it.</para>
 /// </summary>

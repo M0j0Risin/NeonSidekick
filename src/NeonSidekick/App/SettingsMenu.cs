@@ -1126,6 +1126,15 @@ public enum SettingsField
 
     /// <summary>A toggle: whether the Web UI has its Shopping tab (<see cref="Settings.AppSettingsData.WebUiShoppingControls"/>). The Web UI tab under <see cref="WebUiHomeControls"/> (later on 2026-10-15); read at each request.</summary>
     WebUiShoppingControls,
+
+    /// <summary>A toggle: whether a turn offers the timer tools (<see cref="Settings.AppSettingsData.TimerTools"/>). The Timers menu on <c>/tools</c> › Core (later on 2026-10-15, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    TimerTools,
+
+    /// <summary>A toggle: whether deletes go to the Recycle bin, the Trash on a Mac (<see cref="Settings.AppSettingsData.FileDeletesToRecycleBin"/>). The File menu's second row (later on 2026-10-15, the user's ask); read at each delete. Last in the enum, as every newcomer.</summary>
+    FileDeletesToRecycleBin,
+
+    /// <summary>A picker over <see cref="Web.WebSignInMode.Names"/>: how the default browser signs in to the Web UI (<see cref="Settings.AppSettingsData.WebBrowserSignInMode"/>). The Web tab, right under <see cref="WebOpenLinksIn"/> (later on 2026-10-15, the user's ask and name); read at each open. Last in the enum, as every newcomer.</summary>
+    WebBrowserSignInMode,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1637,9 +1646,9 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
     [
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
-        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
+        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserSignInMode, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
-        [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
+        [SettingsField.FileTools, SettingsField.FileDeletesToRecycleBin, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
         [SettingsField.ImageTools, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
         [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine],
@@ -1659,6 +1668,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount],
         [SettingsField.ShoppingTools, SettingsField.ShoppingList, SettingsField.ShoppingStores],
         [SettingsField.EventLogTools, SettingsField.EventLogComputersOffered, SettingsField.EventLogSetPassword, SettingsField.EventLogAddComputer, SettingsField.EventLogMaxEvents, SettingsField.EventLogScanLimit, SettingsField.EventLogComputersProfile, SettingsField.EventLogComputersGlobal],
+        [SettingsField.TimerTools],
     ];
 
     /// <summary>
@@ -2079,7 +2089,8 @@ internal sealed partial class SettingsMenu
             or SettingsField.Advisors or SettingsField.AdvisorConfirm
             or SettingsField.ShoppingTools or SettingsField.EventLogTools
             or SettingsField.WebUi or SettingsField.WebUiCommands or SettingsField.WebUiConnectionDetails or SettingsField.WebUiHomeControls or SettingsField.WebUiProfileTheme
-            or SettingsField.WebUiChatControls or SettingsField.WebUiShoppingControls;
+            or SettingsField.WebUiChatControls or SettingsField.WebUiShoppingControls
+            or SettingsField.TimerTools or SettingsField.FileDeletesToRecycleBin;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -2348,6 +2359,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebBrowserHomePage => "Web browser home page",
         SettingsField.BrowserPrivacy => "Web browser privacy",
         SettingsField.WebOpenLinksIn => "Web open links in",
+        SettingsField.WebBrowserSignInMode => "Web browser sign in mode",
         SettingsField.WebBrowserNetworkMode => "Web browser network mode",
         SettingsField.WebSearxngUrl => "Web SearXNG URL",
         SettingsField.WebSearchMaxResults => "Web search max results",
@@ -2356,6 +2368,8 @@ internal sealed partial class SettingsMenu
         SettingsField.FileTools => "File tools",
         SettingsField.ImageTools => "Image tools",
         SettingsField.ShoppingTools => "Shopping tools",
+        SettingsField.TimerTools => "Timer tools",
+        SettingsField.FileDeletesToRecycleBin => "File deletes to " + Files.FileText.RecycleBinName,
         SettingsField.ShoppingStores => "Shopping stores",
         SettingsField.ShoppingList => "Shopping list",
         SettingsField.WebSearchMethod => "Web search method",
@@ -2724,6 +2738,7 @@ internal sealed partial class SettingsMenu
             SettingsField.WebBrowserBotcheckWindow => data.WebBrowserBotcheckWindow,
             SettingsField.BrowserPrivacy => data.BrowserPrivacy,
             SettingsField.WebOpenLinksIn => data.WebOpenLinksIn,
+            SettingsField.WebBrowserSignInMode => data.WebBrowserSignInMode,
             SettingsField.WebBrowserHomePage => string.IsNullOrWhiteSpace(data.WebBrowserHomePage) ? BlankHomePageLabel : data.WebBrowserHomePage,
             SettingsField.WebBrowserPath => string.IsNullOrWhiteSpace(data.WebBrowserPath) ? AutoBrowserLabel(locatedBrowser) : data.WebBrowserPath,
             SettingsField.DraftEditor => string.IsNullOrWhiteSpace(data.DraftEditor) ? DefaultDraftEditorLabel : data.DraftEditor,
@@ -2745,6 +2760,8 @@ internal sealed partial class SettingsMenu
             SettingsField.FileTools => OnOff(data.FileTools),
             SettingsField.ImageTools => OnOff(data.ImageTools),
             SettingsField.ShoppingTools => OnOff(data.ShoppingTools),
+            SettingsField.TimerTools => OnOff(data.TimerTools),
+            SettingsField.FileDeletesToRecycleBin => OnOff(data.FileDeletesToRecycleBin),
             SettingsField.ShoppingStores => NeonSidekick.Shopping.ShoppingText.ManageStoresLabel,
             SettingsField.ShoppingList => NeonSidekick.Shopping.ShoppingText.ManageListLabel,
             SettingsField.WebSearchMethod => data.WebSearchMethod,
@@ -3658,6 +3675,10 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the Web open links in picker (later still on 2026-10-13): the choice and its hint, padded to sixteen (<c>default-browser</c> is fifteen).</summary>
     public static string WebOpenLinksInLabel(string name) =>
         Markup.Escape(name.PadRight(16)) + Theme.DimMarkup(Web.OpenLinksIn.Describe(name));
+
+    /// <summary>One row of the Web browser sign in mode picker (later on 2026-10-15): the choice and its hint, padded to fifteen (<c>url-with-token</c> is fourteen). Pinned.</summary>
+    public static string WebSignInModeLabel(string name) =>
+        Markup.Escape(name.PadRight(15)) + Theme.DimMarkup(Web.WebSignInMode.Describe(name));
 
     /// <summary>One row of the network-mode picker: the mode and its hint (padded to nine: <c>internet</c> is eight, since <c>local_area_network</c> became <c>lan</c> on 2026-10-13). Pinned.</summary>
     public static string NetworkModeLabel(string name) =>
@@ -5091,6 +5112,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.WebOpenLinksIn)
         {
             return await PickWebOpenLinksInAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.WebBrowserSignInMode)
+        {
+            return await PickWebSignInModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.WebBrowserNetworkMode)
@@ -7671,6 +7697,8 @@ internal sealed partial class SettingsMenu
             SettingsField.FileTools => data.FileTools,
             SettingsField.ImageTools => data.ImageTools,
             SettingsField.ShoppingTools => data.ShoppingTools,
+            SettingsField.TimerTools => data.TimerTools,
+            SettingsField.FileDeletesToRecycleBin => data.FileDeletesToRecycleBin,
             SettingsField.AskUser => data.AskUser,
             SettingsField.AgentSkills => data.AgentSkills,
             SettingsField.GlobalSkills => data.GlobalSkills,
@@ -7789,6 +7817,8 @@ internal sealed partial class SettingsMenu
             case SettingsField.FileTools: data.FileTools = on; break;
             case SettingsField.ImageTools: data.ImageTools = on; break;
             case SettingsField.ShoppingTools: data.ShoppingTools = on; break;
+            case SettingsField.TimerTools: data.TimerTools = on; break;
+            case SettingsField.FileDeletesToRecycleBin: data.FileDeletesToRecycleBin = on; break;
             case SettingsField.AskUser: data.AskUser = on; break;
             case SettingsField.AgentSkills: data.AgentSkills = on; break;
             case SettingsField.GlobalSkills: data.GlobalSkills = on; break;
@@ -7854,6 +7884,8 @@ internal sealed partial class SettingsMenu
         SettingsField.FileTools => on ? "file tools enabled" : "file tools disabled",
         SettingsField.ImageTools => on ? "image tools enabled" : "image tools disabled",
         SettingsField.ShoppingTools => on ? "shopping tools enabled" : "shopping tools disabled",
+        SettingsField.TimerTools => on ? "timer tools enabled" : "timer tools disabled",
+        SettingsField.FileDeletesToRecycleBin => on ? "deleted files go to the " + Files.FileText.RecycleBinName : "delete files directly",
         SettingsField.FileTreeShowSizes => on ? "/tree carries each file's size" : "/tree lists names only",
         SettingsField.WebTools => on ? "web tools enabled" : "web tools disabled",
         SettingsField.GitLibTools => on ? "gitlib tools enabled" : "gitlib tools disabled",
@@ -8260,6 +8292,23 @@ internal sealed partial class SettingsMenu
 
         string name = names[index];
         Apply(SettingsField.WebOpenLinksIn, d => d.WebOpenLinksIn = name);
+        return true;
+    }
+
+    /// <summary>The Web browser sign in mode picker (later on 2026-10-15): one <see cref="WebSignInModeLabel"/> row per <see cref="Web.WebSignInMode.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickWebSignInModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = Web.WebSignInMode.Names;
+        string current = Web.WebSignInMode.TryParse(saved.WebBrowserSignInMode, out var kind) ? Web.WebSignInMode.Name(kind) : Web.WebSignInMode.Default;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.WebBrowserSignInMode)), names.Select(WebSignInModeLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, current)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.WebBrowserSignInMode, d => d.WebBrowserSignInMode = name);
         return true;
     }
 

@@ -57,7 +57,37 @@ public static class WebUiText
     public const string NotAvailableError = "/webui: the Web UI is not available in this build.";
 
     /// <summary><c>/webui</c>'s grammar. Pinned.</summary>
-    public const string UsageError = "Usage: /webui [on|off|copy|reset]";
+    public const string UsageError = "Usage: /webui [on|off|copy|reset|browser [--external]]";
+
+    // ── Opening it on this PC (later on 2026-10-15, /webui browser and the pane's link) ──
+
+    /// <summary><c>/webui browser</c>'s flag: the default browser, whatever <i>Web open links in</i> says.</summary>
+    public const string ExternalFlag = "--external";
+
+    /// <summary>The address <c>/webui browser</c> opens: one host, so one cookie, under either reach.</summary>
+    public const string LoopbackHost = "127.0.0.1";
+
+    /// <summary><c>/webui browser</c> with the Web UI off.</summary>
+    public const string BrowserWebUiOff = "The Web UI is off: /webui on starts it.";
+
+    /// <summary><c>/webui browser</c> while the server isn't serving (a port refused, still starting).</summary>
+    public static string BrowserNotServing(int port) => "The Web UI isn't serving on port " + port.ToString(System.Globalization.CultureInfo.InvariantCulture) + " yet.";
+
+    /// <summary>Where it went; never the link or the token.</summary>
+    public static string BrowserOpened(bool window) => "📱 opened the Web UI in " + (window ? "the Browser window" : "the default browser");
+
+    /// <summary>The audit line: where, never the link.</summary>
+    public static string BrowserOpenedLogLine(bool window, bool once) => "Web UI opened on this PC in " + (window ? "the Browser window" : "the default browser") + (once ? " with a one-time link." : " with the sign-in link.");
+
+    /// <summary>The <c>/webui</c> pane's copy button (later on 2026-10-15, the user's ask): the shown tab's link to the clipboard.</summary>
+    public const char CopyKey = 'c';
+
+    public const string CopyWord = "copy link";
+
+    public const string CopyButton = "copy";
+
+    /// <summary>The pane's hint under the link: a double-click opens it here.</summary>
+    public const string LinkOpenHint = "Double-click the link to open it on this PC; c copies it.";
 
     /// <summary><c>/webui copy</c> with nothing serving. Pinned.</summary>
     public const string NoLinkError = "/webui copy: the Web UI is not serving, so there is no link (/webui on).";
@@ -335,10 +365,68 @@ public static class WebUiText
     /// <summary>A strip picture the page picked that the strip no longer holds, or with the strip off.</summary>
     public const string NoSuchPicture = "That picture is no longer in the strip.";
 
+    // ── The page's saved prompts (later on 2026-10-15) ──
+
+    /// <summary>What the page opens for bare <c>/prompts</c>.</summary>
+    public const string OpenPrompts = "prompts";
+
+    /// <summary>A Page line that reached the PC (never by the page's own path): what it is.</summary>
+    public const string OpensOnThePage = "That opens on the page itself.";
+
+    /// <summary>The 📣 button's label.</summary>
+    public const string PromptsButton = "Saved prompts";
+
+    /// <summary>The sheet with nothing saved.</summary>
+    public const string PromptsNone = "No saved prompts yet: /prompts save <text> at the PC saves one.";
+
+    /// <summary>A row's ➤.</summary>
+    public const string PromptsSend = "Send this prompt";
+
+    /// <summary>A long list's filter.</summary>
+    public const string Filter = "Filter";
+
+    /// <summary>The sheet's ✕.</summary>
+    public const string ClosePrompts = "Close the saved prompts";
+
+    // ── The page's 🗑️ (later on 2026-10-15) ──
+
+    /// <summary>The overlay's 🗑️, and its label once armed.</summary>
+    public const string DeletePicture = "Delete";
+
+    public const string DeleteArmed = "Tap again to delete";
+
+    /// <summary>A delete of a picture neither the transcript nor the strip holds, or whose file is gone already.</summary>
+    public const string PictureNotHere = "That picture is no longer here.";
+
+    /// <summary>A delete of a picture with no file of its own (pasted, a camera watch frame).</summary>
+    public const string PictureHasNoFile = "That picture has no file of its own to delete.";
+
+    /// <summary>The page's note after a delete: where it went (the Trash on a Mac).</summary>
+    public static string PictureDeleted(string name, Files.DeleteWay way) => way switch
+    {
+        Files.DeleteWay.Recycled => "Moved " + name + " to the " + Files.FileText.RecycleBinName + ".",
+        Files.DeleteWay.DeletedNoBin => "Deleted " + name + " (no " + Files.FileText.RecycleBinName + " on that drive).",
+        _ => "Deleted " + name + ".",
+    };
+
+    /// <summary>A delete the system refused; the picture stays.</summary>
+    public static string PictureDeleteFailed(string name, string detail) => "Could not delete " + name + ": " + detail;
+
+    /// <summary>A delete the PC did not finish within the request's wait.</summary>
+    public static string StillDeleting(string name) => name + " is still being deleted at the PC.";
+
+    /// <summary>The PC's hint row after the page deleted a picture.</summary>
+    public static string PictureDeletedFlash(string name, Files.DeleteWay way) =>
+        "📱 " + (way == Files.DeleteWay.Recycled ? "moved " + name + " to the " + Files.FileText.RecycleBinName : "deleted " + name);
+
+    /// <summary>The audit line: the name alone, never the path.</summary>
+    public static string PictureDeletedLogLine(string name, Files.DeleteWay way, IPAddress? remote) =>
+        "Web UI deleted \"" + name + "\"" + (way == Files.DeleteWay.Recycled ? " (to the " + Files.FileText.RecycleBinName + ")" : "") + " from " + Where(remote) + ".";
+
     /// <summary>The page's own words, sent with every snapshot.</summary>
     public static readonly WebWords Words = new(PictureGone, PictureTooLarge, OpenOriginal, SendAsMessage, UseLine, DraftFilled, Undo, Working, CloseChoice,
         UI.TranscriptRenderer.NoReplyText, UI.ThinkingFoldText.LiveBare, EntryGone,
-        ClearDraft, DraftCleared, ExpandAll, CollapseAll, ToTop, ToBottom, StripButton, StripOne, StripMany, CloseStrip, Live, LiveLabel);
+        ClearDraft, DraftCleared, ExpandAll, CollapseAll, ToTop, ToBottom, StripButton, StripOne, StripMany, CloseStrip, Live, LiveLabel, DeletePicture, DeleteArmed, PromptsButton, PromptsNone, PromptsSend, Filter, ClosePrompts);
 
     /// <summary>A folded entry whose text the page asked for after the transcript let it go (2026-10-15).</summary>
     public const string EntryGone = "(no longer available)";

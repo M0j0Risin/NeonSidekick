@@ -231,9 +231,9 @@ internal sealed unsafe partial class BrowserWindowThread
     private void RecordVisit()
     {
         string? source = _host?.Source;
-        if (PdfView.IsOurs(source))
+        if (PdfView.IsOurs(source) || WebUi.WebUiAuth.IsSignInUrl(source))
         {
-            return;   // a local PDF the app staged (2026-10-14): no visit to remember
+            return;   // a local PDF the app staged (2026-10-14), a Web UI sign-in link (later on 2026-10-15): no visit to remember
         }
 
         var recorded = BrowserHistory.Record(_history, source, _host?.Title ?? _pageTitle, TimeProvider.System.GetUtcNow());

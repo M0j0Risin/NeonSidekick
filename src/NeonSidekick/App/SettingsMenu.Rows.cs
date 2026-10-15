@@ -138,6 +138,7 @@ internal sealed partial class SettingsMenu
         [(SettingsField.ToolsDollarMention, "Mentions"), (SettingsField.ToolCollapseCount, "Folding"), (SettingsField.ShowFileDiffs, "Diffs")],
         [(SettingsField.ShoppingTools, "The list")],
         [(SettingsField.EventLogTools, "Access"), (SettingsField.EventLogComputersOffered, "Computers"), (SettingsField.EventLogMaxEvents, "Searches"), (SettingsField.EventLogComputersProfile, "Files")],
+        [(SettingsField.TimerTools, "Timers")],
     ];
 
     /// <summary>

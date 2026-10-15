@@ -113,7 +113,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/settings <words>` | Searches every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by name, tab or description. |
 | `/settings changed` | Lists the settings that differ from their defaults, to edit one or put it back. |
 | `/tools` | Switches the model's tools on or off, each group's settings on its own tab. See [TOOLS.md](TOOLS.md). |
-| `/tools <group>` | Opens one group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` or `shopping`. |
+| `/tools <group>` | Opens one group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping` or `timers`. |
 | `/tools shell allowed`, `/tools shell police` | Opens *Shell allowed commands* (which also steps *Shell command policy*), or *Shell police* and its forbidden strings. |
 | `/skills` | Lists the skills, to move, rename, edit, revert, lock, disable or delete one, and their settings. Its **loaded** tab shows the skills in this conversation. |
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. See [Installing skills](SETTINGS.md#installing-skills). |
@@ -197,12 +197,13 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/youtube save [<id>\|<link>]` | Saves the video playing, or the one named, to this profile's saved videos. |
 | `/youtube list`, `/youtube list --clear` | The saved videos in a pane; `--clear` removes them all after a yes (headless: at once). |
 | `/youtube unsave <n>\|<id>\|<link>` | Removes one saved video. |
-| `/webui` | Shows the [Web UI](INTERFACE.md#web-ui): on or off, its port and reach, and a tab per address with a QR code to scan with a phone and the sign-in link. Its buttons: `e` turns it on or off, `l` switches the reach between `lan` and `local`, `r` makes a new token after a yes. Waits for the idle line under a reply. Not headless. |
+| `/webui` | Shows the [Web UI](INTERFACE.md#web-ui): on or off, its port and reach, and a tab per address with a QR code to scan with a phone and the sign-in link. Its buttons: `e` turns it on or off, `l` switches the reach between `lan` and `local`, `r` makes a new token after a yes, `c` copies the shown tab's link. A double-click on the link opens it on this PC, as `/webui browser` does. Opens over a reply too. Not headless. |
 | `/webui on\|off` | Turns the Web UI on or off for this profile; the server starts or stops at once. |
 
 Which commands the Web UI's page may send, and how each shows there: [Commands from the page](INTERFACE.md#commands-from-the-page).
 | `/webui copy` | Puts the first sign-in link on the clipboard. It holds the token: paste it only where you trust. |
 | `/webui reset` | Makes a new sign-in token after a yes; every browser signed in will be signed out. |
+| `/webui browser [--external]` | Opens the Web UI on this PC, already signed in: in the Browser window under *Web open links in* `browser-window`, else in your default browser, signed in as *Web browser sign in mode* says. `--external` always uses the default browser. The Web UI must be on. Runs at once under a reply. |
 
 ### Integrations
 
@@ -275,7 +276,7 @@ Which commands the Web UI's page may send, and how each shows there: [Commands f
 | `/loop <count>\|infinite [<delay>] <message>`, `/loop <count>\|infinite [<delay>] /imagine\|/read <arguments>` | Sends a message, or runs `/imagine` or `/read`, that many times or until ESC. See [Loops](#loops). |
 | `/test [<id>\|reasoning\|structured\|long\|all\|history]` | Runs benchmark tests against the connected model. See [Benchmark tests](#benchmark-tests). |
 | `/learn [<note>]`, `/learn sessions [<n>\|<search>]` | Writes or improves a skill in the background from the last turn, or from stored sessions (the newest 5, *n* up to 20, or a search). Needs *Agent skills* and *LLM offer tools* on. |
-| `/timer [<duration> [<name>]]`, `/timer stop <name>\|all` | Lists or starts timers (`10m`, `1h30m`; a bare number is minutes; up to 24 hours), or stops one or all. |
+| `/timer [<duration> [<name>]]`, `/timer stop <name>\|all` | Lists or starts timers (`10m`, `1h30m`; a bare number is minutes; up to 24 hours), or stops one or all. Works with *Timer tools* off. |
 
 ## Command details
 

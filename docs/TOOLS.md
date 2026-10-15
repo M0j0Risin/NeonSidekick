@@ -7,8 +7,8 @@ Each group has a switch (*File tools*, *Web tools*…), and the Offered tab of `
 ## Contents
 
 - [Where tools are offered](#where-tools-are-offered)
-- [Always offered](#always-offered): [Clock](#clock), [Timers](#timers), [Help](#help)
-- [Core](#core): [Ask](#ask), [Web](#web), [Shell](#shell)
+- [Always offered](#always-offered): [Clock](#clock), [Help](#help)
+- [Core](#core): [Ask](#ask), [Web](#web), [Shell](#shell), [Timers](#timers)
 - [Files](#files): [File](#file), [Image](#image), [UNC shares and outside folders](#unc-shares-and-outside-folders), [GitLib](#gitlib), [Obsidian](#obsidian)
 - [Apps](#apps): [Docker](#docker), [Event logs](#event-logs), [ComfyUI](#comfyui), [YouTube](#youtube)
 - [Databases](#databases): [How the database tools work](#how-the-database-tools-work), [SQL Server](#sql-server), [MySQL and MariaDB](#mysql-and-mariadb), [SQLite](#sqlite), [PostgreSQL](#postgresql), [Oracle](#oracle)
@@ -36,16 +36,6 @@ These have no group switch. To withhold one, switch it off on the Offered tab.
 | `get_current_time` | `zone?` | The date, time, weekday and time zone, here or in an IANA zone. Called at the start of every conversation. |
 | `shift_date` | `date, days?, weeks?, months?, years?` | Moves a date by days, weeks, months or years and gives its weekday. |
 | `date_difference` | `from, to` | The days between two dates (negative when the second is earlier), plus years, months and days for longer gaps. |
-
-### Timers
-
-Not offered headless.
-
-| Tool | Arguments | What it does |
-|---|---|---|
-| `start_timer` | `name?, hours?, minutes?, seconds?` | Starts a named countdown that alerts you when it ends; several can run at once. |
-| `stop_timer` | `name` | Stops a running timer, or silences one that has gone off. |
-| `list_timers` | — | Every running timer and its time left. |
 
 ### Help
 
@@ -109,6 +99,16 @@ Under *Shell command policy*. Commands run on your machine in the working direct
 
 * **The tool bridge:** with *Shell tool bridge* on, a script can call the app's other tools (Python `from neon_tools import call`, Node `neon.call(...)`, PowerShell `Invoke-NeonTool`), except `execute_code` and `ask_user`. A `run_command` through it still asks, and can't run in the background.
 
+### Timers
+
+Under *Timer tools* (on by default). Off, the model has no timer tools and its prompt drops the timer sentence; `/timer` and timers already running keep working. Not offered headless.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `start_timer` | `name?, hours?, minutes?, seconds?` | Starts a named countdown that alerts you when it ends; several can run at once. |
+| `stop_timer` | `name` | Stops a running timer, or silences one that has gone off. |
+| `list_timers` | — | Every running timer and its time left. |
+
 ## Files
 
 ### File
@@ -127,7 +127,7 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 | `create_directory` | `path` | Creates a folder and any missing parents. |
 | `move` | `from, to, overwrite?` | Renames or moves a file or folder; replaces nothing unless `overwrite`. |
 | `copy` | `from, to, overwrite?` | Copies a file or folder under the same rule; a folder copied over a folder merges. |
-| `delete` | `path` | Deletes a file or folder for good. `.git`, anything in it and a folder holding one are refused. |
+| `delete` | `path` | Moves a file or folder to the Recycle bin (the Trash on a Mac) under *File deletes to Recycle bin* (on by default), else deletes it for good. A network share or removable drive has no bin, so it's deleted directly and the result says so; something too big for the bin is deleted for good, as Windows does. `.git`, anything in it and a folder holding one are refused. |
 | `zip` | `path, to?, overwrite?` | Packs a file or folder into a `.zip`, beside it by default. Off in a new profile. |
 | `unzip` | `path, to?, overwrite?` | Extracts a `.zip` into a folder, all or nothing. Off in a new profile. |
 | `open` | `path?, share?` | Opens a file in its own program, a picture where *Image viewer* says, or a folder in Explorer (Finder on a Mac); `share` opens one on a UNC share. |

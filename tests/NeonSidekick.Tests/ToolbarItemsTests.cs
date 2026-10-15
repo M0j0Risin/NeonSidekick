@@ -28,7 +28,7 @@ public sealed class ToolbarItemsTests
         Assert.Equal("Model name", ToolbarItems.Title(ToolbarItems.Model));
         Assert.Equal("Model name: Qwen3-30B · double-click to open", ToolbarItems.ModelNote("Qwen3-30B"));
         Assert.DoesNotContain(ToolbarItems.Model, ToolbarItems.Defaults);
-        Assert.Equal(ToolsText.SwitchWords.Where(w => w != ToolsText.ShoppingSwitchWord), ToolbarItems.Names.Where(id => ToolsText.SwitchField(id) is not null));
+        Assert.Equal(ToolsText.SwitchWords.Where(w => w != ToolsText.ShoppingSwitchWord && w != ToolsText.TimersSwitchWord), ToolbarItems.Names.Where(id => ToolsText.SwitchField(id) is not null));
         Assert.Equal([ToolbarItems.Files, ToolbarItems.ShoppingList], ToolbarItems.Resolve(["files", "Shopping"]).Order(StringComparer.Ordinal));   // a saved "shopping" (🛒's id for a few hours) is the list's item   // each switch's id is its /tools word; shopping's 🛒 opens the list instead (2026-10-11)
     }
 

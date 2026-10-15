@@ -316,7 +316,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, recycleBin: _recycleBin);
         screen.UserProfileFolder = _userProfile;
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
@@ -4151,7 +4151,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(StandingAndFileTools.Length + 2, offered.Length);   // skill_editor and session_manager ride (the fixture opts every tool on; no pane, no ask_user)
         string prompt = _chat.Requests[0][0].Text!;
         Assert.Contains(Assistant.FileRule, prompt, StringComparison.Ordinal);
-        Assert.Contains("delete removes a file or a folder for good", prompt, StringComparison.Ordinal);
+        Assert.Contains("delete removes a file or a folder, with everything in it; its description says whether it goes for good", prompt, StringComparison.Ordinal);   // the description says where since later on 2026-10-15 (File deletes to Recycle bin)
         Assert.DoesNotContain(" restore ", prompt, StringComparison.Ordinal);   // the old tool's name; SessionRule's "The user restores" is another word
         Assert.DoesNotContain("trash", prompt, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(DeleteTool.DescriptionText, tools.Single(t => t.Name == DeleteTool.ToolName).Description);
@@ -4764,7 +4764,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ToolsText.OfferedKeys, output);
         Assert.Contains("\n▸ $-mention enabled    on\n" + HeadingRow("── Folding") + "\n  Tool collapse count  off\n  Code collapse count  off\n", output);   // the fixture's 0s (2026-09-22)
         Assert.Contains("\n▸ Ask user                      on\n", output);
-        Assert.Contains("\n▸ File tools                  on\n", output);
+        Assert.Contains("\n▸ " + "File tools".PadRight(Math.Max(28, SettingsMenu.FieldName(SettingsField.FileDeletesToRecycleBin).Length + 2)) + "on\n", output);   // the bin's row widened the column later on 2026-10-15
         Assert.Contains("\n▸ Image tools               off\n  Image edit quality        90\n", output);   // the Image menu (2026-10-10), its switch first, padded to its own column
         Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n" + HeadingRow("── Identity") + "\n  GitLib user email       (not set)\n  GitLib user name        (not set)\n", output);
         Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n" + HeadingRow("── Guards") + "\n  Shell police                    on\n  Shell police forbidden strings  none\n" + HeadingRow("── Commands") + "\n  Shell prefer native tools       on\n  Shell default shell             powershell\n  Shell default timeout (s)       180\n  Shell max timeout (s)           600\n  Shell output max chars          30,000 chars\n" + HeadingRow("── Scripts") + "\n  Shell code languages            powershell, python, node\n  Shell code default timeout (s)  300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
@@ -9748,7 +9748,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ToolsText.SwitchStateLine(SettingsField.SqlTools, _settings.Current) + "\n", output);
         Assert.Equal("SQL tools: off", ToolsText.SwitchStateLine(SettingsField.SqlTools, new AppSettingsData { SqlTools = false }));
         Assert.Contains("  · Shell command policy: ask\n", output);
-        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, eventlog, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, shopping, or nothing for the pane.", ToolsText.SwitchUsageError);
+        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, eventlog, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, shopping, timers, or nothing for the pane.", ToolsText.SwitchUsageError);
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Tools, hasArgs: true));   // as /police: the rows are never refused under a reply
         Assert.Equal(SettingsField.HomeAssistantTools, ToolsText.SwitchField(" HA "));
         Assert.Null(ToolsText.SwitchField("git"));
@@ -9784,7 +9784,7 @@ public partial class ChatScreenTests : IDisposable
         (strip, off) = ChatScreen.ToolbarStripFor(ToolbarItems.Resolve(["usage", "memory"]), new AppSettingsData { MemoryMode = "off" });
         Assert.Equal("📊 💾", strip);
         Assert.Equal([1], off);
-        Assert.All(ToolsText.SwitchWords.Where(w => w is not ("shell" or "ask")), word => Assert.True(ChatScreen.ToolbarItemOff(word, new AppSettingsData())));   // every group off by default
+        Assert.All(ToolsText.SwitchWords.Where(w => w is not ("shell" or "ask" or "timers")), word => Assert.True(ChatScreen.ToolbarItemOff(word, new AppSettingsData())));   // every group off by default; timers on (later on 2026-10-15)
         // 🙋 (2026-10-09, the user's ask): Ask user is on by default, on the slab while it is off.
         Assert.False(ChatScreen.ToolbarItemOff("ask", new AppSettingsData()));
         Assert.True(ChatScreen.ToolbarItemOff("ask", new AppSettingsData { AskUser = false }));
@@ -11601,7 +11601,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ChatScreen.ProcessToolGlyph + " Process", ProcessMenu.Title);
         Assert.Equal(NeonSidekick.Viewer.ViewerText.StripButton, ChatScreen.ComfyViewToolGlyph);   // the picture strip's button, one source
         Assert.Equal(NeonSidekick.Docker.DockerText.Glyph, ChatScreen.DockerToolGlyph);
-        Assert.All(ToolsText.SwitchWords.Where(w => w != ToolsText.ShoppingSwitchWord), word => Assert.Equal(ToolsText.SwitchLine(word), ChatScreen.ToolbarWord(ToolbarItems.Glyph(word))));   // shopping has no switch glyph: 🛒 opens the list (2026-10-11)
+        Assert.All(ToolsText.SwitchWords.Where(w => w != ToolsText.ShoppingSwitchWord && w != ToolsText.TimersSwitchWord), word => Assert.Equal(ToolsText.SwitchLine(word), ChatScreen.ToolbarWord(ToolbarItems.Glyph(word))));   // shopping has no switch glyph: 🛒 opens the list (2026-10-11)
         Assert.True(ChatScreen.TogglesWindow("/log") && ChatScreen.TogglesWindow("/comfy view") && ChatScreen.TogglesWindow("/comfy thumbs"));
         Assert.False(ChatScreen.TogglesWindow("/tools web") || ChatScreen.TogglesWindow("/log file") || ChatScreen.TogglesWindow(null));
         Assert.Null(ChatScreen.ToolbarWord("📂"));

@@ -12,6 +12,12 @@ public sealed record InfoTab(string Title, Func<IRenderable> Content)
 {
     /// <summary>The tab's toggle on the strip (2026-10-12, <see cref="InfoToggle"/>); null for none (every tab but <c>/help</c>'s Keys).</summary>
     public InfoToggle? Toggle { get; init; }
+
+    /// <summary>
+    /// Told the plain text of a content line double-clicked (later on 2026-10-15, the user's ask: <c>/webui</c>'s link opens on a double-click);
+    /// the pane stays open. Null: the content takes no clicks, as before.
+    /// </summary>
+    public Action<string>? LineDoubleClicked { get; init; }
 }
 
 /// <summary>
@@ -143,6 +149,9 @@ public sealed class InfoPane
     private int _shown;
     private int _count;
     private int _stripRows = 1;
+
+    // A content line's double-click target, apart from the outside parts' (later on 2026-10-15).
+    private const int ContentClickBase = 1_000_000;
     // Whether the last draw put the more row under the content (2026-10-14: a click on it pages).
     private bool _moreShown;
     private readonly Func<string?>? _clipboard;
@@ -468,6 +477,9 @@ public sealed class InfoPane
     /// <summary>The pane's button (<see cref="InfoAction"/>) that closed the last visit, or null when it closed otherwise.</summary>
     public InfoAction? Pressed { get; private set; }
 
+    /// <summary>The tab shown when the pane last closed (later on 2026-10-15): a host that opens it again after a button keeps the user's tab.</summary>
+    public int LastTab { get; private set; }
+
     // The pane's buttons this visit (2026-10-14): ahead of the tabs on the strip.
     private IReadOnlyList<InfoAction> _actions = [];
 
@@ -498,6 +510,7 @@ public sealed class InfoPane
         }
 
         int active = Math.Clamp(initial, 0, tabs.Count - 1);
+        LastTab = active;
         _first = 0;
         _tallestWidth = -1;
         _content = null;
@@ -551,6 +564,19 @@ public sealed class InfoPane
                         {
                             _pane.Dismiss(click.X, click.Y);
                             return;
+                        }
+
+                        continue;
+                    }
+
+                    // A double-click on a content line (later on 2026-10-15) goes to the tab's handler, when it has one; the pane stays.
+                    if (click.Button == MouseButton.Left && tabs[active].LineDoubleClicked is { } lineClicked && !(tabs[active].Toggle is not null && _toggled.Contains(active))
+                        && _pane.TryHitOverlay(click.X, click.Y, out int row) && row > _stripRows && row <= _stripRows + _shown && _content is { } shownLines)
+                    {
+                        int line = _first + row - _stripRows - 1;
+                        if (line < shownLines.Count && _clicks.Second(ContentClickBase + line))
+                        {
+                            lineClicked(TextFind.LineText(shownLines[line]));
                         }
 
                         continue;
@@ -723,6 +749,7 @@ public sealed class InfoPane
                 else if (next != active)
                 {
                     active = next;
+                    LastTab = active;
                     _first = 0;
                     _findMoved = _find.Length > 0;
                 }

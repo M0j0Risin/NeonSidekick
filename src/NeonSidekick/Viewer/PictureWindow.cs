@@ -1550,7 +1550,7 @@ internal sealed unsafe class PictureWindowThread : ILiveWindow
     }
 
     // Del (2026-09-27, the user's call): the first arms the shown picture, the title says so and a timer disarms it; a
-    // second on the same picture in time deletes it for good, and the next one is shown without waiting for the watcher
+    // second on the same picture in time deletes it (to the Recycle bin under File deletes to Recycle bin, later on 2026-10-15), and the next one is shown without waiting for the watcher
     // (whose Deleted then finds nothing to remove).
     private void DeleteShown()
     {
@@ -1567,9 +1567,10 @@ internal sealed unsafe class PictureWindowThread : ILiveWindow
         }
 
         KillTimer(_hwnd, DeleteArmTimer);
+        Files.DeleteWay way;
         try
         {
-            File.Delete(path);
+            way = PictureDeletes.Delete(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -1578,7 +1579,7 @@ internal sealed unsafe class PictureWindowThread : ILiveWindow
             return;
         }
 
-        DiagnosticLog.Info("Viewer", $"Deleted {path}.");
+        DiagnosticLog.Info("Viewer", $"Deleted {path}{PictureDeletes.LogTail(way)}.");
         _state.Remove(path);
         UpdateTitle();
         LoadCurrent();

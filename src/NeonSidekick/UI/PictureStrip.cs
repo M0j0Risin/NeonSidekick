@@ -287,6 +287,30 @@ public sealed class PictureStrip
         return true;
     }
 
+    /// <summary>
+    /// Every picture whose id <paramref name="isId"/> takes, gone (later on 2026-10-15: a picture the Web UI deleted; one file can be registered more than
+    /// once). The highlight keeps its picture when that stays, else is let go. True when any went.
+    /// </summary>
+    public bool Remove(Func<int, bool> isId)
+    {
+        ArgumentNullException.ThrowIfNull(isId);
+        lock (_gate)
+        {
+            int? selectedId = _selected >= 0 && _selected < _entries.Count ? _entries[_selected].Id : null;
+            if (_entries.RemoveAll(e => isId(e.Id)) == 0)
+            {
+                return false;
+            }
+
+            _selected = selectedId is { } kept ? _entries.FindIndex(e => e.Id == kept) : -1;
+            _first = Math.Clamp(_first, 0, Math.Max(0, _entries.Count - 1));
+            _version++;
+        }
+
+        Changed?.Invoke();
+        return true;
+    }
+
     /// <summary>Whether picture <paramref name="id"/> is in the strip (later on 2026-10-15: the Web UI serves and selects only the strip's).</summary>
     public bool Holds(int id)
     {

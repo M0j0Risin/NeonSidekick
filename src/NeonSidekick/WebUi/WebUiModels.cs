@@ -38,6 +38,13 @@ public sealed class WebQuestionAnswer
     public string? Other { get; set; }
 }
 
+/// <summary>A picture the page's 🗑️ deletes (later on 2026-10-15): its id alone.</summary>
+public sealed class WebPictureDelete
+{
+    /// <summary>The picture's id, as its entry or the strip carries it; never a path.</summary>
+    public int Id { get; set; }
+}
+
 /// <summary>A picture of the strip picked on the page (later on 2026-10-15): the PC's highlight and its open viewer move to it.</summary>
 public sealed class WebStripSelect
 {
@@ -69,6 +76,9 @@ public sealed record WebResult(bool Ok, string? Message = null, bool AsText = fa
     /// whose device went) carries none.
     /// </summary>
     public bool? TabOff { get; init; }
+
+    /// <summary>What the page opens for a line that opens on the page (later on 2026-10-15): <c>prompts</c>.</summary>
+    public string? Open { get; init; }
 }
 
 /// <summary>The Web UI's tabs and whether each is on (later on 2026-10-15): <i>Web UI chat controls</i>, <i>home controls</i>, <i>shopping controls</i>.</summary>
@@ -141,9 +151,17 @@ public sealed record WebReplaced(long Seq, string Text, bool Failed);
 /// <summary>
 /// A picture the page may load (2026-10-14): the screen's id for it, its name, the three sizes' addresses (built by the server, never by the
 /// page), its width and height as the PC holds it (the grid reserves the room before it loads), and <see cref="TooLarge"/> when its file is
-/// over what the server decodes for a thumbnail (an <c>img</c> cannot read a status code).
+/// over what the server decodes for a thumbnail (an <c>img</c> cannot read a status code). <see cref="Key"/> (later on 2026-10-15) names its file
+/// without its path (<see cref="WebPictureKey"/>; none for a picture with bytes only), so a <c>point</c> from the PC finds it in either view;
+/// <see cref="Deletable"/> says it has a file of its own the page's 🗑️ may delete.
 /// </summary>
-public sealed record WebPicture(int Id, string Name, string Thumb, string Mid, string Full, int Width, int Height, bool TooLarge);
+public sealed record WebPicture(int Id, string Name, string Thumb, string Mid, string Full, int Width, int Height, bool TooLarge, string? Key = null, bool Deletable = false);
+
+/// <summary>
+/// The picture the PC's own hand moved to (later on 2026-10-15, the user's ask): its file's key (<see cref="WebPictureKey"/>) and a sequence that
+/// only rises, so the page follows each point once and a reconnect follows only a newer one.
+/// </summary>
+public sealed record WebPoint(string Key, long Seq);
 
 /// <summary>An entry taken out of the transcript (the splash cycled to another picture).</summary>
 public sealed record WebRemoved(long Seq);
@@ -318,7 +336,7 @@ public sealed record WebState(
 /// What a page gets on (re)connecting: the transcript, the open asks, the state, the app's words the page shows of its own, the drafts held for
 /// it, and the status row (2026-10-15).
 /// </summary>
-public sealed record WebSnapshot(IReadOnlyList<WebEntry> Entries, IReadOnlyList<WebAskView> Asks, WebState State, WebWords? Words = null, IReadOnlyList<string>? Drafts = null, WebStatus? Status = null, WebStrip? Strip = null);
+public sealed record WebSnapshot(IReadOnlyList<WebEntry> Entries, IReadOnlyList<WebAskView> Asks, WebState State, WebWords? Words = null, IReadOnlyList<string>? Drafts = null, WebStatus? Status = null, WebStrip? Strip = null, WebPoint? Point = null);
 
 /// <summary>
 /// The PC's picture strip as the page's drawer shows it (later on 2026-10-15): its ComfyUI pictures newest first and the one the PC has
@@ -345,7 +363,14 @@ public sealed record WebUsageCard(string Title, IReadOnlyList<string> Lines);
 /// </summary>
 public sealed record WebWords(string PictureGone, string PictureTooLarge, string OpenOriginal, string SendAsMessage = "", string UseLine = "", string DraftFilled = "", string Undo = "", string Working = "", string Close = "", string NoReply = "", string ThinkingLive = "", string Gone = "",
     string ClearDraft = "", string DraftCleared = "", string ExpandAll = "", string CollapseAll = "", string ToTop = "", string ToBottom = "", string StripButton = "", string StripOne = "", string StripMany = "", string CloseStrip = "",
-    string Live = "", string LiveLabel = "");
+    string Live = "", string LiveLabel = "", string DeletePicture = "", string DeleteArmed = "",
+    string PromptsButton = "", string PromptsNone = "", string PromptsSend = "", string Filter = "", string ClosePrompts = "");
+
+/// <summary>The page's saved prompts sheet (later on 2026-10-15): its title and the profile's prompts, numbered as at the PC.</summary>
+public sealed record WebPrompts(string Title, IReadOnlyList<WebPrompt> Items);
+
+/// <summary>One saved prompt: its number at the PC (from 1, the user's order) and its text.</summary>
+public sealed record WebPrompt(int Number, string Text);
 
 /// <summary>The open asks, whole (an <c>asks</c> event).</summary>
 public sealed record WebAsks(IReadOnlyList<WebAskView> Asks);
@@ -419,10 +444,13 @@ public sealed class WebStoreRequest
 [JsonSerializable(typeof(WebState))]
 [JsonSerializable(typeof(WebSnapshot))]
 [JsonSerializable(typeof(WebStrip))]
+[JsonSerializable(typeof(WebPoint))]
+[JsonSerializable(typeof(WebPictureDelete))]
 [JsonSerializable(typeof(WebStripSelect))]
 [JsonSerializable(typeof(WebWords))]
 [JsonSerializable(typeof(WebStatus))]
 [JsonSerializable(typeof(WebUsageCard))]
+[JsonSerializable(typeof(WebPrompts))]
 [JsonSerializable(typeof(WebAsks))]
 [JsonSerializable(typeof(WebShopping))]
 public sealed partial class WebUiJsonContext : JsonSerializerContext;

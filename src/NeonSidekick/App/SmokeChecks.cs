@@ -161,6 +161,7 @@ public static partial class SmokeChecks
         results.Add(ProbeHotkey());
         results.Add(ProbeCarbonHotkeys());
         results.Add(ProbeShortcut());
+        results.Add(ProbeRecycleBin());   // later on 2026-10-15: File deletes to Recycle bin
         results.Add(ProbeSqlite());
         results.Add(ProbeWebUi());
         results.Add(ProbePostgres());

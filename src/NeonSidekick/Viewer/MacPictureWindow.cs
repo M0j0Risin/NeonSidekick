@@ -723,9 +723,10 @@ internal sealed class MacPictureWindow : AppKitWindow
         }
 
         _deleteArm.Stop();
+        Files.DeleteWay way;
         try
         {
-            File.Delete(path);
+            way = PictureDeletes.Delete(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -734,7 +735,7 @@ internal sealed class MacPictureWindow : AppKitWindow
             return;
         }
 
-        DiagnosticLog.Info("Viewer", $"Deleted {path}.");
+        DiagnosticLog.Info("Viewer", $"Deleted {path}{PictureDeletes.LogTail(way)}.");
         _state.Remove(path);
         UpdateTitle();
         LoadCurrent();

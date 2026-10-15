@@ -312,7 +312,11 @@ public sealed record CreateResult(FileOutcome Outcome, string Relative, string D
 public sealed record MoveResult(FileOutcome Outcome, string From, string To, bool IsDirectory, bool Renamed, string Detail = "");
 
 /// <summary>What a <see cref="WorkingDirectory.Delete"/> removed, for good (in place since 2026-10-01, when File safe edits and its <c>.trash</c> went, the user's call).</summary>
-public sealed record DeleteResult(FileOutcome Outcome, string Relative, bool IsDirectory, string Detail = "");
+public sealed record DeleteResult(FileOutcome Outcome, string Relative, bool IsDirectory, string Detail = "")
+{
+    /// <summary>How it went (later on 2026-10-15): for good, to the Recycle bin, or for good on a drive with no bin.</summary>
+    public DeleteWay Way { get; init; }
+}
 
 /// <summary>What <see cref="WorkingDirectory.PurgeFolder"/> removed: the files, the folders and their bytes (<c>PurgeResult</c> until 2026-10-01).</summary>
 public sealed record PurgeResult(FileOutcome Outcome, int Files, int Folders, long Bytes, string Detail = "");
@@ -488,6 +492,12 @@ public sealed class WorkingDirectory
     /// (<see cref="HoldsDatabase"/>), so a database changes only through <c>sqlite_execute</c>. The shell police reads it too.
     /// </summary>
     public Func<DatabaseGuard?>? Databases { get; set; }
+
+    /// <summary>
+    /// The bin a <see cref="Delete"/> moves to (later on 2026-10-15, <c>File deletes to Recycle bin</c>), read at each delete: the screen's and
+    /// headless's working directory hand the system's bin while the setting is on, else null. Null (unset, a share's, a test's) deletes directly.
+    /// </summary>
+    public Func<IRecycleBin?>? RecycleDeletes { get; set; }
 
     /// <summary>
     /// The server families the shell police guards (2026-10-05, the user's call: SQLite's rule mirrored for SQL Server, Oracle, MySQL
@@ -2382,7 +2392,7 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>
-    /// Removes a file or a folder for good, a folder with everything in it: the one recursive delete in the sandbox
+    /// Removes a file or a folder (to the Recycle bin while <see cref="RecycleDeletes"/> hands one, later on 2026-10-15), a folder with everything in it: the one recursive delete in the sandbox
     /// (in place since 2026-09-20 with File safe edits off, and always since 2026-10-01, when that setting and its
     /// <c>.trash</c> went, the user's call). The root is refused, and so (2026-09-23, the user's call) are <c>.git</c>,
     /// anything in it and a folder with a <c>.git</c> anywhere under it — <see cref="FileOutcome.GitProtected"/>: a
@@ -2423,21 +2433,10 @@ public sealed class WorkingDirectory
                 return new DeleteResult(FileOutcome.DatabaseProtected, display, isDirectory);
             }
 
-            if (isDirectory && isLink)
-            {
-                Directory.Delete(full);
-            }
-            else if (isDirectory)
-            {
-                Directory.Delete(full, recursive: true);
-            }
-            else
-            {
-                File.Delete(full);
-            }
-
-            DiagnosticLog.Debug(Category, DeletedLogLine(Relative(full)));
-            return new DeleteResult(FileOutcome.Ok, display, isDirectory);
+            // To the bin while the setting is on (later on 2026-10-15); a link, a drive with no bin and the setting off delete directly.
+            var way = FileDeletes.Remove(full, isDirectory, isLink, RecycleDeletes?.Invoke());
+            DiagnosticLog.Debug(Category, DeletedLogLine(Relative(full)) + (way == DeleteWay.Recycled ? " (to the " + FileText.RecycleBinName + ")" : ""));
+            return new DeleteResult(FileOutcome.Ok, display, isDirectory) { Way = way };
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {

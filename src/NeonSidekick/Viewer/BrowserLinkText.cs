@@ -142,6 +142,9 @@ public static class BrowserLinkText
     public const string Duplicate = "Another saved link has that address already.";
 
     /// <summary>A local PDF the window shows (2026-10-14): a copy that goes when the window closes, so no link. Pinned.</summary>
+    /// <summary>A Web UI sign-in link offered for saving (later on 2026-10-15). Pinned.</summary>
+    public const string SignInLinkRefused = "A Web UI sign-in link is not saved: it holds the sign-in token.";
+
     public const string LocalCopy = "A PDF opened from your disk is not saved as a link: the window shows a copy that goes when it closes.";
 
     /// <summary>A refusal's answer, led by <c>Error: </c>; null for an outcome that is no refusal.</summary>
@@ -150,6 +153,7 @@ public static class BrowserLinkText
         BrowserLinkOutcome.NotWeb => ErrorPrefix + NotWeb,
         BrowserLinkOutcome.Credentials => ErrorPrefix + Credentials,
         BrowserLinkOutcome.LocalCopy => ErrorPrefix + LocalCopy,
+        BrowserLinkOutcome.SignInLink => ErrorPrefix + SignInLinkRefused,
         BrowserLinkOutcome.Duplicate => ErrorPrefix + Duplicate,
         BrowserLinkOutcome.Newer => ErrorPrefix + NewerFile,
         BrowserLinkOutcome.Failed => ErrorPrefix + SaveFailed,

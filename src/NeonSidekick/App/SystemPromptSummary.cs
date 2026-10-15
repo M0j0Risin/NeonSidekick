@@ -71,6 +71,7 @@ namespace NeonSidekick.App;
 /// <param name="ImagesEnabled">The setting <c>Image tools</c> (2026-10-10, the picture tools' own group).</param>
 /// <param name="ImageTools">How many picture tools the next turn offers (none without codecs, the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.ImageRule"/> while any is.</param>
 /// <param name="ShoppingEnabled">The setting <c>Shopping tools</c> (2026-10-11).</param>
+/// <param name="TimersEnabled">The setting <c>Timer tools</c> (later on 2026-10-15): off, the rules carry no <see cref="Assistant.TimerRule"/>.</param>
 /// <param name="ShoppingTools">How many shopping tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.ShoppingRule"/> while any is.</param>
 /// <param name="GlobalSkills">The profile's <c>Global skills</c> switch as the catalog's last scan read it (2026-10-13, <see cref="SkillCatalog.GlobalEnabled"/>): off, the skills block names no global scope and its status says <see cref="SystemPromptSummary.GlobalOffSuffix"/>.</param>
 /// <param name="PlanDirective">Plan mode's directive while planning (2026-09-26, <see cref="Plans.PlanText.Directive"/>), else null: its own section, after the skills.</param>
@@ -141,7 +142,8 @@ public sealed record SystemPromptFacts(
     int ShoppingTools = 0,
     bool GlobalSkills = true,
     bool EventLogEnabled = false,
-    int EventLogTools = 0)
+    int EventLogTools = 0,
+    bool TimersEnabled = true)
 {
     /// <summary>Whether the rules carry <see cref="Assistant.EventLogRule"/>: tools on, the switch on (Windows) and an event-log tool offered (2026-10-15).</summary>
     public bool EventLog => ToolsEnabled && EventLogEnabled && EventLogTools > 0;
@@ -228,7 +230,7 @@ public sealed record SystemPromptFacts(
     public string MemoryModeName => !Memory ? MemoryMode.Off : MemorySave ? MemoryMode.ReadWrite : MemoryMode.ReadOnly;
 
     /// <summary>Whether the rules carry <see cref="Assistant.TimerRule"/>: any of the three timer tools not switched off on <c>/tools</c> (2026-09-20; the emptied group drops its sentence).</summary>
-    public bool Timers => !(Off(StartTimerTool.ToolName) && Off(StopTimerTool.ToolName) && Off(ListTimersTool.ToolName));
+    public bool Timers => TimersEnabled && !(Off(StartTimerTool.ToolName) && Off(StopTimerTool.ToolName) && Off(ListTimersTool.ToolName));
 }
 
 /// <summary>
@@ -373,6 +375,9 @@ public static class SystemPromptSummary
 
     /// <summary>The tail of the Shopping group while its tools cannot be offered: the switch off (2026-10-11). Pinned.</summary>
     public const string ShoppingOffSuffix = "Shopping tools is off";
+
+    /// <summary>The Timers group's note while <c>Timer tools</c> is off (later on 2026-10-15). Pinned.</summary>
+    public const string TimersOffSuffix = "Timer tools is off";
 
     /// <summary>The tail of the Event logs group while its tools cannot be offered: the switch off, or not Windows (2026-10-15). Pinned.</summary>
     public const string EventLogOffSuffix = "Event log tools is off, or this is not Windows";
@@ -718,7 +723,8 @@ public static class SystemPromptSummary
         bool shoppingEnabled = true,
         IReadOnlyList<AIFunction>? eventLog = null,
         bool eventLogEnabled = true,
-        bool eventLogTicked = true)
+        bool eventLogTicked = true,
+        bool timersEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -732,7 +738,8 @@ public static class SystemPromptSummary
         var groups = new List<ToolGroup>(8)
         {
             Group("Clock", clock, standing, toolsEnabled, null, disabled),
-            Group("Timers", timers, standing, toolsEnabled, null, disabled),
+            // The timers' own switch since later on 2026-10-15 (the user's ask): Timer tools.
+            Group(ToolsText.TimersMenuTitle, timers, !timersEnabled ? NotOffered(TimersOffSuffix) : standing, timersEnabled && toolsEnabled, SettingsField.TimerTools, disabled),
         };
         if (help is not null)
         {
