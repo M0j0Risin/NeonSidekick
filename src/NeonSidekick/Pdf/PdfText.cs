@@ -22,6 +22,9 @@ public static class PdfText
 
     public const string UrlNeedsWebTools = "Error: a web page needs the web tools, which are off; turn on Web tools, or save the page first";
 
+    /// <summary>A web address that is a PDF already (2026-10-14, the PDF plan's gaps 15 and 23). Pinned.</summary>
+    public static string UrlIsPdf(string url) => $"Error: {url} is a PDF already; download_file saves it, and web_fetch reads it";
+
     /// <summary>A PDF given to make a PDF of; it names what reads one instead (2026-10-14, the PDF plan's gap 75). Pinned.</summary>
     public static string AlreadyPdf(string file) => $"Error: {file} is a PDF already; read_pdf reads it";
 

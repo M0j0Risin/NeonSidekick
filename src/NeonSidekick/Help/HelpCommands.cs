@@ -236,7 +236,7 @@ public static class HelpCommands
         new("/pdf",
         [
             new("/pdf <file> [to=<path>] [paper=letter|a4|legal] [landscape] [overwrite]", "Make a PDF of a file in the working directory, beside it unless `to=` names a file or folder; an existing PDF is replaced only with `overwrite`. Markdown keeps its headings, tables, lists, links, colored code and the pictures beside it; text and code become a colored listing; HTML prints as the page, without its scripts or anything outside the working directory; a picture is fitted to one page. Options go anywhere. *PDF engine* chooses what makes it: Edge, Chrome or Brave, or without one Microsoft Print to PDF (Markdown, text and pictures, in black and white). Alone, `/pdf` shows how to use it."),
-            new("/pdf <url> [to=<path>] [overwrite]", "Make a PDF of a web page (`http://` or `https://`) as the browser shows it, once *Web browser network mode* allows its address. The page keeps its own layout, so `paper=` and `landscape` are not taken."),
+            new("/pdf <url> [to=<path>] [overwrite]", "Make a PDF of a web page (`http://` or `https://`) as the browser shows it, once *Web browser network mode* allows its address. The page keeps its own layout, so `paper=` and `landscape` are not taken. A link that is a PDF already is refused: `web_fetch` reads it and `download_file` saves it."),
             new("/pdf reply [<options>]", "Make a PDF of the last reply, formatted as Markdown."),
         ]),
         new("/perfbar",

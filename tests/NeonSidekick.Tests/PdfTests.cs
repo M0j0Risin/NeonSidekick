@@ -503,6 +503,16 @@ public sealed class PdfTests : IDisposable
         Assert.Empty(_browser.PdfRuns);
     }
 
+    /// <summary>A web address that is a PDF already (2026-10-14, the PDF plan's gaps 15 and 23): named before any request, never printed.</summary>
+    [Fact]
+    public async Task Tool_AUrlThatIsAPdf_IsNamed_NotPrinted()
+    {
+        _settings.WebTools = true;
+        Assert.Equal(PdfText.UrlIsPdf("https://example.com/paper.pdf"), await Tool().InvokeAsync(Args(("url", "https://example.com/paper.pdf"))));
+        Assert.Equal("Error: https://example.com/paper.pdf is a PDF already; download_file saves it, and web_fetch reads it", PdfText.UrlIsPdf("https://example.com/paper.pdf"));
+        Assert.Empty(_browser.PdfRuns);
+    }
+
     [Fact]
     public void Tool_IsAFileTool_NotForPlanMode_AndQuiet()
     {

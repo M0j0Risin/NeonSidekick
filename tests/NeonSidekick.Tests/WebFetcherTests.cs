@@ -282,17 +282,202 @@ public class WebFetcherTests
     [Fact]
     public async Task Binary_IsRefused_ByType_WithoutReadingTheBody()
     {
-        _http.Map("https://example.com/x.pdf", (_, _) =>
+        _http.Map("https://example.com/x.png", (_, _) =>
         {
-            var response = StubHttpMessageHandler.Bytes(HttpStatusCode.OK, new byte[100], "application/pdf");
+            var response = StubHttpMessageHandler.Bytes(HttpStatusCode.OK, new byte[100], "image/png");
             response.Content.Headers.ContentLength = 1_234_567;
             return Task.FromResult(response);
         });
 
-        var page = await Fetcher().FetchAsync(new Uri("https://example.com/x.pdf"), Options(), CancellationToken.None);
+        var page = await Fetcher().FetchAsync(new Uri("https://example.com/x.png"), Options(), CancellationToken.None);
 
         Assert.Equal(FetchOutcome.Binary, page.Outcome);
-        Assert.Equal("Error: 'https://example.com/x.pdf' is application/pdf (1.2 MB); only web pages and text are readable", page.Error);
+        Assert.Equal("Error: 'https://example.com/x.png' is image/png (1.2 MB); only web pages, PDFs and text are readable", page.Error);
+        Assert.Equal("image/png", page.MediaType);   // the refusal names its type (2026-10-14: convert_to_pdf's probe asks)
+    }
+
+    // ── PDFs (2026-10-14, the PDF plan's phase 2) ───────────────────────────
+
+    private static readonly byte[] PdfBytes = Encoding.ASCII.GetBytes("%PDF-1.7\n% a test\n%%EOF\n");
+
+    private static HttpResponseMessage Pdf(HttpStatusCode status = HttpStatusCode.OK, string mediaType = "application/pdf", byte[]? bytes = null, string? fileName = null)
+    {
+        var response = StubHttpMessageHandler.Bytes(status, bytes ?? PdfBytes, mediaType);
+        if (fileName is not null)
+        {
+            response.Content.Headers.ContentDisposition = new System.Net.Http.Headers.ContentDispositionHeaderValue("attachment") { FileName = fileName };
+        }
+
+        return response;
+    }
+
+    private void PdfPages(params string[] texts)
+    {
+        for (int i = 0; i < texts.Length; i++)
+        {
+            _browser.PdfReadPages.Add(new PdfPageRead(i + 1, texts[i], null, 0, 0));
+        }
+    }
+
+    [Fact]
+    public async Task APdf_IsRead_ItsOutlineLabelsAndPages_UnderTheFilesName()
+    {
+        _http.Map("https://example.com/docs/manual.pdf", (_, _) => Task.FromResult(Pdf()));
+        PdfPages("Intro text", "Body text");
+        _browser.PdfOutline.Add(new PdfOutlineItem("Intro", 1, 1));
+        _browser.PdfLabels.AddRange(["i", "1"]);
+
+        var page = await Fetcher().FetchAsync(new Uri("https://example.com/docs/manual.pdf"), Options(), CancellationToken.None);
+
+        Assert.True(page.Ok, page.Error);
+        Assert.Equal("application/pdf", page.MediaType);
+        Assert.Equal(WebText.PdfEngine, page.Engine);
+        Assert.Equal("manual.pdf", page.Page!.Title);
+        Assert.Equal("Outline:\n- Intro (page 1)\n--- page 1 (printed \"i\") ---\nIntro text\n--- page 2 (printed \"1\") ---\nBody text", page.Page.Markdown);
+        var options = Assert.Single(_browser.PdfReadOptionsSeen);
+        Assert.Equal(WebFetcher.MaxPdfPages, options.MaxPages);
+        Assert.False(options.Pictures);
+        Assert.True(options.Outline && options.Labels);
+        Assert.Empty(_browser.Runs);
+    }
+
+    [Fact]
+    public async Task APdfReadInPart_SaysHowToReadTheRest_AndOneWithNoText_SaysToLook()
+    {
+        _http.Map("https://example.com/long.pdf", (_, _) => Task.FromResult(Pdf()));
+        PdfPages("one", "two");
+        _browser.PdfReadCount = 120;
+
+        var page = await Fetcher().FetchAsync(new Uri("https://example.com/long.pdf"), Options(), CancellationToken.None);
+
+        Assert.EndsWith(WebText.PdfMore(WebFetcher.MaxPdfPages, 120), page.Page!.Markdown, StringComparison.Ordinal);   // the first 40 read
+        Assert.Equal("(pages 1–2 of 120; for the rest, save it with download_file and read it with read_pdf, pages \"3-\")", WebText.PdfMore(2, 120));
+
+        _browser.PdfReadPages.Clear();
+        _browser.PdfReadCount = null;
+        PdfPages("", "");
+        _http.Map("https://example.com/scan.pdf", (_, _) => Task.FromResult(Pdf()));
+        var scan = await Fetcher().FetchAsync(new Uri("https://example.com/scan.pdf"), Options(), CancellationToken.None);
+        Assert.EndsWith(WebText.PdfNoText, scan.Page!.Markdown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task APdf_IsPagedFromTheCache_OneReadForAllItsWindows()
+    {
+        _http.Map("https://example.com/big.pdf", (_, _) => Task.FromResult(Pdf()));
+        PdfPages(new string('a', 30_000), new string('b', 30_000));
+        var web = new WebAccess(new HttpClient(_http), _browser, TimeProvider.System, (host, _) => Task.FromResult(_dns.TryGetValue(host, out var a) ? a : []));
+        var tool = new NeonSidekick.Llm.Tools.WebFetchTool(web, () => new NeonSidekick.Settings.AppSettingsData());
+
+        string first = await tool.FetchAsync("https://example.com/big.pdf", null, CancellationToken.None);
+        string second = await tool.FetchAsync("https://example.com/big.pdf", 32_000, CancellationToken.None);
+
+        Assert.StartsWith("big.pdf — https://example.com/big.pdf (chars 1–32,000 of ", first, StringComparison.Ordinal);
+        Assert.Contains(WebText.PdfEngine, first.Split('\n')[0], StringComparison.Ordinal);
+        Assert.StartsWith("big.pdf — https://example.com/big.pdf (chars 32,001–", second, StringComparison.Ordinal);
+        Assert.Single(_browser.PdfReads);
+    }
+
+    [Fact]
+    public async Task APdfWithNoBrowser_OverTheCap_OrNotAPdf_IsRefused()
+    {
+        _http.Map("https://example.com/nobrowser.pdf", (_, _) => Task.FromResult(Pdf()));
+        _browser.Executable = null;
+        var none = await Fetcher().FetchAsync(new Uri("https://example.com/nobrowser.pdf"), Options(), CancellationToken.None);
+        Assert.Equal(FetchOutcome.Binary, none.Outcome);
+        Assert.Equal(WebText.PdfNoBrowser("https://example.com/nobrowser.pdf", PdfBytes.Length), none.Error);
+
+        _browser.Executable = "msedge";
+        _http.Map("https://example.com/huge.pdf", (_, _) =>
+        {
+            var response = Pdf();
+            response.Content.Headers.ContentLength = 40_000_000;
+            return Task.FromResult(response);
+        });
+        var huge = await Fetcher().FetchAsync(new Uri("https://example.com/huge.pdf"), Options(), CancellationToken.None);
+        Assert.Equal(FetchOutcome.TooBig, huge.Outcome);
+        Assert.Equal("Error: 'https://example.com/huge.pdf' is a PDF of 40 MB, over the 33.6 MB a read takes; download_file saves it", huge.Error);
+
+        // Bytes of no type under a .pdf name are read when they are a PDF, refused when they are not.
+        _http.Map("https://example.com/get/report.pdf", (_, _) => Task.FromResult(Pdf(mediaType: "application/octet-stream")));
+        _http.Map("https://example.com/get/fake.pdf", (_, _) => Task.FromResult(Pdf(mediaType: "application/octet-stream", bytes: "not a pdf"u8.ToArray())));
+        _http.Map("https://example.com/download", (_, _) => Task.FromResult(Pdf(mediaType: "application/octet-stream", fileName: "named.pdf")));
+        PdfPages("text");
+        Assert.True((await Fetcher().FetchAsync(new Uri("https://example.com/get/report.pdf"), Options(), CancellationToken.None)).Ok);
+        Assert.Equal("named.pdf", (await Fetcher().FetchAsync(new Uri("https://example.com/download"), Options(), CancellationToken.None)).Page!.Title);
+        var fake = await Fetcher().FetchAsync(new Uri("https://example.com/get/fake.pdf"), Options(), CancellationToken.None);
+        Assert.Equal(FetchOutcome.Binary, fake.Outcome);
+    }
+
+    [Fact]
+    public async Task APdfAt404_IsAFailedFetch_AndAt403ABlockedOne()
+    {
+        _http.Map("https://example.com/gone.pdf", (_, _) => Task.FromResult(Pdf(HttpStatusCode.NotFound)));
+        _http.Map("https://example.com/locked.pdf", (_, _) => Task.FromResult(Pdf(HttpStatusCode.Forbidden)));
+
+        var gone = await Fetcher().FetchAsync(new Uri("https://example.com/gone.pdf"), Options(FetchEngine.HttpClient), CancellationToken.None);
+        var blocked = await Fetcher().FetchAsync(new Uri("https://example.com/locked.pdf"), Options(FetchEngine.HttpClient), CancellationToken.None);
+
+        Assert.Equal(FetchOutcome.Failed, gone.Outcome);
+        Assert.Contains("HTTP 404", gone.Error, StringComparison.Ordinal);
+        Assert.Equal(FetchOutcome.Blocked, blocked.Outcome);
+        Assert.Empty(_browser.PdfReads);
+    }
+
+    [Fact]
+    public async Task ALockedPdf_IsAFailedFetch_NamingThePassword()
+    {
+        _http.Map("https://example.com/secret.pdf", (_, _) => Task.FromResult(Pdf()));
+        _browser.PdfLocked = true;
+
+        var page = await Fetcher().FetchAsync(new Uri("https://example.com/secret.pdf"), Options(), CancellationToken.None);
+
+        Assert.Equal(FetchOutcome.Failed, page.Outcome);
+        Assert.Equal("Error: could not fetch 'https://example.com/secret.pdf': the PDF is locked with a password", page.Error);
+    }
+
+    /// <summary>The PDF plan's gap 56: the browser mode reads a .pdf address over HTTP, and an address that names none when the browser made nothing of it.</summary>
+    [Fact]
+    public async Task InTheBrowserMode_APdfGoesOverHttp()
+    {
+        _http.Map("https://example.com/paper.pdf", (_, _) => Task.FromResult(Pdf()));
+        _http.Map("https://example.com/pdf/2401.1", (_, _) => Task.FromResult(Pdf()));
+        PdfPages("Abstract");
+        _browser.Html = null;   // the headless browser downloads a PDF: nothing to read
+
+        var named = await Fetcher().FetchAsync(new Uri("https://example.com/paper.pdf"), Options(FetchEngine.Chromium), CancellationToken.None);
+        Assert.True(named.Ok, named.Error);
+        Assert.Equal(WebText.PdfEngine, named.Engine);
+        Assert.Empty(_browser.Runs);
+
+        var unnamed = await Fetcher().FetchAsync(new Uri("https://example.com/pdf/2401.1"), Options(FetchEngine.Chromium), CancellationToken.None);
+        Assert.True(unnamed.Ok, unnamed.Error);
+        Assert.Equal(WebText.PdfEngine, unnamed.Engine);
+        Assert.Single(_browser.Runs);   // the browser went first, as the mode says, and made nothing
+    }
+
+    [Fact]
+    public async Task InTheBrowserMode_APdfNamedAddressServingAPage_IsTheBrowsers()
+    {
+        _http.Map("https://example.com/landing.pdf", HttpStatusCode.OK, Article, "text/html");
+        _browser.Html = Article;
+
+        var page = await Fetcher().FetchAsync(new Uri("https://example.com/landing.pdf"), Options(FetchEngine.Chromium), CancellationToken.None);
+
+        Assert.True(page.Ok);
+        Assert.Equal(WebText.BrowserEngine, page.Engine);
+    }
+
+    [Fact]
+    public async Task ReadPdfFalse_LeavesAPdfUnread_ItsTypeNamed()
+    {
+        _http.Map("https://example.com/x.pdf", (_, _) => Task.FromResult(Pdf()));
+
+        var page = await Fetcher().FetchAsync(new Uri("https://example.com/x.pdf"), Options() with { ReadPdf = false }, CancellationToken.None);
+
+        Assert.Equal(FetchOutcome.Binary, page.Outcome);
+        Assert.True(WebFetcher.IsPdfType(page.MediaType));
+        Assert.Empty(_browser.PdfReads);
     }
 
     [Theory]

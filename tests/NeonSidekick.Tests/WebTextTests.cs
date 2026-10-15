@@ -32,7 +32,7 @@ public class WebTextTests
         Assert.Equal("Error: 'example.com' is on the internet, which Web browser network mode 'lan' keeps off limits", WebText.InternetRefused("example.com"));
         Assert.Equal("Error: 'https://a/' did not answer within 30s", WebText.Timeout("https://a/", TimeSpan.FromSeconds(30)));
         Assert.Equal("Error: 'https://a/' refused the request (HTTP 403 Forbidden)", WebText.Blocked("https://a/", "HTTP 403 Forbidden"));
-        Assert.Equal("Error: 'https://a/x.pdf' is application/pdf (1.2 MB); only web pages and text are readable", WebText.Binary("https://a/x.pdf", "application/pdf", 1_234_567));
+        Assert.Equal("Error: 'https://a/x.png' is image/png (1.2 MB); only web pages, PDFs and text are readable", WebText.Binary("https://a/x.png", "image/png", 1_234_567));
         Assert.Equal("Error: the headless browser could not load 'https://a/': exit code 1", WebText.BrowserFailed("https://a/", "exit code 1"));
         Assert.Equal("Error: could not fetch 'https://a/': No such host is known", WebText.CouldNot("https://a/", "No such host is known"));
         Assert.Equal("Error: offset 50000 is past the end of the page (2,100 characters)", WebText.OffsetPastEnd(50000, 2100));

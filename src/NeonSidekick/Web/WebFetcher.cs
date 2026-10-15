@@ -10,9 +10,11 @@ namespace NeonSidekick.Web;
 /// <summary>
 /// What one fetch is told: the engine (the setting <c>Web browser mode</c>), the browser path, where it may reach (the setting
 /// <c>Web browser network mode</c>), the page it is coming from, and an <c>Accept</c> in place of Chrome's (2026-09-26: the GitHub
-/// API's media types for <c>/skills add</c>; null keeps <see cref="BrowserHeaders.Accept"/>).
+/// API's media types for <c>/skills add</c>; null keeps <see cref="BrowserHeaders.Accept"/>). <see cref="ReadPdf"/> (2026-10-14, the PDF
+/// plan's gaps 15 and 23): a PDF answer is read with pdf.js; false leaves it a refusal that names its media type, for a caller that
+/// only asks what the address is (<c>convert_to_pdf</c>'s bot-check probe).
 /// </summary>
-public sealed record FetchOptions(FetchEngine Engine, string BrowserPath, NetworkReach Reach, Uri? Referer = null, string? Accept = null);
+public sealed record FetchOptions(FetchEngine Engine, string BrowserPath, NetworkReach Reach, Uri? Referer = null, string? Accept = null, bool ReadPdf = true);
 
 /// <summary>
 /// A fetched page or the reason there is none. <see cref="Page"/> is the converted HTML;
@@ -329,7 +331,7 @@ public sealed class WebFetcher
             case FetchEngine.HttpClient:
                 return await PoliteHttpAsync(url, options, cancellationToken).ConfigureAwait(false);
             case FetchEngine.Chromium:
-                return await BrowserAsync(url, options, cancellationToken).ConfigureAwait(false);
+                return await ChromiumFirstAsync(url, options, cancellationToken).ConfigureAwait(false);
         }
 
         var first = await PoliteHttpAsync(url, options, cancellationToken).ConfigureAwait(false);
@@ -659,11 +661,17 @@ public sealed class WebFetcher
             int status = (int)response.StatusCode;
             var contentType = response.Content.Headers.ContentType;
             string mediaType = contentType?.MediaType?.Trim().ToLowerInvariant() ?? "";
+            if (options.ReadPdf && IsPdfAnswer(mediaType, current, response))
+            {
+                return await PdfAsync(url, arrival, status, mediaType, options, watch, cancellationToken).ConfigureAwait(false);
+            }
+
             if (!IsText(mediaType))
             {
                 long size = response.Content.Headers.ContentLength ?? 0;
                 DiagnosticLog.Info(Category, $"GET {current} → {status.ToString(CultureInfo.InvariantCulture)} {mediaType} ({size.ToString(CultureInfo.InvariantCulture)} B), not text.");
-                return FetchResult.Fail(FetchOutcome.Binary, url.AbsoluteUri, WebText.Binary(url.AbsoluteUri, mediaType, size), status);
+                // The media type rides the refusal (2026-10-14): convert_to_pdf's probe asks whether an address is a PDF (ReadPdf false).
+                return FetchResult.Fail(FetchOutcome.Binary, url.AbsoluteUri, WebText.Binary(url.AbsoluteUri, mediaType, size), status) with { MediaType = mediaType };
             }
 
             var (bytes, truncated) = await ReadAsync(response, MaxDownloadBytes, arrival.Budget.Token).ConfigureAwait(false);
@@ -692,6 +700,175 @@ public sealed class WebFetcher
         {
             return Failure(ex, url, current, FetchTimeout);
         }
+    }
+
+    /// <summary>
+    /// The browser mode's fetch (<see cref="FetchEngine.Chromium"/>), with PDFs taken out of it (2026-10-14, the PDF plan's gap 56): headless
+    /// Chromium downloads a PDF rather than showing it, so a page it would read as nothing. An address whose path names a <c>.pdf</c> goes
+    /// over HTTP first and is that answer when it is a PDF (read or refused); an address that names none (<c>/pdf/2401.1</c>, a
+    /// <c>download?id=</c>) goes to the browser as before, and when the browser made nothing of it, or a blank page, it is asked once more
+    /// over HTTP, that answer kept only if it is a PDF. Every other page is the browser's, as the user chose.
+    /// </summary>
+    private async Task<FetchResult> ChromiumFirstAsync(Uri url, FetchOptions options, CancellationToken cancellationToken)
+    {
+        if (options.ReadPdf && Files.PdfFile.IsPdfPath(url.AbsolutePath))
+        {
+            var http = await PoliteHttpAsync(url, options, cancellationToken).ConfigureAwait(false);
+            if (IsPdfType(http.MediaType))
+            {
+                return http;
+            }
+        }
+
+        var rendered = await BrowserAsync(url, options, cancellationToken).ConfigureAwait(false);
+        bool blank = rendered.Ok && (rendered.Page?.Markdown ?? rendered.Text).Trim().Length == 0;
+        if (options.ReadPdf && (rendered.Outcome == FetchOutcome.BrowserFailed || blank))
+        {
+            var again = await PoliteHttpAsync(url, options, cancellationToken).ConfigureAwait(false);
+            if (IsPdfType(again.MediaType))
+            {
+                DiagnosticLog.Info(Category, $"{url}: the headless browser made nothing of it; a PDF over HTTP.");
+                return again;
+            }
+        }
+
+        return rendered;
+    }
+
+    /// <summary>The media types a PDF is served as.</summary>
+    public static bool IsPdfType(string mediaType) => mediaType is "application/pdf" or "application/x-pdf";
+
+    /// <summary>
+    /// Whether an answer is a PDF to read (2026-10-14, the PDF plan's phase 2): served as one, or as bytes of no particular type
+    /// (<c>application/octet-stream</c>) under a <c>.pdf</c> name — the address's or its <c>Content-Disposition</c>'s — the bytes' header
+    /// deciding after. An answer with no type at all stays a page, as before.
+    /// </summary>
+    public static bool IsPdfAnswer(string mediaType, Uri final, HttpResponseMessage response)
+    {
+        ArgumentNullException.ThrowIfNull(final);
+        ArgumentNullException.ThrowIfNull(response);
+        return IsPdfType(mediaType)
+            || (mediaType is "application/octet-stream" or "binary/octet-stream"
+                && (Files.PdfFile.IsPdfPath(final.AbsolutePath) || Files.PdfFile.IsPdfPath(FileNameOf(response))));
+    }
+
+    /// <summary>How many pages a fetch reads of a PDF; the rest are <c>read_pdf</c>'s, through <c>download_file</c>.</summary>
+    public const int MaxPdfPages = 40;
+
+    /// <summary>
+    /// A PDF answer read (2026-10-14, the PDF plan's phase 2 and gaps 54, 55 and 94): a refusal status first (a 404 or a 403 served as a
+    /// PDF is that refusal, as a page's would be, not a "binary"), then the declared size against <see cref="BrowserPdfReader.MaxBytes"/>
+    /// (refused unread), the body under <see cref="DownloadTimeout"/> rather than the headers' <see cref="FetchTimeout"/> (a large PDF on a
+    /// slow link is a download), the header checked (a <c>.pdf</c> name over other bytes is <see cref="FetchOutcome.Binary"/>), and its
+    /// first <see cref="MaxPdfPages"/> pages read by pdf.js in the headless browser — its own network-less profile, under its own limit,
+    /// not this request's — with the outline and the printed labels. The answer is a <see cref="PageText"/> titled with the file's name,
+    /// engine <see cref="WebText.PdfEngine"/>, so <c>web_fetch</c>'s paging and its page cache take it as a page.
+    /// </summary>
+    private async Task<FetchResult> PdfAsync(Uri url, Arrival arrival, int status, string mediaType, FetchOptions options, Stopwatch watch, CancellationToken cancellationToken)
+    {
+        var response = arrival.Response;
+        var current = arrival.Final;
+        if (status >= 400)
+        {
+            string detail = $"HTTP {status.ToString(CultureInfo.InvariantCulture)} {response.ReasonPhrase}".TrimEnd();
+            DiagnosticLog.Info(Category, $"GET {current} → {detail} ({mediaType}).");
+            var retryAfter = status is 429 or 503 ? RetryAfterOf(response.Headers.RetryAfter, _time.GetUtcNow()) : null;
+            return new FetchResult(IsBlockedStatus(status) ? FetchOutcome.Blocked : FetchOutcome.Failed, url.AbsoluteUri, current.AbsoluteUri, status, mediaType, null, "", WebText.HttpEngine, detail, false, retryAfter);
+        }
+
+        long declared = response.Content.Headers.ContentLength ?? 0;
+        if (declared > BrowserPdfReader.MaxBytes)
+        {
+            DiagnosticLog.Info(Category, $"GET {current} → {status.ToString(CultureInfo.InvariantCulture)} {mediaType}, {declared.ToString(CultureInfo.InvariantCulture)} B declared: over a PDF read's cap.");
+            return FetchResult.Fail(FetchOutcome.TooBig, url.AbsoluteUri, WebText.PdfTooBig(url.AbsoluteUri, declared), status) with { MediaType = "application/pdf" };
+        }
+
+        // The hop's budget timed the headers; a PDF's body is a download's, under its own ceiling (its timeout named as such).
+        arrival.Budget.CancelAfter(DownloadTimeout);
+        byte[] bytes;
+        bool truncated;
+        try
+        {
+            (bytes, truncated) = await ReadAsync(response, BrowserPdfReader.MaxBytes, arrival.Budget.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsFetchFailure(ex, cancellationToken))
+        {
+            return Failure(ex, url, current, DownloadTimeout);
+        }
+
+        if (truncated)
+        {
+            return FetchResult.Fail(FetchOutcome.TooBig, url.AbsoluteUri, WebText.PdfTooBig(url.AbsoluteUri, 0), status) with { MediaType = "application/pdf" };
+        }
+
+        if (!Files.PdfFile.HasPdfHeader(bytes))
+        {
+            DiagnosticLog.Info(Category, $"GET {current} → {status.ToString(CultureInfo.InvariantCulture)} {mediaType}, {bytes.Length.ToString(CultureInfo.InvariantCulture)} B with no PDF header.");
+            return FetchResult.Fail(FetchOutcome.Binary, url.AbsoluteUri, WebText.Binary(url.AbsoluteUri, mediaType, bytes.Length), status) with { MediaType = mediaType };
+        }
+
+        if (_browser.Locate(options.BrowserPath) is not { } executable)
+        {
+            return FetchResult.Fail(FetchOutcome.Binary, url.AbsoluteUri, WebText.PdfNoBrowser(url.AbsoluteUri, bytes.Length), status) with { MediaType = "application/pdf" };
+        }
+
+        var read = await _browser.ReadPdfAsync(executable, bytes, new PdfReadOptions(MaxPages: MaxPdfPages, Pictures: false, Outline: true, Labels: true), cancellationToken).ConfigureAwait(false);
+        DiagnosticLog.Info(Category, $"GET {current} → {status.ToString(CultureInfo.InvariantCulture)} a PDF of {bytes.Length.ToString(CultureInfo.InvariantCulture)} B, {read.Pages.Count.ToString(CultureInfo.InvariantCulture)} of {read.PageCount.ToString(CultureInfo.InvariantCulture)} pages read in {watch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)} ms" + (read.Ok ? "." : $": {read.Detail}"));
+        if (read.Locked)
+        {
+            return FetchResult.Fail(FetchOutcome.Failed, url.AbsoluteUri, WebText.PdfLocked, status) with { MediaType = "application/pdf" };
+        }
+
+        if (!read.Ok)
+        {
+            return FetchResult.Fail(FetchOutcome.Failed, url.AbsoluteUri, WebText.PdfUnreadable(read.Detail), status) with { MediaType = "application/pdf" };
+        }
+
+        string name = FileNameOf(response) is { Length: > 0 } given ? given : Uri.UnescapeDataString(current.Segments.LastOrDefault() ?? "").Trim('/');
+        string text = PdfAnswerText(read);
+        return new FetchResult(FetchOutcome.Ok, url.AbsoluteUri, current.AbsoluteUri, status, "application/pdf", new PageText(name.Length > 0 ? name : current.Host, text), text, WebText.PdfEngine, "", false);
+    }
+
+    /// <summary>A PDF read as a fetch's text: the outline's two levels, the pages under their headings (labels beside), and what was left.</summary>
+    public static string PdfAnswerText(PdfRead read)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        var sb = new System.Text.StringBuilder();
+        if (read.Outline is { Count: > 0 } outline)
+        {
+            sb.Append(Pdf.PdfText.OutlineHeading);
+            foreach (var item in outline.Take(Llm.Tools.ReadPdfTool.MaxOutlineLines))
+            {
+                sb.Append('\n').Append(Pdf.PdfText.OutlineLine(item.Title, item.Level, item.Page));
+            }
+
+            if (outline.Count > Llm.Tools.ReadPdfTool.MaxOutlineLines)
+            {
+                sb.Append('\n').Append(Pdf.PdfText.OutlineMore);
+            }
+        }
+
+        foreach (var page in read.Pages)
+        {
+            string? label = read.Labels is { } labels && page.Number <= labels.Count ? labels[page.Number - 1] : null;
+            sb.Append(sb.Length > 0 ? "\n" : "").Append(Pdf.PdfText.PageHeading(page.Number, label));
+            if (page.Text.Length > 0)
+            {
+                sb.Append('\n').Append(page.Text);
+            }
+        }
+
+        if (read.Pages.All(p => p.Text.Length == 0))
+        {
+            sb.Append('\n').Append(WebText.PdfNoText);
+        }
+
+        if (read.Pages.Count < read.PageCount)
+        {
+            sb.Append('\n').Append(WebText.PdfMore(read.Pages.Count, read.PageCount));
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>
@@ -1067,6 +1244,25 @@ public sealed class WebFetcher
         if (await LeftTheReachAsync(url, solved.FinalUrl, options, cancellationToken).ConfigureAwait(false))
         {
             return refused with { Detail = refused.Detail + BotCheckText.LeftTheReach(solved.FinalUrl) };
+        }
+
+        // A file past the check (2026-10-14, the PDF plan's gap 22): the window cancels a download during a check (WasFile) and shows a
+        // PDF in a viewer whose page reads as nothing, so with the cookies it earned in the jar the address is asked once more over HTTP,
+        // where a PDF is read; a file still unread names download_file.
+        var final = Uri.TryCreate(solved.FinalUrl, UriKind.Absolute, out var ended) && IsHttp(ended) ? ended : url;
+        if (solved.WasFile || HtmlToMarkdown.Convert(solved.Html ?? "", final).Markdown.Trim().Length == 0)
+        {
+            Adopt(solved.Cookies, solved.Identity, final);
+            var again = await PoliteHttpAsync(url, options, cancellationToken).ConfigureAwait(false);
+            if (again.Ok)
+            {
+                return again;
+            }
+
+            if (solved.WasFile)
+            {
+                return refused with { Detail = refused.Detail + WebText.FileAfterBotCheck };
+            }
         }
 
         return FromWindow(url, solved);

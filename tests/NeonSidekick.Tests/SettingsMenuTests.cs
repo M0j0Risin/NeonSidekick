@@ -1453,7 +1453,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("must be 1 to 20 results", SettingsMenu.WebSearchMaxResultsRangeError);
         Assert.Equal("auto    [#9A8BB8]the HTTP client, then a headless browser when a page is blocked or empty[/]", SettingsMenu.BrowserModeLabel("auto"));
         Assert.Equal("http    [#9A8BB8]the HTTP client alone, with browser-like headers[/]", SettingsMenu.BrowserModeLabel("http"));
-        Assert.Equal("browser [#9A8BB8]a headless Edge, Chrome or Brave for every page[/]", SettingsMenu.BrowserModeLabel("browser"));
+        Assert.Equal("browser [#9A8BB8]a headless Edge, Chrome or Brave for every page; a PDF over HTTP[/]", SettingsMenu.BrowserModeLabel("browser"));
         Assert.Equal("Web browser path: (auto: msedge.exe)", SettingsMenu.SavedNotice(SettingsField.WebBrowserPath, data, _settings.ProfileDirectory, FakeBrowserPath));
         Assert.True(SettingsMenu.IsToggle(SettingsField.ShowImageThumbnails));
         Assert.Equal("Show image thumbnails", SettingsMenu.FieldName(SettingsField.ShowImageThumbnails));

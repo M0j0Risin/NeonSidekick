@@ -12,7 +12,7 @@ public enum FetchEngine
     /// <summary>The HTTP client alone.</summary>
     HttpClient,
 
-    /// <summary>The headless browser for every page.</summary>
+    /// <summary>The headless browser for every page; a PDF over HTTP since 2026-10-14 (headless Chromium downloads one; <c>WebFetcher.ChromiumFirstAsync</c>).</summary>
     Chromium,
 }
 
@@ -81,7 +81,7 @@ public static class BrowserMode
     {
         "auto" => "the HTTP client, then a headless browser when a page is blocked or empty",
         "http" => "the HTTP client alone, with browser-like headers",
-        "browser" => "a headless Edge, Chrome or Brave for every page",
+        "browser" => "a headless Edge, Chrome or Brave for every page; a PDF over HTTP",
         _ => "",
     };
 

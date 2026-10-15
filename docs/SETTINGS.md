@@ -466,7 +466,7 @@ The tools most profiles use, and the pane's own options.
 | Setting | What it does | Default |
 |---|---|---|
 | Web tools | Offers `web_search`, `web_fetch`, `open_url`, `web_links`, `web_save_link` and `download_file`. The link tools read and change the profile's saved links (see [Web](TOOLS.md#web)). | off |
-| Web browser mode | `auto` uses HTTP and falls back to a headless browser for a blocked or empty page; `http` never falls back; `browser` uses the browser for every page. | `auto` |
+| Web browser mode | `auto` uses HTTP and falls back to a headless browser for a blocked or empty page; `http` never falls back; `browser` uses the browser for every page, a PDF excepted (fetched over HTTP). | `auto` |
 | Web browser path | The Chromium-based browser for headless fetches and for making and reading PDFs. Empty finds Edge, Chrome or Brave. | empty (found) |
 | Web browser botcheck window | A bot check the web tools can't pass: `ask` asks, then opens it in the Browser window for you to solve; `automatic` opens it unasked; `off` never does. Windows only. | `ask` |
 | Web browser home page | Where the Browser window's home button and a bare `/browser` go: a web address (`example.com`, `localhost:3000`), or empty for a blank page. Windows only. | empty |

@@ -70,7 +70,7 @@ Under *Web tools*.
 | Tool | Arguments | What it does |
 |---|---|---|
 | `web_search` | `query, max_results?` | Searches the web with *Web search method* (DuckDuckGo or SearXNG): title, URL, snippet. |
-| `web_fetch` | `url, offset?` | A page's readable content as Markdown, 32,000 characters at a time; also plain text, JSON, XML and CSV. |
+| `web_fetch` | `url, offset?` | A page's readable content as Markdown, 32,000 characters at a time; also plain text, JSON, XML and CSV, and a PDF's outline and first 40 pages (see [Reading PDFs](#reading-pdfs)). |
 | `open_url` | `url?, urls?` | Opens up to five links in your browser. Under *Web open links in* `browser-window` it opens one in the [Browser window](#the-browser-window) when the window can take it. |
 | `web_links` | `filter?` | Your saved links (as `/browser list` shows), numbered, at most 100; `filter` keeps those holding all its words. |
 | `web_save_link` | `action, url, name?` | `add`, `remove` or `rename` a saved link. To remove or rename, `url` may be its number in `web_links`; `current` is the Browser window's page. |
@@ -147,6 +147,7 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 * **On a share:** `share`, or a full `\\server\share` path, reads a PDF on an offered UNC share where it is.
 * The text is cached until the file changes, so a second call on the same PDF starts no browser.
 * The browser reads the PDF on a page cut off from the network, in a profile of its own (`%TEMP%\NeonSidekick\browser-pdf`, `$TMPDIR/NeonSidekick/browser-pdf` on a Mac), never the one that keeps the web tools' cookies.
+* **On the web:** `web_fetch` reads a PDF link the same way, its outline and first 40 pages, and pages through it as through a long page; `download_file` then `read_pdf` reads the rest or draws its pages. A PDF up to 32 MB, its download allowed 2 minutes. Under *Web browser mode* `browser` a PDF is still fetched over HTTP: headless Chromium would only download it. Past a bot check, the Browser window hands its cookies over and the PDF is fetched again.
 
 ### Image
 
@@ -677,7 +678,7 @@ Under *Print tools*. `/print` and these tools print on any installed printer (on
 
 `/pdf` and `convert_to_pdf` make a PDF in the working directory.
 
-* **Sources:** Markdown (pictures from the working directory only), text and code, a picture, an HTML file (scripts removed), or a web page (when *Web browser network mode* allows it).
+* **Sources:** Markdown (pictures from the working directory only), text and code, a picture, an HTML file (scripts removed), or a web page (when *Web browser network mode* allows it). A PDF, local or a link, is refused with a pointer to `read_pdf`, `web_fetch` or `download_file`.
 * **Pages:** US Letter by default (`paper` `a4` or `legal`), portrait unless `landscape`; a web page keeps its own layout.
 * **The engine** (*PDF engine*): Edge, Chrome, Brave or (on a Mac) Chromium. On Windows without one, Microsoft Print to PDF draws Markdown, text and pictures in black and white; on a Mac only the browser works.
 * **Output:** beside the source (`example.com-intro.pdf` for a page), or `to`; an existing PDF is replaced only with `overwrite`.

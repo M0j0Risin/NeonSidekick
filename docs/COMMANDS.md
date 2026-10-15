@@ -226,7 +226,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]` | Prints a file (*Print action policy* never applies). On a Mac a PDF prints as it is and Office files are refused. See [Printing](TOOLS.md#printing). |
 | `/print reply [<options>]`, `/print printers` | Prints the last reply, or lists the printers. |
 | `/pdf <file> [to=<path>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF of a file, beside it unless `to=` says (*PDF engine*; on a Mac, a browser). See [Making PDFs](TOOLS.md#making-pdfs). |
-| `/pdf <url> [to=<path>] [overwrite]`, `/pdf reply [<options>]` | Makes a PDF of a web page (*Web browser network mode* applies) or of the last reply. |
+| `/pdf <url> [to=<path>] [overwrite]`, `/pdf reply [<options>]` | Makes a PDF of a web page (*Web browser network mode* applies; a link that is a PDF already is refused) or of the last reply. |
 | `/claude <message>`, `/claude new` | Asks Claude Code and streams its reply, or starts a new Claude Code conversation. See [Claude Code from the chat](#claude-code-from-the-chat). |
 | `/gituser [force]` | Writes *GitLib user email* and *GitLib user name* into the repository's config; `force` replaces a `[user]` already there. Needs *GitLib tools*. |
 | `/shopping` | The shopping list in a pane, in the active store's aisle order; headless, it prints. See [Shopping list](TOOLS.md#shopping-list). |

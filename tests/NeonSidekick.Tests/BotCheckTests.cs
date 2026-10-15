@@ -340,6 +340,40 @@ public sealed class BotCheckTests : IDisposable
         Assert.EndsWith("the Browser window ended on http://nas.home/, which Web browser network mode keeps off limits)", lan.Error, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A PDF past a bot check (2026-10-14, the PDF plan's gap 22): the window cancels a download during a check and hands back its cookies,
+    /// so the address is asked once more over HTTP with them — a PDF read there; a file still refused names download_file.
+    /// </summary>
+    [Fact]
+    public async Task Fetcher_PastBotCheck_AFile_IsFetchedAgainWithTheCookies()
+    {
+        var url = new Uri("https://example.com/paper.pdf");
+        var refused = Refused(403);
+        var options = WebAccess.Options(_settings);
+        string? cookie = null;
+        bool refusing = false;
+        _http.Map("https://example.com/paper.pdf", (r, _) =>
+        {
+            cookie = _jar.GetCookieHeader(r.RequestUri!);
+            return Task.FromResult(refusing
+                ? Html(HttpStatusCode.Forbidden, "denied")
+                : StubHttpMessageHandler.Bytes(HttpStatusCode.OK, Encoding.ASCII.GetBytes("%PDF-1.7\n%%EOF\n"), "application/pdf"));
+        });
+        _browser.PdfReadPages.Add(new PdfPageRead(1, "Abstract", null, 0, 0));
+        _answer = r => FakeBrowserWindow.Cleared(r, null) with { WasFile = true };   // its clearance cookie for the host
+
+        var read = await _web.Fetcher.PastBotCheckAsync(url, refused, options, Solve, BotCheckUse.Fetch, CancellationToken.None);
+
+        Assert.True(read.Ok, read.Error);
+        Assert.Equal(WebText.PdfEngine, read.Engine);
+        Assert.Contains("cf_clearance=solved", cookie, StringComparison.Ordinal);
+
+        refusing = true;
+        var still = await _web.Fetcher.PastBotCheckAsync(url, refused, options, Solve, BotCheckUse.Fetch, CancellationToken.None);
+        Assert.False(still.Ok);
+        Assert.EndsWith(WebText.FileAfterBotCheck + ")", still.Error, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Download_ReadsTheRetryAfter()
     {

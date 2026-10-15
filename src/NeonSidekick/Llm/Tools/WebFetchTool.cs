@@ -9,7 +9,9 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>web_fetch(url, offset?)</c>: a web page as light Markdown (<see cref="HtmlToMarkdown"/>),
 /// <see cref="MaxChars"/> characters at a time — <c>offset</c> continues a long one, the page
 /// served from <see cref="PageCache"/> so paging never downloads twice. Plain text, JSON, XML and
-/// CSV come back as they are; a PDF or a picture is an error. The result starts with a header line
+/// CSV come back as they are; a picture is an error. A PDF (2026-10-14, the PDF plan's phase 2) is read by pdf.js
+/// (<see cref="WebFetcher.PdfAnswerText"/>): its outline and its first pages, the rest through <c>download_file</c> and <c>read_pdf</c>.
+/// The result starts with a header line
 /// naming the title, the final URL, the window and the engine, so the transcript's one-line note
 /// reads <c>Example Domain — https://example.com/ (chars 1–2,100 of 2,100, http)</c>.
 /// <para>
@@ -55,7 +57,7 @@ public sealed class WebFetchTool : AIFunction
 
     public override string Description =>
         "Fetches a web page and returns its readable content as Markdown, " + MaxChars.ToString(System.Globalization.CultureInfo.InvariantCulture) + " characters at a time; " +
-        "the header names the offset to continue a long page with. Also reads plain text, JSON, XML and CSV. Use it on a " + WebSearchTool.ToolName + " result or a URL the user gives you.";
+        "the header names the offset to continue a long page with. Also reads plain text, JSON, XML and CSV, and a PDF's first " + WebFetcher.MaxPdfPages.ToString(System.Globalization.CultureInfo.InvariantCulture) + " pages. Use it on a " + WebSearchTool.ToolName + " result or a URL the user gives you.";
 
     public override JsonElement JsonSchema => Schema;
 

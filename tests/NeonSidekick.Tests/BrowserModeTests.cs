@@ -48,7 +48,7 @@ public class BrowserModeTests
 
         Assert.Equal("the HTTP client, then a headless browser when a page is blocked or empty", BrowserMode.Describe("auto"));
         Assert.Equal("the HTTP client alone, with browser-like headers", BrowserMode.Describe("http"));
-        Assert.Equal("a headless Edge, Chrome or Brave for every page", BrowserMode.Describe("browser"));
+        Assert.Equal("a headless Edge, Chrome or Brave for every page; a PDF over HTTP", BrowserMode.Describe("browser"));
         Assert.Equal("", BrowserMode.Describe("edge"));
     }
 

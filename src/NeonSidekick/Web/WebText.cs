@@ -91,7 +91,40 @@ public static class WebText
     public static string InternetRefused(string host) => $"Error: '{host}' is on the internet, which Web browser network mode 'lan' keeps off limits";
     public static string Timeout(string url, TimeSpan after) => $"Error: '{url}' did not answer within {Llm.LlmTimeouts.Format(after)}";
     public static string Blocked(string url, string detail) => $"Error: '{url}' refused the request ({detail})";
-    public static string Binary(string url, string mediaType, long bytes) => $"Error: '{url}' is {mediaType} ({Size(bytes)}); only web pages and text are readable";
+    /// <summary>An answer that is no page, no text and no PDF (a PDF was named among the readable on 2026-10-14, the PDF plan's gap 71). Pinned.</summary>
+    public static string Binary(string url, string mediaType, long bytes) => $"Error: '{url}' is {mediaType} ({Size(bytes)}); only web pages, PDFs and text are readable";
+
+    // ---- a PDF (2026-10-14, the PDF plan's phase 2) ----
+
+    /// <summary>The engine a PDF read names on its header: the HTTP leg's bytes, read by pdf.js.</summary>
+    public const string PdfEngine = "http, pdf.js";
+
+    /// <summary>A PDF with no browser to read it. Pinned.</summary>
+    public static string PdfNoBrowser(string url, long bytes) =>
+        $"Error: '{url}' is a PDF ({Size(bytes)}); reading one needs Edge, Chrome or Brave, and none was found; download_file saves it";
+
+    /// <summary>A PDF over what a read takes, refused unread when the server says so. Pinned.</summary>
+    public static string PdfTooBig(string url, long bytes) =>
+        (bytes > 0 ? $"Error: '{url}' is a PDF of {Size(bytes)}" : $"Error: '{url}' is a PDF")
+        + $", over the {Size(BrowserPdfReader.MaxBytes)} a read takes; download_file saves it";
+
+    /// <summary>A PDF that asks for a password. Pinned.</summary>
+    public const string PdfLocked = "the PDF is locked with a password";
+
+    /// <summary>A PDF pdf.js could not read: the detail after <see cref="CouldNot"/>'s lead-in.</summary>
+    public static string PdfUnreadable(string detail) => "pdf.js could not read the PDF: " + detail.Trim();
+
+    /// <summary>The note under a PDF read in part: its first pages here, the rest through <c>download_file</c> and <c>read_pdf</c>. Pinned.</summary>
+    public static string PdfMore(int read, int pageCount) =>
+        $"(pages 1–{read.ToString(CultureInfo.InvariantCulture)} of {pageCount.ToString(CultureInfo.InvariantCulture)}; for the rest, save it with download_file and read it with read_pdf, pages \"{(read + 1).ToString(CultureInfo.InvariantCulture)}-\")";
+
+    /// <summary>A PDF with no text on the pages read. Pinned.</summary>
+    public const string PdfNoText =
+        "(no text in this PDF: a scan or pictures only; save it with download_file and look at it with read_pdf, pictures: true)";
+
+    /// <summary>A bot check's window ended on a file (a PDF, say) the HTTP client still could not fetch (the PDF plan's gaps 22 and 86). Pinned.</summary>
+    public const string FileAfterBotCheck =
+        "; the check was passed, but it is a file the window would only download: save it with download_file (the cookies it earned go with it); read_pdf reads a PDF";
 
     /// <summary>A download over the cap (2026-09-18): the size when the server declared one, else the cap alone. Pinned.</summary>
     public static string TooBig(string url, long bytes, long cap) =>

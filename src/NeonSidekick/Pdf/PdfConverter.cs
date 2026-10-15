@@ -209,6 +209,13 @@ public sealed class PdfConverter
             return (null, PdfText.PageLayoutFixed);
         }
 
+        // A web address that is a PDF already (2026-10-14, the PDF plan's gaps 15 and 23): headless Chromium would download it, not print
+        // it. A .pdf path says so before any request; the probe below catches the rest by its media type.
+        if (Files.PdfFile.IsPdfPath(url.AbsolutePath))
+        {
+            return (null, PdfText.UrlIsPdf(url.AbsoluteUri));
+        }
+
         var options = WebAccess.Options(effective);
         if (await _fetcher.PreflightAsync(url.Host, options, cancellationToken).ConfigureAwait(false) is { } refused)
         {
@@ -216,10 +223,16 @@ public sealed class PdfConverter
         }
 
         // With someone to ask (2026-10-13), the page as web_fetch gets it first: a bot check a person may solve is the window's to print.
+        // Asked without reading a PDF (2026-10-14): the probe only wants to know what the address is, not a 40-page read.
         BotCheckRequest? gate = null;
         if (_botCheck is not null && BotcheckWindow.Resolve(effective) != BotcheckKind.Disabled)
         {
-            var probe = await _fetcher.FetchAsync(url, options, cancellationToken).ConfigureAwait(false);
+            var probe = await _fetcher.FetchAsync(url, options with { ReadPdf = false }, cancellationToken).ConfigureAwait(false);
+            if (WebFetcher.IsPdfType(probe.MediaType))
+            {
+                return (null, PdfText.UrlIsPdf(url.AbsoluteUri));
+            }
+
             if (BotCheck.Offers(probe))
             {
                 gate = new BotCheckRequest(url, BotCheckUse.Pdf, BotCheck.WhyOf(probe.Detail));
