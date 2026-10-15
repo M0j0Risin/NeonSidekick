@@ -7,7 +7,8 @@ public static class FileToolNames
 {
     /// <summary>
     /// Every file tool, the PDF converter last: fourteen since 2026-10-10, when <c>view_image</c>, <c>image_info</c> and <c>image_edit</c>
-    /// became a group of their own (<see cref="ImageToolNames"/>, the user's ask).
+    /// became a group of their own (<see cref="ImageToolNames"/>, the user's ask); fifteen since 2026-10-14, <c>read_pdf</c> after
+    /// <c>read_file</c> (the PDF plan).
     /// </summary>
     public static readonly string[] All =
     [
@@ -15,6 +16,7 @@ public static class FileToolNames
         SearchFilesTool.ToolName,
         FileInfoTool.ToolName,
         ReadFileTool.ToolName,
+        ReadPdfTool.ToolName,
         WriteFileTool.ToolName,
         PatchFileTool.ToolName,
         CreateDirectoryTool.ToolName,
@@ -27,8 +29,11 @@ public static class FileToolNames
         ConvertToPdfTool.ToolName,
     ];
 
-    /// <summary>The thirteen <c>ChatScreen.FileTools</c> builds without a PDF converter (the tests that build the list alone; 2026-10-03).</summary>
-    public static readonly string[] WithoutPdf = All[..^1];
+    /// <summary>
+    /// The thirteen <c>ChatScreen.FileTools</c> builds without a PDF converter and a PDF reader (the tests that build the list alone;
+    /// 2026-10-03). An explicit list since 2026-10-14 (the PDF plan's gap 33): <c>read_pdf</c> is optional too, and not last.
+    /// </summary>
+    public static readonly string[] WithoutPdf = [.. All.Where(n => n is not ConvertToPdfTool.ToolName and not ReadPdfTool.ToolName)];
 
     /// <summary>The file tools and then the picture tools, as a turn offers both groups (2026-10-10): what the file tools' list was until then, in the new order.</summary>
     public static readonly string[] WithImages = [.. All, .. ImageToolNames.All];

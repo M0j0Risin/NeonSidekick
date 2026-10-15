@@ -69,6 +69,7 @@ module.exports = {
   call,
   run,
   readFile: (path, args) => call("read_file", { path, ...(args || {}) }),
+  readPdf: (path, args) => call("read_pdf", { path, ...(args || {}) }),
   writeFile: (path, content, args) => call("write_file", { path, content, ...(args || {}) }),
   patchFile: (path, args) => call("patch_file", { path, ...(args || {}) }),
   searchFiles: (args) => call("search_files", args || {}),

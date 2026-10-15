@@ -730,7 +730,9 @@ public sealed class SidekickApp
         // The profile's images folder (2026-10-09): ComfyUI's pictures go there, and the picture tools reach it by full path.
         var images = BuildImagesDirectory();
         files.ImagesFolder = () => images.Root;
-        var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings, unc, pdf, images);
+        // read_pdf (2026-10-14, the PDF plan): headless too, through the web tools' browser.
+        var pdfReading = new Pdf.PdfReading(_web.Browser, () => _web.Browser.Locate(EffectiveSettings.WebBrowserPath));
+        var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings, unc, pdf, images, reading: pdfReading);
         // The picture tools (2026-10-10): their own group, Image tools the switch.
         var imageTools = ChatScreen.ImageTools(files, () => EffectiveSettings, images, () => _settings.ProfileSplashDirectory);
         // The app's own manual beside the clock (2026-10-02): it reads documentation only, so headless offers it too.

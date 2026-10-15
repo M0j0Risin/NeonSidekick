@@ -72,13 +72,24 @@ public static class FileText
     public static string Missing(string path) => $"Error: nothing is at '{path}'";
     public static string IsDirectory(string path) => $"Error: '{path}' is a folder, not a file";
     public static string IsAFile(string path) => $"Error: '{path}' is a file, not a folder";
-    /// <summary>A binary file; an image by extension is pointed at <c>view_image</c> (a small model tries <c>read_file</c> on a PNG first).</summary>
-    public static string NotText(string path) => $"Error: '{path}' is not a text file" + (ImageFile.IsImagePath(path) ? ViewImageHint : "");
+    /// <summary>
+    /// A binary file; an image by extension is pointed at <c>view_image</c> (a small model tries <c>read_file</c> on a PNG first), and
+    /// a PDF at <c>read_pdf</c> (2026-10-14, the PDF plan).
+    /// </summary>
+    public static string NotText(string path) =>
+        $"Error: '{path}' is not a text file" + (ImageFile.IsImagePath(path) ? ViewImageHint : PdfFile.IsPdfPath(path) ? ReadPdfHint : "");
 
     /// <summary>What <see cref="NotText"/> adds for an image path. Pinned.</summary>
     public const string ViewImageHint = "; use view_image to look at it";
 
-    public static string NotAnImage(string path) => $"Error: '{path}' could not be read as an image";
+    /// <summary>What <see cref="NotText"/> adds for a PDF (2026-10-14). Pinned.</summary>
+    public const string ReadPdfHint = "; use read_pdf to read its text";
+
+    /// <summary>A file the picture codecs refuse; a PDF is pointed at <c>read_pdf</c> and its page pictures (2026-10-14, the PDF plan's gap 70).</summary>
+    public static string NotAnImage(string path) => $"Error: '{path}' could not be read as an image" + (PdfFile.IsPdfPath(path) ? PdfPicturesHint : "");
+
+    /// <summary>What <see cref="NotAnImage"/> adds for a PDF (2026-10-14). Pinned.</summary>
+    public const string PdfPicturesHint = "; it is a PDF: use read_pdf (pictures: true for its pages)";
     public static string ImageTooBig(string path) => $"Error: '{path}' is over {ImageFile.MaxFileBytes / 1_000_000} MB or {ImageFile.MaxPixels / 1_000_000} megapixels; too large to view";
     public static string NotAnArchive(string path) => $"Error: '{path}' is not a zip archive";
     public static string Exists(string path) => $"Error: '{path}' already exists; call again with overwrite true to replace it";

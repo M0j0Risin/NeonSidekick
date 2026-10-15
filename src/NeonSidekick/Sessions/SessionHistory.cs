@@ -224,6 +224,11 @@ public static class SessionHistory
                 case DataContent data when !keepScreen && ConversationHistory.ScreenPath(data) is { } screenPath:
                     stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = Screen.ScreenText.NotKept(screenPath) });
                     break;
+                // A PDF page's picture (2026-10-14, the PDF plan's gap 21): a line naming the page, never its bytes — the session is
+                // written whole at every save, and the PDF is still on disk for read_pdf to draw again. No keep switch.
+                case DataContent data when ConversationHistory.PdfPage(data) is { } pdfPage:
+                    stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = Pdf.PdfText.PageNotKept(pdfPage.File, pdfPage.Page) });
+                    break;
                 case DataContent data when data.HasTopLevelMediaType("image"):
                     stored.Parts.Add(new StoredPart { Kind = StoredPart.ImageKind, Bytes = Convert.ToBase64String(data.Data.Span), MediaType = data.MediaType, Path = ConversationHistory.PicturePath(data) });
                     break;

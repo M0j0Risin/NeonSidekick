@@ -46,6 +46,10 @@ def read_file(path, **arguments):
     return call("read_file", path=path, **arguments)
 
 
+def read_pdf(path, **arguments):
+    return call("read_pdf", path=path, **arguments)
+
+
 def write_file(path, content, **arguments):
     return call("write_file", path=path, content=content, **arguments)
 

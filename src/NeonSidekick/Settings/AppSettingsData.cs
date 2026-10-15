@@ -1782,7 +1782,8 @@ public sealed class AppSettingsData
     /// The most pictures one <c>view_image</c> call loads (2026-09-19, the user's ask; a constant 4 until
     /// then): <see cref="MinViewImageMaxPerCall"/> to <see cref="MaxViewImageMaxPerCall"/>; the tool's schema
     /// and description quote it, a call over it loads the first that many and names the rest, and the
-    /// tool clamps a hand-edited value. Read at each call, no reconnect. No variable.
+    /// tool clamps a hand-edited value. Since 2026-10-14 also the most pages one <c>read_pdf</c> call with pictures draws
+    /// (the PDF plan's gap 11). Read at each call, no reconnect. No variable.
     /// </summary>
     public int FileViewImageMaxPerCall { get; set; } = DefaultViewImageMaxPerCall;
 
@@ -2632,7 +2633,8 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// The Chromium executable the headless leg runs, or empty to find Edge, Chrome or Brave in their
-    /// standard folders (<see cref="Web.HeadlessBrowser.Candidates"/>). No variable.
+    /// standard folders (<see cref="Web.HeadlessBrowser.Candidates"/>); the same browser makes PDFs and, since 2026-10-14,
+    /// reads them (<c>read_pdf</c>, the PDF plan). No variable.
     /// </summary>
     public string WebBrowserPath { get; set; } = "";
 

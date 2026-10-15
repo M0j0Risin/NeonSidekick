@@ -20,6 +20,13 @@ public sealed record ImageAttachment(string Path, byte[] Bytes, string MediaType
     /// line naming it unless <c>Screen capture keep in sessions</c> is on (<c>SessionHistory</c>).
     /// </summary>
     public bool Screen { get; init; }
+
+    /// <summary>
+    /// A PDF page's picture drawn by <c>read_pdf</c> (2026-10-14, the PDF plan's gaps 21 and 32): the PDF and the page, <c>report.pdf#3</c>.
+    /// Such a picture has no file (<see cref="Path"/> empty); its history part is marked so a stored session keeps a line naming the
+    /// page instead of its bytes, and a picture taken out of a request names the page (the PDF is still on disk to draw again).
+    /// </summary>
+    public string? PdfPage { get; init; }
 }
 
 /// <summary>

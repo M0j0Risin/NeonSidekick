@@ -83,7 +83,32 @@ public sealed class ConversationHistory
             (part.AdditionalProperties ??= new AdditionalPropertiesDictionary())[ScreenKey] = image.Path;
         }
 
+        if (image.PdfPage is { Length: > 0 } page)
+        {
+            (part.AdditionalProperties ??= new AdditionalPropertiesDictionary())[PdfPageKey] = page;
+        }
+
         return part;
+    }
+
+    /// <summary>
+    /// The additional property a PDF page's picture carries (2026-10-14, the PDF plan's gap 21): <c>report.pdf#3</c>, the file and the page.
+    /// <c>SessionHistory</c> stores a line naming the page instead of its bytes, and <see cref="PictureBudget.LeftOutFor"/> names it.
+    /// </summary>
+    public const string PdfPageKey = "neon.pdfPage";
+
+    /// <summary>The PDF and page when <paramref name="content"/> is a page picture's part (<see cref="PdfPageKey"/>); null otherwise.</summary>
+    public static (string File, int Page)? PdfPage(AIContent content)
+    {
+        if (content is not DataContent || content.AdditionalProperties?.TryGetValue(PdfPageKey, out var value) != true || value is not string { Length: > 0 } text)
+        {
+            return null;
+        }
+
+        int hash = text.LastIndexOf('#');
+        return hash > 0 && int.TryParse(text.AsSpan(hash + 1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int page)
+            ? (text[..hash], page)
+            : (text, 0);
     }
 
     /// <summary>The photo's path when <paramref name="content"/> is a camera picture's part (<see cref="CameraKey"/>); null otherwise.</summary>

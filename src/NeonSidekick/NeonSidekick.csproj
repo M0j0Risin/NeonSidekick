@@ -285,6 +285,10 @@
          browser's blank page; nothing is written to disk. -->
     <EmbeddedResource Include="..\..\assets\pdfjs\pdf.min.mjs" LogicalName="pdfjs/pdf.min.mjs" Visible="false" />
     <EmbeddedResource Include="..\..\assets\pdfjs\pdf.worker.min.mjs" LogicalName="pdfjs/pdf.worker.min.mjs" Visible="false" />
+    <!-- pdf.js's packed CMaps (2026-10-14, the PDF plan's gap 3): the same release's cmaps\*.bcmap, Adobe's cmap-resources under
+         BSD-3-Clause (assets\pdfjs\cmaps\LICENSE), about 1.2 MB. Without them a PDF whose fonts use a predefined CMap (most Chinese,
+         Japanese and Korean ones) read blank; BrowserPdfReader hands them to pdf.js from memory, nothing fetched. -->
+    <EmbeddedResource Include="..\..\assets\pdfjs\cmaps\*.bcmap" LogicalName="pdfjs/cmaps/%(Filename)%(Extension)" Visible="false" />
   </ItemGroup>
 
   <!--

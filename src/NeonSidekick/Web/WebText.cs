@@ -133,11 +133,14 @@ public static class WebText
         }
 
         return (result.Replaced ? "replaced " : "downloaded ") + result.Relative + " (" + Size(result.Bytes) + ", " + (mediaType.Length == 0 ? "(no type)" : mediaType) + ") from " + url
-            + (Files.ImageFile.IsImagePath(result.Relative) ? ViewImageNote : "");
+            + (Files.ImageFile.IsImagePath(result.Relative) ? ViewImageNote : Files.PdfFile.IsPdfPath(result.Relative) ? ReadPdfNote : "");
     }
 
     /// <summary>What a downloaded picture's sentence ends with. Pinned.</summary>
     public const string ViewImageNote = "; view_image shows it";
+
+    /// <summary>What a downloaded PDF's sentence ends with (2026-10-14, the PDF plan's gap 16). Pinned.</summary>
+    public const string ReadPdfNote = "; read_pdf reads it";
 
     // ---- open_url ----
 

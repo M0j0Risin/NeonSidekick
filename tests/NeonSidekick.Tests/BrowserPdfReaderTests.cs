@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using NeonSidekick.Tests.Fakes;
 using NeonSidekick.Web;
 
 namespace NeonSidekick.Tests;
@@ -108,5 +109,89 @@ public sealed class BrowserPdfReaderTests
         var notPdf = await browser.ReadPdfAsync(executable, Encoding.ASCII.GetBytes("hello"), PdfReadOptions.Default, CancellationToken.None);
         Assert.False(notPdf.Ok);
         Assert.StartsWith("not a PDF pdf.js can open: ", notPdf.Detail, StringComparison.Ordinal);
+    }
+
+    private static HeadlessBrowser LiveBrowser(out string? executable)
+    {
+        var browser = new HeadlessBrowser(Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", "pdf-" + Guid.NewGuid().ToString("N")));
+        executable = browser.Locate("");
+        return browser;
+    }
+
+    /// <summary>
+    /// The PDF plan's gaps 44, 91, 92 and 94 on the machine's own browser (2026-10-14): exactly the pages asked, a picture of only the one
+    /// asked, the outline's two levels with their pages, the printed labels, and a page past the end left out.
+    /// </summary>
+    [WindowsFact]
+    public async Task TheMachinesBrowser_ReadsTheAskedPages_TheOutline_AndTheLabels()
+    {
+        var browser = LiveBrowser(out string? executable);
+        if (executable is null)
+        {
+            return;   // no browser installed: nothing to prove here
+        }
+
+        var read = await browser.ReadPdfAsync(executable, TestPdfs.WithOutlineAndLabels(), new PdfReadOptions(MaxSide: 400, Pages: [2, 3, 7], PicturePages: [3], Outline: true, Labels: true), CancellationToken.None);
+
+        Assert.True(read.Ok, read.Detail);
+        Assert.Equal(3, read.PageCount);
+        Assert.Equal("", read.Detail);
+        Assert.Equal([2, 3], read.Pages.Select(p => p.Number));
+        Assert.Equal(["two", "three"], read.Pages.Select(p => p.Text));
+        Assert.Null(read.Pages[0].Png);
+        Assert.NotNull(read.Pages[1].Png);
+        Assert.Equal([new PdfOutlineItem("Front", 1, 1), new PdfOutlineItem("Preface", 2, 2), new PdfOutlineItem("Body", 1, 3)], read.Outline!);
+        Assert.Equal(["i", "ii", "1"], read.Labels!);
+
+        var none = await browser.ReadPdfAsync(executable, TestPdfs.WithOutlineAndLabels(), new PdfReadOptions(Pages: [9]), CancellationToken.None);
+        Assert.True(none.Ok, none.Detail);
+        Assert.Equal(3, none.PageCount);
+        Assert.Empty(none.Pages);
+        Assert.Null(none.Outline);
+    }
+
+    /// <summary>The PDF plan's gap 2 (2026-10-14): a file that asks for a password is <see cref="PdfRead.Locked"/>, not a raw error.</summary>
+    [WindowsFact]
+    public async Task TheMachinesBrowser_SaysALockedPdfIsLocked()
+    {
+        var browser = LiveBrowser(out string? executable);
+        if (executable is null)
+        {
+            return;
+        }
+
+        var read = await browser.ReadPdfAsync(executable, TestPdfs.Locked(), PdfReadOptions.Default, CancellationToken.None);
+        Assert.False(read.Ok);
+        Assert.True(read.Locked, read.Detail);
+        Assert.Equal(HeadlessBrowser.PdfLockedDetail, read.Detail);
+    }
+
+    /// <summary>The PDF plan's gap 3 (2026-10-14): a Japanese page whose font needs a predefined CMap reads its text, from the packed CMaps.</summary>
+    [WindowsFact]
+    public async Task TheMachinesBrowser_ReadsAPageThatNeedsAPredefinedCMap()
+    {
+        Assert.True(BrowserPdfReader.CMapCount > 100, "the packed CMaps are embedded");
+        var browser = LiveBrowser(out string? executable);
+        if (executable is null)
+        {
+            return;
+        }
+
+        var read = await browser.ReadPdfAsync(executable, TestPdfs.Cjk(), new PdfReadOptions(Pictures: false), CancellationToken.None);
+        Assert.True(read.Ok, read.Detail);
+        Assert.Equal(TestPdfs.CjkText, Assert.Single(read.Pages).Text);
+    }
+
+    [Fact]
+    public void TheOutline_AndTheLabels_AreReadFromTheirAnswers()
+    {
+        using var outline = JsonDocument.Parse("""{ "o": [ { "t": "  A   title ", "l": 1, "p": 3 }, { "t": "No page", "l": 2, "p": 0 }, { "t": "", "l": 1, "p": 1 }, { "x": 1 } ] }""");
+        Assert.Equal([new PdfOutlineItem("A title", 1, 3), new PdfOutlineItem("No page", 2, null)], BrowserPdfReader.ReadOutline(outline.RootElement));
+        using var labels = JsonDocument.Parse("""{ "l": [ "i", " ii ", 3 ] }""");
+        Assert.Equal(["i", "ii", ""], BrowserPdfReader.ReadLabels(labels.RootElement));
+        using var locked = JsonDocument.Parse("""{ "locked": true }""");
+        Assert.True(BrowserPdfReader.IsLocked(locked.RootElement));
+        Assert.Contains("PasswordException", BrowserPdfReader.OpenExpression("AA=="), StringComparison.Ordinal);
+        Assert.Contains("CMapReaderFactory: NeonCMaps", BrowserPdfReader.OpenExpression("AA=="), StringComparison.Ordinal);
     }
 }

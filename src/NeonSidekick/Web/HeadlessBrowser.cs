@@ -303,13 +303,29 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     private const string Category = "Web";
     private readonly SemaphoreSlim _oneAtATime = new(1, 1);
     private readonly string _userData;
+    private readonly string _pdfUserData;
+
+    /// <summary>
+    /// The profile folder of the PDF reads (2026-10-14, the PDF plan's gap 58): a folder of their own beside <see cref="UserDataDirectory"/>,
+    /// so a PDF from the web, read by pdf.js in the page, never runs in the profile that holds the headless fetches' clearance cookies.
+    /// Shared between copies of the app as that one is, so <see cref="ProfileInUse(string, int, string?)"/> guards it the same way.
+    /// </summary>
+    public static string PdfUserDataDirectory => Path.Combine(Path.GetTempPath(), "NeonSidekick", "browser-pdf");
 
     /// <param name="userDataDirectory">The profile folder its runs use; null = <see cref="UserDataDirectory"/>, the app's. The smoke
     /// gives one of its own (2026-10-11, code review: on the shared folder a copy of the app reading a page read as the probe's
-    /// browser left running).</param>
+    /// browser left running). The PDF reads use <see cref="PdfUserDataDirectory"/>, or this folder's name with <c>-pdf</c> after it.</param>
     public HeadlessBrowser(string? userDataDirectory = null)
     {
         _userData = userDataDirectory ?? UserDataDirectory;
+        _pdfUserData = userDataDirectory is null ? PdfUserDataDirectory : PdfFolderFor(userDataDirectory);
+    }
+
+    /// <summary>The PDF reads' profile folder beside a given one (a test's, the smoke's): its name with <c>-pdf</c> after it.</summary>
+    public static string PdfFolderFor(string userDataDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(userDataDirectory);
+        return userDataDirectory.TrimEnd('\\', '/') + "-pdf";
     }
 
     /// <summary>The known executables in the order they are tried, under the standard install folders of this machine.</summary>
@@ -535,7 +551,10 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
 
     /// <summary>
     /// The PDF-reading command line after the executable (2026-10-11): headless on a blank page, DevTools on, no GPU (a canvas draws
-    /// the same without one). Pinned.
+    /// the same without one). Since 2026-10-14 (the PDF plan's gaps 58 and 86: <c>web_fetch</c> hands it PDFs from the web, and nothing
+    /// kept the page off the network) no request leaves it: no name resolves, and every connection, a literal address and loopback
+    /// included, goes to a proxy at the discard port that is not there. The PDF comes over DevTools and pdf.js as <c>data:</c> imports,
+    /// neither of which the network carries, and the DevTools socket is the browser's own server, not a request of the page's. Pinned.
     /// </summary>
     public static IReadOnlyList<string> PdfReadArguments(string userDataDirectory)
     {
@@ -546,6 +565,9 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             "--remote-debugging-port=0",
             "--disable-gpu",
             .. CommonFlags,
+            "--host-resolver-rules=MAP * ~NOTFOUND",
+            "--proxy-server=127.0.0.1:9",
+            "--proxy-bypass-list=<-loopback>",
             "--window-size=" + WindowSize,
             "--user-data-dir=" + userDataDirectory,
             "about:blank",
@@ -573,20 +595,26 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             var read = new PdfReadState();
             var blank = new Uri("about:blank");
             string data = Convert.ToBase64String(pdf);
-            var run = await RunProcessAsync(executable, blank, _userData, PdfReadArguments, PdfReadTimeout, (process, userData, token) => WatchPdfAsync(process, userData, library, worker, data, options, read, token), cancellationToken).ConfigureAwait(false);
+            var run = await RunProcessAsync(executable, blank, _pdfUserData, PdfReadArguments, PdfReadTimeout, (process, userData, token) => WatchPdfAsync(process, userData, library, worker, data, options, read, token), cancellationToken).ConfigureAwait(false);
             if (run.StartError is not null)
             {
                 return new PdfRead(false, run.StartError, 0, []);
             }
 
-            DiagnosticLog.Debug(Category, $"{run.Summary}, a PDF of {read.PageCount.ToString(CultureInfo.InvariantCulture)} pages read to page {read.Pages.Count.ToString(CultureInfo.InvariantCulture)}" + (read.Failure is null ? "" : $"; {read.Failure}") + run.StderrTail);
-            string detail = read.Failure ?? (run.TimedOut ? $"stopped after {Llm.LlmTimeouts.Format(PdfReadTimeout)}" : read.Pages.Count < read.PageCount ? $"read the first {read.Pages.Count.ToString(CultureInfo.InvariantCulture)} of {read.PageCount.ToString(CultureInfo.InvariantCulture)} pages" : "");
-            if (read.Pages.Count == 0 && read.Failure is null && !run.TimedOut)
+            DiagnosticLog.Debug(Category, $"{run.Summary}, a PDF of {read.PageCount.ToString(CultureInfo.InvariantCulture)} pages, {read.Pages.Count.ToString(CultureInfo.InvariantCulture)} read" + (read.Failure is null ? "" : $"; {read.Failure}") + run.StderrTail);
+            if (read.Locked)
+            {
+                return new PdfRead(false, PdfLockedDetail, 0, []) { InJob = run.InJob, Locked = true };
+            }
+
+            string detail = read.Failure ?? (run.TimedOut ? $"stopped after {Llm.LlmTimeouts.Format(PdfReadTimeout)}" : ShortDetail(options, read));
+            bool ok = read.Pages.Count > 0 || (read.Opened && read.Wanted == 0 && read.Failure is null && !run.TimedOut);
+            if (!ok && read.Failure is null && !run.TimedOut)
             {
                 detail = await run.FailureAsync("it read no page", cancellationToken).ConfigureAwait(false);
             }
 
-            return new PdfRead(read.Pages.Count > 0, detail, read.PageCount, read.Pages) { InJob = run.InJob };
+            return new PdfRead(ok, detail, read.PageCount, read.Pages) { InJob = run.InJob, Outline = read.Outline, Labels = read.Labels };
         }
         finally
         {
@@ -594,11 +622,34 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         }
     }
 
+    /// <summary>A locked PDF's detail (2026-10-14, the PDF plan's gap 2). Pinned.</summary>
+    public const string PdfLockedDetail = "the PDF asks for a password";
+
+    /// <summary>
+    /// Why a read that ended well read fewer pages than it set out to: the first N of a file's pages under <see cref="PdfReadOptions.MaxPages"/>
+    /// (2026-10-11, pinned), or N of the pages a list asked for (2026-10-14); empty when it read them all.
+    /// </summary>
+    private static string ShortDetail(PdfReadOptions options, PdfReadState read)
+    {
+        string n = read.Pages.Count.ToString(CultureInfo.InvariantCulture);
+        if (options.Pages is null)
+        {
+            return read.Pages.Count < read.PageCount ? $"read the first {n} of {read.PageCount.ToString(CultureInfo.InvariantCulture)} pages" : "";
+        }
+
+        return read.Pages.Count < read.Wanted ? $"read {n} of the {read.Wanted.ToString(CultureInfo.InvariantCulture)} pages asked for" : "";
+    }
+
     /// <summary>What <see cref="WatchPdfAsync"/> read, kept as it goes so a run that times out keeps the pages it got.</summary>
     private sealed class PdfReadState
     {
         public int PageCount;
+        public int Wanted;
+        public bool Opened;
+        public bool Locked;
         public readonly List<PdfPageRead> Pages = [];
+        public IReadOnlyList<PdfOutlineItem>? Outline;
+        public IReadOnlyList<string>? Labels;
         public string? Failure;
     }
 
@@ -621,6 +672,12 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             }
 
             var (_, loadError) = await EvaluateAwaitAsync(client, session, BrowserPdfReader.LoadExpression(library, worker), cancellationToken).ConfigureAwait(false);
+            if (loadError is null && BrowserPdfReader.CMapCount > 0)
+            {
+                // The packed CMaps (2026-10-14, the PDF plan's gap 3), before the file opens: pdf.js asks for one while it builds a font.
+                (_, loadError) = await EvaluateAwaitAsync(client, session, BrowserPdfReader.CMapsExpression(), cancellationToken).ConfigureAwait(false);
+            }
+
             if (loadError is not null)
             {
                 read.Failure = "pdf.js did not load: " + loadError;
@@ -628,16 +685,35 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             else
             {
                 var (opened, openError) = await EvaluateAwaitAsync(client, session, BrowserPdfReader.OpenExpression(pdf), cancellationToken).ConfigureAwait(false);
-                if (opened is not { } doc || !doc.TryGetProperty("n", out var n) || !n.TryGetInt32(out int pages))
+                if (opened is { } locked && BrowserPdfReader.IsLocked(locked))
+                {
+                    read.Locked = true;
+                }
+                else if (opened is not { } doc || !doc.TryGetProperty("n", out var n) || !n.TryGetInt32(out int pages))
                 {
                     read.Failure = "not a PDF pdf.js can open: " + (openError ?? "no page count");
                 }
                 else
                 {
+                    read.Opened = true;
                     read.PageCount = pages;
-                    for (int number = 1; number <= Math.Min(pages, options.MaxPages); number++)
+                    if (options.Outline)
                     {
-                        var (value, pageError) = await EvaluateAwaitAsync(client, session, BrowserPdfReader.PageExpression(number, options.MaxSide, options.Pictures), cancellationToken).ConfigureAwait(false);
+                        var (outline, _) = await EvaluateAwaitAsync(client, session, BrowserPdfReader.OutlineExpression(), cancellationToken).ConfigureAwait(false);
+                        read.Outline = outline is { } o ? BrowserPdfReader.ReadOutline(o) : [];
+                    }
+
+                    if (options.Labels)
+                    {
+                        var (labels, _) = await EvaluateAwaitAsync(client, session, BrowserPdfReader.LabelsExpression(), cancellationToken).ConfigureAwait(false);
+                        read.Labels = labels is { } l ? BrowserPdfReader.ReadLabels(l) : [];
+                    }
+
+                    var wanted = options.PagesOf(pages);
+                    read.Wanted = wanted.Count;
+                    foreach (int number in wanted)
+                    {
+                        var (value, pageError) = await EvaluateAwaitAsync(client, session, BrowserPdfReader.PageExpression(number, options.MaxSide, options.Draws(number)), cancellationToken).ConfigureAwait(false);
                         if (value is not { } answer || BrowserPdfReader.ReadPage(number, answer) is not { } page)
                         {
                             read.Failure = $"page {number.ToString(CultureInfo.InvariantCulture)} could not be read: " + (pageError ?? "no answer");

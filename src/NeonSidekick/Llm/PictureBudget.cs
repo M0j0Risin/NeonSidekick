@@ -44,6 +44,16 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes)
     public static string LeftOut(string? path) =>
         string.IsNullOrWhiteSpace(path) ? "(a picture, taken out to keep the request small)" : "(picture " + path + " taken out to keep the request small)";
 
+    /// <summary>
+    /// What <paramref name="picture"/> becomes when taken out: <see cref="LeftOut"/> naming its path, or for a PDF page's picture
+    /// (2026-10-14, the PDF plan's gap 21) the page and the call that draws it again, so the model never tries <c>view_image</c> on a PDF.
+    /// </summary>
+    public static string LeftOutFor(DataContent picture)
+    {
+        ArgumentNullException.ThrowIfNull(picture);
+        return ConversationHistory.PdfPage(picture) is { } page ? Pdf.PdfText.PageNotKept(page.File, page.Page) : LeftOut(ConversationHistory.PicturePath(picture));
+    }
+
     /// <summary>The bytes a picture costs on the wire: its data as base64, which is what a data URL or a media block carries.</summary>
     public static long WireBytes(DataContent picture)
     {
@@ -137,7 +147,7 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes)
                 if (content is DataContent picture && (pictures > keepPictures || bytes > keepBytes))
                 {
                     long size = WireBytes(picture);
-                    contents.Add(new TextContent(LeftOut(ConversationHistory.PicturePath(picture))));
+                    contents.Add(new TextContent(LeftOutFor(picture)));
                     pictures--;
                     bytes -= size;
                     taken++;

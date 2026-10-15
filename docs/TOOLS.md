@@ -121,6 +121,7 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 | `search_files` | `text?, path?, files?, regex?, context?, output?, order?, limit?, depth?` | Searches text files for a word, phrase or regex. Without `text`, lists a folder, a tree (`depth` 2–4), matching names or the newest files, also in the `images` folder. |
 | `file_info` | `path` | A file's size, time, lines, words, line ending and BOM, or a folder's counts and size; also whether something exists. |
 | `read_file` | `path, start_line?, max_lines?` | Reads a text file or part of it (a negative `start_line` counts from the end). |
+| `read_pdf` | `path, pages?, pictures?, find?, share?` | Reads a PDF's text page by page; `find` lists the pages holding some words, `pictures` sends the pages as pictures. See [Reading PDFs](#reading-pdfs). |
 | `write_file` | `path, content, mode?` | Writes a text file: `create` (default), `overwrite` or `append`. Without a mode it replaces only a file the model read whole, wrote or patched in this conversation, unchanged since. |
 | `patch_file` | `path, old_text, new_text, replace_all?` | Replaces `old_text` once (or everywhere, with `replace_all`), tolerating spacing, indentation and quote differences. |
 | `create_directory` | `path` | Creates a folder and any missing parents. |
@@ -133,6 +134,19 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 | `convert_to_pdf` | `path?, url?, markdown?, title?, to?, overwrite?, landscape?, paper?` | Makes a PDF from one of a file, a web page (needs *Web tools*) or Markdown; see [Making PDFs](#making-pdfs). |
 
 * In the `images` folder, `open` opens only pictures and folders. A `runas` UNC share can't be opened.
+
+#### Reading PDFs
+
+`read_pdf` reads a PDF with pdf.js in Edge, Chrome, Brave or (on a Mac) Chromium, headless; without one it refuses. `read_file` refuses a PDF and points to it.
+
+* **Pages:** physical numbers, `"3"`, `"2-5"`, `"5-"` or `"1,3,7-9"`. Without `pages` it starts at page 1 with the PDF's outline (its bookmarks, two levels). A long PDF comes back in part, the header naming the pages to read next.
+* **Printed numbers:** a page whose printed number differs shows it beside its own, `--- page 14 (printed "xii") ---`.
+* **`find`:** the pages holding every word (any case or accent), up to 20 with a line each; the first search reads the whole text once.
+* **`pictures`:** the pages as pictures, at most *File view image max images* a call, for a scan, a chart or a form; a model that can't see pictures gets nothing from them. A saved session keeps a line naming each page, not the picture.
+* **Limits:** 32 MB; a locked PDF is refused. Chinese, Japanese and Korean text reads with pdf.js's own CMaps, built in.
+* **On a share:** `share`, or a full `\\server\share` path, reads a PDF on an offered UNC share where it is.
+* The text is cached until the file changes, so a second call on the same PDF starts no browser.
+* The browser reads the PDF on a page cut off from the network, in a profile of its own (`%TEMP%\NeonSidekick\browser-pdf`, `$TMPDIR/NeonSidekick/browser-pdf` on a Mac), never the one that keeps the web tools' cookies.
 
 ### Image
 

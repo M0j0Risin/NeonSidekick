@@ -16,6 +16,17 @@ public class SmokeChecksTests
         Assert.Contains(AudioDevice.OutputCount == 0 ? "no output device" : "device", check.Detail);
     }
 
+    /// <summary><c>pdf:cmap</c> (2026-10-14, the PDF plan's gap 87): page 2 of the probe's PDF read alone, its Japanese through the packed CMaps; skipped, passing, with no browser.</summary>
+    [WindowsFact]
+    public void ProbePdfCMap_ReadsPageTwo_ThroughThePackedCMaps()
+    {
+        var check = SmokeChecks.ProbePdfCMap();
+
+        Assert.Equal("pdf:cmap", check.Name);
+        Assert.True(check.Passed, check.Detail);
+        Assert.True(check.Detail.StartsWith("skipped", StringComparison.Ordinal) || check.Detail.Contains("read page 2 of 2, Japanese through", StringComparison.Ordinal), check.Detail);
+    }
+
     [Fact]
     public void ProbeWhisperVad_Passes_WithoutAModel()
     {

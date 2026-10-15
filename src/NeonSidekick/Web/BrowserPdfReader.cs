@@ -8,20 +8,52 @@ namespace NeonSidekick.Web;
 /// <summary>One page of a PDF read through the browser (2026-10-11): its number (1-based), its text, and its picture as PNG bytes (null when not asked for).</summary>
 public sealed record PdfPageRead(int Number, string Text, byte[]? Png, int Width, int Height);
 
+/// <summary>One entry of a PDF's outline (its bookmarks, 2026-10-14): the title, its depth (1 the top), and its physical page (null when its destination could not be followed).</summary>
+public sealed record PdfOutlineItem(string Title, int Level, int? Page);
+
 /// <summary>
-/// What <see cref="IHeadlessBrowser.ReadPdfAsync"/> read (2026-10-11): the pages it got to (at most <see cref="PdfReadOptions.MaxPages"/>),
-/// how many the file has, and why it stopped short (<see cref="Detail"/>, empty when it read them all). Not <see cref="Ok"/> when it read none.
+/// What <see cref="IHeadlessBrowser.ReadPdfAsync"/> read (2026-10-11): the pages it got to (at most <see cref="PdfReadOptions.MaxPages"/>,
+/// or those of <see cref="PdfReadOptions.Pages"/>), how many the file has, and why it stopped short (<see cref="Detail"/>, empty when it
+/// read them all). Not <see cref="Ok"/> when it read none of the pages asked for (a read that asked for none is Ok once the file opened).
 /// </summary>
 public sealed record PdfRead(bool Ok, string Detail, int PageCount, IReadOnlyList<PdfPageRead> Pages)
 {
     /// <summary>Whether the run began in the app's kill-on-close job (Windows), <see cref="BrowserDump.InJob"/>'s.</summary>
     public bool InJob { get; init; }
+
+    /// <summary>Whether the file asks for a password (2026-10-14, the PDF plan's gap 2): pdf.js's <c>PasswordException</c>; nothing read.</summary>
+    public bool Locked { get; init; }
+
+    /// <summary>The outline's first two levels when <see cref="PdfReadOptions.Outline"/> asked (empty for a PDF without one); null when not asked.</summary>
+    public IReadOnlyList<PdfOutlineItem>? Outline { get; init; }
+
+    /// <summary>The printed page labels, one per page, when <see cref="PdfReadOptions.Labels"/> asked (empty for a PDF without any); null when not asked.</summary>
+    public IReadOnlyList<string>? Labels { get; init; }
 }
 
-/// <summary>How a PDF is read: the most pages, the longest side of a page's picture in pixels, and whether pictures are drawn at all.</summary>
-public sealed record PdfReadOptions(int MaxPages = 40, int MaxSide = 1600, bool Pictures = true)
+/// <summary>
+/// How a PDF is read: the most pages, the longest side of a page's picture in pixels, and whether pictures are drawn at all — and since
+/// 2026-10-14 (the PDF plan's gaps 44 and 94) which pages exactly (<see cref="Pages"/>, physical numbers; one past the end is left out),
+/// which of them are drawn (<see cref="PicturePages"/>, null = every page read when <see cref="Pictures"/>), and whether the outline and
+/// the page labels are read in the same run.
+/// </summary>
+public sealed record PdfReadOptions(
+    int MaxPages = 40,
+    int MaxSide = 1600,
+    bool Pictures = true,
+    IReadOnlyList<int>? Pages = null,
+    IReadOnlyList<int>? PicturePages = null,
+    bool Outline = false,
+    bool Labels = false)
 {
     public static readonly PdfReadOptions Default = new();
+
+    /// <summary>The pages to read of a file of <paramref name="pageCount"/>: <see cref="Pages"/> within it, else the first <see cref="MaxPages"/>.</summary>
+    public IReadOnlyList<int> PagesOf(int pageCount) =>
+        Pages is { } asked ? [.. asked.Where(p => p >= 1 && p <= pageCount).Distinct().Order()] : [.. Enumerable.Range(1, Math.Max(0, Math.Min(pageCount, MaxPages)))];
+
+    /// <summary>Whether page <paramref name="number"/> is drawn.</summary>
+    public bool Draws(int number) => PicturePages is { } drawn ? drawn.Contains(number) : Pictures;
 }
 
 /// <summary>
@@ -61,11 +93,127 @@ public static partial class BrowserPdfReader
         "globalThis.pdfjsWorker = await import('data:text/javascript;base64," + workerBase64 + "'); " +
         "globalThis.__neonPdfLib = lib; return { v: lib.version }; })()";
 
-    /// <summary>The expression that opens <paramref name="pdfBase64"/>; it answers <c>{ n: pages }</c>.</summary>
+    /// <summary>The prefix of the packed CMaps' resource names (2026-10-14, the PDF plan's gap 3).</summary>
+    public const string CMapResourcePrefix = "pdfjs/cmaps/";
+
+    private static readonly Lazy<(string Expression, int Count)> s_cmaps = new(BuildCMaps);
+
+    /// <summary>How many packed CMaps this build carries (0 for a build without them, a test assembly's load).</summary>
+    public static int CMapCount => s_cmaps.Value.Count;
+
+    /// <summary>
+    /// The expression that puts every packed CMap into the page (2026-10-14, the PDF plan's gaps 3 and 48): one object of names to base64,
+    /// about 1.6 MB, built once a process from the embedded resources; it answers <c>{ n: count }</c>. Always sent: pdf.js swallows a
+    /// font it cannot build (an <c>ErrorFont</c>, its text blank), so there is no error to retry on, and a lazy load would need the page
+    /// to call back to the app mid-read. <see cref="OpenExpression"/>'s factory answers from it.
+    /// </summary>
+    public static string CMapsExpression() => s_cmaps.Value.Expression;
+
+    private static (string, int) BuildCMaps()
+    {
+        var assembly = typeof(BrowserPdfReader).Assembly;
+        var sb = new StringBuilder("(() => { globalThis.__neonCMaps = {");
+        int count = 0;
+        foreach (string name in assembly.GetManifestResourceNames().Where(n => n.StartsWith(CMapResourcePrefix, StringComparison.Ordinal) && n.EndsWith(".bcmap", StringComparison.Ordinal)).Order(StringComparer.Ordinal))
+        {
+            using var stream = assembly.GetManifestResourceStream(name);
+            if (stream is null)
+            {
+                continue;
+            }
+
+            using var copy = new MemoryStream();
+            stream.CopyTo(copy);
+            // The names are Adobe's (UniJIS-UCS2-H, 78-EUC-H, Adobe-Japan1-UCS2): letters, digits and dashes, quoted as they are; any
+            // other character would need escaping in the literal, so such a name is left out rather than written wrong.
+            string key = name[CMapResourcePrefix.Length..^".bcmap".Length];
+            if (key.Length == 0 || !key.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.'))
+            {
+                continue;
+            }
+
+            sb.Append(count > 0 ? "," : "").Append('\'').Append(key).Append("':'")
+                .Append(Convert.ToBase64String(copy.GetBuffer(), 0, (int)copy.Length)).Append('\'');
+            count++;
+        }
+
+        sb.Append("}; return { n: ").Append(count.ToString(CultureInfo.InvariantCulture)).Append(" }; })()");
+        return (sb.ToString(), count);
+    }
+
+    /// <summary>
+    /// The expression that opens <paramref name="pdfBase64"/>; it answers <c>{ n: pages }</c>, or <c>{ locked: true }</c> for a file that asks
+    /// for a password (2026-10-14, the PDF plan's gap 2: pdf.js's <c>PasswordException</c>, a raw error until then). Since the same day a
+    /// <c>CMapReaderFactory</c> answers pdf.js's CMap requests from <see cref="CMapsExpression"/>'s map (gap 3); <c>useWorkerFetch</c> stays
+    /// off, as it already was with no CMap URL, so the requests come to the page's side, where the map is.
+    /// </summary>
     public static string OpenExpression(string pdfBase64) =>
         "(async () => { const bytes = Uint8Array.from(atob('" + pdfBase64 + "'), c => c.charCodeAt(0)); " +
-        "globalThis.__neonPdf = await globalThis.__neonPdfLib.getDocument({ data: bytes, isEvalSupported: false, useSystemFonts: true }).promise; " +
+        "class NeonCMaps { constructor() {} async fetch({ name }) { const b = (globalThis.__neonCMaps || {})[name]; " +
+        "if (!b) { throw new Error('Unable to load CMap ' + name); } " +
+        "return { cMapData: Uint8Array.from(atob(b), c => c.charCodeAt(0)), isCompressed: true }; } } " +
+        "try { globalThis.__neonPdf = await globalThis.__neonPdfLib.getDocument({ data: bytes, isEvalSupported: false, useSystemFonts: true, useWorkerFetch: false, CMapReaderFactory: NeonCMaps }).promise; } " +
+        "catch (e) { if (e && e.name === 'PasswordException') { return { locked: true }; } throw e; } " +
         "return { n: globalThis.__neonPdf.numPages }; })()";
+
+    /// <summary>Whether an answer of <see cref="OpenExpression"/> says the file is locked.</summary>
+    public static bool IsLocked(JsonElement value) =>
+        value.ValueKind == JsonValueKind.Object && value.TryGetProperty("locked", out var locked) && locked.ValueKind == JsonValueKind.True;
+
+    /// <summary>The most outline entries the page sends back; <c>read_pdf</c> shows fewer (2026-10-14, the PDF plan's gap 91).</summary>
+    public const int MaxOutlineItems = 200;
+
+    /// <summary>
+    /// The expression that reads the outline's first two levels (2026-10-14, the PDF plan's gap 91): each entry's title, depth and physical
+    /// page, a named destination looked up and a page reference turned into its index; one that cannot be followed answers page 0. It
+    /// answers <c>{ o: [{ t, l, p }] }</c>, empty for a PDF without an outline.
+    /// </summary>
+    public static string OutlineExpression() =>
+        "(async () => { const doc = globalThis.__neonPdf; const out = []; " +
+        "const pageOf = async (dest) => { try { const d = typeof dest === 'string' ? await doc.getDestination(dest) : dest; " +
+        "if (!Array.isArray(d) || d.length === 0) { return 0; } const ref = d[0]; " +
+        "return (typeof ref === 'number' ? ref : await doc.getPageIndex(ref)) + 1; } catch (e) { return 0; } }; " +
+        "const walk = async (list, level) => { for (const it of (list || [])) { if (out.length >= " + MaxOutlineItems.ToString(CultureInfo.InvariantCulture) + ") { return; } " +
+        "out.push({ t: String(it.title || ''), l: level, p: await pageOf(it.dest) }); if (level < 2) { await walk(it.items, level + 1); } } }; " +
+        "await walk(await doc.getOutline(), 1); return { o: out }; })()";
+
+    /// <summary>An answer of <see cref="OutlineExpression"/> read; empty for any other shape.</summary>
+    public static IReadOnlyList<PdfOutlineItem> ReadOutline(JsonElement value)
+    {
+        var items = new List<PdfOutlineItem>();
+        if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty("o", out var list) || list.ValueKind != JsonValueKind.Array)
+        {
+            return items;
+        }
+
+        foreach (var item in list.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty("t", out var t) || t.ValueKind != JsonValueKind.String)
+            {
+                continue;
+            }
+
+            int level = item.TryGetProperty("l", out var l) && l.TryGetInt32(out int lv) ? lv : 1;
+            int page = item.TryGetProperty("p", out var p) && p.TryGetInt32(out int pv) ? pv : 0;
+            string title = Spaces().Replace(t.GetString() ?? "", " ").Trim();
+            if (title.Length > 0)
+            {
+                items.Add(new PdfOutlineItem(title, level, page > 0 ? page : null));
+            }
+        }
+
+        return items;
+    }
+
+    /// <summary>The expression that reads the printed page labels (2026-10-14, the PDF plan's gap 92); it answers <c>{ l: [labels] }</c>, empty without them.</summary>
+    public static string LabelsExpression() =>
+        "(async () => { const l = await globalThis.__neonPdf.getPageLabels(); return { l: Array.isArray(l) ? l.map(x => String(x || '')) : [] }; })()";
+
+    /// <summary>An answer of <see cref="LabelsExpression"/> read; empty for any other shape.</summary>
+    public static IReadOnlyList<string> ReadLabels(JsonElement value) =>
+        value.ValueKind == JsonValueKind.Object && value.TryGetProperty("l", out var list) && list.ValueKind == JsonValueKind.Array
+            ? [.. list.EnumerateArray().Select(x => x.ValueKind == JsonValueKind.String ? (x.GetString() ?? "").Trim() : "")]
+            : [];
 
     /// <summary>
     /// The expression that reads page <paramref name="number"/>: its text, and with <paramref name="picture"/> its picture scaled so its

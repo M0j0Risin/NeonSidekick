@@ -685,6 +685,9 @@ internal sealed partial class ChatScreen
     private readonly IReadOnlyList<AIFunction> _imageTools;
     private readonly WebAccess _web;
     private readonly PdfConverter _pdf;
+
+    /// <summary>The PDFs read for the model (2026-10-14, the PDF plan's phase 1): <c>read_pdf</c>'s reader and its page-text cache.</summary>
+    private readonly PdfReading _pdfReading;
     private readonly IReadOnlyList<AIFunction> _webTools;
     private readonly GitAccess _git;
     private readonly IReadOnlyList<AIFunction> _gitTools;
@@ -1186,7 +1189,9 @@ internal sealed partial class ChatScreen
         // The print tools and /print (2026-09-28): the spooler the composition root hands in (none in tests); a model's print waits on the pane under ask.
         _print = new PrintService(printSpooler ?? NullPrintSpooler.Instance, _files, _effective, _time);
         _pdf = new PdfConverter(_web.Browser, _web.Fetcher, _print, _files, _effective, _time, botCheck: SolveBotCheckAsync);
-        _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf, _images, OpenPictureForModel);
+        // The PDF reader (2026-10-14, the PDF plan): read_pdf's texts cached for the run, the web tools' browser reading them.
+        _pdfReading = new PdfReading(_web.Browser, () => _web.Browser.Locate(_effective().WebBrowserPath));
+        _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf, _images, OpenPictureForModel, _pdfReading);
         _imageTools = ImageTools(_files, _effective, _images, () => _settings.ProfileSplashDirectory);
         _timers = new TimerBoard(time, SignalAlert);
         _jobs = new BackgroundJobs(SignalAlert, time);
@@ -5799,18 +5804,29 @@ internal sealed partial class ChatScreen
     /// on 2026-10-01) lets <c>open</c> open on an offered UNC share; null = the working directory alone. <paramref name="pdf"/>
     /// (2026-10-03) adds <c>convert_to_pdf</c> last; null = without it (the tests that count the rest). Sixteen without it from
     /// 2026-10-04 (<c>view_image</c> fifth, <c>image_info</c> and <c>image_edit</c> after <c>open</c>) until 2026-10-10, when the three
-    /// became a group of their own (<see cref="ImageTools"/>, the user's ask): thirteen since.
+    /// became a group of their own (<see cref="ImageTools"/>, the user's ask): thirteen since, fifteen with <c>read_pdf</c>
+    /// (2026-10-14, given <paramref name="reading"/>) and <c>convert_to_pdf</c>.
     /// </summary>
     /// <param name="images">The profile's images folder (2026-10-09): the picture tools read (and <c>image_edit</c> writes) a full path there, and <c>search_files</c> and <c>file_info</c> read one (later that day, the user's call: the model could not list it to find the newest pictures); null = the working directory alone.</param>
     /// <param name="openPicture"><c>open</c>'s picture, opened where a double-click would (2026-10-11, <see cref="OpenTool"/>); null = the <paramref name="openFile"/> like any file (headless).</param>
-    public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null, PdfConverter? pdf = null, WorkingDirectory? images = null, Func<string, string>? openPicture = null)
+    /// <param name="reading">The PDF reader (2026-10-14, the PDF plan's phase 1): adds <c>read_pdf</c> right after <c>read_file</c>; null = without it (the tests that count the rest, as <paramref name="pdf"/>).</param>
+    public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null, PdfConverter? pdf = null, WorkingDirectory? images = null, Func<string, string>? openPicture = null, PdfReading? reading = null)
     {
-        var tools = new List<AIFunction>(14)
+        var tools = new List<AIFunction>(15)
         {
             new GetWorkingDirectoryTool(files, isDefault),
             new SearchFilesTool(files, effective, images),
             new FileInfoTool(files, images),
             new ReadFileTool(files),
+        };
+
+        if (reading is not null)
+        {
+            tools.Add(new ReadPdfTool(files, reading, effective, unc, images));
+        }
+
+        tools.AddRange(
+        [
             new WriteFileTool(files),
             new PatchFileTool(files),
             new CreateDirectoryTool(files),
@@ -5820,7 +5836,7 @@ internal sealed partial class ChatScreen
             new ZipTool(files),
             new UnzipTool(files),
             new OpenTool(files, openFile, unc, effective, openPicture, images),
-        };
+        ]);
 
         if (pdf is not null)
         {
@@ -6425,6 +6441,7 @@ internal sealed partial class ChatScreen
         SearchFilesTool.ToolName,
         FileInfoTool.ToolName,
         ReadFileTool.ToolName,
+        ReadPdfTool.ToolName,
         ViewImageTool.ToolName,
         GenerateImageTool.ToolName,
         SetSplashImageTool.ToolName,

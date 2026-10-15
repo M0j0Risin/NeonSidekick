@@ -73,18 +73,74 @@ public sealed class FakeHeadlessBrowser : IHeadlessBrowser
         return Task.FromResult(new BrowserPdf(true, ""));
     }
 
-    /// <summary>What a PDF read answers (2026-10-11, the shopping list's reference documents): <see cref="PdfReadPages"/>'s pages, the count of them unless <see cref="PdfReadCount"/> says more; every read's size recorded.</summary>
+    /// <summary>
+    /// What a PDF read answers (2026-10-11, the shopping list's reference documents): <see cref="PdfReadPages"/>'s pages, the count of them
+    /// unless <see cref="PdfReadCount"/> says more; every read's size recorded. Since 2026-10-14 (the PDF plan) it honors the options as the
+    /// real reader does — <see cref="PdfReadOptions.Pages"/> and <see cref="PdfReadOptions.PicturePages"/> (a page drawn keeps the picture it
+    /// was given, a page not given is the tiny PNG; one not drawn loses it), the outline and labels when asked (<see cref="PdfOutline"/>, <see cref="PdfLabels"/>),
+    /// a <see cref="PdfLocked"/> file — records each read's options in <see cref="PdfReadOptionsSeen"/>, and stops after
+    /// <see cref="PdfStopAfter"/> pages with <see cref="PdfStopDetail"/>, as a run that timed out keeps what it read.
+    /// </summary>
     public List<PdfPageRead> PdfReadPages { get; } = new();
 
     public int? PdfReadCount { get; set; }
 
     public List<int> PdfReads { get; } = new();
 
+    public List<PdfReadOptions> PdfReadOptionsSeen { get; } = new();
+
+    public List<PdfOutlineItem> PdfOutline { get; } = new();
+
+    public List<string> PdfLabels { get; } = new();
+
+    public bool PdfLocked { get; set; }
+
+    public int? PdfStopAfter { get; set; }
+
+    public string PdfStopDetail { get; set; } = "stopped after 2 min";
+
+    /// <summary>A one-pixel PNG, the picture a drawn page gets when <see cref="PdfReadPages"/> gives none.</summary>
+    public static readonly byte[] TinyPng = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+
     public Task<PdfRead> ReadPdfAsync(string executable, byte[] pdf, PdfReadOptions options, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         PdfReads.Add(pdf.Length);
-        var pages = PdfReadPages.Take(options.MaxPages).ToList();
-        return Task.FromResult(new PdfRead(pages.Count > 0, pages.Count > 0 ? "" : Failure, PdfReadCount ?? PdfReadPages.Count, pages));
+        PdfReadOptionsSeen.Add(options);
+        if (PdfLocked)
+        {
+            return Task.FromResult(new PdfRead(false, HeadlessBrowser.PdfLockedDetail, 0, []) { Locked = true });
+        }
+
+        int count = PdfReadCount ?? PdfReadPages.Count;
+        var wanted = options.PagesOf(count);
+        var pages = new List<PdfPageRead>();
+        string detail = "";
+        foreach (int number in wanted)
+        {
+            if (PdfStopAfter is { } stop && pages.Count >= stop)
+            {
+                detail = PdfStopDetail;
+                break;
+            }
+
+            // A page the test gave is drawn as given (its Png may be null on purpose: a page with no picture); one it did not give is
+            // blank text, and drawn as the tiny PNG.
+            var given = PdfReadPages.FirstOrDefault(p => p.Number == number);
+            var page = given ?? new PdfPageRead(number, "", TinyPng, 1, 1);
+            pages.Add(options.Draws(number) ? page : page with { Png = null });
+        }
+
+        if (detail.Length == 0 && options.Pages is null && pages.Count < count)
+        {
+            detail = $"read the first {pages.Count} of {count} pages";
+        }
+
+        bool ok = pages.Count > 0 || (wanted.Count == 0 && count > 0);
+        return Task.FromResult(new PdfRead(ok, ok ? detail : Failure, count, pages)
+        {
+            Outline = options.Outline ? PdfOutline.ToList() : null,
+            Labels = options.Labels ? PdfLabels.ToList() : null,
+        });
     }
 }

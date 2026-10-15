@@ -1474,6 +1474,12 @@ public sealed class WorkingDirectory
     /// that fit in <see cref="MaxReadChars"/>.
     /// </summary>
 
+    /// <summary>
+    /// A file's identity for a cache without reading it (2026-10-14, <c>read_pdf</c>'s page texts): its full path, length and last write,
+    /// or null when it is outside the sandbox, missing or unreadable. One metadata call, on a UNC share too.
+    /// </summary>
+    public (string Full, long Length, DateTime Written)? TryStamp(string relative) => Stamp(relative);
+
     private (string Full, long Length, DateTime Written)? Stamp(string relative)
     {
         if (Resolve(relative, forWrite: false, out string full) != FileOutcome.Ok)
@@ -3075,8 +3081,13 @@ public sealed class WorkingDirectory
         return bom ? Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3) : Encoding.UTF8.GetString(bytes);
     }
 
+    /// <summary>
+    /// Whether <paramref name="bytes"/> are not text: a NUL in the first <see cref="BinaryProbeBytes"/>, or a PDF's header at the first
+    /// byte (2026-10-14, the PDF plan: a PDF with no early NUL was read as its raw syntax; <see cref="PdfFile.LooksLikePdf"/>, offset 0
+    /// only, so a text that mentions the header further down stays text).
+    /// </summary>
     public static bool LooksBinary(ReadOnlySpan<byte> bytes) =>
-        bytes[..Math.Min(BinaryProbeBytes, bytes.Length)].IndexOf((byte)0) >= 0;
+        bytes[..Math.Min(BinaryProbeBytes, bytes.Length)].IndexOf((byte)0) >= 0 || PdfFile.LooksLikePdf(bytes);
 
     /// <summary>
     /// Whether the file at <paramref name="full"/> would read as text: its first

@@ -170,6 +170,7 @@ public static partial class SmokeChecks
         results.Add(ProbePdfBrowser());
         results.Add(ProbeWebDevTools());
         results.Add(ProbeShoppingPdfRead());
+        results.Add(ProbePdfCMap());
         results.Add(PicturesHere ? ProbeSplash() : NotWindows("splash:decode"));
         results.Add(ProbeWebMarkdown());
         results.Add(ProbeTranscriptMarkdown());
