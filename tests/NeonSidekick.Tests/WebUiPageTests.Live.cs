@@ -6,7 +6,7 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// The full-screen picture following new pictures while it is on the newest (later on 2026-10-15, the user's ask, as the PC's viewer): the strip's
-/// view (the newest at the left) and the transcript's (the newest the last), the live tag and its words, a held view keeping its picture, a step back
+/// view and the transcript's, both newest first with the live slot at the far left (the transcript's ran oldest first until the user's report), the live tag and its words, a held view keeping its picture, a step back
 /// onto the newest following again, a live swap sending the PC no pick and dropping one still pending, the splash's remove-then-append, a reconnect.
 /// </summary>
 public sealed partial class WebUiPageTests
@@ -94,7 +94,7 @@ public sealed partial class WebUiPageTests
     }
 
     [WindowsFact]
-    public async Task TheTranscriptsView_OnTheLast_FollowsAnAppendedPicture_AndHeldStaysPut()
+    public async Task TheTranscriptsView_RunsNewestFirst_LiveAtTheFarLeft_FollowsAnAppendedPicture_AndHeldStaysPut()
     {
         _backend.Snap = new WebSnapshot([PictureEntry(1, 11), PictureEntry(2, 12)], [], State(), WebUiText.Words);
         if (await SignedInAsync("/") is not { } page)
@@ -104,13 +104,16 @@ public sealed partial class WebUiPageTests
 
         await page.WaitAsync("document.querySelectorAll('.entry.pictures .tile').length === 2", "two pictures");
         await page.EvalAsync("document.querySelectorAll('.entry.pictures .tile')[1].click()");
-        await page.WaitAsync(OverlayName + " === 'talk-12.png' && " + LiveShown, "the last, live");
+        await page.WaitAsync(OverlayName + " === 'talk-12.png' && " + LiveShown, "the newest, live");
+        // Newest first, as the strip and the PC's viewer: the newest is the first slot (no ‹), the older one is ›.
+        Assert.True((await page.EvalAsync("document.getElementById('overlay-prev').disabled")).GetBoolean());
+        Assert.False((await page.EvalAsync("document.getElementById('overlay-next').disabled")).GetBoolean());
 
         Publish("append", JsonSerializer.Serialize(PictureEntry(3, 13), WebUiJsonContext.Default.WebEntry));
         await page.WaitAsync(OverlayName + " === 'talk-13.png' && " + LiveShown, "the appended picture shown");
 
-        // Held on an earlier one: an append leaves it, and its › (newer here) enables.
-        await page.EvalAsync("document.getElementById('overlay-prev').click()");
+        // Held on an older one (›): an append leaves it where it is.
+        await page.EvalAsync("document.getElementById('overlay-next').click()");
         await page.WaitAsync(OverlayName + " === 'talk-12.png'", "held on the one before");
         Assert.True(await HiddenAsync(page, "overlay-live"));
         Publish("append", JsonSerializer.Serialize(PictureEntry(4, 14), WebUiJsonContext.Default.WebEntry));

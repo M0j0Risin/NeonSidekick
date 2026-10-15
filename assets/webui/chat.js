@@ -433,8 +433,14 @@ function allPictures() {
   return list;
 }
 
+// The transcript's pictures newest first (later on 2026-10-15, the user's report: the view opened from the transcript ran oldest first, so its
+// live picture sat at the far right while the strip's and the PC's viewer keep it at the far left): ‹ newer, › older, live always the first.
+function transcriptPictures() {
+  return allPictures().filter(p => !p.tooLarge).reverse();
+}
+
 function openOverlay(id) {
-  openOverlayOn(allPictures().filter(p => !p.tooLarge), id, false);
+  openOverlayOn(transcriptPictures(), id, false);
 }
 
 // The overlay over a list of pictures: the transcript's, or the strip's (fromStrip: each step moves the PC's viewer too). Its history entry
@@ -470,18 +476,18 @@ function paintOverlayBar() {
 }
 
 // ── Live (later on 2026-10-15) ──
-// As the PC's viewer: on the newest slot the overlay follows new pictures (the strip's newest is its first, the left; the transcript's its
-// last); a step off it holds the shown picture, and a step back onto it follows again. A live swap sends the PC no pick (its viewer follows on
+// As the PC's viewer: on the newest slot, the first (the far left, in the strip's order and the transcript's alike), the overlay follows new
+// pictures; a step off it holds the shown picture, and a step back onto it follows again. A live swap sends the PC no pick (its viewer follows on
 // its own) and drops a pick still pending from a step, which would move the PC to a picture the page no longer shows.
 function isLive() {
-  return !!shown && (shown.fromStrip ? shown.at === 0 : shown.at === shown.list.length - 1);
+  return !!shown && shown.at === 0;
 }
 
 let liveWait = 0;
 
 function refreshOverlay(waited) {
   if (!shown) return;
-  const list = shown.fromStrip ? (strip ? strip.pictures.filter(p => !p.tooLarge) : []) : allPictures().filter(p => !p.tooLarge);
+  const list = shown.fromStrip ? (strip ? strip.pictures.filter(p => !p.tooLarge) : []) : transcriptPictures();
   if (!list.length) {
     closeOverlay();
     return;
@@ -490,7 +496,7 @@ function refreshOverlay(waited) {
   const live = isLive();
   let at;
   if (live) {
-    at = shown.fromStrip ? 0 : list.length - 1;
+    at = 0;
     // The shown picture removed (the splash cycling: a remove, then an append): a frame's wait, so the append lands first and the one before
     // never flashes.
     if (!waited && !shown.fromStrip && list.findIndex(p => p.id === current.id) < 0) {
