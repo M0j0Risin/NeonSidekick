@@ -17,18 +17,28 @@ public enum FeedKind
     Separator,
     Picture,
 
-    /// <summary>A command from the page at work (later on 2026-10-14): the spinner's label, taken out when it ends.</summary>
-    Working,
+    /// <summary>The model's thinking (2026-10-15), streamed, then folded under its summary.</summary>
+    Thinking,
+
+    /// <summary>A <c>/cmd</c> run's output (2026-10-15): one stream's consecutive lines.</summary>
+    Output,
+
+    /// <summary>A tool run's head (2026-10-15): its summary over the tool lines that carry its seq.</summary>
+    Run,
 }
 
-/// <summary>What changed in the feed: an entry added, text grown on one, a reply ended, or everything cleared.</summary>
+/// <summary>What changed in the feed: an entry added, text grown on one, an entry ended or its text replaced, one removed, or everything cleared.</summary>
 public abstract record FeedChange
 {
     public sealed record Appended(WebEntry Entry) : FeedChange;
 
     public sealed record Grew(long Seq, int At, string Text) : FeedChange;
 
-    public sealed record Ended(long Seq, string Markdown) : FeedChange;
+    /// <summary>An entry is over: a reply's final Markdown, a thinking block's summary, a run or an output ended (2026-10-15: the kind and summary).</summary>
+    public sealed record Ended(long Seq, string Markdown, FeedKind Kind = FeedKind.Assistant, string? Summary = null) : FeedChange;
+
+    /// <summary>A run's summary changed (2026-10-15): a call counted, a result failed.</summary>
+    public sealed record Replaced(long Seq, string Text, bool Failed) : FeedChange;
 
     public sealed record Cleared : FeedChange;
 
@@ -45,6 +55,11 @@ public abstract record FeedChange
 /// A picture entry carries its pictures (later on 2026-10-14): the feed counts the entries holding each picture's id, so the server serves a
 /// picture only while an entry holds it (<see cref="Holds"/>) and the screen hears when the last one goes (<see cref="PictureReleased"/>) — a
 /// trim, a <see cref="Clear"/> (a new conversation, a profile switch, a restore, a rewind) or a <see cref="Remove"/>.
+/// What the terminal shows besides (2026-10-15, the plan's Part B): a reply is begun lazily — its entry pushed at its first words, so no empty
+/// bubble stands before tool lines, and one that said nothing at all ends as <see cref="WebEntry.NoReply"/>; a stretch after a break is
+/// <see cref="WebEntry.Continues"/> once the reply has spoken (the PC's flush-left text); the thinking streams into an entry of its own, folded
+/// under <c>ThinkingFoldText</c>'s summary when anything else is written; a <c>/cmd</c> run's lines group per stream; and while
+/// <see cref="ToolKeep"/> is above 0 the tool lines gather under a run's head whose summary follows the renderer's tally.
 /// </summary>
 public sealed class TranscriptFeed
 {
@@ -57,12 +72,21 @@ public sealed class TranscriptFeed
     /// <summary>The longest tool result line kept.</summary>
     public const int MaxResultChars = 300;
 
+    /// <summary>The most characters one thinking block keeps (2026-10-15); past it the block ends with "…" and grows no more.</summary>
+    public const int MaxThinkingChars = 64_000;
+
     private readonly object _gate = new();
     private readonly LinkedList<Entry> _entries = new();
     private long _next = 1;
     private long _chars;
-    private Entry? _open;
+    private Entry? _open;   // the entry growing now: a reply's stretch, a thinking block, or a stream of output
     private string? _replyGlyph;   // the reply's glyph, kept for its text after a tool line or a notice
+    private bool _replyOpen;   // Begin was called and End not yet
+    private bool _replyWrote;   // anything was written since Begin
+    private bool _replySpoke;   // the reply's own text was written since Begin
+    private Entry? _run;   // the open tool run's head
+    private string _runSummary = "";   // the renderer's tally, held for the next run when none is open
+    private bool _runFailed;
     private readonly Dictionary<int, int> _held = [];   // a picture's id → the entries holding it
     private readonly List<int> _released = [];   // ids whose last entry went, raised outside the lock
 
@@ -71,6 +95,12 @@ public sealed class TranscriptFeed
 
     /// <summary>A picture's last entry went (its id); raised on the writing task, outside the feed's lock.</summary>
     public event Action<int>? PictureReleased;
+
+    /// <summary>
+    /// How many units of a tool run stay while it runs (2026-10-15, the screen's <c>Tool collapse count</c>, read on the writing task as a run
+    /// opens): above 0 the tool lines gather under a run's head, 0 (the default) leaves them flat.
+    /// </summary>
+    public Func<int>? ToolKeep { get; set; }
 
     /// <summary>Whether an entry kept now holds picture <paramref name="id"/> (any thread: the server asks before it serves one).</summary>
     public bool Holds(int id)
@@ -93,8 +123,12 @@ public sealed class TranscriptFeed
         }
     }
 
-    /// <summary>A whole entry of <paramref name="kind"/>; a reply still open is ended first.</summary>
-    public long Add(FeedKind kind, string text, string? glyph = null, bool failed = false, IReadOnlyList<WebPicture>? pictures = null)
+    /// <summary>
+    /// A whole entry of <paramref name="kind"/>; whatever grows now is ended first. A tool line (<see cref="FeedKind.Tool"/>,
+    /// <see cref="FeedKind.ToolResult"/>) joins the open run, opening one while <see cref="ToolKeep"/> is above 0; any other kind ends the run.
+    /// <paramref name="joins"/> marks a tool line that completes the call before it (one unit); <paramref name="diff"/> is an edit's rows.
+    /// </summary>
+    public long Add(FeedKind kind, string text, string? glyph = null, bool failed = false, IReadOnlyList<WebPicture>? pictures = null, bool joins = false, WebDiff? diff = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         if (kind == FeedKind.ToolResult && text.Length > MaxResultChars)
@@ -103,17 +137,36 @@ public sealed class TranscriptFeed
         }
 
         WebEntry added;
-        FeedChange? ended;
+        var changes = new List<FeedChange>(3);
         lock (_gate)
         {
-            ended = CloseOpen();
+            Add(changes, CloseOpen());
+            bool tool = kind is FeedKind.Tool or FeedKind.ToolResult;
+            if (!tool)
+            {
+                Add(changes, EndRunLocked());
+            }
+            else if (_run is null && ToolKeep?.Invoke() is > 0 and int keep)
+            {
+                _run = Push(FeedKind.Run, _runSummary, null, _runFailed);
+                _run.Keep = keep;
+                changes.Add(new FeedChange.Appended(_run.ToWeb(null)));
+            }
+
             var entry = Push(kind, text, glyph, failed, pictures is { Count: > 0 } ? pictures : null);
+            if (tool && _run is { } run)
+            {
+                entry.Run = run.Seq;
+                entry.Joins = joins;
+            }
+
+            entry.Diff = diff;
+            _replyWrote |= _replyOpen;
             added = entry.ToWeb(null);
         }
 
-        Raise(ended);
-        Raise(new FeedChange.Appended(added));
-        RaiseReleased();
+        changes.Add(new FeedChange.Appended(added));
+        RaiseAll(changes);
         return added.Seq;
     }
 
@@ -143,26 +196,30 @@ public sealed class TranscriptFeed
         return true;
     }
 
-    /// <summary>A reply starts: an entry that <see cref="Append"/> grows until <see cref="End"/>.</summary>
-    public long Begin(string? glyph)
+    /// <summary>
+    /// A reply starts (2026-10-15: lazily — nothing is pushed until its first words, so a reply that only calls tools leaves no empty entry):
+    /// whatever grows now ends, and the run with it.
+    /// </summary>
+    public void Begin(string? glyph)
     {
-        WebEntry added;
-        FeedChange? ended;
+        var changes = new List<FeedChange>(2);
         lock (_gate)
         {
-            ended = CloseOpen();
+            Add(changes, CloseOpen());
+            Add(changes, EndRunLocked());
             _replyGlyph = glyph;
-            _open = Push(FeedKind.Assistant, "", glyph, failed: false);
-            added = _open.ToWeb(null);
+            _replyOpen = true;
+            _replyWrote = false;
+            _replySpoke = false;
         }
 
-        Raise(ended);
-        Raise(new FeedChange.Appended(added));
-        RaiseReleased();
-        return added.Seq;
+        RaiseAll(changes);
     }
 
-    /// <summary>Text for the reply streaming now; a reply is begun when none is open (text written with no begin).</summary>
+    /// <summary>
+    /// Text for the reply streaming now. A new stretch (after a tool line, a thinking block, a notice, or with no <see cref="Begin"/>) starts at
+    /// its first non-blank text, its leading blanks dropped as the PC drops them, and is <see cref="WebEntry.Continues"/> once the reply has spoken.
+    /// </summary>
     public void Append(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -171,14 +228,22 @@ public sealed class TranscriptFeed
             return;
         }
 
-        FeedChange? appended = null;
-        FeedChange grew;
+        var changes = new List<FeedChange>(4);
         lock (_gate)
         {
-            if (_open is null)
+            if (_open is not { Kind: FeedKind.Assistant })
             {
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    return;   // the blanks between a break and the words are nobody's
+                }
+
+                Add(changes, CloseOpen());
+                Add(changes, EndRunLocked());
                 _open = Push(FeedKind.Assistant, "", _replyGlyph, failed: false);
-                appended = new FeedChange.Appended(_open.ToWeb(null));
+                _open.Continues = _replySpoke;
+                changes.Add(new FeedChange.Appended(_open.ToWeb(null)));
+                text = text.TrimStart();
             }
 
             var open = _open;
@@ -191,22 +256,170 @@ public sealed class TranscriptFeed
             }
 
             _chars += text.Length;
-            grew = new FeedChange.Grew(_open.Seq, at, text);
+            _replyWrote |= _replyOpen;
+            _replySpoke = true;
+            changes.Add(new FeedChange.Grew(open.Seq, at, text));
             Trim();
         }
 
-        Raise(appended);
-        Raise(grew);
-        RaiseReleased();
+        RaiseAll(changes);
     }
 
-    /// <summary>The reply streaming now is over: its Markdown is final.</summary>
+    /// <summary>
+    /// The reply is over: what grows ends. A reply that wrote nothing at all since <see cref="Begin"/> — no words, no tool line, no thinking, no
+    /// notice — ends as an entry of its own marked <see cref="WebEntry.NoReply"/>, the PC's "(no reply)".
+    /// </summary>
     public void End()
+    {
+        var changes = new List<FeedChange>(2);
+        lock (_gate)
+        {
+            Add(changes, CloseOpen());
+            if (_replyOpen && !_replyWrote)
+            {
+                var empty = Push(FeedKind.Assistant, "", _replyGlyph, failed: false);
+                empty.NoReply = true;
+                empty.Ended = true;
+                changes.Add(new FeedChange.Appended(empty.ToWeb(null)));
+            }
+
+            _replyOpen = false;
+        }
+
+        RaiseAll(changes);
+    }
+
+    /// <summary>
+    /// The model's thinking (2026-10-15): grows the open thinking block, or starts one at its first non-blank text (whatever else grows ends).
+    /// <paramref name="elapsed"/> is how long it has streamed, the summary's figure when it folds. Past <see cref="MaxThinkingChars"/> the block
+    /// ends with "…" and keeps nothing more.
+    /// </summary>
+    public void AppendThinking(string text, TimeSpan elapsed)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var changes = new List<FeedChange>(4);
+        lock (_gate)
+        {
+            if (_open is not { Kind: FeedKind.Thinking })
+            {
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    return;
+                }
+
+                Add(changes, CloseOpen());
+                Add(changes, EndRunLocked());
+                _open = Push(FeedKind.Thinking, "", null, failed: false);
+                changes.Add(new FeedChange.Appended(_open.ToWeb(null)));
+                text = text.TrimStart();
+                _replyWrote |= _replyOpen;
+            }
+
+            var open = _open;
+            open.Elapsed = elapsed;
+            if (open.Capped)
+            {
+                return;
+            }
+
+            int room = MaxThinkingChars - open.Text.Length;
+            if (text.Length >= room)
+            {
+                text = text[..Math.Max(0, room)] + "…";
+                open.Capped = true;
+            }
+
+            int at;
+            lock (open)
+            {
+                at = open.Text.Length;
+                open.Text.Append(text);
+            }
+
+            _chars += text.Length;
+            changes.Add(new FeedChange.Grew(open.Seq, at, text));
+            Trim();
+        }
+
+        RaiseAll(changes);
+    }
+
+    /// <summary>
+    /// A line a <c>/cmd</c> run printed (2026-10-15): joins the open output of the same stream, or starts one (stderr's marked failed); any other
+    /// write ends it. Never part of a tool run.
+    /// </summary>
+    public void AppendOutput(string text, bool isError)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var changes = new List<FeedChange>(4);
+        lock (_gate)
+        {
+            if (_open is { Kind: FeedKind.Output } same && same.Failed == isError)
+            {
+                text = "\n" + text;
+            }
+            else
+            {
+                Add(changes, CloseOpen());
+                Add(changes, EndRunLocked());
+                _open = Push(FeedKind.Output, "", null, isError);
+                changes.Add(new FeedChange.Appended(_open.ToWeb(null)));
+                _replyWrote |= _replyOpen;
+            }
+
+            var open = _open;
+            int at;
+            lock (open)
+            {
+                at = open.Text.Length;
+                open.Text.Append(text);
+            }
+
+            _chars += text.Length;
+            changes.Add(new FeedChange.Grew(open.Seq, at, text));
+            Trim();
+        }
+
+        RaiseAll(changes);
+    }
+
+    /// <summary>
+    /// The tool run's summary as the renderer's tally reads now (2026-10-15, <c>ToolGroupText.Bare</c>): the open run's head is rewritten, or,
+    /// with none open (the call is counted before its line is written), it is held for the next one.
+    /// </summary>
+    public void ToolSummary(string text, bool failed)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        FeedChange? replaced = null;
+        lock (_gate)
+        {
+            _runSummary = text;
+            _runFailed = failed;
+            if (_run is { } run)
+            {
+                lock (run)
+                {
+                    _chars += text.Length - run.Text.Length;
+                    run.Text.Clear().Append(text);
+                }
+
+                run.Failed = failed;
+                replaced = new FeedChange.Replaced(run.Seq, text, failed);
+            }
+        }
+
+        Raise(replaced);
+    }
+
+    /// <summary>The tool run is over (2026-10-15, the renderer's own end of a run): its head ends, so a page folds a long one; the tally starts again.</summary>
+    public void EndToolRun()
     {
         FeedChange? ended;
         lock (_gate)
         {
-            ended = CloseOpen();
+            ended = EndRunLocked();
+            _runSummary = "";
+            _runFailed = false;
         }
 
         Raise(ended);
@@ -220,7 +433,13 @@ public sealed class TranscriptFeed
             _entries.Clear();
             _chars = 0;
             _open = null;
+            _run = null;
             _replyGlyph = null;
+            _replyOpen = false;
+            _replyWrote = false;
+            _replySpoke = false;
+            _runSummary = "";
+            _runFailed = false;
             _released.AddRange(_held.Keys);
             _held.Clear();
         }
@@ -229,8 +448,13 @@ public sealed class TranscriptFeed
         RaiseReleased();
     }
 
-    /// <summary>The entries kept now, oldest first; <paramref name="html"/> renders a finished reply's Markdown (each one once, cached).</summary>
-    public IReadOnlyList<WebEntry> Snapshot(Func<string, string> html)
+    /// <summary>
+    /// The entries kept now, oldest first; <paramref name="html"/> renders a finished reply's Markdown (each one once, cached). With
+    /// <paramref name="defer"/> (2026-10-15, a page's reconnect, often on mobile data) a finished thinking block goes as its summary alone and a folded
+    /// diff of more than <see cref="DeferRows"/> rows as its head and fold alone, each <see cref="WebEntry.Deferred"/>: the page reads it whole from
+    /// <see cref="EntryOf"/> when it is opened.
+    /// </summary>
+    public IReadOnlyList<WebEntry> Snapshot(Func<string, string> html, bool defer = false)
     {
         ArgumentNullException.ThrowIfNull(html);
         List<Entry> entries;
@@ -242,10 +466,26 @@ public sealed class TranscriptFeed
         var list = new List<WebEntry>(entries.Count);
         foreach (var entry in entries)
         {
-            list.Add(entry.ToWeb(html));
+            list.Add(entry.ToWeb(html, defer));
         }
 
         return list;
+    }
+
+    /// <summary>The diff rows past which a snapshot defers a folded diff (2026-10-15).</summary>
+    public const int DeferRows = 200;
+
+    /// <summary>Entry <paramref name="seq"/> whole while the feed holds it (2026-10-15, a deferred one opened on the page), or null.</summary>
+    public WebEntry? EntryOf(long seq, Func<string, string> html)
+    {
+        ArgumentNullException.ThrowIfNull(html);
+        Entry? found;
+        lock (_gate)
+        {
+            found = _entries.FirstOrDefault(e => e.Seq == seq);
+        }
+
+        return found?.ToWeb(html);
     }
 
     private Entry Push(FeedKind kind, string text, string? glyph, bool failed, IReadOnlyList<WebPicture>? pictures = null)
@@ -306,6 +546,7 @@ public sealed class TranscriptFeed
         }
     }
 
+    /// <summary>Under the lock: the growing entry ends — a reply's Markdown is final, a thinking block takes its summary.</summary>
     private FeedChange? CloseOpen()
     {
         if (_open is not { } open)
@@ -314,22 +555,64 @@ public sealed class TranscriptFeed
         }
 
         _open = null;
+        string text;
         lock (open)
         {
             open.Ended = true;
+            text = open.Text.ToString();
         }
 
-        return new FeedChange.Ended(open.Seq, open.Text.ToString());
+        if (open.Kind == FeedKind.Thinking)
+        {
+            open.Summary = UI.ThinkingFoldText.Bare(open.Elapsed, text);
+        }
+
+        return new FeedChange.Ended(open.Seq, text, open.Kind, open.Summary);
+    }
+
+    /// <summary>Under the lock: the open run's head ends.</summary>
+    private FeedChange? EndRunLocked()
+    {
+        if (_run is not { } run)
+        {
+            return null;
+        }
+
+        _run = null;
+        lock (run)
+        {
+            run.Ended = true;
+        }
+
+        return new FeedChange.Ended(run.Seq, "", FeedKind.Run);
     }
 
     private void Trim()
     {
-        while (_entries.Count > 1 && (_entries.Count > MaxEntries || _chars > MaxChars) && _entries.First is { } first && first.Value != _open)
+        while (_entries.Count > 1 && (_entries.Count > MaxEntries || _chars > MaxChars) && _entries.First is { } first && first.Value != _open && first.Value != _run)
         {
             _chars -= first.Value.Text.Length;
             _entries.RemoveFirst();
             Release(first.Value);
         }
+    }
+
+    private static void Add(List<FeedChange> changes, FeedChange? change)
+    {
+        if (change is not null)
+        {
+            changes.Add(change);
+        }
+    }
+
+    private void RaiseAll(List<FeedChange> changes)
+    {
+        foreach (var change in changes)
+        {
+            Raise(change);
+        }
+
+        RaiseReleased();
     }
 
     private void Raise(FeedChange? change)
@@ -340,56 +623,7 @@ public sealed class TranscriptFeed
         }
     }
 
-    private sealed class Entry(long seq, FeedKind kind, string? glyph, bool failed, IReadOnlyList<WebPicture>? pictures)
-    {
-        private string? _html;
-        private int _htmlLength = -1;
-
-        public long Seq { get; } = seq;
-
-        public FeedKind Kind { get; } = kind;
-
-        public string? Glyph { get; } = glyph;
-
-        public bool Failed { get; } = failed;
-
-        public IReadOnlyList<WebPicture>? Pictures { get; } = pictures;
-
-        public StringBuilder Text { get; } = new();
-
-        /// <summary>A reply whose text is final (read under the feed's lock or after).</summary>
-        public volatile bool Ended;
-
-        public WebEntry ToWeb(Func<string, string>? html)
-        {
-            string text;
-            bool ended;
-            lock (this)
-            {
-                text = Text.ToString();
-                ended = Ended;
-            }
-
-            string? rendered = null;
-            if (html is not null && Kind == FeedKind.Assistant && ended)
-            {
-                lock (this)
-                {
-                    if (_htmlLength != text.Length)
-                    {
-                        _html = html(text);
-                        _htmlLength = text.Length;
-                    }
-
-                    rendered = _html;
-                }
-            }
-
-            return new WebEntry(Seq, KindName(Kind), text, Glyph, rendered, Failed, Pictures);
-        }
-    }
-
-    /// <summary>The kind's word on the wire.</summary>
+    /// <summary>The page's name for a kind.</summary>
     public static string KindName(FeedKind kind) => kind switch
     {
         FeedKind.User => "user",
@@ -403,10 +637,101 @@ public sealed class TranscriptFeed
         FeedKind.Alert => "alert",
         FeedKind.Separator => "separator",
         FeedKind.Picture => "picture",
-        FeedKind.Working => "working",
+        FeedKind.Thinking => "thinking",
+        FeedKind.Output => "output",
+        FeedKind.Run => "run",
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
     };
 
-    /// <summary>A working line's end (later on 2026-10-14): taken out, so the pages drop it and a snapshot never shows a finished one.</summary>
-    public void EndWorking(long seq) => Remove(seq);
+    private sealed class Entry(long seq, FeedKind kind, string? glyph, bool failed, IReadOnlyList<WebPicture>? pictures)
+    {
+        private string? _html;
+        private int _htmlLength = -1;
+
+        public long Seq { get; } = seq;
+
+        public FeedKind Kind { get; } = kind;
+
+        public string? Glyph { get; } = glyph;
+
+        /// <summary>A failed result, stderr's output, or a run with a failed result (the run's changes as results land).</summary>
+        public bool Failed { get; set; } = failed;
+
+        public IReadOnlyList<WebPicture>? Pictures { get; } = pictures;
+
+        public StringBuilder Text { get; } = new();
+
+        /// <summary>An entry whose text is final (read under the feed's lock or after).</summary>
+        public volatile bool Ended;
+
+        /// <summary>A reply's stretch after a break, once the reply had spoken: drawn with no glyph.</summary>
+        public bool Continues { get; set; }
+
+        /// <summary>A reply that wrote nothing at all.</summary>
+        public bool NoReply { get; set; }
+
+        /// <summary>A thinking block's summary once it folds.</summary>
+        public string? Summary { get; set; }
+
+        /// <summary>How long a thinking block has streamed.</summary>
+        public TimeSpan Elapsed { get; set; }
+
+        /// <summary>A thinking block cut at <see cref="MaxThinkingChars"/>.</summary>
+        public bool Capped { get; set; }
+
+        /// <summary>A tool line's run (its head's seq).</summary>
+        public long? Run { get; set; }
+
+        /// <summary>A tool line that completes the call before it.</summary>
+        public bool Joins { get; set; }
+
+        /// <summary>A run's keep count.</summary>
+        public int? Keep { get; set; }
+
+        /// <summary>An edit's rows.</summary>
+        public WebDiff? Diff { get; set; }
+
+        public WebEntry ToWeb(Func<string, string>? html, bool defer = false)
+        {
+            string text;
+            bool ended;
+            lock (this)
+            {
+                text = Text.ToString();
+                ended = Ended;
+            }
+
+            // A reconnect's snapshot leaves out what a page reads on opening it (2026-10-15).
+            bool deferText = defer && Kind == FeedKind.Thinking && ended && text.Length > 0;
+            bool deferDiff = defer && Diff is { Fold: > 0 } folded && folded.Rows.Count > DeferRows;
+
+            string? rendered = null;
+            if (html is not null && Kind == FeedKind.Assistant && ended && !NoReply)
+            {
+                lock (this)
+                {
+                    if (_htmlLength != text.Length)
+                    {
+                        _html = html(text);
+                        _htmlLength = text.Length;
+                    }
+
+                    rendered = _html;
+                }
+            }
+
+            return new WebEntry(Seq, KindName(Kind), deferText ? "" : text, Glyph, rendered, Failed, Pictures)
+            {
+                Continues = Continues ? true : null,
+                NoReply = NoReply ? true : null,
+                Summary = Summary,
+                Ended = Kind is FeedKind.Run or FeedKind.Thinking or FeedKind.Output && ended ? true : null,
+                Run = Run,
+                Joins = Joins ? true : null,
+                Keep = Keep,
+                Diff = deferDiff ? Diff! with { Rows = [], More = null } : Diff,
+                Deferred = deferText || deferDiff ? true : null,
+            };
+        }
+    }
 }

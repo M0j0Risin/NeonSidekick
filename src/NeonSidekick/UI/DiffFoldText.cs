@@ -15,7 +15,13 @@ public static class DiffFoldText
     public static string Summary(FileDiff diff, int rows, bool expanded)
     {
         ArgumentNullException.ThrowIfNull(diff);
-        return DiffView.Indent + (expanded ? ToolGroupText.ExpandedGlyph : ToolGroupText.CollapsedGlyph) + " " + FileText.DiffSummary(diff) + " · "
-            + rows.ToString(CultureInfo.InvariantCulture) + (rows == 1 ? " row" : " rows");
+        return DiffView.Indent + (expanded ? ToolGroupText.ExpandedGlyph : ToolGroupText.CollapsedGlyph) + " " + Bare(diff, rows);
+    }
+
+    /// <summary>The summary without its indent and triangle (2026-10-15, the Web UI's folded diff): <c>Added 3 lines, removed 1 line · 14 rows</c>.</summary>
+    public static string Bare(FileDiff diff, int rows)
+    {
+        ArgumentNullException.ThrowIfNull(diff);
+        return FileText.DiffSummary(diff) + " · " + rows.ToString(CultureInfo.InvariantCulture) + (rows == 1 ? " row" : " rows");
     }
 }

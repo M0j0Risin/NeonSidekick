@@ -5,12 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>NeonSidekick</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<script src="/signin.js" defer></script>
 <link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/theme.css" id="theme-css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 </head>
 <body>
 <div class="signin">
   <h1>NeonSidekick</h1>
-  <p>Open the sign-in link that <code>/webui</code> shows in the app.</p>
+  <p>Open the sign-in link that <code>/webui</code> shows in the app, or paste it here (an app added to the Home Screen signs in this way).</p>
+  <form id="signin-form">
+    <input type="text" id="signin-link" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="The sign-in link or token">
+    <button type="submit" class="primary">Sign in</button>
+  </form>
+  <p class="banner message hidden" id="message"></p>
 </div>
 </body>
 </html>

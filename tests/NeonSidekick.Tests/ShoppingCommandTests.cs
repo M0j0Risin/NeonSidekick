@@ -417,6 +417,45 @@ public sealed class ShoppingCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task TheOpenPane_FollowsAStoreOrATickMadeElsewhere_OnItsWatch()
+    {
+        await Run("store add Costco");
+        await Run("store add Aldi");
+        await Run("add Bread");
+        var aldi = _list.Store.FindStore("Aldi")!;
+        var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100), _time) { Hint = () => "idle" };
+        var input = new ScriptedInput();
+        var menu = new ShoppingMenu(_list, new MenuPane(pane, new KeySource(input, TimeSpan.FromMilliseconds(1))), time: _time);
+        pane.Show();
+        int waits = 0;
+        bool switched = false;
+        input.OnWait = () =>
+        {
+            if (++waits == 1)
+            {
+                // The Web UI's page (or the model's tools) picks another store while the PC's pane is open.
+                _list.UseStore(aldi);
+                switched = true;
+                _time.Advance(ShoppingMenu.WatchEvery);
+            }
+            else if (switched && _console.Output.Contains(ShoppingText.PaneLabel(aldi), StringComparison.Ordinal))
+            {
+                switched = false;
+                input.Push(Keys.Escape);   // drawn again for the new store: done
+            }
+            else if (waits > 200)
+            {
+                input.Push(Keys.Escape);   // never redrawn: the assertion below says so
+            }
+        };
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(ShoppingText.PaneLabel(aldi), _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
     public async Task ThePane_TicksWithEnter_ChangesTheQuantity_Removes_AndClearsTheTicked()
     {
         await Run("store add H-E-B");

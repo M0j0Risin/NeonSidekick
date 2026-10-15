@@ -53,6 +53,10 @@ internal sealed class ShoppingMenu
     private readonly bool _closeWhenDone;
     private readonly InputLine? _input;
     private readonly TimeZoneInfo _zone;
+    private readonly TimeProvider? _time;
+
+    /// <summary>How often an open list looks for a change made elsewhere (2026-10-15).</summary>
+    public static readonly TimeSpan WatchEvery = TimeSpan.FromSeconds(1);
 
     /// <param name="list">The list's operations over the loaded profile's store.</param>
     /// <param name="pane">The menu host in the bottom pane.</param>
@@ -60,14 +64,57 @@ internal sealed class ShoppingMenu
     /// <param name="closeWhenDone">Whether ESC closes the pane (the <c>/shopping</c> pane's own); false under a host that drew it, the <c>Shopping list</c> row of <c>/tools</c> (2026-10-11), whose page comes back.</param>
     /// <param name="input">The input row a rename or a new item is typed on (2026-10-11); null: they say so.</param>
     /// <param name="zone">The zone the recently bought's dates are shown in.</param>
-    public ShoppingMenu(ShoppingList list, MenuPane pane, Func<CancellationToken, Task<bool>>? manageStores = null, bool closeWhenDone = true, InputLine? input = null, TimeZoneInfo? zone = null)
+    /// <param name="time">
+    /// The clock the open list is re-read on (2026-10-15): once a second it compares the store and the list with what it drew, and on a change from
+    /// elsewhere (the Web UI's page, the model's tools) draws again where it stood. Null watches nothing.
+    /// </param>
+    public ShoppingMenu(ShoppingList list, MenuPane pane, Func<CancellationToken, Task<bool>>? manageStores = null, bool closeWhenDone = true, InputLine? input = null, TimeZoneInfo? zone = null, TimeProvider? time = null)
     {
+        _time = time;
         _input = input;
         _manageStores = manageStores;
         _closeWhenDone = closeWhenDone;
         _zone = zone ?? TimeZoneInfo.Local;
         _list = list ?? throw new ArgumentNullException(nameof(list));
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
+    }
+
+    /// <summary>What the open list shows, as a key (2026-10-15): the active store and every line's state; another means it changed elsewhere.</summary>
+    private string ListKey()
+    {
+        var store = _list.Store;
+        return store.ActiveStore()?.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|"
+            + string.Join(",", store.Items().Select(i => i.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) + (i.Checked ? "+" : "-") + i.Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture) + i.Name));
+    }
+
+    /// <summary>
+    /// Re-reads the list every <see cref="WatchEvery"/> while a pick waits, and ends it (the page's <c>stale</c> token) when the key differs from
+    /// <paramref name="drawn"/>; nothing without a clock. Ends quietly with the pick.
+    /// </summary>
+    private async Task Watch(string drawn, CancellationTokenSource stale, CancellationToken cancellationToken)
+    {
+        if (_time is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var both = CancellationTokenSource.CreateLinkedTokenSource(stale.Token, cancellationToken);
+            while (true)
+            {
+                await Task.Delay(WatchEvery, _time, both.Token).ConfigureAwait(false);
+                if (!string.Equals(ListKey(), drawn, StringComparison.Ordinal))
+                {
+                    await stale.CancelAsync().ConfigureAwait(false);
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The pick ended, or the change was found.
+        }
     }
 
     /// <summary>The page's rows over <paramref name="view"/>: markup, the headings' indexes, and the line each row stands for (null on a heading).</summary>
@@ -132,12 +179,33 @@ internal sealed class ShoppingMenu
                     SpaceToggles = true,
                     Caption = ShoppingText.PaneCaption(view.Groups.Sum(g => g.Items.Count), view.Ticked.Count, guesses),
                 };
-                if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
+                MenuPick? picked;
+                using (var stale = new CancellationTokenSource())
+                {
+                    var watching = Watch(ListKey(), stale, cancellationToken);
+                    try
+                    {
+                        picked = await _pane.PickAsync(page, cursor, cancellationToken, stale: stale.Token).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        await stale.CancelAsync().ConfigureAwait(false);
+                        await watching.ConfigureAwait(false);
+                    }
+                }
+
+                if (picked is not { } pick)
                 {
                     return;
                 }
 
                 var item = pick.Row >= 0 && pick.Row < items.Count ? items[pick.Row] : null;
+                if (pick.Refresh)
+                {
+                    on = item?.Id ?? on;   // changed elsewhere: drawn again where it stood
+                    continue;
+                }
+
                 on = item?.Id ?? on;
                 switch (pick.Button)
                 {

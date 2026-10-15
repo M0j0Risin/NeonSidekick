@@ -1114,6 +1114,12 @@ public enum SettingsField
 
     /// <summary>An edit row: the home's <c>eventlog.json</c> in the editor. The EventLog menu (2026-10-15).</summary>
     EventLogComputersGlobal,
+
+    /// <summary>A toggle: whether the Web UI's Home tab may act (<see cref="Settings.AppSettingsData.WebUiHomeControls"/>). The Web UI tab under <see cref="WebUiConnectionDetails"/> (2026-10-15); read at each request.</summary>
+    WebUiHomeControls,
+
+    /// <summary>A toggle: whether the Web UI's pages wear the profile's theme (<see cref="Settings.AppSettingsData.WebUiProfileTheme"/>). The Web UI tab under <see cref="WebUiHomeControls"/> (2026-10-15); read at each request.</summary>
+    WebUiProfileTheme,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1555,7 +1561,7 @@ internal sealed partial class SettingsMenu
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
          SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
-        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails],
+        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiHomeControls, SettingsField.WebUiProfileTheme],
         [SettingsField.LlmUrl, SettingsField.LlmModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.PlanGapPasses,
@@ -2066,7 +2072,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.YouTubeTools or SettingsField.YouTubeAutoplay
             or SettingsField.Advisors or SettingsField.AdvisorConfirm
             or SettingsField.ShoppingTools or SettingsField.EventLogTools
-            or SettingsField.WebUi or SettingsField.WebUiCommands or SettingsField.WebUiConnectionDetails;
+            or SettingsField.WebUi or SettingsField.WebUiCommands or SettingsField.WebUiConnectionDetails or SettingsField.WebUiHomeControls or SettingsField.WebUiProfileTheme;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -2147,6 +2153,8 @@ internal sealed partial class SettingsMenu
         SettingsField.WebUiReach => "Web UI reach",
         SettingsField.WebUiCommands => "Web UI commands",
         SettingsField.WebUiConnectionDetails => "Web UI connection details",
+        SettingsField.WebUiHomeControls => "Web UI home controls",
+        SettingsField.WebUiProfileTheme => "Web UI profile theme",
         SettingsField.ImageThumbnailSize => "Image thumbnail size",
         SettingsField.FileTreeMaxLength => "File /tree max entries",
         SettingsField.FileTreeShowSizes => "File /tree show sizes",
@@ -2741,6 +2749,8 @@ internal sealed partial class SettingsMenu
             SettingsField.WebUi => OnOff(data.WebUi),
             SettingsField.WebUiCommands => OnOff(data.WebUiCommands),
             SettingsField.WebUiConnectionDetails => OnOff(data.WebUiConnectionDetails),
+            SettingsField.WebUiHomeControls => OnOff(data.WebUiHomeControls),
+            SettingsField.WebUiProfileTheme => OnOff(data.WebUiProfileTheme),
             SettingsField.WebUiPort => data.WebUiPort.ToString(CultureInfo.InvariantCulture),
             SettingsField.WebUiReach => data.WebUiReach,
             SettingsField.ExternalSkills => OnOff(data.ExternalSkills),
@@ -7656,6 +7666,8 @@ internal sealed partial class SettingsMenu
             SettingsField.WebUi => data.WebUi,
             SettingsField.WebUiCommands => data.WebUiCommands,
             SettingsField.WebUiConnectionDetails => data.WebUiConnectionDetails,
+            SettingsField.WebUiHomeControls => data.WebUiHomeControls,
+            SettingsField.WebUiProfileTheme => data.WebUiProfileTheme,
             SettingsField.ExternalSkills => data.ExternalSkills,
             SettingsField.ProjectFile => data.ProjectFile,
             SettingsField.TranscriptMarkdown => data.TranscriptMarkdown,
@@ -7770,6 +7782,8 @@ internal sealed partial class SettingsMenu
             case SettingsField.WebUi: data.WebUi = on; break;
             case SettingsField.WebUiCommands: data.WebUiCommands = on; break;
             case SettingsField.WebUiConnectionDetails: data.WebUiConnectionDetails = on; break;
+            case SettingsField.WebUiHomeControls: data.WebUiHomeControls = on; break;
+            case SettingsField.WebUiProfileTheme: data.WebUiProfileTheme = on; break;
             case SettingsField.ExternalSkills: data.ExternalSkills = on; break;
             case SettingsField.ProjectFile: data.ProjectFile = on; break;
             case SettingsField.TranscriptMarkdown: data.TranscriptMarkdown = on; break;
@@ -7891,6 +7905,8 @@ internal sealed partial class SettingsMenu
         SettingsField.WebUi => on ? "web server enabled" : "web server disabled",   // the user's wording, 2026-10-14
         SettingsField.WebUiCommands => on ? "the page runs the commands it may, and completes them" : "the page sends messages; its dropdown offers the mentions alone",
         SettingsField.WebUiConnectionDetails => on ? "the page's dropdown shows the % and * connections' notes" : "the page's dropdown names the connections alone",
+        SettingsField.WebUiHomeControls => on ? "the Home tab toggles, runs scenes, asks Assist and plays the video" : "the Home tab only shows",
+        SettingsField.WebUiProfileTheme => on ? "the pages wear the profile's theme" : "the pages keep their own look",
         SettingsField.ExternalSkills => on ? (OperatingSystem.IsMacOS() ? "~/.agents/skills is read too" : "%USERPROFILE%\\.agents\\skills is read too") : "no external skills",   // the Mac's home, 2026-10-06
         SettingsField.ProjectFile => on ? "use project file (NEON.md or AGENTS.md in the working directory)" : "project files in the working directory are ignored",   // the user's wording, 2026-10-01
         SettingsField.SkillHashMention => on ? "# and part of a name lists the loaded skills on the line" : "# is ordinary text",

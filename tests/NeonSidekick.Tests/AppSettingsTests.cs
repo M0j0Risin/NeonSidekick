@@ -192,14 +192,16 @@ public class AppSettingsTests : IDisposable
         WebUiReach = "local",
         WebUiCommands = true,
         WebUiConnectionDetails = false,
+        WebUiHomeControls = true,
+        WebUiProfileTheme = false,
         WebUiToken = "dpapi:token",
     };
 
     private static void AssertSame(AppSettingsData expected, AppSettingsData actual)
     {
         Assert.Equal(
-            (expected.WebUi, expected.WebUiPort, expected.WebUiReach, expected.WebUiCommands, expected.WebUiConnectionDetails, expected.WebUiToken),
-            (actual.WebUi, actual.WebUiPort, actual.WebUiReach, actual.WebUiCommands, actual.WebUiConnectionDetails, actual.WebUiToken));
+            (expected.WebUi, expected.WebUiPort, expected.WebUiReach, expected.WebUiCommands, expected.WebUiConnectionDetails, expected.WebUiHomeControls, expected.WebUiProfileTheme, expected.WebUiToken),
+            (actual.WebUi, actual.WebUiPort, actual.WebUiReach, actual.WebUiCommands, actual.WebUiConnectionDetails, actual.WebUiHomeControls, actual.WebUiProfileTheme, actual.WebUiToken));
         Assert.Equal(expected.SchemaVersion, actual.SchemaVersion);
         Assert.Equal(expected.ModelAvatar, actual.ModelAvatar);
         Assert.Equal(expected.UserAvatar, actual.UserAvatar);
@@ -544,6 +546,8 @@ public class AppSettingsTests : IDisposable
             d.WebUiReach = full.WebUiReach;
             d.WebUiCommands = full.WebUiCommands;
             d.WebUiConnectionDetails = full.WebUiConnectionDetails;
+            d.WebUiHomeControls = full.WebUiHomeControls;
+            d.WebUiProfileTheme = full.WebUiProfileTheme;
             d.WebUiToken = full.WebUiToken;
         });
 
@@ -699,6 +703,8 @@ public class AppSettingsTests : IDisposable
                 d.WebUiReach = full.WebUiReach;
                 d.WebUiCommands = full.WebUiCommands;
                 d.WebUiConnectionDetails = full.WebUiConnectionDetails;
+                d.WebUiHomeControls = full.WebUiHomeControls;
+                d.WebUiProfileTheme = full.WebUiProfileTheme;
                 d.WebUiToken = full.WebUiToken;
             });
             await settings.FlushAsync();

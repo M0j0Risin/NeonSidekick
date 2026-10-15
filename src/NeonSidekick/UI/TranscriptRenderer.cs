@@ -420,9 +420,9 @@ public sealed class TranscriptRenderer : INoticeSink
     public void ToolResult(string name, string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        Feed?.Add(WebUi.FeedKind.ToolResult, Truncate(text, ToolTextLimit), failed: IsToolFailure(text));
-        // On the pane: the result under its call, its first line and the next ones that fold with the run (2026-10-04).
+        // On the pane: the result under its call, its first line and the next ones that fold with the run (2026-10-04); on the page, the same unit (2026-10-15).
         bool sameUnit = TakeCall();
+        Feed?.Add(WebUi.FeedKind.ToolResult, Truncate(text, ToolTextLimit), failed: IsToolFailure(text), joins: sameUnit);
         ToolWrite(new ToolResultView(text), () => WriteLine(ToolResultMarkup(name, text), ToolResultMarkup(name, text).TrimStart()), sameUnit);
         CountFailure(text);
     }
@@ -446,8 +446,9 @@ public sealed class TranscriptRenderer : INoticeSink
     private void Note(string text, string glyph)
     {
         ArgumentNullException.ThrowIfNull(text);
-        Feed?.Add(WebUi.FeedKind.Tool, glyph.TrimStart() + Truncate(text, ToolTextLimit), failed: IsToolFailure(text));
-        ToolLine(ToolNoteMarkup(text, glyph), sameUnit: TakeCall(), inlineMarkup: IsToolFailure(text)
+        bool sameUnit = TakeCall();
+        Feed?.Add(WebUi.FeedKind.Tool, glyph.TrimStart() + Truncate(text, ToolTextLimit), failed: IsToolFailure(text), joins: sameUnit);
+        ToolLine(ToolNoteMarkup(text, glyph), sameUnit: sameUnit, inlineMarkup: IsToolFailure(text)
             ? Theme.ColorMarkup(Theme.Warn, ToolFailedGlyph.TrimStart() + Truncate(text, ToolTextLimit))
             : Theme.ColorMarkup(Theme.Dim, glyph.TrimStart() + Truncate(text, ToolTextLimit)));
         CountFailure(text);
@@ -462,11 +463,15 @@ public sealed class TranscriptRenderer : INoticeSink
         }
 
         _failed++;
+        FeedSummary();
         if (_run)
         {
             PushSummary();
         }
     }
+
+    /// <summary>The run's summary for the Web UI's page (2026-10-15): as the tally reads now, whether or not the pane holds a run.</summary>
+    private void FeedSummary() => Feed?.ToolSummary(ToolGroupText.Bare(_tally, _failed), _failed > 0);
 
     /// <summary>
     /// A tool note's detail line (later still on 2026-09-24, <c>ComfyUI show prompts</c>): the same dim line behind the tools'
@@ -509,7 +514,8 @@ public sealed class TranscriptRenderer : INoticeSink
     {
         ArgumentNullException.ThrowIfNull(note);
         ArgumentNullException.ThrowIfNull(diff);
-        Feed?.Add(WebUi.FeedKind.Tool, ToolGlyph.TrimStart() + Truncate(note, ToolTextLimit));
+        // The page gets the rows too (2026-10-15), cut and folded as here.
+        Feed?.Add(WebUi.FeedKind.Tool, ToolGlyph.TrimStart() + Truncate(note, ToolTextLimit), diff: WebUi.WebDiffs.From(diff, maxLines, collapseCount));
         var full = new DiffView(new Markup(ToolNoteMarkup(note)), diff, maxLines, collapseCount);
         var inline = new DiffView(new Markup(Theme.ColorMarkup(Theme.Dim, ToolGlyph.TrimStart() + Truncate(note, ToolTextLimit))), diff, maxLines, collapseCount);
         ToolWrite(full, () => WriteBlock(full, inline));
@@ -544,6 +550,8 @@ public sealed class TranscriptRenderer : INoticeSink
     {
         ArgumentNullException.ThrowIfNull(text);
         string markup = ShellOutputMarkup(text, isError);
+        // The page's copy (2026-10-15): the stream's lines together, never in a tool run.
+        Feed?.AppendOutput(text, isError);
         Line(markup, markup);
     }
 
@@ -648,6 +656,7 @@ public sealed class TranscriptRenderer : INoticeSink
             _tally[at] = (name, _tally[at].Count + 1);
         }
 
+        FeedSummary();
         if (_run)
         {
             PushSummary();
@@ -859,6 +868,12 @@ public sealed class TranscriptRenderer : INoticeSink
     public void AppendThinking(string text, TimeSpan elapsed)
     {
         ArgumentNullException.ThrowIfNull(text);
+        if (_assistantOpen)
+        {
+            // The page's copy (2026-10-15), whatever the pane does: streamed, folded when anything else is written.
+            Feed?.AppendThinking(text, elapsed);
+        }
+
         if (!_assistantOpen || !_slot)
         {
             return;
@@ -957,26 +972,9 @@ public sealed class TranscriptRenderer : INoticeSink
     public async Task<T> WithSpinnerAsync<T>(string label, Func<Action<string>, Task<T>> work)
     {
         ArgumentNullException.ThrowIfNull(work);
-        // A command from the Web UI's page at work (later on 2026-10-14): its label on the page while it runs, once, gone when it ends.
-        long? working = Feed is { } feed && !_assistantOpen && MirrorSpinner?.Invoke() == true ? feed.Add(WebUi.FeedKind.Working, label) : null;
-        try
-        {
-            return await SpinAsync(label, work).ConfigureAwait(false);
-        }
-        finally
-        {
-            if (working is { } seq)
-            {
-                Feed?.EndWorking(seq);
-            }
-        }
+        // The Web UI's page shows this spinner on its status row (2026-10-15, ScreenPane.BusyNow), so the transcript gets no line for it.
+        return await SpinAsync(label, work).ConfigureAwait(false);
     }
-
-    /// <summary>
-    /// Whether a spinner's label goes to the Web UI's page too (later on 2026-10-14): the screen says yes for a command the page sent while no model
-    /// work runs (a reply shows its own). Null, never.
-    /// </summary>
-    public Func<bool>? MirrorSpinner { get; set; }
 
     private async Task<T> SpinAsync<T>(string label, Func<Action<string>, Task<T>> work)
     {
@@ -1212,6 +1210,7 @@ public sealed class TranscriptRenderer : INoticeSink
         _tally.Clear();
         _failed = 0;
         _callOpen = false;
+        Feed?.EndToolRun();
         if (_run)
         {
             _run = false;

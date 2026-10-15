@@ -45,10 +45,22 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     private readonly Action _shoppingChanged;
     private readonly ConcurrentQueue<WebLine> _lines = new();
     private readonly ConcurrentQueue<(string Text, bool Error)> _notices = new();
+    private readonly ConcurrentQueue<string> _flashes = new();
+    private int _flashing;
     private readonly LinkedList<string> _ids = new();
     private readonly object _idGate = new();
     private readonly ITimer _sampler;
+    private readonly ITimer _statusTrail;
+    private readonly TimeProvider _time;
+    private readonly object _statusGate = new();
     private string _lastState = "";
+    private string _lastStatus = "";
+    private long _statusAt;
+    private bool _statusSent;
+    private bool _statusTrailing;
+
+    /// <summary>The fastest the status row is sent while its label changes (2026-10-15): a download's percent can change many times a second.</summary>
+    public static readonly TimeSpan StatusThrottle = TimeSpan.FromMilliseconds(200);
 
     /// <param name="state">The state as the page's header shows it, read on a timer thread (reads only).</param>
     /// <param name="stop">The page's Stop: the screen ends what it may (its reply, not a model's load).</param>
@@ -63,7 +75,9 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         _shoppingChanged = shoppingChanged ?? throw new ArgumentNullException(nameof(shoppingChanged));
         Feed.Changed += OnFeedChanged;
         Asks.Changed += PublishAsks;
-        _sampler = (time ?? TimeProvider.System).CreateTimer(_ => SampleState(), null, StateInterval, StateInterval);
+        _time = time ?? TimeProvider.System;
+        _sampler = _time.CreateTimer(_ => SampleState(), null, StateInterval, StateInterval);
+        _statusTrail = _time.CreateTimer(_ => TrailingStatus(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
     }
 
     /// <summary>The transcript as the pages see it.</summary>
@@ -133,6 +147,39 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     {
         string root = "/api/picture/" + s_pictureRun + "/" + id.ToString(System.Globalization.CultureInfo.InvariantCulture) + "/";
         return new WebPicture(id, name, root + "thumb", root + "mid", root + "full", width, height, tooLarge);
+    }
+
+    /// <summary>
+    /// The page's status row now and its key (2026-10-15, the screen's <c>WebStatusNow</c>, reads only): the key leaves out the running clocks,
+    /// so a tick alone sends nothing. Null sends no row.
+    /// </summary>
+    public Func<(WebStatus Status, string Key)>? StatusNow { get; set; }
+
+    /// <summary>The full <c>/usage</c> lines for the page's card (2026-10-15, reads only); null gives an empty card.</summary>
+    public Func<IReadOnlyList<string>>? UsageLines { get; set; }
+
+    public WebUsageCard Usage() => new(WebUiText.UsageTitle, UsageLines?.Invoke() ?? []);
+
+    public WebEntry? Entry(long seq) => Feed.EntryOf(seq, WebUiMarkdown.ToHtml);
+
+    /// <summary>Whether the pages wear the profile's theme (2026-10-15, <i>Web UI profile theme</i>, read per request); null: they do.</summary>
+    public Func<bool>? ProfileTheme { get; set; }
+
+    public string ThemeCss() => WebTheme.Css(UI.Theme.Current, ProfileTheme?.Invoke() ?? true);
+
+    public string Manifest() => WebTheme.Manifest(UI.Theme.Current, ProfileTheme?.Invoke() ?? true);
+
+    /// <summary>The Home tab's side (2026-10-15, the screen's); null in a build without one.</summary>
+    public IWebHome? Home { get; set; }
+
+    /// <summary>The screen's chores on the session's 1-second tick whether or not a page streams (2026-10-15: the Home tab's lease running out).</summary>
+    public Action? Tick { get; set; }
+
+    /// <summary>What the Chat badge reads (2026-10-15): the state's busy and waiting, the asks open, the theme, the files' tag.</summary>
+    public WebPulse Pulse()
+    {
+        var state = _state();
+        return new WebPulse(state.Busy, Asks.OpenAsks().Count, state.WaitingAtPc, state.Theme, WebUiAssets.Current);
     }
 
     /// <summary>Wakes the screen's idle line: a message or a notice is waiting (the screen's <c>SignalAlert</c>, and its act signal under a botchat).</summary>
@@ -220,6 +267,61 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         Nudge?.Invoke();
     }
 
+    /// <summary>
+    /// Hands a line to the PC's hint row (2026-10-15: the screen's <c>ScreenPane.Flash</c>). Called on a pool thread, never a request's: the pane
+    /// draws under its own lock while it writes to the console, and a stalled console (a mouse selection in the terminal) must not hold a phone.
+    /// </summary>
+    public Action<string>? FlashOnPc { get; set; }
+
+    /// <summary>
+    /// What the page did, shown at the PC for a moment (2026-10-15: a ticked line, a store, a light): queued and handed over by one drain on the
+    /// thread pool, the newest of a burst only, so the request answers at once whatever the console does.
+    /// </summary>
+    public void FlashPc(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (FlashOnPc is null)
+        {
+            return;
+        }
+
+        _flashes.Enqueue(text);
+        if (Interlocked.CompareExchange(ref _flashing, 1, 0) == 0)
+        {
+            ThreadPool.QueueUserWorkItem(_ => DrainFlashes());
+        }
+    }
+
+    private void DrainFlashes()
+    {
+        while (true)
+        {
+            string? newest = null;
+            while (_flashes.TryDequeue(out string? text))
+            {
+                newest = text;
+            }
+
+            if (newest is not null)
+            {
+                try
+                {
+                    FlashOnPc?.Invoke(newest);
+                }
+                catch (Exception e) when (e is not OutOfMemoryException)
+                {
+                    DiagnosticLog.Debug(Category, "Web UI: a flash at the PC failed: " + e.Message);
+                }
+            }
+
+            Volatile.Write(ref _flashing, 0);
+            if (_flashes.IsEmpty || Interlocked.CompareExchange(ref _flashing, 1, 0) != 0)
+            {
+                return;   // nothing came meanwhile, or another drain took it
+            }
+        }
+    }
+
     /// <summary>The notices waiting, oldest first, taken.</summary>
     public IReadOnlyList<(string Text, bool Error)> TakeNotices()
     {
@@ -237,7 +339,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     public WebSnapshot Snapshot()
     {
         // The connecting page's own copy: the other pages' last state stays what the sampler compares with.
-        return new WebSnapshot(Feed.Snapshot(WebUiMarkdown.ToHtml), Asks.OpenAsks().Select(View).ToList(), _state(), WebUiText.Words, TakeDrafts());
+        return new WebSnapshot(Feed.Snapshot(WebUiMarkdown.ToHtml, defer: true), Asks.OpenAsks().Select(View).ToList(), _state(), WebUiText.Words, TakeDrafts(), StatusNow?.Invoke().Status);
     }
 
     public void SignedIn(IPAddress? remote)
@@ -292,7 +394,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
 
     public WebReply Answer(WebAnswerRequest request, IPAddress? remote) => Asks.Answer(request, remote);
 
-    public WebShopping Shopping() => _shopping() is { } list ? WebShoppingView.Of(list) : new WebShopping("", ShoppingText.Unavailable, [], ShoppingText.TickedHeading, [], ShoppingText.GuessMark);
+    public WebShopping Shopping() => _shopping() is { } list ? WebShoppingView.Of(list) : new WebShopping("", ShoppingText.Unavailable, [], ShoppingText.TickedHeading, [], ShoppingText.GuessMark, WebUiAssets.Current);
 
     public WebReply Check(WebCheckRequest request, IPAddress? remote)
     {
@@ -307,6 +409,26 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         {
             DiagnosticLog.Info(Category, WebUiText.CheckedLogLine(line, request.On, remote));
             _shoppingChanged();
+            FlashPc(WebUiText.CheckedFlash(line, request.On));
+        }
+
+        return reply;
+    }
+
+    public WebReply UseStore(WebStoreRequest request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (_shopping() is not { } list)
+        {
+            return new WebReply(WebOutcome.NotFound, WebUiText.NoSuchStore);
+        }
+
+        var reply = WebShoppingView.UseStore(list, request.Id, out string? store);
+        if (reply.Outcome == WebOutcome.Ok && store is not null)
+        {
+            DiagnosticLog.Info(Category, WebUiText.StoreLogLine(store, remote));
+            _shoppingChanged();
+            FlashPc(WebUiText.StoreFlash(store));
         }
 
         return reply;
@@ -331,11 +453,82 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         Events.Publish(new WebEvent("state", new Lazy<string>(json)));
     }
 
+    /// <summary>
+    /// The PC's spinner changed (2026-10-15, the pane's <c>BusyChanged</c>, on the thread that changed it): the row now, or, inside
+    /// <see cref="StatusThrottle"/> of the last one, once more when the window ends, so the last label always lands. Never blocks.
+    /// </summary>
+    public void StatusNudge()
+    {
+        if (Events.Count == 0 || StatusNow is null)
+        {
+            return;
+        }
+
+        long now = _time.GetTimestamp();
+        lock (_statusGate)
+        {
+            if (_statusTrailing)
+            {
+                return;   // the trailing send reads the newest
+            }
+
+            var since = _time.GetElapsedTime(_statusAt, now);
+            if (_statusSent && since < StatusThrottle)
+            {
+                _statusTrailing = true;
+                _statusTrail.Change(StatusThrottle - since, Timeout.InfiniteTimeSpan);
+                return;
+            }
+
+            _statusAt = now;
+            _statusSent = true;
+        }
+
+        PublishStatus();
+    }
+
+    private void TrailingStatus()
+    {
+        lock (_statusGate)
+        {
+            _statusTrailing = false;
+            _statusAt = _time.GetTimestamp();
+        }
+
+        try
+        {
+            PublishStatus();
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            DiagnosticLog.Debug(Category, "Web UI: the status could not be read: " + e.Message);
+        }
+    }
+
+    /// <summary>The status row now, to every page, when its key differs from what they have (the sampler's tick, a nudge).</summary>
+    public void PublishStatus()
+    {
+        if (Events.Count == 0 || StatusNow is null)
+        {
+            return;
+        }
+
+        var (status, key) = StatusNow();
+        if (key == Interlocked.Exchange(ref _lastStatus, key))
+        {
+            return;
+        }
+
+        Events.Publish(new WebEvent("status", new Lazy<string>(JsonSerializer.Serialize(status, WebUiJsonContext.Default.WebStatus))));
+    }
+
     private void SampleState()
     {
         try
         {
+            Tick?.Invoke();
             PublishState();
+            PublishStatus();
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
@@ -356,7 +549,12 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
                 Events.Publish(new WebEvent("delta", () => JsonSerializer.Serialize(new WebDelta(grew.Seq, grew.At, grew.Text), WebUiJsonContext.Default.WebDelta)));
                 break;
             case FeedChange.Ended ended:
-                Events.Publish(new WebEvent("end", () => JsonSerializer.Serialize(new WebEnd(ended.Seq, WebUiMarkdown.ToHtml(ended.Markdown)), WebUiJsonContext.Default.WebEnd)));
+                // A reply's Markdown as HTML; a thinking block its summary, a run or an output their end alone (2026-10-15).
+                Events.Publish(new WebEvent("end", () => JsonSerializer.Serialize(
+                    new WebEnd(ended.Seq, ended.Kind == FeedKind.Assistant ? WebUiMarkdown.ToHtml(ended.Markdown) : null, ended.Summary), WebUiJsonContext.Default.WebEnd)));
+                break;
+            case FeedChange.Replaced replaced:
+                Events.Publish(new WebEvent("replace", () => JsonSerializer.Serialize(new WebReplaced(replaced.Seq, replaced.Text, replaced.Failed), WebUiJsonContext.Default.WebReplaced)));
                 break;
             case FeedChange.Cleared:
                 Events.Publish(new WebEvent("reset", () => "{}"));
@@ -428,6 +626,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     public void Dispose()
     {
         _sampler.Dispose();
+        _statusTrail.Dispose();
         _completing.Dispose();
     }
 }

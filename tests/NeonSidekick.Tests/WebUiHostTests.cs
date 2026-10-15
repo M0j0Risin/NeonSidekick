@@ -239,12 +239,16 @@ public sealed class WebUiHostTests : IAsyncLifetime
             Assert.NotEmpty(asset.Bytes);
         }
 
-        foreach (string page in new[] { WebUiAssets.ChatPage, WebUiAssets.ShoppingPage, WebUiAssets.SignInPage })
+        foreach (string page in new[] { WebUiAssets.ChatPage, WebUiAssets.ShoppingPage, WebUiAssets.HomePage, WebUiAssets.SignInPage })
         {
             string html = Encoding.UTF8.GetString(WebUiAssets.Find(page)!.Bytes);
-            foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(html, "(?:src|href)=\"/([a-z]+\\.[a-z]+)\""))
+            foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(html, "(?:src|href)=\"/([a-z0-9-]+\\.[a-z]+)\""))
             {
-                Assert.Contains(match.Groups[1].Value, WebUiAssets.Names);
+                // The theme's sheet and the manifest are made per request (2026-10-15), not files.
+                if (match.Groups[1].Value is not ("theme.css" or "manifest.webmanifest"))
+                {
+                    Assert.Contains(match.Groups[1].Value, WebUiAssets.Names);
+                }
             }
         }
 
@@ -261,6 +265,202 @@ public sealed class WebUiHostTests : IAsyncLifetime
         Assert.Contains("chat.js", await chat.Content.ReadAsStringAsync(), StringComparison.Ordinal);
         using var shopping = await _client.SendAsync(Get("/shopping"));
         Assert.Contains("shopping.js", await shopping.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task APickedStore_ReachesTheBackend_BehindTheCookieAndTheHeader()
+    {
+        using var ok = await _client.SendAsync(Post("/api/shopping/store", "{\"id\":7}"));
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+        Assert.Equal(7, Assert.Single(_backend.Stores).Id);
+
+        _backend.Reply = new WebReply(WebOutcome.NotFound, WebUiText.NoSuchStore);
+        using var gone = await _client.SendAsync(Post("/api/shopping/store", "{\"id\":8}"));
+        Assert.Equal(HttpStatusCode.NotFound, gone.StatusCode);
+        Assert.Contains(WebUiText.NoSuchStore, await gone.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+
+        using var forged = await _client.SendAsync(Post("/api/shopping/store", "{\"id\":9}", csrf: false));
+        Assert.Equal(HttpStatusCode.Forbidden, forged.StatusCode);
+        using var signedOut = await _client.SendAsync(Post("/api/shopping/store", "{\"id\":9}", signedIn: false));
+        Assert.Equal(HttpStatusCode.Unauthorized, signedOut.StatusCode);
+        Assert.Equal(2, _backend.Stores.Count);
+    }
+
+    /// <summary>The Home tab's side for the host's tests (2026-10-15): fixed answers, every call recorded.</summary>
+    private sealed class FakeHome : IWebHome
+    {
+        public WebHome Tab { get; set; } = new("live", null, true, [new WebHomeTile("entity:light.desk", "💡", "Desk", "", "", "call", null, "off", null, 0, true)], [], null, null,
+            new WebHomeModel("m", "host", 8000, false, false, null), new WebPulse(false, 0, null, "", "tag"), WebUiText.HomeWords);
+
+        public List<string> Calls { get; } = [];
+
+        public WebReply Next { get; set; } = WebReply.Ok;
+
+        public WebHome Read() => Tab;
+
+        public WebHomeSheet? Sheet(string reference) => reference == "entity:light.desk" ? new WebHomeSheet(reference, "Desk", "off", []) : null;
+
+        public WebReply Tap(WebHomeTapRequest request, IPAddress? remote) { Calls.Add("tap " + request.Ref + " " + request.Confirmed); return Next; }
+
+        public WebReply Act(WebHomeActRequest request, IPAddress? remote) { Calls.Add("act " + request.Entity); return Next; }
+
+        public WebReply Scene(WebHomeSceneRequest request, IPAddress? remote) { Calls.Add("scene " + request.Id); return Next; }
+
+        public Task<WebReply> SayAsync(WebHomeSayRequest request, IPAddress? remote, CancellationToken cancellationToken) { Calls.Add("say " + request.Text); return Task.FromResult(new WebReply(WebOutcome.Ok, "Done.")); }
+
+        public WebReply Video(WebHomeVideoRequest request, IPAddress? remote) { Calls.Add("video " + request.Action); return Next; }
+    }
+
+    [Fact]
+    public async Task TheHomePage_IsBehindTheCookie_AndItsReadIsA304WhenUnchanged()
+    {
+        var home = new FakeHome();
+        _backend.Home = home;
+        using var signedOut = await _client.SendAsync(Get("/home", signedIn: false));
+        Assert.DoesNotContain("home.js", await signedOut.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        using var page = await _client.SendAsync(Get("/home"));
+        Assert.Contains("home.js", await page.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        using var script = await _client.GetAsync("/home.js");
+        Assert.Equal(HttpStatusCode.OK, script.StatusCode);
+
+        using var first = await _client.SendAsync(Get("/api/home"));
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Contains("\"ref\":\"entity:light.desk\"", await first.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        using var again = Get("/api/home");
+        again.Headers.IfNoneMatch.Add(first.Headers.ETag!);
+        using var unchanged = await _client.SendAsync(again);
+        Assert.Equal(HttpStatusCode.NotModified, unchanged.StatusCode);
+
+        using var sheet = await _client.SendAsync(Get("/api/home/sheet?ref=entity%3Alight.desk"));
+        Assert.Equal(HttpStatusCode.OK, sheet.StatusCode);
+        using var outside = await _client.SendAsync(Get("/api/home/sheet?ref=entity%3Alock.back"));
+        Assert.Equal(HttpStatusCode.NotFound, outside.StatusCode);
+        using var pulse = await _client.SendAsync(Get("/api/pulse"));
+        Assert.Equal(HttpStatusCode.OK, pulse.StatusCode);
+    }
+
+    [Fact]
+    public async Task HomePosts_ReachTheTab_TheirAskAndRefusalsAsJson()
+    {
+        var home = new FakeHome();
+        _backend.Home = home;
+
+        home.Next = new WebReply(WebOutcome.Conflict, null, Prompt: "Unlock Front Door?");
+        using var ask = await _client.SendAsync(Post("/api/home/tap", "{\"ref\":\"entity:lock.front\"}"));
+        Assert.Equal(HttpStatusCode.Conflict, ask.StatusCode);
+        string json = await ask.Content.ReadAsStringAsync();
+        Assert.Contains("\"needsConfirm\":true", json, StringComparison.Ordinal);
+        Assert.Contains("Unlock Front Door?", json, StringComparison.Ordinal);
+
+        home.Next = new WebReply(WebOutcome.Forbidden, WebUiText.HomeControlsOff);
+        using var off = await _client.SendAsync(Post("/api/home/video", "{\"action\":\"play\"}"));
+        Assert.Equal(HttpStatusCode.Forbidden, off.StatusCode);
+
+        using var said = await _client.SendAsync(Post("/api/home/say", "{\"text\":\"lights?\"}"));
+        Assert.Contains("Done.", await said.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        using var forged = await _client.SendAsync(Post("/api/home/scene", "{\"id\":\"scene.x\"}", csrf: false));
+        Assert.Equal(HttpStatusCode.Forbidden, forged.StatusCode);
+        Assert.Equal(["tap entity:lock.front False", "video play", "say lights?"], home.Calls);
+
+        _backend.Home = null;
+        using var none = await _client.SendAsync(Get("/api/home"));
+        Assert.Equal(HttpStatusCode.NotFound, none.StatusCode);
+    }
+
+    [Fact]
+    public async Task TheUsageCard_IsServedSignedIn_And401Otherwise()
+    {
+        using var signedOut = await _client.SendAsync(Get("/api/usage", signedIn: false));
+        Assert.Equal(HttpStatusCode.Unauthorized, signedOut.StatusCode);
+
+        using var card = await _client.SendAsync(Get("/api/usage"));
+        Assert.Equal(HttpStatusCode.OK, card.StatusCode);
+        var read = System.Text.Json.JsonSerializer.Deserialize(await card.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebUsageCard)!;
+        Assert.Equal(_backend.Card.Lines, read.Lines);
+    }
+
+    [Fact]
+    public async Task TheThemesSheet_TheManifest_AndTheIcons_NeedNoCookie_AndRevalidate()
+    {
+        using var css = await _client.GetAsync("/theme.css");
+        Assert.Equal(HttpStatusCode.OK, css.StatusCode);
+        Assert.Equal("text/css; charset=utf-8", css.Content.Headers.ContentType?.ToString());
+        Assert.Equal(_backend.Css, await css.Content.ReadAsStringAsync());
+        Assert.Equal("no-cache", css.Headers.CacheControl?.ToString());
+        using var again = new HttpRequestMessage(HttpMethod.Get, "/theme.css");
+        again.Headers.IfNoneMatch.Add(css.Headers.ETag!);
+        using var same = await _client.SendAsync(again);
+        Assert.Equal(HttpStatusCode.NotModified, same.StatusCode);
+
+        _backend.Css = "";   // Web UI profile theme off: an empty sheet, its own ETag
+        using var off = await _client.GetAsync("/theme.css");
+        Assert.Equal("\"default\"", off.Headers.ETag?.ToString());
+        Assert.Equal("", await off.Content.ReadAsStringAsync());
+
+        using var manifest = await _client.GetAsync("/manifest.webmanifest");
+        Assert.Equal("application/manifest+json; charset=utf-8", manifest.Content.Headers.ContentType?.ToString());
+        Assert.Contains("\"display\": \"standalone\"", await manifest.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        foreach (string icon in new[] { "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png" })
+        {
+            using var png = await _client.GetAsync(icon);
+            Assert.Equal("image/png", png.Content.Headers.ContentType?.ToString());
+            byte[] bytes = await png.Content.ReadAsByteArrayAsync();
+            Assert.Equal([0x89, (byte)'P', (byte)'N', (byte)'G'], bytes[..4]);
+        }
+
+        using var script = await _client.GetAsync("/signin.js");
+        Assert.Equal(HttpStatusCode.OK, script.StatusCode);
+    }
+
+    [Fact]
+    public async Task APastedSignIn_TakesTheLinkOrTheToken_NeedsTheHeader_AndNeverEchoesIt()
+    {
+        string link = WebUiAuth.SignInLink("127.0.0.1", _host.Port, _token);
+        using var byLink = await _client.SendAsync(Post("/signin", "{\"link\":\"" + link + "\"}", signedIn: false));
+        Assert.Equal(HttpStatusCode.OK, byLink.StatusCode);
+        Assert.StartsWith(WebUiAuth.CookieName(_host.Port) + "=" + _token + ";", Assert.Single(byLink.Headers.GetValues("Set-Cookie")), StringComparison.Ordinal);
+
+        using var byToken = await _client.SendAsync(Post("/signin", "{\"link\":\" " + _token + " \"}", signedIn: false));
+        Assert.Equal(HttpStatusCode.OK, byToken.StatusCode);
+
+        using var wrong = await _client.SendAsync(Post("/signin", "{\"link\":\"not-it\"}", signedIn: false));
+        Assert.Equal(HttpStatusCode.Forbidden, wrong.StatusCode);
+        string said = await wrong.Content.ReadAsStringAsync();
+        Assert.Equal(WebUiText.SignInWrong, System.Text.Json.JsonSerializer.Deserialize(said, WebUiJsonContext.Default.WebResult)!.Message);
+        Assert.DoesNotContain("not-it", said, StringComparison.Ordinal);
+
+        using var forged = await _client.SendAsync(Post("/signin", "{\"link\":\"" + _token + "\"}", csrf: false, signedIn: false));
+        Assert.Equal(HttpStatusCode.Forbidden, forged.StatusCode);
+        Assert.False(forged.Headers.Contains("Set-Cookie"));
+        Assert.Equal(2, _backend.SignIns.Count);
+    }
+
+    [Fact]
+    public async Task ADeferredEntry_IsReadWhole_WhileTheTranscriptHoldsIt()
+    {
+        _backend.Entries[7] = new WebEntry(7, "thinking", "the whole of it", null, null, false) { Summary = "💭 thought for 1.0s", Ended = true };
+        using var found = await _client.SendAsync(Get("/api/entry/7"));
+        Assert.Equal(HttpStatusCode.OK, found.StatusCode);
+        Assert.Contains("the whole of it", await found.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        using var gone = await _client.SendAsync(Get("/api/entry/8"));
+        Assert.Equal(HttpStatusCode.NotFound, gone.StatusCode);
+        using var signedOut = await _client.SendAsync(Get("/api/entry/7", signedIn: false));
+        Assert.Equal(HttpStatusCode.Unauthorized, signedOut.StatusCode);
+    }
+
+    [Fact]
+    public async Task APostPastItsLimit_Is429_WithRetryAfter_AndTheAppsSentence()
+    {
+        // Ask the house's bucket holds one every 2 seconds: the second at once is over, whatever the route answers.
+        using var first = await _client.SendAsync(Post("/api/home/say", "{\"text\":\"hi\"}"));
+        Assert.NotEqual(HttpStatusCode.TooManyRequests, first.StatusCode);
+
+        using var second = await _client.SendAsync(Post("/api/home/say", "{\"text\":\"hi\"}"));
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, second.StatusCode);
+        Assert.True(second.Headers.RetryAfter?.Delta >= TimeSpan.FromSeconds(1));
+        Assert.Contains(WebUiText.SlowDown, await second.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Equal("no-store", second.Headers.CacheControl?.ToString());
     }
 
     [Fact]

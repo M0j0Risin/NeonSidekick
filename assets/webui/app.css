@@ -12,6 +12,8 @@
   --warn: #ffb454;
   --error: #ff6b6b;
   --ok: #5eea9a;
+  --diff-add: #10301f;
+  --diff-del: #3a1018;
   --radius: 10px;
   color-scheme: dark;
 }
@@ -51,6 +53,18 @@ header.top nav a {
   border-radius: 999px;
 }
 header.top nav a.here { color: var(--text); background: var(--panel-2); }
+/* The Chat badge on the other tabs (2026-10-15): a dot while a reply runs, the count of questions waiting. */
+header.top nav a.busy::after { content: " •"; color: var(--accent); }
+header.top nav a.asking::after {
+  content: attr(data-badge);
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #1a0b22;
+  font-size: 12px;
+  font-weight: 700;
+}
 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); flex: none; }
 .dot.on { background: var(--ok); }
 
@@ -74,8 +88,49 @@ main { flex: 1; padding: 12px 16px 16px; max-width: 900px; width: 100%; margin: 
 .entry.warning, .entry.alert { color: var(--warn); white-space: pre-wrap; }
 .entry.error { color: var(--error); white-space: pre-wrap; }
 .entry.separator { border: 0; border-top: 1px solid var(--line); margin: 6px 0; }
-.entry.working { color: var(--dim); font-size: 14px; animation: pulse 1.6s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: 0.45; } }
+
+/* What the terminal shows besides (2026-10-15): the thinking, the output of /cmd, the tool runs, an edit's diff, "(no reply)". */
+.entry.assistant .glyph.none { visibility: hidden; }
+.entry.assistant .body.noreply { color: var(--dim); }
+.entry.thinking { color: var(--dim); font-size: 14px; }
+.entry.thinking .think-head { font-style: italic; }
+.entry.thinking .think-body {
+  white-space: pre-wrap;
+  max-height: 9em;
+  overflow-y: auto;
+  border-left: 2px solid var(--line);
+  padding-left: 8px;
+  margin-top: 2px;
+}
+.entry.thinking details .think-body { max-height: 40vh; }
+.entry.thinking summary, .diff summary { cursor: pointer; }
+.entry.output {
+  margin: 0;
+  padding-left: 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 13px/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+.entry.output.failed { color: var(--warn); }
+.entry.run { display: flex; flex-direction: column; gap: 4px; }
+.entry.run .run-head {
+  background: none;
+  border: 0;
+  padding: 0;
+  min-height: 0;
+  text-align: left;
+  color: var(--dim);
+  font-size: 14px;
+}
+.entry.run.failed .run-head { color: var(--warn); }
+.entry.run .run-body, .entry.run .unit { display: flex; flex-direction: column; gap: 4px; }
+.diff { margin: 4px 0 0 18px; font: 12.5px/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--text); }
+.diff-head, .diff-gap, .diff-more, .diff summary { color: var(--dim); white-space: pre; }
+.diff-row { display: flex; gap: 8px; }
+.diff-row .num, .diff-row .sign { flex: none; color: var(--dim); white-space: pre; }
+.diff-row .code { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff-row.add { background: var(--diff-add); }
+.diff-row.del { background: var(--diff-del); }
 .banner.message button.inline { min-height: 32px; padding: 4px 10px; margin-left: 8px; font-size: 14px; }
 
 /* ── Pictures (later on 2026-10-14) ─────────────────────────────── */
@@ -162,6 +217,29 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 .hidden { display: none !important; }
 
 .compose { display: flex; gap: 8px; align-items: flex-end; }
+
+/* The status row (2026-10-15): the PC's spinner, its label and clocks on the left, the usage on the right, one slim line. */
+.status { display: flex; align-items: center; gap: 10px; font-size: 13px; line-height: 20px; color: var(--dim); min-height: 20px; }
+.status .spin { flex: 1; min-width: 0; display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+.status .spin .frame { color: var(--accent); flex: none; width: 1.2em; text-align: center; }
+.status .spin .label { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.status .spin .clock { flex: none; font-variant-numeric: tabular-nums; }
+.status .usage {
+  flex-shrink: 0;
+  margin-left: auto;
+  min-height: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  position: relative;
+}
+.status .usage::after { content: ""; position: absolute; inset: -12px -6px; }   /* a finger-sized target on a 20px row */
+.usage-card pre { max-height: 40vh; }
 .complete {
   max-height: 34vh;
   overflow-y: auto;
@@ -228,6 +306,18 @@ button:disabled { opacity: 0.45; cursor: default; }
 
 /* ── Shopping ───────────────────────────────────────────────────── */
 .shop-header { color: var(--dim); margin: 0 0 12px; }
+.store-pick { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; color: var(--dim); }
+.store-pick select {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font: inherit;
+}
 .shop-group h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent-2); margin: 16px 0 6px; }
 .shop-item {
   display: flex;
@@ -246,7 +336,91 @@ button:disabled { opacity: 0.45; cursor: default; }
 .shop-item .note, .shop-item .guess { color: var(--dim); font-size: 14px; margin-left: 6px; }
 .shop-item.checked .name { text-decoration: line-through; color: var(--dim); }
 
+/* ── Home (2026-10-15) ───────────────────────────────────────────── */
+main.home { display: flex; flex-direction: column; gap: 12px; }
+#tiles { display: flex; flex-direction: column; gap: 10px; }
+.tile-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 560px) { .tile-group { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 800px) { .tile-group { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.tile {
+  --tile: var(--accent-2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  min-height: 60px;
+  padding: 8px 10px;
+  background: var(--panel);
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+  position: relative;
+}
+.tile .glyph { font-size: 22px; line-height: 1; flex: none; }
+.tile .text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.tile .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .value { font-size: 13px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .more { flex: none; color: var(--dim); font-size: 20px; padding: 0 2px; }
+.tile.tone-on { border-color: var(--tile); }
+.tile.tone-on .name { color: var(--tile); }
+.tile.tone-off .name, .tile.tone-stale .name { color: var(--dim); }
+.tile.tone-alert { border-color: var(--tile); }
+.tile.tone-alert .name, .tile.tone-alert .value { color: var(--tile); font-weight: 700; }
+.tile.tone-stale { opacity: 0.6; }
+.tile:disabled { opacity: 0.8; cursor: default; }
+.tile.pending { animation: pulse 1.2s ease-in-out infinite; }
+.tile.failed { border-color: var(--error); animation: shake 0.4s ease-in-out 1; }
+@keyframes pulse { 50% { opacity: 0.45; } }
+@keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+.home-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+.home-card h2, .home-card summary { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent-2); margin: 0 0 8px; }
+.home-card summary { cursor: pointer; margin: 0; }
+.scene-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.ask-row { display: flex; gap: 8px; }
+.ask-row input { flex: 1; min-width: 0; min-height: 44px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; font: inherit; }
+.home-card .answer { white-space: pre-wrap; margin: 8px 0 0; }
+.home-card .answer.failed, .home-card .failed { color: var(--warn); }
+.video-title { font-weight: 600; overflow-wrap: anywhere; }
+.video-meta, .video-clock, .model-meta, .model-usage, .net { color: var(--dim); font-size: 14px; font-variant-numeric: tabular-nums; }
+.remote { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.remote button { min-width: 44px; padding: 8px; }
+.meter { display: grid; grid-template-columns: 4em 1fr 3.5em; align-items: center; gap: 8px; font-size: 14px; margin: 4px 0; }
+.meter .label { color: var(--dim); }
+.meter .value { text-align: right; font-variant-numeric: tabular-nums; }
+.meter .bar { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.meter .bar i { display: block; height: 100%; background: var(--accent-2); }
+.model-name { font-weight: 600; }
+.sheet-back { position: fixed; inset: 0; z-index: 10; background: rgba(8, 4, 16, 0.6); display: flex; align-items: flex-end; justify-content: center; }
+.sheet {
+  width: 100%;
+  max-width: 640px;
+  max-height: 80dvh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px 14px 0 0;
+  padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+  animation: slide 0.2s ease-out;
+}
+@keyframes slide { from { transform: translateY(40px); opacity: 0; } }
+.sheet-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.sheet-bar h2 { flex: 1; font-size: 16px; margin: 0; }
+.sheet-row { padding: 8px 0; border-top: 1px solid var(--line); }
+.sheet-head { display: flex; gap: 8px; align-items: center; }
+.sheet-head .name { flex: 1; min-width: 0; }
+.sheet-head .state { color: var(--dim); font-size: 14px; }
+.sheet-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.sheet-actions button { min-height: 40px; padding: 6px 10px; font-size: 14px; }
+.sheet .choices { display: flex; gap: 8px; justify-content: flex-end; }
+
 /* ── Sign in ────────────────────────────────────────────────────── */
 .signin { max-width: 420px; margin: 18vh auto 0; text-align: center; padding: 0 16px; }
 .signin h1 { font-size: 22px; }
 .signin p { color: var(--dim); }
+.signin form { display: flex; gap: 8px; margin-top: 16px; }
+.signin input { flex: 1; min-width: 0; min-height: 44px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; font: inherit; }
+
+/* Reduced motion (2026-10-15, E9): nothing pulses, shakes or slides; the spinner stands still (chat.js draws ⏳). */
+@media (prefers-reduced-motion: reduce) {
+  .tile.pending, .tile.failed, .sheet { animation: none; }
+}

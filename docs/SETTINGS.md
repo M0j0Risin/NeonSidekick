@@ -122,6 +122,8 @@ A browser front end for this profile: the chat, its questions and the shopping l
 | Web UI reach | `local` (localhost only) or `lan` (your home network and your tailnet). Either way a browser signs in with `/webui`'s link. | `lan` |
 | Web UI commands | Lets the page run slash commands: the ones that work from a phone run, `/model`, `/reasoning` and `/rewind` show as cards, the lists show on the page, and its dropdown completes commands. See [Commands from the page](INTERFACE.md#commands-from-the-page). Off, the page sends messages alone. | off |
 | Web UI connection details | Shows the `%` and `*` connections' notes (their server and database) in the page's dropdown. Off, it names them alone. The dropdown only: the chat shows what the model says. | on |
+| Web UI home controls | Lets the Home tab act: tiles toggle, sheets run a device's actions, scenes run, *Ask the house* asks Assist, the video remote plays and pauses. Unlocking, opening a garage, gate or door, and disarming still ask on the page. Off, the tab only shows. `/ha` from the chat follows *Web UI commands*. | off |
+| Web UI profile theme | Dresses the pages in the profile's theme, following a `/theme` at once. Off, they keep their own look. | on |
 
 ### Servers
 

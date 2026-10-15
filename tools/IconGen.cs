@@ -8,6 +8,8 @@
 //     dotnet run tools/IconGen.cs                       # writes src/NeonSidekick/Assets/app.ico
 //     dotnet run tools/IconGen.cs -- --preview <dir>    # also 256 / 32 / 16 px PNGs for eyeballing
 //     dotnet run tools/IconGen.cs -- --svg <icon.svg> --out <dir>
+//     dotnet run tools/IconGen.cs -- --web              # the Web UI's icons (2026-10-15): assets/webui/icon-192.png, icon-512.png,
+//                                                       # apple-touch-icon.png (180), on the page's ground, the picture at 80%
 //
 // Svg.Skia pins its own SkiaSharp version; do not add a separate SkiaSharp package.
 // Frames are PNG-compressed, valid inside a .ico at every size since Windows Vista.
@@ -21,6 +23,7 @@ int[] sizes = [16, 20, 24, 32, 40, 48, 64, 128, 256];
 var svgPath = Arg("--svg") ?? "assets/icon.svg";
 var outDir = Arg("--out") ?? "src/NeonSidekick/Assets";
 var previewDir = Arg("--preview");
+bool web = args.Contains("--web");
 
 if (!File.Exists(svgPath))
 {
@@ -33,6 +36,20 @@ if (svg.Load(svgPath) is not { } picture)
 {
     Console.Error.WriteLine($"Could not parse SVG: {svgPath}");
     return 1;
+}
+
+if (web)
+{
+    // Add to Home Screen (2026-10-15): an opaque square (iOS fills a transparent icon with black), the page's own dark ground.
+    var ground = new SKColor(0x12, 0x0b, 0x1f);
+    foreach (var (name, size) in new[] { ("icon-192.png", 192), ("icon-512.png", 512), ("apple-touch-icon.png", 180) })
+    {
+        string path = Path.Combine("assets", "webui", name);
+        File.WriteAllBytes(path, Render(picture, size, ground, 0.8f));
+        Console.WriteLine($"Wrote {Path.GetFullPath(path)}");
+    }
+
+    return 0;
 }
 
 Directory.CreateDirectory(outDir);
@@ -60,15 +77,16 @@ string? Arg(string name)
     return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
 }
 
-static byte[] Render(SKPicture picture, int size)
+static byte[] Render(SKPicture picture, int size, SKColor? ground = null, float fill = 1f)
 {
     var info = new SKImageInfo(size, size, SKColorType.Rgba8888, SKAlphaType.Premul);
     using var surface = SKSurface.Create(info);
     var canvas = surface.Canvas;
-    canvas.Clear(SKColors.Transparent);
+    canvas.Clear(ground ?? SKColors.Transparent);
 
     var bounds = picture.CullRect;
-    var scale = Math.Min(size / bounds.Width, size / bounds.Height);
+    var scale = Math.Min(size / bounds.Width, size / bounds.Height) * fill;
+    canvas.Translate((size - bounds.Width * scale) / 2, (size - bounds.Height * scale) / 2);
     canvas.Scale(scale);
     canvas.Translate(-bounds.Left, -bounds.Top);
     canvas.DrawPicture(picture);

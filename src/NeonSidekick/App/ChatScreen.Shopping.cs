@@ -88,7 +88,7 @@ internal sealed partial class ChatScreen
         var line = ShoppingCommand.Parse(args);
         if (line.Verb == ShoppingVerb.Pane && line.Error is null && _pane.Enabled && _shopping.Store.Available)
         {
-            await new ShoppingMenu(_shopping, _menuPane, _menu.ManageShoppingStoresAsync, input: _input, zone: _time.LocalTimeZone).ShowAsync(cancellationToken).ConfigureAwait(false);
+            await new ShoppingMenu(_shopping, _menuPane, _menu.ManageShoppingStoresAsync, input: _input, zone: _time.LocalTimeZone, time: _time).ShowAsync(cancellationToken).ConfigureAwait(false);
             return;
         }
 

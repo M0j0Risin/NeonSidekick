@@ -38,6 +38,9 @@ public static class WebUiText
     /// <summary>A message from the page stopped before the model answered: it went back to the page's draft. Pinned.</summary>
     public const string WithdrawnNotice = "(canceled — the message is back on the Web UI's page)";
 
+    /// <summary>A shopping line ticked or unticked from the page, flashed on the PC's hint row (2026-10-15).</summary>
+    public static string CheckedFlash(string line, bool on) => Glyph + (on ? "ticked: " : "unticked: ") + line;
+
     /// <summary>A pane answered from the phone, under its question. Pinned.</summary>
     public static string AnsweredNotice(string choice) => "(" + Glyph + "answered from the Web UI: " + choice + ")";
 
@@ -159,6 +162,9 @@ public static class WebUiText
 
     // ── To the page ───────────────────────────────────────────────────────────
 
+    /// <summary>A pasted sign-in whose token does not match (2026-10-15). Never echoes it.</summary>
+    public const string SignInWrong = "That isn't the sign-in link or token: copy it again from /webui at the PC.";
+
     /// <summary>An API call without the cookie.</summary>
     public const string SignInNeeded = "Sign in first: open the link /webui shows in the app.";
 
@@ -201,6 +207,9 @@ public static class WebUiText
 
     /// <summary><c>/model &lt;id&gt;</c> from the page naming an embedded model not installed.</summary>
     public const string WouldInstall = "that embedded model is not installed: install it at the PC.";
+
+    /// <summary>A post past its rate limit (2026-10-15, <see cref="WebRateLimit"/>); the page does not try again by itself.</summary>
+    public const string SlowDown = "Slow down: too many in a row. Try again in a moment.";
 
     /// <summary>An empty message.</summary>
     public const string EmptyMessage = "Nothing to send.";
@@ -265,8 +274,88 @@ public static class WebUiText
     /// <summary>The page's undo of a filled draft.</summary>
     public const string Undo = "Undo";
 
+    /// <summary>The status row's word while the PC works with no label to show (2026-10-15: no pane at the PC).</summary>
+    public const string Working = "working";
+
+    /// <summary>The usage card's title (2026-10-15).</summary>
+    public const string UsageTitle = "Usage";
+
     /// <summary>The page's own words, sent with every snapshot.</summary>
-    public static readonly WebWords Words = new(PictureGone, PictureTooLarge, OpenOriginal, SendAsMessage, UseLine, DraftFilled, Undo);
+    public static readonly WebWords Words = new(PictureGone, PictureTooLarge, OpenOriginal, SendAsMessage, UseLine, DraftFilled, Undo, Working, CloseChoice,
+        UI.TranscriptRenderer.NoReplyText, UI.ThinkingFoldText.LiveBare, EntryGone);
+
+    /// <summary>A folded entry whose text the page asked for after the transcript let it go (2026-10-15).</summary>
+    public const string EntryGone = "(no longer available)";
+
+    /// <summary>The shopping page's store picker (2026-10-15).</summary>
+    public const string StoreLabel = "Store";
+
+    /// <summary>A store the page picked that is gone meanwhile (2026-10-15).</summary>
+    public const string NoSuchStore = "That store is gone from the list.";
+
+    /// <summary>A store picked on the page, flashed on the PC's hint row (2026-10-15).</summary>
+    public static string StoreFlash(string name) => Glyph + "store: " + name;
+
+    // ── The Home tab (2026-10-15) ─────────────────────────────────────────────
+
+    /// <summary>Every Home action while <i>Web UI home controls</i> is off.</summary>
+    public const string HomeControlsOff = "The Home tab only shows: Web UI home controls in /settings › Client › Web UI lets it act.";
+
+    /// <summary>A tile, an action or a scene gone or changed since the page read it.</summary>
+    public const string HomeChanged = "That changed since the page read it: look again.";
+
+    /// <summary>No URL or token for Home Assistant.</summary>
+    public const string HomeNotSetUp = "Home Assistant isn't set up: /settings › Tools › Home › HomeAssistant.";
+
+    /// <summary>The live feed opening.</summary>
+    public const string HomeConnecting = "Connecting to Home Assistant…";
+
+    /// <summary>The live feed lost, trying again.</summary>
+    public static string HomeRetrying(string? error) => "Home Assistant can't be reached" + (string.IsNullOrWhiteSpace(error) ? "" : " (" + error.TrimEnd('.') + ")") + "; trying again.";
+
+    /// <summary>The token refused.</summary>
+    public const string HomeUnauthorized = "Home Assistant refused the token: set a new one at the PC.";
+
+    /// <summary>A question for Assist over the cap.</summary>
+    public static string HomeSayTooLong(int max) => "Too long: a question holds at most " + max.ToString(CultureInfo.InvariantCulture) + " characters.";
+
+    /// <summary>A question while another is asked.</summary>
+    public const string HomeSayBusy = "Home Assistant is still answering the last one.";
+
+    /// <summary>The video remote with no window open.</summary>
+    public const string NoVideo = "No video is open at the PC.";
+
+    /// <summary>The model card's server for the embedded model.</summary>
+    public const string EmbeddedServer = "embedded";
+
+    /// <summary>The model card's server for a Docker container.</summary>
+    public static string DockerServer(string container) => "Docker: " + container;
+
+    /// <summary>The model card's server for the Claude Code server.</summary>
+    public const string ClaudeCodeServer = "Claude Code";
+
+    /// <summary>The Home tab's own words.</summary>
+    public static readonly WebHomeWords HomeWords = new(
+        HomeControlsOff, "Scenes", "Ask the house", "Ask", "Now playing", "The PC", "Model", "Yes", "No", CloseChoice, "loading", "busy", "window", "down", "up");
+
+    /// <summary>A home action from the page, flashed on the PC's hint row: the device and the service.</summary>
+    public static string HomeFlash(string name, string service) => Glyph + name + ": " + service.Replace('_', ' ');
+
+    /// <summary>A question for Assist from the page, flashed on the PC's hint row (never its words).</summary>
+    public const string HomeSayFlash = Glyph + "asked Home Assistant";
+
+    /// <summary>The video remote from the page, flashed on the PC's hint row.</summary>
+    public static string HomeVideoFlash(string action) => Glyph + "video: " + action;
+
+    /// <summary>A home action from the page (audit): the device, the service, the address.</summary>
+    public static string HomeLogLine(string name, string call, IPAddress? remote) => "Web UI called " + call + " on \"" + name + "\" from " + Where(remote) + ".";
+
+    /// <summary>A question for Assist from the page (audit): its length alone, never its words.</summary>
+    public static string HomeSayLogLine(int length, IPAddress? remote) =>
+        "Web UI asked Home Assistant (" + length.ToString(CultureInfo.InvariantCulture) + " characters) from " + Where(remote) + ".";
+
+    /// <summary>The video remote from the page (audit).</summary>
+    public static string HomeVideoLogLine(string action, IPAddress? remote) => "Web UI told the video to " + action + " from " + Where(remote) + ".";
 
     /// <summary>A write the shopping list refused.</summary>
     public const string ShoppingWriteFailed = "The shopping list could not be written.";
@@ -289,9 +378,21 @@ public static class WebUiText
     public static string AnsweredLogLine(string title, string choice, IPAddress? remote) =>
         "Web UI answered \"" + title + "\": " + choice + " from " + Where(remote) + ".";
 
+    /// <summary>A store picked from the phone (audit, 2026-10-15).</summary>
+    public static string StoreLogLine(string store, IPAddress? remote) => "Web UI made \"" + store + "\" the shopping store from " + Where(remote) + ".";
+
     /// <summary>A shopping line ticked from the phone (audit).</summary>
     public static string CheckedLogLine(string line, bool on, IPAddress? remote) =>
         "Web UI " + (on ? "ticked" : "unticked") + " \"" + line + "\" from " + Where(remote) + ".";
+
+    /// <summary>An address past a rate limit, once a minute at most (2026-10-15).</summary>
+    public static string RateLimitedLogLine(IPAddress? remote, WebRateBucket bucket) =>
+        "Web UI: too many " + bucket switch
+        {
+            WebRateBucket.Act => "taps",
+            WebRateBucket.Say => "questions to Home Assistant",
+            _ => "sign-in attempts",
+        } + " from " + Where(remote) + "; refused for now.";
 
     private static string Where(IPAddress? remote) => remote is null ? "an unknown address" : (remote.IsIPv4MappedToIPv6 ? remote.MapToIPv4() : remote).ToString();
 

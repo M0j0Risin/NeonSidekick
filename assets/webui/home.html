@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Home · NeonSidekick</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/theme.css" id="theme-css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<script src="/common.js" defer></script>
+<script src="/home.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="who"><span id="profile">Home</span></div>
+  <nav><a href="/" id="chat-link">Chat</a><a href="/home" class="here">Home</a><a href="/shopping">Shopping</a></nav>
+  <span class="dot" id="dot" title="connection"></span>
+</header>
+<main class="home">
+  <div class="banner waiting hidden" id="ha-status"></div>
+  <p class="banner hidden" id="controls-off"></p>
+  <div id="tiles"></div>
+  <details class="home-card hidden" id="scenes"><summary></summary><div class="scene-row"></div></details>
+  <section class="home-card hidden" id="ask">
+    <h2></h2>
+    <div class="ask-row"><input type="text" id="ask-text" autocomplete="off" enterkeyhint="send"><button type="button" class="primary" id="ask-send"></button></div>
+    <p class="answer hidden" id="ask-answer"></p>
+  </section>
+  <section class="home-card hidden" id="video"></section>
+  <section class="home-card hidden" id="pc"></section>
+  <section class="home-card" id="model"></section>
+  <div class="banner message hidden" id="message"></div>
+</main>
+<div class="sheet-back hidden" id="sheet-back">
+  <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <div class="sheet-bar"><h2 id="sheet-title"></h2><button type="button" id="sheet-close" title="Close" aria-label="Close">✕</button></div>
+    <div id="sheet-body"></div>
+  </section>
+</div>
+</body>
+</html>

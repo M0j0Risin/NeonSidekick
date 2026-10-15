@@ -38,7 +38,7 @@ public static class UsageText
     /// <summary>Beside the Context heading, and the Window row's value, when no server tier and no setting named the window.</summary>
     public const string WindowUnknown = "unknown";
 
-    private const string Sep = " · ";
+    internal const string Sep = " · ";
 
     // ── The Statistics tab ──────────────────────────────────────────────────
 
@@ -313,7 +313,13 @@ public static class UsageText
     /// model reports), so the row reads as before. Never the conversation's summed total: that
     /// counts the re-sent history once per request and sits several times past the real context.
     /// </summary>
-    public static string? HintPart(TokenTally tally, ContextLength? window)
+    public static string? HintPart(TokenTally tally, ContextLength? window) => HintParts(tally, window)?.Joined;
+
+    /// <summary>
+    /// <see cref="HintPart"/> in its three figures (2026-10-15, the Web UI's status row, which drops them one by one on a narrow phone): the
+    /// context in use (over the window when known), its share, and the speed. Null as <see cref="HintPart"/> is.
+    /// </summary>
+    public static UsageParts? HintParts(TokenTally tally, ContextLength? window)
     {
         ArgumentNullException.ThrowIfNull(tally);
         long inUse = tally.LastRequest.Total;
@@ -322,8 +328,7 @@ public static class UsageText
             return null;
         }
 
-        string part = ContextPart(inUse, window, "");
-        return tally.LastReply.TokensPerSecond is { } speed ? part + Sep + Speed(speed, 0) : part;
+        return ContextParts(inUse, window, "", tally.LastReply.TokensPerSecond is { } speed ? Speed(speed, 0) : null);
     }
 
     /// <summary>What marks a figure of the busy row's <see cref="BusyHintPart"/> as estimated. Pinned.</summary>
@@ -340,14 +345,17 @@ public static class UsageText
     /// and the last-known figures null while <see cref="TokenTally.HintHidden"/> (2026-10-03: another model's, through a
     /// load's spinner); the live estimate still shows then, being the new model's own count.
     /// </summary>
-    public static string? BusyHintPart(TokenTally tally, ContextLength? window, MidTurnUsage mode, StreamMeter.Reading live)
+    public static string? BusyHintPart(TokenTally tally, ContextLength? window, MidTurnUsage mode, StreamMeter.Reading live) =>
+        BusyHintParts(tally, window, mode, live)?.Joined;
+
+    /// <summary><see cref="BusyHintPart"/> in its three figures (2026-10-15), each estimated one with its <see cref="EstimateMark"/>.</summary>
+    public static UsageParts? BusyHintParts(TokenTally tally, ContextLength? window, MidTurnUsage mode, StreamMeter.Reading live)
     {
         ArgumentNullException.ThrowIfNull(tally);
         long known = tally.LastRequest.Total;
         if (mode == MidTurnUsage.Estimate && live is { Streaming: true, Chunks: > 0 })
         {
-            string part = ContextPart(known + live.Chunks, window, EstimateMark);
-            return live.ChunksPerSecond is { } rate ? part + Sep + EstimateMark + Speed(rate, 0) : part;
+            return ContextParts(known + live.Chunks, window, EstimateMark, live.ChunksPerSecond is { } rate ? EstimateMark + Speed(rate, 0) : null);
         }
 
         if (known == 0 || tally.HintHidden)
@@ -355,15 +363,17 @@ public static class UsageText
             return null;
         }
 
-        string last = ContextPart(known, window, "");
-        return tally.LastKnownSpeed is { } speed ? last + Sep + Speed(speed, 0) : last;
+        return ContextParts(known, window, "", tally.LastKnownSpeed is { } speed ? Speed(speed, 0) : null);
     }
 
-    /// <summary>The context in use over the window and its share (<c>4.6k / 151.4k · 3%</c>), or <c>4.6k tokens</c> while the window is unknown; <paramref name="mark"/> ahead of each figure.</summary>
-    private static string ContextPart(long inUse, ContextLength? window, string mark) =>
+    /// <summary>
+    /// The context in use over the window (<c>4.6k / 151.4k</c>) and its share (<c>3%</c>), or <c>4.6k tokens</c> and no share while the window
+    /// is unknown; <paramref name="mark"/> ahead of each figure, then <paramref name="speed"/> as given.
+    /// </summary>
+    private static UsageParts ContextParts(long inUse, ContextLength? window, string mark, string? speed) =>
         Percent(inUse, window) is { } percent
-            ? mark + CompactNumber(inUse) + " / " + CompactNumber(window!.Value.Tokens) + Sep + mark + PercentText(percent)
-            : mark + Compact(inUse);
+            ? new UsageParts(mark + CompactNumber(inUse) + " / " + CompactNumber(window!.Value.Tokens), mark + PercentText(percent), speed)
+            : new UsageParts(mark + Compact(inUse), null, speed);
 
     /// <summary>
     /// The <c>/usage</c> lines: the context, the last reply, this conversation, since launch. The
@@ -457,4 +467,14 @@ public static class UsageText
     /// <summary><c>1 reply</c>, <c>2 replies</c>.</summary>
     public static string Plural(long count, string one, string many) =>
         count == 1 ? "1 " + one : N0(count) + " " + many;
+}
+
+/// <summary>
+/// The usage figures the hint row joins (2026-10-15): the tokens in use (over the window when known), the share, the speed — each with its own
+/// estimate mark. <see cref="Joined"/> is the hint row's text; the Web UI shows them apart so a narrow phone can drop one.
+/// </summary>
+public sealed record UsageParts(string Tokens, string? Percent, string? Speed)
+{
+    /// <summary>The figures as the hint row reads them: <c>4.6k / 151.4k · 3% · 42 tok/s</c>.</summary>
+    public string Joined => Tokens + (Percent is null ? "" : UsageText.Sep + Percent) + (Speed is null ? "" : UsageText.Sep + Speed);
 }

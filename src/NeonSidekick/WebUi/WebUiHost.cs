@@ -81,6 +81,7 @@ public sealed class WebUiHost : IWebUiHost
     private readonly object _gate = new();
     private readonly List<OpenStream> _streams = [];
     private readonly PictureServer _pictures = new();
+    private readonly WebRateLimit _limits;
     private WebApplication? _app;
     private WebUiBinding? _binding;
     private CancellationTokenSource _stopping = new();
@@ -95,6 +96,7 @@ public sealed class WebUiHost : IWebUiHost
         _contentRoot = contentRoot ?? throw new ArgumentNullException(nameof(contentRoot));
         _time = time ?? TimeProvider.System;
         _allowRemote = allowRemote ?? Web.LanPolicy.IsPrivate;
+        _limits = new WebRateLimit(_time);
     }
 
     public int Port { get; private set; }
@@ -214,23 +216,55 @@ public sealed class WebUiHost : IWebUiHost
                 return;
             }
 
+            // The limits (2026-10-15): a tap, a question to Home Assistant, a pasted sign-in, each counted per address before anything else.
+            if (WebRateLimit.BucketOf(path, post) is { } bucket && !_limits.TryTake(remote, bucket, out var retry))
+            {
+                response.Headers.CacheControl = "no-store";
+                response.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling(retry.TotalSeconds)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                await ResultAsync(context, StatusCodes.Status429TooManyRequests, new WebResult(false, WebUiText.SlowDown)).ConfigureAwait(false);
+                return;
+            }
+
             if (path == WebUiAuth.SignInPath && get)
             {
                 await SignInAsync(context).ConfigureAwait(false);
                 return;
             }
 
+            if (path == WebUiAuth.SignInPath && post)
+            {
+                // The link pasted on the page (2026-10-15: an app installed from Safari keeps its own cookies), the header no other site can send.
+                await PastedSignInAsync(context).ConfigureAwait(false);
+                return;
+            }
+
+            if (get && path == "/theme.css")
+            {
+                // The profile's theme (2026-10-15), cookie-free like app.css: a plain link revalidates on each load, so the page is themed from its first paint.
+                await TextAssetAsync(context, _backend.ThemeCss(), "text/css; charset=utf-8").ConfigureAwait(false);
+                return;
+            }
+
+            if (get && path == "/manifest.webmanifest")
+            {
+                await TextAssetAsync(context, _backend.Manifest(), "application/manifest+json; charset=utf-8").ConfigureAwait(false);
+                return;
+            }
+
             string name = path.TrimStart('/');
-            if (get && name is "app.css" or "chat.js" or "shopping.js" or "favicon.svg")
+            if (get && WebUiAssets.IsStatic(name))
             {
                 await AssetAsync(context, name).ConfigureAwait(false);
                 return;
             }
 
             bool signedIn = SignedIn(context);
-            if (get && path is "/" or "/index.html" or "/shopping" or "/shopping.html")
+            if (get && path is "/" or "/index.html" or "/shopping" or "/shopping.html" or "/home" or "/home.html")
             {
-                string page = !signedIn ? WebUiAssets.SignInPage : path.StartsWith("/shopping", StringComparison.Ordinal) ? WebUiAssets.ShoppingPage : WebUiAssets.ChatPage;
+                string page = !signedIn ? WebUiAssets.SignInPage
+                    : path.StartsWith("/shopping", StringComparison.Ordinal) ? WebUiAssets.ShoppingPage
+                    : path.StartsWith("/home", StringComparison.Ordinal) ? WebUiAssets.HomePage
+                    : WebUiAssets.ChatPage;
                 await AssetAsync(context, page).ConfigureAwait(false);
                 return;
             }
@@ -254,6 +288,21 @@ public sealed class WebUiHost : IWebUiHost
                 return;
             }
 
+            if (get && path.StartsWith(EntryPrefix, StringComparison.Ordinal))
+            {
+                // A deferred entry opened on the page (2026-10-15): whole while the transcript holds it.
+                if (long.TryParse(path[EntryPrefix.Length..], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out long seq) && _backend.Entry(seq) is { } entry)
+                {
+                    await JsonAsync(context, StatusCodes.Status200OK, entry, WebUiJsonContext.Default.WebEntry).ConfigureAwait(false);
+                }
+                else
+                {
+                    await ResultAsync(context, StatusCodes.Status404NotFound, new WebResult(false, WebUiText.EntryGone)).ConfigureAwait(false);
+                }
+
+                return;
+            }
+
             if (get)
             {
                 switch (path)
@@ -263,6 +312,29 @@ public sealed class WebUiHost : IWebUiHost
                         return;
                     case "/api/shopping":
                         await JsonAsync(context, StatusCodes.Status200OK, _backend.Shopping(), WebUiJsonContext.Default.WebShopping).ConfigureAwait(false);
+                        return;
+                    case "/api/usage":
+                        // The usage card (2026-10-15): the /usage figures on the page alone.
+                        await JsonAsync(context, StatusCodes.Status200OK, _backend.Usage(), WebUiJsonContext.Default.WebUsageCard).ConfigureAwait(false);
+                        return;
+                    case "/api/pulse":
+                        // The Chat badge on the other tabs (2026-10-15).
+                        await TaggedJsonAsync(context, _backend.Pulse(), WebUiJsonContext.Default.WebPulse).ConfigureAwait(false);
+                        return;
+                    case "/api/home" when _backend.Home is { } home:
+                        // The Home tab (2026-10-15): read often, so an unchanged tab is a 304.
+                        await TaggedJsonAsync(context, home.Read(), WebUiJsonContext.Default.WebHome).ConfigureAwait(false);
+                        return;
+                    case "/api/home/sheet" when _backend.Home is { } home:
+                        if (home.Sheet(context.Request.Query["ref"].ToString()) is { } sheet)
+                        {
+                            await JsonAsync(context, StatusCodes.Status200OK, sheet, WebUiJsonContext.Default.WebHomeSheet).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            await ResultAsync(context, StatusCodes.Status404NotFound, new WebResult(false, WebUiText.HomeChanged)).ConfigureAwait(false);
+                        }
+
                         return;
                 }
             }
@@ -293,6 +365,8 @@ public sealed class WebUiHost : IWebUiHost
                     "/api/stop" => _backend.Stop(remote),
                     "/api/answer" => await ReadAsync(context, WebUiJsonContext.Default.WebAnswerRequest).ConfigureAwait(false) is { } answer ? _backend.Answer(answer, remote) : null,
                     "/api/shopping/check" => await ReadAsync(context, WebUiJsonContext.Default.WebCheckRequest).ConfigureAwait(false) is { } check ? _backend.Check(check, remote) : null,
+                    "/api/shopping/store" => await ReadAsync(context, WebUiJsonContext.Default.WebStoreRequest).ConfigureAwait(false) is { } store ? _backend.UseStore(store, remote) : null,
+                    "/api/home/tap" or "/api/home/act" or "/api/home/scene" or "/api/home/say" or "/api/home/video" => await HomePostAsync(context, path, remote).ConfigureAwait(false),
                     _ => new WebReply(WebOutcome.NotFound),
                 };
                 if (reply is not { } done)
@@ -301,7 +375,11 @@ public sealed class WebUiHost : IWebUiHost
                     return;
                 }
 
-                await ResultAsync(context, StatusOf(done.Outcome), new WebResult(done.Outcome == WebOutcome.Ok, done.Message, done.AsText, done.Use)).ConfigureAwait(false);
+                await ResultAsync(context, StatusOf(done.Outcome), new WebResult(done.Outcome == WebOutcome.Ok, done.Message, done.AsText, done.Use)
+                {
+                    NeedsConfirm = done.Prompt is not null ? true : null,
+                    Prompt = done.Prompt,
+                }).ConfigureAwait(false);
                 return;
             }
 
@@ -327,6 +405,46 @@ public sealed class WebUiHost : IWebUiHost
             }
         }
     }
+
+    /// <summary>A Home tab post (2026-10-15): its body read, the tab's side asked; null for a body that does not read, a 404 with no tab.</summary>
+    private async Task<WebReply?> HomePostAsync(HttpContext context, string path, System.Net.IPAddress? remote)
+    {
+        if (_backend.Home is not { } home)
+        {
+            return new WebReply(WebOutcome.NotFound);
+        }
+
+        return path switch
+        {
+            "/api/home/tap" => await ReadAsync(context, WebUiJsonContext.Default.WebHomeTapRequest).ConfigureAwait(false) is { } tap ? home.Tap(tap, remote) : null,
+            "/api/home/act" => await ReadAsync(context, WebUiJsonContext.Default.WebHomeActRequest).ConfigureAwait(false) is { } act ? home.Act(act, remote) : null,
+            "/api/home/scene" => await ReadAsync(context, WebUiJsonContext.Default.WebHomeSceneRequest).ConfigureAwait(false) is { } scene ? home.Scene(scene, remote) : null,
+            "/api/home/say" => await ReadAsync(context, WebUiJsonContext.Default.WebHomeSayRequest).ConfigureAwait(false) is { } say ? await home.SayAsync(say, remote, context.RequestAborted).ConfigureAwait(false) : null,
+            _ => await ReadAsync(context, WebUiJsonContext.Default.WebHomeVideoRequest).ConfigureAwait(false) is { } video ? home.Video(video, remote) : null,
+        };
+    }
+
+    /// <summary>A JSON answer with an ETag of its bytes (2026-10-15): the same answer again is a 304 with no body, for the pages that read often.</summary>
+    private static async Task TaggedJsonAsync<T>(HttpContext context, T value, JsonTypeInfo<T> info)
+    {
+        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(value, info);
+        string etag = "\"" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes))[..16] + "\"";
+        context.Response.Headers.CacheControl = "no-cache";
+        context.Response.Headers.ETag = etag;
+        if (context.Request.Headers.IfNoneMatch == etag)
+        {
+            context.Response.StatusCode = StatusCodes.Status304NotModified;
+            return;
+        }
+
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        context.Response.ContentType = "application/json; charset=utf-8";
+        context.Response.ContentLength = bytes.Length;
+        await context.Response.Body.WriteAsync(bytes, context.RequestAborted).ConfigureAwait(false);
+    }
+
+    /// <summary>Where a deferred entry is read whole: <c>/api/entry/{seq}</c> (2026-10-15).</summary>
+    public const string EntryPrefix = "/api/entry/";
 
     /// <summary>Where the pictures are served: <c>/api/picture/{run}/{id}/{thumb|mid|full}</c>.</summary>
     public const string PicturePrefix = "/api/picture/";
@@ -355,6 +473,7 @@ public sealed class WebUiHost : IWebUiHost
         WebOutcome.Refused => StatusCodes.Status422UnprocessableEntity,
         WebOutcome.Conflict => StatusCodes.Status409Conflict,
         WebOutcome.NotFound => StatusCodes.Status404NotFound,
+        WebOutcome.Forbidden => StatusCodes.Status403Forbidden,
         _ => StatusCodes.Status429TooManyRequests,
     };
 
@@ -385,6 +504,14 @@ public sealed class WebUiHost : IWebUiHost
             return;
         }
 
+        SetCookie(context, binding);
+        _backend.SignedIn(remote);
+        // The token leaves the address bar (and the history's next entry) at once.
+        context.Response.StatusCode = StatusCodes.Status303SeeOther;
+        context.Response.Headers.Location = "/";
+    }
+
+    private void SetCookie(HttpContext context, WebUiBinding binding) =>
         context.Response.Cookies.Append(WebUiAuth.CookieName(Port), binding.Token, new CookieOptions
         {
             HttpOnly = true,
@@ -393,10 +520,53 @@ public sealed class WebUiHost : IWebUiHost
             MaxAge = WebUiAuth.CookieLifetime,
             IsEssential = true,
         });
+
+    /// <summary>
+    /// A sign-in pasted on the page (2026-10-15, E8): the whole link or the bare token, as JSON with the header no other site can send (so no site
+    /// can sign a browser in to its own session), checked the way the link is; the same cookie, and the page reloads where it is. Never echoes it.
+    /// </summary>
+    private async Task PastedSignInAsync(HttpContext context)
+    {
+        var remote = context.Connection.RemoteIpAddress;
+        context.Response.Headers.CacheControl = "no-store";
+        if (!CrossSiteSafe(context.Request))
+        {
+            await ResultAsync(context, StatusCodes.Status403Forbidden, new WebResult(false, WebUiText.PostRefused)).ConfigureAwait(false);
+            return;
+        }
+
+        var request = await ReadAsync(context, WebUiJsonContext.Default.WebSignInRequest).ConfigureAwait(false);
+        if (_binding is not { } binding || !WebUiAuth.Matches(WebUiAuth.TokenFrom(request?.Link), binding.Token))
+        {
+            DiagnosticLog.Info(Category, WebUiText.SignInFailedLogLine(remote));
+            await ResultAsync(context, StatusCodes.Status403Forbidden, new WebResult(false, WebUiText.SignInWrong)).ConfigureAwait(false);
+            return;
+        }
+
+        SetCookie(context, binding);
         _backend.SignedIn(remote);
-        // The token leaves the address bar (and the history's next entry) at once.
-        context.Response.StatusCode = StatusCodes.Status303SeeOther;
-        context.Response.Headers.Location = "/";
+        await ResultAsync(context, StatusCodes.Status200OK, new WebResult(true)).ConfigureAwait(false);
+    }
+
+    /// <summary>A text the app makes per request (the theme's sheet, the manifest), cookie-free, with an ETag of its bytes: unchanged, a 304.</summary>
+    private static async Task TextAssetAsync(HttpContext context, string text, string type)
+    {
+        byte[] bytes = Encoding.UTF8.GetBytes(text);
+        string etag = bytes.Length == 0 ? "\"default\"" : "\"" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes))[..16] + "\"";
+        context.Response.Headers.CacheControl = "no-cache";
+        context.Response.Headers.ETag = etag;
+        if (context.Request.Headers.IfNoneMatch == etag)
+        {
+            context.Response.StatusCode = StatusCodes.Status304NotModified;
+            return;
+        }
+
+        context.Response.ContentType = type;
+        context.Response.ContentLength = bytes.Length;
+        if (!HttpMethods.IsHead(context.Request.Method))
+        {
+            await context.Response.Body.WriteAsync(bytes, context.RequestAborted).ConfigureAwait(false);
+        }
     }
 
     private static async Task AssetAsync(HttpContext context, string name, int status = StatusCodes.Status200OK)

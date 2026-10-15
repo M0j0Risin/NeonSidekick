@@ -48,6 +48,16 @@ internal sealed partial class ChatScreen
             Nudge = WebNudge,
             CommandSettings = WebCommandSettingsNow,
             HeldForPc = HeldWebLines,
+            // What the page did, on the hint row for a moment (2026-10-15): handed over on a pool thread, never a request's.
+            FlashOnPc = text => _pane.Flash(text),
+            // The page's status row (2026-10-15): the PC's spinner and usage, read without waiting on the pane's lock.
+            StatusNow = WebStatusNow,
+            UsageLines = () => UsageText.Lines(_session.Usage, _session.ContextLength),
+            // The Home tab (2026-10-15): its side, and its lease's end checked on the session's 1-second tick.
+            Home = new HomeSide(this),
+            Tick = HomeWebTick,
+            // The pages wear the profile's theme (2026-10-15), per request.
+            ProfileTheme = () => _effective().WebUiProfileTheme,
         };
         return (session, new WebUiController(webUiHost, session));
     }
@@ -56,9 +66,11 @@ internal sealed partial class ChatScreen
     private void WireWebUiFeed()
     {
         _transcript.Feed = _webUi.Feed;
+        // The page folds a tool run as the pane does (2026-10-15): Tool collapse count, read as each run opens.
+        _webUi.Feed.ToolKeep = () => _effective().ToolCollapseCount;
         _transcript.WebPicture = WebPictureOf;
-        // A command from the page shows its spinner's label there while no model work runs (later on 2026-10-14).
-        _transcript.MirrorSpinner = () => FromWebNow && !ScopesNow().Working;
+        // The PC's spinner on the page's status row (2026-10-15): every start, rename and end, sent at once (throttled).
+        _pane.BusyChanged += _webUi.StatusNudge;
         _webUi.PictureSource = WebPictureSourceOf;
         _webUi.Feed.PictureReleased += ForgetWebPicture;
         _pane.Committed = text => _webUi.Feed.Add(FeedKind.User, text);
@@ -283,7 +295,32 @@ internal sealed partial class ChatScreen
             _webUi.Waiting,
             WaitingAtPc(working),
             WebUiText.Version,
-            WebUiAssets.Current);
+            WebUiAssets.Current,
+            // The theme's name (2026-10-15): a /theme at the PC re-links the page's sheet; empty while the pages keep their own look.
+            effective.WebUiProfileTheme ? Theme.Current.Name : "");
+    }
+
+    /// <summary>
+    /// The page's status row (2026-10-15), read on a timer or a request's thread (reads only, no lock of the pane's): the PC's spinner label and its
+    /// clocks (the step's only while the PC shows it), and the usage the PC's Status bar shows — the busy row's figures while a spinner runs (none
+    /// during a /botchat turn), the idle row's otherwise, whatever the Status bar's Usage item says. The key leaves out the running clocks.
+    /// </summary>
+    private (WebStatus Status, string Key) WebStatusNow()
+    {
+        var busy = _pane.BusyNow();
+        bool step = busy is not null && _turnRunning && _toolStage;
+        var parts = busy is null
+            ? UsageText.HintParts(_session.Usage, _session.ContextLength)
+            : _botTurnRunning ? null
+            : UsageText.BusyHintParts(_session.Usage, _session.ContextLength, MidTurnUsageMode.TryParse(_effective().LlmMidTurnUsage, out var mode) ? mode : MidTurnUsage.LastKnown, _session.Meter.Read());
+        var status = new WebStatus(
+            busy?.Label,
+            busy is { } running ? (long)running.Elapsed.TotalMilliseconds : null,
+            step ? (long)busy!.Value.Step.TotalMilliseconds : null,
+            parts is null ? null : new WebUsage(parts.Tokens, parts.Percent, parts.Speed));
+        string key = (busy is { } r ? r.Label + "\n" + r.Since.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\n" + (step ? r.StageSince : 0).ToString(System.Globalization.CultureInfo.InvariantCulture) : "")
+            + "\n" + parts?.Joined;
+        return (status, key);
     }
 
     /// <summary>

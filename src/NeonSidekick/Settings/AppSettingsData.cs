@@ -3194,6 +3194,22 @@ public sealed class AppSettingsData
     public bool WebUiConnectionDetails { get; set; } = true;
 
     /// <summary>
+    /// Whether the Web UI's Home tab may act (2026-10-15, the user's call: off by default): on, its tiles toggle, its sheets run a device's
+    /// actions, its scenes run, <i>Ask the house</i> asks Home Assistant's Assist and the video remote plays and pauses the PC's YouTube window —
+    /// the home bar's own confirms (an unlock, a garage, gate or door opening, a disarm) still asked on the page. Off, the tab is read-only:
+    /// states, meters, now playing. It gates the Home tab alone; <c>/ha</c> from the chat is <see cref="WebUiCommands"/>'s. Read at each
+    /// request. No variable.
+    /// </summary>
+    public bool WebUiHomeControls { get; set; }
+
+    /// <summary>
+    /// Whether the Web UI's pages wear the profile's theme (2026-10-15, the user's call: on by default): on, their accents, tones and grounds are
+    /// the theme's (<c>/theme.css</c> from <see cref="Theme"/>'s palette) and follow a <c>/theme</c> at once; off, the pages keep their own default
+    /// look. Read at each request. No variable.
+    /// </summary>
+    public bool WebUiProfileTheme { get; set; } = true;
+
+    /// <summary>
     /// The Web UI's sign-in token (2026-10-14): 32 random bytes as hex, minted when the Web UI first serves and by <c>/webui reset</c>,
     /// kept encrypted for this Windows user (<see cref="SettingsSecrets"/>; the keychain on a Mac). A browser opens the link
     /// <c>/webui</c> shows and keeps a cookie. Never logged (<see cref="SettingsDiff.Secrets"/>); never copied to another profile

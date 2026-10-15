@@ -6,6 +6,12 @@ using Spectre.Console.Rendering;
 namespace NeonSidekick.UI;
 
 /// <summary>
+/// The pane's spinner as <see cref="ScreenPane.BusyNow"/> reads it (2026-10-15): the label the busy row shows, the time since the spinner started
+/// and since its label last changed, and the two starts as timestamps (stable while nothing changes, so a reader can tell a new step from a tick).
+/// </summary>
+public readonly record struct BusyReading(string Label, TimeSpan Elapsed, TimeSpan Step, long Since, long StageSince);
+
+/// <summary>
 /// The screen's bottom rows: a rule, the input rows, a second rule and a hint line, kept on the last
 /// rows of the window while the transcript flows above them — the Claude Code shape. An <see cref="IAnsiConsole"/>
 /// the chat screen writes through: every write is a <em>flow</em> write (the transcript), and the
@@ -3606,14 +3612,17 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             RedrawHint();
             RefreshGhost();
             RefreshHintsLocked();   // the keys' lead and an armed prompt are the rest's (2026-10-14): the held row goes blank
+            PublishBusy();
         }
 
+        RaiseBusyChanged();
         return new BusyScope(this, slot);
     }
 
     /// <summary>The scope's label, from any thread; nothing once the scope ended. Shown when the scope is the top one; the count is not restarted.</summary>
     private void SetBusyLabel(int slot, string label)
     {
+        bool changed = false;
         lock (_gate)
         {
             if (slot >= _busyLabels.Count)
@@ -3627,11 +3636,18 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 if (!string.Equals(_busyLabel, label, StringComparison.Ordinal))
                 {
                     _stageSince = _time.GetTimestamp();   // a new step: its own clock starts (2026-10-04)
+                    changed = true;
                 }
 
                 _busyLabel = label;
                 RedrawHint();
+                PublishBusy();
             }
+        }
+
+        if (changed)
+        {
+            RaiseBusyChanged();
         }
     }
 
@@ -3651,8 +3667,48 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             RedrawHint();
             RefreshGhost();
             RefreshHintsLocked();
+            PublishBusy();
         }
+
+        RaiseBusyChanged();
     }
+
+    /// <summary>The spinner as it stands, for <see cref="BusyNow"/>: its label and its two clocks' starts, or none.</summary>
+    private sealed record BusyState(string Label, long Since, long StageSince);
+
+    // Rewritten under _gate at every start, rename and end; read with no lock (BusyNow).
+    private volatile BusyState? _busyState;
+
+    /// <summary>Under <c>_gate</c>: the spinner now, for readers that must not take the lock.</summary>
+    private void PublishBusy() => _busyState = _busyLabel is { } label ? new BusyState(label, _busySince, _stageSince) : null;
+
+    /// <summary>
+    /// The spinner now, from any thread and never waiting (2026-10-15, the Web UI's status row): its label as the busy row shows it, the time
+    /// since it started (a nested one's count is the outer's) and since its label last changed. The pane draws under its lock while it writes to
+    /// the console, and a console write can stall (a mouse selection in the terminal), so this reads a copy published under that lock instead of
+    /// taking it. Null while no spinner runs, or with the pane disabled.
+    /// </summary>
+    public BusyReading? BusyNow()
+    {
+        if (_busyState is not { } state)
+        {
+            return null;
+        }
+
+        long now = _time.GetTimestamp();
+        return new BusyReading(state.Label, _time.GetElapsedTime(state.Since, now), _time.GetElapsedTime(state.StageSince, now), state.Since, state.StageSince);
+    }
+
+    /// <summary>
+    /// The spinner started, its shown label changed, or it ended (2026-10-15): raised after the pane's lock is let go, on the thread that did it.
+    /// Subscribers must not block (the Web UI's status nudge).
+    /// </summary>
+    public event Action? BusyChanged;
+
+    private void RaiseBusyChanged() => BusyChanged?.Invoke();
+
+    /// <summary>The pane's draw lock, for the tests that hold it as a stalled console would (2026-10-15).</summary>
+    internal object GateForTests => _gate;
 
     /// <summary>
     /// A live spinner (<see cref="BeginBusy"/>): <see cref="SetLabel"/> renames it while it runs — a

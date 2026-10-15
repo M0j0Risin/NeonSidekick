@@ -90,9 +90,10 @@ internal sealed partial class ChatScreen
             lock (_homeGate)
             {
                 _homeCache = null;
+                _homeBarIds = null;
             }
 
-            _homeLive.Want(null);
+            HomeWantSync();   // the Web UI's Home tab may still want its own (2026-10-15)
             return null;
         }
 
@@ -118,6 +119,7 @@ internal sealed partial class ChatScreen
             if (cache is null || !ReferenceEquals(ids, cache.Ids))
             {
                 want = ids;
+                _homeBarIds = ids;
             }
 
             bool due = cache is null || !sameItems || cache.Cells != cells || !ReferenceEquals(cache.Palette, Theme.Current) || !ReferenceEquals(cache.Ids, ids)
@@ -146,7 +148,7 @@ internal sealed partial class ChatScreen
 
         if (want is not null)
         {
-            _homeLive.Want(want.ToList());
+            HomeWantSync();   // the bar's, with the Web UI's Home tab's while a page holds it (2026-10-15)
         }
 
         return row;

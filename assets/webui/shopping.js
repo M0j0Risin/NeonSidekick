@@ -1,24 +1,16 @@
 // NeonSidekick's Web UI, the shopping page (2026-10-14): the loaded profile's list walked through its store; a tap ticks or unticks a
-// line. The list has no change event, so the page reads it again every five seconds while it is visible, and at once after a tap.
+// line. The list has no change event, so the page reads it again every five seconds while it is visible, and at once after a tap. The shared
+// helpers are common.js's (2026-10-15): the post, the sentence, the dot, the self-reload after an upgrade.
 'use strict';
 
+const { el, say, post } = Neon;
 const listEl = document.getElementById('list');
 const headerEl = document.getElementById('header');
-const messageEl = document.getElementById('message');
-const dot = document.getElementById('dot');
+const storeBox = document.getElementById('store');
+const storeLabel = storeBox.querySelector('span');
+const storePick = storeBox.querySelector('select');
 let busy = false;
-
-function el(tag, cls, text) {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text !== undefined && text !== null) e.textContent = text;
-  return e;
-}
-
-function say(text) {
-  messageEl.textContent = text || '';
-  messageEl.classList.toggle('hidden', !text);
-}
+let active = null;
 
 function row(item, guessMark) {
   const b = el('button', 'shop-item' + (item.checked ? ' checked' : ''));
@@ -33,7 +25,44 @@ function row(item, guessMark) {
   return b;
 }
 
+// The store picker (2026-10-15): with two or more stores, the phone's own picker; a change walks the list through the new one.
+function renderStores(list) {
+  const stores = list.stores || [];
+  storeBox.classList.toggle('hidden', stores.length < 2);
+  if (stores.length < 2) return;
+  storeLabel.textContent = list.storeLabel || 'Store';
+  const key = stores.map(s => s.id + ':' + s.name).join('|');
+  if (storePick.dataset.key !== key) {
+    storePick.replaceChildren(...stores.map(s => { const o = el('option', null, s.name); o.value = String(s.id); return o; }));
+    storePick.dataset.key = key;
+  }
+  active = list.active === undefined || list.active === null ? null : String(list.active);
+  if (active !== null && document.activeElement !== storePick) storePick.value = active;
+}
+
+async function pickStore() {
+  const picked = storePick.value;
+  if (picked === active) return;
+  busy = true;
+  storePick.disabled = true;
+  say('');
+  try {
+    const r = await post('/api/shopping/store', { id: Number(picked) });
+    if (!r.ok) {
+      storePick.value = active;   // back to the store the list is walked through
+      say(r.message || 'That did not go through.');
+    }
+  } finally {
+    busy = false;
+    storePick.disabled = false;
+    poller.now();
+  }
+}
+
+storePick.addEventListener('change', pickStore);
+
 function render(list) {
+  renderStores(list);
   headerEl.textContent = list.note || list.header || '';
   listEl.replaceChildren();
   for (const group of list.groups || []) {
@@ -52,13 +81,10 @@ function render(list) {
 
 async function load() {
   if (busy) return;
-  try {
-    const r = await fetch('/api/shopping', { credentials: 'same-origin', cache: 'no-store' });
-    if (r.status === 401) { location.reload(); return; }
-    dot.classList.toggle('on', r.ok);
-    if (r.ok) render(await r.json());
-  } catch {
-    dot.classList.remove('on');
+  const r = await Neon.get('/api/shopping', false);
+  if (r.ok && r.json) {
+    if (Neon.staleAssets(r.json.assets)) return;
+    render(r.json);
   }
 }
 
@@ -66,26 +92,14 @@ async function tick(id, on) {
   busy = true;
   say('');
   try {
-    const r = await fetch('/api/shopping/check', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-Neon': '1' },
-      body: JSON.stringify({ id: id, on: on }),
-    });
-    if (r.status === 401) { location.reload(); return; }
-    if (!r.ok) {
-      let j = null;
-      try { j = await r.json(); } catch { /* none */ }
-      say(j && j.message ? j.message : 'That did not go through.');
-    }
-  } catch {
-    say('The app could not be reached.');
+    const r = await post('/api/shopping/check', { id: id, on: on });
+    if (!r.ok) say(r.message || 'That did not go through.');
   } finally {
     busy = false;
-    load();
+    poller.now();
   }
 }
 
-load();
-setInterval(() => { if (document.visibilityState === 'visible') load(); }, 5000);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') load(); });
+const poller = Neon.poll(load, 5000);
+// The Chat badge (2026-10-15): a reply running, a question waiting.
+Neon.poll(async () => { const r = await Neon.get('/api/pulse', true); if (r.ok && r.json) Neon.pulse(r.json); }, 3000);

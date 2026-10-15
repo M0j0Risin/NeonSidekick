@@ -142,6 +142,17 @@ public sealed class HaCatalog
         return domains.Length == 0 ? members : members.Where(id => domains.Contains(DomainOf(id), StringComparer.Ordinal)).ToList();
     }
 
+    /// <summary>
+    /// Every visible entity of <paramref name="domain"/> the catalog knows (2026-10-15, the Web UI's scenes): the registry's, or the states' without
+    /// one, by id.
+    /// </summary>
+    public IReadOnlyList<string> EntitiesOf(string domain)
+    {
+        ArgumentNullException.ThrowIfNull(domain);
+        IEnumerable<string> ids = _registry.Count > 0 ? _registry.Keys : _states.Keys;
+        return ids.Where(id => string.Equals(DomainOf(id), domain, StringComparison.Ordinal) && Visible(id)).Order(StringComparer.Ordinal).ToList();
+    }
+
     /// <summary>The name to show for an entity: the state's friendly name, else the registry's, else the id.</summary>
     public string NameOf(string entityId)
     {

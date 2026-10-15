@@ -44,6 +44,15 @@ public static class ToolGroupText
         return TranscriptRenderer.Truncate(head + calls + failures + " — " + string.Join(", ", names), TranscriptRenderer.ToolTextLimit);
     }
 
+    /// <summary>
+    /// <see cref="Summary"/> without its indent and triangle (2026-10-15, the Web UI's run head, which draws its own ▸/▾):
+    /// <c>🛠️ 3 tool calls — grep ×2, read_file</c>.
+    /// </summary>
+    public static string Bare(IReadOnlyList<(string Name, int Count)> tally, int failed = 0) => Summary(tally, expanded: false, failed)[Lead.Length..];
+
+    /// <summary>What every summary opens with: the indent and the triangle.</summary>
+    private const string Lead = "  " + CollapsedGlyph + " ";
+
     /// <summary>After the count of a run with failed results (2026-10-04): <c> · 1 failed</c>. Pinned.</summary>
     public static string FailedNote(int failed) => " · " + failed.ToString(CultureInfo.InvariantCulture) + " failed";
 

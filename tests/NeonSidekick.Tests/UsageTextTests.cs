@@ -352,6 +352,28 @@ public class UsageTextTests
     }
 
     [Fact]
+    public void TheParts_AreTheHintRowsFiguresApart_EachMarkedWhenEstimated_AndJoinToTheRow()
+    {
+        var tally = Filled();
+
+        var idle = UsageText.HintParts(tally, Window)!;
+        Assert.Equal(("1.2k / 4.1k", "30%", "46 tok/s"), (idle.Tokens, idle.Percent, idle.Speed));
+        Assert.Equal(UsageText.HintPart(tally, Window), idle.Joined);
+
+        var unknown = UsageText.HintParts(tally, null)!;
+        Assert.Equal(("1.2k tokens", (string?)null), (unknown.Tokens, unknown.Percent));
+        Assert.Equal(UsageText.HintPart(tally, null), unknown.Joined);
+        Assert.Null(UsageText.HintParts(new TokenTally(), Window));
+
+        var live = new StreamMeter.Reading(true, 500, 40);
+        var estimate = UsageText.BusyHintParts(tally, Window, MidTurnUsage.Estimate, live)!;
+        Assert.Equal(("~1.7k / 4.1k", "~42%", "~40 tok/s"), (estimate.Tokens, estimate.Percent, estimate.Speed));
+        Assert.Equal(UsageText.BusyHintPart(tally, Window, MidTurnUsage.Estimate, live), estimate.Joined);
+        Assert.Equal(UsageText.BusyHintPart(tally, Window, MidTurnUsage.LastKnown, live), UsageText.BusyHintParts(tally, Window, MidTurnUsage.LastKnown, live)!.Joined);
+        Assert.Null(UsageText.BusyHintParts(tally, Window, MidTurnUsage.Estimate, new StreamMeter.Reading(true, 1, null))!.Speed);
+    }
+
+    [Fact]
     public void BusyHintPart_Estimate_AddsTheStreamedChunks_Marked_AndFallsBackOutsideAStream()
     {
         var tally = Filled();

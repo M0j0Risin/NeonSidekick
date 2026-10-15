@@ -6,15 +6,22 @@
 <title>Shopping · NeonSidekick</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/theme.css" id="theme-css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<script src="/common.js" defer></script>
 <script src="/shopping.js" defer></script>
 </head>
 <body>
 <header class="top">
   <div class="who"><span id="profile">Shopping</span></div>
-  <nav><a href="/">Chat</a><a href="/shopping" class="here">Shopping</a></nav>
+  <nav><a href="/" id="chat-link">Chat</a><a href="/home">Home</a><a href="/shopping" class="here">Shopping</a></nav>
   <span class="dot" id="dot" title="connection"></span>
 </header>
 <main>
+  <label class="store-pick hidden" id="store"><span></span><select></select></label>
   <p class="shop-header" id="header"></p>
   <div id="list"></div>
   <div class="banner message hidden" id="message"></div>

@@ -61,12 +61,13 @@ public sealed class WebUiTests : IDisposable
         var feed = new TranscriptFeed();
         var changes = Watch(feed);
 
-        long seq = feed.Begin("🦊");
+        feed.Begin("🦊");
         feed.Append("Hello");
         feed.Append(" **there**");
         feed.End();
 
         var entry = Assert.Single(feed.Snapshot(m => "<p>" + m + "</p>"));
+        long seq = entry.Seq;
         Assert.Equal((seq, "assistant", "Hello **there**", "🦊", "<p>Hello **there**</p>"), (entry.Seq, entry.Kind, entry.Text, entry.Glyph, entry.Html));
         Assert.Collection(changes,
             c => Assert.IsType<FeedChange.Appended>(c),
@@ -76,7 +77,7 @@ public sealed class WebUiTests : IDisposable
     }
 
     [Fact]
-    public void AToolLine_EndsTheReplyRun_AndTheTextAfterItKeepsTheGlyph()
+    public void AToolLine_EndsTheReplysStretch_AndTheTextAfterIt_Continues()
     {
         var feed = new TranscriptFeed();
         feed.Begin("🦊");
@@ -88,7 +89,187 @@ public sealed class WebUiTests : IDisposable
         var entries = feed.Snapshot(m => m);
         Assert.Equal(["assistant", "tool", "assistant"], entries.Select(e => e.Kind));
         Assert.Equal("🦊", entries[2].Glyph);
+        Assert.Null(entries[0].Continues);
+        Assert.True(entries[2].Continues);   // the reply had spoken: the page draws it flush, as the PC does
         Assert.All(entries.Where(e => e.Kind == "assistant"), e => Assert.NotNull(e.Html));
+    }
+
+    // ── What the terminal shows besides (2026-10-15) ────────────────────────
+
+    [Fact]
+    public void ALazyReply_PushesNothingUntilItsWords_AndAToolsOnlyReplyLeavesNoBubble()
+    {
+        var feed = new TranscriptFeed();
+        feed.Begin("🦊");
+        feed.Append("\n\n");   // blanks before the words are nobody's
+        Assert.Equal(0, feed.Count);
+
+        feed.Add(FeedKind.Tool, "🛠️ read_file a.txt");
+        feed.Append("  Done.");
+        feed.End();
+
+        var entries = feed.Snapshot(m => m);
+        Assert.Equal(["tool", "assistant"], entries.Select(e => e.Kind));
+        Assert.Equal("Done.", entries[1].Text);
+        Assert.Null(entries[1].Continues);   // nothing said before the tool: the glyph goes with the words
+        Assert.Null(entries[1].NoReply);
+
+        var tools = new TranscriptFeed();
+        tools.Begin("🦊");
+        tools.Add(FeedKind.Tool, "🛠️ read_file a.txt");
+        tools.End();
+        Assert.Equal(["tool"], tools.Snapshot(m => m).Select(e => e.Kind));
+    }
+
+    [Fact]
+    public void AReplyThatSaidNothing_EndsAsNoReply_WithItsGlyph()
+    {
+        var feed = new TranscriptFeed();
+        var changes = Watch(feed);
+        feed.Begin("🦊");
+        feed.End();
+
+        var entry = Assert.Single(feed.Snapshot(m => "<p>" + m + "</p>"));
+        Assert.Equal(("assistant", "", "🦊", (bool?)true, (string?)null), (entry.Kind, entry.Text, entry.Glyph, entry.NoReply, entry.Html));
+        Assert.IsType<FeedChange.Appended>(Assert.Single(changes));
+    }
+
+    [Fact]
+    public void Thinking_StreamsIntoItsOwnEntry_AndFoldsUnderItsSummaryWhenTheWordsCome()
+    {
+        var feed = new TranscriptFeed();
+        var changes = Watch(feed);
+        feed.Begin("🦊");
+        feed.AppendThinking("  \n", TimeSpan.Zero);   // nothing yet
+        feed.AppendThinking("The user wants the time. ", TimeSpan.FromSeconds(1));
+        feed.AppendThinking("I'll check.", TimeSpan.FromSeconds(4.2));
+        feed.Append("It is noon.");
+        feed.End();
+
+        var entries = feed.Snapshot(m => m);
+        Assert.Equal(["thinking", "assistant"], entries.Select(e => e.Kind));
+        Assert.Equal("The user wants the time. I'll check.", entries[0].Text);
+        Assert.Equal(ThinkingFoldText.Bare(TimeSpan.FromSeconds(4.2), entries[0].Text), entries[0].Summary);
+        Assert.True(entries[0].Ended);
+        Assert.Null(entries[1].Continues);   // the thinking is no speech: the glyph comes with the words
+        var ended = changes.OfType<FeedChange.Ended>().First();
+        Assert.Equal((FeedKind.Thinking, entries[0].Summary), (ended.Kind, ended.Summary));
+    }
+
+    [Fact]
+    public void Thinking_IsCappedOnce_ThenKeepsNothingMore()
+    {
+        var feed = new TranscriptFeed();
+        feed.AppendThinking(new string('a', TranscriptFeed.MaxThinkingChars - 10), TimeSpan.Zero);
+        feed.AppendThinking(new string('b', 50), TimeSpan.Zero);
+        feed.AppendThinking("more", TimeSpan.Zero);
+
+        string text = Assert.Single(feed.Snapshot(m => m)).Text;
+        Assert.Equal(TranscriptFeed.MaxThinkingChars + 1, text.Length);
+        Assert.EndsWith("bbb…", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Output_GroupsAStreamsLines_AndASwitchStartsAnother()
+    {
+        var feed = new TranscriptFeed();
+        feed.AppendOutput("one", isError: false);
+        feed.AppendOutput("two", isError: false);
+        feed.AppendOutput("oops", isError: true);
+        feed.AppendOutput("three", isError: false);
+        feed.Add(FeedKind.Notice, "(exit 0)");
+
+        var entries = feed.Snapshot(m => m);
+        Assert.Equal(["output", "output", "output", "notice"], entries.Select(e => e.Kind));
+        Assert.Equal(("one\ntwo", false), (entries[0].Text, entries[0].Failed));
+        Assert.True(entries[1].Failed);
+        Assert.True(entries[2].Ended);
+    }
+
+    [Fact]
+    public void ToolLines_StayFlat_WithNoKeep()
+    {
+        var feed = new TranscriptFeed();
+        feed.ToolSummary("🛠️ 1 tool call — grep", failed: false);
+        feed.Add(FeedKind.Tool, "🛠️ grep x");
+        Assert.Equal(["tool"], feed.Snapshot(m => m).Select(e => e.Kind));
+        Assert.Null(feed.Snapshot(m => m)[0].Run);
+    }
+
+    [Fact]
+    public void ARun_GathersItsToolLines_UnderTheHeldSummary_RewrittenAsCallsAreCounted()
+    {
+        var feed = new TranscriptFeed { ToolKeep = () => 2 };
+        var changes = Watch(feed);
+
+        feed.ToolSummary("🛠️ 1 tool call — grep", failed: false);   // counted before its line is written
+        feed.Add(FeedKind.Tool, "🛠️ grep x");
+        feed.Add(FeedKind.ToolResult, "3 matches", joins: true);
+        feed.ToolSummary("🛠️ 2 tool calls · 1 failed — grep ×2", failed: true);
+        feed.Add(FeedKind.Tool, "🛠️ grep y");
+        feed.Add(FeedKind.ToolResult, "Error: no file", failed: true, joins: true);
+        feed.Add(FeedKind.Notice, "(a notice ends it)");
+
+        var entries = feed.Snapshot(m => m);
+        Assert.Equal(["run", "tool", "result", "tool", "result", "notice"], entries.Select(e => e.Kind));
+        var run = entries[0];
+        Assert.Equal(("🛠️ 2 tool calls · 1 failed — grep ×2", true, (int?)2, (bool?)true), (run.Text, run.Failed, run.Keep, run.Ended));
+        Assert.All(entries.Skip(1).Take(4), e => Assert.Equal(run.Seq, e.Run));
+        Assert.Equal([null, true, null, true], entries.Skip(1).Take(4).Select(e => e.Joins));
+        Assert.Null(entries[5].Run);
+        Assert.Contains(changes, c => c is FeedChange.Replaced r && r.Seq == run.Seq && r.Failed);
+        Assert.Contains(changes, c => c is FeedChange.Ended { Kind: FeedKind.Run } e && e.Seq == run.Seq);
+    }
+
+    [Fact]
+    public void EndToolRun_EndsTheRun_AndTheNextToolLineOpensAnother()
+    {
+        var feed = new TranscriptFeed { ToolKeep = () => 1 };
+        feed.Add(FeedKind.Tool, "🛠️ a");
+        feed.EndToolRun();
+        feed.Add(FeedKind.Tool, "🛠️ b");
+        feed.Append("words end it too");
+
+        var entries = feed.Snapshot(m => m);
+        Assert.Equal(["run", "tool", "run", "tool", "assistant"], entries.Select(e => e.Kind));
+        Assert.Equal("", entries[2].Text);   // the tally began again
+        Assert.True(entries[2].Ended);
+    }
+
+    [Fact]
+    public void ARunsChildren_OutliveATrimmedHead_OnTheirOwn()
+    {
+        var feed = new TranscriptFeed { ToolKeep = () => 1 };
+        feed.Add(FeedKind.Tool, "🛠️ first");
+        feed.Add(FeedKind.Notice, "end");
+        for (int i = 0; i < TranscriptFeed.MaxEntries - 2; i++)
+        {
+            feed.Add(FeedKind.Notice, "n" + i);
+        }
+
+        var entries = feed.Snapshot(m => m);
+        Assert.Equal("tool", entries[0].Kind);   // its run's head went first
+        Assert.NotNull(entries[0].Run);
+    }
+
+    [Fact]
+    public void TheSession_SendsAThinkingEndsSummary_WithNoHtml_AndARunsReplace()
+    {
+        using var subscription = _session.Events.Subscribe();
+        _session.Feed.ToolKeep = () => 1;
+        _session.Feed.AppendThinking("Hmm.", TimeSpan.FromSeconds(2));
+        _session.Feed.ToolSummary("🛠️ 1 tool call — grep", failed: false);
+        _session.Feed.Add(FeedKind.Tool, "🛠️ grep x");
+        _session.Feed.ToolSummary("🛠️ 1 tool call · 1 failed — grep", failed: true);
+
+        var events = Drain(subscription);
+        var end = JsonSerializer.Deserialize(events.First(e => e.Name == "end").Json.Value, WebUiJsonContext.Default.WebEnd)!;
+        Assert.Null(end.Html);
+        Assert.Equal(ThinkingFoldText.Bare(TimeSpan.FromSeconds(2), "Hmm."), end.Summary);
+        var replace = JsonSerializer.Deserialize(events.Single(e => e.Name == "replace").Json.Value, WebUiJsonContext.Default.WebReplaced)!;
+        Assert.True(replace.Failed);
+        var run = _session.Snapshot().Entries.Single(e => e.Kind == "run");
+        Assert.Equal("🛠️ 1 tool call · 1 failed — grep", run.Text);
     }
 
     [Fact]
@@ -143,6 +324,65 @@ public sealed class WebUiTests : IDisposable
         Assert.Equal(["user", "tool", "result", "notice", "separator", "assistant"], entries.Select(e => e.Kind));
         Assert.Equal(TranscriptRenderer.ToolText("web_search", "{\"query\":\"cats\"}"), entries[1].Text);
         Assert.Equal("Hello", entries[5].Text);   // the leading whitespace dropped, as on the screen
+    }
+
+    [Fact]
+    public void TheRenderer_FeedsThinking_TheRunsSummary_AResultJoiningItsCall_AndCmdOutput()
+    {
+        var console = new Spectre.Console.Testing.TestConsole();
+        var feed = new TranscriptFeed { ToolKeep = () => 3 };
+        var renderer = new TranscriptRenderer(console) { Feed = feed };
+
+        renderer.BeginAssistant(glyph: "🦊");
+        renderer.AppendThinking("Look it up.", TimeSpan.FromSeconds(1));   // no pane: the page gets it all the same
+        renderer.CountToolCall("web_search");
+        renderer.Tool("web_search", "{\"query\":\"cats\"}");
+        renderer.ToolResult("web_search", "3 results");
+        renderer.AppendDelta("Found them.");
+        renderer.EndAssistant();
+        renderer.ShellOutput("line one", isError: false);
+        renderer.ShellOutput("bad", isError: true);
+
+        var entries = feed.Snapshot(m => m);
+        Assert.Equal(["thinking", "run", "tool", "result", "assistant", "output", "output"], entries.Select(e => e.Kind));
+        Assert.Equal(ToolGroupText.Bare([("web_search", 1)]), entries[1].Text);
+        Assert.True(entries[1].Ended);   // the words ended the run
+        Assert.True(entries[3].Joins);
+        Assert.True(entries[6].Failed);
+    }
+
+    [Fact]
+    public void TheRenderer_FeedsAnEditsRows_CutAndFoldedAsOnThePc()
+    {
+        var console = new Spectre.Console.Testing.TestConsole();
+        var feed = new TranscriptFeed();
+        var renderer = new TranscriptRenderer(console) { Feed = feed };
+        var diff = new NeonSidekick.Files.FileDiff("a.txt", false, [new NeonSidekick.Git.UnifiedDiff.Hunk(1, 3, 1, 3, [" one", "-two", "+TWO", " three"])], 1, 1);
+
+        renderer.ToolDiff("edited a.txt", diff, maxLines: 3, collapseCount: 2);
+
+        var web = Assert.Single(feed.Snapshot(m => m)).Diff!;
+        Assert.Equal(NeonSidekick.Files.FileText.DiffSummary(diff), web.Head);
+        Assert.Equal([(" ", 1, "one"), ("-", 2, "two"), ("+", 2, "TWO")], web.Rows.Select(r => (r!.Sign, r.Number, r.Text)));
+        Assert.Equal(NeonSidekick.Files.FileText.DiffMore(1), web.More);
+        Assert.Equal((2, DiffFoldText.Bare(diff, 4)), (web.Fold, web.FoldSummary));
+
+        var whole = WebDiffs.From(diff, maxLines: 10, collapseCount: 0);
+        Assert.Equal((4, (string?)null, 0, ""), (whole.Rows.Count, whole.More, whole.Fold, whole.FoldSummary));
+        Assert.Empty(WebDiffs.From(diff, maxLines: 0, collapseCount: 2).Rows);
+        Assert.Null(WebDiffs.From(diff, maxLines: 0, collapseCount: 2).More);
+    }
+
+    [Fact]
+    public void TheBareSummaries_AreTheTerminalsWithoutTheirLead()
+    {
+        (string, int)[] tally = [("grep", 2), ("read_file", 1)];
+        Assert.Equal(ToolGroupText.Summary(tally, expanded: false, failed: 1)[4..], ToolGroupText.Bare(tally, 1));
+        Assert.StartsWith(TranscriptRenderer.ToolGlyph.TrimStart(), ToolGroupText.Bare(tally), StringComparison.Ordinal);
+        Assert.EndsWith(ThinkingFoldText.Bare(TimeSpan.FromSeconds(3), "Hi. More."), ThinkingFoldText.Summary(TimeSpan.FromSeconds(3), expanded: false, "Hi. More."), StringComparison.Ordinal);
+        Assert.StartsWith(ThinkingFoldText.Glyph, ThinkingFoldText.Bare(TimeSpan.FromSeconds(3), null), StringComparison.Ordinal);
+        var diff = new NeonSidekick.Files.FileDiff("a.txt", false, [], 3, 1);
+        Assert.EndsWith(DiffFoldText.Bare(diff, 14), DiffFoldText.Summary(diff, 14, expanded: true), StringComparison.Ordinal);
     }
 
     // ── The asks ─────────────────────────────────────────────────────────────
@@ -472,6 +712,159 @@ public sealed class WebUiTests : IDisposable
         Assert.Equal(2, states.Count);   // the first tick, then the queued line; the second tick changed nothing
     }
 
+    // ── Lighter reconnects (2026-10-15) ─────────────────────────────────────
+
+    [Fact]
+    public void ASnapshot_DefersAFinishedThinkingBlock_AndALongFoldedDiff_WhileLiveEventsCarryThemWhole()
+    {
+        var feed = new TranscriptFeed();
+        var changes = Watch(feed);
+        feed.AppendThinking("A long think.", TimeSpan.FromSeconds(1));
+        var rows = Enumerable.Range(1, TranscriptFeed.DeferRows + 1).Select(i => (WebDiffRow?)new WebDiffRow("+", i, "x")).ToList();
+        feed.Add(FeedKind.Tool, "🛠️ edited a.txt", diff: new WebDiff("Added 201 lines", rows, null, 10, "Added 201 lines · 201 rows"));
+        feed.Add(FeedKind.Tool, "🛠️ edited b.txt", diff: new WebDiff("Added 1 line", [rows[0]], null, 0, ""));
+
+        var deferred = feed.Snapshot(m => m, defer: true);
+        Assert.Equal(("", (bool?)true), (deferred[0].Text, deferred[0].Deferred));
+        Assert.NotNull(deferred[0].Summary);
+        Assert.Equal((0, (bool?)true), (deferred[1].Diff!.Rows.Count, deferred[1].Deferred));
+        Assert.Null(deferred[2].Deferred);   // a short diff goes whole
+
+        Assert.Equal("A long think.", feed.EntryOf(deferred[0].Seq, m => m)!.Text);
+        Assert.Equal(TranscriptFeed.DeferRows + 1, feed.EntryOf(deferred[1].Seq, m => m)!.Diff!.Rows.Count);
+        Assert.Null(feed.EntryOf(999, m => m));
+        Assert.Contains(changes, c => c is FeedChange.Grew g && g.Text == "A long think.");
+        Assert.Equal("A long think.", feed.Snapshot(m => m)[0].Text);   // undeferred: whole
+    }
+
+    [Fact]
+    public void TheSessionsSnapshot_Defers_AndItsEntryReadsWhole()
+    {
+        _session.Feed.AppendThinking("Hmm.", TimeSpan.FromSeconds(1));
+        _session.Feed.Add(FeedKind.Notice, "(done)");
+        var thinking = _session.Snapshot().Entries[0];
+        Assert.True(thinking.Deferred);
+        Assert.Equal("Hmm.", _session.Entry(thinking.Seq)!.Text);
+    }
+
+    // ── The theme and the sign-in (2026-10-15) ──────────────────────────────
+
+    [Fact]
+    public void TheThemesSheet_IsThePalette_OrNothingWhenOff_AndTheManifestFollows()
+    {
+        var palette = UI.Theme.Current;
+        Assert.Equal("", WebTheme.Css(palette, on: false));
+        string css = WebTheme.Css(palette, on: true);
+        Assert.Contains("--accent: " + WebTheme.Hex(palette.Primary) + ";", css, StringComparison.Ordinal);
+        Assert.Equal(WebTheme.Readable(palette), css.Contains("--bg: ", StringComparison.Ordinal));
+        Assert.Contains("\"background_color\": \"" + WebTheme.PageGround + "\"", WebTheme.Manifest(palette, on: false), StringComparison.Ordinal);
+        Assert.Contains("/icon-512.png", WebTheme.Manifest(palette, on: true), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EveryBuiltInTheme_IsASheet_ItsInkReadableWhereItLendsItsGrounds()
+    {
+        foreach (var palette in UI.ThemeLibrary.All)
+        {
+            string css = WebTheme.Css(palette, on: true);
+            Assert.StartsWith("/* The profile's theme, ", css, StringComparison.Ordinal);
+            if (css.Contains("--bg: ", StringComparison.Ordinal))
+            {
+                Assert.True(WebTheme.Contrast(palette.Ink, palette.Bg) >= WebTheme.MinContrast, palette.Name);
+            }
+        }
+
+        Assert.Equal(21, WebTheme.Contrast(Spectre.Console.Color.White, Spectre.Console.Color.Black), 1);
+    }
+
+    [Theory]
+    [InlineData("http://192.168.1.217:8765/signin?t=abc_DEF-123", "abc_DEF-123")]
+    [InlineData("  abc_DEF-123  ", "abc_DEF-123")]
+    [InlineData("http://h:1/signin?x=1&t=tok&y=2", "tok")]
+    [InlineData("", "")]
+    public void APastedSignIn_IsReadForItsToken(string pasted, string token)
+    {
+        Assert.Equal(token, WebUiAuth.TokenFrom(pasted));
+    }
+
+    // ── The status row (2026-10-15) ─────────────────────────────────────────
+
+    private (WebStatus Status, string Key) _status = (new WebStatus(null, null, null, null), "");
+
+    private void StatusIs(string? label, long since, string? usage)
+    {
+        _status = (new WebStatus(label, label is null ? null : 1_000, null, usage is null ? null : new WebUsage(usage, null, null)),
+            label + "\n" + since + "\n" + usage);
+    }
+
+    private List<WebStatus> Statuses(WebEventHub.Subscription subscription) =>
+        Drain(subscription).Where(e => e.Name == "status").Select(e => JsonSerializer.Deserialize(e.Json.Value, WebUiJsonContext.Default.WebStatus)!).ToList();
+
+    [Fact]
+    public void TheStatus_IsSentOnANewLabelOrUsage_NotForAClockTick_AndNeverWithNoPage()
+    {
+        _session.StatusNow = () => _status;
+        StatusIs("thinking", 1, null);
+        _session.PublishStatus();   // no page: nothing, and nothing remembered
+
+        using var subscription = _session.Events.Subscribe();
+        _session.PublishStatus();
+        _session.PublishStatus();   // the same key: a running clock alone sends nothing
+        StatusIs("writing", 1, null);
+        _session.PublishStatus();
+        StatusIs("writing", 1, "1.2k tokens");
+        _time.Advance(WebUiSession.StateInterval);   // the sampler's tick sends it too
+
+        var sent = Statuses(subscription);
+        Assert.Equal(["thinking", "writing", "writing"], sent.Select(s => s.Label));
+        Assert.Equal(1_000, sent[0].ElapsedMs);
+        Assert.Equal("1.2k tokens", sent[2].Usage!.Tokens);
+    }
+
+    [Fact]
+    public void TheStatus_IsThrottled_AndTheLastLabelAlwaysLands()
+    {
+        _session.StatusNow = () => _status;
+        using var subscription = _session.Events.Subscribe();
+
+        StatusIs("thinking", 1, null);
+        _session.StatusNudge();
+        StatusIs("read_file", 1, null);
+        _session.StatusNudge();   // inside the window: held
+        StatusIs("grep", 1, null);
+        _session.StatusNudge();   // held as well; the trailing send reads the newest
+        Assert.Equal(["thinking"], Statuses(subscription).Select(s => s.Label));
+
+        _time.Advance(WebUiSession.StatusThrottle);
+        Assert.Equal(["grep"], Statuses(subscription).Select(s => s.Label));
+    }
+
+    [Fact]
+    public void TheSnapshot_CarriesTheStatus_AndADisposedSessionSendsNoTrailingOne()
+    {
+        _session.StatusNow = () => _status;
+        StatusIs("thinking", 1, "1.2k tokens");
+        Assert.Equal("thinking", _session.Snapshot().Status!.Label);
+
+        using var subscription = _session.Events.Subscribe();
+        _session.StatusNudge();
+        StatusIs("writing", 1, null);
+        _session.StatusNudge();   // a trailing send armed
+        Drain(subscription);
+        _session.Dispose();
+        _time.Advance(WebUiSession.StatusThrottle);
+
+        Assert.Empty(Statuses(subscription));
+    }
+
+    [Fact]
+    public void TheUsageCard_IsTheScreensLines_UnderItsTitle()
+    {
+        Assert.Equal((WebUiText.UsageTitle, 0), (_session.Usage().Title, _session.Usage().Lines.Count));
+        _session.UsageLines = () => ["Context: 1,000 of 8,000 tokens (13%)"];
+        Assert.Equal(["Context: 1,000 of 8,000 tokens (13%)"], _session.Usage().Lines);
+    }
+
     private static List<WebEvent> Drain(WebEventHub.Subscription subscription)
     {
         var events = new List<WebEvent>();
@@ -512,6 +905,104 @@ public sealed class WebUiTests : IDisposable
         Assert.True(_list.Store.Items().Single().Checked);
         Assert.Equal(1, _shoppingChanges);
         Assert.Equal(WebOutcome.NotFound, _session.Check(new WebCheckRequest { Id = 9999, On = true }, null).Outcome);
+    }
+
+    [Fact]
+    public void TheShoppingPage_OffersTheStores_WithTheActiveOne()
+    {
+        Assert.Null(_session.Shopping().Active);
+        _list.AddStore("Costco");
+        _list.AddStore("Aldi");
+
+        var page = _session.Shopping();
+
+        Assert.Equal(["Aldi", "Costco"], page.Stores!.Select(s => s.Name));   // by name
+        Assert.Equal(_list.Store.FindStore("Costco")!.Id, page.Active);   // the first made is active
+        Assert.Equal(WebUiText.StoreLabel, page.StoreLabel);
+        Assert.Equal(WebUiAssets.Current, page.Assets);
+    }
+
+    [Fact]
+    public void PickingAStore_SwitchesIt_LogsAndFlashes_AndTheSameOrAGoneOneDoesNothing()
+    {
+        _list.AddStore("Costco");
+        _list.AddStore("Aldi");
+        long aldi = _list.Store.FindStore("Aldi")!.Id;
+        long costco = _list.Store.FindStore("Costco")!.Id;
+        var flashed = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var landed = new SemaphoreSlim(0);
+        _session.FlashOnPc = text => { flashed.Enqueue(text); landed.Release(); };
+        var lines = new List<string>();
+        void Record(NeonSidekick.Diagnostics.DiagnosticEvent e) => lines.Add(e.Message);
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += Record;
+        try
+        {
+            Assert.Equal(WebOutcome.Ok, _session.UseStore(new WebStoreRequest { Id = aldi }, IPAddress.Loopback).Outcome);
+            Assert.Equal(aldi, _list.Store.ActiveStore()!.Id);
+            Assert.Equal(1, _shoppingChanges);
+            Assert.Contains(WebUiText.StoreLogLine("Aldi", IPAddress.Loopback), lines);
+            Assert.True(landed.Wait(TimeSpan.FromSeconds(10)));
+            Assert.Equal(WebUiText.StoreFlash("Aldi"), Assert.Single(flashed));
+
+            Assert.Equal(WebOutcome.Ok, _session.UseStore(new WebStoreRequest { Id = aldi }, null).Outcome);   // already: nothing
+            Assert.Equal(1, _shoppingChanges);
+            var gone = _session.UseStore(new WebStoreRequest { Id = 9999 }, null);
+            Assert.Equal((WebOutcome.NotFound, WebUiText.NoSuchStore), (gone.Outcome, gone.Message));
+            Assert.Equal(aldi, _list.Store.ActiveStore()!.Id);
+            Assert.NotEqual(aldi, costco);
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= Record;
+        }
+    }
+
+    [Fact]
+    public void ATick_FlashesOnThePc_OffTheRequestsThread()
+    {
+        var flashed = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var landed = new SemaphoreSlim(0);
+        int requestThread = Environment.CurrentManagedThreadId;
+        int flashThread = requestThread;
+        _session.FlashOnPc = text =>
+        {
+            flashThread = Environment.CurrentManagedThreadId;
+            flashed.Enqueue(text);
+            landed.Release();
+        };
+        var milk = _list.Add("Milk", 1, null)!.Item;
+
+        Assert.Equal(WebOutcome.Ok, _session.Check(new WebCheckRequest { Id = milk.Id, On = true }, null).Outcome);
+
+        Assert.True(landed.Wait(TimeSpan.FromSeconds(10)));
+        Assert.Equal(WebUiText.CheckedFlash("Milk", on: true), Assert.Single(flashed));
+        Assert.NotEqual(requestThread, flashThread);
+        Assert.StartsWith(WebUiText.Glyph, WebUiText.CheckedFlash("Milk", on: false), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFlash_WhileThePcHoldsTheLast_ReturnsAtOnce_AndOnlyTheNewestLandsAfter()
+    {
+        var flashed = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var first = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        using var done = new CountdownEvent(2);
+        _session.FlashOnPc = text =>
+        {
+            flashed.Enqueue(text);
+            first.Set();
+            release.Wait(TimeSpan.FromSeconds(10));   // the PC's console stalled under its lock
+            done.Signal();
+        };
+
+        _session.FlashPc("one");
+        Assert.True(first.Wait(TimeSpan.FromSeconds(10)));
+        _session.FlashPc("two");
+        _session.FlashPc("three");   // returns at once, held behind the stalled one
+        release.Set();
+
+        Assert.True(done.Wait(TimeSpan.FromSeconds(10)));
+        Assert.Equal(["one", "three"], flashed);
     }
 
     // ── The words, the token, the reply's HTML ───────────────────────────────
@@ -573,9 +1064,10 @@ public sealed class WebUiTests : IDisposable
 
         Assert.True(App.SettingsMenu.IsToggle(App.SettingsField.WebUi));
         Assert.Equal("must be a port from 1024 to 65535", App.SettingsMenu.WebUiPortRangeError);
-        Assert.Equal([App.SettingsField.WebUi, App.SettingsField.WebUiPort, App.SettingsField.WebUiReach, App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails], App.SettingsMenu.TabFields[(int)App.SettingsTab.WebUi]);
-        // The page's two rows (later on 2026-10-14) are read at each request: neither restarts the server nor is refused under a reply.
-        foreach (var field in new[] { App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails })
+        Assert.Equal([App.SettingsField.WebUi, App.SettingsField.WebUiPort, App.SettingsField.WebUiReach, App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails,
+            App.SettingsField.WebUiHomeControls, App.SettingsField.WebUiProfileTheme], App.SettingsMenu.TabFields[(int)App.SettingsTab.WebUi]);
+        // The page's rows (later on 2026-10-14; the Home tab's and the theme's 2026-10-15) are read at each request: none restarts the server or is refused under a reply.
+        foreach (var field in new[] { App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails, App.SettingsField.WebUiHomeControls, App.SettingsField.WebUiProfileTheme })
         {
             Assert.False(App.SettingsMenu.IsWebUiField(field));
             Assert.False(App.SettingsMenu.RefusedMidTurn(field));

@@ -55,6 +55,14 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
         return Reply;
     }
 
+    public ConcurrentQueue<WebStoreRequest> Stores { get; } = new();
+
+    public WebReply UseStore(WebStoreRequest request, IPAddress? remote)
+    {
+        Stores.Enqueue(request);
+        return Reply;
+    }
+
     public string PictureRun { get; set; } = "0123456789abcdef0123456789abcdef";
 
     /// <summary>The pictures the transcript holds, by id.</summary>
@@ -71,4 +79,24 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
         Completed.Enqueue(request);
         return Completion with { Seq = request.Seq };
     }
+
+    public WebUsageCard Card { get; set; } = new("Usage", ["Context: 1,000 of 8,000 tokens (13%)"]);
+
+    public WebUsageCard Usage() => Card;
+
+    public IWebHome? Home { get; set; }
+
+    public Dictionary<long, WebEntry> Entries { get; } = [];
+
+    public WebEntry? Entry(long seq) => Entries.GetValueOrDefault(seq);
+
+    public WebPulse PulseNow { get; set; } = new(false, 0, null, "", "tag");
+
+    public WebPulse Pulse() => PulseNow;
+
+    public string Css { get; set; } = ":root { --accent: #123456; }\n";
+
+    public string ThemeCss() => Css;
+
+    public string Manifest() => WebTheme.Manifest(NeonSidekick.UI.Theme.Current, on: true);
 }

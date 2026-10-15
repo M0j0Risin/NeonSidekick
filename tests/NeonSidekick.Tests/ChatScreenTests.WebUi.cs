@@ -588,17 +588,150 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task APagesCommand_ShowsItsWorkingLine_WhileItRuns_ThenTakesItOut()
+    public async Task ATurnsStage_ReachesThePagesStatusRow_AsTheFunVerbThePcShows_AndClearsAtItsEnd()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmUseFunVerbs = true; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _random = new Random(7);
+        _chat.EnqueueText("Hello there.");
+        WebEventHub.Subscription? page = null;
+        WebStatus? after = null;
+        var input = WhenIdle(
+            _ =>
+            {
+                page = Web.Events.Subscribe();
+                Web.Send(new WebSendRequest { Text = "hi" }, null);
+            },
+            i =>
+            {
+                after = Web.Snapshot().Status;
+                PushLine(i, "/exit");
+            });
+
+        await RunAsync(input);
+
+        var labels = new List<string?>();
+        while (page!.Reader.TryRead(out var item))
+        {
+            if (item.Name == "status")
+            {
+                labels.Add(JsonSerializer.Deserialize(item.Json.Value, WebUiJsonContext.Default.WebStatus)!.Label);
+            }
+        }
+
+        // The first stage's verb, drawn as the PC's busy row draws it; never the plain words under the fun verbs.
+        var draws = new Random(7);
+        Assert.Equal(ThinkingVerbs.Pick(draws, null), labels.First(l => l is not null));
+        Assert.DoesNotContain(ChatScreen.ThinkingLabel, labels);
+        Assert.DoesNotContain(TurnStages.WritingLabel, labels);
+        Assert.Null(after!.Label);   // the row clears once the turn is over
+        page.Dispose();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ATurnsThinking_ReachesThePage_FoldedUnderItsSummary_OnlyWhenShown(bool show)
+    {
+        ThinkingTurn(show);
+        _settings.Update(d => d.TtsOutput = false);
+        LinesWhenIdle("why?", "/exit");
+
+        await RunAsync();
+
+        var feed = Web.Feed.Snapshot(m => m);
+        var thinking = feed.Where(e => e.Kind == "thinking").ToList();
+        if (show)
+        {
+            var block = Assert.Single(thinking);
+            Assert.Equal("Pondering the sky.", block.Text);
+            Assert.StartsWith(ThinkingFoldText.Glyph + "thought for", block.Summary, StringComparison.Ordinal);
+            Assert.True(block.Ended);
+        }
+        else
+        {
+            Assert.Empty(thinking);
+        }
+
+        Assert.Contains(feed, e => e.Kind == "assistant" && e.Text.Contains("It is blue.", StringComparison.Ordinal) && e.Continues is null);
+    }
+
+    [Fact]
+    public async Task ATurnsToolCalls_GatherUnderOneRun_ItsSummaryCountingThem()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolCollapseCount = 2; });
+        _chat.Enqueue(FakeChatClient.Call("c1", GetCurrentTimeTool.ToolName, new Dictionary<string, object?>()));
+        _chat.Enqueue(FakeChatClient.Call("c2", GetCurrentTimeTool.ToolName, new Dictionary<string, object?>()));
+        _chat.EnqueueText("Done.");
+        LinesWhenIdle("what time is it?", "/exit");
+
+        await RunAsync();
+
+        var feed = Web.Feed.Snapshot(m => m);
+        // The turn's opening calls are a run of their own, as on the PC; the reply's two calls the next.
+        var runs = feed.Where(e => e.Kind == "run").ToList();
+        Assert.Equal(2, runs.Count);
+        var run = runs[^1];
+        Assert.Equal(ToolGroupText.Bare([(GetCurrentTimeTool.ToolName, 2)]), run.Text);
+        Assert.True(run.Ended);
+        Assert.Equal(2, feed.Count(e => e.Run == run.Seq));   // two quiet calls: their result notes, a unit each
+        Assert.All(feed.Where(e => e.Kind is "tool" or "result"), e => Assert.NotNull(e.Run));
+    }
+
+    [Fact]
+    public async Task ARestoredSession_IsOnThePageAsOnThePc_ALoneToolNoteNoRunHead()
+    {
+        // 2026-10-15 (E6): a restore draws through the same renderer, so the page's copy is the PC's lines; its one tool note opens a run of one
+        // unit, whose head the page draws only past Tool collapse count, as the PC folds.
+        _settings.Update(d => { d.TtsOutput = false; d.ToolCollapseCount = 2; });
+        long id = SeedSession(toolCalls: 2);
+        PushLine("/sessions " + id);
+        PushLine("/exit");
+
+        await RunAsync();
+
+        var feed = Web.Feed.Snapshot(m => m).SkipWhile(e => e.Kind != "user").ToList();
+        Assert.Equal(["user", "run", "tool", "assistant"], feed.Select(e => e.Kind).Take(4));
+        Assert.Equal("How do I wire the Vosk model?", feed[0].Text);
+        Assert.Equal(TranscriptRenderer.ToolGlyph.TrimStart() + NeonSidekick.Sessions.SessionText.ToolCallsNote(2), feed[2].Text);
+        Assert.Equal((int?)2, feed[1].Keep);   // one unit of a keep of two: the page shows the note and no head
+        Assert.Contains("Pass the folder to the detector.", feed[3].Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(feed, e => e.NoReply == true);
+    }
+
+    [Fact]
+    public async Task AReplyThatSaysNothing_IsNoReplyOnThePage_AsOnThePc()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("");
+        LinesWhenIdle("hello?", "/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(TranscriptRenderer.NoReplyText, output);
+        Assert.Contains(Web.Feed.Snapshot(m => m), e => e.Kind == "assistant" && e.NoReply == true);
+    }
+
+    [Fact]
+    public async Task APagesCommand_ShowsItsSpinnerOnTheStatusRow_AndNoLineInTheTranscript()
     {
         _settings.Update(d => { d.TtsOutput = false; d.WebUiCommands = true; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);   // the pane: its spinner is what the row reads
         WebEventHub.Subscription? page = null;
+        WebStatus? after = null;
         var input = WebSteps(
             _ =>
             {
                 page = Web.Events.Subscribe();
                 SendFromPage("/ha");   // no server set: an error, but under its spinner
             },
-            i => PushLine(i, "/exit"));
+            i =>
+            {
+                after = Web.Snapshot().Status;   // the row as a page connecting now reads it (the end's own send may wait out the throttle)
+                PushLine(i, "/exit");
+            });
 
         await RunAsync(input);
 
@@ -608,11 +741,11 @@ public partial class ChatScreenTests
             events.Add((item.Name, item.Json.Value));
         }
 
-        var working = events.FirstOrDefault(e => e.Name == "append" && e.Json.Contains("\"kind\":\"working\"", StringComparison.Ordinal));
-        Assert.NotNull(working.Json);
-        long seq = JsonSerializer.Deserialize(working.Json, WebUiJsonContext.Default.WebEntry)!.Seq;
-        Assert.Contains(events, e => e.Name == "remove" && JsonSerializer.Deserialize(e.Json, WebUiJsonContext.Default.WebRemoved)!.Seq == seq);
-        Assert.DoesNotContain(Web.Feed.Snapshot(m => m), e => e.Kind == "working");
+        // The status row (2026-10-15) carries the command's spinner, and the row clears when it ends; the transcript holds no line for it.
+        var statuses = events.Where(e => e.Name == "status").Select(e => JsonSerializer.Deserialize(e.Json, WebUiJsonContext.Default.WebStatus)!).ToList();
+        Assert.Contains(statuses, s => s.Label == NeonSidekick.HomeAssistant.HaText.Working && s.ElapsedMs >= 0);
+        Assert.Null(after!.Label);
+        Assert.DoesNotContain(events, e => e.Name == "append" && e.Json.Contains("\"kind\":\"working\"", StringComparison.Ordinal));
         page.Dispose();
     }
 

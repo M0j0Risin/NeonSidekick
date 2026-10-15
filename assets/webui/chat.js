@@ -13,13 +13,10 @@ const sendBtn = document.getElementById('send');
 const stopBtn = document.getElementById('stop');
 const asksEl = document.getElementById('asks');
 const waitingEl = document.getElementById('waiting');
-const loadingEl = document.getElementById('loading');
 const queuedEl = document.getElementById('queued');
-const messageEl = document.getElementById('message');
 const completeEl = document.getElementById('complete');
 const profileEl = document.getElementById('profile');
 const modelEl = document.getElementById('model');
-const dot = document.getElementById('dot');
 
 const overlayEl = document.getElementById('overlay');
 const overlayImg = document.getElementById('overlay-img');
@@ -33,9 +30,9 @@ const desktop = window.matchMedia('(pointer: fine)').matches;
 const entries = new Map();   // seq → { el, body, kind, text, pictures }
 let words = {
   pictureGone: 'is no longer there.', pictureTooLarge: 'is too large to show here.', openOriginal: 'Open original',
-  sendAsMessage: 'Send as a message', useLine: 'Use', draftFilled: 'Put on the draft.', undo: 'Undo',
+  sendAsMessage: 'Send as a message', useLine: 'Use', draftFilled: 'Put on the draft.', undo: 'Undo', working: 'working', close: 'Close',
+  noReply: '(no reply)', thinkingLive: '💭 thinking…', gone: '(no longer available)',
 };
-let assetsTag = null;
 let state = null;
 let asks = [];
 let source = null;
@@ -43,17 +40,10 @@ let pendingId = null;
 let pendingText = null;
 let lastAskCount = 0;
 
-function el(tag, cls, text) {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text !== undefined && text !== null) e.textContent = text;
-  return e;
-}
-
-function say(text) {
-  messageEl.replaceChildren(document.createTextNode(text || ''));
-  messageEl.classList.toggle('hidden', !text);
-}
+// The shared helpers (common.js, 2026-10-15): the element maker, the post, the sentence under the composer with its buttons.
+const { el, post } = Neon;
+const say = text => Neon.say(text);
+const sayWith = Neon.say;
 
 function nearBottom() {
   return window.innerHeight + window.scrollY >= document.body.scrollHeight - 80;
@@ -67,37 +57,10 @@ function newId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 }
 
-async function post(path, body) {
-  try {
-    const r = await fetch(path, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-Neon': '1' },
-      body: JSON.stringify(body || {}),
-    });
-    let j = null;
-    try { j = await r.json(); } catch { /* none */ }
-    if (r.status === 401) location.reload();
-    return { ok: r.ok, status: r.status, message: j && j.message, asText: !!(j && j.asText), use: j && j.use, json: j };
-  } catch {
-    return { ok: false, status: 0, message: 'The app could not be reached.' };
-  }
-}
-
-// A sentence under the composer, with buttons the app offered (later on 2026-10-14): a refused command's Send as a message and Use …, a filled
-// draft's Undo.
-function sayWith(text, actions) {
-  messageEl.replaceChildren(document.createTextNode(text || ''));
-  for (const a of actions || []) {
-    const b = el('button', 'inline', a.label);
-    b.type = 'button';
-    b.addEventListener('click', () => { say(''); a.run(); });
-    messageEl.appendChild(b);
-  }
-  messageEl.classList.toggle('hidden', !text);
-}
-
 // ── The transcript ────────────────────────────────────────────────────
+
+// What the terminal shows besides (2026-10-15): the thinking (streamed, then folded under its summary), an edit's diff, the tool runs folded
+// under their summary past Tool collapse count, a /cmd run's output, and "(no reply)". A fold the page makes on its own keeps the reading place.
 
 function renderEntry(entry) {
   let node;
@@ -108,9 +71,13 @@ function renderEntry(entry) {
       break;
     case 'assistant': {
       node = el('div', 'entry assistant');
-      node.appendChild(el('span', 'glyph', entry.glyph || '●'));
+      // A stretch after a break, once the reply had spoken, reads on with no glyph, as the PC's flush-left text does.
+      node.appendChild(el('span', 'glyph' + (entry.continues ? ' none' : ''), entry.glyph || '●'));
       const body = el('div', 'body');
-      if (entry.html) {
+      if (entry.noReply) {
+        body.classList.add('noreply');
+        body.textContent = words.noReply || '(no reply)';
+      } else if (entry.html) {
         body.innerHTML = entry.html;
       } else {
         body.classList.add('streaming');
@@ -120,15 +87,38 @@ function renderEntry(entry) {
       record.body = body;
       break;
     }
+    case 'thinking':
+      node = el('div', 'entry thinking');
+      if (entry.ended || entry.summary) {
+        node.appendChild(foldedThinking({ ...entry }, record));
+      } else {
+        node.appendChild(el('div', 'think-head', words.thinkingLive || '💭 thinking…'));
+        record.body = el('div', 'think-body', entry.text);
+        node.appendChild(record.body);
+      }
+      break;
+    case 'output':
+      node = el('pre', 'entry output' + (entry.failed ? ' failed' : ''), entry.text);
+      record.body = node;
+      break;
+    case 'run': {
+      node = el('div', 'entry run' + (entry.failed ? ' failed' : ''));
+      const head = el('button', 'run-head hidden');
+      head.type = 'button';
+      const body = el('div', 'run-body');
+      node.appendChild(head);
+      node.appendChild(body);
+      record.run = { head, body, keep: entry.keep || 0, units: [], ended: !!entry.ended, expanded: false, text: entry.text };
+      head.addEventListener('click', () => { record.run.expanded = !record.run.expanded; applyRun(record.run); });
+      applyRun(record.run);
+      break;
+    }
     case 'user': {
       node = el('div', 'entry user');
       node.appendChild(el('span', 'glyph', (state && state.userAvatar) || '›'));
       node.appendChild(document.createTextNode(entry.text));
       break;
     }
-    case 'working':
-      node = el('div', 'entry working', '⏳ ' + entry.text);
-      break;
     case 'picture':
       if (entry.pictures && entry.pictures.length) {
         node = el('div', 'entry pictures');
@@ -142,10 +132,107 @@ function renderEntry(entry) {
       break;
     default:
       node = el('div', 'entry ' + entry.kind + (entry.failed ? ' failed' : ''), entry.text);
+      if (entry.diff) {
+        const block = diffBlock(entry.diff);
+        node.appendChild(block);
+        // A long folded diff a reconnect left out (2026-10-15): its rows read when it is opened.
+        const fold = block.querySelector('details');
+        if (entry.deferred && fold) whenOpened(fold, entry.seq, whole => { if (whole.diff) block.replaceWith(diffBlock(whole.diff, true)); });
+      }
   }
   record.el = node;
   entries.set(entry.seq, record);
-  logEl.appendChild(node);
+  const run = entry.run !== undefined && entry.run !== null ? entries.get(entry.run) : null;
+  if (run && run.run) {
+    // A tool line joins its run: a unit of its own, or the last one when it completes the call before it.
+    const units = run.run.units;
+    let unit = entry.joins && units.length ? units[units.length - 1] : null;
+    if (!unit) {
+      unit = el('div', 'unit');
+      units.push(unit);
+      run.run.body.appendChild(unit);
+    }
+    unit.appendChild(node);
+    applyRun(run.run);
+  } else {
+    logEl.appendChild(node);   // no run, or its head was trimmed away: on its own
+  }
+}
+
+// A run's head shows once it holds more than keep units. While it runs only the last keep show; once over, a long one folds to its head.
+function applyRun(run) {
+  const n = run.units.length;
+  const long = run.keep > 0 && n > run.keep;
+  run.head.classList.toggle('hidden', !long);
+  run.head.textContent = (run.expanded ? '▾ ' : '▸ ') + run.text;
+  run.head.setAttribute('aria-expanded', run.expanded ? 'true' : 'false');
+  run.units.forEach((unit, i) => {
+    const hidden = long && !run.expanded && (run.ended || i < n - run.keep);
+    unit.classList.toggle('hidden', hidden);
+  });
+}
+
+function foldedThinking(entry, record) {
+  const box = el('details', 'think-fold');
+  box.appendChild(el('summary', null, entry.summary || ''));
+  const text = el('div', 'think-body');
+  text.textContent = entry.text;
+  box.appendChild(text);
+  record.body = null;
+  record.fold = box;
+  // A reconnect's snapshot sent the summary alone (2026-10-15): the text read when it is opened, or a line saying it went.
+  if (entry.deferred) whenOpened(box, entry.seq, whole => { text.textContent = whole.text; });
+  return box;
+}
+
+// Reads a deferred entry the first time its fold opens; one the transcript let go says so.
+function whenOpened(details, seq, fill) {
+  let asked = false;
+  details.addEventListener('toggle', async () => {
+    if (!details.open || asked) return;
+    asked = true;
+    const r = await Neon.get('/api/entry/' + seq, false);
+    if (r.ok && r.json) fill(r.json);
+    else details.appendChild(el('div', 'gone', words.gone || '(no longer available)'));
+  });
+}
+
+// An edit's diff as the PC draws it: the head, the rows (a gap between two hunks), the cut's last line, folded past Diff collapse count.
+function diffBlock(d, open) {
+  const box = el('div', 'diff');
+  box.appendChild(el('div', 'diff-head', '└ ' + d.head));
+  const rows = el('div', 'diff-rows');
+  const width = Math.max(1, ...(d.rows || []).filter(r => r).map(r => String(r.number).length));
+  for (const r of d.rows || []) {
+    if (!r) { rows.appendChild(el('div', 'diff-gap', '⋮'.padStart(width))); continue; }
+    const row = el('div', 'diff-row' + (r.sign === '+' ? ' add' : r.sign === '-' ? ' del' : ''));
+    row.appendChild(el('span', 'num', String(r.number).padStart(width)));
+    row.appendChild(el('span', 'sign', r.sign));
+    row.appendChild(el('span', 'code', r.text));
+    rows.appendChild(row);
+  }
+  if (d.more) rows.appendChild(el('div', 'diff-more', d.more));
+  if (d.fold > 0) {
+    const fold = el('details', 'diff-fold');
+    fold.open = !!open;
+    fold.appendChild(el('summary', null, d.foldSummary));
+    fold.appendChild(rows);
+    box.appendChild(fold);
+  } else {
+    box.appendChild(rows);
+  }
+  return box;
+}
+
+// A change the page makes on its own (a run or a thinking block folding) keeps the reading place: near the bottom it stays at the bottom, and
+// a change above the view moves the view by as much (Safari has no scroll anchoring of its own).
+function keepPlace(node, change) {
+  const was = nearBottom();
+  const top = node.getBoundingClientRect().top;
+  const height = node.offsetHeight;
+  change();
+  if (was) keepBottom(true);
+  else if (top < 0) window.scrollBy(0, node.offsetHeight - height);
 }
 
 function append(entry) {
@@ -162,6 +249,7 @@ function delta(d) {
     record.text += d.text;
     const was = nearBottom();
     record.body.textContent = record.text;
+    if (record.kind === 'thinking') record.body.scrollTop = record.body.scrollHeight;   // the box follows the stream
     keepBottom(was);
   } else if (d.at + d.text.length > record.text.length) {
     reconnect();   // a gap: start again from a snapshot
@@ -170,11 +258,30 @@ function delta(d) {
 
 function end(e) {
   const record = entries.get(e.seq);
-  if (!record || !record.body) return;
+  if (!record) return;
+  if (record.run) {
+    record.run.ended = true;
+    keepPlace(record.el, () => applyRun(record.run));
+    return;
+  }
+  if (record.kind === 'thinking') {
+    keepPlace(record.el, () => record.el.replaceChildren(foldedThinking({ text: record.text, summary: e.summary }, record)));
+    return;
+  }
+  if (record.kind !== 'assistant' || !record.body) return;
   const was = nearBottom();
   record.body.classList.remove('streaming');
   record.body.innerHTML = e.html;
   keepBottom(was);
+}
+
+// A run's summary rewritten: a call counted, a result failed.
+function replaceRun(r) {
+  const record = entries.get(r.seq);
+  if (!record || !record.run) return;
+  record.run.text = r.text;
+  record.el.classList.toggle('failed', !!r.failed);
+  applyRun(record.run);
 }
 
 function reset() {
@@ -337,27 +444,18 @@ overlayEl.addEventListener('touchend', ev => {
 
 // The app serves other files than the ones this page runs (an upgrade while the phone kept the tab): reload, the draft kept, once per tag.
 function staleAssets(tag) {
-  if (!tag) return false;
-  if (assetsTag === null) { assetsTag = tag; return false; }
-  if (tag === assetsTag) return false;
-  let tried = null;
-  try { tried = sessionStorage.getItem('neon.reloaded'); } catch { /* private mode */ }
-  if (tried === tag) return false;
-  try { sessionStorage.setItem('neon.reloaded', tag); } catch { /* private mode */ }
-  saveDraft();
-  location.reload();
-  return true;
+  return Neon.staleAssets(tag, saveDraft);
 }
 
 // ── The state ─────────────────────────────────────────────────────────
 
 function applyState(s) {
   state = s;
+  Neon.theme(s.theme);
   profileEl.textContent = (s.modelAvatar ? s.modelAvatar + ' ' : '') + s.profile + (s.planMode ? ' · plan' : '');
   modelEl.textContent = s.model + (s.title ? ' · ' + s.title : '');
   stopBtn.classList.toggle('hidden', !s.busy);
-  loadingEl.textContent = s.loading ? 'Loading the model…' : '';
-  loadingEl.classList.toggle('hidden', !s.loading);
+  drawStatus();   // a busy PC with no label to show still spins
   waitingEl.textContent = s.waitingAtPc ? '⏸ Waiting for an answer at the PC: ' + s.waitingAtPc : '';
   waitingEl.classList.toggle('hidden', !s.waitingAtPc);
   queuedEl.replaceChildren();
@@ -365,6 +463,106 @@ function applyState(s) {
   queuedEl.classList.toggle('hidden', !(s.queued || []).length);
   updateTitle();
 }
+
+// ── The status row (2026-10-15) ───────────────────────────────────────
+// The PC's spinner as its busy row shows it (the turn's stage, a fun verb, a tool, a model's load) with its clocks, and the usage on the right.
+// The app sends the elapsed times when the label changes; the page runs the clocks from there. A narrow phone drops the token count, then the
+// speed. A tap on the usage opens the full /usage figures, on the page alone.
+
+const statusEl = document.getElementById('status');
+const spinEl = statusEl.querySelector('.spin');
+const frameEl = spinEl.querySelector('.frame');
+const labelEl = spinEl.querySelector('.label');
+const clockEl = spinEl.querySelector('.clock');
+const usageBtn = document.getElementById('usage');
+const usageCard = document.getElementById('usage-card');
+const Frames = ['⠋', '⠙', '⠸', '⠴', '⠧', '⠇', '⠏'];   // the PC's (Theme.SpinnerFrames)
+const still = window.matchMedia('(prefers-reduced-motion: reduce)');
+const narrow = window.matchMedia('(max-width: 420px)');
+const tiny = window.matchMedia('(max-width: 340px)');
+let status = null;
+let started = 0;
+let stepStarted = null;
+let spinTimer = null;
+let frame = 0;
+
+function two(n) { return String(n).padStart(2, '0'); }
+
+// ElapsedText.Countdown's shape: 00:12, 01:02:03 past an hour.
+function countdown(ms) {
+  const t = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(t / 3600);
+  return (h > 0 ? two(h) + ':' : '') + two(Math.floor(t % 3600 / 60)) + ':' + two(t % 60);
+}
+
+function applyStatus(s) {
+  status = s || null;
+  const now = performance.now();
+  if (status && status.label) {
+    started = now - (status.elapsedMs || 0);
+    stepStarted = status.stepMs !== undefined && status.stepMs !== null ? now - status.stepMs : null;
+  }
+  drawStatus();
+}
+
+function usageText(u) {
+  if (!u) return '';
+  const parts = [];
+  if (u.tokens && !(narrow.matches && u.percent)) parts.push(u.tokens);
+  if (u.percent) parts.push(u.percent);
+  if (u.speed && !tiny.matches) parts.push(u.speed);
+  return parts.join(' · ');
+}
+
+function drawStatus() {
+  const label = status && status.label;
+  const spinning = !!label || !!(state && state.busy);
+  spinEl.classList.toggle('hidden', !spinning);
+  if (spinning) {
+    frameEl.textContent = still.matches ? '⏳' : Frames[frame % Frames.length];
+    if (label) {
+      const total = countdown(performance.now() - started);
+      labelEl.textContent = (stepStarted !== null ? '🛠️ ' : '') + label;
+      clockEl.textContent = stepStarted !== null ? countdown(performance.now() - stepStarted) + ' · ' + total : total;
+    } else {
+      labelEl.textContent = words.working || 'working';
+      clockEl.textContent = '';
+    }
+  }
+  const usage = usageText(status && status.usage);
+  usageBtn.textContent = usage;
+  usageBtn.classList.toggle('hidden', !usage);
+  statusEl.classList.toggle('hidden', !spinning && !usage);
+  if (spinning && !spinTimer) {
+    spinTimer = setInterval(() => { frame++; drawStatus(); }, 100);
+  } else if (!spinning && spinTimer) {
+    clearInterval(spinTimer);
+    spinTimer = null;
+  }
+}
+
+narrow.addEventListener('change', drawStatus);
+tiny.addEventListener('change', drawStatus);
+
+async function toggleUsage() {
+  if (!usageCard.classList.contains('hidden')) { closeUsage(); return; }
+  const r = await Neon.get('/api/usage', false);
+  if (!r.ok || !r.json) return;
+  document.getElementById('usage-title').textContent = r.json.title;
+  document.getElementById('usage-lines').textContent = (r.json.lines || []).join('\n');
+  document.getElementById('usage-close').textContent = words.close || 'Close';
+  usageCard.classList.remove('hidden');
+}
+
+function closeUsage() {
+  usageCard.classList.add('hidden');
+}
+
+usageBtn.addEventListener('click', toggleUsage);
+document.getElementById('usage-close').addEventListener('click', closeUsage);
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape' && !usageCard.classList.contains('hidden')) { ev.preventDefault(); closeUsage(); }
+});
 
 function updateTitle() {
   const name = state ? state.profile : 'NeonSidekick';
@@ -580,9 +778,9 @@ async function stop() {
 
 function connect() {
   source = new EventSource('/api/events');
-  source.onopen = () => dot.classList.add('on');
+  source.onopen = () => Neon.connected(true);
   source.onerror = () => {
-    dot.classList.remove('on');
+    Neon.connected(false);
     // Signed out (a new token, another profile): the page itself says how to sign in again.
     fetch('/api/shopping', { credentials: 'same-origin', cache: 'no-store' }).then(r => { if (r.status === 401) location.reload(); }).catch(() => {});
   };
@@ -591,6 +789,7 @@ function connect() {
     if (staleAssets(s.state.assets)) return;   // before drawing it
     if (s.words) words = s.words;
     applyState(s.state);
+    applyStatus(s.status);
     reset();
     for (const entry of s.entries) renderEntry(entry);
     renderAsks(s.asks);
@@ -601,6 +800,8 @@ function connect() {
   source.addEventListener('delta', ev => delta(JSON.parse(ev.data)));
   source.addEventListener('end', ev => end(JSON.parse(ev.data)));
   source.addEventListener('reset', () => reset());
+  source.addEventListener('status', ev => applyStatus(JSON.parse(ev.data)));
+  source.addEventListener('replace', ev => replaceRun(JSON.parse(ev.data)));
   source.addEventListener('asks', ev => renderAsks(JSON.parse(ev.data).asks));
   source.addEventListener('state', ev => {
     const s = JSON.parse(ev.data);

@@ -1970,7 +1970,8 @@ internal sealed partial class ChatScreen
     {
         var shown = _effective();
         var items = PerfBarItems.Resolve(shown.PerformanceBarItems);
-        _perf.Ensure(PerfBarItems.Reads(items));
+        // The bar's meters, and the Web UI's Home card's while a page holds it (2026-10-15): one place decides them, PerfReadsNow.
+        _perf.Ensure(PerfReadsNow());
         if (items.Count == 0)
         {
             return null;
@@ -5648,6 +5649,7 @@ internal sealed partial class ChatScreen
     private void BindProfile()
     {
         HomeShoppingForget();   // the 🛒 count is the profile's (2026-10-13)
+        HomeWebForget();   // the Web UI's Home tab: its sheet and lease are the last profile's (2026-10-15)
         _memory = new MemoryStore(_settings.ProfileDirectory);
         _persona = new PersonaFile(_settings.ProfileDirectory);
         _operata = new OperataFile(_settings.ProfileDirectory);

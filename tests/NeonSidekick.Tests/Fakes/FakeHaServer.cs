@@ -39,6 +39,9 @@ public sealed class FakeHaServer
     /// <summary>Service calls are recorded and played, but never answered.</summary>
     public bool SilentCalls { get; set; }
 
+    /// <summary>A call is answered and recorded but moves no state (2026-10-15: a mark that would clear on the state's change stays to be read).</summary>
+    public bool HoldStates { get; set; }
+
     /// <summary><c>subscribe_entities</c> is refused, as a server too old for it would.</summary>
     public bool RefuseSubscribe { get; set; }
 
@@ -241,7 +244,7 @@ public sealed class FakeHaServer
                         Result(wire, id, "{\"context\":{\"id\":\"x\"}}");
                     }
 
-                    foreach (string entity in Targets(target))
+                    foreach (string entity in HoldStates ? [] : Targets(target))
                     {
                         Play(entity, service);
                     }

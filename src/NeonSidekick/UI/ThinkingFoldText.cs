@@ -28,6 +28,15 @@ public static class ThinkingFoldText
     public static string Summary(TimeSpan elapsed, bool expanded, string? thinking) =>
         Gist(thinking) is { Length: > 0 } gist ? Summary(elapsed, expanded) + " — " + gist : Summary(elapsed, expanded);
 
+    /// <summary>
+    /// <see cref="Summary(TimeSpan, bool, string?)"/> without its indent and triangle (2026-10-15, the Web UI's folded thinking, which draws its
+    /// own): <c>💭 thought for 4.2s — The user wants the time…</c>.
+    /// </summary>
+    public static string Bare(TimeSpan elapsed, string? thinking) => Summary(elapsed, expanded: false, thinking)[("  " + ToolGroupText.CollapsedGlyph + " ").Length..];
+
+    /// <summary>The live block's header without its indent and triangle (2026-10-15, the Web UI's): <c>💭 thinking…</c>.</summary>
+    public const string LiveBare = Glyph + "thinking…";
+
     /// <summary>The most cells of a thinking's first sentence on its fold row. Pinned.</summary>
     public const int GistCells = 60;
 

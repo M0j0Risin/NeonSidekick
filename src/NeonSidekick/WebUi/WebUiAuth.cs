@@ -23,6 +23,30 @@ public static class WebUiAuth
     /// <summary>The sign-in path; its <c>t</c> query carries the token.</summary>
     public const string SignInPath = "/signin";
 
+    /// <summary>
+    /// The token in what was pasted on the sign-in page (2026-10-15): the <c>t</c> of a whole link (<c>http://…/signin?t=…</c>), else the text itself,
+    /// trimmed. Pure; the match is <see cref="Matches"/>'s.
+    /// </summary>
+    public static string TokenFrom(string? pasted)
+    {
+        string text = (pasted ?? "").Trim();
+        int query = text.IndexOf("?t=", StringComparison.Ordinal);
+        if (query < 0)
+        {
+            query = text.IndexOf("&t=", StringComparison.Ordinal);
+        }
+
+        if (query >= 0)
+        {
+            text = text[(query + 3)..];
+            int end = text.IndexOfAny(['&', '#']);
+            text = end >= 0 ? text[..end] : text;
+            text = Uri.UnescapeDataString(text);
+        }
+
+        return text.Trim();
+    }
+
     /// <summary>How long a browser keeps the cookie: a year, so a phone stays signed in; <c>/webui reset</c> is the sign-out.</summary>
     public static readonly TimeSpan CookieLifetime = TimeSpan.FromDays(365);
 

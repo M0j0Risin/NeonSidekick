@@ -17,7 +17,7 @@ public static class WebShoppingView
         ArgumentNullException.ThrowIfNull(list);
         if (!list.Store.Available)
         {
-            return new WebShopping("", ShoppingText.Unavailable, [], ShoppingText.TickedHeading, [], ShoppingText.GuessMark);
+            return new WebShopping("", ShoppingText.Unavailable, [], ShoppingText.TickedHeading, [], ShoppingText.GuessMark, WebUiAssets.Current);
         }
 
         var view = list.View(list.Store.ActiveStore());
@@ -28,7 +28,41 @@ public static class WebShoppingView
             .Select(g => new WebShopGroup(ShoppingText.Heading(g), g.Items.Select(p => Item(p.Item, p.Place.IsGuess)).ToList()))
             .ToList();
         var ticked = view.Ticked.Select(i => Item(i, guess: false)).ToList();
-        return new WebShopping(header, null, groups, ShoppingText.TickedHeading, ticked, ShoppingText.GuessMark);
+        return new WebShopping(header, null, groups, ShoppingText.TickedHeading, ticked, ShoppingText.GuessMark, WebUiAssets.Current)
+        {
+            // The picker (2026-10-15): every store by name and the one walked now.
+            Stores = list.Store.Stores().Select(s => new WebShopStore(s.Id, s.Name)).ToList(),
+            Active = view.Store?.Id,
+            StoreLabel = WebUiText.StoreLabel,
+        };
+    }
+
+    /// <summary>
+    /// Makes store <paramref name="id"/> the active one as the page asks (2026-10-15, the store picker): not found when it went meanwhile, refused when
+    /// the write failed, and Ok with nothing done for the store already active. <paramref name="changed"/> is the store's name when it changed
+    /// (<see cref="ShoppingList.UseStore"/> wrote its audit line).
+    /// </summary>
+    public static WebReply UseStore(ShoppingList list, long id, out string? changed)
+    {
+        ArgumentNullException.ThrowIfNull(list);
+        changed = null;
+        if (list.Store.Stores().FirstOrDefault(s => s.Id == id) is not { } shop)
+        {
+            return new WebReply(WebOutcome.NotFound, WebUiText.NoSuchStore);
+        }
+
+        if (list.Store.ActiveStore()?.Id == shop.Id)
+        {
+            return WebReply.Ok;   // as asked already: no change, no audit line
+        }
+
+        if (list.UseStore(shop).StartsWith("Error:", StringComparison.Ordinal))
+        {
+            return new WebReply(WebOutcome.Refused, WebUiText.ShoppingWriteFailed);
+        }
+
+        changed = shop.Name;
+        return WebReply.Ok;
     }
 
     private static WebShopItem Item(ShopItem item, bool guess) =>

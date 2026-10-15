@@ -6,12 +6,18 @@
 <title>NeonSidekick</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/theme.css" id="theme-css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<script src="/common.js" defer></script>
 <script src="/chat.js" defer></script>
 </head>
 <body>
 <header class="top">
   <div class="who"><span id="profile">NeonSidekick</span><span class="model" id="model"></span></div>
-  <nav><a href="/" class="here">Chat</a><a href="/shopping">Shopping</a></nav>
+  <nav><a href="/" class="here">Chat</a><a href="/home">Home</a><a href="/shopping">Shopping</a></nav>
   <span class="dot" id="dot" title="connection"></span>
 </header>
 <main>
@@ -20,11 +26,19 @@
 <footer class="bottom">
   <div class="inner">
     <div id="asks"></div>
+    <section class="ask usage-card hidden" id="usage-card" role="dialog" aria-labelledby="usage-title">
+      <h2 id="usage-title"></h2>
+      <pre id="usage-lines"></pre>
+      <div class="choices"><button type="button" id="usage-close"></button></div>
+    </section>
     <div class="banner waiting hidden" id="waiting"></div>
-    <div class="banner hidden" id="loading"></div>
     <div class="queued hidden" id="queued"></div>
     <div class="banner message hidden" id="message"></div>
     <div class="complete hidden" id="complete" role="listbox"></div>
+    <div class="status hidden" id="status">
+      <span class="spin hidden" role="status" aria-live="polite"><span class="frame" aria-hidden="true"></span><span class="label"></span><span class="clock" aria-hidden="true"></span></span>
+      <button type="button" class="usage hidden" id="usage"></button>
+    </div>
     <div class="compose">
       <textarea id="draft" rows="1" placeholder="Message…" enterkeyhint="send"></textarea>
       <button class="primary" id="send" title="Send">➤</button>
