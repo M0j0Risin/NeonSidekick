@@ -205,6 +205,9 @@ public partial class ChatScreenTests : IDisposable
         _settings.Dispose();
         _console.Dispose();
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
+
+        // A command from the Web UI's page never leaves the page waiting on a PC-only pane (later on 2026-10-14): any test that drove one fails.
+        Assert.Empty(_pcOnlyPanes);
     }
 
     /// <summary>Everything the screen has written, snapshotted under the writer's lock: safe to poll while a turn runs.</summary>

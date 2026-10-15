@@ -168,8 +168,39 @@ public static class WebUiText
     /// <summary>A body that did not read.</summary>
     public const string BadRequest = "The request did not read.";
 
-    /// <summary>A line naming a slash command. Pinned.</summary>
-    public const string SlashRefused = "Slash commands run at the PC; the Web UI sends messages.";
+    // ── Commands from the page (later on 2026-10-14) ──────────────────────────
+
+    /// <summary>Any command while <i>Web UI commands</i> is off.</summary>
+    public const string CommandsOff = "Commands from the Web UI are off: Web UI commands in /settings › Client › Web UI turns them on.";
+
+    /// <summary>A command kept for the PC (<see cref="App.WebCommands.Never"/>).</summary>
+    public static string PcOnly(string word) => word + " runs at the PC only.";
+
+    /// <summary>A form that opens a window or a pane only the PC has, and the form that works here when there is one.</summary>
+    public static string OpensPane(string word, string? works) =>
+        word + " opens a pane or a window at the PC, so it runs there." + (works is null ? "" : " Here: " + works + ".");
+
+    /// <summary>A command whose tools are switched off.</summary>
+    public static string Needs(string word, string setting) => word + " needs " + setting + " on (/tools).";
+
+    /// <summary>A word the app does not know: the page offers to send the line as a message.</summary>
+    public static string UnknownCommand(string word) => "Unknown command: " + word + ". Type / to see the list.";
+
+    /// <summary>Bare <c>/shopping</c> and <c>/shopping add</c>: the page has a shopping list of its own.</summary>
+    public const string UseShoppingPage = "The shopping list is this page's Shopping tab; /shopping add <items> adds from here.";
+
+    /// <summary>The audit line of a command from the page: its word, the address and the verdict, never its words.</summary>
+    public static string CommandLogLine(string word, IPAddress? remote, string verdict) =>
+        "Web UI command " + word + " from " + Where(remote) + ": " + verdict + ".";
+
+    /// <summary>A command the screen refused as it took the line (the settings changed meanwhile, or the server would be walked).</summary>
+    public static string RefusedAtDispatch(string reason) => "From the Web UI: " + reason;
+
+    /// <summary><c>/model &lt;id&gt;</c> or <c>/reasoning</c> from the page while the connect would scan for a server.</summary>
+    public const string WouldScan = "the server would be looked for (no LLM URL, the scan on): pick it at the PC.";
+
+    /// <summary><c>/model &lt;id&gt;</c> from the page naming an embedded model not installed.</summary>
+    public const string WouldInstall = "that embedded model is not installed: install it at the PC.";
 
     /// <summary>An empty message.</summary>
     public const string EmptyMessage = "Nothing to send.";
@@ -197,6 +228,45 @@ public static class WebUiText
 
     /// <summary>A shopping line gone meanwhile.</summary>
     public const string NoSuchItem = "That line is gone from the list.";
+
+    /// <summary>After a picture's name on the page: its file is gone, or the server would not serve it (later on 2026-10-14).</summary>
+    public const string PictureGone = "is no longer there.";
+
+    /// <summary>After a picture's name on the page: its file is over what the server decodes for a thumbnail.</summary>
+    public const string PictureTooLarge = "is too large to show here; tap to open the original.";
+
+    /// <summary>The overlay's link to the picture's original.</summary>
+    public const string OpenOriginal = "Open original";
+
+    /// <summary>A pick card's way out (later on 2026-10-14): nothing chosen.</summary>
+    public const string CancelChoice = "Cancel";
+
+    /// <summary>An info card's close.</summary>
+    public const string CloseChoice = "Close";
+
+    /// <summary>The most a list card carries, in UTF-16 characters (about 256 KB).</summary>
+    public const int MaxInfoChars = 256 * 1024;
+
+    /// <summary>Ahead of a list card cut to <see cref="MaxInfoChars"/>: its first part left out.</summary>
+    public const string InfoCutNote = "(the first part is left out: the whole list is at the PC)";
+
+    /// <summary>A rewind from the page whose message carried pictures, PDFs or pasted blocks: they come back at the PC alone.</summary>
+    public const string RewindAttachmentsNotice = "(the message's pictures, PDFs and pasted blocks come back on the PC's line only: rewind there to send them again)";
+
+    /// <summary>The page's offer under an unknown command: send the line as a message instead.</summary>
+    public const string SendAsMessage = "Send as a message";
+
+    /// <summary>The page's offer under <c>//word</c>: the command meant, put on the draft (the line follows).</summary>
+    public const string UseLine = "Use";
+
+    /// <summary>The page's line when a command put a text on its draft (<c>/prompts &lt;n&gt;</c>, <c>/rewind</c>).</summary>
+    public const string DraftFilled = "Put on the draft.";
+
+    /// <summary>The page's undo of a filled draft.</summary>
+    public const string Undo = "Undo";
+
+    /// <summary>The page's own words, sent with every snapshot.</summary>
+    public static readonly WebWords Words = new(PictureGone, PictureTooLarge, OpenOriginal, SendAsMessage, UseLine, DraftFilled, Undo);
 
     /// <summary>A write the shopping list refused.</summary>
     public const string ShoppingWriteFailed = "The shopping list could not be written.";

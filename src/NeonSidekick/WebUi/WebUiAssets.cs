@@ -28,6 +28,21 @@ public static class WebUiAssets
 
     private static readonly Lazy<IReadOnlyDictionary<string, WebAsset>> s_assets = new(Load);
 
+    private static readonly Lazy<string> s_tag = new(() => Tag(Names.Select(n => s_assets.Value[n].ETag)));
+
+    /// <summary>
+    /// The tag of the files this build serves (2026-10-14): a page that has another reloads itself, so a phone left open across an upgrade
+    /// runs the new script (<see cref="WebState.Assets"/>).
+    /// </summary>
+    public static string Current => s_tag.Value;
+
+    /// <summary>The tag of a set of files by their ETags, in order: 16 hex characters. Pure.</summary>
+    public static string Tag(IEnumerable<string> etags)
+    {
+        ArgumentNullException.ThrowIfNull(etags);
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', etags))))[..16];
+    }
+
     /// <summary>The file served at <paramref name="name"/>, or null.</summary>
     public static WebAsset? Find(string name) => s_assets.Value.GetValueOrDefault(name);
 

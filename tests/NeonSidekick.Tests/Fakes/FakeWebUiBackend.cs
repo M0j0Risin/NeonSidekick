@@ -54,4 +54,21 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
         Checks.Enqueue(request);
         return Reply;
     }
+
+    public string PictureRun { get; set; } = "0123456789abcdef0123456789abcdef";
+
+    /// <summary>The pictures the transcript holds, by id.</summary>
+    public ConcurrentDictionary<int, WebPictureSource> Pictures { get; } = new();
+
+    public WebPictureSource? Picture(int id) => Pictures.GetValueOrDefault(id);
+
+    public ConcurrentQueue<WebCompleteRequest> Completed { get; } = new();
+
+    public WebCompletion Completion { get; set; } = WebCompletion.Empty(0);
+
+    public WebCompletion Complete(WebCompleteRequest request)
+    {
+        Completed.Enqueue(request);
+        return Completion with { Seq = request.Seq };
+    }
 }

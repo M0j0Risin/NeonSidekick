@@ -120,6 +120,8 @@ A browser front end for this profile: the chat, its questions and the shopping l
 | Web UI | Serves the pages for this profile. `/webui` shows the sign-in link. A profile switch hands the server to the other profile's settings. Refused while a reply runs. | off |
 | Web UI port | The TCP port it listens on (1024–65535). A port in use, or one Windows reserves, keeps it off with a notice. Changing it signs browsers out. | 8765 |
 | Web UI reach | `local` (localhost only) or `lan` (your home network and your tailnet). Either way a browser signs in with `/webui`'s link. | `lan` |
+| Web UI commands | Lets the page run slash commands: the ones that work from a phone run, `/model`, `/reasoning` and `/rewind` show as cards, the lists show on the page, and its dropdown completes commands. See [Commands from the page](INTERFACE.md#commands-from-the-page). Off, the page sends messages alone. | off |
+| Web UI connection details | Shows the `%` and `*` connections' notes (their server and database) in the page's dropdown. Off, it names them alone. The dropdown only: the chat shows what the model says. | on |
 
 ### Servers
 

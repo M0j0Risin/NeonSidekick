@@ -77,7 +77,8 @@ internal sealed partial class ChatScreen
             case PromptsVerb.Fill:
                 if (prompts.Resolve(line.Text) is { } prompt)
                 {
-                    FillDraft(prompt.Text, keepOld: true);
+                    // From the Web UI's page (later on 2026-10-14) it goes to the page's draft, not the PC's row.
+                    ToDraft(prompt.Text, () => FillDraft(prompt.Text, keepOld: true));
                 }
                 else
                 {

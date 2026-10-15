@@ -961,6 +961,8 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.WebUi,                // 2026-10-14, Client › Web UI: the switch, the port and the reach
                 SettingsField.WebUiPort,
                 SettingsField.WebUiReach,
+                SettingsField.WebUiCommands,           // later on 2026-10-14, under the reach: commands from the page
+                SettingsField.WebUiConnectionDetails,  // later on 2026-10-14: the % and * notes in the page's dropdown
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -3390,8 +3392,8 @@ public partial class SettingsMenuTests : IDisposable
         // Each tab under the strip, padded to its own column (26, 32, 19, 26), the whole tab in view, nothing of another tab on it.
         // Every tab headed since later on 2026-10-10 (the user's ask), Sessions' save thinking up in the Saving run.
         AssertTabEnds("\n \n" + MenuLayout.Heading("Saving", 120) + "\n▸ Session logging             on\n  Session save thinking       off\n  Session retention (days)    forever\n" + MenuLayout.Heading("Titles", 120) + "\n  Session naming mode         model-written\n  Session show name           all\n" + MenuLayout.Heading("Search tool", 120) + "\n  Session tool                on\n  Session search max results  10 results\n", 120);
-        // The Web UI tab (2026-10-14, the user's ask): the switch, the port and the reach under one heading.
-        AssertTabEnds("\n \n" + MenuLayout.Heading("Server", 120) + "\n▸ Web UI        off\n  Web UI port   8765\n  Web UI reach  lan\n", 120);
+        // The Web UI tab (2026-10-14, the user's ask): the switch, the port and the reach under one heading; the page's two rows under another (later that day).
+        AssertTabEnds("\n \n" + MenuLayout.Heading("Server", 120) + "\n▸ Web UI                     off\n  Web UI port                8765\n  Web UI reach               lan\n" + MenuLayout.Heading("The page", 120) + "\n  Web UI commands            off\n  Web UI connection details  on\n", 120);
         // The Common tab (2026-10-10, the user's call; the LLM tab before): whole names, no row starting "Common ", in the LLM tab's five runs (2026-10-01, the user's call).
         AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL                   (probe local ports)\n  LLM model                 (first listed)\n" + MenuLayout.Heading("How it answers", 120) + "\n  LLM reasoning             none\n  LLM show thinking         on\n" + MenuLayout.Heading("Tools and limits", 120) + "\n  LLM offer tools           on\n  LLM max tool iterations   10000 round trips\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n  LLM plan gap passes       5 passes\n" + MenuLayout.Heading("Context", 120) + "\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM max turns             auto\n  LLM auto compact (%)      90 %\n  LLM compact mode          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM tool compact mode     compact\n" + MenuLayout.Heading("Pictures and verbs", 120) + "\n  LLM max images            20 pictures\n  LLM max images (MB)       24 MB\n  LLM fun verbs             off\n", 120);
         // The Http tab (2026-10-10): the six rows only an OpenAI-compatible HTTP server reads, whole names too, in three runs.

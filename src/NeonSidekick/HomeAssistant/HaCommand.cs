@@ -28,13 +28,36 @@ public sealed record HaCommandResult(IReadOnlyList<string> Lines, bool Failed, b
 /// <item><c>/ha say &lt;sentence&gt;</c> — Assist.</item>
 /// </list>
 /// </summary>
+/// <summary>
+/// How <c>/ha</c> asks before a change from the Web UI's page (later on 2026-10-14): <paramref name="Confirm"/> asks the question (true a yes;
+/// false or null keeps it), and <paramref name="Safe"/> is <i>Home Assistant safe services</i> (null its defaults).
+/// </summary>
+public sealed record HaAsk(Func<string, CancellationToken, Task<bool?>> Confirm, IReadOnlyList<string>? Safe)
+{
+    /// <summary>Whether <paramref name="domain"/>.<paramref name="service"/> on <paramref name="what"/> may run: a read or a safe service at once, else the yes.</summary>
+    public async Task<bool> AllowsAsync(string domain, string service, string what, CancellationToken cancellationToken)
+    {
+        if (HaPolicy.ReadServices.Contains(domain + "." + service) || HaPolicy.IsSafe(domain, service, Safe))
+        {
+            return true;
+        }
+
+        return await Confirm(HaText.ConfirmCall(domain, service, what), cancellationToken).ConfigureAwait(false) == true;
+    }
+}
+
 public static class HaCommand
 {
     /// <summary>The domains <c>/ha on|off|toggle</c> reaches; a light gets the light service, any other <c>homeassistant.*</c>.</summary>
     public static readonly IReadOnlyList<string> SwitchableDomains = ["light", "switch", "fan", "input_boolean", "media_player"];
 
     /// <summary>Runs one <c>/ha</c> line (<paramref name="args"/>, the text after the word).</summary>
-    public static async Task<HaCommandResult> RunAsync(HaSession ha, string args, CancellationToken cancellationToken)
+    /// <param name="ask">
+    /// A change from the Web UI's page asks first (later on 2026-10-14, the user's call: from the PC <c>/ha</c> acts unasked, the user's own
+    /// hand at the keyboard): a service call that only reads (<see cref="HaPolicy.ReadServices"/>) or that <see cref="HaAsk.Safe"/> names runs,
+    /// anything else waits for a yes. Null, nothing is asked.
+    /// </param>
+    public static async Task<HaCommandResult> RunAsync(HaSession ha, string args, CancellationToken cancellationToken, HaAsk? ask = null)
     {
         ArgumentNullException.ThrowIfNull(ha);
         ArgumentNullException.ThrowIfNull(args);
@@ -68,7 +91,7 @@ public static class HaCommand
             case "on":
             case "off":
             case "toggle":
-                return await SwitchAsync(ha, verb, rest, cancellationToken).ConfigureAwait(false);
+                return await SwitchAsync(ha, ask, verb, rest, cancellationToken).ConfigureAwait(false);
 
             case "scene":
             {
@@ -94,11 +117,11 @@ public static class HaCommand
                     return HaCommandResult.Error(HaText.Ambiguous(rest, match.Entities.Take(HaSnapshot.MaxCandidates).ToList(), match.Entities.Count));
                 }
 
-                return await CallAsync(ha, "scene", "turn_on", match.Entities, null, null, cancellationToken).ConfigureAwait(false);
+                return await CallAsync(ha, ask, "scene", "turn_on", match.Entities, null, null, cancellationToken).ConfigureAwait(false);
             }
 
             case "tv":
-                return await TvAsync(ha, rest, cancellationToken).ConfigureAwait(false);
+                return await TvAsync(ha, ask, rest, cancellationToken).ConfigureAwait(false);
 
             case "states":
             {
@@ -119,6 +142,11 @@ public static class HaCommand
                     return HaCommandResult.Error(HaText.Usage);
                 }
 
+                if (ask is not null && !await ask.AllowsAsync("conversation", "process", rest, cancellationToken).ConfigureAwait(false))
+                {
+                    return HaCommandResult.Of(HaText.Kept);
+                }
+
                 string answer = await HaAssistTool.AskAsync(ha, rest, cancellationToken).ConfigureAwait(false);
                 return answer.StartsWith("Error:", StringComparison.Ordinal) ? HaCommandResult.Error(answer) : HaCommandResult.Of(answer);
 
@@ -133,7 +161,7 @@ public static class HaCommand
     /// which of Den Piano 1 and 2; the quoted name worked only because <c>1"</c> is no number). The whole text is tried first
     /// and the split only when it names nothing, so <c>on den 40</c> is still the den at 40% and a miss reports the split's target.
     /// </summary>
-    private static async Task<HaCommandResult> SwitchAsync(HaSession ha, string verb, string rest, CancellationToken cancellationToken)
+    private static async Task<HaCommandResult> SwitchAsync(HaSession ha, HaAsk? ask, string verb, string rest, CancellationToken cancellationToken)
     {
         var (target, brightness) = SplitBrightness(rest);
         if (target.Length == 0)
@@ -163,7 +191,7 @@ public static class HaCommand
         bool lights = match.Entities.All(e => e.Domain == "light");
         int? level = verb == "on" && lights ? brightness : null;
         string? data = level is { } b ? HaLightsTool.Data(b, null, null, null) : null;
-        return await CallAsync(ha, lights ? "light" : "homeassistant", service, match.Entities, data, level is { } l ? l.ToString(CultureInfo.InvariantCulture) + "%" : null, cancellationToken).ConfigureAwait(false);
+        return await CallAsync(ha, ask, lights ? "light" : "homeassistant", service, match.Entities, data, level is { } l ? l.ToString(CultureInfo.InvariantCulture) + "%" : null, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>A light by <paramref name="target"/>, else any switchable entity (a switch, a fan, the TV); a miss is the light's error.</summary>
@@ -197,7 +225,7 @@ public static class HaCommand
     }
 
     /// <summary><c>tv …</c>: the only media player (or the ambiguity), one action.</summary>
-    private static async Task<HaCommandResult> TvAsync(HaSession ha, string rest, CancellationToken cancellationToken)
+    private static async Task<HaCommandResult> TvAsync(HaSession ha, HaAsk? ask, string rest, CancellationToken cancellationToken)
     {
         string action = rest.Split(' ', 2)[0].ToLowerInvariant();
         string value = rest.Length > action.Length ? rest[action.Length..].Trim() : "";
@@ -217,14 +245,14 @@ public static class HaCommand
         {
             case "on":
             case "off":
-                return await CallAsync(ha, "media_player", action == "on" ? "turn_on" : "turn_off", [player], null, null, cancellationToken).ConfigureAwait(false);
+                return await CallAsync(ha, ask, "media_player", action == "on" ? "turn_on" : "turn_off", [player], null, null, cancellationToken).ConfigureAwait(false);
             case "mute":
             case "unmute":
                 bool mute = action == "mute";
-                return await CallAsync(ha, "media_player", "volume_mute", [player], HaJson.Object(w => w.WriteBoolean("is_volume_muted", mute)), mute ? "muted" : "unmuted", cancellationToken).ConfigureAwait(false);
+                return await CallAsync(ha, ask, "media_player", "volume_mute", [player], HaJson.Object(w => w.WriteBoolean("is_volume_muted", mute)), mute ? "muted" : "unmuted", cancellationToken).ConfigureAwait(false);
             case "up":
             case "down":
-                return await CallAsync(ha, "media_player", action == "up" ? "volume_up" : "volume_down", [player], null, null, cancellationToken).ConfigureAwait(false);
+                return await CallAsync(ha, ask, "media_player", action == "up" ? "volume_up" : "volume_down", [player], null, null, cancellationToken).ConfigureAwait(false);
             case "vol":
             case "volume":
                 if (!int.TryParse(value.TrimEnd('%'), NumberStyles.None, CultureInfo.InvariantCulture, out int level) || level > 100)
@@ -232,7 +260,7 @@ public static class HaCommand
                     return HaCommandResult.Error(HaText.Usage);
                 }
 
-                return await CallAsync(ha, "media_player", "volume_set", [player], HaJson.Object(w => w.WriteNumber("volume_level", Math.Round(level / 100.0, 2))), "volume " + level.ToString(CultureInfo.InvariantCulture) + "%", cancellationToken).ConfigureAwait(false);
+                return await CallAsync(ha, ask, "media_player", "volume_set", [player], HaJson.Object(w => w.WriteNumber("volume_level", Math.Round(level / 100.0, 2))), "volume " + level.ToString(CultureInfo.InvariantCulture) + "%", cancellationToken).ConfigureAwait(false);
             case "source":
                 var sources = HaJson.Strings(player.Attributes, "source_list");
                 if (value.Length == 0 || HaMediaTool.MatchSource(sources, value) is not { } source)
@@ -240,14 +268,19 @@ public static class HaCommand
                     return HaCommandResult.Error(HaText.BadChoice("source", value, sources.Count == 0 ? ["(the player lists none)"] : sources));
                 }
 
-                return await CallAsync(ha, "media_player", "select_source", [player], HaJson.Object(w => w.WriteString("source", source)), "source " + source, cancellationToken).ConfigureAwait(false);
+                return await CallAsync(ha, ask, "media_player", "select_source", [player], HaJson.Object(w => w.WriteString("source", source)), "source " + source, cancellationToken).ConfigureAwait(false);
             default:
                 return HaCommandResult.Error(HaText.Usage);
         }
     }
 
-    private static async Task<HaCommandResult> CallAsync(HaSession ha, string domain, string service, IReadOnlyList<HaEntity> targets, string? data, string? detail, CancellationToken cancellationToken)
+    private static async Task<HaCommandResult> CallAsync(HaSession ha, HaAsk? ask, string domain, string service, IReadOnlyList<HaEntity> targets, string? data, string? detail, CancellationToken cancellationToken)
     {
+        if (ask is not null && !await ask.AllowsAsync(domain, service, string.Join(", ", targets.Select(t => t.Name)), cancellationToken).ConfigureAwait(false))
+        {
+            return HaCommandResult.Of(HaText.Kept);
+        }
+
         var reply = await ha.CallAsync(domain, service, targets.Select(t => t.Id).ToList(), data, cancellationToken).ConfigureAwait(false);
         return reply.Ok ? HaCommandResult.Of(HaText.Done(domain, service, targets, detail)) : HaCommandResult.Error(reply.Error!);
     }

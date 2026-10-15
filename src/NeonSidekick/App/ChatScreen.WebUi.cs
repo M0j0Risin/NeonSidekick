@@ -43,7 +43,12 @@ internal sealed partial class ChatScreen
     /// <summary>Builds the session and the controller, and wires the feed (from the constructor, before the first draw).</summary>
     private (WebUiSession Session, WebUiController Controller) CreateWebUi(Func<IWebUiBackend, IWebUiHost>? webUiHost)
     {
-        var session = new WebUiSession(WebStateNow, WebStop, () => _shopping, HomeShoppingChanged, _time) { Nudge = WebNudge };
+        var session = new WebUiSession(WebStateNow, WebStop, () => _shopping, HomeShoppingChanged, _time)
+        {
+            Nudge = WebNudge,
+            CommandSettings = WebCommandSettingsNow,
+            HeldForPc = HeldWebLines,
+        };
         return (session, new WebUiController(webUiHost, session));
     }
 
@@ -51,7 +56,96 @@ internal sealed partial class ChatScreen
     private void WireWebUiFeed()
     {
         _transcript.Feed = _webUi.Feed;
+        _transcript.WebPicture = WebPictureOf;
+        // A command from the page shows its spinner's label there while no model work runs (later on 2026-10-14).
+        _transcript.MirrorSpinner = () => FromWebNow && !ScopesNow().Working;
+        _webUi.PictureSource = WebPictureSourceOf;
+        _webUi.Feed.PictureReleased += ForgetWebPicture;
         _pane.Committed = text => _webUi.Feed.Add(FeedKind.User, text);
+    }
+
+    /// <summary>
+    /// A pane opening (later on 2026-10-14): one a command from the page opened with no ask on the page leaves the page waiting on the PC — the
+    /// safety net <see cref="WaitingAtPc"/> names it on the page; the log says so, and the tests fail on it (<see cref="WebPaneWithoutAskForTests"/>).
+    /// </summary>
+    private void PaneOpening(string title)
+    {
+        if (FromWebNow && _webUi.Asks.OpenAsks().Count == 0)
+        {
+            DiagnosticLog.Debug(WebUiCategory, "Web UI: a command from the page opened \"" + title + "\" at the PC with nothing on the page.");
+            WebPaneWithoutAskForTests?.Invoke(title);
+        }
+    }
+
+    /// <summary>For the tests: told a pane's title when a command from the page opens one with no ask on the page.</summary>
+    internal Action<string>? WebPaneWithoutAskForTests { get; set; }
+
+    // ── The page's pictures (later on 2026-10-14) ───────────────────────────
+
+    /// <summary>A registered picture as the feed's entry carries it: its addresses, its name and size, and whether its file is over the server's decode.</summary>
+    private WebPicture? WebPictureOf(int id)
+    {
+        PictureSource? source;
+        lock (_pictures)
+        {
+            source = id >= 0 && id < _pictures.Count ? _pictures[id] : null;
+        }
+
+        if (source is null)
+        {
+            return null;
+        }
+
+        // An <img> cannot read a status code, so a file over the thumbnail's decode is marked when the entry is made.
+        bool tooLarge = source.Bytes is null && source.FullPath is { } path && FileLength(path) > PictureServer.MaxDecodeBytes;
+        return _webUi.Describe(id, source.Name, source.Width, source.Height, tooLarge);
+    }
+
+    private static long FileLength(string path)
+    {
+        try
+        {
+            return new FileInfo(path).Length;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return 0;
+        }
+    }
+
+    /// <summary>A registered picture for the page's server (a Kestrel thread; the session asks only for an id the feed holds).</summary>
+    private WebPictureSource? WebPictureSourceOf(int id)
+    {
+        lock (_pictures)
+        {
+            return id >= 0 && id < _pictures.Count && _pictures[id] is var source
+                ? new WebPictureSource(source.Name, source.FullPath, source.Bytes, source.MediaType)
+                : null;
+        }
+    }
+
+    /// <summary>
+    /// The page's transcript let go of picture <paramref name="id"/> (a trim, a new conversation, a rewind): a picture only the page had keeps no
+    /// bytes after it, so the registered list stays small however many rewinds replay a picture-heavy session. One the PC drew keeps them.
+    /// </summary>
+    private void ForgetWebPicture(int id)
+    {
+        lock (_pictures)
+        {
+            if (id >= 0 && id < _pictures.Count && _pictures[id] is { WebOnly: true, Bytes: not null } source)
+            {
+                _pictures[id] = source with { Bytes = null };
+            }
+        }
+    }
+
+    /// <summary>For the tests: the bytes picture <paramref name="id"/> keeps, or null.</summary>
+    internal byte[]? PictureBytesForTests(int id)
+    {
+        lock (_pictures)
+        {
+            return id >= 0 && id < _pictures.Count ? _pictures[id].Bytes : null;
+        }
     }
 
     /// <summary>A message or a notice waits: the idle read ends, and a turn's (or a botchat's) wait wakes to drain the notices.</summary>
@@ -188,7 +282,8 @@ internal sealed partial class ChatScreen
             _sessionTitle?.Title ?? "",
             _webUi.Waiting,
             WaitingAtPc(working),
-            WebUiText.Version);
+            WebUiText.Version,
+            WebUiAssets.Current);
     }
 
     /// <summary>
@@ -197,7 +292,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private string? WaitingAtPc(bool working)
     {
-        if (!(working || _webUi.WaitingCount > 0) || _webUi.Asks.OpenAsks().Count > 0)
+        if (!(working || _webUi.WaitingCount > 0 || _webDispatching) || _webUi.Asks.OpenAsks().Count > 0)
         {
             return null;
         }
@@ -239,7 +334,7 @@ internal sealed partial class ChatScreen
         }
 
         string label = line.Text.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\n', ' ').Replace('\r', ' ');
-        return new SubmittedLine(line.Text, line.Text.TrimEnd(), [], label) { FromWeb = true };
+        return new SubmittedLine(line.Text, line.Text.TrimEnd(), [], label) { FromWeb = true, AsText = line.AsText, Remote = line.Remote };
     }
 
     /// <summary>A message from the page, withdrawn before the model answered: back to the page's draft.</summary>

@@ -199,6 +199,8 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/youtube unsave <n>\|<id>\|<link>` | Removes one saved video. |
 | `/webui` | Shows the [Web UI](INTERFACE.md#web-ui): on or off, its port and reach, and a tab per address with a QR code to scan with a phone and the sign-in link. Its buttons: `e` turns it on or off, `l` switches the reach between `lan` and `local`, `r` makes a new token after a yes. Waits for the idle line under a reply. Not headless. |
 | `/webui on\|off` | Turns the Web UI on or off for this profile; the server starts or stops at once. |
+
+Which commands the Web UI's page may send, and how each shows there: [Commands from the page](INTERFACE.md#commands-from-the-page).
 | `/webui copy` | Puts the first sign-in link on the clipboard. It holds the token: paste it only where you trust. |
 | `/webui reset` | Makes a new sign-in token after a yes; every browser signed in will be signed out. |
 

@@ -93,7 +93,11 @@ internal sealed partial class ChatScreen
         }
 
         RewindTurn? picked;
-        if (_pane.Enabled)
+        if (FromWebNow)
+        {
+            picked = await RewindFromWebAsync(turns, back, cancellationToken).ConfigureAwait(false);
+        }
+        else if (_pane.Enabled)
         {
             picked = await RewindPicker.PickAsync(turns, turns.Count - back, turn => ConversationRewind.Preview(_session.History.Messages, turn.Start), cancellationToken).ConfigureAwait(false);
         }
@@ -200,7 +204,41 @@ internal sealed partial class ChatScreen
             }
         }
 
-        _input.Chat.Load(RewindDraft(picked), prependToCurrent: true);
+        // From the Web UI's page (later on 2026-10-14) the text goes to the page's draft: its pictures, PDFs and pasted blocks stay the PC's.
+        ToDraft(UI.PasteBlocks.WithoutSavedPaths(ConversationRewind.UserLine(picked)), () => _input.Chat.Load(RewindDraft(picked), prependToCurrent: true));
+        if (FromWebNow && (ConversationRewind.Images(picked).Count > 0 || ConversationRewind.Documents(picked).Count > 0))
+        {
+            _transcript.Notice(WebUi.WebUiText.RewindAttachmentsNotice);
+        }
+    }
+
+    /// <summary>
+    /// <c>/rewind [n]</c> from the Web UI's page (later on 2026-10-14): the messages as a pick card on the page and the list on the PC's pane at once,
+    /// the cursor on the n-th from the end; then the yes/no on both. The message picked when the yes came, else null (kept said).
+    /// </summary>
+    private async Task<RewindTurn?> RewindFromWebAsync(IReadOnlyList<RewindTurn> turns, int back, CancellationToken cancellationToken)
+    {
+        var options = turns.Select((t, i) => new PickOption(i.ToString(System.Globalization.CultureInfo.InvariantCulture), RewindText.WebLabel(t), RewindText.WebNote(t))).ToList();
+        string current = (turns.Count - back).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        string? chosen = await PickBothAsync(RewindText.Title, options, current,
+            async token => await RewindPicker.PickTurnAsync(turns, turns.Count - back, token).ConfigureAwait(false) is { } turn ? turns.ToList().IndexOf(turn).ToString(System.Globalization.CultureInfo.InvariantCulture) : null,
+            cancellationToken).ConfigureAwait(false);
+        if (chosen is null || !int.TryParse(chosen, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int index) || index >= turns.Count)
+        {
+            _transcript.Notice(KeptNotice);
+            return null;
+        }
+
+        var picked = turns[index];
+        var cut = ConversationRewind.Preview(_session.History.Messages, picked.Start);
+        string question = RewindText.ConfirmPrompt(picked, cut) + (RewindText.ConfirmCaption(cut) is { } caption ? " " + caption : "");
+        if (await ConfirmFromWebAsync(question, cancellationToken).ConfigureAwait(false) == true)
+        {
+            return picked;
+        }
+
+        _transcript.Notice(KeptNotice);
+        return null;
     }
 
     /// <summary>
@@ -212,7 +250,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void ReplayTurn(string userText, string replyText, int toolCalls, bool styled, TurnPictures? pictures = null, UI.ThumbnailBox? box = null)
     {
-        var drawn = box is not null && pictures is { Any: true } turn ? turn : null;
+        // Every turn's pictures: drawn with a box, offered to the Web UI's page alone without (later on 2026-10-14).
+        var drawn = pictures is { Any: true } turn ? turn : null;
         ReplayThumbnails(drawn?.Imagined, box, sandbox: true);
         _transcript.User(userText);
         // A dropped picture's path is full; a pasted one's has none, as live (its bytes are kept for a double-click).
@@ -257,13 +296,22 @@ internal sealed partial class ChatScreen
         return byRow;
     }
 
-    /// <summary>A restored turn's pictures as thumbnails at <paramref name="box"/>, as <see cref="ToolThumbnails"/> draws a live one's; nothing without either.</summary>
+    /// <summary>A restored turn's pictures as thumbnails at <paramref name="box"/>, as <see cref="ToolThumbnails"/> draws a live one's; without a box, offered to the Web UI's page alone.</summary>
     private void ReplayThumbnails(IReadOnlyList<DataContent>? pictures, UI.ThumbnailBox? box, bool sandbox)
     {
-        if (box is { } size && pictures is { Count: > 0 })
+        if (pictures is not { Count: > 0 })
         {
-            var (tiles, ids) = ReadThumbnails(RestoredImages(pictures), size, sandbox);
-            _transcript.Images(tiles, ids);
+            return;
+        }
+
+        if (box is { } size)
+        {
+            var (tiles, ids, web) = ReadThumbnails(RestoredImages(pictures), size, sandbox);
+            _transcript.Images(tiles, ids, web);
+        }
+        else
+        {
+            WebOnlyPictures(RestoredImages(pictures), sandbox);
         }
     }
 

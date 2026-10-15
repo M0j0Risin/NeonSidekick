@@ -11,6 +11,13 @@ namespace NeonSidekick.HomeAssistant;
 /// </summary>
 public static class HaText
 {
+    /// <summary>A change from the Web UI's page the user said no to (later on 2026-10-14).</summary>
+    public const string Kept = "(kept)";
+
+    /// <summary>The question before a change from the Web UI's page (later on 2026-10-14): the service and what it acts on.</summary>
+    public static string ConfirmCall(string domain, string service, string what) =>
+        "Call " + domain + "." + service + (what.Length > 0 ? " on " + what : "") + "?";
+
     /// <summary>The log category.</summary>
     public const string Category = "HomeAssistant";
 

@@ -14,6 +14,10 @@ public enum AskSource
 /// plan, learn), its title, a plain body, a command or statement's lines (monospace), a plan's Markdown, the choices (the PC's own
 /// wording), the choice that takes typed text, and <c>ask_user</c>'s questions answered with <see cref="SubmitLabel"/>.
 /// </summary>
+/// <remarks>
+/// A <c>pick</c> (later on 2026-10-14: bare <c>/model</c>, <c>/reasoning</c>, <c>/rewind</c> from the page) carries <see cref="Items"/> — answered by an
+/// item's id — and the one in use (<see cref="Current"/>); an <c>info</c> carries its <see cref="Lines"/> and one choice, <c>close</c>.
+/// </remarks>
 public sealed record WebAskSpec(
     string Kind,
     string Title,
@@ -23,7 +27,9 @@ public sealed record WebAskSpec(
     string? Markdown = null,
     string? TextChoice = null,
     IReadOnlyList<WebQuestion>? Questions = null,
-    string? SubmitLabel = null);
+    string? SubmitLabel = null,
+    IReadOnlyList<WebPickItem>? Items = null,
+    string? Current = null);
 
 /// <summary>
 /// One open ask: its id, the answer the page gave (when the page claimed it), and the claim both sides race for. The first claim wins
@@ -83,7 +89,9 @@ public sealed class WebAskHandle
             return Spec.SubmitLabel ?? "answered";
         }
 
-        string label = Spec.Choices.FirstOrDefault(c => c.Id == answer.Choice)?.Label ?? answer.Choice ?? "";
+        string label = Spec.Choices.FirstOrDefault(c => c.Id == answer.Choice)?.Label
+            ?? Spec.Items?.FirstOrDefault(i => i.Id == answer.Choice)?.Label
+            ?? answer.Choice ?? "";
         return string.IsNullOrWhiteSpace(answer.Text) || answer.Choice != Spec.TextChoice ? label : label + ": " + answer.Text.Trim();
     }
 }
@@ -206,6 +214,8 @@ public sealed class WebAskBroker
             return null;
         }
 
-        return spec.Choices.Any(c => c.Id == answer.Choice) ? null : new WebReply(WebOutcome.Refused, WebUiText.NoSuchChoice);
+        return spec.Choices.Any(c => c.Id == answer.Choice) || spec.Items?.Any(i => i.Id == answer.Choice) == true
+            ? null
+            : new WebReply(WebOutcome.Refused, WebUiText.NoSuchChoice);
     }
 }

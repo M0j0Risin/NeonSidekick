@@ -131,6 +131,9 @@ internal sealed partial class ChatScreen
         private IReadOnlyList<string> _names = [];
         private DateTimeOffset _read = DateTimeOffset.MinValue;
 
+        /// <summary>The names last read, never read again here (the Web UI's dropdown, later on 2026-10-14).</summary>
+        public IReadOnlyList<string> Last => _names;
+
         public IReadOnlyList<string> Get()
         {
             var now = time.GetUtcNow();

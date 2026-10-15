@@ -180,10 +180,17 @@ public sealed class WebUiHostTests : IAsyncLifetime
         Assert.True(_backend.Sent.TryDequeue(out var sent));
         Assert.Equal(("a1", "hi"), (sent.Id, sent.Text));
 
-        _backend.Reply = new WebReply(WebOutcome.Refused, WebUiText.SlashRefused);
-        using var refused = await _client.SendAsync(Post("/api/send", "{\"text\":\"/clear\"}"));
+        _backend.Reply = new WebReply(WebOutcome.Refused, WebUiText.UnknownCommand("//tools"), AsText: true, Use: "/tools");
+        using var refused = await _client.SendAsync(Post("/api/send", "{\"text\":\"//tools\"}"));
         Assert.Equal(HttpStatusCode.UnprocessableEntity, refused.StatusCode);
-        Assert.Contains(WebUiText.SlashRefused, await refused.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        string body = await refused.Content.ReadAsStringAsync();
+        Assert.Contains(WebUiText.UnknownCommand("//tools"), body, StringComparison.Ordinal);
+        Assert.Contains("\"asText\":true", body, StringComparison.Ordinal);
+        Assert.Contains("\"use\":\"/tools\"", body, StringComparison.Ordinal);
+
+        using var asText = await _client.SendAsync(Post("/api/send", "{\"text\":\"/usr/bin\",\"asText\":true}"));
+        Assert.True(_backend.Sent.TryDequeue(out _));
+        Assert.True(_backend.Sent.TryDequeue(out var sentAsText) && sentAsText.AsText);
 
         _backend.Reply = new WebReply(WebOutcome.TooMany, "full");
         using var full = await _client.SendAsync(Post("/api/send", "{\"text\":\"x\"}"));
@@ -281,6 +288,155 @@ public sealed class WebUiHostTests : IAsyncLifetime
         var stopping = _host.StopAsync();
         Assert.Null(await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(20)));
         await stopping.WaitAsync(TimeSpan.FromSeconds(20));
+    }
+
+    // ── Pictures (later on 2026-10-14) ───────────────────────────────────────
+
+    private string PictureUrl(int id, string size, string? run = null) => WebUiHost.PicturePrefix + (run ?? _backend.PictureRun) + "/" + id + "/" + size;
+
+    private static byte[] Png(int width = 8, int height = 4) => NeonSidekick.Files.ImageFile.Load(NeonSidekick.App.SmokeChecks.SolidBmp(width, height), "x.bmp", out _)!.Bytes;
+
+    private string TempFile(string name, byte[] bytes)
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        string path = Path.Combine(dir, name);
+        File.WriteAllBytes(path, bytes);
+        return path;
+    }
+
+    private List<DiagnosticEvent> Errors(out Action stop)
+    {
+        var errors = new List<DiagnosticEvent>();
+        void Record(DiagnosticEvent e)
+        {
+            if (e.Level >= DiagnosticLevel.Warning)
+            {
+                lock (errors)
+                {
+                    errors.Add(e);
+                }
+            }
+        }
+
+        DiagnosticLog.Emitted += Record;
+        stop = () => DiagnosticLog.Emitted -= Record;
+        return errors;
+    }
+
+    [WindowsFact]
+    public async Task APicture_IsServed_AtEachSize_WithAnETag_ThatAnswers304()
+    {
+        byte[] png = Png();
+        _backend.Pictures[3] = new WebPictureSource("a.png", null, png, "image/png");
+
+        using var thumb = await _client.SendAsync(Get(PictureUrl(3, "thumb")));
+        Assert.Equal(HttpStatusCode.OK, thumb.StatusCode);
+        Assert.StartsWith("image/", thumb.Content.Headers.ContentType?.MediaType, StringComparison.Ordinal);
+        Assert.True(thumb.Headers.CacheControl is { Private: true, NoCache: true, NoStore: false }, thumb.Headers.CacheControl?.ToString());
+        Assert.Equal("same-origin", Assert.Single(thumb.Headers.GetValues("Cross-Origin-Resource-Policy")));
+        var etag = thumb.Headers.ETag;
+        Assert.NotNull(etag);
+
+        using var again = Get(PictureUrl(3, "thumb"));
+        again.Headers.IfNoneMatch.Add(etag);
+        using var notModified = await _client.SendAsync(again);
+        Assert.Equal(HttpStatusCode.NotModified, notModified.StatusCode);
+
+        using var mid = await _client.SendAsync(Get(PictureUrl(3, "mid")));
+        Assert.Equal(png, await mid.Content.ReadAsByteArrayAsync());   // the attachment's own bytes
+        using var full = await _client.SendAsync(Get(PictureUrl(3, "full")));
+        Assert.Equal("image/png", full.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(png, await full.Content.ReadAsByteArrayAsync());   // no file: the bytes are the original
+    }
+
+    [Fact]
+    public async Task APictureWithAFile_IsServedWhole_AndAHeadSendsNoBody()
+    {
+        byte[] png = Png();
+        string path = TempFile("photo.png", png);
+        _backend.Pictures[4] = new WebPictureSource("photo.png", path, null, "image/png");
+
+        using var full = await _client.SendAsync(Get(PictureUrl(4, "full")));
+        Assert.Equal(HttpStatusCode.OK, full.StatusCode);
+        Assert.Equal("image/png", full.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(png, await full.Content.ReadAsByteArrayAsync());
+        Assert.Equal(png.Length, full.Content.Headers.ContentLength);
+
+        using var head = new HttpRequestMessage(HttpMethod.Head, PictureUrl(4, "thumb"));
+        head.Headers.Add("Cookie", Cookie);
+        using var headed = await _client.SendAsync(head);
+        Assert.Equal(HttpStatusCode.OK, headed.StatusCode);
+        Assert.Empty(await headed.Content.ReadAsByteArrayAsync());
+        Assert.NotNull(headed.Headers.ETag);
+    }
+
+    [Fact]
+    public async Task AnUnknownPicture_AStaleRun_ABadSize_OrAGoneFile_Is404_AndNoErrorLine()
+    {
+        var errors = Errors(out var stop);
+        try
+        {
+            _backend.Pictures[5] = new WebPictureSource("gone.png", Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".png"), null, "image/png");
+            _backend.Pictures[6] = new WebPictureSource("a.png", null, [1, 2, 3], "image/png");
+
+            foreach (string url in new[] { PictureUrl(99, "thumb"), PictureUrl(6, "thumb", run: new string('f', 32)), PictureUrl(6, "huge"), PictureUrl(5, "full"), PictureUrl(5, "thumb"), WebUiHost.PicturePrefix + "x" })
+            {
+                using var response = await _client.SendAsync(Get(url));
+                Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            }
+
+            using var unsigned = await _client.SendAsync(Get(PictureUrl(6, "full"), signedIn: false));
+            Assert.Equal(HttpStatusCode.Unauthorized, unsigned.StatusCode);
+
+            using var undecodable = await _client.SendAsync(Get(PictureUrl(6, "thumb")));
+            Assert.Equal(HttpStatusCode.UnsupportedMediaType, undecodable.StatusCode);
+        }
+        finally
+        {
+            stop();
+        }
+
+        Assert.Empty(errors);
+    }
+
+    [WindowsFact]
+    public async Task ATiff_IsReEncodedAsJpeg_ForTheBrowser()
+    {
+        var settings = new PhotoSauce.MagicScaler.ProcessImageSettings();
+        Assert.True(settings.TrySetEncoderFormat("image/tiff"));
+        using var tiff = new MemoryStream();
+        PhotoSauce.MagicScaler.MagicImageProcessor.ProcessImage(NeonSidekick.App.SmokeChecks.SolidBmp(20, 10), tiff, settings);
+        string path = TempFile("scan.tiff", tiff.ToArray());
+        _backend.Pictures[7] = new WebPictureSource("scan.tiff", path, null, "image/png");
+
+        using var full = await _client.SendAsync(Get(PictureUrl(7, "full")));
+
+        Assert.Equal(HttpStatusCode.OK, full.StatusCode);
+        Assert.Equal("image/jpeg", full.Content.Headers.ContentType?.MediaType);
+        var info = NeonSidekick.Images.ImageEditor.Info(await full.Content.ReadAsByteArrayAsync())!;
+        Assert.Equal((20, 10), (info.Width, info.Height));
+    }
+
+    [Fact]
+    public async Task TheDropdown_NeedsTheCookieAndTheHeader_AndAnswersItsJson()
+    {
+        _backend.Completion = new WebCompletion(0, 0, 3, [new WebCompletionItem("/tree", "a tree", "/tree ")], false);
+
+        using var unsigned = await _client.SendAsync(Post("/api/complete", "{\"text\":\"/tr\",\"cursor\":3,\"seq\":1}", signedIn: false));
+        using var cross = await _client.SendAsync(Post("/api/complete", "{\"text\":\"/tr\",\"cursor\":3,\"seq\":1}", csrf: false));
+        using var bad = await _client.SendAsync(Post("/api/complete", "{nope"));
+        using var ok = await _client.SendAsync(Post("/api/complete", "{\"text\":\"/tr\",\"cursor\":3,\"seq\":9}"));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, unsigned.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, cross.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+        string json = await ok.Content.ReadAsStringAsync();
+        Assert.Contains("\"seq\":9", json, StringComparison.Ordinal);
+        Assert.Contains("\"insert\":\"/tree \"", json, StringComparison.Ordinal);
+        Assert.True(_backend.Completed.TryDequeue(out var asked) && asked.Text == "/tr" && asked.Cursor == 3);
+        Assert.Equal("no-store", ok.Headers.CacheControl?.ToString());
     }
 
     [Fact]

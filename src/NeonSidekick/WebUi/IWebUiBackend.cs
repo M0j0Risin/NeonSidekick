@@ -12,8 +12,8 @@ public enum WebOutcome
     TooMany,
 }
 
-/// <summary>A post's outcome and its sentence for the page.</summary>
-public readonly record struct WebReply(WebOutcome Outcome, string? Message = null)
+/// <summary>A post's outcome and its sentence for the page; for a refused command, its offers (<see cref="WebResult"/>).</summary>
+public readonly record struct WebReply(WebOutcome Outcome, string? Message = null, bool AsText = false, string? Use = null)
 {
     public static WebReply Ok => new(WebOutcome.Ok);
 }
@@ -48,4 +48,16 @@ public interface IWebUiBackend
 
     /// <summary>A shopping line ticked or unticked.</summary>
     WebReply Check(WebCheckRequest request, IPAddress? remote);
+
+    /// <summary>
+    /// This run's tag in every picture's address (2026-10-14): 128 random bits made once per process, so an address from another run of the app
+    /// (a phone's old tab, a cached page) names nothing.
+    /// </summary>
+    string PictureRun { get; }
+
+    /// <summary>Picture <paramref name="id"/> while the transcript holds it, or null (never drawn, trimmed, a conversation since).</summary>
+    WebPictureSource? Picture(int id);
+
+    /// <summary>The page's dropdown for the text it sent (later on 2026-10-14); quick, and an empty answer when busy.</summary>
+    WebCompletion Complete(WebCompleteRequest request);
 }

@@ -24,6 +24,7 @@
     <div class="banner hidden" id="loading"></div>
     <div class="queued hidden" id="queued"></div>
     <div class="banner message hidden" id="message"></div>
+    <div class="complete hidden" id="complete" role="listbox"></div>
     <div class="compose">
       <textarea id="draft" rows="1" placeholder="Message…" enterkeyhint="send"></textarea>
       <button class="primary" id="send" title="Send">➤</button>
@@ -31,5 +32,15 @@
     </div>
   </div>
 </footer>
+<div class="overlay hidden" id="overlay" role="dialog" aria-modal="true">
+  <div class="overlay-bar">
+    <span class="overlay-name" id="overlay-name"></span>
+    <a id="overlay-open" target="_blank" rel="noopener noreferrer"></a>
+    <button type="button" id="overlay-close" title="Close">✕</button>
+  </div>
+  <img id="overlay-img" alt="">
+  <button type="button" class="overlay-step prev" id="overlay-prev" title="Previous">‹</button>
+  <button type="button" class="overlay-step next" id="overlay-next" title="Next">›</button>
+</div>
 </body>
 </html>

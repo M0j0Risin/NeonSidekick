@@ -25,6 +25,12 @@ public sealed record SubmittedLine(string Draft, string Text, IReadOnlyList<Imag
     /// page — not to the PC's row — when it is withdrawn.
     /// </summary>
     public bool FromWeb { get; init; }
+
+    /// <summary>A page's line that reads as a command, sent as a message (later on 2026-10-14: the page's <i>Send as a message</i>).</summary>
+    public bool AsText { get; init; }
+
+    /// <summary>Where a page's line came from (the dispatch guard's log).</summary>
+    public System.Net.IPAddress? Remote { get; init; }
 }
 
 /// <summary>What one event did to an <see cref="InputLine.Editor"/> (2026-09-25).</summary>
@@ -1376,67 +1382,17 @@ public sealed partial class InputLine
                 return;
             }
 
+            // Where the word under the cursor stands and its list, through the router the Web UI's dropdown asks too (later on 2026-10-14):
+            // a command at the start, its argument after it, else a mention; an argument source narrows itself and may answer paths.
             string draft = _text.ToString();
-            int start, end;
-            string query;
-            // The command list is narrowed here; an argument source narrows itself (it knows the
-            // command) and may answer the path shape (ArgumentList.IsPathList), drawn as the @ list.
-            Func<IReadOnlyList<CompletionItem>>? words = null;
-            Func<ArgumentList>? argument = null;
-            string prefix = "";
-            if (_commanding && MentionCompleter.TryFindCommand(draft, _cursor, out end, out query))
-            {
-                start = 0;
-                string typed = query;
-                words = () => MentionCompleter.Matches(_line._commands!(), typed);
-            }
-            else if (_arguing && MentionCompleter.TryFindArgument(draft, _cursor, out string command, out start, out end, out query) && !MentionInArgument(draft, command))
-            {
-                string typed = query;
-                argument = () => _line._arguments!(command, typed);
-            }
-            else if (_hashing && MentionCompleter.TryFind(draft, _cursor, '#', out start, out end, out query))
-            {
-                // A #skill mention (2026-09-17): a word list like a command's, re-prefixed on a pick.
-                string typed = query;
-                prefix = "#";
-                words = () => MentionCompleter.Matches(_line._skills!(), typed);
-            }
-            else if (_dollaring && MentionCompleter.TryFind(draft, _cursor, '$', out start, out end, out query))
-            {
-                // A $tool mention (2026-09-19): the #skill shape over the tools the next turn offers.
-                string typed = query;
-                prefix = "$";
-                words = () => MentionCompleter.Matches(_line._tools!(), typed);
-            }
-            else if (_percenting && MentionCompleter.TryFind(draft, _cursor, '%', out start, out end, out query))
-            {
-                // A %connection mention (later on 2026-09-23): the $tool shape over the database connections (SQL, Oracle, MySQL).
-                string typed = query;
-                prefix = "%";
-                words = () => MentionCompleter.Matches(_line._connections!(), typed);
-            }
-            else if (_careting && MentionCompleter.TryFind(draft, _cursor, '^', out start, out end, out query))
-            {
-                // A ^workflow mention (later still on 2026-09-24): the %connection shape over the offered ComfyUI workflows.
-                string typed = query;
-                prefix = "^";
-                words = () => MentionCompleter.Matches(_line._workflows!(), typed);
-            }
-            else if (_starring && MentionCompleter.TryFind(draft, _cursor, '*', out start, out end, out query))
-            {
-                // A *share mention (2026-10-01, the user's ask): the %connection shape over the offered UNC shares, once part of %'s list.
-                string typed = query;
-                prefix = "*";
-                words = () => MentionCompleter.Matches(_line._shares!(), typed);
-            }
-            else if (!_completing || !MentionCompleter.TryFind(draft, _cursor, out start, out end, out query))
+            if (CompletionQuery.Route(draft, _cursor, Lists, _line.PathArgument) is not { } route)
             {
                 // The dismissal stands: the cursor may come back over the same word.
                 CloseList();
                 return;
             }
 
+            var (start, end, query) = (route.Start, route.End, route.Query);
             if (_dismissed is { } gone && gone.Start == start && gone.Query == query)
             {
                 CloseList();
@@ -1450,70 +1406,29 @@ public sealed partial class InputLine
                 return;
             }
 
-            if (argument is not null)
-            {
-                var answer = argument();
-                if (answer.IsPathList)
-                {
-                    // The @ shape for a path argument (/read): no notes, no prefix, the folder mode on a pick.
-                    if (answer.Paths!.Count == 0)
-                    {
-                        CloseList();
-                        return;
-                    }
-
-                    _list = new MentionList(start, end, query, answer.Paths, answer.Truncated, 0, 0);
-                    ShowList();
-                    return;
-                }
-
-                words = () => answer.Words;
-            }
-
-            if (words is not null)
-            {
-                var items = words();
-                if (items.Count == 0)
-                {
-                    CloseList();
-                    return;
-                }
-
-                _list = new MentionList(start, end, query, items.Select(i => i.Text).ToList(), false, 0, 0) { Notes = items.Select(i => i.Note).ToList(), Prefix = prefix };
-                ShowList();
-                return;
-            }
-
-            var found = _line._mentions!(query);
-            if (found.Paths.Count == 0)
+            if (CompletionQuery.Fetch(route, Sources) is not { } answer)
             {
                 CloseList();
                 return;
             }
 
-            _list = new MentionList(start, end, query, found.Paths, found.Truncated, 0, 0) { Prefix = "@" };
+            _list = new MentionList(start, end, query, answer.Matches, answer.Truncated, 0, 0) { Notes = answer.Notes, Prefix = answer.Prefix };
             ShowList();
         }
 
-        /// <summary>
-        /// Whether the word under the cursor in a slash command's text is a mention to complete as one (2026-09-30, the user's
-        /// ask: <c>/loop infinite 1s append the time to @file.txt</c> completes the <c>@</c> as a message would): its character's
-        /// list is on, and the command's argument is no path of its own (<see cref="InputLine.PathArgument"/>: <c>/read</c>,
-        /// <c>/view</c>, <c>/print</c> keep their file list and <c>/tree</c>, <c>/explore</c>, <c>/vault</c> their folder list,
-        /// and none of them takes an <c>@</c>).
-        /// </summary>
-        private bool MentionInArgument(string draft, string command) =>
-            MentionCompleter.TriggerAt(draft, _cursor) switch
-            {
-                '@' => _completing,
-                '#' => _hashing,
-                '$' => _dollaring,
-                '%' => _percenting,
-                '^' => _careting,
-                '*' => _starring,
-                _ => false,
-            }
-            && _line.PathArgument?.Invoke(command) != true;
+        /// <summary>The lists this line completes, as its options and sources say.</summary>
+        private CompletionLists Lists => new(_commanding, _arguing, _completing, _hashing, _dollaring, _percenting, _careting, _starring);
+
+        /// <summary>The line's sources; a list switched off is never asked, so a missing one is never read.</summary>
+        private CompletionSources Sources => new(
+            () => _line._commands!(),
+            (command, typed) => _line._arguments!(command, typed),
+            () => _line._skills!(),
+            () => _line._tools!(),
+            () => _line._connections!(),
+            () => _line._workflows!(),
+            () => _line._shares!(),
+            typed => _line._mentions!(typed));
 
         private void ShowList()
         {

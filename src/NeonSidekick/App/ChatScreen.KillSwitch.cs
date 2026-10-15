@@ -15,6 +15,9 @@ internal enum KillScopeKind
     Work,
     Edit,
     Load,
+
+    /// <summary>Work beside the model's (later on 2026-10-14: a <c>/claude</c> run): the Web UI's Stop ends it, the kill switch leaves it.</summary>
+    Aside,
 }
 
 internal sealed partial class ChatScreen
@@ -122,7 +125,7 @@ internal sealed partial class ChatScreen
 
         for (var outer = Volatile.Read(ref _killScopes); outer is not null; outer = outer.Outer)
         {
-            if (all || outer.Kind == KillScopeKind.Work)
+            if (all ? outer.Kind != KillScopeKind.Aside : outer.Kind is KillScopeKind.Work or KillScopeKind.Aside)
             {
                 VoiceSession.SafeCancel(outer.Cts);
                 any = true;
@@ -139,7 +142,7 @@ internal sealed partial class ChatScreen
         bool loading = false;
         for (var outer = Volatile.Read(ref _killScopes); outer is not null; outer = outer.Outer)
         {
-            working |= outer.Kind == KillScopeKind.Work;
+            working |= outer.Kind is KillScopeKind.Work or KillScopeKind.Aside;
             loading |= outer.Kind == KillScopeKind.Load;
         }
 

@@ -433,13 +433,6 @@ internal sealed partial class ChatScreen
     /// </summary>
     private readonly ConcurrentQueue<SubmittedLine> _pendingLines = new();
 
-    /// <summary>Leaves <paramref name="line"/> for the idle line; always taken.</summary>
-    private bool Pend(SubmittedLine line)
-    {
-        _pendingLines.Enqueue(line);
-        return true;
-    }
-
     /// <summary>The line hook of a watch that takes no command (a spinner's, a listen's): every line waits for the idle line (2026-09-25).</summary>
     private Task<bool> PendLineAsync(KeySource.WatchedLine line) => Task.FromResult(line.Line is { } submitted && Pend(submitted));
 
@@ -806,6 +799,18 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task ShowLinesAsync(string label, IReadOnlyList<string> lines, INoticeSink sink, CancellationToken cancellationToken)
     {
+        if (FromWebNow && _pane.Enabled)
+        {
+            // From the Web UI's page (later on 2026-10-14): the list as a card there and on the info pane here; either's close ends both.
+            string shown = string.Join('\n', lines);
+            await RaceAsync<bool>(InfoSpec(label, lines), async token =>
+            {
+                await _info.ShowAsync(label, [new InfoTab(label, () => new Spectre.Console.Text(shown))], 0, token).ConfigureAwait(false);
+                return true;
+            }, _ => true, "The list pane failed: ", cancellationToken, noticeAnswer: false).ConfigureAwait(false);
+            return;
+        }
+
         if (!_pane.Enabled)
         {
             foreach (string line in lines)
@@ -839,10 +844,11 @@ internal sealed partial class ChatScreen
         _transcript.Notice(notice);
     }
 
-    /// <summary>Queues an act for the turn task and wakes its select.</summary>
+    /// <summary>Queues an act for the turn task and wakes its select; it runs under the poster's origin (later on 2026-10-14), whatever the turn's is.</summary>
     private void Post(Func<Task> act)
     {
-        _acts.Enqueue(act);
+        var origin = s_origin.Value;
+        _acts.Enqueue(() => WithOrigin(origin, act));
         Volatile.Read(ref _actSignal).TrySetResult();
     }
 
@@ -960,6 +966,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task EndTurnAsync(bool closePane, CancellationToken cancellationToken)
     {
+        // The hand-overs are a pane's, the PC's hand (later on 2026-10-14): never asked on the page, whatever started the turn.
+        s_origin.Value = CommandOrigin.Pc;
         await EndWatchAsync(closePane).ConfigureAwait(false);
         if (cancellationToken.IsCancellationRequested)
         {
@@ -1145,6 +1153,12 @@ internal sealed partial class ChatScreen
     /// <summary>A yes/no question: the pane (<see cref="SettingsMenu.ConfirmAsync"/>) where menus open, else the question with <see cref="TypedConfirmSuffix"/> and a typed <c>y</c> on the input line.</summary>
     private async Task<bool> ConfirmAsync(string question, CancellationToken cancellationToken)
     {
+        if (FromWebNow)
+        {
+            // A command from the page (later on 2026-10-14): the question on the page and the PC at once, the first answer winning.
+            return await ConfirmFromWebAsync(question, cancellationToken).ConfigureAwait(false) == true;
+        }
+
         if (_menu.CanShowMenus())
         {
             return await _menu.ConfirmAsync(question, cancellationToken).ConfigureAwait(false);

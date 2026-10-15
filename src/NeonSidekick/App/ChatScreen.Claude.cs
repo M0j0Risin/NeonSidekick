@@ -83,6 +83,8 @@ internal sealed partial class ChatScreen
     private async Task<ClaudeRun> RunClaudeAsync(string prompt, string sessionId, bool resume, AppSettingsData effective, CancellationToken cancellationToken)
     {
         using var claudeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        // The Web UI's Stop ends it (later on 2026-10-14), the kill switch does not: Claude Code is not the embedded model's work.
+        using var aside = BeginKillScope(claudeCts, KillScopeKind.Aside);
         using var stop = new CancellationTokenSource();
         var speaker = effective.TtsOutput && _speech.IsReady ? _speech.BeginTurn(cancellationToken) : null;
         using var stopSpeech = speaker is null ? default : claudeCts.Token.Register(_speech.Stop);

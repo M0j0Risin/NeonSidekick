@@ -27,7 +27,7 @@ internal sealed partial class ChatScreen
     /// answer (the turn's end, the pane-close signal) is the pane's answer as before; no watcher is never asked, the web ask withdrawn.
     /// Under a web answer the transcript says so and the log names the address. <paramref name="failure"/> is the pane's own failure line.
     /// </summary>
-    private async Task<AskOutcome<T>> AskBothAsync<T>(WebAskSpec spec, Func<CancellationToken, Task<T>> pane, Func<WebAnswerRequest, T> fromWeb, string failure, CancellationToken turnToken)
+    private async Task<AskOutcome<T>> AskBothAsync<T>(WebAskSpec spec, Func<CancellationToken, Task<T>> pane, Func<WebAnswerRequest, T> fromWeb, string failure, CancellationToken turnToken, bool noticeAnswer = true)
     {
         var handle = _webUi.Asks.Open(spec);
         var paneToken = _paneClose?.Token ?? CancellationToken.None;
@@ -92,7 +92,11 @@ internal sealed partial class ChatScreen
             VoiceSession.SafeCancel(paneCts);
             string said = handle.Describe(answer);
             DiagnosticLog.Info(WebUiCategory, WebUiText.AnsweredLogLine(spec.Title, said, handle.Remote));
-            _transcript.Notice(WebUiText.AnsweredNotice(said));
+            if (noticeAnswer)
+            {
+                _transcript.Notice(WebUiText.AnsweredNotice(said));
+            }
+
             return new AskOutcome<T>(fromWeb(answer), AskSource.Web, NeverAsked: false);
         }
         finally
@@ -113,8 +117,7 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        var spec = new WebAskSpec("confirm", question,
-            [new WebChoice("no", SettingsMenu.ConfirmRows[0]), new WebChoice("yes", SettingsMenu.ConfirmRows[1])]);
+        var spec = ConfirmSpec(question);
         var outcome = await AskBothAsync<bool?>(spec, async token => await _menu.ConfirmAsync(question, token).ConfigureAwait(false), a => a.Choice == "yes", failure, turnToken).ConfigureAwait(false);
         return outcome.NeverAsked ? null : outcome.Value ?? false;
     }

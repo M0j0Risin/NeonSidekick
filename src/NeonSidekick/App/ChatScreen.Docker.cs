@@ -117,13 +117,15 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task HandleDockerAsync(string args, CancellationToken cancellationToken)
     {
-        if (args.Trim().Length == 0 && _pane.Enabled)
+        // From the Web UI's page (later on 2026-10-14) the bare word lists, as without the pane, and a change asks first.
+        if (args.Trim().Length == 0 && _pane.Enabled && !FromWebNow)
         {
             await DockerMenuFor(closeWhenDone: true).ShowAsync(cancellationToken).ConfigureAwait(false);
             return;
         }
 
-        var result = await _transcript.WithSpinnerAsync(DockerText.Working, () => DockerCommand.RunAsync(_docker, args, cancellationToken)).ConfigureAwait(false);
+        var confirm = WebConfirmHook;
+        var result = await _transcript.WithSpinnerAsync(DockerText.Working, () => DockerCommand.RunAsync(_docker, args, cancellationToken, confirm)).ConfigureAwait(false);
         await ShowDockerResultAsync(result, args, _transcript, cancellationToken).ConfigureAwait(false);
     }
 

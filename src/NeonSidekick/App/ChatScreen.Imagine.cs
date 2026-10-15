@@ -198,12 +198,17 @@ internal sealed partial class ChatScreen
             {
                 _transcript.Picture(picture, RegisterPicture(images[0], sandbox: true));
             }
+            else
+            {
+                // The terminal's codecs refused it: the page may still draw it (later on 2026-10-14).
+                WebOnlyPictures(images, sandbox: true);
+            }
 
             return;
         }
 
-        var (tiles, ids) = ReadThumbnails(images, ThumbnailSize.Resolve(_effective(), WindowBox()), sandbox: true);
-        _transcript.Images(tiles, ids);
+        var (tiles, ids, web) = ReadThumbnails(images, ThumbnailSize.Resolve(_effective(), WindowBox()), sandbox: true);
+        _transcript.Images(tiles, ids, web);
     }
 
     /// <summary>The message as the model gets it (2026-09-24): the <c>/imagine</c> notes since the last one ahead of the text, their pictures after the user's own; then the notes are spent.</summary>

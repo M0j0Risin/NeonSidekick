@@ -16,6 +16,9 @@ public enum FeedKind
     Alert,
     Separator,
     Picture,
+
+    /// <summary>A command from the page at work (later on 2026-10-14): the spinner's label, taken out when it ends.</summary>
+    Working,
 }
 
 /// <summary>What changed in the feed: an entry added, text grown on one, a reply ended, or everything cleared.</summary>
@@ -28,6 +31,8 @@ public abstract record FeedChange
     public sealed record Ended(long Seq, string Markdown) : FeedChange;
 
     public sealed record Cleared : FeedChange;
+
+    public sealed record Removed(long Seq) : FeedChange;
 }
 
 /// <summary>
@@ -37,6 +42,9 @@ public abstract record FeedChange
 /// <see cref="MaxChars"/> characters, the oldest dropped first). Thread-safe: the turn task writes, a Kestrel thread reads a
 /// <see cref="Snapshot"/>. <see cref="Changed"/> runs on the writing task, so its subscribers must be quick (the session only hands
 /// the change to the pages' queues). Pure otherwise.
+/// A picture entry carries its pictures (later on 2026-10-14): the feed counts the entries holding each picture's id, so the server serves a
+/// picture only while an entry holds it (<see cref="Holds"/>) and the screen hears when the last one goes (<see cref="PictureReleased"/>) — a
+/// trim, a <see cref="Clear"/> (a new conversation, a profile switch, a restore, a rewind) or a <see cref="Remove"/>.
 /// </summary>
 public sealed class TranscriptFeed
 {
@@ -55,9 +63,23 @@ public sealed class TranscriptFeed
     private long _chars;
     private Entry? _open;
     private string? _replyGlyph;   // the reply's glyph, kept for its text after a tool line or a notice
+    private readonly Dictionary<int, int> _held = [];   // a picture's id → the entries holding it
+    private readonly List<int> _released = [];   // ids whose last entry went, raised outside the lock
 
     /// <summary>Raised after every change, on the writing task.</summary>
     public event Action<FeedChange>? Changed;
+
+    /// <summary>A picture's last entry went (its id); raised on the writing task, outside the feed's lock.</summary>
+    public event Action<int>? PictureReleased;
+
+    /// <summary>Whether an entry kept now holds picture <paramref name="id"/> (any thread: the server asks before it serves one).</summary>
+    public bool Holds(int id)
+    {
+        lock (_gate)
+        {
+            return _held.ContainsKey(id);
+        }
+    }
 
     /// <summary>The entries kept now (tests).</summary>
     public int Count
@@ -72,7 +94,7 @@ public sealed class TranscriptFeed
     }
 
     /// <summary>A whole entry of <paramref name="kind"/>; a reply still open is ended first.</summary>
-    public long Add(FeedKind kind, string text, string? glyph = null, bool failed = false)
+    public long Add(FeedKind kind, string text, string? glyph = null, bool failed = false, IReadOnlyList<WebPicture>? pictures = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         if (kind == FeedKind.ToolResult && text.Length > MaxResultChars)
@@ -85,13 +107,40 @@ public sealed class TranscriptFeed
         lock (_gate)
         {
             ended = CloseOpen();
-            var entry = Push(kind, text, glyph, failed);
+            var entry = Push(kind, text, glyph, failed, pictures is { Count: > 0 } ? pictures : null);
             added = entry.ToWeb(null);
         }
 
         Raise(ended);
         Raise(new FeedChange.Appended(added));
+        RaiseReleased();
         return added.Seq;
+    }
+
+    /// <summary>Takes entry <paramref name="seq"/> out (the splash cycled to another picture); false when it is gone already or still streaming.</summary>
+    public bool Remove(long seq)
+    {
+        lock (_gate)
+        {
+            var node = _entries.First;
+            while (node is not null && node.Value.Seq != seq)
+            {
+                node = node.Next;
+            }
+
+            if (node is null || node.Value == _open)
+            {
+                return false;
+            }
+
+            _chars -= node.Value.Text.Length;
+            _entries.Remove(node);
+            Release(node.Value);
+        }
+
+        Raise(new FeedChange.Removed(seq));
+        RaiseReleased();
+        return true;
     }
 
     /// <summary>A reply starts: an entry that <see cref="Append"/> grows until <see cref="End"/>.</summary>
@@ -109,6 +158,7 @@ public sealed class TranscriptFeed
 
         Raise(ended);
         Raise(new FeedChange.Appended(added));
+        RaiseReleased();
         return added.Seq;
     }
 
@@ -147,6 +197,7 @@ public sealed class TranscriptFeed
 
         Raise(appended);
         Raise(grew);
+        RaiseReleased();
     }
 
     /// <summary>The reply streaming now is over: its Markdown is final.</summary>
@@ -170,9 +221,12 @@ public sealed class TranscriptFeed
             _chars = 0;
             _open = null;
             _replyGlyph = null;
+            _released.AddRange(_held.Keys);
+            _held.Clear();
         }
 
         Raise(new FeedChange.Cleared());
+        RaiseReleased();
     }
 
     /// <summary>The entries kept now, oldest first; <paramref name="html"/> renders a finished reply's Markdown (each one once, cached).</summary>
@@ -194,14 +248,62 @@ public sealed class TranscriptFeed
         return list;
     }
 
-    private Entry Push(FeedKind kind, string text, string? glyph, bool failed)
+    private Entry Push(FeedKind kind, string text, string? glyph, bool failed, IReadOnlyList<WebPicture>? pictures = null)
     {
-        var entry = new Entry(_next++, kind, glyph, failed);
+        var entry = new Entry(_next++, kind, glyph, failed, pictures);
         entry.Text.Append(text);
         _entries.AddLast(entry);
         _chars += text.Length;
+        foreach (var picture in pictures ?? [])
+        {
+            _held[picture.Id] = _held.GetValueOrDefault(picture.Id) + 1;
+        }
+
         Trim();
         return entry;
+    }
+
+    /// <summary>An entry's pictures let go (under the lock): an id no entry holds any more is raised after it.</summary>
+    private void Release(Entry entry)
+    {
+        foreach (var picture in entry.Pictures ?? [])
+        {
+            if (!_held.TryGetValue(picture.Id, out int count))
+            {
+                continue;
+            }
+
+            if (count <= 1)
+            {
+                _held.Remove(picture.Id);
+                _released.Add(picture.Id);
+            }
+            else
+            {
+                _held[picture.Id] = count - 1;
+            }
+        }
+    }
+
+    private void RaiseReleased()
+    {
+        int[] released;
+        lock (_gate)
+        {
+            if (_released.Count == 0)
+            {
+                return;
+            }
+
+            // An id held again since (the same picture added anew) is not let go.
+            released = [.. _released.Where(id => !_held.ContainsKey(id)).Distinct()];
+            _released.Clear();
+        }
+
+        foreach (int id in released)
+        {
+            PictureReleased?.Invoke(id);
+        }
     }
 
     private FeedChange? CloseOpen()
@@ -226,6 +328,7 @@ public sealed class TranscriptFeed
         {
             _chars -= first.Value.Text.Length;
             _entries.RemoveFirst();
+            Release(first.Value);
         }
     }
 
@@ -237,7 +340,7 @@ public sealed class TranscriptFeed
         }
     }
 
-    private sealed class Entry(long seq, FeedKind kind, string? glyph, bool failed)
+    private sealed class Entry(long seq, FeedKind kind, string? glyph, bool failed, IReadOnlyList<WebPicture>? pictures)
     {
         private string? _html;
         private int _htmlLength = -1;
@@ -249,6 +352,8 @@ public sealed class TranscriptFeed
         public string? Glyph { get; } = glyph;
 
         public bool Failed { get; } = failed;
+
+        public IReadOnlyList<WebPicture>? Pictures { get; } = pictures;
 
         public StringBuilder Text { get; } = new();
 
@@ -280,7 +385,7 @@ public sealed class TranscriptFeed
                 }
             }
 
-            return new WebEntry(Seq, KindName(Kind), text, Glyph, rendered, Failed);
+            return new WebEntry(Seq, KindName(Kind), text, Glyph, rendered, Failed, Pictures);
         }
     }
 
@@ -297,6 +402,11 @@ public sealed class TranscriptFeed
         FeedKind.Error => "error",
         FeedKind.Alert => "alert",
         FeedKind.Separator => "separator",
-        _ => "picture",
+        FeedKind.Picture => "picture",
+        FeedKind.Working => "working",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
     };
+
+    /// <summary>A working line's end (later on 2026-10-14): taken out, so the pages drop it and a snapshot never shows a finished one.</summary>
+    public void EndWorking(long seq) => Remove(seq);
 }

@@ -16,9 +16,9 @@ internal sealed partial class ChatScreen
     /// </summary>
     private Task ListProcessesAsync(INoticeSink sink, CancellationToken cancellationToken)
     {
-        if (_pane.Enabled)
+        if (_pane.Enabled && !FromWebNow)
         {
-            // The menu reads the list and says NoneYet itself.
+            // The menu reads the list and says NoneYet itself. From the Web UI's page (later on 2026-10-14) the list card below instead.
             return new ProcessMenu(_processes, sink, _menuPane, OpenProcessWindow).ShowAsync(cancellationToken);
         }
 

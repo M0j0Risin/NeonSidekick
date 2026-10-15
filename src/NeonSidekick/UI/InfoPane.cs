@@ -477,8 +477,12 @@ public sealed class InfoPane
     /// handed back as it was (2026-10-14, <see cref="ScreenPane.RestoreOverlay"/>); one of <paramref name="actions"/>, the pane's buttons,
     /// closes it too, named by <see cref="Pressed"/>.
     /// </summary>
+    /// <summary>Told the pane's label as it opens (later on 2026-10-14, as <see cref="MenuPane.Opening"/>).</summary>
+    public Action<string>? Opening { get; set; }
+
     public async Task ShowAsync(string label, IReadOnlyList<InfoTab> tabs, int initial, CancellationToken cancellationToken, IReadOnlyList<InfoAction>? actions = null)
     {
+        Opening?.Invoke(label);
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(tabs);
         Pressed = null;

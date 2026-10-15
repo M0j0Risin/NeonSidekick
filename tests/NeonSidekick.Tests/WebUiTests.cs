@@ -255,6 +255,125 @@ public sealed class WebUiTests : IDisposable
         Assert.False(_session.LinesReady);
     }
 
+    private static App.WebCommandSettings CommandsOn => new(Commands: true, FileTools: true, ObsidianTools: false);
+
+    [Fact]
+    public void WithCommandsOn_ACommandWaits_AndAPaneFormIsRefused_WithItsReason()
+    {
+        _session.CommandSettings = () => CommandsOn;
+
+        Assert.Equal(WebOutcome.Ok, _session.Send(new WebSendRequest { Text = "/clear" }, IPAddress.Loopback).Outcome);
+        var pane = _session.Send(new WebSendRequest { Text = "/settings" }, null);
+        var never = _session.Send(new WebSendRequest { Text = "/exit" }, null);
+
+        Assert.Equal((WebOutcome.Refused, WebUiText.OpensPane("/settings", null)), (pane.Outcome, pane.Message));
+        Assert.Equal(WebUiText.PcOnly("/exit"), never.Message);
+        Assert.False(pane.AsText);
+        Assert.True(_session.TryTakeLine(out var line));
+        Assert.Equal(new WebLine("/clear", null, IPAddress.Loopback), line);
+    }
+
+    [Fact]
+    public void AnUnknownCommand_OffersTheMessage_AndTheCommandMeant()
+    {
+        _session.CommandSettings = () => CommandsOn;
+
+        var unknown = _session.Send(new WebSendRequest { Text = "/nosuch thing" }, null);
+        var typo = _session.Send(new WebSendRequest { Text = "//tree src" }, null);
+        var asText = _session.Send(new WebSendRequest { Text = "/nosuch thing", AsText = true }, null);
+
+        Assert.Equal((WebOutcome.Refused, WebUiText.UnknownCommand("/nosuch"), true, (string?)null), (unknown.Outcome, unknown.Message, unknown.AsText, unknown.Use));
+        Assert.Equal("/tree src", typo.Use);
+        Assert.Equal(WebOutcome.Ok, asText.Outcome);
+        Assert.True(_session.TryTakeLine(out var line) && line.AsText);
+    }
+
+    [Fact]
+    public void WithCommandsOff_EveryCommandNamesTheSetting_ButAMessageGoes()
+    {
+        var command = _session.Send(new WebSendRequest { Text = "/clear" }, null);
+        var unknown = _session.Send(new WebSendRequest { Text = "/home/me" }, null);
+
+        Assert.Equal(WebUiText.CommandsOff, command.Message);
+        Assert.Equal(WebUiText.CommandsOff, unknown.Message);
+        Assert.True(unknown.AsText);   // a path still goes as a message
+        Assert.Null(unknown.Use);
+    }
+
+    [Fact]
+    public void ACommandFromThePage_IsAudited_ByItsWordAlone()
+    {
+        _session.CommandSettings = () => CommandsOn;
+        var lines = new List<string>();
+        void Record(NeonSidekick.Diagnostics.DiagnosticEvent e) => lines.Add(e.Message);
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += Record;
+        try
+        {
+            _session.Send(new WebSendRequest { Text = "/remember my secret pin" }, IPAddress.Parse("192.168.1.5"));
+            _session.Send(new WebSendRequest { Text = "/settings" }, IPAddress.Parse("192.168.1.5"));
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= Record;
+        }
+
+        Assert.Contains(WebUiText.CommandLogLine("/remember", IPAddress.Parse("192.168.1.5"), "run"), lines);
+        Assert.Contains(WebUiText.CommandLogLine("/settings", IPAddress.Parse("192.168.1.5"), "refused"), lines);
+        Assert.DoesNotContain(lines, l => l.Contains("secret", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ADraft_GoesToTheConnectedPages_OrWaitsForTheNextSnapshot_OnceEitherWay()
+    {
+        _session.Draft("held for later");
+        Assert.Equal(["held for later"], _session.Snapshot().Drafts!);
+        Assert.Null(_session.Snapshot().Drafts);   // delivered once
+
+        using var page = _session.Events.Subscribe();
+        _session.Draft("now");
+        Assert.True(page.Reader.TryRead(out var item));
+        Assert.Equal("draft", item.Name);
+        Assert.Equal("now", JsonSerializer.Deserialize(item.Json.Value, WebUiJsonContext.Default.WebTextBack)!.Text);
+        Assert.Null(_session.Snapshot().Drafts);
+    }
+
+    [Fact]
+    public void TheHeldLines_AreListedAsWaiting()
+    {
+        _session.HeldForPc = () => ["/clear"];
+        _session.Send(new WebSendRequest { Text = "hello" }, null);
+
+        Assert.Equal(["hello", "/clear"], _session.Waiting);
+    }
+
+    [Fact]
+    public void APickCard_IsAnsweredByARowsId_AndTheNoticeNamesTheRow()
+    {
+        var broker = new WebAskBroker();
+        var spec = new WebAskSpec("pick", "🤖 Model", [new WebChoice("cancel", WebUiText.CancelChoice)], Items: [new("i0", "llama"), new("i1", "qwen", "the model in use")], Current: "i1");
+        var handle = broker.Open(spec);
+
+        Assert.Equal(WebOutcome.Refused, broker.Answer(new WebAnswerRequest { AskId = handle.Id, Choice = "i9" }, null).Outcome);
+        Assert.Equal(WebOutcome.Ok, broker.Answer(new WebAnswerRequest { AskId = handle.Id, Choice = "i0" }, null).Outcome);
+        Assert.Equal("llama", handle.Describe(new WebAnswerRequest { Choice = "i0" }));
+        Assert.Equal(WebUiText.CancelChoice, handle.Describe(new WebAnswerRequest { Choice = "cancel" }));
+    }
+
+    [Fact]
+    public void AListCard_KeepsItsLastPart_UnderTheCutNote()
+    {
+        var lines = Enumerable.Range(0, 3000).Select(i => i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + new string('x', 200)).ToList();
+
+        var spec = App.ChatScreen.InfoSpec("/tree", lines);
+
+        Assert.Equal(("info", "/tree"), (spec.Kind, spec.Title));
+        Assert.Equal(WebUiText.InfoCutNote, spec.Lines![0]);
+        Assert.Equal(lines[^1], spec.Lines[^1]);
+        Assert.True(spec.Lines.Sum(l => l.Length + 1) <= WebUiText.MaxInfoChars + WebUiText.InfoCutNote.Length + 1);
+        Assert.Equal(["close"], spec.Choices.Select(c => c.Id));
+        Assert.Equal(["a", "b"], App.ChatScreen.InfoSpec("x", ["a", "b"]).Lines);
+    }
+
     [Fact]
     public void ABareWord_IsAMessage_NotACommand()
     {
@@ -454,7 +573,16 @@ public sealed class WebUiTests : IDisposable
 
         Assert.True(App.SettingsMenu.IsToggle(App.SettingsField.WebUi));
         Assert.Equal("must be a port from 1024 to 65535", App.SettingsMenu.WebUiPortRangeError);
-        Assert.Equal([App.SettingsField.WebUi, App.SettingsField.WebUiPort, App.SettingsField.WebUiReach], App.SettingsMenu.TabFields[(int)App.SettingsTab.WebUi]);
+        Assert.Equal([App.SettingsField.WebUi, App.SettingsField.WebUiPort, App.SettingsField.WebUiReach, App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails], App.SettingsMenu.TabFields[(int)App.SettingsTab.WebUi]);
+        // The page's two rows (later on 2026-10-14) are read at each request: neither restarts the server nor is refused under a reply.
+        foreach (var field in new[] { App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails })
+        {
+            Assert.False(App.SettingsMenu.IsWebUiField(field));
+            Assert.False(App.SettingsMenu.RefusedMidTurn(field));
+            Assert.True(App.SettingsMenu.IsToggle(field));
+        }
+
+        Assert.Equal((false, true), (new Settings.AppSettingsData().WebUiCommands, new Settings.AppSettingsData().WebUiConnectionDetails));
         Assert.Equal("Web UI", App.SettingsMenu.TabTitles[(int)App.SettingsTab.WebUi]);
         var defaults = new Settings.AppSettingsData();
         Assert.Equal((false, 8765, "lan", ""), (defaults.WebUi, defaults.WebUiPort, defaults.WebUiReach, defaults.WebUiToken));

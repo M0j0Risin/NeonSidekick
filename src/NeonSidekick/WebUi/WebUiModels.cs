@@ -5,12 +5,17 @@ namespace NeonSidekick.WebUi;
 // The Web UI's wire shapes (2026-10-14): what the pages post and what the server sends back or streams. Every one is registered in
 // WebUiJsonContext (source-generated; reflection is off). Property names go out camelCase.
 
-/// <summary>A message the page sends: the page's own id for it (a repeat is not sent twice) and the text.</summary>
+/// <summary>
+/// A message the page sends: the page's own id for it (a repeat is not sent twice) and the text; <see cref="AsText"/> sends a line that reads
+/// as a command as a message (later on 2026-10-14: the page's <i>Send as a message</i> on an unknown command).
+/// </summary>
 public sealed class WebSendRequest
 {
     public string? Id { get; set; }
 
     public string? Text { get; set; }
+
+    public bool AsText { get; set; }
 }
 
 /// <summary>An answer to an open ask: the choice's id, the typed text of a text choice, or one answer per question (<c>ask_user</c>).</summary>
@@ -41,11 +46,24 @@ public sealed class WebCheckRequest
     public bool On { get; set; }
 }
 
-/// <summary>A post's answer: whether it was taken, and a sentence for the page when it was not.</summary>
-public sealed record WebResult(bool Ok, string? Message = null);
+/// <summary>
+/// A post's answer: whether it was taken, and a sentence for the page when it was not; for a refused command, whether the page may send it as a
+/// message (<see cref="AsText"/>) and the line it may use instead (<see cref="Use"/>).
+/// </summary>
+public sealed record WebResult(bool Ok, string? Message = null, bool AsText = false, string? Use = null);
 
-/// <summary>One transcript entry as the page shows it (<see cref="TranscriptFeed"/>).</summary>
-public sealed record WebEntry(long Seq, string Kind, string Text, string? Glyph, string? Html, bool Failed);
+/// <summary>One transcript entry as the page shows it (<see cref="TranscriptFeed"/>); a picture entry's pictures, when the page may load them.</summary>
+public sealed record WebEntry(long Seq, string Kind, string Text, string? Glyph, string? Html, bool Failed, IReadOnlyList<WebPicture>? Pictures = null);
+
+/// <summary>
+/// A picture the page may load (2026-10-14): the screen's id for it, its name, the three sizes' addresses (built by the server, never by the
+/// page), its width and height as the PC holds it (the grid reserves the room before it loads), and <see cref="TooLarge"/> when its file is
+/// over what the server decodes for a thumbnail (an <c>img</c> cannot read a status code).
+/// </summary>
+public sealed record WebPicture(int Id, string Name, string Thumb, string Mid, string Full, int Width, int Height, bool TooLarge);
+
+/// <summary>An entry taken out of the transcript (the splash cycled to another picture).</summary>
+public sealed record WebRemoved(long Seq);
 
 /// <summary>Text growing on an entry: <see cref="Text"/> belongs at character <see cref="At"/> of entry <see cref="Seq"/>.</summary>
 public sealed record WebDelta(long Seq, int At, string Text);
@@ -58,6 +76,9 @@ public sealed record WebTextBack(string Text);
 
 /// <summary>A choice of an ask: its id and its label, the PC's own wording.</summary>
 public sealed record WebChoice(string Id, string Label);
+
+/// <summary>One row of a pick card (later on 2026-10-14): a made-up id (<c>i0</c>, <c>i1</c>…), the row's words and a note under them.</summary>
+public sealed record WebPickItem(string Id, string Label, string? Note = null);
 
 /// <summary>One <c>ask_user</c> question: the text, its short title, single or multi-choice, its options.</summary>
 public sealed record WebQuestion(string Question, string? Title, bool Multi, IReadOnlyList<string> Options);
@@ -77,11 +98,14 @@ public sealed record WebAskView(
     IReadOnlyList<WebChoice> Choices,
     string? TextChoice,
     IReadOnlyList<WebQuestion>? Questions,
-    string? SubmitLabel);
+    string? SubmitLabel,
+    IReadOnlyList<WebPickItem>? Items = null,
+    string? Current = null);
 
 /// <summary>
 /// What the page's header and composer show: the profile and its two avatars, the model, whether a reply runs (Stop) or a model loads,
-/// plan mode, the session's title, the phone's lines waiting, what the PC is waiting on, the app's version.
+/// plan mode, the session's title, the phone's lines waiting, what the PC is waiting on, the app's version, and the page's own files' tag
+/// (<see cref="WebUiAssets.Tag"/>: a page whose tag differs reloads itself).
 /// </summary>
 public sealed record WebState(
     string Profile,
@@ -94,10 +118,17 @@ public sealed record WebState(
     string Title,
     IReadOnlyList<string> Queued,
     string? WaitingAtPc,
-    string Version);
+    string Version,
+    string Assets = "");
 
-/// <summary>What a page gets on (re)connecting: the transcript, the open asks and the state.</summary>
-public sealed record WebSnapshot(IReadOnlyList<WebEntry> Entries, IReadOnlyList<WebAskView> Asks, WebState State);
+/// <summary>What a page gets on (re)connecting: the transcript, the open asks, the state, and the app's words the page shows of its own.</summary>
+public sealed record WebSnapshot(IReadOnlyList<WebEntry> Entries, IReadOnlyList<WebAskView> Asks, WebState State, WebWords? Words = null, IReadOnlyList<string>? Drafts = null);
+
+/// <summary>
+/// The words the page puts on its own (later on 2026-10-14), the app's like every other: a picture's fallbacks (after the file's name alone),
+/// the overlay's link, a refused command's two offers (<see cref="UseLine"/> before the line), and a draft filled by a command with its undo.
+/// </summary>
+public sealed record WebWords(string PictureGone, string PictureTooLarge, string OpenOriginal, string SendAsMessage = "", string UseLine = "", string DraftFilled = "", string Undo = "");
 
 /// <summary>The open asks, whole (an <c>asks</c> event).</summary>
 public sealed record WebAsks(IReadOnlyList<WebAskView> Asks);
@@ -122,10 +153,17 @@ public sealed record WebShopping(string Header, string? Note, IReadOnlyList<WebS
 [JsonSerializable(typeof(WebResult))]
 [JsonSerializable(typeof(WebEntry))]
 [JsonSerializable(typeof(WebDelta))]
+[JsonSerializable(typeof(WebPicture))]
+[JsonSerializable(typeof(WebPickItem))]
+[JsonSerializable(typeof(WebCompleteRequest))]
+[JsonSerializable(typeof(WebCompletion))]
+[JsonSerializable(typeof(WebCompletionItem))]
+[JsonSerializable(typeof(WebRemoved))]
 [JsonSerializable(typeof(WebEnd))]
 [JsonSerializable(typeof(WebTextBack))]
 [JsonSerializable(typeof(WebState))]
 [JsonSerializable(typeof(WebSnapshot))]
+[JsonSerializable(typeof(WebWords))]
 [JsonSerializable(typeof(WebAsks))]
 [JsonSerializable(typeof(WebShopping))]
 public sealed partial class WebUiJsonContext : JsonSerializerContext;

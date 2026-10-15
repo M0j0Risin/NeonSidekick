@@ -84,6 +84,16 @@ public static class RewindText
         return new MenuFooter(text, "message #" + turn.Number.ToString(CultureInfo.InvariantCulture) + " · " + calls);
     }
 
+    /// <summary>A row of the Web UI's pick card (later on 2026-10-14): <c>#3 the message</c>, its lines joined by a space, plain text.</summary>
+    public static string WebLabel(RewindTurn turn)
+    {
+        ArgumentNullException.ThrowIfNull(turn);
+        return "#" + turn.Number.ToString(CultureInfo.InvariantCulture) + " " + Footer(turn).Text;
+    }
+
+    /// <summary>The note under a pick card's row: the footer's <c>message #3 · 4 tool calls</c>.</summary>
+    public static string? WebNote(RewindTurn turn) => Footer(turn).Last;
+
     /// <summary>The confirmation's question: <c>↩️ Rewind to before #3? 2 messages will be removed.</c> Pinned.</summary>
     public static string ConfirmPrompt(RewindTurn turn, RewindCut cut)
     {

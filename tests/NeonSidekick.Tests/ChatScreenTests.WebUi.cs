@@ -340,6 +340,445 @@ public partial class ChatScreenTests
         Assert.Contains(WebUiText.NotAvailableError, output);
     }
 
+    // ── Pictures on the page (later on 2026-10-14) ──────────────────────────
+
+    private List<WebPicture> PagePictures() => [.. Web.Feed.Snapshot(m => m).Where(e => e.Kind == "picture").SelectMany(e => e.Pictures ?? [])];
+
+    [Fact]
+    public async Task ADroppedPicture_WithThumbnailsOff_IsStillOfferedToThePage_FromItsFile()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ShowImageThumbnails = false; });
+        _chat.EnqueueText("A pink square.");
+        string path = Bmp("square.bmp");
+        var input = new ScriptedInput();
+        input.PushPaste(path).Push(Keys.Enter);
+        PushLine(input, "/exit");
+
+        string output = await RunAsync(input);
+
+        Assert.DoesNotContain("▀", output);   // nothing at the PC
+        var picture = Assert.Single(PagePictures());
+        Assert.Equal("square.bmp", picture.Name);
+        Assert.Equal((4, 4), (picture.Width, picture.Height));
+        Assert.False(picture.TooLarge);
+        var source = Web.Picture(picture.Id);
+        Assert.NotNull(source);
+        Assert.Equal(path, source.FullPath);
+        Assert.Null(source.Bytes);   // a web-only picture with a file keeps none
+        Assert.Equal(WebUiAssets.Current, Web.Snapshot().State.Assets);
+    }
+
+    [Fact]
+    public async Task ADroppedPicture_ThePcDrew_IsTheSamePicture_OnThePage_AndKeepsItsBytes()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("A pink square.");
+        string path = Bmp("square.bmp");
+        var input = new ScriptedInput();
+        input.PushPaste(path).Push(Keys.Enter);
+        PushLine(input, "/exit");
+
+        string output = await RunAsync(input);
+
+        Assert.Contains("▀", output);
+        var picture = Assert.Single(PagePictures());
+        Assert.NotNull(Web.Picture(picture.Id)!.Bytes);
+        Assert.NotNull(_running!.PictureBytesForTests(picture.Id));
+    }
+
+    /// <summary>
+    /// A rewind or a <c>/clear</c> lets the page's pictures go (later on 2026-10-14): a restored picture whose file is not there keeps its bytes only
+    /// while the page's transcript holds it, so replaying a picture-heavy session again and again does not pile them up.
+    /// </summary>
+    [WindowsFact]
+    public async Task ARestoredPicture_OnThePageAlone_KeepsItsBytes_UntilThePageLetsItGo()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ShowImageThumbnails = false; });
+        PaneOf40Rows();
+        long id = SeedPictureSession();
+        List<WebPicture>? restored = null;
+        bool keptWhileShown = false;
+        StepsWhenIdle(
+            Line("/sessions " + id),
+            i =>
+            {
+                restored = PagePictures();
+                keptWhileShown = restored.All(p => _running!.PictureBytesForTests(p.Id) is not null);
+                PushLine(i, "/clear");
+            },
+            Line("/exit"));
+
+        await RunAsync();
+
+        Assert.Equal(2, restored!.Count);
+        Assert.True(keptWhileShown);
+        foreach (var picture in restored)
+        {
+            Assert.Null(_running!.PictureBytesForTests(picture.Id));
+            Assert.Null(Web.Picture(picture.Id));
+        }
+
+        Assert.Empty(PagePictures());
+    }
+
+    // ── Commands from the page (later on 2026-10-14) ────────────────────────
+
+    /// <summary>
+    /// A script for commands from the page: each step at the idle line, never while an ask is open on the page (the page answers it) or a page's
+    /// line waits to be taken.
+    /// </summary>
+    private ScriptedInput WebSteps(params Action<ScriptedInput>[] steps) => WebSteps((Func<WebAskHandle, string?>?)null, steps);
+
+    private ScriptedInput WebSteps(string? answer, params Action<ScriptedInput>[] steps) => WebSteps(answer is null ? null : _ => answer, steps);
+
+    /// <summary>The asks the page was shown, in order (kind and title), recorded by <see cref="WebSteps(Func{WebAskHandle, string?}?, Action{ScriptedInput}[])"/>.</summary>
+    private readonly List<WebAskSpec> _pageAsks = [];
+
+    /// <summary>The panes a command from the page opened at the PC with nothing on the page: every web test ends with none.</summary>
+    private readonly List<string> _pcOnlyPanes = [];
+
+    /// <summary>
+    /// <see cref="WebSteps(Action{ScriptedInput}[])"/> whose page answers each ask with <paramref name="answer"/> once the PC's pane waits on a key
+    /// (a phone's user reading the question), so the pane is up when the page's answer closes it.
+    /// </summary>
+    private ScriptedInput WebSteps(Func<WebAskHandle, string?>? answer, params Action<ScriptedInput>[] steps)
+    {
+        var input = new ScriptedInput();
+        int next = 0;
+        input.OnWait = () =>
+        {
+            if (_running is null)
+            {
+                return;
+            }
+
+            _running.WebPaneWithoutAskForTests ??= title => { lock (_pcOnlyPanes) { _pcOnlyPanes.Add(title); } };
+            if (Web.Asks.OpenAsks() is [var ask, ..])
+            {
+                if (ask.Winner is null && !_pageAsks.Contains(ask.Spec))
+                {
+                    _pageAsks.Add(ask.Spec);
+                    if (answer?.Invoke(ask) is { } choice)
+                    {
+                        Web.Answer(new WebAnswerRequest { AskId = ask.Id, Choice = choice }, IPAddress.Loopback);
+                    }
+                    else if (answer is null)
+                    {
+                        _pcAnswer?.Invoke(input);   // the PC answers instead
+                    }
+                }
+
+                return;
+            }
+
+            if (next < steps.Length && Web.WaitingCount == 0)
+            {
+                steps[next++](input);
+            }
+        };
+        return input;
+    }
+
+    private void SendFromPage(string text) => Assert.Equal(WebOutcome.Ok, Web.Send(new WebSendRequest { Text = text }, IPAddress.Loopback).Outcome);
+
+    [Fact]
+    public async Task ACommandFromThePage_RunsAtTheIdleLine_AsTyped()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebUiCommands = true; d.MemoryMode = "read-write"; });
+        var input = WebSteps(_ => SendFromPage("/memory read-only"), i => PushLine(i, "/exit"));
+
+        await RunAsync(input);
+
+        Assert.Equal("read-only", _settings.Current.MemoryMode);
+        Assert.Empty(_chat.Requests);   // a command, not a message
+    }
+
+    [Fact]
+    public async Task ACommandFromThePage_IsCheckedAgainAsItIsTaken()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebUiCommands = true; d.MemoryMode = "read-write"; });
+        var input = WebSteps(
+            _ =>
+            {
+                SendFromPage("/memory off");
+                _settings.Update(d => d.WebUiCommands = false);   // switched off while it waited
+            },
+            i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        Assert.Equal("read-write", _settings.Current.MemoryMode);
+        Assert.Contains(WebUiText.RefusedAtDispatch(WebUiText.CommandsOff), output);
+    }
+
+    [Fact]
+    public async Task AModelSetFromThePage_IsRefused_WhenTheConnectWouldLookForAServer()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebUiCommands = true; });
+        string model = _settings.Current.LlmModel;
+        var input = WebSteps(
+            _ =>
+            {
+                _settings.Update(d => { d.LlmUrl = ""; d.LlmScanMode = "local"; });
+                SendFromPage("/model qwen3");
+            },
+            i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        Assert.Contains(WebUiText.RefusedAtDispatch(WebUiText.WouldScan), output);
+        Assert.Equal(model, _settings.Current.LlmModel);
+    }
+
+    [Fact]
+    public async Task ASavedPrompt_FromThePage_GoesToThePagesDraft_NotThePcsRow()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebUiCommands = true; });
+        WebEventHub.Subscription? page = null;
+        var input = WebSteps(
+            _ =>
+            {
+                page = Web.Events.Subscribe();
+                SendFromPage("/prompts save tell me a joke");
+            },
+            _ => SendFromPage("/prompts 1"),
+            i => PushLine(i, "/exit"));
+
+        await RunAsync(input);
+
+        var drafts = new List<string>();
+        while (page!.Reader.TryRead(out var item))
+        {
+            if (item.Name == "draft")
+            {
+                drafts.Add(JsonSerializer.Deserialize(item.Json.Value, WebUiJsonContext.Default.WebTextBack)!.Text);
+            }
+        }
+
+        Assert.Equal(["tell me a joke"], drafts);
+        Assert.Empty(_chat.Requests);
+        page.Dispose();
+    }
+
+    [Theory]
+    [InlineData("no", 1)]
+    [InlineData("yes", 0)]
+    public async Task AYesNoFromAPagesCommand_IsAskedOnThePage_AndItsAnswerActs(string answer, int left)
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebUiCommands = true; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        int lines = -1;
+        var input = WebSteps(
+            answer,
+            _ => SendFromPage("/shopping add milk"),
+            _ => SendFromPage("/shopping clear all"),
+            i =>
+            {
+                var list = Web.Shopping();
+                lines = list.Groups.Sum(g => g.Items.Count) + list.Ticked.Count;
+                PushLine(i, "/exit");
+            });
+
+        string output = await RunAsync(input);
+
+        Assert.Equal(left, lines);
+        Assert.Contains(WebUiText.AnsweredNotice(answer == "yes" ? SettingsMenu.ConfirmRows[1] : SettingsMenu.ConfirmRows[0]), output);
+        Assert.Empty(Web.Asks.OpenAsks());
+    }
+
+    [Fact]
+    public async Task APagesCommand_ShowsItsWorkingLine_WhileItRuns_ThenTakesItOut()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebUiCommands = true; });
+        WebEventHub.Subscription? page = null;
+        var input = WebSteps(
+            _ =>
+            {
+                page = Web.Events.Subscribe();
+                SendFromPage("/ha");   // no server set: an error, but under its spinner
+            },
+            i => PushLine(i, "/exit"));
+
+        await RunAsync(input);
+
+        var events = new List<(string Name, string Json)>();
+        while (page!.Reader.TryRead(out var item))
+        {
+            events.Add((item.Name, item.Json.Value));
+        }
+
+        var working = events.FirstOrDefault(e => e.Name == "append" && e.Json.Contains("\"kind\":\"working\"", StringComparison.Ordinal));
+        Assert.NotNull(working.Json);
+        long seq = JsonSerializer.Deserialize(working.Json, WebUiJsonContext.Default.WebEntry)!.Seq;
+        Assert.Contains(events, e => e.Name == "remove" && JsonSerializer.Deserialize(e.Json, WebUiJsonContext.Default.WebRemoved)!.Seq == seq);
+        Assert.DoesNotContain(Web.Feed.Snapshot(m => m), e => e.Kind == "working");
+        page.Dispose();
+    }
+
+    [Fact]
+    public async Task APcTypedCommand_NeverAsksOnThePage()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebUiCommands = true; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        int asked = 0;
+        int lines = -1;
+        var input = WebSteps(
+            _ =>
+            {
+                Web.Asks.Changed += () => Interlocked.Increment(ref asked);
+                SendFromPage("/shopping add milk");
+            },
+            i =>
+            {
+                PushLine(i, "/shopping clear all");
+                i.Push(Keys.Enter);   // the pane's No
+            },
+            i =>
+            {
+                lines = Web.Shopping().Groups.Sum(g => g.Items.Count);
+                PushLine(i, "/exit");
+            });
+
+        await RunAsync(input);
+
+        Assert.Equal(0, asked);
+        Assert.Equal(1, lines);
+    }
+
+    /// <summary>What the PC presses while a page's ask is open and the page leaves it (the "either answer wins" tests).</summary>
+    private Action<ScriptedInput>? _pcAnswer;
+
+    /// <summary>The page's id for the pick card's row reading <paramref name="label"/>.</summary>
+    private static string ItemId(WebAskHandle ask, string label) => ask.Spec.Items!.First(i => i.Label == label).Id;
+
+    [Fact]
+    public async Task BareReasoningFromThePage_IsAPickCard_AndThePagesPickIsSaved()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebUiCommands = true; d.LlmReasoning = "none"; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        var input = WebSteps(ask => ItemId(ask, "high"), _ => SendFromPage("/reasoning"), i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        Assert.Equal("high", _settings.Current.LlmReasoning);
+        var card = Assert.Single(_pageAsks);
+        Assert.Equal(("pick", SettingsMenu.ReasoningTitle), (card.Kind, card.Title));
+        Assert.Equal(NeonSidekick.Llm.ReasoningLevel.Levels, card.Items!.Select(i => i.Label));
+        Assert.Equal(ItemIdOf(card, "none"), card.Current);
+        Assert.Contains(WebUiText.AnsweredNotice("high"), output);
+    }
+
+    private static string ItemIdOf(WebAskSpec spec, string label) => spec.Items!.First(i => i.Label == label).Id;
+
+    [Fact]
+    public async Task BareReasoningFromThePage_ThePcMayPickInstead()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebUiCommands = true; d.LlmReasoning = "none"; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _pcAnswer = i => i.Push(Keys.Down, Keys.Enter);   // the row under none
+        var input = WebSteps(_ => SendFromPage("/reasoning"), i => PushLine(i, "/exit"));
+
+        await RunAsync(input);
+
+        Assert.Equal(NeonSidekick.Llm.ReasoningLevel.Levels[1], _settings.Current.LlmReasoning);
+        Assert.Single(_pageAsks);
+        Assert.Empty(Web.Asks.OpenAsks());
+    }
+
+    [Fact]
+    public async Task AListFromThePage_IsAnInfoCard_ThePageClosesIt_AndNothingIsSaidOfIt()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebUiCommands = true; d.FileTools = true; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        string files = Path.Combine(_settings.ProfileDirectory, NeonSidekick.Files.WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(Path.Combine(files, "docs"));
+        File.WriteAllText(Path.Combine(files, "docs", "a.txt"), "a");
+        var input = WebSteps(_ => "close", _ => SendFromPage("/tree"), i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        var card = Assert.Single(_pageAsks);
+        Assert.Equal("info", card.Kind);
+        Assert.Contains(card.Lines!, line => line.Contains("a.txt", StringComparison.Ordinal));
+        Assert.DoesNotContain(WebUiText.AnsweredNotice(WebUiText.CloseChoice), output);
+    }
+
+    [Fact]
+    public async Task RewindFromThePage_PicksOnTheCard_AsksYes_AndPutsTheMessageOnThePagesDraft()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebUiCommands = true; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("One.").EnqueueText("Two.");
+        WebEventHub.Subscription? page = null;
+        var input = WebSteps(
+            ask => ask.Spec.Kind == "pick" ? ask.Spec.Items![0].Id : "yes",
+            i => PushLine(i, "first"),
+            i => PushLine(i, "second"),
+            _ =>
+            {
+                page = Web.Events.Subscribe();
+                SendFromPage("/rewind");
+            },
+            i => PushLine(i, "/exit"));
+
+        await RunAsync(input);
+
+        Assert.Equal(["pick", "confirm"], _pageAsks.Select(a => a.Kind));
+        Assert.Equal(2, _pageAsks[0].Items!.Count);
+        Assert.Equal(_pageAsks[0].Items![1].Id, _pageAsks[0].Current);   // the last message by default
+        Assert.Equal(0, _session.History.TurnCount);
+        var drafts = new List<string>();
+        while (page!.Reader.TryRead(out var item))
+        {
+            if (item.Name == "draft")
+            {
+                drafts.Add(JsonSerializer.Deserialize(item.Json.Value, WebUiJsonContext.Default.WebTextBack)!.Text);
+            }
+        }
+
+        Assert.Equal(["first"], drafts);
+        page.Dispose();
+    }
+
+    [Fact]
+    public async Task ThePagesDropdown_IsBuiltAtTheIdleLine_WhileAPageIsConnected_AndFollowsTheSettings()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebUiCommands = true; });
+        WebEventHub.Subscription? page = null;
+        IReadOnlyList<string>? on = null;
+        IReadOnlyList<string>? off = null;
+        var input = WebSteps(
+            i =>
+            {
+                Assert.Null(Web.Completions);   // nobody connected: never built
+                page = Web.Events.Subscribe();
+                PushLine(i, "/new");
+            },
+            i =>
+            {
+                on = [.. Web.Complete(new WebCompleteRequest { Text = "/tr", Cursor = 3, Seq = 1 }).Items.Select(x => x.Text)];
+                _settings.Update(d => d.WebUiCommands = false);
+                PushLine(i, "/new");
+            },
+            i =>
+            {
+                off = [.. Web.Complete(new WebCompleteRequest { Text = "/tr", Cursor = 3, Seq = 2 }).Items.Select(x => x.Text)];
+                PushLine(i, "/exit");
+            });
+
+        await RunAsync(input);
+
+        Assert.Contains("/tree", on!);
+        Assert.Empty(off!);
+        page!.Dispose();
+    }
+
     private static class AppSettingsDataDefaults
     {
         public const int WebUiPort = Settings.AppSettingsData.DefaultWebUiPort;

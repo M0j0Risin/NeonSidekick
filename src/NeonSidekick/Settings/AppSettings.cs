@@ -1047,6 +1047,8 @@ public sealed class AppSettings : IDisposable
         WebUi = source.WebUi,
         WebUiPort = source.WebUiPort,
         WebUiReach = source.WebUiReach,
+        WebUiCommands = source.WebUiCommands,
+        WebUiConnectionDetails = source.WebUiConnectionDetails,
         WebUiToken = source.WebUiToken,
         ShellCodeLanguages = [.. source.ShellCodeLanguages],
         ShellCodeMaxToolCalls = source.ShellCodeMaxToolCalls,

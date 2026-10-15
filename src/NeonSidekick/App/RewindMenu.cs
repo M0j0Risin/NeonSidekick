@@ -47,13 +47,7 @@ internal sealed class RewindMenu
                 }
 
                 var turn = turns[row];
-                var cut = preview(turn);
-                var confirm = new MenuPage(RewindText.ConfirmPrompt(turn, cut), SettingsMenu.ConfirmRows, SettingsMenu.ConfirmKeys)
-                {
-                    Hotkeys = SettingsMenu.ConfirmHotkeys,
-                    Caption = RewindText.ConfirmCaption(cut),
-                };
-                if (await _pane.PickAsync(confirm, 0, cancellationToken).ConfigureAwait(false) is { Row: 1 })
+                if (await ConfirmOnPaneAsync(turn, preview(turn), cancellationToken).ConfigureAwait(false))
                 {
                     return turn;
                 }
@@ -65,5 +59,51 @@ internal sealed class RewindMenu
         {
             _pane.Close();
         }
+    }
+
+    /// <summary>
+    /// The list alone (later on 2026-10-14, the Web UI's card races it): the message picked, or null on ESC; the pane closed after. The yes/no is
+    /// the caller's (<see cref="ConfirmAsync"/>, or the screen's raced one).
+    /// </summary>
+    public async Task<RewindTurn?> PickTurnAsync(IReadOnlyList<RewindTurn> turns, int cursor, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(turns);
+        if (turns.Count == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            var page = new MenuPage(RewindText.Title, turns.Select(RewindText.RowMarkup).ToList(), RewindText.Keys) { Caption = RewindText.Caption, Footer = (_, row) => row < turns.Count ? RewindText.Footer(turns[row]) : null };
+            return await _pane.PickAsync(page, Math.Clamp(cursor, 0, turns.Count - 1), cancellationToken).ConfigureAwait(false) is { Row: var row } && row < turns.Count ? turns[row] : null;
+        }
+        finally
+        {
+            _pane.Close();
+        }
+    }
+
+    /// <summary>The yes/no for <paramref name="turn"/> on the pane, the pane closed after: true for Yes.</summary>
+    public async Task<bool> ConfirmAsync(RewindTurn turn, RewindCut cut, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await ConfirmOnPaneAsync(turn, cut, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _pane.Close();
+        }
+    }
+
+    private async Task<bool> ConfirmOnPaneAsync(RewindTurn turn, RewindCut cut, CancellationToken cancellationToken)
+    {
+        var confirm = new MenuPage(RewindText.ConfirmPrompt(turn, cut), SettingsMenu.ConfirmRows, SettingsMenu.ConfirmKeys)
+        {
+            Hotkeys = SettingsMenu.ConfirmHotkeys,
+            Caption = RewindText.ConfirmCaption(cut),
+        };
+        return await _pane.PickAsync(confirm, 0, cancellationToken).ConfigureAwait(false) is { Row: 1 };
     }
 }

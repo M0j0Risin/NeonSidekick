@@ -190,7 +190,8 @@ internal sealed partial class ChatScreen
             if (!rest.Any(char.IsWhiteSpace))
             {
                 _transcript.Error(PlanText.NoSuchPlanError(rest));
-                await ListPlansAsync(cancellationToken).ConfigureAwait(false);
+                // From the Web UI's page (later on 2026-10-14) the list under the error is notices: no card for a typo's help.
+                await ListPlansAsync(cancellationToken, asNotices: FromWebNow).ConfigureAwait(false);
                 return false;
             }
 
@@ -472,12 +473,22 @@ internal sealed partial class ChatScreen
         PlanFiles.List(_files).Select(plan => new CompletionItem(plan.Name, PlanText.CompletionNote(plan))).ToList();
 
     /// <summary><c>/plan open</c> alone: the plans under <c>.neon/plans/</c>, one notice each, or that there are none.</summary>
-    private Task ListPlansAsync(CancellationToken cancellationToken)
+    private Task ListPlansAsync(CancellationToken cancellationToken, bool asNotices = false)
     {
         var plans = PlanFiles.List(_files);
         if (plans.Count == 0)
         {
             _transcript.Notice(PlanText.NoPlansNotice);
+            return Task.CompletedTask;
+        }
+
+        if (asNotices)
+        {
+            foreach (var plan in plans)
+            {
+                _transcript.Notice(PlanText.ListLine(plan));
+            }
+
             return Task.CompletedTask;
         }
 
@@ -561,7 +572,7 @@ internal sealed partial class ChatScreen
         _planDraftReply = null;
         SavePlanState();
         _transcript.Notice(PlanText.SavedNotice(saved.Path, saved.Revision));
-        var verdict = _pane.Enabled ? await _planMenu.AskAsync(saved, cancellationToken).ConfigureAwait(false) : null;
+        var verdict = _pane.Enabled || FromWebNow ? await AskPlanAtIdleAsync(saved, cancellationToken).ConfigureAwait(false) : null;
         return await ActOnVerdictAsync(saved, verdict, PlanText.SavedFeedbackMessage, cancellationToken).ConfigureAwait(false);
     }
 
@@ -729,8 +740,19 @@ internal sealed partial class ChatScreen
     /// <summary>A loop that stopped short (its limit, a stall): the plan back on the approval pane at the idle line, the verdict acted on.</summary>
     private async Task<bool> AskStoppedPlanAsync(PlanPresentation plan, CancellationToken cancellationToken)
     {
-        var verdict = await _planMenu.AskAsync(plan, cancellationToken).ConfigureAwait(false);
+        var verdict = await AskPlanAtIdleAsync(plan, cancellationToken).ConfigureAwait(false);
         return await ActOnVerdictAsync(plan, verdict, PlanText.RevisionFeedbackMessage, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The approval pane at the idle line (<c>/plan save</c>'s, a gap loop's that stopped short): from a command or a message the Web UI's page
+    /// sent (later on 2026-10-14), on the page as well, the first answer winning; from the PC, the pane alone as ever. Close gaps stays the PC's.
+    /// </summary>
+    private async Task<PlanVerdict?> AskPlanAtIdleAsync(PlanPresentation plan, CancellationToken cancellationToken)
+    {
+        var outcome = await RaceAsync<PlanVerdict?>(PlanSpec(plan), async token => await _planMenu.AskAsync(plan, token).ConfigureAwait(false),
+            answer => PlanVerdictOf(answer), "The plan pane failed: ", cancellationToken).ConfigureAwait(false);
+        return outcome.Value;
     }
 
     /// <summary>

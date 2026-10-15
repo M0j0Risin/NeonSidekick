@@ -665,6 +665,12 @@ internal sealed partial class ChatScreen
     // splash is gone, with the rest (ForgetSplash). The reserve is the rows of those lines while the picture is drawn again over
     // them (SplashArea).
     private Scrollback.Place? _splashMark;
+
+    /// <summary>
+    /// The Web UI's entry for the splash drawn last (later on 2026-10-14): a cycle or a refit takes it out once the new one is in, so the page
+    /// shows one splash, not every one walked past (<see cref="ReplaceSplashEntry"/>).
+    /// </summary>
+    private long? _splashFeedSeq;
     private int _splashReserve;
 
     /// <summary>The tiled splash's decoded pictures for one source and one thumbnail box, with their double-click ids.</summary>
@@ -759,7 +765,13 @@ internal sealed partial class ChatScreen
     /// picture's <c>.watch</c> under the Camera output folder, 2026-10-02), else <see cref="PictureTempFolder"/>. An open prints nothing; only an error
     /// does (2026-09-24, the user's call).
     /// </summary>
-    private sealed record PictureSource(string Name, string? FullPath, byte[] Bytes, string? Folder = null);
+    /// <remarks>
+    /// The Web UI's pictures (later on 2026-10-14) are registered here too: <paramref name="MediaType"/>, <paramref name="Width"/> and
+    /// <paramref name="Height"/> are the attachment's, and <paramref name="WebOnly"/> marks one the PC never drew (thumbnails off, a codec's
+    /// refusal) — its id is never in a tile, and its bytes are kept only while it has no file and the page's transcript holds it
+    /// (<see cref="ForgetWebPicture"/>). A picture the PC drew keeps its bytes as ever.
+    /// </remarks>
+    private sealed record PictureSource(string Name, string? FullPath, byte[]? Bytes, string? Folder = null, string MediaType = Files.ImageFile.Png, int Width = 0, int Height = 0, bool WebOnly = false);
 
     // Every picture drawn, by id (its index); read on the watcher task too, so under its own lock.
     private readonly List<PictureSource> _pictures = [];
@@ -1401,6 +1413,8 @@ internal sealed partial class ChatScreen
         _keys.LearnCancel = CancelLearnByKey;
         // The home bar's clicks (2026-10-12), wherever they are read.
         _keys.HomeBarClick = HomeBarClick;
+        // Whatever the watcher does is the PC's hand (later on 2026-10-14), even under a turn the page started: its lines, clicks and posts.
+        _keys.OnWatch = static () => s_origin.Value = CommandOrigin.Pc;
         _transcript = new TranscriptRenderer(_pane)
         {
             // Tool collapse count (2026-09-22): read when a tool run opens, clamped as the menu saves it.
@@ -1448,9 +1462,10 @@ internal sealed partial class ChatScreen
             mouse(true);
             holdWheel?.Invoke(true);
         };
-        _info = new InfoPane(_pane, keys, menuMouse, clipboard);
+        // Each tells the screen as it opens (later on 2026-10-14): a pane a command from the Web UI opened with nothing on the page (PaneOpening).
+        _info = new InfoPane(_pane, keys, menuMouse, clipboard) { Opening = PaneOpening };
         _folderPane = new FolderPane(_pane, keys, menuMouse);
-        _menuPane = new MenuPane(_pane, keys, menuMouse, clipboard);
+        _menuPane = new MenuPane(_pane, keys, menuMouse, clipboard) { Opening = PaneOpening };
         // The question tool's pane and the tool itself: built always (the /sys Tools tab
         // lists it either way), offered only while the setting Ask user and the pane say so (RunTurnAsync).
         _questionMenu = new QuestionMenu(_menuPane, _input);
@@ -2022,7 +2037,9 @@ internal sealed partial class ChatScreen
     /// bar as Ctrl+F does (2026-10-12; Ctrl+Alt+W until later that day). False for every other chord:
     /// the pane closes and the screen runs it (<see cref="ScreenPane.Chord"/>, <see cref="OffPaneLine"/>).
     /// </summary>
-    private bool ChordInPlace(string line)
+    private bool ChordInPlace(string line) => WithOrigin(CommandOrigin.Pc, () => ChordInPlaceOnce(line));
+
+    private bool ChordInPlaceOnce(string line)
     {
         var (command, args) = ParseLine(line);
         switch (command)
@@ -3280,7 +3297,7 @@ internal sealed partial class ChatScreen
     {
         // The Web UI's waiting messages go with the PC's (2026-10-14), back to the page's draft — but not for /queue clear, which empties
         // the queue its pane shows (web: false).
-        if (_queue.Clear() + (web ? _webUi.DropLines() : 0) is > 0 and var dropped)
+        if (_queue.Clear() + (web ? _webUi.DropLines() + DropPendingWebLines() : 0) is > 0 and var dropped)
         {
             _transcript.Notice(QueueDroppedNotice(dropped));
         }
@@ -10200,6 +10217,8 @@ internal sealed partial class ChatScreen
                 // The Web UI's notices (a sign-in, the server's start) and, as a backstop, its server as the settings now say (2026-10-14).
                 PrintWebNotices();
                 ReconcileWebUi();
+                // Its dropdown's lists as they stand now (later on 2026-10-14), built here on the screen's task while a page is connected.
+                RefreshWebCompletions();
                 // The jobs behind the line that ended (2026-09-29): their lines, an embedded model's connect — here, never under a reply.
                 await _jobs.DrainAsync().ConfigureAwait(false);
                 if (await AnnounceAlertsAsync(cancellationToken).ConfigureAwait(false))
@@ -10558,10 +10577,24 @@ internal sealed partial class ChatScreen
                         }
 
                         // A draft is a message whatever it reads (a file holding "/help" asks the
-                        // model about /help): straight to the turn, never the command parser.
-                        if (await (fromDraft ? RunMessageAsync(submitted.Text, submitted.Images, cancellationToken) : HandleAsync(submitted.Text, submitted.Images, cancellationToken)).ConfigureAwait(false))
+                        // model about /help): straight to the turn, never the command parser. So is a page's line sent as a message
+                        // (later on 2026-10-14). A line from the page runs under its origin: what it asks, the page asks too.
+                        bool web = send?.FromWeb == true;
+                        bool asMessage = fromDraft || send?.AsText == true;
+                        _webDispatching = web;
+                        try
                         {
-                            return 0;
+                            if (await WithOrigin(web ? CommandOrigin.Web : CommandOrigin.Pc, () => asMessage
+                                ? RunMessageAsync(submitted.Text, submitted.Images, cancellationToken)
+                                : HandleAsync(submitted.Text, submitted.Images, cancellationToken)).ConfigureAwait(false))
+                            {
+                                return 0;
+                            }
+                        }
+                        finally
+                        {
+                            _webDispatching = false;
+                            _sentFromWeb = false;
                         }
 
                         break;
@@ -11079,6 +11112,7 @@ internal sealed partial class ChatScreen
         bool forced = _splashForced;
         string? name = _splashName;
         int? page = _splashPage;
+        long? entry = _splashFeedSeq;
         using (_pane.Batch())
         {
             head();
@@ -11102,6 +11136,17 @@ internal sealed partial class ChatScreen
 
             _splashForced = forced && _splashShown;
             _pane.Rewrite(lines);
+        }
+
+        ReplaceSplashEntry(entry);
+    }
+
+    /// <summary>The splash's old entry on the Web UI's page taken out once a new one is drawn in its place (later on 2026-10-14).</summary>
+    private void ReplaceSplashEntry(long? old)
+    {
+        if (old is { } seq && _splashFeedSeq != seq)
+        {
+            _webUi.Feed.Remove(seq);
         }
     }
 
@@ -11148,7 +11193,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        _transcript.Picture(picture, RegisterPicture(image, sandbox: false));
+        _splashFeedSeq = _transcript.Picture(picture, RegisterPicture(image, sandbox: false));
         _splashShown = true;
         _splashName = name;
         _splashCount = source.Names.Count;
@@ -11205,7 +11250,7 @@ internal sealed partial class ChatScreen
 
         int at = (page % pages.Count + pages.Count) % pages.Count;
         var (start, count) = pages[at];
-        _transcript.Images(tiles.Thumbnails.GetRange(start, count), tiles.Ids.GetRange(start, count));
+        _splashFeedSeq = _transcript.Images(tiles.Thumbnails.GetRange(start, count), tiles.Ids.GetRange(start, count));
         _splashShown = true;
         _splashName = null;
         _splashCount = pages.Count;
@@ -11255,6 +11300,7 @@ internal sealed partial class ChatScreen
             }
 
             bool pageForced = _splashForced;
+            long? pageEntry = _splashFeedSeq;
             using (_pane.Batch())
             {
                 RedrawScreen();
@@ -11262,6 +11308,7 @@ internal sealed partial class ChatScreen
                 _splashForced = pageForced && _splashShown;
             }
 
+            ReplaceSplashEntry(pageEntry);
             return true;
         }
 
@@ -11282,6 +11329,7 @@ internal sealed partial class ChatScreen
         }
 
         bool forced = _splashForced;
+        long? entry = _splashFeedSeq;
         using (_pane.Batch())
         {
             RedrawScreen();
@@ -11289,6 +11337,7 @@ internal sealed partial class ChatScreen
             _splashForced = forced && _splashShown;
         }
 
+        ReplaceSplashEntry(entry);
         return true;
     }
 
@@ -12407,6 +12456,12 @@ internal sealed partial class ChatScreen
     /// <summary>The model picker (<c>/model [id]</c>; the hint row's model name was its double-click from 2026-09-18 until it became <c>/server</c>'s, 2026-09-22) and the reconnect a pick asks for.</summary>
     private async Task PickModelAsync(string args, CancellationToken cancellationToken)
     {
+        if (FromWebNow && args.Trim().Length == 0)
+        {
+            await PickModelFromWebAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         if (await _menu.PickModelAsync(_session, args, cancellationToken).ConfigureAwait(false))
         {
             await ConnectLlmAsync(cancellationToken).ConfigureAwait(false);
@@ -12421,6 +12476,20 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task PickReasoningAsync(string args, CancellationToken cancellationToken)
     {
+        if (FromWebNow && args.Trim().Length == 0)
+        {
+            // From the Web UI's page (later on 2026-10-14): the levels as a card there and the picker here, the first answer saved.
+            string current = _effective().LlmReasoning;
+            var options = Llm.ReasoningLevel.Levels.Select(level => new PickOption(level, level, Llm.ReasoningLevel.Describe(level))).ToList();
+            string? level = await PickBothAsync(SettingsMenu.ReasoningTitle, options, current, token => _menu.ChooseReasoningAsync(current, token), cancellationToken).ConfigureAwait(false);
+            if (_menu.SaveReasoningChoice(level))
+            {
+                await ConnectLlmAsync(cancellationToken, quiet: true).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
         if (await _menu.PickReasoningAsync(args, _effective().LlmReasoning, cancellationToken).ConfigureAwait(false))
         {
             await ConnectLlmAsync(cancellationToken, quiet: true).ConfigureAwait(false);
@@ -12574,6 +12643,8 @@ internal sealed partial class ChatScreen
 
             text = next;
             images = [];
+            // What closed the pane was the PC's hand (later on 2026-10-14): a chord, a double-click.
+            s_origin.Value = CommandOrigin.Pc;
         }
     }
 
@@ -12593,6 +12664,14 @@ internal sealed partial class ChatScreen
         if (command != SlashCommand.None && images.Count > 0)
         {
             _transcript.Notice(ImagesIgnoredNotice(images));
+        }
+
+        if (FromWebNow && command != SlashCommand.None && WebDispatchRefusal(command, args, text) is { } refusal)
+        {
+            // Taken from the page already, so an error line (later on 2026-10-14): the settings changed meanwhile, or the server would be walked.
+            DiagnosticLog.Info(WebUiCategory, WebUi.WebUiText.CommandLogLine(WebCommands.Word(text), null, "refused at the dispatch"));
+            _transcript.Error(WebUi.WebUiText.RefusedAtDispatch(refusal));
+            return false;
         }
 
         switch (command)
@@ -15118,11 +15197,12 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         if (!effective.ShowImageThumbnails)
         {
+            WebOnlyPictures(generation.Images, sandbox: true);
             return;
         }
 
-        var (tiles, ids) = ReadThumbnails(generation.Images, ThumbnailSize.Resolve(effective, WindowBox()), sandbox: true);
-        _transcript.Images(tiles, ids);
+        var (tiles, ids, web) = ReadThumbnails(generation.Images, ThumbnailSize.Resolve(effective, WindowBox()), sandbox: true);
+        _transcript.Images(tiles, ids, web);
     }
 
     /// <summary>
@@ -15250,6 +15330,13 @@ internal sealed partial class ChatScreen
         // The Web UI's messages too (2026-10-14), after the PC's and never under a held queue: the page has no command to send.
         while (TakeWebLine() is { } web)
         {
+            if (!web.AsText && web.CommandText is { } webCommand && ParseLine(webCommand).Command != SlashCommand.None)
+            {
+                // A command from the page waits for the idle line as the PC's does (later on 2026-10-14), listed on the page as waiting.
+                Pend(web);
+                continue;
+            }
+
             _transcript.User(web.Label);
             lines.Add(new BotChatLine(BotChat.UserName, web.Text, IsUser: true));
             joined = true;
@@ -15906,11 +15993,19 @@ internal sealed partial class ChatScreen
         // tool fetches mid-turn is drawn by the same switch at the same size.
         ThumbnailBox? thumbnails = effective.ShowImageThumbnails ? ThumbnailSize.Resolve(effective, WindowBox()) : null;
         // Not a /botchat turn's (2026-09-27, Botchat vision enabled): its pictures were drawn when they were made.
-        if (thumbnails is { } box && bot is null)
+        if (bot is null)
         {
-            // A dropped picture's path is full; a pasted one has none (its bytes are kept for a double-click).
-            var (tiles, ids) = ReadThumbnails(images, box, sandbox: false);
-            _transcript.Images(tiles, ids);
+            if (thumbnails is { } box)
+            {
+                // A dropped picture's path is full; a pasted one has none (its bytes are kept for a double-click).
+                var (tiles, ids, web) = ReadThumbnails(images, box, sandbox: false);
+                _transcript.Images(tiles, ids, web);
+            }
+            else
+            {
+                // Thumbnails off: the page still offers them (later on 2026-10-14); a botchat's silent camera frame never reaches it.
+                WebOnlyPictures(images, sandbox: false);
+            }
         }
 
         // A /botchat turn's tokens stay out of the main conversation's usage (its auto-compact reads the last request).
@@ -16306,21 +16401,52 @@ internal sealed partial class ChatScreen
     /// (<see cref="RegisterPicture"/>, <paramref name="sandbox"/> saying whether the paths are the working directory's);
     /// a picture the codecs refuse is left out.
     /// </summary>
-    private (List<ImageThumbnail> Tiles, List<int> Ids) ReadThumbnails(IReadOnlyList<ImageAttachment> images, ThumbnailBox box, bool sandbox)
+    /// <remarks>
+    /// Every picture is registered for the Web UI's page too (later on 2026-10-14): <c>WebIds</c> holds them all, a codec-refused one among them
+    /// (registered web-only), while the PC's double-click and drag see only <c>TileIds</c>.
+    /// </remarks>
+    private (List<ImageThumbnail> Tiles, List<int> TileIds, List<int> WebIds) ReadThumbnails(IReadOnlyList<ImageAttachment> images, ThumbnailBox box, bool sandbox)
     {
         var tiles = new List<ImageThumbnail>(images.Count);
         var ids = new List<int>(images.Count);
+        var web = new List<int>(images.Count);
         foreach (var image in images)
         {
             // An attached PDF has no thumbnail (2026-10-14): its label on the line says what it is.
-            if (!image.IsDocument && ImageThumbnail.Read(image, box.Columns, box.MaxRows) is { } thumbnail)
+            if (image.IsDocument)
             {
+                continue;
+            }
+
+            if (ImageThumbnail.Read(image, box.Columns, box.MaxRows) is { } thumbnail)
+            {
+                int id = RegisterPicture(image, sandbox);
                 tiles.Add(thumbnail);
-                ids.Add(RegisterPicture(image, sandbox));
+                ids.Add(id);
+                web.Add(id);
+            }
+            else
+            {
+                web.Add(RegisterPicture(image, sandbox, webOnly: true));
             }
         }
 
-        return (tiles, ids);
+        return (tiles, ids, web);
+    }
+
+    /// <summary>
+    /// Pictures the PC does not draw offered to the Web UI's page alone (later on 2026-10-14, the user's call: always offered, even with
+    /// <c>Show image thumbnails</c> off): each registered web-only, the feed's entry written, nothing at the PC. An attached PDF is skipped.
+    /// </summary>
+    private void WebOnlyPictures(IReadOnlyList<ImageAttachment>? images, bool sandbox)
+    {
+        if (images is not { Count: > 0 })
+        {
+            return;
+        }
+
+        var ids = images.Where(i => !i.IsDocument).Select(i => RegisterPicture(i, sandbox, webOnly: true)).ToList();
+        _transcript.WebOnlyPictures(ids);
     }
 
     // ── The picture strip (later still on 2026-09-24) ───────────────────────
@@ -16498,7 +16624,7 @@ internal sealed partial class ChatScreen
         _queuedClicks.Reset();
         lock (_pictures)
         {
-            return id >= 0 && id < _pictures.Count && _pictures[id] is var source ? new DroppedPicture(source.Name, source.FullPath, source.Bytes) : null;
+            return id >= 0 && id < _pictures.Count && _pictures[id] is { WebOnly: false, Bytes: { } bytes } source ? new DroppedPicture(source.Name, source.FullPath, bytes) : null;
         }
     }
 
@@ -16530,7 +16656,7 @@ internal sealed partial class ChatScreen
     /// change later: <paramref name="sandbox"/> resolves the path under it; else a fully qualified path that exists is taken
     /// as it is. A picture with neither (pasted from the clipboard, the bundled splash) keeps its bytes.
     /// </summary>
-    private int RegisterPicture(ImageAttachment image, bool sandbox)
+    private int RegisterPicture(ImageAttachment image, bool sandbox, bool webOnly = false)
     {
         string? full = null;
         if (sandbox)
@@ -16550,7 +16676,9 @@ internal sealed partial class ChatScreen
         string? folder = full is null && image.Camera ? WatchFolderPath() : null;
         lock (_pictures)
         {
-            _pictures.Add(new PictureSource(name.Length > 0 ? name : "picture.png", full, image.Bytes, folder));
+            // A web-only picture with a file of its own keeps no bytes: the page's server reads the file (later on 2026-10-14).
+            byte[]? bytes = webOnly && full is not null ? null : image.Bytes;
+            _pictures.Add(new PictureSource(name.Length > 0 ? name : "picture.png", full, bytes, folder, image.MediaType, image.Width, image.Height, webOnly));
             return _pictures.Count - 1;
         }
     }
@@ -16674,7 +16802,7 @@ internal sealed partial class ChatScreen
                 string folder = source.Folder ?? PictureTempFolder;
                 Directory.CreateDirectory(folder);
                 path = Path.Combine(folder, source.Name);
-                File.WriteAllBytes(path, source.Bytes);
+                File.WriteAllBytes(path, source.Bytes ?? []);
             }
 
             OpenPictureWith(path, _viewPicture);
@@ -16924,8 +17052,13 @@ internal sealed partial class ChatScreen
     {
         if (thumbnails is { } box && result.Images is { Count: > 0 } fetched)
         {
-            var (tiles, ids) = ReadThumbnails(fetched, box, sandbox: true);
-            _transcript.Images(tiles, ids);
+            var (tiles, ids, web) = ReadThumbnails(fetched, box, sandbox: true);
+            _transcript.Images(tiles, ids, web);
+        }
+        else
+        {
+            // Thumbnails off: the page still offers them (later on 2026-10-14).
+            WebOnlyPictures(result.Images, sandbox: true);
         }
     }
 

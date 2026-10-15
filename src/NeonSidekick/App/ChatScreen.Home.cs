@@ -99,7 +99,9 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task HandleHomeAssistantAsync(string args, CancellationToken cancellationToken)
     {
-        var result = await _transcript.WithSpinnerAsync(HaText.Working, () => HaCommand.RunAsync(_ha, args, cancellationToken)).ConfigureAwait(false);
+        // A change from the Web UI's page asks first on the page and here (later on 2026-10-14); the PC's own hand never does.
+        var ask = WebConfirmHook is { } confirm ? new HaAsk(confirm, _effective().HomeAssistantSafeServices) : null;
+        var result = await _transcript.WithSpinnerAsync(HaText.Working, () => HaCommand.RunAsync(_ha, args, cancellationToken, ask)).ConfigureAwait(false);
         await ShowHomeResultAsync(result, args, _transcript, cancellationToken).ConfigureAwait(false);
     }
 

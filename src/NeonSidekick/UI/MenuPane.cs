@@ -581,6 +581,9 @@ public sealed class MenuPane : INoticeSink
     /// </summary>
     public string? OpenTitle => Volatile.Read(ref _open) ? Volatile.Read(ref _page)?.Title : null;
 
+    /// <summary>Told each page's title as it is drawn (later on 2026-10-14: the screen watches for a pane a command from the Web UI opened with no ask on the page).</summary>
+    public Action<string>? Opening { get; set; }
+
     /// <summary>The status lines shown under the title (tests).</summary>
     public IReadOnlyList<(NoticeKind Kind, string Text)> Status => _status;
 
@@ -770,6 +773,7 @@ public sealed class MenuPane : INoticeSink
 
         _page = page;
         _open = true;
+        Opening?.Invoke(page.Title);
         int count = page.Rows.Count;
         // On a heading or a gap (2026-10-03): the next stop down, else up.
         _cursor = count == 0 ? 0 : page.StopFrom(cursor, +1);
@@ -1128,6 +1132,7 @@ public sealed class MenuPane : INoticeSink
         Require();
         _page = page;
         _open = true;
+        Opening?.Invoke(page.Title);
         _cursor = page.Rows.Count == 0 ? 0 : Math.Clamp(highlighted, 0, page.Rows.Count - 1);
         // The slot's rows for the pre-filled value, so the list leaves room for them from the start.
         _inputRows = Math.Clamp(InputLayout.Wrap(initial, initial.Length, InputLine.AvailableCells(Width)).Rows.Count, 1, ScreenPane.MaxInputRows(Height));

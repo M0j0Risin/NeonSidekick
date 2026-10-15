@@ -34,7 +34,11 @@ public static class DockerCommand
     public const int DefaultLogLines = 50;
 
     /// <summary>Runs one <c>/docker</c> line (<paramref name="args"/>, the text after the word).</summary>
-    public static async Task<DockerCommandResult> RunAsync(DockerSession docker, string args, CancellationToken cancellationToken)
+    /// <param name="confirm">
+    /// A change from the Web UI's page asks first (later on 2026-10-14, the user's call: from the PC it acts unasked): the question for each
+    /// of the five actions once the container resolves; true a yes, false or null keeps it. Null, nothing is asked.
+    /// </param>
+    public static async Task<DockerCommandResult> RunAsync(DockerSession docker, string args, CancellationToken cancellationToken, Func<string, CancellationToken, Task<bool?>>? confirm = null)
     {
         ArgumentNullException.ThrowIfNull(docker);
         ArgumentNullException.ThrowIfNull(args);
@@ -122,6 +126,11 @@ public static class DockerCommand
                     if (container is null)
                     {
                         return DockerCommandResult.Error(error!);
+                    }
+
+                    if (confirm is not null && await confirm(App.DockerMenu.ConfirmPrompt(verb, container), cancellationToken).ConfigureAwait(false) != true)
+                    {
+                        return DockerCommandResult.Of(App.DockerMenu.KeptNotice);
                     }
 
                     return DockerCommandResult.Of(await docker.ActAsync(verb, [container], null, DockerText.ByUser, cancellationToken).ConfigureAwait(false));

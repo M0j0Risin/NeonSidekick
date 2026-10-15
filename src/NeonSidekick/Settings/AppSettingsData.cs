@@ -3145,6 +3145,20 @@ public sealed class AppSettingsData
     public string WebUiReach { get; set; } = NeonSidekick.WebUi.WebUiReach.Default;
 
     /// <summary>
+    /// Whether the Web UI's page may run slash commands (later on 2026-10-14, the user's call: off by default): on, the page sends the commands
+    /// <c>App/WebCommands</c> allows — the ones that run, the pickers it shows as cards, the lists — and its dropdown completes them; off, a
+    /// command from the page is refused naming this setting, and the dropdown offers the mentions alone. Read at each request, so a change
+    /// needs no restart. No variable.
+    /// </summary>
+    public bool WebUiCommands { get; set; }
+
+    /// <summary>
+    /// Whether the Web UI's dropdown shows the <c>%</c> and <c>*</c> connections' notes in full (later on 2026-10-14, the user's call: on by default):
+    /// off, it lists their names alone. The dropdown only: the chat shows whatever the model says. Read at each request. No variable.
+    /// </summary>
+    public bool WebUiConnectionDetails { get; set; } = true;
+
+    /// <summary>
     /// The Web UI's sign-in token (2026-10-14): 32 random bytes as hex, minted when the Web UI first serves and by <c>/webui reset</c>,
     /// kept encrypted for this Windows user (<see cref="SettingsSecrets"/>; the keychain on a Mac). A browser opens the link
     /// <c>/webui</c> shows and keeps a cookie. Never logged (<see cref="SettingsDiff.Secrets"/>); never copied to another profile

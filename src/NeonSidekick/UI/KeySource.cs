@@ -61,6 +61,30 @@ public sealed class KeySource : IAnsiConsoleInput
     private TaskCompletionSource _requestSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _watching;
 
+    /// <summary>Set while a watcher's phase runs (a pane request, a line's hook), on the phase's own flow (later on 2026-10-14).</summary>
+    private static readonly AsyncLocal<bool> s_inPhase = new();
+
+    /// <summary>Whether a watcher runs now (a reply, a spinner, a load): a pane request is served (later on 2026-10-14).</summary>
+    public bool Watching
+    {
+        get
+        {
+            lock (_requestGate)
+            {
+                return _watching;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the code running now is a watcher's own phase (later on 2026-10-14): a pane it wants must run here, since a request would wait for
+    /// the phase that posts it.
+    /// </summary>
+    public static bool InPhase => s_inPhase.Value;
+
+    /// <summary>Runs first in every watch, on the watch's own flow (later on 2026-10-14: the screen marks what the watcher does as the PC's hand).</summary>
+    public Action? OnWatch { get; set; }
+
     public KeySource(IAnsiConsoleInput input, TimeSpan? pollInterval = null)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -617,6 +641,7 @@ public sealed class KeySource : IAnsiConsoleInput
     public async Task<Interrupt> WatchAsync(CancellationTokenSource turnCts, CancellationToken stop, Func<ConsoleKeyInfo, bool>? accept, CancellationTokenSource? acceptCts, Func<WatchedLine, Task<bool>>? onLine = null, Func<bool>? softCancel = null, Func<InputEvent, bool>? spend = null, Func<ConsoleKeyInfo, bool>? cancel = null, Func<InputEvent.Click, string?>? onClick = null, InputLine.Editor? editor = null)
     {
         ArgumentNullException.ThrowIfNull(turnCts);
+        OnWatch?.Invoke();
         cancel ??= IsTurnCancel;
         bool accepted = false;
         lock (_requestGate)
@@ -995,6 +1020,7 @@ public sealed class KeySource : IAnsiConsoleInput
         // A live row's list closes while a pane reads the keys (2026-09-25); the row is drawn again after.
         var editor = _editor;
         editor?.Suspend();
+        s_inPhase.Value = true;
         var back = await phase().ConfigureAwait(false);
 
         // What the phase's reader left (nothing, normally: a pane reads until ESC) comes after

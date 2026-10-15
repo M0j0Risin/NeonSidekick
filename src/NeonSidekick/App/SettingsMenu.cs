@@ -1084,6 +1084,12 @@ public enum SettingsField
 
     /// <summary>A picker over <see cref="NeonSidekick.WebUi.WebUiReach.Names"/>: who may reach the Web UI, this machine or the home network (<see cref="Settings.AppSettingsData.WebUiReach"/>). The Web UI tab under <see cref="WebUiPort"/> (2026-10-14); a change restarts the server, so it is refused mid-turn.</summary>
     WebUiReach,
+
+    /// <summary>A toggle: whether the Web UI's page may run slash commands (<see cref="Settings.AppSettingsData.WebUiCommands"/>). The Web UI tab under <see cref="WebUiReach"/> (later on 2026-10-14); read at each request, so neither refused mid-turn nor a restart.</summary>
+    WebUiCommands,
+
+    /// <summary>A toggle: whether the Web UI's dropdown shows the <c>%</c>/<c>*</c> connections' notes (<see cref="Settings.AppSettingsData.WebUiConnectionDetails"/>). The Web UI tab under <see cref="WebUiCommands"/> (later on 2026-10-14); read at each request.</summary>
+    WebUiConnectionDetails,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1525,7 +1531,7 @@ internal sealed partial class SettingsMenu
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
          SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
-        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach],
+        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails],
         [SettingsField.LlmUrl, SettingsField.LlmModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.PlanGapPasses,
@@ -2035,7 +2041,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.YouTubeTools or SettingsField.YouTubeAutoplay
             or SettingsField.Advisors or SettingsField.AdvisorConfirm
             or SettingsField.ShoppingTools
-            or SettingsField.WebUi;
+            or SettingsField.WebUi or SettingsField.WebUiCommands or SettingsField.WebUiConnectionDetails;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -2114,6 +2120,8 @@ internal sealed partial class SettingsMenu
         SettingsField.WebUi => "Web UI",
         SettingsField.WebUiPort => "Web UI port",
         SettingsField.WebUiReach => "Web UI reach",
+        SettingsField.WebUiCommands => "Web UI commands",
+        SettingsField.WebUiConnectionDetails => "Web UI connection details",
         SettingsField.ImageThumbnailSize => "Image thumbnail size",
         SettingsField.FileTreeMaxLength => "File /tree max entries",
         SettingsField.FileTreeShowSizes => "File /tree show sizes",
@@ -2690,6 +2698,8 @@ internal sealed partial class SettingsMenu
             SettingsField.AgentSkills => OnOff(data.AgentSkills),
             SettingsField.GlobalSkills => OnOff(data.GlobalSkills),
             SettingsField.WebUi => OnOff(data.WebUi),
+            SettingsField.WebUiCommands => OnOff(data.WebUiCommands),
+            SettingsField.WebUiConnectionDetails => OnOff(data.WebUiConnectionDetails),
             SettingsField.WebUiPort => data.WebUiPort.ToString(CultureInfo.InvariantCulture),
             SettingsField.WebUiReach => data.WebUiReach,
             SettingsField.ExternalSkills => OnOff(data.ExternalSkills),
@@ -4450,6 +4460,29 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
+        var (ids, cursor) = ModelChoices(listed, current);
+        if (ids.Count == 0)
+        {
+            // Only reachable with no current id at all; a connected session always has one.
+            Flow.Error(NoModelsError(listed));
+            return false;
+        }
+
+        return SaveModelChoice(await ChooseModelFromListAsync(ids, cursor, cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>Why a model list is empty: the server lists none, or did not answer.</summary>
+    public static string NoModelsError(ProbeResult listed) =>
+        listed.Exists ? NoModelsListedError : $"The server did not answer ({listed.Detail}). {NoModelsListedError}";
+
+    /// <summary>
+    /// The model picker's rows over a list in hand (out of <see cref="PickModelFromListAsync"/> later on 2026-10-14, for the Web UI's card too):
+    /// the ids A to Z with <paramref name="current"/> among them, and the cursor on it — or, with none in use, on the one the server lists first,
+    /// its default. Pure.
+    /// </summary>
+    public static (List<string> Ids, int Cursor) ModelChoices(ProbeResult listed, string current)
+    {
+        ArgumentNullException.ThrowIfNull(current);
         var ids = listed.ModelIds.ToList();
         if (!string.IsNullOrWhiteSpace(current) && !ids.Contains(current, StringComparer.Ordinal))
         {
@@ -4457,30 +4490,34 @@ internal sealed partial class SettingsMenu
         }
 
         ids = ModelOrder(ids);
-
-        // The cursor on the model in use; with none listed (a new server), on the one the server lists first, its default.
         int cursor = ids.IndexOf(current);
         if (cursor < 0 && listed.ModelIds.Count > 0)
         {
             cursor = ids.IndexOf(listed.ModelIds[0]);
         }
 
-        if (ids.Count == 0)
-        {
-            // Only reachable with no current id at all; a connected session always has one.
-            Flow.Error(listed.Exists ? NoModelsListedError : $"The server did not answer ({listed.Detail}). {NoModelsListedError}");
-            return false;
-        }
+        return (ids, cursor);
+    }
 
+    /// <summary>
+    /// The model picker alone (later on 2026-10-14): the pane's filtered list, or the menus' page without it; the id chosen, or null on ESC. Saves
+    /// nothing (<see cref="SaveModelChoice"/> does): the Web UI races it against its card.
+    /// </summary>
+    public async Task<string?> ChooseModelFromListAsync(IReadOnlyList<string> ids, int cursor, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
         if (_pane.Enabled)
         {
-            return await PickFilteredModelAsync(ids, cursor, cancellationToken).ConfigureAwait(false) is { } chosen ? SaveModel(chosen) : Unchanged();
+            return await PickFilteredModelAsync(ids, cursor, cancellationToken).ConfigureAwait(false);
         }
 
         var page = new MenuPage(ModelTitle, ids.Select(Markup.Escape).ToList(), KeepKeys);
         int? picked = await PickOnceAsync(page, cursor, cancellationToken).ConfigureAwait(false);
-        return picked is { } i ? SaveModel(ids[i]) : Unchanged();
+        return picked is { } i ? ids[i] : null;
     }
+
+    /// <summary>A model chosen saved (true when it changed), or <see cref="UnchangedNotice"/> for none.</summary>
+    public bool SaveModelChoice(string? id) => id is not null ? SaveModel(id) : Unchanged();
 
     /// <summary>The footer under the model picker (2026-10-07, the user's ask: a long Hugging Face id is cut at the edge): the whole id, and whether it is the one in use. Pinned.</summary>
     public static MenuFooter ModelFooter(string id, bool inUse) => new(id, inUse ? ModelInUseNote : null);
@@ -6649,10 +6686,20 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
+        return SaveReasoningChoice(await ChooseReasoningAsync(current, cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>The reasoning picker alone (later on 2026-10-14): the level chosen, or null on ESC. Saves nothing (<see cref="SaveReasoningChoice"/>).</summary>
+    public async Task<string?> ChooseReasoningAsync(string current, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(current);
         var page = new MenuPage(ReasoningTitle, ReasoningRows(), KeepKeys);
         int? picked = await PickOnceAsync(page, ReasoningCursor(current), cancellationToken).ConfigureAwait(false);
-        return picked is { } index ? SaveReasoning(Llm.ReasoningLevel.Levels[index]) : Unchanged();
+        return picked is { } index ? Llm.ReasoningLevel.Levels[index] : null;
     }
+
+    /// <summary>A reasoning level chosen saved (true when it changed), or <see cref="UnchangedNotice"/> for none.</summary>
+    public bool SaveReasoningChoice(string? level) => level is not null ? SaveReasoning(level) : Unchanged();
 
     /// <summary>One <see cref="ReasoningLabel"/> row per level, in <see cref="Llm.ReasoningLevel.Levels"/> order.</summary>
     private static List<string> ReasoningRows() => Llm.ReasoningLevel.Levels.Select(ReasoningLabel).ToList();
@@ -7510,6 +7557,8 @@ internal sealed partial class SettingsMenu
             SettingsField.AgentSkills => data.AgentSkills,
             SettingsField.GlobalSkills => data.GlobalSkills,
             SettingsField.WebUi => data.WebUi,
+            SettingsField.WebUiCommands => data.WebUiCommands,
+            SettingsField.WebUiConnectionDetails => data.WebUiConnectionDetails,
             SettingsField.ExternalSkills => data.ExternalSkills,
             SettingsField.ProjectFile => data.ProjectFile,
             SettingsField.TranscriptMarkdown => data.TranscriptMarkdown,
@@ -7621,6 +7670,8 @@ internal sealed partial class SettingsMenu
             case SettingsField.AgentSkills: data.AgentSkills = on; break;
             case SettingsField.GlobalSkills: data.GlobalSkills = on; break;
             case SettingsField.WebUi: data.WebUi = on; break;
+            case SettingsField.WebUiCommands: data.WebUiCommands = on; break;
+            case SettingsField.WebUiConnectionDetails: data.WebUiConnectionDetails = on; break;
             case SettingsField.ExternalSkills: data.ExternalSkills = on; break;
             case SettingsField.ProjectFile: data.ProjectFile = on; break;
             case SettingsField.TranscriptMarkdown: data.TranscriptMarkdown = on; break;
@@ -7739,6 +7790,8 @@ internal sealed partial class SettingsMenu
         SettingsField.AgentSkills => on ? "the skills catalog, load_skill and skill_editor are offered" : "no skills, no project notes",
         SettingsField.GlobalSkills => on ? "every profile's global skills are read too" : "only this profile's skills; the global ones are hidden and left alone",
         SettingsField.WebUi => on ? "web server enabled" : "web server disabled",   // the user's wording, 2026-10-14
+        SettingsField.WebUiCommands => on ? "the page runs the commands it may, and completes them" : "the page sends messages; its dropdown offers the mentions alone",
+        SettingsField.WebUiConnectionDetails => on ? "the page's dropdown shows the % and * connections' notes" : "the page's dropdown names the connections alone",
         SettingsField.ExternalSkills => on ? (OperatingSystem.IsMacOS() ? "~/.agents/skills is read too" : "%USERPROFILE%\\.agents\\skills is read too") : "no external skills",   // the Mac's home, 2026-10-06
         SettingsField.ProjectFile => on ? "use project file (NEON.md or AGENTS.md in the working directory)" : "project files in the working directory are ignored",   // the user's wording, 2026-10-01
         SettingsField.SkillHashMention => on ? "# and part of a name lists the loaded skills on the line" : "# is ordinary text",

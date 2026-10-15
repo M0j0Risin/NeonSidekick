@@ -306,15 +306,20 @@ public sealed class TranscriptRenderer : INoticeSink
     /// The sent pictures under the user's line, tiled left to right (<see cref="ImageStrip"/>); nothing for none. With
     /// <paramref name="ids"/> (later on 2026-09-24) the pane keeps where each tile landed, so a double-click opens it.
     /// </summary>
-    public void Images(IReadOnlyList<ImageThumbnail> thumbnails, IReadOnlyList<int>? ids = null)
+    /// <remarks>
+    /// <paramref name="webIds"/> (later on 2026-10-14) are the pictures the Web UI's entry offers — every picture of the set, a codec-refused one too
+    /// — written before the PC's early return, so a set the terminal drew none of still reaches the page; without them, <paramref name="ids"/>.
+    /// Returns the entry's seq, or null with no feed or nothing to record.
+    /// </remarks>
+    public long? Images(IReadOnlyList<ImageThumbnail> thumbnails, IReadOnlyList<int>? ids = null, IReadOnlyList<int>? webIds = null)
     {
         ArgumentNullException.ThrowIfNull(thumbnails);
+        long? seq = webIds is { Count: > 0 } ? FeedPictures(webIds, webIds.Count) : FeedPictures(ids ?? [], thumbnails.Count);
         if (thumbnails.Count == 0)
         {
-            return;
+            return seq;
         }
 
-        Feed?.Add(WebUi.FeedKind.Picture, thumbnails.Count == 1 ? "a picture" : thumbnails.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) + " pictures");
         EndRun();
         BreakIfMidText();
         var strip = new ImageStrip(thumbnails, ids);
@@ -328,6 +333,7 @@ public sealed class TranscriptRenderer : INoticeSink
         }
 
         _state = LineState.AtLineStart;
+        return seq;
     }
 
     /// <summary>
@@ -336,10 +342,10 @@ public sealed class TranscriptRenderer : INoticeSink
     /// console's, so the picture sits in the middle of the window as it is now. The strip under a
     /// sent line (<see cref="Images"/>) stays at the left, under the line it belongs to.
     /// </summary>
-    public void Picture(ImageThumbnail thumbnail, int? id = null)
+    public long? Picture(ImageThumbnail thumbnail, int? id = null)
     {
         ArgumentNullException.ThrowIfNull(thumbnail);
-        Feed?.Add(WebUi.FeedKind.Picture, "a picture");
+        long? seq = FeedPictures(id is { } web ? [web] : [], 1);
         EndRun();
         BreakIfMidText();
         if (id is { } key && _pane is { Enabled: true } pane)
@@ -353,6 +359,7 @@ public sealed class TranscriptRenderer : INoticeSink
         }
 
         _state = LineState.AtLineStart;
+        return seq;
     }
 
     public void Notice(string text)
@@ -575,6 +582,43 @@ public sealed class TranscriptRenderer : INoticeSink
     /// not. Null records nothing (headless, the tests that do not ask for it).
     /// </summary>
     public WebUi.TranscriptFeed? Feed { get; set; }
+
+    /// <summary>
+    /// A registered picture as the Web UI's entry carries it (later on 2026-10-14): its addresses, size and name, by the screen's id; null for an
+    /// id it does not know. Null (the default) leaves a picture entry its words alone.
+    /// </summary>
+    public Func<int, WebUi.WebPicture?>? WebPicture { get; set; }
+
+    /// <summary>The words a picture entry carries: "a picture" or "N pictures" (the page's alt text, and its whole line before pictures were served).</summary>
+    public static string PictureWords(int count) =>
+        count == 1 ? "a picture" : count.ToString(System.Globalization.CultureInfo.InvariantCulture) + " pictures";
+
+    /// <summary>The feed's picture entry for <paramref name="ids"/>: its pictures where the screen describes them; its seq, or null with no feed.</summary>
+    private long? FeedPictures(IReadOnlyList<int> ids, int count)
+    {
+        if (Feed is not { } feed || count == 0)
+        {
+            return null;
+        }
+
+        List<WebUi.WebPicture>? pictures = null;
+        if (WebPicture is { } describe)
+        {
+            pictures = [.. ids.Select(describe).OfType<WebUi.WebPicture>()];
+        }
+
+        return feed.Add(WebUi.FeedKind.Picture, PictureWords(count), pictures: pictures);
+    }
+
+    /// <summary>
+    /// Pictures for the Web UI's page alone (later on 2026-10-14): what the PC does not draw — <c>Show image thumbnails</c> off, a picture the
+    /// terminal's codecs refused — the page still offers. Nothing at the PC; the entry's seq, or null with no feed or no id.
+    /// </summary>
+    public long? WebOnlyPictures(IReadOnlyList<int> ids)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        return ids.Count == 0 ? null : FeedPictures(ids, ids.Count);
+    }
 
     /// <summary>
     /// How many lines a top-level code block of a styled reply may have before the transcript folds
@@ -913,6 +957,29 @@ public sealed class TranscriptRenderer : INoticeSink
     public async Task<T> WithSpinnerAsync<T>(string label, Func<Action<string>, Task<T>> work)
     {
         ArgumentNullException.ThrowIfNull(work);
+        // A command from the Web UI's page at work (later on 2026-10-14): its label on the page while it runs, once, gone when it ends.
+        long? working = Feed is { } feed && !_assistantOpen && MirrorSpinner?.Invoke() == true ? feed.Add(WebUi.FeedKind.Working, label) : null;
+        try
+        {
+            return await SpinAsync(label, work).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (working is { } seq)
+            {
+                Feed?.EndWorking(seq);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a spinner's label goes to the Web UI's page too (later on 2026-10-14): the screen says yes for a command the page sent while no model
+    /// work runs (a reply shows its own). Null, never.
+    /// </summary>
+    public Func<bool>? MirrorSpinner { get; set; }
+
+    private async Task<T> SpinAsync<T>(string label, Func<Action<string>, Task<T>> work)
+    {
         if (_pane is { Enabled: true })
         {
             using (var busy = _pane.BeginBusy(label))

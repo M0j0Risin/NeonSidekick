@@ -187,10 +187,19 @@ public class AppSettingsTests : IDisposable
         McpConnectTimeoutSeconds = 45,
         McpServers = true,
         McpServersDisabled = ["docker"],
+        WebUi = true,
+        WebUiPort = 9100,
+        WebUiReach = "local",
+        WebUiCommands = true,
+        WebUiConnectionDetails = false,
+        WebUiToken = "dpapi:token",
     };
 
     private static void AssertSame(AppSettingsData expected, AppSettingsData actual)
     {
+        Assert.Equal(
+            (expected.WebUi, expected.WebUiPort, expected.WebUiReach, expected.WebUiCommands, expected.WebUiConnectionDetails, expected.WebUiToken),
+            (actual.WebUi, actual.WebUiPort, actual.WebUiReach, actual.WebUiCommands, actual.WebUiConnectionDetails, actual.WebUiToken));
         Assert.Equal(expected.SchemaVersion, actual.SchemaVersion);
         Assert.Equal(expected.ModelAvatar, actual.ModelAvatar);
         Assert.Equal(expected.UserAvatar, actual.UserAvatar);
@@ -330,6 +339,54 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.EmbeddedVision, actual.EmbeddedVision);
         Assert.Equal(expected.EmbeddedLlmServer, actual.EmbeddedLlmServer);
         Assert.Equal(expected.EmbeddedDrafter, actual.EmbeddedDrafter);
+    }
+
+    /// <summary>
+    /// Every property the profile's JSON holds survives the hand-written copy (later on 2026-10-14, the Web UI review: a new setting left out of
+    /// <see cref="AppSettings.Copy"/> was lost on the next save): each one set to something other than its default, by its type, through the
+    /// source-generated contract, then the copy's JSON compared with the original's whole.
+    /// </summary>
+    [Fact]
+    public void EveryProperty_SetOffItsDefault_SurvivesCopy()
+    {
+        var info = SettingsJsonContext.Default.AppSettingsData;
+        var data = new AppSettingsData();
+        var skipped = new List<string>();
+        foreach (var property in info.Properties)
+        {
+            if (property.Set is null || property.Get is null)
+            {
+                continue;
+            }
+
+            object? current = property.Get(data);
+            object? other = property.PropertyType switch
+            {
+                var t when t == typeof(bool) => !(bool)current!,
+                var t when t == typeof(bool?) => current is true ? false : true,
+                var t when t == typeof(int) => (int)current! + 7,
+                var t when t == typeof(int?) => ((int?)current ?? 0) + 7,
+                var t when t == typeof(long) => (long)current! + 7,
+                var t when t == typeof(double) => (double)current! + 0.5,
+                var t when t == typeof(double?) => ((double?)current ?? 0) + 0.5,
+                var t when t == typeof(string) => "x-" + property.Name,
+                var t when t == typeof(List<string>) => new List<string> { "x-" + property.Name },
+                _ => null,
+            };
+            if (other is null)
+            {
+                skipped.Add(property.Name);
+                continue;
+            }
+
+            property.Set(data, other);
+        }
+
+        string original = System.Text.Json.JsonSerializer.Serialize(data, info);
+        string copied = System.Text.Json.JsonSerializer.Serialize(AppSettings.Copy(data), info);
+
+        Assert.Equal(original, copied);
+        Assert.True(skipped.Count < 20, "Too many settings of a type this test cannot set: " + string.Join(", ", skipped));
     }
 
     [Fact]
@@ -482,6 +539,12 @@ public class AppSettingsTests : IDisposable
             d.SessionShowName = full.SessionShowName;
             d.SessionTool = full.SessionTool;
             d.SessionSaveThinking = full.SessionSaveThinking;
+            d.WebUi = full.WebUi;
+            d.WebUiPort = full.WebUiPort;
+            d.WebUiReach = full.WebUiReach;
+            d.WebUiCommands = full.WebUiCommands;
+            d.WebUiConnectionDetails = full.WebUiConnectionDetails;
+            d.WebUiToken = full.WebUiToken;
         });
 
         AssertSame(full, settings.Current);
@@ -631,6 +694,12 @@ public class AppSettingsTests : IDisposable
                 d.SessionShowName = full.SessionShowName;
                 d.SessionTool = full.SessionTool;
                 d.SessionSaveThinking = full.SessionSaveThinking;
+                d.WebUi = full.WebUi;
+                d.WebUiPort = full.WebUiPort;
+                d.WebUiReach = full.WebUiReach;
+                d.WebUiCommands = full.WebUiCommands;
+                d.WebUiConnectionDetails = full.WebUiConnectionDetails;
+                d.WebUiToken = full.WebUiToken;
             });
             await settings.FlushAsync();
         }

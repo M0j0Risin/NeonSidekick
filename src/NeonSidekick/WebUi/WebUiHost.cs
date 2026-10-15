@@ -80,6 +80,7 @@ public sealed class WebUiHost : IWebUiHost
     private readonly Func<IPAddress, bool> _allowRemote;
     private readonly object _gate = new();
     private readonly List<OpenStream> _streams = [];
+    private readonly PictureServer _pictures = new();
     private WebApplication? _app;
     private WebUiBinding? _binding;
     private CancellationTokenSource _stopping = new();
@@ -247,6 +248,12 @@ public sealed class WebUiHost : IWebUiHost
                 return;
             }
 
+            if (get && path.StartsWith(PicturePrefix, StringComparison.Ordinal))
+            {
+                await PictureAsync(context, path[PicturePrefix.Length..]).ConfigureAwait(false);
+                return;
+            }
+
             if (get)
             {
                 switch (path)
@@ -267,6 +274,19 @@ public sealed class WebUiHost : IWebUiHost
                     return;
                 }
 
+                if (path == "/api/complete")
+                {
+                    // The dropdown (later on 2026-10-14): its own answer, not a post's sentence.
+                    if (await ReadAsync(context, WebUiJsonContext.Default.WebCompleteRequest).ConfigureAwait(false) is not { } complete)
+                    {
+                        await ResultAsync(context, StatusCodes.Status400BadRequest, new WebResult(false, WebUiText.BadRequest)).ConfigureAwait(false);
+                        return;
+                    }
+
+                    await JsonAsync(context, StatusCodes.Status200OK, _backend.Complete(complete), WebUiJsonContext.Default.WebCompletion).ConfigureAwait(false);
+                    return;
+                }
+
                 WebReply? reply = path switch
                 {
                     "/api/send" => await ReadAsync(context, WebUiJsonContext.Default.WebSendRequest).ConfigureAwait(false) is { } send ? _backend.Send(send, remote) : null,
@@ -281,7 +301,7 @@ public sealed class WebUiHost : IWebUiHost
                     return;
                 }
 
-                await ResultAsync(context, StatusOf(done.Outcome), new WebResult(done.Outcome == WebOutcome.Ok, done.Message)).ConfigureAwait(false);
+                await ResultAsync(context, StatusOf(done.Outcome), new WebResult(done.Outcome == WebOutcome.Ok, done.Message, done.AsText, done.Use)).ConfigureAwait(false);
                 return;
             }
 
@@ -306,6 +326,27 @@ public sealed class WebUiHost : IWebUiHost
                 response.StatusCode = StatusCodes.Status500InternalServerError;
             }
         }
+    }
+
+    /// <summary>Where the pictures are served: <c>/api/picture/{run}/{id}/{thumb|mid|full}</c>.</summary>
+    public const string PicturePrefix = "/api/picture/";
+
+    /// <summary>
+    /// A picture (2026-10-14): the run's tag first (another run's address names nothing), then the id the transcript holds now, then the size;
+    /// anything else a 404 with no line in the transcript. The page never names a path: the id is the screen's.
+    /// </summary>
+    private async Task PictureAsync(HttpContext context, string rest)
+    {
+        string[] parts = rest.Split('/');
+        if (parts.Length != 3 || !string.Equals(parts[0], _backend.PictureRun, StringComparison.Ordinal)
+            || !int.TryParse(parts[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int id)
+            || PictureServer.SizeOf(parts[2]) is not { } size || _backend.Picture(id) is not { } source)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        await _pictures.ServeAsync(context, source, size).ConfigureAwait(false);
     }
 
     private static int StatusOf(WebOutcome outcome) => outcome switch
