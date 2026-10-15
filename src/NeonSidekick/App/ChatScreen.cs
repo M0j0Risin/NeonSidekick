@@ -5396,7 +5396,7 @@ internal sealed partial class ChatScreen
             _settings.ProfileName,
             _timers.Snapshot().Select(timer => timer.Name).ToList(),
             prefix => _files.Complete(prefix).Paths.Where(path => path.EndsWith('/')).ToList(),
-            prefix => _files.Complete(prefix, WorkingDirectory.IsTextFile),
+            prefix => _files.Complete(prefix, full => WorkingDirectory.IsTextFile(full) || PdfFile.IsPdfPath(full)),   // a PDF reads aloud too (2026-10-14)
             prefix => _files.Complete(prefix, ImageFile.IsImagePath),
             SessionChoices,
             SkillChoices,
@@ -8869,8 +8869,11 @@ internal sealed partial class ChatScreen
     ///
     /// <para>True when the reading started, false when an error line was printed instead — a looped
     /// <c>/read</c> (2026-09-25) stops on false.</para>
+    ///
+    /// <para>A PDF (2026-10-14, the PDF plan's gaps 7, 38 and 89) is read through <c>read_pdf</c>'s reader and cache
+    /// (<see cref="PdfAloudAsync"/>), under a spinner ESC stops, its pages joined back into sentences; hence async.</para>
     /// </summary>
-    private bool HandleSpeak(string args, CancellationToken cancellationToken)
+    private async Task<bool> HandleSpeakAsync(string args, CancellationToken cancellationToken)
     {
         if (args.Length == 0)
         {
@@ -8906,10 +8909,28 @@ internal sealed partial class ChatScreen
         // nothing is there, `<file> <n>`: the head read and the number the start sentence.
         var read = _files.ReadText(args, null, null);
         int from = 1;
+        string target = args;
         if (read.Outcome == FileOutcome.Missing && SpeakReading.TrySplitPosition(args, out string head, out int position))
         {
             read = _files.ReadText(head, null, null);
             from = position;
+            target = head;
+        }
+
+        if (read.Outcome == FileOutcome.NotText && PdfFile.IsPdfPath(read.Relative))
+        {
+            var (text, cut, error) = await PdfAloudAsync(target, cancellationToken).ConfigureAwait(false);
+            if (text is null)
+            {
+                if (error is not null)
+                {
+                    _transcript.Error(error);
+                }
+
+                return false;
+            }
+
+            read = new ReadResult(FileOutcome.Ok, read.Relative, text, 0, 0, 0, cut);
         }
 
         if (read.Outcome != FileOutcome.Ok)
@@ -12692,7 +12713,7 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Read:
-                _ = HandleSpeak(args, cancellationToken);
+                _ = await HandleSpeakAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.View:
@@ -13783,7 +13804,7 @@ internal sealed partial class ChatScreen
     /// <summary>One looped <c>/read</c> (2026-09-25): the reading started, then its audio waited out under ESC, which stops it and the loop.</summary>
     private async Task<LoopPass> SpeakPassAsync(string args, CancellationToken cancellationToken)
     {
-        if (!HandleSpeak(args, cancellationToken))
+        if (!await HandleSpeakAsync(args, cancellationToken).ConfigureAwait(false))
         {
             return LoopPass.Failed;
         }

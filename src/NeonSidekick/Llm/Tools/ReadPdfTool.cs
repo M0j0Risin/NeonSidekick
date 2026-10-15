@@ -181,44 +181,9 @@ public sealed class ReadPdfTool : FileTool
         return UncCatalog.IsAbsolute(spelled) && SharesOffered && (UncPath.IsNetwork(spelled, OperatingSystem.IsWindows()) || FilesFor(spelled).Resolve(spelled, forWrite: false, out _) != FileOutcome.Ok);
     }
 
-    /// <summary>The file's cache key and its display path, or the refusal: outside the sandbox, missing, a folder, too large.</summary>
-    private static string? Stamped(WorkingDirectory files, string path, out PdfDocKey? key, out string display)
-    {
-        key = null;
-        display = path;
-        var outcome = files.Resolve(path, forWrite: false, out string full);
-        if (outcome != FileOutcome.Ok)
-        {
-            return FileText.Error(outcome, path, "read");
-        }
+    private static string? Stamped(WorkingDirectory files, string path, out PdfDocKey? key, out string display) => PdfReading.Locate(files, path, out key, out display);
 
-        display = files.Relative(full);
-        if (Directory.Exists(full))
-        {
-            return FileText.Error(FileOutcome.IsDirectory, files.Relative(full, isDirectory: true), "read");
-        }
-
-        if (files.TryStamp(path) is not { } stamp)
-        {
-            return FileText.Error(FileOutcome.Missing, display, "read");
-        }
-
-        if (stamp.Length > BrowserPdfReader.MaxBytes)
-        {
-            return PdfText.TooBigToRead(display);
-        }
-
-        key = new PdfDocKey(stamp.Full, stamp.Length, stamp.Written);
-        return null;
-    }
-
-    private static (byte[]? Bytes, string? Error) Bytes(WorkingDirectory files, string path)
-    {
-        var read = files.ReadBytes(path, BrowserPdfReader.MaxBytes);
-        return read.Outcome == FileOutcome.Ok
-            ? (read.Bytes, null)
-            : (null, read.Outcome == FileOutcome.TooBig ? PdfText.TooBigToRead(read.Relative) : FileText.Error(read.Outcome, read.Relative, "read", read.Detail));
-    }
+    private static (byte[]? Bytes, string? Error) Bytes(WorkingDirectory files, string path) => PdfReading.BytesOf(files, path);
 
     /// <summary>The read asked of <see cref="PdfReading"/> for the request, then the answer composed from what it holds.</summary>
     private async Task<object?> AnswerAsync(PdfDocKey key, string display, Func<CancellationToken, Task<(byte[]? Bytes, string? Error)>> bytes, Request request, Func<string, string> scope, CancellationToken cancellationToken)

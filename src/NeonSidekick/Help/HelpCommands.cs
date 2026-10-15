@@ -303,7 +303,7 @@ public static class HelpCommands
         ]),
         new("/read",
         [
-            new("/read [<file> [<n>]|<n>]", "Read a text file from the working directory aloud as a reply. Alone, it resumes; a number starts from that sentence (a file named only with digits is typed `./5`). On an empty line, Space pauses and resumes, and ←/→ step a sentence back or forward (while paused they only move the position, and Space or `/read` plays from there). The hints bar shows the keys that apply: `← → ␣ pause`, `← → ␣ play` or `␣ replay`."),
+            new("/read [<file> [<n>]|<n>]", "Read a text file or a PDF from the working directory aloud as a reply (a PDF's first 40 pages, read with Edge, Chrome or Brave and joined back into sentences; ESC stops the read). Alone, it resumes; a number starts from that sentence (a file named only with digits is typed `./5`). On an empty line, Space pauses and resumes, and ←/→ step a sentence back or forward (while paused they only move the position, and Space or `/read` plays from there). The hints bar shows the keys that apply: `← → ␣ pause`, `← → ␣ play` or `␣ replay`."),
         ]),
         new("/reasoning",
         [

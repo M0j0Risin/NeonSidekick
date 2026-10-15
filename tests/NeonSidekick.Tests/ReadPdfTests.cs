@@ -191,6 +191,34 @@ public sealed class ReadPdfTests : IDisposable
         Assert.True(context.Length <= PdfFind.ContextChars + 2);
     }
 
+    // ── reflow for /read (gap 89) ───────────────────────────────────────────
+
+    [Fact]
+    public void Reflow_JoinsLines_MendsHyphens_AndKeepsPagesApart()
+    {
+        Assert.Equal("The warranty covers the whole machine. An example of it.\n\nPage two.",
+            PdfReflow.Reflow(["The warranty covers the\nwhole machine. An exam-\nple of it.", "Page two.", ""]));
+        // A compound split at a line's end reads as one word (no dictionary tells it from a broken word); spoken, it sounds the same.
+        Assert.Equal("a wellknown one", PdfReflow.Join(["a well-", "known one"]));
+        Assert.Equal("Cost: 12- 15 units", PdfReflow.Join(["Cost: 12-", "15 units"]));   // a hyphen after a digit stays, joined with a space
+        Assert.Equal("See Part-", PdfReflow.Join(["See Part-"]));
+        Assert.Equal("Part- One", PdfReflow.Join(["Part-", "One"]));   // a capital next: a real dash, kept
+    }
+
+    [Fact]
+    public void Reflow_DropsARunningHeaderAndFooter_ButNotOnAShortDocument()
+    {
+        string[] pages =
+        [
+            "Acme Manual\nFirst page text.\nPage 1 of 4",
+            "Acme Manual\nSecond page text.\nPage 2 of 4",
+            "Acme Manual\nThird page text.\nPage 3 of 4",
+            "Acme Manual\nFourth page text.\nPage 4 of 4",
+        ];
+        Assert.Equal("First page text.\n\nSecond page text.\n\nThird page text.\n\nFourth page text.", PdfReflow.Reflow(pages));
+        Assert.Equal("Acme Manual One. Page 1\n\nAcme Manual Two. Page 2", PdfReflow.Reflow(["Acme Manual\nOne.\nPage 1", "Acme Manual\nTwo.\nPage 2"]));   // twice is not a pattern
+    }
+
     // ── the tool ────────────────────────────────────────────────────────────
 
     [Fact]

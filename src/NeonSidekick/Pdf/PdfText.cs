@@ -207,6 +207,12 @@ public static class PdfText
             ? $"(page {page.ToString(CultureInfo.InvariantCulture)} of {file}; read_pdf with pictures reads it again)"
             : $"(a page of {file}; read_pdf with pictures reads it again)";
 
+    /// <summary><c>/read</c>'s spinner while a PDF is read for speech (2026-10-14, the PDF plan's gap 38). Pinned.</summary>
+    public const string ReadingAloudLabel = "Reading the PDF";
+
+    /// <summary>A PDF's read for <c>/read</c> stopped by ESC before it spoke (gap 38). Pinned.</summary>
+    public const string ReadAloudStopped = "(reading the PDF stopped)";
+
     /// <summary><c>3 pages</c>, <c>1 page</c>.</summary>
     public static string Pages(int count) => count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " page" : " pages");
 

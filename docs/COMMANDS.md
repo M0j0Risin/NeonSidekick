@@ -171,7 +171,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/stt [on\|off]` | Turns voice input on or off (*STT input*). |
 | `/stt wake [on\|off]` | Turns the wake word on or off; off turns the interrupt off too. |
 | `/stt interrupt [on\|off]` | Turns the wake-word interrupt during a spoken reply on or off; needs the wake word. |
-| `/read [<file> [<n>]\|<n>]` | Reads a text file aloud; alone it resumes, a number starts at that sentence. Space pauses and ←/→ step a sentence. |
+| `/read [<file> [<n>]\|<n>]` | Reads a text file or a PDF aloud; alone it resumes, a number starts at that sentence. Space pauses and ←/→ step a sentence. A PDF's first 40 pages are read with your browser, its printed lines joined back into sentences and a repeated header or footer left out. |
 
 ### Web and video
 

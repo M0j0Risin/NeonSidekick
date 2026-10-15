@@ -256,4 +256,51 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
     }
 
     private static PdfPages Fail(string error) => new(error, 0, new Dictionary<int, string>(), [], null, null, "");
+
+    /// <summary>
+    /// The file <paramref name="path"/> names in <paramref name="files"/> as a cache key and its display path, or the refusal (a sentence):
+    /// outside the sandbox, missing, a folder, over <see cref="BrowserPdfReader.MaxBytes"/>. One metadata call; nothing read. Shared by
+    /// <c>read_pdf</c> and <c>/read</c> (2026-10-14).
+    /// </summary>
+    public static string? Locate(WorkingDirectory files, string path, out PdfDocKey? key, out string display)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(path);
+        key = null;
+        display = path;
+        var outcome = files.Resolve(path, forWrite: false, out string full);
+        if (outcome != FileOutcome.Ok)
+        {
+            return FileText.Error(outcome, path, "read");
+        }
+
+        display = files.Relative(full);
+        if (Directory.Exists(full))
+        {
+            return FileText.Error(FileOutcome.IsDirectory, files.Relative(full, isDirectory: true), "read");
+        }
+
+        if (files.TryStamp(path) is not { } stamp)
+        {
+            return FileText.Error(FileOutcome.Missing, display, "read");
+        }
+
+        if (stamp.Length > BrowserPdfReader.MaxBytes)
+        {
+            return PdfText.TooBigToRead(display);
+        }
+
+        key = new PdfDocKey(stamp.Full, stamp.Length, stamp.Written);
+        return null;
+    }
+
+    /// <summary>The file's bytes for a read, or the sentence why not (the bytes callback of <see cref="ReadAsync"/>).</summary>
+    public static (byte[]? Bytes, string? Error) BytesOf(WorkingDirectory files, string path)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        var read = files.ReadBytes(path, BrowserPdfReader.MaxBytes);
+        return read.Outcome == FileOutcome.Ok
+            ? (read.Bytes, null)
+            : (null, read.Outcome == FileOutcome.TooBig ? PdfText.TooBigToRead(read.Relative) : FileText.Error(read.Outcome, read.Relative, "read", read.Detail));
+    }
 }

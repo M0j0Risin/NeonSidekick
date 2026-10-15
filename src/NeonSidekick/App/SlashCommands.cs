@@ -445,7 +445,7 @@ public static class SlashCommands
             new("/settings", "edit, search and save settings", "//"),
             new("/shortcut", "put a launch shortcut on the desktop"),
             new("/skills", "manage and install skills"),
-            new("/read", "read a text file aloud"),
+            new("/read", "read a text file or PDF aloud"),
             new("/splash", "start over with the splash screen"),
             new("/stt", "toggle voice input and the wake word"),
             new("/sys", "show or edit the system prompt"),

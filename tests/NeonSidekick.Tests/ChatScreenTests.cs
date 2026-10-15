@@ -15973,6 +15973,50 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
+    /// <summary>
+    /// <c>/read</c> of a PDF (2026-10-14, the PDF plan's gaps 7, 38 and 89): read through the browser into whole sentences — a page's
+    /// printed lines joined, a hyphen across a line's end mended, pages apart — and a second <c>/read</c> of it served from the cache.
+    /// </summary>
+    [Fact]
+    public async Task Read_APdf_ReadsItsPagesAsSentences_AndTheCacheServesItAgain()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _browser.Executable = OperatingSystem.IsWindows() ? @"C:\Edge\msedge.exe" : "/Applications/Edge";
+        _browser.PdfReadPages.Add(new PdfPageRead(1, "The warranty covers the\nwhole machine for two years. The exam-\nple follows.", null, 0, 0));
+        _browser.PdfReadPages.Add(new PdfPageRead(2, "Page two says more.", null, 0, 0));
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        File.WriteAllBytes(Path.Combine(files, "manual.pdf"), System.Text.Encoding.ASCII.GetBytes("%PDF-1.7\n% a test\n%%EOF\n"));
+        PushLine("/read manual.pdf");
+        PushLine("/read manual.pdf 2");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("● The warranty covers the whole machine for two years. The example follows.", output);
+        Assert.Contains("Page two says more.", output);
+        Assert.Contains("● The example follows.", output);   // sentence 2 of the reflowed text
+        Assert.Single(_browser.PdfReads);                    // the second /read came from the cache
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>A PDF with no browser to read it is an error line, not a "not a text file" (2026-10-14).</summary>
+    [Fact]
+    public async Task Read_APdfWithoutABrowser_SaysWhatItNeeds()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        File.WriteAllBytes(Path.Combine(files, "manual.pdf"), System.Text.Encoding.ASCII.GetBytes("%PDF-1.7\n%%EOF\n"));
+        PushLine("/read manual.pdf");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + NeonSidekick.Pdf.PdfText.NoBrowserToRead, output);
+        Assert.Empty(_browser.PdfReads);
+    }
+
     [WindowsFact]
     public async Task Read_AFileAndANumber_StartsThere_AndAFileNamedWithANumberIsReadWhole()
     {
