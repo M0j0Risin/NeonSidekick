@@ -327,13 +327,18 @@ public static class WebUiText
     /// <summary>The drawer's ✕.</summary>
     public const string CloseStrip = "Close the pictures";
 
+    /// <summary>The overlay's tag while it follows new pictures, on the newest slot (later on 2026-10-15), and its label for a screen reader.</summary>
+    public const string Live = "live";
+
+    public const string LiveLabel = "following new pictures";
+
     /// <summary>A strip picture the page picked that the strip no longer holds, or with the strip off.</summary>
     public const string NoSuchPicture = "That picture is no longer in the strip.";
 
     /// <summary>The page's own words, sent with every snapshot.</summary>
     public static readonly WebWords Words = new(PictureGone, PictureTooLarge, OpenOriginal, SendAsMessage, UseLine, DraftFilled, Undo, Working, CloseChoice,
         UI.TranscriptRenderer.NoReplyText, UI.ThinkingFoldText.LiveBare, EntryGone,
-        ClearDraft, DraftCleared, ExpandAll, CollapseAll, ToTop, ToBottom, StripButton, StripOne, StripMany, CloseStrip);
+        ClearDraft, DraftCleared, ExpandAll, CollapseAll, ToTop, ToBottom, StripButton, StripOne, StripMany, CloseStrip, Live, LiveLabel);
 
     /// <summary>A folded entry whose text the page asked for after the transcript let it go (2026-10-15).</summary>
     public const string EntryGone = "(no longer available)";

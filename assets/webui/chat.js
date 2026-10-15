@@ -28,6 +28,7 @@ const overlayOpen = document.getElementById('overlay-open');
 const overlayPrev = document.getElementById('overlay-prev');
 const overlayNext = document.getElementById('overlay-next');
 const overlayClose = document.getElementById('overlay-close');
+const overlayLive = document.getElementById('overlay-live');
 
 const desktop = window.matchMedia('(pointer: fine)').matches;
 const entries = new Map();   // seq → { el, body, kind, text, pictures }
@@ -37,6 +38,7 @@ let words = {
   noReply: '(no reply)', thinkingLive: '💭 thinking…', gone: '(no longer available)',
   clearDraft: 'Clear the draft', draftCleared: 'Draft cleared.', expandAll: 'Expand all', collapseAll: 'Collapse all', toTop: 'To the top',
   toBottom: 'To the bottom', stripButton: 'Pictures', stripOne: '1 picture', stripMany: '{0} pictures', closeStrip: 'Close the pictures',
+  live: 'live', liveLabel: 'following new pictures',
 };
 // Expand all (later on 2026-10-15, the PC's Ctrl+O on the page alone): a mode while on, kept for the tab, so folds that arrive start open.
 let expandAll = false;
@@ -277,6 +279,7 @@ function append(entry) {
   renderEntry(entry);
   keepBottom(was);
   floatSoon();
+  if (shown && !shown.fromStrip && entry.pictures && entry.pictures.length) refreshOverlay();
 }
 
 function delta(d) {
@@ -338,6 +341,7 @@ function removeEntry(seq) {
   record.el.remove();
   entries.delete(seq);
   floatSoon();
+  if (shown && !shown.fromStrip && record.pictures && record.pictures.length) refreshOverlay();
 }
 
 // ── Pictures ──────────────────────────────────────────────────────────
@@ -454,8 +458,62 @@ function showPicture() {
   overlayName.textContent = p.name;
   overlayOpen.textContent = words.openOriginal;
   overlayOpen.href = p.full;
+  paintOverlayBar();
+}
+
+// The arrows and the live tag, for the picture shown now (a refresh that kept its picture repaints this alone).
+function paintOverlayBar() {
   overlayPrev.disabled = shown.at === 0;
   overlayNext.disabled = shown.at === shown.list.length - 1;
+  overlayLive.textContent = words.live || 'live';
+  overlayLive.classList.toggle('hidden', !isLive());
+}
+
+// ── Live (later on 2026-10-15) ──
+// As the PC's viewer: on the newest slot the overlay follows new pictures (the strip's newest is its first, the left; the transcript's its
+// last); a step off it holds the shown picture, and a step back onto it follows again. A live swap sends the PC no pick (its viewer follows on
+// its own) and drops a pick still pending from a step, which would move the PC to a picture the page no longer shows.
+function isLive() {
+  return !!shown && (shown.fromStrip ? shown.at === 0 : shown.at === shown.list.length - 1);
+}
+
+let liveWait = 0;
+
+function refreshOverlay(waited) {
+  if (!shown) return;
+  const list = shown.fromStrip ? (strip ? strip.pictures.filter(p => !p.tooLarge) : []) : allPictures().filter(p => !p.tooLarge);
+  if (!list.length) {
+    closeOverlay();
+    return;
+  }
+  const current = shown.list[shown.at];
+  const live = isLive();
+  let at;
+  if (live) {
+    at = shown.fromStrip ? 0 : list.length - 1;
+    // The shown picture removed (the splash cycling: a remove, then an append): a frame's wait, so the append lands first and the one before
+    // never flashes.
+    if (!waited && !shown.fromStrip && list.findIndex(p => p.id === current.id) < 0) {
+      if (!liveWait) {
+        liveWait = requestAnimationFrame(() => {
+          liveWait = 0;
+          refreshOverlay(true);
+        });
+      }
+      return;   // nothing moves until then
+    }
+  } else {
+    at = list.findIndex(p => p.id === current.id);
+    if (at < 0) at = Math.min(shown.at, list.length - 1);
+  }
+  shown.list = list;
+  shown.at = at;
+  if (list[at].id !== current.id) {
+    if (live) clearTimeout(selectTimer);
+    showPicture();
+  } else {
+    paintOverlayBar();
+  }
 }
 
 function step(by) {
@@ -1028,6 +1086,7 @@ function applyStrip(st) {
   stripNew.classList.toggle('hidden', drawerOpen || String(strip.pictures[0].id) === stripSeen());
   renderStrip();
   floatSoon();
+  if (shown && shown.fromStrip) refreshOverlay();
 }
 
 function renderStrip() {
@@ -1150,6 +1209,8 @@ function applyWords() {
   stripClose.setAttribute('aria-label', words.closeStrip);
   stripClose.title = words.closeStrip;
   drawerEl.setAttribute('aria-label', words.stripButton);
+  overlayLive.setAttribute('aria-label', words.liveLabel || 'following new pictures');
+  overlayLive.title = words.liveLabel || 'following new pictures';
   paintExpand();
 }
 

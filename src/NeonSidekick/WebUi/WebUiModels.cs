@@ -344,7 +344,8 @@ public sealed record WebUsageCard(string Title, IReadOnlyList<string> Lines);
 /// the overlay's link, a refused command's two offers (<see cref="UseLine"/> before the line), and a draft filled by a command with its undo.
 /// </summary>
 public sealed record WebWords(string PictureGone, string PictureTooLarge, string OpenOriginal, string SendAsMessage = "", string UseLine = "", string DraftFilled = "", string Undo = "", string Working = "", string Close = "", string NoReply = "", string ThinkingLive = "", string Gone = "",
-    string ClearDraft = "", string DraftCleared = "", string ExpandAll = "", string CollapseAll = "", string ToTop = "", string ToBottom = "", string StripButton = "", string StripOne = "", string StripMany = "", string CloseStrip = "");
+    string ClearDraft = "", string DraftCleared = "", string ExpandAll = "", string CollapseAll = "", string ToTop = "", string ToBottom = "", string StripButton = "", string StripOne = "", string StripMany = "", string CloseStrip = "",
+    string Live = "", string LiveLabel = "");
 
 /// <summary>The open asks, whole (an <c>asks</c> event).</summary>
 public sealed record WebAsks(IReadOnlyList<WebAskView> Asks);

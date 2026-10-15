@@ -172,6 +172,17 @@ main { flex: 1; padding: 12px 16px 16px; max-width: 900px; width: 100%; margin: 
   background: rgba(28, 18, 48, 0.9);
 }
 .overlay-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--dim); }
+/* Following new pictures (later on 2026-10-15): a small pill before the name; the name gives way on a narrow phone, never the tag. */
+.overlay-live {
+  flex: none;
+  padding: 1px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 18px;
+}
+@media (prefers-reduced-motion: reduce) { .overlay-live { opacity: 0.8; } }
 .overlay-bar a { color: var(--accent-2); white-space: nowrap; }
 .overlay-step { position: absolute; top: 50%; transform: translateY(-50%); font-size: 28px; padding: 6px 14px; background: rgba(37, 25, 64, 0.8); }
 .overlay-step.prev { left: 8px; }
