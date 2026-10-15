@@ -334,7 +334,7 @@ What every window shares:
 
 ### The picture viewer
 
-Opened by a double-click on a picture in the transcript (*Image viewer* can name another program), `/view <image or folder>` (which follows new pictures), and `/comfy view`, `/camera view` or `/screen view`. Without a window (over SSH on a Mac), `/view` draws in the transcript.
+Opened by a double-click on a picture in the transcript (*Image viewer* can name another program), `/view <image or folder>` (which follows new pictures), and `/comfy view`, `/camera view` or `/screen view`. Without a window (over SSH on a Mac), `/view` draws in the transcript. A PDF goes to [the Browser window](#the-browser-window) instead.
 
 | Key | Action |
 |---|---|
@@ -417,6 +417,7 @@ A browser window (Windows only): the web tools open it for bot checks ([TOOLS.md
 * **Saved links** (☆, ★ on a saved page): the first 15 on the menu, the rest in submenus, up to 190; `/browser list` (⭐) has them all. They're kept in `<profile>\browser-links.json`. An address holding a user name or password is never saved. The model reaches them with `web_links` and `web_save_link` ([TOOLS.md](TOOLS.md#web)).
 * **Per profile:** sign-ins and solved checks live in `<profile>\webview2-browser`. Switching profiles closes the window. Two copies of the app can each open it, on different profiles.
 * **Clearing:** `/browser clear history` clears the history now. `/browser clear all` asks, then clears the history, cookies, sign-ins, cache and site settings; saved links stay.
+* **A PDF:** `/view report.pdf` shows a PDF from the working directory in the window's own PDF viewer. It shows a copy, made in `%TEMP%\NeonSidekick\pdfview` and deleted when the window closes; the open button opens the file itself in its own program. A PDF view isn't kept in the history, can't be saved as a link, and hands no cookies over. Where the window can't take it (a bot check waiting, no WebView2 runtime), the PDF opens in its own program; a policy that makes Edge download PDFs makes the window download it.
 
 ## Web UI
 

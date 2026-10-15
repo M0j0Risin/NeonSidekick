@@ -459,7 +459,7 @@ public static class SlashCommands
             new("/tts", "toggle speech output"),
             new("/usage", "show token usage and statistics"),
             new("/vault", "show the Obsidian vault's tree"),
-            new("/view", "view images or a folder of them"),
+            new("/view", "view images, a folder of them, or a PDF"),
             new("/webui", "serve the chat to a browser"),
             new("/window", "show the terminal window's size"),
             new(YouTube.YouTubeCommand.Word, YouTube.YouTubeText.HelpSummary),

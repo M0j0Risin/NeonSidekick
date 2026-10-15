@@ -75,6 +75,15 @@ public static class ViewerText
     /// <summary>Ctrl+Alt+U's notice when it closes the open viewer (later on 2026-10-02, the user's ask: the chord toggles). Pinned.</summary>
     public const string Closed = "(🖼️ picture viewer closed)";
 
+    /// <summary><c>/view</c> of a PDF in the Browser window (2026-10-14, the PDF plan's phase 4a). Pinned.</summary>
+    public static string PdfOpened(string file) => $"(📄 {file} in the Browser window)";
+
+    /// <summary><c>/view</c> of a PDF the Browser window could not take: it went to its own program, and why. Pinned.</summary>
+    public static string PdfInDefaultApp(string file, string why) => $"(📄 {file} opened in its own program: {why.Trim().TrimEnd('.')})";
+
+    /// <summary>Why a PDF goes to its own program where there is no Browser window at all. Pinned.</summary>
+    public static string NoBrowserWindow => OperatingSystem.IsMacOS() ? "the Browser window needs Windows" : "no Browser window here";
+
     /// <summary>The viewer's keys, the line under <see cref="Opened"/> (later on 2026-09-27): newest at the left since 2026-10-03,
     /// TAB back to the terminal; the wheel and the right-click menu since 2026-10-04. Pinned.</summary>
     public const string Keys = "(← or wheel up newer · → or wheel down older · Home newest · End oldest · right-click picture menu · F9 slide show · F10 random · ↑ ↓ slide time · F11 full screen · DEL twice delete · TAB terminal · ESC close)";

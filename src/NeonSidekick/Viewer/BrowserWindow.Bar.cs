@@ -473,11 +473,26 @@ internal sealed unsafe partial class BrowserWindowThread
         }
     }
 
-    // The page in the user's own browser: web addresses only (the shell runs whatever handler a scheme has).
+    // The page in the user's own browser: web addresses only (the shell runs whatever handler a scheme has). A staged PDF (2026-10-14):
+    // its original file in its own program, since the staged address names no real host.
     private void OpenOutside()
     {
         string? source = _host?.Source;
-        if (!VideoPage.IsWebLink(source))
+        if (PdfView.OriginalOf(source) is { } original)
+        {
+            try
+            {
+                BrowserWindow.OpenFile(original);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                DiagnosticLog.Warn("Browser", $"The PDF did not open in its own program: {ex.Message}");
+            }
+
+            return;
+        }
+
+        if (!VideoPage.IsWebLink(source) || PdfView.IsOurs(source))
         {
             return;
         }

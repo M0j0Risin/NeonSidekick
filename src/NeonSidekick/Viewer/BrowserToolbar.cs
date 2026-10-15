@@ -151,7 +151,8 @@ public sealed record BrowserBarState(bool CanBack, bool CanForward, bool Loading
         BrowserToolItem.Links => BrowserText.LinksName,
         BrowserToolItem.Padlock => Lock == BrowserLock.Secure ? BrowserText.SecureName : Lock == BrowserLock.NotSecure ? BrowserText.NotSecureName : "",
         BrowserToolItem.Go => BrowserText.GoName,
-        BrowserToolItem.Open => BrowserText.OpenName,
+        // A staged PDF (2026-10-14, the PDF plan's gap 76): the button opens the file in its own program.
+        BrowserToolItem.Open => PdfView.IsOurs(Source) ? BrowserText.OpenFileName : BrowserText.OpenName,
         _ => "",
     };
 }

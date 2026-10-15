@@ -7,7 +7,8 @@ public static partial class SmokeChecks
     /// window never binds (navigation completed with its status, the address, DevTools' cookies with the DevTools window off, PrintToPdf
     /// and its BOOL handler, a download cancelled) and the browsing profile's navigation filter, over a hidden window and a temp user data
     /// folder (<see cref="Viewer.WebViewHost.ProbeBrowser"/>). No network and nothing shown. Skipped off Windows and where no WebView2
-    /// Runtime is installed; a missing loader fails.
+    /// Runtime is installed; a missing loader fails. Since 2026-10-14 it is also the PDF plan's <c>browser:pdf-view</c> (gap 87), a step at
+    /// its end rather than a check of its own: the printed PDF staged as <c>/view a.pdf</c> stages one and shown on its virtual host.
     /// </summary>
     public static SmokeCheck ProbeBrowserWebView2()
     {

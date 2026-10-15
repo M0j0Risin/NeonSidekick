@@ -5400,7 +5400,7 @@ internal sealed partial class ChatScreen
             _timers.Snapshot().Select(timer => timer.Name).ToList(),
             prefix => _files.Complete(prefix).Paths.Where(path => path.EndsWith('/')).ToList(),
             prefix => _files.Complete(prefix, full => WorkingDirectory.IsTextFile(full) || PdfFile.IsPdfPath(full)),   // a PDF reads aloud too (2026-10-14)
-            prefix => _files.Complete(prefix, ImageFile.IsImagePath),
+            prefix => _files.Complete(prefix, full => ImageFile.IsImagePath(full) || PdfFile.IsPdfPath(full)),   // /view opens a PDF too (2026-10-14)
             SessionChoices,
             SkillChoices,
             VaultFolderChoices,
@@ -9203,8 +9203,11 @@ internal sealed partial class ChatScreen
 
     // ── /view (2026-09-17) ──────────────────────────────────────────────────
 
-    /// <summary>A bare <c>/view</c> (or a flag alone, or both flags, 2026-10-04). Pinned.</summary>
-    public const string ViewUsageError = "Usage: /view <image or folder> [--chat | --thumbs]";
+    /// <summary>A bare <c>/view</c> (or a flag alone, or both flags, 2026-10-04). A PDF named since 2026-10-14 (the PDF plan's gap 73). Pinned.</summary>
+    public const string ViewUsageError = "Usage: /view <image, PDF or folder> [--chat | --thumbs]";
+
+    /// <summary>A PDF with <c>--chat</c> or <c>--thumbs</c> (2026-10-14): it opens in the Browser window alone. Pinned.</summary>
+    public const string ViewPdfFlagsError = "A PDF opens in the Browser window (or its own program): /view <file.pdf>, without --chat or --thumbs";
 
     /// <summary><c>/view</c>'s word for drawing the picture in the transcript rather than opening the viewer (2026-09-27). Matched ignoring case. Pinned.</summary>
     public const string ViewChatFlag = "--chat";
@@ -9284,6 +9287,19 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        // A PDF (2026-10-14, the PDF plan's phase 4a and gap 35): ahead of the picture rules, which would draw it as text where there is no viewer.
+        if (PdfFile.IsPdfPath(path))
+        {
+            if (chat || thumbs)
+            {
+                _transcript.Error(ViewPdfFlagsError);
+                return;
+            }
+
+            OpenPdf(path);
+            return;
+        }
+
         if (thumbs)
         {
             OpenThumbsAt(path);
@@ -9321,6 +9337,12 @@ internal sealed partial class ChatScreen
         if (!folder && !File.Exists(full))
         {
             _flow.Error(FileText.Error(FileOutcome.Missing, _files.Relative(full), "view"));
+            return;
+        }
+
+        if (!folder && PdfFile.IsPdfPath(full))
+        {
+            OpenPdf(path);   // here too: a /view under a reply comes straight here (gap 64)
             return;
         }
 

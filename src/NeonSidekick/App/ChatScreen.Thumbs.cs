@@ -60,6 +60,13 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        if (!folder && PdfFile.IsPdfPath(full))
+        {
+            // A PDF has no thumbnails (2026-10-14, the PDF plan's gap 64): here too, since a /view --thumbs under a reply comes straight here.
+            _flow.Error(ViewPdfFlagsError);
+            return;
+        }
+
         if (!folder && !ImageFile.IsImagePath(full))
         {
             _flow.Error(FileText.Error(FileOutcome.NotAnImage, _files.Relative(full), "view"));

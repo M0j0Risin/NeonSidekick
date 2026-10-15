@@ -47,6 +47,9 @@ public static class BrowserText
     public const string LinksName = "Saved links";
     public const string GoName = "Go";
     public const string OpenName = "Open in your browser";
+
+    /// <summary>The open button's name on a PDF the app opened from disk (2026-10-14, the PDF plan's gap 76). Pinned.</summary>
+    public const string OpenFileName = "Open in its own program";
     public const string SecureName = "Secure";
     public const string NotSecureName = "Not secure";
 

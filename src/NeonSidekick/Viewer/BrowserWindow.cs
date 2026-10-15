@@ -78,6 +78,12 @@ public static class BrowserWindow
     /// </summary>
     public static Action<string> OpenLink { get; set; } = Llm.PersonaFile.OpenInBrowser;
 
+    /// <summary>
+    /// What the open button hands a staged PDF's original to (2026-10-14, the PDF plan's gap 60): its own program, as <c>open</c> and
+    /// <c>/open</c> do (<see cref="Llm.PersonaFile.OpenInEditor"/>, the same counted site). The staged address names no real host.
+    /// </summary>
+    public static Action<string> OpenFile { get; set; } = Llm.PersonaFile.OpenInEditor;
+
     /// <summary>The home page's address now (<see cref="BrowserAddress.Home"/>): the setting's page, else the blank page.</summary>
     public static string HomeAddress() => BrowserAddress.Home(HomePage?.Invoke())?.AbsoluteUri ?? BrowserPage.Blank;
 
@@ -567,7 +573,20 @@ internal sealed unsafe partial class BrowserWindowThread
                 NavigationBegan = OnNavigationBegan,
                 TopInset = _layout?.Height ?? 0,
             };
-            _host.Start(_userDataFolder, null, BrowserPage.Blank, WebViewProfile.Browser);
+            // The staged PDFs' folder on its virtual host (2026-10-14, the PDF plan's phase 4a), made and mapped for every window, one
+            // opened for a clear alone too (gap 62), so a /view a.pdf that finds this window open can be shown in it.
+            string? staging = null;
+            try
+            {
+                Directory.CreateDirectory(PdfView.Folder);
+                staging = PdfView.Folder;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                DiagnosticLog.Warn("Browser", "The staged PDFs' folder could not be made; a PDF will open in its own program.", ex);
+            }
+
+            _host.Start(_userDataFolder, staging, BrowserPage.Blank, WebViewProfile.Browser);
             DiagnosticLog.Info("Browser", "Browser window opened.");
 
             _started = true;
@@ -1089,7 +1108,8 @@ internal sealed unsafe partial class BrowserWindowThread
         SetBarState(_barState with { Source = source });
         RefreshSaved();
         ShowAddress(source);
-        if (_visited is not null && BrowserPage.HostOf(source) is { } host)
+        // A staged PDF's host is no site (2026-10-14, the PDF plan's gap 59): no cookies to hand over for it.
+        if (_visited is not null && !PdfView.IsOurs(source) && BrowserPage.HostOf(source) is { } host)
         {
             _visited.Add(host);
         }

@@ -35,8 +35,11 @@ internal sealed record WebViewProfile(string BrowserArguments, string? HostName,
     /// <summary>The video window's: the player page on its virtual host and nothing else, as it was from 2026-10-05.</summary>
     public static WebViewProfile Video { get; } = new(WebViewOptions.BrowserArguments, VideoPage.HostName, VideoPage.IsOurs, LockedDown: true, Browsing: false, "Video");
 
-    /// <summary>The Browser window's: any web page (<see cref="BrowserPage.Allows"/>), no page of its own, a browser's settings.</summary>
-    public static WebViewProfile Browser { get; } = new("", null, BrowserPage.Allows, LockedDown: false, Browsing: true, "Browser");
+    /// <summary>
+    /// The Browser window's: any web page (<see cref="BrowserPage.Allows"/>), a browser's settings, and since 2026-10-14 (the PDF plan's phase
+    /// 4a) the staged PDFs' host (<see cref="PdfView.HostName"/>), mapped when the window gives its folder.
+    /// </summary>
+    public static WebViewProfile Browser { get; } = new("", PdfView.HostName, BrowserPage.Allows, LockedDown: false, Browsing: true, "Browser");
 }
 
 /// <summary>

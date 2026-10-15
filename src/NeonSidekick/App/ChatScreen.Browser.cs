@@ -295,6 +295,8 @@ internal sealed partial class ChatScreen
         try
         {
             var visit = await window.BrowseAsync(url).ConfigureAwait(false);
+            // The window closed: the PDFs /view staged for it go (2026-10-14, the PDF plan's phase 4a).
+            PdfView.Clear();
             if (visit.Failure is { } failure)
             {
                 _flow.Error(failure);

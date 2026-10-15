@@ -147,7 +147,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 
 | Command | What it does |
 |---|---|
-| `/view <image>\|<folder>` | Opens an image, or a folder's newest picture, in the [picture viewer](INTERFACE.md#the-picture-viewer). |
+| `/view <image>\|<folder>` | Opens an image, or a folder's newest picture, in the [picture viewer](INTERFACE.md#the-picture-viewer). A PDF opens in the [Browser window](INTERFACE.md#the-browser-window)'s own PDF viewer (on a Mac, in Preview). |
 | `/view <image> --chat` | Draws it in the transcript instead. |
 | `/view <image>\|<folder> --thumbs` | Opens the folder in the [thumbnail browser](INTERFACE.md#the-thumbnail-browser), in step with the viewer. |
 | `/camera`, `/camera snap` | Opens the camera pane to take a photo, or takes one at once, and puts it on the input line. See [Camera](#camera). |

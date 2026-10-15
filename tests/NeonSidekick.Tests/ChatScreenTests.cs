@@ -16526,7 +16526,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(2, Count(output, lead + "▀▀▀▀"));
         Assert.DoesNotContain("\n▀▀▀▀", output);
         Assert.Contains("  ✗ " + ChatScreen.ViewUsageError, output);
-        Assert.Equal("Usage: /view <image or folder> [--chat | --thumbs]", ChatScreen.ViewUsageError);   // --thumbs later on 2026-10-04
+        Assert.Equal("Usage: /view <image, PDF or folder> [--chat | --thumbs]", ChatScreen.ViewUsageError);   // --thumbs later on 2026-10-04, a PDF on 2026-10-14
         Assert.Contains("  ✗ " + FileText.Missing("nope.png"), output);
         Assert.Contains("  ✗ " + FileText.IsDirectory(@"docs\"), output);
         Assert.Contains("  ✗ " + FileText.NotAnImage("notes.txt"), output);

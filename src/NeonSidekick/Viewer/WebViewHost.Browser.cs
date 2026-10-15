@@ -33,7 +33,10 @@ internal sealed unsafe partial class WebViewHost
     /// probe's window, the box's text set and read back, and a history entry (<c>location.hash</c>) seen through <c>HistoryChanged</c>,
     /// gone back from, and the way forward seen; then the history cleared through the profile (<c>ICoreWebView2_13</c>,
     /// <c>ICoreWebView2Profile2.ClearBrowsingData</c>, the fifth handler shape; later still). No network: every step stays on the blank page. Skipped (and passed) where no WebView2
-    /// Runtime is installed; a missing loader fails.
+    /// Runtime is installed; a missing loader fails. Since <c>/view a.pdf</c> (2026-10-14, the PDF plan's phase 4a, gap 87's
+    /// <c>browser:pdf-view</c>): the PDF the probe printed is staged as <see cref="PdfView"/> stages one, in a folder mapped to
+    /// <see cref="PdfView.HostName"/>, and opened last, its navigation completed and its document read as <c>application/pdf</c> — WebView2's
+    /// own viewer showed it, where a policy that downloads PDFs instead would have started a download (gap 61).
     /// </summary>
     public static (bool Ok, string Detail) ProbeBrowser(TimeSpan timeout)
     {
@@ -70,7 +73,8 @@ internal sealed unsafe partial class WebViewHost
         SetThreadDpiAwarenessContext(PerMonitorAwareV2);
         int ole = OleInitialize(IntPtr.Zero);
         IntPtr hwnd = IntPtr.Zero;
-        var run = new BrowserProbeRun(version, timeout, Path.Combine(root, "probe.pdf"));
+        string site = Path.Combine(root, "pdfview");
+        var run = new BrowserProbeRun(version, timeout, Path.Combine(root, "probe.pdf"), site);
         t_browserProbe = run;
         try
         {
@@ -91,7 +95,7 @@ internal sealed unsafe partial class WebViewHost
                 return (false, barFailure);
             }
 
-            Directory.CreateDirectory(root);
+            Directory.CreateDirectory(site);
             run.Host = new WebViewHost(hwnd)
             {
                 NavigationDone = run.OnNavigationDone,
@@ -101,7 +105,7 @@ internal sealed unsafe partial class WebViewHost
                 Failed = (step, hr) => run.Finish(false, $"failed at {step} (0x{hr.ToString("X8", CultureInfo.InvariantCulture)})"),
             };
             SetTimer(hwnd, 1, 100, IntPtr.Zero);
-            if (run.Host.Start(Path.Combine(root, BrowserPage.FolderName), null, BrowserPage.Blank, WebViewProfile.Browser))
+            if (run.Host.Start(Path.Combine(root, BrowserPage.FolderName), site, BrowserPage.Blank, WebViewProfile.Browser))
             {
                 PumpBrowserProbe(() => run.Done);
             }
@@ -180,8 +184,12 @@ internal sealed unsafe partial class WebViewHost
     }
 
     /// <summary>The Browser probe's steps, run on its thread as WebView2 answers, each starting the next.</summary>
-    private sealed class BrowserProbeRun(string version, TimeSpan timeout, string pdfPath)
+    private sealed class BrowserProbeRun(string version, TimeSpan timeout, string pdfPath, string site)
     {
+        /// <summary>The staged copy's random folder: fixed here, the probe's site folder being its own.</summary>
+        private const string StageName = "0123456789abcdef";
+
+        private const string StagedFile = "probe page.pdf";   // a space, escaped in the address as a real name would be
         private readonly Stopwatch _clock = Stopwatch.StartNew();
         private Stopwatch? _exitClock;
         private string _step = "the blank page's navigation";
@@ -192,6 +200,9 @@ internal sealed unsafe partial class WebViewHost
         private bool _refused;
         private int _cookies;
         private long _pdfBytes;
+        private bool _viewPending;
+        private bool _viewing;
+        private bool _viewed;
 
         public WebViewHost? Host { get; set; }
 
@@ -205,6 +216,12 @@ internal sealed unsafe partial class WebViewHost
 
         public void OnNavigationDone(bool ok, int status)
         {
+            if (_viewing)
+            {
+                OnPdfViewed(ok, status);
+                return;
+            }
+
             if (_navigated || Done)
             {
                 return;
@@ -340,6 +357,11 @@ internal sealed unsafe partial class WebViewHost
                         Finish(false, $"PrintToPdf answered {ok} (0x{hr.ToString("X8", CultureInfo.InvariantCulture)}), {(pdf ? "a PDF" : "no PDF")} written");
                         return;
                     }
+
+                    stream!.Dispose();
+                    string staged = Path.Combine(site, StageName);
+                    Directory.CreateDirectory(staged);
+                    File.Copy(pdfPath, Path.Combine(staged, StagedFile), overwrite: true);
                 }
                 catch (IOException ex)
                 {
@@ -370,8 +392,58 @@ internal sealed unsafe partial class WebViewHost
 
         public bool OnDownloadStarting(string? source)
         {
-            Finish(true, $"runtime {version}; the bar's address box and a tooltip; the blank page's navigation and address, its DOM, a history entry gone back from and cleared, {_cookies.ToString(CultureInfo.InvariantCulture)} cookie set and read over DevTools, a PDF of {_pdfBytes.ToString(CultureInfo.InvariantCulture)} B, a file: navigation refused, a download canceled");
+            if (_viewing)
+            {
+                // A policy that downloads PDFs (AlwaysOpenPdfExternally) rather than show them: /view a.pdf would download too.
+                Finish(false, "the staged PDF was downloaded, not shown (a policy that downloads PDFs?)");
+                return true;
+            }
+
+            // The PDF's view is started from the next tick, out of this handler.
+            _step = "the staged PDF's view";
+            _viewPending = true;
             return true;
+        }
+
+        private void ViewPdf()
+        {
+            _viewing = true;
+            if (!Host!.Navigate(PdfView.UrlOf(StageName, StagedFile).AbsoluteUri))
+            {
+                Finish(false, "the staged PDF's navigation could not start");
+            }
+        }
+
+        private void OnPdfViewed(bool ok, int status)
+        {
+            if (_viewed || Done)
+            {
+                return;
+            }
+
+            _viewed = true;
+            if (!ok)
+            {
+                Finish(false, $"the staged PDF's navigation failed (status {status.ToString(CultureInfo.InvariantCulture)})");
+                return;
+            }
+
+            if (!PdfView.IsOurs(Host!.Source))
+            {
+                Finish(false, $"the view's address read {Host.Source ?? "nothing"} after the staged PDF");
+                return;
+            }
+
+            Host.RunScript("document.contentType", (hr, json) =>
+            {
+                if (hr < 0 || json != "\"application/pdf\"")
+                {
+                    Finish(false, $"the staged PDF's document read as {json ?? "nothing"} (0x{hr.ToString("X8", CultureInfo.InvariantCulture)})");
+                    return;
+                }
+
+                Finish(true, $"runtime {version}; the bar's address box and a tooltip; the blank page's navigation and address, its DOM, a history entry gone back from and cleared, {_cookies.ToString(CultureInfo.InvariantCulture)} cookie set and read over DevTools, a PDF of {_pdfBytes.ToString(CultureInfo.InvariantCulture)} B, a file: navigation refused, a download canceled, the PDF staged and shown on {PdfView.HostName}");
+            });
         }
 
         public void AwaitExit() => _exitClock = Stopwatch.StartNew();
@@ -380,6 +452,12 @@ internal sealed unsafe partial class WebViewHost
 
         public void Tick()
         {
+            if (_viewPending && !Done)
+            {
+                _viewPending = false;
+                ViewPdf();
+            }
+
             if (!Done && _clock.Elapsed > timeout)
             {
                 Finish(false, $"{_step} did not answer within {timeout.TotalSeconds.ToString(CultureInfo.InvariantCulture)} s");

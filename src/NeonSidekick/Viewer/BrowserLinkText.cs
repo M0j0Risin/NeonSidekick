@@ -141,11 +141,15 @@ public static class BrowserLinkText
 
     public const string Duplicate = "Another saved link has that address already.";
 
+    /// <summary>A local PDF the window shows (2026-10-14): a copy that goes when the window closes, so no link. Pinned.</summary>
+    public const string LocalCopy = "A PDF opened from your disk is not saved as a link: the window shows a copy that goes when it closes.";
+
     /// <summary>A refusal's answer, led by <c>Error: </c>; null for an outcome that is no refusal.</summary>
     public static string? Refusal(BrowserLinkOutcome outcome, string? text = null, int count = 0) => outcome switch
     {
         BrowserLinkOutcome.NotWeb => ErrorPrefix + NotWeb,
         BrowserLinkOutcome.Credentials => ErrorPrefix + Credentials,
+        BrowserLinkOutcome.LocalCopy => ErrorPrefix + LocalCopy,
         BrowserLinkOutcome.Duplicate => ErrorPrefix + Duplicate,
         BrowserLinkOutcome.Newer => ErrorPrefix + NewerFile,
         BrowserLinkOutcome.Failed => ErrorPrefix + SaveFailed,

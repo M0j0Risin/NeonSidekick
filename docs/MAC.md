@@ -35,7 +35,7 @@ You need a Mac with Apple Silicon (M1 or later). Download and unpack the Mac pac
 | Camera | Works (macOS 14+) | The built-in camera, a USB webcam, or an iPhone as Continuity Camera. |
 | Screen capture | Works (macOS 14+) | A window on another Space, or minimized, isn't listed until you bring it up. |
 | YouTube playback | Works (macOS 14+) | The video window uses Safari's WebKit. |
-| The Browser window (`/browser`) and bot checks in a window | Not available | It needs Windows. A page behind a bot check is reported as refused, and *Web open links in* `browser-window` opens links in your default browser. |
+| The Browser window (`/browser`) and bot checks in a window | Not available | It needs Windows. A page behind a bot check is reported as refused, and *Web open links in* `browser-window` opens links in your default browser. `/view report.pdf` opens the PDF in Preview. |
 | Performance bar | Works | VRAM shows as **GMEM**: the GPU's share of the Mac's memory. |
 | `/terminal` | Works | A new Terminal window, or a new tab in iTerm2. |
 | `/shortcut` | Works | A `.command` file on the Desktop that opens in iTerm2 or Terminal. |

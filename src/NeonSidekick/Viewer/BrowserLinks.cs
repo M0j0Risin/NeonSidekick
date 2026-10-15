@@ -37,6 +37,9 @@ public enum BrowserLinkOutcome
     /// <summary>An address with a user name or password in it, never written to the plain file.</summary>
     Credentials,
 
+    /// <summary>A local PDF's copy the window shows (2026-10-14, <see cref="PdfView"/>): it is gone when the window closes.</summary>
+    LocalCopy,
+
     /// <summary>The file is from a newer NeonSidekick: left alone, nothing written.</summary>
     Newer,
 
@@ -337,7 +340,8 @@ public sealed class BrowserLinks
 
     /// <summary>Why <paramref name="url"/> cannot be saved, or null when it can: a web address with no user name or password in it.</summary>
     public static BrowserLinkOutcome? Refused(string? url) =>
-        !VideoPage.IsWebLink(url) ? BrowserLinkOutcome.NotWeb
+        PdfView.IsOurs(url) ? BrowserLinkOutcome.LocalCopy   // a staged PDF's copy (2026-10-14, the PDF plan's gap 65): gone when the window closes
+        : !VideoPage.IsWebLink(url) ? BrowserLinkOutcome.NotWeb
         : HasCredentials(url) ? BrowserLinkOutcome.Credentials
         : null;
 
