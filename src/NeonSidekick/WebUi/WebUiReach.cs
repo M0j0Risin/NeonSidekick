@@ -46,8 +46,8 @@ public static class WebUiReach
     /// <summary>The menu hint next to a word. Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "local" => "this machine alone",
-        "lan" => "the home network: browsers at a private address, signed in with the link",
+        "local" => "localhost only",                         // the user's wording, 2026-10-14
+        "lan" => "your home network and your tailnet",       // the user's wording, 2026-10-14 (Tailscale's tab, /webui)
         _ => "",
     };
 

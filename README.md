@@ -44,7 +44,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Auto-complete** for commands, files, folders, skills and tools, and **find** in the transcript (`/find`).
 * **Message queue:** keep typing while the model works; messages go out in order. `/prompts` keeps the ones you send often.
 * **Headless mode:** `--headless` runs over stdin/stdout for scripts and scheduled jobs ([HEADLESS.md](docs/HEADLESS.md)).
-* **Web UI:** the chat, its questions and the shopping list in a browser, from a phone on your home network (`/webui`, [the Web UI](docs/INTERFACE.md#web-ui)).
+* **Web UI:** the chat, its questions and the shopping list in a browser, from a phone on your home network or your tailnet (`/webui`, [the Web UI](docs/INTERFACE.md#web-ui)).
 
 ### Models
 * **Local servers:** finds OpenAI-compatible servers on this machine or your network, or takes a URL.

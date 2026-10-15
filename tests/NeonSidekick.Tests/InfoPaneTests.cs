@@ -651,6 +651,75 @@ public class InfoPaneTests : IDisposable
         Assert.Contains(InfoPane.FindHint("xk", 0, 0), Output);
     }
 
+    // ── The pane's buttons (2026-10-14, /webui's enabled │ lan) ──────────────
+
+    private static readonly InfoAction[] Buttons = [new("enabled", 'e', "on/off") { Lit = true }, new("lan", 'r', "lan/local")];
+
+    [Fact]
+    public void Buttons_LeadTheStrip_ABarAfterEach_TheLitOneLit_AndTheHintNamesTheirKeys()
+    {
+        // "Help │ enabled │ lan │ One · Two ": the buttons as the first titles, a bar after each, the tabs after them as ever.
+        Assert.Equal(["Help │ enabled │ lan │ One · Two "], InfoPane.TabStripRows("Help", Buttons, ["One", "Two"], 1, 80).Select(Markup.Remove));
+        Assert.Equal(["Help │ enabled │ lan "], InfoPane.TabStripRows("Help", Buttons, [], -1, 80).Select(Markup.Remove));   // a pane of one tab: the buttons alone
+        string row = InfoPane.TabStripRows("Help", Buttons, ["One", "Two"], 1, 80)[0];
+        Assert.Contains($" [{Theme.TabLit.ToMarkup()}]enabled[/] ", row);
+        Assert.Contains($" [{Theme.TabIdle.ToMarkup()}]lan[/] ", row);
+        Assert.Contains($" [{Theme.TabActive.ToMarkup()}]Two[/] ", row);
+        var places = InfoPane.TabStripLayout("Help", ["enabled", "lan", "One", "Two"], 80).Places;
+        Assert.Equal(0, InfoPane.TabAt("Help", ["enabled", "lan", "One", "Two"], 80, places[0].Column, 0));   // a click's hit: the buttons' indexes first
+        Assert.Equal(1, InfoPane.TabAt("Help", ["enabled", "lan", "One", "Two"], 80, places[1].Column + 1, 0));
+        Assert.Equal("↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · e = on/off · r = lan/local · type = find · ESC = close", InfoPane.ButtonsHint([('e', "on/off"), ('r', "lan/local")]));
+        Assert.Equal(InfoPane.ToggleHint('k', "key check", tabs: false), InfoPane.ButtonsHint([('k', "key check")], tabs: false));
+    }
+
+    /// <summary>A button's key closes the pane and names it; a click on its title does the same; a plain close names nothing.</summary>
+    [Fact]
+    public async Task AButton_ItsKey_OrAClick_ClosesThePane_AndPressedNamesIt()
+    {
+        _console.Profile.Width = 60;
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var info = new InfoPane(pane, keys);
+        input.Push(Keys.Char('R'));   // either case
+
+        await info.ShowAsync(InfoPane.Title, [Tab("One", "first"), Tab("Two", "second")], 0, CancellationToken.None, Buttons);
+
+        Assert.Same(Buttons[1], info.Pressed);
+        Assert.False(pane.OverlayOpen);
+        Assert.Contains(ScreenPane.Fit(InfoPane.ButtonsHint([('e', "on/off"), ('r', "lan/local")]), 59), Output);
+
+        pane.Show();
+        int column = InfoPane.TabStripLayout(InfoPane.Title, ["enabled", "lan", "One", "Two"], 60).Places[0].Column;
+        input.PushClick(column + 1, 100);
+        await info.ShowAsync(InfoPane.Title, [Tab("One", "first"), Tab("Two", "second")], 0, CancellationToken.None, Buttons);
+        Assert.Same(Buttons[0], info.Pressed);
+
+        pane.Show();
+        input.Push(Keys.Escape);
+        await info.ShowAsync(InfoPane.Title, [Tab("One", "first"), Tab("Two", "second")], 0, CancellationToken.None, Buttons);
+        Assert.Null(info.Pressed);
+    }
+
+    /// <summary>Under a find a button's key is typed into it, as a toggle's is.</summary>
+    [Fact]
+    public async Task AButtonsKey_UnderAFind_IsTyped()
+    {
+        _console.Profile.Width = 60;
+        using var pane = Pane();
+        pane.Show();
+        _console.Input.PushKey(Keys.Char('x'));
+        _console.Input.PushKey(Keys.Char('e'));
+        _console.Input.PushKey(Keys.Escape);
+        _console.Input.PushKey(Keys.Escape);
+        var info = new InfoPane(pane, Source());
+
+        await info.ShowAsync(InfoPane.Title, [Tab("One", "first")], 0, CancellationToken.None, Buttons);
+
+        Assert.Null(info.Pressed);
+        Assert.Contains(InfoPane.FindHint("xe", 0, 0), Output);
+    }
+
     /// <summary>At 30 columns the strip is two rows (buffer 100 and 101), the spacer 102, the content from 103; a click on the second row's title switches to it.</summary>
     [Fact]
     public async Task AStripOnTwoRows_DrawsTheSecondUnderTheFirstTitle_AndAClickThereSwitches()

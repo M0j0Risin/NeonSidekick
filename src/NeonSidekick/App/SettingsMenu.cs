@@ -7738,7 +7738,7 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmCompactShowSummary => on ? "the summary's lines or the pruned results, then the protected counts" : "the one compact notice alone",
         SettingsField.AgentSkills => on ? "the skills catalog, load_skill and skill_editor are offered" : "no skills, no project notes",
         SettingsField.GlobalSkills => on ? "every profile's global skills are read too" : "only this profile's skills; the global ones are hidden and left alone",
-        SettingsField.WebUi => on ? "the pages are served; /webui shows the sign-in link" : "no web server",
+        SettingsField.WebUi => on ? "web server enabled" : "web server disabled",   // the user's wording, 2026-10-14
         SettingsField.ExternalSkills => on ? (OperatingSystem.IsMacOS() ? "~/.agents/skills is read too" : "%USERPROFILE%\\.agents\\skills is read too") : "no external skills",   // the Mac's home, 2026-10-06
         SettingsField.ProjectFile => on ? "use project file (NEON.md or AGENTS.md in the working directory)" : "project files in the working directory are ignored",   // the user's wording, 2026-10-01
         SettingsField.SkillHashMention => on ? "# and part of a name lists the loaded skills on the line" : "# is ordinary text",

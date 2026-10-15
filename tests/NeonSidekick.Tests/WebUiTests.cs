@@ -478,28 +478,60 @@ public sealed class WebUiTests : IDisposable
 
     // ── The sign-in addresses ────────────────────────────────────────────────
 
-    private static WebUiAdapter Adapter(System.Net.NetworkInformation.NetworkInterfaceType type, string address, bool gateway, long speed = 1_000_000_000) =>
-        new(type, [IPAddress.Parse(address)], gateway, speed);
+    private static WebUiAdapter Adapter(System.Net.NetworkInformation.NetworkInterfaceType type, string address, bool gateway, long speed = 1_000_000_000, string names = "") =>
+        new(type, [IPAddress.Parse(address)], gateway, speed, names);
+
+    private const System.Net.NetworkInformation.NetworkInterfaceType Tunnel = (System.Net.NetworkInformation.NetworkInterfaceType)53;
+
+    private static List<string> Hosts(IReadOnlyList<WebUiAddress> addresses) => [.. addresses.Select(a => a.Host)];
 
     [Fact]
     public void TheHomeNetwork_ThenTailscale_NotNordLynxNorWsl()
     {
         // This machine on 2026-10-14 (the user's question: three addresses): NordLynx and Tailscale are tunnels (a virtual type), WSL's switch
-        // is Ethernet with no gateway, and the Realtek card is the home network; Tailscale's own address follows it (later that day).
+        // is Ethernet with no gateway, and the Realtek card is the home network; Tailscale's own address follows it, marked (later that day),
+        // each adapter named as Get-NetAdapter names it (Name and InterfaceDescription).
         var adapters = new[]
         {
-            Adapter((System.Net.NetworkInformation.NetworkInterfaceType)53, "10.5.0.2", gateway: false),
-            Adapter((System.Net.NetworkInformation.NetworkInterfaceType)53, "100.78.20.125", gateway: false),
-            Adapter(System.Net.NetworkInformation.NetworkInterfaceType.Ethernet, "172.17.224.1", gateway: false),
-            Adapter(System.Net.NetworkInformation.NetworkInterfaceType.Ethernet, "192.168.1.217", gateway: true, speed: 2_500_000_000),
-            Adapter(System.Net.NetworkInformation.NetworkInterfaceType.Loopback, "127.0.0.1", gateway: false),
+            Adapter(Tunnel, "10.5.0.2", gateway: false, names: "NordLynx NordLynx Tunnel"),
+            Adapter(Tunnel, "100.78.20.125", gateway: false, names: "Tailscale Tailscale Tunnel"),
+            Adapter(System.Net.NetworkInformation.NetworkInterfaceType.Ethernet, "172.17.224.1", gateway: false, names: "vEthernet (WSL (Hyper-V firewall)) Hyper-V Virtual Ethernet Adapter"),
+            Adapter(System.Net.NetworkInformation.NetworkInterfaceType.Ethernet, "192.168.1.217", gateway: true, speed: 2_500_000_000, names: "Ethernet Realtek Gaming 2.5GbE Family Controller"),
+            Adapter(System.Net.NetworkInformation.NetworkInterfaceType.Loopback, "127.0.0.1", gateway: false, names: "Loopback Pseudo-Interface 1"),
         };
 
-        Assert.Equal(["192.168.1.217", "100.78.20.125"], WebUiController.ChooseAddresses(adapters));
+        Assert.Equal([new WebUiAddress("192.168.1.217", false), new WebUiAddress("100.78.20.125", true)], WebUiController.ChooseAddresses(adapters));
         Assert.True(WebUiController.IsTailnet(IPAddress.Parse("100.64.0.1")));
         Assert.True(WebUiController.IsTailnet(IPAddress.Parse("100.127.255.254")));
         Assert.False(WebUiController.IsTailnet(IPAddress.Parse("100.128.0.1")));
         Assert.False(WebUiController.IsTailnet(IPAddress.Parse("10.5.0.2")));
+    }
+
+    /// <summary>A tailnet-range address that is not on Tailscale's adapter (later on 2026-10-14, the user's pick): another VPN's, or a provider's carrier-grade NAT, gets no tab.</summary>
+    [Fact]
+    public void ATailnetRangeAddress_OffTailscalesAdapter_GetsNoTab()
+    {
+        var adapters = new[]
+        {
+            Adapter(Tunnel, "100.70.1.2", gateway: false, names: "NordLynx NordLynx Tunnel"),
+            Adapter(System.Net.NetworkInformation.NetworkInterfaceType.Ethernet, "100.80.3.4", gateway: false, names: "Ethernet 2 Realtek USB GbE Family Controller"),
+            Adapter(System.Net.NetworkInformation.NetworkInterfaceType.Ethernet, "192.168.1.217", gateway: true, names: "Ethernet Realtek Gaming 2.5GbE Family Controller"),
+        };
+
+        Assert.Equal([new WebUiAddress("192.168.1.217", false)], WebUiController.ChooseAddresses(adapters));
+    }
+
+    [Fact]
+    public void TailscalesAdapter_ByNameOrDescription_AndAMacsUtun()
+    {
+        static WebUiAdapter Named(string names, System.Net.NetworkInformation.NetworkInterfaceType type = Tunnel) => Adapter(type, "100.78.20.125", gateway: false, names: names);
+        Assert.True(WebUiController.IsTailscaleAdapter(Named("Tailscale Tailscale Tunnel"), windows: true));
+        Assert.True(WebUiController.IsTailscaleAdapter(Named("Ethernet 3 Tailscale Tunnel"), windows: true));   // renamed: the description still says so
+        Assert.True(WebUiController.IsTailscaleAdapter(Named("tailscale0 tailscale0"), windows: false));
+        Assert.False(WebUiController.IsTailscaleAdapter(Named("Ethernet Realtek Gaming 2.5GbE Family Controller", System.Net.NetworkInformation.NetworkInterfaceType.Ethernet), windows: true));
+        Assert.False(WebUiController.IsTailscaleAdapter(Named("utun4 utun4"), windows: true));
+        Assert.True(WebUiController.IsTailscaleAdapter(Named("utun4 utun4"), windows: false));   // macOS names Tailscale's tunnel utunN alone
+        Assert.False(WebUiController.IsTailscaleAdapter(Named(""), windows: false));
     }
 
     [Fact]
@@ -507,11 +539,11 @@ public sealed class WebUiTests : IDisposable
     {
         var adapters = new[]
         {
-            Adapter((System.Net.NetworkInformation.NetworkInterfaceType)53, "169.254.83.107", gateway: false),
+            Adapter(Tunnel, "169.254.83.107", gateway: false, names: "Tailscale Tailscale Tunnel"),
             Adapter(System.Net.NetworkInformation.NetworkInterfaceType.Ethernet, "192.168.1.217", gateway: true),
         };
 
-        Assert.Equal(["192.168.1.217"], WebUiController.ChooseAddresses(adapters));
+        Assert.Equal([new WebUiAddress("192.168.1.217", false)], WebUiController.ChooseAddresses(adapters));
     }
 
     [Fact]
@@ -524,21 +556,60 @@ public sealed class WebUiTests : IDisposable
             Adapter(System.Net.NetworkInformation.NetworkInterfaceType.Ethernet, "8.8.8.8", gateway: true),   // not private: never
         };
 
-        Assert.Equal(["192.168.1.217", "192.168.1.50"], WebUiController.ChooseAddresses(adapters));
+        var chosen = WebUiController.ChooseAddresses(adapters);
+        Assert.Equal(["192.168.1.217", "192.168.1.50"], Hosts(chosen));
+        Assert.DoesNotContain(chosen, a => a.Tailscale);
     }
 
     [Fact]
-    public void WithNoHomeAdapter_EveryPrivateAddressIsOffered()
+    public void WithNoHomeAdapter_EveryPrivateAddressIsOffered_TailscalesMarked()
     {
         var adapters = new[]
         {
-            Adapter((System.Net.NetworkInformation.NetworkInterfaceType)53, "100.101.102.103", gateway: false),
+            Adapter(Tunnel, "100.101.102.103", gateway: false),
             Adapter(System.Net.NetworkInformation.NetworkInterfaceType.Ethernet, "172.17.224.1", gateway: false),
             Adapter(System.Net.NetworkInformation.NetworkInterfaceType.Ethernet, "169.254.1.1", gateway: false),
         };
 
-        Assert.Equal(["100.101.102.103", "172.17.224.1"], WebUiController.ChooseAddresses(adapters));
+        Assert.Equal([new WebUiAddress("100.101.102.103", false), new WebUiAddress("172.17.224.1", false)], WebUiController.ChooseAddresses(adapters));   // an unnamed tunnel's 100.x: listed, unmarked
+        adapters[0] = Adapter(Tunnel, "100.101.102.103", gateway: false, names: "Tailscale Tailscale Tunnel");
+        Assert.Equal([new WebUiAddress("100.101.102.103", true), new WebUiAddress("172.17.224.1", false)], WebUiController.ChooseAddresses(adapters));
         Assert.Empty(WebUiController.ChooseAddresses([]));
+    }
+
+    // ── What the pane says (later on 2026-10-14) ──────────────────────────────
+
+    [Fact]
+    public void TheReach_IsDescribedInPlainWords()
+    {
+        Assert.Equal("localhost only", WebUiReach.Describe("local"));
+        Assert.Equal("your home network and your tailnet", WebUiReach.Describe("lan"));
+        Assert.Equal("", WebUiReach.Describe("wan"));
+    }
+
+    [Fact]
+    public void TailscalesTab_IsHeadedByItsNote_AndItsScanHintNamesNoNetwork()
+    {
+        Assert.Equal("Tailscale: works from any device on your tailnet, at home or away.", WebUiText.TailscaleNote);
+        Assert.Equal(WebUiText.TailscaleNote + "\nWeb UI: on\n\n" + WebUiText.TailscaleScanHint + "\n", WebUiText.LinkTabText("Web UI: on", tailscale: true));
+        Assert.Equal("Web UI: on\n\n" + WebUiText.ScanHint + "\n", WebUiText.LinkTabText("Web UI: on", tailscale: false));
+        Assert.Contains("(on the same network)", WebUiText.ScanHint);
+        Assert.DoesNotContain("same network", WebUiText.TailscaleScanHint);
+    }
+
+    [Fact]
+    public void WithoutAPane_TheLinesMarkTailscalesLink_AndItsLeadNamesTheTailnet()
+    {
+        var lines = WebUiText.PaneLines(true, true, 8765, WebUiAudience.LocalAreaNetwork,
+            [new WebUiLink("http://192.168.1.217:8765/signin?t=x", false), new WebUiLink("http://100.78.20.125:8765/signin?t=x", true)]);
+        Assert.Contains(lines, l => l.StartsWith("Open one of these in the browser (a phone on the same network, or on your tailnet for the one marked Tailscale).", StringComparison.Ordinal));
+        Assert.Contains("  http://192.168.1.217:8765/signin?t=x", lines);
+        Assert.Contains("  http://100.78.20.125:8765/signin?t=x" + WebUiText.TailscaleMark, lines);
+        Assert.Equal(" (Tailscale)", WebUiText.TailscaleMark);
+
+        var plain = WebUiText.PaneLines(true, true, 8765, WebUiAudience.LocalAreaNetwork, [new WebUiLink("http://192.168.1.217:8765/signin?t=x", false)]);
+        Assert.Contains(plain, l => l.StartsWith("Open one of these in the browser (a phone on the same network). ", StringComparison.Ordinal));
+        Assert.DoesNotContain(plain, l => l.Contains("Tailscale", StringComparison.Ordinal));
     }
 
     // ── The controller ───────────────────────────────────────────────────────
@@ -587,7 +658,7 @@ public sealed class WebUiTests : IDisposable
         Assert.Equal(new WebUiBinding(WebUiAudience.Local, 8765, "t1"), made[0].Started);
         Assert.True(controller.Serving);
         Assert.Contains(_session.TakeNotices(), n => n.Text == WebUiText.ServingNotice("http://localhost:8765/"));
-        Assert.Equal(["http://localhost:8765/signin?t=t1"], controller.Links("t1"));
+        Assert.Equal([new WebUiLink("http://localhost:8765/signin?t=t1", false)], controller.Links("t1"));   // localhost is never Tailscale's
 
         await controller.ReconcileAsync(new WebUiWanted(true, 8766, WebUiAudience.Local, "t1"));
         Assert.True(made[0].Stopped);

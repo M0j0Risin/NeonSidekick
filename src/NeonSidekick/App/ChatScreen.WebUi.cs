@@ -288,18 +288,14 @@ internal sealed partial class ChatScreen
                     return;
                 }
 
-                _transcript.Notice(_copy(link) ? WebUiText.CopiedNotice : WebUiText.CopyFailedError);
+                _transcript.Notice(_copy(link.Url) ? WebUiText.CopiedNotice : WebUiText.CopyFailedError);
                 return;
             case "reset":
-                if (!await ConfirmAsync(WebUiText.ResetQuestion, cancellationToken).ConfigureAwait(false))
+                if (await ResetWebUiTokenAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    _transcript.Notice(KeptNotice);
-                    return;
+                    ReconcileWebUi();
                 }
 
-                MintWebUiToken(announce: false);
-                _transcript.Notice(WebUiText.ResetNotice);
-                ReconcileWebUi();
                 return;
             default:
                 _transcript.Error(WebUiText.UsageError);
@@ -307,37 +303,102 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary><c>/webui</c>'s pane: on or off, the port, the reach, the links (the token in them, never in the transcript but without a pane).</summary>
+    /// <summary>
+    /// <c>/webui reset</c> and the pane's reset button (later on 2026-10-14): after a yes, a new token and its notice (true); on a no, kept (false).
+    /// The caller reconciles, so the server signs in with the new one.
+    /// </summary>
+    private async Task<bool> ResetWebUiTokenAsync(CancellationToken cancellationToken)
+    {
+        if (!await ConfirmAsync(WebUiText.ResetQuestion, cancellationToken).ConfigureAwait(false))
+        {
+            _transcript.Notice(KeptNotice);
+            return false;
+        }
+
+        MintWebUiToken(announce: false);
+        _transcript.Notice(WebUiText.ResetNotice);
+        return true;
+    }
+
+    /// <summary>
+    /// <c>/webui</c>'s pane: on or off, the port, the reach and a tab per address with its QR code and link (the token in them, never in the
+    /// transcript but without a pane). Three buttons lead the strip (2026-10-14, the user's ask, <see cref="InfoAction"/>): <c>enabled</c>/<c>disabled</c>
+    /// switches <i>Web UI</i>, <c>lan</c>/<c>local</c> <i>Web UI reach</i>, and <c>reset</c> makes a new token after a yes (<c>/webui reset</c>);
+    /// pressed, the setting is saved, the server starts, stops or restarts on it, and the pane opens again on what changed.
+    /// </summary>
     private async Task ShowWebUiAsync(CancellationToken cancellationToken)
     {
-        var effective = _effective();
-        var lines = WebUiText.PaneLines(effective.WebUi, _webUiController.Serving, _webUiController.Serving ? _webUiController.Port : effective.WebUiPort,
-            WebUiReach.Resolve(effective), _webUiController.Links(WebUiTokenNow(mint: false)));
-        if (!_pane.Enabled)
+        while (true)
         {
-            foreach (string line in lines.Where(l => l.Length > 0))
+            var effective = _effective();
+            var audience = WebUiReach.Resolve(effective);
+            var links = _webUiController.Links(WebUiTokenNow(mint: false));
+            var lines = WebUiText.PaneLines(effective.WebUi, _webUiController.Serving, _webUiController.Serving ? _webUiController.Port : effective.WebUiPort, audience, links);
+            if (!_pane.Enabled)
             {
-                _transcript.Notice(line);
+                foreach (string line in lines.Where(l => l.Length > 0))
+                {
+                    _transcript.Notice(line);
+                }
+
+                return;
             }
 
-            return;
-        }
+            // The pane's buttons ahead of the address tabs (2026-10-14, the user's ask): 📱 Web UI │ enabled │ lan │ reset │ 192.168.1.217 · …
+            InfoAction[] buttons =
+            [
+                new(WebUiText.EnabledButton(effective.WebUi), WebUiText.EnabledKey, WebUiText.EnabledWord) { Lit = effective.WebUi },
+                new(WebUiText.ReachButton(audience), WebUiText.ReachKey, WebUiText.ReachWord),
+                new(WebUiText.ResetButton, WebUiText.ResetKey, WebUiText.ResetWord),
+            ];
+            IReadOnlyList<InfoTab> tabs;
+            if (links.Count == 0)
+            {
+                string text = string.Join("\n", lines);
+                tabs = [new InfoTab(WebUiText.PaneTitle, () => new Spectre.Console.Text(text))];
+            }
+            else
+            {
+                // One tab per address (2026-10-14, the user's ask): its QR code for the phone's camera, then the link itself; Tailscale's
+                // headed by its note (later that day, the user's ask).
+                string status = string.Join("\n", WebUiText.StatusLines(effective.WebUi, true, _webUiController.Port, audience));
+                tabs = [.. links.Select(link => new InfoTab(WebUiText.LinkTabTitle(link.Url), () => new Spectre.Console.Rows(
+                    new Spectre.Console.Text(WebUiText.LinkTabText(status, link.Tailscale)),
+                    new QrView(QrCode.Encode(link.Url)),
+                    new Spectre.Console.Text("\n" + link.Url + "\n\n" + WebUiText.TokenWarning))))];
+            }
 
-        var links = _webUiController.Links(WebUiTokenNow(mint: false));
-        if (links.Count == 0)
-        {
-            string text = string.Join("\n", lines);
-            await _info.ShowAsync(WebUiText.PaneTitle, [new InfoTab(WebUiText.PaneTitle, () => new Spectre.Console.Text(text))], 0, cancellationToken).ConfigureAwait(false);
-            return;
-        }
+            await _info.ShowAsync(WebUiText.PaneTitle, tabs, 0, cancellationToken, buttons).ConfigureAwait(false);
+            switch (_info.Pressed?.Key)
+            {
+                case WebUiText.EnabledKey:
+                    bool on = !effective.WebUi;
+                    _settings.Update(d => d.WebUi = on);
+                    _transcript.Notice(SettingsMenu.SavedNotice(SettingsField.WebUi, _settings.Current, _settings.ProfileDirectory));
+                    break;
+                case WebUiText.ReachKey:
+                    string next = WebUiReach.Name(audience == WebUiAudience.Local ? WebUiAudience.LocalAreaNetwork : WebUiAudience.Local);
+                    _settings.Update(d => d.WebUiReach = next);
+                    _transcript.Notice(SettingsMenu.SavedNotice(SettingsField.WebUiReach, _settings.Current, _settings.ProfileDirectory));
+                    break;
+                case WebUiText.ResetKey:
+                    // A no keeps the token and the server as they are; the pane opens again either way.
+                    if (!await ResetWebUiTokenAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        continue;
+                    }
 
-        // One tab per address (2026-10-14, the user's ask): its QR code for the phone's camera, then the link itself.
-        string status = string.Join("\n", WebUiText.StatusLines(effective.WebUi, true, _webUiController.Port, WebUiReach.Resolve(effective)));
-        var tabs = links.Select(link => new InfoTab(WebUiText.LinkTabTitle(link), () => new Spectre.Console.Rows(
-            new Spectre.Console.Text(status + "\n\n" + WebUiText.ScanHint + "\n"),
-            new QrView(QrCode.Encode(link)),
-            new Spectre.Console.Text("\n" + link + "\n\n" + WebUiText.TokenWarning)))).ToList();
-        await _info.ShowAsync(WebUiText.PaneTitle, tabs, 0, cancellationToken).ConfigureAwait(false);
+                    break;
+                default:
+                    return;
+            }
+
+            // The start, stop or restart before the pane opens again, so its tabs are the addresses served now.
+            var wanted = WebUiWantedNow();
+            _webUiAsked = wanted;
+            await ReconcileWebUiQuietlyAsync(wanted).ConfigureAwait(false);
+            PrintWebNotices();
+        }
     }
 
     /// <summary>For the tests: the session the fake server drives.</summary>

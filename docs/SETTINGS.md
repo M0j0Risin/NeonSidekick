@@ -58,7 +58,7 @@ The app itself, this side of the connection.
 | Menus max height | How much of the window a pane may take: `half`, `three-quarters` or `full`. Longer lists scroll. | `full` |
 | Hints bar | Whether the keys' hints get a bar of their own over the status bar: `auto` (a row while there is a hint, held until the next send), `always` or `off` (on the status bar). See [The hints bar](INTERFACE.md#the-hints-bar). | `auto` |
 | Status bar | Which sections the status bar shows, their order, and which side each is pinned to. Enter opens the checklist; see [The status bar](INTERFACE.md#the-status-bar) and [Bar checklists](INTERFACE.md#bar-checklists). | `default`: every section but Working directory; Model and Working directory pinned right |
-| Tool bar | Which glyphs the toolbar shows, their order, and which side each is pinned to. Enter (or `/toolbar edit`) opens the checklist; see [The toolbar](INTERFACE.md#the-toolbar). | Settings, Tools, Skills, Memory, Saved prompts, Queue, Shell allowed commands, Shell police, Shell, Files, Image, Web, path (13 of 41), with three dividers |
+| Tool bar | Which glyphs the toolbar shows, their order, and which side each is pinned to. Enter (or `/toolbar edit`) opens the checklist; see [The toolbar](INTERFACE.md#the-toolbar). | Settings, Tools, Skills, Memory, Saved prompts, Queue, Shell allowed commands, Shell police, Shell, Files, Image, Web, path (13 of 42), with three dividers |
 | Performance bar | Which meters the performance bar shows, and where. Enter (or `/perfbar edit`) opens the checklist, whose **look:** button (`l`) steps the look; `/perfbar text`, `gauge` or `led` picks it too. See [The performance bar](INTERFACE.md#the-performance-bar). | CPU, RAM, GPU, VRAM, `led` |
 | Home bar | Home Assistant rooms and devices, and the shopping list's 🛒, as chips on a row of their own. Enter (or `/homebar edit`) opens the [picker](INTERFACE.md#the-home-bar). | off |
 | Toolbar order | The order of the five bars under the input line (**Order** on the pane). Enter opens the list; Shift+↑/↓ moves a bar. | `default` (hints bar, status bar, toolbar, performance bar, home bar) |
@@ -119,7 +119,7 @@ A browser front end for this profile: the chat, its questions and the shopping l
 |---|---|---|
 | Web UI | Serves the pages for this profile. `/webui` shows the sign-in link. A profile switch hands the server to the other profile's settings. Refused while a reply runs. | off |
 | Web UI port | The TCP port it listens on (1024–65535). A port in use, or one Windows reserves, keeps it off with a notice. Changing it signs browsers out. | 8765 |
-| Web UI reach | `local` (this machine only) or `lan` (the home network: browsers at a private address, signed in with the link). | `lan` |
+| Web UI reach | `local` (localhost only) or `lan` (your home network and your tailnet). Either way a browser signs in with `/webui`'s link. | `lan` |
 
 ### Servers
 

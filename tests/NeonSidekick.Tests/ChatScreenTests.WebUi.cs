@@ -193,9 +193,13 @@ public partial class ChatScreenTests
 
         public int Port => Started?.Port ?? 0;
 
+        /// <summary>Every binding it was started on, in order.</summary>
+        public List<WebUiBinding> Starts { get; } = [];
+
         public Task StartAsync(WebUiBinding binding, CancellationToken cancellationToken)
         {
             Started = binding;
+            Starts.Add(binding);
             return Task.CompletedTask;
         }
 
@@ -226,6 +230,103 @@ public partial class ChatScreenTests
         Assert.False(_settings.Current.WebUi);
         Assert.StartsWith("dpapi:", _settings.Current.WebUiToken.Replace("keychain:", "dpapi:", StringComparison.Ordinal), StringComparison.Ordinal);
         Assert.DoesNotContain(first.Started.Token, output);   // never on the screen
+    }
+
+    /// <summary>
+    /// The pane's buttons (2026-10-14, the user's ask: <c>📱 Web UI │ enabled │ lan │ reset │ …</c>): l switches local to lan, saves it, restarts
+    /// the server on it and opens the pane again, its button reading lan.
+    /// </summary>
+    [Fact]
+    public async Task WebUiPane_TheReachButton_SwitchesTheReach_RestartsTheServer_AndOpensThePaneAgain()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebUi = true; d.WebUiReach = "local"; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        var made = new List<RecordingHost>();
+        _webUiHost = _ => { var host = new RecordingHost(); made.Add(host); return host; };
+        var input = WhenIdle(
+            i =>
+            {
+                PushLine(i, "/webui");
+                i.Push(Keys.Char(WebUiText.ReachKey), Keys.Escape);
+            },
+            i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        Assert.Equal("lan", _settings.Current.WebUiReach);
+        Assert.Equal(WebUiAudience.LocalAreaNetwork, made[^1].Started!.Audience);
+        string before = WebUiText.PaneTitle + " │ enabled │ local │ reset ";   // one address (localhost): a pane of one tab shows no title
+        string after = WebUiText.PaneTitle + " │ enabled │ lan │ reset ";
+        Assert.Contains(before, output);
+        Assert.Contains(after, output);
+        Assert.True(output.IndexOf(before, StringComparison.Ordinal) < output.IndexOf(after, StringComparison.Ordinal), output);
+        Assert.Contains(InfoPane.ButtonsHint([('e', "on/off"), ('l', "lan/local"), ('r', "new token")], tabs: false), output);
+        Assert.Equal("lan", WebUiText.ReachButton(WebUiAudience.LocalAreaNetwork));
+        Assert.Equal("local", WebUiText.ReachButton(WebUiAudience.Local));
+    }
+
+    /// <summary>The on/off button (2026-10-14, the user's ask): e turns a disabled Web UI on, starts the server and opens the pane on its address; again turns it off.</summary>
+    [Fact]
+    public async Task WebUiPane_TheEnabledButton_TurnsTheWebUiOn_AndOff()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebUi = false; d.WebUiReach = "local"; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        var made = new List<RecordingHost>();
+        _webUiHost = _ => { var host = new RecordingHost(); made.Add(host); return host; };
+        var input = WhenIdle(
+            i =>
+            {
+                PushLine(i, "/webui");
+                i.Push(Keys.Char(WebUiText.EnabledKey), Keys.Char(WebUiText.EnabledKey), Keys.Escape);
+            },
+            i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        Assert.False(_settings.Current.WebUi);
+        var host = Assert.Single(made);
+        Assert.Equal(WebUiAudience.Local, host.Started!.Audience);
+        Assert.True(host.Stopped);
+        string off = WebUiText.PaneTitle + " │ disabled │ local │ reset ";
+        string on = WebUiText.PaneTitle + " │ enabled │ local │ reset ";
+        Assert.Contains(off, output);
+        Assert.Contains(on, output);
+        Assert.True(output.IndexOf(off, StringComparison.Ordinal) < output.IndexOf(on, StringComparison.Ordinal), output);
+        Assert.True(output.IndexOf(on, StringComparison.Ordinal) < output.LastIndexOf(off, StringComparison.Ordinal), output);
+        Assert.Equal("enabled", WebUiText.EnabledButton(true));
+        Assert.Equal("disabled", WebUiText.EnabledButton(false));
+    }
+
+    /// <summary>The reset button (later on 2026-10-14, the user's ask): r asks first; a yes makes a new token and restarts the server on it, a no keeps both.</summary>
+    [Fact]
+    public async Task WebUiPane_TheResetButton_AsksFirst_AndAYesMakesANewToken()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebUi = true; d.WebUiReach = "local"; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        var made = new List<RecordingHost>();
+        _webUiHost = _ => { var host = new RecordingHost(); made.Add(host); return host; };
+        var input = WhenIdle(
+            i =>
+            {
+                PushLine(i, "/webui");
+                i.Push(Keys.Char(WebUiText.ResetKey), Keys.Escape);   // asked, no: kept
+                i.Push(Keys.Char(WebUiText.ResetKey), Keys.Char('y'), Keys.Enter, Keys.Escape);   // asked, yes: a new token
+            },
+            i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        var starts = made.SelectMany(h => h.Starts).ToList();
+        Assert.Equal(2, starts.Count);
+        Assert.NotEqual(starts[0].Token, starts[1].Token);
+        Assert.True(WebUiAuth.IsWellFormed(starts[1].Token));
+        Assert.Contains(WebUiText.ResetQuestion, output);
+        Assert.Contains(ChatScreen.KeptNotice, output);
+        Assert.Contains(WebUiText.ResetNotice, output);
+        Assert.True(output.IndexOf(ChatScreen.KeptNotice, StringComparison.Ordinal) < output.IndexOf(WebUiText.ResetNotice, StringComparison.Ordinal), output);
     }
 
     [Fact]

@@ -452,9 +452,9 @@ public static class HelpCommands
         ]),
         new("/webui",
         [
-            new("/webui", "Show the Web UI: on or off, its port and reach, and a tab per address with a QR code to scan with a phone on the same network and the sign-in link to open in a browser. The link signs the browser in and leaves the address bar at once; the browser keeps a cookie for a year. *Web UI* (`/settings` › Client › Web UI) turns it on. Waits for the idle line under a reply."),
+            new("/webui", "Show the Web UI: on or off, its port and reach, and a tab per address with a QR code to scan with a phone on the same network and the sign-in link to open in a browser; its buttons: e turns it on or off, l switches the reach between lan and local, r makes a new token after a yes. The link signs the browser in and leaves the address bar at once; the browser keeps a cookie for a year. *Web UI* (`/settings` › Client › Web UI) turns it on. Waits for the idle line under a reply."),
             new("/webui on|off", "Turn the Web UI on or off for this profile: the server starts or stops at once."),
-            new("/webui reset", "Make a new sign-in token, after a yes: every browser signed in now is signed out, and `/webui` shows the new link."),
+            new("/webui reset", "Make a new sign-in token, after a yes: every browser signed in will be signed out, and `/webui` shows the new link."),
         ]),
         new("/window",
         [

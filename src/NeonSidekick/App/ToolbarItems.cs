@@ -35,6 +35,7 @@ public static class ToolbarItems
     public const string Settings = "settings";
     public const string Profile = "profile";   // later on 2026-09-29, the user's ask: 🪪, /profile's picker
     public const string Themes = "themes";     // 2026-10-04, the user's ask: 🧮, /theme's picker
+    public const string WebUi = "webui";       // 2026-10-14, the user's ask: 📱, /webui's pane, right after Themes
     public const string Tools = "tools";
     public const string Mcp = "mcp";
     public const string Skills = "skills";
@@ -88,11 +89,11 @@ public static class ToolbarItems
     /// (the user's ask); Ask between the disk and the lock (2026-10-09, the user's ask); Image after Files (2026-10-10, the user's ask); Advisors after
     /// the Claude Code advisor (later that day, the profile advisors), after Web once that one was retired (later still); Queue after
     /// Memory (2026-10-13, the user's ask); Saved links after YouTube (later that day, the user's ask); Saved prompts after Saved links (later still), after Memory
-    /// since 2026-10-14 (the user's ask). Pinned.
+    /// since 2026-10-14 (the user's ask); the Web UI after Themes (later that day, the user's ask). Pinned.
     /// </summary>
     public static readonly string[] Names =
     [
-        Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Prompts, Queue, Ask, CmdList, Police,
+        Settings, Profile, Themes, WebUi, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Prompts, Queue, Ask, CmdList, Police,
         Shell, Files, Image, Web, Advisors, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
         Log, Process, ComfyView, ComfyThumbs, YouTube, BrowserLinks, ShoppingList, Path, Model,
     ];
@@ -117,6 +118,7 @@ public static class ToolbarItems
         Settings => ChatScreen.SettingsToolGlyph,
         Profile => ChatScreen.ProfileToolGlyph,
         Themes => ChatScreen.ThemeToolGlyph,
+        WebUi => ChatScreen.WebUiToolGlyph,
         Tools => ChatScreen.ToolsToolGlyph,
         Mcp => ChatScreen.McpToolGlyph,
         Skills => ChatScreen.SkillsToolGlyph,
@@ -163,6 +165,7 @@ public static class ToolbarItems
         Settings => "Settings",
         Profile => "Profile",
         Themes => "Themes",
+        WebUi => "Web UI",
         Tools => "Tools",
         Mcp => "MCP",
         Skills => "Skills",
@@ -213,6 +216,7 @@ public static class ToolbarItems
         Settings => "/settings",
         Profile => "/profile",
         Themes => SlashCommands.ThemeWord,
+        WebUi => SlashCommands.WebUiWord,
         Tools => "/tools",
         Mcp => "/mcp",
         Skills => "/skills",

@@ -42,7 +42,7 @@ public static class WebUiText
     public static string AnsweredNotice(string choice) => "(" + Glyph + "answered from the Web UI: " + choice + ")";
 
     /// <summary><c>/webui reset</c>'s question. Pinned.</summary>
-    public const string ResetQuestion = "Make a new Web UI sign-in token? Every browser signed in now is signed out.";
+    public const string ResetQuestion = "Make a new Web UI sign-in token? Every browser signed in will be signed out.";
 
     /// <summary><c>/webui reset</c> done. Pinned.</summary>
     public const string ResetNotice = "(" + Glyph + "a new Web UI sign-in token: every browser is signed out; /webui shows the new link)";
@@ -70,8 +70,11 @@ public static class WebUiText
     /// <summary>The pane's title.</summary>
     public const string PaneTitle = Glyph + "Web UI";
 
-    /// <summary>The pane's status lines: on or off, the port, the reach, then the links (or why there are none).</summary>
-    public static IReadOnlyList<string> PaneLines(bool on, bool serving, int port, WebUiAudience audience, IReadOnlyList<string> links)
+    /// <summary>
+    /// The pane's status lines: on or off, the port, the reach, then the links (or why there are none). Where there is no pane, the notices;
+    /// Tailscale's link marked <see cref="TailscaleMark"/> and the lead naming the tailnet (later on 2026-10-14). Pinned.
+    /// </summary>
+    public static IReadOnlyList<string> PaneLines(bool on, bool serving, int port, WebUiAudience audience, IReadOnlyList<WebUiLink> links)
     {
         var lines = new List<string>(StatusLines(on, serving, port, audience)) { "" };
         if (!serving)
@@ -85,8 +88,10 @@ public static class WebUiText
             return lines;
         }
 
-        lines.Add("Open one of these in the browser (a phone on the same network). The link signs it in and leaves the address bar at once:");
-        lines.AddRange(links.Select(link => "  " + link));
+        lines.Add(links.Any(l => l.Tailscale)
+            ? "Open one of these in the browser (a phone on the same network, or on your tailnet for the one marked Tailscale). The link signs it in and leaves the address bar at once:"
+            : "Open one of these in the browser (a phone on the same network). The link signs it in and leaves the address bar at once:");
+        lines.AddRange(links.Select(link => "  " + link.Url + (link.Tailscale ? TailscaleMark : "")));
         lines.Add("");
         lines.Add("The link holds the token: sending it through a messaging service hands that service the token too. /webui reset makes a new one.");
         return lines;
@@ -103,8 +108,51 @@ public static class WebUiText
     /// <summary>Above an address's QR code (2026-10-14, the user's ask: no long address typed on a phone). Pinned.</summary>
     public const string ScanHint = "Scan with the phone's camera (on the same network), or open the link below. It signs the browser in and leaves the address bar at once.";
 
+    /// <summary>Above Tailscale's QR code (later on 2026-10-14): <see cref="ScanHint"/> without "on the same network", which a tailnet is not. Pinned.</summary>
+    public const string TailscaleScanHint = "Scan with the phone's camera, or open the link below. It signs the browser in and leaves the address bar at once.";
+
+    /// <summary>What heads Tailscale's tab (later on 2026-10-14, the user's ask and wording). Pinned.</summary>
+    public const string TailscaleNote = "Tailscale: works from any device on your tailnet, at home or away.";
+
+    /// <summary>After Tailscale's link where there is no pane (later on 2026-10-14). Pinned.</summary>
+    public const string TailscaleMark = " (Tailscale)";
+
+    /// <summary>
+    /// An address tab's text above its QR code: <paramref name="status"/> (<see cref="StatusLines"/> joined), a blank line and the scan hint;
+    /// Tailscale's headed by <see cref="TailscaleNote"/> and with <see cref="TailscaleScanHint"/> (later on 2026-10-14). Pinned.
+    /// </summary>
+    public static string LinkTabText(string status, bool tailscale) =>
+        tailscale ? TailscaleNote + "\n" + status + "\n\n" + TailscaleScanHint + "\n" : status + "\n\n" + ScanHint + "\n";
+
     /// <summary>Under the link: what holding it means. Pinned.</summary>
     public const string TokenWarning = "The code and the link hold the token: anyone who sees them can sign in. /webui reset makes a new one.";
+
+    /// <summary>The on/off button's key on <c>/webui</c>'s pane (2026-10-14, the user's ask: <c>📱 Web UI │ enabled │ lan │ …</c>).</summary>
+    public const char EnabledKey = 'e';
+
+    /// <summary>What the pane's hint calls the on/off button: <c>e = on/off</c>. Pinned.</summary>
+    public const string EnabledWord = "on/off";
+
+    /// <summary>The on/off button on <c>/webui</c>'s strip, first after the label: what <i>Web UI</i> is now, <c>enabled</c> or <c>disabled</c>. Pinned.</summary>
+    public static string EnabledButton(bool on) => on ? "enabled" : "disabled";
+
+    /// <summary>The reach button's key on <c>/webui</c>'s pane (2026-10-14, the user's ask): l, the button reading lan or local.</summary>
+    public const char ReachKey = 'l';
+
+    /// <summary>What the pane's hint calls the reach button: <c>l = lan/local</c>. Pinned.</summary>
+    public const string ReachWord = "lan/local";
+
+    /// <summary>The reset button's key on <c>/webui</c>'s pane (later on 2026-10-14, the user's ask: <c>/webui reset</c> as a button, its yes too).</summary>
+    public const char ResetKey = 'r';
+
+    /// <summary>What the pane's hint calls the reset button: <c>r = new token</c>. Pinned.</summary>
+    public const string ResetWord = "new token";
+
+    /// <summary>The reset button on <c>/webui</c>'s strip, after the reach: a new sign-in token, after a yes. Pinned.</summary>
+    public const string ResetButton = "reset";
+
+    /// <summary>The reach button on <c>/webui</c>'s strip, after the on/off one: <i>Web UI reach</i> now, <c>lan</c> or <c>local</c>. Pinned.</summary>
+    public static string ReachButton(WebUiAudience audience) => WebUiReach.Name(audience);
 
     /// <summary>An address's tab title: the host the link names.</summary>
     public static string LinkTabTitle(string link) => Uri.TryCreate(link, UriKind.Absolute, out var uri) ? uri.Host : link;

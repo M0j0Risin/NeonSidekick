@@ -1722,6 +1722,9 @@ internal sealed partial class ChatScreen
     /// </summary>
     public const string ShoppingToolGlyph = "🛒";
 
+    /// <summary>The toolbar's Web UI item (2026-10-14, the user's ask): the phone, <c>/webui</c>'s pane, after the abacus. Pinned.</summary>
+    public const string WebUiToolGlyph = "📱";
+
     /// <summary>The line the shopping item runs (2026-10-11): the bare <c>/shopping</c>, the list's pane.</summary>
     public const string ShoppingToolLine = Shopping.ShoppingCommand.Word;
 
@@ -1780,11 +1783,17 @@ internal sealed partial class ChatScreen
     /// Whether item <paramref name="id"/> is drawn on the off slab under <paramref name="shown"/> (2026-10-03, the user's ask: a
     /// dark slab behind the glyph, the one look that reads on a colour emoji): a tool switch that is off, the shell under the
     /// policy <c>off</c>, the disk while Memory mode is disabled (later that day, the user's ask: the disk no longer gone while it is),
-    /// the hourglass while Queue mode is disabled (2026-10-13); never any other item. Pinned.
+    /// the hourglass while Queue mode is disabled (2026-10-13), the phone while the Web UI is off (2026-10-14); never any other item. Pinned.
     /// </summary>
     public static bool ToolbarItemOff(string id, AppSettingsData shown)
     {
         ArgumentNullException.ThrowIfNull(shown);
+        if (id == ToolbarItems.WebUi)
+        {
+            // 2026-10-14, the user's ask: the phone on the slab while the Web UI is off, as a tool switch's glyph.
+            return !shown.WebUi;
+        }
+
         if (id == ToolbarItems.Memory)
         {
             return !MemoryMode.Enabled(shown);
@@ -1836,6 +1845,7 @@ internal sealed partial class ChatScreen
             ToolbarItems.Police => shown.ShellPolice ? ToolbarItems.OnWord : ToolbarItems.OffWord,
             ToolbarItems.Memory => MemoryMode.Name(memory),
             ToolbarItems.Queue => QueueMode.Name(SavedQueueMode(shown)),   // 2026-10-13
+            ToolbarItems.WebUi => shown.WebUi ? ToolbarItems.OnWord : ToolbarItems.OffWord,   // 2026-10-14
             _ when ToolsText.SwitchField(id) is not null => ToolbarItemOff(id, shown) ? ToolbarItems.OffWord : ToolbarItems.OnWord,
             _ => null,
         };
@@ -2226,6 +2236,7 @@ internal sealed partial class ChatScreen
         SettingsToolGlyph => SlashCommands.SettingsWord,
         ProfileToolGlyph => SlashCommands.ProfileWord,
         ThemeToolGlyph => SlashCommands.ThemeWord,
+        WebUiToolGlyph => SlashCommands.WebUiWord,   // 2026-10-14: /webui's pane
         SkillsToolGlyph => SlashCommands.SkillsWord,
         ToolsToolGlyph => SlashCommands.ToolsWord,
         McpToolGlyph => SlashCommands.McpWord,

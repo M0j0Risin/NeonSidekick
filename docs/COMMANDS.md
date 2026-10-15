@@ -197,10 +197,10 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/youtube save [<id>\|<link>]` | Saves the video playing, or the one named, to this profile's saved videos. |
 | `/youtube list`, `/youtube list --clear` | The saved videos in a pane; `--clear` removes them all after a yes (headless: at once). |
 | `/youtube unsave <n>\|<id>\|<link>` | Removes one saved video. |
-| `/webui` | Shows the [Web UI](INTERFACE.md#web-ui): on or off, its port and reach, and a tab per address with a QR code to scan with a phone and the sign-in link. Waits for the idle line under a reply. Not headless. |
+| `/webui` | Shows the [Web UI](INTERFACE.md#web-ui): on or off, its port and reach, and a tab per address with a QR code to scan with a phone and the sign-in link. Its buttons: `e` turns it on or off, `l` switches the reach between `lan` and `local`, `r` makes a new token after a yes. Waits for the idle line under a reply. Not headless. |
 | `/webui on\|off` | Turns the Web UI on or off for this profile; the server starts or stops at once. |
 | `/webui copy` | Puts the first sign-in link on the clipboard. It holds the token: paste it only where you trust. |
-| `/webui reset` | Makes a new sign-in token after a yes; every browser signed in now is signed out. |
+| `/webui reset` | Makes a new sign-in token after a yes; every browser signed in will be signed out. |
 
 ### Integrations
 

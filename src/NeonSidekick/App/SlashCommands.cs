@@ -574,6 +574,7 @@ public static class SlashCommands
     public const string MemoryWord = "/memory";       // 2026-09-22, the disk between the balloon and the lock, while Memory is on
     public const string ProfileWord = "/profile";     // later on 2026-09-29, the ID card after the gear: the profile picker
     public const string ThemeWord = "/theme";         // 2026-10-04, the abacus after the ID card: the theme picker
+    public const string WebUiWord = "/webui";         // 2026-10-14, the phone after the abacus: the Web UI's pane
     public const string PerfWord = "/perfbar";           // later on 2026-09-29, the rising chart after the Usage chart: the performance bar shown or hidden
 
     /// <summary>The words the hint row's model name and reasoning mark send through the screen's dispatch at idle (later on 2026-09-21, so a double-click off the pane they open can switch panes); the name is <c>/server</c> since 2026-09-22 (the user's call: the click walks server, model, then reasoning, as the typed command does). Pinned.</summary>

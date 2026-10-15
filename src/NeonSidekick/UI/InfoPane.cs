@@ -23,6 +23,18 @@ public sealed record InfoTab(string Title, Func<IRenderable> Content)
 public sealed record InfoToggle(string Title, char Key, string Word, Func<IRenderable> Content);
 
 /// <summary>
+/// A button of the whole pane (2026-10-14, the user's ask: <c>/webui</c>'s <c>enabled │ lan</c>, two switches ahead of its address tabs):
+/// <paramref name="Title"/> on the strip right after the label, before the tabs, a dim <c>│</c> after each; <paramref name="Key"/> presses it
+/// (while no find is typed), <paramref name="Word"/> is what the hint calls it. Pressed, by its key or a click, the pane closes and
+/// <see cref="InfoPane.Pressed"/> names it, for the host to act and open the pane again on what changed.
+/// </summary>
+public sealed record InfoAction(string Title, char Key, string Word)
+{
+    /// <summary>Drawn lit (<see cref="Theme.TabLit"/>) as a switch that is on; idle otherwise.</summary>
+    public bool Lit { get; init; }
+}
+
+/// <summary>
 /// The info pane: a box that rises from the bottom of the window over the input row — a tab strip,
 /// the active tab's content, a hint row — and closes on ESC. The Claude Code <c>/help</c> shape,
 /// kept out of the transcript. It is an overlay of the <see cref="ScreenPane"/>, which draws it and
@@ -61,6 +73,10 @@ public sealed record InfoToggle(string Title, char Key, string Word, Func<IRende
 /// after a dim <c>│</c>, lit (<see cref="Theme.TabLit"/>, a switch, so no underline) while on. A click on it or its key — while no find
 /// is typed, the menus' rule for a button's key — swaps the tab's content for the toggle's and back, the view from the top as a tab
 /// switch starts it; the tab keeps it on for the visit, and the hint names the key (<see cref="ToggleHint"/>).</para>
+///
+/// <para>The pane's buttons (2026-10-14, the user's ask, <see cref="InfoAction"/>): right after the label, ahead of the tabs, a dim <c>│</c>
+/// after each — <c>📱 Web UI │ enabled │ lan │ 192.168.1.217 · 100.78.20.125</c>. Its key or a click closes the pane, and
+/// <see cref="Pressed"/> names it for the host to act on (<see cref="ButtonsHint"/>).</para>
 /// </summary>
 public sealed class InfoPane
 {
@@ -77,8 +93,23 @@ public sealed class InfoPane
     /// The hint row on a tab with a toggle (2026-10-12): <see cref="HintText"/> (or <see cref="SingleTabHintText"/> on a pane of one
     /// tab) with the toggle's key before the find, <c>k = key check</c>. Pinned.
     /// </summary>
-    public static string ToggleHint(char key, string word, bool tabs = true) =>
-        (tabs ? "↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · " : "↑/↓ PgUp/PgDn = scroll · ") + key + " = " + word + " · type = find · ESC = close";
+    public static string ToggleHint(char key, string word, bool tabs = true) => ButtonsHint([(key, word)], tabs);
+
+    /// <summary>
+    /// The hint row with the pane's buttons (2026-10-14, <see cref="InfoAction"/>, and a tab's toggle after them): each <c>key = word</c> before
+    /// the find, in the strip's order, <c>e = on/off · r = lan/local</c>. Pinned.
+    /// </summary>
+    public static string ButtonsHint(IReadOnlyList<(char Key, string Word)> buttons, bool tabs = true)
+    {
+        ArgumentNullException.ThrowIfNull(buttons);
+        var hint = new System.Text.StringBuilder(tabs ? "↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · " : "↑/↓ PgUp/PgDn = scroll · ");
+        foreach (var (key, word) in buttons)
+        {
+            hint.Append(key).Append(" = ").Append(word).Append(" · ");
+        }
+
+        return hint.Append("type = find · ESC = close").ToString();
+    }
 
     /// <summary>What sits between the tabs' last title and a toggle's (2026-10-12): a dim bar, one cell as <see cref="TitleSeparator"/>, so the layout is the strip's.</summary>
     public const string ToggleSeparator = "│";
@@ -270,6 +301,20 @@ public sealed class InfoPane
         return TabStripRows(label, [.. titles, toggle.Title], Set(active), Theme.TabActive, width, null, toggle: toggle.On);
     }
 
+    /// <summary>
+    /// The strip with the pane's buttons ahead of the titles (2026-10-14, <see cref="InfoAction"/>): each laid out as one more title before
+    /// the tabs' (so a click's <see cref="TabAt(string, IReadOnlyList{string}, int, int, int, IReadOnlyList{string?}?)"/> over the buttons, the
+    /// titles and the toggle answers a button's index first), a dim <see cref="ToggleSeparator"/> after each, lit while <see cref="InfoAction.Lit"/>;
+    /// then the titles and a tab's toggle as ever. Pinned.
+    /// </summary>
+    public static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<InfoAction> actions, IReadOnlyList<string> titles, int active, int width, (string Title, bool On)? toggle = null)
+    {
+        ArgumentNullException.ThrowIfNull(actions);
+        ArgumentNullException.ThrowIfNull(titles);
+        string[] all = [.. actions.Select(a => a.Title), .. titles, .. toggle is { } t ? [t.Title] : Array.Empty<string>()];
+        return TabStripRows(label, all, Set(active < 0 ? -1 : active + actions.Count), Theme.TabActive, width, null, toggle: toggle?.On, actions: actions);
+    }
+
     /// <summary><see cref="TabStripRows(string, IReadOnlyList{string}, int, int)"/> with any number of titles lit (later on 2026-09-29).</summary>
     public static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, IReadOnlySet<int> active, int width) =>
         TabStripRows(label, titles, active, Theme.TabLit, width, null);
@@ -291,9 +336,11 @@ public sealed class InfoPane
     private static int TitleCells(IReadOnlyList<string> titles, IReadOnlyList<string?>? badges, int i) =>
         TextCells.Width(titles[i]) + 2 + (BadgeOf(badges, i) is { } badge ? TextCells.Width(badge) : 0);
 
-    // toggle: null for a strip of titles alone; else the last title is a toggle's (2026-10-12), on or off.
-    private static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, IReadOnlySet<int> active, Style lit, int width, IReadOnlyList<string?>? badges, bool sub = false, bool? toggle = null)
+    // toggle: null for a strip of titles alone; else the last title is a toggle's (2026-10-12), on or off. actions: the pane's buttons, the
+    // first titles (2026-10-14), a bar after each.
+    private static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, IReadOnlySet<int> active, Style lit, int width, IReadOnlyList<string?>? badges, bool sub = false, bool? toggle = null, IReadOnlyList<InfoAction>? actions = null)
     {
+        int lead = actions?.Count ?? 0;
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(titles);
         ArgumentNullException.ThrowIfNull(active);
@@ -322,11 +369,12 @@ public sealed class InfoPane
             bool isToggle = toggle is not null && i == titles.Count - 1;
             if (i > 0 && places[i - 1].Row == places[i].Row)
             {
-                line.Append($"[{separator}]{(isToggle ? ToggleSeparator : TitleSeparator)}[/]");
+                line.Append($"[{separator}]{(isToggle || i <= lead ? ToggleSeparator : TitleSeparator)}[/]");
             }
 
             // The spaces either side are unstyled (2026-10-07): the underline sits under the title alone; the click still takes them.
-            var style = isToggle ? (toggle == true ? Theme.TabLit : Theme.TabIdle) : active.Contains(i) ? lit : Theme.TabIdle;
+            var style = i < lead ? (actions![i].Lit ? Theme.TabLit : Theme.TabIdle)
+                : isToggle ? (toggle == true ? Theme.TabLit : Theme.TabIdle) : active.Contains(i) ? lit : Theme.TabIdle;
             line.Append($" [{style.ToMarkup()}]{Markup.Escape(titles[i])}[/]");
             if (BadgeOf(badges, i) is { } badge)
             {
@@ -417,15 +465,24 @@ public sealed class InfoPane
         return (Math.Clamp(first, 0, count - shown), shown);
     }
 
+    /// <summary>The pane's button (<see cref="InfoAction"/>) that closed the last visit, or null when it closed otherwise.</summary>
+    public InfoAction? Pressed { get; private set; }
+
+    // The pane's buttons this visit (2026-10-14): ahead of the tabs on the strip.
+    private IReadOnlyList<InfoAction> _actions = [];
+
     /// <summary>
     /// Shows the pane under <paramref name="label"/> on <paramref name="tabs"/>[<paramref name="initial"/>]
     /// and reads keys until ESC, the token, or the end of input; on every path the pane is closed, or the one it opened over
-    /// handed back as it was (2026-10-14, <see cref="ScreenPane.RestoreOverlay"/>).
+    /// handed back as it was (2026-10-14, <see cref="ScreenPane.RestoreOverlay"/>); one of <paramref name="actions"/>, the pane's buttons,
+    /// closes it too, named by <see cref="Pressed"/>.
     /// </summary>
-    public async Task ShowAsync(string label, IReadOnlyList<InfoTab> tabs, int initial, CancellationToken cancellationToken)
+    public async Task ShowAsync(string label, IReadOnlyList<InfoTab> tabs, int initial, CancellationToken cancellationToken, IReadOnlyList<InfoAction>? actions = null)
     {
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(tabs);
+        Pressed = null;
+        _actions = actions ?? [];
         if (tabs.Count == 0)
         {
             throw new ArgumentException("At least one tab.", nameof(tabs));
@@ -511,16 +568,22 @@ public sealed class InfoPane
                         first = Math.Clamp(_first + dir * Math.Max(1, _shown), 0, Math.Max(0, _count - _shown));
                     }
                     else if (click.Button == MouseButton.Left && _pane.TryHitOverlay(click.X, click.Y, out int at) && at < _stripRows
-                        && TabAt(label, toggle is null ? shown : [.. shown, toggle.Title], _width, click.X, at) is int hit)
+                        && TabAt(label, [.. _actions.Select(a => a.Title), .. shown, .. toggle is null ? Array.Empty<string>() : [toggle.Title]], _width, click.X, at) is int hit)
                     {
-                        // The toggle's title is the one past the tabs' (2026-10-12).
-                        if (hit == shown.Length)
+                        // The pane's buttons come first (2026-10-14); the toggle's title is the one past the tabs' (2026-10-12).
+                        if (hit < _actions.Count)
+                        {
+                            Pressed = _actions[hit];
+                            return;
+                        }
+
+                        if (hit - _actions.Count == shown.Length)
                         {
                             flip = true;
                         }
                         else
                         {
-                            next = hit;
+                            next = hit - _actions.Count;
                         }
                     }
                 }
@@ -569,6 +632,12 @@ public sealed class InfoPane
                 {
                     _clicks.Reset();
                     next = (active + step + tabs.Count) % tabs.Count;
+                }
+                else if (_find.Length == 0 && FindChar(k) is char key && _actions.FirstOrDefault(a => char.ToLowerInvariant(a.Key) == char.ToLowerInvariant(key)) is { } button)
+                {
+                    // A button's key (2026-10-14) while no find is typed, as the toggle's: the pane closes and says which.
+                    Pressed = button;
+                    return;
                 }
                 else if (_find.Length == 0 && tabs[active].Toggle is { } keyed && FindChar(k) is char pressed
                     && char.ToLowerInvariant(pressed) == char.ToLowerInvariant(keyed.Key))
@@ -734,7 +803,8 @@ public sealed class InfoPane
         int height = _pane.Profile.Height > 0 ? _pane.LayoutHeight : DefaultHeight;   // less the toolbar's row (2026-09-21)
         var toggle = tabs[active].Toggle;
         bool toggled = toggle is not null && _toggled.Contains(active);
-        var strip = toggle is null ? TabStripRows(label, titles, active, width) : TabStripRows(label, titles, active, width, (toggle.Title, toggled));
+        var strip = _actions.Count > 0 ? TabStripRows(label, _actions, titles, titles.Length == 0 ? -1 : active, width, toggle is null ? null : (toggle.Title, toggled))
+            : toggle is null ? TabStripRows(label, titles, active, width) : TabStripRows(label, titles, active, width, (toggle.Title, toggled));
         _width = width;
         _stripRows = strip.Count;
         int capacity = _pane.MenuContentRows(height, 0) - HeaderRows - (_stripRows - 1);
@@ -838,6 +908,7 @@ public sealed class InfoPane
         }
 
         string hint = _find.Length > 0 ? FindHint(_find, _hit, _hits.Count)
+            : _actions.Count > 0 ? ButtonsHint([.. _actions.Select(a => (a.Key, a.Word)), .. toggle is null ? Array.Empty<(char, string)>() : [(toggle.Key, toggle.Word)]], tabs: tabs.Count > 1)
             : toggle is not null ? ToggleHint(toggle.Key, toggle.Word, tabs: tabs.Count > 1)
             : tabs.Count == 1 ? SingleTabHintText : HintText;
         _pane.ShowOverlay(new Rows(lines), hint, close: true);

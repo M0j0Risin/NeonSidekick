@@ -45,7 +45,7 @@ You need a Mac with Apple Silicon (M1 or later). Download and unpack the Mac pac
 | Docker servers | Not available | Docker Desktop on a Mac passes no GPU to containers; the embedded model is the Mac's local server instead. |
 | UNC shares and outside folders | Works | A share is `smb://server/share`, mounted under `/Volumes` while the app runs ([UNC shares on a Mac](TOOLS.md#unc-shares-on-a-mac)). |
 | `/keycheck` | Works | Finds macOS's own shortcuts, apps' exclusive hotkeys and the terminal's Option key. Most apps' shared hotkeys don't show. |
-| Web UI (`/webui`) | Expected to work | Unproven until a Mac publish runs it. The token is kept with the keychain, and macOS asks to let the app accept incoming connections the first time it serves the network. |
+| Web UI (`/webui`) | Expected to work | Unproven until a Mac publish runs it. The token is kept with the keychain, and macOS asks to let the app accept incoming connections the first time it serves the network. The Tailscale tab is a `utun` interface's 100.64/10 address there (Tailscale's own adapter has no name of its own on a Mac). |
 
 ## What differs
 
