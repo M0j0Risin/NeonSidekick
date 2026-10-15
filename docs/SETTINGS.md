@@ -596,6 +596,21 @@ The apps and services the tools reach. `/claude`'s settings are on `/settings` �
 | Docker writes | The master key for the model's changes: `docker_lifecycle`, `docker_pull`, `docker_remove` and `docker_prune`. Every call asks first; headless refuses them. | off |
 | Docker engine pipe | The engine's named pipe (`docker_engine` is Docker Desktop's). On a Mac the row is *Docker engine socket*, the engine's Unix socket; empty finds it as the `docker` command does. | `\\.\pipe\docker_engine` (on a Mac, found) |
 
+#### EventLog
+
+Windows only. See [Event logs](TOOLS.md#event-logs).
+
+| Setting | What it does | Default |
+|---|---|---|
+| Event log tools | Offers the read-only event-log tools (`eventlog_logs`, `eventlog_search`, `eventlog_summary`, `eventlog_event`) over the ticked computers and the working directory's `.evtx` files. `/eventlog` works either way. The page's `o` button opens *Event log computers offered*. | off |
+| Event log computers offered | A checklist: `local` (this PC) first, then the computers of both `eventlog.json` files. Untick everything and the tools read `.evtx` files alone. | `local` |
+| Event log set password | Pick a runas computer and type its password, masked; it goes to its store (encrypted in `eventlog.json`, or Windows Credential Manager). | — |
+| Event log add/edit computer | A wizard for a new computer or a saved one; it can test the draft by reading the newest System event. `local` walks only its logs, detail and description. | — |
+| Event log max events | How many events a search lists when the model names no `limit`, and a page of `/eventlog` (1–100). | 20 |
+| Event log scan limit | The most events one search looks at before it stops and says how far back it got (1,000–30,000); a quarter of it on a remote computer. | 20,000 |
+| Event log computers (profile) | Enter opens this profile's `eventlog.json` (made with commented examples when missing). | — |
+| Event log computers (global) | Enter opens the home's `eventlog.json`, which every profile reads; the profile's entry wins on a name clash. | — |
+
 #### ComfyUI
 
 | Setting | What it does | Default |

@@ -193,7 +193,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Settings or SlashCommand.Sys or SlashCommand.Memory
             or SlashCommand.Usage or SlashCommand.About or SlashCommand.MsgClear or SlashCommand.Mcp or SlashCommand.Tools
             or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Browse
-            or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.KeyCheck or SlashCommand.YouTube or SlashCommand.Shopping => MidTurnClass.Pane,
+            or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.KeyCheck or SlashCommand.YouTube or SlashCommand.Shopping => MidTurnClass.Pane,
         SlashCommand.Reasoning or SlashCommand.Queue or SlashCommand.Sampling => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Rename => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
@@ -384,6 +384,8 @@ internal sealed partial class ChatScreen
                 // A prompt picked on /prompts' pane (2026-10-13), reached by its own line or by a switch from another pane: on the draft
                 // now, the hook answering "kept" for a typed line so the live row does not empty itself over it.
                 bool taken = TakePromptPick(typed);
+                // An event's ask on /eventlog's pane (2026-10-15): the draft after the pane phase, as a prompt's.
+                taken = TakeEventLogDraft(typed) && taken;
                 if (chord is not null)
                 {
                     // A chord pressed in the pane that names no pane (2026-10-01): offered as the live row's chord is.
@@ -660,6 +662,10 @@ internal sealed partial class ChatScreen
             case SlashCommand.Docker:
                 // /docker (2026-10-02, /ha's way): the engine call on the watcher, the reply streaming on; the bare word lists rather than opening the pane.
                 await HandleDockerMidTurnAsync(args, cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.EventLog:
+                // /eventlog (2026-10-15): the pane on the watcher, the reply streaming on, its reads as at the idle line; an ask is kept for after.
+                await HandleEventLogAsync(args, _flow, cancellationToken, onWatcher: true).ConfigureAwait(false);
                 break;
         }
     }

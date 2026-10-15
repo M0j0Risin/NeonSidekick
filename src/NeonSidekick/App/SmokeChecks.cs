@@ -189,6 +189,9 @@ public static partial class SmokeChecks
         results.Add(OperatingSystem.IsMacOS() ? ProbeUncNetFs() : new SmokeCheck("unc:netfs", true, "skipped: not macOS"));
         results.Add(OperatingSystem.IsWindows() ? ProbeDocker() : new SmokeCheck("docker:pipe-transport", true, "skipped: not Windows"));
         results.Add(ProbeDockerSocket());
+        results.Add(OperatingSystem.IsWindows() ? ProbeEventLog() : new SmokeCheck("eventlog:wevtapi", true, "skipped: not Windows"));
+        results.Add(OperatingSystem.IsWindows() ? ProbeEventLogRpcLogin() : new SmokeCheck("eventlog:rpc-login", true, "skipped: not Windows"));
+        results.Add(OperatingSystem.IsWindows() ? ProbeEventLogEvtx() : new SmokeCheck("eventlog:evtx", true, "skipped: not Windows"));
         results.Add(ProbeCulture());
         results.Add(ProbeKokoroVoices(nativeDirectory));
         results.Add(ProbeKokoroPhonemizer());

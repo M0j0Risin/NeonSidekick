@@ -137,6 +137,7 @@ internal sealed partial class SettingsMenu
         [(SettingsField.GitLibTools, "Tools"), (SettingsField.GitLibEmail, "Identity")],
         [(SettingsField.ToolsDollarMention, "Mentions"), (SettingsField.ToolCollapseCount, "Folding"), (SettingsField.ShowFileDiffs, "Diffs")],
         [(SettingsField.ShoppingTools, "The list")],
+        [(SettingsField.EventLogTools, "Access"), (SettingsField.EventLogComputersOffered, "Computers"), (SettingsField.EventLogMaxEvents, "Searches"), (SettingsField.EventLogComputersProfile, "Files")],
     ];
 
     /// <summary>

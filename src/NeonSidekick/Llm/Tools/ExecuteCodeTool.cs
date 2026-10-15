@@ -344,7 +344,8 @@ public sealed class ExecuteCodeTool : AIFunction
             return ShellText.UnknownTool(tool);
         }
 
-        var offered = _tools().Where(t => !Excluded.Contains(t.Name)).ToList();
+        // The event-log tools read every computer redacted for a script (2026-10-15, the event-log plan): the main chat reads full by calling them itself.
+        var offered = _tools().Where(t => !Excluded.Contains(t.Name)).Select(t => t is EventLogTool eventLog ? eventLog.AsRedacted() : t).ToList();
         if (!offered.Any(t => string.Equals(t.Name, tool, StringComparison.Ordinal)))
         {
             return ShellText.UnknownTool(tool);

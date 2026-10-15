@@ -196,7 +196,7 @@ public class NeonHelpTests
         Assert.StartsWith("Tab /tools › Files › GitLib:", Invoke("/tools git"), StringComparison.Ordinal);
         Assert.StartsWith("Tab /tools › Home › HomeAssistant:", Invoke("/tools home assistant"), StringComparison.Ordinal);   // on Home since 2026-10-11
         Assert.StartsWith("Tab /tools › Home: " + HelpText.MenusTab(["HomeAssistant", "Shopping"]), Invoke("/tools home"), StringComparison.Ordinal);   // the tab said whole wins over HomeAssistant
-        Assert.StartsWith("Tab /tools › Apps: " + HelpText.MenusTab(["Docker", "ComfyUI", "YouTube"]), Invoke("/tools apps"), StringComparison.Ordinal);
+        Assert.StartsWith("Tab /tools › Apps: " + HelpText.MenusTab(["Docker", "EventLog", "ComfyUI", "YouTube"]), Invoke("/tools apps"), StringComparison.Ordinal);
     }
 
     /// <summary>

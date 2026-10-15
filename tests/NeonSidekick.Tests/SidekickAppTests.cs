@@ -110,7 +110,11 @@ public partial class SidekickAppTests : IDisposable
             // The camera (2026-10-02): none unless a test hands in the fake.
             camera: _camera,
             // The Docker servers' switcher (2026-10-02): the real host over the stub unless a test hands in the fake.
-            dockerServers: dockerServers);
+            dockerServers: dockerServers,
+            // The event logs (2026-10-15): none unless a test hands in the fake.
+            eventLogSystem: _eventLogSystem);
+
+    private Fakes.FakeEventLogSystem? _eventLogSystem;
 
     private FakeCameraSystem? _camera;
 
@@ -346,6 +350,25 @@ public partial class SidekickAppTests : IDisposable
         string output = await Headless("/docker\n/docker frob\n");
         Assert.Contains("Docker: 6 containers (4 running, 1 exited, 1 paused)" + Environment.NewLine + "mariadb_dev · running (healthy)", output);
         Assert.Contains("[error] " + NeonSidekick.Docker.DockerText.Usage, output);
+        Assert.DoesNotContain(SidekickApp.HeadlessNoAssistantReply, output);
+    }
+
+    /// <summary><c>/eventlog</c> headless (2026-10-15): ahead of the server check, the rows as lines; with no reader, the sentence that it needs Windows.</summary>
+    [Fact]
+    public async Task Headless_EventLog_PrintsTheRows_AndSaysWhenThereAreNoLogs()
+    {
+        string away = await Headless("/eventlog\n");
+        Assert.Contains("[error] " + NeonSidekick.EventLog.EventLogText.NeedsWindows, away);
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        _eventLogSystem = new Fakes.FakeEventLogSystem();
+        _eventLogSystem.Add("System", Fakes.FakeEventLogSystem.Xml("Kernel-Power", 41, 1, 9, Fakes.ManualTimeProvider.DefaultUtcNow), "The system rebooted without cleanly shutting down first.");
+        string output = await Headless("/eventlog sys\n/eventlog sys level:loud\n");
+        Assert.Contains("System on local: 1 event, newest first" + Environment.NewLine + "#9  2026-09-11 14:05:30 -07:00  critical  Kernel-Power  41  The system rebooted without cleanly shutting down first.", output);
+        Assert.Contains("[error] " + NeonSidekick.EventLog.EventLogText.BadLevel("loud"), output);
         Assert.DoesNotContain(SidekickApp.HeadlessNoAssistantReply, output);
     }
 

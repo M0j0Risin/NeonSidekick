@@ -59,6 +59,12 @@ public static class AdvisorRecent
     public static IReadOnlyList<string> Lines(IReadOnlyList<ChatMessage> messages)
     {
         ArgumentNullException.ThrowIfNull(messages);
+        // The event-log tools' calls by id (2026-10-15, the event-log plan): their results are withheld from an advisor, a stand-in naming the
+        // call in their place, so a full computer's events never pass to another profile through the recent lines.
+        var eventLogCalls = messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>()
+            .Where(c => App.ChatScreen.EventLogToolNames.Contains(c.Name))
+            .GroupBy(c => c.CallId, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         var lines = new List<string>();
         foreach (var message in messages.Skip(Math.Max(0, messages.Count - AdvisorText.RecentMessages)))
         {
@@ -78,6 +84,9 @@ public static class AdvisorRecent
                     case FunctionCallContent call:
                         lines.Add(AdvisorText.RecentLine("assistant", "(called " + call.Name + ")"));
                         break;
+                    case FunctionResultContent withheld when eventLogCalls.TryGetValue(withheld.CallId, out var call):
+                        lines.Add(AdvisorText.RecentLine("tool", EventLog.EventLogText.WithheldFromAdvisor(call.Name, Argument(call, Llm.Tools.EventLogTool.LogArgument), Argument(call, Llm.Tools.EventLogEventTool.RecordArgument))));
+                        break;
                     case FunctionResultContent result:
                         string body = result.Result?.ToString() ?? "";
                         body = body.Length > AdvisorText.ToolResultChars ? body[..AdvisorText.ToolResultChars] + "…" : body;
@@ -93,4 +102,8 @@ public static class AdvisorRecent
 
         return lines;
     }
+
+    /// <summary>A call's argument as text, or null.</summary>
+    private static string? Argument(FunctionCallContent call, string name) =>
+        call.Arguments is { } arguments && arguments.TryGetValue(name, out object? value) && value is not null ? value.ToString() : null;
 }

@@ -1090,6 +1090,30 @@ public enum SettingsField
 
     /// <summary>A toggle: whether the Web UI's dropdown shows the <c>%</c>/<c>*</c> connections' notes (<see cref="Settings.AppSettingsData.WebUiConnectionDetails"/>). The Web UI tab under <see cref="WebUiCommands"/> (later on 2026-10-14); read at each request.</summary>
     WebUiConnectionDetails,
+
+    /// <summary>A toggle: whether a turn offers the event-log tools (<see cref="Settings.AppSettingsData.EventLogTools"/>). The EventLog menu's first row on <c>/tools</c> › Apps (2026-10-15, the event-log plan); no reconnect (read at each turn). Windows only.</summary>
+    EventLogTools,
+
+    /// <summary>A checklist: which computers the event-log tools and <c>/eventlog</c> may read, <c>local</c> first (<see cref="Settings.AppSettingsData.EventLogComputersOffered"/>). The EventLog menu (2026-10-15).</summary>
+    EventLogComputersOffered,
+
+    /// <summary>An action row: the masked password prompt for a <c>runas</c> computer of <c>eventlog.json</c>; nothing saved in the settings. The EventLog menu (2026-10-15).</summary>
+    EventLogSetPassword,
+
+    /// <summary>An action row: the computer wizard, a new entry of <c>eventlog.json</c> or an edit of one. The EventLog menu (2026-10-15).</summary>
+    EventLogAddComputer,
+
+    /// <summary>Typed: how many events a search lists by default and a page of <c>/eventlog</c>, 1 to 100 (<see cref="Settings.AppSettingsData.EventLogMaxEvents"/>). The EventLog menu (2026-10-15).</summary>
+    EventLogMaxEvents,
+
+    /// <summary>Typed: the most events one search looks at, 1,000 to 30,000 (<see cref="Settings.AppSettingsData.EventLogScanLimit"/>). The EventLog menu (2026-10-15).</summary>
+    EventLogScanLimit,
+
+    /// <summary>An edit row: this profile's <c>eventlog.json</c> in the editor. The EventLog menu (2026-10-15).</summary>
+    EventLogComputersProfile,
+
+    /// <summary>An edit row: the home's <c>eventlog.json</c> in the editor. The EventLog menu (2026-10-15).</summary>
+    EventLogComputersGlobal,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1622,6 +1646,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount],
         [SettingsField.ShoppingTools, SettingsField.ShoppingList, SettingsField.ShoppingStores],
+        [SettingsField.EventLogTools, SettingsField.EventLogComputersOffered, SettingsField.EventLogSetPassword, SettingsField.EventLogAddComputer, SettingsField.EventLogMaxEvents, SettingsField.EventLogScanLimit, SettingsField.EventLogComputersProfile, SettingsField.EventLogComputersGlobal],
     ];
 
     /// <summary>
@@ -2040,7 +2065,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.PostgresTools or SettingsField.PostgresPercentMention
             or SettingsField.YouTubeTools or SettingsField.YouTubeAutoplay
             or SettingsField.Advisors or SettingsField.AdvisorConfirm
-            or SettingsField.ShoppingTools
+            or SettingsField.ShoppingTools or SettingsField.EventLogTools
             or SettingsField.WebUi or SettingsField.WebUiCommands or SettingsField.WebUiConnectionDetails;
 
     public static string FieldName(SettingsField field) => field switch
@@ -2282,6 +2307,14 @@ internal sealed partial class SettingsMenu
         SettingsField.UncSharesProfile => "UNC shares (profile)",
         SettingsField.UncSharesGlobal => "UNC shares (global)",
         SettingsField.DockerTools => "Docker tools",
+        SettingsField.EventLogTools => "Event log tools",
+        SettingsField.EventLogComputersOffered => "Event log computers offered",
+        SettingsField.EventLogSetPassword => "Event log set password",
+        SettingsField.EventLogAddComputer => "Event log add/edit computer",
+        SettingsField.EventLogMaxEvents => "Event log max events",
+        SettingsField.EventLogScanLimit => "Event log scan limit",
+        SettingsField.EventLogComputersProfile => "Event log computers (profile)",
+        SettingsField.EventLogComputersGlobal => "Event log computers (global)",
         SettingsField.DockerWrites => "Docker writes",
         SettingsField.DockerEnginePipe => OperatingSystem.IsMacOS() ? DockerEngineSocketLabel : "Docker engine pipe",   // a Mac's socket, 2026-10-11
         SettingsField.DockerServers => "Docker servers enabled",
@@ -2652,6 +2685,14 @@ internal sealed partial class SettingsMenu
             SettingsField.UncSharesProfile => UncSharesLabel(Unc.UncConfigFile.ProfilePath(profileDirectory)),
             SettingsField.UncSharesGlobal => UncSharesLabel(Unc.UncConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
             SettingsField.DockerTools => OnOff(data.DockerTools),
+            SettingsField.EventLogTools => OnOff(data.EventLogTools),
+            SettingsField.EventLogComputersOffered => EventLogOfferedValue(data.EventLogComputersOffered, EventLog.EventLogConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
+            SettingsField.EventLogSetPassword => EventLogSetPasswordLabel,
+            SettingsField.EventLogAddComputer => EventLogAddComputerLabel,
+            SettingsField.EventLogMaxEvents => data.EventLogMaxEvents.ToString(CultureInfo.InvariantCulture),
+            SettingsField.EventLogScanLimit => data.EventLogScanLimit.ToString(CultureInfo.InvariantCulture),
+            SettingsField.EventLogComputersProfile => EventLogComputersLabel(EventLog.EventLogConfigFile.ProfilePath(profileDirectory)),
+            SettingsField.EventLogComputersGlobal => EventLogComputersLabel(EventLog.EventLogConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
             SettingsField.DockerWrites => OnOff(data.DockerWrites),
             SettingsField.DockerEnginePipe => OperatingSystem.IsMacOS() ? Docker.DockerSocket.RowValue(data.DockerEnginePipe) : Docker.DockerPipe.Display(data.DockerEnginePipe),
             SettingsField.DockerServers => OnOff(data.DockerServers),
@@ -3045,6 +3086,14 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.YouTubeLanguage"/> (2026-10-08). Pinned.</summary>
     public const string YouTubeLanguageError = "must be a language code (en, es, zh-Hans), or empty for any language";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.EventLogMaxEvents"/> (2026-10-15). Pinned.</summary>
+    public static readonly string EventLogMaxEventsRangeError =
+        "must be " + AppSettingsData.MinEventLogMaxEvents.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxEventLogMaxEvents.ToString(CultureInfo.InvariantCulture) + " events";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.EventLogScanLimit"/> (2026-10-15). Pinned.</summary>
+    public static readonly string EventLogScanLimitRangeError =
+        "must be " + AppSettingsData.MinEventLogScanLimit.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxEventLogScanLimit.ToString(CultureInfo.InvariantCulture) + " events";
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.YouTubeSearchMaxResults"/>. Pinned.</summary>
     public static readonly string YouTubeSearchMaxResultsRangeError =
@@ -3502,6 +3551,7 @@ internal sealed partial class SettingsMenu
         SettingsField.SqliteTools => (SettingsField.SqliteDatabasesOffered, EditSqliteOfferedAsync),
         SettingsField.PostgresTools => (SettingsField.PostgresConnectionsOffered, EditPostgresOfferedAsync),
         SettingsField.UncTools => (SettingsField.UncSharesOffered, EditUncOfferedAsync),
+        SettingsField.EventLogTools => (SettingsField.EventLogComputersOffered, EditEventLogOfferedAsync),
         _ => null,
     };
 
@@ -3840,6 +3890,8 @@ internal sealed partial class SettingsMenu
         SettingsField.McpConnectTimeoutSeconds => data.McpConnectTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.WebSearchMaxResults => data.WebSearchMaxResults.ToString(CultureInfo.InvariantCulture),
         SettingsField.YouTubeSearchMaxResults => data.YouTubeSearchMaxResults.ToString(CultureInfo.InvariantCulture),
+        SettingsField.EventLogMaxEvents => data.EventLogMaxEvents.ToString(CultureInfo.InvariantCulture),
+        SettingsField.EventLogScanLimit => data.EventLogScanLimit.ToString(CultureInfo.InvariantCulture),
         SettingsField.WebDownloadMaxMegabytes => data.WebDownloadMaxMegabytes.ToString(CultureInfo.InvariantCulture),
         SettingsField.ToolCollapseCount => data.ToolCollapseCount.ToString(CultureInfo.InvariantCulture),
         SettingsField.CodeCollapseCount => data.CodeCollapseCount.ToString(CultureInfo.InvariantCulture),
@@ -5409,6 +5461,30 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
+        if (field == SettingsField.EventLogComputersOffered)
+        {
+            return await EditEventLogOfferedAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.EventLogAddComputer)
+        {
+            return await AddEventLogComputerAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.EventLogSetPassword)
+        {
+            return await SetEventLogPasswordAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field is SettingsField.EventLogComputersProfile or SettingsField.EventLogComputersGlobal)
+        {
+            // An edit row (2026-10-15), the UNC menu's: the file in the editor, made with its commented shape first.
+            OpenEventLogFile(field == SettingsField.EventLogComputersProfile
+                ? EventLog.EventLogConfigFile.ProfilePath(_settings.ProfileDirectory)
+                : EventLog.EventLogConfigFile.GlobalPath(_settings.StorageDirectory));
+            return false;
+        }
+
         if (field == SettingsField.UncAddShare)
         {
             return await AddUncShareAsync(cancellationToken).ConfigureAwait(false);
@@ -5688,6 +5764,26 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.WebSearchMaxResults = hits);
+                return true;
+
+            case SettingsField.EventLogMaxEvents:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int events) || events < AppSettingsData.MinEventLogMaxEvents || events > AppSettingsData.MaxEventLogMaxEvents)
+                {
+                    Sink.Error($"{FieldName(field)} {EventLogMaxEventsRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.EventLogMaxEvents = events);
+                return true;
+
+            case SettingsField.EventLogScanLimit:
+                if (!int.TryParse(text, NumberStyles.Integer | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out int scan) || scan < AppSettingsData.MinEventLogScanLimit || scan > AppSettingsData.MaxEventLogScanLimit)
+                {
+                    Sink.Error($"{FieldName(field)} {EventLogScanLimitRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.EventLogScanLimit = scan);
                 return true;
 
             case SettingsField.YouTubeSearchMaxResults:
@@ -7510,6 +7606,7 @@ internal sealed partial class SettingsMenu
             SettingsField.UncWrites => data.UncWrites,
             SettingsField.UncStarMention => data.UncStarMention,
             SettingsField.DockerTools => data.DockerTools,
+            SettingsField.EventLogTools => data.EventLogTools,
             SettingsField.DockerWrites => data.DockerWrites,
             SettingsField.CameraTools => data.CameraTools,
             SettingsField.CameraKeepInSessions => data.CameraKeepInSessions,
@@ -7623,6 +7720,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.UncWrites: data.UncWrites = on; break;
             case SettingsField.UncStarMention: data.UncStarMention = on; break;
             case SettingsField.DockerTools: data.DockerTools = on; break;
+            case SettingsField.EventLogTools: data.EventLogTools = on; break;
             case SettingsField.CameraTools: data.CameraTools = on; break;
             case SettingsField.CameraKeepInSessions: data.CameraKeepInSessions = on; break;
             case SettingsField.ScreenTools: data.ScreenTools = on; break;
@@ -7746,6 +7844,7 @@ internal sealed partial class SettingsMenu
         SettingsField.UncWrites => on ? "read-write shares may write" : "read-only forced for all shares",
         SettingsField.UncStarMention => on ? "* and part of a name lists the UNC shares on the line" : "* is ordinary text",
         SettingsField.DockerTools => on ? "docker tools enabled" : "docker tools disabled",   // the user's wording, 2026-10-03
+        SettingsField.EventLogTools => on ? "event log tools enabled" : "event log tools disabled",
         SettingsField.CameraTools => on ? "camera tool enabled" : "camera tool disabled",   // the user's wording, 2026-10-03
         SettingsField.CameraKeepInSessions => on ? "stored sessions keep the camera's pictures" : "stored sessions name the photos; files stay in the output folder",
         SettingsField.ScreenTools => on ? "screen capture tool enabled" : "screen capture tool disabled",

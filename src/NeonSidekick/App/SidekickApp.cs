@@ -87,6 +87,7 @@ public sealed class SidekickApp
 
     /// <summary>The screen for <c>screen_capture</c>, <c>screen_list</c> and <c>/screen</c> (2026-10-04); null off Windows.</summary>
     private readonly Screen.IScreenSystem? _screenSystem;
+    private readonly EventLog.IEventLogSystem? _eventLogSystem;
     private readonly Viewer.IVideoPlayer? _videoPlayer;
 
     /// <summary>The Browser window for bot checks and <c>/browser</c> (2026-10-13): <see cref="Viewer.BrowserWindow.Window"/> on Windows, null elsewhere and in headless.</summary>
@@ -237,8 +238,11 @@ public sealed class SidekickApp
         Action<Shell.ProcessSession, Action<Shell.ProcessSession>>? openProcessWindow = null,
         Viewer.IVideoPlayer? videoPlayer = null,
         Viewer.IBrowserWindow? browserWindow = null,
-        Func<WebUi.IWebUiBackend, WebUi.IWebUiHost>? webUiHost = null)
+        Func<WebUi.IWebUiBackend, WebUi.IWebUiHost>? webUiHost = null,
+        EventLog.IEventLogSystem? eventLogSystem = null)
     {
+        // The event logs (2026-10-15): WindowsEventLogSystem in the app on Windows, a fake in tests, none elsewhere.
+        _eventLogSystem = eventLogSystem;
         _openProcessWindow = openProcessWindow;
         _browserWindow = browserWindow;
         _webUiHost = webUiHost;
@@ -516,6 +520,14 @@ public sealed class SidekickApp
             return await CameraCheck.RunAsync(_console, cameraCheck, cancellationToken).ConfigureAwait(false);
         }
 
+        if (options.EventLogCheck is { } eventLogComputer)
+        {
+            // The live proof on the published exe (2026-10-15): the whole catalog, not the ticked list, as the UNC and database checks.
+            var loaded = EventLog.EventLogConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory);
+            var checkFiles = new Files.WorkingDirectory(() => Files.WorkingDirectory.Resolve(EffectiveSettings.WorkingDirectory, _settings.ProfileDirectory), _time);
+            return await EventLogCheck.RunAsync(_console, _eventLogSystem, loaded, eventLogComputer, checkFiles, _time, cancellationToken).ConfigureAwait(false);
+        }
+
         if (options.UncCheck is { } uncShare)
         {
             // The whole catalog, not the offered list, as the database checks: the check proves the share, whatever this profile offers the model.
@@ -785,6 +797,9 @@ public sealed class SidekickApp
         // The camera (2026-10-02): /camera list only; a photo needs the screen's panes, so camera_capture is never offered here.
         using var camera = new Camera.CameraSession(_camera, () => Camera.CameraSettings.Options(EffectiveSettings), _time);
         var dockerTools = ChatScreen.DockerTools(docker, confirm: null);
+        // The event logs (2026-10-15): read-only, so headless has all four; the ticked computers and the working directory's .evtx files.
+        var eventLog = new EventLog.EventLogAccess(_eventLogSystem, () => EventLog.EventLogConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory), () => EffectiveSettings.EventLogComputersOffered, files, _time);
+        var eventLogTools = ChatScreen.EventLogTools(eventLog, () => EffectiveSettings);
         // The print tools (2026-09-28): no pane to ask on, so under ask (the default) the model's print is refused; /print works.
         var printTools = ChatScreen.PrintTools(print, confirm: null);
         // The shell tools (2026-09-21): headless has no pane to ask on, so the gate has no asker — under ask the
@@ -1177,6 +1192,18 @@ public sealed class SidekickApp
                     continue;
                 }
 
+                // /eventlog (2026-10-15): ahead of the server check too — the logs need no LLM; the rows as lines.
+                if (SlashCommands.Parse(text) is (SlashCommand.EventLog, var eventLogArgs))
+                {
+                    var eventLogResult = await EventLog.EventLogCommand.RunAsync(eventLog, eventLogArgs, EffectiveSettings.EventLogMaxEvents, EffectiveSettings.EventLogScanLimit, cancellationToken).ConfigureAwait(false);
+                    foreach (string eventLogLine in eventLogResult.Lines)
+                    {
+                        await HeadlessLineAsync((eventLogResult.Failed ? "[error] " : "") + eventLogLine).ConfigureAwait(false);
+                    }
+
+                    continue;
+                }
+
                 // /docker (2026-10-02): ahead of the server check too — the engine needs no LLM; the bare word lists.
                 if (SlashCommands.Parse(text) is (SlashCommand.Docker, var dockerArgs))
                 {
@@ -1298,7 +1325,7 @@ public sealed class SidekickApp
                 }
 
                 // Per turn, as the screen does: a memory saved in this turn is in the next one's prompt.
-                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, MemoryMode.Enabled(EffectiveSettings), speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, gitTools: gitTools, gitEnabled: EffectiveSettings.GitLibTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPolice, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings), oracleTools: oracleTools, oracleEnabled: ChatScreen.OracleOffered(EffectiveSettings, oracle), mysqlTools: mysqlTools, mysqlEnabled: ChatScreen.MySqlOffered(EffectiveSettings, mysql), uncTools: ChatScreen.UncToolsFor(uncTools, EffectiveSettings, unc.Catalog(), EffectiveSettings.FileTools), uncEnabled: ChatScreen.UncOffered(EffectiveSettings, unc), dockerTools: ChatScreen.DockerToolsFor(dockerTools, EffectiveSettings), dockerEnabled: ChatScreen.DockerOffered(EffectiveSettings), sqliteTools: sqliteTools, sqliteEnabled: ChatScreen.SqliteOffered(EffectiveSettings, sqlite), postgresTools: postgresTools, postgresEnabled: ChatScreen.PostgresOffered(EffectiveSettings, postgres), memorySave: MemoryMode.Saves(EffectiveSettings), youTubeTools: ChatScreen.YouTubeToolsFor(youTubeTools, EffectiveSettings), youTubeEnabled: ChatScreen.YouTubeOffered(EffectiveSettings, youTubeTools), imageTools: imageTools, imagesEnabled: EffectiveSettings.ImageTools, neonAdvisorTools: neonAdvisorTools, neonAdvisorEnabled: ChatScreen.AdvisorsOffered(EffectiveSettings), composed: inputs => lastInputs = inputs, shoppingTools: shoppingTools, shoppingEnabled: ChatScreen.ShoppingOffered(EffectiveSettings));
+                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, MemoryMode.Enabled(EffectiveSettings), speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, gitTools: gitTools, gitEnabled: EffectiveSettings.GitLibTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPolice, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings), oracleTools: oracleTools, oracleEnabled: ChatScreen.OracleOffered(EffectiveSettings, oracle), mysqlTools: mysqlTools, mysqlEnabled: ChatScreen.MySqlOffered(EffectiveSettings, mysql), uncTools: ChatScreen.UncToolsFor(uncTools, EffectiveSettings, unc.Catalog(), EffectiveSettings.FileTools), uncEnabled: ChatScreen.UncOffered(EffectiveSettings, unc), dockerTools: ChatScreen.DockerToolsFor(dockerTools, EffectiveSettings), dockerEnabled: ChatScreen.DockerOffered(EffectiveSettings), sqliteTools: sqliteTools, sqliteEnabled: ChatScreen.SqliteOffered(EffectiveSettings, sqlite), postgresTools: postgresTools, postgresEnabled: ChatScreen.PostgresOffered(EffectiveSettings, postgres), memorySave: MemoryMode.Saves(EffectiveSettings), youTubeTools: ChatScreen.YouTubeToolsFor(youTubeTools, EffectiveSettings), youTubeEnabled: ChatScreen.YouTubeOffered(EffectiveSettings, youTubeTools), imageTools: imageTools, imagesEnabled: EffectiveSettings.ImageTools, neonAdvisorTools: neonAdvisorTools, neonAdvisorEnabled: ChatScreen.AdvisorsOffered(EffectiveSettings), composed: inputs => lastInputs = inputs, shoppingTools: shoppingTools, shoppingEnabled: ChatScreen.ShoppingOffered(EffectiveSettings), eventLogTools: eventLogTools, eventLogEnabled: ChatScreen.EventLogOffered(EffectiveSettings, eventLog));
                 assistant.PictureBudget = new PictureBudget(EffectiveSettings.LlmPictureKeep, EffectiveSettings.LlmPictureMegabytes);
 
                 // The Claude Code server (2026-09-30), as the screen does: the turn names its session, no guard over a history the CLI does not read.
@@ -2450,7 +2477,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as IMouseInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;
@@ -2527,7 +2554,12 @@ public sealed class SidekickApp
     private void EncryptPostgresPasswords() => Postgres.PostgresConfigFile.EncryptAll(_settings.StorageDirectory);
 
     /// <summary>A plain runas password typed into any <c>unc.json</c> encrypted before the first screen or turn (2026-09-30), as <see cref="EncryptSqlPasswords"/> does for <c>sql.json</c>.</summary>
-    private void EncryptUncPasswords() => Unc.UncConfigFile.EncryptAll(_settings.StorageDirectory);
+    private void EncryptUncPasswords()
+    {
+        Unc.UncConfigFile.EncryptAll(_settings.StorageDirectory);
+        // eventlog.json's runas passwords (2026-10-15) are encrypted at startup the same way.
+        EventLog.EventLogConfigFile.EncryptAll(_settings.StorageDirectory);
+    }
 
     private void LogStartup()
     {

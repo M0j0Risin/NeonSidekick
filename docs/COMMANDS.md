@@ -213,6 +213,8 @@ Which commands the Web UI's page may send, and how each shows there: [Commands f
 | `/docker logs <container> [<lines>]` | A container's last lines (50, up to 2000). |
 | `/docker stats [<container>]` | CPU, memory, network and disk use of one or every running container. |
 | `/docker start\|stop\|restart\|pause\|unpause <container>` | Acts on one container. Nothing is asked and *Docker writes* doesn't apply; every change is logged. |
+| `/eventlog` | This PC's event logs (or the only ticked computer's) in a pane: Application, System, Security and Setup as tabs, newest first. `r` reads the tab again, `m` adds the next page, `c` picks another ticked computer; Enter opens an event with **copy** and **ask** (a draft asking the model about it). Works with *Event log tools* off; full text. Windows only. See [Event logs](TOOLS.md#event-logs). |
+| `/eventlog <log>\|<file.evtx> [<term>…] [<words>]` | Opens on that log (`app`, `sys`, `sec`, `setup`, `ps`) or an `.evtx` in the working directory, narrowed by `computer:dc01`, `level:error,warning`, `id:41,1074`, `provider:<name>`, `field:<Name>=<value>`, `since:2h`, `until:<time>`, `audit:failure\|success` and words to find. Without the pane, and from the Web UI, it lists the events. |
 | `/ha` | Home Assistant at a glance: lights on per room, the TV, temperatures, motion, low batteries, to-do lists. See [Home Assistant](TOOLS.md#home-assistant). |
 | `/ha on\|off\|toggle <name> [<brightness>]` | Switches a room, light, switch or the TV (`/ha on den 40%`, `/ha off kitchen and hallway`). |
 | `/ha scene <name>` | Activates a scene. |

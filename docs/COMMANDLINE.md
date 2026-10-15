@@ -24,6 +24,7 @@ Options apply to this launch only and are never saved. Both `--option value` and
 | `--sqlite-check <database>` | The same for a database in `sqlite.json`, or a SQLite file in the working directory. |
 | `--postgres-check <connection>` | The same for a connection in `postgres.json`. |
 | `--unc-check <share>` | The same for a share in `unc.json`. On a Mac it mounts the network share and unmounts it on exit. |
+| `--eventlog-check <computer>` | The same for a computer in `eventlog.json`, or `local`: its session and sign-in, its newest System event, and whether its Security log is readable. Windows only. |
 | `--docker-check` | The same for the Docker engine: Docker Desktop's pipe on Windows, the engine's socket on a Mac. |
 | `--camera-check` | Opens the camera, reports brightness and noise, and encodes a test photo (nothing saved; the light comes on briefly), then exits. On a Mac it needs macOS 14 or later and the terminal app's Camera permission. |
 | `--version` | Prints the version and exits. |

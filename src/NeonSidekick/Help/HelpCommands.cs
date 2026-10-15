@@ -132,6 +132,11 @@ public static class HelpCommands
         [
             new("/echo <text>", "Print a line as a reply, read aloud when *TTS output* is on."),
         ]),
+        new("/eventlog",
+        [
+            new("/eventlog", "Show this PC's event logs on a pane (or the only ticked computer's): Application, System, Security and Setup as tabs, newest first, each on its usual view (Security's audit failures, the others' critical events, errors and warnings). `r` reads the tab again, `m` adds the next page, `c` picks another ticked computer. Enter on an event opens its page in full, with **copy** (`c`) and **ask** (`a`: a draft asking the model about it). Type to filter; Shift+letter starts a filter with `r`, `m` or `c`. It works with *Event log tools* off, reaches only the computers ticked in *Event log computers offered*, and shows full text. Windows only."),
+            new("/eventlog <log>|<evtx-file> [<term>…] [<words>]", "Open on that log (`app`, `sys`, `sec`, `setup`, `ps` for short; quote a name with spaces) or an `.evtx` file in the working directory, narrowed by terms: `computer:<name>`, `level:error,warning`, `id:41,1074` or `id:4700-4799`, `provider:<name>`, `field:<Name>=<value>`, `since:2h` or `since:2026-10-14T21:00`, `until:<time>`, `audit:failure|success`; other words are found in the provider, fields or message. Without the pane, and from the Web UI, it lists the events."),
+        ]),
         new("/exit",
         [
             new("/exit", "Exit the app."),

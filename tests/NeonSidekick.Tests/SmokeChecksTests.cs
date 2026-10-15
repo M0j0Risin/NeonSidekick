@@ -180,6 +180,28 @@ public class SmokeChecksTests
         Assert.EndsWith(" worker threads; the share sandbox listed 8 and searched 8", check.Detail);
     }
 
+    /// <summary><c>eventlog:wevtapi</c>, <c>eventlog:rpc-login</c> and <c>eventlog:evtx</c> (2026-10-15): this PC's own logs, read-only, the session path and an export read back.</summary>
+    [Fact]
+    public void ProbeEventLog_ReadsThisPcsLogs_ALoopbackSession_AndAnExport()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;   // the event logs are Windows'
+        }
+
+        var wevtapi = SmokeChecks.ProbeEventLog();
+        var rpc = SmokeChecks.ProbeEventLogRpcLogin();
+        var evtx = SmokeChecks.ProbeEventLogEvtx();
+
+        Assert.Equal("eventlog:wevtapi", wevtapi.Name);
+        Assert.True(wevtapi.Passed, wevtapi.Detail);
+        Assert.EndsWith("15001 and 15007 worded", wevtapi.Detail);
+        Assert.Equal("eventlog:rpc-login", rpc.Name);
+        Assert.True(rpc.Passed, rpc.Detail);
+        Assert.Equal("eventlog:evtx", evtx.Name);
+        Assert.True(evtx.Passed, evtx.Detail);
+    }
+
     /// <summary><c>mysql:driver</c> (later on 2026-09-30): the gate, a bound parameter, and MySqlConnector's connect path answering a port nobody serves.</summary>
     [Fact]
     public void ProbeMySql_ChecksTheGate_AndReachesTheManagedDriver()

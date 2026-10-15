@@ -37,7 +37,7 @@ public static class ToolsText
     /// </summary>
     public static readonly string[] SwitchWords =
     [
-        ToolbarItems.Ask, ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Image, ToolbarItems.Web, ToolbarItems.Advisors, ToolbarItems.Docker, ToolbarItems.Obsidian,
+        ToolbarItems.Ask, ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Image, ToolbarItems.Web, ToolbarItems.Advisors, ToolbarItems.Docker, ToolbarItems.EventLog, ToolbarItems.Obsidian,
         ToolbarItems.Sql, ToolbarItems.Oracle, ToolbarItems.MySql, ToolbarItems.Sqlite, ToolbarItems.Postgres, ToolbarItems.Unc, ToolbarItems.Ha, ToolbarItems.Comfy,
         ToolbarItems.Camera, ToolbarItems.Print, ShoppingSwitchWord,
     ];
@@ -58,6 +58,7 @@ public static class ToolsText
         ToolbarItems.Web => SettingsField.WebTools,
         ToolbarItems.Advisors => SettingsField.Advisors,   // 2026-10-10, the profile advisors' switch (/settings › Advisors)
         ToolbarItems.Docker => SettingsField.DockerTools,
+        ToolbarItems.EventLog => SettingsField.EventLogTools,   // 2026-10-15, the event logs' switch
         ToolbarItems.Obsidian => SettingsField.ObsidianTools,
         ToolbarItems.Sql => SettingsField.SqlTools,
         ToolbarItems.Oracle => SettingsField.OracleTools,
@@ -190,6 +191,9 @@ public static class ToolsText
     /// <summary>The Docker tools' tab and group (2026-10-02), Apps' (Integrations' until 2026-10-11) first menu since 2026-10-10 (the ClaudeCode tab before it went); after Claude, before HA, since 2026-10-03 (the user's order; after UNC, before GitLib, until then).</summary>
     public const string DockerTabTitle = "Docker";
 
+    /// <summary>The event-log tools' menu and group (2026-10-15, the event-log plan): on Apps after Docker. Pinned.</summary>
+    public const string EventLogTabTitle = "EventLog";
+
     /// <summary>The image tools' tab and group (2026-09-24), after HA, before GitLib, since 2026-10-03 (the user's order; after Obsidian, before SQL, from 2026-09-27); "Images" until later on 2026-09-24 (the user's call: it is ComfyUI's tab).</summary>
     public const string ComfyTabTitle = "ComfyUI";
 
@@ -226,7 +230,7 @@ public static class ToolsText
     /// The settings menus in <see cref="SettingsMenu.ToolsTabFields"/>' order, each list's title (2026-10-09): every one was a tab of its own
     /// until then, and the constants above stay its name — the Offered tab's group heading and <c>/sys</c>' group too. Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, ImageMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle, ShoppingMenuTitle];
+    public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, ImageMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle, ShoppingMenuTitle, EventLogTabTitle];
 
     /// <summary>The tabs in strip order — Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Screen (2026-10-04), Obsidian, SQL, MySQL, Oracle, ClaudeCLI, Docker, HA, ComfyUI, GitLib, Options, the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04); before it (Camera after Ask since 2026-10-02; Docker after UNC since 2026-10-02; Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down until 2026-10-09.
     /// Since then (the user's call) the five database tabs are menus on one Database tab, where SQL stood, and Print, Camera, Screen,
@@ -247,7 +251,7 @@ public static class ToolsText
     /// one for a plain tab, its rows the tab's; more for a group tab — <see cref="CoreTabTitle"/> (later on 2026-10-10), <see cref="FilesTabTitle"/>, <see cref="AppsTabTitle"/> (2026-10-10),
     /// <see cref="DatabaseTabTitle"/>, <see cref="DevicesTabTitle"/> and <see cref="HomeTabTitle"/> (2026-10-11) — whose menus are sub-tabs on a second strip (<see cref="ToolsMenu"/>). Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[0, 1, 2, 20], [3, 4, 5, 19, 9], [15, 17, 18], [10, 11, 12, 13, 14], [6, 7, 8], [16, 21]];
+    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[0, 1, 2, 20], [3, 4, 5, 19, 9], [15, 22, 17, 18], [10, 11, 12, 13, 14], [6, 7, 8], [16, 21]];
 
     /// <summary>Whether tab <paramref name="tab"/> (a <see cref="TabTitles"/> index) holds menus rather than rows: Core, Files, Apps, Databases, Devices and Home.</summary>
     public static bool IsGroupTab(int tab) => tab > 0 && tab < TabTitles.Count && TabMenus[tab - 1].Count > 1;
@@ -356,6 +360,9 @@ public static class ToolsText
     /// Mac runs all three, so only a system that is neither shows it, and it says so (the user's ask). Pinned.
     /// </summary>
     public const string NeedsWindowsReason = "it needs Windows or a Mac";
+
+    /// <summary>Why a Windows-alone group (the event logs, 2026-10-15) is not offered elsewhere; <see cref="NeedsWindowsReason"/> says "or a Mac". Pinned.</summary>
+    public const string WindowsOnlyReason = "it needs Windows";
 
     /// <summary>The YouTube group off with its switch on (2026-10-05): no key to search with and no video window to play in.</summary>
     public const string NoYouTubeReason = "no YouTube API key is set and there is no video window";

@@ -130,6 +130,13 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public int Tab { get; init; }
 
     /// <summary>
+    /// <see cref="Buttons"/> drawn and pressed on a tabbed page too (2026-10-15, <c>/eventlog</c>'s list: its log tabs and ⟳ refresh, more,
+    /// computer on one title row): after the tabs on the strip, lit as a switch is, their keys pressing them while no filter is typed,
+    /// a click on one a <see cref="MenuPick.Button"/>. Off (every other page): a tabbed page's buttons are ignored, as ever.
+    /// </summary>
+    public bool TabButtons { get; init; }
+
+    /// <summary>
     /// Plain text drawn under the title or the strip, above the status line (a question over its
     /// answers): escaped by the pane, word-wrapped to at most <see cref="MenuPane.CaptionMaxRows"/>
     /// rows with the last cut by an ellipsis, or the more <see cref="CaptionGrows"/> allows. Null for none (every page but the question pane).
@@ -855,6 +862,21 @@ public sealed class MenuPane : INoticeSink
                         {
                             count = SwitchTab(page, held, page.Tab, sub);
                         }
+                        else if (at < main && page.Tabs is { } buttoned && page.TabButtons && page.Buttons is { Count: > 0 } stripButtons
+                            && InfoPane.TabAt(page.Title, [.. Titles(buttoned), .. Titles(stripButtons)], Width, click.X, at) is int struck)
+                        {
+                            // A tabbed page with buttons (2026-10-15): a tab's title switches, a button's presses it.
+                            if (struck >= buttoned.Count)
+                            {
+                                _status.Clear();
+                                return new MenuPick(page.Tab, _cursor, Button: struck - buttoned.Count, Sub: page.Sub);
+                            }
+
+                            if (struck != page.Tab)
+                            {
+                                count = SwitchTab(page, buttoned, struck);
+                            }
+                        }
                         else if (at < main && page.Tabs is { Count: > 1 } strip && InfoPane.TabAt(page.Title, Titles(strip), Width, click.X, at, Badges(strip)) is int hit && hit != page.Tab)
                         {
                             count = SwitchTab(page, strip, hit);
@@ -1029,7 +1051,7 @@ public sealed class MenuPane : INoticeSink
                 // buttons): a filter may start with a button's letter that way. The modifier, not the case, so Caps Lock leaves the buttons
                 // be on Windows; a Unix terminal sends the character alone (VtInputParser reads A–Z as Shift), so there Caps Lock filters.
                 bool shiftedLetter = (k.Modifiers & ConsoleModifiers.Shift) != 0 && char.IsLetter(k.KeyChar);
-                bool buttonKey = page.Filter is { Length: 0 } && page.Tabs is null && page.Buttons is { Count: > 0 } offered && !shiftedLetter
+                bool buttonKey = page.Filter is { Length: 0 } && (page.Tabs is null || page.TabButtons) && page.Buttons is { Count: > 0 } offered && !shiftedLetter
                     && k.KeyChar is not '\0' && !char.IsControl(k.KeyChar) && ButtonFor(offered, k.KeyChar) is not null;
                 if (!buttonKey && page.Filter is { } filter && MenuFilter.Edit(filter, k, page.SpaceFlips) is { } typed)
                 {
@@ -1043,7 +1065,7 @@ public sealed class MenuPane : INoticeSink
                     return new MenuPick(page.Tab, _cursor, Filter: typed, Sub: page.Sub);
                 }
 
-                if (page.Tabs is null && page.Buttons is { Count: > 0 } keyed && k.KeyChar is not '\0' && !char.IsControl(k.KeyChar)
+                if ((page.Tabs is null || page.TabButtons) && page.Buttons is { Count: > 0 } keyed && k.KeyChar is not '\0' && !char.IsControl(k.KeyChar)
                     && ButtonFor(keyed, k.KeyChar) is int pressed)
                 {
                     _status.Clear();
@@ -1235,6 +1257,14 @@ public sealed class MenuPane : INoticeSink
     /// <summary>The indices of the buttons that are <see cref="MenuButton.On"/>: the strip draws them highlighted (later on 2026-09-29).</summary>
     private static HashSet<int> Lit(IReadOnlyList<MenuButton> buttons) => Enumerable.Range(0, buttons.Count).Where(i => buttons[i].On && !buttons[i].Hidden).ToHashSet();
 
+    /// <summary>A tabbed page's strip with buttons (2026-10-15, <see cref="MenuPage.TabButtons"/>): the tab on show and the lit buttons, these counted after the tabs.</summary>
+    private static HashSet<int> TabAndLit(int tab, int tabs, IReadOnlyList<MenuButton> buttons)
+    {
+        var lit = Lit(buttons).Select(i => tabs + i).ToHashSet();
+        lit.Add(tab);
+        return lit;
+    }
+
     /// <summary>The index of the button whose key is <paramref name="key"/> (ignoring case), null for none. Pure.</summary>
     public static int? ButtonFor(IReadOnlyList<MenuButton> buttons, char key)
     {
@@ -1333,7 +1363,9 @@ public sealed class MenuPane : INoticeSink
     public static string TopMarkup(MenuPage page)
     {
         ArgumentNullException.ThrowIfNull(page);
-        return page.Tabs is { } tabs ? InfoPane.TabStripMarkup(page.Title, Titles(tabs), page.Tab, Badges(tabs))
+        return page.Tabs is { } withButtons && page.TabButtons && page.Buttons is { Count: > 0 } tabButtons
+                ? InfoPane.TabStripMarkup(page.Title, [.. Titles(withButtons), .. Titles(tabButtons)], TabAndLit(page.Tab, withButtons.Count, tabButtons))
+            : page.Tabs is { } tabs ? InfoPane.TabStripMarkup(page.Title, Titles(tabs), page.Tab, Badges(tabs))
             : page.Buttons is { Count: > 0 } buttons ? InfoPane.TabStripMarkup(page.Title, Titles(buttons), Lit(buttons))
             : TitleMarkup(page.Title);
     }
@@ -1346,7 +1378,9 @@ public sealed class MenuPane : INoticeSink
     public static IReadOnlyList<string> TopRows(MenuPage page, int width)
     {
         ArgumentNullException.ThrowIfNull(page);
-        return page.Tabs is { } tabs ? [.. InfoPane.TabStripRows(page.Title, Titles(tabs), page.Tab, width, Badges(tabs)), .. SubStripRows(page, width)]
+        return page.Tabs is { } withButtons && page.TabButtons && page.Buttons is { Count: > 0 } tabButtons
+                ? InfoPane.TabStripRows(page.Title, [.. Titles(withButtons), .. Titles(tabButtons)], TabAndLit(page.Tab, withButtons.Count, tabButtons), width)
+            : page.Tabs is { } tabs ? [.. InfoPane.TabStripRows(page.Title, Titles(tabs), page.Tab, width, Badges(tabs)), .. SubStripRows(page, width)]
             : page.Buttons is { Count: > 0 } buttons ? InfoPane.TabStripRows(page.Title, Titles(buttons), Lit(buttons), width)
             : [TitleMarkup(page.Title)];
     }

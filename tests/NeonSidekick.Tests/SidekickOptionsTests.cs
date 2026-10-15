@@ -83,6 +83,12 @@ public class SidekickOptionsTests
         Assert.True(unc.IsCheck);
         Assert.Equal("unc-check", unc.Mode);
         Assert.NotNull(SidekickOptions.Parse(new[] { "--unc-check" }).Error);
+        var eventLog = SidekickOptions.Parse(new[] { "--eventlog-check", "dc01" });   // 2026-10-15
+        Assert.Equal("dc01", eventLog.EventLogCheck);
+        Assert.True(eventLog.IsCheck);
+        Assert.Equal("eventlog-check", eventLog.Mode);
+        Assert.NotNull(SidekickOptions.Parse(new[] { "--eventlog-check" }).Error);
+        Assert.Contains("--eventlog-check <computer>  prove the event-log tools against that computer of eventlog.json, or local (reads only), exit 0/1", SidekickOptions.Usage);
         var o = SidekickOptions.Parse(new[] { "--voice-check" });
         Assert.True(o.VoiceCheck);
         Assert.False(o.AudioCheck);

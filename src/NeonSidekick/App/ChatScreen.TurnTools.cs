@@ -77,6 +77,10 @@ internal sealed record TurnToolInputs
     /// <summary>The shopping list's tools (2026-10-11): offered while <see cref="ShoppingEnabled"/> (<c>Shopping tools</c>).</summary>
     public IReadOnlyList<AIFunction>? Shopping { get; init; }
     public bool ShoppingEnabled { get; init; }
+
+    /// <summary>The event-log tools (2026-10-15): offered while <see cref="EventLogEnabled"/> (<c>Event log tools</c>, Windows).</summary>
+    public IReadOnlyList<AIFunction>? EventLog { get; init; }
+    public bool EventLogEnabled { get; init; }
     public IReadOnlySet<string>? Disabled { get; init; }
     public PlanTurn? Plan { get; init; }
     public bool PlanReadOnly { get; init; }
@@ -124,6 +128,7 @@ internal sealed partial class ChatScreen
         var postgresTools = inputs.Postgres;
         var uncTools = inputs.Unc;
         var dockerTools = inputs.Docker;
+        var eventLogTools = inputs.EventLog;
         var comfyTools = inputs.Comfy;
         var homeTools = inputs.Home;
         var printTools = inputs.Print;
@@ -145,13 +150,13 @@ internal sealed partial class ChatScreen
         {
             // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
             // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
-            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
+            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, eventLogTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
         }
 
         if (inputs.OnlyTools is { } only)
         {
             // Botchat limited tools (2026-10-04): every name not on the list joins the disabled set, the same way.
-            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
+            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, eventLogTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
         }
 
         if (disabledTools is { Count: > 0 })
@@ -171,6 +176,7 @@ internal sealed partial class ChatScreen
             postgresTools = postgresTools is null ? null : Without(postgresTools, disabledTools);
             uncTools = uncTools is null ? null : Without(uncTools, disabledTools);
             dockerTools = dockerTools is null ? null : Without(dockerTools, disabledTools);
+            eventLogTools = eventLogTools is null ? null : Without(eventLogTools, disabledTools);
             comfyTools = comfyTools is null ? null : Without(comfyTools, disabledTools);
             homeTools = homeTools is null ? null : Without(homeTools, disabledTools);
             printTools = printTools is null ? null : Without(printTools, disabledTools);
@@ -245,6 +251,9 @@ internal sealed partial class ChatScreen
         bool docker = inputs.DockerEnabled && dockerTools is { Count: > 0 };
         tools = docker ? [.. tools, .. dockerTools!] : tools;
         bool dockerWrite = docker && dockerTools!.Any(t => DockerWriteToolNames.Contains(t.Name));
+        // The event-log tools after the Docker tools (2026-10-15): Event log tools on (Windows) is the group's switch; their sentence after the Docker ones.
+        bool eventLog = inputs.EventLogEnabled && eventLogTools is { Count: > 0 };
+        tools = eventLog ? [.. tools, .. eventLogTools!] : tools;
         // The image tools after the SQL tools (2026-09-24): ComfyUI tools, a URL and a workflow are the group's switch; no rule — the description carries the workflows and the prompt styles.
         bool comfy = inputs.ComfyEnabled && comfyTools is { Count: > 0 };
         tools = comfy ? [.. tools, .. comfyTools!] : tools;
@@ -293,7 +302,7 @@ internal sealed partial class ChatScreen
         tools = ask is not null ? [.. tools, .. askTools!] : tools;
         // … and the rules say so after the shell sentence, naming the groups offered.
         bool native = shell && inputs.ShellNative;
-        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, ServerWritesOf(tools), images, advisors, shopping);
+        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, ServerWritesOf(tools), images, advisors, shopping, eventLog);
         return new TurnToolSet(
             tools,
             offered,

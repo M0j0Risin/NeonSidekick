@@ -1,6 +1,4 @@
-using System.Globalization;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Docker;
 
@@ -13,7 +11,7 @@ namespace NeonSidekick.Llm.Tools;
 /// hold the text (case ignored) kept. The answer is held to <see cref="MaxChars"/>, the oldest lines going first. Logs are
 /// not redacted: the rule sentence says they may hold secrets.
 /// </summary>
-public sealed partial class DockerLogsTool : DockerTool
+public sealed class DockerLogsTool : DockerTool
 {
     public const string ToolName = "docker_logs";
     public const string ContainerArgument = "container";
@@ -156,41 +154,8 @@ public sealed partial class DockerLogsTool : DockerTool
     /// <summary>
     /// A <c>since</c> as unix seconds: an age before <paramref name="now"/> (<c>30s</c>, <c>10m</c>, <c>2h</c>, <c>1d</c>,
     /// <c>1w</c>, combined as <c>1h30m</c>), or a moment (ISO 8601, UTC when no offset is given); null for neither. Pure.
+    /// <see cref="TimeArgument.Parse"/> in UTC since 2026-10-15 (the event-log plan moved it out; Docker's reading unchanged).
     /// </summary>
-    public static long? ParseSince(string text, DateTimeOffset now)
-    {
-        ArgumentNullException.ThrowIfNull(text);
-        string trimmed = text.Trim();
-        if (Age().Match(trimmed) is { Success: true } match)
-        {
-            var total = TimeSpan.Zero;
-            foreach (Capture part in match.Groups["part"].Captures)
-            {
-                var piece = AgePart().Match(part.Value);
-                if (!double.TryParse(piece.Groups["n"].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double n))
-                {
-                    return null;
-                }
-
-                total += piece.Groups["u"].Value.ToLowerInvariant() switch
-                {
-                    "s" => TimeSpan.FromSeconds(n),
-                    "m" => TimeSpan.FromMinutes(n),
-                    "h" => TimeSpan.FromHours(n),
-                    "d" => TimeSpan.FromDays(n),
-                    _ => TimeSpan.FromDays(n * 7),
-                };
-            }
-
-            return (now - total).ToUnixTimeSeconds();
-        }
-
-        return DateTimeOffset.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var moment) ? moment.ToUnixTimeSeconds() : null;
-    }
-
-    [GeneratedRegex(@"^(?<part>\d+(?:\.\d+)?\s*[smhdw])+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex Age();
-
-    [GeneratedRegex(@"(?<n>\d+(?:\.\d+)?)\s*(?<u>[smhdw])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex AgePart();
+    public static long? ParseSince(string text, DateTimeOffset now) =>
+        TimeArgument.Parse(text, now, TimeZoneInfo.Utc)?.ToUnixTimeSeconds();
 }

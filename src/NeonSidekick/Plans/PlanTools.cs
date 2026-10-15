@@ -69,6 +69,8 @@ public static class PlanTools
         "shopping_reference",
         // what was bought before (2026-10-11): read from the profile's shopping.db
         "shopping_recent",
+        // the event logs (2026-10-15): every call reads Windows' logs or an .evtx file; nothing changes
+        "eventlog_logs", "eventlog_search", "eventlog_summary", "eventlog_event",
     };
 
     /// <summary>The tools plan mode drops because they change something or start something: named, so the classification test can hold every tool to one list.</summary>

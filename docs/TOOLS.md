@@ -10,7 +10,7 @@ Each group has a switch (*File tools*, *Web tools*…), and the Offered tab of `
 - [Always offered](#always-offered): [Clock](#clock), [Timers](#timers), [Help](#help)
 - [Core](#core): [Ask](#ask), [Web](#web), [Shell](#shell)
 - [Files](#files): [File](#file), [Image](#image), [UNC shares and outside folders](#unc-shares-and-outside-folders), [GitLib](#gitlib), [Obsidian](#obsidian)
-- [Apps](#apps): [Docker](#docker), [ComfyUI](#comfyui), [YouTube](#youtube)
+- [Apps](#apps): [Docker](#docker), [Event logs](#event-logs), [ComfyUI](#comfyui), [YouTube](#youtube)
 - [Databases](#databases): [How the database tools work](#how-the-database-tools-work), [SQL Server](#sql-server), [MySQL and MariaDB](#mysql-and-mariadb), [SQLite](#sqlite), [PostgreSQL](#postgresql), [Oracle](#oracle)
 - [Devices](#devices): [Printing](#printing), [Camera](#camera), [Screen](#screen)
 - [Home](#home): [Home Assistant](#home-assistant), [Shopping list](#shopping-list)
@@ -23,7 +23,7 @@ Each group has a switch (*File tools*, *Web tools*…), and the Offered tab of `
 * **Headless** ([HEADLESS.md](HEADLESS.md)) has no timers, `ask_user`, camera or screen tools, Browser window or `_execute` database tools, and YouTube can't play.
 * **Headless, what would ask you on a pane is refused:** a shell command off the allow list under `ask`, a Docker change, a print under `ask`, a Home Assistant service that needs your yes, clearing the whole shopping list, an advisor under *Advisor confirm*.
 * **Plan mode** ([COMMANDS.md](COMMANDS.md#plan-mode)) keeps each group's reading tools plus `ask_user`, `camera_capture`, the screen tools and `neon_advisor`, and adds `present_plan`. It drops every tool that changes or starts something (`start_timer`, `open`, `open_url`, `process`, `image_edit`, `unc_fetch`…) and every MCP tool.
-* **On a Mac** the Browser window and Docker servers are Windows only, and the camera and screen tools and YouTube playback need macOS 14 or later. Other differences are in each section and [MAC.md](MAC.md#what-works).
+* **On a Mac** the Browser window, Docker servers and the event logs are Windows only, and the camera and screen tools and YouTube playback need macOS 14 or later. Other differences are in each section and [MAC.md](MAC.md#what-works).
 
 ## Always offered
 
@@ -323,6 +323,60 @@ The same tools work over the engine's socket (Docker Desktop, OrbStack, Colima o
 
 * A `tcp://` or `ssh://` engine is refused. `docker_stats` shows the Linux VM's CPU and memory, not the Mac's.
 * **Docker servers stay Windows only:** Docker on a Mac passes no GPU to containers. A Mac's local server is the [embedded model](SETTINGS.md#embedded).
+
+### Event logs
+
+Under *Event log tools*. **Windows only.** They read what Windows itself recorded (a crash, a failed service start, a driver error, a failed sign-in, a PowerShell script block) from this PC, from `.evtx` files in the working directory, and from remote computers you name. Everything is read-only, through Windows' own event log API in the app: nothing is started, no `wevtutil`. `/eventlog` is your own hand on them ([COMMANDS.md](COMMANDS.md)) and works with the tools off.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `eventlog_logs` | `filter?, all?, computer?` | The computers offered, a computer's logs with records, size and last write (200 looked into on this PC, 40 on a remote one; `all` adds the empty, disabled, Analytic and Debug ones), and the `.evtx` files in the working directory. |
+| `eventlog_search` | `log, level?, id?, provider?, field?, since?, until?, audit?, text?, before_record?, limit?, computer?` | A log's events newest first, a line each; the answer ends with the next page as the whole call to make. |
+| `eventlog_summary` | `log, since?, level?, computer?` | Counts by provider and id since a time (a day by default), the top 30, each with its newest time and a sample message. |
+| `eventlog_event` | `log, record, computer?` | One event in full: system values, message, named fields, and (under `full`) its XML. At most 32,000 characters. |
+
+* **The log** is a name `eventlog_logs` lists (`app`, `sys`, `sec`, `setup` and `ps` for PowerShell/Operational), or an `.evtx` path in the working directory (never with `computer`).
+* **Default view:** with no `level` or `audit`, Security shows its audit failures and every other log its critical events, errors and warnings.
+* **Filters** go into Windows' own query: `level` (`critical,error,warning,information,verbose` or `all`), `id` (`41,1074` or `4700-4799`), `provider`, `since`/`until` (an age such as `2h`, or a moment in your time zone), `audit`, and `field` (`Name=value`, EventData's named values; `UserData` values are reached by `text`). At most 20 terms; `text` is matched in the app, over the provider, the fields and the message.
+* **Limits:** *Event log max events* per page (100 at most); *Event log scan limit* events looked at per call (a quarter of it on a remote computer) and 10 seconds, after which the answer says how far back it got. A read gives up after 30 s (60 s remote).
+* **Security** needs the Event Log Readers group, or the app run as administrator. Analytic and Debug logs read oldest-first only and can't be searched.
+
+#### Event log computers
+
+Computers live in `eventlog.json`, in the home or profile folder like the [database connections](#managing-connections) (the profile's wins by name). `local` is this PC, built in. A computer is read only once ticked in *Event log computers offered*, for the model and `/eventlog` alike; until you change it, `local` alone is ticked. *Event log add/edit computer* walks through one and tests it (the newest System event under its account); *Event log set password* changes a runas password.
+
+* **`host`** (required): the computer's name or address (`localhost` is a loopback session).
+* **`auth`**: `windows` (default, as you) or `runas`, with **`user`** (`DOMAIN\name` or `name@domain`; `lab-box\admin` for the machine's own account) and **`passwordStore`** `file` or `credman` (`NeonSidekick/eventlog/<name>`). **`authMethod`**: `default`, `negotiate`, `kerberos` or `ntlm`.
+* **`logs`**: the logs allowed, case ignored, `*` any run but `/` (`Microsoft-Windows-*/Operational`, `*/*` every slashed name). Absent: all.
+* **`detail`**: `redacted` (default) or `full`, what the main chat's model reads (see below).
+* **`description`**: what the computer is; the model reads it to choose.
+* An entry named `local` may set only `logs`, `detail` and `description`.
+
+```json
+{
+  "computers": {
+    "local": { "logs": ["Application", "System", "Setup", "Microsoft-Windows-*/Operational"] },
+    "fs01": { "host": "fs01.corp.example", "description": "file server", "detail": "full" },
+    "dc01": {
+      "host": "dc01",
+      "auth": "runas",
+      "user": "CORP\\svc-logreader",
+      "passwordStore": "credman",
+      "logs": ["Security", "System", "Directory Service"]
+    }
+  }
+}
+```
+
+**A remote computer needs:** the "Remote Event Log Management" firewall rule on, and the account in its Event Log Readers group. A local administrator's network sign-in is filtered by UAC, so membership is the dependable way. `--eventlog-check <computer>` tests one.
+
+#### Who sees what
+
+* **`redacted`** hides secret-looking values: fields named like a password, secret, API key, private key or connection string, and in free text URL passwords, `password=…`, `-Password x`, `/pass:x`, `-p x`, `net user u <pw>`, `net use … /user:u <pw>`, `schtasks /RP`, `ConvertTo-SecureString '…' -AsPlainText`, `PSCredential`, `$password = '…'`, `Authorization:` headers, JWTs and PEM blocks. The message is formatted from the hidden values, so a secret doesn't slip in that way, and `text` and `field` match the hidden values only. **It is best-effort:** no rule knows every secret in free text.
+* **`full`** is the main chat's alone. Bots, advisors and a script's `execute_code` bridge always read redacted, and an advisor's recent lines name an event-log call, never its result.
+* **A `.evtx` file** takes `local`'s detail and no `logs` applies to it: a log exported from a `redacted` computer and read as a file is read under `local`'s detail.
+* **Out of any rule's reach:** what the main model quotes, and saved sessions, which keep what the main chat saw. Set `full` only for computers whose events you are content to have anywhere the conversation goes.
+* **Event text is untrusted:** any program or user can write an event. Each message and value is fenced as quoted data (`⟪ ⟫`), the model is told it is never an instruction, and an event whose source isn't registered says "source not registered: any program could have written this". Control characters are replaced.
 
 ### ComfyUI
 

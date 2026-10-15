@@ -122,6 +122,7 @@ Only for running the tests from source. Each live test is skipped unless its res
 * `NEONSIDEKICK_TEST_POSTGRES_CONNECTION`: an Npgsql connection string (`Host=127.0.0.1;Port=5432;Username=…;Password=…;Database=…`).
 * `NEONSIDEKICK_TEST_UNC_SHARE`: a readable `\\server\share` path (`\\localhost\C$\Windows`); on a Mac, `smb://server/share` (your Public share with File Sharing on works), mounted and unmounted by each test. `NEONSIDEKICK_TEST_UNC_USER` and `NEONSIDEKICK_TEST_UNC_PASSWORD` add a second account for the runas path. Reads only.
 * `NEONSIDEKICK_TEST_DOCKER_CONTAINER`: a running container to read (`mysql_dev`); `NEONSIDEKICK_TEST_DOCKER_PIPE` names another pipe (a socket's path on a Mac). Reads only.
+* `NEONSIDEKICK_TEST_EVENTLOG_COMPUTER`: a computer's host whose event logs are read over RPC as you (`localhost` is a loopback session). Windows only; reads only.
 * `NEONSIDEKICK_TEST_CAMERA`: `1` or a camera's name (the light comes on); `NEONSIDEKICK_TEST_CAMERA_OUT`: a folder to keep the test photo in.
 * `NEONSIDEKICK_TEST_PRINTER`: a printer's CUPS queue name on a Mac (`Brother_HL_L2340D_series`). Jobs are held and canceled, so nothing prints.
 * `NEONSIDEKICK_TEST_HA_URL` with `NEONSIDEKICK_TEST_HA_TOKEN`: a Home Assistant to read from.

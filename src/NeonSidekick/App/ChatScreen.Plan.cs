@@ -162,7 +162,7 @@ internal sealed partial class ChatScreen
     {
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         return _plan.Active
-            ? PlanTools.Widen(disabled, _clockTools, _timerTools, _fileTools, _imageTools, _webTools, _gitTools, _shellTools, _vaultTools, _sqlTools, _oracleTools, _uncTools, _mysqlTools, _sqliteTools, _postgresTools, _dockerTools, _comfyTools, _haTools, _youTubeTools, _shoppingTools, _memoryTools, _skillTools, _sessionTools, _askTools, _mcp.Tools)
+            ? PlanTools.Widen(disabled, _clockTools, _timerTools, _fileTools, _imageTools, _webTools, _gitTools, _shellTools, _vaultTools, _sqlTools, _oracleTools, _uncTools, _mysqlTools, _sqliteTools, _postgresTools, _dockerTools, _eventLogTools, _comfyTools, _haTools, _youTubeTools, _shoppingTools, _memoryTools, _skillTools, _sessionTools, _askTools, _mcp.Tools)
             : disabled;
     }
 

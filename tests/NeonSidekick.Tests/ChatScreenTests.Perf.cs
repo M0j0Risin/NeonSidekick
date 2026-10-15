@@ -168,7 +168,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Equal(["off", "2 of 42", "off", "2 of 42", "2 of 42"], shown);   // 41 since 📈 went (2026-10-14); 38 until ✴️ went (2026-10-10), 38 again with 🛒 (2026-10-11), 39 with Model name (2026-10-12)
+        Assert.Equal(["off", "2 of 43", "off", "2 of 43", "2 of 43"], shown);   // 41 since 📈 went (2026-10-14); 38 until ✴️ went (2026-10-10), 38 again with 🛒 (2026-10-11), 39 with Model name (2026-10-12)
         Assert.Contains(ToolbarItems.Notice(false), output);
         Assert.Contains(ToolbarItems.Notice(true), output);
         Assert.Contains(ToolbarItems.UsageError, output);

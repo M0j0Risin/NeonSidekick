@@ -139,8 +139,13 @@ public sealed record SystemPromptFacts(
     int AdvisorTools = 0,
     bool ShoppingEnabled = false,
     int ShoppingTools = 0,
-    bool GlobalSkills = true)
+    bool GlobalSkills = true,
+    bool EventLogEnabled = false,
+    int EventLogTools = 0)
 {
+    /// <summary>Whether the rules carry <see cref="Assistant.EventLogRule"/>: tools on, the switch on (Windows) and an event-log tool offered (2026-10-15).</summary>
+    public bool EventLog => ToolsEnabled && EventLogEnabled && EventLogTools > 0;
+
     /// <summary>Whether the rules carry <see cref="Assistant.ShoppingRule"/>: tools on, the switch on and a shopping tool offered (2026-10-11).</summary>
     public bool Shopping => ToolsEnabled && ShoppingEnabled && ShoppingTools > 0;
 
@@ -369,6 +374,15 @@ public static class SystemPromptSummary
     /// <summary>The tail of the Shopping group while its tools cannot be offered: the switch off (2026-10-11). Pinned.</summary>
     public const string ShoppingOffSuffix = "Shopping tools is off";
 
+    /// <summary>The tail of the Event logs group while its tools cannot be offered: the switch off, or not Windows (2026-10-15). Pinned.</summary>
+    public const string EventLogOffSuffix = "Event log tools is off, or this is not Windows";
+
+    /// <summary>
+    /// The Event logs group's note while it is offered with no computer ticked (2026-10-15, the plan: on with nothing ticked is not "off").
+    /// Pinned.
+    /// </summary>
+    public const string EventLogFilesOnlyNote = "no computer ticked; .evtx files only";
+
     /// <summary>The tail of the ComfyUI group while the image tools cannot be offered (2026-09-24). Pinned.</summary>
     /// <summary>Why the profile advisors' group is not offered (2026-10-10). Pinned.</summary>
     public const string AdvisorsOffSuffix = "Advisors enabled is off";
@@ -431,7 +445,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting, serverWrites: facts.ServerWrites, images: facts.Images, advisors: facts.Advisors, shopping: facts.Shopping);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting, serverWrites: facts.ServerWrites, images: facts.Images, advisors: facts.Advisors, shopping: facts.Shopping, eventLog: facts.EventLog);
         sections.Add(new(
             "Operating rules",
             customRules ? $"{OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : defaultLabel,
@@ -570,7 +584,8 @@ public static class SystemPromptSummary
             images: facts.Images,
             advisors: facts.Advisors,
             shopping: facts.Shopping,
-            globalSkills: facts.GlobalSkills);
+            globalSkills: facts.GlobalSkills,
+            eventLog: facts.EventLog);
     }
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26): <see cref="PlanModeLabel"/> and <see cref="PlanModeStatus"/> as <see cref="SystemPromptSection.Heading"/> joins them. Pinned.</summary>
@@ -700,7 +715,10 @@ public static class SystemPromptSummary
         IReadOnlyList<AIFunction>? advisors = null,
         bool advisorsEnabled = true,
         IReadOnlyList<AIFunction>? shopping = null,
-        bool shoppingEnabled = true)
+        bool shoppingEnabled = true,
+        IReadOnlyList<AIFunction>? eventLog = null,
+        bool eventLogEnabled = true,
+        bool eventLogTicked = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -800,6 +818,13 @@ public static class SystemPromptSummary
             // The Docker tools (2026-10-02): after the UNC tools, the outside places together; offered while the setting Docker tools is on.
             string dockerNote = !dockerEnabled ? NotOffered(DockerOffSuffix) : standing;
             groups.Add(Group(ToolsText.DockerTabTitle, docker, dockerNote, dockerEnabled && toolsEnabled, SettingsField.DockerTools, disabled));
+        }
+
+        if (eventLog is not null)
+        {
+            // The event logs (2026-10-15): after the Docker tools; offered while Event log tools is on, on Windows — with nothing ticked, for .evtx files alone.
+            string eventLogNote = !eventLogEnabled ? NotOffered(EventLogOffSuffix) : !eventLogTicked && toolsEnabled ? EventLogFilesOnlyNote : standing;
+            groups.Add(Group(ToolsText.EventLogTabTitle, eventLog, eventLogNote, eventLogEnabled && toolsEnabled, SettingsField.EventLogTools, disabled));
         }
 
         if (comfy is not null)

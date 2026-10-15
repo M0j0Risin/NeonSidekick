@@ -57,6 +57,7 @@ public static class ToolbarItems
     public const string Web = "web";
     public const string Advisors = "advisors";   // 2026-10-10: 🦉, the Advisors enabled switch (/tools advisors), after Web (the Claude Code advisor's ✴️ "claude" stood between until it was retired that day; a saved "claude" is dropped)
     public const string Docker = "docker";
+    public const string EventLog = "eventlog";   // 2026-10-15, the event-log plan: 🪵, the Event log tools switch (/tools eventlog), after Docker, off by default; on the slab off Windows
     public const string Obsidian = "obsidian";
     public const string Sql = "sql";
     public const string Oracle = "oracle";
@@ -94,7 +95,7 @@ public static class ToolbarItems
     public static readonly string[] Names =
     [
         Settings, Profile, Themes, WebUi, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Prompts, Queue, Ask, CmdList, Police,
-        Shell, Files, Image, Web, Advisors, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
+        Shell, Files, Image, Web, Advisors, Docker, EventLog, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
         Log, Process, ComfyView, ComfyThumbs, YouTube, BrowserLinks, ShoppingList, Path, Model,
     ];
 
@@ -136,6 +137,7 @@ public static class ToolbarItems
         Web => ChatScreen.WebToolGlyph,
         Advisors => ChatScreen.AdvisorsToolGlyph,
         Docker => ChatScreen.DockerToolGlyph,
+        EventLog => ChatScreen.EventLogToolGlyph,
         Obsidian => ChatScreen.ObsidianToolGlyph,
         Sql => ChatScreen.SqlToolGlyph,
         Oracle => ChatScreen.OracleToolGlyph,
@@ -183,6 +185,7 @@ public static class ToolbarItems
         Web => "Web",
         Advisors => "Advisors",
         Docker => "Docker",
+        EventLog => "Event logs",
         Obsidian => "Obsidian",
         Sql => "SQL",
         Oracle => "Oracle",

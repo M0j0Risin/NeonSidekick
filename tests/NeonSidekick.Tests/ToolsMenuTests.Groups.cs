@@ -27,7 +27,7 @@ public partial class ToolsMenuTests
         Assert.Equal("         │ ↳ SQL · MySQL · SQLite · PostgreSQL · Oracle ", SubStrip(ToolsText.DatabaseTabTitle));
         Assert.Equal("         │ ↳ Print · Camera · Screen ", SubStrip(ToolsText.DevicesTabTitle));   // ComfyUI and YouTube on Integrations since 2026-10-10
         Assert.Equal("         │ ↳ File · Image · UNC · GitLib · Obsidian ", SubStrip(ToolsText.FilesTabTitle));   // 2026-10-10; Image later that day
-        Assert.Equal("         │ ↳ Docker · ComfyUI · YouTube ", SubStrip(ToolsText.AppsTabTitle));   // 2026-10-10; ClaudeCode first until later that day; HomeAssistant until 2026-10-11
+        Assert.Equal("         │ ↳ Docker · EventLog · ComfyUI · YouTube ", SubStrip(ToolsText.AppsTabTitle));   // EventLog 2026-10-15; 2026-10-10; ClaudeCode first until later that day; HomeAssistant until 2026-10-11
         Assert.Equal("         │ ↳ HomeAssistant · Shopping ", SubStrip(ToolsText.HomeTabTitle));   // 2026-10-11 (the user's ask)
     }
 
@@ -60,7 +60,7 @@ public partial class ToolsMenuTests
         Assert.Equal(LeafIndex(ToolsText.FileMenuTitle), LeafIndex(ToolsText.FilesTabTitle));
         Assert.Contains(Strips(ToolsText.FilesTabTitle) + HeadingOver(ToolsText.FileMenuTitle, SettingsField.FileTools) + "▸ " + SettingsMenu.FieldName(SettingsField.FileTools) + "  ", Output);
         Assert.Contains(Strips(ToolsText.AppsTabTitle) + HeadingOver(ToolsText.DockerTabTitle, TabFields(ToolsText.DockerTabTitle)[0]) + "▸ " + SettingsMenu.FieldName(TabFields(ToolsText.DockerTabTitle)[0]) + "  ", Output);
-        Assert.Equal(LeafIndex(ToolsText.DockerTabTitle) + 1, LeafIndex(ToolsText.ComfyTabTitle));   // ComfyUI and YouTube after Docker since 2026-10-11 (HomeAssistant between them, off to Home), off Media
+        Assert.Equal(LeafIndex(ToolsText.DockerTabTitle) + 2, LeafIndex(ToolsText.ComfyTabTitle));   // EventLog between them since 2026-10-15;   // ComfyUI and YouTube after Docker since 2026-10-11 (HomeAssistant between them, off to Home), off Media
         Assert.Equal(LeafIndex(ToolsText.HomeAssistantTabTitle) + 1, LeafIndex(ToolsText.ShoppingMenuTitle));   // Home: HomeAssistant, then Shopping (2026-10-11)
         pane.Dispose();
     }

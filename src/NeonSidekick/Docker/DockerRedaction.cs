@@ -81,16 +81,9 @@ public static partial class DockerRedaction
         return string.Join(' ', Args(line.Split(' ')));
     }
 
-    /// <summary>Every <c>scheme://user:password@</c> in <paramref name="text"/> with the password hidden.</summary>
-    public static string Url(string text)
-    {
-        ArgumentNullException.ThrowIfNull(text);
-        return UrlCredentials().Replace(text, m => m.Groups["head"].Value + DockerText.Redacted + "@");
-    }
+    /// <summary>Every <c>scheme://user:password@</c> in <paramref name="text"/> with the password hidden (<see cref="Llm.Tools.ToolRedaction.Url"/> since 2026-10-15).</summary>
+    public static string Url(string text) => Llm.Tools.ToolRedaction.Url(text);
 
     [GeneratedRegex(@"pass|pwd|secret|token|key|credential|auth|cert|private", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SecretWords();
-
-    [GeneratedRegex(@"(?<head>[a-z][a-z0-9+.\-]*://[^:/@\s]+:)[^@\s/]+@", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex UrlCredentials();
 }

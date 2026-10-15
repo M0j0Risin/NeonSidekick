@@ -91,6 +91,7 @@ In every list ↑/↓ move, Enter or a double-click picks, ESC closes; key lette
 | `/find` | type to find · a paste or right-click adds its first line · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · ESC or a double-click outside done |
 | Info panes (`/help`, `/sys`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find · ESC closes |
 | **Saved lists** | |
+| `/eventlog` | ←/→ logs · Enter opens the event (`c` copy, `a` ask, ESC back to the list) · `r` refresh · `m` more · `c` computer · type to filter, Shift+letter to start one with a button's letter |
 | `/youtube list` | Enter plays |
 | `/youtube <words>`, `/youtube playlist` | Enter plays · `s` saves the video |
 | `/prompts` | Enter puts the prompt on the draft line · `a` add · `s` save the draft · `e` edit (a long one in the draft editor) |
@@ -125,6 +126,10 @@ In every list ↑/↓ move, Enter or a double-click picks, ESC closes; key lette
 | `/toolbar edit`, `/perfbar edit`, *Status bar* | see [Bar checklists](#bar-checklists) |
 | `/homebar edit` | **On the bar**: see [Bar checklists](#bar-checklists); Enter for rename and emoji · other tabs: Space or Enter adds or removes, type to filter |
 | A room's pane on the home bar | Space switches a device · Enter its actions |
+
+### The event log pane
+
+`/eventlog` shows a computer's events newest first, a tab per log (Application, System, Security, Setup, and the one you named). Each row is the time, a level glyph (◆ critical, ● error, ▲ warning, ○ information; ✗ and ✓ for Security's audit failures and successes), the provider, the id and the message's first line; a dim line marks each new day. A tab reads "(no access)" once Windows refused it. The title row's `⟳ refresh`, `more` (lit while there is a next page) and `computer` (with more than one ticked) are buttons. An event's page shows everything Windows recorded, its XML too, as plain text: nothing an event holds is read as markup or a terminal code.
 
 ### Folder picker
 
@@ -255,6 +260,7 @@ Glyphs under the status bar (*Tool bar*), each shown while it is checked there. 
 | 👮 / 🥷 | *Shell police* on / off (none while the policy is `off`) | `/tools shell police` |
 | 🐚 | slab under `off` | `/tools shell` |
 | 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | slab while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` |
+| 🪵 | slab while off, and always off Windows | `/tools eventlog` |
 | 📄 ⚡ | always | the [log window](#the-log-window); `/process` |
 | 🎞️ 🪟 | always | the [picture viewer](#the-picture-viewer); the [thumbnail browser](#the-thumbnail-browser) (ComfyUI's folder) |
 | 📺 ⭐ 🛒 | always | `/youtube list`, `/browser list`, `/shopping` |
@@ -450,7 +456,7 @@ With *Web UI commands* on (off by default; `/settings` › Client › Web UI), t
 |---|---|---|
 | Run | `/new`, `/clear`, `/splash`, `/compact`, `/plan …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/learn [<note>]`, `/test …`, `/pdf …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …`, `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave` | Their lines; a working line (⏳) while one runs |
 | Pick | `/model`, `/reasoning`, `/rewind [<n>]` | A card with the choices, the one in use marked, a filter for a long list |
-| List | `/ha states`, `/docker logs`, `/plan open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy`, `/comfy offered` | A card with the lines; Close |
+| List | `/ha states`, `/docker logs`, `/eventlog …`, `/plan open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy`, `/comfy offered` | A card with the lines; Close |
 | Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/cwd <path>`, `/msgclear`, `/sessions`, `/skills`, `/youtube`, `/queue`, `/botchat`, `/loop`, `/sampling`, `/server`, `/usage` | Refused: they run at the PC only |
 | Other | Every form that opens a pane or a window at the PC (`/settings`, `/theme`, `/view`, bare `/prompts`, `/camera`, `/screen`…) | Refused, naming the form that works here when there is one |
 

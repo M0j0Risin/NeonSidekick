@@ -316,7 +316,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem);
         screen.UserProfileFolder = _userProfile;
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
@@ -9748,7 +9748,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ToolsText.SwitchStateLine(SettingsField.SqlTools, _settings.Current) + "\n", output);
         Assert.Equal("SQL tools: off", ToolsText.SwitchStateLine(SettingsField.SqlTools, new AppSettingsData { SqlTools = false }));
         Assert.Contains("  · Shell command policy: ask\n", output);
-        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, shopping, or nothing for the pane.", ToolsText.SwitchUsageError);
+        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, eventlog, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, shopping, or nothing for the pane.", ToolsText.SwitchUsageError);
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Tools, hasArgs: true));   // as /police: the rows are never refused under a reply
         Assert.Equal(SettingsField.HomeAssistantTools, ToolsText.SwitchField(" HA "));
         Assert.Null(ToolsText.SwitchField("git"));
@@ -10512,7 +10512,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab
-        _console.Profile.Height = 132;   // /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
+        _console.Profile.Height = 134;   // /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);   // Advanced, since later on 2026-09-27
@@ -11054,7 +11054,7 @@ public partial class ChatScreenTests : IDisposable
             Key(Keys.Escape),
             input => { input.PushClick(45, 103); input.PushClick(45, 103); },    // 👮 (2026-09-22: the police are on by default): the police page (later that day) (+3 since ⏳, 2026-10-13) (+3 since 📣, 2026-10-14) (+3 since 📱, 2026-10-14)
             Key(Keys.Escape),
-            input => { input.PushClick(120, 103); input.PushClick(120, 103); },  // the blanks: /settings (later on 2026-09-21; nothing before)
+            input => { input.PushClick(126, 103); input.PushClick(126, 103); },  // the blanks: /settings (later on 2026-09-21; nothing before) (+6 since 🪵, 2026-10-15: past the strip's end)
             Key(Keys.Escape),
             input =>
             {
@@ -11204,7 +11204,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task UnderAPane_ADoubleClickOnItsOwnToolbarGlyph_ClosesIt_OnAnothers_SwitchesToThatPane()
     {
         _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.EventLog)]; });   // 🪵 left out (2026-10-15): the clicks below are at the cells the strip had before it
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -11462,7 +11462,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("⚙️ 🔓", ChatScreen.ToolbarStripFor(Items("cmdlist", "settings"), CommandPolicyMode.Yolo, true));   // strip order, not the list's
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("cmdlist", "police"), CommandPolicyMode.Off, true));
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("path"), CommandPolicyMode.Ask, true));
-        Assert.Equal("⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🎭 💬 📊 📣 ⏳ 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03); 📈 last until it was retired (2026-10-14)
+        Assert.Equal("⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🎭 💬 📊 📣 ⏳ 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 🪵 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03); 📈 last until it was retired (2026-10-14)
         Assert.Equal("🐚 🌐", ChatScreen.ToolbarStripFor(Items("web", "shell"), CommandPolicyMode.Off, true));   // the switches always drawn, the shell under off too
         Assert.Equal("🪪 📄", ChatScreen.ToolbarStripFor(Items("log", "profile"), CommandPolicyMode.Ask, true));   // strip order (later on 2026-09-29; the rising chart's pair until 2026-10-14)
     }
@@ -11534,7 +11534,7 @@ public partial class ChatScreenTests : IDisposable
         // 2026-09-29; the ID card and the rising chart later that day; the tool switches, the log and the viewers in the user's
         // order, the rising chart behind the log, 2026-10-03, and behind the viewers later that day.
         const string Panes = "⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🎭 💬 📊";   // 🧮 Themes 2026-10-04; 📱 the Web UI 2026-10-14
-        const string Rest = "🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒";   // 📈 last until it was retired (2026-10-14); 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04; 🛒 the shopping list after 📺, 2026-10-11
+        const string Rest = "🐚 📁 🌄 🌐 🦉 🐳 🪵 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒";   // 📈 last until it was retired (2026-10-14); 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04; 🛒 the shopping list after 📺, 2026-10-11
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 " + Rest, ChatScreen.ToolbarStrip);   // the disk always drawn since later on 2026-10-03 (the user's ask); 🙋 after it, 2026-10-09; 📣 after the disk since 2026-10-14
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, false));
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🔒 🥷 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, false));   // the ninja while the police is off (2026-10-02, the user's ask)
@@ -11608,7 +11608,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.ToolbarWord(ChatScreen.TtsGlyph));
         Assert.Null(ChatScreen.ToolbarWord(""));
         string[] glyphs = ChatScreen.ToolbarStrip.Split(' ');
-        Assert.Equal(38, glyphs.Length);   // 📱 2026-10-14 (the Web UI); 📈 gone 2026-10-14 (the performance item retired); 📣 later still on 2026-10-13 (the saved prompts); ⭐ later on 2026-10-13 (the saved links); ⏳ 2026-10-13 (the queue); 🛒 2026-10-11 (the shopping list); ✴️ gone later on 2026-10-10 (the Claude Code advisor tool retired); 🦉 2026-10-10 (the advisors); 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04, 🧮 and 🪟 later that day, ⚡ 2026-10-05, 🙋 2026-10-09, 🌄 2026-10-10
+        Assert.Equal(39, glyphs.Length);   // 🪵 2026-10-15 (the event logs); 📱 2026-10-14 (the Web UI); 📈 gone 2026-10-14 (the performance item retired); 📣 later still on 2026-10-13 (the saved prompts); ⭐ later on 2026-10-13 (the saved links); ⏳ 2026-10-13 (the queue); 🛒 2026-10-11 (the shopping list); ✴️ gone later on 2026-10-10 (the Claude Code advisor tool retired); 🦉 2026-10-10 (the advisors); 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04, 🧮 and 🪟 later that day, ⚡ 2026-10-05, 🙋 2026-10-09, 🌄 2026-10-10
         for (int i = 0; i < glyphs.Length; i++)
         {
             Assert.Equal(2, TextCells.Width(glyphs[i]));
@@ -13457,7 +13457,7 @@ public partial class ChatScreenTests : IDisposable
                     break;
             }
         }, "One ", "two ", "three ", "four ", "five ", "six ", "seven ", "eight.");
-        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)]);   // the path on the last cells, not the model's name (2026-10-12)
+        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model && id != ToolbarItems.EventLog)]);   // the path on the last cells, not the model's name (2026-10-12)
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
         SeedSession();

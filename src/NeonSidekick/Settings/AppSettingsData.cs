@@ -2291,6 +2291,41 @@ public sealed class AppSettingsData
     /// </summary>
     public string DockerEnginePipe { get; set; } = Docker.DockerPipe.DefaultName;
 
+    // ─── Event logs ─────────────────────────────────────────────────────────────
+    // The event-log tools and /eventlog (2026-10-15, the event-log plan: what Windows itself recorded, read in-process over
+    // wevtapi.dll — no process-start site, no shipped DLL, no new package; Windows only).
+
+    /// <summary>
+    /// Whether a turn offers the event-log tools (2026-10-15): <c>eventlog_logs</c>, <c>eventlog_search</c>, <c>eventlog_summary</c> and
+    /// <c>eventlog_event</c>, read-only, over the computers ticked in <see cref="EventLogComputersOffered"/> and the working directory's
+    /// <c>.evtx</c> files. Windows only. Read at each turn. Off by default, as every tool group. No variable. <c>/eventlog</c> works either way.
+    /// </summary>
+    public bool EventLogTools { get; set; }
+
+    /// <summary>
+    /// Which computers the event-log tools and <c>/eventlog</c> may read (2026-10-15): the built-in <c>local</c> (this PC) and the names of
+    /// <c>eventlog.json</c>. Null (never set) is <c>local</c> alone, so a fresh profile reads this PC once the switch is on; an empty list
+    /// none (the tools then read <c>.evtx</c> files alone). <c>/profile reset</c> returns it to null. No variable.
+    /// </summary>
+    public List<string>? EventLogComputersOffered { get; set; }
+
+    public const int MinEventLogMaxEvents = 1;
+    public const int MaxEventLogMaxEvents = 100;
+    public const int DefaultEventLogMaxEvents = 20;
+
+    /// <summary>How many events a search lists when the call names no <c>limit</c>, and a page of <c>/eventlog</c>'s list (2026-10-15): 1 to 100, 20 by default. No variable.</summary>
+    public int EventLogMaxEvents { get; set; } = DefaultEventLogMaxEvents;
+
+    public const int MinEventLogScanLimit = 1_000;
+    public const int MaxEventLogScanLimit = 30_000;
+    public const int DefaultEventLogScanLimit = 20_000;
+
+    /// <summary>
+    /// The most events one search or summary looks at before it stops and says how far back it got (2026-10-15): 1,000 to 30,000,
+    /// 20,000 by default; a remote computer gets a quarter of it, and every search 10 seconds at most. No variable.
+    /// </summary>
+    public int EventLogScanLimit { get; set; } = DefaultEventLogScanLimit;
+
     // ─── Docker servers (2026-10-02) ────────────────────────────────────────────
     // Chosen Docker containers as /server choices (the user's ask, after their tray app DockerLlmPicker: their vLLM and SGLang
     // containers, one running at a time so the GPU holds one model). /settings' Docker tab; the engine pipe is /tools' row above.

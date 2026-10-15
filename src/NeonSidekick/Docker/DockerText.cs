@@ -17,7 +17,7 @@ public static class DockerText
     public const string Glyph = "🐳";
 
     /// <summary>What every hidden value reads (<see cref="DockerRedaction"/>). Pinned.</summary>
-    public const string Redacted = "<redacted>";
+    public const string Redacted = Llm.Tools.ToolRedaction.Placeholder;
 
     // ─── failures ───────────────────────────────────────────────────────────────
 

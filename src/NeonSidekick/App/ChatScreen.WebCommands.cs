@@ -370,7 +370,8 @@ internal sealed partial class ChatScreen
             Print: argText => Printing.PrintCommand.Complete(argText, printers),
             Docker: argText => Docker.DockerCommand.Complete(docker, argText),
             Advisors: () => advisors,
-            Shopping: argText => Shopping.ShoppingCommand.Complete(argText, stores, items));
+            Shopping: argText => Shopping.ShoppingCommand.Complete(argText, stores, items),
+            EventLog: EventLogChoices);
         var sources = new CompletionSources(
             () => commands,
             (command, argText) => ArgumentPaths(command, argText, arguments) is { } paths
