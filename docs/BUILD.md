@@ -120,7 +120,7 @@ pwsh ./build.ps1 -Package      # publish/package/NeonSidekick-v<version>-osx-arm
 * **Signing.** The script makes the bundled `espeak-ng` executable and gives it and the app an ad-hoc signature.
 * **The package** is a `.tar.gz`, so the executable bits survive. It leaves out what a Mac never needs: the other platforms' native files and the debug symbols (`NeonSidekick.dSYM`, kept in `publish/output` for reading crash reports).
 
-### Notes for contributors
+### Notes for developers
 
 * **Windows-only tests.** Mark a test whose subject is Windows-only `[WindowsFact]` or `[WindowsTheory]`. A test of a portable feature written with Windows paths or `cmd` lines gets a Unix twin (`…_Unix`, `[UnixFact]`).
 * **Python.** The tests need the Xcode tools' `/usr/bin/python3`.
