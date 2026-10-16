@@ -86,7 +86,8 @@ public sealed class ServerDatabasePoliceTests : IDisposable
         Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(profile));
         File.WriteAllText(NeonSidekick.Settings.Profiles.ConfigPath(profile, "postgres.json"), """{ "connections": { "shop": { "host": "pg01", "user": "u" }, "local": { "host": "localhost", "port": 5433, "user": "u" } } }""");
         // No "database": a problem the tools skip since 2026-10-09, but its host is still guarded.
-        File.WriteAllText(Path.Combine(_dir, "mysql.json"), """{ "connections": { "m": { "host": "my01", "user": "u" } } }""");
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_dir));   // the home's mysql.json, in its configs since 2026-10-16
+        File.WriteAllText(NeonSidekick.MySql.MySqlConfigFile.GlobalPath(_dir), """{ "connections": { "m": { "host": "my01", "user": "u" } } }""");
         Assert.Null(ServerDatabasePolice.For(new AppSettingsData(), profile, _dir));
 
         var guard = ServerDatabasePolice.For(new AppSettingsData { PostgresTools = true, MySqlTools = true }, profile, _dir)!;

@@ -13,6 +13,7 @@ public sealed class SqlConfigFileTests : IDisposable
     {
         _profile = Path.Combine(_home, "profiles", "default");
         Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_profile));
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_home));   // the home's files in <home>\configs since 2026-10-16
     }
 
     public void Dispose()

@@ -77,7 +77,7 @@ public sealed record UncCatalog(IReadOnlyList<UncNamedShare> Shares, IReadOnlyLi
 }
 
 /// <summary>
-/// <c>unc.json</c> (2026-09-30): <c>{ "shares": { "&lt;name&gt;": { … } } }</c>, one in the profile's <c>configs</c> folder and one in the home,
+/// <c>unc.json</c> (2026-09-30): <c>{ "shares": { "&lt;name&gt;": { … } } }</c>, one in the profile's <c>configs</c> folder and one in the home's,
 /// the <see cref="SqlConfigFile"/> pair: the profile's wins by name. A missing file is empty; a corrupt or unreadable one is a
 /// problem and one warning, never a crash. Read afresh at every call (<see cref="UncAccess"/>), so an edit in the editor counts
 /// on the next tool call. A plain <c>password</c> is DPAPI-encrypted in place at the first read that sees it; the byte-level
@@ -165,8 +165,8 @@ public sealed class UncConfigFile
     /// <summary>The profile's file: <c>&lt;profile&gt;\configs\unc.json</c> (<c>configs</c> since 2026-10-16).</summary>
     public static string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
 
-    /// <summary>The home's file: <c>&lt;home&gt;\unc.json</c>, every profile's.</summary>
-    public static string GlobalPath(string home) => Path.Combine(home, FileName);
+    /// <summary>The home's file: <c>&lt;home&gt;\configs\unc.json</c> (configs since 2026-10-16), every profile's.</summary>
+    public static string GlobalPath(string home) => NeonSidekick.Settings.Profiles.HomeConfigPath(home, FileName);
 
     /// <summary>
     /// Reads <paramref name="path"/>: the usable shares in file order and a problem per entry that cannot be used

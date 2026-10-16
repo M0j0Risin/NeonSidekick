@@ -7,12 +7,12 @@ namespace NeonSidekick.Emojis;
 /// <summary>
 /// What the avatar picker remembers across profiles (2026-10-10): the emoji last picked, newest first, at most
 /// <see cref="RecentLimit"/>, and the skin tone last chosen (0 none, 1 light … 5 dark), where the tone grid opens. One file for the
-/// home, <c>&lt;home&gt;/emoji.json</c> (<see cref="FileName"/>): picks are rare, and a tone is the user's, not a profile's. Best effort
+/// home, <c>&lt;home&gt;/configs/emoji.json</c> (<see cref="PathFor"/>; the home's top until 2026-10-16, no migration): picks are rare, and a tone is the user's, not a profile's. Best effort
 /// both ways: a missing or unreadable file is no history, a failed save a warning in the log.
 /// </summary>
 public sealed class EmojiPrefs
 {
-    /// <summary>The file's name in the home.</summary>
+    /// <summary>The file's name in the home's <c>configs</c>.</summary>
     public const string FileName = "emoji.json";
 
     /// <summary>How many picks the Recent tab keeps.</summary>
@@ -35,11 +35,14 @@ public sealed class EmojiPrefs
     /// <summary>The skin tone last chosen: 0 none, 1 light … 5 dark.</summary>
     public int Tone { get; private set; }
 
+    /// <summary><c>&lt;home&gt;/configs/emoji.json</c> (2026-10-16, <see cref="Settings.Profiles.HomeConfigPath"/>).</summary>
+    public static string PathFor(string home) => Settings.Profiles.HomeConfigPath(home, FileName);
+
     /// <summary>The prefs of the home <paramref name="home"/>: empty when there is no file or it does not read.</summary>
     public static EmojiPrefs Load(string home)
     {
         ArgumentNullException.ThrowIfNull(home);
-        string path = Path.Combine(home, FileName);
+        string path = PathFor(home);
         try
         {
             if (File.Exists(path) && JsonSerializer.Deserialize(File.ReadAllText(path), EmojiJsonContext.Default.EmojiPrefsFile) is { } file)
@@ -87,7 +90,7 @@ public sealed class EmojiPrefs
     }
 }
 
-/// <summary><c>&lt;home&gt;/emoji.json</c> as written.</summary>
+/// <summary><c>&lt;home&gt;/configs/emoji.json</c> as written.</summary>
 public sealed class EmojiPrefsFile
 {
     public List<string>? Recent { get; set; }
@@ -95,7 +98,7 @@ public sealed class EmojiPrefsFile
     public int Tone { get; set; }
 }
 
-/// <summary>The source-generated context for <c>&lt;home&gt;/emoji.json</c> (2026-10-10). Reflection serialisation is off.</summary>
+/// <summary>The source-generated context for <c>&lt;home&gt;/configs/emoji.json</c> (2026-10-10). Reflection serialisation is off.</summary>
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     ReadCommentHandling = JsonCommentHandling.Skip,

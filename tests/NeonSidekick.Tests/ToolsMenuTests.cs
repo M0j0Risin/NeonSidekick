@@ -1416,6 +1416,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "connections": { "zeta": { "server": "x", "database": "db", "auth": "windows" }, "Alpha": { "server": "y", "database": "db", "auth": "windows" } } }""");
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.StorageDirectory));
         File.WriteAllText(NeonSidekick.Sql.SqlConfigFile.GlobalPath(_settings.StorageDirectory), """{ "connections": { "mid": { "server": "z", "database": "db", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
         Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the offered row: the checklist

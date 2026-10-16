@@ -114,6 +114,7 @@ public class McpRowsTests : IAsyncDisposable
     [Fact]
     public async Task ServerRows_OffLines_ShadowedAndGlobal_Problems()
     {
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.StorageDirectory));
         File.WriteAllText(McpConfigFile.GlobalPath(_settings.StorageDirectory), """{ "mcpServers": { "docker": { "command": "g" }, "gw": { "url": "http://h/mcp" }, "bad": {} } }""");
         _settings.Update(d => d.McpServersDisabled = ["gw"]);
         await using var session = await ConnectedAsync("""{ "mcpServers": { "docker": { "command": "docker" } } }""");

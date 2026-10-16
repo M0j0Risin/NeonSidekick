@@ -223,7 +223,8 @@ public sealed class DirectoryConfigFile
 
     public static string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
 
-    public static string GlobalPath(string home) => Path.Combine(home, FileName);
+    /// <summary>The home's file: <c>&lt;home&gt;\configs\ad.json</c> (configs since 2026-10-16), every profile's.</summary>
+    public static string GlobalPath(string home) => NeonSidekick.Settings.Profiles.HomeConfigPath(home, FileName);
 
     public static (IReadOnlyList<DirectoryDomain> Domains, IReadOnlyList<SqlConfigProblem> Problems) Load(string path)
     {

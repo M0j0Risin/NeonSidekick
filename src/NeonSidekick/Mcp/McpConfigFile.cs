@@ -15,7 +15,7 @@ public sealed record McpConfigLoad(string Path, IReadOnlyList<KeyValuePair<strin
 
 /// <summary>
 /// <c>mcp.json</c> (2026-09-20): <c>{ "mcpServers": { "&lt;name&gt;": { … } } }</c>, the shape every MCP client
-/// reads, one in the profile's <c>configs</c> folder and one in the home (<see cref="McpCatalog"/> merges them, the
+/// reads, one in the profile's <c>configs</c> folder and one in the home's (since 2026-10-16; <see cref="McpCatalog"/> merges them, the
 /// profile's winning by name). A missing file is empty; a corrupt or unreadable one is a problem and
 /// one warning (the <c>MemoryStore</c> tolerance), never a crash. The pane's edit rows create the file
 /// with <see cref="EmptyText"/> when it is missing (<see cref="EnsureExists"/>), so the editor opens on
@@ -38,8 +38,8 @@ public sealed class McpConfigFile
     /// <summary>The profile's file: <c>&lt;profile&gt;\configs\mcp.json</c> (<c>configs</c> since 2026-10-16).</summary>
     public static string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
 
-    /// <summary>The home's file: <c>&lt;home&gt;\mcp.json</c>, every profile's.</summary>
-    public static string GlobalPath(string home) => Path.Combine(home, FileName);
+    /// <summary>The home's file: <c>&lt;home&gt;\configs\mcp.json</c> (configs since 2026-10-16), every profile's.</summary>
+    public static string GlobalPath(string home) => NeonSidekick.Settings.Profiles.HomeConfigPath(home, FileName);
 
     /// <summary>
     /// Reads <paramref name="path"/>: the usable servers in file order, a problem per server that names

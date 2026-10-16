@@ -8,7 +8,7 @@ namespace NeonSidekick.Settings;
 /// <c>&lt;home&gt;\profiles\&lt;name&gt;\</c> holds one sidekick's <c>profile.json</c>, <c>persona.md</c>,
 /// <c>operata.md</c> and <c>vocalia.md</c>, and every other settings file in <c>configs\</c> (<see cref="ConfigPath"/>:
 /// <c>memory.json</c>, <c>mcp.json</c>, the connection files, the saved lists; 2026-10-16, the user's call, no migration:
-/// a file left beside <c>profile.json</c> is not read). Nothing here knows which profile is loaded; the
+/// a file left beside <c>profile.json</c> is not read; the home's own JSON files in <c>&lt;home&gt;\configs</c> too, <see cref="HomeConfigPath"/>). Nothing here knows which profile is loaded; the
 /// guards that need that (<see cref="DeleteRefusal"/>) take it as an argument, so every rule and
 /// every sentence is testable without a screen.
 ///
@@ -141,8 +141,8 @@ public static class Profiles
     /// <summary>
     /// <c>&lt;profile&gt;\configs</c> (2026-10-16, the user's call): where a profile keeps every JSON settings file but its
     /// <c>profile.json</c> — the memories, the MCP servers, the saved prompts, tests, videos and links, the browser's history, and
-    /// the connection and computer files. Only the profile's: the home's own files (<c>&lt;home&gt;\sql.json</c>…) stay in the home.
-    /// No migration: a file left at the profile's top is not read.
+    /// the connection and computer files; the home's own files in <c>&lt;home&gt;\configs</c> too (<see cref="HomeConfigPath"/>, 2026-10-16, no migration).
+    /// No migration: a file left at the profile's or the home's top is not read.
     /// </summary>
     public static string ConfigsDirectory(string profileDirectory)
     {
@@ -152,6 +152,12 @@ public static class Profiles
 
     /// <summary><c>&lt;profile&gt;\configs\&lt;fileName&gt;</c>: a profile's settings file, every family's <c>ProfilePath</c> and every profile store's file.</summary>
     public static string ConfigPath(string profileDirectory, string fileName) => Path.Combine(ConfigsDirectory(profileDirectory), fileName);
+
+    /// <summary>
+    /// <c>&lt;home&gt;\configs\&lt;fileName&gt;</c> (2026-10-16, the user's call, no migration): the home's own JSON files, every family's
+    /// <c>GlobalPath</c> and <c>emoji.json</c>, in the home's <c>configs</c> as a profile's are in its own. A file left at the home's top is not read.
+    /// </summary>
+    public static string HomeConfigPath(string home, string fileName) => ConfigPath(home, fileName);
 
     /// <summary>Where one of <see cref="SidekickFiles"/> lives in <paramref name="profileDirectory"/>: a <c>.json</c> in <c>configs</c>, the prompt files at the top.</summary>
     public static string SidekickFilePath(string profileDirectory, string fileName) =>

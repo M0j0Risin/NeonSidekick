@@ -31,7 +31,7 @@ public class McpConfigFileTests : IDisposable
         Assert.Equal("mcp.json", McpConfigFile.FileName);
         Assert.Equal("Mcp", McpConfigFile.Category);
         Assert.Equal(Path.Combine(@"D:\home\profiles\work", "configs", "mcp.json"), McpConfigFile.ProfilePath(@"D:\home\profiles\work"));   // configs since 2026-10-16
-        Assert.Equal(Path.Combine(@"D:\home", "mcp.json"), McpConfigFile.GlobalPath(@"D:\home"));
+        Assert.Equal(Path.Combine(@"D:\home", "configs", "mcp.json"), McpConfigFile.GlobalPath(@"D:\home"));   // configs since 2026-10-16
     }
 
     [Fact]

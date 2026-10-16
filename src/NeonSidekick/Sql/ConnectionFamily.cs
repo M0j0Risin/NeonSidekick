@@ -83,7 +83,7 @@ public static class ConnectionCatalog
 /// One connections-file family that signs in with a password — <c>oracle.json</c>, <c>mysql.json</c>, <c>postgres.json</c> — as one
 /// piece of code over the family's facts (2026-10-04, the review's call: the three were copies with the names changed, and a fix to
 /// the secrets or the loading had to be made three times). <c>{ "connections": { "&lt;name&gt;": { … } } }</c>, one in the profile's
-/// folder and one in the home, the profile's winning by name (<see cref="SqlConfigFile"/>'s pair). A missing file is empty; a corrupt
+/// folder and one in the home's (configs since 2026-10-16), the profile's winning by name (<see cref="SqlConfigFile"/>'s pair). A missing file is empty; a corrupt
 /// or unreadable one is a problem and one warning, never a crash. A plain <c>password</c> is DPAPI-encrypted in place at the first read
 /// that sees it; the byte-level edits are <see cref="ConnectionsFileEdit"/>'s. <c>sql.json</c> (Windows sign-in, <c>runas</c>),
 /// <c>sqlite.json</c> (no password) and <c>unc.json</c> (shares) differ enough to keep their own.
@@ -128,8 +128,8 @@ public sealed class ConnectionFamily<TConfig, TNamed>
     /// <summary>The profile's file: <c>&lt;profile&gt;\configs\&lt;FileName&gt;</c> (<c>configs</c> since 2026-10-16).</summary>
     public string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
 
-    /// <summary>The home's file: <c>&lt;home&gt;\&lt;FileName&gt;</c>, every profile's.</summary>
-    public string GlobalPath(string home) => Path.Combine(home, FileName);
+    /// <summary>The home's file: <c>&lt;home&gt;\configs\&lt;FileName&gt;</c> (configs since 2026-10-16), every profile's.</summary>
+    public string GlobalPath(string home) => NeonSidekick.Settings.Profiles.HomeConfigPath(home, FileName);
 
     /// <summary>
     /// Reads <paramref name="path"/>: the usable connections in file order and a problem per entry that cannot connect

@@ -35,7 +35,11 @@ public class McpSessionTests : IAsyncDisposable
         File.WriteAllText(McpConfigFile.ProfilePath(_settings.ProfileDirectory), json);
     }
 
-    private void GlobalFile(string json) => File.WriteAllText(McpConfigFile.GlobalPath(_settings.StorageDirectory), json);
+    private void GlobalFile(string json)
+    {
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.StorageDirectory));
+        File.WriteAllText(McpConfigFile.GlobalPath(_settings.StorageDirectory), json);
+    }
 
     private const string Two = """{ "mcpServers": { "docker": { "command": "docker", "args": ["mcp", "gateway", "run"] }, "chrome": { "url": "http://localhost:9/mcp" } } }""";
 

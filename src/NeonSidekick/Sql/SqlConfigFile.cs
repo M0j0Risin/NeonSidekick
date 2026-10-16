@@ -55,7 +55,7 @@ public sealed record SqlCatalog(IReadOnlyList<SqlNamedConnection> Connections, I
 
 /// <summary>
 /// <c>sql.json</c> (2026-09-23): <c>{ "connections": { "&lt;name&gt;": { … } } }</c>, one in the profile's <c>configs</c> folder
-/// and one in the home, the <c>mcp.json</c> pair (<see cref="Mcp.McpConfigFile"/>): the profile's wins by name.
+/// and one in the home's (since 2026-10-16), the <c>mcp.json</c> pair (<see cref="Mcp.McpConfigFile"/>): the profile's wins by name.
 /// A missing file is empty; a corrupt or unreadable one is a problem and one warning, never a crash. Read
 /// afresh at every call (<see cref="SqlAccess"/>), so an edit in the editor counts on the next tool call with no
 /// reload. The <c>/tools</c> SQL tab's edit rows create the file with <see cref="EmptyText"/> when it is missing.
@@ -181,8 +181,8 @@ public sealed class SqlConfigFile
     /// <summary>The profile's file: <c>&lt;profile&gt;\configs\sql.json</c> (<c>configs</c> since 2026-10-16).</summary>
     public static string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
 
-    /// <summary>The home's file: <c>&lt;home&gt;\sql.json</c>, every profile's.</summary>
-    public static string GlobalPath(string home) => Path.Combine(home, FileName);
+    /// <summary>The home's file: <c>&lt;home&gt;\configs\sql.json</c> (configs since 2026-10-16), every profile's.</summary>
+    public static string GlobalPath(string home) => NeonSidekick.Settings.Profiles.HomeConfigPath(home, FileName);
 
     /// <summary>
     /// Reads <paramref name="path"/>: the usable connections in file order and a problem per entry that cannot

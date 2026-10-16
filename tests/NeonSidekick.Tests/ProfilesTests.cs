@@ -199,10 +199,10 @@ public class ProfilesTests : IDisposable
 
     /// <summary>
     /// Every profile settings file lives in <c>&lt;profile&gt;\configs</c> (2026-10-16, the user's call): each family's profile file, each
-    /// profile store's file and the browser's history; the home's own files stay in the home.
+    /// profile store's file and the browser's history; the home's own files in <c>&lt;home&gt;\configs</c> (later the same day, no migration).
     /// </summary>
     [Fact]
-    public void EveryProfileSettingsFile_IsInConfigs_AndEveryGlobalOneInTheHome()
+    public void EveryProfileSettingsFile_IsInConfigs_AndEveryGlobalOneInTheHomesConfigs()
     {
         string home = Path.GetFullPath(_dir);
         string profile = Profiles.Directory(home, "work");
@@ -226,8 +226,11 @@ public class ProfilesTests : IDisposable
             Postgres.PostgresConfigFile.GlobalPath(home), Sqlite.SqliteConfigFile.GlobalPath(home), Unc.UncConfigFile.GlobalPath(home),
             EventLog.EventLogConfigFile.GlobalPath(home), ActiveDirectory.DirectoryConfigFile.GlobalPath(home),
             Services.ServiceConfigFile.Family.GlobalPath(home), Tasks.TaskConfigFile.Family.GlobalPath(home), McpConfigFile.GlobalPath(home),
+            Emojis.EmojiPrefs.PathFor(home),
         };
-        Assert.All(globalFiles, path => Assert.Equal(home, Path.GetDirectoryName(path)));
+        Assert.Equal(12, globalFiles.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.All(globalFiles, path => Assert.Equal(Profiles.ConfigsDirectory(home), Path.GetDirectoryName(path)));
+        Assert.Empty(globalFiles.Intersect(profileFiles, StringComparer.OrdinalIgnoreCase));
     }
 
     [Fact]

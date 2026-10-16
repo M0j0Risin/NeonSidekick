@@ -93,6 +93,7 @@ public sealed class SqliteToolsTests : IDisposable
         _profile = Path.Combine(_home, "profiles", "default");
         _work = Path.Combine(_dir, "work");
         Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_profile));   // sqlite.json in <profile>\configs since 2026-10-16
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_home));   // the home's files in <home>\configs since 2026-10-16
         Directory.CreateDirectory(Path.Combine(_work, "data"));
         Make(Path.Combine(_dir, "shop.db"), """
             CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT NOT NULL, city TEXT DEFAULT 'Oslo');
@@ -159,6 +160,15 @@ public sealed class SqliteToolsTests : IDisposable
         // A null list is no databases, not a throw at every turn's tool build (the third 2026-10-04 review).
         File.WriteAllText(SqliteConfigFile.GlobalPath(_home), "{ \"databases\": null }");
         Assert.Same(SqliteCatalog.Empty, SqliteConfigFile.Load(SqliteConfigFile.GlobalPath(_home)));
+    }
+
+    /// <summary>The home's <c>sqlite.json</c> is in <c>&lt;home&gt;\configs</c> since 2026-10-16, so a relative <c>path</c> in it counts from there, as a profile's counts from its own <c>configs</c>.</summary>
+    [Fact]
+    public void TheGlobalFile_ARelativePath_CountsFromTheHomesConfigs()
+    {
+        File.WriteAllText(SqliteConfigFile.GlobalPath(_home), """{ "databases": { "x": { "path": "../x.db" } } }""");
+        var global = Assert.Single(SqliteConfigFile.Load(SqliteConfigFile.GlobalPath(_home)).Databases);
+        Assert.Equal(Path.Combine(_home, "x.db"), global.FullPath);
     }
 
     [Fact]

@@ -2,7 +2,7 @@ using NeonSidekick.Emojis;
 
 namespace NeonSidekick.Tests;
 
-/// <summary>The avatar picker's <c>&lt;home&gt;/emoji.json</c> (2026-10-10): recent picks and the last skin tone.</summary>
+/// <summary>The avatar picker's <c>&lt;home&gt;/configs/emoji.json</c> (2026-10-10; in <c>configs</c> since 2026-10-16): recent picks and the last skin tone.</summary>
 public sealed class EmojiPrefsTests : IDisposable
 {
     private readonly string _home = Path.Combine(Path.GetTempPath(), "neon-emoji-" + Guid.NewGuid().ToString("N"));
@@ -36,6 +36,8 @@ public sealed class EmojiPrefsTests : IDisposable
         var again = EmojiPrefs.Load(_home);
         Assert.Equal(["🦊", "👍🏽", "🐙"], again.Recent);
         Assert.Equal(3, again.Tone);
+        Assert.True(File.Exists(Path.Combine(_home, "configs", EmojiPrefs.FileName)));   // the home's configs since 2026-10-16
+        Assert.False(File.Exists(Path.Combine(_home, EmojiPrefs.FileName)));
     }
 
     [Fact]
@@ -53,11 +55,11 @@ public sealed class EmojiPrefsTests : IDisposable
     [Fact]
     public void ACorruptFile_IsNoHistory()
     {
-        Directory.CreateDirectory(_home);
-        File.WriteAllText(Path.Combine(_home, EmojiPrefs.FileName), "{ not json");
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_home));
+        File.WriteAllText(EmojiPrefs.PathFor(_home), "{ not json");
         Assert.Empty(EmojiPrefs.Load(_home).Recent);
 
-        File.WriteAllText(Path.Combine(_home, EmojiPrefs.FileName), "{ \"recent\": [\"🦊\", \"word\", \"🦊\"], \"tone\": 9 }");
+        File.WriteAllText(EmojiPrefs.PathFor(_home), "{ \"recent\": [\"🦊\", \"word\", \"🦊\"], \"tone\": 9 }");
         var prefs = EmojiPrefs.Load(_home);
         Assert.Equal(["🦊"], prefs.Recent);
         Assert.Equal(5, prefs.Tone);

@@ -333,7 +333,7 @@ The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar 
 * **Tabs:** **⭐ For you** (matching the profile's name and persona), **🕘 Recent**, then the Unicode groups. Tab and Shift+Tab step them; the arrows move; a double-click picks.
 * Type to search (`fox`, `red heart`) or paste an emoji; Esc clears. 🎲 picks at random; 🚫 clears the avatar.
 * Enter on a hand or a person opens its six skin tones. Other profiles' avatars are marked.
-* Recent picks and the last skin tone are kept in `emoji.json` in the home folder, shared by every profile.
+* Recent picks and the last skin tone are kept in `emoji.json` in the home folder's `configs`, shared by every profile.
 
 ## The welcome splash
 

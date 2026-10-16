@@ -162,6 +162,7 @@ public sealed class PostgresToolsTests : IDisposable
         string home = Path.Combine(_dir, "home");
         string profile = Path.Combine(home, "profiles", "default");
         Directory.CreateDirectory(profile);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(home));
         File.WriteAllText(PostgresConfigFile.GlobalPath(home), """{ "connections": { "shop": { "host": "global", "database": "shop", "user": "u" }, "bad": { "user": "u" } } }""");
         Assert.Null(PostgresConfigFile.AddConnection(PostgresConfigFile.ProfilePath(profile), "shop", new PostgresConnectionConfig { Host = "local", Database = "shop", User = "reader", SslMode = "require" }));
         Assert.Contains("// One entry per connection.", File.ReadAllText(PostgresConfigFile.ProfilePath(profile)));

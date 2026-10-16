@@ -62,7 +62,7 @@ public sealed record SqliteCatalog(IReadOnlyList<SqliteNamedDatabase> Databases,
 
 /// <summary>
 /// <c>sqlite.json</c> (2026-10-04): <c>{ "databases": { "&lt;name&gt;": { "path": …, "description": … } } }</c>, one in the profile's
-/// folder and one in the home, <c>mysql.json</c>'s pair: the profile's wins by name. A missing file is empty; a corrupt or unreadable
+/// folder and one in the home's (since 2026-10-16), <c>mysql.json</c>'s pair: the profile's wins by name. A missing file is empty; a corrupt or unreadable
 /// one is a problem and one warning, never a crash. Read afresh at every call. The byte-level edits are
 /// <see cref="ConnectionsFileEdit"/>'s, under the <c>databases</c> section.
 /// </summary>
@@ -96,7 +96,8 @@ public sealed class SqliteConfigFile
 
     public static string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
 
-    public static string GlobalPath(string home) => Path.Combine(home, FileName);
+    /// <summary>The home's file: <c>&lt;home&gt;\configs\sqlite.json</c> (configs since 2026-10-16, so a relative <c>path</c> in it counts from there), every profile's.</summary>
+    public static string GlobalPath(string home) => NeonSidekick.Settings.Profiles.HomeConfigPath(home, FileName);
 
     /// <summary>Reads <paramref name="path"/>: the usable databases in file order and a problem per entry with no path or a blank name; a file that is not JSON or cannot be read is one problem and one warning. Never throws.</summary>
     public static SqliteCatalog Load(string path)

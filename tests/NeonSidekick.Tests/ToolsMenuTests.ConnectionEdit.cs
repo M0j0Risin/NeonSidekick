@@ -95,6 +95,7 @@ public partial class ToolsMenuTests
     {
         Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(SqlConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "connections": { "zeta": { "server": "x", "database": "db", "auth": "windows" }, "Alpha": { "server": "y", "database": "db", "auth": "windows" } } }""");
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.StorageDirectory));
         File.WriteAllText(SqlConfigFile.GlobalPath(_settings.StorageDirectory), """{ "connections": { "mid": { "server": "z", "database": "db", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
         OpenSqlWizard();
