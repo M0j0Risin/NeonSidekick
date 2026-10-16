@@ -1740,6 +1740,50 @@ public class AppSettingsTests : IDisposable
         string resolved = AppSettings.ResolveStorageDirectory(null);
         Assert.EndsWith(AppSettings.DefaultDirectoryName, resolved);
     }
+
+    /// <summary>
+    /// An update flushed at once (2026-10-16, the first launch's shortcut offer: <c>MarkShortcutOfferedAsync</c>) leaves no faulted save behind:
+    /// the flush disposed the debounce's source before the scheduled save read its token, and the save's task died unobserved with
+    /// <see cref="ObjectDisposedException"/>, logged by the finalizer as an unobserved task exception.
+    /// </summary>
+    [Fact]
+    public async Task AnUpdateFlushedAtOnce_LeavesNoFaultedSave()
+    {
+        var faults = new List<Exception>();
+        EventHandler<UnobservedTaskExceptionEventArgs> seen = (_, e) =>
+        {
+            lock (faults)
+            {
+                faults.AddRange(e.Exception.InnerExceptions.Where(x => x.StackTrace?.Contains(nameof(AppSettings), StringComparison.Ordinal) == true));
+            }
+        };
+        TaskScheduler.UnobservedTaskException += seen;
+        try
+        {
+            using (var settings = new AppSettings(_dir))
+            {
+                for (int i = 0; i < 200; i++)
+                {
+                    settings.Update(d => d.LlmModel = "m" + i);
+                    await settings.FlushAsync();
+                }
+            }
+
+            await Task.Delay(300);   // the scheduled saves run (or die) on the pool
+            for (int i = 0; i < 3; i++)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
+        }
+        finally
+        {
+            TaskScheduler.UnobservedTaskException -= seen;
+        }
+
+        Assert.Empty(faults);
+    }
+
     [Fact]
     public void Update_LogsOneChangedLinePerProperty_AndNothingForANoOp()
     {

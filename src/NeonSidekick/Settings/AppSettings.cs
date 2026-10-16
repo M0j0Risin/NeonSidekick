@@ -456,7 +456,7 @@ public sealed class AppSettings : IDisposable
 
     private void ScheduleSave(AppSettingsData snapshot, string path)
     {
-        CancellationTokenSource cts;
+        CancellationToken token;
         TimeSpan debounce;
         lock (_gate)
         {
@@ -467,7 +467,11 @@ public sealed class AppSettings : IDisposable
 
             _pendingSave?.Cancel();
             _pendingSave?.Dispose();
-            _pendingSave = cts = new CancellationTokenSource();
+            _pendingSave = new CancellationTokenSource();
+            // The token taken here, under the lock (2026-10-16, the first launch's unobserved ObjectDisposedException): a flush straight
+            // after the update (MarkShortcutOfferedAsync) cancels and disposes the source before the pool runs the save, and the source's
+            // Token getter throws once disposed. A token taken before is only cancelled, which the delay below answers as such.
+            token = _pendingSave.Token;
             debounce = SaveDebounce;
         }
 
@@ -478,7 +482,7 @@ public sealed class AppSettings : IDisposable
         {
             try
             {
-                await Task.Delay(debounce, cts.Token).ConfigureAwait(false);
+                await Task.Delay(debounce, token).ConfigureAwait(false);
                 await SaveAsync(snapshot, path).ConfigureAwait(false);
             }
             catch (OperationCanceledException)

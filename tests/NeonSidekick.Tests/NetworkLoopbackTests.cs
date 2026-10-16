@@ -105,22 +105,39 @@ public sealed class NetworkLoopbackTests
     }
 
     /// <summary>
-    /// A UDP socket and a TCP listener on one loopback port: the TCP port taken first (Windows reserves ranges of TCP ports for Hyper-V, so a
-    /// free UDP port's twin may refuse to bind), then UDP on it, tried again on a clash.
+    /// A UDP socket and a TCP listener on one loopback port, tried again on a clash. Windows reserves blocks of 100 ports for Hyper-V, of TCP
+    /// and of UDP apart, so one protocol's free port may be the other's reserved one; and free ports come in sequence, so twenty TCP-first tries
+    /// in a row can all land in one reserved UDP block (2026-10-16: the suite failed so, with 53308–54307 reserved for UDP). The tries
+    /// alternate: TCP's free port then UDP on it, UDP's free port then TCP on it.
     /// </summary>
     private static (UdpClient Udp, TcpListener Tcp) PortPair()
     {
         for (int attempt = 0; ; attempt++)
         {
-            var tcp = new TcpListener(IPAddress.Loopback, 0);
-            tcp.Start();
+            bool tcpFirst = attempt % 2 == 0;
+            TcpListener? tcp = null;
+            UdpClient? udp = null;
             try
             {
-                return (new UdpClient(new IPEndPoint(IPAddress.Loopback, ((IPEndPoint)tcp.LocalEndpoint).Port)), tcp);
+                if (tcpFirst)
+                {
+                    tcp = new TcpListener(IPAddress.Loopback, 0);
+                    tcp.Start();
+                    udp = new UdpClient(new IPEndPoint(IPAddress.Loopback, ((IPEndPoint)tcp.LocalEndpoint).Port));
+                }
+                else
+                {
+                    udp = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+                    tcp = new TcpListener(IPAddress.Loopback, ((IPEndPoint)udp.Client.LocalEndPoint!).Port);
+                    tcp.Start();
+                }
+
+                return (udp, tcp);
             }
-            catch (SocketException) when (attempt < 20)
+            catch (SocketException) when (attempt < 40)
             {
-                tcp.Stop();
+                tcp?.Stop();
+                udp?.Dispose();
             }
         }
     }
