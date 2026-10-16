@@ -42,7 +42,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Its own windows:** a picture viewer and thumbnail browser (`/view`), a live camera view (`/camera live`), the log (`/log`), a background process's output (`/process`), a YouTube player (`/youtube`) and a web browser (`/browser`, Windows only), where you can sign in to a site or pass its bot check and lend its cookies to the web tools.
 * **Auto-complete** for commands, files, folders, skills and tools, and **find** in the transcript (`/find`).
 * **Message queue:** keep typing while the model works; messages go out in order.
-* **Saved prompts:** keep the messages you send often and send one from a pane, or from your phone through the Web UI (`/prompts`).
+* **Saved prompts:** keep the messages you send often and pick one from a list, or send one from your phone through the Web UI (`/prompts`).
 * **Voice in and out:** Whisper speech-to-text with push-to-talk or a wake word ("hey neon"), and Kokoro text-to-speech with voice presets you can mix; both run in-process (or speech through a Kokoro server).
 * **Headless mode:** `--headless` runs over stdin/stdout for scripts and scheduled jobs ([HEADLESS.md](docs/HEADLESS.md)).
 * **Web UI:** the chat, the model's questions and the shopping list in a browser, from a phone on your home network or your tailnet (`/webui`, [the Web UI](docs/INTERFACE.md#web-ui)).
