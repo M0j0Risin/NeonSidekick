@@ -230,6 +230,62 @@ public static partial class YouTubeIds
     public static string WatchUrl(string id, double start = 0) =>
         "https://www.youtube.com/watch?v=" + id + (start >= 1 ? "&t=" + ((int)start).ToString(CultureInfo.InvariantCulture) + "s" : "");
 
+    /// <summary>
+    /// A playlist's page for a browser (2026-10-16, <c>YouTube open links in</c>'s browsers): <c>watch?v=…&amp;list=…</c> (with its <c>t=</c>)
+    /// when a video is named, <c>playlist?list=…</c> from its start, else <c>watch?list=…&amp;index=n</c> at entry <paramref name="entry"/>
+    /// (0-based here, 1-based in the link).
+    /// </summary>
+    public static string PlaylistWatchUrl(string list, int entry, string? video, double start)
+    {
+        ArgumentNullException.ThrowIfNull(list);
+        if (video is not null)
+        {
+            return WatchUrl(video, start) + "&list=" + list;
+        }
+
+        return entry <= 0 ? PlaylistUrl(list) : "https://www.youtube.com/watch?list=" + list + "&index=" + (entry + 1).ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>The page a browser opens for <paramref name="request"/>: its video's watch page, or its playlist's (<see cref="PlaylistWatchUrl"/>).</summary>
+    public static string UrlFor(VideoRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return request.PlaylistId is { } list ? PlaylistWatchUrl(list, request.Entry, request.VideoId, request.Start) : WatchUrl(request.VideoId!, request.Start);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="host"/> is one of YouTube's own (2026-10-16): youtube.com on <c>www.</c>, <c>m.</c> or <c>music.</c>,
+    /// youtube-nocookie.com and youtu.be; a look-alike (<c>youtube.com.example</c>) is not.
+    /// </summary>
+    public static bool IsYouTubeHost(string? host)
+    {
+        string h = (host ?? "").Trim().TrimEnd('.').ToLowerInvariant();
+        return Hosts.Contains(h) || h is "youtu.be" or "www.youtu.be";
+    }
+
+    /// <summary>
+    /// Whether <paramref name="text"/> is something the player plays (2026-10-16, open_url's and the video window's links): a video
+    /// <see cref="TryParse"/> reads, or a link whose <c>list=</c> <see cref="TryParsePlaylist"/> reads. A channel's page is a page to look
+    /// at, never a playable link here, though the parser reads <c>/channel/UC…</c> as its uploads.
+    /// </summary>
+    public static bool IsPlayable(string? text)
+    {
+        if (TryParse(text, out _, out _))
+        {
+            return true;
+        }
+
+        text = text?.Trim();
+        if (string.IsNullOrEmpty(text) || VideoRequest.IsPlaylistId(text))
+        {
+            return false;   // a bare id is never a link
+        }
+
+        string link = text.Contains("://", StringComparison.Ordinal) ? text : "https://" + text;
+        return Uri.TryCreate(link, UriKind.Absolute, out var uri) && IsYouTubeHost(uri.Host)
+            && Query(uri.Query).ContainsKey("list") && TryParsePlaylist(text, out _, out _, out _, out _);
+    }
+
     private static Dictionary<string, string> Query(string query)
     {
         var pairs = new Dictionary<string, string>(StringComparer.Ordinal);

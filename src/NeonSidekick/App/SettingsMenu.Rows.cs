@@ -133,7 +133,7 @@ internal sealed partial class SettingsMenu
         [(SettingsField.DockerTools, "Access"), (SettingsField.DockerEnginePipe, "Engine")],
         [(SettingsField.HomeAssistantTools, "Connection"), (SettingsField.HomeAssistantActionPolicy, "Requests")],
         [(SettingsField.ComfyTools, "Server"), (SettingsField.ComfyWorkflowsOffered, "Workflows"), (SettingsField.ComfyTimeoutSeconds, "Runs"), (SettingsField.ComfyPictureStrip, "Pictures")],
-        [(SettingsField.YouTubeTools, "Connection"), (SettingsField.YouTubeSearchMaxResults, "Search"), (SettingsField.YouTubeAutoplay, "Playing")],
+        [(SettingsField.YouTubeTools, "Connection"), (SettingsField.YouTubeSearchMaxResults, "Search"), (SettingsField.YouTubeOpenLinksIn, "Playing")],
         [(SettingsField.GitLibTools, "Tools"), (SettingsField.GitLibEmail, "Identity")],
         [(SettingsField.ToolsDollarMention, "Mentions"), (SettingsField.ToolCollapseCount, "Folding"), (SettingsField.ShowFileDiffs, "Diffs")],
         [(SettingsField.ShoppingTools, "The list")],

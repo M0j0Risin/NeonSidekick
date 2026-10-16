@@ -977,6 +977,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.ServiceTools, SettingsField.ServiceWrites, SettingsField.ServiceComputersOffered, SettingsField.ServiceSetPassword, SettingsField.ServiceAddComputer, SettingsField.ServiceComputersProfile, SettingsField.ServiceComputersGlobal,
                 SettingsField.TaskTools, SettingsField.TaskWrites, SettingsField.TaskComputersOffered, SettingsField.TaskSetPassword, SettingsField.TaskAddComputer, SettingsField.TaskComputersProfile, SettingsField.TaskComputersGlobal,
                 SettingsField.DirectoryTools, SettingsField.DirectoryDomainsOffered, SettingsField.DirectorySetPassword, SettingsField.DirectoryAddDomain, SettingsField.DirectoryDomainsProfile, SettingsField.DirectoryDomainsGlobal,
+                SettingsField.YouTubeOpenLinksIn,   // 2026-10-16, /tools › Apps › YouTube first under Playing: where a video goes
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -5433,7 +5434,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(["Servers"], SettingsMenu.McpMenuSections[0].Select(s => s.Title));
 
         // The rows moved to sit under their headings: YouTube's playing pair after the search rows, the reflection's sessions switch under What it reads.
-        Assert.Equal([SettingsField.YouTubeLanguage, SettingsField.YouTubeAutoplay, SettingsField.YouTubeVoice], SettingsMenu.ToolsTabFields[ToolsText.MenuIndex(ToolsText.YouTubeTabTitle)].TakeLast(3));
+        Assert.Equal([SettingsField.YouTubeOpenLinksIn, SettingsField.YouTubeAutoplay, SettingsField.YouTubeVoice], SettingsMenu.ToolsTabFields[ToolsText.MenuIndex(ToolsText.YouTubeTabTitle)].TakeLast(3));
         Assert.Equal([SettingsField.ReflectionMaxRequests, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionCooldownMinutes], SettingsMenu.SkillsTabFields[1].Skip(4).Take(3));
 
         // A row back to its field: a heading and past the rows are null.

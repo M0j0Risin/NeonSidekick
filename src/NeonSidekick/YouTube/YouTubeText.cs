@@ -247,6 +247,8 @@ public static class YouTubeText
             2 => $"YouTube says \"{id}\" is not a valid video id",
             5 => $"the player could not play video {id} (an HTML5 player error)",
             100 => $"YouTube found no video {id} (it was removed or made private)",
+            // 2026-10-16: only the Web UI's page sees these, YouTube getting no usable referrer from its address; the PC window's own https host never does.
+            152 or 153 => $"YouTube will not play video {id} on the Web UI's page (error {code.ToString(CultureInfo.InvariantCulture)}: it got no usable referrer from the page's address)",
             _ => $"YouTube will not play video {id} in an embedded player: its uploader may have turned embedding off, or it is private, age-restricted or unavailable",
         };
         return $"Error: {what}. open_url can open {watch} in the browser instead.";
@@ -273,11 +275,17 @@ public static class YouTubeText
             return Refused(snapshot.VideoId, code) + (snapshot.Skipping ? " The playlist moves on to the next entry." : "");
         }
 
+        // A held video's state is Opening (2026-10-16): its own sentence first, so it never reads "Opening … in the video window".
+        if (snapshot.Held is { } held)
+        {
+            return Held(snapshot, held);
+        }
+
         if (snapshot.State == VideoState.Opening)
         {
             return snapshot.VideoId is null && snapshot.PlaylistId is { } opening
-                ? $"Opening playlist {opening} in the video window; youtube_status says when it plays."
-                : $"Opening video {snapshot.VideoId} in the video window; youtube_status says when it plays.";
+                ? $"Opening playlist {opening} in {PlaceName(snapshot.Place)}; youtube_status says when it plays."
+                : $"Opening video {snapshot.VideoId} in {PlaceName(snapshot.Place)}; youtube_status says when it plays.";
         }
 
         string state = snapshot.State switch
@@ -296,8 +304,125 @@ public static class YouTubeText
             : snapshot.Position > 0 ? $" at {YouTubeIds.FormatTime(snapshot.Position)}" : "";
         string sound = $", volume {snapshot.Volume.ToString(CultureInfo.InvariantCulture)}%{(snapshot.Muted ? ", muted" : "")}";
         string id = string.IsNullOrWhiteSpace(snapshot.Title) ? "" : $" · video {snapshot.VideoId}";
-        return state + " " + title + author + where + sound + id + InPlaylist(snapshot);
+        return state + " " + title + author + where + sound + id + InPlaylist(snapshot) + OnTheTab(snapshot);
     }
+
+    /// <summary>
+    /// The Web UI's tab after a state line (2026-10-16): where it plays, and the tap a phone wants — to start a video its autoplay blocked
+    /// (<see cref="VideoState.Unstarted"/>), or for sound when it could only start muted (<see cref="VideoSnapshot.NeedsTap"/>). Empty for the window.
+    /// </summary>
+    private static string OnTheTab(VideoSnapshot snapshot) => snapshot.Place != VideoPlace.WebTab ? "" : snapshot switch
+    {
+        { State: VideoState.Unstarted } => " · in " + WebTabName + "; tap the video on the phone to start",
+        { State: VideoState.Playing or VideoState.Buffering, NeedsTap: true } => " · in " + WebTabName + "; playing muted until the video is tapped",
+        _ => " · in " + WebTabName,
+    };
+
+    /// <summary>The Web UI's tab as a sentence names it.</summary>
+    public const string WebTabName = "the Web UI's YouTube tab";
+
+    /// <summary>Where a place plays, in a sentence: <c>the video window</c>, or <see cref="WebTabName"/>.</summary>
+    public static string PlaceName(VideoPlace place) => place == VideoPlace.WebTab ? WebTabName : "the video window";
+
+    /// <summary>How long a video waits for a YouTube tab before it is dropped (2026-10-16).</summary>
+    public static readonly TimeSpan HoldFor = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// A video waiting for a YouTube tab (2026-10-16): with an open page asked to switch to it, or with none that will see the ask, when it
+    /// plays as one opens.
+    /// </summary>
+    public static string Held(VideoSnapshot snapshot, VideoHold held)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(held);
+        string what = snapshot.VideoId is null && snapshot.PlaylistId is { } list ? "playlist " + list : "video " + snapshot.VideoId;
+        return held.Nudged
+            ? $"Waiting for a YouTube tab: {what} plays in {WebTabName} as soon as it opens; the open Web UI page was asked to switch to it."
+            : $"Waiting for a YouTube tab: no Web UI page is open now, so {what} plays when the user opens {WebTabName} on their phone or browser (it waits up to {((int)HoldFor.TotalMinutes).ToString(CultureInfo.InvariantCulture)} minutes).";
+    }
+
+    /// <summary>
+    /// The status with a browser in the picture (2026-10-16): <paramref name="handoff"/>'s line when the last video went to one, else
+    /// <see cref="Status(VideoSnapshot?)"/>. Shared by youtube_status and <c>/youtube status</c>.
+    /// </summary>
+    public static string StatusOrHandoff(VideoSnapshot? snapshot, VideoHandoff? handoff) =>
+        snapshot is null && handoff is not null ? HandedOffStatus(handoff) : Status(snapshot);
+
+    /// <summary>A browser's name in a sentence: <c>the app's Browser window</c> or <c>the user's default browser</c>.</summary>
+    public static string BrowserName(YouTubeOpenLinksInKind to) => to == YouTubeOpenLinksInKind.BrowserWindow ? "the app's Browser window" : "the user's default browser";
+
+    // A hand-off's video or playlist, in a sentence.
+    private static string What(VideoHandoff handoff) =>
+        handoff.VideoId is null && handoff.PlaylistId is { } list ? "playlist " + list : "video " + handoff.VideoId;
+
+    /// <summary>youtube_play's answer for a video sent to a browser (2026-10-16): opened there, out of the app's sight and control.</summary>
+    public static string HandedOff(VideoHandoff handoff)
+    {
+        ArgumentNullException.ThrowIfNull(handoff);
+        return $"Opened {What(handoff)} in {BrowserName(handoff.To)} ({handoff.Url}); it plays there, where youtube_status and youtube_control can't see or control it.";
+    }
+
+    /// <summary>youtube_status after a hand-off (2026-10-16): where the video went, and that no player of the app's own has one open.</summary>
+    public static string HandedOffStatus(VideoHandoff handoff)
+    {
+        ArgumentNullException.ThrowIfNull(handoff);
+        return $"The last video, {What(handoff)}, went to {BrowserName(handoff.To)} ({handoff.Url}), which the app can't see into; no video is open in its own players.";
+    }
+
+    /// <summary>youtube_control after a hand-off (2026-10-16): nothing to drive.</summary>
+    public static string HandedOffControl(VideoHandoff handoff)
+    {
+        ArgumentNullException.ThrowIfNull(handoff);
+        return $"Error: {What(handoff)} is in {BrowserName(handoff.To)}, which the app can't control; the user can pause or close it there.";
+    }
+
+    /// <summary>The note before a play's answer when <c>webui-window</c> fell back to the window (2026-10-16): the Web UI isn't serving.</summary>
+    public const string WebUiOffFellBack = "The Web UI isn't serving, so the video plays in the video window instead. ";
+
+    /// <summary>The note when <c>browser-window</c> went to the default browser (2026-10-16): the Browser window's reason.</summary>
+    public static string BrowserFellBack(string reason) => $"The Browser window can't take it now ({reason}), so it went to the default browser. ";
+
+    /// <summary>The note when there is no Browser window here at all (a Mac, 2026-10-16).</summary>
+    public const string NoBrowserWindowHere = "there is no Browser window here";
+
+    /// <summary><see cref="NoPlaylist"/> worded for <paramref name="place"/> (2026-10-16); the window's byte for byte.</summary>
+    public static string NoPlaylistIn(VideoPlace place) => place == VideoPlace.WebTab
+        ? "Error: " + WebTabName + " is not playing a playlist; youtube_play with a playlist starts one."
+        : NoPlaylist;
+
+    /// <summary><see cref="Closed"/> worded for <paramref name="place"/> (2026-10-16).</summary>
+    public static string ClosedIn(VideoPlace place) => place == VideoPlace.WebTab ? "Closed the video in " + WebTabName + "." : Closed;
+
+    /// <summary><see cref="ClosedMeanwhile"/> worded for <paramref name="place"/> (2026-10-16).</summary>
+    public static string ClosedMeanwhileIn(VideoPlace place) => place == VideoPlace.WebTab ? "The video in " + WebTabName + " was closed." : ClosedMeanwhile;
+
+    /// <summary>
+    /// The spinner's words under <c>/youtube play</c> for where the play is going (2026-10-16): <see cref="WaitingForPlayer"/> for the window.
+    /// </summary>
+    public static string WaitingFor(YouTubeOpenLinksInKind target) => target switch
+    {
+        YouTubeOpenLinksInKind.WebUiWindow => "Waiting for the Web UI's YouTube tab…",
+        YouTubeOpenLinksInKind.BrowserWindow => "Opening the video in the Browser window…",
+        YouTubeOpenLinksInKind.DefaultBrowser => "Opening the video in the default browser…",
+        _ => WaitingForPlayer,
+    };
+
+    /// <summary><see cref="StoppedWaiting"/> worded for what the player shows now (2026-10-16): a held video still waits; the tab plays on.</summary>
+    public static string StoppedWaitingFor(VideoSnapshot? snapshot) => snapshot switch
+    {
+        { Held: not null } => "(stopped waiting; the video still waits for a YouTube tab: /youtube status says so)",
+        { Place: VideoPlace.WebTab } => "(stopped waiting; the video is still in " + WebTabName + ": /youtube status says where it is)",
+        _ => StoppedWaiting,
+    };
+
+    /// <summary>open_url's note before a YouTube link it passed on to the browser because YouTube refused it in the player (2026-10-16).</summary>
+    public const string WontEmbedHere = "YouTube won't play it embedded here, so it goes to the browser instead. ";
+
+    /// <summary>open_url's note before a YouTube link it passed on because no player could take it (2026-10-16).</summary>
+    public static string CouldNotPlay(string reason) => $"The app's player couldn't take it ({reason.TrimEnd('.')}), so it goes to the browser instead. ";
+
+    /// <summary>A player's close that failed (2026-10-16), for the log.</summary>
+    public static string CloseFailedLogLine(VideoPlace place) => "Closing the video in " + PlaceName(place) + " failed.";
 
     /// <summary>
     /// Where a playlist's video stands in it (2026-10-08): <c> · entry 3 of 25 in playlist PL…</c>, <c> · in playlist PL…</c> before the

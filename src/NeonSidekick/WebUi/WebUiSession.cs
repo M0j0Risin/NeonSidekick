@@ -379,11 +379,39 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// <summary>The screen's chores on the session's 1-second tick whether or not a page streams (2026-10-15: the Home tab's lease running out).</summary>
     public Action? Tick { get; set; }
 
-    /// <summary>What the Chat badge reads (2026-10-15): the state's busy and waiting, the asks open, the theme, the files' tag, and the tabs on.</summary>
+    /// <summary>The YouTube tab's player (2026-10-16, the screen's), or null with none.</summary>
+    public IWebVideo? Video { get; set; }
+
+    /// <summary>
+    /// What the Chat badge reads (2026-10-15): the state's busy and waiting, the asks open, the theme, the files' tag, and the tabs on; the
+    /// YouTube tab and the banner's words while a video waits for it (2026-10-16), copied from the screen's state. Every pulse marks the read
+    /// (<see cref="WatchNudge"/>): <c>/api/pulse</c> and Home's read both build theirs here, a 304 included.
+    /// </summary>
     public WebPulse Pulse()
     {
+        Interlocked.Exchange(ref _pulseRead, _time.GetTimestamp());
         var state = _state();
-        return new WebPulse(state.Busy, Asks.OpenAsks().Count, state.WaitingAtPc, state.Theme, WebUiAssets.Current, state.ChatTab, state.HomeTab, state.ShoppingTab);
+        return new WebPulse(state.Busy, Asks.OpenAsks().Count, state.WaitingAtPc, state.Theme, WebUiAssets.Current, state.ChatTab, state.HomeTab, state.ShoppingTab, state.YouTubeTab, state.Watch);
+    }
+
+    /// <summary>When a pulse was last built (a timestamp of the session's clock; <see cref="long.MinValue"/> for never: a clock may start at 0), read without a lock.</summary>
+    private long _pulseRead = long.MinValue;
+
+    /// <summary>How recent a pulse or Home read counts as a page that will see a nudge soon (2026-10-16).</summary>
+    public static readonly TimeSpan PulseFresh = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// A video waits for a YouTube tab (2026-10-16): the state goes out now with its <c>watch</c> words, and a <c>watch</c> event on the Chat
+    /// stream, so an open Chat page jumps at once (Home and Shopping at their next poll). True when a page will see it soon: a Chat stream is
+    /// connected, or a pulse or Home read came within <see cref="PulseFresh"/>.
+    /// </summary>
+    public bool WatchNudge()
+    {
+        PublishState();
+        string words = WebUiText.WatchBanner;
+        Events.Publish(new WebEvent("watch", () => JsonSerializer.Serialize(new WebTextBack(words), WebUiJsonContext.Default.WebTextBack)));
+        long read = Interlocked.Read(ref _pulseRead);
+        return Events.Count > 0 || (read != long.MinValue && _time.GetElapsedTime(read) < PulseFresh);
     }
 
     /// <summary>Which tabs are on, read per request (later on 2026-10-15, the screen's settings); null: every one.</summary>

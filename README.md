@@ -90,7 +90,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **ComfyUI:** pictures from your own workflows (text-to-image, image-to-image, face swaps), or `/imagine` with your own prompt.
 * **Picture editing:** resize, crop, rotate, recolor, convert or strip metadata, by the model or with a right-click in the viewer.
 * **Bot chat:** `/botchat` lets your profiles talk to each other in their own voices, optionally illustrated by ComfyUI.
-* **YouTube:** search (with your API key) and play videos in the app's video window; saved videos resume where you left off.
+* **YouTube:** search (with your API key) and play videos in the app's video window, a browser or the Web UI's YouTube tab; saved videos resume where you left off.
 * **Obsidian:** search, read, write and link notes in your vault.
 
 ### Extras

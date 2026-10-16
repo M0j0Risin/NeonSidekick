@@ -411,7 +411,10 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>The video remote: the PC's YouTube window told at once (no wait: the tab reads it back).</summary>
+    /// <summary>
+    /// The video remote: the video told at once, in the PC's window or (2026-10-16) the YouTube tab (no wait: the tab reads it back). A video
+    /// still waiting for its tab answers its held words; nothing is open, the place the router plays in now.
+    /// </summary>
     private WebReply WebHomeVideo(WebHomeVideoRequest request, IPAddress? remote)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -422,7 +425,12 @@ internal sealed partial class ChatScreen
 
         if (_videoPlayer?.Snapshot is not { State: not VideoState.Failed } video)
         {
-            return new WebReply(WebOutcome.Conflict, WebUiText.NoVideo);
+            return new WebReply(WebOutcome.Conflict, WebUiText.NoVideoIn(_videoPlayer?.Place ?? VideoPlace.Window));
+        }
+
+        if (video.Held is { } held)
+        {
+            return new WebReply(WebOutcome.Conflict, YouTube.YouTubeText.Held(video, held));
         }
 
         VideoCommand? command = (request.Action ?? "") switch
@@ -446,7 +454,7 @@ internal sealed partial class ChatScreen
 
         if (!_videoPlayer.Send(command))
         {
-            return new WebReply(WebOutcome.Conflict, WebUiText.NoVideo);
+            return new WebReply(WebOutcome.Conflict, WebUiText.NoVideoIn(video.Place));
         }
 
         DiagnosticLog.Info(WebUiCategory, WebUiText.HomeVideoLogLine(request.Action!, remote));

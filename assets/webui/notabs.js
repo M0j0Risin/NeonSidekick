@@ -8,5 +8,5 @@ Neon.poll(async () => {
   const p = r.json;
   if (Neon.staleAssets(p.assets)) return;
   Neon.theme(p.theme);
-  if (p.chatTab !== false || p.homeTab !== false || p.shoppingTab !== false) Neon.leave();
+  if (p.chatTab !== false || p.homeTab !== false || p.shoppingTab !== false || p.youTubeTab === true) Neon.leave();   // YouTube too (2026-10-16)
 }, 3000);

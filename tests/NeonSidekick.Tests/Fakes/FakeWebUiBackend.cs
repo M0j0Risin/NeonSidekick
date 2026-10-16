@@ -242,7 +242,15 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
         return new WebReply(WebOutcome.Ok, "Cleared.");
     }
 
-    public IWebHome? Home { get; set; }
+public IWebHome? Home { get; set; }
+
+    /// <summary>
+    /// The YouTube tab's player (2026-10-16): a real <see cref="WebVideoPlayer"/> (portable, on the test's clock when one is given), so the host's
+    /// tests run the same owner rules the player's own pin; null for a backend with no player.
+    /// </summary>
+    public WebVideoPlayer? VideoPlayer { get; set; }
+
+    public IWebVideo? Video => VideoPlayer;
 
     public Dictionary<long, WebEntry> Entries { get; } = [];
 

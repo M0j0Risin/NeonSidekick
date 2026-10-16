@@ -20,6 +20,12 @@ namespace NeonSidekick.Llm.Tools;
 /// shows one page at a time, so only the first link opens and the rest are named as not opened (the user's pick), and the schema offers
 /// <c>url</c> alone. When the window cannot take it now — no runtime, a bot check waiting in it — the link goes to the default browser
 /// with the reason. Headless and macOS give no hook: the default browser, as before.</para>
+///
+/// <para><b>YouTube links</b> (2026-10-16, <c>YouTube open links in</c>): with a YouTube hook given (the screen with a video player), each
+/// link goes to it first, before either path above. A link it plays has its answer as its line (a player of the app's own, or the Browser
+/// window: one at a time, so the next playable links are named as not opened; the default browser: each one); a link it passes on goes on
+/// through <c>Web open links in</c>, its note (if any) before that line. The hook passes on whatever is not a video or <c>list=</c> link,
+/// whatever YouTube refused in the player, and everything while YouTube tools are off. Headless gives no hook.</para>
 /// </summary>
 public sealed class OpenUrlTool : AIFunction
 {
@@ -60,16 +66,20 @@ public sealed class OpenUrlTool : AIFunction
     private readonly WebAccess _web;
     private readonly Func<AppSettingsData>? _effective;
     private readonly Func<Uri, string?>? _openInWindow;
+    private readonly Func<Uri, CancellationToken, Task<YouTubeLinkOutcome>>? _openYouTube;
 
     /// <param name="web">The default browser's opener (<see cref="WebAccess.OpenUrl"/>).</param>
     /// <param name="effective">The settings in force, read at each call for <c>Web open links in</c>; null keeps the default browser.</param>
     /// <param name="openInWindow">Opens a link in the Browser window and returns null, or returns why it cannot now (<c>IBrowserWindow.Unavailable</c>)
     /// without opening; null (headless, macOS) keeps the default browser.</param>
-    public OpenUrlTool(WebAccess web, Func<AppSettingsData>? effective = null, Func<Uri, string?>? openInWindow = null)
+    /// <param name="openYouTube">A YouTube link played where <c>YouTube open links in</c> says (2026-10-16; <c>ChatScreen.OpenYouTubeForToolAsync</c>),
+    /// or passed on; null (headless) passes every link on.</param>
+    public OpenUrlTool(WebAccess web, Func<AppSettingsData>? effective = null, Func<Uri, string?>? openInWindow = null, Func<Uri, CancellationToken, Task<YouTubeLinkOutcome>>? openYouTube = null)
     {
         _web = web ?? throw new ArgumentNullException(nameof(web));
         _effective = effective;
         _openInWindow = openInWindow;
+        _openYouTube = openYouTube;
     }
 
     public override string Name => ToolName;
@@ -192,12 +202,73 @@ public sealed class OpenUrlTool : AIFunction
         }
     }
 
-    protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    /// <summary>
+    /// <see cref="Open"/> with YouTube's links first (2026-10-16): each web link the hook takes answers its own line; the rest go on through
+    /// <see cref="Open"/>, each hook's note before that line. With no hook, <see cref="Open"/> alone.
+    /// </summary>
+    public async Task<string> OpenAsync(IReadOnlyList<string> urls, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(urls);
+        if (_openYouTube is null || urls.Count == 0 || urls.Count > MaxUrls)
+        {
+            return Open(urls);
+        }
+
+        var lines = new List<string>();
+        var notes = new List<string>();
+        var passOn = new List<string>();
+        var notOpened = new List<string>();
+        bool onePlayerTaken = false;
+        foreach (string raw in urls)
+        {
+            var parsed = WebFetcher.ParseUrl(raw);
+            if (parsed is null || !YouTube.YouTubeIds.IsYouTubeHost(parsed.Host))
+            {
+                passOn.Add(raw);
+                continue;
+            }
+
+            if (onePlayerTaken && YouTube.YouTubeIds.IsPlayable(parsed.AbsoluteUri))
+            {
+                notOpened.Add(raw.Trim());   // one player, one page at a time: the first playable link has it
+                continue;
+            }
+
+            var outcome = await _openYouTube(parsed, cancellationToken).ConfigureAwait(false);
+            if (outcome.Answer is { } answer)
+            {
+                lines.Add(answer);
+                onePlayerTaken |= outcome.OnePlayer;
+                continue;
+            }
+
+            if (outcome.Note is { Length: > 0 } note)
+            {
+                notes.Add(note);
+            }
+
+            passOn.Add(raw);
+        }
+
+        if (notOpened.Count > 0)
+        {
+            lines.Add(WebText.OneAtATime(notOpened));
+        }
+
+        if (passOn.Count > 0)
+        {
+            lines.Add(string.Concat(notes) + Open(passOn));
+        }
+
+        return string.Join('\n', lines);
+    }
+
+    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         if (!ToolArguments.TryReadStringList(arguments, UrlsArgument, out var several, out string raw))
         {
-            return new ValueTask<object?>(WebText.BadUrlList(UrlsArgument, raw));
+            return WebText.BadUrlList(UrlsArgument, raw);
         }
 
         var urls = new List<string>(several.Count + 1);
@@ -208,6 +279,17 @@ public sealed class OpenUrlTool : AIFunction
         }
 
         urls.AddRange(several);
-        return new ValueTask<object?>(Open(urls));
+        return await OpenAsync(urls, cancellationToken).ConfigureAwait(false);
     }
+}
+
+/// <summary>
+/// What open_url's YouTube hook did with a link (2026-10-16): <see cref="Answer"/> its whole line when it played or handed it off (and
+/// <see cref="OnePlayer"/> when the place shows one at a time: the video window, the Web UI's tab, the Browser window), or null to pass the
+/// link on through <c>Web open links in</c>, <see cref="Note"/> (if any) before that line.
+/// </summary>
+public sealed record YouTubeLinkOutcome(string? Answer, string? Note = null, bool OnePlayer = false)
+{
+    /// <summary>Passed on, with nothing to say.</summary>
+    public static YouTubeLinkOutcome PassOn { get; } = new(Answer: null);
 }

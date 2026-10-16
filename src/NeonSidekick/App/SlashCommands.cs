@@ -294,8 +294,8 @@ public enum SlashCommand
     Screen,
 
     /// <summary>
-    /// <c>/youtube</c> (2026-10-05, the YouTube plan): <c>/youtube &lt;words&gt;</c> searches and picks a video on the pane to play in
-    /// the video window; <c>play &lt;id|link&gt; [&lt;time&gt;] | pause | resume | seek | volume | mute | unmute | close | status</c>
+    /// <c>/youtube</c> (2026-10-05, the YouTube plan): <c>/youtube &lt;words&gt;</c> searches and picks a video on the pane to play where
+    /// <c>YouTube open links in</c> says (2026-10-16; the video window until then); <c>play &lt;id|link&gt; [&lt;time&gt;] | pause | resume | seek | volume | mute | unmute | close | status</c>
     /// drive it (<see cref="YouTube.YouTubeCommand"/>). The user's own hand: never judged by <c>YouTube tools</c>.
     /// </summary>
     YouTube,

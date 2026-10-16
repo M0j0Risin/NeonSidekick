@@ -1229,7 +1229,7 @@ internal sealed partial class ChatScreen
         _timers = new TimerBoard(time, SignalAlert);
         _jobs = new BackgroundJobs(SignalAlert, time);
         _timerTools = TimerTools(_timers);
-        _webTools = WebTools(_web, _files, _effective, SolveBotCheckAsync, WebLinkHooksFor(), _browserWindow is null ? null : OpenForTool);
+        _webTools = WebTools(_web, _files, _effective, SolveBotCheckAsync, WebLinkHooksFor(), _browserWindow is null ? null : OpenForTool, OpenYouTubeForToolAsync);
         // The git tools (2026-09-20) sit on the same sandbox: the repository is looked for from a sandbox path, never above the root.
         _git = new GitAccess(_files, time);
         _gitTools = GitTools(_git, _effective);
@@ -1286,10 +1286,16 @@ internal sealed partial class ChatScreen
         _shortcutWriter = shortcutWriter;
         _screenCapture = screenSystem is null ? null : new Screen.ScreenCapture(screenSystem, () => _images, () => _effective().ScreenOutputFolder, _time);
         _screenTools = ScreenTools(CaptureForModelAsync, screenSystem);
-        // The YouTube tools (2026-10-05): the Data API over the web tools' client, the video window when there is one.
-        _videoPlayer = videoPlayer;
+        // The YouTube tools (2026-10-05): the Data API over the web tools' client, the video window when there is one. Since 2026-10-16
+        // (YouTube open links in) every path reads the router over the window and the Web UI's player, never the window itself; the tools
+        // route each play where the setting says, and /youtube's own tool instances do too (PlayToolFor, ControlToolFor).
+        // The Web UI's YouTube tab as a player (2026-10-16), only beside a video window: its nudge and flash read the session, made later.
+        _webVideo = videoPlayer is null ? null : new WebUi.WebVideoPlayer(_time, () => _webUi?.WatchNudge() ?? false, text => _webUi?.FlashPc(text));
+        _routedVideo = videoPlayer is null ? null : new Viewer.RoutedVideoPlayer(videoPlayer, _webVideo);
+        _videoPlayer = _routedVideo;
         _youTubeSearch = new YouTube.YouTubeDataApi(_web.Http);
-        _youTubeTools = YouTubeTools(_youTubeSearch, videoPlayer, _effective, _time, YouTubeLibraryNow);
+        _youTubeTools = YouTubeTools(_youTubeSearch, _videoPlayer, _effective, _time, YouTubeLibraryNow,
+            _routedVideo is null ? null : RouteVideo, () => _routedVideo?.LastHandoff, () => PlayTarget().Kind);
         // The shopping list (2026-10-11): the loaded profile's store, opened again after a profile switch; a whole-list clear asks on the pane.
         _shoppingStore = new Shopping.ShoppingStoreHolder(() => _settings.ProfileDirectory, _time);
         _shopping = new Shopping.ShoppingList(_shoppingStore.Current);
@@ -1298,12 +1304,13 @@ internal sealed partial class ChatScreen
         _shoppingTools = ShoppingTools(_shopping, ConfirmShoppingAsync, _shoppingReference);
         // The saved videos' places (2026-10-07): kept from the window's reports, whoever played the video; the resume lives on as
         // the window's listener, nothing here holds it.
-        if (videoPlayer is not null)
+        // Both hear the router (2026-10-16): its Changed is the one whichever player plays, and its own null at a switch saves the place.
+        if (_videoPlayer is not null)
         {
-            _ = new YouTube.YouTubeResume(videoPlayer, YouTubeLibraryNow, _time);
+            _ = new YouTube.YouTubeResume(_videoPlayer, YouTubeLibraryNow, _time);
         }
         // A playing video pauses (YouTube while speaking) from a speaker's first audio to its last, and around a request's listen.
-        _videoPause = videoPlayer is null ? null : new YouTube.VideoVoicePause(videoPlayer, () => _effective().YouTubeVoice);
+        _videoPause = _videoPlayer is null ? null : new YouTube.VideoVoicePause(_videoPlayer, () => _effective().YouTubeVoice);
         if (_videoPause is { } videoPause)
         {
             _speech.Began = speaker => speaker.FirstAudio = () => videoPause.HoldUntil(speaker.Completion);
@@ -5726,6 +5733,7 @@ internal sealed partial class ChatScreen
     {
         HomeShoppingForget();   // the 🛒 count is the profile's (2026-10-13)
         HomeWebForget();   // the Web UI's Home tab: its sheet and lease are the last profile's (2026-10-15)
+        _webVideo?.ForgetProfile();   // the YouTube tab: its held video and Resume offer were the last profile's; one playing plays on (2026-10-16)
         _memory = new MemoryStore(_settings.ProfileDirectory);
         _persona = new PersonaFile(_settings.ProfileDirectory);
         _operata = new OperataFile(_settings.ProfileDirectory);
@@ -6067,13 +6075,13 @@ internal sealed partial class ChatScreen
     /// <see cref="WebToolsFor"/>); <paramref name="openInWindow"/> is where <c>open_url</c> puts a link under <c>Web open links in</c>
     /// <c>browser-window</c> (the screen on Windows; null keeps the default browser).
     /// </summary>
-    public static IReadOnlyList<AIFunction> WebTools(WebAccess web, WorkingDirectory files, Func<AppSettingsData> effective, BotCheckSolver? botCheck = null, WebLinkHooks? links = null, Func<Uri, string?>? openInWindow = null)
+    public static IReadOnlyList<AIFunction> WebTools(WebAccess web, WorkingDirectory files, Func<AppSettingsData> effective, BotCheckSolver? botCheck = null, WebLinkHooks? links = null, Func<Uri, string?>? openInWindow = null, Func<Uri, CancellationToken, Task<YouTubeLinkOutcome>>? openYouTube = null)
     {
         var tools = new List<AIFunction>
         {
             new WebSearchTool(web, effective, botCheck),
             new WebFetchTool(web, effective, botCheck),
-            new OpenUrlTool(web, effective, openInWindow),
+            new OpenUrlTool(web, effective, openInWindow, openYouTube),   // YouTube's links first where YouTube open links in says (2026-10-16)
         };
         if (links is not null)
         {
@@ -10780,7 +10788,10 @@ internal sealed partial class ChatScreen
             _camera.Dispose();
             _sessions.Dispose();
             // The Web UI's server stops before the shopping list closes under it (2026-10-14).
+            // The phone's video stops with the app, and its null saves the place (2026-10-16), before the server goes; its timers after.
+            _webVideo?.Forget();
             await _webUiController.DisposeAsync().ConfigureAwait(false);
+            _webVideo?.Dispose();
             _webUi.Dispose();
             DisposeShopping();
             _skillRecords.Store.Dispose();

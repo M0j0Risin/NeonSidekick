@@ -34,8 +34,8 @@ You need a Mac with Apple Silicon (M1 or later). Download and unpack the Mac pac
 | Voice: Kokoro, Whisper, push-to-talk, wake word, interrupt | Works | Whisper runs on the GPU. |
 | Camera | Works (macOS 14+) | The built-in camera, a USB webcam, or an iPhone as Continuity Camera. |
 | Screen capture | Works (macOS 14+) | A window on another Space, or minimized, isn't listed until you bring it up. |
-| YouTube playback | Works (macOS 14+) | The video window uses Safari's WebKit. |
-| The Browser window (`/browser`) and bot checks in a window | Not available | It needs Windows. A page behind a bot check is reported as refused, and *Web open links in* `browser-window` opens links in your default browser. `/view report.pdf` opens the PDF in Preview. |
+| YouTube playback | Works (macOS 14+) | The video window uses Safari's WebKit. Before macOS 14 there is no video window, so there is no Web UI YouTube tab either. |
+| The Browser window (`/browser`) and bot checks in a window | Not available | It needs Windows. A page behind a bot check is reported as refused, and *Web open links in* `browser-window` opens links in your default browser, where *YouTube open links in* `browser-window` plays videos too. `/view report.pdf` opens the PDF in Preview. |
 | Performance bar | Works | VRAM shows as **GMEM**: the GPU's share of the Mac's memory. |
 | `/terminal` | Works | A new Terminal window, or a new tab in iTerm2. |
 | `/shortcut` | Works | A `.command` file on the Desktop that opens in iTerm2 or Terminal. |
@@ -66,7 +66,7 @@ You need a Mac with Apple Silicon (M1 or later). Download and unpack the Mac pac
 * **Thumbnails and the splash** are drawn in half blocks: full color in iTerm2, 256 colors (banded) in Terminal.app.
 * **A microphone that sends only silence** gets one warning. A MacBook's microphone and camera are off with the lid closed: open the lid or pick another input in System Settings › Sound.
 * **Echo.** Interrupting a reply by voice works with headphones and with a MacBook's own speakers; *STT interrupt echo guard (%)* keeps the reply's own words from counting.
-* **The [video window](INTERFACE.md#the-video-window)** opens a link you click in the player in your default browser. Its cookies and cache are in `~/Library/WebKit/NeonSidekick/WebsiteDataStore/`; delete that folder to clear them.
+* **The [video window](INTERFACE.md#the-video-window)** sends a video or playlist link you click in the player where *YouTube open links in* says, and anything else to your default browser. Its cookies and cache are in `~/Library/WebKit/NeonSidekick/WebsiteDataStore/`; delete that folder to clear them.
 * **Copy and paste.** Cmd+V is the terminal's paste, text only. The app's paste (Ctrl+V, Option+V or a right-click on the input line) takes a picture first, such as a screenshot copied with ⌃⇧⌘4; a file copied in Finder pastes as its path, which attaches a picture or a PDF. A right-click in a menu's filter or find box pastes the first copied file's path; on Windows, files copied in Explorer paste nothing there.
 * **Stand-in keys.** A Mac terminal can't send some chords, so Ctrl+D opens `/model`, Ctrl+] `/terminal` and Ctrl+Option+A `/memory`, and Option+Delete deletes a word. See [Keyboard shortcuts](INTERFACE.md#keyboard-shortcuts).
 * **No key for these.** Type `/find` (a Mac terminal sends Ctrl+Shift+F as Ctrl+F, which is `/perfbar`), and use Shift+F3 to go back in a find. Click the ☺ for the emoji picker (Ctrl+J arrives as a line break).

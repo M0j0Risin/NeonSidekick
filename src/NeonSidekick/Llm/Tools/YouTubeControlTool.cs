@@ -11,7 +11,9 @@ namespace NeonSidekick.Llm.Tools;
 /// forward and back by seconds, 10 by default), its volume set (0–100), muted or unmuted, or the window closed. It waits for the
 /// player to show the change (<see cref="YouTubeWait.Command"/>) and answers with what the window then reports. Nothing without
 /// a window: <see cref="YouTubeText.NoVideo"/>. Never headless. While a playlist plays (2026-10-08), <c>next</c>, <c>previous</c>
-/// and <c>entry</c> (its value the entry, 1-based) move through it, waiting for the player to show another entry.
+/// and <c>entry</c> (its value the entry, 1-based) move through it, waiting for the player to show another entry. Since 2026-10-16
+/// (<c>YouTube open links in</c>) the player may be the Web UI's YouTube tab: a video waiting for the tab answers its held words to every
+/// action but <c>close</c>, which drops it; a video sent to a browser answers that it can't be controlled.
 /// </summary>
 public sealed class YouTubeControlTool : AIFunction
 {
@@ -39,20 +41,39 @@ public sealed class YouTubeControlTool : AIFunction
 
     private readonly IVideoPlayer _player;
     private readonly TimeProvider _time;
+    private readonly Func<VideoHandoff?>? _handoff;
+    private readonly Func<YouTubeOpenLinksInKind>? _target;
 
-    public YouTubeControlTool(IVideoPlayer player, TimeProvider? time = null)
+    /// <param name="handoff">The video last sent to a browser (the router's <see cref="RoutedVideoPlayer.LastHandoff"/>); null for none.</param>
+    /// <param name="target">Where a play goes now, for the description; null is the video window.</param>
+    public YouTubeControlTool(IVideoPlayer player, TimeProvider? time = null, Func<VideoHandoff?>? handoff = null, Func<YouTubeOpenLinksInKind>? target = null)
     {
         _player = player ?? throw new ArgumentNullException(nameof(player));
         _time = time ?? TimeProvider.System;
+        _handoff = handoff;
+        _target = target;
     }
 
     public override string Name => ToolName;
 
-    /// <summary>Pinned.</summary>
-    public override string Description =>
-        "Controls the video playing in the video window: play, pause, seek to a time, forward or back some seconds, volume 0–100, mute, unmute, " +
-        "next, previous or entry in a playlist, or close the window. " +
-        "Use it when the user asks; it answers with where the video then is.";
+    /// <summary>Follows <c>YouTube open links in</c> (2026-10-16); the window's is the text before it, byte for byte. Pinned.</summary>
+    public override string Description => DescriptionFor(_target?.Invoke() ?? YouTubeOpenLinksInKind.YouTubeWindow);
+
+    /// <summary>The description where a play goes to <paramref name="target"/>.</summary>
+    public static string DescriptionFor(YouTubeOpenLinksInKind target) => target switch
+    {
+        YouTubeOpenLinksInKind.WebUiWindow =>
+            "Controls the video playing in the Web UI's YouTube tab: play, pause, seek to a time, forward or back some seconds, volume 0–100, mute, unmute, " +
+            "next, previous or entry in a playlist, or close the player. " + Use,
+        YouTubeOpenLinksInKind.BrowserWindow or YouTubeOpenLinksInKind.DefaultBrowser =>
+            "Controls a video in the app's own video players: play, pause, seek to a time, forward or back some seconds, volume 0–100, mute, unmute, " +
+            "next, previous or entry in a playlist, or close the player. A video opened in a browser can't be controlled from here. " + Use,
+        _ =>
+            "Controls the video playing in the video window: play, pause, seek to a time, forward or back some seconds, volume 0–100, mute, unmute, " +
+            "next, previous or entry in a playlist, or close the window. " + Use,
+    };
+
+    private const string Use = "Use it when the user asks; it answers with where the video then is.";
 
     public override JsonElement JsonSchema => Schema;
 
@@ -68,13 +89,19 @@ public sealed class YouTubeControlTool : AIFunction
 
         if (_player.Snapshot is not { State: not VideoState.Failed } current)
         {
-            return YouTubeText.NoVideo;
+            return _handoff?.Invoke() is { } handoff ? YouTubeText.HandedOffControl(handoff) : YouTubeText.NoVideo;
         }
 
         if (action == "close")
         {
             _player.Close();
-            return YouTubeText.Closed;
+            return YouTubeText.ClosedIn(current.Place);
+        }
+
+        // A video waiting for a YouTube tab (2026-10-16): nothing to drive yet, so its held words, and nothing sent.
+        if (current.Held is { } held)
+        {
+            return YouTubeText.Held(current, held);
         }
 
         VideoCommand command;
@@ -132,7 +159,7 @@ public sealed class YouTubeControlTool : AIFunction
             case "entry":
                 if (current.PlaylistId is null)
                 {
-                    return YouTubeText.NoPlaylist;
+                    return YouTubeText.NoPlaylistIn(current.Place);
                 }
 
                 if (action == "entry")
@@ -167,7 +194,7 @@ public sealed class YouTubeControlTool : AIFunction
         // Another entry loads before it plays: the wait for a playlist's move is a play's, not a command's (2026-10-08).
         var timeout = action is "next" or "previous" or "entry" ? YouTubeWait.Play : YouTubeWait.Command;
         var snapshot = await YouTubeWait.UntilAsync(_player, before, shows, timeout, _time, cancellationToken).ConfigureAwait(false);
-        return snapshot is null ? YouTubeText.ClosedMeanwhile : YouTubeText.Status(snapshot);
+        return snapshot is null ? YouTubeText.ClosedMeanwhileIn(current.Place) : YouTubeText.Status(snapshot);
     }
 
     // An entry moved to shows once it plays, waits cued or has ended (a short one may be over before the report). Not paused

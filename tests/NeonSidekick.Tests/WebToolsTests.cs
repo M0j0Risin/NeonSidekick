@@ -9,7 +9,7 @@ using NeonSidekick.Web;
 namespace NeonSidekick.Tests;
 
 /// <summary>The web tools over a stub client and a fake browser: the argument reading, the settings they read per call, the paging, the download into a temp sandbox.</summary>
-public sealed class WebToolsTests : IDisposable
+public sealed partial class WebToolsTests : IDisposable
 {
     private const string Article = "<html><head><title>Example Domain</title></head><body><h1>Example Domain</h1><p>This domain is for use in illustrative examples in documents.</p></body></html>";
 

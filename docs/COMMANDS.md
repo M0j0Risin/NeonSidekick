@@ -187,14 +187,14 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/browser save [<url> [<name>]]` | Saves a link (the words after the address name it), or with no address the page the window shows. Headless, give the address. |
 | `/browser list`, `/browser list --clear` | The saved links in a pane; `--clear` removes them all after a yes (headless: without asking). |
 | `/browser unsave <n>\|<url>` | Removes one saved link. Works headless too. |
-| `/youtube`, `/youtube status` | Says what the video window is playing. |
+| `/youtube`, `/youtube status` | Says what the video player is playing. |
 | `/youtube <words>`, `/youtube search <words>` | Searches YouTube and opens a picker (needs a *YouTube API key*; 100 quota units a search); use `search` when the words start with one of `/youtube`'s own words (`play`, `list`…). |
 | `/youtube search [--switches] <words>` | Searches with `--playlists`, `--channels`, `--order relevance\|date\|views\|rating\|title`, `--length short\|medium\|long`, `--since today\|week\|month\|year\|<date>`, `--region <cc>`, `--lang <code>`, `--live`, `--captions`, `--safe none\|moderate\|strict`. |
-| `/youtube play <id>\|<link> [<time>]` | Plays a video from the time given or the link's own; no key needed. |
-| `/youtube play <playlist>\|<link> [<n>]` | Plays a public playlist, or a channel's uploads, from entry *n*; no key needed. |
+| `/youtube play <id>\|<link> [<time>]` | Plays a video from the time given or the link's own, where *YouTube open links in* says; no key needed. |
+| `/youtube play <playlist>\|<link> [<n>]` | Plays a public playlist, or a channel's uploads, from entry *n*, where *YouTube open links in* says; no key needed. |
 | `/youtube next\|previous`, `/youtube entry <n>` | Plays the playlist's next, previous or *n*th video. |
 | `/youtube playlist [<id>\|<link>]` | A playlist's videos in a pane (a key: 1 unit, plus 1 per 50 videos); alone, the one playing. |
-| `/youtube play\|resume`, `/youtube pause`, `/youtube seek <time>`, `/youtube volume <level>`, `/youtube mute\|unmute`, `/youtube close` | Resumes, pauses, seeks, sets the volume (0–100), mutes or unmutes, or closes the window. |
+| `/youtube play\|resume`, `/youtube pause`, `/youtube seek <time>`, `/youtube volume <level>`, `/youtube mute\|unmute`, `/youtube close` | Resumes, pauses, seeks, sets the volume (0–100), mutes or unmutes, or closes the player. |
 | `/youtube save [<id>\|<link>]` | Saves the video playing, or the one named, to this profile's saved videos. |
 | `/youtube list`, `/youtube list --clear` | The saved videos in a pane; `--clear` removes them all after a yes (headless: without asking). |
 | `/youtube unsave <n>\|<id>\|<link>` | Removes one saved video. |

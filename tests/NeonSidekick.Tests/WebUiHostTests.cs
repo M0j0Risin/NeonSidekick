@@ -239,7 +239,7 @@ public sealed partial class WebUiHostTests : IAsyncLifetime
             Assert.NotEmpty(asset.Bytes);
         }
 
-        foreach (string page in new[] { WebUiAssets.ChatPage, WebUiAssets.ShoppingPage, WebUiAssets.HomePage, WebUiAssets.SignInPage })
+        foreach (string page in new[] { WebUiAssets.ChatPage, WebUiAssets.ShoppingPage, WebUiAssets.HomePage, WebUiAssets.SignInPage, WebUiAssets.YouTubePage })
         {
             string html = Encoding.UTF8.GetString(WebUiAssets.Find(page)!.Bytes);
             foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(html, "(?:src|href)=\"/([a-z0-9-]+\\.[a-z]+)\""))

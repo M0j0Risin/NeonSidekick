@@ -138,6 +138,23 @@ public sealed class WebHomeViewTests
         Assert.Null(WebHomeView.Video(null));
         var video = WebHomeView.Video(new VideoSnapshot(VideoState.Playing, "abc", "Song", "Band", 12.34, 200, 60, false, PlaylistEntry: 2, PlaylistCount: 5))!;
         Assert.Equal(("playing", "Song", 12.3, 3, 5), (video.State, video.Title, video.Position, video.Entry, video.Count));
+        Assert.Equal(WebUiText.VideoWhere(VideoPlace.Window), video.Where);
+    }
+
+    /// <summary>
+    /// The card under YouTube open links in (2026-10-16): a held video reads <c>waiting</c>, never <c>opening</c>; one with no title yet sends its
+    /// id or its playlist; where it plays from the snapshot's place.
+    /// </summary>
+    [Fact]
+    public void TheVideoCard_ReadsAHeldVideoAsWaiting_TheIdForNoTitle_AndWhereItPlays()
+    {
+        var held = WebHomeView.Video(VideoSnapshot.Opening(new VideoRequest("aqz-KE-bpKQ")) with { Held = new VideoHold(true, DateTimeOffset.UnixEpoch), Place = VideoPlace.WebTab })!;
+        Assert.Equal(("waiting", "aqz-KE-bpKQ"), (held.State, held.Title));
+        Assert.Equal(WebUiText.VideoWhere(VideoPlace.WebTab), held.Where);
+        Assert.NotEqual(WebUiText.VideoWhere(VideoPlace.Window), held.Where);
+
+        var opening = WebHomeView.Video(VideoSnapshot.Opening(VideoRequest.Playlist("PLabcdefghijklmnopqrstu")))!;
+        Assert.Equal(("opening", "playlist PLabcdefghijklmnopqrstu"), (opening.State, opening.Title));
     }
 
     [Fact]

@@ -689,7 +689,7 @@ function staleAssets(tag) {
 // ── The state ─────────────────────────────────────────────────────────
 
 function applyState(s) {
-  if (Neon.tabs(s.chatTab, s.homeTab, s.shoppingTab)) return;   // Chat turned off at the PC: on to a tab that is on
+  if (Neon.tabs(s.chatTab, s.homeTab, s.shoppingTab, s.youTubeTab)) return;   // Chat turned off at the PC: on to a tab that is on
   state = s;
   Neon.theme(s.theme);
   profileEl.textContent = (s.modelAvatar ? s.modelAvatar + ' ' : '') + s.profile + (s.planMode ? ' · plan' : '');
@@ -1784,7 +1784,10 @@ function connect() {
     if (lastPointSeq === null) lastPointSeq = s.point ? s.point.seq : 0; else applyPoint(s.point);
     window.scrollTo(0, document.body.scrollHeight);
     floatSoon();
+    // A video waiting for the YouTube tab (2026-10-16): last, once the asks are drawn, so a question is never left behind.
+    Neon.watch(s.state.youTubeTab === true ? (s.state.watch || null) : null);
   });
+  source.addEventListener('watch', ev => Neon.watch(JSON.parse(ev.data).text || null));
   source.addEventListener('strip', ev => applyStrip(JSON.parse(ev.data)));
   source.addEventListener('point', ev => applyPoint(JSON.parse(ev.data)));
   source.addEventListener('append', ev => append(JSON.parse(ev.data)));
@@ -1796,7 +1799,9 @@ function connect() {
   source.addEventListener('asks', ev => renderAsks(JSON.parse(ev.data).asks));
   source.addEventListener('state', ev => {
     const s = JSON.parse(ev.data);
-    if (!staleAssets(s.assets)) applyState(s);
+    if (staleAssets(s.assets)) return;
+    applyState(s);
+    Neon.watch(s.youTubeTab === true ? (s.watch || null) : null);
   });
   source.addEventListener('remove', ev => removeEntry(JSON.parse(ev.data).seq));
   source.addEventListener('draft', ev => takeDraft(JSON.parse(ev.data).text));
@@ -1811,6 +1816,11 @@ function reconnect() {
 
 try { draft.value = sessionStorage.getItem('neon.draft') || ''; } catch { /* private mode */ }
 grow();
+
+// Never jump to the YouTube tab mid-typing or over a question (2026-10-16): a draft with text, an ask card open, the 📣 sheet open (its filter
+// or a two-tap delete half done); the banner instead.
+Neon.watchBlocked = () => !!draft.value.trim() || asks.length > 0 || !promptsEl.classList.contains('hidden')
+  || (document.activeElement && document.activeElement.tagName === 'INPUT');
 draft.addEventListener('input', () => { saveDraft(); grow(); });
 draft.addEventListener('keydown', ev => {
   if (ev.key === 'Enter' && desktop && !ev.shiftKey && !ev.isComposing && !completion) {

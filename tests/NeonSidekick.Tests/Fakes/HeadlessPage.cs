@@ -27,8 +27,13 @@ public sealed class HeadlessPage : IAsyncDisposable
         _profile = profile;
     }
 
-    /// <summary>The browser started on a blank page, or null when none is installed.</summary>
-    public static async Task<HeadlessPage?> StartAsync()
+    /// <summary>
+    /// The browser started on a blank page, or null when none is installed. <paramref name="offline"/> (2026-10-16, the YouTube tab's tests) cuts
+    /// it off from everything but loopback: every name resolves to nothing and anything else goes to a dead proxy, so a page asking for YouTube's
+    /// script never reaches the internet; the Web UI's 127.0.0.1 is excluded from the resolver's rule (which catches an address too), and loopback bypasses the proxy by Chromium's own
+    /// rule (the PDF reader's <c>&lt;-loopback&gt;</c> is left out: it would send the page's own server to the dead proxy too).
+    /// </summary>
+    public static async Task<HeadlessPage?> StartAsync(bool offline = false)
     {
         string profile = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", "page-" + Guid.NewGuid().ToString("N"));
         if (new HeadlessBrowser(profile).Locate("") is not { } executable)
@@ -38,7 +43,8 @@ public sealed class HeadlessPage : IAsyncDisposable
 
         Directory.CreateDirectory(profile);
         var start = new ProcessStartInfo(executable) { UseShellExecute = false, RedirectStandardError = true, RedirectStandardOutput = true };
-        foreach (string argument in new[] { "--headless=new", "--remote-debugging-port=0", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--user-data-dir=" + profile, "about:blank" })
+        string[] cutOff = offline ? ["--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1", "--proxy-server=127.0.0.1:9"] : [];
+        foreach (string argument in (string[])["--headless=new", "--remote-debugging-port=0", "--disable-gpu", "--no-first-run", "--no-default-browser-check", .. cutOff, "--user-data-dir=" + profile, "about:blank"])
         {
             start.ArgumentList.Add(argument);
         }

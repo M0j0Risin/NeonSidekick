@@ -2578,7 +2578,24 @@ public sealed class SidekickApp
     /// here): handed to the running screen's strip (<see cref="ChatScreen.ViewerBrowsed"/>); nothing outside the interactive
     /// screen. Any thread.
     /// </summary>
-    public void ViewerBrowsed(string path) => _screen?.ViewerBrowsed(path);
+public void ViewerBrowsed(string path) => _screen?.ViewerBrowsed(path);
+
+    /// <summary>
+    /// A link the video window opens (2026-10-16, <c>YouTube open links in</c>; <c>Program</c> sets <c>VideoWindow.OpenLink</c> and
+    /// <c>MacVideoWindows.OpenLink</c> to it): the screen routes it, and with no screen (headless, a check mode) <paramref name="defaultBrowser"/> has it.
+    /// </summary>
+    public void OpenVideoLink(string url, Action<string> defaultBrowser)
+    {
+        ArgumentNullException.ThrowIfNull(defaultBrowser);
+        if (_screen is { } screen)
+        {
+            screen.RouteVideoLink(url, defaultBrowser);
+        }
+        else
+        {
+            defaultBrowser(url);
+        }
+    }
 
     /// <summary>The picture the thumbnail browser's user picked (2026-10-04, <see cref="Viewer.ThumbsWindow.Picked"/>): the running screen moves the viewer and the strip (<see cref="ChatScreen.ThumbsPicked"/>). Any thread.</summary>
     public void ThumbsPicked(string path) => _screen?.ThumbsPicked(path);

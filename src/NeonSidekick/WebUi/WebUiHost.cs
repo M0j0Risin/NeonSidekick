@@ -72,6 +72,24 @@ public sealed class WebUiHost : IWebUiHost
     public const string ContentSecurityPolicy =
         "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
+    /// <summary>
+    /// The YouTube tab's page alone (2026-10-16, <c>YouTube open links in</c> <c>webui-window</c>): <see cref="ContentSecurityPolicy"/> with
+    /// YouTube's player let in, and <see cref="YouTubeReferrerPolicy"/>. <b>The trust, the user's call on 2026-10-15:</b> YouTube's player
+    /// script runs in the Web UI's own page on this tab (not isolated on a second port, nor driven by raw undocumented messages), so while
+    /// the tab is open that script can do what the signed-in page can — send a chat line the model acts on, for one — though never read the
+    /// HttpOnly sign-in cookie. So the policy is as narrow as CSP makes it: <c>script-src</c> by path, the loader
+    /// (<c>/iframe_api</c>) and the player script it fetches (<c>/s/player/</c>, whose build hash changes), never all of www.youtube.com
+    /// (checked 2026-10-15: the loader injects exactly that one script); <c>frame-src</c> www.youtube.com, where the player is made (no
+    /// nocookie host, no <c>i.ytimg.com</c>: the page draws no thumbnail of its own). The phase 0 spike (2026-10-16) played a video, paused and
+    /// played it from script and loaded a second one under exactly this policy, on the PC and an iPhone, with no violation reported. Widen it
+    /// only with a violation to show for it.
+    /// </summary>
+    public const string YouTubeContentSecurityPolicy =
+        "default-src 'self'; script-src 'self' https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self'; img-src 'self' data:; frame-src https://www.youtube.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+
+    /// <summary>The YouTube tab's referrer policy (2026-10-16): YouTube's embed needs the page's origin as the referrer, else error 153.</summary>
+    public const string YouTubeReferrerPolicy = "strict-origin-when-cross-origin";
+
     /// <summary>How long a stop waits for open requests before it lets them go.</summary>
     public static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
 
@@ -276,7 +294,7 @@ public sealed class WebUiHost : IWebUiHost
             }
 
             bool signedIn = SignedIn(context);
-            if (get && path is "/" or "/index.html" or "/shopping" or "/shopping.html" or "/home" or "/home.html")
+            if (get && path is "/" or "/index.html" or "/shopping" or "/shopping.html" or "/home" or "/home.html" or "/youtube" or "/youtube.html")
             {
                 await PageAsync(context, path, signedIn).ConfigureAwait(false);
                 return;
@@ -296,7 +314,7 @@ public sealed class WebUiHost : IWebUiHost
             }
 
             // A tab that is off (later on 2026-10-15) has no APIs: a 404 the page reads as "go to /", which sends it to a tab that is on.
-            if (TabOf(path) is { } tab && !_backend.Tabs().Has(tab))
+            if (TabOf(path) is { } tab && (!_backend.Tabs().Has(tab) || (tab == WebTab.YouTube && _backend.Video is null)))
             {
                 await ResultAsync(context, StatusCodes.Status404NotFound, new WebResult(false, WebUiText.TabOff(tab)) { TabOff = true }).ConfigureAwait(false);
                 return;
@@ -329,6 +347,10 @@ public sealed class WebUiHost : IWebUiHost
                 {
                     case "/api/events":
                         await EventsAsync(context).ConfigureAwait(false);
+                        return;
+                    case YouTubeEventsPath when _backend.Video is { } video:
+                        // The YouTube tab's own stream (2026-10-16): per page, apart from Chat's.
+                        await YouTubeEventsAsync(context, video).ConfigureAwait(false);
                         return;
                     case "/api/shopping":
                         await JsonAsync(context, StatusCodes.Status200OK, _backend.Shopping(), WebUiJsonContext.Default.WebShopping).ConfigureAwait(false);
@@ -408,6 +430,7 @@ public sealed class WebUiHost : IWebUiHost
                     MemorySavePath => await ReadAsync(context, WebUiJsonContext.Default.WebTextBody).ConfigureAwait(false) is { } memory ? _backend.SaveMemory(memory, remote) : null,
                     MemoryDeletePath => await ReadAsync(context, WebUiJsonContext.Default.WebTextBody).ConfigureAwait(false) is { } forget ? _backend.DeleteMemory(forget, remote) : null,
                     HistoryClearPath => _backend.ClearHistory(remote),   // the body is not read, as Stop's
+                    YouTubeReportPath => await YouTubeReportAsync(context, remote).ConfigureAwait(false),
                     "/api/home/tap" or "/api/home/act" or "/api/home/scene" or "/api/home/say" or "/api/home/video" => await HomePostAsync(context, path, remote).ConfigureAwait(false),
                     _ => new WebReply(WebOutcome.NotFound),
                 };
@@ -462,6 +485,23 @@ public sealed class WebUiHost : IWebUiHost
         }
 
         var tabs = _backend.Tabs();
+        if (path.StartsWith("/youtube", StringComparison.Ordinal))
+        {
+            // The YouTube tab (2026-10-16): its page alone lets YouTube's player in (YouTubeContentSecurityPolicy's trust).
+            if (tabs.YouTube && _backend.Video is not null)
+            {
+                context.Response.Headers.ContentSecurityPolicy = YouTubeContentSecurityPolicy;
+                context.Response.Headers["Referrer-Policy"] = YouTubeReferrerPolicy;
+                await AssetAsync(context, WebUiAssets.YouTubePage).ConfigureAwait(false);
+            }
+            else
+            {
+                SeeOther(context.Response, "/");
+            }
+
+            return;
+        }
+
         if (path.StartsWith("/shopping", StringComparison.Ordinal) || path.StartsWith("/home", StringComparison.Ordinal))
         {
             bool shopping = path.StartsWith("/shopping", StringComparison.Ordinal);
@@ -514,6 +554,11 @@ public sealed class WebUiHost : IWebUiHost
         if (path is "/api/home" || path.StartsWith("/api/home/", StringComparison.Ordinal))
         {
             return WebTab.Home;
+        }
+
+        if (path.StartsWith("/api/youtube/", StringComparison.Ordinal))
+        {
+            return WebTab.YouTube;   // 2026-10-16
         }
 
         return path is "/api/events" or "/api/send" or "/api/stop" or "/api/answer" or "/api/complete" or "/api/usage" or "/api/strip/select" or "/api/prompts"
@@ -586,6 +631,12 @@ public sealed class WebUiHost : IWebUiHost
 
     /// <summary>The 🕘 tab's clear all (2026-10-16).</summary>
     public const string HistoryClearPath = "/api/history/clear";
+
+    /// <summary>The YouTube tab's event stream (2026-10-16): <c>?page=&amp;load=[&amp;claim=1]</c>, per page, apart from Chat's.</summary>
+    public const string YouTubeEventsPath = "/api/youtube/events";
+
+    /// <summary>The YouTube tab's player reports (2026-10-16), in the <see cref="WebRateBucket.Report"/> bucket.</summary>
+    public const string YouTubeReportPath = "/api/youtube/report";
 
     /// <summary>Where the pictures are served: <c>/api/picture/{run}/{id}/{thumb|mid|full}</c>.</summary>
     public const string PicturePrefix = "/api/picture/";
@@ -861,6 +912,105 @@ public sealed class WebUiHost : IWebUiHost
         {
             Release(stream);
         }
+    }
+
+    /// <summary>
+    /// The YouTube tab's stream (2026-10-16): <c>?page=&amp;load=[&amp;claim=1]</c>, each 16 to 64 base64url characters or a 400. The Chat
+    /// stream's shape — no-cache, no buffering, linked to the request and the stop, the heartbeat, the tab read before each batch and at each
+    /// heartbeat — over the page's own queue from the player, which decides which stream ends (an evicted waiting page, a reconnect replacing a
+    /// half-open one) through the stream's own cancel. Never counted among <see cref="MaxStreams"/>: the player holds its own list.
+    /// </summary>
+    private async Task YouTubeEventsAsync(HttpContext context, IWebVideo video)
+    {
+        var response = context.Response;
+        string page = context.Request.Query["page"].ToString();
+        string load = context.Request.Query["load"].ToString();
+        if (!WebVideoPlayer.IsId(page) || !WebVideoPlayer.IsId(load))
+        {
+            await ResultAsync(context, StatusCodes.Status400BadRequest, new WebResult(false, WebUiText.BadRequest)).ConfigureAwait(false);
+            return;
+        }
+
+        response.ContentType = "text/event-stream; charset=utf-8";
+        response.Headers.CacheControl = "no-cache";
+        context.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+        using var mine = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, _stopping.Token);
+        void End()
+        {
+            try
+            {
+                mine.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // ended meanwhile
+            }
+        }
+
+        using var attachment = video.Attach(page, load, context.Request.Query["claim"] == "1", context.Connection.RemoteIpAddress, End);
+        try
+        {
+            var token = mine.Token;
+            await WriteEventAsync(response, "hello", JsonSerializer.Serialize(attachment.Hello, WebUiJsonContext.Default.WebVideoHello), token).ConfigureAwait(false);
+            await response.Body.FlushAsync(token).ConfigureAwait(false);
+            var reader = attachment.Events;
+            while (!token.IsCancellationRequested)
+            {
+                if (!_backend.Tabs().YouTube)
+                {
+                    break;   // the tab turned off: the page's reconnect reads the 404 that sends it on
+                }
+
+                while (reader.TryRead(out var item))
+                {
+                    await WriteEventAsync(response, item.Name, item.Json.Value, token).ConfigureAwait(false);
+                }
+
+                await response.Body.FlushAsync(token).ConfigureAwait(false);
+                var waiting = reader.WaitToReadAsync(token).AsTask();
+                var beat = Task.Delay(Heartbeat, _time, token);
+                var first = await Task.WhenAny(waiting, beat).ConfigureAwait(false);
+                if (token.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                if (first == beat)
+                {
+                    await response.WriteAsync(": alive\n\n", token).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (!await waiting.ConfigureAwait(false))
+                {
+                    break;   // dropped for falling behind, or replaced: the page reconnects as the same page
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The page went, the server stops, or the player ended this stream.
+        }
+    }
+
+    /// <summary>
+    /// A YouTube tab's report (2026-10-16): <see cref="WebVideoReport"/> read as every body is, its page id checked and its message held to
+    /// <see cref="WebVideoPlayer.MaxReportChars"/> (a 400 otherwise, null here); the player's answer, a 409 from a page that is not the player.
+    /// </summary>
+    private async Task<WebReply?> YouTubeReportAsync(HttpContext context, IPAddress? remote)
+    {
+        if (_backend.Video is not { } video)
+        {
+            return new WebReply(WebOutcome.NotFound);
+        }
+
+        if (await ReadAsync(context, WebUiJsonContext.Default.WebVideoReport).ConfigureAwait(false) is not { Page: { } page, Message: { } message }
+            || !WebVideoPlayer.IsId(page) || message.Length > WebVideoPlayer.MaxReportChars)
+        {
+            return null;
+        }
+
+        return new WebReply(video.Report(page, message, remote));
     }
 
     private static Task WriteEventAsync(HttpResponse response, string name, string json, CancellationToken cancellationToken) =>

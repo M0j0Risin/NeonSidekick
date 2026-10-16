@@ -24,6 +24,15 @@ public enum VideoPageEvent
 
     /// <summary>The smoke's echo coming back.</summary>
     Echo,
+
+    /// <summary>
+    /// The Web UI's page could not make a player (2026-10-16: YouTube's script never came, a blocker): a failed snapshot with the app's
+    /// sentence (<see cref="WebUi.WebUiText.PlayerFailed"/>), never the page's own reason raw.
+    /// </summary>
+    Failed,
+
+    /// <summary>The Web UI's page started a video by itself (its Resume tap, 2026-10-16): the snapshot is left as it is.</summary>
+    Resumed,
 }
 
 /// <summary>
@@ -100,7 +109,8 @@ public static class VideoMessages
     /// A page message read against <paramref name="current"/>: a state report becomes the new snapshot (YouTube's error kept
     /// while it is the same video, dropped for another), an error is set on the current one, and anything else leaves it as
     /// it is. Each change counts up <see cref="VideoSnapshot.Version"/>. Never throws on what the page sends. A playlist's
-    /// report (2026-10-08) carries <c>list</c>, <c>index</c> and <c>count</c>, and an error the page moves past <c>skip</c>.
+    /// report (2026-10-08) carries <c>list</c>, <c>index</c> and <c>count</c>, and an error the page moves past <c>skip</c>. The Web UI's page (2026-10-16)
+    /// adds <c>failed</c>, <c>resumed</c> and a state report's <c>gesture</c> (<see cref="VideoSnapshot.NeedsTap"/>); the PC's page sends none of them.
     /// </summary>
     public static (VideoPageEvent Event, VideoSnapshot Snapshot) Apply(VideoSnapshot current, string? message)
     {
@@ -127,6 +137,15 @@ public static class VideoMessages
                     return (VideoPageEvent.Ready, current);
                 case "echo":
                     return (VideoPageEvent.Echo, current);
+                case "resumed":
+                    return (VideoPageEvent.Resumed, current);
+                case "failed":
+                    return (VideoPageEvent.Failed, current with
+                    {
+                        State = VideoState.Failed,
+                        Failure = WebUi.WebUiText.PlayerFailed(Text(root, "reason")),
+                        Version = current.Version + 1,
+                    });
                 case "error":
                     return (VideoPageEvent.Error, current with
                     {
@@ -151,7 +170,10 @@ public static class VideoMessages
                         PlaylistId: Text(root, "list"),
                         PlaylistEntry: Number(root, "index") is { } index and >= 0 ? (int)index : null,
                         PlaylistCount: Number(root, "count") is { } count and > 0 ? (int)count : null,
-                        Skipping: id == current.VideoId && current.Skipping));
+                        Skipping: id == current.VideoId && current.Skipping)
+                    {
+                        NeedsTap = root.TryGetProperty("gesture", out var gesture) && gesture.ValueKind == JsonValueKind.True,
+                    });
                 default:
                     return (VideoPageEvent.Other, current);
             }

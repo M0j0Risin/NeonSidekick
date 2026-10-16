@@ -122,6 +122,12 @@ public interface IWebUiBackend
     /// <summary>The Home tab (2026-10-15), or null in a build without one.</summary>
     IWebHome? Home { get; }
 
+    /// <summary>
+    /// The YouTube tab's player (2026-10-16), or null where there is none (no video window to route beside, headless, a test's backend): the
+    /// host then answers <c>/api/youtube/*</c> with the tab-off 404 whatever the tabs say.
+    /// </summary>
+    IWebVideo? Video => null;
+
     /// <summary>An entry whole while the transcript holds it (2026-10-15: a page opening what its snapshot deferred), or null.</summary>
     WebEntry? Entry(long seq);
 

@@ -13,19 +13,19 @@ public partial class ToolsMenuTests
     private void OpenYouTubeRow(int row) => Push([.. ToTab(ToolsText.YouTubeTabTitle), .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
 
     [Fact]
-    public void TheYouTubeTab_SitsAfterComfyUI_BeforeGitLib_WithItsNineRows()
+    public void TheYouTubeTab_SitsAfterComfyUI_BeforeGitLib_WithItsTenRows()
     {
         int tab = ToolsText.MenuIndex(ToolsText.YouTubeTabTitle) + 1;   // a menu on Media since 2026-10-09, its rows ToolsTabFields' as before
 
         Assert.Equal(ToolsText.MenuIndex(ToolsText.ComfyTabTitle) + 2, tab);   // the user's place, later on 2026-10-05 (after Screen until then); last on Media since 2026-10-09
         Assert.Equal(ToolsText.AppsTabTitle, ToolsText.TabTitles[TabIndex(ToolsText.YouTubeTabTitle)]);   // on Apps (Integrations until 2026-10-11) since 2026-10-10 (Media from 2026-10-09)
-        Assert.Equal(["YouTube tools", "YouTube API key", "YouTube search max results", "YouTube search order", "YouTube safe search", "YouTube region", "YouTube language", "YouTube autoplay", "YouTube while speaking"], SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
+        Assert.Equal(["YouTube tools", "YouTube API key", "YouTube search max results", "YouTube search order", "YouTube safe search", "YouTube region", "YouTube language", "YouTube open links in", "YouTube autoplay", "YouTube while speaking"], SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));   // open links in on 2026-10-16
         Assert.Equal([SettingsField.YouTubeTools, SettingsField.YouTubeAutoplay], SettingsMenu.ToolsTabFields[tab - 1].Where(SettingsMenu.IsToggle));
         Assert.DoesNotContain(SettingsMenu.ToolsTabFields[tab - 1], SettingsMenu.RefusedMidTurn);
         Assert.DoesNotContain(SettingsMenu.ToolsTabFields[tab - 1], SettingsMenu.IsLlmField);   // no reconnect: read at each turn and search
 
         var data = new AppSettingsData();
-        Assert.Equal(["off", "(none)", "8 results", "relevance", "moderate", "(any region)", "(any language)", "on", "pause"], SettingsMenu.ToolsTabFields[tab - 1].Select(f => SettingsMenu.FieldValue(f, data, _settings.ProfileDirectory)));
+        Assert.Equal(["off", "(none)", "8 results", "relevance", "moderate", "(any region)", "(any language)", "youtube-window", "on", "pause"], SettingsMenu.ToolsTabFields[tab - 1].Select(f => SettingsMenu.FieldValue(f, data, _settings.ProfileDirectory)));
         Assert.Equal(["views", "strict", "GB", "pt-BR"], new[] { SettingsField.YouTubeSearchOrder, SettingsField.YouTubeSafeSearch, SettingsField.YouTubeRegion, SettingsField.YouTubeLanguage }
             .Select(f => SettingsMenu.FieldValue(f, new AppSettingsData { YouTubeSearchOrder = "Views", YouTubeSafeSearch = "strict", YouTubeRegion = "gb", YouTubeLanguage = "PT-BR" }, _settings.ProfileDirectory)));
         Assert.Equal("relevance", SettingsMenu.FieldValue(SettingsField.YouTubeSearchOrder, new AppSettingsData { YouTubeSearchOrder = "newest" }, _settings.ProfileDirectory));   // unreadable: YouTube's own
@@ -34,6 +34,30 @@ public partial class ToolsMenuTests
         Assert.Equal("", SettingsMenu.EditableValue(SettingsField.YouTubeApiKey, new AppSettingsData { YouTubeApiKey = "AIza-plain" }));   // never put back on the line
         Assert.Equal("must be 1 to 20 results", SettingsMenu.YouTubeSearchMaxResultsRangeError);
         Assert.Equal("YouTube API key saved unencrypted: no DPAPI.", SettingsMenu.YouTubeApiKeyPlainWarning("no DPAPI"));
+    }
+
+    /// <summary>
+    /// YouTube open links in (2026-10-16, the user's ask and words): first under Playing, a picker over the four words on youtube-window, the
+    /// default; a hand-edited value reads as the default it acts as, not as typed.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_YouTubeOpenLinksIn_IsFirstUnderPlaying_APicker()
+    {
+        var (menu, pane, _) = PaneMenu();
+        OpenYouTubeRow(7);                         // the picker, on youtube-window
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // webui-window
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(NeonSidekick.YouTube.YouTubeOpenLinksIn.WebUiWindow, _settings.Current.YouTubeOpenLinksIn);
+        Assert.Contains("▸ " + Spectre.Console.Markup.Remove(SettingsMenu.YouTubeOpenLinksInLabel(NeonSidekick.YouTube.YouTubeOpenLinksIn.YouTubeWindow)) + "\n", Output);
+        Assert.Contains("  · YouTube open links in: webui-window\n", Output);
+        Assert.False(SettingsMenu.IsToggle(SettingsField.YouTubeOpenLinksIn));
+        Assert.Equal("youtube-window", SettingsMenu.FieldValue(SettingsField.YouTubeOpenLinksIn, new AppSettingsData { YouTubeOpenLinksIn = "phone" }, _settings.ProfileDirectory));
+        Assert.Equal("browser-window", SettingsMenu.FieldValue(SettingsField.YouTubeOpenLinksIn, new AppSettingsData { YouTubeOpenLinksIn = " Browser-Window " }, _settings.ProfileDirectory));
+        Assert.Equal("youtube-window  ", Spectre.Console.Markup.Remove(SettingsMenu.YouTubeOpenLinksInLabel("youtube-window"))[..16]);   // padded to sixteen, as Web open links in's
+        pane.Dispose();
     }
 
     [Fact]

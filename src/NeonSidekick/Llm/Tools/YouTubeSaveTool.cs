@@ -22,29 +22,39 @@ public sealed class YouTubeSaveTool : AIFunction
     /// <summary>The word for the video in the window.</summary>
     public const string Current = "current";
 
-    private static readonly JsonElement Schema = ToolSchema.Parse(
+    private static readonly JsonElement Schema = Build("the one in the video window");
+
+    // The schema per YouTube open links in (2026-10-16): only current's words change, the window's byte for byte.
+    private static readonly JsonElement WebSchema = Build("the one in the Web UI's YouTube tab");
+
+    private static readonly JsonElement BrowserSchema = Build("the one in the app's own video players (never one opened in a browser)");
+
+    private static JsonElement Build(string current) => ToolSchema.Parse(
         """
         {
           "type": "object",
           "properties": {
             "action": { "type": "string", "enum": ["add", "remove"], "description": "add saves the video; remove takes it off the saved list." },
-            "video": { "type": "string", "description": "The video's 11-character id or a YouTube link; \"current\" for the one in the video window; for remove, also its number in youtube_saved's list." }
+            "video": { "type": "string", "description": "The video's 11-character id or a YouTube link; \"current\" for CURRENT; for remove, also its number in youtube_saved's list." }
           },
           "required": ["action", "video"]
         }
-        """);
+        """.Replace("CURRENT", current, StringComparison.Ordinal));
 
     private readonly Func<YouTubeLibrary> _library;
     private readonly IVideoPlayer? _player;
     private readonly YouTubeLookup? _lookup;
+    private readonly Func<YouTubeOpenLinksInKind>? _target;
 
     /// <param name="player">The video window, for <c>current</c>; null headless.</param>
     /// <param name="lookup">A video's title by its id, for one saved by id or link; null saves it untitled.</param>
-    public YouTubeSaveTool(Func<YouTubeLibrary> library, IVideoPlayer? player, YouTubeLookup? lookup = null)
+    /// <param name="target">Where a play goes now, for <c>current</c>'s words in the schema (2026-10-16); null is the video window.</param>
+    public YouTubeSaveTool(Func<YouTubeLibrary> library, IVideoPlayer? player, YouTubeLookup? lookup = null, Func<YouTubeOpenLinksInKind>? target = null)
     {
         _library = library ?? throw new ArgumentNullException(nameof(library));
         _player = player;
         _lookup = lookup;
+        _target = target;
     }
 
     public override string Name => ToolName;
@@ -54,7 +64,16 @@ public sealed class YouTubeSaveTool : AIFunction
         "Adds a YouTube video to the user's saved videos (their bookmarks), or removes one. A saved video resumes where it was left the next time it plays. " +
         "Save only what the user asked to keep.";
 
-    public override JsonElement JsonSchema => Schema;
+    /// <summary>Its <c>current</c> words follow <c>YouTube open links in</c> (2026-10-16), one cached schema per value; the window's byte for byte.</summary>
+    public override JsonElement JsonSchema => SchemaFor(_target?.Invoke() ?? YouTubeOpenLinksInKind.YouTubeWindow);
+
+    /// <summary>The schema where a play goes to <paramref name="target"/>.</summary>
+    public static JsonElement SchemaFor(YouTubeOpenLinksInKind target) => target switch
+    {
+        YouTubeOpenLinksInKind.WebUiWindow => WebSchema,
+        YouTubeOpenLinksInKind.BrowserWindow or YouTubeOpenLinksInKind.DefaultBrowser => BrowserSchema,
+        _ => Schema,
+    };
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {

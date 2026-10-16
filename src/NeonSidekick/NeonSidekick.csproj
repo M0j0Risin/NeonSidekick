@@ -274,6 +274,8 @@
     <!-- The video window's page (2026-10-05): the IFrame Player API host Viewer/VideoPage writes into <home>\webview2\site and
          WebView2 serves from https://player.neonsidekick.example/ (a page with an origin, so YouTube's embeds get a Referer). -->
     <EmbeddedResource Include="..\..\assets\youtube\player.html" LogicalName="youtube/player.html" Visible="false" />
+    <!-- The player both pages share (2026-10-16): embedded once, under the Web UI's name; VideoPage.Text() reads the same resource to inline it. -->
+    <EmbeddedResource Include="..\..\assets\youtube\player-core.js" LogicalName="webui/youtube-core.js" Visible="false" />
     <!-- The Web UI's pages (2026-10-14): plain HTML, CSS and JavaScript, no library, served by WebUi/WebUiAssets from memory
          (no web root on disk). -->
     <EmbeddedResource Include="..\..\assets\webui\*.*" LogicalName="webui/%(Filename)%(Extension)" Visible="false" />

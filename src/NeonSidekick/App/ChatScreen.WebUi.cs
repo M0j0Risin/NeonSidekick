@@ -56,7 +56,9 @@ internal sealed partial class ChatScreen
             UsageNow = () => WebUsageView.Of(_session.Usage, _session.ContextLength),
             // The Home tab (2026-10-15): its side, and its lease's end checked on the session's 1-second tick.
             Home = new HomeSide(this),
-            Tick = HomeWebTick,
+            // The YouTube tab's player (2026-10-16), and its chores on the same tick: a hold's expiry, a video stopped once the tab is off.
+            Video = _webVideo,
+            Tick = () => { HomeWebTick(); WebVideoTick(); },
             // The pages wear the profile's theme (2026-10-15), per request.
             ProfileTheme = () => _effective().WebUiProfileTheme,
             // Each tab only while its controls are on (later on 2026-10-15), per request.
@@ -591,7 +593,10 @@ internal sealed partial class ChatScreen
             // The tabs on (later on 2026-10-15): the page hides the others' links, and leaves a tab that went off.
             effective.WebUiChatControls,
             effective.WebUiHomeControls,
-            effective.WebUiShoppingControls);
+            effective.WebUiShoppingControls,
+            // The YouTube tab (2026-10-16), and the banner's words while a video waits for it.
+            YouTubeTab: WebTabsNow().YouTube,
+            Watch: _webVideo?.Waiting == true ? WebUiText.WatchBanner : null);
     }
 
     /// <summary>
@@ -601,7 +606,27 @@ internal sealed partial class ChatScreen
     private WebTabs WebTabsNow()
     {
         var effective = _effective();
-        return new WebTabs(effective.WebUiChatControls, effective.WebUiHomeControls, effective.WebUiShoppingControls);
+        return new WebTabs(effective.WebUiChatControls, effective.WebUiHomeControls, effective.WebUiShoppingControls,
+            YouTube: _webVideo is not null && YouTube.YouTubeOpenLinksIn.Resolve(effective) == YouTube.YouTubeOpenLinksInKind.WebUiWindow);
+    }
+
+    /// <summary>
+    /// The YouTube tab's chores on the session's 1-second tick (2026-10-16): a request held too long dropped, and the tab's video stopped
+    /// (its place saved) once <i>YouTube open links in</i> is no longer <c>webui-window</c> or the Web UI isn't serving. A playing PC window is
+    /// left alone the other way round, until the next play.
+    /// </summary>
+    private void WebVideoTick()
+    {
+        if (_webVideo is not { } web)
+        {
+            return;
+        }
+
+        web.Tick();
+        if (YouTube.YouTubeOpenLinksIn.Resolve(_effective()) != YouTube.YouTubeOpenLinksInKind.WebUiWindow || !_webUiController.Serving)
+        {
+            web.Forget();
+        }
     }
 
     /// <summary>

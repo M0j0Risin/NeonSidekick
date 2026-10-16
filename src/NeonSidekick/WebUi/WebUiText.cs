@@ -207,12 +207,17 @@ public static class WebUiText
     /// <summary>An API of the Shopping tab while <i>Web UI shopping controls</i> is off (later on 2026-10-15); bare <c>/shopping</c> from the page too.</summary>
     public const string ShoppingTabOff = "The Shopping tab is off: Web UI shopping controls in /settings › Client › Web UI turns it on.";
 
-    /// <summary>The sentence for a tab that is off.</summary>
+    /// <summary>An API of the YouTube tab while <i>YouTube open links in</i> is not <c>webui-window</c> (2026-10-16).</summary>
+    public const string YouTubeTabOff = "The YouTube tab is off: YouTube open links in webui-window in /tools › Apps › YouTube turns it on.";
+
+    /// <summary>The sentence for a tab that is off; each tab named (2026-10-16: a newcomer never reads another tab's).</summary>
     public static string TabOff(WebTab tab) => tab switch
     {
         WebTab.Chat => ChatTabOff,
         WebTab.Home => HomeTabOff,
-        _ => ShoppingTabOff,
+        WebTab.Shopping => ShoppingTabOff,
+        WebTab.YouTube => YouTubeTabOff,
+        _ => "",
     };
 
     /// <summary>A POST without JSON and the header.</summary>
@@ -543,6 +548,71 @@ public static class WebUiText
     /// <summary>The video remote with no window open.</summary>
     public const string NoVideo = "No video is open at the PC.";
 
+    /// <summary><see cref="NoVideo"/> for where the router plays now (2026-10-16): the PC's words, or the YouTube tab's.</summary>
+    public static string NoVideoIn(Viewer.VideoPlace place) => place == Viewer.VideoPlace.WebTab ? "No video is open in the YouTube tab." : NoVideo;
+
+    /// <summary>Home's video card: where the video plays (2026-10-16), from its snapshot's place.</summary>
+    public static string VideoWhere(Viewer.VideoPlace place) => place == Viewer.VideoPlace.WebTab ? "in the YouTube tab" : "on the PC";
+
+    // ── The YouTube tab (2026-10-16) ─────────────────────────────────────────
+
+    /// <summary>
+    /// A player the page could not make, as the model and the status read it: YouTube's script never came (no internet, a blocker), or
+    /// another reason. The page's own reason is never shown raw.
+    /// </summary>
+    public static string PlayerFailed(string? reason) => reason switch
+    {
+        "api" => "the Web UI's YouTube tab could not load YouTube's player (no internet on the phone, or a blocker stopped it).",
+        _ => "the Web UI's YouTube tab could not start YouTube's player.",
+    };
+
+    /// <summary>The banner a page shows instead of leaving for a waiting video: a link to the tab.</summary>
+    public const string WatchBanner = "▶ A video is waiting — Watch";
+
+    /// <summary>The YouTube tab's words, made here as every word the pages show (<see cref="WebVideoWords"/>).</summary>
+    public static WebVideoWords VideoWords { get; } = new(
+        Waiting: "Playing on another page",
+        PlayHere: "Play here",
+        TapForSound: "Tap the video's speaker for sound",
+        TapToStart: "Tap the video to start",
+        Idle: "Nothing is playing here. Ask in Chat for a video, and it plays on this tab.",
+        Loading: "Loading YouTube's player…",
+        Failed: "YouTube's player didn't load: is this phone online?",
+        Closed: "The video was closed.");
+
+    /// <summary>
+    /// The Resume button's words (2026-10-16): <c>Resume "Big Buck Bunny" at 3:12</c>; the id for a video with no title yet; a playlist's entry.
+    /// The time from <see cref="YouTube.YouTubeIds.FormatTime"/>, so the phone and the PC's lines read alike.
+    /// </summary>
+    public static string ResumeLabel(string? title, string? videoId, string? playlistId, int? entry, double start)
+    {
+        string what = !string.IsNullOrWhiteSpace(title) ? "\"" + title + "\""
+            : videoId is not null ? "video " + videoId
+            : "playlist " + playlistId;
+        string inList = playlistId is not null && entry is { } at ? " (entry " + (at + 1).ToString(CultureInfo.InvariantCulture) + ")" : "";
+        string time = start > 0 ? " at " + YouTube.YouTubeIds.FormatTime(start) : " from the start";
+        return "Resume " + what + inList + time;
+    }
+
+    /// <summary>The PC's hint row as a page takes playback with Play here.</summary>
+    public const string YouTubeClaimFlash = Glyph + "YouTube tab: playing here now";
+
+    /// <summary>The PC's hint row as a page's Resume tap starts the last video.</summary>
+    public const string YouTubeResumeFlash = Glyph + "YouTube tab: resumed";
+
+    /// <summary>A page took playback with Play here (audit).</summary>
+    public static string YouTubeClaimLogLine(IPAddress? remote) => "Web UI: a YouTube tab took playback from " + Where(remote) + ".";
+
+    /// <summary>A page's Resume tap (audit).</summary>
+    public static string YouTubeResumeLogLine(IPAddress? remote) => "Web UI: a YouTube tab resumed the last video from " + Where(remote) + ".";
+
+    /// <summary>A page became the YouTube tab's owner, first come or promoted (audit).</summary>
+    public static string YouTubeOwnerLogLine(IPAddress? remote) => "Web UI: a YouTube tab became the player from " + Where(remote) + ".";
+
+    /// <summary>YouTube's refusal on the tab, as the window logs its own.</summary>
+    public static string YouTubeRefusedLogLine(string? id, int code) =>
+        "YouTube refused video " + id + " in the player on the Web UI's YouTube tab (error " + code.ToString(CultureInfo.InvariantCulture) + ").";
+
     /// <summary>The model card's server for the embedded model.</summary>
     public const string EmbeddedServer = "embedded";
 
@@ -609,7 +679,9 @@ public static class WebUiText
         {
             WebRateBucket.Act => "taps",
             WebRateBucket.Say => "questions to Home Assistant",
-            _ => "sign-in attempts",
+            WebRateBucket.SignIn => "sign-in attempts",
+            WebRateBucket.Report => "player reports",
+            _ => "requests",
         } + " from " + Where(remote) + "; refused for now.";
 
     private static string Where(IPAddress? remote) => remote is null ? "an unknown address" : (remote.IsIPv4MappedToIPv6 ? remote.MapToIPv4() : remote).ToString();

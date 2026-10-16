@@ -93,22 +93,27 @@ public sealed record WebResult(bool Ok, string? Message = null, bool AsText = fa
     public string? Open { get; init; }
 }
 
-/// <summary>The Web UI's tabs and whether each is on (later on 2026-10-15): <i>Web UI chat controls</i>, <i>home controls</i>, <i>shopping controls</i>.</summary>
-public readonly record struct WebTabs(bool Chat, bool Home, bool Shopping)
+/// <summary>
+/// The Web UI's tabs and whether each is on (later on 2026-10-15): <i>Web UI chat controls</i>, <i>home controls</i>, <i>shopping controls</i>, and
+/// (2026-10-16) the YouTube tab while <i>YouTube open links in</i> is <c>webui-window</c> and there is a web player.
+/// </summary>
+public readonly record struct WebTabs(bool Chat, bool Home, bool Shopping, bool YouTube = false)
 {
-    /// <summary>Every tab on: a backend that says nothing of its tabs.</summary>
+    /// <summary>Every tab on but YouTube: a backend that says nothing of its tabs has no web player for that one.</summary>
     public static WebTabs All => new(true, true, true);
 
-    /// <summary>Whether <paramref name="tab"/> is on.</summary>
+    /// <summary>Whether <paramref name="tab"/> is on; each tab named, an unknown one off.</summary>
     public bool Has(WebTab tab) => tab switch
     {
         WebTab.Chat => Chat,
         WebTab.Home => Home,
-        _ => Shopping,
+        WebTab.Shopping => Shopping,
+        WebTab.YouTube => YouTube,
+        _ => false,
     };
 
-    /// <summary>The page <c>/</c> sends a browser to with Chat off: the first tab on in the nav's order (Home, then Shopping), or null for none.</summary>
-    public string? FirstOtherPage => Home ? "/home" : Shopping ? "/shopping" : null;
+    /// <summary>The page <c>/</c> sends a browser to with Chat off: the first tab on in the nav's order (Home, then Shopping, then YouTube), or null for none.</summary>
+    public string? FirstOtherPage => Home ? "/home" : Shopping ? "/shopping" : YouTube ? "/youtube" : null;
 }
 
 /// <summary>A tab of the Web UI's pages.</summary>
@@ -117,6 +122,9 @@ public enum WebTab
     Chat,
     Home,
     Shopping,
+
+    /// <summary>The YouTube tab (2026-10-16).</summary>
+    YouTube,
 }
 
 /// <summary>
@@ -214,8 +222,11 @@ public sealed record WebHomeTile(string Ref, string Glyph, string Name, string V
 /// <summary>A scene the tab offers: its entity id and its name.</summary>
 public sealed record WebHomeScene(string Id, string Name);
 
-/// <summary>The PC's YouTube window as the tab shows it: its state, the video, the clock, the sound, a playlist's place, a failure's sentence.</summary>
-public sealed record WebHomeVideo(string State, string? Title, string? Author, double Position, double Duration, int Volume, bool Muted, int? Entry, int? Count, string? Failure);
+/// <summary>
+/// The video playing, as the tab shows it: its state, the video, the clock, the sound, a playlist's place, a failure's sentence, and (2026-10-16)
+/// where it plays, the PC's window or the YouTube tab.
+/// </summary>
+public sealed record WebHomeVideo(string State, string? Title, string? Author, double Position, double Duration, int Volume, bool Muted, int? Entry, int? Count, string? Failure, string? Where = null);
 
 /// <summary>The PC's meters in whole percents, and the network's rates as the perf bar words them; each missing when the machine cannot read it.</summary>
 public sealed record WebHomePc(int? Cpu, int? Ram, int? Gpu, int? Vram, string? Down, string? Up);
@@ -223,8 +234,11 @@ public sealed record WebHomePc(int? Cpu, int? Ram, int? Gpu, int? Vram, string? 
 /// <summary>The model card: the model, its server, its window, whether it loads or works, and the usage figures.</summary>
 public sealed record WebHomeModel(string Model, string Server, int? Context, bool Loading, bool Busy, WebUsage? Usage);
 
-/// <summary>What the Chat badge on the other tabs reads (2026-10-15): a reply running, the asks open, what the PC waits on, the theme's name, the files' tag.</summary>
-public sealed record WebPulse(bool Busy, int Asks, string? WaitingAtPc, string Theme, string Assets, bool ChatTab = true, bool HomeTab = true, bool ShoppingTab = true);
+/// <summary>
+/// What the Chat badge on the other tabs reads (2026-10-15): a reply running, the asks open, what the PC waits on, the theme's name, the files' tag;
+/// the tabs on; and (2026-10-16) whether the YouTube tab is, and the banner's words while a video waits for it (<see cref="Watch"/>, null for none).
+/// </summary>
+public sealed record WebPulse(bool Busy, int Asks, string? WaitingAtPc, string Theme, string Assets, bool ChatTab = true, bool HomeTab = true, bool ShoppingTab = true, bool YouTubeTab = false, string? Watch = null);
 
 /// <summary>The Home tab's own words, the app's like every other.</summary>
 public sealed record WebHomeWords(
@@ -324,7 +338,8 @@ public sealed record WebAskView(
 /// <summary>
 /// What the page's header and composer show: the profile and its two avatars, the model, whether a reply runs (Stop) or a model loads,
 /// plan mode, the session's title, the phone's lines waiting, what the PC is waiting on, the app's version, and the page's own files' tag
-/// (<see cref="WebUiAssets.Tag"/>: a page whose tag differs reloads itself).
+/// (<see cref="WebUiAssets.Tag"/>: a page whose tag differs reloads itself). The tabs on; and (2026-10-16) the banner's words while a video
+/// waits for a YouTube tab (<see cref="Watch"/>: the flag and the text in one, null for none).
 /// </summary>
 public sealed record WebState(
     string Profile,
@@ -342,7 +357,9 @@ public sealed record WebState(
     string Theme = "",
     bool ChatTab = true,
     bool HomeTab = true,
-    bool ShoppingTab = true);
+    bool ShoppingTab = true,
+    bool YouTubeTab = false,
+    string? Watch = null);
 
 /// <summary>
 /// What a page gets on (re)connecting: the transcript, the open asks, the state, the app's words the page shows of its own, the drafts held for
@@ -459,6 +476,34 @@ public sealed class WebStoreRequest
     public long Id { get; set; }
 }
 
+// ── The YouTube tab (2026-10-16) ─────────────────────────────────────────
+
+/// <summary>The YouTube tab's words, made on the server (<see cref="WebUiText.VideoWords"/>).</summary>
+public sealed record WebVideoWords(string Waiting, string PlayHere, string TapForSound, string TapToStart, string Idle, string Loading, string Failed, string Closed);
+
+/// <summary>
+/// The Resume offer (2026-10-16): the last video or playlist, the entry, where to start (the saved videos' rewind applied) and the button's
+/// ready words.
+/// </summary>
+public sealed record WebVideoResume(string? VideoId, string? PlaylistId, int? Entry, double Start, string Label);
+
+/// <summary>
+/// A YouTube stream's first event: the page id to use from now on (a duplicated tab gets a fresh one), the tab's words, whether this page plays
+/// (else it waits, with Play here), the Resume offer, and how long the page waits for YouTube's player script before it reports a failure.
+/// </summary>
+public sealed record WebVideoHello(string Page, WebVideoWords Words, bool Owner, WebVideoResume? Resume, int ApiWaitMs);
+
+/// <summary>An <c>owner</c> event: this page plays now (or waits), with the Resume offer a promoted page draws.</summary>
+public sealed record WebVideoOwner(bool Owner, WebVideoResume? Resume);
+
+/// <summary>A report from the YouTube tab's player: the page's id and its message, the PC page's own JSON as a string inside this one.</summary>
+public sealed class WebVideoReport
+{
+    public string? Page { get; set; }
+
+    public string? Message { get; set; }
+}
+
 /// <summary>The source-generated serializer for the Web UI's wire shapes (reflection is off under NativeAOT).</summary>
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(WebSendRequest))]
@@ -503,4 +548,9 @@ public sealed class WebStoreRequest
 [JsonSerializable(typeof(WebHistory))]
 [JsonSerializable(typeof(WebAsks))]
 [JsonSerializable(typeof(WebShopping))]
+[JsonSerializable(typeof(WebVideoHello))]
+[JsonSerializable(typeof(WebVideoWords))]
+[JsonSerializable(typeof(WebVideoResume))]
+[JsonSerializable(typeof(WebVideoOwner))]
+[JsonSerializable(typeof(WebVideoReport))]
 public sealed partial class WebUiJsonContext : JsonSerializerContext;

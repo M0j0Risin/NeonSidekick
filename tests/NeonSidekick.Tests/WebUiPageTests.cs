@@ -166,12 +166,15 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
 
         public List<string> Taps { get; } = [];
 
+        /// <summary>The video card (2026-10-16), none by default.</summary>
+        public WebHomeVideo? VideoCard { get; set; }
+
         public WebHome Read() => new("live", null, Controls,
             [
                 new WebHomeTile("entity:light.desk", "💡", "Desk", "", "", Controls ? "call" : "none", null, "on", "#ffcc00", 0, true),
                 new WebHomeTile("entity:lock.front", "🔒", "Front Door", "", "", Controls ? "confirm" : "none", null, "off", null, 1, true),
             ],
-            [], null, new WebHomePc(12, 50, null, null, null, null), new WebHomeModel("m", "host", 8000, false, false, null), new WebPulse(false, 0, null, "", "tag"), WebUiText.HomeWords);
+            [], VideoCard, new WebHomePc(12, 50, null, null, null, null), new WebHomeModel("m", "host", 8000, false, false, null), new WebPulse(false, 0, null, "", "tag"), WebUiText.HomeWords);
 
         public WebHomeSheet? Sheet(string reference) =>
             new(reference, "Desk", "off", [new WebHomeSheetRow("light.desk", "💡", "Desk", "off", [new WebHomeAction(0, "Toggle", false)])]);
@@ -217,6 +220,26 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
         await page.EvalAsync("history.back()");
         await page.WaitAsync("document.getElementById('sheet-back').classList.contains('hidden')", "Back closing the sheet");
         Assert.Equal(2, (await page.EvalAsync("document.querySelectorAll('.meter').length")).GetInt32());   // CPU and RAM; the GPU's unread
+    }
+
+    /// <summary>Home's video card under YouTube open links in (2026-10-16): a video waiting for its tab draws no remote, its meta naming where it plays.</summary>
+    [WindowsFact]
+    public async Task Home_AWaitingVideosCard_HasNoRemote_AndItsMetaNamesWhereItPlays()
+    {
+        string where = WebUiText.VideoWhere(NeonSidekick.Viewer.VideoPlace.WebTab);
+        _backend.Home = new Home { VideoCard = new WebHomeVideo("waiting", "aqz-KE-bpKQ", null, 0, 0, 100, false, null, null, null, where) };
+        if (await SignedInAsync("/home") is not { } page)
+        {
+            return;
+        }
+
+        await page.WaitAsync("!document.getElementById('video').classList.contains('hidden')", "the video card");
+        Assert.Contains(where, await page.TextAsync("document.querySelector('#video .video-meta').textContent"), StringComparison.Ordinal);
+        Assert.Equal(0, (await page.EvalAsync("document.querySelectorAll('#video .remote').length")).GetInt32());
+
+        _backend.Home = new Home { VideoCard = new WebHomeVideo("playing", "Big Buck Bunny", "Blender", 3, 635, 100, false, null, null, null, where) };
+        await page.GoAsync(Root + "home");
+        await page.WaitAsync("document.querySelectorAll('#video .remote').length === 1", "the remote for a playing video");
     }
 
     // ── Common ──────────────────────────────────────────────────────────────

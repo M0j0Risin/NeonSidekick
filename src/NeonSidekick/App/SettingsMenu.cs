@@ -1218,6 +1218,9 @@ public enum SettingsField
 
     /// <summary>An edit row: the home's <c>ad.json</c> in the editor.</summary>
     DirectoryDomainsGlobal,
+
+    /// <summary>A picker over <see cref="YouTube.YouTubeOpenLinksIn.Names"/>: where a YouTube video goes, the video window, the Browser window, the default browser or the Web UI's YouTube tab (<see cref="Settings.AppSettingsData.YouTubeOpenLinksIn"/>). The YouTube tab, first under Playing (2026-10-16, the user's ask and words); no reconnect (read at each play). Last in the enum, as every newcomer.</summary>
+    YouTubeOpenLinksIn,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1746,7 +1749,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe],
         [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
         [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyOutputFolder],
-        [SettingsField.YouTubeTools, SettingsField.YouTubeApiKey, SettingsField.YouTubeSearchMaxResults, SettingsField.YouTubeSearchOrder, SettingsField.YouTubeSafeSearch, SettingsField.YouTubeRegion, SettingsField.YouTubeLanguage, SettingsField.YouTubeAutoplay, SettingsField.YouTubeVoice],
+        [SettingsField.YouTubeTools, SettingsField.YouTubeApiKey, SettingsField.YouTubeSearchMaxResults, SettingsField.YouTubeSearchOrder, SettingsField.YouTubeSafeSearch, SettingsField.YouTubeRegion, SettingsField.YouTubeLanguage, SettingsField.YouTubeOpenLinksIn, SettingsField.YouTubeAutoplay, SettingsField.YouTubeVoice],
         [SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount],
         [SettingsField.ShoppingTools, SettingsField.ShoppingList, SettingsField.ShoppingStores],
@@ -2320,6 +2323,7 @@ internal sealed partial class SettingsMenu
         SettingsField.YouTubeSearchMaxResults => "YouTube search max results",
         SettingsField.YouTubeAutoplay => "YouTube autoplay",
         SettingsField.YouTubeVoice => "YouTube while speaking",
+        SettingsField.YouTubeOpenLinksIn => "YouTube open links in",
         SettingsField.YouTubeSearchOrder => "YouTube search order",
         SettingsField.YouTubeSafeSearch => "YouTube safe search",
         SettingsField.YouTubeRegion => "YouTube region",
@@ -2728,6 +2732,7 @@ internal sealed partial class SettingsMenu
             SettingsField.YouTubeSearchMaxResults => Results(data.YouTubeSearchMaxResults),
             SettingsField.YouTubeAutoplay => OnOff(data.YouTubeAutoplay),
             SettingsField.YouTubeVoice => YouTube.YouTubeVoiceMode.Resolve(data.YouTubeVoice),
+            SettingsField.YouTubeOpenLinksIn => YouTube.YouTubeOpenLinksIn.TryParse(data.YouTubeOpenLinksIn, out var youTubeTarget) ? YouTube.YouTubeOpenLinksIn.Name(youTubeTarget) : YouTube.YouTubeOpenLinksIn.Default,
             SettingsField.YouTubeSearchOrder => YouTube.YouTubeSearchFilters.Defaults(data).Order,
             SettingsField.YouTubeSafeSearch => YouTube.YouTubeSearchFilters.Defaults(data).SafeSearch,
             SettingsField.YouTubeRegion => YouTube.YouTubeSearchFilters.Defaults(data).Region is { Length: > 0 } region ? region : NoYouTubeRegionLabel,
@@ -5316,6 +5321,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.YouTubeVoice)
         {
             return await PickYouTubeVoiceAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.YouTubeOpenLinksIn)
+        {
+            return await PickYouTubeOpenLinksInAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field is SettingsField.YouTubeSearchOrder or SettingsField.YouTubeSafeSearch)

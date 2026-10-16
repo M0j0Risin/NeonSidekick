@@ -275,6 +275,43 @@ public class YouTubeSearchTests
         Assert.Equal("https://www.youtube.com/watch?v=aqz-KE-bpKQ&t=90s", YouTubeIds.WatchUrl("aqz-KE-bpKQ", 90.7));
     }
 
+    /// <summary>A playlist's page for a browser (2026-10-16, YouTube open links in): a video in it with its t=, from its start, at an entry (1-based in the link).</summary>
+    [Fact]
+    public void PlaylistWatchUrl_HasItsThreeForms()
+    {
+        const string List = "PLabcdefghijklmnopqrstu";
+        Assert.Equal("https://www.youtube.com/watch?v=aqz-KE-bpKQ&t=90s&list=" + List, YouTubeIds.PlaylistWatchUrl(List, 0, "aqz-KE-bpKQ", 90));
+        Assert.Equal("https://www.youtube.com/playlist?list=" + List, YouTubeIds.PlaylistWatchUrl(List, 0, null, 0));
+        Assert.Equal("https://www.youtube.com/watch?list=" + List + "&index=3", YouTubeIds.PlaylistWatchUrl(List, 2, null, 0));
+        Assert.Equal("https://www.youtube.com/watch?list=" + List + "&index=3", YouTubeIds.UrlFor(Viewer.VideoRequest.Playlist(List, 2)));
+        Assert.Equal("https://www.youtube.com/watch?v=aqz-KE-bpKQ&t=12s", YouTubeIds.UrlFor(new Viewer.VideoRequest("aqz-KE-bpKQ", 12)));
+    }
+
+    [Theory]
+    [InlineData("youtube.com", true)]
+    [InlineData("www.youtube.com", true)]
+    [InlineData("M.YouTube.com", true)]
+    [InlineData("music.youtube.com", true)]
+    [InlineData("www.youtube-nocookie.com", true)]
+    [InlineData("youtu.be", true)]
+    [InlineData("youtube.com.example", false)]
+    [InlineData("notyoutube.com", false)]
+    [InlineData(null, false)]
+    public void IsYouTubeHost_KnowsYouTubesOwnHosts_NeverALookAlike(string? host, bool expected) => Assert.Equal(expected, YouTubeIds.IsYouTubeHost(host));
+
+    /// <summary>What the player plays (2026-10-16, open_url's and the video window's links): a video, or a link with a list= it reads; a channel's page, a search or another site passes on.</summary>
+    [Theory]
+    [InlineData("https://www.youtube.com/watch?v=aqz-KE-bpKQ", true)]
+    [InlineData("https://youtu.be/aqz-KE-bpKQ?t=30", true)]
+    [InlineData("https://www.youtube.com/playlist?list=PLabcdefghijklmnopqrstu", true)]
+    [InlineData("https://www.youtube.com/watch?v=aqz-KE-bpKQ&list=RDaqz-KE-bpKQ&start_radio=1", true)]
+    [InlineData("https://www.youtube.com/channel/UCSMOQeBJ2RAnuFungnQOxLg", false)]
+    [InlineData("https://www.youtube.com/@blender", false)]
+    [InlineData("https://www.youtube.com/results?search_query=bunny", false)]
+    [InlineData("https://example.com/watch?v=aqz-KE-bpKQ", false)]
+    [InlineData("PLabcdefghijklmnopqrstu", false)]
+    public void IsPlayable_IsAVideoOrAListLink(string text, bool expected) => Assert.Equal(expected, YouTubeIds.IsPlayable(text));
+
     // ── The Data API's answers ───────────────────────────────────────────────
 
     [Fact]

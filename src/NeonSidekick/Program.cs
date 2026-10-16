@@ -393,6 +393,9 @@ NeonSidekick.Viewer.ThumbsWindow.Placed = (x, y) =>
 if (OperatingSystem.IsWindows())
 {
     NeonSidekick.Viewer.VideoWindow.Home = home;
+    // Its links go where YouTube open links in says (2026-10-16): the window's own default, read before it is replaced, is the fallback.
+    var videoDefaultBrowser = NeonSidekick.Viewer.VideoWindow.OpenLink;
+    NeonSidekick.Viewer.VideoWindow.OpenLink = url => app.OpenVideoLink(url, videoDefaultBrowser);
     NeonSidekick.Viewer.VideoWindow.Position = () => settings.Current is { VideoWindowLeft: int x, VideoWindowTop: int y } ? (x, y) : null;
     NeonSidekick.Viewer.VideoWindow.Placed = (x, y) =>
     {
@@ -427,6 +430,15 @@ if (OperatingSystem.IsWindows())
 if (OperatingSystem.IsMacOSVersionAtLeast(14) && appKit)
 {
     NeonSidekick.Viewer.MacVideoWindows.Home = home;
+    // Its links likewise (2026-10-16), the WebKit opener the fallback, posted to the AppKit thread when a pool thread falls back.
+    var macDefaultBrowser = NeonSidekick.Viewer.MacVideoWindows.OpenLink;
+    NeonSidekick.Viewer.MacVideoWindows.OpenLink = url => app.OpenVideoLink(url, link =>
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            NeonSidekick.Viewer.AppKitHost.Post(() => macDefaultBrowser(link));
+        }
+    });
     NeonSidekick.Viewer.MacVideoWindows.Position = () => settings.Current is { VideoWindowLeft: int x, VideoWindowTop: int y } ? (x, y) : null;
     NeonSidekick.Viewer.MacVideoWindows.Placed = (x, y) =>
     {

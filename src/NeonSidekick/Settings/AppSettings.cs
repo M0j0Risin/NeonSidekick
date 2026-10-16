@@ -762,6 +762,7 @@ public sealed class AppSettings : IDisposable
         YouTubeSearchMaxResults = source.YouTubeSearchMaxResults,
         YouTubeAutoplay = source.YouTubeAutoplay,
         YouTubeVoice = source.YouTubeVoice,
+        YouTubeOpenLinksIn = source.YouTubeOpenLinksIn,
         YouTubeSearchOrder = source.YouTubeSearchOrder,
         YouTubeSafeSearch = source.YouTubeSafeSearch,
         YouTubeRegion = source.YouTubeRegion,

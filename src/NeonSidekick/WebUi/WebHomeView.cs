@@ -187,7 +187,11 @@ public static class WebHomeView
         return pc is { Cpu: null, Ram: null, Gpu: null, Vram: null, Down: null, Up: null } ? null : pc;
     }
 
-    /// <summary>The PC's YouTube window for the card, or null with none open.</summary>
+    /// <summary>
+    /// The video playing for the card, in the PC's window or (2026-10-16) the YouTube tab, or null with none open. A video waiting for a YouTube
+    /// tab reads <c>waiting</c>, not <c>opening</c>; one with no title yet sends its id (or its playlist) as the title, never an empty line; and
+    /// <see cref="WebHomeVideo.Where"/> names the place.
+    /// </summary>
     public static WebHomeVideo? Video(VideoSnapshot? snapshot)
     {
         if (snapshot is not { } video)
@@ -195,9 +199,13 @@ public static class WebHomeView
             return null;
         }
 
-        string state = video.State.ToString().ToLowerInvariant();
-        return new WebHomeVideo(state, video.Title, video.Author, Math.Round(video.Position, 1), Math.Round(video.Duration, 1), video.Volume, video.Muted,
-            video.PlaylistEntry is { } entry ? entry + 1 : null, video.PlaylistCount, video.Failure);
+        string state = video.Held is not null ? "waiting" : video.State.ToString().ToLowerInvariant();
+        string? title = !string.IsNullOrWhiteSpace(video.Title) ? video.Title
+            : video.VideoId is { } id ? id
+            : video.PlaylistId is { } list ? "playlist " + list
+            : null;
+        return new WebHomeVideo(state, title, video.Author, Math.Round(video.Position, 1), Math.Round(video.Duration, 1), video.Volume, video.Muted,
+            video.PlaylistEntry is { } entry ? entry + 1 : null, video.PlaylistCount, video.Failure, WebUiText.VideoWhere(video.Place));
     }
 
     /// <summary>The model's server as the card names it: the embedded model, a Docker container, the Claude Code server, or the host alone (never a key). Pure.</summary>

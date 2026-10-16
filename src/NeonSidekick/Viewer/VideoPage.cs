@@ -25,6 +25,15 @@ internal static class VideoPage
     public const string ResourceName = "youtube/player.html";
     public const string FileName = "player.html";
 
+    /// <summary>
+    /// The player both pages share (2026-10-16, <c>assets\youtube\player-core.js</c>), embedded once under the Web UI's name, which serves it
+    /// as is; <see cref="Text"/> puts it into this page at <see cref="CoreMarker"/>.
+    /// </summary>
+    public const string CoreResourceName = "webui/youtube-core.js";
+
+    /// <summary>Where <see cref="Text"/> puts the shared player in the page.</summary>
+    public const string CoreMarker = "/*@neon-player-core@*/";
+
     /// <summary>The folder under the home WebView2 keeps its profile in: <c>&lt;home&gt;\webview2</c>.</summary>
     public const string FolderName = "webview2";
 
@@ -59,11 +68,22 @@ internal static class VideoPage
         && (parsed.Scheme == Uri.UriSchemeHttps || parsed.Scheme == Uri.UriSchemeHttp)
         && parsed.Host.Length > 0;
 
-    /// <summary>The embedded page's text.</summary>
+    /// <summary>The embedded page's text, the shared player put in at its marker (2026-10-16): the page as written and as the Mac loads it.</summary>
     public static string Text()
     {
-        using var stream = typeof(VideoPage).Assembly.GetManifestResourceStream(ResourceName)
-            ?? throw new InvalidOperationException("The video page " + ResourceName + " is not embedded.");
+        string page = Resource(ResourceName);
+        if (!page.Contains(CoreMarker, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The video page " + ResourceName + " has no " + CoreMarker + " for the player.");
+        }
+
+        return page.Replace(CoreMarker, Resource(CoreResourceName), StringComparison.Ordinal);
+    }
+
+    private static string Resource(string name)
+    {
+        using var stream = typeof(VideoPage).Assembly.GetManifestResourceStream(name)
+            ?? throw new InvalidOperationException("The video page's " + name + " is not embedded.");
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
     }

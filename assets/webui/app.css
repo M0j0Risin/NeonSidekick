@@ -587,3 +587,14 @@ main.home { display: flex; flex-direction: column; gap: 12px; }
 @media (prefers-reduced-motion: reduce) {
   .tile.pending, .tile.failed, .sheet { animation: none; }
 }
+
+/* The YouTube tab (2026-10-16): the player full width at 16:9, its hints and buttons in a strip above it (never over the iframe: a phone's
+   autoplay wants the tap on the video itself). */
+main.youtube { display: flex; flex-direction: column; gap: 12px; }
+.yt-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 40px; }
+.yt-hint { margin: 0; flex: 1; min-width: 12em; color: var(--dim); font-size: 14px; }
+.yt-frame { width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 8px; overflow: hidden; }
+.yt-frame iframe, .yt-frame #player { width: 100%; height: 100%; border: 0; display: block; }
+
+/* The banner a page shows instead of jumping to a waiting video (2026-10-16): a link to the YouTube tab under the header. */
+.watch-banner { display: block; padding: 10px 16px; background: var(--panel-2); color: var(--accent); font-weight: 600; text-decoration: none; text-align: center; }

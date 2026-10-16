@@ -13,7 +13,7 @@ namespace NeonSidekick.Tests;
 /// The YouTube tools (2026-10-05, the YouTube plan): the four over a stub search and <see cref="FakeVideoPlayer"/> — what each
 /// answers, how each refuses, the wait for the player to show a change — and how the group is offered and composed.
 /// </summary>
-public class YouTubeToolsTests
+public partial class YouTubeToolsTests
 {
     private const string Bunny = "aqz-KE-bpKQ";
     private readonly FakeVideoPlayer _player = new();

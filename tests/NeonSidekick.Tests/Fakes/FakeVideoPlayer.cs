@@ -9,11 +9,52 @@ namespace NeonSidekick.Tests.Fakes;
 /// <see cref="CloseByUser"/> is the user's Esc. Raised on the caller's thread, where the real one raises on the window's. A playlist
 /// (2026-10-08) plays <see cref="PlaylistVideos"/>: from the entry asked for (or the video named in it), and next, previous and an
 /// entry move through them as YouTube's player would.
+///
+/// <para>Two close behaviors for the router's tests (2026-10-16), both off by default: <see cref="LateClose"/> holds a close's null until
+/// <see cref="RaiseLateClose"/>, as the real window's thread raises it later (a play before then drops it, as <c>VideoWindow.Report</c>'s
+/// replaced-window guard does, unless that close is still blocked, since the window raises its own null as it closes); <see cref="CloseGate"/>
+/// holds <see cref="Close"/> itself until the test completes it, as <c>VideoWindowThread.Close</c> can block for 12 s. <see cref="RaiseTookOver"/>
+/// is the web player's Resume tap.</para>
 /// </summary>
-public sealed class FakeVideoPlayer : IVideoPlayer
+public sealed class FakeVideoPlayer : IVideoPlayer, IVideoTakeover
 {
     private readonly Lock _gate = new();
     private VideoSnapshot? _snapshot;
+    private bool _heldNull;
+    private int _closesBlocked;
+
+    /// <summary>A close's null held until <see cref="RaiseLateClose"/>.</summary>
+    public bool LateClose { get; set; }
+
+    /// <summary>Held by <see cref="Close"/> until completed, when set.</summary>
+    public TaskCompletionSource? CloseGate { get; set; }
+
+    /// <summary>Where it says it plays.</summary>
+    public VideoPlace Place { get; set; }
+
+    public event Action? TookOver;
+
+    /// <summary>The Resume tap: <see cref="TookOver"/> raised.</summary>
+    public void RaiseTookOver() => TookOver?.Invoke();
+
+    /// <summary>The held null of a late close raised now (nothing when a play dropped it).</summary>
+    public void RaiseLateClose()
+    {
+        bool raise;
+        lock (_gate)
+        {
+            raise = _heldNull;
+            _heldNull = false;
+        }
+
+        if (raise)
+        {
+            Report(null);
+        }
+    }
+
+    /// <summary>The thread each <see cref="Close"/> ran on.</summary>
+    public List<int> CloseThreads { get; } = [];
 
     public List<VideoRequest> Plays { get; } = [];
 
@@ -58,6 +99,14 @@ public sealed class FakeVideoPlayer : IVideoPlayer
         }
 
         Plays.Add(request);
+        lock (_gate)
+        {
+            if (_closesBlocked == 0)
+            {
+                _heldNull = false;   // a new window: the old one's late null is discarded
+            }
+        }
+
         Report(VideoSnapshot.Opening(request) with { Version = (Snapshot?.Version ?? 0) + 1 });
         if (!Behave)
         {
@@ -123,10 +172,45 @@ public sealed class FakeVideoPlayer : IVideoPlayer
     public bool Close()
     {
         bool open = Snapshot is not null;
-        Closes++;
+        lock (_gate)
+        {
+            Closes++;
+            CloseThreads.Add(Environment.CurrentManagedThreadId);
+        }
+
+        if (CloseGate is { } gate)
+        {
+            lock (_gate)
+            {
+                _closesBlocked++;
+            }
+
+            gate.Task.Wait(TimeSpan.FromSeconds(30));
+            lock (_gate)
+            {
+                _closesBlocked--;
+            }
+        }
+
         if (open)
         {
-            Report(null);
+            if (LateClose)
+            {
+                lock (_gate)
+                {
+                    _snapshot = null;
+                    _heldNull = true;
+                }
+
+                if (CloseGate is not null)
+                {
+                    RaiseLateClose();   // a blocked close's null lands as it finishes, ahead of the next play's window
+                }
+            }
+            else
+            {
+                Report(null);
+            }
         }
 
         return open;
@@ -140,7 +224,7 @@ public sealed class FakeVideoPlayer : IVideoPlayer
     {
         lock (_gate)
         {
-            _snapshot = snapshot is null ? null : snapshot with { Version = Math.Max(snapshot.Version, (_snapshot?.Version ?? 0) + 1) };
+            _snapshot = snapshot is null ? null : snapshot with { Version = Math.Max(snapshot.Version, (_snapshot?.Version ?? 0) + 1), Place = Place == VideoPlace.Window ? snapshot.Place : Place };   // a web fake stamps its place, as the web player does
             snapshot = _snapshot;
         }
 

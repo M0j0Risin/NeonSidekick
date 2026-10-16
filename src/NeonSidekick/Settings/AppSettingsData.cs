@@ -239,6 +239,16 @@ public sealed class AppSettingsData
     public string YouTubeVoice { get; set; } = YouTube.YouTubeVoiceMode.Default;
 
     /// <summary>
+    /// Where a YouTube video goes (2026-10-16, the user's ask and words): one of <see cref="YouTube.YouTubeOpenLinksIn.Names"/> —
+    /// <c>youtube-window</c> (the default, the app's video window as before), <c>browser-window</c> (the app's Browser window),
+    /// <c>default-browser</c>, or <c>webui-window</c> (the Web UI's YouTube tab, which shows only under this value). It moves every play,
+    /// <c>open_url</c> on a YouTube video or playlist link while <see cref="YouTubeTools"/> is on, and the links the video window opens.
+    /// <c>webui-window</c> plays in the video window while the Web UI isn't serving; <c>browser-window</c> uses the default browser where
+    /// there is no Browser window; anything else reads as the default. The YouTube tab; read at each play, no reconnect. No variable.
+    /// </summary>
+    public string YouTubeOpenLinksIn { get; set; } = YouTube.YouTubeOpenLinksIn.Default;
+
+    /// <summary>
     /// The order a search lists in unless it names one (2026-10-08, the user's ask: the filters' saved defaults): one of
     /// <see cref="YouTube.YouTubeSearchFilters.Orders"/> — <c>relevance</c> (the default, YouTube's own), <c>date</c>, <c>views</c>,
     /// <c>rating</c>, <c>title</c>; anything else reads as relevance. The YouTube tab; no reconnect.

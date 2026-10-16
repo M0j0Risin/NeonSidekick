@@ -62,7 +62,7 @@ Under *Web tools*.
 |---|---|---|
 | `web_search` | `query, max_results?` | Searches the web with *Web search method* (DuckDuckGo or SearXNG): title, URL, snippet. |
 | `web_fetch` | `url, offset?` | A page's readable content as Markdown, 32,000 characters at a time; also plain text, JSON, XML and CSV, and a PDF's outline and first 40 pages (see [Reading PDFs](#reading-pdfs)). |
-| `open_url` | `url?, urls?` | Opens up to five links in your browser. Under *Web open links in* `browser-window` it opens one in the [Browser window](#the-browser-window) when the window can take it. |
+| `open_url` | `url?, urls?` | Opens up to five links in your browser. Under *Web open links in* `browser-window` it opens one in the [Browser window](#the-browser-window) when the window can take it. While *YouTube tools* is on, a YouTube video or playlist link goes where *YouTube open links in* says. |
 | `web_links` | `filter?` | Your saved links (as `/browser list` shows), numbered, at most 100; `filter` keeps those holding all its words. |
 | `web_save_link` | `action, url, name?` | `add`, `remove` or `rename` a saved link. To remove or rename, `url` may be its number in `web_links`; `current` is the Browser window's page. |
 | `download_file` | `url, path?, overwrite?` | Downloads a file into the working directory, up to *Web download max (MB)*. Needs *File tools* too. |
@@ -439,7 +439,7 @@ Then "put my face from [Image #2] on the person in [Image #1]" works in chat, or
 
 ### YouTube
 
-Under *YouTube tools*. Videos play in the app's [video window](INTERFACE.md#the-video-window) on YouTube's embedded player (on Windows through the WebView2 Runtime; on a Mac, macOS 14 or later). A video that can't be embedded is refused.
+Under *YouTube tools*. Videos play where *YouTube open links in* says: the app's [video window](INTERFACE.md#the-video-window) (as before; on Windows through the WebView2 Runtime, on a Mac macOS 14 or later), the Browser window, the default browser or the Web UI's [YouTube tab](INTERFACE.md#the-youtube-tab). The app's players use YouTube's embedded player, which refuses a video that can't be embedded.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -447,13 +447,14 @@ Under *YouTube tools*. Videos play in the app's [video window](INTERFACE.md#the-
 | `youtube_playlist` | `playlist?, max?` | A public playlist's videos (`max` 1–200, 50 by default), by id, link or channel; left out, the one playing. |
 | `youtube_play` | `video?, start?, playlist?, entry?` | Plays a video by id or link from `start` (`90` or `1:30`), or a playlist from `entry`. It starts at once, or is cued with *YouTube autoplay* off. |
 | `youtube_control` | `action, value?` | `play`, `pause`, `seek`, `forward` / `back` (10 s by default), `volume` (0–100), `mute`, `unmute`, `next` / `previous` / `entry`, or `close`. |
-| `youtube_status` | — | What the window plays: video, state, position, volume and playlist entry. |
+| `youtube_status` | — | What the player plays: video, state, position, volume and playlist entry. |
 | `youtube_saved` | — | Your saved videos, numbered, with where each was left (or `watched`). |
-| `youtube_save` | `action, video` | `add` a video (`current` for the window's), or `remove` one (also by number). |
+| `youtube_save` | `action, video` | `add` a video (`current` for the player's), or `remove` one (also by number). |
 
 * **The key:** `youtube_search` and `youtube_playlist` need one, and each search spends daily quota; playing needs none. Watch Later and private playlists are out of reach (the app never signs in).
 * **Saved videos** are your bookmarks, per profile, in `youtube.json`. One resumes a few seconds before where you left it; one seen to the end starts over. `/youtube save`, `list` and `unsave` let you manage the list yourself.
 * **Known issue:** `seek` and `volume` on a paused video answer with the old value. The change itself happens, and the next answer shows it.
+* **Where it plays:** in a browser the app can't see or control the video, so `youtube_status` says only where it went and `youtube_control` says it can't. In the Web UI's tab a video with no tab open waits for one. A video YouTube won't embed goes to the browser through `open_url`.
 
 ## Admin
 

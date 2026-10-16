@@ -203,6 +203,47 @@ public class VideoTests
         Assert.Equal(new VideoSnapshot(VideoState.Unstarted, Bunny, Volume: 60, Version: 1), snapshot);
     }
 
+    /// <summary>The PC's page is its wrapper with the shared player put in at its marker (2026-10-16): one page, as written and as the Mac loads it.</summary>
+    [Fact]
+    public void ThePage_HasTheSharedPlayerInlined()
+    {
+        string page = VideoPage.Text();
+        Assert.DoesNotContain(VideoPage.CoreMarker, page);
+        Assert.Contains("function NeonPlayer(send, hooks)", page);
+        Assert.Contains("const core = NeonPlayer(send);", page);
+        Assert.Contains("chrome.webview.postMessage", page);
+        Assert.DoesNotContain("chrome.webview", NeonSidekick.WebUi.WebUiAssets.Find(NeonSidekick.WebUi.WebUiAssets.YouTubeCore)!.Bytes is var core ? System.Text.Encoding.UTF8.GetString(core) : "");
+        Assert.True(page.IndexOf("function NeonPlayer", StringComparison.Ordinal) < page.IndexOf("const core = NeonPlayer(send);", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The Web UI's page's own reports (2026-10-16): <c>failed</c> a failed snapshot with the app's sentence, never the page's raw reason;
+    /// <c>resumed</c> the snapshot as it was; a state report's <c>gesture: true</c> sets <see cref="VideoSnapshot.NeedsTap"/>, and anything
+    /// else leaves it false, as every report of the PC's page does.
+    /// </summary>
+    [Fact]
+    public void Apply_TheWebPagesReports_FailedResumedAndTheGesture()
+    {
+        var current = new VideoSnapshot(VideoState.Opening, Bunny, Version: 4);
+
+        var (failedEvent, failed) = VideoMessages.Apply(current, "{\"ev\":\"failed\",\"reason\":\"<script>api</script>\"}");
+        Assert.Equal(VideoPageEvent.Failed, failedEvent);
+        Assert.Equal(VideoState.Failed, failed.State);
+        Assert.Equal(5, failed.Version);
+        Assert.Equal(NeonSidekick.WebUi.WebUiText.PlayerFailed(null), failed.Failure);
+        Assert.DoesNotContain("script", failed.Failure);
+        Assert.Contains("no internet", VideoMessages.Apply(current, "{\"ev\":\"failed\",\"reason\":\"api\"}").Snapshot.Failure);
+
+        var (resumedEvent, resumed) = VideoMessages.Apply(current, "{\"ev\":\"resumed\"}");
+        Assert.Equal(VideoPageEvent.Resumed, resumedEvent);
+        Assert.Same(current, resumed);
+
+        Assert.True(VideoMessages.Apply(current, "{\"ev\":\"state\",\"id\":\"" + Bunny + "\",\"state\":1,\"muted\":true,\"gesture\":true}").Snapshot.NeedsTap);
+        Assert.False(VideoMessages.Apply(current, "{\"ev\":\"state\",\"id\":\"" + Bunny + "\",\"state\":1,\"gesture\":\"true\"}").Snapshot.NeedsTap);
+        var pc = VideoMessages.Apply(current, "{\"ev\":\"state\",\"why\":\"tick\",\"id\":\"" + Bunny + "\",\"state\":1,\"position\":3,\"duration\":635,\"volume\":100,\"muted\":false}").Snapshot;
+        Assert.Equal(new VideoSnapshot(VideoState.Playing, Bunny, Position: 3, Duration: 635, Version: 5), pc);   // the PC page's, as before
+    }
+
     [Theory]
     [InlineData(-1.0, VideoState.Unstarted)]
     [InlineData(0.0, VideoState.Ended)]

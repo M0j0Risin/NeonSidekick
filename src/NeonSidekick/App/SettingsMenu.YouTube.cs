@@ -92,4 +92,25 @@ internal sealed partial class SettingsMenu
         Apply(SettingsField.YouTubeVoice, d => d.YouTubeVoice = name);
         return true;
     }
+
+    /// <summary>One row of the YouTube open links in picker: the word padded to sixteen (as <see cref="WebOpenLinksInLabel"/>) and what it does. Pinned.</summary>
+    public static string YouTubeOpenLinksInLabel(string name) =>
+        Markup.Escape(name.PadRight(16)) + Theme.DimMarkup(YouTube.YouTubeOpenLinksIn.Describe(name));
+
+    /// <summary>The <c>YouTube open links in</c> picker (2026-10-16): one <see cref="YouTubeOpenLinksInLabel"/> row per word, the saved one (as it reads) under the cursor.</summary>
+    private async Task<bool> PickYouTubeOpenLinksInAsync(Settings.AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = YouTube.YouTubeOpenLinksIn.Names;
+        string current = YouTube.YouTubeOpenLinksIn.TryParse(saved.YouTubeOpenLinksIn, out var kind) ? YouTube.YouTubeOpenLinksIn.Name(kind) : YouTube.YouTubeOpenLinksIn.Default;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.YouTubeOpenLinksIn)), names.Select(YouTubeOpenLinksInLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Array.IndexOf(names, current), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.YouTubeOpenLinksIn, d => d.YouTubeOpenLinksIn = name);
+        return true;
+    }
 }

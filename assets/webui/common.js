@@ -2,7 +2,8 @@
 // cross-site form can send; a 401 signs in again, a 429's sentence is the app's), the connection dot, the poll that rests while the page is
 // hidden, the self-reload after an upgrade (once per tag), the Chat badge on the other tabs and the theme's re-link. Loaded first, before the
 // page's own script; nothing here runs on its own but the theme's and the badge's wiring the page asks for. Later on 2026-10-15: the tabs on
-// (a tab exists only while its controls are on at the PC), so the nav hides the others and a page whose tab went off goes to /.
+// (a tab exists only while its controls are on at the PC), so the nav hides the others and a page whose tab went off goes to /. 2026-10-16: the
+// YouTube tab (on only while the PC says so, YouTube open links in webui-window), and the jump to it while a video waits (watch).
 'use strict';
 
 const Neon = (() => {
@@ -43,7 +44,7 @@ const Neon = (() => {
       try { j = await r.json(); } catch { /* none */ }
       if (r.status === 401) location.reload();
       if (r.status === 404 && j && j.tabOff) leave();
-      return { ok: r.ok, status: r.status, message: j && j.message, asText: !!(j && j.asText), use: j && j.use, json: j };
+      return { ok: r.ok, status: r.status, message: j && j.message, asText: !!(j && j.asText), use: j && j.use, json: j, retryAfter: Number(r.headers.get('Retry-After')) || null };
     } catch {
       return { ok: false, status: 0, message: 'The app could not be reached.' };
     }
@@ -88,12 +89,13 @@ const Neon = (() => {
   setTimeout(navReady, 2000);
 
   function tabOf(href) {
-    return href === '/' ? 'chat' : href === '/home' ? 'home' : href === '/shopping' ? 'shopping' : null;
+    return href === '/' ? 'chat' : href === '/home' ? 'home' : href === '/shopping' ? 'shopping' : href === '/youtube' ? 'youtube' : null;
   }
 
-  // True when the page leaves (its own tab is off), so the caller draws nothing more.
-  function tabs(chat, home, shopping) {
-    const on = { chat: chat !== false, home: home !== false, shopping: shopping !== false };
+  // True when the page leaves (its own tab is off), so the caller draws nothing more. YouTube is on only when the PC says it is (=== true), so a
+  // page from before it, or a pulse that says nothing of it, never shows the link; the other three are on unless === false.
+  function tabs(chat, home, shopping, youtube) {
+    const on = { chat: chat !== false, home: home !== false, shopping: shopping !== false, youtube: youtube === true };
     for (const a of document.querySelectorAll('header.top nav a')) {
       const tab = tabOf(a.getAttribute('href'));
       if (tab) a.classList.toggle('hidden', !on[tab]);
@@ -165,6 +167,56 @@ const Neon = (() => {
     if (link) link.href = '/theme.css?v=' + encodeURIComponent(name || 'default');
   }
 
+  // ── A video waiting for the YouTube tab (2026-10-16) ──
+  // Every page jumps to /youtube while the PC holds a video for it, unless the page says not now (watchBlocked: by default a text field with
+  // focus; Chat sets its own: a draft, an ask card, the sheet), when it shows a banner instead, a link to the tab. A page that showed the banner
+  // for a waiting video never jumps for that one by itself; a new one (the flag cleared and set again) gets the usual check. A hidden page waits
+  // until it shows. The YouTube page itself does nothing.
+  const api = {};
+  let bannerShown = false;
+  let watchWords = null;
+  let watchDeferred = false;
+  function blockedByDefault() {
+    const a = document.activeElement;
+    return !!a && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT' || a.isContentEditable);
+  }
+
+  function banner(words) {
+    let b = document.getElementById('watch-banner');
+    if (!words) { if (b) b.remove(); return; }
+    if (!b) {
+      b = el('a', 'watch-banner');
+      b.id = 'watch-banner';
+      b.href = '/youtube';
+      const top = document.querySelector('header.top');
+      if (top && top.parentNode) top.parentNode.insertBefore(b, top.nextSibling); else document.body.prepend(b);
+    }
+    b.textContent = words;
+  }
+
+  function watch(words) {
+    if (document.body.dataset.tab === 'youtube') return;
+    watchWords = words || null;
+    if (!watchWords) { bannerShown = false; banner(null); return; }
+    if (bannerShown) { banner(watchWords); return; }
+    if (document.visibilityState !== 'visible') {
+      if (!watchDeferred) {
+        watchDeferred = true;
+        const shown = () => {
+          if (document.visibilityState !== 'visible') return;
+          document.removeEventListener('visibilitychange', shown);
+          watchDeferred = false;
+          watch(watchWords);
+        };
+        document.addEventListener('visibilitychange', shown);
+      }
+      return;
+    }
+    const blocked = api.watchBlocked ? api.watchBlocked() : blockedByDefault();
+    if (blocked) { bannerShown = true; banner(watchWords); return; }
+    location.assign('/youtube');
+  }
+
   // The Chat badge on the other tabs (2026-10-15, E2): a dot while a reply runs, a count while the PC waits on an answer; (n) in the title; one
   // vibration on a new ask where the phone can (Android: iOS Safari has none, so the badge and the title carry it there).
   const baseTitle = document.title;
@@ -173,7 +225,8 @@ const Neon = (() => {
     if (!p) return;
     if (staleAssets(p.assets)) return;
     theme(p.theme);
-    if (tabs(p.chatTab, p.homeTab, p.shoppingTab)) return;
+    if (tabs(p.chatTab, p.homeTab, p.shoppingTab, p.youTubeTab)) return;
+    watch(p.youTubeTab === true ? (p.watch || null) : null);
     // With Chat off the PC's questions are the PC's alone: no dot, no count, no (n), no vibration.
     const chatOn = p.chatTab !== false;
     const waiting = chatOn ? (p.asks || 0) + (p.waitingAtPc ? 1 : 0) : 0;
@@ -190,5 +243,5 @@ const Neon = (() => {
     lastAsks = waiting;
   }
 
-  return { el, say, post, get, connected, poll, staleAssets, theme, pulse, tabs, leave, keyboardInset };
+  return Object.assign(api, { el, say, post, get, connected, poll, staleAssets, theme, pulse, tabs, leave, keyboardInset, watch, watchBlocked: null });
 })();
