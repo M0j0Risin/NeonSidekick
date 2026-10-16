@@ -1072,6 +1072,7 @@ public sealed class AppSettings : IDisposable
         WebUiHomeControls = source.WebUiHomeControls,
         WebUiChatControls = source.WebUiChatControls,
         WebUiShoppingControls = source.WebUiShoppingControls,
+        WebUiYouTubeControls = source.WebUiYouTubeControls,
         WebUiProfileTheme = source.WebUiProfileTheme,
         WebUiToken = source.WebUiToken,
         TimerTools = source.TimerTools,

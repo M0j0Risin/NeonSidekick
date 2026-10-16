@@ -114,7 +114,7 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 
 #### Web UI
 
-A browser front end for this profile: the chat and the questions it asks you, the Home Assistant controls and the shopping list, from a phone on the home network. Each tab shows only while its controls are on, and the YouTube tab while *YouTube open links in* is `webui-window`. See [the Web UI](INTERFACE.md#web-ui).
+A browser front end for this profile: the chat and the questions it asks you, the Home Assistant controls and the shopping list, from a phone on the home network. Each tab shows only while its controls are on, the YouTube tab too (while *Web UI YouTube controls* is on). See [the Web UI](INTERFACE.md#web-ui).
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -126,6 +126,7 @@ A browser front end for this profile: the chat and the questions it asks you, th
 | Web UI connection details | The Chat tab only. Shows the `%` and `*` connections' notes (their server and database) in the page's dropdown. Off, it shows only their names. This affects only the dropdown; the chat shows whatever the model says. | on |
 | Web UI home controls | Shows the Home tab and lets it act: tiles toggle, sheets run a device's actions, scenes run, *Ask the house* asks Assist, the video remote plays and pauses. Unlocking, opening a garage, gate or door, and disarming still ask on the page. Off, there is no Home tab. `/ha` from the chat follows *Web UI commands*. | off |
 | Web UI shopping controls | Shows the Shopping tab: the list, where you can tick lines and change the store from the phone. Off (the default), there is no Shopping tab; `/shopping` at the PC is unchanged. | off |
+| Web UI YouTube controls | Shows the YouTube tab: it plays videos and keeps the saved list (play, resume, move, remove, save the playing one). A video started on the tab plays there, whatever *YouTube open links in* says. Off, there is no YouTube tab, and *YouTube open links in* `webui-window` plays in the PC's video window. There is no tab where the app has no video window (before macOS 14). | off |
 | Web UI profile theme | Dresses the pages in the profile's theme, following a `/theme` at once. Off, they keep their own look. | on |
 
 ### Servers
@@ -650,7 +651,7 @@ The apps and services the tools reach. `/claude`'s settings are on `/settings` â
 | YouTube safe search | How much restricted content a search leaves out: `none`, `moderate` or `strict`. | `moderate` |
 | YouTube region | A two-letter country code (`US`, `GB`) a search asks for. Empty for any region. | empty (any region) |
 | YouTube language | A language code (`en`, `es`) whose results rank higher. Empty for any language. | empty (any language) |
-| YouTube open links in | Where a video plays: `youtube-window` (the app's video window), `browser-window` (the app's Browser window), `default-browser`, or `webui-window` (the Web UI's [YouTube tab](INTERFACE.md#the-youtube-tab), on your phone or browser). It covers `youtube_play`, `/youtube play` and its lists, `open_url` on a video or playlist link while *YouTube tools* is on, and the video window's own video and playlist links. In a browser the model can't see or control the video. `webui-window` plays in the video window while the Web UI isn't serving; `browser-window` uses your default browser where there is no Browser window (a Mac). The YouTube tab runs YouTube's player script in the Web UI's page, so while it is open that script can do what the page can, though never read the sign-in cookie. | `youtube-window` |
+| YouTube open links in | Where a video plays: `youtube-window` (the app's video window), `browser-window` (the app's Browser window), `default-browser`, or `webui-window` (the Web UI's [YouTube tab](INTERFACE.md#the-youtube-tab), on your phone or browser). It covers `youtube_play`, `/youtube play` and its lists, `open_url` on a video or playlist link while *YouTube tools* is on, and the video window's own video and playlist links. In a browser the model can't see or control the video. `webui-window` plays in the video window while the Web UI isn't serving or *Web UI YouTube controls* is off, and goes to the tab shown most recently (with none in view the video waits for one); `browser-window` uses your default browser where there is no Browser window (a Mac). The YouTube tab runs YouTube's player script in the Web UI's page, so while it is open that script can do what the page can, though never read the sign-in cookie. | `youtube-window` |
 | YouTube autoplay | Whether a played video starts at once or waits for play. | on |
 | YouTube while speaking | What a playing video does while the app speaks or listens: `pause`, `duck` (to 15 %) or `none`. | `pause` |
 

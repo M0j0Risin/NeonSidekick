@@ -810,13 +810,13 @@ function renderUsage(card) {
     if (c.percent !== undefined && c.percent !== null) head.appendChild(el('span', 'usage-share', c.percent + '%'));
     usageContext.appendChild(head);
     if (c.percent !== undefined && c.percent !== null) {
-      const meter = el('div', 'meter' + (c.percent >= 95 ? ' full' : c.percent >= 80 ? ' warn' : ''));
+      const meter = el('div', 'usage-meter' + (c.percent >= 95 ? ' full' : c.percent >= 80 ? ' warn' : ''));
       meter.setAttribute('role', 'meter');
       meter.setAttribute('aria-valuemin', '0');
       meter.setAttribute('aria-valuemax', '100');
       meter.setAttribute('aria-valuenow', String(Math.min(c.percent, 100)));
       meter.setAttribute('aria-label', c.heading + ' ' + c.percent + '%');
-      const fill = el('div', 'meter-fill');
+      const fill = el('div', 'usage-meter-fill');
       fill.style.width = Math.min(c.percent, 100) + '%';
       meter.appendChild(fill);
       usageContext.appendChild(meter);
@@ -1136,55 +1136,22 @@ let promptsOpen = false;
 let promptsOpening = false;
 let sheetTab = 'prompts';
 try { if (SheetTabs.includes(sessionStorage.getItem('neon.sheetTab'))) sheetTab = sessionStorage.getItem('neon.sheetTab'); } catch { /* private mode */ }
-let sheetArmed = null;   // { button, timer, paint }
 let promptsActionNow = promptsAction;   // the bar's action button as it stands (each tab's is a fresh one)
 
 function showPrompts(on) {
   const was = nearBottom();
   promptsOpen = on;
   promptsEl.classList.toggle('hidden', !on);
-  if (!on) sheetDisarm();
+  if (!on) Neon.disarm();
   keepBottom(was);
   floatSoon();
 }
 
-// A 🗑️ or clear all: the first tap arms it (red, its label says so) for 3 s, the second acts. One armed at a time.
-function sheetDisarm() {
-  if (!sheetArmed) return;
-  clearTimeout(sheetArmed.timer);
-  const was = sheetArmed;
-  sheetArmed = null;
-  was.paint(false);
-}
-
-function armTwice(button, paint, act) {
-  paint(false);
-  button.addEventListener('click', ev => {
-    ev.stopPropagation();
-    if (sheetArmed && sheetArmed.button === button) {
-      sheetDisarm();
-      act();
-      return;
-    }
-    sheetDisarm();
-    sheetArmed = { button, paint, timer: setTimeout(sheetDisarm, 3000) };
-    paint(true);
-  });
-}
-
-function paintArmed(button, label) {
-  return on => {
-    button.classList.toggle('armed', on);
-    const text = label(on);
-    button.setAttribute('aria-label', text);
-    button.title = text;
-  };
-}
-
+// A 🗑️ or clear all: two taps (Neon.armTwice, common.js since later on 2026-10-16, shared with the YouTube tab's saved list).
 function rowDelete(onConfirm) {
   const del = el('button', 'row-delete', '🗑️');
   del.type = 'button';
-  armTwice(del, paintArmed(del, on => on ? (words.deleteRowArmed || 'Delete?') : (words.deleteRow || 'Delete')), onConfirm);
+  Neon.armTwice(del, Neon.paintArmed(del, on => on ? (words.deleteRowArmed || 'Delete?') : (words.deleteRow || 'Delete')), onConfirm);
   return del;
 }
 
@@ -1199,12 +1166,12 @@ function paintTabs() {
 
 // The bar's action: ⇪ save draft on the prompts and memory tabs, a two-tap clear all on the history's.
 function paintAction() {
-  sheetDisarm();
+  Neon.disarm();
   const fresh = promptsActionNow.cloneNode(false);   // its listeners gone with the old one
   promptsActionNow.replaceWith(fresh);
   promptsActionNow = fresh;
   if (sheetTab === 'history') {
-    armTwice(fresh, on => {
+    Neon.armTwice(fresh, on => {
       fresh.classList.toggle('armed', on);
       actionLabel(fresh, on ? (words.clearAllArmed || 'Clear all?') : (words.clearAll || '🗑️ clear all'));
     }, clearHistoryNow);
@@ -1396,7 +1363,7 @@ for (const tab of promptsTabs) {
 document.addEventListener('keydown', ev => {
   if (ev.key !== 'Escape' || ev.defaultPrevented || shown || !promptsOpen || !usageCard.classList.contains('hidden')) return;
   ev.preventDefault();
-  if (sheetArmed) { sheetDisarm(); return; }   // an armed 🗑️ first, then the sheet
+  if (Neon.armed()) { Neon.disarm(); return; }   // an armed 🗑️ first, then the sheet
   closePrompts(false);
 });
 

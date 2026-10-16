@@ -3325,6 +3325,15 @@ public sealed class AppSettingsData
     public bool WebUiShoppingControls { get; set; }
 
     /// <summary>
+    /// Whether the Web UI has its YouTube tab (2026-10-16, the user's ask and calls: off by default, like Home and Shopping): on, the tab shows
+    /// (where the app has a video window to build the web player beside) and plays videos and keeps the saved list, whatever
+    /// <see cref="YouTubeOpenLinksIn"/> says, since a play started on the tab plays on the tab; off, there is no YouTube tab (its link is hidden,
+    /// its page goes to <c>/</c> and its APIs answer 404) and <c>webui-window</c> plays in the video window instead. Read at each request. No
+    /// variable.
+    /// </summary>
+    public bool WebUiYouTubeControls { get; set; }
+
+    /// <summary>
     /// Whether the Web UI's pages wear the profile's theme (2026-10-15, the user's call: on by default): on, their accents, tones and grounds are
     /// the theme's (<c>/theme.css</c> from <see cref="Theme"/>'s palette) and follow a <c>/theme</c> at once; off, the pages keep their own default
     /// look. Read at each request. No variable.

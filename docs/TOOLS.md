@@ -439,7 +439,7 @@ Then "put my face from [Image #2] on the person in [Image #1]" works in chat, or
 
 ### YouTube
 
-Under *YouTube tools*. Videos play where *YouTube open links in* says: the app's [video window](INTERFACE.md#the-video-window) (as before; on Windows through the WebView2 Runtime, on a Mac macOS 14 or later), the Browser window, the default browser or the Web UI's [YouTube tab](INTERFACE.md#the-youtube-tab). The app's players use YouTube's embedded player, which refuses a video that can't be embedded.
+Under *YouTube tools*. Videos play where *YouTube open links in* says: the app's [video window](INTERFACE.md#the-video-window) (as before; on Windows through the WebView2 Runtime, on a Mac macOS 14 or later), the Browser window, the default browser or the Web UI's [YouTube tab](INTERFACE.md#the-youtube-tab) (while *Web UI YouTube controls* is on; otherwise the video window). The app's players use YouTube's embedded player, which refuses a video that can't be embedded.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -454,7 +454,7 @@ Under *YouTube tools*. Videos play where *YouTube open links in* says: the app's
 * **The key:** `youtube_search` and `youtube_playlist` need one, and each search spends daily quota; playing needs none. Watch Later and private playlists are out of reach (the app never signs in).
 * **Saved videos** are your bookmarks, per profile, in `youtube.json`. One resumes a few seconds before where you left it; one seen to the end starts over. `/youtube save`, `list` and `unsave` let you manage the list yourself.
 * **Known issue:** `seek` and `volume` on a paused video answer with the old value. The change itself happens, and the next answer shows it.
-* **Where it plays:** in a browser the app can't see or control the video, so `youtube_status` says only where it went and `youtube_control` says it can't. In the Web UI's tab a video with no tab open waits for one. A video YouTube won't embed goes to the browser through `open_url`.
+* **Where it plays:** in a browser the app can't see or control the video, so `youtube_status` says only where it went and `youtube_control` says it can't. In the Web UI's tab a video with no tab in view waits for one. A video YouTube won't embed goes to the browser through `open_url`.
 
 ## Admin
 

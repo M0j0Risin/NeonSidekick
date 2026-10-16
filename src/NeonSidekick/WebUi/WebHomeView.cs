@@ -160,22 +160,96 @@ public static class WebHomeView
         };
     }
 
-    /// <summary>Every scene the catalog knows, named as the live states name them (else the registry), sorted by area then name. Pure.</summary>
-    public static IReadOnlyList<WebHomeScene> Scenes(HaLiveSnapshot live)
+    /// <summary>
+    /// Every scene the catalog knows in a box per room or zone (2026-10-16, the user's ask: one long wrap of buttons was hard to scan), each named
+    /// as the live states name it (else the registry). A scene goes by its area (its own, else its device's); with none, by its device's name
+    /// (Hue hangs each scene on its room's or zone's device, and a zone spanning rooms usually has no area), joining the area of that name when
+    /// one exists so there are never two "Den" boxes; else under <see cref="HomeBarText.NoArea"/>. A REST-only catalog has no devices. The
+    /// boxes: the home bar's rooms (<paramref name="homeBarItems"/>' <c>area:</c> entries) in the bar's order, the other areas in
+    /// <see cref="HaCatalog.Areas"/>' order (by floor, then name: the PC's picker's), the device-named ones by name, no area last; the scenes in
+    /// each by name, each labeled without its box's name in front ("Den Relax" in Den reads "Relax"). Pure.
+    /// </summary>
+    public static IReadOnlyList<WebHomeSceneGroup> SceneGroups(HaLiveSnapshot live, IReadOnlyList<string> homeBarItems)
     {
         ArgumentNullException.ThrowIfNull(live);
+        ArgumentNullException.ThrowIfNull(homeBarItems);
         if (live.Catalog is not { } catalog)
         {
             return [];
         }
 
-        return catalog.EntitiesOf("scene")
-            .Select(id => (Id: id, Name: live.Entities.GetValueOrDefault(id)?.Name ?? catalog.NameOf(id), Area: catalog.AreaOf(id) is { } area ? catalog.Area(area)?.Name ?? "" : ""))
-            .OrderBy(s => s.Area.Length == 0 ? 1 : 0)
-            .ThenBy(s => s.Area, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(s => new WebHomeScene(s.Id, s.Name))
+        var areaByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var area in catalog.Areas)
+        {
+            areaByName.TryAdd(area.Name, area.Id);
+        }
+
+        var members = new Dictionary<string, (string Name, List<(string Id, string Name)> Scenes)>(StringComparer.Ordinal);
+        foreach (string id in catalog.EntitiesOf("scene"))
+        {
+            string name = live.Entities.GetValueOrDefault(id)?.Name ?? catalog.NameOf(id);
+            string key;
+            string groupName;
+            if (catalog.AreaOf(id) is { } areaId && catalog.Area(areaId) is { } area)
+            {
+                (key, groupName) = (areaId, area.Name);
+            }
+            else if (catalog.DeviceOf(id) is { Name.Length: > 0 } device)
+            {
+                (key, groupName) = areaByName.TryGetValue(device.Name, out string? named)
+                    ? (named, catalog.Area(named)!.Name)
+                    : (DeviceKeyPrefix + device.Id, device.Name);
+            }
+            else
+            {
+                (key, groupName) = (NoAreaKey, HomeBarText.NoArea);
+            }
+
+            (members.TryGetValue(key, out var group) ? group : members[key] = (groupName, [])).Scenes.Add((id, name));
+        }
+
+        var onBar = homeBarItems
+            .Select(i => HomeBarItems.TryParse(i, out var kind, out string areaId) && kind == HomeItemKind.Area ? areaId : null)
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
             .ToList();
+        var order = new List<string>(members.Count);
+        order.AddRange(onBar.Where(members.ContainsKey));
+        order.AddRange(catalog.Areas.Select(a => a.Id).Where(id => members.ContainsKey(id) && !order.Contains(id, StringComparer.Ordinal)));
+        order.AddRange(members.Keys.Where(k => k.StartsWith(DeviceKeyPrefix, StringComparison.Ordinal)).OrderBy(k => members[k].Name, StringComparer.OrdinalIgnoreCase).ThenBy(k => k, StringComparer.Ordinal));
+        if (members.ContainsKey(NoAreaKey))
+        {
+            order.Add(NoAreaKey);
+        }
+
+        return order.Select(key =>
+        {
+            var (name, scenes) = members[key];
+            bool named = key != NoAreaKey;
+            return new WebHomeSceneGroup(key, name, onBar.Contains(key, StringComparer.Ordinal),
+                scenes.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ThenBy(s => s.Id, StringComparer.Ordinal)
+                    .Select(s => new WebHomeScene(s.Id, s.Name, named ? LabelIn(s.Name, name) : s.Name)).ToList());
+        }).ToList();
+    }
+
+    /// <summary>The key of the scenes with no area and no device (2026-10-16).</summary>
+    public const string NoAreaKey = "none";
+
+    /// <summary>What a device-named box's key starts with, before the device's id (2026-10-16).</summary>
+    public const string DeviceKeyPrefix = "device:";
+
+    /// <summary>A scene's name with its box's in front taken off ("Den Relax" in Den is "Relax"), else the whole name. Pure.</summary>
+    public static string LabelIn(string name, string group)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(group);
+        if (group.Length == 0 || name.Length <= group.Length + 1 || !name.StartsWith(group, StringComparison.OrdinalIgnoreCase) || name[group.Length] != ' ')
+        {
+            return name;
+        }
+
+        string rest = name[(group.Length + 1)..].Trim();
+        return rest.Length > 0 ? rest : name;
     }
 
     /// <summary>The PC's meters for the card: whole percents, the network's rates as the perf bar words them (trimmed); null with nothing read.</summary>

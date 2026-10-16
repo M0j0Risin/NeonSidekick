@@ -85,7 +85,7 @@ public sealed class WebUiHost : IWebUiHost
     /// only with a violation to show for it.
     /// </summary>
     public const string YouTubeContentSecurityPolicy =
-        "default-src 'self'; script-src 'self' https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self'; img-src 'self' data:; frame-src https://www.youtube.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+        "default-src 'self'; script-src 'self' https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self'; img-src 'self' data: https://i.ytimg.com; frame-src https://www.youtube.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
     /// <summary>The YouTube tab's referrer policy (2026-10-16): YouTube's embed needs the page's origin as the referrer, else error 153.</summary>
     public const string YouTubeReferrerPolicy = "strict-origin-when-cross-origin";
@@ -365,6 +365,18 @@ public sealed class WebUiHost : IWebUiHost
                         response.Headers.CacheControl = "no-store";
                         await JsonAsync(context, StatusCodes.Status200OK, _backend.Memories(), WebUiJsonContext.Default.WebMemories).ConfigureAwait(false);
                         return;
+                    case YouTubeSavedPath:
+                        // The YouTube tab's saved list (later on 2026-10-16): read every few seconds while open, so an unchanged one is a 304.
+                        if (_backend.SavedVideos() is { } saved)
+                        {
+                            await TaggedJsonAsync(context, saved, WebUiJsonContext.Default.WebSavedVideos).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            response.StatusCode = StatusCodes.Status404NotFound;
+                        }
+
+                        return;
                     case HistoryPath:
                         // The message history (2026-10-16): read at each walk and as the box takes focus, so an unchanged one is a 304.
                         await TaggedJsonAsync(context, _backend.History(), WebUiJsonContext.Default.WebHistory).ConfigureAwait(false);
@@ -431,6 +443,12 @@ public sealed class WebUiHost : IWebUiHost
                     MemoryDeletePath => await ReadAsync(context, WebUiJsonContext.Default.WebTextBody).ConfigureAwait(false) is { } forget ? _backend.DeleteMemory(forget, remote) : null,
                     HistoryClearPath => _backend.ClearHistory(remote),   // the body is not read, as Stop's
                     YouTubeReportPath => await YouTubeReportAsync(context, remote).ConfigureAwait(false),
+                    YouTubeSeenPath => await YouTubeSeenAsync(context, remote).ConfigureAwait(false),
+                    YouTubeSavedPlayPath => await ReadAsync(context, WebUiJsonContext.Default.WebSavedPlay).ConfigureAwait(false) is { } play ? _backend.PlaySaved(play, remote) : null,
+                    YouTubeSavedRemovePath => await ReadAsync(context, WebUiJsonContext.Default.WebSavedId).ConfigureAwait(false) is { } unsave ? _backend.RemoveSaved(unsave, remote) : null,
+                    YouTubeSavedClearPath => _backend.ClearSaved(remote),   // the body is not read, as Stop's
+                    YouTubeSavedMovePath => await ReadAsync(context, WebUiJsonContext.Default.WebSavedMove).ConfigureAwait(false) is { } move ? _backend.MoveSaved(move, remote) : null,
+                    YouTubeSavedSavePath => _backend.SaveCurrent(remote),
                     "/api/home/tap" or "/api/home/act" or "/api/home/scene" or "/api/home/say" or "/api/home/video" => await HomePostAsync(context, path, remote).ConfigureAwait(false),
                     _ => new WebReply(WebOutcome.NotFound),
                 };
@@ -637,6 +655,27 @@ public sealed class WebUiHost : IWebUiHost
 
     /// <summary>The YouTube tab's player reports (2026-10-16), in the <see cref="WebRateBucket.Report"/> bucket.</summary>
     public const string YouTubeReportPath = "/api/youtube/report";
+
+    /// <summary>A YouTube page in view or not (later on 2026-10-16), in the <see cref="WebRateBucket.Report"/> bucket.</summary>
+    public const string YouTubeSeenPath = "/api/youtube/seen";
+
+    /// <summary>The YouTube tab's saved list (later on 2026-10-16), tagged.</summary>
+    public const string YouTubeSavedPath = "/api/youtube/saved";
+
+    /// <summary>A saved video played on the tapping page (later on 2026-10-16), in the <see cref="WebRateBucket.Act"/> bucket as the four below.</summary>
+    public const string YouTubeSavedPlayPath = "/api/youtube/saved/play";
+
+    /// <summary>A saved video removed (later on 2026-10-16).</summary>
+    public const string YouTubeSavedRemovePath = "/api/youtube/saved/remove";
+
+    /// <summary>Every saved video removed (later on 2026-10-16).</summary>
+    public const string YouTubeSavedClearPath = "/api/youtube/saved/clear";
+
+    /// <summary>A saved video moved up, down, to the top or the bottom (later on 2026-10-16).</summary>
+    public const string YouTubeSavedMovePath = "/api/youtube/saved/move";
+
+    /// <summary>The playing video saved (later on 2026-10-16).</summary>
+    public const string YouTubeSavedSavePath = "/api/youtube/saved/save";
 
     /// <summary>Where the pictures are served: <c>/api/picture/{run}/{id}/{thumb|mid|full}</c>.</summary>
     public const string PicturePrefix = "/api/picture/";
@@ -915,7 +954,8 @@ public sealed class WebUiHost : IWebUiHost
     }
 
     /// <summary>
-    /// The YouTube tab's stream (2026-10-16): <c>?page=&amp;load=[&amp;claim=1]</c>, each 16 to 64 base64url characters or a 400. The Chat
+    /// The YouTube tab's stream (2026-10-16): <c>?page=&amp;load=[&amp;claim=&lt;id&gt;][&amp;visible=1|0]</c>, each id 16 to 64 base64url
+    /// characters or a 400 (a claim of <c>1</c>, the first script's, is still a claim; no <c>visible</c>, the first script's, is in view). The Chat
     /// stream's shape — no-cache, no buffering, linked to the request and the stop, the heartbeat, the tab read before each batch and at each
     /// heartbeat — over the page's own queue from the player, which decides which stream ends (an evicted waiting page, a reconnect replacing a
     /// half-open one) through the stream's own cancel. Never counted among <see cref="MaxStreams"/>: the player holds its own list.
@@ -925,7 +965,9 @@ public sealed class WebUiHost : IWebUiHost
         var response = context.Response;
         string page = context.Request.Query["page"].ToString();
         string load = context.Request.Query["load"].ToString();
-        if (!WebVideoPlayer.IsId(page) || !WebVideoPlayer.IsId(load))
+        string? claim = context.Request.Query["claim"].ToString() is { Length: > 0 } c ? c : null;
+        bool visible = context.Request.Query["visible"].ToString() != "0";
+        if (!WebVideoPlayer.IsId(page) || !WebVideoPlayer.IsId(load) || (claim is not null && claim != WebVideoPlayer.LegacyClaim && !WebVideoPlayer.IsId(claim)))
         {
             await ResultAsync(context, StatusCodes.Status400BadRequest, new WebResult(false, WebUiText.BadRequest)).ConfigureAwait(false);
             return;
@@ -947,7 +989,7 @@ public sealed class WebUiHost : IWebUiHost
             }
         }
 
-        using var attachment = video.Attach(page, load, context.Request.Query["claim"] == "1", context.Connection.RemoteIpAddress, End);
+        using var attachment = video.Attach(page, load, claim, visible, context.Connection.RemoteIpAddress, End);
         try
         {
             var token = mine.Token;
@@ -1011,6 +1053,25 @@ public sealed class WebUiHost : IWebUiHost
         }
 
         return new WebReply(video.Report(page, message, remote));
+    }
+
+    /// <summary>
+    /// A YouTube page in view or not (later on 2026-10-16): <see cref="WebVideoSeen"/>, its page id checked (a 400 otherwise, null here); the
+    /// player's answer, a 409 from a page with no open stream. No log line: the player writes a Debug one.
+    /// </summary>
+    private async Task<WebReply?> YouTubeSeenAsync(HttpContext context, IPAddress? remote)
+    {
+        if (_backend.Video is not { } video)
+        {
+            return new WebReply(WebOutcome.NotFound);
+        }
+
+        if (await ReadAsync(context, WebUiJsonContext.Default.WebVideoSeen).ConfigureAwait(false) is not { Page: { } page } seen || !WebVideoPlayer.IsId(page))
+        {
+            return null;
+        }
+
+        return new WebReply(video.Seen(page, seen.Visible, remote));
     }
 
     private static Task WriteEventAsync(HttpResponse response, string name, string json, CancellationToken cancellationToken) =>

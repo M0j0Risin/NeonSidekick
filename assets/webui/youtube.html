@@ -31,6 +31,17 @@
   </div>
   <div class="yt-frame"><div id="player"></div></div>
   <div class="banner message hidden" id="message"></div>
+  <!-- The saved videos (later on 2026-10-16, the user's ask: /youtube list under the player). -->
+  <section class="yt-saved hidden" id="saved" aria-labelledby="saved-caption">
+    <div class="yt-saved-head">
+      <h2 class="yt-caption" id="saved-caption"></h2>
+      <button type="button" class="yt-save hidden" id="saved-save"></button>
+      <button type="button" class="yt-clear hidden" id="saved-clear"></button>
+    </div>
+    <input type="search" class="yt-filter hidden" id="saved-filter" autocomplete="off" enterkeyhint="search">
+    <p class="yt-note hidden" id="saved-note"></p>
+    <ul class="yt-list" id="saved-list"></ul>
+  </section>
 </main>
 </body>
 </html>

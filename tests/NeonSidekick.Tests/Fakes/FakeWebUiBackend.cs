@@ -252,6 +252,158 @@ public IWebHome? Home { get; set; }
 
     public IWebVideo? Video => VideoPlayer;
 
+    // ── The YouTube tab's saved list (later on 2026-10-16), over an in-memory list ─────────────────────────────
+
+    /// <summary>The saved list, the user's order; guarded by <see cref="ListsGate"/>.</summary>
+    public List<WebSavedVideo> SavedList { get; } = [];
+
+    /// <summary>The video the player has open for the ☆, or null.</summary>
+    public WebSavedPlaying? SavedPlaying { get; set; }
+
+    /// <summary>Whether titles are being looked up.</summary>
+    public bool SavedLooking { get; set; }
+
+    /// <summary>False: no saved list (a 404).</summary>
+    public bool SavedOn { get; set; } = true;
+
+    /// <summary>A reply every change returns instead of changing the list, when set.</summary>
+    public WebReply? SavedReply { get; set; }
+
+    /// <summary>Every change asked for, in order: <c>play page id</c>, <c>remove id</c>, <c>clear</c>, <c>move id to</c>, <c>save</c>.</summary>
+    public ConcurrentQueue<string> SavedChanges { get; } = new();
+
+    /// <summary>A saved video for the list, its footer lines made up.</summary>
+    public static WebSavedVideo SavedVideo(string id, string title, string? channel = "Channel", bool watched = false) =>
+        new(id, title, channel, watched ? "watched" : "at 1:00 of 10:00", watched, title, "saved today · id " + id);
+
+    public WebSavedVideos? SavedVideos()
+    {
+        if (!SavedOn)
+        {
+            return null;
+        }
+
+        lock (ListsGate)
+        {
+            return new WebSavedVideos([.. SavedList], NeonSidekick.YouTube.YouTubeText.SavedCaption(SavedList.Count), NeonSidekick.YouTube.YouTubeText.NoneSaved, SavedLooking, SavedPlaying);
+        }
+    }
+
+    public WebReply PlaySaved(WebSavedPlay request, IPAddress? remote)
+    {
+        SavedChanges.Enqueue("play " + request.Page + " " + request.Id);
+        if (SavedReply is { } reply)
+        {
+            return reply;
+        }
+
+        lock (ListsGate)
+        {
+            if (!SavedList.Any(v => v.Id == request.Id))
+            {
+                return new WebReply(WebOutcome.NotFound, WebUiText.SavedVideoGone);
+            }
+        }
+
+        if (VideoPlayer is { } player)
+        {
+            if (player.Claim(request.Page ?? "", remote) == WebOutcome.Conflict)
+            {
+                return new WebReply(WebOutcome.Conflict, WebUiText.YouTubePageNotConnected);
+            }
+
+            player.Play(new NeonSidekick.Viewer.VideoRequest(request.Id!, 57));
+        }
+
+        return new WebReply(WebOutcome.Ok, "Resumed the saved video at 0:57, a moment before where it was left.");
+    }
+
+    public WebReply RemoveSaved(WebSavedId request, IPAddress? remote)
+    {
+        SavedChanges.Enqueue("remove " + request.Id);
+        if (SavedReply is { } reply)
+        {
+            return reply;
+        }
+
+        lock (ListsGate)
+        {
+            return SavedList.RemoveAll(v => v.Id == request.Id) > 0 ? WebReply.Ok : new WebReply(WebOutcome.NotFound, WebUiText.SavedVideoGone);
+        }
+    }
+
+    public WebReply ClearSaved(IPAddress? remote)
+    {
+        SavedChanges.Enqueue("clear");
+        if (SavedReply is { } reply)
+        {
+            return reply;
+        }
+
+        lock (ListsGate)
+        {
+            SavedList.Clear();
+        }
+
+        return WebReply.Ok;
+    }
+
+    public WebReply MoveSaved(WebSavedMove request, IPAddress? remote)
+    {
+        SavedChanges.Enqueue("move " + request.Id + " " + request.To);
+        if (SavedReply is { } reply)
+        {
+            return reply;
+        }
+
+        lock (ListsGate)
+        {
+            int at = SavedList.FindIndex(v => v.Id == request.Id);
+            if (at < 0)
+            {
+                return new WebReply(WebOutcome.NotFound, WebUiText.SavedVideoGone);
+            }
+
+            int to = request.To switch { "up" => at - 1, "down" => at + 1, "top" => 0, "bottom" => SavedList.Count - 1, _ => -2 };
+            if (to == -2)
+            {
+                return new WebReply(WebOutcome.Refused, WebUiText.SavedMoveUnknown);
+            }
+
+            var video = SavedList[at];
+            SavedList.RemoveAt(at);
+            SavedList.Insert(Math.Clamp(to, 0, SavedList.Count), video);
+        }
+
+        return WebReply.Ok;
+    }
+
+    public WebReply SaveCurrent(IPAddress? remote)
+    {
+        SavedChanges.Enqueue("save");
+        if (SavedReply is { } reply)
+        {
+            return reply;
+        }
+
+        lock (ListsGate)
+        {
+            if (SavedPlaying is not { } playing)
+            {
+                return new WebReply(WebOutcome.Refused, NeonSidekick.YouTube.YouTubeText.NothingToSave);
+            }
+
+            if (!SavedList.Any(v => v.Id == playing.Id))
+            {
+                SavedList.Add(SavedVideo(playing.Id, playing.Title ?? playing.Id));
+            }
+
+            SavedPlaying = playing with { Saved = true };
+        }
+
+        return new WebReply(WebOutcome.Ok, "Saved it.");
+    }
+
     public Dictionary<long, WebEntry> Entries { get; } = [];
 
     public WebEntry? Entry(long seq) => Entries.GetValueOrDefault(seq);

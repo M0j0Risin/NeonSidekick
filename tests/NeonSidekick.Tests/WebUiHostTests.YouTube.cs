@@ -73,7 +73,7 @@ public sealed partial class WebUiHostTests
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
         Assert.Contains("youtube.js", await page.Content.ReadAsStringAsync(), StringComparison.Ordinal);
         Assert.Equal(
-            "default-src 'self'; script-src 'self' https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self'; img-src 'self' data:; frame-src https://www.youtube.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+            "default-src 'self'; script-src 'self' https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self'; img-src 'self' data: https://i.ytimg.com; frame-src https://www.youtube.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
             Assert.Single(page.Headers.GetValues("Content-Security-Policy")));
         Assert.Equal("strict-origin-when-cross-origin", Assert.Single(page.Headers.GetValues("Referrer-Policy")));
 
@@ -277,7 +277,7 @@ public sealed partial class WebUiHostTests
         Assert.False(WebTabs.All.YouTube);
         Assert.False(new WebTabs(true, true, true, true).Has((WebTab)99));
         Assert.Equal(WebUiText.YouTubeTabOff, WebUiText.TabOff(WebTab.YouTube));
-        Assert.Contains("YouTube open links in", WebUiText.YouTubeTabOff, StringComparison.Ordinal);
+        Assert.Contains("Web UI YouTube controls", WebUiText.YouTubeTabOff, StringComparison.Ordinal);
         Assert.Equal("", WebUiText.TabOff((WebTab)99));
         Assert.Equal("/youtube", new WebTabs(false, false, false, YouTube: true).FirstOtherPage);
         Assert.Equal("/shopping", new WebTabs(false, false, true, YouTube: true).FirstOtherPage);

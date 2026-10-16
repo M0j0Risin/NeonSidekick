@@ -40,9 +40,10 @@ public sealed record WebCommandVerdict(WebCommandKind Kind, string? Reason = nul
 
 /// <summary>
 /// The settings a verdict reads: <i>Web UI commands</i>, the switches <c>/tree</c> and <c>/vault</c> need, and whether the page has its Shopping
-/// tab (later on 2026-10-15: bare <c>/shopping</c> points at the tab, or at the setting while the tab is off).
+/// tab (later on 2026-10-15: bare <c>/shopping</c> points at the tab, or at the setting while the tab is off) and (later on 2026-10-16) its
+/// YouTube tab, for <c>/youtube list</c>.
 /// </summary>
-public readonly record struct WebCommandSettings(bool Commands, bool FileTools, bool ObsidianTools, bool ShoppingTab = true);
+public readonly record struct WebCommandSettings(bool Commands, bool FileTools, bool ObsidianTools, bool ShoppingTab = true, bool YouTubeTab = false);
 
 /// <summary>
 /// Which slash commands the Web UI's page may run (later on 2026-10-14, the user's calls): a phone has no PC pane to answer and no PC window to
@@ -117,13 +118,21 @@ public static class WebCommands
             return Refused(WebUiText.CommandsOff);
         }
 
+        string text = args.Trim();
+        string first = FirstWord(text);
+
+        // /youtube list (and list --clear) point at the YouTube tab's saved list (later on 2026-10-16), the Shopping tab's way; every other
+        // /youtube form stays the PC's.
+        if (command == SlashCommand.YouTube && Is(first, "list"))
+        {
+            return Refused(settings.YouTubeTab ? WebUiText.UseYouTubePage : WebUiText.YouTubeTabOff);
+        }
+
         if (Never.Contains(command))
         {
             return Refused(WebUiText.PcOnly(word));
         }
 
-        string text = args.Trim();
-        string first = FirstWord(text);
         return command switch
         {
             SlashCommand.Overloaded => Refused(ChatScreen.NoArgumentError(word)),

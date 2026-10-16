@@ -122,6 +122,16 @@ public sealed class HaCatalog
     }
 
     /// <summary>
+    /// The device <paramref name="entityId"/> hangs on, or null (2026-10-16, the Web UI's scene boxes: Hue's scenes hang on their room's or
+    /// zone's device, and a zone usually has no area). Always null without the registries.
+    /// </summary>
+    public HaDevice? DeviceOf(string entityId)
+    {
+        ArgumentNullException.ThrowIfNull(entityId);
+        return _registry.TryGetValue(entityId, out var entry) && entry.DeviceId is { } device ? _devices.GetValueOrDefault(device) : null;
+    }
+
+    /// <summary>
     /// Whether the entity is one to offer: not disabled, not hidden, and no config or diagnostic category. Without the
     /// registry, everything is.
     /// </summary>

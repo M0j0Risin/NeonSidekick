@@ -45,8 +45,8 @@ public sealed partial class WebUiPageTests
 
         await OpenUsageAsync(page);
         Assert.Equal("1.2k / 4.1k", await page.TextAsync("document.querySelector('.usage-figures').textContent"));
-        Assert.Equal("30%", await page.TextAsync("document.querySelector('.meter-fill').style.width"));
-        Assert.False((await page.EvalAsync("document.querySelector('.meter').classList.contains('warn')")).GetBoolean());
+        Assert.Equal("30%", await page.TextAsync("document.querySelector('.usage-meter-fill').style.width"));
+        Assert.False((await page.EvalAsync("document.querySelector('.usage-meter').classList.contains('warn')")).GetBoolean());
         Assert.Equal(3, (await page.EvalAsync("document.querySelectorAll('.usage-tile').length")).GetInt32());
         Assert.Equal("Last reply", await page.TextAsync("document.querySelector('.usage-tile h3').textContent"));
         Assert.True((await page.EvalAsync("(() => { const t = document.querySelectorAll('.usage-tile'); return t[0].getBoundingClientRect().top === t[1].getBoundingClientRect().top; })()")).GetBoolean());   // side by side when wide
@@ -65,8 +65,8 @@ public sealed partial class WebUiPageTests
         }
 
         await OpenUsageAsync(page);
-        Assert.True((await page.EvalAsync("document.querySelector('.meter').classList.contains('" + kind + "')")).GetBoolean());
-        Assert.Equal(Math.Min(percent, 100) + "%", await page.TextAsync("document.querySelector('.meter-fill').style.width"));
+        Assert.True((await page.EvalAsync("document.querySelector('.usage-meter').classList.contains('" + kind + "')")).GetBoolean());
+        Assert.Equal(Math.Min(percent, 100) + "%", await page.TextAsync("document.querySelector('.usage-meter-fill').style.width"));
         Assert.Equal(percent + "%", await page.TextAsync("document.querySelector('.usage-share').textContent"));
     }
 
@@ -80,7 +80,7 @@ public sealed partial class WebUiPageTests
         }
 
         await OpenUsageAsync(page);
-        Assert.Equal(0, (await page.EvalAsync("document.querySelectorAll('.meter').length")).GetInt32());
+        Assert.Equal(0, (await page.EvalAsync("document.querySelectorAll('.usage-meter').length")).GetInt32());
         Assert.Equal("unknown", await page.TextAsync("document.querySelector('.usage-source').textContent"));
         Assert.Equal(NeonSidekick.App.UsageText.NothingCounted, await page.TextAsync("document.getElementById('usage-empty').textContent"));
     }

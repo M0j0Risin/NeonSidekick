@@ -220,22 +220,69 @@ document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && openShee
 
 // ── Scenes, Ask the house ─────────────────────────────────────────────
 
+// The scenes in a box per room or zone (2026-10-16, the user's ask: one long wrap was hard to scan): the home bar's rooms first and open, the
+// rest folded (every box open when none is on the bar); a fold the user toggles is kept on this device under neon.home.scenes.<key>, and in
+// memory beside it where storage throws (private mode). The boxes are rebuilt only when the list changes, so a read every 1.5 s keeps the folds
+// and the scroll place. Each button reads its label (the name without its box's) and carries the whole name as its title.
+const sceneFolds = new Map();
+let scenesDrawn = null;
+
+function sceneOpen(group, anyOnBar) {
+  const key = 'neon.home.scenes.' + group.key;
+  if (sceneFolds.has(key)) return sceneFolds.get(key);
+  try {
+    const kept = localStorage.getItem(key);
+    if (kept === '1' || kept === '0') return kept === '1';
+  } catch { /* private mode, blocked storage: the default */ }
+  return anyOnBar ? group.onBar : true;
+}
+
+function keepSceneFold(group, open) {
+  const key = 'neon.home.scenes.' + group.key;
+  sceneFolds.set(key, open);
+  try { localStorage.setItem(key, open ? '1' : '0'); } catch { /* kept in memory only */ }
+}
+
 function renderScenes() {
-  const has = home.scenes.length > 0;
+  const groups = home.sceneGroups || [];
+  const has = groups.length > 0;
   scenesEl.classList.toggle('hidden', !has);
-  if (!has) return;
+  if (!has) { scenesDrawn = null; return; }
   scenesEl.querySelector('summary').textContent = words.scenes;
-  const row = scenesEl.querySelector('.scene-row');
-  row.replaceChildren();
-  for (const scene of home.scenes) {
-    const b = el('button', null, scene.name);
-    b.type = 'button';
-    b.disabled = !home.controls;
-    b.addEventListener('click', async () => {
-      const r = await post('/api/home/scene', { id: scene.id });
-      say(r.ok ? '' : r.message || '');
+  const drawn = JSON.stringify([groups, home.controls]);
+  if (drawn === scenesDrawn) return;
+  scenesDrawn = drawn;
+  const boxes = scenesEl.querySelector('.scene-groups');
+  boxes.replaceChildren();
+  const anyOnBar = groups.some(g => g.onBar);
+  for (const group of groups) {
+    const box = el('details', 'scene-group');
+    box.dataset.key = group.key;
+    box.open = sceneOpen(group, anyOnBar);
+    const summary = el('summary', null, group.name);
+    summary.appendChild(el('span', 'scene-count', String(group.scenes.length)));
+    box.appendChild(summary);
+    const row = el('div', 'scene-row');
+    for (const scene of group.scenes) {
+      const b = el('button', null, scene.label || scene.name);
+      b.type = 'button';
+      b.title = scene.name;
+      b.setAttribute('aria-label', scene.name);
+      b.disabled = !home.controls;
+      b.addEventListener('click', async () => {
+        const r = await post('/api/home/scene', { id: scene.id });
+        say(r.ok ? '' : r.message || '');
+      });
+      row.appendChild(b);
+    }
+    box.appendChild(row);
+    // Opening it above queues a toggle of its own: that one is the default, not the user's.
+    let opened = box.open;
+    box.addEventListener('toggle', () => {
+      if (opened) { opened = false; if (box.open) return; }
+      keepSceneFold(group, box.open);
     });
-    row.appendChild(b);
+    boxes.appendChild(box);
   }
 }
 

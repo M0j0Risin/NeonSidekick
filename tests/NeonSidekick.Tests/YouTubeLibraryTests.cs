@@ -41,6 +41,48 @@ public sealed class YouTubeLibraryTests : IDisposable
         Assert.False(library.Move("xxxxxxxxxxx", 1));
     }
 
+    /// <summary>
+    /// Two instances on one file (later on 2026-10-16: the Web UI's saved list moves from Kestrel threads while the window's resume updates):
+    /// one lock for both, so neither read-modify-write loses the other's change.
+    /// </summary>
+    [Fact]
+    public async Task TwoInstances_InterleavingMoveAndUpdate_LoseNothing()
+    {
+        var ids = Enumerable.Range(0, 8).Select(i => "video" + i.ToString(System.Globalization.CultureInfo.InvariantCulture).PadLeft(6, '0')).ToList();
+        var seed = Library();
+        foreach (string id in ids)
+        {
+            seed.Add(id, "title " + id);
+        }
+
+        var mover = Library();
+        var updater = Library();
+        var moves = Task.Run(() =>
+        {
+            for (int i = 0; i < 200; i++)
+            {
+                mover.Move(ids[i % ids.Count], i % 2 == 0 ? int.MinValue : int.MaxValue);
+            }
+        });
+        var updates = Task.Run(() =>
+        {
+            for (int i = 0; i < 200; i++)
+            {
+                string id = ids[i % ids.Count];
+                updater.Update(id, v => v with { Position = i + 1 });
+            }
+        });
+        await Task.WhenAll(moves, updates);
+
+        var listed = Library().List();
+        Assert.Equal(ids.Order(StringComparer.Ordinal), listed.Select(v => v.Id).Order(StringComparer.Ordinal));   // every video still there, once
+        for (int k = 0; k < ids.Count; k++)
+        {
+            int last = Enumerable.Range(0, 200).Last(i => i % ids.Count == k) + 1;
+            Assert.Equal(last, listed.Single(v => v.Id == ids[k]).Position);   // and each one's last update kept
+        }
+    }
+
     private YouTubeLibrary Library() => new(_dir, _time);
 
     // ── The list ─────────────────────────────────────────────────────────────

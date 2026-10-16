@@ -11,7 +11,7 @@ namespace NeonSidekick.Tests;
 /// the owner leaving after the grace and the longest-waiting page promoted), a held play going out as a page attaches, the Resume offer by the
 /// saved videos' rules, the owner's reports alone, the load's settle, the cap of streams, a full queue, and the forgets. On the manual clock.
 /// </summary>
-public class WebVideoPlayerTests
+public partial class WebVideoPlayerTests
 {
     private const string Bunny = "aqz-KE-bpKQ";
     private const string Other = "jNQXAC9IVRw";
@@ -44,10 +44,11 @@ public class WebVideoPlayerTests
         }
     }
 
-    private static Attached Attach(WebVideoPlayer player, string page, string load, bool claim = false)
+    // claim: true is the first script's claim=1; claimId a tap's own id (later on 2026-10-16); visible as the page's visible=.
+    private static Attached Attach(WebVideoPlayer player, string page, string load, bool claim = false, bool visible = true, string? claimId = null)
     {
         int ends = 0;
-        var attachment = player.Attach(page, load, claim, null, () => ends++);
+        var attachment = player.Attach(page, load, claimId ?? (claim ? WebVideoPlayer.LegacyClaim : null), visible, null, () => ends++);
         return new Attached(attachment, () => ends);
     }
 
@@ -60,13 +61,13 @@ public class WebVideoPlayerTests
     {
         var player = Player();
         var a = Attach(player, Id('a'), Id('1'));
-        var b = Attach(player, Id('b'), Id('2'));
+        var b = Attach(player, Id('b'), Id('2'), visible: false);   // hidden: an idle owner yields only to a page in view
 
         Assert.True(a.Attachment.Hello.Owner);
         Assert.False(b.Attachment.Hello.Owner);
         Assert.Equal(Id('a'), player.Owner);
 
-        var c = Attach(player, Id('b'), Id('2'), claim: true);   // Play here: the page's own stream again, with claim
+        var c = Attach(player, Id('b'), Id('2'), claim: true, visible: false);   // Play here: the page's own stream again, with claim
         Assert.Equal(1, b.Ends());   // its old stream replaced
         Assert.Equal(Id('b'), player.Owner);
         Assert.Contains(a.Drain(), e => e.Name == "taken");
@@ -74,7 +75,7 @@ public class WebVideoPlayerTests
         Assert.Equal([WebUiText.YouTubeClaimFlash], _flashes);
         Assert.True(c.Attachment.Hello.Owner);
 
-        var again = Attach(player, Id('b'), Id('2'));   // the same page reconnecting: quietly the owner still
+        var again = Attach(player, Id('b'), Id('2'), visible: false);   // the same page reconnecting: quietly the owner still
         Assert.True(again.Attachment.Hello.Owner);
         Assert.Equal(1, c.Ends());
         Assert.Single(_flashes);
@@ -106,8 +107,8 @@ public class WebVideoPlayerTests
     {
         var player = Player();
         var a = Attach(player, Id('a'), Id('1'));
-        var b = Attach(player, Id('b'), Id('2'));
-        var c = Attach(player, Id('c'), Id('3'));
+        var b = Attach(player, Id('b'), Id('2'), visible: false);
+        var c = Attach(player, Id('c'), Id('3'), visible: false);
         player.Play(new VideoRequest(Bunny));
         player.Report(Id('a'), State(1, position: 192), null);
 
@@ -125,8 +126,9 @@ public class WebVideoPlayerTests
         Assert.Equal(189, doc.RootElement.GetProperty("resume").GetProperty("start").GetDouble());
         Assert.DoesNotContain(c.Drain(), e => e.Name == "owner");
 
+        player.Seen(Id('b'), true, null);
         player.Play(new VideoRequest(Other));
-        Assert.Contains(b.Drain(), e => e.Name == "load");   // the next play goes to the promoted page, never held
+        Assert.Contains(b.Drain(), e => e.Name == "load");   // the next play goes to the promoted page once it is in view
         Assert.Null(player.Snapshot?.Held);
     }
 
@@ -195,7 +197,7 @@ public class WebVideoPlayerTests
     {
         var player = Player();
         Attach(player, Id('a'), Id('1'));
-        Attach(player, Id('b'), Id('2'));
+        Attach(player, Id('b'), Id('2'), visible: false);
         player.Play(new VideoRequest(Bunny));
 
         Assert.Equal(WebOutcome.Conflict, player.Report(Id('b'), State(1), null));
@@ -290,6 +292,8 @@ public class WebVideoPlayerTests
     {
         var player = Player();
         var owner = Attach(player, Id('a'), Id('1'));
+        player.Play(new VideoRequest(Bunny));
+        player.Report(Id('a'), State(1), null);   // playing: the pages in view that follow wait
         var oldest = Attach(player, Id('b'), Id('2'));
         Attach(player, Id('c'), Id('3'));
         Attach(player, Id('d'), Id('4'));
@@ -315,7 +319,7 @@ public class WebVideoPlayerTests
         a.Attachment.Dispose();   // the replaced stream's own end detaches nothing
         Assert.Equal(1, player.Streams);
 
-        var duplicate = Attach(player, Id('a'), Id('9'));
+        var duplicate = Attach(player, Id('a'), Id('9'), visible: false);
         Assert.NotEqual(Id('a'), duplicate.Attachment.Hello.Page);
         Assert.True(WebVideoPlayer.IsId(duplicate.Attachment.Hello.Page));
         Assert.False(duplicate.Attachment.Hello.Owner);

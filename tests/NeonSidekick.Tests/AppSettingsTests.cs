@@ -195,6 +195,7 @@ public class AppSettingsTests : IDisposable
         WebUiHomeControls = true,
         WebUiChatControls = false,
         WebUiShoppingControls = true,
+        WebUiYouTubeControls = true,
         WebUiProfileTheme = false,
         WebUiToken = "dpapi:token",
     };
@@ -204,7 +205,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(
             (expected.WebUi, expected.WebUiPort, expected.WebUiReach, expected.WebUiCommands, expected.WebUiConnectionDetails, expected.WebUiHomeControls, expected.WebUiProfileTheme, expected.WebUiToken),
             (actual.WebUi, actual.WebUiPort, actual.WebUiReach, actual.WebUiCommands, actual.WebUiConnectionDetails, actual.WebUiHomeControls, actual.WebUiProfileTheme, actual.WebUiToken));
-        Assert.Equal((expected.WebUiChatControls, expected.WebUiShoppingControls), (actual.WebUiChatControls, actual.WebUiShoppingControls));
+        Assert.Equal((expected.WebUiChatControls, expected.WebUiShoppingControls, expected.WebUiYouTubeControls), (actual.WebUiChatControls, actual.WebUiShoppingControls, actual.WebUiYouTubeControls));
         Assert.Equal(expected.SchemaVersion, actual.SchemaVersion);
         Assert.Equal(expected.ModelAvatar, actual.ModelAvatar);
         Assert.Equal(expected.UserAvatar, actual.UserAvatar);
@@ -552,6 +553,7 @@ public class AppSettingsTests : IDisposable
             d.WebUiHomeControls = full.WebUiHomeControls;
             d.WebUiChatControls = full.WebUiChatControls;
             d.WebUiShoppingControls = full.WebUiShoppingControls;
+            d.WebUiYouTubeControls = full.WebUiYouTubeControls;
             d.WebUiProfileTheme = full.WebUiProfileTheme;
             d.WebUiToken = full.WebUiToken;
         });
@@ -711,6 +713,7 @@ public class AppSettingsTests : IDisposable
                 d.WebUiHomeControls = full.WebUiHomeControls;
                 d.WebUiChatControls = full.WebUiChatControls;
                 d.WebUiShoppingControls = full.WebUiShoppingControls;
+                d.WebUiYouTubeControls = full.WebUiYouTubeControls;
                 d.WebUiProfileTheme = full.WebUiProfileTheme;
                 d.WebUiToken = full.WebUiToken;
             });

@@ -42,6 +42,7 @@ public partial class YouTubeToolsTests
 
         Assert.Contains("Web UI's YouTube tab", YouTubePlayTool.DescriptionFor(YouTubeOpenLinksInKind.WebUiWindow));
         Assert.Contains("waits for one", YouTubePlayTool.DescriptionFor(YouTubeOpenLinksInKind.WebUiWindow));
+        Assert.Contains("with no tab in view it waits for one", YouTubePlayTool.DescriptionFor(YouTubeOpenLinksInKind.WebUiWindow));   // later on 2026-10-16: in view, not open
         Assert.Contains("Browser window", YouTubePlayTool.DescriptionFor(YouTubeOpenLinksInKind.BrowserWindow));
         Assert.Contains("default browser", YouTubePlayTool.DescriptionFor(YouTubeOpenLinksInKind.DefaultBrowser));
         Assert.All([YouTubeOpenLinksInKind.BrowserWindow, YouTubeOpenLinksInKind.DefaultBrowser], k =>
@@ -137,6 +138,16 @@ public partial class YouTubeToolsTests
         Assert.DoesNotContain("in the video window", video);
     }
 
+    /// <summary>A video held while YouTube tabs are open but none is in view (later on 2026-10-16): its own sentence, whatever the nudge.</summary>
+    [Fact]
+    public void Held_WithTabsHidden_SaysItPlaysWhenOneComesIntoView()
+    {
+        var snapshot = VideoSnapshot.Opening(new VideoRequest(Bunny)) with { Place = VideoPlace.WebTab };
+        string hidden = YouTubeText.Held(snapshot, new VideoHold(false, _time.GetUtcNow(), TabsHidden: true));
+        Assert.StartsWith("Waiting for a YouTube tab in view: video " + Bunny + " plays in the Web UI's YouTube tab as soon as one comes into view", hidden, StringComparison.Ordinal);
+        Assert.Equal(hidden, YouTubeText.Held(snapshot, new VideoHold(true, _time.GetUtcNow(), TabsHidden: true)));
+        Assert.StartsWith("Waiting for a YouTube tab: no Web UI page", YouTubeText.Held(snapshot, new VideoHold(false, _time.GetUtcNow())), StringComparison.Ordinal);
+    }
     [Fact]
     public async Task AHeldVideo_WithAPageNudged_KeepsWaiting_AndAStoppedWaitLeavesItHeld()
     {

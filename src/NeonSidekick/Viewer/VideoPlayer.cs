@@ -48,9 +48,10 @@ public enum VideoPlace
 
 /// <summary>
 /// A video waiting for a YouTube tab to open (2026-10-16): whether an open Web UI page was asked to switch to it and will see the ask soon
-/// (<see cref="Nudged"/>), and since when it waits.
+/// (<see cref="Nudged"/>), since when it waits, and (later that day) whether YouTube tabs are open but none is in view
+/// (<see cref="TabsHidden"/>: a locked phone, a tab in the background), so it plays as soon as one comes into view.
 /// </summary>
-public sealed record VideoHold(bool Nudged, DateTimeOffset Since);
+public sealed record VideoHold(bool Nudged, DateTimeOffset Since, bool TabsHidden = false);
 
 /// <summary>A player that another side can take playback from by itself (2026-10-16: the Web UI's YouTube tab, its Resume tap).</summary>
 public interface IVideoTakeover

@@ -77,16 +77,20 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The loaded profile's saved videos (2026-10-07): the one made for its directory, or a new one once a profile switch moved it.
-    /// Read from the window's thread too (<see cref="YouTubeResume"/>); two made in a race read and write the same file under its
-    /// atomic save, so the loser is merely dropped.
+    /// Read from the window's thread too (<see cref="YouTubeResume"/>) and (later on 2026-10-16) from Kestrel's, the Web UI's saved list:
+    /// the field read and swapped atomically, and two made in a race share the library's one lock over the same file, so neither loses a
+    /// change; the one that lost the swap is simply not kept.
     /// </summary>
     private YouTubeLibrary YouTubeLibraryNow()
     {
-        var library = _youTubeLibrary;
+        var library = Volatile.Read(ref _youTubeLibrary);
         if (library is null || !string.Equals(library.Directory, Path.GetFullPath(_settings.ProfileDirectory), StringComparison.OrdinalIgnoreCase))
         {
-            library = new YouTubeLibrary(_settings.ProfileDirectory, _time);
-            _youTubeLibrary = library;
+            var made = new YouTubeLibrary(_settings.ProfileDirectory, _time);
+            var seen = Interlocked.CompareExchange(ref _youTubeLibrary, made, library);
+            library = ReferenceEquals(seen, library) ? made
+                : seen is not null && string.Equals(seen.Directory, made.Directory, StringComparison.OrdinalIgnoreCase) ? seen
+                : made;
         }
 
         return library;
@@ -339,7 +343,7 @@ internal sealed partial class ChatScreen
         if (_pane.Enabled)
         {
             Func<YouTubeSaved, CancellationToken, Task<string>>? play = _videoPlayer is { } player ? (video, ct) => PlayVideoAsync(player, video.Id, null, ct) : null;
-            return new YouTubeSavedMenu(YouTubeLibraryNow, sink, _menuPane, play, _time.LocalTimeZone).ShowAsync(cancellationToken);
+            return new YouTubeSavedMenu(YouTubeLibraryNow, sink, _menuPane, play, _time.LocalTimeZone, _time).ShowAsync(cancellationToken);
         }
 
         var videos = YouTubeLibraryNow().List();

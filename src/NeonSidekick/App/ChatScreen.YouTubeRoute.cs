@@ -28,7 +28,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// Where a play goes now, worked out once for the play, the spinner's words and the tools' descriptions, so they never disagree: the
-    /// setting, with <c>webui-window</c> falling back to the video window while the Web UI isn't serving (or there is no web player), and
+    /// setting, with <c>webui-window</c> falling back to the video window while the Web UI isn't serving (or there is no web player) or, since
+    /// 2026-10-16, while <i>Web UI YouTube controls</i> is off (there is no tab), and
     /// <c>browser-window</c> to the default browser where the Browser window can't take it (none here, as on a Mac; no runtime; a bot check
     /// waiting in it). The note leads a play's answer when a fallback was taken.
     /// </summary>
@@ -39,9 +40,12 @@ internal sealed partial class ChatScreen
         switch (setting)
         {
             case YouTubeOpenLinksInKind.WebUiWindow:
-                return _routedVideo is { HasWeb: true } && effective.WebUi && _webUiController.Serving
-                    ? (setting, null)
-                    : (YouTubeOpenLinksInKind.YouTubeWindow, YouTubeText.WebUiOffFellBack);
+                if (_routedVideo is not { HasWeb: true } || !effective.WebUi || !_webUiController.Serving)
+                {
+                    return (YouTubeOpenLinksInKind.YouTubeWindow, YouTubeText.WebUiOffFellBack);
+                }
+
+                return effective.WebUiYouTubeControls ? (setting, null) : (YouTubeOpenLinksInKind.YouTubeWindow, YouTubeText.WebUiControlsOffFellBack);
             case YouTubeOpenLinksInKind.BrowserWindow:
                 // No window at all is tested first: on a Mac _browserWindow?.Unavailable() reads null, which would look like "available".
                 if (_browserWindow is null)

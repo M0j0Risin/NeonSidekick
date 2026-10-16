@@ -95,7 +95,7 @@ public sealed record WebResult(bool Ok, string? Message = null, bool AsText = fa
 
 /// <summary>
 /// The Web UI's tabs and whether each is on (later on 2026-10-15): <i>Web UI chat controls</i>, <i>home controls</i>, <i>shopping controls</i>, and
-/// (2026-10-16) the YouTube tab while <i>YouTube open links in</i> is <c>webui-window</c> and there is a web player.
+/// (2026-10-16) the YouTube tab while <i>Web UI YouTube controls</i> is on and there is a web player.
 /// </summary>
 public readonly record struct WebTabs(bool Chat, bool Home, bool Shopping, bool YouTube = false)
 {
@@ -205,7 +205,7 @@ public sealed record WebHome(
     string? StatusText,
     bool Controls,
     IReadOnlyList<WebHomeTile> Tiles,
-    IReadOnlyList<WebHomeScene> Scenes,
+    IReadOnlyList<WebHomeSceneGroup> SceneGroups,
     WebHomeVideo? Video,
     WebHomePc? Pc,
     WebHomeModel Model,
@@ -219,8 +219,17 @@ public sealed record WebHome(
 /// </summary>
 public sealed record WebHomeTile(string Ref, string Glyph, string Name, string Value, string Note, string Action, string? Mark, string Tone, string? Color, int Group, bool Sheet);
 
-/// <summary>A scene the tab offers: its entity id and its name.</summary>
-public sealed record WebHomeScene(string Id, string Name);
+/// <summary>
+/// A scene the tab offers: its entity id, its whole name (the button's title, what a screen reader hears) and (2026-10-16) its label in its box,
+/// the name without the box's in front.
+/// </summary>
+public sealed record WebHomeScene(string Id, string Name, string Label);
+
+/// <summary>
+/// A box of scenes on the Home tab (2026-10-16): its key (the area's id, <c>device:&lt;id&gt;</c> or <c>none</c>, stable across renames for the
+/// page's remembered folds), its name, whether its room is on the home bar (open by default), and its scenes by name.
+/// </summary>
+public sealed record WebHomeSceneGroup(string Key, string Name, bool OnBar, IReadOnlyList<WebHomeScene> Scenes);
 
 /// <summary>
 /// The video playing, as the tab shows it: its state, the video, the clock, the sound, a playlist's place, a failure's sentence, and (2026-10-16)
@@ -478,8 +487,72 @@ public sealed class WebStoreRequest
 
 // ── The YouTube tab (2026-10-16) ─────────────────────────────────────────
 
-/// <summary>The YouTube tab's words, made on the server (<see cref="WebUiText.VideoWords"/>).</summary>
-public sealed record WebVideoWords(string Waiting, string PlayHere, string TapForSound, string TapToStart, string Idle, string Loading, string Failed, string Closed);
+/// <summary>
+/// The YouTube tab's words, made on the server (<see cref="WebUiText.VideoWords"/>), with (later on 2026-10-16) the saved list's
+/// (<see cref="Saved"/>).
+/// </summary>
+public sealed record WebVideoWords(string Waiting, string PlayHere, string TapForSound, string TapToStart, string Idle, string Loading, string Failed, string Closed)
+{
+    public WebSavedWords? Saved { get; init; }
+}
+
+/// <summary>
+/// The saved list's words on the YouTube tab (later on 2026-10-16): the filter's placeholder and its no-match line (<c>{0}</c> the filter), the
+/// row's details toggle, the moves, the two-tap delete and clear all (each with its armed words), the save button's two faces, and the line
+/// while titles are looked up.
+/// </summary>
+public sealed record WebSavedWords(
+    string Filter,
+    string NoMatch,
+    string Details,
+    string MoveUp,
+    string MoveDown,
+    string MoveTop,
+    string MoveBottom,
+    string Delete,
+    string DeleteArmed,
+    string ClearAll,
+    string ClearArmed,
+    string SavePlaying,
+    string Saved,
+    string Looking);
+
+/// <summary>
+/// The YouTube tab's saved list (later on 2026-10-16, the user's ask: <c>/youtube list</c> under the player): the videos in the user's order, the
+/// count's caption, the empty list's sentence, whether titles are being looked up, and the video the player has open (null for none).
+/// </summary>
+public sealed record WebSavedVideos(IReadOnlyList<WebSavedVideo> Items, string Caption, string Empty, bool Looking, WebSavedPlaying? Playing);
+
+/// <summary>
+/// One saved video: its id (every post names it; the page builds its thumbnail from it), title and channel (null until known), where it was
+/// left, whether it was watched to its end, and the PC pane's footer as two lines (in the PC's time zone).
+/// </summary>
+public sealed record WebSavedVideo(string Id, string? Title, string? Channel, string Place, bool Watched, string Heading, string Details);
+
+/// <summary>The video the player has open, and whether it is saved (the ☆/★).</summary>
+public sealed record WebSavedPlaying(string Id, string? Title, bool Saved);
+
+/// <summary>A saved video played on the tapping page (later on 2026-10-16): that page's id and the video's.</summary>
+public sealed class WebSavedPlay
+{
+    public string? Page { get; set; }
+
+    public string? Id { get; set; }
+}
+
+/// <summary>A saved video named by its id (later on 2026-10-16): the remove.</summary>
+public sealed class WebSavedId
+{
+    public string? Id { get; set; }
+}
+
+/// <summary>A saved video moved (later on 2026-10-16): <c>up</c>, <c>down</c>, <c>top</c> or <c>bottom</c>, so no extreme numbers go over JSON.</summary>
+public sealed class WebSavedMove
+{
+    public string? Id { get; set; }
+
+    public string? To { get; set; }
+}
 
 /// <summary>
 /// The Resume offer (2026-10-16): the last video or playlist, the entry, where to start (the saved videos' rewind applied) and the button's
@@ -489,9 +562,18 @@ public sealed record WebVideoResume(string? VideoId, string? PlaylistId, int? En
 
 /// <summary>
 /// A YouTube stream's first event: the page id to use from now on (a duplicated tab gets a fresh one), the tab's words, whether this page plays
-/// (else it waits, with Play here), the Resume offer, and how long the page waits for YouTube's player script before it reports a failure.
+/// (else it waits, with Play here), the Resume offer, how long the page waits for YouTube's player script before it reports a failure, and
+/// (later on 2026-10-16) <see cref="Play"/>: a Play here took the video with it, so the page resumes the offer by itself.
 /// </summary>
-public sealed record WebVideoHello(string Page, WebVideoWords Words, bool Owner, WebVideoResume? Resume, int ApiWaitMs);
+public sealed record WebVideoHello(string Page, WebVideoWords Words, bool Owner, WebVideoResume? Resume, int ApiWaitMs, bool Play = false);
+
+/// <summary>A YouTube page in view or not (later on 2026-10-16): <c>POST /api/youtube/seen</c>, on every change and every reconnect.</summary>
+public sealed class WebVideoSeen
+{
+    public string? Page { get; set; }
+
+    public bool Visible { get; set; }
+}
 
 /// <summary>An <c>owner</c> event: this page plays now (or waits), with the Resume offer a promoted page draws.</summary>
 public sealed record WebVideoOwner(bool Owner, WebVideoResume? Resume);
@@ -512,6 +594,7 @@ public sealed class WebVideoReport
 [JsonSerializable(typeof(WebStoreRequest))]
 [JsonSerializable(typeof(WebSignInRequest))]
 [JsonSerializable(typeof(WebHome))]
+[JsonSerializable(typeof(WebHomeSceneGroup))]
 [JsonSerializable(typeof(WebHomeSheet))]
 [JsonSerializable(typeof(WebHomeTapRequest))]
 [JsonSerializable(typeof(WebHomeActRequest))]
@@ -550,6 +633,14 @@ public sealed class WebVideoReport
 [JsonSerializable(typeof(WebShopping))]
 [JsonSerializable(typeof(WebVideoHello))]
 [JsonSerializable(typeof(WebVideoWords))]
+[JsonSerializable(typeof(WebVideoSeen))]
+[JsonSerializable(typeof(WebSavedWords))]
+[JsonSerializable(typeof(WebSavedVideos))]
+[JsonSerializable(typeof(WebSavedVideo))]
+[JsonSerializable(typeof(WebSavedPlaying))]
+[JsonSerializable(typeof(WebSavedPlay))]
+[JsonSerializable(typeof(WebSavedId))]
+[JsonSerializable(typeof(WebSavedMove))]
 [JsonSerializable(typeof(WebVideoResume))]
 [JsonSerializable(typeof(WebVideoOwner))]
 [JsonSerializable(typeof(WebVideoReport))]

@@ -169,12 +169,17 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
         /// <summary>The video card (2026-10-16), none by default.</summary>
         public WebHomeVideo? VideoCard { get; set; }
 
+        /// <summary>The scenes' boxes (2026-10-16), none by default.</summary>
+        public IReadOnlyList<WebHomeSceneGroup> SceneGroups { get; set; } = [];
+
+        public List<string> Scenes { get; } = [];
+
         public WebHome Read() => new("live", null, Controls,
             [
                 new WebHomeTile("entity:light.desk", "💡", "Desk", "", "", Controls ? "call" : "none", null, "on", "#ffcc00", 0, true),
                 new WebHomeTile("entity:lock.front", "🔒", "Front Door", "", "", Controls ? "confirm" : "none", null, "off", null, 1, true),
             ],
-            [], VideoCard, new WebHomePc(12, 50, null, null, null, null), new WebHomeModel("m", "host", 8000, false, false, null), new WebPulse(false, 0, null, "", "tag"), WebUiText.HomeWords);
+            SceneGroups, VideoCard, new WebHomePc(12, 50, null, null, null, null), new WebHomeModel("m", "host", 8000, false, false, null), new WebPulse(false, 0, null, "", "tag"), WebUiText.HomeWords);
 
         public WebHomeSheet? Sheet(string reference) =>
             new(reference, "Desk", "off", [new WebHomeSheetRow("light.desk", "💡", "Desk", "off", [new WebHomeAction(0, "Toggle", false)])]);
@@ -187,7 +192,11 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
 
         public WebReply Act(WebHomeActRequest request, IPAddress? remote) => WebReply.Ok;
 
-        public WebReply Scene(WebHomeSceneRequest request, IPAddress? remote) => WebReply.Ok;
+        public WebReply Scene(WebHomeSceneRequest request, IPAddress? remote)
+        {
+            Scenes.Add(request.Id ?? "");
+            return WebReply.Ok;
+        }
 
         public Task<WebReply> SayAsync(WebHomeSayRequest request, IPAddress? remote, CancellationToken cancellationToken) => Task.FromResult(WebReply.Ok);
 
@@ -220,6 +229,21 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
         await page.EvalAsync("history.back()");
         await page.WaitAsync("document.getElementById('sheet-back').classList.contains('hidden')", "Back closing the sheet");
         Assert.Equal(2, (await page.EvalAsync("document.querySelectorAll('.meter').length")).GetInt32());   // CPU and RAM; the GPU's unread
+
+        // Each PC meter is a row of label, bar and value (2026-10-16: the Usage card's global .meter squeezed them into 8 px pills, labels
+        // clipped, and the count above stayed green): measured in the browser.
+        string rows = await page.TextAsync("JSON.stringify([...document.querySelectorAll('#pc .meter')].map(r => {"
+            + " const l = r.querySelector('.label'), v = r.querySelector('.value'), b = r.querySelector('.bar');"
+            + " return [r.getBoundingClientRect().height, l.clientHeight, l.scrollHeight, v.clientHeight, v.scrollHeight, b.getBoundingClientRect().height, r.clientHeight, r.scrollHeight]; }))");
+        foreach (var row in JsonDocument.Parse(rows).RootElement.EnumerateArray())
+        {
+            double[] m = [.. row.EnumerateArray().Select(x => x.GetDouble())];
+            Assert.True(m[0] >= 16, "a meter row " + m[0] + " px tall, a pill");
+            Assert.True(m[1] > 0 && m[2] <= m[1], "its label clipped: " + m[2] + " in " + m[1]);
+            Assert.True(m[3] > 0 && m[4] <= m[3], "its value clipped: " + m[4] + " in " + m[3]);
+            Assert.Equal(8, m[5], 0.5);
+            Assert.True(m[7] <= m[6], "the row clips its content: " + m[7] + " in " + m[6]);
+        }
     }
 
     /// <summary>Home's video card under YouTube open links in (2026-10-16): a video waiting for its tab draws no remote, its meta naming where it plays.</summary>
@@ -242,6 +266,50 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
         await page.WaitAsync("document.querySelectorAll('#video .remote').length === 1", "the remote for a playing video");
     }
 
+    /// <summary>
+    /// The scenes in a box per room (2026-10-16, the user's ask): drawn in the server's order, a home bar room's box open and another's folded, a
+    /// button labeled without its room and titled with its whole name, posting its id; a fold the user toggles kept through a redraw and a reload.
+    /// </summary>
+    [WindowsFact]
+    public async Task Home_TheScenes_AreBoxesPerRoom_TheBarsOpen_AndAToggledFoldIsKept()
+    {
+        var home = new Home
+        {
+            SceneGroups =
+            [
+                new WebHomeSceneGroup("den", "Den", true, [new WebHomeScene("scene.den_relax", "Den Relax", "Relax")]),
+                new WebHomeSceneGroup("bed", "Bedroom", false, [new WebHomeScene("scene.bed_candle", "Bedroom Candle", "Candle"), new WebHomeScene("scene.bed_night", "Bedroom Night", "Night")]),
+                new WebHomeSceneGroup(WebHomeView.NoAreaKey, "No area", false, [new WebHomeScene("scene.party", "Party", "Party")]),
+            ],
+        };
+        _backend.Home = home;
+        if (await SignedInAsync("/home") is not { } page)
+        {
+            return;
+        }
+
+        await page.WaitAsync("document.querySelectorAll('.scene-group').length === 3", "the three boxes");
+        Assert.Equal("[\"den\",\"bed\",\"none\"]", await page.TextAsync("JSON.stringify([...document.querySelectorAll('.scene-group')].map(g => g.dataset.key))"));
+        Assert.Equal("[true,false,false]", await page.TextAsync("JSON.stringify([...document.querySelectorAll('.scene-group')].map(g => g.open))"));
+        Assert.Equal("Relax", await page.TextAsync("document.querySelector('.scene-group button').textContent"));
+        Assert.Equal("Den Relax", await page.TextAsync("document.querySelector('.scene-group button').title"));
+        Assert.Equal("Den Relax", await page.TextAsync("document.querySelector('.scene-group button').getAttribute('aria-label')"));
+
+        await page.EvalAsync("document.querySelector('.scene-group button').click()");
+        await WaitForAsync(() => home.Scenes.Contains("scene.den_relax"));
+
+        // Fold Den, open Bedroom; a changed read (the controls going off) rebuilds the boxes and keeps both, the buttons disabled.
+        await page.EvalAsync("(() => { const g = document.querySelectorAll('.scene-group'); g[0].open = false; g[1].open = true; })()");
+        await Task.Delay(100);
+        home.Controls = false;
+        await page.WaitAsync("document.querySelector('.scene-group button').disabled", "the rebuilt boxes, disabled", 10);
+        Assert.Equal("[false,true,false]", await page.TextAsync("JSON.stringify([...document.querySelectorAll('.scene-group')].map(g => g.open))"));
+
+        await page.GoAsync(Root + "home");
+        await page.WaitAsync("document.querySelectorAll('.scene-group').length === 3", "the boxes after a reload");
+        Assert.Equal("[false,true,false]", await page.TextAsync("JSON.stringify([...document.querySelectorAll('.scene-group')].map(g => g.open))"));
+    }
+
     // ── Common ──────────────────────────────────────────────────────────────
 
     [WindowsFact]
@@ -259,6 +327,23 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
         _backend.PulseNow = new WebPulse(true, 0, null, "synthwave", "tag");
         await page.WaitAsync("document.getElementById('theme-css').getAttribute('href') === '/theme.css?v=synthwave'", "the theme's sheet re-linked");
         Assert.True((await page.EvalAsync("document.getElementById('chat-link').classList.contains('busy')")).GetBoolean());
+    }
+
+    /// <summary>Neon.post's keepalive (later on 2026-10-16: a YouTube tab saying it is hidden as it goes) reaches fetch; without it, none.</summary>
+    [WindowsFact]
+    public async Task Post_PassesKeepaliveToFetch()
+    {
+        if (await SignedInAsync("/shopping") is not { } page)
+        {
+            return;
+        }
+
+        await page.WaitAsync("typeof Neon !== 'undefined'", "the shared script");
+        await page.EvalAsync("window.__ka = []; (() => { const f = window.fetch; window.fetch = (u, o) => { window.__ka.push(!!(o && o.keepalive)); return f(u, o); }; })()");
+        await page.EvalAsync("Neon.post('/api/stop', {}, { keepalive: true })");
+        await page.EvalAsync("Neon.post('/api/stop', {})");
+        await page.WaitAsync("window.__ka.length >= 2", "both posts");
+        Assert.Equal("[true,false]", await page.TextAsync("JSON.stringify(window.__ka.slice(0, 2))"));
     }
 
     [WindowsFact]

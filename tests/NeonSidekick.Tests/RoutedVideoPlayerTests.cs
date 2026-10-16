@@ -242,6 +242,21 @@ public class RoutedVideoPlayerTests
         await router.PendingClose;
     }
 
+    /// <summary>A Resume on the tab is a play there (later on 2026-10-16): a browser hand-off made before it no longer names where the video is.</summary>
+    [Fact]
+    public async Task TheWebPlayersTakeover_ClearsAHandoff()
+    {
+        var router = Router();
+        router.Handoff(new VideoHandoff(YouTubeIds.WatchUrl(Other), YouTubeOpenLinksInKind.DefaultBrowser, Other, null));
+        Assert.NotNull(router.LastHandoff);
+
+        _web.RaiseTookOver();
+        await router.PendingClose;
+
+        Assert.Null(router.LastHandoff);
+        Assert.Equal(VideoSink.Web, router.Active);
+    }
+
     [Fact]
     public async Task TheWebPlayersTakeover_SwitchesToWeb_ALateTickFromAClosedPlayer_SwitchesNothing()
     {

@@ -26,7 +26,7 @@ public static class WebUiAssets
     /// <summary>The page a browser without the cookie gets.</summary>
     public const string SignInPage = "signin.html";
 
-    /// <summary>The YouTube tab (2026-10-16), shown while <i>YouTube open links in</i> is <c>webui-window</c>.</summary>
+    /// <summary>The YouTube tab (2026-10-16), shown while <i>Web UI YouTube controls</i> is on.</summary>
     public const string YouTubePage = "youtube.html";
 
     /// <summary>The player both video pages share (2026-10-16, <c>assets\youtube\player-core.js</c>, one embed read by both).</summary>

@@ -1066,14 +1066,14 @@ public sealed partial class WebUiTests : IDisposable
         Assert.True(App.SettingsMenu.IsToggle(App.SettingsField.WebUi));
         Assert.Equal("must be a port from 1024 to 65535", App.SettingsMenu.WebUiPortRangeError);
         Assert.Equal([App.SettingsField.WebUi, App.SettingsField.WebUiPort, App.SettingsField.WebUiReach, App.SettingsField.WebUiChatControls, App.SettingsField.WebUiCommands,
-            App.SettingsField.WebUiConnectionDetails, App.SettingsField.WebUiHomeControls, App.SettingsField.WebUiShoppingControls, App.SettingsField.WebUiProfileTheme],
+            App.SettingsField.WebUiConnectionDetails, App.SettingsField.WebUiHomeControls, App.SettingsField.WebUiShoppingControls, App.SettingsField.WebUiYouTubeControls, App.SettingsField.WebUiProfileTheme],
             App.SettingsMenu.TabFields[(int)App.SettingsTab.WebUi]);
         // The page's rows (later on 2026-10-14; the Home tab's and the theme's 2026-10-15; the Chat and Shopping tabs' later that day) are read at each
         // request: none restarts the server or is refused under a reply.
         foreach (var field in new[]
         {
             App.SettingsField.WebUiChatControls, App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails, App.SettingsField.WebUiHomeControls,
-            App.SettingsField.WebUiShoppingControls, App.SettingsField.WebUiProfileTheme,
+            App.SettingsField.WebUiShoppingControls, App.SettingsField.WebUiYouTubeControls, App.SettingsField.WebUiProfileTheme,
         })
         {
             Assert.False(App.SettingsMenu.IsWebUiField(field));
@@ -1084,6 +1084,7 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Equal((false, true), (new Settings.AppSettingsData().WebUiCommands, new Settings.AppSettingsData().WebUiConnectionDetails));
         // Later on 2026-10-15, the user's calls: Chat on, Home and Shopping off.
         Assert.Equal((true, false, false), (new Settings.AppSettingsData().WebUiChatControls, new Settings.AppSettingsData().WebUiHomeControls, new Settings.AppSettingsData().WebUiShoppingControls));
+        Assert.False(new Settings.AppSettingsData().WebUiYouTubeControls);   // 2026-10-16, the user's call: off, like Home and Shopping
         Assert.Equal("Web UI", App.SettingsMenu.TabTitles[(int)App.SettingsTab.WebUi]);
         var defaults = new Settings.AppSettingsData();
         Assert.Equal((false, 8765, "lan", ""), (defaults.WebUi, defaults.WebUiPort, defaults.WebUiReach, defaults.WebUiToken));

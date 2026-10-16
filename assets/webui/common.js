@@ -3,7 +3,9 @@
 // hidden, the self-reload after an upgrade (once per tag), the Chat badge on the other tabs and the theme's re-link. Loaded first, before the
 // page's own script; nothing here runs on its own but the theme's and the badge's wiring the page asks for. Later on 2026-10-15: the tabs on
 // (a tab exists only while its controls are on at the PC), so the nav hides the others and a page whose tab went off goes to /. 2026-10-16: the
-// YouTube tab (on only while the PC says so, YouTube open links in webui-window), and the jump to it while a video waits (watch).
+// YouTube tab (on only while the PC says so: Web UI YouTube controls since later that day), and the jump to it while a video waits (watch).
+// Later on 2026-10-16: post's keepalive (a page leaving still says so) and the two-tap buttons (armTwice), shared by Chat's sheet and the
+// YouTube tab's saved list.
 'use strict';
 
 const Neon = (() => {
@@ -32,13 +34,15 @@ const Neon = (() => {
   }
 
   // A JSON post the app takes from its own page only. The answer: ok, the status, the app's sentence, and the body for what else it carries.
-  async function post(path, body) {
+  // options.keepalive (later on 2026-10-16): the post outlives the page (a YouTube tab saying it is hidden as it goes).
+  async function post(path, body, options) {
     try {
       const r = await fetch(path, {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-Neon': '1' },
         body: JSON.stringify(body || {}),
+        keepalive: !!(options && options.keepalive),
       });
       let j = null;
       try { j = await r.json(); } catch { /* none */ }
@@ -69,6 +73,45 @@ const Neon = (() => {
       connected(false);
       return { ok: false, status: 0, json: null };
     }
+  }
+
+  // ── Two-tap buttons (later on 2026-10-16, moved here from Chat's sheet) ──
+  // A 🗑️ or clear all: the first tap arms it (red, its label says so) for 3 s, the second acts. One armed at a time on the page.
+  let armedNow = null;   // { button, timer, paint }
+
+  function disarm() {
+    if (!armedNow) return;
+    clearTimeout(armedNow.timer);
+    const was = armedNow;
+    armedNow = null;
+    was.paint(false);
+  }
+
+  function armed() { return !!armedNow; }
+
+  function armTwice(button, paint, act) {
+    paint(false);
+    button.addEventListener('click', ev => {
+      ev.stopPropagation();
+      if (armedNow && armedNow.button === button) {
+        disarm();
+        act();
+        return;
+      }
+      disarm();
+      armedNow = { button, paint, timer: setTimeout(disarm, 3000) };
+      paint(true);
+    });
+  }
+
+  // The usual paint: the armed class, and the label (aria-label and title) from label(on).
+  function paintArmed(button, label) {
+    return on => {
+      button.classList.toggle('armed', on);
+      const text = label(on);
+      button.setAttribute('aria-label', text);
+      button.title = text;
+    };
   }
 
   // ── The tabs (later on 2026-10-15) ──
@@ -243,5 +286,5 @@ const Neon = (() => {
     lastAsks = waiting;
   }
 
-  return Object.assign(api, { el, say, post, get, connected, poll, staleAssets, theme, pulse, tabs, leave, keyboardInset, watch, watchBlocked: null });
+  return Object.assign(api, { el, say, post, get, connected, poll, staleAssets, theme, pulse, tabs, leave, keyboardInset, watch, watchBlocked: null, armTwice, paintArmed, disarm, armed });
 })();

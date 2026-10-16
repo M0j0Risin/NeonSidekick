@@ -77,7 +77,7 @@ public sealed class YouTubePlayTool : AIFunction
     public static string DescriptionFor(YouTubeOpenLinksInKind target) => target switch
     {
         YouTubeOpenLinksInKind.WebUiWindow =>
-            "Plays a YouTube video, with sound, in the Web UI's YouTube tab on the user's phone or browser (one player: a new video replaces the one playing; with no tab open it waits for one). " +
+            "Plays a YouTube video, with sound, in the Web UI's YouTube tab on the user's phone or browser (one player: a new video replaces the one playing, on the tab shown most recently; with no tab in view it waits for one). " +
             Give + Then + Saved,
         YouTubeOpenLinksInKind.BrowserWindow =>
             "Opens a YouTube video in the app's Browser window on the user's screen. Once it opens it is out of your control: " + YouTubeControlTool.ToolName + " and " + YouTubeStatusTool.ToolName + " can't see or drive it. " +

@@ -128,6 +128,24 @@ public interface IWebUiBackend
     /// </summary>
     IWebVideo? Video => null;
 
+    /// <summary>The YouTube tab's saved list (later on 2026-10-16), or null where there is none; reads only (a missing title's lookup may start).</summary>
+    WebSavedVideos? SavedVideos() => null;
+
+    /// <summary>A saved video played on the tapping page (later on 2026-10-16): that page takes the player, the video resumes where it was left.</summary>
+    WebReply PlaySaved(WebSavedPlay request, IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>A saved video removed (later on 2026-10-16), the page's two taps having been the yes.</summary>
+    WebReply RemoveSaved(WebSavedId request, IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>Every saved video removed (later on 2026-10-16), the page's two taps having been the yes.</summary>
+    WebReply ClearSaved(IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>A saved video moved up, down, to the top or the bottom (later on 2026-10-16).</summary>
+    WebReply MoveSaved(WebSavedMove request, IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>The video playing saved (later on 2026-10-16, the ☆).</summary>
+    WebReply SaveCurrent(IPAddress? remote) => new(WebOutcome.NotFound);
+
     /// <summary>An entry whole while the transcript holds it (2026-10-15: a page opening what its snapshot deferred), or null.</summary>
     WebEntry? Entry(long seq);
 

@@ -169,7 +169,7 @@ internal sealed partial class ChatScreen
         var parts = UsageText.HintParts(_session.Usage, _session.ContextLength);
         var model = new WebHomeModel(ModelLabel(_session.Endpoint?.ModelId), WebHomeView.ServerOf(_session.Endpoint?.BaseUrl), _session.ContextLength?.Tokens, loading, working,
             parts is null ? null : new WebUsage(parts.Tokens, parts.Percent, parts.Speed));
-        return new WebHome(status, text, effective.WebUiHomeControls, tiles, WebHomeView.Scenes(live), WebHomeView.Video(_videoPlayer?.Snapshot),
+        return new WebHome(status, text, effective.WebUiHomeControls, tiles, WebHomeView.SceneGroups(live, items), WebHomeView.Video(_videoPlayer?.Snapshot),
             WebHomeView.Pc(_perf.Read().Latest), model, _webUi.Pulse(), WebUiText.HomeWords);
     }
 

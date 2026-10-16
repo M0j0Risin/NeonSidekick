@@ -59,7 +59,7 @@ internal sealed partial class ChatScreen
     private WebCommandSettings WebCommandSettingsNow()
     {
         var effective = _effective();
-        return new WebCommandSettings(effective.WebUiCommands, effective.FileTools, effective.ObsidianTools, effective.WebUiShoppingControls);
+        return new WebCommandSettings(effective.WebUiCommands, effective.FileTools, effective.ObsidianTools, effective.WebUiShoppingControls, WebTabsNow().YouTube);
     }
 
     /// <summary>

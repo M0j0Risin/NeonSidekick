@@ -51,7 +51,9 @@ public enum YouTubeSaveOutcome
 /// <c>BenchHistory</c> shape: missing is empty, unreadable is empty with a warning (the next save writes over it), a save is a temp
 /// file moved over the old one, and a failed save is logged and reported, never thrown. Read on each use, never kept in memory:
 /// the file is small, the resume reads it only when it writes (at most every 15 s while a video plays), and a copy kept by its time
-/// went stale under two instances writing within the same tick of the file clock (found by the tests, 2026-10-07).
+/// went stale under two instances writing within the same tick of the file clock (found by the tests, 2026-10-07). One lock for every
+/// instance (later on 2026-10-16, the <c>SavedPrompts</c> shape: the Web UI's saved list changes the file from Kestrel threads while the
+/// screen and the window's resume do), so two instances on one file never interleave a read-modify-write.
 /// </summary>
 public sealed class YouTubeLibrary
 {
@@ -68,7 +70,7 @@ public sealed class YouTubeLibrary
 
     private const string Category = "YouTube";
 
-    private readonly Lock _gate = new();
+    private static readonly Lock s_gate = new();
     private readonly string _filePath;
     private readonly TimeProvider _time;
 
@@ -92,7 +94,7 @@ public sealed class YouTubeLibrary
     /// <summary>The saved videos, in the order they were saved.</summary>
     public IReadOnlyList<YouTubeSaved> List()
     {
-        lock (_gate)
+        lock (s_gate)
         {
             return Load();
         }
@@ -101,7 +103,7 @@ public sealed class YouTubeLibrary
     /// <summary>The saved video <paramref name="id"/>, or null when it is not saved.</summary>
     public YouTubeSaved? Find(string id)
     {
-        lock (_gate)
+        lock (s_gate)
         {
             return Load().Find(v => v.Id == id);
         }
@@ -137,7 +139,7 @@ public sealed class YouTubeLibrary
     public YouTubeSaveOutcome Add(string id, string? title = null, string? author = null, double duration = 0, double position = 0)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        lock (_gate)
+        lock (s_gate)
         {
             var videos = Load();
             int at = videos.FindIndex(v => v.Id == id);
@@ -170,7 +172,7 @@ public sealed class YouTubeLibrary
     /// <summary>The saved video <paramref name="id"/> taken off the list; false when it was not saved or the file could not be written.</summary>
     public bool Remove(string id)
     {
-        lock (_gate)
+        lock (s_gate)
         {
             var videos = Load();
             return videos.RemoveAll(v => v.Id == id) > 0 && Save(videos);
@@ -183,7 +185,7 @@ public sealed class YouTubeLibrary
     /// </summary>
     public int? Clear()
     {
-        lock (_gate)
+        lock (s_gate)
         {
             int count = Load().Count;
             return count == 0 ? 0 : Save([]) ? count : null;
@@ -194,7 +196,7 @@ public sealed class YouTubeLibrary
     public bool Update(string id, Func<YouTubeSaved, YouTubeSaved> change)
     {
         ArgumentNullException.ThrowIfNull(change);
-        lock (_gate)
+        lock (s_gate)
         {
             var videos = Load();
             int at = videos.FindIndex(v => v.Id == id);
@@ -223,7 +225,7 @@ public sealed class YouTubeLibrary
     /// </summary>
     public bool Move(string id, int delta)
     {
-        lock (_gate)
+        lock (s_gate)
         {
             var videos = Load();
             int at = videos.FindIndex(v => v.Id == id);

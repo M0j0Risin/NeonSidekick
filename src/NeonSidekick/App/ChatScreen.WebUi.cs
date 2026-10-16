@@ -82,6 +82,13 @@ internal sealed partial class ChatScreen
             MemoryDelete = WebDeleteMemory,
             HistoryNow = WebHistoryNow,
             HistoryClear = WebClearHistory,
+            // The YouTube tab's saved list (later on 2026-10-16): ChatScreen.WebSaved.cs; none without a web player.
+            SavedVideosNow = () => _webVideo is null ? null : WebSavedNow(),
+            SavedPlay = WebPlaySaved,
+            SavedRemove = WebRemoveSaved,
+            SavedClear = WebClearSaved,
+            SavedMove = WebMoveSaved,
+            SavedSave = WebSaveCurrent,
             // A line the page sent joins the message history as the page sends it, as Enter does a typed one (the history's lock allows it).
             Accepted = text => _input.Remember(text),
         };
@@ -601,19 +608,21 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The Web UI's tabs on now (later on 2026-10-15, the user's call: a tab exists only while its controls are on): <i>Web UI chat controls</i>,
-    /// <i>home controls</i>, <i>shopping controls</i>. Any thread.
+    /// <i>home controls</i>, <i>shopping controls</i>, and (2026-10-16) <i>YouTube controls</i> where there is a web player, whatever
+    /// <i>YouTube open links in</i> says. Any thread.
     /// </summary>
     private WebTabs WebTabsNow()
     {
         var effective = _effective();
         return new WebTabs(effective.WebUiChatControls, effective.WebUiHomeControls, effective.WebUiShoppingControls,
-            YouTube: _webVideo is not null && YouTube.YouTubeOpenLinksIn.Resolve(effective) == YouTube.YouTubeOpenLinksInKind.WebUiWindow);
+            YouTube: _webVideo is not null && effective.WebUiYouTubeControls);
     }
 
     /// <summary>
     /// The YouTube tab's chores on the session's 1-second tick (2026-10-16): a request held too long dropped, and the tab's video stopped
-    /// (its place saved) once <i>YouTube open links in</i> is no longer <c>webui-window</c> or the Web UI isn't serving. A playing PC window is
-    /// left alone the other way round, until the next play.
+    /// (its place saved) once the tab is off (<i>Web UI YouTube controls</i> off, or the Web UI not serving). Not on <i>YouTube open links in</i>
+    /// alone: the tab plays its saved list under <c>youtube-window</c> too, and a play in the video window closes the tab's through the router's
+    /// switch. A playing PC window is left alone the other way round, until the next play.
     /// </summary>
     private void WebVideoTick()
     {
@@ -623,7 +632,7 @@ internal sealed partial class ChatScreen
         }
 
         web.Tick();
-        if (YouTube.YouTubeOpenLinksIn.Resolve(_effective()) != YouTube.YouTubeOpenLinksInKind.WebUiWindow || !_webUiController.Serving)
+        if (!_effective().WebUiYouTubeControls || !_webUiController.Serving)
         {
             web.Forget();
         }

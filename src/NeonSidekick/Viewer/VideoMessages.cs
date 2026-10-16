@@ -195,6 +195,29 @@ public static class VideoMessages
         _ => VideoState.Unstarted,
     };
 
+    /// <summary>
+    /// A <c>page</c> message's <c>load</c>, the Web UI's script nonce (later on 2026-10-16, Fix 3: the player tells the script a video was
+    /// just given to from a reload); null for another message, one without it (the first script) or one that doesn't parse. Never throws.
+    /// </summary>
+    public static string? PageLoad(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(message);
+            var root = doc.RootElement;
+            return root.ValueKind == JsonValueKind.Object && Text(root, "ev") == "page" ? Text(root, "load") : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static string? Text(JsonElement root, string name) =>
         root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 

@@ -115,13 +115,100 @@ public sealed class WebHomeViewTests
     }
 
     [Fact]
-    public void TheScenes_AreTheVisibleOnes_ByAreaThenName_NamedByTheirStates()
+    public void TheScenes_AreTheVisibleOnes_InBoxes_NamedByTheirStates()
     {
         var live = Live(HaLiveStatus.Live, Entity("scene.movie", "2026-10-15", "{\"friendly_name\":\"Movie night\"}"));
-        var scenes = WebHomeView.Scenes(live);
-        Assert.Equal([("scene.movie", "Movie night"), ("scene.bedtime", "Bedtime")], scenes.Select(s => (s.Id, s.Name)));
-        Assert.Empty(WebHomeView.Scenes(new HaLiveSnapshot(HaLiveStatus.Connecting, new Dictionary<string, HaLiveEntity>(), null, 0, null)));
+        var groups = WebHomeView.SceneGroups(live, []);
+        Assert.Equal([("den", "Den"), (WebHomeView.NoAreaKey, HomeBarText.NoArea)], groups.Select(g => (g.Key, g.Name)));
+        Assert.Equal([("scene.movie", "Movie night")], groups[0].Scenes.Select(s => (s.Id, s.Name)));
+        Assert.Equal([("scene.bedtime", "Bedtime")], groups[1].Scenes.Select(s => (s.Id, s.Name)));   // the hidden one left out
+        Assert.Empty(WebHomeView.SceneGroups(new HaLiveSnapshot(HaLiveStatus.Connecting, new Dictionary<string, HaLiveEntity>(), null, 0, null), []));
     }
+
+    /// <summary>
+    /// The scenes' boxes (2026-10-16): by area (the entity's own, else its device's), then a device's name for a scene with no area (a Hue
+    /// zone), joining the area of that name; the home bar's rooms first in its order, then the catalog's (by floor, then name), the devices' by
+    /// name, no area last.
+    /// </summary>
+    private static HaCatalog SceneCatalog() => new(
+        [new HaFloor("up", "Upstairs", 1), new HaFloor("down", "Downstairs", 0)],
+        [new HaAreaEntry("bed", "Bedroom", "up"), new HaAreaEntry("den", "Den", "down"), new HaAreaEntry("bath", "Bathroom", "up")],
+        [
+            new HaDevice("hue-den", "Den", null),            // a Hue room's device left without its area: joins Den by name
+            new HaDevice("hue-zone", "Front Porch", null),   // a zone: its own box
+            new HaDevice("hue-bath", "Bath Hue", "bath"),    // its area through the device
+            new HaDevice("hue-up", "Upstairs zone", null),
+        ],
+        [
+            new HaRegistryEntity("scene.den_relax", null, "den", null, false, false, null, []),
+            new HaRegistryEntity("scene.den_bright", "hue-den", null, null, false, false, null, []),
+            new HaRegistryEntity("scene.den", null, "den", null, false, false, null, []),
+            new HaRegistryEntity("scene.bed_candle", null, "bed", null, false, false, null, []),
+            new HaRegistryEntity("scene.bath_time", "hue-bath", null, null, false, false, null, []),
+            new HaRegistryEntity("scene.porch_candle", "hue-zone", null, null, false, false, null, []),
+            new HaRegistryEntity("scene.up_night", "hue-up", null, null, false, false, null, []),
+            new HaRegistryEntity("scene.party", null, null, null, false, false, null, []),
+        ],
+        [],
+        []);
+
+    private static HaLiveSnapshot SceneLive(HaCatalog catalog) => new(HaLiveStatus.Live, new[]
+    {
+        Entity("scene.den_relax", "x", "{\"friendly_name\":\"Den Relax\"}"),
+        Entity("scene.den_bright", "x", "{\"friendly_name\":\"Den Bright\"}"),
+        Entity("scene.den", "x", "{\"friendly_name\":\"Den\"}"),
+        Entity("scene.bed_candle", "x", "{\"friendly_name\":\"Bedroom Candle\"}"),
+        Entity("scene.bath_time", "x", "{\"friendly_name\":\"Bathroom Bathtime\"}"),
+        Entity("scene.porch_candle", "x", "{\"friendly_name\":\"Front Porch Candle\"}"),
+        Entity("scene.up_night", "x", "{\"friendly_name\":\"Night\"}"),
+        Entity("scene.party", "x", "{\"friendly_name\":\"Party\"}"),
+    }.ToDictionary(e => e.Id, StringComparer.Ordinal), catalog, 1, null);
+
+    [Fact]
+    public void TheScenesBoxes_GoByArea_ThenDevice_ThenNone_TheBarsRoomsFirst()
+    {
+        var groups = WebHomeView.SceneGroups(SceneLive(SceneCatalog()), ["entity:light.x", "area:bath", "divider:1", "area:den"]);
+        Assert.Equal(["bath", "den", "bed", "device:hue-zone", "device:hue-up", WebHomeView.NoAreaKey], groups.Select(g => g.Key));
+        Assert.Equal(["Bathroom", "Den", "Bedroom", "Front Porch", "Upstairs zone", HomeBarText.NoArea], groups.Select(g => g.Name));
+        Assert.Equal([true, true, false, false, false, false], groups.Select(g => g.OnBar));
+
+        // Den's three: the one hung on the Den-named device joined it; by name; labels without "Den " in front, a name that is only "Den" whole.
+        var den = groups[1].Scenes;
+        Assert.Equal(["scene.den", "scene.den_bright", "scene.den_relax"], den.Select(s => s.Id));
+        Assert.Equal(["Den", "Bright", "Relax"], den.Select(s => s.Label));
+        Assert.Equal("Den Relax", den[2].Name);   // the whole name stays for the title
+
+        Assert.Equal("Bathtime", groups[0].Scenes[0].Label);           // "Bathroom Bathtime" in Bathroom
+        Assert.Equal("Candle", groups[3].Scenes[0].Label);             // "Front Porch Candle" in Front Porch
+        Assert.Equal("Night", groups[4].Scenes[0].Label);              // doesn't start with its box's name: whole
+        Assert.Equal("Party", groups[5].Scenes[0].Label);
+
+        // With no room on the bar: the catalog's order (Downstairs first, then Upstairs by name).
+        Assert.Equal(["den", "bath", "bed"], WebHomeView.SceneGroups(SceneLive(SceneCatalog()), []).Take(3).Select(g => g.Key));
+    }
+
+    [Fact]
+    public void TheScenesBoxes_OfARestOnlyCatalog_GoByTheTemplatesAreas_OrNone()
+    {
+        var snapshot = new HaSnapshot(
+            [new HaEntity("scene.den_relax", "Den Relax", "x", null, default, null), new HaEntity("scene.party", "Party", "x", null, default, null)],
+            [new HaArea("den", "Den", ["scene.den_relax"])],
+            DateTimeOffset.UnixEpoch);
+        var catalog = HaCatalog.FromSnapshot(snapshot);
+        var groups = WebHomeView.SceneGroups(new HaLiveSnapshot(HaLiveStatus.Live, new Dictionary<string, HaLiveEntity>(), catalog, 1, null), []);
+        Assert.Equal(["den", WebHomeView.NoAreaKey], groups.Select(g => g.Key));
+        Assert.Equal("Relax", groups[0].Scenes[0].Label);
+    }
+
+    [Theory]
+    [InlineData("Den Relax", "Den", "Relax")]
+    [InlineData("den relax", "Den", "relax")]
+    [InlineData("Den", "Den", "Den")]
+    [InlineData("Den ", "Den", "Den ")]
+    [InlineData("Denver Lights", "Den", "Denver Lights")]
+    [InlineData("Relax", "Den", "Relax")]
+    public void ASceneLabel_TakesItsBoxsNameOffItsFront_OnlyWithSomethingLeft(string name, string group, string label) =>
+        Assert.Equal(label, WebHomeView.LabelIn(name, group));
 
     [Fact]
     public void ThePcCard_IsWholePercents_AndNoneWithNothingRead()

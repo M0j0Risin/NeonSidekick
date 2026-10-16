@@ -382,6 +382,63 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// <summary>The YouTube tab's player (2026-10-16, the screen's), or null with none.</summary>
     public IWebVideo? Video { get; set; }
 
+    // ── The YouTube tab's saved list (later on 2026-10-16): the screen's hooks, the prompts sheet's shape; a null hook is a 404 ──────────
+
+    /// <summary>The saved list now (the screen's, on a Kestrel thread); null: none.</summary>
+    public Func<WebSavedVideos?>? SavedVideosNow { get; set; }
+
+    /// <summary>The screen's play of a saved video on the tapping page.</summary>
+    public Func<WebSavedPlay, IPAddress?, WebReply>? SavedPlay { get; set; }
+
+    /// <summary>The screen's remove of a saved video.</summary>
+    public Func<WebSavedId, IPAddress?, WebReply>? SavedRemove { get; set; }
+
+    /// <summary>The screen's clear of the saved videos.</summary>
+    public Func<IPAddress?, WebReply>? SavedClear { get; set; }
+
+    /// <summary>The screen's move of a saved video.</summary>
+    public Func<WebSavedMove, IPAddress?, WebReply>? SavedMove { get; set; }
+
+    /// <summary>The screen's save of the playing video.</summary>
+    public Func<IPAddress?, WebReply>? SavedSave { get; set; }
+
+    public WebSavedVideos? SavedVideos()
+    {
+        try
+        {
+            return SavedVideosNow?.Invoke();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            DiagnosticLog.Debug(Category, "Web UI: the saved videos could not be read: " + e.Message);
+            return null;
+        }
+    }
+
+    public WebReply PlaySaved(WebSavedPlay request, IPAddress? remote) => Saved(() => SavedPlay?.Invoke(request, remote));
+
+    public WebReply RemoveSaved(WebSavedId request, IPAddress? remote) => Saved(() => SavedRemove?.Invoke(request, remote));
+
+    public WebReply ClearSaved(IPAddress? remote) => Saved(() => SavedClear?.Invoke(remote));
+
+    public WebReply MoveSaved(WebSavedMove request, IPAddress? remote) => Saved(() => SavedMove?.Invoke(request, remote));
+
+    public WebReply SaveCurrent(IPAddress? remote) => Saved(() => SavedSave?.Invoke(remote));
+
+    // A saved list's change: the hook's reply, a 404 with no hook, the list's file failing a refusal with its reason.
+    private static WebReply Saved(Func<WebReply?> change)
+    {
+        try
+        {
+            return change() ?? new WebReply(WebOutcome.NotFound);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Debug(Category, "Web UI: the saved videos could not be changed: " + e.Message);
+            return new WebReply(WebOutcome.Refused, YouTube.YouTubeText.SaveFailed);
+        }
+    }
+
     /// <summary>
     /// What the Chat badge reads (2026-10-15): the state's busy and waiting, the asks open, the theme, the files' tag, and the tabs on; the
     /// YouTube tab and the banner's words while a video waits for it (2026-10-16), copied from the screen's state. Every pulse marks the read

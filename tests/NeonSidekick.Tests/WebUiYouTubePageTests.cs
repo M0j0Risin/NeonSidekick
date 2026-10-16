@@ -12,7 +12,7 @@ namespace NeonSidekick.Tests;
 /// from Chat and Shopping, the banner instead over a draft or a question, the page's own report, a player that never loads, Play here, a
 /// reload's Resume, and the Chat badge. Over a real <see cref="WebVideoPlayer"/>. No browser installed: each test returns.
 /// </summary>
-public sealed class WebUiYouTubePageTests : IAsyncLifetime
+public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
 {
     private readonly FakeWebUiBackend _backend = new() { VideoPlayer = new WebVideoPlayer(apiWaitMs: 1500) };
     private readonly string _token = WebUiAuth.NewToken();
@@ -95,7 +95,7 @@ public sealed class WebUiYouTubePageTests : IAsyncLifetime
         }
 
         await page.WaitAsync("document.getElementById('notabs') !== null", "the page that says none is on");
-        Assert.Contains("YouTube open links in", await page.TextAsync("document.getElementById('notabs').textContent"), StringComparison.Ordinal);
+        Assert.Contains("Web UI YouTube controls", await page.TextAsync("document.getElementById('notabs').textContent"), StringComparison.Ordinal);
 
         _backend.TabsOn = new WebTabs(false, false, false, YouTube: true);
         _backend.PulseNow = new WebPulse(false, 0, null, "", "tag", false, false, false, YouTubeTab: true);
@@ -176,9 +176,14 @@ public sealed class WebUiYouTubePageTests : IAsyncLifetime
     }
 
     [WindowsFact]
-    public async Task ASecondPage_ShowsPlayHere_AndItsTapClaimsPlayback()
+    public async Task ASecondPage_ShowsPlayHere_AndItsTapClaimsPlayback_TheVideoWithIt()
     {
-        using var other = Player.Attach(new string('z', 22), new string('9', 22), false, null, () => { });   // another page plays
+        string otherPage = new('z', 22);
+        using var other = Player.Attach(otherPage, new string('9', 22), false, null, () => { });   // another page plays
+        Player.Play(new VideoRequest("aqz-KE-bpKQ"));
+        Player.Report(otherPage, "{\"ev\":\"state\",\"id\":\"aqz-KE-bpKQ\",\"title\":\"Big Buck Bunny\",\"state\":1,\"position\":100,\"duration\":635}", null);
+        int took = 0;
+        Player.TookOver += () => Interlocked.Increment(ref took);
         if (await SignedInAsync("/youtube") is not { } page)
         {
             return;
@@ -188,9 +193,14 @@ public sealed class WebUiYouTubePageTests : IAsyncLifetime
         Assert.Equal(WebUiText.VideoWords.PlayHere, await page.TextAsync("document.getElementById('play-here').textContent"));
         Assert.Equal(WebUiText.VideoWords.Waiting, await page.TextAsync("document.getElementById('hint').textContent"));
 
+        // The hello's play runs the Resume: the page's own load at the place less the rewind (offline: spied, never YouTube).
+        await page.EvalAsync("window.__msgs = []; (() => { const o = core.onMessage; core.onMessage = m => { window.__msgs.push(m); o(m); }; })()");
         await page.EvalAsync("document.getElementById('play-here').click()");
         await page.WaitAsync("document.getElementById('play-here').classList.contains('hidden')", "the page plays now");
         Assert.Equal(await page.TextAsync("sessionStorage.getItem('neon.youtube.page')"), Player.Owner);
+        await page.WaitAsync("window.__msgs.some(m => m.cmd === 'load' && m.id === 'aqz-KE-bpKQ' && m.start === 97)", "the carried video resumed here");
+        SpinWait.SpinUntil(() => Volatile.Read(ref took) == 1, TimeSpan.FromSeconds(10));
+        Assert.Equal(1, Volatile.Read(ref took));
         var told = new List<string>();
         while (other.Events.TryRead(out var e))
         {

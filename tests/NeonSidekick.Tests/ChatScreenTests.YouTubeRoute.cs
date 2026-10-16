@@ -19,7 +19,8 @@ public partial class ChatScreenTests
 
     private static string PageOf(char c) => new(c, 22);
 
-    private void YouTubeRouteFixture(string target, bool webUi = false)
+    // youTubeTab: Web UI YouTube controls (2026-10-16), on with the Web UI unless a test says otherwise.
+    private void YouTubeRouteFixture(string target, bool webUi = false, bool? youTubeTab = null)
     {
         YouTubeFixture(key: false);
         _settings.Update(d =>
@@ -27,6 +28,7 @@ public partial class ChatScreenTests
             d.YouTubeOpenLinksIn = target;
             d.WebUi = webUi;
             d.WebUiReach = "local";
+            d.WebUiYouTubeControls = youTubeTab ?? webUi;
         });
         if (webUi)
         {
@@ -67,6 +69,59 @@ public partial class ChatScreenTests
         Assert.Contains("load", events);
     }
 
+    /// <summary>
+    /// The user's log (later on 2026-10-16): a tab in the background reconnected first and became the player, and the play went there unseen.
+    /// Now the tab in view plays, and the status the play waits for is that page's.
+    /// </summary>
+    [Fact]
+    public async Task YouTube_UnderWebUiWindow_APlayGoesToTheTabInView_NotAHiddenOneThatAttachedFirst()
+    {
+        YouTubeRouteFixture(YouTubeOpenLinksIn.WebUiWindow, webUi: true);
+        List<string> hiddenEvents = [];
+        List<string> shownEvents = [];
+        WebVideoAttachment? hidden = null;
+        WebVideoAttachment? shown = null;
+        var input = WhenIdle(
+            i =>
+            {
+                UntilServing();
+                var web = _running!.WebVideoForTests!;
+                hidden = web.Attach(PageOf('h'), PageOf('1'), null, visible: false, null, () => { });
+                shown = web.Attach(PageOf('v'), PageOf('2'), null, visible: true, null, () => { });
+                // The page in view answers the load, as its player would; a report from the hidden one would be refused.
+                _running.RoutedVideoForTests!.Changed += s =>
+                {
+                    if (s is { State: VideoState.Opening, Place: VideoPlace.WebTab, Held: null })
+                    {
+                        _ = Task.Run(() => web.Report(PageOf('v'), "{\"ev\":\"state\",\"id\":\"" + BunnyId + "\",\"state\":1,\"position\":1,\"duration\":635}", null));
+                    }
+                };
+                PushLine(i, "/youtube play " + BunnyId);
+            },
+            i =>
+            {
+                while (hidden!.Events.TryRead(out var e))
+                {
+                    hiddenEvents.Add(e.Name);
+                }
+
+                while (shown!.Events.TryRead(out var e))
+                {
+                    shownEvents.Add(e.Name);
+                }
+
+                PushLine(i, "/exit");
+            });
+
+        string output = await RunAsync(input);
+
+        Assert.Contains("load", shownEvents);
+        Assert.DoesNotContain("load", hiddenEvents);
+        Assert.Contains("taken", hiddenEvents);
+        Assert.Contains("  · Playing", output);
+        Assert.Equal(PageOf('v'), _running!.WebVideoForTests!.Owner);
+    }
+
     [Fact]
     public async Task YouTube_UnderWebUiWindow_WithTheWebUiOff_PlaysInTheWindow_WithANote()
     {
@@ -78,6 +133,80 @@ public partial class ChatScreenTests
 
         Assert.Equal(BunnyId, Assert.Single(_videoPlayer!.Plays).VideoId);
         Assert.Contains("  · " + YouTubeText.WebUiOffFellBack + "Playing ", output);
+    }
+
+    /// <summary>
+    /// <i>Web UI YouTube controls</i> off (2026-10-16, the user's ask): there is no tab, and <c>webui-window</c> plays in the video window,
+    /// saying why; the model's description names the window.
+    /// </summary>
+    [Fact]
+    public async Task YouTube_UnderWebUiWindow_WithTheControlsOff_HasNoTab_AndPlaysInTheWindow_WithItsNote()
+    {
+        YouTubeRouteFixture(YouTubeOpenLinksIn.WebUiWindow, webUi: true, youTubeTab: false);
+        bool? tab = null;
+        var input = WhenIdle(
+            i => { UntilServing(); tab = Web.Tabs().YouTube; PushLine(i, "/youtube play " + BunnyId); },
+            i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        Assert.False(tab);
+        Assert.Equal(BunnyId, Assert.Single(_videoPlayer!.Plays).VideoId);
+        Assert.Contains("  · " + YouTubeText.WebUiControlsOffFellBack + "Playing ", output);
+        Assert.Null(_running!.WebVideoForTests!.Snapshot);
+    }
+
+    /// <summary>
+    /// The tab with <i>YouTube open links in</i> left at <c>youtube-window</c> (2026-10-16, the user's call): the tab is on, while a play from
+    /// <c>/youtube</c> still goes to the video window.
+    /// </summary>
+    [Fact]
+    public async Task YouTube_UnderYouTubeWindow_WithTheControlsOn_HasTheTab_ButAPlayGoesToTheWindow()
+    {
+        YouTubeRouteFixture(YouTubeOpenLinksIn.YouTubeWindow, webUi: true, youTubeTab: true);
+        bool? tab = null;
+        var input = WhenIdle(
+            i => { UntilServing(); tab = Web.Tabs().YouTube; PushLine(i, "/youtube play " + BunnyId); },
+            i => PushLine(i, "/exit"));
+
+        await RunAsync(input);
+
+        Assert.True(tab);
+        Assert.Equal(BunnyId, Assert.Single(_videoPlayer!.Plays).VideoId);
+        Assert.Equal(VideoSink.Window, _running!.RoutedVideoForTests!.Active);
+    }
+
+    /// <summary>
+    /// The tick forgets the tab's video once the controls go off (2026-10-16), and no longer when only <i>YouTube open links in</i> leaves
+    /// <c>webui-window</c>: the tab plays its saved list under <c>youtube-window</c> too.
+    /// </summary>
+    [Fact]
+    public async Task TheTick_ForgetsTheTabsVideo_WhenTheControlsGoOff_NotWhenOnlyTheSettingIsTheWindow()
+    {
+        YouTubeRouteFixture(YouTubeOpenLinksIn.WebUiWindow, webUi: true);
+        VideoSnapshot? underWindow = null;
+        VideoSnapshot? controlsOff = new(VideoState.Playing, BunnyId);
+        var input = WhenIdle(
+            i =>
+            {
+                UntilServing();
+                var web = _running!.WebVideoForTests!;
+                web.Play(new VideoRequest(BunnyId));   // held: no page
+                _settings.Update(d => d.YouTubeOpenLinksIn = YouTubeOpenLinksIn.YouTubeWindow);
+                _time.Advance(TimeSpan.FromSeconds(1));   // two of the session's 1-second ticks (a manual clock)
+                _time.Advance(TimeSpan.FromSeconds(1));
+                underWindow = web.Snapshot;
+                _settings.Update(d => d.WebUiYouTubeControls = false);
+                _time.Advance(TimeSpan.FromSeconds(1));
+                SpinWait.SpinUntil(() => web.Snapshot is null, TimeSpan.FromSeconds(10));
+                controlsOff = web.Snapshot;
+                PushLine(i, "/exit");
+            });
+
+        await RunAsync(input);
+
+        Assert.NotNull(underWindow?.Held);
+        Assert.Null(controlsOff);
     }
 
     [Fact]

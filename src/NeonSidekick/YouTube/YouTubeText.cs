@@ -329,14 +329,16 @@ public static class YouTubeText
 
     /// <summary>
     /// A video waiting for a YouTube tab (2026-10-16): with an open page asked to switch to it, or with none that will see the ask, when it
-    /// plays as one opens.
+    /// plays as one opens; or (later that day) with YouTube tabs open but none in view, when one comes into view.
     /// </summary>
     public static string Held(VideoSnapshot snapshot, VideoHold held)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(held);
         string what = snapshot.VideoId is null && snapshot.PlaylistId is { } list ? "playlist " + list : "video " + snapshot.VideoId;
-        return held.Nudged
+        return held.TabsHidden
+            ? $"Waiting for a YouTube tab in view: {what} plays in {WebTabName} as soon as one comes into view (a YouTube tab is open but hidden, or the phone is locked); the open Web UI pages were asked to switch to it."
+            : held.Nudged
             ? $"Waiting for a YouTube tab: {what} plays in {WebTabName} as soon as it opens; the open Web UI page was asked to switch to it."
             : $"Waiting for a YouTube tab: no Web UI page is open now, so {what} plays when the user opens {WebTabName} on their phone or browser (it waits up to {((int)HoldFor.TotalMinutes).ToString(CultureInfo.InvariantCulture)} minutes).";
     }
@@ -378,6 +380,9 @@ public static class YouTubeText
 
     /// <summary>The note before a play's answer when <c>webui-window</c> fell back to the window (2026-10-16): the Web UI isn't serving.</summary>
     public const string WebUiOffFellBack = "The Web UI isn't serving, so the video plays in the video window instead. ";
+
+    /// <summary>The note when <c>webui-window</c> fell back to the window because <i>Web UI YouTube controls</i> is off (2026-10-16): there is no tab.</summary>
+    public const string WebUiControlsOffFellBack = "Web UI YouTube controls is off, so the video plays in the video window instead. ";
 
     /// <summary>The note when <c>browser-window</c> went to the default browser (2026-10-16): the Browser window's reason.</summary>
     public static string BrowserFellBack(string reason) => $"The Browser window can't take it now ({reason}), so it went to the default browser. ";

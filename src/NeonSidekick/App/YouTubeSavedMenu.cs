@@ -18,7 +18,9 @@ namespace NeonSidekick.App;
 /// transcript — <c>/queue</c>'s clear all. The <see cref="ProcessMenu"/> shape, the list read again after every act. Without the pane
 /// the screen prints the rows instead (<c>ChatScreen.ShowSavedVideosAsync</c>). The order is the user's since 2026-10-13 (the user's
 /// ask, with the Browser window's saved links): <see cref="MenuPage.Moves"/> while nothing is typed — Shift/Alt+↑↓ a place,
-/// Shift/Alt+Home/End to the top or bottom, silently (<see cref="YouTubeLibrary.Move"/>) — and Delete is the remove's key too.
+/// Shift/Alt+Home/End to the top or bottom, silently (<see cref="YouTubeLibrary.Move"/>) — and Delete is the remove's key too. A change made
+/// elsewhere while it is open (later on 2026-10-16: the Web UI's YouTube tab plays, moves, removes, saves) redraws it within a second, the
+/// <see cref="ShoppingMenu"/>'s watch, the cursor following its video.
 /// </summary>
 internal sealed class YouTubeSavedMenu
 {
@@ -34,14 +36,20 @@ internal sealed class YouTubeSavedMenu
     private readonly MenuPane _pane;
     private readonly Func<YouTubeSaved, CancellationToken, Task<string>>? _play;
     private readonly TimeZoneInfo _zone;
+    private readonly TimeProvider? _time;
+
+    /// <summary>How often an open list looks for a change made elsewhere (later on 2026-10-16), <see cref="ShoppingMenu.WatchEvery"/>'s.</summary>
+    public static readonly TimeSpan WatchEvery = ShoppingMenu.WatchEvery;
 
     /// <param name="library">The loaded profile's saved videos, read when the pane opens and after every act.</param>
     /// <param name="transcript">Where the lines outside the pane go.</param>
     /// <param name="pane">The menu host in the bottom pane.</param>
     /// <param name="play">What Enter hands a video to: the screen's play, answering as youtube_play does; null with no video window (Enter then says so).</param>
     /// <param name="zone">The zone the footer's dates are shown in.</param>
-    public YouTubeSavedMenu(Func<YouTubeLibrary> library, INoticeSink transcript, MenuPane pane, Func<YouTubeSaved, CancellationToken, Task<string>>? play, TimeZoneInfo? zone = null)
+    /// <param name="time">The clock the open list is re-read on (later on 2026-10-16); null watches nothing.</param>
+    public YouTubeSavedMenu(Func<YouTubeLibrary> library, INoticeSink transcript, MenuPane pane, Func<YouTubeSaved, CancellationToken, Task<string>>? play, TimeZoneInfo? zone = null, TimeProvider? time = null)
     {
+        _time = time;
         _zone = zone ?? TimeZoneInfo.Local;
         _library = library ?? throw new ArgumentNullException(nameof(library));
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
@@ -87,9 +95,41 @@ internal sealed class YouTubeSavedMenu
                     Footer = (_, row) => row < shown.Count ? YouTubeText.SavedFooter(listed[shown[row]], _zone) : null,
                     Moves = filter.Length == 0,   // the order is the whole list's: no moves while a filter shows part of it
                 };
-                if (await _pane.PickAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken).ConfigureAwait(false) is not { } pick)
+                MenuPick? picked;
+                using (var stale = new CancellationTokenSource())
+                {
+                    var watching = Watch(ListKey(listed), stale, cancellationToken);
+                    try
+                    {
+                        picked = await _pane.PickAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken, stale: stale.Token).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        await stale.CancelAsync().ConfigureAwait(false);
+                        await watching.ConfigureAwait(false);
+                    }
+                }
+
+                if (picked is not { } pick)
                 {
                     return;
+                }
+
+                if (pick.Refresh)
+                {
+                    // Changed elsewhere: drawn again, the cursor on the same video wherever it went (or the row it stood on once it is gone).
+                    string? on = pick.Row >= 0 && pick.Row < shown.Count ? listed[shown[pick.Row]].Id : cursor >= 0 && cursor < listed.Count ? listed[cursor].Id : null;
+                    int stood = pick.Row >= 0 && pick.Row < shown.Count ? shown[pick.Row] : Math.Max(cursor, 0);
+                    videos = _library().List();
+                    if (videos.Count == 0)
+                    {
+                        _transcript.Notice(YouTubeText.NoneSaved);
+                        return;
+                    }
+
+                    int found = on is null ? -1 : videos.ToList().FindIndex(v => v.Id == on);
+                    cursor = found >= 0 ? found : Math.Clamp(stood, 0, videos.Count - 1);
+                    continue;
                 }
 
                 if (pick.Filter is { } typed)
@@ -170,6 +210,40 @@ internal sealed class YouTubeSavedMenu
     }
 
     private const string ErrorPrefix = "Error: ";
+
+    /// <summary>What the open list shows, as a key: each video's id, title and place, in order; another means it changed elsewhere.</summary>
+    private static string ListKey(IReadOnlyList<YouTubeSaved> videos) =>
+        string.Join("\n", videos.Select(v => v.Id + "|" + v.Title + "|" + YouTubeText.Place(v)));
+
+    /// <summary>
+    /// Re-reads the list every <see cref="WatchEvery"/> while a pick waits, and ends it (the page's <c>stale</c> token) when its key differs from
+    /// <paramref name="drawn"/>; nothing without a clock. Ends quietly with the pick.
+    /// </summary>
+    private async Task Watch(string drawn, CancellationTokenSource stale, CancellationToken cancellationToken)
+    {
+        if (_time is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var both = CancellationTokenSource.CreateLinkedTokenSource(stale.Token, cancellationToken);
+            while (true)
+            {
+                await Task.Delay(WatchEvery, _time, both.Token).ConfigureAwait(false);
+                if (!string.Equals(ListKey(_library().List()), drawn, StringComparison.Ordinal))
+                {
+                    await stale.CancelAsync().ConfigureAwait(false);
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The pick ended, or the change was found.
+        }
+    }
 
     /// <summary>An answer on the transcript, for one the pane closes after: an error as one, anything else a notice.</summary>
     private void Tell(string result)

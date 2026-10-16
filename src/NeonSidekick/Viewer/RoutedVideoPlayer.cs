@@ -71,7 +71,8 @@ public sealed class RoutedVideoPlayer : IVideoPlayer
             web.Changed += s => OnReport(VideoSink.Web, s);
             if (web is IVideoTakeover takeover)
             {
-                takeover.TookOver += () => Switch(VideoSink.Web);
+                // A Resume is a play on the tab (later on 2026-10-16): a browser hand-off made before it is no longer where the video is.
+                takeover.TookOver += () => Switch(VideoSink.Web, clearHandoff: true);
             }
         }
     }

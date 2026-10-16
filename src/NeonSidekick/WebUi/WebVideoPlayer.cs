@@ -16,13 +16,20 @@ public interface IWebVideo
 
     /// <summary>
     /// A page's stream attached: <paramref name="page"/> its id from <c>sessionStorage</c>, <paramref name="load"/> its script's nonce,
-    /// <paramref name="claim"/> its Play here. <paramref name="end"/> ends the host's stream; the player calls it only for a stream it evicts
-    /// or a reconnect replaces. The attachment's <c>hello</c> is written first; disposing it is the detach.
+    /// <paramref name="claim"/> its Play here's id (a fresh one per tap; <c>1</c> from the first script; null for none), <paramref name="visible"/>
+    /// whether it was in view as it opened. <paramref name="end"/> ends the host's stream; the player calls it only for a stream it evicts or a
+    /// reconnect replaces. The attachment's <c>hello</c> is written first; disposing it is the detach.
     /// </summary>
-    WebVideoAttachment Attach(string page, string load, bool claim, IPAddress? remote, Action end);
+    WebVideoAttachment Attach(string page, string load, string? claim, bool visible, IPAddress? remote, Action end);
 
     /// <summary>A page's report: <see cref="WebOutcome.Ok"/>, or <see cref="WebOutcome.Conflict"/> from a page that is not the player.</summary>
     WebOutcome Report(string page, string message, IPAddress? remote);
+
+    /// <summary>
+    /// A page came into view or left it (later on 2026-10-16): <see cref="WebOutcome.Ok"/> from any attached page, <see cref="WebOutcome.Conflict"/>
+    /// from one with no open stream.
+    /// </summary>
+    WebOutcome Seen(string page, bool visible, IPAddress? remote);
 }
 
 /// <summary>One page's stream as the player holds it: the hello to write first, the page's own events, and the detach.</summary>
@@ -52,28 +59,47 @@ public sealed class WebVideoAttachment : IDisposable
 }
 
 /// <summary>
-/// The Web UI's YouTube tab as a player (2026-10-16, <c>YouTube open links in</c> <c>webui-window</c>): an <see cref="IVideoPlayer"/> the
-/// router (<see cref="RoutedVideoPlayer"/>) plays on, whose video runs in YouTube's player on a phone's or a browser's YouTube tab. Portable;
-/// one lock, <see cref="Changed"/> and <see cref="TookOver"/> raised outside it; its time is the screen's <see cref="TimeProvider"/>.
+/// The Web UI's YouTube tab as a player (2026-10-16, <c>YouTube open links in</c> <c>webui-window</c>, and the tab's own saved list): an
+/// <see cref="IVideoPlayer"/> the router (<see cref="RoutedVideoPlayer"/>) plays on, whose video runs in YouTube's player on a phone's or a
+/// browser's YouTube tab. Portable; one lock, <see cref="Changed"/> and <see cref="TookOver"/> raised outside it; its time is the screen's
+/// <see cref="TimeProvider"/>.
 ///
 /// <para><b>Pages, not streams.</b> A page is a browser tab, its id kept in <c>sessionStorage</c> and sent with its stream and its reports. A
 /// stream with the same id and the same <c>load</c> nonce is a reconnect, which replaces the old one quietly (a half-open socket); the same id
 /// with a new <c>load</c> and no stream open is a reload; and with another stream still open, a duplicated tab, given a fresh id in its hello.
-/// The first page to attach plays (the owner); one attaching while another plays waits (its Play here claims, the old owner told <c>taken</c>,
-/// both streams left open). The owner leaving is read after <see cref="DetachGrace"/>, so a reconnect is not a close: its video's snapshot goes
-/// null, as a window's close, and its last place becomes the Resume offer; the longest-waiting page is promoted with an <c>owner</c> event. A
-/// reload stops the video too: the owner's first report after it, <c>page</c>, is read as the close, and the offer is sent back to it.</para>
+/// Each page says whether it is in view (<c>visible=</c> on its stream, then <see cref="Seen"/> on every change and every reconnect), and the
+/// player keeps when it last came into view; an owner with no open stream counts as hidden.</para>
 ///
-/// <para><b>A play</b> goes to the owner as a <c>load</c>, or is held (with no owner, or one in its grace) until a page attaches: the snapshot
-/// then reads <see cref="VideoSnapshot.Held"/>, whether a page will see the nudge, and expires after <see cref="YouTubeText.HoldFor"/> (on the
-/// screen's tick). Reports from the owner alone, applied as the windows apply theirs, <see cref="VideoLoadSettle"/> on each.</para>
+/// <para><b>Who plays</b> (later on 2026-10-16, the user's call, after a play went to a hidden tab that had merely reconnected first, and a
+/// Play here dropped the video): while nothing plays, the player follows the tab shown most recently; a play goes to the tab shown most
+/// recently; a tab that is playing keeps the player until a new play or a Play here. So the first page to attach owns; an idle owner (nothing
+/// open, or only a held request) yields to a page attaching in view or coming into view, and hands over to the visible page seen most recently
+/// when it hides; <see cref="Play"/> moves the player to the visible page seen most recently, or, with none in view, holds the request (a hidden
+/// owner's other video closed first); a playing owner is never moved on visibility alone. Play here (<c>claim</c>) takes the player and the
+/// video with it: the old owner is told <c>taken</c> (its page stops), the video's place becomes the Resume offer, and the claimer's hello says
+/// <c>play</c>. Each tap's claim carries a fresh id; the same id again (the browser's own reconnect to the same URL) is a plain reconnect. The
+/// owner leaving is read after <see cref="DetachGrace"/>, so a reconnect is not a close: its video's snapshot goes null, as a window's close,
+/// and its last place becomes the Resume offer; the visible page seen most recently (else the longest waiting) is promoted with an
+/// <c>owner</c> event. A reload stops the video too: the owner's first report after it, <c>page</c>, is read as the close and the offer sent
+/// back, unless its <c>load</c> nonce is the script a video was just given to (a held request loaded as it attached).</para>
+///
+/// <para><b>A held request</b> loads only into a visible owner. Its snapshot reads <see cref="VideoSnapshot.Held"/> (whether a page will see
+/// the nudge; whether YouTube tabs are open but none in view) and expires after <see cref="YouTubeText.HoldFor"/> on the screen's tick. Only a
+/// hold nudges the other pages to the tab. Reports from the owner alone, applied as the windows apply theirs, <see cref="VideoLoadSettle"/> on
+/// each. Every decision writes a Debug line (a page by its first four characters and its address).</para>
 /// </summary>
 public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, IDisposable
 {
     /// <summary>How long a page's stream may be gone before its leaving counts: a reconnect within it changes nothing.</summary>
     public static readonly TimeSpan DetachGrace = TimeSpan.FromSeconds(5);
 
-    /// <summary>The most YouTube streams at once; one more evicts the oldest waiting page's, never the owner's.</summary>
+    /// <summary>
+    /// How long a page's last honored claim id is kept once its last stream went (later on 2026-10-16): long past the browser's own reconnect
+    /// (about 3 s), whose repeat it must recognize, so a blip after a tap never claims again.
+    /// </summary>
+    public static readonly TimeSpan ClaimMemory = TimeSpan.FromMinutes(1);
+
+    /// <summary>The most YouTube streams at once; one more evicts the oldest hidden waiting page's (else the oldest waiting), never the owner's.</summary>
     public const int MaxStreams = 4;
 
     /// <summary>The most events a page may have waiting before it is dropped (its reconnect comes back as the same page).</summary>
@@ -85,6 +111,9 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
     /// <summary>How long a page waits for YouTube's script (<see cref="IWebVideo.ApiWaitMs"/>) by default.</summary>
     public const int DefaultApiWaitMs = 10_000;
 
+    /// <summary>The claim the first script sent (<c>&amp;claim=1</c>): always a claim.</summary>
+    public const string LegacyClaim = "1";
+
     private const string Category = "WebUi";
 
     private readonly Lock _gate = new();
@@ -92,6 +121,7 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
     private readonly Func<bool> _nudge;
     private readonly Action<string>? _flash;
     private readonly List<PageStream> _streams = [];
+    private readonly Dictionary<string, ClaimSeen> _claims = new(StringComparer.Ordinal);
     private readonly VideoLoadSettle _settle = new();
     private VideoSnapshot? _snapshot;
     private long _version;
@@ -103,11 +133,14 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
     private long _joined;
     private bool _disposed;
 
+    // The load nonce of the script a video was last given to (later on 2026-10-16, Fix 3): that script's own first page report is no reload.
+    private string? _loadedInto;
+
     // Whether the owner's reports count: only after a load (or its own Resume), never after a close, so a stopped player's late report
     // never brings a closed video back.
     private bool _closed = true;
 
-    /// <param name="time">The screen's clock: the grace's timer, the hold's age.</param>
+    /// <param name="time">The screen's clock: the grace's timer, the hold's age, when a page came into view.</param>
     /// <param name="nudge">Asks the open pages to jump to the YouTube tab; true when one will see it soon (<c>WebUiSession.WatchNudge</c>).</param>
     /// <param name="flash">The PC's hint row (<c>WebUiSession.FlashPc</c>), for a Play here or a Resume tap; null for none.</param>
     /// <param name="apiWaitMs">How long a page waits for YouTube's script.</param>
@@ -138,14 +171,17 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
         }
     }
 
-    /// <summary>Whether a video waits for a YouTube tab with none attached: the pages' banner and jump (<c>WebState.Watch</c>).</summary>
+    /// <summary>
+    /// Whether a video waits for a YouTube tab with none in view (none attached, or every one hidden): the pages' banner and jump
+    /// (<c>WebState.Watch</c>, <c>WebPulse.Watch</c>).
+    /// </summary>
     public bool Waiting
     {
         get
         {
             lock (_gate)
             {
-                return _held is not null && _streams.Count == 0;
+                return _held is not null && !_streams.Any(s => s.Visible);
             }
         }
     }
@@ -186,6 +222,15 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
         }
     }
 
+    /// <summary>Whether <paramref name="page"/>'s newest stream is in view, or null with none open (tests).</summary>
+    internal bool? VisibleOf(string page)
+    {
+        lock (_gate)
+        {
+            return _streams.LastOrDefault(s => s.Page == page)?.Visible;
+        }
+    }
+
     /// <summary>Whether <paramref name="text"/> has the shape of a page id or a load nonce: 16 to 64 base64url characters.</summary>
     public static bool IsId(string? text) =>
         text is { Length: >= 16 and <= 64 } && text.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_');
@@ -195,24 +240,65 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
 
     // ── IVideoPlayer ──────────────────────────────────────────────────────
 
+    /// <summary>
+    /// A play: to the visible page seen most recently (the player moved there first when it is another), else held for one to come into view,
+    /// the pages nudged then (Fix 5: only a hold nudges, after it is set, so the published state already says <see cref="Waiting"/>), and
+    /// <see cref="Changed"/> raised once with the final snapshot.
+    /// </summary>
     public void Play(VideoRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        bool nudged = _nudge();   // outside the lock: it publishes on the Chat stream
+        var outbox = new Outbox();
         VideoSnapshot snapshot;
+        bool held;
+        DateTimeOffset since;
         lock (_gate)
         {
             _offer = null;
-            if (OwnerStream() is { } owner)
+            since = _time.GetUtcNow();
+            if (MostRecentVisible() is { } target)
             {
+                held = false;
+                if (target.Page != _owner)
+                {
+                    Transfer(target, outbox, WebUiText.YouTubeMovedLogLine(target.Remote), flash: null, attaching: false);
+                }
+
                 _held = null;
-                snapshot = Load(owner, request);
+                snapshot = Load(target, request);
+                outbox.Debug.Add(WebUiText.YouTubePlayDebug("loaded into", target.Page, target.Remote));
             }
             else
             {
+                held = true;
+                if (_snapshot is not null && _held is null && OwnerStream() is { } hidden)
+                {
+                    Enqueue(hidden, new WebEvent("close", () => "{}"));   // a hidden owner's other video never plays on under the new one's snapshot
+                }
+
+                _closed = true;
                 _held = request;
-                _heldSince = _time.GetUtcNow();
-                snapshot = _snapshot = VideoSnapshot.Opening(request) with { Version = ++_version, Place = VideoPlace.WebTab, Held = new VideoHold(nudged, _heldSince) };
+                _heldSince = since;
+                snapshot = _snapshot = VideoSnapshot.Opening(request) with
+                {
+                    Version = ++_version,
+                    Place = VideoPlace.WebTab,
+                    Held = new VideoHold(false, since, TabsHidden: _streams.Count > 0),
+                };
+                outbox.Debug.Add(WebUiText.YouTubePlayDebug(_streams.Count > 0 ? "held (no YouTube tab in view)" : "held (no YouTube tab open)", null, null));
+            }
+        }
+
+        outbox.Flush(this, raise: false);
+        if (held)
+        {
+            bool nudged = _nudge();   // outside the lock: it publishes on the Chat stream, reading Waiting
+            lock (_gate)
+            {
+                if (ReferenceEquals(_held, request) && _snapshot is { Held: { } hold } current)
+                {
+                    snapshot = _snapshot = current with { Held = hold with { Nudged = nudged } };
+                }
             }
         }
 
@@ -237,8 +323,8 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
     public bool Close() => Stop(clearOffer: true);
 
     /// <summary>
-    /// Everything let go (the screen's tick once the setting is off or the Web UI isn't serving, and the app's exit): the owner told to close,
-    /// the held request and the offer dropped, the snapshot null.
+    /// Everything let go (the screen's tick once the tab is off, and the app's exit): the owner told to close, the held request and the offer
+    /// dropped, the snapshot null.
     /// </summary>
     public void Forget() => Stop(clearOffer: true);
 
@@ -289,25 +375,29 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
 
     // ── IWebVideo ─────────────────────────────────────────────────────────
 
-    public WebVideoAttachment Attach(string page, string load, bool claim, IPAddress? remote, Action end)
+    /// <summary>A stream attached in view, with Play here as the first script sent it (the tests' and the old callers' shape).</summary>
+    public WebVideoAttachment Attach(string page, string load, bool claim, IPAddress? remote, Action end) =>
+        Attach(page, load, claim ? LegacyClaim : null, visible: true, remote, end);
+
+    public WebVideoAttachment Attach(string page, string load, string? claim, bool visible, IPAddress? remote, Action end)
     {
         ArgumentNullException.ThrowIfNull(end);
-        var ends = new List<Action>();
-        var lines = new List<string>();
-        string? flash = null;
-        VideoSnapshot? raise = null;
-        bool raiseAny = false;
+        var outbox = new Outbox();
         PageStream stream;
         WebVideoHello hello;
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            var now = _time.GetUtcNow();
+            PruneClaims(now);
             var same = _streams.Where(s => s.Page == page).ToList();
+            DateTimeOffset seenBefore = DateTimeOffset.MinValue;
             if (same.FirstOrDefault(s => s.Load == load) is { } reconnect)
             {
                 _streams.Remove(reconnect);   // a reconnect: the old stream (a half-open socket) goes quietly
                 reconnect.Queue.Writer.TryComplete();
-                ends.Add(reconnect.End);
+                outbox.Ends.Add(reconnect.End);
+                seenBefore = reconnect.SeenAt;
             }
             else if (same.Count > 0)
             {
@@ -319,75 +409,171 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
                 CancelGrace();
             }
 
-            // At the cap the oldest waiting page goes, never the owner.
-            if (_streams.Count >= MaxStreams && _streams.Where(s => s.Page != _owner).OrderBy(s => s.Joined).FirstOrDefault() is { } evicted)
+            // At the cap the oldest hidden waiting page goes, else the oldest waiting page; never the owner.
+            if (_streams.Count >= MaxStreams && _streams.Where(s => s.Page != _owner).OrderBy(s => s.Visible ? 1 : 0).ThenBy(s => s.Joined).FirstOrDefault() is { } evicted)
             {
                 _streams.Remove(evicted);
                 evicted.Queue.Writer.TryComplete();
-                ends.Add(evicted.End);
+                outbox.Ends.Add(evicted.End);
+                LastStreamGone(evicted.Page, now);
             }
 
             var queue = Channel.CreateBounded<WebEvent>(new BoundedChannelOptions(Capacity) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
-            stream = new PageStream(page, load, queue, end, ++_joined, remote);
+            stream = new PageStream(page, load, queue, end, ++_joined, remote)
+            {
+                Visible = visible,
+                SeenAt = visible ? Max(now, seenBefore) : seenBefore,
+            };
             _streams.Add(stream);
+            if (_claims.TryGetValue(page, out var kept))
+            {
+                _claims[page] = kept with { GoneSince = null };
+            }
 
+            // A claim is honored once per id (Fix 4): the browser's own reconnect repeats the stream's first URL, claim and all.
+            bool claims = false;
+            if (claim is not null)
+            {
+                if (claim != LegacyClaim && _claims.TryGetValue(page, out var last) && last.Id == claim)
+                {
+                    outbox.Debug.Add(WebUiText.YouTubeClaimDebug(page, remote, honored: false));
+                }
+                else
+                {
+                    claims = true;
+                    _claims[page] = new ClaimSeen(claim, null);
+                }
+            }
+
+            bool carried = false;
             if (_owner is null)
             {
                 _owner = page;
-                lines.Add(WebUiText.YouTubeOwnerLogLine(remote));
+                outbox.Info.Add(WebUiText.YouTubeOwnerLogLine(remote));
             }
-            else if (claim && _owner != page)
+            else if (claims && _owner != page)
             {
-                if (OwnerStream() is { } old)
+                // Play here takes the video with it (Fix 2): where it was, less the rewind, offered to the claimer, whose hello says play.
+                if (_snapshot is { } playing && _held is null && !_closed)
                 {
-                    Enqueue(old, new WebEvent("taken", () => "{}"));
+                    _offer = OfferFrom(playing);
+                    _snapshot = null;
+                    _closed = true;
+                    outbox.RaiseNull = true;
+                    carried = _offer is not null;
                 }
 
-                _owner = page;
-                CancelGrace();
-                lines.Add(WebUiText.YouTubeClaimLogLine(remote));
-                flash = WebUiText.YouTubeClaimFlash;
+                Transfer(stream, outbox, WebUiText.YouTubeClaimLogLine(remote), WebUiText.YouTubeClaimFlash, attaching: true);
+                outbox.Debug.Add(WebUiText.YouTubeClaimDebug(page, remote, honored: true));
+            }
+            else if (claims && _owner == page)
+            {
+                outbox.Debug.Add(WebUiText.YouTubeClaimDebug(page, remote, honored: true));
+            }
+            else if (visible && _owner != page && OwnerIdle())
+            {
+                Transfer(stream, outbox, WebUiText.YouTubeMovedLogLine(remote), flash: null, attaching: true);   // rule 1: before the held load
             }
 
             bool owner = _owner == page;
-            hello = new WebVideoHello(page, WebUiText.VideoWords, owner, _offer, ApiWaitMs);
-            if (owner && _held is { } held)
+            hello = new WebVideoHello(page, WebUiText.VideoWords, owner, _offer, ApiWaitMs, Play: carried);
+            outbox.Debug.Add(WebUiText.YouTubeAttachDebug(page, remote, visible, owner));
+            if (owner && visible && _held is { } held)
             {
                 _held = null;
-                raise = Load(stream, held);
-                raiseAny = true;
+                outbox.Raise = Load(stream, held);
+                outbox.RaiseAny = true;
+                outbox.Debug.Add(WebUiText.YouTubePlayDebug("held, loaded into", page, remote));
             }
         }
 
-        foreach (var gone in ends)
-        {
-            End(gone);
-        }
-
-        foreach (string line in lines)
-        {
-            DiagnosticLog.Info(Category, line);
-        }
-
-        if (flash is not null)
-        {
-            _flash?.Invoke(flash);
-        }
-
-        if (raiseAny)
-        {
-            Raise(raise);
-        }
-
+        outbox.Flush(this);
         return new WebVideoAttachment(hello, stream.Queue.Reader, a => Detach(stream));
+    }
+
+    public WebOutcome Seen(string page, bool visible, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        var outbox = new Outbox();
+        lock (_gate)
+        {
+            if (_streams.LastOrDefault(s => s.Page == page) is not { } stream)
+            {
+                return WebOutcome.Conflict;
+            }
+
+            bool was = stream.Visible;
+            stream.Visible = visible;
+            if (visible)
+            {
+                stream.SeenAt = _time.GetUtcNow();
+            }
+
+            outbox.Debug.Add(WebUiText.YouTubeSeenDebug(page, remote, visible, was));
+            if (visible)
+            {
+                if (page != _owner && OwnerIdle())
+                {
+                    Transfer(stream, outbox, WebUiText.YouTubeMovedLogLine(remote), flash: null, attaching: false);   // rule 2
+                }
+
+                if (page == _owner && _held is { } held)
+                {
+                    _held = null;
+                    outbox.Raise = Load(stream, held);   // rule 2, and the unlocked phone
+                    outbox.RaiseAny = true;
+                    outbox.Debug.Add(WebUiText.YouTubePlayDebug("held, loaded into", page, remote));
+                }
+            }
+            else if (page == _owner && OwnerIdle() && MostRecentVisible() is { } next)
+            {
+                Transfer(next, outbox, WebUiText.YouTubeMovedLogLine(next.Remote), flash: null, attaching: false);   // rule 3
+                if (_held is { } held)
+                {
+                    _held = null;
+                    outbox.Raise = Load(next, held);
+                    outbox.RaiseAny = true;
+                }
+            }
+        }
+
+        outbox.Flush(this);
+        return WebOutcome.Ok;
+    }
+
+    /// <summary>
+    /// A tap on the YouTube tab's saved list from a page (later on 2026-10-16): the page takes the player, as Play here does but never carrying
+    /// the old video (the play that follows at once replaces it), and is marked in view now, since a tap means it is, so the play goes to it.
+    /// <see cref="WebOutcome.Conflict"/> for a page with no open stream; the owner's own tap changes nothing else.
+    /// </summary>
+    public WebOutcome Claim(string page, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        var outbox = new Outbox();
+        lock (_gate)
+        {
+            if (_streams.LastOrDefault(s => s.Page == page) is not { } stream)
+            {
+                return WebOutcome.Conflict;
+            }
+
+            stream.Visible = true;
+            stream.SeenAt = _time.GetUtcNow();
+            if (_owner != page)
+            {
+                Transfer(stream, outbox, WebUiText.YouTubeClaimLogLine(remote), WebUiText.YouTubeClaimFlash, attaching: false);
+                outbox.Debug.Add(WebUiText.YouTubeClaimDebug(page, remote, honored: true));
+            }
+        }
+
+        outbox.Flush(this);
+        return WebOutcome.Ok;
     }
 
     public WebOutcome Report(string page, string message, IPAddress? remote)
     {
         ArgumentNullException.ThrowIfNull(page);
-        VideoSnapshot? raise = null;
-        bool raiseAny = false;
-        bool tookOver = false;
+        var outbox = new Outbox();
         string? refused = null;
         lock (_gate)
         {
@@ -401,26 +587,35 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
             switch (kind)
             {
                 case VideoPageEvent.Page:
+                    // The script given the video just now (a held request loaded as it attached, Fix 3): its first report is no reload.
+                    if (VideoMessages.PageLoad(message) is { } nonce && nonce == _loadedInto)
+                    {
+                        outbox.Debug.Add(WebUiText.YouTubePageReportDebug(page, remote, acted: false));
+                        break;
+                    }
+
                     // The owner's page loaded again (a reload, the user's or after an upgrade): its player went with it.
                     _closed = true;
                     if (_snapshot is { } playing && _held is null)
                     {
                         _offer = OfferFrom(playing);
                         _snapshot = null;
-                        raiseAny = true;
+                        outbox.RaiseAny = true;
                         if (_offer is { } offer && OwnerStream() is { } owner)
                         {
                             Enqueue(owner, new WebEvent("resume", () => JsonSerializer.Serialize(offer, WebUiJsonContext.Default.WebVideoResume)));
                         }
                     }
 
+                    outbox.Debug.Add(WebUiText.YouTubePageReportDebug(page, remote, acted: true));
                     break;
                 case VideoPageEvent.Resumed:
                     _offer = null;
                     _held = null;
                     _closed = false;
                     _settle.Loaded();   // the page loads the video itself
-                    tookOver = true;
+                    _loadedInto = OwnerStream()?.Load;
+                    outbox.TookOver = true;
                     break;
                 case VideoPageEvent.Failed:
                 case VideoPageEvent.State:
@@ -431,8 +626,8 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
                     }
 
                     _version = next.Version;
-                    raise = _snapshot = next with { Place = VideoPlace.WebTab, Held = null };
-                    raiseAny = true;
+                    outbox.Raise = _snapshot = next with { Place = VideoPlace.WebTab, Held = null };
+                    outbox.RaiseAny = true;
                     if (kind == VideoPageEvent.Error && next.Error is { } code)
                     {
                         refused = WebUiText.YouTubeRefusedLogLine(next.VideoId, code);
@@ -447,18 +642,14 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
             DiagnosticLog.Info("Video", refused);
         }
 
-        if (tookOver)
+        if (outbox.TookOver)
         {
             DiagnosticLog.Info(Category, WebUiText.YouTubeResumeLogLine(remote));
             _flash?.Invoke(WebUiText.YouTubeResumeFlash);
             TookOver?.Invoke();
         }
 
-        if (raiseAny)
-        {
-            Raise(raise);
-        }
-
+        outbox.Flush(this);
         return WebOutcome.Ok;
     }
 
@@ -484,11 +675,39 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
     // The owner's open stream, or null (no owner, or one in its grace).
     private PageStream? OwnerStream() => _owner is null ? null : _streams.LastOrDefault(s => s.Page == _owner);
 
-    // A load to the owner: the settle armed, the snapshot opening on the tab.
+    // Nothing open but perhaps a held request: the player may follow the tab in view.
+    private bool OwnerIdle() => _snapshot is null || _held is not null;
+
+    // The visible stream that came into view last (the owner's too); null with none in view.
+    private PageStream? MostRecentVisible() => _streams.Where(s => s.Visible).OrderByDescending(s => s.SeenAt).ThenByDescending(s => s.Joined).FirstOrDefault();
+
+    // The player moved to `to` (the one place it moves, but for the first owner): taken to the old owner's stream, the grace cancelled, owner
+    // to `to` unless it is the stream being attached (its hello says so), the caller's audit line and flash queued.
+    private void Transfer(PageStream to, Outbox outbox, string logLine, string? flash, bool attaching)
+    {
+        if (OwnerStream() is { } old && old.Page != to.Page)
+        {
+            Enqueue(old, new WebEvent("taken", () => "{}"));
+        }
+
+        _owner = to.Page;
+        CancelGrace();
+        if (!attaching)
+        {
+            var owner = new WebVideoOwner(true, _offer);
+            Enqueue(to, new WebEvent("owner", () => JsonSerializer.Serialize(owner, WebUiJsonContext.Default.WebVideoOwner)));
+        }
+
+        outbox.Info.Add(logLine);
+        outbox.Flash ??= flash;
+    }
+
+    // A load to a page's stream: the settle armed, the snapshot opening on the tab, the stream's script remembered (Fix 3).
     private VideoSnapshot Load(PageStream owner, VideoRequest request)
     {
         _settle.Loaded();
         _closed = false;
+        _loadedInto = owner.Load;
         Enqueue(owner, new WebEvent("load", () => VideoMessages.Load(request)));
         return _snapshot = VideoSnapshot.Opening(request) with { Version = ++_version, Place = VideoPlace.WebTab };
     }
@@ -508,8 +727,29 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
             StartGrace(stream.Page);
         }
 
+        LastStreamGone(stream.Page, _time.GetUtcNow());
         _ = Task.Run(() => End(stream.End));
         return false;
+    }
+
+    // A page's last stream went: its claim id is kept a while yet (ClaimMemory), past the browser's reconnect.
+    private void LastStreamGone(string page, DateTimeOffset now)
+    {
+        if (!_streams.Any(s => s.Page == page) && _claims.TryGetValue(page, out var seen))
+        {
+            _claims[page] = seen with { GoneSince = now };
+        }
+    }
+
+    private void PruneClaims(DateTimeOffset now)
+    {
+        foreach (var (page, seen) in _claims.ToList())
+        {
+            if (seen.GoneSince is { } gone && now - gone >= ClaimMemory)
+            {
+                _claims.Remove(page);
+            }
+        }
     }
 
     private bool Stop(bool clearOffer)
@@ -543,6 +783,7 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
 
     private void Detach(PageStream stream)
     {
+        string? line = null;
         lock (_gate)
         {
             if (!_streams.Remove(stream))
@@ -555,7 +796,12 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
             {
                 StartGrace(stream.Page);
             }
+
+            LastStreamGone(stream.Page, _time.GetUtcNow());
+            line = WebUiText.YouTubeDetachDebug(stream.Page, stream.Remote, stream.Page == _owner);
         }
+
+        DiagnosticLog.Debug(Category, line);
     }
 
     private void StartGrace(string page)
@@ -573,11 +819,11 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
         _grace = null;
     }
 
-    // The grace ran out with the owner's page still gone: its video closes, its place is offered, the longest-waiting page plays next.
+    // The grace ran out with the owner's page still gone: its video closes, its place is offered, the visible page seen most recently plays
+    // next (else the longest waiting), a held request loaded only into a visible one.
     private void OwnerLeft(string page)
     {
-        bool raise = false;
-        string? promoted = null;
+        var outbox = new Outbox();
         lock (_gate)
         {
             if (_disposed || _owner != page || _streams.Any(s => s.Page == page))
@@ -592,34 +838,25 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
                 _offer = OfferFrom(last) ?? _offer;
                 _snapshot = null;
                 _closed = true;
-                raise = true;
+                outbox.RaiseAny = true;
             }
 
             _owner = null;
-            if (_streams.OrderBy(s => s.Joined).FirstOrDefault() is { } next)
+            if ((MostRecentVisible() ?? _streams.OrderBy(s => s.Joined).FirstOrDefault()) is { } next)
             {
-                _owner = next.Page;
-                var owner = new WebVideoOwner(true, _offer);
-                Enqueue(next, new WebEvent("owner", () => JsonSerializer.Serialize(owner, WebUiJsonContext.Default.WebVideoOwner)));
-                promoted = WebUiText.YouTubeOwnerLogLine(next.Remote);
-                if (_held is { } held)
+                Transfer(next, outbox, WebUiText.YouTubeOwnerLogLine(next.Remote), flash: null, attaching: false);
+                if (next.Visible && _held is { } held)
                 {
                     _held = null;
                     Load(next, held);
-                    raise = true;
+                    outbox.RaiseAny = true;
                 }
             }
+
+            outbox.Raise = _snapshot;
         }
 
-        if (promoted is not null)
-        {
-            DiagnosticLog.Info(Category, promoted);
-        }
-
-        if (raise)
-        {
-            Raise(Snapshot);
-        }
+        outbox.Flush(this);
     }
 
     /// <summary>
@@ -640,6 +877,8 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
         return new WebVideoResume(last.VideoId, last.PlaylistId, last.PlaylistEntry, start,
             WebUiText.ResumeLabel(last.Title, last.VideoId, last.PlaylistId, last.PlaylistEntry, start));
     }
+
+    private static DateTimeOffset Max(DateTimeOffset a, DateTimeOffset b) => a > b ? a : b;
 
     private static void End(Action end)
     {
@@ -665,6 +904,67 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
         }
     }
 
-    /// <summary>One page's open stream.</summary>
-    private sealed record PageStream(string Page, string Load, Channel<WebEvent> Queue, Action End, long Joined, IPAddress? Remote);
+    /// <summary>One page's open stream: whether it is in view, and when it last came into view (both under the lock).</summary>
+    private sealed record PageStream(string Page, string Load, Channel<WebEvent> Queue, Action End, long Joined, IPAddress? Remote)
+    {
+        public bool Visible { get; set; } = true;
+
+        public DateTimeOffset SeenAt { get; set; }
+    }
+
+    /// <summary>A page's last honored claim id, and since when its last stream is gone (null while one is open).</summary>
+    private sealed record ClaimSeen(string Id, DateTimeOffset? GoneSince);
+
+    /// <summary>What a call decided under the lock, done after it: the audit and Debug lines, a flash, streams to end, what to raise.</summary>
+    private sealed class Outbox
+    {
+        public List<string> Info { get; } = [];
+
+        public List<string> Debug { get; } = [];
+
+        public List<Action> Ends { get; } = [];
+
+        public string? Flash { get; set; }
+
+        public bool RaiseNull { get; set; }
+
+        public bool RaiseAny { get; set; }
+
+        public VideoSnapshot? Raise { get; set; }
+
+        public bool TookOver { get; set; }
+
+        public void Flush(WebVideoPlayer player, bool raise = true)
+        {
+            foreach (var gone in Ends)
+            {
+                End(gone);
+            }
+
+            foreach (string line in Info)
+            {
+                DiagnosticLog.Info(Category, line);
+            }
+
+            foreach (string line in Debug)
+            {
+                DiagnosticLog.Debug(Category, line);
+            }
+
+            if (Flash is not null)
+            {
+                player._flash?.Invoke(Flash);
+            }
+
+            if (RaiseNull)
+            {
+                player.Raise(null);   // a claim carried the video: the router's listeners see its close (the resume saves its place)
+            }
+
+            if (raise && RaiseAny)
+            {
+                player.Raise(Raise);
+            }
+        }
+    }
 }
