@@ -12,7 +12,7 @@ public sealed class SqlConfigFileTests : IDisposable
     public SqlConfigFileTests()
     {
         _profile = Path.Combine(_home, "profiles", "default");
-        Directory.CreateDirectory(_profile);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_profile));
     }
 
     public void Dispose()
@@ -250,7 +250,7 @@ public sealed class SqlConfigFileTests : IDisposable
     {
         const string plain = """{ "connections": { "a": { "server": "x", "database": "db", "user": "u", "password": "hunter2" } } }""";
         string work = Path.Combine(_home, "profiles", "work");
-        Directory.CreateDirectory(work);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(work));
         Directory.CreateDirectory(Path.Combine(_home, "profiles", "empty"));   // a profile without a sql.json
         Global(plain);
         Profile(plain);
@@ -280,7 +280,7 @@ public sealed class SqlConfigFileTests : IDisposable
 
         const string plain = """{ "connections": { "a": { "server": "x", "database": "db", "user": "u", "password": "hunter2" } } }""";
         string work = Path.Combine(_home, "profiles", "work");
-        Directory.CreateDirectory(work);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(work));
         Global(plain);
         Profile(plain);
         File.WriteAllText(SqlConfigFile.ProfilePath(work), plain);

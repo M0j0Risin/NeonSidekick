@@ -387,7 +387,7 @@ public sealed class EventLogTests : IDisposable
     {
         string profile = Path.Combine(_root, "profile");
         string home = Path.Combine(_root, "home");
-        Directory.CreateDirectory(profile);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(profile));
         Directory.CreateDirectory(home);
         File.WriteAllText(EventLogConfigFile.ProfilePath(profile), """{ "computers": { "fs01": { "host": "fs01.corp", "detail": "full" }, "local": { "logs": ["System"] } } }""");
         File.WriteAllText(EventLogConfigFile.GlobalPath(home), """{ "computers": { "fs01": { "host": "other" }, "dc01": { "host": "dc01" }, "bad": { "auth": "runas" } } }""");

@@ -31,6 +31,7 @@ public class McpRowsTests : IAsyncDisposable
     /// <summary>A connected session over the profile file <paramref name="json"/>: docker (echo + fail) and chrome (navigate) unless the file says otherwise.</summary>
     private async Task<McpSession> ConnectedAsync(string json, params string[] failing)
     {
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(McpConfigFile.ProfilePath(_settings.ProfileDirectory), json);
         _servers.Tools("chrome", ("navigate", "Opens a page."));
         foreach (string name in failing)

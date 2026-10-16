@@ -29,7 +29,11 @@ public class McpSessionTests : IAsyncDisposable
 
     private McpSession Session() => new(_settings, _servers.Transport, _time);
 
-    private void ProfileFile(string json) => File.WriteAllText(McpConfigFile.ProfilePath(_settings.ProfileDirectory), json);
+    private void ProfileFile(string json)
+    {
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
+        File.WriteAllText(McpConfigFile.ProfilePath(_settings.ProfileDirectory), json);
+    }
 
     private void GlobalFile(string json) => File.WriteAllText(McpConfigFile.GlobalPath(_settings.StorageDirectory), json);
 

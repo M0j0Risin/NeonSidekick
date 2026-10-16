@@ -92,7 +92,7 @@ public sealed class SqliteToolsTests : IDisposable
         _home = Path.Combine(_dir, "home");
         _profile = Path.Combine(_home, "profiles", "default");
         _work = Path.Combine(_dir, "work");
-        Directory.CreateDirectory(_profile);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_profile));   // sqlite.json in <profile>\configs since 2026-10-16
         Directory.CreateDirectory(Path.Combine(_work, "data"));
         Make(Path.Combine(_dir, "shop.db"), """
             CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT NOT NULL, city TEXT DEFAULT 'Oslo');
@@ -109,7 +109,7 @@ public sealed class SqliteToolsTests : IDisposable
             {
               // a comment, as the empty text has
               "databases": {
-                "shop": { "path": "../../../shop.db", "description": "the sample shop" },
+                "shop": { "path": "../../../../shop.db", "description": "the sample shop" },
                 "nopath": { "description": "no file" },
                 "notes": { "path": "D:\\nowhere\\notes.db" },
               }

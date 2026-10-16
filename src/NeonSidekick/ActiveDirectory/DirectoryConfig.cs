@@ -221,7 +221,7 @@ public sealed class DirectoryConfigFile
         "  \"domains\": {}\n" +
         "}\n";
 
-    public static string ProfilePath(string profileDirectory) => Path.Combine(profileDirectory, FileName);
+    public static string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
 
     public static string GlobalPath(string home) => Path.Combine(home, FileName);
 

@@ -30,7 +30,7 @@ public sealed record MySqlCatalog(IReadOnlyList<MySqlNamedConnection> Connection
 }
 
 /// <summary>
-/// <c>mysql.json</c> (2026-09-30): <c>{ "connections": { "&lt;name&gt;": { … } } }</c>, one in the profile's folder and one in
+/// <c>mysql.json</c> (2026-09-30): <c>{ "connections": { "&lt;name&gt;": { … } } }</c>, one in the profile's <c>configs</c> folder and one in
 /// the home, the <see cref="SqlConfigFile"/> pair: the profile's wins by name. A missing file is empty; a corrupt or
 /// unreadable one is a problem and one warning, never a crash. Read afresh at every call (<see cref="MySqlAccess"/>), so an
 /// edit in the editor counts on the next tool call. A plain <c>password</c> is DPAPI-encrypted in place at the first read
@@ -39,7 +39,7 @@ public sealed record MySqlCatalog(IReadOnlyList<MySqlNamedConnection> Connection
 /// </summary>
 public sealed class MySqlConfigFile
 {
-    /// <summary>The file's name in a profile's folder and in the home.</summary>
+    /// <summary>The file's name in a profile's <c>configs</c> folder and in the home.</summary>
     public const string FileName = "mysql.json";
 
     /// <summary>The log category of everything MySQL.</summary>
@@ -111,7 +111,7 @@ public sealed class MySqlConfigFile
         ProfilesUnlistedLogLine = MySqlText.ProfilesUnlistedLogLine,
     };
 
-    /// <summary>The profile's file: <c>&lt;profile&gt;\mysql.json</c>.</summary>
+    /// <summary>The profile's file: <c>&lt;profile&gt;\configs\mysql.json</c>.</summary>
     public static string ProfilePath(string profileDirectory) => Family.ProfilePath(profileDirectory);
 
     /// <summary>The home's file: <c>&lt;home&gt;\mysql.json</c>, every profile's.</summary>

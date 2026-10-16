@@ -34,8 +34,11 @@ public sealed partial class BrowserJsonContext : JsonSerializerContext;
 /// </summary>
 public static class BrowserHistory
 {
-    /// <summary>The file in the profile's folder.</summary>
+    /// <summary>The file in the profile's <c>configs</c> folder (<see cref="PathFor"/>).</summary>
     public const string FileName = "browser-history.json";
+
+    /// <summary><c>&lt;profile&gt;\configs\browser-history.json</c> (2026-10-16, the user's call; the profile's top until then, no migration).</summary>
+    public static string PathFor(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
 
     /// <summary>The file's version; another reads as empty and is replaced at the next save.</summary>
     public const int Version = 1;

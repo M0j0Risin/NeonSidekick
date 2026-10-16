@@ -426,6 +426,7 @@ A monitor, every monitor or one window, through GDI on Windows or ScreenCaptureK
 ### Profiles
 
 * A name is 1 to 32 letters, digits, `-` or `_`, and not one of `/profile`'s words (`add`, `push`, `keys`…). The default profile is `neon`.
+* Each profile is a folder in the home's `profiles` folder: `profile.json`, `persona.md`, `operata.md` and `vocalia.md` at its top, its other settings files (memories, MCP servers, connections, saved prompts, videos and links) in `configs`.
 * A name starting with `_` is temporary: off the picker.
 * Every start opens `neon`; a switch lasts until the app closes. A desktop shortcut, `--profile` or `NEONSIDEKICK_PROFILE` opens another.
 * `--profile <name>` (or `NEONSIDEKICK_PROFILE`) opens a profile for one launch; an unknown name exits with code 2.

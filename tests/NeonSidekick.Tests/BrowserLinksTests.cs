@@ -26,7 +26,7 @@ public sealed class BrowserLinksTests : IDisposable
 
     private BrowserLinks Links() => new(_dir, _time);
 
-    private string FilePath => Path.Combine(_dir, BrowserLinks.FileName);
+    private string FilePath => NeonSidekick.Settings.Profiles.ConfigPath(_dir, BrowserLinks.FileName);   // <profile>\configs since 2026-10-16
 
     // ── The list ─────────────────────────────────────────────────────────────
 
@@ -180,7 +180,7 @@ public sealed class BrowserLinksTests : IDisposable
         Assert.Contains("\"version\": 1", json, StringComparison.Ordinal);
         Assert.Contains("\"links\": [", json, StringComparison.Ordinal);
         Assert.Contains("\"url\": \"https://a.example/\"", json, StringComparison.Ordinal);
-        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
+        Assert.Empty(Directory.GetFiles(NeonSidekick.Settings.Profiles.ConfigsDirectory(_dir), "*.tmp"));
 
         File.WriteAllText(FilePath, "{ not json");
         Assert.Empty(links.List());
@@ -193,7 +193,7 @@ public sealed class BrowserLinksTests : IDisposable
     [Fact]
     public void TheFile_FromANewerVersion_IsLeftAlone_AndRefusesEveryChange()
     {
-        Directory.CreateDirectory(_dir);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_dir));
         const string Newer = "{ \"version\": 2, \"links\": [{ \"url\": \"https://a.example/\", \"name\": \"A\", \"added\": \"2026-10-13T18:00:00+00:00\" }] }";
         File.WriteAllText(FilePath, Newer);
         var links = Links();

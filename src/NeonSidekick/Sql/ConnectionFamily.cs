@@ -92,7 +92,7 @@ public sealed class ConnectionFamily<TConfig, TNamed>
     where TConfig : class, ISignInConfig
     where TNamed : class, INamedConnection<TConfig>
 {
-    /// <summary>The file's name in a profile's folder and in the home (<c>mysql.json</c>).</summary>
+    /// <summary>The file's name in a profile's <c>configs</c> folder and in the home (<c>mysql.json</c>).</summary>
     public required string FileName { get; init; }
 
     /// <summary>The log category of everything in the family (<c>MySql</c>).</summary>
@@ -125,8 +125,8 @@ public sealed class ConnectionFamily<TConfig, TNamed>
     /// <summary>The log line for a profiles folder that could not be listed (<c>MySqlText.ProfilesUnlistedLogLine</c>).</summary>
     public required Func<string, string, string> ProfilesUnlistedLogLine { get; init; }
 
-    /// <summary>The profile's file: <c>&lt;profile&gt;\&lt;FileName&gt;</c>.</summary>
-    public string ProfilePath(string profileDirectory) => Path.Combine(profileDirectory, FileName);
+    /// <summary>The profile's file: <c>&lt;profile&gt;\configs\&lt;FileName&gt;</c> (<c>configs</c> since 2026-10-16).</summary>
+    public string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
 
     /// <summary>The home's file: <c>&lt;home&gt;\&lt;FileName&gt;</c>, every profile's.</summary>
     public string GlobalPath(string home) => Path.Combine(home, FileName);

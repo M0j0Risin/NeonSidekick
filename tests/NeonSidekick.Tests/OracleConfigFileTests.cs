@@ -17,7 +17,7 @@ public sealed class OracleConfigFileTests : IDisposable
     public OracleConfigFileTests()
     {
         _profile = Path.Combine(_home, "profiles", "default");
-        Directory.CreateDirectory(_profile);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_profile));
     }
 
     public void Dispose()
@@ -216,7 +216,7 @@ public sealed class OracleConfigFileTests : IDisposable
     public void EncryptAll_ReadsTheHomesFile_AndEveryProfiles()
     {
         string other = Path.Combine(_home, "profiles", "work");
-        Directory.CreateDirectory(other);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(other));
         Global("""{ "connections": { "a": { "dataSource": "x:1/y", "user": "u", "password": "one" } } }""");
         File.WriteAllText(OracleConfigFile.ProfilePath(other), """{ "connections": { "b": { "dataSource": "x:1/y", "user": "u", "password": "two" } } }""");
 

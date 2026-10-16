@@ -191,7 +191,7 @@ Under *Image tools* (`/tools image`, or the toolbar's 🌄), whether *File tools
 
 Under *UNC tools*. They reach named network shares (`\\server\share`, or a folder under one) and local folders outside the working directory (`D:\Data`), as you (`windows`) or another Windows account (`runas`, like `runas /netonly`).
 
-* **Setting up:** shares live in `unc.json`, in the home or profile folder like the [database connections](#managing-connections). *UNC add/edit share* walks you through adding one and tests it; *UNC set password* changes a password; *UNC shares offered* picks what the model sees.
+* **Setting up:** shares live in `unc.json`, in the home folder or the profile's `configs` folder like the [database connections](#managing-connections). *UNC add/edit share* walks you through adding one and tests it; *UNC set password* changes a password; *UNC shares offered* picks what the model sees.
 * **Changes need two keys:** *UNC writes* on **and** the share's `access` `readwrite`. They are permanent (no trash) and logged; `unc_delete` starts off even then.
 * A share that doesn't answer within 10 seconds is given up on. The shell can't use a `runas` sign-in: `unc_fetch` the file instead.
 
@@ -439,7 +439,7 @@ Under *YouTube tools*. Videos play where *YouTube open links in* says: the app's
 
 Checks on the network, then Windows' own records and machinery: the event logs, the services, the scheduled tasks and Active Directory. The network checks work everywhere; the rest are **Windows only**, all through Windows' own APIs inside the app: nothing is started (no `wevtutil`, `sc`, `schtasks` or PowerShell). Each has its own command (`/net`, `/eventlog`, `/services`, `/tasks`, `/ad`) that lets you run them yourself, even with the tools off.
 
-The services and tasks reach computers you name in `services.json` and `tasks.json`; the directory reaches domains in `ad.json`. Each sits in the home or profile folder like the [database connections](#managing-connections) (when both name the same one, the profile's wins), each entry is used only after you tick it in its *… offered* setting, and its *add/edit* wizard walks you through adding one and tests it. A remote computer reached with `runas` has not been tried against a real second machine here yet; this PC and `localhost` have.
+The services and tasks reach computers you name in `services.json` and `tasks.json`; the directory reaches domains in `ad.json`. Each sits in the home folder or the profile's `configs` folder like the [database connections](#managing-connections) (when both name the same one, the profile's wins), each entry is used only after you tick it in its *… offered* setting, and its *add/edit* wizard walks you through adding one and tests it. A remote computer reached with `runas` has not been tried against a real second machine here yet; this PC and `localhost` have.
 
 ### Network
 
@@ -481,7 +481,7 @@ Under *Event log tools*. They read what Windows itself recorded (a crash, a fail
 
 #### Event log computers
 
-Computers live in `eventlog.json`, in the home or profile folder like the [database connections](#managing-connections) (when both name the same one, the profile's wins). `local` is this PC, built in. The app reads a computer only after you tick it in *Event log computers offered*, for the model and `/eventlog` alike; until you change it, `local` alone is ticked. *Event log add/edit computer* walks you through adding one and tests it (the newest System event under its account); *Event log set password* changes a runas password.
+Computers live in `eventlog.json`, in the home folder or the profile's `configs` folder like the [database connections](#managing-connections) (when both name the same one, the profile's wins). `local` is this PC, built in. The app reads a computer only after you tick it in *Event log computers offered*, for the model and `/eventlog` alike; until you change it, `local` alone is ticked. *Event log add/edit computer* walks you through adding one and tests it (the newest System event under its account); *Event log set password* changes a runas password.
 
 * **`host`** (required): the computer's name or address (`localhost` is a loopback session).
 * **`auth`**: `windows` (default, as you) or `runas`, with **`user`** (`DOMAIN\name` or `name@domain`; `lab-box\admin` for the machine's own account) and **`passwordStore`** `file` or `credman` (`NeonSidekick/eventlog/<name>`). **`authMethod`**: `default`, `negotiate`, `kerberos` or `ntlm`.
@@ -641,7 +641,7 @@ The five families (SQL Server, MySQL/MariaDB, SQLite, PostgreSQL, Oracle) share 
 
 #### Managing connections
 
-* **The file:** each family keeps its connections in `sql.json`, `mysql.json`, `sqlite.json`, `postgres.json` or `oracle.json`. The home folder's (`%USERPROFILE%\.neonsidekick\`, `~/.neonsidekick/` on a Mac) is read by every profile; the profile's (`…\profiles\<profile>\`) wins a name clash. Comments and trailing commas are allowed.
+* **The file:** each family keeps its connections in `sql.json`, `mysql.json`, `sqlite.json`, `postgres.json` or `oracle.json`. The home folder's (`%USERPROFILE%\.neonsidekick\`, `~/.neonsidekick/` on a Mac) is read by every profile; the profile's (`…\profiles\<profile>\configs\`) wins a name clash. Comments and trailing commas are allowed.
 * **The wizard:** *… add/edit connection* (*SQLite add/edit database*) adds or edits one. Its test writes nothing: it signs in, warns when the account could change data, and names what else it could reach.
 * ***… connections offered*** (*SQLite databases offered*) picks what the model sees: **nothing is offered until you tick it**. *… set password* changes a password.
 * **Passwords:** `passwordStore` is `file` (default) or `credman`. With `file`, a password typed into the file is encrypted in place (DPAPI) at the next read. `credman` keeps it in Windows Credential Manager as `NeonSidekick/<family>/<connection_name>` (`sql`, `mysql`, `postgres` or `oracle`).
@@ -797,7 +797,7 @@ The server families take a connection by name in `connection`, and SQLite a data
 
 ### SQLite
 
-The SQLite tools read database **files**: no server, no password. A database is a name from `sqlite.json` (a relative `path` counts from that file's folder) or, with *SQLite sandbox files* on, any file in the working directory by its path. *SQLite add/edit database* can test one by opening it read-only. Changes need only *SQLite mode* (no `access` key).
+The SQLite tools read database **files**: no server, no password. A database is a name from `sqlite.json` (a relative `path` counts from that file's folder, a profile's `configs` folder for the profile's) or, with *SQLite sandbox files* on, any file in the working directory by its path. *SQLite add/edit database* can test one by opening it read-only. Changes need only *SQLite mode* (no `access` key).
 
 ```json
 {

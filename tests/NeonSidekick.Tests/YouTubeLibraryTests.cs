@@ -91,7 +91,7 @@ public sealed class YouTubeLibraryTests : IDisposable
     public void Missing_IsEmpty_AndAnAddIsReadBackByAnotherInstance_InTheOrderSaved()
     {
         Assert.Empty(Library().List());
-        Assert.False(File.Exists(Path.Combine(_dir, YouTubeLibrary.FileName)));
+        Assert.False(File.Exists(NeonSidekick.Settings.Profiles.ConfigPath(_dir, YouTubeLibrary.FileName)));
 
         Assert.Equal(YouTubeSaveOutcome.Added, Library().Add(Bunny, "Big Buck Bunny", "Blender", 635, 120));
         _time.Advance(TimeSpan.FromMinutes(1));
@@ -138,7 +138,7 @@ public sealed class YouTubeLibraryTests : IDisposable
     public void Clear_TakesThemAllOff_AndWithNoneWritesNothing()
     {
         Assert.Equal(0, Library().Clear());
-        Assert.False(File.Exists(Path.Combine(_dir, YouTubeLibrary.FileName)));
+        Assert.False(File.Exists(NeonSidekick.Settings.Profiles.ConfigPath(_dir, YouTubeLibrary.FileName)));
 
         var library = Library();
         library.Add(Bunny);
@@ -184,15 +184,15 @@ public sealed class YouTubeLibraryTests : IDisposable
     [Fact]
     public void AnUnreadableFile_IsEmpty_AndTheNextSaveWritesOverIt_AndAnEditByHandIsSeen()
     {
-        Directory.CreateDirectory(_dir);
-        string path = Path.Combine(_dir, YouTubeLibrary.FileName);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_dir));
+        string path = NeonSidekick.Settings.Profiles.ConfigPath(_dir, YouTubeLibrary.FileName);
         File.WriteAllText(path, "{ not json");
         var library = Library();
 
         Assert.Empty(library.List());
         Assert.Equal(YouTubeSaveOutcome.Added, library.Add(Bunny));
         Assert.Equal([Bunny], Library().List().Select(v => v.Id));
-        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
+        Assert.Empty(Directory.GetFiles(NeonSidekick.Settings.Profiles.ConfigsDirectory(_dir), "*.tmp"));
 
         // Written by something else (another instance, the user's editor): read as it is now, at once.
         File.WriteAllText(path, "{ \"Videos\": [ { \"Id\": \"" + Zoo + "\" }, { \"Id\": \"not-an-id\" } ] }");

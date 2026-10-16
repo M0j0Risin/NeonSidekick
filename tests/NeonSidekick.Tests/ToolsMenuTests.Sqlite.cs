@@ -73,7 +73,7 @@ public partial class ToolsMenuTests
     [Fact]
     public async Task OnThePane_TheSqliteOffered_ListsTheDatabasesAToZ()
     {
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(SqliteConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "databases": { "zeta": { "path": "z.db" }, "Alpha": { "path": "a.db" } } }""");
         var (menu, _, _) = PaneMenu();
         OpenSqliteRow(3);

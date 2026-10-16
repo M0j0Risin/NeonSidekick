@@ -197,14 +197,14 @@ public sealed class SqliteExecuteTests : IDisposable
         _profile = Path.Combine(home, "profiles", "default");
         _work = Path.Combine(_dir, "work");
         _shop = Path.Combine(_work, "shop.db");
-        Directory.CreateDirectory(_profile);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_profile));   // sqlite.json in <profile>\configs since 2026-10-16
         Directory.CreateDirectory(Path.Combine(_work, "data"));
         using (var connection = Open(_shop, SqliteOpenMode.ReadWriteCreate))
         {
             Exec(connection, "CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT NOT NULL); INSERT INTO customers (name) VALUES ('Ada'), ('Grace');");
         }
 
-        File.WriteAllText(SqliteConfigFile.ProfilePath(_profile), """{ "databases": { "shop": { "path": "../../../work/shop.db" } } }""");
+        File.WriteAllText(SqliteConfigFile.ProfilePath(_profile), """{ "databases": { "shop": { "path": "../../../../work/shop.db" } } }""");
     }
 
     public void Dispose()

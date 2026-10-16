@@ -144,8 +144,8 @@ public sealed class WebLinksToolsTests : IDisposable
     [Fact]
     public async Task Add_ANewerFile_IsRefused_AndLeftAlone()
     {
-        Directory.CreateDirectory(_dir);
-        string file = Path.Combine(_dir, BrowserLinks.FileName);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_dir));
+        string file = NeonSidekick.Settings.Profiles.ConfigPath(_dir, BrowserLinks.FileName);
         File.WriteAllText(file, "{\"version\": 99, \"links\": []}");
 
         Assert.Equal(BrowserLinkText.Refusal(BrowserLinkOutcome.Newer), await Save(("action", "add"), ("url", "https://example.com/")));

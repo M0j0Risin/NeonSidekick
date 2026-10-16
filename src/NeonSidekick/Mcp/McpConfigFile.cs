@@ -15,7 +15,7 @@ public sealed record McpConfigLoad(string Path, IReadOnlyList<KeyValuePair<strin
 
 /// <summary>
 /// <c>mcp.json</c> (2026-09-20): <c>{ "mcpServers": { "&lt;name&gt;": { … } } }</c>, the shape every MCP client
-/// reads, one in the profile's folder and one in the home (<see cref="McpCatalog"/> merges them, the
+/// reads, one in the profile's <c>configs</c> folder and one in the home (<see cref="McpCatalog"/> merges them, the
 /// profile's winning by name). A missing file is empty; a corrupt or unreadable one is a problem and
 /// one warning (the <c>MemoryStore</c> tolerance), never a crash. The pane's edit rows create the file
 /// with <see cref="EmptyText"/> when it is missing (<see cref="EnsureExists"/>), so the editor opens on
@@ -23,7 +23,7 @@ public sealed record McpConfigLoad(string Path, IReadOnlyList<KeyValuePair<strin
 /// </summary>
 public sealed class McpConfigFile
 {
-    /// <summary>The file's name in a profile's folder and in the home.</summary>
+    /// <summary>The file's name in a profile's <c>configs</c> folder and in the home.</summary>
     public const string FileName = "mcp.json";
 
     /// <summary>The log category of everything MCP.</summary>
@@ -35,8 +35,8 @@ public sealed class McpConfigFile
     /// <summary>The servers by name, in file order (the deserializer keeps it).</summary>
     public Dictionary<string, McpServerConfig> McpServers { get; set; } = new(StringComparer.Ordinal);
 
-    /// <summary>The profile's file: <c>&lt;profile&gt;\mcp.json</c>.</summary>
-    public static string ProfilePath(string profileDirectory) => Path.Combine(profileDirectory, FileName);
+    /// <summary>The profile's file: <c>&lt;profile&gt;\configs\mcp.json</c> (<c>configs</c> since 2026-10-16).</summary>
+    public static string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
 
     /// <summary>The home's file: <c>&lt;home&gt;\mcp.json</c>, every profile's.</summary>
     public static string GlobalPath(string home) => Path.Combine(home, FileName);

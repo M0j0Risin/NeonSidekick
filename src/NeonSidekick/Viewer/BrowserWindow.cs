@@ -46,7 +46,7 @@ public static class BrowserWindow
     /// The loaded app profile's folder (<c>Program</c>), read at each open: the window's WebView2 profile lives in
     /// <c>&lt;profile&gt;\webview2-browser</c> (the home's until later on 2026-10-13, the user's pick: each profile its own history,
     /// cookies, sign-ins and solved checks; the home's old folder is left as it was), its list of visits in
-    /// <c>&lt;profile&gt;\browser-history.json</c>. Null (the smoke, a test) is a temp folder.
+    /// <c>&lt;profile&gt;\configs\browser-history.json</c>. Null (the smoke, a test) is a temp folder.
     /// </summary>
     public static Func<string>? ProfileDirectory { get; set; }
 
@@ -121,7 +121,7 @@ public static class BrowserWindow
 
             stale?.Close();
             var identity = CheckRuntime();
-            var window = new BrowserWindowThread(folder, identity, Path.Combine(profile, BrowserHistory.FileName), forClear, profile);
+            var window = new BrowserWindowThread(folder, identity, BrowserHistory.PathFor(profile), forClear, profile);
             window.Start();
             lock (s_gate)
             {
@@ -268,7 +268,7 @@ public static class BrowserWindow
             catch (InvalidOperationException ex)
             {
                 // No window to clear Chromium's data with: the profile's list of visits goes all the same.
-                string file = Path.Combine(ProfileNow(), BrowserHistory.FileName);
+                string file = BrowserHistory.PathFor(ProfileNow());
                 if (File.Exists(file))
                 {
                     BrowserHistory.Delete(file);

@@ -78,7 +78,7 @@ public sealed class SavedPrompts
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         Directory = Path.GetFullPath(directory);
-        _filePath = Path.Combine(Directory, FileName);
+        _filePath = NeonSidekick.Settings.Profiles.ConfigPath(Directory, FileName);   // <profile>\configs since 2026-10-16
         _time = time ?? TimeProvider.System;
     }
 
@@ -400,7 +400,7 @@ public sealed class SavedPrompts
         string tempPath = $"{_filePath}.{Guid.NewGuid():N}.tmp";
         try
         {
-            System.IO.Directory.CreateDirectory(Directory);
+            System.IO.Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
             if (file.State == FileState.Broken && File.Exists(_filePath))
             {
                 File.Move(_filePath, _filePath + ".bad", overwrite: true);

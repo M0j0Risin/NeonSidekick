@@ -17,7 +17,7 @@ public sealed class MySqlConfigFileTests : IDisposable
     public MySqlConfigFileTests()
     {
         _profile = Path.Combine(_home, "profiles", "default");
-        Directory.CreateDirectory(_profile);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_profile));
     }
 
     public void Dispose()

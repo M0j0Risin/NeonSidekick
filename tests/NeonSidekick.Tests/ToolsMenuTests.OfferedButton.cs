@@ -56,7 +56,7 @@ public partial class ToolsMenuTests
     public async Task ShowSwitch_Sql_TheOfferedButton_TicksAConnection_AndTheCountFollows()
     {
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows" }, "prod": { "server": "y", "database": "db", "auth": "windows" } } }""");
         var (menu, pane, _) = PaneMenu();
         Push(Keys.Char('o'), Keys.Enter, Keys.Escape, Keys.Escape);   // the button, aw ticked, back to the page, out

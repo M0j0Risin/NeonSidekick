@@ -76,7 +76,7 @@ public partial class ChatScreenTests
 
         string second = await RunAsync();
         Assert.Contains("✗grid", second);
-        Assert.Contains("1 run saved in " + Path.Combine(_settings.ProfileDirectory, BenchHistory.FileName), second);
+        Assert.Contains("1 run saved in " + NeonSidekick.Settings.Profiles.ConfigPath(_settings.ProfileDirectory, BenchHistory.FileName), second);
     }
 
     [Fact]

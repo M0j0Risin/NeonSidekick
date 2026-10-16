@@ -24,7 +24,7 @@ public sealed class SavedPromptsTests : IDisposable
 
     private SavedPrompts Prompts() => new(_dir, _time);
 
-    private string FilePath => Path.Combine(_dir, SavedPrompts.FileName);
+    private string FilePath => NeonSidekick.Settings.Profiles.ConfigPath(_dir, SavedPrompts.FileName);   // <profile>\configs since 2026-10-16
 
     private static IEnumerable<string> Texts(SavedPrompts prompts) => prompts.List().Select(p => p.Text);
 
@@ -169,7 +169,7 @@ public sealed class SavedPromptsTests : IDisposable
     [Fact]
     public void TheFile_FromANewerVersion_IsLeftAlone_AndRefusesEveryChange()
     {
-        Directory.CreateDirectory(_dir);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_dir));
         const string Newer = "{ \"version\": 2, \"prompts\": [{ \"id\": \"a\", \"text\": \"A\", \"added\": \"2026-10-13T18:00:00+00:00\" }] }";
         File.WriteAllText(FilePath, Newer);
 
@@ -205,7 +205,7 @@ public sealed class SavedPromptsTests : IDisposable
     [Fact]
     public void TheFile_DropsAnEntryWithNoIdOrText_AndARepeat()
     {
-        Directory.CreateDirectory(_dir);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_dir));
         File.WriteAllText(FilePath, """
             { "version": 1, "prompts": [
               { "id": "a", "text": "A", "added": "2026-10-13T18:00:00+00:00" },

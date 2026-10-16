@@ -74,7 +74,7 @@ public sealed record EventLogCatalog(IReadOnlyList<EventLogComputer> Computers, 
 
 /// <summary>
 /// <c>eventlog.json</c> (2026-10-15, the event-log plan, <c>Unc/UncConfigFile</c>'s shape): <c>{ "computers": { "&lt;name&gt;": { … } } }</c>,
-/// one in the profile's folder and one in the home, the profile's winning by name. A missing file is empty; a corrupt or unreadable one is a
+/// one in the profile's <c>configs</c> folder and one in the home, the profile's winning by name. A missing file is empty; a corrupt or unreadable one is a
 /// problem and one warning, never a crash. Read afresh at every call, so an edit in the editor counts on the next one. A plain <c>password</c>
 /// is DPAPI-encrypted in place at the first read that sees it (<see cref="ConnectionsFileEdit"/> under <c>computers</c>). Not carried by
 /// <c>/profile push|pull</c>, not copied by <c>/profile add</c> (as <c>unc.json</c>).
@@ -122,7 +122,7 @@ public sealed class EventLogConfigFile
     /// <summary>The computers by name, in file order.</summary>
     public Dictionary<string, EventLogComputerConfig?> Computers { get; set; } = new(StringComparer.Ordinal);
 
-    public static string ProfilePath(string profileDirectory) => Path.Combine(profileDirectory, FileName);
+    public static string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
 
     public static string GlobalPath(string home) => Path.Combine(home, FileName);
 

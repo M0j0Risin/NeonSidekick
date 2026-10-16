@@ -51,6 +51,7 @@ public class McpMenuTests : IAsyncDisposable
     /// <summary>The profile file written and the session connected, so the pane opens on live rows.</summary>
     private async Task ConnectedAsync(string json = Two)
     {
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(McpConfigFile.ProfilePath(_settings.ProfileDirectory), json);
         await _session.ConnectAllAsync(_settings.Current, null, CancellationToken.None);
     }

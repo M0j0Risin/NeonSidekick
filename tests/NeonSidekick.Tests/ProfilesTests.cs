@@ -183,6 +183,54 @@ public class ProfilesTests : IDisposable
     }
 
     [Fact]
+    public void ConfigPaths_AreTheProfilesConfigsFolder_AndSidekickFilesSplitByKind()
+    {
+        string profile = Path.Combine(@"D:\home", Profiles.DirectoryName, "work");
+
+        Assert.Equal(Path.Combine(profile, "configs"), Profiles.ConfigsDirectory(profile));
+        Assert.Equal(Path.Combine(profile, "configs", "memory.json"), Profiles.ConfigPath(profile, "memory.json"));
+        Assert.Equal(Path.Combine(profile, "configs", MemoryStore.FileName), Profiles.SidekickFilePath(profile, MemoryStore.FileName));
+        Assert.Equal(Path.Combine(profile, "configs", McpConfigFile.FileName), Profiles.SidekickFilePath(profile, McpConfigFile.FileName));
+        Assert.Equal(Path.Combine(profile, "configs", SavedPrompts.FileName), Profiles.SidekickFilePath(profile, SavedPrompts.FileName));
+        Assert.Equal(Path.Combine(profile, PersonaFile.FileName), Profiles.SidekickFilePath(profile, PersonaFile.FileName));
+        Assert.Equal(Path.Combine(profile, OperataFile.FileName), Profiles.SidekickFilePath(profile, OperataFile.FileName));
+        Assert.Equal(Path.Combine(profile, VocaliaFile.FileName), Profiles.SidekickFilePath(profile, VocaliaFile.FileName));
+    }
+
+    /// <summary>
+    /// Every profile settings file lives in <c>&lt;profile&gt;\configs</c> (2026-10-16, the user's call): each family's profile file, each
+    /// profile store's file and the browser's history; the home's own files stay in the home.
+    /// </summary>
+    [Fact]
+    public void EveryProfileSettingsFile_IsInConfigs_AndEveryGlobalOneInTheHome()
+    {
+        string home = Path.GetFullPath(_dir);
+        string profile = Profiles.Directory(home, "work");
+        string configs = Profiles.ConfigsDirectory(profile);
+
+        var profileFiles = new[]
+        {
+            Sql.SqlConfigFile.ProfilePath(profile), Oracle.OracleConfigFile.ProfilePath(profile), MySql.MySqlConfigFile.ProfilePath(profile),
+            Postgres.PostgresConfigFile.ProfilePath(profile), Sqlite.SqliteConfigFile.ProfilePath(profile), Unc.UncConfigFile.ProfilePath(profile),
+            EventLog.EventLogConfigFile.ProfilePath(profile), ActiveDirectory.DirectoryConfigFile.ProfilePath(profile),
+            Services.ServiceConfigFile.Family.ProfilePath(profile), Tasks.TaskConfigFile.Family.ProfilePath(profile), McpConfigFile.ProfilePath(profile),
+            new MemoryStore(profile).FilePath, new Bench.BenchHistory(profile).FilePath, new SavedPrompts(profile).FilePath,
+            new YouTube.YouTubeLibrary(profile).FilePath, new Viewer.BrowserLinks(profile).FilePath, Viewer.BrowserHistory.PathFor(profile),
+        };
+        Assert.Equal(17, profileFiles.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.All(profileFiles, path => Assert.Equal(configs, Path.GetDirectoryName(path)));
+
+        var globalFiles = new[]
+        {
+            Sql.SqlConfigFile.GlobalPath(home), Oracle.OracleConfigFile.GlobalPath(home), MySql.MySqlConfigFile.GlobalPath(home),
+            Postgres.PostgresConfigFile.GlobalPath(home), Sqlite.SqliteConfigFile.GlobalPath(home), Unc.UncConfigFile.GlobalPath(home),
+            EventLog.EventLogConfigFile.GlobalPath(home), ActiveDirectory.DirectoryConfigFile.GlobalPath(home),
+            Services.ServiceConfigFile.Family.GlobalPath(home), Tasks.TaskConfigFile.Family.GlobalPath(home), McpConfigFile.GlobalPath(home),
+        };
+        Assert.All(globalFiles, path => Assert.Equal(home, Path.GetDirectoryName(path)));
+    }
+
+    [Fact]
     public void CopySidekickFiles_CopiesThePresentOnes_InOrder_AndNothingElse()
     {
         Profiles.Create(_dir, "neon", new AppSettingsData { LlmModel = "old" });
@@ -199,9 +247,10 @@ public class ProfilesTests : IDisposable
         Assert.Equal(new[] { MemoryStore.FileName, PersonaFile.FileName, VocaliaFile.FileName }, copied);
         string target = Profiles.Directory(_dir, "work");
         Assert.Equal(
-            new[] { MemoryStore.FileName, VocaliaFile.FileName, PersonaFile.FileName, Profiles.FileName }.Order(),
+            new[] { VocaliaFile.FileName, PersonaFile.FileName, Profiles.FileName }.Order(),
             Directory.GetFiles(target).Select(Path.GetFileName).Order());
-        Assert.Empty(Directory.GetDirectories(target));
+        Assert.Equal(new[] { MemoryStore.FileName }, Directory.GetFiles(Profiles.ConfigsDirectory(target)).Select(Path.GetFileName));   // a .json in configs (2026-10-16)
+        Assert.Equal(new[] { Profiles.ConfigsDirectoryName }, Directory.GetDirectories(target).Select(Path.GetFileName));
         Assert.Contains("\"LlmModel\": \"new\"", File.ReadAllText(Path.Combine(target, Profiles.FileName)));   // the seed, not the source's settings
         Assert.Equal("You are Rex.", File.ReadAllText(Path.Combine(target, PersonaFile.FileName)));
         Assert.Equal("Speak like a pirate.", File.ReadAllText(Path.Combine(target, VocaliaFile.FileName)));
@@ -223,9 +272,10 @@ public class ProfilesTests : IDisposable
 
         // The memories and, since 2026-10-13, the saved prompts: a new profile starts with both.
         Assert.Equal(new[] { MemoryStore.FileName, SavedPrompts.FileName }, copied);
+        Assert.Equal(new[] { Profiles.FileName }, Directory.GetFiles(Profiles.Directory(_dir, "work")).Select(Path.GetFileName));
         Assert.Equal(
-            new[] { MemoryStore.FileName, SavedPrompts.FileName, Profiles.FileName }.Order(),
-            Directory.GetFiles(Profiles.Directory(_dir, "work")).Select(Path.GetFileName).Order());
+            new[] { MemoryStore.FileName, SavedPrompts.FileName }.Order(),
+            Directory.GetFiles(Profiles.ConfigsDirectory(Profiles.Directory(_dir, "work"))).Select(Path.GetFileName).Order());
         Assert.Equal(["Summarize this."], new SavedPrompts(Profiles.Directory(_dir, "work")).List().Select(p => p.Text));
         Assert.Empty(Profiles.CopySidekickFiles(source, _dir, "work2", Array.Empty<string>()));   // nothing named, nothing copied — the directory is made
         Assert.True(Directory.Exists(Profiles.Directory(_dir, "work2")));
@@ -262,8 +312,12 @@ public class ProfilesTests : IDisposable
         File.WriteAllText(Path.Combine(dir, PersonaFile.FileName), "You are Rex.");
         Directory.CreateDirectory(Path.Combine(dir, "files"));
         File.WriteAllText(Path.Combine(dir, "files", MemoryStore.FileName), "not the sidekick's");
+        File.WriteAllText(Path.Combine(dir, McpConfigFile.FileName), McpConfigFile.EmptyText);   // the top, where it lived until 2026-10-16: not read
 
         Assert.Equal(new[] { PersonaFile.FileName, VocaliaFile.FileName }, Profiles.PresentSidekickFiles(dir));
+        Directory.CreateDirectory(Profiles.ConfigsDirectory(dir));
+        File.WriteAllText(Profiles.ConfigPath(dir, McpConfigFile.FileName), McpConfigFile.EmptyText);
+        Assert.Equal(new[] { PersonaFile.FileName, VocaliaFile.FileName, McpConfigFile.FileName }, Profiles.PresentSidekickFiles(dir));
         Assert.Empty(Profiles.PresentSidekickFiles(Profiles.Directory(_dir, "neon")));
     }
 
@@ -276,7 +330,7 @@ public class ProfilesTests : IDisposable
         File.WriteAllText(Path.Combine(dir, PersonaFile.FileName), "You are Rex.");
         File.WriteAllText(Path.Combine(dir, OperataFile.FileName), "Answer in haiku.");
         File.WriteAllText(Path.Combine(dir, VocaliaFile.FileName), "Speak like a pirate.");
-        File.WriteAllText(Path.Combine(dir, McpConfigFile.FileName), McpConfigFile.EmptyText);
+        File.WriteAllText(McpConfigFile.ProfilePath(dir), McpConfigFile.EmptyText);   // configs made by the memory's save
         new SavedPrompts(dir).Add("Summarize this.", out _);
         Directory.CreateDirectory(Path.Combine(dir, "files", ".trash"));
         File.WriteAllText(Path.Combine(dir, "files", "notes.txt"), "kept");
@@ -289,7 +343,7 @@ public class ProfilesTests : IDisposable
         Assert.Equal("Answer in haiku.", File.ReadAllText(Path.Combine(dir, OperataFile.FileName)));
         Assert.Equal("Speak like a pirate.", File.ReadAllText(Path.Combine(dir, VocaliaFile.FileName)));
         Assert.Equal(new[] { "They like tea." }, new MemoryStore(dir).Snapshot());
-        Assert.Equal(McpConfigFile.EmptyText, File.ReadAllText(Path.Combine(dir, McpConfigFile.FileName)));
+        Assert.Equal(McpConfigFile.EmptyText, File.ReadAllText(McpConfigFile.ProfilePath(dir)));
         Assert.Equal(Profiles.SidekickFiles, Profiles.PresentSidekickFiles(dir));
         string json = File.ReadAllText(Path.Combine(dir, Profiles.FileName));
         Assert.Contains("\"LlmModel\": \"\"", json);

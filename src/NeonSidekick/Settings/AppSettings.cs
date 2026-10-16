@@ -130,7 +130,7 @@ public sealed class AppSettings : IDisposable
         get { lock (_gate) { return _profileName; } }
     }
 
-    /// <summary>The loaded profile's directory: where its <c>profile.json</c>, <c>memory.json</c>, <c>persona.md</c>, <c>operata.md</c> and <c>vocalia.md</c> live.</summary>
+    /// <summary>The loaded profile's directory: where its <c>profile.json</c>, <c>persona.md</c>, <c>operata.md</c> and <c>vocalia.md</c> live, its other settings files in <c>configs</c> (<see cref="Profiles.ConfigPath"/>, 2026-10-16).</summary>
     public string ProfileDirectory => Profiles.Directory(StorageDirectory, ProfileName);
 
     /// <summary>

@@ -162,7 +162,7 @@ public partial class SidekickAppTests : IDisposable
     public async Task Startup_EncryptsThePlainSqlPasswords_OfEveryProfile_ButASmokeRunLeavesThem()
     {
         string other = Path.Combine(_dir, "profiles", "other");
-        Directory.CreateDirectory(other);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(other));
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(other);
         File.WriteAllText(path, """{ "connections": { "a": { "server": "x", "database": "db", "user": "u", "password": "hunter2" } } }""");
 
@@ -181,7 +181,7 @@ public partial class SidekickAppTests : IDisposable
     public async Task Startup_EncryptsThePlainSqlPasswords_OfEveryProfile_ButASmokeRunLeavesThem_Unix()
     {
         string other = Path.Combine(_dir, "profiles", "other");
-        Directory.CreateDirectory(other);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(other));
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(other);
         File.WriteAllText(path, """{ "connections": { "a": { "server": "x", "database": "db", "user": "u", "password": "hunter2" } } }""");
 
@@ -819,6 +819,7 @@ public partial class SidekickAppTests : IDisposable
     public async Task Headless_McpServer_ConnectsAfterTheLlm_OffersItsTools_AndACallIsATooLine()
     {
         ServerOn1234("llama");
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(NeonSidekick.Mcp.McpConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "mcpServers": { "pipe": { "command": "pipe-server" } } }""");
         _settings.Update(d => d.McpServers = true);   // off by default since 2026-09-21: the profile opts in
         _chat.Enqueue(FakeChatClient.Call("c1", "pipe__echo", new Dictionary<string, object?> { ["text"] = "ping" }));
@@ -840,6 +841,7 @@ public partial class SidekickAppTests : IDisposable
     public async Task Headless_McpServerFails_IsALine_AndTheMasterOffConnectsNothing()
     {
         ServerOn1234("llama");
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(NeonSidekick.Mcp.McpConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "mcpServers": { "pipe": { "command": "pipe-server" } } }""");
         _settings.Update(d => d.McpServers = true);   // off by default since 2026-09-21: the profile opts in
         _mcpServers.Failing.Add("pipe");
@@ -1043,7 +1045,7 @@ public partial class SidekickAppTests : IDisposable
     public async Task Headless_PersonaFile_ReplacesTheIdentity_PerTurn()
     {
         ServerOn1234("llama");
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         string personaPath = Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName);
         File.WriteAllText(personaPath, "You are Rex, a gruff pirate.");
         _chat.EnqueueText("Arr.");
@@ -1069,7 +1071,7 @@ public partial class SidekickAppTests : IDisposable
     public async Task Headless_OperataFile_ReplacesTheRules_PerTurn()
     {
         ServerOn1234("llama");
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         string operataPath = Path.Combine(_settings.ProfileDirectory, OperataFile.FileName);
         File.WriteAllText(operataPath, "Answer in haiku.");
         _chat.EnqueueText("Hi.");
@@ -1096,7 +1098,7 @@ public partial class SidekickAppTests : IDisposable
     public async Task Headless_VocaliaFile_IsReadButNeverSpoken()
     {
         ServerOn1234("llama");
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, VocaliaFile.FileName), "Speak like a pirate.");
         _chat.EnqueueText("Hi.");
 
@@ -1716,7 +1718,7 @@ public partial class SidekickAppTests : IDisposable
     {
         // The turn reads persona.md and PersonaFile logs an Info line for it; before the fix (when
         // the old status rows read it too) the line went to stdout above the banner.
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName), "You are Rex, a gruff pirate.");
         InteractiveServerOn1234("llama");
         _chat.EnqueueText("Arr.");

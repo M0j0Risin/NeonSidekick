@@ -149,8 +149,8 @@ public sealed class BenchTests : IDisposable
         Assert.Contains("| qwen |  |  | 1/1 | ✓mind |", history);
 
         // Round trip: an older file without the fields reads them as null.
-        Directory.CreateDirectory(_dir);
         var store = new BenchHistory(_dir);
+        Directory.CreateDirectory(Path.GetDirectoryName(store.FilePath)!);
         File.WriteAllText(store.FilePath, """{ "Runs": [ { "Model": "old", "Results": [] } ] }""");
         store.Append(run);
         var runs = store.Runs();
@@ -387,8 +387,8 @@ public sealed class BenchTests : IDisposable
     [Fact]
     public void History_ACorruptFile_IsEmpty_AndTheNextRunWritesOverIt()
     {
-        Directory.CreateDirectory(_dir);
         var history = new BenchHistory(_dir);
+        Directory.CreateDirectory(Path.GetDirectoryName(history.FilePath)!);
         File.WriteAllText(history.FilePath, "{ not json");
         Assert.Empty(history.Runs());
         Assert.True(history.Append(Run("qwen", DateTimeOffset.UnixEpoch, ("mind", BenchVerdict.Pass))));

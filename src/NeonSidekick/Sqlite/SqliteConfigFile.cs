@@ -68,7 +68,7 @@ public sealed record SqliteCatalog(IReadOnlyList<SqliteNamedDatabase> Databases,
 /// </summary>
 public sealed class SqliteConfigFile
 {
-    /// <summary>The file's name in a profile's folder and in the home.</summary>
+    /// <summary>The file's name in a profile's <c>configs</c> folder and in the home.</summary>
     public const string FileName = "sqlite.json";
 
     /// <summary>The log category of everything SQLite.</summary>
@@ -94,7 +94,7 @@ public sealed class SqliteConfigFile
     /// <summary>The databases by name, in file order.</summary>
     public Dictionary<string, SqliteDatabaseConfig?> Databases { get; set; } = new(StringComparer.Ordinal);
 
-    public static string ProfilePath(string profileDirectory) => Path.Combine(profileDirectory, FileName);
+    public static string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
 
     public static string GlobalPath(string home) => Path.Combine(home, FileName);
 

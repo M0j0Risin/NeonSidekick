@@ -12,7 +12,7 @@ public class MemoryStoreTests : IDisposable
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
     }
 
-    private string FilePath => Path.Combine(_dir, MemoryStore.FileName);
+    private string FilePath => NeonSidekick.Settings.Profiles.ConfigPath(_dir, MemoryStore.FileName);   // <profile>\configs since 2026-10-16
 
     [Fact]
     public void Add_NormalisesAndWritesTheFile_AndANewStoreReadsItBack()
@@ -30,7 +30,7 @@ public class MemoryStoreTests : IDisposable
         Assert.Contains("\"SchemaVersion\": 1", json);
         Assert.Contains("\"Text\": \"Their name is Chris.\"", json);
         Assert.Contains("\"SavedAt\": \"", json);
-        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
+        Assert.Empty(Directory.GetFiles(NeonSidekick.Settings.Profiles.ConfigsDirectory(_dir), "*.tmp"));
 
         var reloaded = new MemoryStore(_dir);
         Assert.Equal(new[] { "Their name is Chris." }, reloaded.Snapshot());
@@ -187,7 +187,7 @@ public class MemoryStoreTests : IDisposable
     [Fact]
     public void CorruptFile_IsTreatedAsEmpty_WithOneWarning_AndTheNextAddReplacesIt()
     {
-        Directory.CreateDirectory(_dir);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_dir));
         File.WriteAllText(FilePath, "{ not json");
         var warnings = new List<string>();
         Action<DiagnosticEvent> capture = e => { if (e.Category == "Memory" && e.Level == DiagnosticLevel.Warning) warnings.Add(e.Message); };
@@ -266,7 +266,7 @@ public class MemoryStoreTests : IDisposable
     [Fact]
     public void OldFile_WithBlankOrUntidyEntries_IsCleanedOnLoad()
     {
-        Directory.CreateDirectory(_dir);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_dir));
         File.WriteAllText(FilePath, "{ \"SchemaVersion\": 1, \"Entries\": [ { \"Text\": \"  two\\nlines \" }, { \"Text\": \"   \" }, { \"Text\": \"ok\", \"SavedAt\": \"2026-09-11T10:00:00+00:00\" } ] }");
 
         Assert.Equal(new[] { "two lines", "ok" }, new MemoryStore(_dir).Snapshot());
@@ -300,7 +300,7 @@ public class MemoryStoreTests : IDisposable
 
         Assert.Equal(new[] { "one", "three" }, store.Snapshot());
         Assert.Equal(new[] { "one", "three" }, new MemoryStore(_dir).Snapshot());
-        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
+        Assert.Empty(Directory.GetFiles(NeonSidekick.Settings.Profiles.ConfigsDirectory(_dir), "*.tmp"));
     }
 
     [Fact]
@@ -346,7 +346,7 @@ public class MemoryStoreTests : IDisposable
 
         Assert.Equal(new[] { "one", "two", "three" }, store.Snapshot());
         Assert.Equal(new[] { "one", "two", "three" }, new MemoryStore(_dir).Snapshot());
-        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
+        Assert.Empty(Directory.GetFiles(NeonSidekick.Settings.Profiles.ConfigsDirectory(_dir), "*.tmp"));
     }
 
     // ── Import (/memory copy, 2026-09-17 as /memcopy) ───────────────────────
@@ -368,7 +368,7 @@ public class MemoryStoreTests : IDisposable
         var reloaded = new MemoryStore(_dir).EntriesSnapshot();
         Assert.Equal(new[] { "Likes tea.", "Lives in Oslo.", "Has a dog.", "Plays chess." }, reloaded.Select(e => e.Text));
         Assert.Equal(new DateTimeOffset(2026, 9, 4, 0, 0, 0, TimeSpan.Zero), reloaded[2].SavedAt);
-        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
+        Assert.Empty(Directory.GetFiles(NeonSidekick.Settings.Profiles.ConfigsDirectory(_dir), "*.tmp"));
     }
 
     [Fact]

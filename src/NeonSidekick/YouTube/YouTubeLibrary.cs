@@ -79,7 +79,7 @@ public sealed class YouTubeLibrary
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         Directory = Path.GetFullPath(directory);
-        _filePath = Path.Combine(Directory, FileName);
+        _filePath = NeonSidekick.Settings.Profiles.ConfigPath(Directory, FileName);   // <profile>\configs since 2026-10-16
         _time = time ?? TimeProvider.System;
     }
 
@@ -283,7 +283,7 @@ public sealed class YouTubeLibrary
         string tempPath = $"{_filePath}.{Guid.NewGuid():N}.tmp";
         try
         {
-            System.IO.Directory.CreateDirectory(Directory);
+            System.IO.Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
             File.WriteAllText(tempPath, JsonSerializer.Serialize(new YouTubeLibraryFile { Videos = videos }, YouTubeJsonContext.Default.YouTubeLibraryFile));
             File.Move(tempPath, _filePath, overwrite: true);
             return true;

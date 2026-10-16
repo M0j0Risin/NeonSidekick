@@ -1505,7 +1505,8 @@ public class AppSettingsTests : IDisposable
     public async Task ResetProfile_AnotherOne_LeavesTheLoadedDataAlone()
     {
         Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", TtsSpeed = 1.4 });
-        File.WriteAllText(Path.Combine(Profiles.Directory(_dir, "work"), "memory.json"), "[]");
+        Directory.CreateDirectory(Profiles.ConfigsDirectory(Profiles.Directory(_dir, "work")));
+        File.WriteAllText(Profiles.ConfigPath(Profiles.Directory(_dir, "work"), "memory.json"), "[]");
         using var settings = new AppSettings(_dir);
         settings.Update(d => d.LlmModel = "default-model");
         int changes = 0;
@@ -1513,7 +1514,7 @@ public class AppSettingsTests : IDisposable
 
         await settings.ResetProfileAsync("work");
 
-        Assert.True(File.Exists(Path.Combine(Profiles.Directory(_dir, "work"), "memory.json")));   // the memories stay (2026-09-20)
+        Assert.True(File.Exists(Profiles.ConfigPath(Profiles.Directory(_dir, "work"), "memory.json")));   // the memories stay (2026-09-20)
         Assert.Equal(0, changes);
         Assert.Equal(Profiles.DefaultName, settings.ProfileName);
         Assert.Equal("default-model", settings.Current.LlmModel);

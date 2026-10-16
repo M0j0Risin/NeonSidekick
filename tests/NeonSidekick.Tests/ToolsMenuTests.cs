@@ -584,7 +584,7 @@ public partial class ToolsMenuTests : IDisposable
     public async Task OnThePane_TheSqlTab_SetsAPassword_Masked_IntoTheConnectionsStore()
     {
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(path, """{ "connections": { "prod": { "server": "x", "database": "db", "auth": "runas", "user": "CONTOSO\\svc-test" }, "mine": { "server": "y", "database": "db", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
         Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the set-password row (right under the offered list since the default row went, 2026-10-09): the pick
@@ -614,7 +614,7 @@ public partial class ToolsMenuTests : IDisposable
         }
 
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(path, """{ "connections": { "prod": { "server": "x", "database": "db", "auth": "runas", "user": "CONTOSO\\svc-test" }, "mine": { "server": "y", "database": "db", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
         Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the set-password row (right under the offered list since the default row went, 2026-10-09): the pick
@@ -745,7 +745,7 @@ public partial class ToolsMenuTests : IDisposable
     public async Task OnThePane_TheOracleTab_SetsAPassword_Masked_IntoTheConnectionsStore()
     {
         string path = NeonSidekick.Oracle.OracleConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(path, """{ "connections": { "free": { "dataSource": "x:1521/y", "user": "neon" } } }""");
         var (menu, _, _) = PaneMenu();
         OpenOracleRow(4);
@@ -767,7 +767,7 @@ public partial class ToolsMenuTests : IDisposable
     public async Task OnThePane_TheOracleTab_NarrowsTheOfferedConnections()
     {
         string path = NeonSidekick.Oracle.OracleConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(path, """{ "connections": { "free": { "dataSource": "x:1521/y", "user": "u" }, "ledger": { "dataSource": "z:1521/l", "user": "u" } } }""");
         var (menu, _, _) = PaneMenu();
         OpenOracleRow(3);
@@ -841,7 +841,7 @@ public partial class ToolsMenuTests : IDisposable
     public async Task OnThePane_TheMySqlTab_SetsAPassword_AndNarrowsTheOfferedConnections()
     {
         string path = NeonSidekick.MySql.MySqlConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(path, """{ "connections": { "shop": { "host": "localhost", "database": "db", "user": "reader" }, "billing": { "host": "db", "database": "db", "user": "ro" } } }""");
         var (menu, _, _) = PaneMenu();
         OpenMySqlRow(4);
@@ -954,7 +954,7 @@ public partial class ToolsMenuTests : IDisposable
     public async Task OnThePane_TheUncTab_FlipsWrites_SetsARunAsPassword_AndNarrowsTheOfferedShares()
     {
         string path = NeonSidekick.Unc.UncConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(path, """{ "shares": { "eng": { "path": "//fs01/eng" }, "fin": { "path": "//fs02/fin", "auth": "runas", "user": "CORP\\svc" } } }""");
         var (menu, _, _) = PaneMenu();
         OpenUncRow(3);                                       // set password: only fin takes one
@@ -986,7 +986,7 @@ public partial class ToolsMenuTests : IDisposable
     public async Task OnThePane_TheUncTab_ListsTheSharesAToZ()
     {
         string path = NeonSidekick.Unc.UncConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(path, """{ "shares": { "zeta": { "path": "//fs01/zeta", "auth": "runas", "user": "CORP\\svc" }, "Alpha": { "path": "//fs02/alpha", "auth": "runas", "user": "CORP\\svc" } } }""");
         var (menu, _, _) = PaneMenu();
         OpenUncRow(3);                                       // set password: both take one
@@ -1227,7 +1227,7 @@ public partial class ToolsMenuTests : IDisposable
     public async Task OnThePane_TheSqlWizard_RefusesATakenName_AndARunAsWithoutDomain_AndCancelWritesNothing()
     {
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         const string Before = """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows" } } }""";
         File.WriteAllText(path, Before);
         var (menu, _, _) = PaneMenu(testSql: (c, _) => Task.FromResult(NeonSidekick.Sql.SqlRun.Refused(NeonSidekick.Sql.SqlOutcome.ConnectFailed, "Login failed for user.", c.Name)));
@@ -1268,7 +1268,7 @@ public partial class ToolsMenuTests : IDisposable
     public async Task OnThePane_TheSqlWizard_RefusesATakenName_AndARunAsWithoutDomain_AndCancelWritesNothing_Mac()
     {
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         const string Before = """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows" } } }""";
         File.WriteAllText(path, Before);
         NeonSidekick.Sql.SqlConnectionConfig? tested = null;
@@ -1374,7 +1374,7 @@ public partial class ToolsMenuTests : IDisposable
     public async Task OnThePane_TheSqlTab_NarrowsTheOfferedConnections_AndANewOneStartsHidden()
     {
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows" }, "prod": { "server": "y", "database": "db", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
         Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the offered row: the checklist
@@ -1414,7 +1414,7 @@ public partial class ToolsMenuTests : IDisposable
     [Fact]
     public async Task OnThePane_TheSqlOffered_ListsTheConnectionsAToZ_AcrossBothFiles()
     {
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "connections": { "zeta": { "server": "x", "database": "db", "auth": "windows" }, "Alpha": { "server": "y", "database": "db", "auth": "windows" } } }""");
         File.WriteAllText(NeonSidekick.Sql.SqlConfigFile.GlobalPath(_settings.StorageDirectory), """{ "connections": { "mid": { "server": "z", "database": "db", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
@@ -1441,7 +1441,7 @@ public partial class ToolsMenuTests : IDisposable
     public async Task OnThePane_TheSqlSetPassword_ListsTheConnectionsAToZ()
     {
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(path, """{ "connections": { "zeta": { "server": "x", "database": "db", "auth": "sql", "user": "z" }, "mine": { "server": "y", "database": "db", "auth": "windows" }, "Alpha": { "server": "w", "database": "db", "auth": "sql", "user": "a" } } }""");
         var (menu, _, _) = PaneMenu();
         Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the set-password row: the pick
@@ -2744,7 +2744,7 @@ public partial class ToolsMenuTests : IDisposable
     public async Task OnThePane_TheSqlOffered_SelectAll_SavesTodaysList_SelectNone_AnEmptyOne()
     {
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows" }, "prod": { "server": "y", "database": "db", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
         Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the offered row

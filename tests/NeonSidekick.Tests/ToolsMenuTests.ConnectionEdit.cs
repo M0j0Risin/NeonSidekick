@@ -47,7 +47,7 @@ public partial class ToolsMenuTests
     public async Task OnThePane_TheSqlWizard_EditsASavedConnection_RenamesIt_KeepsItsPassword_AndItsPlaceInTheOfferedList()
     {
         string path = SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(path, """
             {
               // the user's note
@@ -93,7 +93,7 @@ public partial class ToolsMenuTests
     [Fact]
     public async Task OnThePane_TheSqlWizard_ListsTheSavedConnectionsAToZ()
     {
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(SqlConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "connections": { "zeta": { "server": "x", "database": "db", "auth": "windows" }, "Alpha": { "server": "y", "database": "db", "auth": "windows" } } }""");
         File.WriteAllText(SqlConfigFile.GlobalPath(_settings.StorageDirectory), """{ "connections": { "mid": { "server": "z", "database": "db", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
@@ -114,7 +114,7 @@ public partial class ToolsMenuTests
     public async Task OnThePane_TheSqlWizard_AnEditsEscGoesBackToTheList_AndCancelChangesNothing()
     {
         string path = SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         const string Before = """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows" } } }""";
         File.WriteAllText(path, Before);
         var (menu, _, _) = PaneMenu();
@@ -146,7 +146,7 @@ public partial class ToolsMenuTests
     [InlineData("unc")]
     public async Task OnThePane_EachWizard_RenamesASavedEntry_KeepingItsPasswordAndComment(string family)
     {
-        Directory.CreateDirectory(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         string path;
         Func<IReadOnlyList<string>> names;
         Func<string?> password;

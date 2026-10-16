@@ -209,7 +209,7 @@ public partial class ChatScreenTests
         Assert.Contains(BotChat.MemoryRule, neon);
         Assert.DoesNotContain(MemoryPrompt.RecallSentence, neon);
         Assert.Contains("- The user plays chess.", SystemText(_chat.Requests[2]));   // ada's
-        Assert.Contains("The user plays chess.", File.ReadAllText(Path.Combine(_settings.ProfileDirectory, MemoryStore.FileName)));
+        Assert.Contains("The user plays chess.", File.ReadAllText(NeonSidekick.Settings.Profiles.ConfigPath(_settings.ProfileDirectory, MemoryStore.FileName)));
     }
 
     /// <summary>Independent: a bot's save goes to its own profile's memory.json, and the other bots never see it.</summary>
@@ -228,8 +228,8 @@ public partial class ChatScreenTests
 
         await RunAsync();
 
-        Assert.Contains("The user plays chess.", File.ReadAllText(Path.Combine(ProfileDir("ada"), MemoryStore.FileName)));
-        string parent = Path.Combine(_settings.ProfileDirectory, MemoryStore.FileName);
+        Assert.Contains("The user plays chess.", File.ReadAllText(NeonSidekick.Settings.Profiles.ConfigPath(ProfileDir("ada"), MemoryStore.FileName)));
+        string parent = NeonSidekick.Settings.Profiles.ConfigPath(_settings.ProfileDirectory, MemoryStore.FileName);
         Assert.False(File.Exists(parent) && File.ReadAllText(parent).Contains("The user plays chess.", StringComparison.Ordinal));
         Assert.DoesNotContain("The user plays chess.", SystemText(_chat.Requests[3]));   // neon
     }

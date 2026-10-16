@@ -5,8 +5,10 @@ namespace NeonSidekick.Settings;
 
 /// <summary>
 /// The profile directory layout and its rules, as pure statics over a home directory:
-/// <c>&lt;home&gt;\profiles\&lt;name&gt;\</c> holds one sidekick's <c>profile.json</c>,
-/// <c>memory.json</c>, <c>persona.md</c>, <c>operata.md</c> and <c>vocalia.md</c>. Nothing here knows which profile is loaded; the
+/// <c>&lt;home&gt;\profiles\&lt;name&gt;\</c> holds one sidekick's <c>profile.json</c>, <c>persona.md</c>,
+/// <c>operata.md</c> and <c>vocalia.md</c>, and every other settings file in <c>configs\</c> (<see cref="ConfigPath"/>:
+/// <c>memory.json</c>, <c>mcp.json</c>, the connection files, the saved lists; 2026-10-16, the user's call, no migration:
+/// a file left beside <c>profile.json</c> is not read). Nothing here knows which profile is loaded; the
 /// guards that need that (<see cref="DeleteRefusal"/>) take it as an argument, so every rule and
 /// every sentence is testable without a screen.
 ///
@@ -31,7 +33,7 @@ public static class Profiles
     private const string Category = "Settings";
 
     /// <summary>
-    /// The sidekick's own files beside <see cref="FileName"/>, in the order <see cref="CopySidekickFiles"/>
+    /// The sidekick's own files (the <c>.json</c> ones in <c>configs</c> since 2026-10-16, <see cref="SidekickFilePath"/>), in the order <see cref="CopySidekickFiles"/>
     /// takes them: the memories, the persona, the operating rules, the voice directive, the MCP servers
     /// (2026-09-20), the saved prompts (2026-10-13). Literals; <c>ProfilesTests</c> pins each to its owner's <c>FileName</c>.
     /// </summary>
@@ -133,6 +135,28 @@ public static class Profiles
     /// <summary><c>&lt;home&gt;\profiles\&lt;name&gt;\profile.json</c>.</summary>
     public static string ProfileFile(string home, string name) => Path.Combine(Directory(home, name), FileName);
 
+    /// <summary>The folder of a profile's settings files beside <see cref="FileName"/> (<see cref="ConfigsDirectory"/>).</summary>
+    public const string ConfigsDirectoryName = "configs";
+
+    /// <summary>
+    /// <c>&lt;profile&gt;\configs</c> (2026-10-16, the user's call): where a profile keeps every JSON settings file but its
+    /// <c>profile.json</c> — the memories, the MCP servers, the saved prompts, tests, videos and links, the browser's history, and
+    /// the connection and computer files. Only the profile's: the home's own files (<c>&lt;home&gt;\sql.json</c>…) stay in the home.
+    /// No migration: a file left at the profile's top is not read.
+    /// </summary>
+    public static string ConfigsDirectory(string profileDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(profileDirectory);
+        return Path.Combine(profileDirectory, ConfigsDirectoryName);
+    }
+
+    /// <summary><c>&lt;profile&gt;\configs\&lt;fileName&gt;</c>: a profile's settings file, every family's <c>ProfilePath</c> and every profile store's file.</summary>
+    public static string ConfigPath(string profileDirectory, string fileName) => Path.Combine(ConfigsDirectory(profileDirectory), fileName);
+
+    /// <summary>Where one of <see cref="SidekickFiles"/> lives in <paramref name="profileDirectory"/>: a <c>.json</c> in <c>configs</c>, the prompt files at the top.</summary>
+    public static string SidekickFilePath(string profileDirectory, string fileName) =>
+        fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ? ConfigPath(profileDirectory, fileName) : Path.Combine(profileDirectory, fileName);
+
     /// <summary>
     /// Every profile, <see cref="DefaultName"/> first (listed even when its directory is missing),
     /// the rest sorted ignoring case. Directories with a name <see cref="IsValidName"/> refuses are
@@ -231,7 +255,9 @@ public static class Profiles
                 continue;
             }
 
-            File.Copy(Path.Combine(Path.GetFullPath(sourceDirectory), fileName), Path.Combine(target, fileName));
+            string to = SidekickFilePath(target, fileName);
+            System.IO.Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+            File.Copy(SidekickFilePath(Path.GetFullPath(sourceDirectory), fileName), to);
             copied.Add(fileName);
         }
 
@@ -249,7 +275,7 @@ public static class Profiles
         var present = new List<string>();
         foreach (var fileName in SidekickFiles)
         {
-            if (File.Exists(Path.Combine(root, fileName)))
+            if (File.Exists(SidekickFilePath(root, fileName)))
             {
                 present.Add(fileName);
             }

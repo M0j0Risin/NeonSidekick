@@ -65,7 +65,7 @@ public sealed record ComputerCatalog<TConfig>(IReadOnlyList<Computer<TConfig>> C
 
 /// <summary>
 /// A family's file and secrets (2026-10-15, the admin-tools plan: <c>EventLogConfigFile</c> and <c>EventLogSecrets</c> made generic): one file
-/// in the profile's folder and one in the home, the profile's winning by name; a missing file is empty, a corrupt one a problem and one
+/// in the profile's <c>configs</c> folder and one in the home, the profile's winning by name; a missing file is empty, a corrupt one a problem and one
 /// warning; a plain <c>password</c> DPAPI-encrypted in place at the first read that sees it (<see cref="ConnectionsFileEdit"/> under
 /// <c>computers</c>). Each family hands in its source-generated <see cref="JsonTypeInfo{T}"/>s, so there is no reflection path. Read afresh at
 /// every call. Not carried by <c>/profile push|pull</c>, not copied by <c>/profile add</c>.
@@ -94,7 +94,7 @@ public sealed class ComputerFamily<TConfig> where TConfig : ComputerConfig, new(
     /// <summary>What a fresh file holds: no computers, a commented example of each kind.</summary>
     public string EmptyText { get; }
 
-    public string ProfilePath(string profileDirectory) => Path.Combine(profileDirectory, Info.FileName);
+    public string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, Info.FileName);
 
     public string GlobalPath(string home) => Path.Combine(home, Info.FileName);
 

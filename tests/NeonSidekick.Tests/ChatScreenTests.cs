@@ -4435,6 +4435,7 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>A profile <c>mcp.json</c> naming one pipe server (echo + fail) and the session the screen connects at startup.</summary>
     private void McpServer(string json = """{ "mcpServers": { "pipe": { "command": "pipe-server" } } }""")
     {
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(McpConfigFile.ProfilePath(_settings.ProfileDirectory), json);
         _settings.Update(d => d.McpServers = true);   // off by default since 2026-09-21: the profile opts in
         _mcp = new McpSession(_settings, _mcpServers.Transport, _time);
@@ -4659,6 +4660,7 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => d.TtsOutput = false);
         McpServer();
         Profiles.Create(_dir, "work", AppSettings.Copy(_settings.Current));
+        Directory.CreateDirectory(Profiles.ConfigsDirectory(Profiles.Directory(_dir, "work")));
         File.WriteAllText(McpConfigFile.ProfilePath(Profiles.Directory(_dir, "work")), """{ "mcpServers": { "other": { "command": "other-server" } } }""");
         PushLine("/profile work");
         PushLine("/exit");
@@ -4700,7 +4702,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task WithGeometry_StarMention_ListsTheOfferedShares()
     {
-        File.WriteAllText(Path.Combine(_settings.ProfileDirectory, "unc.json"), "{ \"shares\": { \"zebrashare\": { \"path\": \"" + _dir.Replace("\\", "/", StringComparison.Ordinal) + "\" } } }");
+        WriteProfileConfig("unc.json", "{ \"shares\": { \"zebrashare\": { \"path\": \"" + _dir.Replace("\\", "/", StringComparison.Ordinal) + "\" } } }");
         _settings.Update(d => { d.TtsOutput = false; d.UncTools = true; d.UncSharesOffered = ["zebrashare"]; });
         _console.Profile.Height = 80;
         _geometry = new ScreenGeometry(() => null);
@@ -5226,7 +5228,7 @@ public partial class ChatScreenTests : IDisposable
             return;
         }
 
-        File.WriteAllText(Path.Combine(_settings.ProfileDirectory, "unc.json"), "{ \"shares\": { \"eng\": { \"path\": \"" + _dir.Replace("\\", "/", StringComparison.Ordinal) + "\" } } }");
+        WriteProfileConfig("unc.json", "{ \"shares\": { \"eng\": { \"path\": \"" + _dir.Replace("\\", "/", StringComparison.Ordinal) + "\" } } }");
         _settings.Update(d => { d.TtsOutput = false; d.UncTools = true; d.UncSharesOffered = ["eng"]; d.DockerTools = true; d.PrintTools = true; });
         PushLine("/tools");
         PushLine("/exit");
@@ -6937,7 +6939,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Memory_Edit_CreatesThenOpensTheFile_AndTheEditIsReadBack()
     {
-        string path = Path.Combine(_settings.ProfileDirectory, MemoryStore.FileName);
+        string path = Profiles.ConfigPath(_settings.ProfileDirectory, MemoryStore.FileName);
         Assert.False(File.Exists(path));
         PushLine("/memory edit");
         PushLine("/exit");
@@ -7104,7 +7106,7 @@ public partial class ChatScreenTests : IDisposable
         File.WriteAllText(Path.Combine(ProfileDir("work"), PersonaFile.FileName), "You are Rex.");
         File.WriteAllText(Path.Combine(ProfileDir("work"), OperataFile.FileName), "Answer in haiku.");
         File.WriteAllText(Path.Combine(ProfileDir("work"), VocaliaFile.FileName), "Speak like a pirate.");
-        File.WriteAllText(Path.Combine(ProfileDir("work"), McpConfigFile.FileName), McpConfigFile.EmptyText);
+        File.WriteAllText(McpConfigFile.ProfilePath(ProfileDir("work")), McpConfigFile.EmptyText);   // configs made by the memory's save
     }
 
     [Fact]
@@ -7378,7 +7380,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\"LlmModel\": \"llama\"", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
         Assert.Null(_settings.Current.ShortcutOffered);   // the new profile is asked for its own shortcut (2026-10-16)
         Assert.True(Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, Profiles.DefaultName)).ShortcutOffered);
-        Assert.Equal(new[] { Profiles.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // the default profile here has no memories, persona, operating rules or voice directive to copy
+        Assert.Equal(new[] { Profiles.FileName }, ProfileFiles(ProfileDir("work")));   // the default profile here has no memories, persona, operating rules or voice directive to copy
         Assert.True(File.Exists(Path.Combine(ProfileDir("work"), SessionStore.FolderName, SessionStore.FileName)));   // the /exit typed there (Keep message history, 2026-09-25), under db\sessions since 2026-10-10, never copied
         // Startup discovery, then the reconnect after the switch (LLM, TTS and voice).
         Assert.Equal(2, ModelProbes);   // the fixture's URL, copied into the new profile: one probe each
@@ -7418,6 +7420,29 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("🤖 averyveryverylongprof…", _titles[^1]);
     }
 
+    /// <summary>
+    /// A profile folder's files and its <c>configs</c> folder's (2026-10-16), as paths relative to it in ordinal order: a listing that sees a
+    /// settings file wherever it lands, so a copy into <c>configs</c> can never pass unseen.
+    /// </summary>
+    private static IEnumerable<string> ProfileFiles(string dir)
+    {
+        string configs = Profiles.ConfigsDirectory(dir);
+        var files = Directory.GetFiles(dir).Concat(Directory.Exists(configs) ? Directory.GetFiles(configs) : []);
+        return files.Select(f => Path.GetRelativePath(dir, f)).Order(StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>Where <see cref="ProfileFiles"/> lists each named file: <c>profile.json</c> and the prompt files at the top, every other <c>.json</c> in <c>configs</c>.</summary>
+    private static IEnumerable<string> Placed(params string[] names) =>
+        names.Select(n => n == Profiles.FileName ? n : Path.GetRelativePath("p", Profiles.SidekickFilePath("p", n))).Order(StringComparer.Ordinal).ToList();
+
+    /// <summary>Writes one of the loaded profile's settings files where the app reads it, <c>&lt;profile&gt;\configs</c> (2026-10-16).</summary>
+    private void WriteProfileConfig(string fileName, string text)
+    {
+        string path = Profiles.ConfigPath(_settings.ProfileDirectory, fileName);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, text);
+    }
+
     /// <summary>The default profile with a memory, a persona, operating rules and a voice directive on disk: of these <c>/profile add</c> copies the memory alone.</summary>
     private void FurnishedDefaultProfile()
     {
@@ -7426,7 +7451,7 @@ public partial class ChatScreenTests : IDisposable
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName), "You are Rex.");
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, OperataFile.FileName), "Answer in haiku.");
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, VocaliaFile.FileName), "Speak like a pirate.");
-        File.WriteAllText(Path.Combine(_settings.ProfileDirectory, McpConfigFile.FileName), McpConfigFile.EmptyText);   // the fifth sidekick file (2026-09-20)
+        File.WriteAllText(McpConfigFile.ProfilePath(_settings.ProfileDirectory), McpConfigFile.EmptyText);   // the fifth sidekick file (2026-09-20); configs made by the memory's save
     }
 
     /// <summary>
@@ -7448,7 +7473,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ChatScreen.ProfileCreatedNotice("work", Profiles.BasicSidekickFiles), output);
         Assert.Contains("(🪪 created profile \"work\" from the current settings, memories, saved prompts)", output);
         Assert.Equal("work", _settings.ProfileName);
-        Assert.Equal(new[] { MemoryStore.FileName, Profiles.FileName, NeonSidekick.Prompts.SavedPrompts.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order());   // sessions.db from the turn sits under db\sessions (2026-10-10), never copied
+        Assert.Equal(Placed(MemoryStore.FileName, Profiles.FileName, NeonSidekick.Prompts.SavedPrompts.FileName), ProfileFiles(ProfileDir("work")));   // sessions.db from the turn sits under db\sessions (2026-10-10), never copied
         var request = Assert.Single(_chat.Requests);
         string prompt = request[0].Text!;
         Assert.DoesNotContain("Rex", prompt);
@@ -7471,7 +7496,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("  · " + ChatScreen.ProfileCreatedNotice("work"), output);
-        Assert.Equal(new[] { Profiles.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // sessions.db (the /exit typed there) sits under db\sessions (2026-10-10)
+        Assert.Equal(new[] { Profiles.FileName }, ProfileFiles(ProfileDir("work")));   // sessions.db (the /exit typed there) sits under db\sessions (2026-10-10)
     }
 
     [Fact]
@@ -8228,8 +8253,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ChatScreen.ProfileRenamedNotice("work", "office"), output);
         Assert.False(Directory.Exists(ProfileDir("work")));
         Assert.Equal(
-            new[] { McpConfigFile.FileName, MemoryStore.FileName, OperataFile.FileName, PersonaFile.FileName, Profiles.FileName, VocaliaFile.FileName },
-            Directory.GetFiles(ProfileDir("office")).Select(Path.GetFileName).OrderBy(n => n, StringComparer.Ordinal));
+            Placed(McpConfigFile.FileName, MemoryStore.FileName, OperataFile.FileName, PersonaFile.FileName, Profiles.FileName, VocaliaFile.FileName),
+            ProfileFiles(ProfileDir("office")));
         Assert.True(File.Exists(Path.Combine(ProfileDir("office"), SessionStore.FolderName, SessionStore.FileName)));   // the /exit typed there (Keep message history, 2026-09-25) moved with the folder
         // The rename alone changed nothing about the running app: the title and the connections
         // stayed until the switch that followed.
@@ -8383,7 +8408,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("work-model", _settings.Current.LlmModel);
         Assert.Equal("work-model", Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work")).LlmModel);
         Assert.True(_settings.Current.TtsOutput == new AppSettingsData().TtsOutput);
-        Assert.Equal(new[] { McpConfigFile.FileName, MemoryStore.FileName, OperataFile.FileName, PersonaFile.FileName, Profiles.FileName, VocaliaFile.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // every sidekick file stays through a reset (2026-09-20)
+        Assert.Equal(Placed(McpConfigFile.FileName, MemoryStore.FileName, OperataFile.FileName, PersonaFile.FileName, Profiles.FileName, VocaliaFile.FileName), ProfileFiles(ProfileDir("work")));   // every sidekick file stays through a reset (2026-09-20)
         Assert.True(File.Exists(Path.Combine(ProfileDir("work"), SessionStore.FolderName, SessionStore.FileName)));   // the session store too (2026-09-18; under db\sessions since 2026-10-10)
         Assert.Equal(new[] { "They like tea." }, new MemoryStore(ProfileDir("work")).Snapshot());
         // Yes was the answer, not a message; the third turn starts a fresh conversation on the default prompt, and the reset profile
@@ -8427,7 +8452,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
         Assert.Equal("default-model", _settings.Current.LlmModel);
         Assert.Equal(new[] { "Their name is Chris." }, _memory.Snapshot());
-        Assert.Equal(Profiles.SidekickFiles.Append(Profiles.FileName).Order(StringComparer.Ordinal), Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // every sidekick file stays (2026-09-20)
+        Assert.Equal(Placed([.. Profiles.SidekickFiles, Profiles.FileName]), ProfileFiles(ProfileDir("work")));   // every sidekick file stays (2026-09-20)
         Assert.Equal("You are Rex.", File.ReadAllText(Path.Combine(ProfileDir("work"), PersonaFile.FileName)));
         Assert.Equal(new[] { "They like tea." }, new MemoryStore(ProfileDir("work")).Snapshot());
         var reset = Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work"));

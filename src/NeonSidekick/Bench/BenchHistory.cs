@@ -26,7 +26,7 @@ public sealed class BenchHistory
     public BenchHistory(string directory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
-        _filePath = Path.Combine(Path.GetFullPath(directory), FileName);
+        _filePath = NeonSidekick.Settings.Profiles.ConfigPath(Path.GetFullPath(directory), FileName);   // <profile>\configs since 2026-10-16
     }
 
     public string FilePath => _filePath;
