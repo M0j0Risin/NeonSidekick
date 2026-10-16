@@ -11,9 +11,9 @@
     "tint": "#B48CFF",
     "ink": "#E8E6F0",
     "dim": "#8E8AA0",
-    "dimmer": "#33323F",
+    "dimmer": "#535166",
     "bg": "#0B0D14",
-    "panelBg": "#171A26",
+    "panelBg": "#1D2130",
     "good": "#5CFF8A",
     "bad": "#FF6A3B",
     "warn": "#F2E85C"

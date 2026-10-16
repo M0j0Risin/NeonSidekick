@@ -149,7 +149,8 @@ public static class Theme
     /// A toolbar tool switch that is off (2026-10-03, the user's pick after trying faint, a grey colour and the text
     /// presentation in Windows Terminal: only a background reads on a colour emoji): the hint's colour on the palette's deep
     /// colour, the pane rule's, so every theme has its own. The panel fill a code block sits on until 2026-10-11 (the user's
-    /// call: about 1.1:1 against the page in every built-in theme, the slab hard to see; deep is 1.4 to 3.4:1).
+    /// call: about 1.1:1 against the page in every built-in theme, the slab hard to see; deep is 1.6 to 3.4:1 since the contrast review
+    /// of 2026-10-16).
     /// </summary>
     public static Style ToolbarOff => new(Hint.Foreground, Deep);
     /// <summary>The mark after the trailer on the hint row (the reasoning glyph beside the model): violet, plain — the user's call, 2026-09-15.</summary>
@@ -174,8 +175,8 @@ public static class Theme
     public static Style TabIdle => new(Body.Foreground);
     /// <summary>
     /// A tab whose switch is off (2026-10-16, the user's ask: a <c>/tools</c> menu whose group switch is off, or a group whose menus all
-    /// are, <see cref="UI.MenuTab.Off"/>): the dim text, italic, since dim alone is weak on a few themes (blueprint, chalkboard, commodore)
-    /// and italic still shows on a terminal with no colour. Derived from <see cref="DimText"/>'s slot, so a theme's override counts.
+    /// are, <see cref="UI.MenuTab.Off"/>): the dim text, italic, since italic still shows on a terminal with no colour. Derived from
+    /// <see cref="DimText"/>'s slot, so a theme's override counts.
     /// </summary>
     public static Style TabOff => new(DimText.Foreground, decoration: Decoration.Italic);
     /// <summary>The tab one is on when its switch is off (2026-10-16): <see cref="TabOff"/> bold and underlined, the underline still marking where one is.</summary>
@@ -271,15 +272,19 @@ public static class Theme
     public static Style CodeDeleted => s_current[ThemeStyleSlot.CodeDeleted];
     /// <summary>
     /// An added line under a file edit (2026-10-03, the user's ask: diffs in the transcript, Claude Code's look): a slab of the
-    /// palette's own good colour a quarter of the way up from the page, so every theme has its own green; the line's text keeps
+    /// palette's own good colour a fifth of the way up from the page, so every theme has its own green; the line's text keeps
     /// its code colours over it (<see cref="DiffView"/> takes only the background).
     /// </summary>
     public static Style DiffAdded => s_current[ThemeStyleSlot.DiffAdded];
     /// <summary>A removed line under a file edit: <see cref="DiffAdded"/>'s slab in the palette's bad colour.</summary>
     public static Style DiffRemoved => s_current[ThemeStyleSlot.DiffRemoved];
 
-    /// <summary>How far a diff slab goes from the page colour toward good or bad: enough to read, faint enough for code over it.</summary>
-    private const double DiffSlabShare = 0.28;
+    /// <summary>
+    /// How far a diff slab goes from the page colour toward good or bad: enough to read, faint enough for code over it. 0.28 until
+    /// 2026-10-16 (the contrast review: code over the slab now reads at 3:1 in every built-in, and the faintest removed slab, cyberpunk's,
+    /// is still 1.19:1 on the page, about the panel's lift; 0.20 would take it to 1.16).
+    /// </summary>
+    private const double DiffSlabShare = 0.22;
 
     /// <summary>The style of a <see cref="CodeTokenKind"/>; plain text is <see cref="MarkdownCodeBlock"/>.</summary>
     public static Style CodeStyle(CodeTokenKind kind) => kind switch

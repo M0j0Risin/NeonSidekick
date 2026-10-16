@@ -2,37 +2,37 @@
   "name": "bauhaus",
   "description": "form follows function",
   "colors": {
-    "primary": "#E8352B",
+    "primary": "#EB544B",
     "secondary": "#F7C42B",
-    "tertiary": "#3F7FE8",
+    "tertiary": "#4A87E9",
     "deep": "#5A5A60",
     "highlight": "#FFE07A",
     "warm": "#FF7A2B",
     "tint": "#8AB0FF",
     "ink": "#F2EEE3",
     "dim": "#9A968C",
-    "dimmer": "#3A3834",
+    "dimmer": "#56534D",
     "bg": "#0E0E10",
-    "panelBg": "#1C1C20",
+    "panelBg": "#212125",
     "good": "#4FCF7A",
     "bad": "#FF6A5A",
     "warn": "#F7C42B"
   },
   "gradient": [
-    "#E8352B",
-    "#E8352B",
-    "#E8352B",
-    "#E8352B",
-    "#E8352B",
-    "#E8352B",
+    "#EB544B",
+    "#EB544B",
+    "#EB544B",
+    "#EB544B",
+    "#EB544B",
+    "#EB544B",
     "#F7C42B",
     "#F7C42B",
     "#F7C42B",
     "#F7C42B",
-    "#3F7FE8",
-    "#3F7FE8",
-    "#3F7FE8",
-    "#3F7FE8"
+    "#4A87E9",
+    "#4A87E9",
+    "#4A87E9",
+    "#4A87E9"
   ],
   "styles": {
     "markdownHeading1": {
@@ -51,12 +51,12 @@
       "underline": true
     },
     "menuHighlight": {
-      "fg": "bg",
-      "bg": "secondary"
+      "fg": "secondary",
+      "bg": "#362D15"
     },
     "menuHighlightDim": {
-      "fg": "#4A3A08",
-      "bg": "secondary"
+      "fg": "dim",
+      "bg": "#362D15"
     },
     "codeKeyword": {
       "fg": "primary",

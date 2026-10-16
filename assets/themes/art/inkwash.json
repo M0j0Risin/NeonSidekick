@@ -4,18 +4,18 @@
   "colors": {
     "primary": "#E0DAD0",
     "secondary": "#B8B2A6",
-    "tertiary": "#E0482E",
+    "tertiary": "#E35A43",
     "deep": "#4A4844",
     "highlight": "#F2EEE6",
     "warm": "#C8C0B0",
     "tint": "#A8A298",
     "ink": "#E8E4DA",
     "dim": "#8E8A82",
-    "dimmer": "#363430",
+    "dimmer": "#55524C",
     "bg": "#0B0B0A",
-    "panelBg": "#181816",
+    "panelBg": "#20201D",
     "good": "#A8C8A0",
-    "bad": "#E8503A",
+    "bad": "#E9543F",
     "warn": "#D8B87A"
   },
   "gradient": [
@@ -32,7 +32,7 @@
     "#625E5A",
     "#5C5854",
     "#5A5652",
-    "#E0482E"
+    "#E35A43"
   ],
   "styles": {
     "accent": {

@@ -11,11 +11,11 @@
     "tint": "#8FB0FF",
     "ink": "#F0E9D6",
     "dim": "#8C93AD",
-    "dimmer": "#2A3352",
+    "dimmer": "#425080",
     "bg": "#050A1C",
-    "panelBg": "#0E1836",
+    "panelBg": "#111E43",
     "good": "#7FD98A",
-    "bad": "#E8505B",
+    "bad": "#E8535E",
     "warn": "#F5DC8C"
   },
   "gradient": [

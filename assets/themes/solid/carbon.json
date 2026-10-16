@@ -2,7 +2,7 @@
   "name": "carbon",
   "description": "racing red on weave",
   "colors": {
-    "primary": "#F0303A",
+    "primary": "#F24A53",
     "secondary": "#D8DDE6",
     "tertiary": "#FF7A6A",
     "deep": "#4E525A",
@@ -11,16 +11,16 @@
     "tint": "#A8B0C0",
     "ink": "#E8EAEE",
     "dim": "#8E939C",
-    "dimmer": "#34373D",
+    "dimmer": "#4E535C",
     "bg": "#0C0D0F",
-    "panelBg": "#1A1C20",
+    "panelBg": "#1F2126",
     "good": "#4ADB8A",
     "bad": "#FF5C9A",
     "warn": "#FFD24A"
   },
   "gradient": [
-    "#F0303A",
-    "#F0303A"
+    "#F24A53",
+    "#F24A53"
   ],
   "styles": {
     "tableHeader": {

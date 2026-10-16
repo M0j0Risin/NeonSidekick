@@ -12,8 +12,8 @@ namespace NeonSidekick.UI;
 /// reply with bold, code, italic, a bullet and a quote, a highlighted code block, a file edit's diff (2026-10-03, the user's ask:
 /// its note, summary and a removed and an added row on their slabs, as <see cref="DiffView"/> draws them; past <c>Diff collapse count</c>
 /// its summary is the fold's unfolded row, 2026-10-04, the user's ask), the thinking slab, the notice, good, warning
-/// and error lines, the pane rule, a highlighted menu row, the input row with a selection, the spinner and a paste label, the
-/// hint row and the ghost text. Every cell is on the palette's <see cref="ThemePalette.Bg"/>, the way the Atlas paints each
+/// and error lines, the pane rule, a highlighted menu row with a setting's value on it, the input row with a selection, the
+/// spinner and a paste label, the hint row and the ghost text. Every cell is on the palette's <see cref="ThemePalette.Bg"/>, the way the Atlas paints each
 /// screen: the card reads as the theme's own window, apart from the list beside it. With <c>Themed background</c> off
 /// (2026-10-03, the user's ask) the card is on the terminal's own background instead, as the screen will be; the fills a style
 /// carries itself (the code block, the thinking slab, the highlighted row, the selection) stay.
@@ -127,9 +127,13 @@ public static class ThemePreview
             ? DiffFoldText.Summary(diff, diffRows, expanded: true)
             : DiffView.Indent + DiffView.Elbow + FileText.DiffSummary(diff);
 
-        // The menu row: the highlight across the card, as the pane draws the cursor's row.
-        string menuName = MenuPane.Pointer + p.Name.PadRight(Math.Max(10, p.Name.Length + 1));
-        string menuNote = p.Description.PadRight(Math.Max(0, inner - TextCells.Width(menuName)));
+        // The menu row: the highlight across the card, as the pane draws the cursor's row, with a value on it as a changed
+        // setting's reads on /settings (2026-10-16, the contrast review: MenuPane.RowMarkup keeps a row's own colours over the bar,
+        // so a bar that hides them shows here, a user theme's too). The value before the description, so a narrow card cuts the
+        // description first.
+        string menuName = MenuPane.Pointer + p.Name.PadRight(Math.Max(10, p.Name.Length + 2));
+        var menuValue = new Piece(ThemeText.PreviewMenuValue, new Style(p.Secondary, s(ThemeStyleSlot.MenuHighlight).Background));
+        string menuNote = ("  " + p.Description).PadRight(Math.Max(0, inner - TextCells.Width(menuName) - TextCells.Width(menuValue.Text)));
 
         return
         [
@@ -165,7 +169,7 @@ public static class ThemePreview
             L(2, P(ThemeStyleSlot.ErrorText, "  " + ThemeText.PreviewError)),
             Empty(),
             L(6, P(ThemeStyleSlot.PaneRule, new string('─', inner))),
-            L(3, P(ThemeStyleSlot.MenuHighlight, menuName), P(ThemeStyleSlot.MenuHighlightDim, menuNote)),
+            L(3, P(ThemeStyleSlot.MenuHighlight, menuName), menuValue, P(ThemeStyleSlot.MenuHighlightDim, menuNote)),
             L(5,
                 P(ThemeStyleSlot.User, "› /theme "), P(ThemeStyleSlot.SelectedText, p.Name),
                 P(ThemeStyleSlot.Spinner, "  " + Theme.SpinnerFrames[0]), P(ThemeStyleSlot.PasteLabel, "  " + ThemeText.PreviewPaste)),

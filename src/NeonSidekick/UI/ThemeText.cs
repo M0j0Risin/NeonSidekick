@@ -80,6 +80,8 @@ public static class ThemeText
     public const string PreviewWarn = "! orphan.json: skipped, it does not set bg";
     public const string PreviewError = "✗ No theme named \"matrix\".";
     public const string PreviewPaste = "[Pasted text #1 +12 lines]";
+    // The menu row's value (2026-10-16, the contrast review): a changed setting's value, as /settings draws it over the cursor's bar.
+    public const string PreviewMenuValue = "on";
     public const string PreviewHint = "Esc to cancel · 1.2k tokens · ";
     public const string PreviewTrailer = " gemma-4";
     public const string PreviewPlaceholder = "Type a message or /help for more info";

@@ -11,9 +11,9 @@
     "tint": "#E8B8A0",
     "ink": "#F2E6D8",
     "dim": "#A08C78",
-    "dimmer": "#3E3026",
+    "dimmer": "#654E3E",
     "bg": "#120B07",
-    "panelBg": "#20150E",
+    "panelBg": "#2C1D13",
     "good": "#A8D08A",
     "bad": "#F0605A",
     "warn": "#FFC24A"
@@ -32,12 +32,12 @@
       "bold": true
     },
     "menuHighlight": {
-      "fg": "bg",
-      "bg": "primary"
+      "fg": "primary",
+      "bg": "#382A1C"
     },
     "menuHighlightDim": {
-      "fg": "#4A2E14",
-      "bg": "primary"
+      "fg": "#A3907C",
+      "bg": "#382A1C"
     }
   }
 }

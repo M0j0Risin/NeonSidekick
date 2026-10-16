@@ -2,7 +2,7 @@
   "name": "akira",
   "description": "neo-tokyo red",
   "colors": {
-    "primary": "#FF2D2D",
+    "primary": "#FF3131",
     "secondary": "#4FD1FF",
     "tertiary": "#FF8A5C",
     "deep": "#6B1020",
@@ -11,9 +11,9 @@
     "tint": "#FF9EB5",
     "ink": "#F2ECE4",
     "dim": "#9A8F99",
-    "dimmer": "#3E3540",
+    "dimmer": "#5A4D5D",
     "bg": "#0A0810",
-    "panelBg": "#1A1220",
+    "panelBg": "#261A2F",
     "good": "#4CF0A0",
     "bad": "#FF5C8A",
     "warn": "#FFD23F"
@@ -21,7 +21,7 @@
   "gradient": [
     "#B01E32",
     "#D8262E",
-    "#FF2D2D",
+    "#FF3131",
     "#FF8A5C",
     "#FFD23F"
   ],

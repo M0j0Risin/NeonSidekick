@@ -2,7 +2,7 @@
   "name": "velvet",
   "description": "theatre curtain",
   "colors": {
-    "primary": "#E8485E",
+    "primary": "#E94D62",
     "secondary": "#F0D08A",
     "tertiary": "#E890A8",
     "deep": "#7A2A3A",
@@ -11,16 +11,16 @@
     "tint": "#F0B8C0",
     "ink": "#F5E8E8",
     "dim": "#A88C90",
-    "dimmer": "#46282E",
+    "dimmer": "#73424B",
     "bg": "#0E0507",
-    "panelBg": "#1E0C10",
+    "panelBg": "#33141B",
     "good": "#A8E0A0",
     "bad": "#FF7A3A",
     "warn": "#FFF06A"
   },
   "gradient": [
-    "#E8485E",
-    "#E8485E"
+    "#E94D62",
+    "#E94D62"
   ],
   "styles": {
     "menuHighlight": {

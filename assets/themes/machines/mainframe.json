@@ -10,10 +10,10 @@
     "warm": "#8FB8FF",
     "tint": "#9ADCFF",
     "ink": "#E2F2FF",
-    "dim": "#6A88A8",
-    "dimmer": "#22324A",
+    "dim": "#6B89A8",
+    "dimmer": "#385279",
     "bg": "#020812",
-    "panelBg": "#081628",
+    "panelBg": "#0B1F38",
     "good": "#7AFFD4",
     "bad": "#FF4D5E",
     "warn": "#BDF0FF"

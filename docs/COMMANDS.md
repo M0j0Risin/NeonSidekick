@@ -517,6 +517,7 @@ Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.jso
 * **Replies:** `markdownBold`, `markdownItalic`, `markdownCode`, `markdownCodeBlock`, `markdownCodeLabel`, `thinking`, `markdownHeading1`, `markdownHeading`, `markdownHeading3`, `markdownBullet`, `markdownQuoteBar`, `markdownQuote`, `markdownLinkUrl`, `markdownRule`.
 * **Code highlighting:** `codeKeyword`, `codeType`, `codeString`, `codeNumber`, `codeComment`, `codePunctuation`, `codeFunction`, `codeVariable`, `codeAttribute`, `codeTag`, `codeHeading`, `codeInserted`, `codeDeleted`.
 * **File diffs:** `diffAdded`, `diffRemoved` (the background colors the whole line).
+* **Tip:** a row keeps its own colors on `menuHighlight`'s fill (a setting's value, a check mark), so keep that fill dark; a diff's code keeps its colors on `diffAdded`'s and `diffRemoved`'s fill too.
 
 ### Voice presets
 
