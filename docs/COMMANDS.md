@@ -259,11 +259,14 @@ Your own hand on the [Admin](TOOLS.md#admin) tools and [Network](TOOLS.md#networ
 | `/eventlog <log>\|<file.evtx> [<term>…] [<words>]` | Opens on that log (`app`, `sys`, `sec`, `setup`, `ps`) or an `.evtx` in the working directory, narrowed by `computer:dc01`, `level:error,warning`, `id:41,1074`, `provider:<name>`, `field:<Name>=<value>`, `since:2h`, `until:<time>`, `audit:failure\|success` and words to find. Without the pane, and from the Web UI, it lists the events. |
 | `/services [computer:<name>] [state:running\|stopped\|failed\|all] [<words>]` | A computer's services in a pane: Running, Stopped, Failed and All as tabs, `r` reads again, `c` another ticked computer; type to filter. Enter opens a service with **copy**, **ask** and, on a `readwrite` computer, the actions its `controlActions` allow (start, stop, restart, start type), each asking first. It skips *Service writes*, never the rest of the [order of checks](TOOLS.md#services). Without the pane, and from the Web UI, it lists them. |
 | `/tasks [computer:<name>] [folder:<path>] [state:ready\|running\|disabled\|all] [microsoft] [<words>]` | A computer's scheduled tasks in a pane: Ready, Running, Disabled and All as tabs, `r` reads again, `c` another computer, `f` a folder, `w` Windows' own under `\Microsoft\`. Enter opens a task (its triggers in words, actions, who it runs as, last result) with **copy**, **ask**, **history** (its runs on `/eventlog`, when Task Scheduler's log is on) and the actions its computer allows (run, end, enable, disable), each asking first; privileged tasks are guarded. See [Scheduled tasks](TOOLS.md#scheduled-tasks). |
-| `/ad <name>` | Looks a name up in Active Directory (account, display name, cn, mail or UPN) and opens the match as a card with **copy** and **ask**. Read-only. See [Active Directory](TOOLS.md#active-directory). |
-| `/ad user <name> [domain:<name>]` | A user's card: enabled, locked and when (with a **Search 4740** button when the PDC emulator is a ticked event-log computer), bad passwords, password expiry, last sign-in, groups, manager, title, department and OU. |
-| `/ad group <name> [nested] [domain:<name>]`, `/ad computer <name> [domain:<name>]` | A group's members, direct or nested; a computer's card. |
-| `/ad find locked\|password_expiring\|disabled\|stale_users\|stale_computers\|name [<days>] [<words>]` | Locked users, passwords ending within the days (14), disabled users, users or computers not signed in for the days (90; the never-signed-in apart), or names holding the words. |
-| `/ad domain [domain:<name>]` | The domain controllers, functional levels, password and lockout policy, and the role holders. |
+| `/ad <name>` | Looks a name up in Active Directory (account, display name, cn, mail, UPN or description) and opens the matches as a card in columns with **copy** and **ask**; a double-click on a row opens its card. Read-only. See [Active Directory](TOOLS.md#active-directory). |
+| `/ad user <name>` | A user's card: enabled, locked and when (with a **Search 4740** button when the PDC emulator is a ticked event-log computer), bad passwords, password expiry, last sign-in, groups, manager, direct reports, title, department and OU. |
+| `/ad group <name> [nested] [members:users\|computers\|groups] [to:<file-or-folder>]` | A group's card and members, direct or nested (each with the group it comes through); `n` and `u` on the card switch. |
+| `/ad computer <name>` | A computer's card, or a managed service account's. |
+| `/ad ou [<path>] [to:<file-or-folder>]` | The OU tree, or one OU (`Neon/Engineering`, a DN or a name): its owner, linked GPOs and objects. |
+| `/ad find <kind> [<days>] [<words>] [type:<type>] [field:<field>] [ou:<path>] [to:<file-or-folder>]` | The kinds of `ad_find`: `locked`, `password_expiring`, `disabled`, `stale_users`, `stale_computers`, `name`, `field`, `os`, `password_never_expires`, `account_expiring`, `created`, `privileged`, `empty_groups`. |
+| `/ad domain` | The domain controllers, functional levels, password and lockout policy, fine-grained policies, and the role holders. |
+| `domain:<name>`, `to:<file-or-folder>` | Anywhere on an `/ad` line: the domain (a ticked name or its DNS name), and a CSV of the list saved in the working directory (never over a file). Quote a value with spaces: `/ad group "Domain Users"`, `to:"my list.csv"`. |
 
 ### Display and windows
 
@@ -368,7 +371,7 @@ Your own hand on the [Admin](TOOLS.md#admin) tools and [Network](TOOLS.md#networ
 
 ### Benchmark tests
 
-`/test <id>` runs one of the nine tests from the companion LLMTester project, each one request graded in code.
+`/test <id>` runs one of nine benchmark tests, each one request graded in code.
 
 | Id | Test | Passes when |
 |---|---|---|
