@@ -115,7 +115,7 @@ internal sealed partial class SettingsMenu
     /// <summary>The first page: <see cref="ConnectionWizardNewRow"/>, then each entry. -1 for new, the entry's index, or null for ESC.</summary>
     private async Task<int?> ConnectionWizardPickAsync(string title, string noun, IReadOnlyList<(string Name, bool Global)> entries, Func<bool, string> pathOf, CancellationToken cancellationToken)
     {
-        int width = entries.Max(e => e.Name.Length);
+        int width = entries.Count == 0 ? 0 : entries.Max(e => e.Name.Length);   // only the new row: never a crash on an empty list (2026-10-15)
         var rows = new List<string> { ConnectionWizardNewRow(noun) };
         rows.AddRange(entries.Select(e => ConnectionWizardEntryRow(e.Name, width, e.Global, pathOf(e.Global))));
         var page = new MenuPage(title, rows.Select(Markup.Escape).ToList(), PickKeys) { Caption = ConnectionWizardPickQuestion };

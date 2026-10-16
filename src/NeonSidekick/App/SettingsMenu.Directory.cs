@@ -208,11 +208,19 @@ internal sealed partial class SettingsMenu
         while (true)
         {
             var entries = ConnectionWizardEntries(DirectoryWizardPath(false), DirectoryWizardPath(true), path => DirectoryConfigFile.Load(path).Domains, d => d.Name);
-            var rows = entries.Select(e => (e.Named.Name, e.Global)).ToList();
-            if (await ConnectionWizardPickAsync(title, "domain", rows, DirectoryWizardPath, cancellationToken).ConfigureAwait(false) is not { } picked)
+            // With no domain saved there is nothing to pick: straight to a new one, as the SQL wizard does (2026-10-15, the user's report:
+            // the pick page measured an empty list and the app crashed).
+            int picked = -1;
+            if (entries.Count > 0)
             {
-                Sink.Notice(DirectoryWizardCancelledNotice);
-                return false;
+                var rows = entries.Select(e => (e.Named.Name, e.Global)).ToList();
+                if (await ConnectionWizardPickAsync(title, "domain", rows, DirectoryWizardPath, cancellationToken).ConfigureAwait(false) is not { } chosen)
+                {
+                    Sink.Notice(DirectoryWizardCancelledNotice);
+                    return false;
+                }
+
+                picked = chosen;
             }
 
             var draft = new DirectoryDraft();
@@ -237,6 +245,12 @@ internal sealed partial class SettingsMenu
             if (await RunDirectoryWizardAsync(draft, title, cancellationToken).ConfigureAwait(false) is { } changed)
             {
                 return changed;
+            }
+
+            if (entries.Count == 0)
+            {
+                Sink.Notice(DirectoryWizardCancelledNotice);
+                return false;
             }
         }
     }

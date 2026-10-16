@@ -68,6 +68,51 @@ public partial class ToolsMenuTests
         Assert.Equal(["local", "app01"], _settings.Current.ServiceComputersOffered);   // local was ticked by default: kept, the new one added
     }
 
+    /// <summary>
+    /// The directory wizard with no <c>ad.json</c> anywhere (2026-10-15, the user's report: the "new or saved?" page measured an empty list and
+    /// the app crashed): it goes straight to a new domain, and saving writes the file with the entry, hidden until ticked.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheDirectoryWizard_WithNoDomainSaved_StartsANewOne_AndSavesIt()
+    {
+        string path = NeonSidekick.ActiveDirectory.DirectoryConfigFile.ProfilePath(_settings.ProfileDirectory);
+        Assert.False(File.Exists(path));
+        var (menu, _, _) = PaneMenu();
+        OpenMenuRow(ToolsText.DirectoryMenuTitle, SettingsField.DirectoryAddDomain);
+        Push(Keys.Enter);                         // the profile's file: no "new or saved?" page before it
+        Type("lab");
+        Type("lab.example");
+        Type("localhost");
+        Type("");                                 // the domain's own base
+        Push(Keys.Enter);                         // 389
+        Push(Keys.Enter);                         // as you
+        Push(Keys.Enter);                         // redacted
+        Type("the lab");
+        Push(Keys.Down, Keys.Enter);              // Save, hidden from the model
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        var lab = Assert.Single(NeonSidekick.ActiveDirectory.DirectoryConfigFile.Load(path).Domains);
+        Assert.Equal(("lab", "lab.example", "localhost", "the lab"), (lab.Name, lab.Config.Domain, lab.Config.Server, lab.Config.Description));
+        Assert.Null(_settings.Current.DirectoryDomainsOffered);
+    }
+
+    /// <summary>ESC on the first page with nothing saved leaves the wizard (no endless loop back into it) and writes nothing.</summary>
+    [Fact]
+    public async Task OnThePane_TheDirectoryWizard_WithNoDomainSaved_EscLeavesAndWritesNothing()
+    {
+        var (menu, _, _) = PaneMenu();
+        OpenMenuRow(ToolsText.DirectoryMenuTitle, SettingsField.DirectoryAddDomain);
+        Push(Keys.Escape);                        // the file page: back out of the wizard
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.False(File.Exists(NeonSidekick.ActiveDirectory.DirectoryConfigFile.ProfilePath(_settings.ProfileDirectory)));
+        Assert.Contains(SettingsMenu.DirectoryWizardCancelledNotice, Output);
+    }
+
     [Fact]
     public async Task OnThePane_TheTasksWizard_AReadOnlyComputer_SkipsTheChangePages()
     {
