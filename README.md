@@ -7,7 +7,7 @@
 
 Neon Sidekick is an agentic terminal client built first and foremost for local LLMs. Point it at LM Studio, Ollama, vLLM, SGLang or llama.cpp, or let it download a model and run it itself. When you want a frontier model too, it connects to the OpenAI and Anthropic APIs with your own key, or to your Claude Code install.
 
-It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing together the features I liked most in each, plus many they don't have. It runs on Windows and Apple Silicon Macs and is built on .NET 10. Use it as a Swiss Army knife for IT and creative work, or as a stable base for building and testing new agentic tools.
+It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing together features I liked from each and adding many of my own. It runs on Windows and Apple Silicon Macs. Use it for IT and admin work, to run your smart home, or for creative projects like images and storytelling. For developers, it's a coding agent and a stable C# and .NET 10 base for building and testing new agentic tools.
 
 <p align="center">
   <img src="assets/screenshots/screen_splash.png" alt="The model writing a Rust Hello World and then editing it: folded thinking and tool calls, the edit's highlighted diff, then its reply" width="50%">
