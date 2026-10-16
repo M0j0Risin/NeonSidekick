@@ -26,10 +26,10 @@ namespace NeonSidekick.App;
 /// heard, why a hit was ignored) are how a voice problem is diagnosed in the field. As typed, <see cref="LogStampToken"/>
 /// and all, until <see cref="WithLogStamp"/>.</param>
 /// <param name="Profile"><c>--profile</c>: the profile this launch loads (2026-09-26, the user's ask: a scripted
-/// headless run must not follow whichever profile was last clicked into). Outranks <c>NEONSIDEKICK_PROFILE</c> and
-/// the pointer in <c>settings.json</c>, and never rewrites that pointer. Not part of <see cref="ApplyTo"/>: it
-/// picks which <c>profile.json</c> is read, not a value in it; <c>Program.cs</c> hands it to <see cref="AppSettings"/>
-/// through <see cref="LaunchProfile"/>, which gives a headless run <c>neon</c> when neither is set.</param>
+/// headless run must not follow whichever profile was last clicked into). Outranks <c>NEONSIDEKICK_PROFILE</c>; a desktop
+/// shortcut is this flag. Not part of <see cref="ApplyTo"/>: it picks which <c>profile.json</c> is read, not a value in it;
+/// <c>Program.cs</c> hands it to <see cref="AppSettings"/> through <see cref="LaunchProfile"/>, which gives every launch
+/// <c>neon</c> when neither is set (2026-10-16).</param>
 /// <param name="Yolo"><c>--yolo</c>: every shell command and script runs without asking, this launch only
 /// (2026-09-26, the user's ask: a scripted run named the policy only through <c>NEONSIDEKICK_COMMAND_POLICY</c>, awkward
 /// to set for one command in PowerShell or cmd). <see cref="ApplyTo"/> sets <c>Shell command policy</c> to <c>yolo</c>, so it
@@ -168,7 +168,7 @@ public sealed record SidekickOptions(
         "  --url <url>    LLM base URL for this launch (outranks NEONSIDEKICK_LLM_URL and the saved setting)\n" +
         "  --model <id>   model id for this launch (outranks NEONSIDEKICK_LLM_MODEL and the saved setting)\n" +
         "  --cwd <path>   working directory for this launch (outranks the saved setting)\n" +
-        "  --profile <name>  profile for this launch (outranks NEONSIDEKICK_PROFILE and settings.json, which it leaves alone)\n" +
+        "  --profile <name>  profile for this launch (outranks NEONSIDEKICK_PROFILE; default neon)\n" +
         "  --yolo         run every shell command without asking, this launch only (outranks NEONSIDEKICK_COMMAND_POLICY; the path police still applies unless --no-police)\n" +
         "  --no-police    let shell commands name paths outside the working directory, this launch only (outranks NEONSIDEKICK_SHELL_POLICE)\n" +
         "  --log <path>   append every diagnostic line (Trace and up) to a file; {ts} in the path becomes the start time (yyyyMMdd-HHmmss)\n" +
@@ -454,13 +454,13 @@ public sealed record SidekickOptions(
 
     /// <summary>
     /// The profile this launch loads: <c>--profile</c>, else <paramref name="environmentProfile"/>
-    /// (<c>NEONSIDEKICK_PROFILE</c>), else <c>neon</c> for a headless run, else null — the pointer in
-    /// <c>settings.json</c> decides. The headless default is 2026-09-26, the user's call: a scripted run must not follow
-    /// whichever profile the TUI last switched to, even when nobody named one. It goes in as an override, so the pointer
-    /// is left alone as it is for <c>--profile</c>; <c>neon</c> always exists, so it can never end the launch with 2.
+    /// (<c>NEONSIDEKICK_PROFILE</c>), else <c>neon</c>. The headless default is 2026-09-26, the user's call (a scripted run must
+    /// not follow whichever profile the TUI last switched to); every launch's since 2026-10-16, when the home's
+    /// <c>settings.json</c> that remembered that switch was retired (the user's call). <c>neon</c> always exists, so it can never
+    /// end the launch with 2.
     /// </summary>
-    public string? LaunchProfile(string? environmentProfile) =>
-        Profile ?? environmentProfile ?? (Headless ? Profiles.DefaultName : null);
+    public string LaunchProfile(string? environmentProfile) =>
+        Profile ?? environmentProfile ?? Profiles.DefaultName;
 
     /// <summary>The mode this launch runs: <c>interactive</c>, <c>headless</c>, <c>smoke</c>, <c>audio-check</c>, <c>voice-check</c>, <c>sql-check</c>, <c>oracle-check</c>, <c>mysql-check</c>, <c>sqlite-check</c>, <c>postgres-check</c>, <c>unc-check</c>, <c>docker-check</c>, <c>camera-check</c>.</summary>
     public string Mode =>

@@ -9,8 +9,9 @@ namespace NeonSidekick.App;
 
 /// <summary>
 /// The Web UI's Home tab (2026-10-15, the plan at <c>~/.claude/plans/read-in-this-plan-glimmering-unicorn.md</c>, Part D): the home bar's items as
-/// tiles over Home Assistant's live states, a room's or a device's sheet, the scenes, <i>Ask the house</i>, and the cards (the PC's YouTube window,
-/// its meters, the model). Every call comes on a Kestrel thread: nothing here waits on the pane's lock (the flashes go through the session's queue),
+/// tiles over Home Assistant's live states, a room's or a device's sheet, the rooms (2026-10-16: every room's switch, its devices' rows and its
+/// scenes, <see cref="WebHomeView.Rooms"/>; the scenes alone until then), <i>Ask the house</i>, and the cards (the PC's YouTube window, its
+/// meters, the model). What a page may read or act on is the tiles' and the rooms' reach (<see cref="HomeReach"/>). Every call comes on a Kestrel thread: nothing here waits on the pane's lock (the flashes go through the session's queue),
 /// and nothing calls the pane while holding <c>_homeGate</c> — the pane's draw holds its own lock and then takes that one (<see cref="HomeBarRow"/>).
 /// A read holds the live states and the meters for <see cref="HomeWebLease"/>: the tab's tiles and an open sheet's devices are kept current even with
 /// the home bar hidden, and the session's 1-second tick (<see cref="HomeWebTick"/>) lets them go once the phone has left. Acting needs <i>Web UI home
@@ -144,22 +145,28 @@ internal sealed partial class ChatScreen
 
     // ── Reads ───────────────────────────────────────────────────────────────
 
-    /// <summary>The tab now (a Kestrel thread): the tiles over the live states, the scenes, the cards; the lease renewed and the feed told.</summary>
+    /// <summary>The tab now (a Kestrel thread): the tiles over the live states, the rooms, the cards; the lease renewed and the feed told.</summary>
     private WebHome WebHomeNow()
     {
         var effective = _effective();
         var items = WebHomeView.Items(effective);
         var live = _homeLive.Snapshot;
         IReadOnlyList<WebHomeTile> tiles;
+        IReadOnlyList<WebHomeRoom> rooms;
         lock (_homeGate)
         {
             _homeWebUntil = (_time.GetUtcNow() + HomeWebLease).UtcTicks;
+            UpdateHomePending(live, _time.GetUtcNow());
+            tiles = WebHomeView.Tiles(items, live, HomeMarkOf, effective.HomeBarAliases, effective.HomeBarGlyphs, effective.WebUiHomeControls);
+            // The rooms under the same lock (2026-10-16): their marks read _homePending, as the tiles' do; nothing here touches the pane.
+            rooms = WebHomeView.Rooms(live, items, HomeMarkOf, HomeRoomDomains);
             var ids = new HashSet<string>(HomeBarItems.EntityIds(items, live.Catalog), StringComparer.Ordinal);
             // The scenes too, so their names come with their states (the registry often has none).
             ids.UnionWith(live.Catalog?.EntitiesOf("scene") ?? []);
+            // And every room's devices, an area's lights and a zone's group light (2026-10-16): a zone's members come with its group's
+            // attributes, so they are wanted from the next read on.
+            ids.UnionWith(HomeRoomIds(rooms, live.Catalog));
             _homeWebIds = ids;
-            UpdateHomePending(live, _time.GetUtcNow());
-            tiles = WebHomeView.Tiles(items, live, HomeMarkOf, effective.HomeBarAliases, effective.HomeBarGlyphs, effective.WebUiHomeControls);
         }
 
         HomeWantSync();
@@ -169,20 +176,61 @@ internal sealed partial class ChatScreen
         var parts = UsageText.HintParts(_session.Usage, _session.ContextLength);
         var model = new WebHomeModel(ModelLabel(_session.Endpoint?.ModelId), WebHomeView.ServerOf(_session.Endpoint?.BaseUrl), _session.ContextLength?.Tokens, loading, working,
             parts is null ? null : new WebUsage(parts.Tokens, parts.Percent, parts.Speed));
-        return new WebHome(status, text, effective.WebUiHomeControls, tiles, WebHomeView.SceneGroups(live, items), WebHomeView.Video(_videoPlayer?.Snapshot),
+        return new WebHome(status, text, effective.WebUiHomeControls, tiles, rooms, WebHomeView.Video(_videoPlayer?.Snapshot),
             WebHomeView.Pc(_perf.Read().Latest), model, _webUi.Pulse(), WebUiText.HomeWords);
     }
 
     /// <summary>
+    /// The entities the rooms keep live for the tab (2026-10-16): each area's room-pane members, every light that may be a zone's group light (its
+    /// attributes say whether it is), a zone's group light, every row's device.
+    /// </summary>
+    private static IEnumerable<string> HomeRoomIds(IReadOnlyList<WebHomeRoom> rooms, HaCatalog? catalog)
+    {
+        foreach (string light in catalog is null ? [] : WebHomeView.ZoneLights(catalog))
+        {
+            yield return light;
+        }
+
+        foreach (var room in rooms)
+        {
+            if (catalog?.Area(room.Key) is not null)
+            {
+                foreach (string member in catalog.MembersOf(room.Key, HomeRoomDomains))
+                {
+                    yield return member;
+                }
+            }
+
+            if (room.Ref is { } reference && HomeBarItems.TryParse(reference, out var kind, out string id) && kind == HomeItemKind.Entity)
+            {
+                yield return id;
+            }
+
+            foreach (var device in room.Devices)
+            {
+                yield return device.Entity;
+            }
+        }
+    }
+
+    /// <summary>
+    /// What a page may read or act on now (2026-10-16): the tiles' reach and the rooms' (<see cref="WebHomeView.Reach"/>), the rooms built
+    /// without marks. Checked again at every request against the states as they are.
+    /// </summary>
+    private static IReadOnlySet<string> HomeReach(IReadOnlyList<string> items, HaLiveSnapshot live) =>
+        WebHomeView.Reach(items, live.Catalog, HomeRoomDomains, WebHomeView.Rooms(live, items, static _ => HomeChipMark.None, HomeRoomDomains));
+
+    /// <summary>
     /// A tile's sheet (a Kestrel thread): a room's devices with their states and actions (its own row first: all on, all off), or one device's;
-    /// null for a reference outside the tiles' reach. Its devices join the wanted set under the lease.
+    /// null for a reference outside the tiles' and the rooms' reach (a room's device row's <c>›</c> since 2026-10-16). Its devices join the
+    /// wanted set under the lease.
     /// </summary>
     private WebHomeSheet? WebHomeSheetOf(string reference)
     {
         var effective = _effective();
         var items = WebHomeView.Items(effective);
         var live = _homeLive.Snapshot;
-        if (!items.Contains(reference, StringComparer.Ordinal) || !HomeBarItems.TryParse(reference, out var kind, out string id))
+        if (!WebHomeView.Reaches(reference, items, HomeReach(items, live)) || !HomeBarItems.TryParse(reference, out var kind, out string id))
         {
             return null;
         }
@@ -234,11 +282,9 @@ internal sealed partial class ChatScreen
     private static WebHomeSheetRow SheetRow(string entityId, HaLiveSnapshot live, bool controls)
     {
         var entity = live.Entities.GetValueOrDefault(entityId);
-        string state = entity is null ? "…" : entity.Unavailable ? "?" : HomeBarText.StateWord(entity.State) + Unit(entity);
+        string state = WebHomeView.DeviceState(entity);
         var actions = entity is null || entity.Unavailable || !controls ? [] : HomeActions(entity).Select((a, i) => new WebHomeAction(i, a.Label, a.Ask)).ToList();
         return new WebHomeSheetRow(entityId, HomeChips.GlyphFor(entityId, entity), entity?.Name ?? live.Catalog?.NameOf(entityId) ?? entityId, state, actions);
-
-        static string Unit(HaLiveEntity entity) => entity.Text("unit_of_measurement") is { Length: > 0 } unit ? " " + unit : "";
     }
 
     // ── Acting ──────────────────────────────────────────────────────────────
@@ -246,7 +292,10 @@ internal sealed partial class ChatScreen
     /// <summary>The refusal every action gets while <i>Web UI home controls</i> is off.</summary>
     private static readonly WebReply HomeControlsOff = new(WebOutcome.Forbidden, WebUiText.HomeControlsOff);
 
-    /// <summary>A tile tapped: the bar's own call (the PC's chip marked pending too), or the question first for a chip that asks.</summary>
+    /// <summary>
+    /// A tile tapped, or (2026-10-16) a room's switch — an area's under the bar's own <c>area:</c> chip, a zone's group light: the bar's own call (the
+    /// PC's chip marked pending too), or the question first for a chip that asks.
+    /// </summary>
     private WebReply WebHomeTap(WebHomeTapRequest request, IPAddress? remote)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -259,7 +308,7 @@ internal sealed partial class ChatScreen
         string reference = request.Ref ?? "";
         var items = WebHomeView.Items(effective);
         var live = _homeLive.Snapshot;
-        if (!items.Contains(reference, StringComparer.Ordinal))
+        if (!WebHomeView.Reaches(reference, items, HomeReach(items, live)))
         {
             return new WebReply(WebOutcome.NotFound, WebUiText.HomeChanged);
         }
@@ -280,7 +329,10 @@ internal sealed partial class ChatScreen
         return WebReply.Ok;
     }
 
-    /// <summary>A sheet's action: checked against the actions now (a state that moved changes them), asked first where the bar asks.</summary>
+    /// <summary>
+    /// A sheet's action, or (2026-10-16) a room row's quick control (its <c>entity:</c> reference and the action at index 0): checked against the
+    /// actions now (a state that moved changes them), asked first where the bar asks; the row itself marked pending.
+    /// </summary>
     private WebReply WebHomeAct(WebHomeActRequest request, IPAddress? remote)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -293,8 +345,8 @@ internal sealed partial class ChatScreen
         string reference = request.Ref ?? "";
         var items = WebHomeView.Items(effective);
         var live = _homeLive.Snapshot;
-        var reach = WebHomeView.Reach(items, live.Catalog, HomeRoomDomains);
-        if (!items.Contains(reference, StringComparer.Ordinal))
+        var reach = HomeReach(items, live);
+        if (!WebHomeView.Reaches(reference, items, reach))
         {
             return new WebReply(WebOutcome.NotFound, WebUiText.HomeChanged);
         }

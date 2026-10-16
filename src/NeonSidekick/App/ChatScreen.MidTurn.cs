@@ -999,6 +999,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task EndTurnAsync(bool closePane, CancellationToken cancellationToken)
     {
+        _toolsOfferedDirty = true;   // 2026-10-16: the toolbar's 🛠️ worked out again at the next idle line
         // The hand-overs are a pane's, the PC's hand (later on 2026-10-14): never asked on the page, whatever started the turn.
         s_origin.Value = CommandOrigin.Pc;
         await EndWatchAsync(closePane).ConfigureAwait(false);

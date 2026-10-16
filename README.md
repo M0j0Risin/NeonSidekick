@@ -125,7 +125,7 @@ On a Mac:
 Each download's `.sha256` file lets you check it arrived intact.
 
 ### First launch
-The app first offers, once, to put a shortcut on the desktop (one that also writes a log, if you like; `/shortcut` makes one later).
+Each profile offers, once, to put a shortcut on the desktop (one that also writes a log, if you like; `/shortcut` makes one later).
 
 If no model server answers when the app starts, it opens **Connect a model**:
 

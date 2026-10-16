@@ -158,6 +158,16 @@ public sealed class AppSettingsData
     public int? CameraWindowTop { get; set; }
 
     /// <summary>
+    /// Whether this profile has offered its desktop shortcut (2026-10-16, the user's call: per profile since the home's
+    /// <c>settings.json</c> was retired; it held one flag for the whole home from 2026-10-09). Null or false is asked at the next
+    /// start that opens this profile, or the next switch to it; any answer, ESC too, sets it true. Kept by a plain
+    /// <c>/profile reset</c>, cleared by <c>reset all</c>, blank on <c>/profile add</c>, never carried by push/pull. Set back to
+    /// false or null by hand (<c>/profile edit</c>) to be asked again. <c>bool?</c> so a hand-written <c>null</c> never fails the
+    /// load. No menu row and no variable.
+    /// </summary>
+    public bool? ShortcutOffered { get; set; }
+
+    /// <summary>
     /// The log window's top-left corner as it last closed (2026-10-02, <c>/log</c>'s window): the <see cref="ViewerLeft"/>
     /// pair's twin, set by the window itself (<see cref="Viewer.LogWindow.Placed"/>). No menu row; null opens it where Windows puts it.
     /// </summary>

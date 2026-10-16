@@ -19,7 +19,7 @@ namespace NeonSidekick.App;
 /// <param name="Architecture">The process architecture, lowercased (<c>x64</c>).</param>
 /// <param name="Os">The OS description (<c>Microsoft Windows 10.0.26200</c>).</param>
 /// <param name="ExecutablePath">The running executable, null when the runtime cannot tell.</param>
-/// <param name="HomeDirectory">The settings home: the pointer, the models and the profiles.</param>
+/// <param name="HomeDirectory">The settings home: the models and the profiles.</param>
 /// <param name="ProfileDirectory">The loaded profile's directory.</param>
 /// <param name="ModelsDirectory">Where the Whisper, Silero, Vosk and Kokoro models live.</param>
 public sealed record AboutFacts(

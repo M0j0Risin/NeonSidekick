@@ -1000,14 +1000,24 @@ public sealed partial class InputLine
             }
 
             // A left click on the area puts the cursor under it and anchors a selection there
-            // (a drag extends it); a right click pastes there, over the selection if any.
+            // (a drag extends it); a right click on the input row pastes at the caret, over the selection if any.
             // Neither is typing: the draft, the history and the push-to-talk rule see nothing.
             // A second left click on the hint row within the interval ends the read (2026-09-18).
+            // Since 2026-10-16 (the user's call: the transcript's right-clicks freed for later) the paste is the input row's
+            // alone — the draft's rows and their prompt-glyph gutter, or a pane's edit slot — and a right-click anywhere else
+            // does nothing, still ending a pending double-click pair; under a reply it is declined to the watcher's hook, which
+            // acts on left clicks alone. Where the pane cannot place a click at all (no pane, no cursor row) it pastes as before:
+            // there is no transcript click to free, and refusing would leave right-click paste dead.
             if (click.Button != MouseButton.Left)
             {
                 hintClicks.Reset();
-                await PasteFromClipboardAsync().ConfigureAwait(false);
-                return EditOutcome.Handled;
+                if (pane.TryHitInput(click.X, click.Y, out _) || !pane.CanPlaceClicks)
+                {
+                    await PasteFromClipboardAsync().ConfigureAwait(false);
+                    return EditOutcome.Handled;
+                }
+
+                return _o.Live ? EditOutcome.Declined : EditOutcome.Handled;
             }
 
             if (!_o.Live && ReferenceEquals(this, _line._chat) && pane.TryHitEmojiButton(click.X, click.Y))

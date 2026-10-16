@@ -815,7 +815,7 @@ public sealed class KeySource : IAnsiConsoleInput
                     }
                     else if (e is InputEvent.Click click)
                     {
-                        // The live row's own clicks first (2026-09-25): the caret, a selection's anchor, a right-click paste.
+                        // The live row's own clicks first (2026-09-25): the caret, a selection's anchor, a right-click paste on the row.
                         if (editor is not null && await editor.FeedAsync(click, stop).ConfigureAwait(false) != EditOutcome.Declined)
                         {
                             continue;

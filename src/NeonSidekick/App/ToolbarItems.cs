@@ -360,6 +360,9 @@ public static class ToolbarItems
     /// <summary>What saves for <paramref name="order"/>: null for <see cref="DefaultOrder"/> (<see cref="ItemOrder.Save"/>).</summary>
     public static List<string>? SaveOrder(IReadOnlyList<string> order) => ItemOrder.Save(order, Names, DefaultOrder);
 
+    /// <summary>The tools' state on their click note while <c>/tools</c> offers no tool at all (2026-10-16, <see cref="ChatScreen.ToolbarGlyphNote"/>). Pinned.</summary>
+    public const string NoneOfferedState = "none offered";
+
     /// <summary><c>/toolbar</c>'s words (later on 2026-09-30): <c>on</c> and <c>off</c>, the completion's list. Pinned.</summary>
     public const string OnWord = "on";
 

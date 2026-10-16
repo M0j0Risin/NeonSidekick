@@ -7362,7 +7362,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Profile_Add_CopiesTheSavedSettings_SwitchesAndReconnects()
     {
-        _settings.Update(d => { d.LlmModel = "llama"; d.SttWakePhrase = "computer"; });
+        _settings.Update(d => { d.LlmModel = "llama"; d.SttWakePhrase = "computer"; d.ShortcutOffered = true; });
         PushLine("/profile add work");
         PushLine("/exit");
 
@@ -7374,7 +7374,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("llama", _settings.Current.LlmModel);
         Assert.Equal("computer", _settings.Current.SttWakePhrase);
         Assert.Contains("\"LlmModel\": \"llama\"", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
-        Assert.Contains("\"Profile\": \"work\"", File.ReadAllText(_settings.PointerPath));
+        Assert.Null(_settings.Current.ShortcutOffered);   // the new profile is asked for its own shortcut (2026-10-16)
+        Assert.True(Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, Profiles.DefaultName)).ShortcutOffered);
         Assert.Equal(new[] { Profiles.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // the default profile here has no memories, persona, operating rules or voice directive to copy
         Assert.True(File.Exists(Path.Combine(ProfileDir("work"), SessionStore.FolderName, SessionStore.FileName)));   // the /exit typed there (Keep message history, 2026-09-25), under db\sessions since 2026-10-10, never copied
         // Startup discovery, then the reconnect after the switch (LLM, TTS and voice).
@@ -8216,7 +8217,6 @@ public partial class ChatScreenTests : IDisposable
     public async Task Profile_Rename_MovesAnotherProfile_AndTouchesNothingElse()
     {
         WorkProfile();
-        string pointer = File.ReadAllText(_settings.PointerPath);
         PushLine("/profile rename work office");
         PushLine("/profile office");
         PushLine("/exit");
@@ -8229,8 +8229,8 @@ public partial class ChatScreenTests : IDisposable
             new[] { McpConfigFile.FileName, MemoryStore.FileName, OperataFile.FileName, PersonaFile.FileName, Profiles.FileName, VocaliaFile.FileName },
             Directory.GetFiles(ProfileDir("office")).Select(Path.GetFileName).OrderBy(n => n, StringComparer.Ordinal));
         Assert.True(File.Exists(Path.Combine(ProfileDir("office"), SessionStore.FolderName, SessionStore.FileName)));   // the /exit typed there (Keep message history, 2026-09-25) moved with the folder
-        // The rename alone changed nothing about the running app: the pointer, the title and the
-        // connections stayed until the switch that followed.
+        // The rename alone changed nothing about the running app: the title and the connections
+        // stayed until the switch that followed.
         int renamedAt = output.IndexOf(ChatScreen.ProfileRenamedNotice("work", "office"), StringComparison.Ordinal);
         int switchedAt = output.IndexOf(SettingsMenu.SwitchedNotice("office"), StringComparison.Ordinal);
         Assert.True(renamedAt >= 0 && switchedAt > renamedAt);
@@ -8239,8 +8239,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(1 + LlmEndpointProbe.CandidatePorts.Length, ModelProbes);   // the fixture's URL + the switch's reconnect (a blank-URL discovery); none for the rename
         Assert.Equal("office", _settings.ProfileName);
         Assert.Equal("work-model", _settings.Current.LlmModel);
-        Assert.NotEqual(pointer, File.ReadAllText(_settings.PointerPath));
-        Assert.Contains("\"Profile\": \"office\"", File.ReadAllText(_settings.PointerPath));
     }
 
     [Fact]
@@ -9798,6 +9796,86 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(ChatScreen.ToolbarItemOff("ask", new AppSettingsData()));
         Assert.True(ChatScreen.ToolbarItemOff("ask", new AppSettingsData { AskUser = false }));
         Assert.Equal("🙋 Ask: off · double-click or right-click to open", ChatScreen.ToolbarGlyphNote(ChatScreen.AskToolGlyph, new AppSettingsData { AskUser = false }));
+        // 🎓 and 🛠️ (2026-10-16, the user's ask): the mortarboard while Agent skills is off, the tools while no tool is offered.
+        Assert.True(ChatScreen.ToolbarItemOff(ToolbarItems.Skills, new AppSettingsData { AgentSkills = false }));
+        Assert.False(ChatScreen.ToolbarItemOff(ToolbarItems.Skills, new AppSettingsData { AgentSkills = true }));
+        Assert.True(ChatScreen.ToolbarItemOff(ToolbarItems.Tools, new AppSettingsData(), noToolsOffered: true));
+        Assert.False(ChatScreen.ToolbarItemOff(ToolbarItems.Tools, new AppSettingsData()));
+        (strip, off) = ChatScreen.ToolbarStripFor(ToolbarItems.Resolve(["tools", "skills", "usage"]), new AppSettingsData { AgentSkills = false }, noToolsOffered: true);
+        Assert.Equal("🛠️ 🎓 📊", strip);
+        Assert.Equal([0, 1], off);
+    }
+
+    /// <summary>
+    /// 🛠️ on the off slab (2026-10-16, the user's ask) while <c>/tools</c>' Offered tab offers no tool — every group's switch off, every
+    /// standing tool unticked — and off it at the next tick once one is ticked on in the open pane, before the pane closes.
+    /// </summary>
+    [Fact]
+    public async Task Toolbar_TheTools_SitOnTheSlab_WhileNoToolIsOffered_AndLeaveItAsOneIsTickedOn()
+    {
+        string[] standing = [.. ChatScreen.ClockTools(_time).Select(t => t.Name), NeonHelpTool.ToolName];
+        _settings.Update(d =>
+        {
+            d.TtsOutput = false;
+            d.ToolbarItems = [ToolbarItems.Tools];
+            d.FileTools = false;
+            d.WebTools = false;
+            d.ObsidianTools = false;
+            d.SqlTools = false;
+            d.ComfyTools = false;
+            d.HomeAssistantTools = false;
+            d.ShellCommandPolicy = "off";
+            d.GitLibTools = false;
+            d.AskUser = false;
+            d.AgentSkills = false;
+            d.SessionTool = false;
+            d.MemoryMode = "off";
+            d.TimerTools = false;
+            d.ToolsDisabled = [.. standing];
+        });
+        _console.EmitAnsiSequences();
+        _console.Profile.Height = 60;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        var fill = Theme.ToolbarOff.Background;
+        string slab = $"48;2;{fill.R};{fill.G};{fill.B}m";
+        string atIdle = "";
+        string inPane = "";
+        int mark = 0;
+        StepsWhenIdle(
+            input =>
+            {
+                _time.Advance(ScreenPane.Tick);   // the first draw came before the idle line worked the fact out: the tick redraws the row
+                atIdle = Output;
+                mark = Output.Length;
+                PushLine(input, "/tools");
+            },
+            input =>
+            {
+                foreach (char c in NeonHelpTool.ToolName)
+                {
+                    input.Push(Keys.Char(c));   // the Offered tab's filter: the one row left, under the cursor
+                }
+            },
+            input =>
+            {
+                Assert.Contains(slab + ChatScreen.ToolsToolGlyph, Output[mark..]);   // still on the slab under the pane
+                mark = Output.Length;
+                input.Push(Keys.Enter);   // neon_help ticked on: offered again
+            },
+            input =>
+            {
+                _time.Advance(ScreenPane.Tick);
+                inPane = Output;   // the pane still open: the toolbar under it as last drawn
+                input.Push(Keys.Escape);   // clears the filter
+                input.Push(Keys.Escape);
+            },
+            Line("/exit"));
+
+        await RunAsync();
+
+        Assert.Contains(slab + ChatScreen.ToolsToolGlyph, atIdle);
+        Assert.DoesNotContain(slab + ChatScreen.ToolsToolGlyph, inPane[mark..]);   // off the slab once neon_help is offered, the pane still open
     }
 
     /// <summary>Without the pane the list prints: the row's name, then each prefix — or the none row.</summary>
@@ -24454,11 +24532,11 @@ public partial class ChatScreenTests : IDisposable
         // The avatars (2026-10-12, the user's ask): two words, then the profiles, nothing after the name.
         Assert.Equal(["push avatar user", "push avatar model"], Texts(ChatScreen.ArgumentItems("/profile", "push avatar ", sources)));
         Assert.Equal([new CompletionItem("push avatar user chef", "user avatar: neon → chef"), new CompletionItem("push avatar user work", "user avatar: neon → work")], ChatScreen.ArgumentItems("/profile", "push avatar user ", sources));
-        Assert.Equal([new CompletionItem("pull avatar model neon", "model avatar: neon → work")], ChatScreen.ArgumentItems("/profile", "pull avatar model n", Sources(loaded: "work")));
+        Assert.Equal([new CompletionItem("pull avatar model neon", "model avatar: work ← neon")], ChatScreen.ArgumentItems("/profile", "pull avatar model n", Sources(loaded: "work")));
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "push avatar user work ", sources));
         // The prompt files (2026-10-10, /sys persona copy until then): the profiles, then overwrite with its own note.
         Assert.Equal([new CompletionItem("push persona chef", "persona.md: neon → chef"), new CompletionItem("push persona work", "persona.md: neon → work")], ChatScreen.ArgumentItems("/profile", "push persona ", sources));
-        Assert.Equal([new CompletionItem("pull vocalia neon", "vocalia.md: neon → work")], ChatScreen.ArgumentItems("/profile", "pull vocalia n", Sources(loaded: "work")));
+        Assert.Equal([new CompletionItem("pull vocalia neon", "vocalia.md: work ← neon")], ChatScreen.ArgumentItems("/profile", "pull vocalia n", Sources(loaded: "work")));
         Assert.Equal([new CompletionItem("push operata work overwrite", ChatScreen.ProfilePromptFileOverwriteNote)], ChatScreen.ArgumentItems("/profile", "push operata work ", sources));
         Assert.Equal(["pull operata work overwrite"], Texts(ChatScreen.ArgumentItems("/profile", "PULL OPERATA WORK ov", sources)));
         Assert.Equal(["push neon"], Texts(ChatScreen.ArgumentItems("/profile", "PUSH n", Sources(loaded: "work"))));
@@ -24472,9 +24550,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(["push history chef overwrite"], Texts(ChatScreen.ArgumentItems("/profile", "push history chef ", sources)));
         // The notes after push and pull say what goes which way, after delete, rename and reset the verb (2026-10-10; "switch to it" until then).
         Assert.Equal([new CompletionItem("push work", "settings: neon → work")], ChatScreen.ArgumentItems("/profile", "push w", sources));
-        Assert.Equal([new CompletionItem("pull neon", "settings: neon → work")], ChatScreen.ArgumentItems("/profile", "pull n", Sources(loaded: "work")));
+        Assert.Equal([new CompletionItem("pull neon", "settings: work ← neon")], ChatScreen.ArgumentItems("/profile", "pull n", Sources(loaded: "work")));
         Assert.Equal([new CompletionItem("push keys chef", "API keys: neon → chef")], ChatScreen.ArgumentItems("/profile", "push keys c", sources));
-        Assert.Equal([new CompletionItem("pull allowed chef", "allowed commands: chef → work")], ChatScreen.ArgumentItems("/profile", "pull allowed c", Sources(loaded: "work")));
+        Assert.Equal([new CompletionItem("pull allowed chef", "allowed commands: work ← chef")], ChatScreen.ArgumentItems("/profile", "pull allowed c", Sources(loaded: "work")));
         Assert.Equal([new CompletionItem("delete chef", ChatScreen.ProfileDeleteNote)], ChatScreen.ArgumentItems("/profile", "delete c", sources));
         Assert.Equal([new CompletionItem("rename chef", ChatScreen.ProfileRenameNote)], ChatScreen.ArgumentItems("/profile", "rename c", sources));
         Assert.Equal([new CompletionItem("reset chef", ChatScreen.ProfileResetNote)], ChatScreen.ArgumentItems("/profile", "reset c", sources));
@@ -24482,7 +24560,7 @@ public partial class ChatScreenTests : IDisposable
 
         // memory (2026-10-13; /memory copy until then): every profile but the loaded one, then overwrite with the list sections' note.
         Assert.Equal([new CompletionItem("push memory chef", "memory: neon → chef"), new CompletionItem("push memory work", "memory: neon → work")], ChatScreen.ArgumentItems("/profile", "push memory ", sources));
-        Assert.Equal([new CompletionItem("pull memory neon", "memory: neon → work")], ChatScreen.ArgumentItems("/profile", "pull memory n", Sources(loaded: "work")));
+        Assert.Equal([new CompletionItem("pull memory neon", "memory: work ← neon")], ChatScreen.ArgumentItems("/profile", "pull memory n", Sources(loaded: "work")));
         Assert.Equal([new CompletionItem("push memory work overwrite", ChatScreen.ProfileSectionOverwriteNote)], ChatScreen.ArgumentItems("/profile", "push memory work ", sources));
         Assert.Equal(["pull memory work overwrite"], Texts(ChatScreen.ArgumentItems("/profile", "PULL MEMORY WORK ov", sources)));
         Assert.Empty(ChatScreen.ArgumentItems("/memory", "copy ", sources));
@@ -24640,6 +24718,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("every reply", ChatScreen.CopyAllNote);
         Assert.Equal("switch to it", ChatScreen.SwitchToProfileNote);
         Assert.Equal("settings: neon → gonzo", ChatScreen.ProfileCopyNote(ChatScreen.ProfileSettingsSubject, "neon", "gonzo"));   // 2026-10-10
+        Assert.Equal("settings: neon ← larry", ChatScreen.ProfilePullNote(ChatScreen.ProfileSettingsSubject, "larry", "neon"));   // 2026-10-16: a pull reads into the loaded profile
         Assert.Equal(
             ["API keys", "server settings", "allowed commands", "message history", "memory", "saved prompts", "forbidden strings", "persona.md", "operata.md", "vocalia.md", "user avatar", "model avatar"],
             ChatScreen.ProfileSectionWords.Select(item => ChatScreen.ProfileSectionSubject(item.Section)));
@@ -25058,6 +25137,11 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(ChatScreen.ToolbarItemOff(ToolbarItems.WebUi, new AppSettingsData { WebUi = true }));
         Assert.Equal(ChatScreen.WebUiToolGlyph + " Web UI: off · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.WebUiToolGlyph, shown));
         Assert.Equal(ChatScreen.WebUiToolGlyph + " Web UI: on · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.WebUiToolGlyph, new AppSettingsData { WebUi = true }));
+        // 2026-10-16: 🎓 says Agent skills' state, 🛠️ "none offered" while nothing is (else its name alone, as before).
+        Assert.Equal(ChatScreen.SkillsToolGlyph + " Skills: on · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.SkillsToolGlyph, shown));
+        Assert.Equal(ChatScreen.SkillsToolGlyph + " Skills: off · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.SkillsToolGlyph, new AppSettingsData { AgentSkills = false }));
+        Assert.Equal(ChatScreen.ToolsToolGlyph + " Tools · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.ToolsToolGlyph, shown));
+        Assert.Equal(ChatScreen.ToolsToolGlyph + " Tools: none offered · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.ToolsToolGlyph, shown, noToolsOffered: true));
         Assert.Equal(ToolbarItems.CmdList, ChatScreen.ToolbarItemOf(ChatScreen.CmdYoloToolGlyph));
         Assert.Equal(ToolbarItems.Police, ChatScreen.ToolbarItemOf(ChatScreen.NinjaToolGlyph));
         Assert.Null(ChatScreen.ToolbarGlyphNote("+", shown));

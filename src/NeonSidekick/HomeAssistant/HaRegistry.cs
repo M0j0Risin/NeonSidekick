@@ -132,6 +132,21 @@ public sealed class HaCatalog
     }
 
     /// <summary>
+    /// The visible entities of <paramref name="domain"/> on device <paramref name="deviceId"/> (2026-10-16, the Web UI's rooms: a Hue zone's
+    /// group light hangs on the zone's device), by id; as <see cref="MembersOf"/> keeps them (<see cref="Visible"/>). Empty without the registries.
+    /// </summary>
+    public IReadOnlyList<string> EntitiesOn(string deviceId, string domain)
+    {
+        ArgumentNullException.ThrowIfNull(deviceId);
+        ArgumentNullException.ThrowIfNull(domain);
+        return _registry.Values
+            .Where(e => string.Equals(e.DeviceId, deviceId, StringComparison.Ordinal) && string.Equals(DomainOf(e.Id), domain, StringComparison.Ordinal) && Visible(e.Id))
+            .Select(e => e.Id)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <summary>
     /// Whether the entity is one to offer: not disabled, not hidden, and no config or diagnostic category. Without the
     /// registry, everything is.
     /// </summary>

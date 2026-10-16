@@ -29,8 +29,8 @@ public class SidekickOptionsTests
     }
 
     /// <summary>
-    /// 2026-09-26: --profile over NEONSIDEKICK_PROFILE over, for a headless run, "default"; otherwise null, and the pointer
-    /// in settings.json decides (the TUI and the check modes).
+    /// 2026-09-26: --profile over NEONSIDEKICK_PROFILE over "neon": a headless run's default then, every launch's since 2026-10-16
+    /// (the home's settings.json retired, the user's call).
     /// </summary>
     [Theory]
     [InlineData("--headless --profile work", "home", "work")]
@@ -39,9 +39,9 @@ public class SidekickOptionsTests
     [InlineData("--headless --smoke", null, "neon")]
     [InlineData("--profile work", null, "work")]
     [InlineData("", "home", "home")]
-    [InlineData("", null, null)]
-    [InlineData("--smoke", null, null)]
-    public void LaunchProfile_HeadlessDefaultsToDefault_UnlessNamed(string args, string? environment, string? expected)
+    [InlineData("", null, "neon")]       // every launch since 2026-10-16: no root settings.json to follow
+    [InlineData("--smoke", null, "neon")]
+    public void LaunchProfile_DefaultsToNeon_UnlessNamed(string args, string? environment, string expected)
     {
         var o = SidekickOptions.Parse(args.Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
@@ -357,7 +357,7 @@ public class SidekickOptionsTests
         Assert.Contains("[--no-police]", SidekickOptions.Usage);
         Assert.Contains("--no-police    let shell commands name paths outside the working directory, this launch only (outranks NEONSIDEKICK_SHELL_POLICE)", SidekickOptions.Usage);
         Assert.Contains("Exit codes: 0 done, 1 a check failed, 2 bad argument or unknown profile, 3 headless run in which a shell command was refused", SidekickOptions.Usage);
-        Assert.Contains("--profile <name>  profile for this launch (outranks NEONSIDEKICK_PROFILE and settings.json, which it leaves alone)", SidekickOptions.Usage);
+        Assert.Contains("--profile <name>  profile for this launch (outranks NEONSIDEKICK_PROFILE; default neon)", SidekickOptions.Usage);
         Assert.Contains("--log <path>   append every diagnostic line (Trace and up) to a file; {ts} in the path becomes the start time (yyyyMMdd-HHmmss)", SidekickOptions.Usage);
         Assert.Contains("--version", SidekickOptions.Usage);
         Assert.Contains("--help", SidekickOptions.Usage);

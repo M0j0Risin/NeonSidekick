@@ -236,6 +236,30 @@ public class ToolsTextTests : IDisposable
         Assert.EndsWith(MenuFilter.TypeAndCloseKeys, ToolsText.OfferedKeys, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// <see cref="ToolsText.NoneOffered"/> (2026-10-16, the toolbar's 🛠️ on the off slab): false while any lit row is ticked, true with every
+    /// group off and the standing tools unticked, or with <c>LLM offer tools</c> off.
+    /// </summary>
+    [Fact]
+    public void NoneOffered_OnlyWhenTheOfferedTabOffersNoTool()
+    {
+        Assert.False(ToolsText.NoneOffered(Facts()));   // the clock, the timers, the files… offered
+        Assert.True(ToolsText.NoneOffered(Facts(toolsEnabled: false)));
+
+        // Every group's switch off: the standing tools (the clock) are still offered until they are unticked too.
+        var groupsOff = Facts(filesEnabled: false, webEnabled: false, memoryEnabled: false, askEnabled: false, skillsEnabled: false, sessionsEnabled: false);
+        Assert.False(ToolsText.NoneOffered(groupsOff));
+        string[] standing = [.. groupsOff.Groups.SelectMany(g => g.Tools.Where(t => g.Offers(t.Name)).Select(t => t.Name))];
+        Assert.NotEmpty(standing);
+        Assert.True(ToolsText.NoneOffered(Facts(standing, filesEnabled: false, webEnabled: false, memoryEnabled: false, askEnabled: false, skillsEnabled: false, sessionsEnabled: false)));
+
+        // One standing tool ticked back on: offered again.
+        Assert.False(ToolsText.NoneOffered(Facts(standing[1..], filesEnabled: false, webEnabled: false, memoryEnabled: false, askEnabled: false, skillsEnabled: false, sessionsEnabled: false)));
+
+        // Every tool of every group unticked, the switches on: none offered.
+        Assert.True(ToolsText.NoneOffered(Facts([.. Facts().Groups.SelectMany(g => g.Tools).Select(t => t.Name)])));
+    }
+
     [Fact]
     public void OfferedRows_ADisabledTool_ReadsOff_DimWithItsNote_AndTheHeadingCountsTheRest()
     {

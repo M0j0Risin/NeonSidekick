@@ -450,6 +450,17 @@ public static class ToolsText
     }
 
     /// <summary>
+    /// Whether the Offered tab offers no tool at all (2026-10-16, the user's ask: the toolbar's 🛠️ on the off slab): <c>LLM offer tools</c>
+    /// off, or no tool in any group both offered by it (<see cref="ToolGroup.Offers"/>) and on (<see cref="IsOn"/>) — <see cref="OfferedRows"/>'
+    /// own test of a lit, ticked row, so the slab and the tab never disagree. The MCP servers' tools live on <c>/mcp</c> and don't count. Pure.
+    /// </summary>
+    public static bool NoneOffered(ToolsFacts facts)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        return !facts.ToolsEnabled || !facts.Groups.Any(g => g.Tools.Any(t => g.Offers(t.Name) && IsOn(facts, t.Name)));
+    }
+
+    /// <summary>
     /// What follows a group's heading: nothing while the group is offered or the whole list is off
     /// (<see cref="OffLine"/> says it once); <see cref="NoPaneSuffix"/> for the Questions group with no
     /// pane; else <see cref="GroupOffSuffix"/> with the group's switch label (<c>File tools</c>).

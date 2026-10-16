@@ -152,11 +152,11 @@ using var logSinkScope = logSink;
 
 string home = AppSettings.ResolveStorageDirectory(environment.Home);
 
-// The profile for this launch (2026-09-26): --profile over NEONSIDEKICK_PROFILE over, headless, "neon", over the
-// pointer (SidekickOptions.LaunchProfile). A name that is not a profile ends the launch like a bad argument does,
-// before anything is created under the home.
-string? profile = options.LaunchProfile(environment.Profile);
-if (profile is not null && !Profiles.Exists(home, profile))
+// The profile for this launch (2026-09-26): --profile over NEONSIDEKICK_PROFILE over "neon" (SidekickOptions.LaunchProfile;
+// every launch's default since 2026-10-16, the home's settings.json retired). A name that is not a profile ends the launch
+// like a bad argument does, before anything is created under the home.
+string profile = options.LaunchProfile(environment.Profile);
+if (!Profiles.Exists(home, profile))
 {
     console.WriteLine(AppSettings.UnknownProfileMessage(profile, Profiles.List(home)));
     return 2;

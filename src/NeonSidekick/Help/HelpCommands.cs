@@ -296,7 +296,7 @@ public static class HelpCommands
         ]),
         new("/profile",
         [
-            new("/profile [<name>]", "Switch profiles: alone, a picker (a typed letter jumps to the next profile starting with it); with a name, straight to that one. Profiles whose name starts with `_` stay off the picker and the name list unless loaded; `/profile _name` still switches to one. Ctrl+P runs the bare `/profile`."),
+            new("/profile [<name>]", "Switch profiles for this run: alone, a picker (a typed letter jumps to the next profile starting with it); with a name, straight to that one. Each start opens `neon` unless `--profile`, `NEONSIDEKICK_PROFILE` or a desktop shortcut names another. Profiles whose name starts with `_` stay off the picker and the name list unless loaded; `/profile _name` still switches to one. Ctrl+P runs the bare `/profile`."),
             new("/profile add|delete <name>", "Create or delete a profile."),
             new("/profile rename <name> <new-name>", "Rename a profile."),
             new("/profile reset [<name>] [--all]", "Reset a profile to the defaults (the loaded one when no name is given), keeping its URLs, paths and keys; `--all` resets those too."),
@@ -404,7 +404,7 @@ public static class HelpCommands
         ]),
         new("/shortcut",
         [
-            new("/shortcut [<profile>] [--log]", "Put a shortcut on the desktop, `NeonSidekick (<profile>)`, that starts the app in the exe's folder on the loaded profile, or the one named (as `--profile <name>`). With `--log` it also writes a log, `logs\\neon-<profile>-{ts}.log` beside the exe, named by the time it starts. One already there is replaced; on a Mac it is a `.command` file. The first start offers it once (No, Yes, or Yes with a log)."),
+            new("/shortcut [<profile>] [--log]", "Put a shortcut on the desktop, `NeonSidekick (<profile>)`, that starts the app in the exe's folder on the loaded profile, or the one named (as `--profile <name>`). With `--log` it also writes a log, `logs\\neon-<profile>-{ts}.log` beside the exe, named by the time it starts. One already there is replaced; on a Mac it is a `.command` file. Each profile is offered it once, at start or on switching to it (No, Yes, or Yes with a log)."),
         ]),
         new("/skills",
         [

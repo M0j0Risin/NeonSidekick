@@ -19,8 +19,8 @@ internal sealed partial class ChatScreen
     /// <c>/shortcut [profile] [--log]</c> (2026-10-07, the user's ask): a desktop shortcut that starts this exe on the loaded profile,
     /// or the one named (as the profile list spells it), and with <c>--log</c> a stamped log beside the exe
     /// (<see cref="DesktopShortcut"/> decides the name, the command line and the folder it starts in). One already there is
-    /// replaced and the notice says so. A temporary profile is allowed: <c>--profile</c> opens one, only the pointer never lands
-    /// there. On a Mac (2026-10-08) a <c>.command</c> file in the same place, with the same command line; elsewhere, an error.
+    /// replaced and the notice says so. A temporary profile is allowed: <c>--profile</c> opens one. Each start opens <c>neon</c>
+    /// unless something names another (2026-10-16), so a shortcut is how a profile is opened from the desktop. On a Mac (2026-10-08) a <c>.command</c> file in the same place, with the same command line; elsewhere, an error.
     /// </summary>
     private void HandleShortcut(string args)
     {
@@ -71,12 +71,13 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The first start's offer of the desktop shortcut (2026-10-09, the user's ask): while <c>settings.json</c>'s
-    /// <see cref="RootSettingsData.ShortcutOffered"/> is false, one pane asks No / Yes / Yes, with a log (the user's pick: one
+    /// The offer of the desktop shortcut (2026-10-09, the user's ask; per profile since 2026-10-16, the user's call): while the
+    /// loaded profile's <see cref="AppSettingsData.ShortcutOffered"/> is unset, one pane asks No / Yes / Yes, with a log (the user's pick: one
     /// pane, three rows), and a yes is <c>/shortcut</c> or <c>/shortcut --log</c> through <see cref="HandleShortcut"/>, its
     /// notice and errors as typed. Any answer marks the offer made, ESC and a pane closed off it too (the user's pick: asked once).
     /// Run as the screen opens, before the LLM's connect (the user's call the same day: first, not behind the server picker or
-    /// the Connect page). Not asked — and not
+    /// the Connect page), and after every profile switch at the same place (<see cref="AfterProfileSwitchAsync"/>), so each
+    /// profile is asked once, as it is first opened. Not asked — and not
     /// marked, so a later start asks — without a writer or the exe's path, without menus (a redirected console: a typed
     /// fallback would take the user's first line), or on a temporary profile (a shortcut to scratch is the wrong first offer). A shortcut already on
     /// the desktop for the loaded profile marks it unasked.
@@ -95,7 +96,7 @@ internal sealed partial class ChatScreen
         if (File.Exists(linkPath))
         {
             DiagnosticLog.Info(ShortcutText.Category, ShortcutText.OfferAlreadyThere(linkPath));
-            _settings.MarkShortcutOffered();
+            await _settings.MarkShortcutOfferedAsync().ConfigureAwait(false);
             return;
         }
 
@@ -104,7 +105,7 @@ internal sealed partial class ChatScreen
             Hotkeys = ShortcutText.OfferHotkeys,
         };
         int? picked = await _menu.ChooseAsync(page, cancellationToken).ConfigureAwait(false);
-        _settings.MarkShortcutOffered();
+        await _settings.MarkShortcutOfferedAsync().ConfigureAwait(false);
         switch (picked)
         {
             case 1:

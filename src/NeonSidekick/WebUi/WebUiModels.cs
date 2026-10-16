@@ -197,15 +197,15 @@ public sealed record WebTextBack(string Text);
 
 /// <summary>
 /// The Home tab (2026-10-15, the plan's Part D): Home Assistant's state (<c>live</c>, <c>connecting</c>, <c>retrying</c>, <c>unauthorized</c>,
-/// <c>off</c>) and its sentence, whether the tab may act (<i>Web UI home controls</i>), the home bar's items as tiles, the scenes, the cards, what
-/// the Chat badge reads (<see cref="Pulse"/>), and the tab's words.
+/// <c>off</c>) and its sentence, whether the tab may act (<i>Web UI home controls</i>), the home bar's items as tiles, the rooms (2026-10-16, the
+/// scenes' boxes until then), the cards, what the Chat badge reads (<see cref="Pulse"/>), and the tab's words.
 /// </summary>
 public sealed record WebHome(
     string Status,
     string? StatusText,
     bool Controls,
     IReadOnlyList<WebHomeTile> Tiles,
-    IReadOnlyList<WebHomeSceneGroup> SceneGroups,
+    IReadOnlyList<WebHomeRoom> Rooms,
     WebHomeVideo? Video,
     WebHomePc? Pc,
     WebHomeModel Model,
@@ -226,10 +226,19 @@ public sealed record WebHomeTile(string Ref, string Glyph, string Name, string V
 public sealed record WebHomeScene(string Id, string Name, string Label);
 
 /// <summary>
-/// A box of scenes on the Home tab (2026-10-16): its key (the area's id, <c>device:&lt;id&gt;</c> or <c>none</c>, stable across renames for the
-/// page's remembered folds), its name, whether its room is on the home bar (open by default), and its scenes by name.
+/// A room on the Home tab (2026-10-16, the user's ask: the scenes' boxes became rooms): its key (the area's id, <c>device:&lt;id&gt;</c> or
+/// <c>none</c>, stable across renames for the page's remembered folds), its switch's reference (<c>area:&lt;id&gt;</c>, a zone's
+/// <c>entity:&lt;group light&gt;</c>, or none for a box with no lights), its name, whether its room is on the home bar (open by default), the
+/// lights on of all (<c>3 of 5 on</c>), the switch's tone, mark, tint and state as a tile's, its devices' rows, and its scenes by name.
 /// </summary>
-public sealed record WebHomeSceneGroup(string Key, string Name, bool OnBar, IReadOnlyList<WebHomeScene> Scenes);
+public sealed record WebHomeRoom(string Key, string? Ref, string Name, bool OnBar, string? Value, string Tone, string? Mark, string? Color, bool? On, IReadOnlyList<WebHomeDevice> Devices, IReadOnlyList<WebHomeScene> Scenes);
+
+/// <summary>
+/// A device's row in a room (2026-10-16): its entity, glyph, name, state in words (a lit light's brightness after it), its chip's note, its quick
+/// control (<c>switch</c>, <c>button</c> or <c>none</c>), a switch's state, the button's (or the switch's) action label and whether it asks first
+/// (the action at index 0 of its sheet's), its mark, and its tone and tint as a tile's.
+/// </summary>
+public sealed record WebHomeDevice(string Entity, string Glyph, string Name, string State, string? Note, string Control, bool? On, string? Label, bool Ask, string? Mark, string Tone, string? Color);
 
 /// <summary>
 /// The video playing, as the tab shows it: its state, the video, the clock, the sound, a playlist's place, a failure's sentence, and (2026-10-16)
@@ -252,7 +261,10 @@ public sealed record WebPulse(bool Busy, int Asks, string? WaitingAtPc, string T
 /// <summary>The Home tab's own words, the app's like every other.</summary>
 public sealed record WebHomeWords(
     string ControlsOff,
+    string Rooms,
     string Scenes,
+    string AllLights,
+    string Actions,
     string AskTheHouse,
     string Ask,
     string NowPlaying,
@@ -594,7 +606,7 @@ public sealed class WebVideoReport
 [JsonSerializable(typeof(WebStoreRequest))]
 [JsonSerializable(typeof(WebSignInRequest))]
 [JsonSerializable(typeof(WebHome))]
-[JsonSerializable(typeof(WebHomeSceneGroup))]
+[JsonSerializable(typeof(WebHomeRoom))]
 [JsonSerializable(typeof(WebHomeSheet))]
 [JsonSerializable(typeof(WebHomeTapRequest))]
 [JsonSerializable(typeof(WebHomeActRequest))]

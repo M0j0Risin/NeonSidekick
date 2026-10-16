@@ -70,6 +70,12 @@ public sealed record HaLiveEntity(string Id, string State, IReadOnlyDictionary<s
 
     /// <summary>Whether it is a light group (a Hue room or zone, or any group listing its members).</summary>
     public bool IsGroup => Flag("is_hue_group") == true || (Attributes.TryGetValue("entity_id", out var members) && members.ValueKind == JsonValueKind.Array);
+
+    /// <summary>A group's members as its <c>entity_id</c> attribute lists them (2026-10-16, the Web UI's zones), in its order; empty for none.</summary>
+    public IReadOnlyList<string> GroupMembers =>
+        Attributes.TryGetValue("entity_id", out var members) && members.ValueKind == JsonValueKind.Array
+            ? members.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString()!).ToList()
+            : [];
 }
 
 /// <summary>

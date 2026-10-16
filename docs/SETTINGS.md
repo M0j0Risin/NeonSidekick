@@ -32,7 +32,7 @@ The app itself, this side of the connection.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Profile | Switches to another profile, each with its own settings, persona, memory, skills and sessions. | `neon` |
+| Profile | Switches to another profile for this run, each with its own settings, persona, memory, skills and sessions. | `neon` |
 | Working directory (cwd) | The folder the file and GitLib tools work in. Enter opens the [folder picker](INTERFACE.md#folder-picker); `/cwd <path>` sets a typed path. | empty (the profile's `files\` folder) |
 | Memory mode | `read-write`: the model saves and recalls memories, and each conversation opens with them. `read-only`: it recalls only (your `/remember` still saves). `off`: no memory, and `/remember` is refused. | `read-write` |
 | Model avatar | The profile's emoji, at the start of its replies, its `/botchat` lines and the window title. Enter (or `/avatar`) opens the [avatar picker](INTERFACE.md#the-avatar-picker). | 🤖 |
@@ -124,7 +124,7 @@ A browser front end for this profile: the chat and the questions it asks you, th
 | Web UI chat controls | Shows the Chat tab: the transcript, the message line, and and the app's questions, answered from the phone. Off, there is no Chat tab: the page opens on Home, else Shopping, else YouTube, or says none is on. The app on the PC is unchanged. | on |
 | Web UI commands | The Chat tab only. Lets the page run slash commands: the ones that work from a phone run, `/model`, `/reasoning` and `/rewind` show as cards, the lists show on the page, and its dropdown completes commands. See [Commands from the page](INTERFACE.md#commands-from-the-page). Off, the page can only send messages. | off |
 | Web UI connection details | The Chat tab only. Shows the `%` and `*` connections' notes (their server and database) in the page's dropdown. Off, it shows only their names. This affects only the dropdown; the chat shows whatever the model says. | on |
-| Web UI home controls | Shows the Home tab and lets it act: tiles toggle, sheets run a device's actions, scenes run, *Ask the house* asks Assist, the video remote plays and pauses. Unlocking, opening a garage, gate or door, and disarming still ask on the page. Off, there is no Home tab. `/ha` from the chat follows *Web UI commands*. | off |
+| Web UI home controls | Shows the Home tab and lets it act: tiles toggle, sheets run a device's actions, the rooms' switches and rows act, scenes run, *Ask the house* asks Assist, the video remote plays and pauses. Unlocking, opening a garage, gate or door, and disarming still ask on the page. Off, there is no Home tab. `/ha` from the chat follows *Web UI commands*. | off |
 | Web UI shopping controls | Shows the Shopping tab: the list, where you can tick lines and change the store from the phone. Off (the default), there is no Shopping tab; `/shopping` at the PC is unchanged. | off |
 | Web UI YouTube controls | Shows the YouTube tab: it plays videos and keeps the saved list (play, resume, move, remove, save the playing one). A video started on the tab plays there, whatever *YouTube open links in* says. Off, there is no YouTube tab, and *YouTube open links in* `webui-window` plays in the PC's video window. There is no tab where the app has no video window (before macOS 14). | off |
 | Web UI profile theme | Dresses the pages in the profile's theme, following a `/theme` at once. Off, they keep their own look. | on |

@@ -4435,6 +4435,27 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
+    /// Whether the pane can place a click at all (2026-10-16, the right-click paste on the input row alone): shown, and the
+    /// console says where its cursor is. False — no pane, or a terminal that doesn't answer — and a right-click pastes
+    /// wherever it lands, as before, since <see cref="TryHitInput(int, int, out int)"/> could never say it was on the row.
+    /// </summary>
+    public bool CanPlaceClicks
+    {
+        get
+        {
+            if (!Enabled)
+            {
+                return false;
+            }
+
+            lock (_gate)
+            {
+                return _geometry?.CursorTop() is int;
+            }
+        }
+    }
+
+    /// <summary>
     /// Where in the draft a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>)
     /// lands: the UTF-16 index of the element under it, the row's end past its last character.
     /// False when the click is not on a drawn input row (the transcript, a rule, the hint), when

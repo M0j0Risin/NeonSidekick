@@ -27,6 +27,7 @@ public class AppSettingsTests : IDisposable
     private static AppSettingsData FullyNonDefault() => new()
     {
         SchemaVersion = 7,
+        ShortcutOffered = true,
         ModelAvatar = "🦊",
         UserAvatar = "🦉",
         EmbeddedBackend = "vulkan",
@@ -410,6 +411,7 @@ public class AppSettingsTests : IDisposable
         settings.Update(d =>
         {
             d.SchemaVersion = full.SchemaVersion;
+            d.ShortcutOffered = full.ShortcutOffered;
             d.ModelAvatar = full.ModelAvatar;
             d.UserAvatar = full.UserAvatar;
             d.EmbeddedBackend = full.EmbeddedBackend;
@@ -570,6 +572,7 @@ public class AppSettingsTests : IDisposable
             settings.Update(d =>
             {
                 d.SchemaVersion = full.SchemaVersion;
+                d.ShortcutOffered = full.ShortcutOffered;
                 d.ModelAvatar = full.ModelAvatar;
                 d.UserAvatar = full.UserAvatar;
                 d.EmbeddedBackend = full.EmbeddedBackend;
@@ -1033,44 +1036,13 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(Json, File.ReadAllText(path));   // nothing to encrypt: never rewritten
     }
 
-    [Fact]
-    public void Pointer_NamingAMissingProfile_WarnsAndLoadsTheDefault_AndIsRewritten()
-    {
-        Directory.CreateDirectory(_dir);
-        File.WriteAllText(Path.Combine(_dir, AppSettings.FileName), "{ \"SchemaVersion\": 2, \"Profile\": \"ghost\" }");
-        var warnings = new List<string>();
-        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Category == "Settings" && e.Level >= NeonSidekick.Diagnostics.DiagnosticLevel.Warning) warnings.Add(e.Message); };
-        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
-        try
-        {
-            using var settings = new AppSettings(_dir);
-            Assert.Equal(Profiles.DefaultName, settings.ProfileName);
-        }
-        finally
-        {
-            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
-        }
+    /// <summary>The home's root file, as the app before 2026-10-16 wrote it: the pointer and the home-wide shortcut flag.</summary>
+    private const string LeftoverRootJson = "{ \"SchemaVersion\": 2, \"Profile\": \"work\", \"ShortcutOffered\": true }";
 
-        Assert.Contains(AppSettings.MissingProfileWarning("ghost"), warnings);
-        Assert.Contains("\"Profile\": \"neon\"", File.ReadAllText(Path.Combine(_dir, AppSettings.FileName)));
-    }
+    private string RootFile => Path.Combine(_dir, "settings.json");
 
     [Fact]
-    public void Pointer_IsHonoured_InTheDirectorysSpelling()
-    {
-        Profiles.Create(_dir, "Work", new AppSettingsData { LlmModel = "work-model" });
-        Directory.CreateDirectory(_dir);
-        File.WriteAllText(Path.Combine(_dir, AppSettings.FileName), "{ \"SchemaVersion\": 2, \"Profile\": \"work\" }");
-
-        using var settings = new AppSettings(_dir);
-
-        Assert.Equal("Work", settings.ProfileName);
-        Assert.Equal("work-model", settings.Current.LlmModel);
-        Assert.EndsWith(Path.Combine("profiles", "Work", Profiles.FileName), settings.FilePath);
-    }
-
-    [Fact]
-    public async Task SwitchProfile_FlushesTheOldOne_LoadsTheOther_RewritesThePointer_AndRaisesChanged()
+    public async Task SwitchProfile_FlushesTheOldOne_LoadsTheOther_AndRaisesChanged()
     {
         Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model" });
         using var settings = new AppSettings(_dir);
@@ -1083,7 +1055,6 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("work", settings.ProfileName);
         Assert.Equal("work-model", settings.Current.LlmModel);
         Assert.Equal("work-model", seen?.LlmModel);
-        Assert.Contains("\"Profile\": \"work\"", File.ReadAllText(settings.PointerPath));
         // The debounced edit landed in the old profile's file, not the new one.
         Assert.Contains("default-model", File.ReadAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName)));
         Assert.DoesNotContain("default-model", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
@@ -1093,122 +1064,123 @@ public class AppSettingsTests : IDisposable
         await settings.FlushAsync();
         Assert.Contains("work-2", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
         Assert.DoesNotContain("work-2", File.ReadAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName)));
+    }
+
+    /// <summary>Every launch opens <c>neon</c> (2026-10-16, the user's call): a switch lasts for its run only.</summary>
+    [Fact]
+    public async Task APlainLaunch_AfterASwitch_OpensNeon()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model" });
+        using (var settings = new AppSettings(_dir))
+        {
+            await settings.SwitchProfileAsync("work");
+            Assert.Equal("work", settings.ProfileName);
+        }
 
         using var relaunched = new AppSettings(_dir);
-        Assert.Equal("work", relaunched.ProfileName);
-        Assert.Equal("work-2", relaunched.Current.LlmModel);
+        Assert.Equal(Profiles.DefaultName, relaunched.ProfileName);
+        Assert.Equal("work-model", Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work")).LlmModel);   // the profile itself is kept
+    }
+
+    /// <summary>A root <c>settings.json</c> left from before 2026-10-16 is never read, nor touched (the user's pick: left on disk, ignored).</summary>
+    [Fact]
+    public async Task ALeftoverRootFile_IsIgnored_AndLeftByteForByte()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData());
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(RootFile, LeftoverRootJson);
+
+        using (var settings = new AppSettings(_dir))
+        {
+            Assert.Equal(Profiles.DefaultName, settings.ProfileName);
+            Assert.False(settings.ShortcutOffered);   // the home-wide flag is not carried over
+            await settings.MarkShortcutOfferedAsync();
+            await settings.SwitchProfileAsync("work");
+        }
+
+        Assert.Equal(LeftoverRootJson, File.ReadAllText(RootFile));
+    }
+
+    /// <summary>Nothing writes a root <c>settings.json</c> any more: a fresh home, a switch, a mark.</summary>
+    [Fact]
+    public async Task NoRootFile_IsEverCreated()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData());
+        using (var settings = new AppSettings(_dir))
+        {
+            await settings.MarkShortcutOfferedAsync();
+            await settings.SwitchProfileAsync("work");
+            settings.Update(d => d.LlmModel = "x");
+            await settings.FlushAsync();
+        }
+
+        using (new AppSettings(_dir, "work"))
+        {
+        }
+
+        Assert.False(File.Exists(RootFile));
     }
 
     /// <summary>
-    /// The shortcut offer's flag (2026-10-09): false in a new home and in a pointer from before the key, true once marked, kept
-    /// by the next launch and by a profile switch's rewrite of the pointer.
+    /// The shortcut offer's flag is each profile's (2026-10-16): false until marked, marking <c>neon</c> leaves <c>work</c> unasked,
+    /// and a relaunch on <c>neon</c> keeps it, written at once (no debounce).
     /// </summary>
     [Fact]
-    public async Task ShortcutOffered_FalseUntilMarked_ThenKept_AcrossALaunchAndASwitch()
+    public async Task ShortcutOffered_IsPerProfile_AndKeptAcrossALaunch()
     {
-        Directory.CreateDirectory(_dir);
-        File.WriteAllText(Path.Combine(_dir, AppSettings.FileName), "{ \"SchemaVersion\": 2, \"Profile\": \"neon\" }");
         Profiles.Create(_dir, "work", new AppSettingsData());
         using (var settings = new AppSettings(_dir))
         {
             Assert.False(settings.ShortcutOffered);
-            settings.MarkShortcutOffered();
+            await settings.MarkShortcutOfferedAsync();
             Assert.True(settings.ShortcutOffered);
-            Assert.Contains("\"ShortcutOffered\": true", File.ReadAllText(settings.PointerPath));
-            Assert.Contains("\"Profile\": \"neon\"", File.ReadAllText(settings.PointerPath));
+            Assert.Contains("\"ShortcutOffered\": true", File.ReadAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName)));
 
             await settings.SwitchProfileAsync("work");
-            Assert.Contains("\"Profile\": \"work\"", File.ReadAllText(settings.PointerPath));
-            Assert.Contains("\"ShortcutOffered\": true", File.ReadAllText(settings.PointerPath));
+            Assert.False(settings.ShortcutOffered);
         }
 
         using var relaunched = new AppSettings(_dir);
         Assert.True(relaunched.ShortcutOffered);
-        Assert.Equal("work", relaunched.ProfileName);
+        using var work = new AppSettings(_dir, "work");
+        Assert.False(work.ShortcutOffered);
     }
 
-    /// <summary>A brand-new home has not been offered the shortcut, and its new pointer says so.</summary>
+    /// <summary>A hand-written <c>null</c> is "not asked yet", and the rest of the file still loads.</summary>
     [Fact]
-    public void ShortcutOffered_ANewHome_IsFalse()
+    public void ShortcutOffered_NullInTheFile_LoadsAsUnasked()
     {
+        Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
+        File.WriteAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName), "{ \"SchemaVersion\": 2, \"LlmModel\": \"kept\", \"ShortcutOffered\": null }");
+
         using var settings = new AppSettings(_dir);
 
         Assert.False(settings.ShortcutOffered);
-        Assert.Contains("\"ShortcutOffered\": false", File.ReadAllText(settings.PointerPath));
+        Assert.Equal("kept", settings.Current.LlmModel);
     }
 
-    /// <summary>Marked under a <c>--profile</c> launch (2026-10-09): the flag is read and written, the pointer's profile left as it was.</summary>
+    /// <summary>A plain reset keeps the flag (the profile was asked); <c>reset all</c> clears it, so the profile is asked again.</summary>
     [Fact]
-    public void ShortcutOffered_UnderAProfileOverride_MarkingLeavesThePointersProfile()
+    public async Task ShortcutOffered_KeptByAPlainReset_ClearedByResetAll()
     {
-        Profiles.Create(_dir, "work", new AppSettingsData());
-        using (var first = new AppSettings(_dir))
-        {
-            Assert.Equal(Profiles.DefaultName, first.ProfileName);
-        }
+        using var settings = new AppSettings(_dir);
+        await settings.MarkShortcutOfferedAsync();
 
-        using (var settings = new AppSettings(_dir, profileOverride: "work"))
-        {
-            Assert.False(settings.ShortcutOffered);
-            settings.MarkShortcutOffered();
-            Assert.Contains("\"Profile\": \"neon\"", File.ReadAllText(settings.PointerPath));
-        }
+        await settings.ResetProfileAsync(Profiles.DefaultName);
+        Assert.True(settings.ShortcutOffered);
 
-        using var overridden = new AppSettings(_dir, profileOverride: "work");
-        Assert.True(overridden.ShortcutOffered);
-    }
-
-    /// <summary>A temporary profile (<c>_test</c>, 2026-09-24) loads like any other, but the next launch opens default and points the pointer back; the profile is kept.</summary>
-    [Fact]
-    public async Task Launch_OnATemporaryProfile_LoadsDefault_AndRewritesThePointer()
-    {
-        Profiles.Create(_dir, "_test", new AppSettingsData { LlmModel = "test-model" });
-        using (var settings = new AppSettings(_dir))
-        {
-            await settings.SwitchProfileAsync("_test");
-            Assert.Equal("_test", settings.ProfileName);
-            Assert.Equal("test-model", settings.Current.LlmModel);
-            Assert.Contains("\"Profile\": \"_test\"", File.ReadAllText(settings.PointerPath));
-        }
-
-        var notes = new List<string>();
-        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Category == "Settings") notes.Add(e.Message); };
-        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
-        try
-        {
-            using var relaunched = new AppSettings(_dir);
-            Assert.Equal(Profiles.DefaultName, relaunched.ProfileName);
-            Assert.Contains("\"Profile\": \"neon\"", File.ReadAllText(relaunched.PointerPath));
-
-            // Kept, and a switch still lands in it with its settings.
-            Assert.True(Profiles.Exists(_dir, "_test"));
-            await relaunched.SwitchProfileAsync("_test");
-            Assert.Equal("test-model", relaunched.Current.LlmModel);
-        }
-        finally
-        {
-            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
-        }
-
-        Assert.Contains(AppSettings.TemporaryProfileNotice("_test"), notes);
-        Assert.Equal("Profile \"_test\" is temporary (starts with _); loading neon.", AppSettings.TemporaryProfileNotice("_test"));
+        await settings.ResetProfileAsync(Profiles.DefaultName, all: true);
+        Assert.False(settings.ShortcutOffered);
     }
 
     /// <summary>
-    /// <c>--profile</c> / <c>NEONSIDEKICK_PROFILE</c> (2026-09-26): the named profile loads in its listed spelling,
-    /// the pointer is left as it is, and the next plain launch follows the pointer again.
+    /// <c>--profile</c> / <c>NEONSIDEKICK_PROFILE</c> (2026-09-26): the named profile loads in its listed spelling, and the
+    /// launch's log names it.
     /// </summary>
     [Fact]
-    public async Task ProfileOverride_LoadsThatProfile_AndLeavesThePointerAlone()
+    public async Task ProfileOverride_LoadsThatProfile_InItsListedSpelling()
     {
         Profiles.Create(_dir, "Work", new AppSettingsData { LlmModel = "work-model" });
-        Profiles.Create(_dir, "home", new AppSettingsData { LlmModel = "home-model" });
-        using (var pointed = new AppSettings(_dir))
-        {
-            await pointed.SwitchProfileAsync("home");
-        }
-
-        string pointer = File.ReadAllText(Path.Combine(_dir, AppSettings.FileName));
         var notes = new List<string>();
         Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Category == "Settings") notes.Add(e.Message); };
         NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
@@ -1217,8 +1189,8 @@ public class AppSettingsTests : IDisposable
             using var settings = new AppSettings(_dir, "WORK");
             Assert.Equal("Work", settings.ProfileName);
             Assert.Equal("work-model", settings.Current.LlmModel);
+            Assert.EndsWith(Path.Combine("profiles", "Work", Profiles.FileName), settings.FilePath);
 
-            // An edit lands in the overriding profile's file; the pointer is untouched.
             settings.Update(d => d.LlmModel = "work-2");
             await settings.FlushAsync();
             Assert.Contains("work-2", File.ReadAllText(Profiles.ProfileFile(_dir, "Work")));
@@ -1228,37 +1200,8 @@ public class AppSettingsTests : IDisposable
             NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
         }
 
-        Assert.Equal(pointer, File.ReadAllText(Path.Combine(_dir, AppSettings.FileName)));
-        Assert.Contains(AppSettings.OverrideProfileNotice("Work"), notes);
-        using var relaunched = new AppSettings(_dir);
-        Assert.Equal("home", relaunched.ProfileName);
-    }
-
-    [Fact]
-    public void ProfileOverride_OnAFreshHome_WritesTheDefaultPointer()
-    {
-        Profiles.Create(_dir, "work", new AppSettingsData());
-
-        using var settings = new AppSettings(_dir, "work");
-
-        Assert.Equal("work", settings.ProfileName);
-        Assert.Contains("\"Profile\": \"neon\"", File.ReadAllText(settings.PointerPath));
-    }
-
-    /// <summary>What a headless run with no profile named hands over (2026-09-26): "default" loads, the pointer stays put.</summary>
-    [Fact]
-    public async Task ProfileOverride_Default_LeavesThePointerOnAnotherProfile()
-    {
-        Profiles.Create(_dir, "work", new AppSettingsData());
-        using (var tui = new AppSettings(_dir))
-        {
-            await tui.SwitchProfileAsync("work");
-        }
-
-        using var settings = new AppSettings(_dir, Profiles.DefaultName);
-
-        Assert.Equal(Profiles.DefaultName, settings.ProfileName);
-        Assert.Contains("\"Profile\": \"work\"", File.ReadAllText(settings.PointerPath));
+        Assert.Contains(AppSettings.LoadedProfileNotice("Work"), notes);
+        Assert.Equal("Loading profile \"Work\" for this launch.", AppSettings.LoadedProfileNotice("Work"));
     }
 
     [Fact]
@@ -1269,10 +1212,9 @@ public class AppSettingsTests : IDisposable
         using var settings = new AppSettings(_dir, Profiles.DefaultName);
 
         Assert.Equal(Profiles.DefaultName, settings.ProfileName);
-        Assert.Contains("\"Profile\": \"neon\"", File.ReadAllText(settings.PointerPath));
     }
 
-    /// <summary>A temporary profile named on purpose loads; the redirect is for the pointer, not for asking.</summary>
+    /// <summary>A temporary profile named on purpose loads.</summary>
     [Fact]
     public void ProfileOverride_LoadsATemporaryProfile()
     {
@@ -1295,19 +1237,6 @@ public class AppSettingsTests : IDisposable
 
         Assert.StartsWith(AppSettings.UnknownProfileMessage(name, Profiles.List(_dir)), ex.Message);
         Assert.Contains("neon, work", ex.Message);
-        Assert.False(File.Exists(Path.Combine(_dir, AppSettings.FileName)));   // nothing written for a bad name
-    }
-
-    [Fact]
-    public async Task ProfileOverride_ThenASwitch_RewritesThePointerAsAlways()
-    {
-        Profiles.Create(_dir, "work", new AppSettingsData());
-        Profiles.Create(_dir, "home", new AppSettingsData());
-        using var settings = new AppSettings(_dir, "work");
-
-        await settings.SwitchProfileAsync("home");
-
-        Assert.Contains("\"Profile\": \"home\"", File.ReadAllText(settings.PointerPath));
     }
 
     [Fact]
@@ -1503,7 +1432,6 @@ public class AppSettingsTests : IDisposable
         Assert.Single(seen);
         AssertSame(new AppSettingsData(), seen[0]);
         Assert.Equal("You are Rex.", File.ReadAllText(Path.Combine(settings.ProfileDirectory, "persona.md")));   // the sidekick's files stay through a reset (2026-09-20)
-        Assert.Contains("\"Profile\": \"work\"", File.ReadAllText(settings.PointerPath));
 
         // The debounce never fires again: the file stays at the defaults.
         await Task.Delay(TimeSpan.FromMilliseconds(800));
@@ -1797,18 +1725,6 @@ public class AppSettingsTests : IDisposable
 
         using var settings = new AppSettings(_dir);
         AssertSame(new AppSettingsData(), settings.Current);
-    }
-
-    [Fact]
-    public void CorruptPointerFile_LoadsTheDefaultProfile()
-    {
-        Directory.CreateDirectory(_dir);
-        File.WriteAllText(Path.Combine(_dir, AppSettings.FileName), "{ this is not json");
-        Profiles.Create(_dir, Profiles.DefaultName, new AppSettingsData { LlmModel = "kept" });
-
-        using var settings = new AppSettings(_dir);
-        Assert.Equal(Profiles.DefaultName, settings.ProfileName);
-        Assert.Equal("kept", settings.Current.LlmModel);
     }
 
     [Fact]

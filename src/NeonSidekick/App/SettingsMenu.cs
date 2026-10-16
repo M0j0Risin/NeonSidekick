@@ -5014,8 +5014,8 @@ internal sealed partial class SettingsMenu
     /// Switches to a listed profile and returns true; the loaded one prints
     /// <see cref="AlreadyCurrentNotice"/> and returns false. The caller announces the switch
     /// (<see cref="SwitchedNotice"/>) on the screen it redraws: printed here, the wipe would take
-    /// it. <paramref name="name"/> must be resolved (<see cref="Profiles.Resolve"/>). A failed
-    /// pointer write is logged, not thrown.
+    /// it. <paramref name="name"/> must be resolved (<see cref="Profiles.Resolve"/>). The switch
+    /// lasts for this run (2026-10-16).
     /// </summary>
     public async Task<bool> SwitchProfileAsync(string name)
     {

@@ -323,6 +323,7 @@ public class ProfilesTests : IDisposable
             ModelAvatar = "🦊",
             UserAvatar = "🦉",
             WebUiToken = "dpapi:web",
+            ShortcutOffered = true,
             TtsOutput = !new AppSettingsData().TtsOutput,
             WorkingDirectory = @"C:\elsewhere",
         };
@@ -345,7 +346,8 @@ public class ProfilesTests : IDisposable
         Assert.Equal("🦊", kept.ModelAvatar);   // the profile's face (2026-10-10)
         Assert.Equal("🦉", kept.UserAvatar);    // the user's own (2026-10-12)
         Assert.Equal("dpapi:web", kept.WebUiToken);   // the Web UI's token (2026-10-14): a signed-in phone stays signed in
-        Assert.Equal(18, Profiles.ResetKeptSettings.Length);
+        Assert.True(kept.ShortcutOffered);   // the profile was asked for its shortcut (2026-10-16)
+        Assert.Equal(19, Profiles.ResetKeptSettings.Length);
 
         Profiles.Create(_dir, "home", mine);
         Profiles.Reset(_dir, "home", all: true);
@@ -386,7 +388,7 @@ public class ProfilesTests : IDisposable
     [Fact]
     public void CopySettings_CopiesEverySetting_ButTheTargetsWorkingDirectory_AndNoSidekickFile()
     {
-        Profiles.Create(_dir, "home", new AppSettingsData { LlmModel = "home-model", LlmApiKey = "dpapi:AQA", SessionNamingMode = "first-line", WorkingDirectory = @"C:\home-sandbox", ModelAvatar = "🦊" });
+        Profiles.Create(_dir, "home", new AppSettingsData { LlmModel = "home-model", LlmApiKey = "dpapi:AQA", SessionNamingMode = "first-line", WorkingDirectory = @"C:\home-sandbox", ModelAvatar = "🦊", ShortcutOffered = true });
         Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", WorkingDirectory = @"C:\work-sandbox", ModelAvatar = "🐙" });
         File.WriteAllText(Path.Combine(Profiles.Directory(_dir, "home"), PersonaFile.FileName), "You are Rex.");
 
@@ -398,6 +400,7 @@ public class ProfilesTests : IDisposable
         Assert.Equal("first-line", work.SessionNamingMode);
         Assert.Equal(@"C:\work-sandbox", work.WorkingDirectory);
         Assert.Equal("🐙", work.ModelAvatar);   // the target's own face (2026-10-10)
+        Assert.Null(work.ShortcutOffered);       // the target's own flag (2026-10-16): still not asked
         Assert.Equal(new[] { Profiles.FileName }, Directory.GetFiles(Profiles.Directory(_dir, "work")).Select(Path.GetFileName));
         Assert.Equal("home-model", Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "home")).LlmModel);   // the source untouched
     }

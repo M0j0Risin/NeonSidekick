@@ -17,13 +17,13 @@
 <body data-tab="home">
 <header class="top">
   <div class="who"><span id="profile">Home</span></div>
-  <nav><a href="/" id="chat-link">Chat</a><a href="/home" class="here">Home</a><a href="/shopping">Shopping</a><a href="/youtube" class="hidden">YouTube</a></nav>
+  <nav><a href="/" id="chat-link">Chat</a><div class="tab-menu"><button type="button" class="tab-menu-button" aria-haspopup="menu" aria-expanded="false" aria-controls="tab-menu-list">☰</button><div class="tab-menu-list hidden" role="menu" id="tab-menu-list"><a href="/home" role="menuitem" class="here">🏠 Home</a><a href="/shopping" role="menuitem">🛒 Shopping</a><a href="/youtube" role="menuitem" class="hidden">▶️ YouTube</a></div></div></nav>
   <span class="dot" id="dot" title="connection"></span>
 </header>
 <main class="home">
   <div class="banner waiting hidden" id="ha-status"></div>
   <div id="tiles"></div>
-  <details class="home-card hidden" id="scenes"><summary></summary><div class="scene-groups"></div></details>
+  <details class="home-card hidden" id="rooms"><summary></summary><div class="room-groups"></div></details>
   <section class="home-card hidden" id="ask">
     <h2></h2>
     <div class="ask-row"><input type="text" id="ask-text" autocomplete="off" enterkeyhint="send"><button type="button" class="primary" id="ask-send"></button></div>

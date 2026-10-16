@@ -1448,19 +1448,71 @@ public class InputLineTests : IDisposable
         var line = new InputLine(pane, new KeySource(scripted, TimeSpan.FromMilliseconds(1)), () => clip);
         scripted.Push(Chars("ab"));
         scripted.Push(Keys.Left);
-        scripted.PushClick(0, 0, MouseButton.Right);      // pasted at the cursor, wherever the click was
+        scripted.PushClick(Col(1), 100, MouseButton.Right);   // on the line: pasted at the cursor, not at the click (2026-10-16: only on the line)
         scripted.Push(Keys.Enter);
 
         Assert.Equal("atwo linesb", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
 
         // Nothing on the clipboard, or no clipboard at all: nothing happens.
         clip = null;
-        scripted.Push(Keys.Char('z')).PushClick(0, 0, MouseButton.Right).Push(Keys.Enter);
+        scripted.Push(Keys.Char('z')).PushClick(Col(0), 100, MouseButton.Right).Push(Keys.Enter);
         Assert.Equal("z", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
 
         var without = new InputLine(pane, new KeySource(scripted, TimeSpan.FromMilliseconds(1)));
-        scripted.Push(Keys.Char('w')).PushClick(0, 0, MouseButton.Right).Push(Keys.Enter);
+        scripted.Push(Keys.Char('w')).PushClick(Col(0), 100, MouseButton.Right).Push(Keys.Enter);
         Assert.Equal("w", Assert.IsType<InputResult.Submitted>(await without.ReadAsync()).Text);
+    }
+
+    /// <summary>
+    /// A right-click off the input row (2026-10-16, the user's call: the transcript's right-clicks freed for later): nothing pasted, the
+    /// draft and its selection left as they were; the prompt glyph's gutter is the row's and pastes.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ARightClickOffTheLine_PastesNothing_TheGutterPastes()
+    {
+        var (line, keys) = PaneLine(() => "Z");
+        keys.Push(Chars("abcdef"));
+        keys.PushClick(Col(1), 100).PushDrag(Col(5), 100);       // a[bcde]f
+        keys.PushClick(3, 50, MouseButton.Right);                // the transcript: nothing
+        keys.PushClick(3, 99, MouseButton.Right);                // the rule above the row: nothing
+        keys.Push(Keys.Backspace).Push(Keys.Enter);              // the selection still there: deleted whole
+
+        Assert.Equal("af", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+
+        keys.Push(Chars("ab")).PushClick(0, 100, MouseButton.Right).Push(Keys.Enter);   // the prompt glyph's cell: pasted at the cursor
+        Assert.Equal("abZ", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+    }
+
+    /// <summary>Under a reply (the live row) the same rule: off the row a right-click is declined to the watcher's hook, nothing pasted; on it, pasted.</summary>
+    [Fact]
+    public async Task OnTheLiveRow_ARightClickOffTheLine_IsDeclined_OnItPastes()
+    {
+        var (line, keys) = PaneLine(() => "Z");
+        keys.Push(Chars("ab")).Push(Keys.Enter);
+        Assert.Equal("ab", Assert.IsType<InputResult.Submitted>(await line.ReadAsync(editor: line.Chat)).Text);
+        var editor = line.Chat;
+        editor.BeginLive();
+        await editor.FeedAsync(new InputEvent.Key(Keys.Char('q')), CancellationToken.None);
+
+        Assert.Equal(EditOutcome.Declined, await editor.FeedAsync(new InputEvent.Click(3, 50, MouseButton.Right), CancellationToken.None));
+        Assert.Equal("q", editor.Text);
+        Assert.Equal(EditOutcome.Handled, await editor.FeedAsync(new InputEvent.Click(Col(0), 100, MouseButton.Right), CancellationToken.None));
+        Assert.Equal("qZ", editor.Text);
+    }
+
+    /// <summary>A pane that cannot place a click (here no cursor row; a pane not shown alike): a right-click anywhere still pastes, as before.</summary>
+    [Fact]
+    public async Task WithoutACursorRow_ARightClickAnywhere_StillPastes()
+    {
+        _console.Profile.Height = 10;
+        using var pane = new ScreenPane(_console, new ScreenGeometry(() => null), new ManualTimeProvider());
+        pane.Show();
+        var scripted = new ScriptedInput();
+        var line = new InputLine(pane, new KeySource(scripted, TimeSpan.FromMilliseconds(1)), () => "Z");
+        Assert.False(pane.CanPlaceClicks);
+        scripted.Push(Chars("ab")).PushClick(3, 50, MouseButton.Right).Push(Keys.Enter);
+
+        Assert.Equal("abZ", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
     }
 
     // ── The transcript scroll ───────────────────────────────────────────────
@@ -2203,7 +2255,7 @@ public class InputLineTests : IDisposable
     {
         var (line, keys) = PaneLine(() => "Z");
         keys.Push(Chars("abcdef"));
-        keys.PushClick(Col(1), 100).PushDrag(Col(5), 100).PushClick(0, 0, MouseButton.Right).Push(Keys.Enter);   // a[bcde]f → aZ|f
+        keys.PushClick(Col(1), 100).PushDrag(Col(5), 100).PushClick(Col(2), 100, MouseButton.Right).Push(Keys.Enter);   // a[bcde]f → aZ|f
 
         Assert.Equal("aZf", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
     }
@@ -2381,7 +2433,7 @@ public class InputLineTests : IDisposable
     {
         string clip = Block(5);
         var (line, keys) = PaneLine(() => clip);
-        keys.Push(Chars("q ")).PushClick(0, 0, MouseButton.Right).Push(Keys.Enter);
+        keys.Push(Chars("q ")).PushClick(Col(0), 100, MouseButton.Right).Push(Keys.Enter);
 
         Assert.Equal("q " + Block(5).Replace("\r\n", "\n"), Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true)).Text);
         Assert.Contains("q [Pasted text #1 +5 lines]\n", _console.Output);

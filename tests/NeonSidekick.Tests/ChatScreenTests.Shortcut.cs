@@ -7,8 +7,8 @@ using NeonSidekick.UI;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// <c>/shortcut</c> on the screen (2026-10-07): the four forms, a replaced one, the refusals, the error off Windows; and the first
-/// start's offer of it (2026-10-09).
+/// <c>/shortcut</c> on the screen (2026-10-07): the four forms, a replaced one, the refusals, the error off Windows; and the
+/// offer of it (2026-10-09), each profile's own since 2026-10-16: at start and after a switch to a profile not yet asked.
 /// </summary>
 public partial class ChatScreenTests
 {
@@ -17,12 +17,15 @@ public partial class ChatScreenTests
 
     private string ShortcutExe => Path.Combine(_dir, "app", "NeonSidekick.exe");
 
-    /// <summary>A writer for the screen, the first start's offer already made (unless <paramref name="offered"/> is false) so a script's keys reach the line.</summary>
+    /// <summary>
+    /// A writer for the screen, the loaded profile's offer already made (unless <paramref name="offered"/> is false) so a script's keys
+    /// reach the line. Only the loaded profile is marked: a test that switches must mark its target too, or answer its offer.
+    /// </summary>
     private FakeShortcutWriter UseShortcutWriter(bool offered = true, ShortcutKind kind = ShortcutKind.Lnk)
     {
         if (offered)
         {
-            _settings.MarkShortcutOffered();
+            _settings.MarkShortcutOfferedAsync().GetAwaiter().GetResult();
         }
 
         return _shortcutWriter = new FakeShortcutWriter(Path.Combine(_dir, "Desktop"), ShortcutExe, kind);
@@ -151,9 +154,66 @@ public partial class ChatScreenTests
         Assert.Equal("--profile neon", spec.Arguments);
         Assert.Contains(ShortcutText.Made(spec.LinkPath, spec.Arguments, replaced: false), output.Replace("\n", "", StringComparison.Ordinal));
         Assert.True(_settings.ShortcutOffered);
+        Assert.True(Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, Profiles.DefaultName)).ShortcutOffered);   // written at once, in the profile
         using var relaunched = new AppSettings(_dir);
         Assert.True(relaunched.ShortcutOffered);
         Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>A switch to a profile not yet asked (2026-10-16): its own offer, a yes writing its shortcut and marking it alone.</summary>
+    [Fact]
+    public async Task Offer_ASwitchToAnUnaskedProfile_OffersItsShortcut_AndMarksItAlone()
+    {
+        var writer = UseShortcutWriter();
+        Profiles.Create(_dir, "work", new AppSettingsData());
+        Profiles.Create(_dir, "home", new AppSettingsData());
+        PushLine("/profile work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ShortcutText.OfferQuestion("work")[NoticeGlyphs.Shortcut.Length..], output);
+        var spec = Assert.Single(writer.Written);
+        Assert.Equal("--profile work", spec.Arguments);
+        Assert.Equal(Path.Combine(writer.DesktopFolder, "NeonSidekick (work).lnk"), spec.LinkPath);
+        Assert.Equal("work", _settings.ProfileName);
+        Assert.True(_settings.ShortcutOffered);
+        Assert.True(Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work")).ShortcutOffered);
+        Assert.Null(Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "home")).ShortcutOffered);
+    }
+
+    /// <summary>A switch to a profile already asked: no pane, the script's next line reaches the input row.</summary>
+    [Fact]
+    public async Task Offer_ASwitchToAnAskedProfile_IsNotAsked()
+    {
+        var writer = UseShortcutWriter();
+        Profiles.Create(_dir, "work", new AppSettingsData { ShortcutOffered = true });
+        PushLine("/profile work");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal("work", _settings.ProfileName);
+        Assert.DoesNotContain(ShortcutText.OfferQuestion("work")[NoticeGlyphs.Shortcut.Length..], output);
+        Assert.Empty(writer.Written);
+    }
+
+    /// <summary><c>/profile add</c> with a writer: the new profile, its flag blank, is offered its shortcut as the switch lands.</summary>
+    [Fact]
+    public async Task Offer_ProfileAdd_OffersTheNewProfilesShortcut()
+    {
+        var writer = UseShortcutWriter();
+        PushLine("/profile add work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ShortcutText.OfferQuestion("work")[NoticeGlyphs.Shortcut.Length..], output);
+        var spec = Assert.Single(writer.Written);
+        Assert.Equal("--profile work", spec.Arguments);
+        Assert.True(_settings.ShortcutOffered);
     }
 
     /// <summary>The log row: <c>/shortcut --log</c>. (The fixture's menus are the prompt, whose rows are reached by the arrows.)</summary>

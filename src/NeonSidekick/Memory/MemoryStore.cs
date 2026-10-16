@@ -90,7 +90,7 @@ public readonly record struct MemoryImportResult(int Added, int Duplicates, int 
 
 /// <summary>
 /// Long-term memory: a short list of facts about the user that outlives the conversation and the
-/// process. One file next to <c>settings.json</c>, loaded on first use, read again when it changed
+/// process. One file in the profile's folder, beside its <c>profile.json</c>, loaded on first use, read again when it changed
 /// outside the app (<c>/memory edit</c>, 2026-09-23) and written through on every change, so what
 /// the store reports is what the disk holds.
 ///

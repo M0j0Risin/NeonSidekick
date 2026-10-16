@@ -289,7 +289,10 @@ public sealed partial class WebUiHostTests : IAsyncLifetime
     /// <summary>The Home tab's side for the host's tests (2026-10-15): fixed answers, every call recorded.</summary>
     private sealed class FakeHome : IWebHome
     {
-        public WebHome Tab { get; set; } = new("live", null, true, [new WebHomeTile("entity:light.desk", "💡", "Desk", "", "", "call", null, "off", null, 0, true)], [], null, null,
+        public WebHome Tab { get; set; } = new("live", null, true, [new WebHomeTile("entity:light.desk", "💡", "Desk", "", "", "call", null, "off", null, 0, true)],
+            [new WebHomeRoom("den", "area:den", "Den", true, "1 of 2 on", "on", null, "#ffcc00", true,
+                [new WebHomeDevice("light.desk", "💡", "Desk", "on · 80%", "Desk: on", "switch", true, "Toggle", false, null, "on", "#ffcc00")],
+                [new WebHomeScene("scene.den_relax", "Den Relax", "Relax")])], null, null,
             new WebHomeModel("m", "host", 8000, false, false, null), new WebPulse(false, 0, null, "", "tag"), WebUiText.HomeWords);
 
         public List<string> Calls { get; } = [];
@@ -325,7 +328,14 @@ public sealed partial class WebUiHostTests : IAsyncLifetime
 
         using var first = await _client.SendAsync(Get("/api/home"));
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
-        Assert.Contains("\"ref\":\"entity:light.desk\"", await first.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        string tab = await first.Content.ReadAsStringAsync();
+        Assert.Contains("\"ref\":\"entity:light.desk\"", tab, StringComparison.Ordinal);
+        // The rooms (2026-10-16): each box with its switch's reference, its count, its rows and its scenes; no scenes' boxes any more.
+        Assert.Contains("\"rooms\":[{\"key\":\"den\",\"ref\":\"area:den\",\"name\":\"Den\",\"onBar\":true,\"value\":\"1 of 2 on\"", tab, StringComparison.Ordinal);
+        Assert.Contains("\"devices\":[{\"entity\":\"light.desk\"", tab, StringComparison.Ordinal);
+        Assert.Contains("\"control\":\"switch\",\"on\":true,\"label\":\"Toggle\",\"ask\":false", tab, StringComparison.Ordinal);
+        Assert.Contains("\"rooms\":\"Rooms\",\"scenes\":\"Scenes\",\"allLights\":\"All lights\"", tab, StringComparison.Ordinal);
+        Assert.DoesNotContain("sceneGroups", tab, StringComparison.Ordinal);
         using var again = Get("/api/home");
         again.Headers.IfNoneMatch.Add(first.Headers.ETag!);
         using var unchanged = await _client.SendAsync(again);

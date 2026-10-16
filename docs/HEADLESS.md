@@ -112,7 +112,7 @@ Each flag lasts one run and outranks its variable and the saved setting. Each ex
 | `--url <url>` | The LLM server: a URL, or `embedded`, `claude-code` or `docker:<container>` (below). Its key goes in `NEONSIDEKICK_LLM_API_KEY`, never on the command line. | `--url http://gpu-box:8080/v1` |
 | `--model <id>` | The model; with `--url` it pins both for a reproducible run. | `--url http://127.0.0.1:1234/v1 --model gemma-3-27b-it` |
 | `--cwd <path>` | The working directory, where the file, GitLib, shell and download tools work. | `--cwd D:\Repo\MyApp` |
-| `--profile <name>` | The profile; with neither the flag nor `NEONSIDEKICK_PROFILE` it is `neon`, never the one the TUI last used. An unknown name exits with code 2. | `--profile automation` |
+| `--profile <name>` | The profile; with neither the flag nor `NEONSIDEKICK_PROFILE` it is `neon`. An unknown name exits with code 2. | `--profile automation` |
 | `--log <path>` | Every diagnostic line to a file, starting with the flags, profile and variables in force; `{ts}` becomes the start time. | `--log C:\Logs\neon_{ts}.log` |
 | `--yolo` | Every shell command runs without asking ([below](#running-yolo-every-shell-command-allowed)). | `--yolo --cwd D:\Repo\MyApp` |
 | `--no-police` | The path police off ([below](#turning-off-the-path-police)). | `--no-police --cwd D:\Repo\MyApp` |

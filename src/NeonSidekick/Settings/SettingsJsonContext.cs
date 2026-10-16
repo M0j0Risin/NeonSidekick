@@ -11,5 +11,4 @@ namespace NeonSidekick.Settings;
 /// </summary>
 [JsonSourceGenerationOptions(WriteIndented = true)]
 [JsonSerializable(typeof(AppSettingsData))]
-[JsonSerializable(typeof(RootSettingsData))]
 public sealed partial class SettingsJsonContext : JsonSerializerContext;

@@ -1173,6 +1173,8 @@ internal sealed partial class ChatScreen
         // The Hint bar resolved once a change (2026-10-13, the code review): the row's funcs read it every frame.
         _hintBar = StatusBarStateOf(_settings.Current);
         _settings.Changed += saved => Volatile.Write(ref _hintBar, StatusBarStateOf(saved));
+        // The toolbar's 🛠️ worked out again at the next idle line (2026-10-16): a change from anywhere, the Web UI's thread too.
+        _settings.Changed += _ => _toolsOfferedDirty = true;
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
         _overriddenBy = overriddenBy ?? throw new ArgumentNullException(nameof(overriddenBy));
         _session = session ?? throw new ArgumentNullException(nameof(session));
@@ -1837,23 +1839,37 @@ internal sealed partial class ChatScreen
     /// The strip for the items Show toolbar checks under <paramref name="shown"/>, and the glyphs in it drawn on the off slab
     /// (2026-10-03, the user's ask): by their place among the strip's glyphs, from 0 — each tool switch whose setting is off,
     /// the shell under <c>off</c> (<see cref="ToolbarItemOff"/>). In <paramref name="shown"/>'s order since 2026-10-12
-    /// (<see cref="AppSettingsData.ToolbarOrder"/>, the checklist's move keys), the left group's then the right's since 2026-10-13. Pinned.
+    /// (<see cref="AppSettingsData.ToolbarOrder"/>, the checklist's move keys), the left group's then the right's since 2026-10-13.
+    /// <paramref name="noToolsOffered"/> is the screen's own fact (<see cref="ToolbarItemOff"/>). Pinned.
     /// </summary>
-    public static (string Strip, IReadOnlyList<int> Off) ToolbarStripFor(IReadOnlySet<string> items, AppSettingsData shown)
+    public static (string Strip, IReadOnlyList<int> Off) ToolbarStripFor(IReadOnlySet<string> items, AppSettingsData shown, bool noToolsOffered = false)
     {
         ArgumentNullException.ThrowIfNull(shown);
-        return ToolbarGlyphs(items, ToolbarPolicy(shown), shown.ShellPolice, id => ToolbarItemOff(id, shown), ToolbarItems.Sides(shown.ToolbarOrder, shown.ToolbarRight).All);
+        return ToolbarGlyphs(items, ToolbarPolicy(shown), shown.ShellPolice, id => ToolbarItemOff(id, shown, noToolsOffered), ToolbarItems.Sides(shown.ToolbarOrder, shown.ToolbarRight).All);
     }
 
     /// <summary>
     /// Whether item <paramref name="id"/> is drawn on the off slab under <paramref name="shown"/> (2026-10-03, the user's ask: a
     /// dark slab behind the glyph, the one look that reads on a colour emoji): a tool switch that is off, the shell under the
     /// policy <c>off</c>, the disk while Memory mode is disabled (later that day, the user's ask: the disk no longer gone while it is),
-    /// the hourglass while Queue mode is disabled (2026-10-13), the phone while the Web UI is off (2026-10-14); never any other item. Pinned.
+    /// the hourglass while Queue mode is disabled (2026-10-13), the phone while the Web UI is off (2026-10-14), the mortarboard while
+    /// <c>Agent skills</c> is off and the tools while <paramref name="noToolsOffered"/> (2026-10-16, the user's ask: <c>/tools</c>' Offered tab
+    /// offers no tool at all, <see cref="ToolsText.NoneOffered"/>, which the screen works out and hands in); never any other item. Pinned.
     /// </summary>
-    public static bool ToolbarItemOff(string id, AppSettingsData shown)
+    public static bool ToolbarItemOff(string id, AppSettingsData shown, bool noToolsOffered = false)
     {
         ArgumentNullException.ThrowIfNull(shown);
+        if (id == ToolbarItems.Skills)
+        {
+            // 2026-10-16, the user's ask: the mortarboard on the slab while Agent skills is off, as the disk under Memory disabled.
+            return !shown.AgentSkills;
+        }
+
+        if (id == ToolbarItems.Tools)
+        {
+            return noToolsOffered;
+        }
+
         if (id == ToolbarItems.WebUi)
         {
             // 2026-10-14, the user's ask: the phone on the slab while the Web UI is off, as a tool switch's glyph.
@@ -1920,9 +1936,11 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The hint row's note for one click on toolbar glyph <paramref name="glyph"/> under <paramref name="shown"/> (2026-10-04, the UI
     /// review; <see cref="ToolbarItems.Note"/>): the shell and the lock the policy, the officer its switch, the disk Memory mode, the
-    /// hourglass Queue mode (2026-10-13), a tool switch on or off, a pane or a window its name alone; null for a glyph that is no item's. Pure; pinned.
+    /// hourglass Queue mode (2026-10-13), a tool switch on or off, the mortarboard <c>Agent skills</c> on or off and the tools
+    /// <see cref="ToolbarItems.NoneOfferedState"/> while <paramref name="noToolsOffered"/> (2026-10-16), a pane or a window its name alone; null
+    /// for a glyph that is no item's. Pure; pinned.
     /// </summary>
-    public static string? ToolbarGlyphNote(string glyph, AppSettingsData shown)
+    public static string? ToolbarGlyphNote(string glyph, AppSettingsData shown, bool noToolsOffered = false)
     {
         ArgumentNullException.ThrowIfNull(glyph);
         ArgumentNullException.ThrowIfNull(shown);
@@ -1939,6 +1957,8 @@ internal sealed partial class ChatScreen
             ToolbarItems.Memory => MemoryMode.Name(memory),
             ToolbarItems.Queue => QueueMode.Name(SavedQueueMode(shown)),   // 2026-10-13
             ToolbarItems.WebUi => shown.WebUi ? ToolbarItems.OnWord : ToolbarItems.OffWord,   // 2026-10-14
+            ToolbarItems.Skills => shown.AgentSkills ? ToolbarItems.OnWord : ToolbarItems.OffWord,   // 2026-10-16
+            ToolbarItems.Tools => noToolsOffered ? ToolbarItems.NoneOfferedState : null,   // 2026-10-16: its name alone while a tool is offered
             _ when ToolsText.SwitchField(id) is not null => ToolbarItemOff(id, shown) ? ToolbarItems.OffWord : ToolbarItems.OnWord,
             _ => null,
         };
@@ -1948,7 +1968,7 @@ internal sealed partial class ChatScreen
     /// <summary>One click on a toolbar glyph (2026-10-04): its note flashed on the hint row (<see cref="ToolbarGlyphNote"/>), idle or under a reply; the pair still waits for its second click.</summary>
     private void ShowToolbarNote(string glyph)
     {
-        if (ToolbarGlyphNote(glyph, _effective()) is string note)
+        if (ToolbarGlyphNote(glyph, _effective(), _noToolsOffered) is string note)
         {
             _pane.Flash(note);
         }
@@ -2218,7 +2238,7 @@ internal sealed partial class ChatScreen
         // The model's name (2026-10-12, the user's ask: Model name), its reasoning glyph after it since later that day (the user's ask), as on the hint row.
         string model = ModelLabel(_session.Endpoint?.ModelId);
         string mark = model.Length == 0 ? "" : ModelMark(_session.Endpoint?.ModelId, shown.LlmReasoning);
-        var parts = ToolbarPartsFor(ToolbarItems.Resolve(shown.ToolbarItems), shown, path, model, mark);
+        var parts = ToolbarPartsFor(ToolbarItems.Resolve(shown.ToolbarItems), shown, path, model, mark, _noToolsOffered);
         return parts.Left.Count + parts.Right.Count == 0 ? null : parts;
     }
 
@@ -2226,9 +2246,10 @@ internal sealed partial class ChatScreen
     /// The toolbar's two groups for the items Show toolbar checks under <paramref name="shown"/> (2026-10-13, the user's ask: any item
     /// pinned left or right, <see cref="ToolbarItems.Sides"/>): each side's checked items in its order — a glyph as its switches allow
     /// (on the off slab where <see cref="ToolbarItemOff"/> says), the path <paramref name="path"/>, the name <paramref name="model"/> with
-    /// <paramref name="mark"/>; an empty one is left out. Pure; pinned.
+    /// <paramref name="mark"/>; an empty one is left out. <paramref name="noToolsOffered"/> is the screen's own fact (2026-10-16,
+    /// <see cref="ToolbarItemOff"/>). Pure; pinned.
     /// </summary>
-    public static ScreenPane.ToolbarParts ToolbarPartsFor(IReadOnlySet<string> items, AppSettingsData shown, string path, string model, string mark)
+    public static ScreenPane.ToolbarParts ToolbarPartsFor(IReadOnlySet<string> items, AppSettingsData shown, string path, string model, string mark, bool noToolsOffered = false)
     {
         ArgumentNullException.ThrowIfNull(items);
         ArgumentNullException.ThrowIfNull(shown);
@@ -2238,7 +2259,7 @@ internal sealed partial class ChatScreen
         {
             ToolbarItems.Path => path.Length > 0 ? ScreenPane.ToolbarItem.PathOf(path) : null,
             ToolbarItems.Model => model.Length > 0 ? ScreenPane.ToolbarItem.ModelOf(model, mark) : null,
-            _ => ToolbarGlyph(id, policy, shown.ShellPolice) is { } glyph ? ScreenPane.ToolbarItem.GlyphOf(glyph, ToolbarItemOff(id, shown)) : null,
+            _ => ToolbarGlyph(id, policy, shown.ShellPolice) is { } glyph ? ScreenPane.ToolbarItem.GlyphOf(glyph, ToolbarItemOff(id, shown, noToolsOffered)) : null,
         };
 
         // A divider only between two drawn items of its side (later on 2026-10-13, ItemOrder.ShownDividers).
@@ -4743,7 +4764,7 @@ internal sealed partial class ChatScreen
             .ToList();
 
         string CopyNote(string subject, string name) =>
-            verb == PullWord ? ProfileCopyNote(subject, name, loaded) : ProfileCopyNote(subject, loaded, name);
+            verb == PullWord ? ProfilePullNote(subject, name, loaded) : ProfileCopyNote(subject, loaded, name);
     }
 
     /// <summary>The notes on a profile name on the <c>/profile</c> list. Pinned.</summary>
@@ -4751,9 +4772,16 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The note on a profile name after <c>push</c> or <c>pull</c> (2026-10-10, the user's call: "switch to it" sat there, and nothing
-    /// switches): what is copied and which way, both profiles named — <c>settings: neon → gonzo</c>, <c>API keys: gonzo → neon</c>. Pinned.
+    /// switches): what is copied and which way, both profiles named — a push's <c>settings: neon → gonzo</c>, <c>API keys: neon → gonzo</c>.
+    /// A pull's is <see cref="ProfilePullNote"/>. Pinned.
     /// </summary>
     public static string ProfileCopyNote(string subject, string from, string to) => $"{subject}: {from} → {to}";
+
+    /// <summary>
+    /// A pull's note (2026-10-16, the user's call: a pull reads into the loaded profile, so the loaded profile comes first and the
+    /// arrow points at it): <c>settings: neon ← larry</c>, pulled from larry into neon. A push keeps <see cref="ProfileCopyNote"/>. Pinned.
+    /// </summary>
+    public static string ProfilePullNote(string subject, string from, string to) => $"{subject}: {to} ← {from}";
 
     /// <summary>The subject of a whole push or pull in <see cref="ProfileCopyNote"/>. Pinned.</summary>
     public const string ProfileSettingsSubject = "settings";
@@ -5657,7 +5685,36 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         _interpreters.Refresh();
-        return new ToolsFacts(ToolsGroups(effective, disabled).Select(g => g.Offered || g.Switch is not { } field ? g : g with { OffReason = GroupOffReason(field, effective) }).ToList(), effective.LlmOfferTools, disabled);
+        var facts = new ToolsFacts(ToolsGroups(effective, disabled).Select(g => g.Offered || g.Switch is not { } field ? g : g with { OffReason = GroupOffReason(field, effective) }).ToList(), effective.LlmOfferTools, disabled);
+        // The toolbar's 🛠️ follows the pane (2026-10-16): re-read after every flip, so the slab lights or goes at the next tick.
+        _noToolsOffered = ToolsText.NoneOffered(facts);
+        return facts;
+    }
+
+    /// <summary>
+    /// Whether <c>/tools</c>' Offered tab offers no tool at all (2026-10-16, the user's ask: the toolbar's 🛠️ on the off slab;
+    /// <see cref="ToolsText.NoneOffered"/>). Set by <see cref="ToolsFacts"/> and, when <see cref="_toolsOfferedDirty"/> says so, at the
+    /// idle line's top (<see cref="NoToolsOfferedNow"/>); read at every toolbar draw, never worked out there (every group is built).
+    /// </summary>
+    private volatile bool _noToolsOffered;
+
+    /// <summary>
+    /// Whether <see cref="_noToolsOffered"/> may be stale (2026-10-16): set by any settings change (any thread: the Web UI too), a profile
+    /// switch, a turn's end and every line the idle line runs (a wizard may add a connection without touching a setting); true at start.
+    /// </summary>
+    private volatile bool _toolsOfferedDirty = true;
+
+    /// <summary>
+    /// <see cref="ToolsText.NoneOffered"/> as the screen stands, for the idle line (2026-10-16): the groups as <c>/tools</c> builds them after
+    /// <see cref="Interpreters.Revalidate"/>, as <see cref="BotChatToolGroups"/> does — never <see cref="ToolsFacts"/>, whose
+    /// <see cref="Interpreters.Refresh"/> walks PATH (the 2026-10-12 shell review took that out of every turn).
+    /// </summary>
+    private bool NoToolsOfferedNow()
+    {
+        var effective = _effective();
+        var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
+        _interpreters.Revalidate();
+        return ToolsText.NoneOffered(new ToolsFacts(ToolsGroups(effective, disabled), effective.LlmOfferTools, disabled));
     }
 
     /// <summary>
@@ -10350,7 +10407,7 @@ internal sealed partial class ChatScreen
             // The watch pictures a double-click left behind (2026-10-02): cleared as the profile loads, in case watch mode never stopped cleanly.
             ClearWatchFolder();
 
-            // The first start's desktop shortcut offer (2026-10-09): first of all, before the LLM's connect (the user's call the
+            // The profile's desktop shortcut offer (2026-10-09; per profile since 2026-10-16): first of all, before the LLM's connect (the user's call the
             // same day), so it never waits behind a scan, a server picker or the Connect page.
             await OfferShortcutAsync(cancellationToken).ConfigureAwait(false);
             // The chat line's options ahead of the first idle read (2026-10-14, the user's report): the startup's embedded load
@@ -10373,6 +10430,12 @@ internal sealed partial class ChatScreen
                 ReconcileWebUi();
                 // Its dropdown's lists as they stand now (later on 2026-10-14), built here on the screen's task while a page is connected.
                 RefreshWebCompletions();
+                // The toolbar's 🛠️ (2026-10-16): whether any tool is offered, worked out again only when something may have changed it.
+                if (_toolsOfferedDirty)
+                {
+                    _toolsOfferedDirty = false;
+                    _noToolsOffered = NoToolsOfferedNow();
+                }
                 // The jobs behind the line that ended (2026-09-29): their lines, an embedded model's connect — here, never under a reply.
                 await _jobs.DrainAsync().ConfigureAwait(false);
                 if (await AnnounceAlertsAsync(cancellationToken).ConfigureAwait(false))
@@ -12783,7 +12846,10 @@ internal sealed partial class ChatScreen
     {
         while (true)
         {
-            if (await HandleOnceAsync(text, images, cancellationToken).ConfigureAwait(false))
+            bool exit = await HandleOnceAsync(text, images, cancellationToken).ConfigureAwait(false);
+            // A command may change what is offered without a setting (a wizard's connection, 2026-10-16): the toolbar's 🛠️ again.
+            _toolsOfferedDirty = true;
+            if (exit)
             {
                 return true;
             }
@@ -13549,6 +13615,7 @@ internal sealed partial class ChatScreen
                     var seed = AppSettings.Copy(_settings.Current);
                     seed.WorkingDirectory = "";
                     seed.ModelAvatar = Emojis.AvatarRules.DefaultAvatar;   // 2026-10-10: a picked face is the profile's own, as its sandbox, so a new one starts on the default (none until later that day)
+                    seed.ShortcutOffered = null;   // 2026-10-16: a new profile is offered its own shortcut as the switch below lands on it
                     Profiles.Create(home, action.Name, seed);
                     IReadOnlyList<string> copied = Profiles.CopySidekickFiles(
                         _settings.ProfileDirectory, home, action.Name, Profiles.BasicSidekickFiles);
@@ -13831,6 +13898,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task AfterProfileSwitchAsync(CancellationToken cancellationToken, string? preface = null, string? notice = null)
     {
+        _toolsOfferedDirty = true;   // 2026-10-16: the new profile's catalogs and switches
         // The Web UI's copy is the old profile's conversation's (2026-10-14): cleared; the server is reconciled below for the new profile.
         _webUi.Feed.Clear();
         // An embedded download is the old profile's (2026-09-29): paused, so its end never saves into the new one.
@@ -13881,6 +13949,9 @@ internal sealed partial class ChatScreen
             ShowSplash();
         }
 
+        // The profile's own desktop shortcut offer (2026-10-16, per profile since the home's settings.json went): asked here as at the
+        // start, before the connects, the first time a run lands on a profile not yet asked (an add, a switch, a reset all, a pull).
+        await OfferShortcutAsync(cancellationToken).ConfigureAwait(false);
         await ConnectLlmAsync(cancellationToken, quiet: true).ConfigureAwait(false);
         await ConnectSpeechAsync(cancellationToken, quiet: true).ConfigureAwait(false);
         await ConnectVoiceAsync(cancellationToken, quiet: true).ConfigureAwait(false);

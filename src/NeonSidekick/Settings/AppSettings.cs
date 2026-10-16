@@ -7,13 +7,12 @@ namespace NeonSidekick.Settings;
 /// <summary>
 /// Loads, holds and persists <see cref="AppSettingsData"/> for the loaded profile.
 ///
-/// <para>Two files. The root <c>settings.json</c> under <see cref="StorageDirectory"/> is the
-/// pointer (<see cref="RootSettingsData"/>): only which profile is loaded. The settings themselves
-/// are <c>profiles\&lt;name&gt;\profile.json</c> (<see cref="FilePath"/>), and
-/// <see cref="SwitchProfileAsync"/> swaps the loaded data for another profile's in place, so every
-/// holder of this store sees the switch through <see cref="Current"/>. A root file from before
-/// profiles (the full settings, no <c>Profile</c> property) is migrated once into the default
-/// profile, together with a root <c>memory.json</c> / <c>persona.md</c>.</para>
+/// <para>The settings are the loaded profile's <c>profiles\&lt;name&gt;\profile.json</c> (<see cref="FilePath"/>), and
+/// <see cref="SwitchProfileAsync"/> swaps the loaded data for another profile's in place, so every holder of this store sees
+/// the switch through <see cref="Current"/>. Which profile a launch opens is the caller's word alone (2026-10-16, the user's
+/// call): <c>--profile</c>, <c>NEONSIDEKICK_PROFILE</c> or a desktop shortcut, else <see cref="Profiles.DefaultName"/>. The
+/// home's root <c>settings.json</c>, which remembered the last profile switched to and held the shortcut's flag, is no
+/// longer read or written; a file left from before stays on disk, ignored.</para>
 ///
 /// <para><see cref="Current"/> is a snapshot, not the live object. Handing out the live instance
 /// would let a caller change a value without <see cref="Changed"/> ever firing, which is the
@@ -23,8 +22,6 @@ namespace NeonSidekick.Settings;
 /// </summary>
 public sealed class AppSettings : IDisposable
 {
-    /// <summary>The root pointer file.</summary>
-    public const string FileName = "settings.json";
     public const string DefaultDirectoryName = ".neonsidekick";
     /// <summary>The log category of every settings line, <see cref="Profiles"/>' too.</summary>
     public const string Category = "Settings";
@@ -41,79 +38,33 @@ public sealed class AppSettings : IDisposable
     private readonly object _gate = new();
     private AppSettingsData _data;
     private string _profileName;
-    private bool _shortcutOffered;
 
     private CancellationTokenSource? _pendingSave;
     private bool _disposed;
 
-    /// <param name="storageDirectory">The home: <c>settings.json</c>, <c>models</c> and <c>profiles</c> live under it. Created on first save if absent.</param>
+    /// <param name="storageDirectory">The home: <c>models</c> and <c>profiles</c> live under it. Created on first save if absent.</param>
     /// <param name="profileOverride">
-    /// The profile this launch loads instead of the pointer's (2026-09-26, <c>--profile</c> / <c>NEONSIDEKICK_PROFILE</c>,
-    /// the user's ask: a scripted headless run names its profile rather than following the last one clicked into).
-    /// Matched as <see cref="Profiles.Resolve"/> matches, loaded under its listed spelling. Unlike the pointer it is
-    /// the caller's word, so it is honoured as given: a temporary profile loads (the redirect guards against the
-    /// pointer stranding a launch there, not against asking), and an unknown name throws <see cref="ArgumentException"/>
-    /// with <see cref="UnknownProfileMessage"/> rather than falling back — a script must not quietly run in the wrong
-    /// profile. The pointer is never rewritten for it (only created, as the default, when there is none); a later
-    /// <see cref="SwitchProfileAsync"/> rewrites it as always. Null = the pointer decides.
+    /// The profile this launch loads (2026-09-26, <c>--profile</c> / <c>NEONSIDEKICK_PROFILE</c>, the user's ask; since 2026-10-16
+    /// the only say a launch has, null being <see cref="Profiles.DefaultName"/>). Matched as <see cref="Profiles.Resolve"/> matches,
+    /// loaded under its listed spelling. Honored as given: a temporary profile loads, and an unknown name throws
+    /// <see cref="ArgumentException"/> with <see cref="UnknownProfileMessage"/> rather than falling back — a script must not quietly
+    /// run in the wrong profile.
     /// </param>
     public AppSettings(string storageDirectory, string? profileOverride = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(storageDirectory);
         StorageDirectory = storageDirectory;
-        PointerPath = Path.Combine(storageDirectory, FileName);
 
-        if (profileOverride is not null)
-        {
-            _profileName = Profiles.Resolve(storageDirectory, profileOverride)
-                ?? throw new ArgumentException(UnknownProfileMessage(profileOverride, Profiles.List(storageDirectory)), nameof(profileOverride));
-            _data = Load(FilePath);
-            _shortcutOffered = File.Exists(PointerPath) && LoadPointer(PointerPath).ShortcutOffered;
-            if (!File.Exists(PointerPath))
-            {
-                TrySavePointer(Profiles.DefaultName);
-            }
-
-            DiagnosticLog.Info(Category, OverrideProfileNotice(_profileName));
-            EnsureProfileDirectories();
-            return;
-        }
-
-        var pointer = LoadPointer(PointerPath);
-        _shortcutOffered = pointer.ShortcutOffered;
-        bool rewritePointer = !File.Exists(PointerPath);
-
-        string? resolved = Profiles.Resolve(storageDirectory, pointer.Profile);
-        if (resolved is null)
-        {
-            DiagnosticLog.Warn(Category, MissingProfileWarning(pointer.Profile));
-            resolved = Profiles.DefaultName;
-            rewritePointer = true;
-        }
-        else if (Profiles.IsTemporary(resolved))
-        {
-            // A temporary profile is never where a launch lands (2026-09-24): default instead, the profile itself kept.
-            DiagnosticLog.Info(Category, TemporaryProfileNotice(resolved));
-            resolved = Profiles.DefaultName;
-            rewritePointer = true;
-        }
-
-        _profileName = resolved;
+        string wanted = profileOverride ?? Profiles.DefaultName;
+        _profileName = Profiles.Resolve(storageDirectory, wanted)
+            ?? throw new ArgumentException(UnknownProfileMessage(wanted, Profiles.List(storageDirectory)), nameof(profileOverride));
         _data = Load(FilePath);
-
-        if (rewritePointer)
-        {
-            TrySavePointer(resolved);
-        }
-
+        DiagnosticLog.Info(Category, LoadedProfileNotice(_profileName));
         EnsureProfileDirectories();
     }
 
-    /// <summary>The home directory: the pointer, the models and the profiles.</summary>
+    /// <summary>The home directory: the models and the profiles.</summary>
     public string StorageDirectory { get; }
-
-    /// <summary>The full path of the root pointer file.</summary>
-    public string PointerPath { get; }
 
     /// <summary>The models directory: <c>models</c> under the home, so <c>NEONSIDEKICK_HOME</c> moves both; shared by every profile.</summary>
     public string ModelsDirectory => Path.Combine(StorageDirectory, "models");
@@ -183,27 +134,23 @@ public sealed class AppSettings : IDisposable
     public string ProfileDirectory => Profiles.Directory(StorageDirectory, ProfileName);
 
     /// <summary>
-    /// Whether the desktop shortcut has been offered (2026-10-09, <see cref="RootSettingsData.ShortcutOffered"/>): the first start's
-    /// question is asked while this is false.
+    /// Whether the loaded profile has offered its desktop shortcut (<see cref="AppSettingsData.ShortcutOffered"/>, per profile since
+    /// 2026-10-16): the offer is asked while this is false, at start and after a switch.
     /// </summary>
     public bool ShortcutOffered
     {
-        get { lock (_gate) { return _shortcutOffered; } }
+        get { lock (_gate) { return _data.ShortcutOffered == true; } }
     }
 
     /// <summary>
-    /// Records that the desktop shortcut was offered (2026-10-09): the pointer is written at once, naming the profile it already
-    /// names (a missing one reads as the default) — a <c>--profile</c> launch still never moves it. Never throws; a failed write
-    /// is logged and asks again next start.
+    /// Records that the loaded profile's shortcut was offered (2026-10-09; per profile since 2026-10-16): the flag is set and the
+    /// profile written at once rather than left in the debounce, so a relaunch straight after the answer reads it. Never throws;
+    /// a failed write is logged by the save and the offer is asked again next time.
     /// </summary>
-    public void MarkShortcutOffered()
+    public async Task MarkShortcutOfferedAsync()
     {
-        lock (_gate)
-        {
-            _shortcutOffered = true;
-        }
-
-        TrySavePointer(LoadPointer(PointerPath).Profile);
+        Update(d => d.ShortcutOffered = true);
+        await FlushAsync().ConfigureAwait(false);
     }
 
     /// <summary>The full path of the loaded profile's settings file.</summary>
@@ -218,10 +165,6 @@ public sealed class AppSettings : IDisposable
         get { lock (_gate) { return Copy(_data); } }
     }
 
-    /// <summary>The warning when the pointer names a profile that is not there. Pinned.</summary>
-    public static string MissingProfileWarning(string name) =>
-        $"Profile \"{name}\" does not exist; loading {Profiles.DefaultName}.";
-
     /// <summary>
     /// What an unknown <c>--profile</c> / <c>NEONSIDEKICK_PROFILE</c> ends the launch with (2026-09-26), the profiles
     /// there are named so the script's author can fix the name. Pinned.
@@ -229,13 +172,9 @@ public sealed class AppSettings : IDisposable
     public static string UnknownProfileMessage(string name, IReadOnlyList<string> available) =>
         $"Profile \"{name}\" does not exist. Profiles: {string.Join(", ", available)}.";
 
-    /// <summary>The log line when a launch loads a named profile over the pointer (2026-09-26). Pinned.</summary>
-    public static string OverrideProfileNotice(string name) =>
-        $"Loading profile \"{name}\" for this launch; {FileName} left as it is.";
-
-    /// <summary>The note when the pointer names a temporary profile (<see cref="Profiles.IsTemporary"/>, 2026-09-24). Pinned.</summary>
-    public static string TemporaryProfileNotice(string name) =>
-        $"Profile \"{name}\" is temporary (starts with {Profiles.TemporaryPrefix}); loading {Profiles.DefaultName}.";
+    /// <summary>The log line naming the profile a launch loaded (2026-10-16; the override's notice since 2026-09-26). Pinned.</summary>
+    public static string LoadedProfileNotice(string name) =>
+        $"Loading profile \"{name}\" for this launch.";
 
     /// <summary>The warning when a skills folder could not be created (2026-09-18); the app runs on, the catalog reads an absent root as empty. Pinned.</summary>
     public static string SkillsFolderWarning(string path, string detail) =>
@@ -351,7 +290,8 @@ public sealed class AppSettings : IDisposable
     /// <summary>
     /// Loads another profile in place: the pending save of the loaded one is written first, the
     /// other's <c>profile.json</c> (or the compiled defaults, when it has none yet) replaces the
-    /// data, the pointer is rewritten, and <see cref="Changed"/> fires with the new snapshot.
+    /// data, and <see cref="Changed"/> fires with the new snapshot. The switch lasts for this run
+    /// (2026-10-16): the next launch opens the profile its caller names, else the default.
     /// <paramref name="name"/> must be a listed profile (<see cref="Profiles.Resolve"/>); an
     /// unknown one is the caller's mistake and throws <see cref="ArgumentException"/>.
     /// </summary>
@@ -371,7 +311,6 @@ public sealed class AppSettings : IDisposable
         }
 
         DiagnosticLog.Info(Category, $"Switched to profile \"{resolved}\".");
-        TrySavePointer(resolved);
         EnsureProfileDirectories();
         RaiseChanged(snapshot);
     }
@@ -381,8 +320,8 @@ public sealed class AppSettings : IDisposable
     /// rewritten, the sidekick's files untouched since 2026-09-20). For the loaded
     /// profile the pending save is written first — a debounced write landing after the reset would
     /// bring the old values back — and the defaults then replace the data in place, with
-    /// <see cref="Changed"/> firing on the new snapshot; another profile is disk only. The pointer
-    /// is untouched. <paramref name="name"/> must be a listed profile (<see cref="Profiles.Resolve"/>);
+    /// <see cref="Changed"/> firing on the new snapshot; another profile is disk only.
+    /// <paramref name="name"/> must be a listed profile (<see cref="Profiles.Resolve"/>);
     /// an unknown one throws <see cref="ArgumentException"/>. <paramref name="all"/> resets
     /// <see cref="Profiles.ResetKeptSettings"/> too (2026-09-27; the flush first is what lets a plain
     /// reset keep the loaded profile's current values).
@@ -423,7 +362,7 @@ public sealed class AppSettings : IDisposable
     /// either is the loaded profile the pending save is written first — a push then copies the values on screen, and a
     /// pull leaves no debounced write to bring the old values back over the copy. When <paramref name="to"/> is the loaded
     /// one the copy replaces the data in place and <see cref="Changed"/> fires on the new snapshot, as a reset does;
-    /// otherwise it is disk only. The pointer is untouched. Both must be listed profiles (<see cref="Profiles.Resolve"/>);
+    /// otherwise it is disk only. Both must be listed profiles (<see cref="Profiles.Resolve"/>);
     /// an unknown one throws <see cref="ArgumentException"/>. A corrupt source throws <see cref="JsonException"/>, nothing written.
     /// </summary>
     public async Task CopyProfileSettingsAsync(string from, string to)
@@ -462,8 +401,7 @@ public sealed class AppSettings : IDisposable
     /// the way back in after <c>/profile edit</c>): the pending debounced save is cancelled — the
     /// hand-edited file is what the user wants, not what the menu last saved —, the data replaced in
     /// place (the compiled defaults when the file is unreadable, as <see cref="Load"/> says), the
-    /// profile folders made sure of, and <see cref="Changed"/> raised with the new snapshot. The
-    /// pointer is untouched. A save already past its debounce and inside its write at that instant
+    /// profile folders made sure of, and <see cref="Changed"/> raised with the new snapshot. A save already past its debounce and inside its write at that instant
     /// still lands; the window is milliseconds, and the next reload reads it.
     /// </summary>
     public void Reload()
@@ -567,60 +505,6 @@ public sealed class AppSettings : IDisposable
             try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { /* best effort */ }
             DiagnosticLog.Error(Category, $"Failed to save settings to {path}: {ex.Message}", ex);
         }
-    }
-
-    /// <summary>The pointer: written synchronously (once per launch, once per switch), never throws. <see cref="ShortcutOffered"/> rides along.</summary>
-    private void TrySavePointer(string profile)
-    {
-        var tempPath = $"{PointerPath}.{Guid.NewGuid():N}.tmp";
-        try
-        {
-            Directory.CreateDirectory(StorageDirectory);
-            var json = JsonSerializer.Serialize(new RootSettingsData { Profile = profile, ShortcutOffered = ShortcutOffered }, SettingsJsonContext.Default.RootSettingsData);
-            File.WriteAllText(tempPath, json);
-            File.Move(tempPath, PointerPath, overwrite: true);
-        }
-        catch (Exception ex)
-        {
-            try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { /* best effort */ }
-            DiagnosticLog.Error(Category, $"Failed to save {FileName} to {PointerPath}: {ex.Message}", ex);
-        }
-    }
-
-    /// <summary>
-    /// Reads the root file. Missing or unreadable is a pointer to the default, logged as the
-    /// settings file always was. The one-time move of a pre-profile root file (the full settings,
-    /// no <c>Profile</c> property) into <c>profiles\default</c> went on 2026-09-24, the user's call:
-    /// such a file now reads as a pointer to the default profile, its settings not carried over.
-    /// </summary>
-    private static RootSettingsData LoadPointer(string path)
-    {
-        try
-        {
-            if (!File.Exists(path))
-            {
-                return new RootSettingsData();
-            }
-
-            string json = File.ReadAllText(path);
-            var loaded = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.RootSettingsData);
-            if (loaded is not null)
-            {
-                return loaded;
-            }
-
-            DiagnosticLog.Warn(Category, $"{FileName} parsed to null. Loading the {Profiles.DefaultName} profile.");
-        }
-        catch (JsonException ex)
-        {
-            DiagnosticLog.Error(Category, $"{FileName} is corrupt ({ex.Message}). Loading the {Profiles.DefaultName} profile.", ex);
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Error(Category, $"Could not read {FileName} ({ex.Message}). Loading the {Profiles.DefaultName} profile.", ex);
-        }
-
-        return new RootSettingsData();
     }
 
     /// <summary>
@@ -749,6 +633,7 @@ public sealed class AppSettings : IDisposable
         ViewerTop = source.ViewerTop,
         CameraWindowLeft = source.CameraWindowLeft,
         CameraWindowTop = source.CameraWindowTop,
+        ShortcutOffered = source.ShortcutOffered,
         LogWindowLeft = source.LogWindowLeft,
         LogWindowTop = source.LogWindowTop,
         ProcessWindowLeft = source.ProcessWindowLeft,

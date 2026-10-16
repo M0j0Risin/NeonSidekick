@@ -10,7 +10,7 @@ Options apply to this launch only and are never saved. Both `--option value` and
 | `--url <url>` | Uses this LLM server: a URL, or `embedded`, `claude-code` or `docker:<container>` (Windows only). |
 | `--model <id>` | Uses this model. |
 | `--cwd <path>` | Uses this working directory; a relative path starts from where you launch. |
-| `--profile <name>` | Opens this profile without changing the saved choice in `settings.json`. An unknown name lists the profiles and exits with code 2. |
+| `--profile <name>` | Opens this profile for this launch; a launch without it opens `neon`. An unknown name lists the profiles and exits with code 2. |
 | `--yolo` | Runs every shell command and script without asking. The path police still applies unless you also pass `--no-police`. |
 | `--no-police` | Turns off the shell police: commands may name paths outside the working directory, and the forbidden strings and database checks stop. |
 | `--log <path>` | Appends every diagnostic line to a file, making its folder if needed. `{ts}` in the path becomes the start time, so each run gets its own log (`logs/neon_{ts}.log` → `logs/neon_20261003-142530.log`). `/log file` opens it. |

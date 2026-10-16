@@ -1,5 +1,5 @@
 // NeonSidekick's Web UI, the Home tab (2026-10-15): the home bar's items as tiles over Home Assistant's live states, a room's or a device's
-// sheet, the scenes, Ask the house, and the cards (the PC's YouTube window, its meters, the model). Read every 1.5 seconds while visible (a 304
+// sheet, the rooms (2026-10-16: each room's switch, its devices and its scenes; the scenes alone until then), Ask the house, and the cards (the PC's YouTube window, its meters, the model). Read every 1.5 seconds while visible (a 304
 // when nothing changed), every 300 ms for a moment after a tap. The tab exists only while Web UI home controls is on at the PC (later on
 // 2026-10-15: a read-only tab whose taps did nothing went); a tap that asks (an unlock, a garage, gate or door, a disarm) asks here first.
 // Every word is the app's (the tab's words come with each read).
@@ -8,7 +8,8 @@
 const { el, say, post } = Neon;
 const statusEl = document.getElementById('ha-status');
 const tilesEl = document.getElementById('tiles');
-const scenesEl = document.getElementById('scenes');
+const roomsEl = document.getElementById('rooms');
+const roomGroups = roomsEl.querySelector('.room-groups');
 const askEl = document.getElementById('ask');
 const askText = document.getElementById('ask-text');
 const askSend = document.getElementById('ask-send');
@@ -36,8 +37,9 @@ async function load() {
   words = home.words;
   render();
   if (Neon.pulse) Neon.pulse(home.pulse);
-  // After a tap: quick reads until the tile settles, or six seconds pass.
-  const pending = home.tiles.some(t => t.mark === 'pending');
+  // After a tap: quick reads until the tile (or a room's switch or row) settles, or six seconds pass.
+  const pending = home.tiles.some(t => t.mark === 'pending')
+    || (home.rooms || []).some(r => r.mark === 'pending' || r.devices.some(d => d.mark === 'pending'));
   poller.every(Date.now() < quickUntil && pending ? 300 : 1500);
 }
 
@@ -45,7 +47,7 @@ function render() {
   statusEl.textContent = home.statusText || '';
   statusEl.classList.toggle('hidden', !home.statusText);
   renderTiles();
-  renderScenes();
+  renderRooms();
   renderAsk();
   renderVideo();
   renderPc();
@@ -173,6 +175,7 @@ async function act(ref, entity, action, confirmed) {
   if (r.json && r.json.needsConfirm) { askFirst(r.json.prompt, () => act(ref, entity, action, true)); return; }
   if (!r.ok) say(r.message || '');
   quickUntil = Date.now() + 6000;
+  if (r.ok) poller.every(300);
   poller.now();
   if (openSheet) readSheet(openSheet.ref);
 }
@@ -218,52 +221,83 @@ document.getElementById('sheet-close').addEventListener('click', closeSheet);
 sheetBack.addEventListener('click', ev => { if (ev.target === sheetBack) closeSheet(); });
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && openSheet) { ev.preventDefault(); closeSheet(); } });
 
-// ── Scenes, Ask the house ─────────────────────────────────────────────
+// ── Rooms, Ask the house ──────────────────────────────────────────────
 
-// The scenes in a box per room or zone (2026-10-16, the user's ask: one long wrap was hard to scan): the home bar's rooms first and open, the
-// rest folded (every box open when none is on the bar); a fold the user toggles is kept on this device under neon.home.scenes.<key>, and in
-// memory beside it where storage throws (private mode). The boxes are rebuilt only when the list changes, so a read every 1.5 s keeps the folds
-// and the scroll place. Each button reads its label (the name without its box's) and carries the whole name as its title.
-const sceneFolds = new Map();
-let scenesDrawn = null;
+// The rooms (2026-10-16, the user's ask: the scenes' boxes became rooms, each doing what /homebar show <room> does at the PC): a box per room, its
+// header the room's name, its lights on of all and its switch (which works folded), then an All lights row with the same switch, a row per device
+// (a switch, or its first action as a button, and › for its sheet; a long-press on the row too), then its scenes. The home bar's rooms open,
+// the rest folded (every box open when none is on the bar); a fold the user toggles is kept on this device under neon.home.scenes.<key> (the
+// scenes' boxes' key, so their folds carry over), and in memory beside it where storage throws. The page reads every 1.5 s and a light anywhere
+// changes the whole list, so each box is drawn again only when its own JSON changed, in place: a long-press, the scroll place and the other boxes'
+// open state are never torn down by a light in another room.
+const roomFolds = new Map();
+const roomsDrawn = new Map();   // key → { json, node }
 
-function sceneOpen(group, anyOnBar) {
-  const key = 'neon.home.scenes.' + group.key;
-  if (sceneFolds.has(key)) return sceneFolds.get(key);
+function roomOpen(room, anyOnBar) {
+  const key = 'neon.home.scenes.' + room.key;
+  if (roomFolds.has(key)) return roomFolds.get(key);
   try {
     const kept = localStorage.getItem(key);
     if (kept === '1' || kept === '0') return kept === '1';
   } catch { /* private mode, blocked storage: the default */ }
-  return anyOnBar ? group.onBar : true;
+  return anyOnBar ? room.onBar : true;
 }
 
-function keepSceneFold(group, open) {
-  const key = 'neon.home.scenes.' + group.key;
-  sceneFolds.set(key, open);
+function keepRoomFold(room, open) {
+  const key = 'neon.home.scenes.' + room.key;
+  roomFolds.set(key, open);
   try { localStorage.setItem(key, open ? '1' : '0'); } catch { /* kept in memory only */ }
 }
 
-function renderScenes() {
-  const groups = home.sceneGroups || [];
-  const has = groups.length > 0;
-  scenesEl.classList.toggle('hidden', !has);
-  if (!has) { scenesDrawn = null; return; }
-  scenesEl.querySelector('summary').textContent = words.scenes;
-  const drawn = JSON.stringify([groups, home.controls]);
-  if (drawn === scenesDrawn) return;
-  scenesDrawn = drawn;
-  const boxes = scenesEl.querySelector('.scene-groups');
-  boxes.replaceChildren();
-  const anyOnBar = groups.some(g => g.onBar);
-  for (const group of groups) {
-    const box = el('details', 'scene-group');
-    box.dataset.key = group.key;
-    box.open = sceneOpen(group, anyOnBar);
-    const summary = el('summary', null, group.name);
-    summary.appendChild(el('span', 'scene-count', String(group.scenes.length)));
-    box.appendChild(summary);
-    const row = el('div', 'scene-row');
-    for (const scene of group.scenes) {
+function renderRooms() {
+  const rooms = home.rooms || [];
+  const has = rooms.length > 0;
+  roomsEl.classList.toggle('hidden', !has);
+  roomsEl.querySelector(':scope > summary').textContent = words.rooms;
+  const anyOnBar = rooms.some(r => r.onBar);
+  const shown = new Set();
+  rooms.forEach((room, i) => {
+    shown.add(room.key);
+    const json = JSON.stringify([room, home.controls]);
+    const drawn = roomsDrawn.get(room.key);
+    let node = drawn ? drawn.node : null;
+    if (!drawn || drawn.json !== json) {
+      const fresh = roomBox(room, anyOnBar, node);
+      if (node) node.replaceWith(fresh);
+      node = fresh;
+      roomsDrawn.set(room.key, { json, node });
+    }
+    if (roomGroups.children[i] !== node) roomGroups.insertBefore(node, roomGroups.children[i] || null);
+  });
+  for (const [key, drawn] of roomsDrawn) {
+    if (!shown.has(key)) { drawn.node.remove(); roomsDrawn.delete(key); }
+  }
+}
+
+// One box. Its header switch is the box's sibling, never inside the <summary> (a button nested in the details' own button is flagged by
+// accessibility checkers, and its tap would fold the box): placed over the summary's right end by the CSS.
+function roomBox(room, anyOnBar, old) {
+  const wrap = el('div', 'room-box');
+  wrap.dataset.key = room.key;
+  const box = el('details', 'room-fold');
+  const oldBox = old && old.querySelector('details');
+  box.open = oldBox ? oldBox.open : roomOpen(room, anyOnBar);
+  const summary = el('summary', room.ref ? 'with-switch' : null);
+  summary.appendChild(el('span', 'room-name', room.name));
+  if (room.value) summary.appendChild(el('span', 'room-count', room.value));
+  box.appendChild(summary);
+  if (room.ref) {
+    const all = el('div', 'room-row room-all');
+    all.appendChild(el('span', 'room-row-text', words.allLights));
+    all.appendChild(roomSwitch(room, words.allLights + ' · ' + room.name));
+    box.appendChild(all);
+  }
+  for (const device of room.devices) box.appendChild(deviceRow(device));
+  if (room.scenes.length) {
+    const scenes = el('div', 'room-scenes');
+    scenes.appendChild(el('div', 'room-scenes-label', words.scenes));
+    const row = el('div', 'room-scene-row');
+    for (const scene of room.scenes) {
       const b = el('button', null, scene.label || scene.name);
       b.type = 'button';
       b.title = scene.name;
@@ -275,15 +309,73 @@ function renderScenes() {
       });
       row.appendChild(b);
     }
-    box.appendChild(row);
-    // Opening it above queues a toggle of its own: that one is the default, not the user's.
-    let opened = box.open;
-    box.addEventListener('toggle', () => {
-      if (opened) { opened = false; if (box.open) return; }
-      keepSceneFold(group, box.open);
-    });
-    boxes.appendChild(box);
+    scenes.appendChild(row);
+    box.appendChild(scenes);
   }
+  // Opening it above queues a toggle of its own: that one is the default (or the old box's), not the user's.
+  let opened = box.open;
+  box.addEventListener('toggle', () => {
+    if (opened) { opened = false; if (box.open) return; }
+    keepRoomFold(room, box.open);
+  });
+  wrap.appendChild(box);
+  if (room.ref) wrap.appendChild(roomSwitch(room, room.name, 'head'));
+  return wrap;
+}
+
+// A room's switch (the header's and the All lights row's): the bar's own area chip, or a zone's group light, through the tile's tap (its question
+// asked here first where the PC's bar asks).
+function roomSwitch(room, label, extra) {
+  const b = el('button', 'room-switch tone-' + room.tone + (room.mark ? ' ' + room.mark : '') + (extra ? ' ' + extra : ''));
+  b.type = 'button';
+  b.setAttribute('role', 'switch');
+  b.setAttribute('aria-checked', room.on ? 'true' : 'false');
+  b.setAttribute('aria-label', label);
+  if (room.color) b.style.setProperty('--tile', room.color);
+  b.appendChild(el('i'));
+  b.disabled = !home.controls;
+  b.addEventListener('click', () => tap({ ref: room.ref, action: 'call' }));
+  return b;
+}
+
+// A device's row: its quick control (a switch, or its first action as a button; none for a thermostat), › and a long-press for its sheet.
+function deviceRow(device) {
+  const ref = 'entity:' + device.entity;
+  const row = el('div', 'room-row tone-' + device.tone + (device.mark ? ' ' + device.mark : ''));
+  row.dataset.entity = device.entity;
+  if (device.color) row.style.setProperty('--tile', device.color);
+  if (device.note) row.title = device.note;
+  const text = el('span', 'room-row-text');
+  text.appendChild(el('span', 'glyph', device.glyph));
+  text.appendChild(el('span', 'room-row-name', device.name));
+  text.appendChild(el('span', 'room-row-state', device.state));
+  row.appendChild(text);
+  const action = { index: 0, label: device.label, ask: device.ask };
+  if (device.control === 'switch') {
+    const s = el('button', 'room-switch');
+    s.type = 'button';
+    s.setAttribute('role', 'switch');
+    s.setAttribute('aria-checked', device.on ? 'true' : 'false');
+    s.setAttribute('aria-label', device.name);
+    s.appendChild(el('i'));
+    s.disabled = !home.controls;
+    s.addEventListener('click', () => act(ref, device.entity, action));
+    row.appendChild(s);
+  } else if (device.control === 'button') {
+    const b = el('button', 'room-act', device.label);
+    b.type = 'button';
+    b.disabled = !home.controls;
+    b.addEventListener('click', () => act(ref, device.entity, action));
+    row.appendChild(b);
+  }
+  const more = el('button', 'room-more', '›');
+  more.type = 'button';
+  more.setAttribute('aria-label', words.actions + ': ' + device.name);
+  more.title = words.actions;
+  more.addEventListener('click', () => showSheet(ref));
+  row.appendChild(more);
+  longPress(text, () => showSheet(ref), () => {});
+  return row;
 }
 
 function renderAsk() {

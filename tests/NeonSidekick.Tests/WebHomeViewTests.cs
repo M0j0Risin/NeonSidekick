@@ -10,7 +10,7 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// The Web UI's Home tab, its pure parts (2026-10-15): the items it shows, the tiles over the bar's own chips, a chip's tone, the tiles' reach,
-/// Home Assistant's state in a word and a sentence, the scenes, and the cards' figures.
+/// Home Assistant's state in a word and a sentence, the rooms (the scenes' boxes until 2026-10-16), and the cards' figures.
 /// </summary>
 public sealed class WebHomeViewTests
 {
@@ -114,15 +114,150 @@ public sealed class WebHomeViewTests
         Assert.Contains("(refused)", WebUiText.HomeRetrying("refused."), StringComparison.Ordinal);
     }
 
+    private static IReadOnlyList<WebHomeRoom> Rooms(HaLiveSnapshot live, IReadOnlyList<string> items, Func<string, HomeChipMark>? mark = null) =>
+        WebHomeView.Rooms(live, items, mark ?? (_ => HomeChipMark.None), ChatScreen.HomeRoomDomains);
+
     [Fact]
-    public void TheScenes_AreTheVisibleOnes_InBoxes_NamedByTheirStates()
+    public void TheRooms_HoldTheVisibleScenes_NamedByTheirStates_AndEveryRoomWithDevices()
     {
         var live = Live(HaLiveStatus.Live, Entity("scene.movie", "2026-10-15", "{\"friendly_name\":\"Movie night\"}"));
-        var groups = WebHomeView.SceneGroups(live, []);
-        Assert.Equal([("den", "Den"), (WebHomeView.NoAreaKey, HomeBarText.NoArea)], groups.Select(g => (g.Key, g.Name)));
-        Assert.Equal([("scene.movie", "Movie night")], groups[0].Scenes.Select(s => (s.Id, s.Name)));
-        Assert.Equal([("scene.bedtime", "Bedtime")], groups[1].Scenes.Select(s => (s.Id, s.Name)));   // the hidden one left out
-        Assert.Empty(WebHomeView.SceneGroups(new HaLiveSnapshot(HaLiveStatus.Connecting, new Dictionary<string, HaLiveEntity>(), null, 0, null), []));
+        var rooms = Rooms(live, []);
+        Assert.Equal([("den", "Den"), ("hall", "Hall"), (WebHomeView.NoAreaKey, HomeBarText.NoArea)], rooms.Select(g => (g.Key, g.Name)));   // Hall: its locks alone (2026-10-16)
+        Assert.Equal([("scene.movie", "Movie night")], rooms[0].Scenes.Select(s => (s.Id, s.Name)));
+        Assert.Empty(rooms[1].Scenes);
+        Assert.Equal(["lock.back", "lock.front"], rooms[1].Devices.Select(d => d.Entity));
+        Assert.Equal([("scene.bedtime", "Bedtime")], rooms[2].Scenes.Select(s => (s.Id, s.Name)));   // the hidden one left out
+        Assert.Empty(rooms[2].Devices);
+        Assert.Empty(Rooms(new HaLiveSnapshot(HaLiveStatus.Connecting, new Dictionary<string, HaLiveEntity>(), null, 0, null), []));
+    }
+
+    /// <summary>
+    /// A house for the rooms (2026-10-16): Den with a lamp, its Hue room's group light, a TV, a lock and a thermostat; Kitchen with one light; a
+    /// Hue zone on a device of its own over two Garden lights; and a lone sensor in the Garden (not a room pane's domain).
+    /// </summary>
+    private static HaCatalog RoomCatalog(params HaEntity[] states) => new(
+        [],
+        [new HaAreaEntry("den", "Den", null), new HaAreaEntry("kitchen", "Kitchen", null), new HaAreaEntry("garden", "Garden", null)],
+        [new HaDevice("hue-zone", "Porch zone", null)],
+        [
+            new HaRegistryEntity("light.den_lamp", null, "den", null, false, false, null, []),
+            new HaRegistryEntity("light.den_room", null, "den", null, false, false, null, []),
+            new HaRegistryEntity("media_player.den_tv", null, "den", null, false, false, null, []),
+            new HaRegistryEntity("lock.den_door", null, "den", null, false, false, null, []),
+            new HaRegistryEntity("climate.den", null, "den", null, false, false, null, []),
+            new HaRegistryEntity("light.kitchen", null, "kitchen", null, false, false, null, []),
+            new HaRegistryEntity("light.porch_zone", "hue-zone", null, null, false, false, null, []),
+            new HaRegistryEntity("light.porch_1", null, "garden", null, false, false, null, []),
+            new HaRegistryEntity("light.porch_2", null, "garden", null, false, false, null, []),
+            new HaRegistryEntity("sensor.soil", null, "garden", null, false, false, null, []),
+        ],
+        [],
+        states);
+
+    private static HaLiveSnapshot RoomLive(HaLiveStatus status = HaLiveStatus.Live, bool zoneLive = true) => new(status, new[]
+    {
+        Entity("light.den_lamp", "on", "{\"friendly_name\":\"Lamp\",\"brightness\":204,\"rgb_color\":[255,200,0]}"),
+        Entity("light.den_room", "on", "{\"friendly_name\":\"Den room\",\"is_hue_group\":true,\"entity_id\":[\"light.den_lamp\"]}"),
+        Entity("media_player.den_tv", "off", "{\"friendly_name\":\"TV\"}"),
+        Entity("lock.den_door", "locked", "{\"friendly_name\":\"Door\"}"),
+        Entity("climate.den", "heat", "{\"friendly_name\":\"Thermostat\",\"temperature\":21}"),
+        Entity("light.kitchen", "off", "{\"friendly_name\":\"Kitchen\"}"),
+        Entity("light.porch_1", "on", "{\"friendly_name\":\"Porch 1\"}"),
+        Entity("light.porch_2", "off", "{\"friendly_name\":\"Porch 2\"}"),
+    }.Concat(zoneLive ? [Entity("light.porch_zone", "on", "{\"friendly_name\":\"Porch zone\",\"is_hue_group\":true,\"entity_id\":[\"light.porch_1\",\"light.porch_2\"]}")] : [])
+     .ToDictionary(e => e.Id, StringComparer.Ordinal), RoomCatalog(), 1, null);
+
+    /// <summary>
+    /// Every room with devices gets a box (2026-10-16): an area's switch is the bar's area chip with its lights on of all, its rows the room pane's
+    /// domains in order with the group light left out; a zone's switch its group light, its rows the group's members.
+    /// </summary>
+    [Fact]
+    public void TheRooms_AreasAndAZone_TheirSwitchesCountsAndRows()
+    {
+        var rooms = Rooms(RoomLive(), []);
+        Assert.Equal(["den", "garden", "kitchen", "device:hue-zone"], rooms.Select(r => r.Key));   // the areas by name (no floors), then the zone
+
+        var den = rooms[0];
+        Assert.Equal(("area:den", WebUiText.RoomLightsOn(1, 1), (bool?)true, "on"), (den.Ref, den.Value, den.On, den.Tone));   // the group light not counted
+        Assert.Equal("1 of 1 on", den.Value);
+        Assert.NotNull(den.Color);
+        Assert.Equal(["light.den_lamp", "media_player.den_tv", "lock.den_door", "climate.den"], den.Devices.Select(d => d.Entity));   // no group row
+
+        // The control kinds: a switch for a light, its first action as a button for a player and a lock (asking for an unlock), none for a thermostat.
+        var lamp = den.Devices[0];
+        Assert.Equal(("switch", (bool?)true, HomeBarText.ToggleAction, false), (lamp.Control, lamp.On, lamp.Label, lamp.Ask));
+        Assert.Equal("on · 80%", lamp.State);
+        Assert.Equal(("Lamp", "on"), (lamp.Name, lamp.Tone));
+        Assert.Equal(("button", HomeBarText.TurnOnAction, false), (den.Devices[1].Control, den.Devices[1].Label, den.Devices[1].Ask));
+        Assert.Equal(("button", HomeBarText.UnlockAction, true), (den.Devices[2].Control, den.Devices[2].Label, den.Devices[2].Ask));
+        Assert.Equal(("none", (string?)null), (den.Devices[3].Control, den.Devices[3].Label));
+
+        // An area with only a light: a box, its switch off.
+        var kitchen = rooms[2];
+        Assert.Equal(("area:kitchen", "0 of 1 on", (bool?)false, "off"), (kitchen.Ref, kitchen.Value, kitchen.On, kitchen.Tone));
+        Assert.Equal(["light.kitchen"], kitchen.Devices.Select(d => d.Entity));
+
+        // The garden's lights are the zone's too: shown in both boxes; its sensor is no row.
+        Assert.Equal(["light.porch_1", "light.porch_2"], rooms[1].Devices.Select(d => d.Entity));
+        var zone = rooms[3];
+        Assert.Equal(("Porch zone", "entity:light.porch_zone", "1 of 2 on", (bool?)true), (zone.Name, zone.Ref, zone.Value, zone.On));
+        Assert.Equal(["light.porch_1", "light.porch_2"], zone.Devices.Select(d => d.Entity));
+    }
+
+    /// <summary>A zone the feed doesn't hold yet is found from the catalog's state; a box with no light has no switch; a stale feed dims every switch.</summary>
+    [Fact]
+    public void TheRooms_AZoneFromTheCatalogsState_NoLightsNoSwitch_AndAStaleFeed()
+    {
+        using var attributes = JsonDocument.Parse("{\"is_hue_group\":true,\"entity_id\":[\"light.porch_1\",\"light.porch_2\"]}");
+        var catalog = RoomCatalog(new HaEntity("light.porch_zone", "Porch zone", "on", null, attributes.RootElement.Clone(), null));
+        var live = RoomLive(zoneLive: false) with { Catalog = catalog };
+        var zone = Rooms(live, []).Single(r => r.Key == "device:hue-zone");
+        Assert.Equal("entity:light.porch_zone", zone.Ref);
+        Assert.Equal(["light.porch_1", "light.porch_2"], zone.Devices.Select(d => d.Entity));
+
+        var hall = Rooms(Live(), []).Single(r => r.Key == "hall");   // locks only
+        Assert.Null(hall.Ref);
+        Assert.Null(hall.Value);
+
+        Assert.All(Rooms(RoomLive(HaLiveStatus.Retrying), []).Where(r => r.Ref is not null), r => Assert.Equal("stale", r.Tone));
+    }
+
+    /// <summary>The rooms' marks are the tiles': a room's switch by its reference, a row by its <c>entity:</c> one.</summary>
+    [Fact]
+    public void TheRooms_CarryTheirMarks()
+    {
+        var rooms = Rooms(RoomLive(), [], reference => reference switch
+        {
+            "area:den" => HomeChipMark.Pending,
+            "entity:lock.den_door" => HomeChipMark.Failed,
+            _ => HomeChipMark.None,
+        });
+        Assert.Equal("pending", rooms[0].Mark);
+        Assert.Equal([null, null, "failed", null], rooms[0].Devices.Select(d => d.Mark));
+        Assert.Null(rooms[2].Mark);
+    }
+
+    /// <summary>The reach widens with the rooms (2026-10-16, the user's call): each box's switch and every row's device; never what no room shows.</summary>
+    [Fact]
+    public void TheReach_TakesTheRooms_SwitchesAndRows()
+    {
+        var live = RoomLive();
+        var rooms = Rooms(live, []);
+        var reach = WebHomeView.Reach([], live.Catalog, ChatScreen.HomeRoomDomains, rooms);
+        Assert.Contains("area:den", reach);
+        Assert.Contains("area:kitchen", reach);
+        Assert.Contains("light.porch_zone", reach);
+        Assert.Contains("lock.den_door", reach);
+        Assert.Contains("light.porch_2", reach);
+        Assert.DoesNotContain("sensor.soil", reach);
+        Assert.DoesNotContain("light.den_room", reach);   // the group light: no row, and the area's switch covers it
+
+        Assert.True(WebHomeView.Reaches("area:den", [], reach));
+        Assert.True(WebHomeView.Reaches("entity:lock.den_door", [], reach));
+        Assert.True(WebHomeView.Reaches("entity:light.porch_zone", [], reach));
+        Assert.False(WebHomeView.Reaches("entity:sensor.soil", [], reach));
+        Assert.True(WebHomeView.Reaches("entity:sensor.soil", ["entity:sensor.soil"], reach));   // a tile is its own reach
+        Assert.False(WebHomeView.Reaches("area:attic", [], reach));
     }
 
     /// <summary>
@@ -167,7 +302,7 @@ public sealed class WebHomeViewTests
     [Fact]
     public void TheScenesBoxes_GoByArea_ThenDevice_ThenNone_TheBarsRoomsFirst()
     {
-        var groups = WebHomeView.SceneGroups(SceneLive(SceneCatalog()), ["entity:light.x", "area:bath", "divider:1", "area:den"]);
+        var groups = Rooms(SceneLive(SceneCatalog()), ["entity:light.x", "area:bath", "divider:1", "area:den"]);
         Assert.Equal(["bath", "den", "bed", "device:hue-zone", "device:hue-up", WebHomeView.NoAreaKey], groups.Select(g => g.Key));
         Assert.Equal(["Bathroom", "Den", "Bedroom", "Front Porch", "Upstairs zone", HomeBarText.NoArea], groups.Select(g => g.Name));
         Assert.Equal([true, true, false, false, false, false], groups.Select(g => g.OnBar));
@@ -184,7 +319,7 @@ public sealed class WebHomeViewTests
         Assert.Equal("Party", groups[5].Scenes[0].Label);
 
         // With no room on the bar: the catalog's order (Downstairs first, then Upstairs by name).
-        Assert.Equal(["den", "bath", "bed"], WebHomeView.SceneGroups(SceneLive(SceneCatalog()), []).Take(3).Select(g => g.Key));
+        Assert.Equal(["den", "bath", "bed"], Rooms(SceneLive(SceneCatalog()), []).Take(3).Select(g => g.Key));
     }
 
     [Fact]
@@ -195,7 +330,7 @@ public sealed class WebHomeViewTests
             [new HaArea("den", "Den", ["scene.den_relax"])],
             DateTimeOffset.UnixEpoch);
         var catalog = HaCatalog.FromSnapshot(snapshot);
-        var groups = WebHomeView.SceneGroups(new HaLiveSnapshot(HaLiveStatus.Live, new Dictionary<string, HaLiveEntity>(), catalog, 1, null), []);
+        var groups = Rooms(new HaLiveSnapshot(HaLiveStatus.Live, new Dictionary<string, HaLiveEntity>(), catalog, 1, null), []);
         Assert.Equal(["den", WebHomeView.NoAreaKey], groups.Select(g => g.Key));
         Assert.Equal("Relax", groups[0].Scenes[0].Label);
     }

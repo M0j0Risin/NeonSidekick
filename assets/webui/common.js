@@ -143,6 +143,9 @@ const Neon = (() => {
       const tab = tabOf(a.getAttribute('href'));
       if (tab) a.classList.toggle('hidden', !on[tab]);
     }
+    // The menu goes with its last tab (2026-10-16): Chat alone is left.
+    if (tabMenu) tabMenu.classList.toggle('hidden', menuItems().length === 0);
+    labelMenu();
     navReady();
     const here = document.body.dataset.tab;
     if (here && on[here] === false) {
@@ -150,6 +153,81 @@ const Neon = (() => {
       return true;
     }
     return false;
+  }
+
+  // ── The tab menu (2026-10-16, the user's pick) ──
+  // Chat stays a link (it carries the busy dot and the questions' badge); Home, Shopping and YouTube sit behind one button, ☰ on Chat and the
+  // open tab's glyph and name with ▾ on the others, so a phone's header keeps the profile's name readable. Wired as this script loads, never
+  // only from tabs(): a page that can't reach the PC still gets its nav after navReady's 2 s, and its menu must work then too. It closes on a
+  // pick, a press outside (pointerdown: iOS fires no click on a tap over the transcript), Esc (focus back on the button) or a scroll; ↑/↓ walk
+  // it while open. Its keys act only while it is open, so the draft's history walk, the dropdown and the sheet's Esc are untouched otherwise.
+  const tabMenu = document.querySelector('header.top .tab-menu');
+  const tabMenuButton = tabMenu && tabMenu.querySelector('.tab-menu-button');
+  const tabMenuList = tabMenu && tabMenu.querySelector('.tab-menu-list');
+
+  function menuItems() {
+    return tabMenuList ? [...tabMenuList.querySelectorAll('a')].filter(a => !a.classList.contains('hidden')) : [];
+  }
+
+  function menuOpen() {
+    return !!tabMenuList && !tabMenuList.classList.contains('hidden');
+  }
+
+  function labelMenu() {
+    if (!tabMenuButton) return;
+    const here = tabMenuList.querySelector('a.here');
+    tabMenuButton.textContent = here ? here.textContent + ' ▾' : '☰';
+    tabMenuButton.classList.toggle('here', !!here);
+    const names = menuItems().map(a => a.textContent.replace(/^\S+\s+/u, ''));
+    const label = 'Tabs: ' + names.join(', ');
+    tabMenuButton.setAttribute('aria-label', label);
+    tabMenuButton.title = label;
+  }
+
+  function pressedOutside(ev) {
+    if (!tabMenu.contains(ev.target)) closeMenu(false);
+  }
+
+  function scrolled() {
+    closeMenu(false);
+  }
+
+  function openMenu() {
+    tabMenuList.classList.remove('hidden');
+    tabMenuButton.setAttribute('aria-expanded', 'true');
+    document.addEventListener('pointerdown', pressedOutside, true);
+    document.addEventListener('scroll', scrolled, true);
+  }
+
+  function closeMenu(focus) {
+    if (!menuOpen()) return;
+    tabMenuList.classList.add('hidden');
+    tabMenuButton.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('pointerdown', pressedOutside, true);
+    document.removeEventListener('scroll', scrolled, true);
+    if (focus) tabMenuButton.focus();
+  }
+
+  if (tabMenu) {
+    labelMenu();
+    tabMenuButton.addEventListener('click', () => { if (menuOpen()) closeMenu(false); else openMenu(); });
+    tabMenuList.addEventListener('click', ev => { if (ev.target.closest('a')) closeMenu(false); });
+    document.addEventListener('keydown', ev => {
+      if (!menuOpen()) return;
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        ev.stopPropagation();
+        closeMenu(true);
+      } else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const items = menuItems();
+        if (!items.length) return;
+        const at = items.indexOf(document.activeElement);
+        const step = ev.key === 'ArrowDown' ? 1 : -1;
+        items[at < 0 ? (step > 0 ? 0 : items.length - 1) : (at + step + items.length) % items.length].focus();
+      }
+    }, true);
   }
 
   // The phone's keyboard over the page's bottom (later on 2026-10-15): an iPhone doesn't shrink the layout viewport for it, so what is fixed

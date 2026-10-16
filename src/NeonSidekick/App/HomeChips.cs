@@ -196,6 +196,22 @@ public static class HomeChips
     private static HomeChip Waiting(string reference, string glyph, string name, HomeChipMark mark) =>
         new(reference, glyph, name, ShortOf(name, null), "", Theme.DimText, HomeChipAction.None, null, HomeBarText.NotYet(name), mark);
 
+    /// <summary>
+    /// The lights an area's chip counts and switches (2026-10-16, shared with the Web UI's rooms): its <see cref="HomeBarItems.AreaDomains"/>
+    /// members the feed holds, groups and the unavailable left out. Pure.
+    /// </summary>
+    public static IReadOnlyList<HaLiveEntity> AreaLights(string areaId, IReadOnlyDictionary<string, HaLiveEntity> entities, HaCatalog catalog)
+    {
+        ArgumentNullException.ThrowIfNull(areaId);
+        ArgumentNullException.ThrowIfNull(entities);
+        ArgumentNullException.ThrowIfNull(catalog);
+        return catalog.MembersOf(areaId, HomeBarItems.AreaDomains)
+            .Select(id => entities.GetValueOrDefault(id))
+            .OfType<HaLiveEntity>()
+            .Where(e => !e.IsGroup && !e.Unavailable)
+            .ToList();
+    }
+
     private static HomeChip AreaChip(string reference, string areaId, IReadOnlyDictionary<string, HaLiveEntity> entities, HaCatalog? catalog)
     {
         string name = catalog?.Area(areaId)?.Name ?? areaId;
@@ -204,11 +220,7 @@ public static class HomeChips
             return Waiting(reference, AreaGlyph, name, HomeChipMark.None);
         }
 
-        var lights = catalog.MembersOf(areaId, HomeBarItems.AreaDomains)
-            .Select(id => entities.GetValueOrDefault(id))
-            .OfType<HaLiveEntity>()
-            .Where(e => !e.IsGroup && !e.Unavailable)
-            .ToList();
+        var lights = AreaLights(areaId, entities, catalog);
         int on = lights.Count(e => e.State == "on");
         string value = lights.Count == 0 ? "" : HomeBarText.Count(on, lights.Count);
         var call = new HaServiceCall("light", on > 0 ? "turn_off" : "turn_on", [], areaId);

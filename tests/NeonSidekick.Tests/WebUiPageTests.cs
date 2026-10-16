@@ -169,8 +169,11 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
         /// <summary>The video card (2026-10-16), none by default.</summary>
         public WebHomeVideo? VideoCard { get; set; }
 
-        /// <summary>The scenes' boxes (2026-10-16), none by default.</summary>
-        public IReadOnlyList<WebHomeSceneGroup> SceneGroups { get; set; } = [];
+        /// <summary>The rooms (2026-10-16; the scenes' boxes until then), none by default; changed between two reads by the per-box test.</summary>
+        public IReadOnlyList<WebHomeRoom> Rooms { get; set; } = [];
+
+        /// <summary>A row's acts (2026-10-16), as <c>ref entity index label</c>, a confirmed one marked.</summary>
+        public List<string> Acts { get; } = [];
 
         public List<string> Scenes { get; } = [];
 
@@ -179,7 +182,7 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
                 new WebHomeTile("entity:light.desk", "💡", "Desk", "", "", Controls ? "call" : "none", null, "on", "#ffcc00", 0, true),
                 new WebHomeTile("entity:lock.front", "🔒", "Front Door", "", "", Controls ? "confirm" : "none", null, "off", null, 1, true),
             ],
-            SceneGroups, VideoCard, new WebHomePc(12, 50, null, null, null, null), new WebHomeModel("m", "host", 8000, false, false, null), new WebPulse(false, 0, null, "", "tag"), WebUiText.HomeWords);
+            Rooms, VideoCard, new WebHomePc(12, 50, null, null, null, null), new WebHomeModel("m", "host", 8000, false, false, null), new WebPulse(false, 0, null, "", "tag"), WebUiText.HomeWords);
 
         public WebHomeSheet? Sheet(string reference) =>
             new(reference, "Desk", "off", [new WebHomeSheetRow("light.desk", "💡", "Desk", "off", [new WebHomeAction(0, "Toggle", false)])]);
@@ -190,7 +193,11 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
             return request.Ref == "entity:lock.front" && !request.Confirmed ? new WebReply(WebOutcome.Conflict, null, Prompt: "Unlock Front Door?") : WebReply.Ok;
         }
 
-        public WebReply Act(WebHomeActRequest request, IPAddress? remote) => WebReply.Ok;
+        public WebReply Act(WebHomeActRequest request, IPAddress? remote)
+        {
+            Acts.Add(request.Ref + " " + request.Entity + " " + request.Index + " " + request.Label + (request.Confirmed ? " confirmed" : ""));
+            return request.Entity == "lock.den_door" && !request.Confirmed ? new WebReply(WebOutcome.Conflict, null, Prompt: "Unlock Door?") : WebReply.Ok;
+        }
 
         public WebReply Scene(WebHomeSceneRequest request, IPAddress? remote)
         {
@@ -266,48 +273,108 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
         await page.WaitAsync("document.querySelectorAll('#video .remote').length === 1", "the remote for a playing video");
     }
 
+    /// <summary>The rooms the Home tests read (2026-10-16): Den on the bar with a lamp, a lock and a scene; Bedroom with its switch and two scenes; scenes with no area.</summary>
+    private static IReadOnlyList<WebHomeRoom> TestRooms(string denCount = "1 of 2 on") =>
+    [
+        new WebHomeRoom("den", "area:den", "Den", true, denCount, "on", null, "#ffcc00", true,
+            [
+                new WebHomeDevice("light.den_lamp", "💡", "Lamp", "on · 80%", "Lamp: on", "switch", true, "Toggle", false, null, "on", "#ffcc00"),
+                new WebHomeDevice("lock.den_door", "🔒", "Door", "locked", "Door: locked", "button", null, "Unlock", true, null, "off", null),
+                new WebHomeDevice("climate.den", "🔥", "Thermostat", "heat", null, "none", null, null, false, null, "on", null),
+            ],
+            [new WebHomeScene("scene.den_relax", "Den Relax", "Relax")]),
+        new WebHomeRoom("bed", "area:bed", "Bedroom", false, "0 of 1 on", "off", null, null, false, [],
+            [new WebHomeScene("scene.bed_candle", "Bedroom Candle", "Candle"), new WebHomeScene("scene.bed_night", "Bedroom Night", "Night")]),
+        new WebHomeRoom(WebHomeView.NoAreaKey, null, "No area", false, null, "off", null, null, null, [], [new WebHomeScene("scene.party", "Party", "Party")]),
+    ];
+
     /// <summary>
-    /// The scenes in a box per room (2026-10-16, the user's ask): drawn in the server's order, a home bar room's box open and another's folded, a
-    /// button labeled without its room and titled with its whole name, posting its id; a fold the user toggles kept through a redraw and a reload.
+    /// The rooms (2026-10-16, the user's ask; the scenes' boxes until then): drawn in the server's order under the Rooms heading, a home bar room's
+    /// box open and another's folded, a scene labeled without its room and titled with its whole name, posting its id; a fold the user toggles kept
+    /// through a redraw and a reload; and a change in one room draws that box alone — another box is the same node after the read, its fold kept.
     /// </summary>
     [WindowsFact]
-    public async Task Home_TheScenes_AreBoxesPerRoom_TheBarsOpen_AndAToggledFoldIsKept()
+    public async Task Home_TheRooms_AreBoxes_TheBarsOpen_AToggledFoldIsKept_AndOneRoomsChangeRedrawsItAlone()
     {
-        var home = new Home
-        {
-            SceneGroups =
-            [
-                new WebHomeSceneGroup("den", "Den", true, [new WebHomeScene("scene.den_relax", "Den Relax", "Relax")]),
-                new WebHomeSceneGroup("bed", "Bedroom", false, [new WebHomeScene("scene.bed_candle", "Bedroom Candle", "Candle"), new WebHomeScene("scene.bed_night", "Bedroom Night", "Night")]),
-                new WebHomeSceneGroup(WebHomeView.NoAreaKey, "No area", false, [new WebHomeScene("scene.party", "Party", "Party")]),
-            ],
-        };
+        var home = new Home { Rooms = TestRooms() };
         _backend.Home = home;
         if (await SignedInAsync("/home") is not { } page)
         {
             return;
         }
 
-        await page.WaitAsync("document.querySelectorAll('.scene-group').length === 3", "the three boxes");
-        Assert.Equal("[\"den\",\"bed\",\"none\"]", await page.TextAsync("JSON.stringify([...document.querySelectorAll('.scene-group')].map(g => g.dataset.key))"));
-        Assert.Equal("[true,false,false]", await page.TextAsync("JSON.stringify([...document.querySelectorAll('.scene-group')].map(g => g.open))"));
-        Assert.Equal("Relax", await page.TextAsync("document.querySelector('.scene-group button').textContent"));
-        Assert.Equal("Den Relax", await page.TextAsync("document.querySelector('.scene-group button').title"));
-        Assert.Equal("Den Relax", await page.TextAsync("document.querySelector('.scene-group button').getAttribute('aria-label')"));
+        await page.WaitAsync("document.querySelectorAll('.room-box').length === 3", "the three boxes");
+        Assert.Equal(WebUiText.HomeWords.Rooms, await page.TextAsync("document.querySelector('#rooms > summary').textContent"));
+        Assert.Equal("[\"den\",\"bed\",\"none\"]", await page.TextAsync("JSON.stringify([...document.querySelectorAll('.room-box')].map(g => g.dataset.key))"));
+        Assert.Equal("[true,false,false]", await page.TextAsync("JSON.stringify([...document.querySelectorAll('.room-box > details')].map(g => g.open))"));
+        Assert.Equal("1 of 2 on", await page.TextAsync("document.querySelector('.room-box .room-count').textContent"));
+        Assert.Equal("Relax", await page.TextAsync("document.querySelector('.room-scene-row button').textContent"));
+        Assert.Equal("Den Relax", await page.TextAsync("document.querySelector('.room-scene-row button').title"));
+        Assert.Equal("Den Relax", await page.TextAsync("document.querySelector('.room-scene-row button').getAttribute('aria-label')"));
+        Assert.Equal(WebUiText.HomeWords.Scenes, await page.TextAsync("document.querySelector('.room-scenes-label').textContent"));
+        Assert.Equal(0, (await page.EvalAsync("document.querySelectorAll('.room-box[data-key=\"none\"] .room-switch').length")).GetInt32());   // no lights: no switch
 
-        await page.EvalAsync("document.querySelector('.scene-group button').click()");
+        await page.EvalAsync("document.querySelector('.room-scene-row button').click()");
         await WaitForAsync(() => home.Scenes.Contains("scene.den_relax"));
 
-        // Fold Den, open Bedroom; a changed read (the controls going off) rebuilds the boxes and keeps both, the buttons disabled.
-        await page.EvalAsync("(() => { const g = document.querySelectorAll('.scene-group'); g[0].open = false; g[1].open = true; })()");
+        // A light in Den changes: Den's box is drawn again, Bedroom's node is the same object with its fold.
+        await page.EvalAsync("(() => { window.__bed = document.querySelector('.room-box[data-key=\"bed\"]'); document.querySelector('.room-box[data-key=\"bed\"] > details').open = true; })()");
+        await Task.Delay(100);
+        home.Rooms = TestRooms("2 of 2 on");
+        await page.WaitAsync("document.querySelector('.room-box .room-count').textContent === '2 of 2 on'", "Den drawn again", 10);
+        Assert.True((await page.EvalAsync("document.querySelector('.room-box[data-key=\"bed\"]') === window.__bed")).GetBoolean());
+        Assert.True((await page.EvalAsync("document.querySelector('.room-box[data-key=\"bed\"] > details').open")).GetBoolean());
+
+        // Fold Den; a changed read (the controls going off) rebuilds the boxes and keeps both folds, the controls disabled.
+        await page.EvalAsync("document.querySelector('.room-box[data-key=\"den\"] > details').open = false");
         await Task.Delay(100);
         home.Controls = false;
-        await page.WaitAsync("document.querySelector('.scene-group button').disabled", "the rebuilt boxes, disabled", 10);
-        Assert.Equal("[false,true,false]", await page.TextAsync("JSON.stringify([...document.querySelectorAll('.scene-group')].map(g => g.open))"));
+        await page.WaitAsync("document.querySelector('.room-scene-row button').disabled && document.querySelector('.room-switch').disabled", "the rebuilt boxes, disabled", 10);
+        Assert.Equal("[false,true,false]", await page.TextAsync("JSON.stringify([...document.querySelectorAll('.room-box > details')].map(g => g.open))"));
 
         await page.GoAsync(Root + "home");
-        await page.WaitAsync("document.querySelectorAll('.scene-group').length === 3", "the boxes after a reload");
-        Assert.Equal("[false,true,false]", await page.TextAsync("JSON.stringify([...document.querySelectorAll('.scene-group')].map(g => g.open))"));
+        await page.WaitAsync("document.querySelectorAll('.room-box').length === 3", "the boxes after a reload");
+        Assert.Equal("[false,true,false]", await page.TextAsync("JSON.stringify([...document.querySelectorAll('.room-box > details')].map(g => g.open))"));
+    }
+
+    /// <summary>
+    /// A room's controls (2026-10-16): the header's switch posts the room's tap and never folds or unfolds its box; a row's switch posts its act;
+    /// a lock's button asks first, its yes posted confirmed; the › opens the device's sheet.
+    /// </summary>
+    [WindowsFact]
+    public async Task Home_TheRooms_TheHeadersSwitch_ARowsSwitch_ALocksButtonAsks_AndTheMoreOpensTheSheet()
+    {
+        var home = new Home { Rooms = TestRooms() };
+        _backend.Home = home;
+        if (await SignedInAsync("/home") is not { } page)
+        {
+            return;
+        }
+
+        await page.WaitAsync("document.querySelectorAll('.room-box').length === 3", "the three boxes");
+        Assert.Equal("true", await page.TextAsync("document.querySelector('.room-box[data-key=\"den\"] > .room-switch').getAttribute('aria-checked')"));
+
+        // Bedroom is folded: its header's switch taps the room, the box stays folded.
+        await page.EvalAsync("document.querySelector('.room-box[data-key=\"bed\"] > .room-switch').click()");
+        await WaitForAsync(() => home.Taps.Contains("area:bed"));
+        Assert.False((await page.EvalAsync("document.querySelector('.room-box[data-key=\"bed\"] > details').open")).GetBoolean());
+
+        // The All lights row's switch is the same tap.
+        await page.EvalAsync("document.querySelector('.room-box[data-key=\"den\"] .room-all .room-switch').click()");
+        await WaitForAsync(() => home.Taps.Count(t => t == "area:den") == 1);
+
+        await page.EvalAsync("document.querySelector('.room-row[data-entity=\"light.den_lamp\"] .room-switch').click()");
+        await WaitForAsync(() => home.Acts.Contains("entity:light.den_lamp light.den_lamp 0 Toggle"));
+        Assert.Equal(0, (await page.EvalAsync("document.querySelectorAll('.room-row[data-entity=\"climate.den\"] .room-switch, .room-row[data-entity=\"climate.den\"] .room-act').length")).GetInt32());
+
+        await page.EvalAsync("document.querySelector('.room-row[data-entity=\"lock.den_door\"] .room-act').click()");
+        await page.WaitAsync("document.getElementById('sheet-title').textContent === 'Unlock Door?'", "the question first");
+        await page.EvalAsync("document.querySelector('#sheet-body .choices button.primary').click()");
+        await WaitForAsync(() => home.Acts.Contains("entity:lock.den_door lock.den_door 0 Unlock confirmed"));
+
+        await page.WaitAsync("document.getElementById('sheet-back').classList.contains('hidden')", "the question's sheet closed");
+        await page.EvalAsync("document.querySelector('.room-row[data-entity=\"light.den_lamp\"] .room-more').click()");
+        await page.WaitAsync("!document.getElementById('sheet-back').classList.contains('hidden') && document.getElementById('sheet-title').textContent.startsWith('Desk')", "the device's sheet");
     }
 
     // ── Common ──────────────────────────────────────────────────────────────

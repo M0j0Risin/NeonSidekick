@@ -217,7 +217,6 @@ public sealed class OracleConfigFileTests : IDisposable
     {
         string other = Path.Combine(_home, "profiles", "work");
         Directory.CreateDirectory(other);
-        File.WriteAllText(Path.Combine(_home, "settings.json"), "{}");
         Global("""{ "connections": { "a": { "dataSource": "x:1/y", "user": "u", "password": "one" } } }""");
         File.WriteAllText(OracleConfigFile.ProfilePath(other), """{ "connections": { "b": { "dataSource": "x:1/y", "user": "u", "password": "two" } } }""");
 

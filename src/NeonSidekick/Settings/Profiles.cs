@@ -404,12 +404,14 @@ public static class Profiles
         string keptDirectory = "";
         string keptAvatar = "";
         string keptToken = "";
+        bool? keptOffered = null;
         try
         {
             var target = ReadProfileFile(path);
             keptDirectory = target.WorkingDirectory;
             keptAvatar = target.ModelAvatar;   // 2026-10-10: the target's own face, never the source's
             keptToken = target.WebUiToken;     // 2026-10-14: a Web UI token never travels between profiles (a new one is minted when it first serves)
+            keptOffered = target.ShortcutOffered;   // 2026-10-16: whether the target was asked for its shortcut is its own
         }
         catch (JsonException ex)
         {
@@ -419,6 +421,7 @@ public static class Profiles
         data.WorkingDirectory = keptDirectory;
         data.ModelAvatar = keptAvatar;
         data.WebUiToken = keptToken;
+        data.ShortcutOffered = keptOffered;
         System.IO.Directory.CreateDirectory(Directory(home, to));
         WriteProfileFile(path, data);
         DiagnosticLog.Info(Category, $"Copied profile \"{from}\"'s settings to \"{to}\".");
@@ -428,7 +431,8 @@ public static class Profiles
     /// What a plain <c>/profile reset</c> keeps (2026-09-27, the user's call): the servers, paths and
     /// key that describe this machine rather than a taste — a reset that took the LLM's URL and model
     /// back to empty left the sidekick unable to answer (the LLM's API key joined them later that day,
-    /// the user's call; the Home Assistant server and its token on 2026-09-28, beside ComfyUI's; the YouTube API key on 2026-10-05, the user's ask). <c>--all</c> resets them too. The property
+    /// the user's call; the Home Assistant server and its token on 2026-09-28, beside ComfyUI's; the YouTube API key on 2026-10-05, the user's ask; whether the
+    /// profile offered its shortcut on 2026-10-16). <c>--all</c> resets them too. The property
     /// names, in <see cref="KeepOnReset"/>'s order.
     /// </summary>
     public static readonly string[] ResetKeptSettings =
@@ -451,6 +455,7 @@ public static class Profiles
         nameof(AppSettingsData.ModelAvatar),
         nameof(AppSettingsData.UserAvatar),
         nameof(AppSettingsData.WebUiToken),
+        nameof(AppSettingsData.ShortcutOffered),
     };
 
     /// <summary>Copies <see cref="ResetKeptSettings"/> from <paramref name="from"/> onto <paramref name="to"/>, one by one (no reflection under AOT). The keys go as stored, protected or not.</summary>
@@ -474,6 +479,7 @@ public static class Profiles
         to.ModelAvatar = from.ModelAvatar;       // 2026-10-10: the profile's face, as its name, not a taste a reset puts back
         to.UserAvatar = from.UserAvatar;         // 2026-10-12: the user's own face, kept as the model's is
         to.WebUiToken = from.WebUiToken;         // 2026-10-14: a phone signed in stays signed in once the Web UI is on again
+        to.ShortcutOffered = from.ShortcutOffered; // 2026-10-16: a profile asked once is not asked again after a plain reset
     }
 
     /// <summary>

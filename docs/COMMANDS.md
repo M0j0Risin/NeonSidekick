@@ -99,7 +99,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 
 | Command | What it does |
 |---|---|
-| `/profile [<name>]` | Switches profiles: a picker, or the one named. See [Profiles](#profiles). |
+| `/profile [<name>]` | Switches profiles for this run: a picker, or the one named. See [Profiles](#profiles). |
 | `/profile add\|delete <name>`, `/profile rename <name> <new-name>` | Creates a profile (from this one's settings, memories and saved prompts), deletes one, or renames one. |
 | `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its URLs, paths, keys and avatars unless `--all`. |
 | `/profile push\|pull <name>` | Copies every setting but the working directory to (`push`) or from (`pull`) another profile; a pull clears the conversation. |
@@ -426,7 +426,8 @@ A monitor, every monitor or one window, through GDI on Windows or ScreenCaptureK
 ### Profiles
 
 * A name is 1 to 32 letters, digits, `-` or `_`, and not one of `/profile`'s words (`add`, `push`, `keys`…). The default profile is `neon`.
-* A name starting with `_` is temporary: off the picker, and the next launch opens `neon` (the profile is kept).
+* A name starting with `_` is temporary: off the picker.
+* Every start opens `neon`; a switch lasts until the app closes. A desktop shortcut, `--profile` or `NEONSIDEKICK_PROFILE` opens another.
 * `--profile <name>` (or `NEONSIDEKICK_PROFILE`) opens a profile for one launch; an unknown name exits with code 2.
 * A reset keeps the URLs, model, API keys, paths, *Web search method*, *Claude Code executable* and avatars unless `--all`. `neon` can only be reset while loaded.
 * `push` and `pull` ask first; the bare forms copy only `profile.json`.
@@ -443,7 +444,7 @@ A monitor, every monitor or one window, through GDI on Windows or ScreenCaptureK
 
 * One already there is replaced. `{ts}` becomes each launch's start time, so every run gets its own log.
 * It points at the running exe, so make it from the copy you mean to keep. Headless has no `/shortcut`.
-* **The first start offers one** (**No**, **Yes** or **Yes, with a log (--log)**) once; set `"ShortcutOffered": false` in the home's `settings.json` to be asked again.
+* **Each profile offers one** (**No**, **Yes** or **Yes, with a log (--log)**) once, at start or on switching to it. Set `"ShortcutOffered": false` in that profile's `profile.json` (`/profile edit`) to be asked again.
 * **On a Mac** it is `NeonSidekick (<profile>).command`, with the app's icon: a zsh script Finder opens in iTerm2 when the app runs there, else Terminal. The log goes to `logs/` beside the app.
 
 ### Custom themes

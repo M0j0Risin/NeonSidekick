@@ -705,9 +705,13 @@ public static class WebUiText
     /// <summary>The model card's server for the Claude Code server.</summary>
     public const string ClaudeCodeServer = "Claude Code";
 
+    /// <summary>A room's lights on of all, on the Home tab's room box (2026-10-16): <c>3 of 5 on</c>.</summary>
+    public static string RoomLightsOn(int on, int total) =>
+        on.ToString(CultureInfo.InvariantCulture) + " of " + total.ToString(CultureInfo.InvariantCulture) + " on";
+
     /// <summary>The Home tab's own words.</summary>
     public static readonly WebHomeWords HomeWords = new(
-        HomeControlsOff, "Scenes", "Ask the house", "Ask", "Now playing", "The PC", "Model", "Yes", "No", CloseChoice, "loading", "busy", "window", "down", "up");
+        HomeControlsOff, "Rooms", "Scenes", "All lights", "Actions", "Ask the house", "Ask", "Now playing", "The PC", "Model", "Yes", "No", CloseChoice, "loading", "busy", "window", "down", "up");
 
     /// <summary>A home action from the page, flashed on the PC's hint row: the device and the service.</summary>
     public static string HomeFlash(string name, string service) => Glyph + name + ": " + service.Replace('_', ' ');

@@ -19,6 +19,8 @@ public sealed class FakeHaServer
     private readonly object _gate = new();
     private readonly Dictionary<string, (string State, string Attributes)> _states = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _areaOf = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _deviceOf = new(StringComparer.Ordinal);
+    private readonly List<(string Id, string Name, string? Area)> _devices = [];
     private readonly List<(string Id, string Name, string? Floor)> _areas = [];
     private readonly List<(string Id, string Name, int Level)> _floors = [];
     private readonly List<string> _received = [];
@@ -78,8 +80,11 @@ public sealed class FakeHaServer
         }
     }
 
-    /// <summary>Adds an entity: its state and its attributes as a JSON object's text; in <paramref name="area"/> when given.</summary>
-    public FakeHaServer Entity(string id, string state, string attributes = "{}", string? area = null)
+    /// <summary>
+    /// Adds an entity: its state and its attributes as a JSON object's text; in <paramref name="area"/> when given, on <paramref name="device"/>
+    /// when given (2026-10-16, a Hue zone's group light).
+    /// </summary>
+    public FakeHaServer Entity(string id, string state, string attributes = "{}", string? area = null, string? device = null)
     {
         lock (_gate)
         {
@@ -88,6 +93,22 @@ public sealed class FakeHaServer
             {
                 _areaOf[id] = area;
             }
+
+            if (device is not null)
+            {
+                _deviceOf[id] = device;
+            }
+        }
+
+        return this;
+    }
+
+    /// <summary>Adds a device (2026-10-16), in <paramref name="area"/> when given.</summary>
+    public FakeHaServer Device(string id, string name, string? area = null)
+    {
+        lock (_gate)
+        {
+            _devices.Add((id, name, area));
         }
 
         return this;
@@ -226,10 +247,10 @@ public sealed class FakeHaServer
                     Result(wire, id, "[" + string.Join(",", _areas.Select(a => "{\"area_id\":\"" + a.Id + "\",\"name\":\"" + a.Name + "\",\"floor_id\":" + (a.Floor is null ? "null" : "\"" + a.Floor + "\"") + "}")) + "]");
                     break;
                 case "config/device_registry/list":
-                    Result(wire, id, "[]");
+                    Result(wire, id, "[" + string.Join(",", _devices.Select(d => "{\"id\":\"" + d.Id + "\",\"name\":\"" + d.Name + "\",\"name_by_user\":null,\"area_id\":" + (d.Area is null ? "null" : "\"" + d.Area + "\"") + "}")) + "]");
                     break;
                 case "config/entity_registry/list":
-                    Result(wire, id, "[" + string.Join(",", _states.Keys.Select(e => "{\"entity_id\":\"" + e + "\",\"area_id\":" + (_areaOf.TryGetValue(e, out var a) ? "\"" + a + "\"" : "null") + ",\"device_id\":null,\"disabled_by\":null,\"hidden_by\":null,\"entity_category\":null,\"labels\":[]}")) + "]");
+                    Result(wire, id, "[" + string.Join(",", _states.Keys.Select(e => "{\"entity_id\":\"" + e + "\",\"area_id\":" + (_areaOf.TryGetValue(e, out var a) ? "\"" + a + "\"" : "null") + ",\"device_id\":" + (_deviceOf.TryGetValue(e, out var dev) ? "\"" + dev + "\"" : "null") + ",\"disabled_by\":null,\"hidden_by\":null,\"entity_category\":null,\"labels\":[]}")) + "]");
                     break;
                 case "config/label_registry/list":
                     wire.Push("{\"id\":" + Num(id) + ",\"type\":\"result\",\"success\":false,\"error\":{\"code\":\"unknown_command\",\"message\":\"Unknown command.\"}}");
