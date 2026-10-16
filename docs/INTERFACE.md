@@ -92,6 +92,9 @@ In every list ↑/↓ move, Enter or a double-click picks, ESC closes; key lette
 | Info panes (`/help`, `/sys`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find · ESC closes |
 | **Saved lists** | |
 | `/eventlog` | ←/→ logs · Enter opens the event (`c` copy, `a` ask, ESC back to the list) · `r` refresh · `m` more · `c` computer · type to filter, Shift+letter to start one with a button's letter |
+| `/services` | ←/→ states · Enter opens the service (`c` copy, `a` ask, and on a readwrite computer `s` start, `x` stop, `r` restart, `t` start type, each asking) · `r` refresh · `c` computer · type to filter |
+| `/tasks` | ←/→ states · Enter opens the task (`c` copy, `a` ask, `h` history, and as allowed `r` run, `e` end, `n` enable, `d` disable, each asking) · `r` refresh · `c` computer · `f` folder · `w` Windows' own · type to filter |
+| `/ad` card | `c` copy · `a` ask · on a locked user, **Search 4740** opens the PDC emulator's lockout events on `/eventlog` |
 | `/youtube list` | Enter plays |
 | `/youtube <words>`, `/youtube playlist` | Enter plays · `s` saves the video |
 | `/prompts` | Enter puts the prompt on the draft line · `a` add · `s` save the draft · `e` edit (a long one in the draft editor) |
@@ -130,6 +133,10 @@ In every list ↑/↓ move, Enter or a double-click picks, ESC closes; key lette
 ### The event log pane
 
 `/eventlog` shows a computer's events newest first, a tab per log (Application, System, Security, Setup, and the one you named). Each row is the time, a level glyph (◆ critical, ● error, ▲ warning, ○ information; ✗ and ✓ for Security's audit failures and successes), the provider, the id and the message's first line; a dim line marks each new day. A tab reads "(no access)" once Windows refused it. The title row's `⟳ refresh`, `more` (lit while there is a next page) and `computer` (with more than one ticked) are buttons. An event's page shows everything Windows recorded, its XML too, as plain text: nothing an event holds is read as markup or a terminal code.
+
+### The services and tasks panes
+
+`/services` lists a computer's services a row each (name, display name, state, a failure's exit code), a tab per state. `/tasks` lists its scheduled tasks (path, state, last run and result, next run), Windows' own under `\Microsoft\` hidden until `w`. Enter opens one whole, with the actions its computer allows as buttons; each asks on a yes/no pane first, and a refusal (protected, a driver, privileged, not in `control`) says why. Times are the computer's own clock.
 
 ### Folder picker
 
@@ -261,6 +268,8 @@ Glyphs under the status bar (*Tool bar*), each shown while it is checked there. 
 | 🐚 | slab under `off` | `/tools shell` |
 | 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | slab while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` |
 | 🪵 | slab while off, and always off Windows | `/tools eventlog` |
+| 📡 | slab while off | `/tools network` |
+| 🧩 📅 🏢 | slab while off, and always off Windows | `/tools services`, `tasks`, `directory` |
 | 📄 ⚡ | always | the [log window](#the-log-window); `/process` |
 | 🎞️ 🪟 | always | the [picture viewer](#the-picture-viewer); the [thumbnail browser](#the-thumbnail-browser) (ComfyUI's folder) |
 | 📺 ⭐ 🛒 | always | `/youtube list`, `/browser list`, `/shopping` |
@@ -487,7 +496,7 @@ With *Web UI commands* on (off by default; `/settings` › Client › Web UI), t
 |---|---|---|
 | Run | `/new`, `/clear`, `/splash`, `/compact`, `/plan …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …`, `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave` | Their lines; the status row shows its spinner while it runs |
 | Pick | `/model`, `/reasoning`, `/rewind [<n>]` | A card with the choices, the one in use marked, a filter for a long list |
-| List | `/ha states`, `/docker logs`, `/eventlog …`, `/plan open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy`, `/comfy offered` | A card with the lines; Close |
+| List | `/ha states`, `/docker logs`, `/eventlog …`, `/net …`, `/services …`, `/tasks …`, `/ad …`, `/plan open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy`, `/comfy offered` | A card with the lines; Close |
 | Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/cwd <path>`, `/msgclear`, `/sessions`, `/skills`, `/youtube`, `/queue`, `/botchat`, `/sampling`, `/server`, `/usage` | Refused: they run at the PC only |
 | Page | bare `/prompts` | Opens the page's saved prompts (📣 does too, even with *Web UI commands* off) |
 | Other | Every form that opens a pane or a window at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`…) | Refused, naming the form that works here when there is one |

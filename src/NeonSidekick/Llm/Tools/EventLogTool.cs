@@ -12,7 +12,7 @@ namespace NeonSidekick.Llm.Tools;
 /// (<see cref="NeonAdvisorTool.ReadOnlyOf"/>) and a script's through <c>execute_code</c>'s bridge — so <c>full</c> stays the main chat's
 /// alone. Every tool reads; none changes anything. A refusal is an <c>Error:</c> sentence, never a throw.
 /// </summary>
-public abstract class EventLogTool : AIFunction
+public abstract class EventLogTool : AIFunction, IRedactedTwin
 {
     public const string LogArgument = "log";
     public const string ComputerArgument = "computer";
@@ -33,6 +33,8 @@ public abstract class EventLogTool : AIFunction
 
     /// <summary>The same tool reading every computer redacted; itself when it already does.</summary>
     public abstract EventLogTool AsRedacted();
+
+    AIFunction IRedactedTwin.AsRedacted() => AsRedacted();
 
     /// <summary>The zone an answer's times are shown in, the user's own.</summary>
     protected TimeZoneInfo Zone => Access.Time.LocalTimeZone;

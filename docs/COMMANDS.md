@@ -20,6 +20,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
   - [Voice](#voice)
   - [Web and video](#web-and-video)
   - [Integrations](#integrations)
+  - [Admin](#admin)
   - [Display and windows](#display-and-windows)
   - [Automation](#automation)
 - [Command details](#command-details)
@@ -113,7 +114,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/settings <words>` | Searches every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by name, tab or description. |
 | `/settings changed` | Lists the settings that differ from their defaults, to edit one or put it back. |
 | `/tools` | Switches the model's tools on or off, each group's settings on its own tab. See [TOOLS.md](TOOLS.md). |
-| `/tools <group>` | Opens one group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping` or `timers`. |
+| `/tools <group>` | Opens one group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `network`, `services`, `tasks`, `directory`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping` or `timers`. |
 | `/tools shell allowed`, `/tools shell police` | Opens *Shell allowed commands* (which also steps *Shell command policy*), or *Shell police* and its forbidden strings. |
 | `/skills` | Lists the skills, to move, rename, edit, revert, lock, disable or delete one, and their settings. Its **loaded** tab shows the skills in this conversation. |
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. See [Installing skills](SETTINGS.md#installing-skills). |
@@ -131,7 +132,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 
 | Command | What it does |
 |---|---|
-| `/cwd [<path>\|~\|browse]` | Shows or changes the working directory (a missing folder is created); `~` is the profile's `files` folder, `browse` the [folder picker](INTERFACE.md#folder-picker). |
+| `/cwd [<path>\|~\|browse]` | Shows or changes the working directory (a missing folder is created; quotes around the path, as Explorer's *Copy as path* adds, are dropped); `~` is the profile's `files` folder, `browse` the [folder picker](INTERFACE.md#folder-picker). |
 | `/tree [<path>]` | A tree of the working directory in a pane; hidden entries per *File browser/tree mode*, `.git` only when named. |
 | `/browse [<folder>]` | Browses the working directory as a tree; Enter or a double-click opens a file in its default app. See [File browser](INTERFACE.md#file-browser). |
 | `/explore [<folder>]` | Opens the working directory, or a folder in it, in your file browser. |
@@ -214,8 +215,6 @@ Which commands the Web UI's page may send, and how each shows there: [Commands f
 | `/docker logs <container> [<lines>]` | A container's last lines (50, up to 2000). |
 | `/docker stats [<container>]` | CPU, memory, network and disk use of one or every running container. |
 | `/docker start\|stop\|restart\|pause\|unpause <container>` | Acts on one container. Nothing is asked and *Docker writes* doesn't apply; every change is logged. |
-| `/eventlog` | This PC's event logs (or the only ticked computer's) in a pane: Application, System, Security and Setup as tabs, newest first. `r` reads the tab again, `m` adds the next page, `c` picks another ticked computer; Enter opens an event with **copy** and **ask** (a draft asking the model about it). Works with *Event log tools* off; full text. Windows only. See [Event logs](TOOLS.md#event-logs). |
-| `/eventlog <log>\|<file.evtx> [<term>…] [<words>]` | Opens on that log (`app`, `sys`, `sec`, `setup`, `ps`) or an `.evtx` in the working directory, narrowed by `computer:dc01`, `level:error,warning`, `id:41,1074`, `provider:<name>`, `field:<Name>=<value>`, `since:2h`, `until:<time>`, `audit:failure\|success` and words to find. Without the pane, and from the Web UI, it lists the events. |
 | `/ha` | Home Assistant at a glance: lights on per room, the TV, temperatures, motion, low batteries, to-do lists. See [Home Assistant](TOOLS.md#home-assistant). |
 | `/ha on\|off\|toggle <name> [<brightness>]` | Switches a room, light, switch or the TV (`/ha on den 40%`, `/ha off kitchen and hallway`). |
 | `/ha scene <name>` | Activates a scene. |
@@ -243,6 +242,28 @@ Which commands the Web UI's page may send, and how each shows there: [Commands f
 | `/shopping clear [all]` | Removes the ticked items; `all` empties the list after a yes (headless: at once). |
 | `/shopping store [<name>]`, `/shopping store rename <name> to <new-name>`, `/shopping store add\|remove <name>` | Lists the stores or shops at one, renames one, or adds or removes one (after a yes; its folder stays). |
 | `/shopping reindex [<store>]` | Reads a store's reference documents again. |
+
+### Admin
+
+Your own hand on the [Admin](TOOLS.md#admin) tools and [Network](TOOLS.md#network): each works with its tools off and reaches only the computers or domains ticked for them. Windows only, but for `/net`.
+
+| Command | What it does |
+|---|---|
+| `/net ping <host> [<count>]` | Pings one host (4 echoes, 10 at most): answered or not, the loss and the round trips. Never judged by *Network tools reach*, the host lists or the budget; when the model's call would be refused, a dim line says so. |
+| `/net trace <host> [names]` | The route, hop by hop (30 at most), with each hop's name when `names` is given. |
+| `/net port <host> <port>…` | Whether TCP ports (16 at most) are open, refused or silent on each of the host's addresses. |
+| `/net dns <name> [<type>] [<server>]` | Looks a name up: A (the default) and AAAA through this machine's resolver; CNAME, MX, TXT, NS, SOA, PTR, SRV and CAA through the app's own client, or the server you name. |
+| `/net tls <host> [<port>] [smtp\|imap\|pop3\|ldap\|rdp\|none]` | A TLS handshake (443 by default): protocol, cipher, the certificate's names, issuer, days left and chain problems; 25, 587, 143, 110, 389 and 3389 speak their preamble first. |
+| `/net certs [<store>] [user\|machine] [<words>]` | One of this machine's certificate stores (`my` by default), soonest to end first; nothing exported. |
+| `/eventlog` | This PC's event logs (or the only ticked computer's) in a pane: Application, System, Security and Setup as tabs, newest first. `r` reads the tab again, `m` adds the next page, `c` picks another ticked computer; Enter opens an event with **copy** and **ask** (a draft asking the model about it). Works with *Event log tools* off; full text. See [Event logs](TOOLS.md#event-logs). |
+| `/eventlog <log>\|<file.evtx> [<term>…] [<words>]` | Opens on that log (`app`, `sys`, `sec`, `setup`, `ps`) or an `.evtx` in the working directory, narrowed by `computer:dc01`, `level:error,warning`, `id:41,1074`, `provider:<name>`, `field:<Name>=<value>`, `since:2h`, `until:<time>`, `audit:failure\|success` and words to find. Without the pane, and from the Web UI, it lists the events. |
+| `/services [computer:<name>] [state:running\|stopped\|failed\|all] [<words>]` | A computer's services in a pane: Running, Stopped, Failed and All as tabs, `r` reads again, `c` another ticked computer; type to filter. Enter opens a service with **copy**, **ask** and, on a `readwrite` computer, the actions its `controlActions` allow (start, stop, restart, start type), each asking first. It skips *Service writes*, never the rest of the [order of checks](TOOLS.md#services). Without the pane, and from the Web UI, it lists them. |
+| `/tasks [computer:<name>] [folder:<path>] [state:ready\|running\|disabled\|all] [microsoft] [<words>]` | A computer's scheduled tasks in a pane: Ready, Running, Disabled and All as tabs, `r` reads again, `c` another computer, `f` a folder, `w` Windows' own under `\Microsoft\`. Enter opens a task (its triggers in words, actions, who it runs as, last result) with **copy**, **ask**, **history** (its runs on `/eventlog`, when Task Scheduler's log is on) and the actions its computer allows (run, end, enable, disable), each asking first; privileged tasks are guarded. See [Scheduled tasks](TOOLS.md#scheduled-tasks). |
+| `/ad <name>` | Looks a name up in Active Directory (account, display name, cn, mail or UPN) and opens the match as a card with **copy** and **ask**. Read-only. See [Active Directory](TOOLS.md#active-directory). |
+| `/ad user <name> [domain:<name>]` | A user's card: enabled, locked and when (with a **Search 4740** button when the PDC emulator is a ticked event-log computer), bad passwords, password expiry, last sign-in, groups, manager, title, department and OU. |
+| `/ad group <name> [nested] [domain:<name>]`, `/ad computer <name> [domain:<name>]` | A group's members, direct or nested; a computer's card. |
+| `/ad find locked\|password_expiring\|disabled\|stale_users\|stale_computers\|name [<days>] [<words>]` | Locked users, passwords ending within the days (14), disabled users, users or computers not signed in for the days (90; the never-signed-in apart), or names holding the words. |
+| `/ad domain [domain:<name>]` | The domain controllers, functional levels, password and lockout policy, and the role holders. |
 
 ### Display and windows
 

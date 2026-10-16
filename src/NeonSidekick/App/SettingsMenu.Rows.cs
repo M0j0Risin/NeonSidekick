@@ -139,6 +139,10 @@ internal sealed partial class SettingsMenu
         [(SettingsField.ShoppingTools, "The list")],
         [(SettingsField.EventLogTools, "Access"), (SettingsField.EventLogComputersOffered, "Computers"), (SettingsField.EventLogMaxEvents, "Searches"), (SettingsField.EventLogComputersProfile, "Files")],
         [(SettingsField.TimerTools, "Timers")],
+        [(SettingsField.NetworkTools, "Access"), (SettingsField.NetworkMaxHostsPerTurn, "Budget"), (SettingsField.NetworkAllowedHosts, "Hosts"), (SettingsField.NetworkCertificateStores, "Certificates")],
+        [(SettingsField.ServiceTools, "Access"), (SettingsField.ServiceComputersOffered, "Computers"), (SettingsField.ServiceComputersProfile, "Files")],
+        [(SettingsField.TaskTools, "Access"), (SettingsField.TaskComputersOffered, "Computers"), (SettingsField.TaskComputersProfile, "Files")],
+        [(SettingsField.DirectoryTools, "Access"), (SettingsField.DirectoryDomainsOffered, "Domains"), (SettingsField.DirectoryDomainsProfile, "Files")],
     ];
 
     /// <summary>

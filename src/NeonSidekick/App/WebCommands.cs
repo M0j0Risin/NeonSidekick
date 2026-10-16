@@ -79,7 +79,7 @@ public static class WebCommands
         SlashCommand.Model, SlashCommand.Reasoning, SlashCommand.Tts, SlashCommand.Voice, SlashCommand.Remember, SlashCommand.Memory,
         SlashCommand.Timer, SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Browser, SlashCommand.Prompts,
         SlashCommand.Plan, SlashCommand.Process, SlashCommand.Learn, SlashCommand.Imagine, SlashCommand.Comfy, SlashCommand.HomeAssistant,
-        SlashCommand.Docker, SlashCommand.EventLog, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.Shopping, SlashCommand.Print, SlashCommand.Pdf,
+        SlashCommand.Docker, SlashCommand.EventLog, SlashCommand.Net, SlashCommand.Services, SlashCommand.Tasks, SlashCommand.Ad, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.Shopping, SlashCommand.Print, SlashCommand.Pdf,
         SlashCommand.Rename, SlashCommand.Claude, SlashCommand.Advisor, SlashCommand.Test, SlashCommand.Avatar, SlashCommand.Loop,
     };
 
@@ -143,6 +143,7 @@ public static class WebCommands
             SlashCommand.HomeAssistant => Is(first, "states") ? WebCommandVerdict.List : WebCommandVerdict.Run,
             SlashCommand.Docker => Is(first, "logs") ? WebCommandVerdict.List : WebCommandVerdict.Run,
             SlashCommand.EventLog => WebCommandVerdict.List,   // 2026-10-15: the events as a list card, /docker's way from a web line
+            SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad => WebCommandVerdict.List,   // 2026-10-15, the admin-tools plan: their lines as a list card
             SlashCommand.Shopping => text.Length == 0 || Is(text, "add") ? Refused(settings.ShoppingTab ? WebUiText.UseShoppingPage : WebUiText.ShoppingTabOff) : WebCommandVerdict.Run,
             SlashCommand.Prompts => PromptsCommand.Parse(args).Verb switch
             {

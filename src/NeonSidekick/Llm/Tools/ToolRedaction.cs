@@ -5,8 +5,10 @@ namespace NeonSidekick.Llm.Tools;
 /// <summary>
 /// What every tool that hides a secret from the model shares (2026-10-15, the event-log plan: the generic rules of
 /// <c>Docker/DockerRedaction.cs</c> moved out so the event-log redaction stands on the same ground): the placeholder a hidden value
-/// reads as, and a URL's password hidden wherever it stands. <see cref="Docker.DockerRedaction"/> keeps its own name rules over these;
-/// <see cref="EventLog.EventLogRedaction"/> its own. Pure.
+/// reads as, a URL's password hidden wherever it stands, and (later on 2026-10-15, the admin-tools plan: moved out of
+/// <c>EventLog/EventLogRedaction</c> so a service's image path, a task's command line and a failure command are read the same way)
+/// the free-text rules of <see cref="Text"/>. <see cref="Docker.DockerRedaction"/> keeps its own name rules over these;
+/// <see cref="EventLog.EventLogRedaction"/> its own field names. Pure.
 /// </summary>
 public static partial class ToolRedaction
 {
@@ -20,6 +22,86 @@ public static partial class ToolRedaction
         return UrlCredentials().Replace(text, m => m.Groups["head"].Value + Placeholder + "@");
     }
 
+    /// <summary>
+    /// <paramref name="text"/> with every secret the free-text rules know hidden: the forms a secret takes on a command line or in a
+    /// script — a URL's password, <c>password=…</c> and its kin (<c>Pwd=</c>, <c>AccountKey=</c>, <c>client_secret=</c>, <c>api_key=</c>,
+    /// a SAS's <c>sig=</c>), <c>-Password x</c> and <c>--password x</c>, <c>/pass:x</c> and <c>/p:x</c>, <c>-p x</c>, <c>-P x</c> and
+    /// <c>-pX</c>, <c>net user u &lt;pw&gt;</c>, <c>net use … /user:u &lt;pw&gt;</c>, <c>schtasks /RP x</c>,
+    /// <c>ConvertTo-SecureString '…' -AsPlainText</c>, the <c>PSCredential</c> constructor, <c>$password = '…'</c>,
+    /// <c>Authorization: Bearer|Basic x</c>, a JWT, a PEM block. Best-effort: no rule can know every secret in free text.
+    /// </summary>
+    public static string Text(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (text.Length == 0)
+        {
+            return text;
+        }
+
+        string result = Pem().Replace(text, Placeholder);
+        result = Jwt().Replace(result, Placeholder);
+        result = Authorization().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = Url(result);
+        result = NetUser().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = NetUse().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = SchtasksPassword().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = SecureString().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = PsCredential().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = Assignment().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = KeyValue().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = SlashSwitch().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = DashFlag().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = DashP().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = DashPAttached().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        return result;
+    }
+
     [GeneratedRegex(@"(?<head>[a-z][a-z0-9+.\-]*://[^:/@\s]+:)[^@\s/]+@", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex UrlCredentials();
+
+    // A quoted or bare value, the shape every rule below hides.
+    private const string Value = "(?:\"[^\"]*\"|'[^']*'|[^\\s\"';,&]+)";
+
+    [GeneratedRegex(@"-----BEGIN [A-Z0-9 ]+-----[\s\S]*?-----END [A-Z0-9 ]+-----", RegexOptions.CultureInvariant)]
+    private static partial Regex Pem();
+
+    [GeneratedRegex(@"\beyJ[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]+", RegexOptions.CultureInvariant)]
+    private static partial Regex Jwt();
+
+    [GeneratedRegex(@"(?<head>\bAuthorization\s*[:=]\s*(?:Bearer|Basic|Digest|Negotiate|NTLM)\s+)[^\s""',;]+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex Authorization();
+
+    [GeneratedRegex(@"(?<head>\bnet1?(?:\.exe)?\s+user\s+(?:""[^""]+""|[^\s/""]+)\s+)(?!/|\*(?:\s|$))" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex NetUser();
+
+    [GeneratedRegex(@"(?<head>\bnet1?(?:\.exe)?\s+use\b[^\r\n]*?/user:(?:""[^""]+""|\S+)\s+)(?!/|\*(?:\s|$))" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex NetUse();
+
+    [GeneratedRegex(@"(?<head>(?<![\w/])/RP\s+)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SchtasksPassword();
+
+    [GeneratedRegex(@"(?<head>\bConvertTo-SecureString\s+(?:-String\s+)?)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SecureString();
+
+    [GeneratedRegex(@"(?<head>PSCredential\s*\(\s*(?:""[^""]*""|'[^']*'|\$[\w:]+)\s*,\s*)[^)]+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex PsCredential();
+
+    [GeneratedRegex(@"(?<head>\$[\w:]*(?:password|passwd|pwd|secret|token|apikey|api_key)[\w]*\s*=\s*)(?:""[^""]*""|'[^']*')", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex Assignment();
+
+    [GeneratedRegex(@"(?<head>(?<![\w\-$/])(?:password|passwd|pwd|pass|secret|client[_\-]?secret|api[_\-]?key|access[_\-]?key|account[_\-]?key|shared[_\-]?access[_\-]?key|sig)\s*[=:]\s*)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex KeyValue();
+
+    [GeneratedRegex(@"(?<head>(?<![\w/])/(?:password|pass|pwd|p):)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SlashSwitch();
+
+    [GeneratedRegex(@"(?<head>(?<![\w\-])--?(?:password|passwd|pwd|pass|secret|token|api-?key|client-?secret)(?:\s+|=))(?!-)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex DashFlag();
+
+    [GeneratedRegex(@"(?<head>(?<![\w\-])-[pP]\s+)(?!-)" + Value, RegexOptions.CultureInvariant)]
+    private static partial Regex DashP();
+
+    // -pSecret (mysql's): the rest of the word after a lowercase -p, unless it is a plain lowercase word (-path, -print).
+    [GeneratedRegex(@"(?<head>(?<![\w\-])-p)(?![a-z]+(?:\s|$))(?=[^\s\-])[^\s""';,&]+", RegexOptions.CultureInvariant)]
+    private static partial Regex DashPAttached();
 }

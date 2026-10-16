@@ -71,6 +71,10 @@ public sealed record SidekickOptions(
     public const string PostgresCheckFlag = "--postgres-check";
     public const string UncCheckFlag = "--unc-check";
     public const string EventLogCheckFlag = "--eventlog-check";
+    public const string NetworkCheckFlag = "--network-check";
+    public const string ServicesCheckFlag = "--services-check";
+    public const string TasksCheckFlag = "--tasks-check";
+    public const string AdCheckFlag = "--ad-check";
     public const string DockerCheckFlag = "--docker-check";
     public const string CameraCheckFlag = "--camera-check";
 
@@ -92,6 +96,18 @@ public sealed record SidekickOptions(
 
     /// <summary><c>--eventlog-check &lt;computer&gt;</c> (2026-10-15): run <see cref="App.EventLogCheck"/> over that computer of <c>eventlog.json</c> (or <c>local</c>) and exit 0/1 — the event-log tools' proof, reads only.</summary>
     public string? EventLogCheck { get; init; }
+
+    /// <summary><c>--network-check &lt;host&gt;</c> (2026-10-15, the admin-tools plan): DNS, ping, the port and TLS on 443 against that host, and the certificate store opened; exit 0/1. Reads only.</summary>
+    public string? NetworkCheck { get; init; }
+
+    /// <summary><c>--services-check &lt;computer&gt;</c> (2026-10-15): the services listed on that computer of <c>services.json</c> (or <c>local</c>) and one read whole; exit 0/1. Changes nothing.</summary>
+    public string? ServicesCheck { get; init; }
+
+    /// <summary><c>--tasks-check &lt;computer&gt;</c> (2026-10-15): the Task Scheduler connected on that computer of <c>tasks.json</c> (or <c>local</c>), the tasks listed and one read; exit 0/1.</summary>
+    public string? TasksCheck { get; init; }
+
+    /// <summary><c>--ad-check &lt;domain&gt;</c> (2026-10-15): RootDSE, the bind, the domain's policy and one user read on that domain of <c>ad.json</c> (or <c>current</c>); exit 0/1.</summary>
+    public string? AdCheck { get; init; }
 
     /// <summary>
     /// <c>--sql-check &lt;connection&gt;</c> (2026-10-03, the user's ask): run <see cref="SqlCheck"/> over that connection of
@@ -129,7 +145,7 @@ public sealed record SidekickOptions(
     public const string DockerCheckSocketLine = "prove the Docker tools against the Docker engine's socket (reads only)";
 
     private const string UsageText =
-        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--eventlog-check <computer>] [--docker-check] [--camera-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
+        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--eventlog-check <computer>] [--network-check <host>] [--services-check <computer>] [--tasks-check <computer>] [--ad-check <domain>] [--docker-check] [--camera-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +
         "  --headless     stdin/stdout REPL, no TUI (profile \"neon\" unless --profile or NEONSIDEKICK_PROFILE names one)\n" +
@@ -143,6 +159,10 @@ public sealed record SidekickOptions(
         "  --postgres-check <connection>  prove the PostgreSQL tools against that connection of postgres.json (reads only), exit 0/1\n" +
         "  --unc-check <share>          prove the UNC tools against that share of unc.json (reads only), exit 0/1\n" +
         "  --eventlog-check <computer>  prove the event-log tools against that computer of eventlog.json, or local (reads only), exit 0/1\n" +
+        "  --network-check <host>       prove the network tools against that host: DNS, ping, port 443, TLS (reads only), exit 0/1\n" +
+        "  --services-check <computer>  prove the services tools against that computer of services.json, or local (reads only), exit 0/1\n" +
+        "  --tasks-check <computer>     prove the task tools against that computer of tasks.json, or local (reads only), exit 0/1\n" +
+        "  --ad-check <domain>          prove the directory tools against that domain of ad.json, or current (reads only), exit 0/1\n" +
         "  --docker-check               prove the Docker tools against Docker Desktop's engine pipe (reads only), exit 0/1\n" +
         "  --camera-check               open the camera, read frames and encode one (nothing saved), exit 0/1\n" +
         "  --url <url>    LLM base URL for this launch (outranks NEONSIDEKICK_LLM_URL and the saved setting)\n" +
@@ -305,6 +325,51 @@ public sealed record SidekickOptions(
                 continue;
             }
 
+            // The admin families' checks (2026-10-15, the admin-tools plan).
+            if (TryValueFlag(NetworkCheckFlag, args, ref i, arg, lower, out var networkHost, out error))
+            {
+                if (error is not null)
+                {
+                    return result with { Error = error };
+                }
+
+                result = result with { NetworkCheck = networkHost };
+                continue;
+            }
+
+            if (TryValueFlag(ServicesCheckFlag, args, ref i, arg, lower, out var servicesComputer, out error))
+            {
+                if (error is not null)
+                {
+                    return result with { Error = error };
+                }
+
+                result = result with { ServicesCheck = servicesComputer };
+                continue;
+            }
+
+            if (TryValueFlag(TasksCheckFlag, args, ref i, arg, lower, out var tasksComputer, out error))
+            {
+                if (error is not null)
+                {
+                    return result with { Error = error };
+                }
+
+                result = result with { TasksCheck = tasksComputer };
+                continue;
+            }
+
+            if (TryValueFlag(AdCheckFlag, args, ref i, arg, lower, out var adDomain, out error))
+            {
+                if (error is not null)
+                {
+                    return result with { Error = error };
+                }
+
+                result = result with { AdCheck = adDomain };
+                continue;
+            }
+
             switch (lower)
             {
                 case "--smoke":
@@ -410,12 +475,16 @@ public sealed record SidekickOptions(
         : PostgresCheck is not null ? "postgres-check"
         : UncCheck is not null ? "unc-check"
         : EventLogCheck is not null ? "eventlog-check"
+        : NetworkCheck is not null ? "network-check"
+        : ServicesCheck is not null ? "services-check"
+        : TasksCheck is not null ? "tasks-check"
+        : AdCheck is not null ? "ad-check"
         : DockerCheck ? "docker-check"
         : CameraCheck ? "camera-check"
         : "interactive";
 
     /// <summary>Whether this launch runs one of the check modes (<c>--smoke</c>, <c>--audio-check</c>, <c>--voice-check</c>, <c>--sql-check</c>, <c>--oracle-check</c>, <c>--mysql-check</c>, <c>--sqlite-check</c>, <c>--postgres-check</c>, <c>--unc-check</c>, <c>--docker-check</c>, <c>--camera-check</c>): no screen, no input reader.</summary>
-    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || SqlCheck is not null || OracleCheck is not null || MySqlCheck is not null || SqliteCheck is not null || PostgresCheck is not null || UncCheck is not null || EventLogCheck is not null || DockerCheck || CameraCheck;
+    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || SqlCheck is not null || OracleCheck is not null || MySqlCheck is not null || SqliteCheck is not null || PostgresCheck is not null || UncCheck is not null || EventLogCheck is not null || NetworkCheck is not null || ServicesCheck is not null || TasksCheck is not null || AdCheck is not null || DockerCheck || CameraCheck;
 
     /// <summary>
     /// The value flags as typed, for the log at startup: <c>--cwd D:\x --log C:\t.log</c>; null when

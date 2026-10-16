@@ -507,6 +507,12 @@ public sealed class WorkingDirectory
     public Func<Shell.ServerDatabaseGuard?>? ServerDatabases { get; set; }
 
     /// <summary>
+    /// The admin families the shell police guards (2026-10-15, the admin-tools plan): services, tasks and the directory while their tools are
+    /// on, read at each shell call; null, or a null answer, while none is. The shell tools read it (<c>Shell.AdminPolice</c>).
+    /// </summary>
+    public Func<Shell.AdminGuard?>? AdminFamilies { get; set; }
+
+    /// <summary>
     /// The profile's images folder, a full path (2026-10-09, the user's call, after a model listed <c>images</c> and then the folder's
     /// full path with <c>search_files</c> and was told only "outside the working directory"): read when a path is refused as outside,
     /// so one inside that folder is <see cref="FileOutcome.InImagesFolder"/>, whose sentence points at the tools' descriptions, which say

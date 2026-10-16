@@ -386,22 +386,22 @@ public sealed class WebFetcher
             return null;
         }
 
-        bool lan;
+        IReadOnlyList<IPAddress> addresses;
         if (LanPolicy.IsPrivateHost(host))
         {
-            lan = true;
+            // Private by spelling: nothing to resolve.
+            addresses = [];
         }
-        else if (IPAddress.TryParse(host.Trim('[', ']'), out _))
+        else if (IPAddress.TryParse(host.Trim('[', ']'), out var literal))
         {
             // A literal address that is not private: public by spelling, nothing to resolve.
-            lan = false;
+            addresses = [literal];
         }
         else
         {
             try
             {
-                var addresses = await _resolve(host, cancellationToken).ConfigureAwait(false);
-                lan = LanPolicy.AnyPrivate(addresses);
+                addresses = await _resolve(host, cancellationToken).ConfigureAwait(false);
             }
             catch (SocketException)
             {
@@ -413,7 +413,8 @@ public sealed class WebFetcher
             }
         }
 
-        FetchOutcome? refused = LanPolicy.Judge(options.Reach, lan) switch
+        // The judgement is LanPolicy.Admit's since later on 2026-10-15 (the admin-tools plan), the network tools' too.
+        FetchOutcome? refused = LanPolicy.Admit(host, addresses, options.Reach).Refusal switch
         {
             NetworkRefusal.Lan => FetchOutcome.LanRefused,
             NetworkRefusal.Internet => FetchOutcome.InternetRefused,

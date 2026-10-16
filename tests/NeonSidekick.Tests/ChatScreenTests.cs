@@ -316,7 +316,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, recycleBin: _recycleBin);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: () => null);
         screen.UserProfileFolder = _userProfile;
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
@@ -4185,7 +4185,7 @@ public partial class ChatScreenTests : IDisposable
         // A fresh profile's ToolsDisabled: gitlib_delete (2026-09-20), zip and unzip (2026-09-21) — gitlib_discard no longer (2026-09-23, the user's call) and delete no longer
         // (later on 2026-09-21, the user's call: on out of the box, so the file rule keeps its delete clause); the fixture had opted every tool on.
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = [.. new AppSettingsData().ToolsDisabled]; });
-        Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName, UncDeleteTool.ToolName, DockerRemoveTool.ToolName, DockerPruneTool.ToolName, HaTodoTool.ToolName], _settings.Current.ToolsDisabled);   // ha_todo since 2026-10-07; docker_remove and docker_prune since 2026-10-02; unc_delete since 2026-09-30
+        Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName, UncDeleteTool.ToolName, DockerRemoveTool.ToolName, DockerPruneTool.ToolName, HaTodoTool.ToolName, ServiceStartTypeTool.ToolName], _settings.Current.ToolsDisabled);   // ha_todo since 2026-10-07; docker_remove and docker_prune since 2026-10-02; unc_delete since 2026-09-30
         _chat.EnqueueText("Hello.");
         _console.Profile.Height = 90;
         _geometry = new ScreenGeometry(() => null);
@@ -4220,7 +4220,7 @@ public partial class ChatScreenTests : IDisposable
         // A fresh profile's ToolsDisabled: gitlib_delete (2026-09-20), zip and unzip (2026-09-21) — gitlib_discard no longer (2026-09-23, the user's call) and delete no longer
         // (later on 2026-09-21, the user's call: on out of the box, so the file rule keeps its delete clause); the fixture had opted every tool on.
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = [.. new AppSettingsData().ToolsDisabled]; });
-        Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName, UncDeleteTool.ToolName, DockerRemoveTool.ToolName, DockerPruneTool.ToolName, HaTodoTool.ToolName], _settings.Current.ToolsDisabled);   // ha_todo since 2026-10-07; docker_remove and docker_prune since 2026-10-02; unc_delete since 2026-09-30
+        Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName, UncDeleteTool.ToolName, DockerRemoveTool.ToolName, DockerPruneTool.ToolName, HaTodoTool.ToolName, ServiceStartTypeTool.ToolName], _settings.Current.ToolsDisabled);   // ha_todo since 2026-10-07; docker_remove and docker_prune since 2026-10-02; unc_delete since 2026-09-30
         _chat.EnqueueText("Hello.");
         _console.Profile.Height = 90;
         _geometry = new ScreenGeometry(() => null);
@@ -4749,12 +4749,16 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Right);     // YouTube (2026-10-05)
         _console.Input.PushKey(Keys.Right);     // Image (2026-10-10: the File menu's picture rows, a menu of their own)
         _console.Input.PushKey(Keys.Right);     // Options (second until later on 2026-09-22, last since — the user's ask)
+        _console.Input.PushKey(Keys.Right);     // Network, Services, Tasks, Directory (later still on 2026-10-15, the admin-tools plan): four leaves more, so the walk ends where it did
+        _console.Input.PushKey(Keys.Right);
+        _console.Input.PushKey(Keys.Right);
+        _console.Input.PushKey(Keys.Right);
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Core · Files · Apps · Admin · Databases · Devices · Home ", output);
         Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.ComfyTools) + " ", output);   // a menu on Media since 2026-10-09 (its own tab from 2026-09-24), a sub-tab the arrows walk since 2026-10-10 (ToolsMenuTests)
         Assert.DoesNotContain("Claude Code executable", output);   // /claude's rows here from 2026-09-27 (off /settings), the advisor's under them; both gone from /tools on 2026-10-10 (the four to /settings › Servers › Anthropic)
         Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
@@ -4805,12 +4809,16 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Right);     // YouTube (2026-10-05)
         _console.Input.PushKey(Keys.Right);     // Image (2026-10-10: the File menu's picture rows, a menu of their own)
         _console.Input.PushKey(Keys.Right);     // Options (second until later on 2026-09-22, last since — the user's ask)
+        _console.Input.PushKey(Keys.Right);     // Network, Services, Tasks, Directory (later still on 2026-10-15, the admin-tools plan): four leaves more, so the walk ends where it did
+        _console.Input.PushKey(Keys.Right);
+        _console.Input.PushKey(Keys.Right);
+        _console.Input.PushKey(Keys.Right);
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Core · Files · Apps · Admin · Databases · Devices · Home ", output);
         Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.ComfyTools) + " ", output);   // a menu on Media since 2026-10-09 (its own tab from 2026-09-24), a sub-tab the arrows walk since 2026-10-10 (ToolsMenuTests)
         Assert.DoesNotContain("Claude Code executable", output);   // /claude's rows here from 2026-09-27 (off /settings), the advisor's under them; both gone from /tools on 2026-10-10 (the four to /settings › Servers › Anthropic)
         Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
@@ -5274,7 +5282,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Core · Files · Apps · Admin · Databases · Devices · Home ", output);
         Assert.Contains("  · " + CameraCaptureTool.ToolName + ": off", output);
         Assert.Equal([CameraCaptureTool.ToolName], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -9737,6 +9745,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task ToolsGroup_AWordThatIsNoGroup_IsTheUsageError_AndWithoutThePane_PrintsTheValue()
     {
         _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Width = 300;   // the usage line on one row: it names every switch word (240 columns held it until the admin words, later still on 2026-10-15)
         PushLine("/tools bogus");
         PushLine("/tools SQL");
         PushLine("/tools shell");
@@ -9748,7 +9757,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ToolsText.SwitchStateLine(SettingsField.SqlTools, _settings.Current) + "\n", output);
         Assert.Equal("SQL tools: off", ToolsText.SwitchStateLine(SettingsField.SqlTools, new AppSettingsData { SqlTools = false }));
         Assert.Contains("  · Shell command policy: ask\n", output);
-        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, eventlog, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, shopping, timers, or nothing for the pane.", ToolsText.SwitchUsageError);
+        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, eventlog, network, services, tasks, directory, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, shopping, timers, or nothing for the pane.", ToolsText.SwitchUsageError);
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Tools, hasArgs: true));   // as /police: the rows are never refused under a reply
         Assert.Equal(SettingsField.HomeAssistantTools, ToolsText.SwitchField(" HA "));
         Assert.Null(ToolsText.SwitchField("git"));
@@ -9822,10 +9831,10 @@ public partial class ChatScreenTests : IDisposable
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
         StepsWhenIdle(
-            input => { input.PushClick(120, 103); input.PushClick(120, 103); },  // under off: the blanks, so /settings
+            input => { input.PushClick(ToolbarBlank(), 103); input.PushClick(ToolbarBlank(), 103); },  // under off: the blanks, so /settings
             Key(Keys.Escape),
             Line("/tools"),
-            input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape),   // the Shell tab, the policy picker on off, yolo picked and confirmed (2026-10-03), the pane closed: the row redrawn with the open lock
+            input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape),   // the Shell tab, the policy picker on off, yolo picked and confirmed (2026-10-03), the pane closed: the row redrawn with the open lock
             input => { input.PushClick(42, 103); input.PushClick(42, 103); },    // 🔓: the list (+3 since ⏳, 2026-10-13) (+3 since 📣, 2026-10-14) (+3 since 📱, 2026-10-14)
             Key(Keys.Escape),
             Line("/exit"));
@@ -9854,7 +9863,7 @@ public partial class ChatScreenTests : IDisposable
             input => { input.PushClick(ToolbarBlank(), 103); input.PushClick(ToolbarBlank(), 103); },  // under off: the blanks, so /settings
             Key(Keys.Escape),
             Line("/tools"),
-            input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape),   // the Shell tab, the policy picker on off, yolo picked and confirmed (2026-10-03), the pane closed: the row redrawn with the open lock
+            input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape),   // the Shell tab, the policy picker on off, yolo picked and confirmed (2026-10-03), the pane closed: the row redrawn with the open lock
             input => { input.PushClick(42, 103); input.PushClick(42, 103); },    // 🔓: the list (+3 since ⏳, 2026-10-13) (+3 since 📣, 2026-10-14) (+3 since 📱, 2026-10-14)
             Key(Keys.Escape),
             Line("/exit"));
@@ -9905,7 +9914,7 @@ public partial class ChatScreenTests : IDisposable
             input => { input.PushClick(42, 103); input.PushClick(42, 103); },    // 🔒 still at 33: the list (+3 since ⏳, 2026-10-13) (+3 since 📣, 2026-10-14) (+3 since 📱, 2026-10-14)
             Key(Keys.Escape),
             Line("/tools"),
-            input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape),   // the Shell tab's third row, Shell police: its page on "on", off picked and confirmed (2026-10-02); the pane closed: the officer gone
+            input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape),   // the Shell tab's third row, Shell police: its page on "on", off picked and confirmed (2026-10-02); the pane closed: the officer gone
             input => { input.PushClick(45, 103); input.PushClick(45, 103); },    // 🥷 now (2026-10-02): the police page again (+3 since ⏳, 2026-10-13) (+3 since 📣, 2026-10-14) (+3 since 📱, 2026-10-14)
             Key(Keys.Escape),
             Line("/exit"));
@@ -9919,7 +9928,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.ShellPolice);
         string memory = "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Admin · Databases · Devices · Home ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -10512,7 +10521,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab
-        _console.Profile.Height = 134;   // /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
+        _console.Profile.Height = 148;   // /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);   // Advanced, since later on 2026-09-27
@@ -10529,7 +10538,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(HelpRows(Entry("/sessions"))[0], output);   // the label column is the widest label of all, the description column the longest description
         Assert.Contains(HelpRows(Entry("/sessions"))[1], output);   // and its further forms stacked under the first (2026-10-05)
         // → the advanced tab: the rest, A to Z, in the same label column.
-        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n \n/advisor ", output);   // /advisor first since 2026-10-10, /botchat until then; /about first until 2026-10-03, when it moved to the basic tab
+        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n \n/ad ", output);   // /ad first since later still on 2026-10-15 (the admin-tools plan); /advisor from 2026-10-10, /botchat until then; /about first until 2026-10-03, when it moved to the basic tab
         Assert.Contains(HelpRow("/timer", Entry("/timer").Summary) + new string(' ', SlashCommands.DescriptionWidth + SlashCommands.HelpColumnGap - Entry("/timer").Summary.Length) + "/timer [<duration> [<name>]]", output);
         Assert.Contains("\n" + new string(' ', SlashCommands.LabelWidth + SlashCommands.DescriptionWidth + 2 * SlashCommands.HelpColumnGap) + "/timer stop <name>|all", output);
         AssertPaneEnds(output, rule + "\n" + InfoPane.HintText);   // the pane's keys on the Hints bar (2026-10-14)
@@ -11054,7 +11063,7 @@ public partial class ChatScreenTests : IDisposable
             Key(Keys.Escape),
             input => { input.PushClick(45, 103); input.PushClick(45, 103); },    // 👮 (2026-09-22: the police are on by default): the police page (later that day) (+3 since ⏳, 2026-10-13) (+3 since 📣, 2026-10-14) (+3 since 📱, 2026-10-14)
             Key(Keys.Escape),
-            input => { input.PushClick(126, 103); input.PushClick(126, 103); },  // the blanks: /settings (later on 2026-09-21; nothing before) (+6 since 🪵, 2026-10-15: past the strip's end)
+            input => { input.PushClick(ToolbarBlank(), 103); input.PushClick(ToolbarBlank(), 103); },  // the blanks: /settings (later on 2026-09-21; nothing before) (found, not counted, since 📡 🧩 📅 🏢 later still on 2026-10-15)
             Key(Keys.Escape),
             input =>
             {
@@ -11071,7 +11080,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Core · Files · Apps · Admin · Databases · Devices · Home ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + " │ Servers · Tools · Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + " │ Offered · Reflection · Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n", StringComparison.Ordinal);
@@ -11146,7 +11155,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Core · Files · Apps · Admin · Databases · Devices · Home ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + " │ Servers · Tools · Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + " │ Offered · Reflection · Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n", StringComparison.Ordinal);
@@ -11215,8 +11224,8 @@ public partial class ChatScreenTests : IDisposable
             input => { int y = ToolbarUnderPane(); input.PushClick(0, y); input.PushClick(1, y); },       // ⚙️ under it: Tools closed, Settings opened
             input => { int y = ToolbarUnderPane(); input.PushClick(0, y); input.PushClick(0, y); },       // ⚙️ under the Settings: closed, nothing more
             input => { input.PushClick(12, 103); input.PushClick(12, 103); },                               // 🛠️ at the idle line (the toolbar at 103 there): Tools (+3 since 📱, 2026-10-14)
-            input => { int y = ToolbarUnderPane(); input.PushClick(120, y); input.PushClick(120, y); },   // the blanks under it: Tools closed, Settings opened
-            input => { int y = ToolbarUnderPane(); input.PushClick(120, y); input.PushClick(120, y); },   // the blanks under the Settings: closed
+            input => { int y = ToolbarUnderPane(); input.PushClick(ToolbarBlank(), y); input.PushClick(ToolbarBlank(), y); },   // the blanks under it: Tools closed, Settings opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(ToolbarBlank(), y); input.PushClick(ToolbarBlank(), y); },   // the blanks under the Settings: closed
             Line("/help"),
             input => { int y = ToolbarUnderPane(); input.PushClick(21, y); input.PushClick(21, y); },     // 🎭 under Help: Help closed, the system prompt opened (+3 since 📱, 2026-10-14)
             input => { int y = ToolbarUnderPane(); input.PushClick(12, y); input.PushClick(12, y); },       // 🛠️ under it: Tools (+3 since 📱, 2026-10-14)
@@ -11246,7 +11255,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Admin · Databases · Devices · Home ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -11334,7 +11343,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Admin · Databases · Devices · Home ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -11462,7 +11471,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("⚙️ 🔓", ChatScreen.ToolbarStripFor(Items("cmdlist", "settings"), CommandPolicyMode.Yolo, true));   // strip order, not the list's
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("cmdlist", "police"), CommandPolicyMode.Off, true));
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("path"), CommandPolicyMode.Ask, true));
-        Assert.Equal("⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🎭 💬 📊 📣 ⏳ 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 🪵 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03); 📈 last until it was retired (2026-10-14)
+        Assert.Equal("⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🎭 💬 📊 📣 ⏳ 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 🪵 📡 🧩 📅 🏢 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03); 📈 last until it was retired (2026-10-14)
         Assert.Equal("🐚 🌐", ChatScreen.ToolbarStripFor(Items("web", "shell"), CommandPolicyMode.Off, true));   // the switches always drawn, the shell under off too
         Assert.Equal("🪪 📄", ChatScreen.ToolbarStripFor(Items("log", "profile"), CommandPolicyMode.Ask, true));   // strip order (later on 2026-09-29; the rising chart's pair until 2026-10-14)
     }
@@ -11534,7 +11543,7 @@ public partial class ChatScreenTests : IDisposable
         // 2026-09-29; the ID card and the rising chart later that day; the tool switches, the log and the viewers in the user's
         // order, the rising chart behind the log, 2026-10-03, and behind the viewers later that day.
         const string Panes = "⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🎭 💬 📊";   // 🧮 Themes 2026-10-04; 📱 the Web UI 2026-10-14
-        const string Rest = "🐚 📁 🌄 🌐 🦉 🐳 🪵 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒";   // 📈 last until it was retired (2026-10-14); 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04; 🛒 the shopping list after 📺, 2026-10-11
+        const string Rest = "🐚 📁 🌄 🌐 🦉 🐳 🪵 📡 🧩 📅 🏢 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒";   // 📈 last until it was retired (2026-10-14); 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04; 🛒 the shopping list after 📺, 2026-10-11
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 " + Rest, ChatScreen.ToolbarStrip);   // the disk always drawn since later on 2026-10-03 (the user's ask); 🙋 after it, 2026-10-09; 📣 after the disk since 2026-10-14
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, false));
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🔒 🥷 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, false));   // the ninja while the police is off (2026-10-02, the user's ask)
@@ -11608,7 +11617,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.ToolbarWord(ChatScreen.TtsGlyph));
         Assert.Null(ChatScreen.ToolbarWord(""));
         string[] glyphs = ChatScreen.ToolbarStrip.Split(' ');
-        Assert.Equal(39, glyphs.Length);   // 🪵 2026-10-15 (the event logs); 📱 2026-10-14 (the Web UI); 📈 gone 2026-10-14 (the performance item retired); 📣 later still on 2026-10-13 (the saved prompts); ⭐ later on 2026-10-13 (the saved links); ⏳ 2026-10-13 (the queue); 🛒 2026-10-11 (the shopping list); ✴️ gone later on 2026-10-10 (the Claude Code advisor tool retired); 🦉 2026-10-10 (the advisors); 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04, 🧮 and 🪟 later that day, ⚡ 2026-10-05, 🙋 2026-10-09, 🌄 2026-10-10
+        Assert.Equal(43, glyphs.Length);   // 📡 🧩 📅 🏢 later still on 2026-10-15 (the admin-tools plan); 🪵 2026-10-15 (the event logs); 📱 2026-10-14 (the Web UI); 📈 gone 2026-10-14 (the performance item retired); 📣 later still on 2026-10-13 (the saved prompts); ⭐ later on 2026-10-13 (the saved links); ⏳ 2026-10-13 (the queue); 🛒 2026-10-11 (the shopping list); ✴️ gone later on 2026-10-10 (the Claude Code advisor tool retired); 🦉 2026-10-10 (the advisors); 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04, 🧮 and 🪟 later that day, ⚡ 2026-10-05, 🙋 2026-10-09, 🌄 2026-10-10
         for (int i = 0; i < glyphs.Length; i++)
         {
             Assert.Equal(2, TextCells.Width(glyphs[i]));
@@ -11983,7 +11992,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(advanced, string.IsNullOrWhiteSpace);
         Assert.StartsWith(HelpRow("/about", Entry("/about").Summary), basic[0]);   // advanced[0] until 2026-10-03; a bare command, no forms
         Assert.Contains(basic, l => l.StartsWith(HelpRow("/settings, //", Entry("/settings").Summary), StringComparison.Ordinal));   // sorted by the command, not the label
-        Assert.StartsWith(HelpRow("/advisor", Entry("/advisor").Summary), advanced[0]);   // /advisor first since 2026-10-10, /botchat until then
+        Assert.StartsWith(HelpRow("/ad", Entry("/ad").Summary), advanced[0]);   // /ad first since later still on 2026-10-15 (the admin-tools plan); /advisor from 2026-10-10, /botchat until then
         int botchat = Array.FindIndex(advanced, l => l.StartsWith(HelpRow("/botchat", Entry("/botchat").Summary), StringComparison.Ordinal));
         Assert.EndsWith("/botchat [<profile> ...] [--] [<topic>]", advanced[botchat].TrimEnd());
         int youTube = Array.FindIndex(advanced, l => l.StartsWith(HelpRow("/youtube", Entry("/youtube").Summary), StringComparison.Ordinal));   // the last entry since 2026-10-05, its forms under it
@@ -12215,6 +12224,11 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new CwdAction(CwdActionKind.Browse, ""), ChatScreen.ParseCwdArgs("browse"));     // the picker, 2026-09-21
         Assert.Equal(new CwdAction(CwdActionKind.Browse, ""), ChatScreen.ParseCwdArgs(" Browse "));
         Assert.Equal(new CwdAction(CwdActionKind.Set, "browse2"), ChatScreen.ParseCwdArgs("browse2"));
+        // Explorer's Copy as path (2026-10-15, the user's ask): a pair of quotes around the whole path is dropped.
+        Assert.Equal(new CwdAction(CwdActionKind.Set, @"C:\Users\me\my files\foo"), ChatScreen.ParseCwdArgs(@" ""C:\Users\me\my files\foo"" "));
+        Assert.Equal(new CwdAction(CwdActionKind.Set, @"D:\x"), ChatScreen.ParseCwdArgs(@"'D:\x'"));
+        Assert.Equal(new CwdAction(CwdActionKind.Set, @"""D:\x"), ChatScreen.ParseCwdArgs(@"""D:\x"));   // one quote alone is kept
+        Assert.Equal(new CwdAction(CwdActionKind.Set, @"D:\O'Brien"), ChatScreen.ParseCwdArgs(@"D:\O'Brien"));
         Assert.Equal("~", ChatScreen.CwdHomeWord);
         Assert.Equal("browse", ChatScreen.CwdBrowseWord);
         Assert.Equal(@"📂 Working directory: D:\x  (profile folder)", ChatScreen.CwdNotice(@"D:\x", isDefault: true, null));
@@ -12246,6 +12260,21 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · Working directory (cwd): " + SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory), output);
         Assert.Equal("", _settings.Current.WorkingDirectory);
         Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>A path pasted from Explorer's Copy as path (2026-10-15, the user's ask): saved as if typed bare.</summary>
+    [Fact]
+    public async Task Cwd_QuotedPath_IsSavedAsTheBarePath()
+    {
+        string elsewhere = Path.Combine(_dir, "elsewhere", "quoted folder");
+        PushLine("/cwd \"" + elsewhere + "\"");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · Working directory (cwd): " + elsewhere, output);
+        Assert.True(Directory.Exists(elsewhere));
+        Assert.Equal(elsewhere, _settings.Current.WorkingDirectory);
     }
 
     [Fact]
@@ -13449,8 +13478,8 @@ public partial class ChatScreenTests : IDisposable
                     PushDoubleClick(238, ToolbarUnder(SessionsMenu.Title));            // the path under it: closed, nothing opened
                     break;
                 case 5:
-                    Scripted().PushClick(120, 103);                  // the blanks at the busy row: the settings
-                    Scripted().PushClick(120, 103);
+                    Scripted().PushClick(ToolbarBlank(), 103);                  // the blanks at the busy row: the settings
+                    Scripted().PushClick(ToolbarBlank(), 103);
                     break;
                 case 6:
                     Scripted().Push(Keys.Escape);
@@ -13465,7 +13494,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Admin · Databases · Devices · Home ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
@@ -13525,7 +13554,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Admin · Databases · Devices · Home ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
@@ -25076,7 +25105,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Databases · Devices · Home ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Admin · Databases · Devices · Home ") + "\n";
         Assert.Equal(2, output.Split(settings).Length - 1);   // the blanks' and the gear's
         Assert.True(output.IndexOf(settings, StringComparison.Ordinal) < output.IndexOf(tools, StringComparison.Ordinal), output);
         Assert.DoesNotContain(FolderText.Title + " │ ", output);

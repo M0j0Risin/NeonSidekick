@@ -1135,6 +1135,89 @@ public enum SettingsField
 
     /// <summary>A picker over <see cref="Web.WebSignInMode.Names"/>: how the default browser signs in to the Web UI (<see cref="Settings.AppSettingsData.WebBrowserSignInMode"/>). The Web tab, right under <see cref="WebOpenLinksIn"/> (later on 2026-10-15, the user's ask and name); read at each open. Last in the enum, as every newcomer.</summary>
     WebBrowserSignInMode,
+
+    // ── The admin families (2026-10-15, the admin-tools plan): kept together, NetworkTools first and DirectoryDomainsGlobal last (FieldValue's range) ──
+
+    /// <summary>A toggle: whether a turn offers the network tools (<see cref="Settings.AppSettingsData.NetworkTools"/>). The Network menu on <c>/tools</c> › Core, after Web; read at each turn.</summary>
+    NetworkTools,
+
+    /// <summary>A picker: where the network tools may reach (<see cref="Settings.AppSettingsData.NetworkToolsReach"/>): same-as-web, internet, lan, both.</summary>
+    NetworkToolsReach,
+
+    /// <summary>Typed: the most distinct hosts a turn checks, 1 to 64 (<see cref="Settings.AppSettingsData.NetworkMaxHostsPerTurn"/>).</summary>
+    NetworkMaxHostsPerTurn,
+
+    /// <summary>Typed: the most distinct host:port pairs a turn checks, 1 to 256 (<see cref="Settings.AppSettingsData.NetworkMaxPortsPerTurn"/>).</summary>
+    NetworkMaxPortsPerTurn,
+
+    /// <summary>A list the user types into: the hosts the network tools may check (<see cref="Settings.AppSettingsData.NetworkAllowedHosts"/>).</summary>
+    NetworkAllowedHosts,
+
+    /// <summary>A list the user types into: the hosts the network tools never check (<see cref="Settings.AppSettingsData.NetworkDeniedHosts"/>).</summary>
+    NetworkDeniedHosts,
+
+    /// <summary>A toggle: whether <c>net_certs</c> is offered with the network tools (<see cref="Settings.AppSettingsData.NetworkCertificateStores"/>).</summary>
+    NetworkCertificateStores,
+
+    /// <summary>A toggle: whether a turn offers the services tools (<see cref="Settings.AppSettingsData.ServiceTools"/>). The Services menu on <c>/tools</c> › Admin. Windows only.</summary>
+    ServiceTools,
+
+    /// <summary>A toggle: whether the model may change a service (<see cref="Settings.AppSettingsData.ServiceWrites"/>).</summary>
+    ServiceWrites,
+
+    /// <summary>A checklist: which computers of <c>services.json</c> the services tools and <c>/services</c> may reach, <c>local</c> first.</summary>
+    ServiceComputersOffered,
+
+    /// <summary>An action row: the masked password prompt for a runas computer of <c>services.json</c>.</summary>
+    ServiceSetPassword,
+
+    /// <summary>An action row: the computer wizard over <c>services.json</c>.</summary>
+    ServiceAddComputer,
+
+    /// <summary>An edit row: this profile's <c>services.json</c> in the editor.</summary>
+    ServiceComputersProfile,
+
+    /// <summary>An edit row: the home's <c>services.json</c> in the editor.</summary>
+    ServiceComputersGlobal,
+
+    /// <summary>A toggle: whether a turn offers the task tools (<see cref="Settings.AppSettingsData.TaskTools"/>). The Tasks menu on <c>/tools</c> › Admin. Windows only.</summary>
+    TaskTools,
+
+    /// <summary>A toggle: whether the model may run, end, enable or disable a task (<see cref="Settings.AppSettingsData.TaskWrites"/>).</summary>
+    TaskWrites,
+
+    /// <summary>A checklist: which computers of <c>tasks.json</c> the task tools and <c>/tasks</c> may reach, <c>local</c> first.</summary>
+    TaskComputersOffered,
+
+    /// <summary>An action row: the masked password prompt for a runas computer of <c>tasks.json</c>.</summary>
+    TaskSetPassword,
+
+    /// <summary>An action row: the computer wizard over <c>tasks.json</c>.</summary>
+    TaskAddComputer,
+
+    /// <summary>An edit row: this profile's <c>tasks.json</c> in the editor.</summary>
+    TaskComputersProfile,
+
+    /// <summary>An edit row: the home's <c>tasks.json</c> in the editor.</summary>
+    TaskComputersGlobal,
+
+    /// <summary>A toggle: whether a turn offers the directory tools (<see cref="Settings.AppSettingsData.DirectoryTools"/>). The Directory menu on <c>/tools</c> › Admin. Windows only.</summary>
+    DirectoryTools,
+
+    /// <summary>A checklist: which domains the directory tools and <c>/ad</c> may read, <c>current</c> first on a joined PC.</summary>
+    DirectoryDomainsOffered,
+
+    /// <summary>An action row: the masked password prompt for a runas domain of <c>ad.json</c>.</summary>
+    DirectorySetPassword,
+
+    /// <summary>An action row: the domain wizard over <c>ad.json</c>.</summary>
+    DirectoryAddDomain,
+
+    /// <summary>An edit row: this profile's <c>ad.json</c> in the editor.</summary>
+    DirectoryDomainsProfile,
+
+    /// <summary>An edit row: the home's <c>ad.json</c> in the editor.</summary>
+    DirectoryDomainsGlobal,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1669,6 +1752,11 @@ internal sealed partial class SettingsMenu
         [SettingsField.ShoppingTools, SettingsField.ShoppingList, SettingsField.ShoppingStores],
         [SettingsField.EventLogTools, SettingsField.EventLogComputersOffered, SettingsField.EventLogSetPassword, SettingsField.EventLogAddComputer, SettingsField.EventLogMaxEvents, SettingsField.EventLogScanLimit, SettingsField.EventLogComputersProfile, SettingsField.EventLogComputersGlobal],
         [SettingsField.TimerTools],
+        // The admin families (2026-10-15, the admin-tools plan): Network on Core after Web; Services, Tasks and Directory on Admin after EventLog.
+        [SettingsField.NetworkTools, SettingsField.NetworkToolsReach, SettingsField.NetworkMaxHostsPerTurn, SettingsField.NetworkMaxPortsPerTurn, SettingsField.NetworkAllowedHosts, SettingsField.NetworkDeniedHosts, SettingsField.NetworkCertificateStores],
+        [SettingsField.ServiceTools, SettingsField.ServiceWrites, SettingsField.ServiceComputersOffered, SettingsField.ServiceSetPassword, SettingsField.ServiceAddComputer, SettingsField.ServiceComputersProfile, SettingsField.ServiceComputersGlobal],
+        [SettingsField.TaskTools, SettingsField.TaskWrites, SettingsField.TaskComputersOffered, SettingsField.TaskSetPassword, SettingsField.TaskAddComputer, SettingsField.TaskComputersProfile, SettingsField.TaskComputersGlobal],
+        [SettingsField.DirectoryTools, SettingsField.DirectoryDomainsOffered, SettingsField.DirectorySetPassword, SettingsField.DirectoryAddDomain, SettingsField.DirectoryDomainsProfile, SettingsField.DirectoryDomainsGlobal],
     ];
 
     /// <summary>
@@ -2090,7 +2178,9 @@ internal sealed partial class SettingsMenu
             or SettingsField.ShoppingTools or SettingsField.EventLogTools
             or SettingsField.WebUi or SettingsField.WebUiCommands or SettingsField.WebUiConnectionDetails or SettingsField.WebUiHomeControls or SettingsField.WebUiProfileTheme
             or SettingsField.WebUiChatControls or SettingsField.WebUiShoppingControls
-            or SettingsField.TimerTools or SettingsField.FileDeletesToRecycleBin;
+            or SettingsField.TimerTools or SettingsField.FileDeletesToRecycleBin
+            or SettingsField.NetworkTools or SettingsField.NetworkCertificateStores or SettingsField.ServiceTools or SettingsField.ServiceWrites
+            or SettingsField.TaskTools or SettingsField.TaskWrites or SettingsField.DirectoryTools;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -2370,6 +2460,33 @@ internal sealed partial class SettingsMenu
         SettingsField.ShoppingTools => "Shopping tools",
         SettingsField.TimerTools => "Timer tools",
         SettingsField.FileDeletesToRecycleBin => "File deletes to " + Files.FileText.RecycleBinName,
+        SettingsField.NetworkTools => "Network tools",
+        SettingsField.NetworkToolsReach => "Network tools reach",
+        SettingsField.NetworkMaxHostsPerTurn => "Network tools max hosts per turn",
+        SettingsField.NetworkMaxPortsPerTurn => "Network tools max ports per turn",
+        SettingsField.NetworkAllowedHosts => "Network tools allowed hosts",
+        SettingsField.NetworkDeniedHosts => "Network tools denied hosts",
+        SettingsField.NetworkCertificateStores => "Network certificate stores",
+        SettingsField.ServiceTools => "Service tools",
+        SettingsField.ServiceWrites => "Service writes",
+        SettingsField.ServiceComputersOffered => "Service computers offered",
+        SettingsField.ServiceSetPassword => "Service set password",
+        SettingsField.ServiceAddComputer => "Service add/edit computer",
+        SettingsField.ServiceComputersProfile => "Service computers (profile)",
+        SettingsField.ServiceComputersGlobal => "Service computers (global)",
+        SettingsField.TaskTools => "Task tools",
+        SettingsField.TaskWrites => "Task writes",
+        SettingsField.TaskComputersOffered => "Task computers offered",
+        SettingsField.TaskSetPassword => "Task set password",
+        SettingsField.TaskAddComputer => "Task add/edit computer",
+        SettingsField.TaskComputersProfile => "Task computers (profile)",
+        SettingsField.TaskComputersGlobal => "Task computers (global)",
+        SettingsField.DirectoryTools => "Directory tools",
+        SettingsField.DirectoryDomainsOffered => "Directory domains offered",
+        SettingsField.DirectorySetPassword => "Directory set password",
+        SettingsField.DirectoryAddDomain => "Directory add/edit domain",
+        SettingsField.DirectoryDomainsProfile => "Directory domains (profile)",
+        SettingsField.DirectoryDomainsGlobal => "Directory domains (global)",
         SettingsField.ShoppingStores => "Shopping stores",
         SettingsField.ShoppingList => "Shopping list",
         SettingsField.WebSearchMethod => "Web search method",
@@ -2762,6 +2879,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ShoppingTools => OnOff(data.ShoppingTools),
             SettingsField.TimerTools => OnOff(data.TimerTools),
             SettingsField.FileDeletesToRecycleBin => OnOff(data.FileDeletesToRecycleBin),
+            >= SettingsField.NetworkTools and <= SettingsField.DirectoryDomainsGlobal => AdminFieldValue(field, data, profileDirectory),
             SettingsField.ShoppingStores => NeonSidekick.Shopping.ShoppingText.ManageStoresLabel,
             SettingsField.ShoppingList => NeonSidekick.Shopping.ShoppingText.ManageListLabel,
             SettingsField.WebSearchMethod => data.WebSearchMethod,
@@ -3590,6 +3708,9 @@ internal sealed partial class SettingsMenu
         SettingsField.PostgresTools => (SettingsField.PostgresConnectionsOffered, EditPostgresOfferedAsync),
         SettingsField.UncTools => (SettingsField.UncSharesOffered, EditUncOfferedAsync),
         SettingsField.EventLogTools => (SettingsField.EventLogComputersOffered, EditEventLogOfferedAsync),
+        SettingsField.ServiceTools => (SettingsField.ServiceComputersOffered, token => EditComputersOfferedAsync(Services.ServiceConfigFile.Family, SettingsField.ServiceComputersOffered, d => d.ServiceComputersOffered, (d, next) => d.ServiceComputersOffered = next, token)),
+        SettingsField.TaskTools => (SettingsField.TaskComputersOffered, token => EditComputersOfferedAsync(Tasks.TaskConfigFile.Family, SettingsField.TaskComputersOffered, d => d.TaskComputersOffered, (d, next) => d.TaskComputersOffered = next, token)),
+        SettingsField.DirectoryTools => (SettingsField.DirectoryDomainsOffered, EditDirectoryOfferedAsync),
         _ => null,
     };
 
@@ -3934,6 +4055,8 @@ internal sealed partial class SettingsMenu
         SettingsField.YouTubeSearchMaxResults => data.YouTubeSearchMaxResults.ToString(CultureInfo.InvariantCulture),
         SettingsField.EventLogMaxEvents => data.EventLogMaxEvents.ToString(CultureInfo.InvariantCulture),
         SettingsField.EventLogScanLimit => data.EventLogScanLimit.ToString(CultureInfo.InvariantCulture),
+        SettingsField.NetworkMaxHostsPerTurn => data.NetworkMaxHostsPerTurn.ToString(CultureInfo.InvariantCulture),
+        SettingsField.NetworkMaxPortsPerTurn => data.NetworkMaxPortsPerTurn.ToString(CultureInfo.InvariantCulture),
         SettingsField.WebDownloadMaxMegabytes => data.WebDownloadMaxMegabytes.ToString(CultureInfo.InvariantCulture),
         SettingsField.ToolCollapseCount => data.ToolCollapseCount.ToString(CultureInfo.InvariantCulture),
         SettingsField.CodeCollapseCount => data.CodeCollapseCount.ToString(CultureInfo.InvariantCulture),
@@ -4939,6 +5062,12 @@ internal sealed partial class SettingsMenu
         if (IsToggle(field))
         {
             return await PickToggleAsync(field, saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field is >= SettingsField.NetworkTools and <= SettingsField.DirectoryDomainsGlobal)
+        {
+            // The admin families' rows (2026-10-15, the admin-tools plan): one dispatcher, SettingsMenu.Admin.cs.
+            return await AdminEditAsync(field, saved, page, row, cancellationToken).ConfigureAwait(false);
         }
 
         if (field is SettingsField.TtsVoice or SettingsField.TtsVoice2
@@ -7699,6 +7828,13 @@ internal sealed partial class SettingsMenu
             SettingsField.ShoppingTools => data.ShoppingTools,
             SettingsField.TimerTools => data.TimerTools,
             SettingsField.FileDeletesToRecycleBin => data.FileDeletesToRecycleBin,
+            SettingsField.NetworkTools => data.NetworkTools,
+            SettingsField.NetworkCertificateStores => data.NetworkCertificateStores,
+            SettingsField.ServiceTools => data.ServiceTools,
+            SettingsField.ServiceWrites => data.ServiceWrites,
+            SettingsField.TaskTools => data.TaskTools,
+            SettingsField.TaskWrites => data.TaskWrites,
+            SettingsField.DirectoryTools => data.DirectoryTools,
             SettingsField.AskUser => data.AskUser,
             SettingsField.AgentSkills => data.AgentSkills,
             SettingsField.GlobalSkills => data.GlobalSkills,
@@ -7819,6 +7955,13 @@ internal sealed partial class SettingsMenu
             case SettingsField.ShoppingTools: data.ShoppingTools = on; break;
             case SettingsField.TimerTools: data.TimerTools = on; break;
             case SettingsField.FileDeletesToRecycleBin: data.FileDeletesToRecycleBin = on; break;
+            case SettingsField.NetworkTools: data.NetworkTools = on; break;
+            case SettingsField.NetworkCertificateStores: data.NetworkCertificateStores = on; break;
+            case SettingsField.ServiceTools: data.ServiceTools = on; break;
+            case SettingsField.ServiceWrites: data.ServiceWrites = on; break;
+            case SettingsField.TaskTools: data.TaskTools = on; break;
+            case SettingsField.TaskWrites: data.TaskWrites = on; break;
+            case SettingsField.DirectoryTools: data.DirectoryTools = on; break;
             case SettingsField.AskUser: data.AskUser = on; break;
             case SettingsField.AgentSkills: data.AgentSkills = on; break;
             case SettingsField.GlobalSkills: data.GlobalSkills = on; break;
@@ -7886,6 +8029,13 @@ internal sealed partial class SettingsMenu
         SettingsField.ShoppingTools => on ? "shopping tools enabled" : "shopping tools disabled",
         SettingsField.TimerTools => on ? "timer tools enabled" : "timer tools disabled",
         SettingsField.FileDeletesToRecycleBin => on ? "deleted files go to the " + Files.FileText.RecycleBinName : "delete files directly",
+        SettingsField.NetworkTools => on ? "network tools enabled" : "network tools disabled",
+        SettingsField.NetworkCertificateStores => on ? "net_certs offered with the network tools" : "net_certs not offered",
+        SettingsField.ServiceTools => on ? "service tools enabled" : "service tools disabled",
+        SettingsField.ServiceWrites => on ? "the model may change services each computer allows, asking first" : "services are read-only for the model",
+        SettingsField.TaskTools => on ? "task tools enabled" : "task tools disabled",
+        SettingsField.TaskWrites => on ? "the model may change tasks each computer allows, asking first" : "tasks are read-only for the model",
+        SettingsField.DirectoryTools => on ? "directory tools enabled" : "directory tools disabled",
         SettingsField.FileTreeShowSizes => on ? "/tree carries each file's size" : "/tree lists names only",
         SettingsField.WebTools => on ? "web tools enabled" : "web tools disabled",
         SettingsField.GitLibTools => on ? "gitlib tools enabled" : "gitlib tools disabled",
@@ -9687,6 +9837,20 @@ internal sealed partial class SettingsMenu
         return picked is not null ? TrySaveWorkingDirectory(picked) : Unchanged();
     }
 
+    /// <summary>
+    /// A typed path trimmed, with one pair of quote marks around the whole of it dropped (2026-10-15, the user's ask: Explorer's
+    /// <i>Copy as path</i> puts double quotes around a path, and <c>/cwd "C:\…\foo"</c> was refused until they were trimmed by hand).
+    /// Double or single, matching at both ends; a quote inside the path is kept. Pure.
+    /// </summary>
+    public static string UnquotePath(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string trimmed = text.Trim();
+        return trimmed.Length >= 2 && (trimmed[0] == '"' || trimmed[0] == '\'') && trimmed[^1] == trimmed[0]
+            ? trimmed[1..^1].Trim()
+            : trimmed;
+    }
+
     /// <summary>A working directory the row and <c>/cwd</c> accept: a full (rooted) path, or nothing at all.</summary>
     public static bool IsWorkingDirectoryCandidate(string? text) =>
         text is not null && (text.Trim().Length == 0 || Path.IsPathRooted(text.Trim()));
@@ -9699,7 +9863,7 @@ internal sealed partial class SettingsMenu
     public bool TrySaveWorkingDirectory(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        string trimmed = text.Trim();
+        string trimmed = UnquotePath(text);
         string current = FieldValue(SettingsField.WorkingDirectory, _settings.Current, _settings.ProfileDirectory);
         if (!IsWorkingDirectoryCandidate(trimmed))
         {

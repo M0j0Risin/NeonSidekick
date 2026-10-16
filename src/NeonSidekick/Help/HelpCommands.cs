@@ -27,9 +27,18 @@ public static class HelpCommands
         [
             new("/about", "Show the app's version, runtime, folders, components, the embedded models' Hugging Face pages and the license."),
         ]),
+        new("/ad",
+        [
+            new("/ad <name>", "Look up a name in Active Directory: users, groups and computers whose account name, display name, cn, mail or UPN holds it. The answer opens as a card with **copy** and **ask**. Read-only; it works with *Directory tools* off, reaches only the domains ticked in *Directory domains offered*. Windows only."),
+            new("/ad user <name> [domain:<name>]", "A user's card: enabled, locked and when (with the PDC emulator where Security event 4740 records the source machine, and a **Search 4740** button when that DC is a ticked event-log computer), bad passwords, password expiry, last sign-in, groups (nested), manager, title, department and OU."),
+            new("/ad group <name> [nested] [domain:<name>]", "A group's members, direct or (with `nested`) through member groups."),
+            new("/ad computer <name> [domain:<name>]", "A computer's card: its operating system, whether it is enabled, its last sign-in, OU and description."),
+            new("/ad find locked|password_expiring|disabled|stale_users|stale_computers|name [<days>] [<words>]", "A structured search: locked users, passwords ending within the days (14 by default), disabled users, users or computers not signed in for the days (90 by default; the never-signed-in listed apart), or names holding the words."),
+            new("/ad domain [domain:<name>]", "The domain: its domain controllers, functional levels, password and lockout policy, and the role holders including the PDC emulator."),
+        ]),
         new("/advisor",
         [
-            new("/advisor", "List the advisors from *Advisor list*: each profile, its role, and the kind of server and the model it is on, a missing one marked."),
+        new("/advisor", "List the advisors from *Advisor list*: each profile, its role, and the kind of server and the model it is on, a missing one marked."),
             new("/advisor <name> <question>", "Ask one advisor, named by its profile or a word of its role, on its own profile's server and model, with the last 10 messages of this conversation. It may use this chat's read-only tools, and its answer joins the conversation, so the model can build on it. Works whether or not *Advisors enabled* is on."),
         ]),
         new("/avatar",
@@ -230,9 +239,18 @@ public static class HelpCommands
         [
             new("/msgclear", "Clear this profile's message history, stored and in memory, after a yes."),
         ]),
+        new("/net",
+        [
+            new("/net ping <host> [<count>]", "Ping one host (4 echoes by default, 10 at most): whether it answers, the loss and the round trips. Your own hand: never judged by *Network tools reach*, the host lists or the turn's budget, and it works with *Network tools* off; when the model's call would be refused, a dim line says so."),
+            new("/net trace <host> [names]", "The route to one host, hop by hop (30 at most, about 45 seconds), with each hop's name when `names` is given."),
+            new("/net port <host> <port>...", "Whether TCP ports (16 at most) are open, refused or silent, on each address the host has."),
+            new("/net dns <name> [<type>] [<server>]", "Look a name up: A (the default) and AAAA through this machine's resolver; CNAME, MX, TXT, NS, SOA, PTR, SRV and CAA through the app's own client against this machine's DNS servers, or the server you name."),
+            new("/net tls <host> [<port>] [smtp|imap|pop3|ldap|rdp|none]", "A TLS handshake (port 443 by default): the protocol, the cipher, the certificate's names, issuer, days left and chain problems. Ports 25, 587, 143, 110, 389 and 3389 speak their STARTTLS or RDP preamble first."),
+            new("/net certs [<store>] [user|machine] [<words>]", "One of this machine's certificate stores (`my` by default, then `root`, `ca`, `trustedpeople`, `trustedpublisher`, `authroot`, `disallowed`, `webhosting`), soonest to end first, filtered by the words; nothing exported."),
+        ]),
         new("/new",
         [
-            new("/new", "Start a new conversation without clearing the screen."),
+        new("/new", "Start a new conversation without clearing the screen."),
         ]),
         new("/open",
         [
@@ -351,6 +369,10 @@ public static class HelpCommands
         [
             new("/server [<url>|embedded|claude-code|docker|docker:<container>]", "Pick an LLM server found on the usual ports, or set one by URL (with its `http://` or `https://`). The list also offers the Anthropic and OpenAI APIs (each when enabled with a key), Claude Code (under *Claude Code server enabled*, when it is found), the installed embedded models and the chosen Docker containers (under *Docker servers enabled*). The model and reasoning pickers follow, and one reconnect applies all three. `embedded` lists only the installed embedded models (install one on `/settings` › Servers › Embedded); `claude-code` picks Claude Code; `docker` lists only the chosen containers, and `docker:<container>` switches to one, whose model is the one it serves, so no model picker follows. Ctrl+S runs it too."),
         ]),
+        new("/services",
+        [
+            new("/services [computer:<name>] [state:running|stopped|failed|all] [<words>]", "Show a computer's services on a pane: Running, Stopped, Failed and All as tabs, `r` to read again, `c` for another ticked computer; type to filter. Enter opens a service's page with **copy**, **ask** and, on a computer whose entry says `\"access\": \"readwrite\"`, the actions its `controlActions` allow (start, stop, restart, start type), each asking first. Your own hand: it skips *Service writes* but every other check of the order. Without the pane, and from the Web UI, it lists the services. Windows only."),
+        ]),
         new("/sessions",
         [
             new("/sessions [<id>]", "List the stored sessions on a pane, or restore one by its id (`#12` works too). Ctrl+Alt+E runs it too."),
@@ -405,6 +427,10 @@ public static class HelpCommands
             new("/sys persona [reset]", "Edit `persona.md` (the persona) in your editor, or reset it to the default."),
             new("/sys operata [reset]", "Edit `operata.md` (the operating rules) in your editor, or reset it to the default. A missing file is created with the rules in use now, the sentences for the tools that are on included."),
             new("/sys vocalia [reset]", "Edit `vocalia.md` (the spoken-reply directive, added last to every spoken reply; empty by default) in your editor, or remove it."),
+        ]),
+        new("/tasks",
+        [
+            new("/tasks [computer:<name>] [folder:<path>] [state:ready|running|disabled|all] [microsoft] [<words>]", "Show a computer's scheduled tasks on a pane: Ready, Running, Disabled and All as tabs, `r` to read again, `c` for another computer, `f` for a folder, `w` to show Windows' own under \\Microsoft\\. Enter opens a task's page (its triggers in words, its actions, who it runs as, its last result) with **copy**, **ask**, **history** (its runs on `/eventlog`, when the Task Scheduler's log is on) and the actions its computer allows (run, end, enable, disable), each asking first; privileged tasks are guarded. Windows only."),
         ]),
         new("/terminal",
         [

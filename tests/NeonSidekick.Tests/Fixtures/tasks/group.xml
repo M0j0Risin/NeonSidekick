@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<!-- A task for every member of a group, on unlock, through a COM handler: privileged by its group principal. -->
+<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Refreshes the users' mapped drives.</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <SessionStateChangeTrigger>
+      <Enabled>true</Enabled>
+      <StateChange>SessionUnlock</StateChange>
+    </SessionStateChangeTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Users">
+      <GroupId>S-1-5-32-545</GroupId>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <Enabled>true</Enabled>
+    <Hidden>true</Hidden>
+  </Settings>
+  <Actions Context="Users">
+    <ComHandler>
+      <ClassId>{A6BA00FE-40E8-477C-B713-C64A14F18ADB}</ClassId>
+    </ComHandler>
+  </Actions>
+</Task>

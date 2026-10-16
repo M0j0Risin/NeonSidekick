@@ -268,6 +268,18 @@ public enum SlashCommand
     /// </summary>
     EventLog,
 
+    /// <summary><c>/net ping|trace|port|dns|tls|certs …</c> (2026-10-15, the admin-tools plan): the network checks by the user's own hand (<see cref="Network.NetworkCommand"/>), never judged by the reach, the lists or the budget.</summary>
+    Net,
+
+    /// <summary><c>/services [computer:x] [state:…] [words]</c> (2026-10-15): a computer's services on a pane, start/stop/restart/start type under <c>readwrite</c>. Windows only.</summary>
+    Services,
+
+    /// <summary><c>/tasks [computer:x] [folder:\x] [state:…] [words]</c> (2026-10-15): a computer's scheduled tasks on a pane, run/end/enable/disable under <c>readwrite</c>. Windows only.</summary>
+    Tasks,
+
+    /// <summary><c>/ad &lt;words&gt;</c> or <c>/ad user|group|computer|find|domain …</c> (2026-10-15): the directory, read-only. Windows only.</summary>
+    Ad,
+
     /// <summary>
     /// <c>/camera</c> (2026-10-02, the user's ask: a USB camera's pictures for the model): the bare word opens the shutter pane and
     /// puts the photo on the input line; <c>/camera snap | list | use &lt;n|name&gt; | live | watch [seconds|off] | off</c>
@@ -417,6 +429,10 @@ public static class SlashCommands
             new("/draft", "write the next message in your editor"),
             new("/echo", "print a line as a reply"),
             new(EventLog.EventLogCommand.Word, "read Windows' event logs"),
+            new(Network.NetworkCommand.Word, "check hosts, ports, DNS and certificates"),
+            new("/services", "list, start and stop Windows services"),
+            new("/tasks", "list and run scheduled tasks"),
+            new("/ad", "look up Active Directory accounts"),
             new("/exit", "exit the app"),
             new("/expand", "unfold every item in the transcript"),
             new("/find", "find words in the transcript"),
@@ -564,7 +580,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/eventlog", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -656,6 +672,10 @@ public static class SlashCommands
             "/ha" => SlashCommand.HomeAssistant,
             "/docker" => SlashCommand.Docker,
             "/eventlog" => SlashCommand.EventLog,
+            "/net" => SlashCommand.Net,
+            "/services" => SlashCommand.Services,
+            "/tasks" => SlashCommand.Tasks,
+            "/ad" => SlashCommand.Ad,
             "/camera" => SlashCommand.Camera,
             "/screen" => SlashCommand.Screen,
             "/youtube" => SlashCommand.YouTube,
@@ -711,6 +731,6 @@ public static class SlashCommands
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.Profile or SlashCommand.Prompts or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browse or SlashCommand.Browser or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Cmd or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
-        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind
+        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind
         or SlashCommand.Log or SlashCommand.Process or SlashCommand.Tools or SlashCommand.Settings or SlashCommand.Find or SlashCommand.WebUi;
 }

@@ -71,6 +71,10 @@ public static class PlanTools
         "shopping_recent",
         // the event logs (2026-10-15): every call reads Windows' logs or an .evtx file; nothing changes
         "eventlog_logs", "eventlog_search", "eventlog_summary", "eventlog_event",
+        // the admin families' reads (2026-10-15, the admin-tools plan): the network checks, services, tasks, the directory
+        "net_dns", "net_ping", "net_trace", "net_port", "net_tls", "net_certs",
+        "service_list", "service_info", "task_list", "task_info",
+        "ad_user", "ad_group", "ad_computer", "ad_find", "ad_domain",
     };
 
     /// <summary>The tools plan mode drops because they change something or start something: named, so the classification test can hold every tool to one list.</summary>
@@ -90,6 +94,8 @@ public static class PlanTools
         "print_file",
         "unc_fetch", "unc_write", "unc_patch", "unc_create_directory", "unc_move", "unc_copy", "unc_delete", "unc_put",
         "docker_lifecycle", "docker_pull", "docker_remove", "docker_prune",
+        // the admin families' changes (2026-10-15): a service started, stopped or retyped; a task run, ended, enabled or disabled
+        "service_control", "service_start_type", "task_control",
         // SQLite's changes (2026-10-05, SQLite mode read-write): a database changed or made
         "sqlite_execute",
         // The server families' changes (2026-10-05, each family's mode read-write).

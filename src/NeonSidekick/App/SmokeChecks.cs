@@ -193,6 +193,16 @@ public static partial class SmokeChecks
         results.Add(OperatingSystem.IsWindows() ? ProbeEventLog() : new SmokeCheck("eventlog:wevtapi", true, "skipped: not Windows"));
         results.Add(OperatingSystem.IsWindows() ? ProbeEventLogRpcLogin() : new SmokeCheck("eventlog:rpc-login", true, "skipped: not Windows"));
         results.Add(OperatingSystem.IsWindows() ? ProbeEventLogEvtx() : new SmokeCheck("eventlog:evtx", true, "skipped: not Windows"));
+        // The admin families (2026-10-15, the admin-tools plan): the network checks everywhere, the Windows layers on Windows.
+        results.Add(ProbeIcmp());
+        results.Add(ProbeDns());
+        results.Add(ProbeTls());
+        results.Add(ProbeCertStore());
+        results.Add(OperatingSystem.IsWindows() ? ProbeServices() : new SmokeCheck("services:scm", true, "skipped: not Windows"));
+        results.Add(OperatingSystem.IsWindows() ? ProbeServicesRemote() : new SmokeCheck("services:remote", true, "skipped: not Windows"));
+        results.Add(OperatingSystem.IsWindows() ? ProbeTasks() : new SmokeCheck("tasks:com", true, "skipped: not Windows"));
+        results.Add(OperatingSystem.IsWindows() ? ProbeTasksRemote() : new SmokeCheck("tasks:remote", true, "skipped: not Windows"));
+        results.Add(OperatingSystem.IsWindows() ? ProbeLdap() : new SmokeCheck("ad:wldap32", true, "skipped: not Windows"));
         results.Add(ProbeCulture());
         results.Add(ProbeKokoroVoices(nativeDirectory));
         results.Add(ProbeKokoroPhonemizer());

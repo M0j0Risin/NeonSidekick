@@ -453,11 +453,66 @@ public static class ShellText
         return $"police: {family} ('{token}'{(file is null ? "" : " in " + file)}) — {request.Kind} {Quote(request.Command)}";
     }
 
+    // ── The admin police (2026-10-15, the admin-tools plan) ──────────────────
+
+    /// <summary>
+    /// What changes a service from a shell or a script (<see cref="AdminPolice"/>): <c>sc</c> with a changing verb (a server name allowed before
+    /// it), <c>net start|stop|pause|continue</c>, PowerShell's service cmdlets that change one. Regular expressions, case-blind. Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<string> AdminServiceWords =
+    [
+        @"\bsc(?:\.exe)?\s+(?:\\\\\S+\s+)?(?:config|start|stop|delete|create|failure|failureflag|pause|continue|control|sdset|privs|sidtype)\b",
+        @"\bnet1?(?:\.exe)?\s+(?:start|stop|pause|continue)\s+\S",
+        @"\b(?:Start|Stop|Restart|Set|New|Remove|Suspend|Resume)-Service\b",
+    ];
+
+    /// <summary>What changes a scheduled task: <c>schtasks</c> with <c>/run</c>, <c>/end</c>, <c>/change</c>, <c>/create</c> or <c>/delete</c>; the task cmdlets that change one. Pinned.</summary>
+    public static readonly IReadOnlyList<string> AdminTaskWords =
+    [
+        @"\bschtasks(?:\.exe)?\b[^\r\n;&|]*?\s/(?:run|end|change|create|delete)\b",
+        @"\b(?:Start|Stop|Enable|Disable|Set|Register|Unregister)-ScheduledTask\b",
+    ];
+
+    /// <summary>
+    /// What changes the directory: the ActiveDirectory module's changing cmdlets (<c>Set-AD…</c>, <c>New-AD…</c>, <c>Unlock-ADAccount</c>,
+    /// <c>Add-ADGroupMember</c> …), the ds tools, the LDAP clients that write, an <c>ldifde</c>/<c>csvde</c> import; <c>net user|group … /domain</c>
+    /// with a change is judged in <see cref="AdminPolice"/>. Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<string> AdminDirectoryWords =
+    [
+        @"\b(?:Set|New|Remove|Add|Unlock|Enable|Disable|Move|Rename|Clear|Reset|Grant|Revoke|Install|Uninstall)-AD[A-Za-z]+\b",
+        @"\b(?:dsmod|dsadd|dsrm|dsmove)(?:\.exe)?\b",
+        @"\b(?:ldapmodify|ldapadd|ldapdelete|ldapmodrdn|ldappasswd)\b",
+        @"\b(?:ldifde|csvde)(?:\.exe)?\b[^\r\n;&|]*?\s-i\b",
+    ];
+
+    /// <summary>What a result the admin police refused opens with.</summary>
+    public const string AdminHead = "Error: refused by the shell police — admin";
+
+    /// <summary>What the model is told when the admin police tripped: the family's changes go through its tools alone. Pinned.</summary>
+    public static string AdminPoliced(string family) => family switch
+    {
+        AdminPolice.ServicesFamily => $"{AdminHead}: while the service tools are on, a service is changed only through {Llm.Tools.ServiceControlTool.ToolName} and {Llm.Tools.ServiceStartTypeTool.ToolName}, which ask the user. Do not try another way (sc, net, a cmdlet, a script); reading with sc query or Get-Service is allowed.",
+        AdminPolice.TasksFamily => $"{AdminHead}: while the task tools are on, a scheduled task is changed only through {Llm.Tools.TaskControlTool.ToolName}, which asks the user. Do not try another way (schtasks, a cmdlet, a script); reading with schtasks /query is allowed.",
+        _ => $"{AdminHead}: while the directory tools are on, nothing in Active Directory is changed from here: the ad_ tools read only. Do not try to change it another way; tell the user what change is needed.",
+    };
+
+    /// <summary>The 👮 line the user reads: <c>Services: 'Stop-Service' in fix.ps1 — not run</c>. Pinned.</summary>
+    public static string AdminShown(string family, string token, string? file) =>
+        file is null ? $"{family}: '{token}' — not run" : $"{family}: '{token}' in {file} — not run";
+
+    public static string AdminLogLine(CommandRequest request, string family, string token, string? file)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return $"police: {family} ('{token}'{(file is null ? "" : " in " + file)}) — {request.Kind} {Quote(request.Command)}";
+    }
+
     /// <summary>Whether <paramref name="result"/> is any police's refusal: the transcript draws it behind 👮 rather than 🛠️.</summary>
     public static bool IsPoliced(string result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        return IsOutside(result) || result.StartsWith(ForbiddenHead, StringComparison.Ordinal) || result.StartsWith(SqliteHead, StringComparison.Ordinal) || result.StartsWith(ServerDatabaseHead, StringComparison.Ordinal);
+        return IsOutside(result) || result.StartsWith(ForbiddenHead, StringComparison.Ordinal) || result.StartsWith(SqliteHead, StringComparison.Ordinal) || result.StartsWith(ServerDatabaseHead, StringComparison.Ordinal)
+            || result.StartsWith(AdminHead, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -106,12 +106,12 @@ public sealed class NeonAdvisorTool : AIFunction
     /// <summary>
     /// The tools an advisor may call out of <paramref name="tools"/>: plan mode's read-only ones, less <see cref="Excluded"/>; an event-log
     /// tool swapped for its twin that reads every computer redacted (2026-10-15, the event-log plan: a computer's <c>full</c> detail is the
-    /// main chat's alone). Pure.
+    /// main chat's alone); every tool with a redacted twin since later that day (the admin-tools plan, <see cref="IRedactedTwin"/>). Pure.
     /// </summary>
     public static IReadOnlyList<AIFunction> ReadOnlyOf(IReadOnlyList<AIFunction> tools)
     {
         ArgumentNullException.ThrowIfNull(tools);
-        return tools.Where(t => PlanTools.Allowed(t.Name) && !Excluded.Contains(t.Name)).Select(t => t is EventLogTool eventLog ? eventLog.AsRedacted() : t).ToList();
+        return tools.Where(t => PlanTools.Allowed(t.Name) && !Excluded.Contains(t.Name)).Select(RedactedTwins.Of).ToList();
     }
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

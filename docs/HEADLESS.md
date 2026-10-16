@@ -70,6 +70,9 @@ They need no server unless the row says so.
 | `/skills add <source> [--global\|--profile] [--yes]` | [Installs a skill](SETTINGS.md#installing-skills); without `--yes` it only previews, and several matches print as ids to type back. |
 | `/ha …`, `/docker …` | Drive Home Assistant and Docker directly; *Home Assistant action policy* and *Docker writes* don't apply. |
 | `/eventlog …` | Prints a log's events as lines, newest first, with the [event logs'](TOOLS.md#event-logs) words; full text, the ticked computers only. Windows only. |
+| `/net …` | Runs a [network](TOOLS.md#network) check and prints it; never judged by the reach, the host lists or the budget, with a line saying when the model's call would be refused. |
+| `/services …`, `/tasks …` | Print a computer's [services](TOOLS.md#services) or [scheduled tasks](TOOLS.md#scheduled-tasks) as lines; the ticked computers only. Changes need the pane, so headless has none (the model's `service_control`, `service_start_type` and `task_control` aren't offered either). Windows only. |
+| `/ad …` | Prints a user's, group's or computer's card, a find or the domain from [Active Directory](TOOLS.md#active-directory); the ticked domains only. Windows only. |
 | `/shopping …` | The [shopping list](TOOLS.md#shopping-list); the bare word prints it, and `clear all` and `store remove` act at once. |
 | `/print …`, `/pdf …` | [Print](TOOLS.md#printing) or [make a PDF](TOOLS.md#making-pdfs) of a file, a web page (`/pdf`) or the last reply; *Print action policy* doesn't apply. On a Mac, `/pdf` has only the `browser` engine. `/pdf merge\|extract\|delete\|rotate` [edit PDFs](TOOLS.md#editing-pdfs) here too. |
 | `/test …` | Runs the [benchmark tests](COMMANDS.md#benchmark-tests), a `[notice]` per test. The listing and `history` need no server; a run does. |
@@ -232,6 +235,6 @@ Flags beat variables, and variables beat the profile's saved values. [ENVIRONMEN
 
 ## Flags that don't combine with `--headless`
 
-`--smoke`, `--audio-check`, `--voice-check`, `--sql-check`, `--oracle-check`, `--mysql-check`, `--sqlite-check`, `--postgres-check`, `--unc-check`, `--eventlog-check`, `--docker-check` and `--camera-check` are separate modes; with `--headless`, headless wins and they are ignored. `--help` and `--version` print and exit first.
+`--smoke`, `--audio-check`, `--voice-check`, `--sql-check`, `--oracle-check`, `--mysql-check`, `--sqlite-check`, `--postgres-check`, `--unc-check`, `--eventlog-check`, `--network-check`, `--services-check`, `--tasks-check`, `--ad-check`, `--docker-check` and `--camera-check` are separate modes; with `--headless`, headless wins and they are ignored. `--help` and `--version` print and exit first.
 
 `--mcp-relay`, `--llama-guard` and `--shell-guard` are the app's own internal modes, not for you to run.

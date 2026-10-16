@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using NeonSidekick.Llm.Tools;
 
 namespace NeonSidekick.EventLog;
@@ -21,7 +20,7 @@ namespace NeonSidekick.EventLog;
 /// Applied to every field value and, through the inserts (<see cref="Insert"/>), to the message, so a hidden value never reaches
 /// the model by another road. Best-effort: no rule can know every secret in free text, and the docs say so. Pure.
 /// </summary>
-public static partial class EventLogRedaction
+public static class EventLogRedaction
 {
     /// <summary>What a hidden value reads as.</summary>
     public const string Placeholder = ToolRedaction.Placeholder;
@@ -56,76 +55,6 @@ public static partial class EventLogRedaction
         return index >= 0 && index < fields.Count ? Field(fields[index].Name, value) : Text(value);
     }
 
-    /// <summary><paramref name="text"/> with every secret the free-text rules know hidden.</summary>
-    public static string Text(string text)
-    {
-        ArgumentNullException.ThrowIfNull(text);
-        if (text.Length == 0)
-        {
-            return text;
-        }
-
-        string result = Pem().Replace(text, Placeholder);
-        result = Jwt().Replace(result, Placeholder);
-        result = Authorization().Replace(result, m => m.Groups["head"].Value + Placeholder);
-        result = ToolRedaction.Url(result);
-        result = NetUser().Replace(result, m => m.Groups["head"].Value + Placeholder);
-        result = NetUse().Replace(result, m => m.Groups["head"].Value + Placeholder);
-        result = SchtasksPassword().Replace(result, m => m.Groups["head"].Value + Placeholder);
-        result = SecureString().Replace(result, m => m.Groups["head"].Value + Placeholder);
-        result = PsCredential().Replace(result, m => m.Groups["head"].Value + Placeholder);
-        result = Assignment().Replace(result, m => m.Groups["head"].Value + Placeholder);
-        result = KeyValue().Replace(result, m => m.Groups["head"].Value + Placeholder);
-        result = SlashSwitch().Replace(result, m => m.Groups["head"].Value + Placeholder);
-        result = DashFlag().Replace(result, m => m.Groups["head"].Value + Placeholder);
-        result = DashP().Replace(result, m => m.Groups["head"].Value + Placeholder);
-        result = DashPAttached().Replace(result, m => m.Groups["head"].Value + Placeholder);
-        return result;
-    }
-
-    // A quoted or bare value, the shape every rule below hides.
-    private const string Value = "(?:\"[^\"]*\"|'[^']*'|[^\\s\"';,&]+)";
-
-    [GeneratedRegex(@"-----BEGIN [A-Z0-9 ]+-----[\s\S]*?-----END [A-Z0-9 ]+-----", RegexOptions.CultureInvariant)]
-    private static partial Regex Pem();
-
-    [GeneratedRegex(@"\beyJ[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]+", RegexOptions.CultureInvariant)]
-    private static partial Regex Jwt();
-
-    [GeneratedRegex(@"(?<head>\bAuthorization\s*[:=]\s*(?:Bearer|Basic|Digest|Negotiate|NTLM)\s+)[^\s""',;]+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex Authorization();
-
-    [GeneratedRegex(@"(?<head>\bnet1?(?:\.exe)?\s+user\s+(?:""[^""]+""|[^\s/""]+)\s+)(?!/|\*(?:\s|$))" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex NetUser();
-
-    [GeneratedRegex(@"(?<head>\bnet1?(?:\.exe)?\s+use\b[^\r\n]*?/user:(?:""[^""]+""|\S+)\s+)(?!/|\*(?:\s|$))" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex NetUse();
-
-    [GeneratedRegex(@"(?<head>(?<![\w/])/RP\s+)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex SchtasksPassword();
-
-    [GeneratedRegex(@"(?<head>\bConvertTo-SecureString\s+(?:-String\s+)?)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex SecureString();
-
-    [GeneratedRegex(@"(?<head>PSCredential\s*\(\s*(?:""[^""]*""|'[^']*'|\$[\w:]+)\s*,\s*)[^)]+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex PsCredential();
-
-    [GeneratedRegex(@"(?<head>\$[\w:]*(?:password|passwd|pwd|secret|token|apikey|api_key)[\w]*\s*=\s*)(?:""[^""]*""|'[^']*')", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex Assignment();
-
-    [GeneratedRegex(@"(?<head>(?<![\w\-$/])(?:password|passwd|pwd|pass|secret|client[_\-]?secret|api[_\-]?key|access[_\-]?key|account[_\-]?key|shared[_\-]?access[_\-]?key|sig)\s*[=:]\s*)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex KeyValue();
-
-    [GeneratedRegex(@"(?<head>(?<![\w/])/(?:password|pass|pwd|p):)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex SlashSwitch();
-
-    [GeneratedRegex(@"(?<head>(?<![\w\-])--?(?:password|passwd|pwd|pass|secret|token|api-?key|client-?secret)(?:\s+|=))(?!-)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex DashFlag();
-
-    [GeneratedRegex(@"(?<head>(?<![\w\-])-[pP]\s+)(?!-)" + Value, RegexOptions.CultureInvariant)]
-    private static partial Regex DashP();
-
-    // -pSecret (mysql's): the rest of the word after a lowercase -p, unless it is a plain lowercase word (-path, -print).
-    [GeneratedRegex(@"(?<head>(?<![\w\-])-p)(?![a-z]+(?:\s|$))(?=[^\s\-])[^\s""';,&]+", RegexOptions.CultureInvariant)]
-    private static partial Regex DashPAttached();
+    /// <summary><paramref name="text"/> with every secret the free-text rules know hidden (<see cref="ToolRedaction.Text"/>'s since later on 2026-10-15).</summary>
+    public static string Text(string text) => ToolRedaction.Text(text);
 }

@@ -25,6 +25,10 @@ Options apply to this launch only and are never saved. Both `--option value` and
 | `--postgres-check <connection>` | The same for a connection in `postgres.json`. |
 | `--unc-check <share>` | The same for a share in `unc.json`. On a Mac it mounts the network share and unmounts it on exit. |
 | `--eventlog-check <computer>` | The same for a computer in `eventlog.json`, or `local`: its session and sign-in, its newest System event, and whether its Security log is readable. Windows only. |
+| `--network-check <host>` | Tests the network tools against a host: a DNS lookup, a ping, port 443 and a TLS handshake, and opens a certificate store. Reads only. |
+| `--services-check <computer>` | The same for a computer in `services.json`, or `local`: its services listed under its account and one read whole. Changes nothing. Windows only. |
+| `--tasks-check <computer>` | The same for a computer in `tasks.json`, or `local`: the Task Scheduler connected, the tasks listed and one read. Windows only. |
+| `--ad-check <domain>` | The same for a domain in `ad.json`, or `current`: the bind, the domain's head and policy, and one user read. Windows only. |
 | `--docker-check` | The same for the Docker engine: Docker Desktop's pipe on Windows, the engine's socket on a Mac. |
 | `--camera-check` | Opens the camera, reports brightness and noise, and encodes a test photo (nothing saved; the light comes on briefly), then exits. On a Mac it needs macOS 14 or later and the terminal app's Camera permission. |
 | `--version` | Prints the version and exits. |

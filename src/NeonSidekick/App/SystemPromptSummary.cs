@@ -74,6 +74,7 @@ namespace NeonSidekick.App;
 /// <param name="TimersEnabled">The setting <c>Timer tools</c> (later on 2026-10-15): off, the rules carry no <see cref="Assistant.TimerRule"/>.</param>
 /// <param name="ShoppingTools">How many shopping tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.ShoppingRule"/> while any is.</param>
 /// <param name="GlobalSkills">The profile's <c>Global skills</c> switch as the catalog's last scan read it (2026-10-13, <see cref="SkillCatalog.GlobalEnabled"/>): off, the skills block names no global scope and its status says <see cref="SystemPromptSummary.GlobalOffSuffix"/>.</param>
+/// <param name="Admin">The admin families' sentences the turn would carry (2026-10-15, the admin-tools plan): <see cref="AdminRules"/> as <c>ComposeTurnTools</c> works it out.</param>
 /// <param name="PlanDirective">Plan mode's directive while planning (2026-09-26, <see cref="Plans.PlanText.Directive"/>), else null: its own section, after the skills.</param>
 public sealed record SystemPromptFacts(
     string? Persona,
@@ -143,7 +144,8 @@ public sealed record SystemPromptFacts(
     bool GlobalSkills = true,
     bool EventLogEnabled = false,
     int EventLogTools = 0,
-    bool TimersEnabled = true)
+    bool TimersEnabled = true,
+    AdminRules Admin = AdminRules.None)
 {
     /// <summary>Whether the rules carry <see cref="Assistant.EventLogRule"/>: tools on, the switch on (Windows) and an event-log tool offered (2026-10-15).</summary>
     public bool EventLog => ToolsEnabled && EventLogEnabled && EventLogTools > 0;
@@ -590,7 +592,8 @@ public static class SystemPromptSummary
             advisors: facts.Advisors,
             shopping: facts.Shopping,
             globalSkills: facts.GlobalSkills,
-            eventLog: facts.EventLog);
+            eventLog: facts.EventLog,
+            admin: facts.ToolsEnabled ? facts.Admin : AdminRules.None);
     }
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26): <see cref="PlanModeLabel"/> and <see cref="PlanModeStatus"/> as <see cref="SystemPromptSection.Heading"/> joins them. Pinned.</summary>
@@ -724,7 +727,8 @@ public static class SystemPromptSummary
         IReadOnlyList<AIFunction>? eventLog = null,
         bool eventLogEnabled = true,
         bool eventLogTicked = true,
-        bool timersEnabled = true)
+        bool timersEnabled = true,
+        IReadOnlyList<AdminGroupSpec>? admin = null)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -832,6 +836,14 @@ public static class SystemPromptSummary
             // The event logs (2026-10-15): after the Docker tools; offered while Event log tools is on, on Windows — with nothing ticked, for .evtx files alone.
             string eventLogNote = !eventLogEnabled ? NotOffered(EventLogOffSuffix) : !eventLogTicked && toolsEnabled ? EventLogFilesOnlyNote : standing;
             groups.Add(Group(ToolsText.EventLogTabTitle, eventLog, eventLogNote, eventLogEnabled && toolsEnabled, SettingsField.EventLogTools, disabled));
+        }
+
+        foreach (var spec in admin ?? [])
+        {
+            // The admin families (2026-10-15, the admin-tools plan): network, services, tasks, the directory, after the event logs; each with its own
+            // off reason and, when on, its note (no domain configured) and its tools' notes (a write not offered, net_certs off, no ping here).
+            string note = !spec.Enabled ? NotOffered(spec.OffReason) : spec.OnNote is { } on && toolsEnabled ? on : standing;
+            groups.Add(Group(spec.Title, spec.Tools, note, spec.Enabled && toolsEnabled, spec.Switch, disabled, spec.ToolNotes is null ? null : new Dictionary<string, string>(spec.ToolNotes, StringComparer.Ordinal)));
         }
 
         if (comfy is not null)

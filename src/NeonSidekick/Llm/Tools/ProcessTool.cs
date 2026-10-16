@@ -238,6 +238,15 @@ public sealed class ProcessTool : AIFunction
                     return new ToolShownResult(ShellText.ServerDatabasePoliced(ServerDatabasePolice.FamilyOf(servers, server.Family)), ShellText.ServerDatabaseShown(server.Family, server.Token, null));
                 }
 
+                // The admin police (2026-10-15, the admin-tools plan): a process's stdin that changes a service, a task or the directory.
+                if (effective.ShellPolice && _files.AdminFamilies?.Invoke() is { } admin && AdminPolice.Find(data, admin) is { } changed)
+                {
+                    var refused = new CommandRequest(session.Kind, data, []);
+                    DiagnosticLog.Info(ShellKinds.Category, ShellText.AdminLogLine(refused, changed.Family, changed.Token, null));
+                    _gate?.NoteRefused(refused);
+                    return new ToolShownResult(ShellText.AdminPoliced(changed.Family), ShellText.AdminShown(changed.Family, changed.Token, null));
+                }
+
                 // The police (Shell police, 2026-09-22): what goes to a process's stdin is read like a command line, relative paths from where it started.
                 if (effective.ShellPolice && PathPolice.Judge(data, _files, session.Launch.WorkingDirectory, isScript: false, session.Kind) is { } outside)
                 {

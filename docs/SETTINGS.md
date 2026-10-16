@@ -9,7 +9,7 @@ Inside the app, the highlighted row of any pane explains itself, and the model's
 - [Panes](#panes)
 - [App settings (`/settings`)](#app-settings-settings): [Client](#client) ([Chat](#chat), [Sessions](#sessions), [Botchat](#botchat), [Web UI](#web-ui)) · [Servers](#servers) ([Common](#common), [Http](#http), [Embedded](#embedded), [Docker](#docker), [Anthropic](#anthropic), [OpenAI](#openai)) · [Advisors](#advisors) · [Voice](#voice) ([TTS](#tts), [STT](#stt))
 - [Skills settings (`/skills`)](#skills-settings-skills): Offered, Reflection, Options, and managing skills
-- [Tools settings (`/tools`)](#tools-settings-tools): Offered · [Core](#core) · [Files](#files) · [Apps](#apps) · [Databases](#databases) · [Devices](#devices) · [Home](#home)
+- [Tools settings (`/tools`)](#tools-settings-tools): Offered · [Core](#core) · [Files](#files) · [Apps](#apps) · [Admin](#admin) · [Databases](#databases) · [Devices](#devices) · [Home](#home)
 - [MCP servers (`/mcp`)](#mcp-servers-mcp)
 - [System prompt (`/sys`)](#system-prompt-sys)
 
@@ -453,7 +453,7 @@ Each group's tools and what they do are in [Tools](TOOLS.md); this section cover
 
 ### Offered
 
-Every tool, grouped, with the description the model reads. Enter or Space switches one; a group whose switch is off is dim. The Help group (`neon_help`) has no switch of its own, so turn it off here. In a new profile, `gitlib_delete`, `zip`, `unzip`, `unc_delete`, `docker_remove`, `docker_prune` and `ha_todo` start off.
+Every tool, grouped, with the description the model reads. Enter or Space switches one; a group whose switch is off is dim. The Help group (`neon_help`) has no switch of its own, so turn it off here. In a new profile, `gitlib_delete`, `zip`, `unzip`, `unc_delete`, `docker_remove`, `docker_prune`, `ha_todo` and `service_start_type` start off.
 
 ### Core
 
@@ -484,6 +484,20 @@ The tools most profiles use, and the pane's own options.
 | Web SearXNG URL | The SearXNG instance, for `searxng`. | empty |
 | Web search max results | Hits per search (1–20). | 20 |
 | Web download max (MB) | The largest file `download_file` saves (1–102,400). | 50 |
+
+#### Network
+
+See [Network](TOOLS.md#network).
+
+| Setting | What it does | Default |
+|---|---|---|
+| Network tools | Offers `net_dns`, `net_ping`, `net_trace`, `net_port` and `net_tls`, each on one host, judged by the reach and the host lists and counted against the turn's budget; `net_certs` too with *Network certificate stores*. `/net` works either way. | off |
+| Network tools reach | What a host may resolve to: `same-as-web` follows *Web browser network mode*; `internet`, `lan` or `both` for these tools alone. | `same-as-web` |
+| Network tools max hosts per turn | Distinct hosts (by address) the model's calls may reach in one turn, scripts' and advisors' included (1–64). | 8 |
+| Network tools max ports per turn | Distinct ports `net_port` and `net_tls` may try in one turn (1–256). | 32 |
+| Network tools allowed hosts | When not empty, the only hosts the tools may reach: names, `*.corp.example` wildcards or address blocks (`10.20.0.0/16`). A bad entry is refused as you type it. | empty (anything the reach admits) |
+| Network tools denied hosts | Hosts never reached, in the same forms; wins over the allowed list. | empty |
+| Network certificate stores | Also offers `net_certs`, which lists one of this machine's certificate stores (nothing exported). On a Mac `my` is your login keychain and `root` the system's trust. | off |
 
 #### Shell
 
@@ -608,21 +622,6 @@ The apps and services the tools reach. `/claude`'s settings are on `/settings` �
 | Docker writes | The master key for the model's changes: `docker_lifecycle`, `docker_pull`, `docker_remove` and `docker_prune`. Every call asks first; headless refuses them. | off |
 | Docker engine pipe | The engine's named pipe (`docker_engine` is Docker Desktop's). On a Mac the row is *Docker engine socket*, the engine's Unix socket; empty finds it as the `docker` command does. | `\\.\pipe\docker_engine` (on a Mac, found) |
 
-#### EventLog
-
-Windows only. See [Event logs](TOOLS.md#event-logs).
-
-| Setting | What it does | Default |
-|---|---|---|
-| Event log tools | Offers the read-only event-log tools (`eventlog_logs`, `eventlog_search`, `eventlog_summary`, `eventlog_event`) over the ticked computers and the working directory's `.evtx` files. `/eventlog` works either way. The page's `o` button opens *Event log computers offered*. | off |
-| Event log computers offered | A checklist: `local` (this PC) first, then the computers of both `eventlog.json` files. Untick everything and the tools read `.evtx` files alone. | `local` |
-| Event log set password | Pick a runas computer and type its password, masked; it goes to its store (encrypted in `eventlog.json`, or Windows Credential Manager). | — |
-| Event log add/edit computer | A wizard for a new computer or a saved one; it can test the draft by reading the newest System event. `local` walks only its logs, detail and description. | — |
-| Event log max events | How many events a search lists when the model names no `limit`, and a page of `/eventlog` (1–100). | 20 |
-| Event log scan limit | The most events one search looks at before it stops and says how far back it got (1,000–30,000); a quarter of it on a remote computer. | 20,000 |
-| Event log computers (profile) | Enter opens this profile's `eventlog.json` (made with commented examples when missing). | — |
-| Event log computers (global) | Enter opens the home's `eventlog.json`, which every profile reads; the profile's entry wins on a name clash. | — |
-
 #### ComfyUI
 
 | Setting | What it does | Default |
@@ -652,6 +651,66 @@ Windows only. See [Event logs](TOOLS.md#event-logs).
 | YouTube language | A language code (`en`, `es`) whose results rank higher. Empty for any language. | empty (any language) |
 | YouTube autoplay | Whether a played video starts at once or waits for play. | on |
 | YouTube while speaking | What a playing video does while the app speaks or listens: `pause`, `duck` (to 15 %) or `none`. | `pause` |
+
+### Admin
+
+Windows' own records and machinery. Windows only: on a Mac the rows are there but the tools are never offered. See [Admin](TOOLS.md#admin).
+
+#### EventLog
+
+See [Event logs](TOOLS.md#event-logs).
+
+| Setting | What it does | Default |
+|---|---|---|
+| Event log tools | Offers the read-only event-log tools (`eventlog_logs`, `eventlog_search`, `eventlog_summary`, `eventlog_event`) over the ticked computers and the working directory's `.evtx` files. `/eventlog` works either way. The page's `o` button opens *Event log computers offered*. | off |
+| Event log computers offered | A checklist: `local` (this PC) first, then the computers of both `eventlog.json` files. Untick everything and the tools read `.evtx` files alone. | `local` |
+| Event log set password | Pick a runas computer and type its password, masked; it goes to its store (encrypted in `eventlog.json`, or Windows Credential Manager). | — |
+| Event log add/edit computer | A wizard for a new computer or a saved one; it can test the draft by reading the newest System event. `local` walks only its logs, detail and description. | — |
+| Event log max events | How many events a search lists when the model names no `limit`, and a page of `/eventlog` (1–100). | 20 |
+| Event log scan limit | The most events one search looks at before it stops and says how far back it got (1,000–30,000); a quarter of it on a remote computer. | 20,000 |
+| Event log computers (profile) | Enter opens this profile's `eventlog.json` (made with commented examples when missing). | — |
+| Event log computers (global) | Enter opens the home's `eventlog.json`, which every profile reads; the profile's entry wins on a name clash. | — |
+
+#### Services
+
+See [Services](TOOLS.md#services). The computer rows work like the EventLog tab's, over `services.json`.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Service tools | Offers `service_list` and `service_info`, read-only, over the ticked computers; with *Service writes* also `service_control` and `service_start_type`. `/services` works either way. | off |
+| Service writes | The master key for the model's changes: start, stop, restart and the start type, each call asking first, only on a `readwrite` computer, within its `control` and `controlActions`; never a driver or a protected service. Never headless. `service_start_type` is off in a new profile's Offered tab even then. | off |
+| Service computers offered | A checklist: `local` (this PC) first, then the computers of both `services.json` files. | `local` |
+| Service set password | As *Event log set password*, for runas computers. | — |
+| Service add/edit computer | A wizard for a new or saved computer: host, sign-in, access, the services visible, and under `readwrite` what may be changed, the actions allowed and its own protected list; its test lists the services under its account. | — |
+| Service computers (profile) | Enter opens this profile's `services.json` (made with commented examples when missing). | — |
+| Service computers (global) | Enter opens the home's `services.json`, which every profile reads. | — |
+
+#### Tasks
+
+See [Scheduled tasks](TOOLS.md#scheduled-tasks). The same rows over `tasks.json`.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Task tools | Offers `task_list` and `task_info`, read-only; with *Task writes* also `task_control`. `/tasks` works either way. | off |
+| Task writes | The master key for `task_control` (run, end, enable, disable), each call asking first, only on a `readwrite` computer, within its `control` and `controlActions`; a privileged task's run or end only where the entry says `privileged`. Never headless. | off |
+| Task computers offered | As *Service computers offered*. | `local` |
+| Task set password | As *Event log set password*. | — |
+| Task add/edit computer | The wizard, with the folders visible in place of the services and *Privileged* in place of the protected list; its test connects and lists the tasks. | — |
+| Task computers (profile) | Enter opens this profile's `tasks.json`. | — |
+| Task computers (global) | Enter opens the home's `tasks.json`. | — |
+
+#### Directory
+
+See [Active Directory](TOOLS.md#active-directory). Read-only, always.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Directory tools | Offers `ad_user`, `ad_group`, `ad_computer`, `ad_find` and `ad_domain` over the ticked domains. `/ad` works either way. | off |
+| Directory domains offered | A checklist: `current` (this PC's own domain, when it is joined) first, then the domains of both `ad.json` files. | `current` when joined, else none |
+| Directory set password | As *Event log set password*, for runas domains. | — |
+| Directory add/edit domain | A wizard for a new or saved domain: its name, server, base, LDAPS, sign-in and detail; its test binds, reads the domain's head and finds a user. | — |
+| Directory domains (profile) | Enter opens this profile's `ad.json`. | — |
+| Directory domains (global) | Enter opens the home's `ad.json`. | — |
 
 ### Databases
 

@@ -1485,9 +1485,10 @@ public sealed class AppSettingsData
     /// and <c>docker_prune</c> joined on 2026-10-02 (a removed volume or image is gone; opt-in even under <c>Docker writes</c>, each call
     /// still asking); a profile saved before keeps its list, so there the yes on the pane is their only guard. <c>ha_todo</c> joined on
     /// 2026-10-07 (the user's call: opt-in, flipped on <c>/tools</c>' Offered tab); a profile saved before keeps its list and with it
-    /// <c>ha_todo</c> on.
+    /// <c>ha_todo</c> on. <c>service_start_type</c> joined on 2026-10-15 (the admin-tools plan: a disabled service stays down across reboots;
+    /// opt-in even under <c>Service writes</c>, each call still asking); a profile saved before keeps its list.
     /// </summary>
-    public List<string> ToolsDisabled { get; set; } = [Llm.Tools.GitDeleteTool.ToolName, Llm.Tools.UnzipTool.ToolName, Llm.Tools.ZipTool.ToolName, Llm.Tools.UncDeleteTool.ToolName, Llm.Tools.DockerRemoveTool.ToolName, Llm.Tools.DockerPruneTool.ToolName, Llm.Tools.HaTodoTool.ToolName];
+    public List<string> ToolsDisabled { get; set; } = [Llm.Tools.GitDeleteTool.ToolName, Llm.Tools.UnzipTool.ToolName, Llm.Tools.ZipTool.ToolName, Llm.Tools.UncDeleteTool.ToolName, Llm.Tools.DockerRemoveTool.ToolName, Llm.Tools.DockerPruneTool.ToolName, Llm.Tools.HaTodoTool.ToolName, Llm.Tools.ServiceStartTypeTool.ToolName];
 
     /// <summary>
     /// Whether <c>$</c> and part of a name on the chat line lists the tools the next turn offers
@@ -2325,6 +2326,95 @@ public sealed class AppSettingsData
     /// 20,000 by default; a remote computer gets a quarter of it, and every search 10 seconds at most. No variable.
     /// </summary>
     public int EventLogScanLimit { get; set; } = DefaultEventLogScanLimit;
+
+    // ─── Network checks ─────────────────────────────────────────────────────────
+    // The network tools and /net (2026-10-15, the admin-tools plan: ping, trace, ports, DNS, TLS and the certificate stores, in-process —
+    // no process-start site, no shipped DLL; the Mac too). On /tools › Core's Network menu, after Web.
+
+    /// <summary>
+    /// Whether a turn offers the network tools (2026-10-15): <c>net_dns</c>, <c>net_ping</c>, <c>net_trace</c>, <c>net_port</c> and
+    /// <c>net_tls</c>, read-only, judged by <see cref="NetworkToolsReach"/> and the host lists; <c>net_certs</c> too with
+    /// <see cref="NetworkCertificateStores"/>. Read at each turn. Off by default, as every tool group. No variable. <c>/net</c> works either way.
+    /// </summary>
+    public bool NetworkTools { get; set; }
+
+    /// <summary>
+    /// Where the network tools may reach (2026-10-15, the user's call: their own setting): <c>same-as-web</c> (the default) follows
+    /// <see cref="WebBrowserNetworkMode"/>; <c>internet</c>, <c>lan</c> or <c>both</c> for these tools alone (<see cref="Network.NetworkToolsReach"/>). No variable.
+    /// </summary>
+    public string NetworkToolsReach { get; set; } = Network.NetworkToolsReach.Default;
+
+    public const int MinNetworkMaxHosts = 1;
+    public const int MaxNetworkMaxHosts = 64;
+    public const int DefaultNetworkMaxHosts = 8;
+
+    /// <summary>The most distinct hosts the network tools check in one turn (2026-10-15, the user's call: a scan budget): 1 to 64, 8 by default. No variable.</summary>
+    public int NetworkMaxHostsPerTurn { get; set; } = DefaultNetworkMaxHosts;
+
+    public const int MinNetworkMaxPorts = 1;
+    public const int MaxNetworkMaxPorts = 256;
+    public const int DefaultNetworkMaxPorts = 32;
+
+    /// <summary>The most distinct host:port pairs the network tools check in one turn (2026-10-15): 1 to 256, 32 by default. No variable.</summary>
+    public int NetworkMaxPortsPerTurn { get; set; } = DefaultNetworkMaxPorts;
+
+    /// <summary>
+    /// The hosts the network tools may check (2026-10-15, the user's call): names, globs of whole labels (<c>*.corp.example</c>) and CIDR
+    /// blocks (<c>10.20.0.0/16</c>); empty (the default) is anything the reach admits, any entry makes it only the matches. Checked after the
+    /// reach, on the name and every address; the denied list wins. <c>/profile reset</c> empties it. No variable.
+    /// </summary>
+    public List<string> NetworkAllowedHosts { get; set; } = [];
+
+    /// <summary>The hosts the network tools never check (2026-10-15): the allowed list's forms; a match refuses whatever else allows it. No variable.</summary>
+    public List<string> NetworkDeniedHosts { get; set; } = [];
+
+    /// <summary>
+    /// Whether <c>net_certs</c> is offered with the network tools (2026-10-15, the user's call: its own switch, so the connection checks never
+    /// expose personal certificates' subjects and emails). Off by default. <c>/net certs</c> works either way. No variable.
+    /// </summary>
+    public bool NetworkCertificateStores { get; set; }
+
+    // ─── Windows services ───────────────────────────────────────────────────────
+    // The services tools and /services (2026-10-15, the admin-tools plan: the Service Control Manager in-process over advapi32; Windows only).
+
+    /// <summary>
+    /// Whether a turn offers the services tools (2026-10-15): <c>service_list</c> and <c>service_info</c> over the computers ticked in
+    /// <see cref="ServiceComputersOffered"/>; the write tools too with <see cref="ServiceWrites"/>. Windows only. Off by default. No variable.
+    /// </summary>
+    public bool ServiceTools { get; set; }
+
+    /// <summary>
+    /// Whether the model may change a service (2026-10-15): <c>service_control</c> and <c>service_start_type</c>, offered only with a pane and a
+    /// ticked <c>access: readwrite</c> computer whose <c>controlActions</c> allow it, every call asking first. Off by default. No variable.
+    /// </summary>
+    public bool ServiceWrites { get; set; }
+
+    /// <summary>Which computers the services tools and <c>/services</c> may reach (2026-10-15): null (never set) is <c>local</c> alone, an empty list none. <c>/profile reset</c> returns it to null. No variable.</summary>
+    public List<string>? ServiceComputersOffered { get; set; }
+
+    // ─── Scheduled tasks ────────────────────────────────────────────────────────
+    // The task tools and /tasks (2026-10-15, the admin-tools plan: the Task Scheduler's COM API in-process; Windows only).
+
+    /// <summary>Whether a turn offers the task tools (2026-10-15): <c>task_list</c> and <c>task_info</c>; <c>task_control</c> too with <see cref="TaskWrites"/>. Windows only. Off by default. No variable.</summary>
+    public bool TaskTools { get; set; }
+
+    /// <summary>Whether the model may run, end, enable or disable a task (2026-10-15): <c>task_control</c>, offered as <see cref="ServiceWrites"/> is, every call asking first. Off by default. No variable.</summary>
+    public bool TaskWrites { get; set; }
+
+    /// <summary>Which computers the task tools and <c>/tasks</c> may reach (2026-10-15): null (never set) is <c>local</c> alone, an empty list none. <c>/profile reset</c> returns it to null. No variable.</summary>
+    public List<string>? TaskComputersOffered { get; set; }
+
+    // ─── Active Directory ───────────────────────────────────────────────────────
+    // The directory tools and /ad (2026-10-15, the admin-tools plan: on-premises Active Directory over wldap32, read-only by construction; Windows only).
+
+    /// <summary>Whether a turn offers the directory tools (2026-10-15): <c>ad_user</c>, <c>ad_group</c>, <c>ad_computer</c>, <c>ad_find</c> and <c>ad_domain</c>, read-only. Windows only. Off by default. No variable.</summary>
+    public bool DirectoryTools { get; set; }
+
+    /// <summary>
+    /// Which domains the directory tools and <c>/ad</c> may read (2026-10-15): the names of <c>ad.json</c> and the built-in <c>current</c> on a
+    /// domain-joined PC. Null (never set) is <c>current</c> when joined, else none; an empty list none. <c>/profile reset</c> returns it to null. No variable.
+    /// </summary>
+    public List<string>? DirectoryDomainsOffered { get; set; }
 
     // ─── Docker servers (2026-10-02) ────────────────────────────────────────────
     // Chosen Docker containers as /server choices (the user's ask, after their tray app DockerLlmPicker: their vLLM and SGLang

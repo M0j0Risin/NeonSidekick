@@ -11,6 +11,13 @@ public enum NetworkRefusal
     Internet,
 }
 
+/// <summary>What <see cref="LanPolicy.Admit"/> decided: the addresses to use, none under a refusal.</summary>
+public readonly record struct Admission(IReadOnlyList<IPAddress> Addresses, NetworkRefusal Refusal)
+{
+    /// <summary>Whether the host may be reached.</summary>
+    public bool Admitted => Refusal == NetworkRefusal.None;
+}
+
 /// <summary>Thrown by <see cref="LanPolicy.ConnectAsync"/> for a host the setting <c>Web browser network mode</c> keeps off limits (<c>LanRefusedException</c> until 2026-09-18).</summary>
 public sealed class NetworkRefusedException : HttpRequestException
 {
@@ -136,29 +143,45 @@ public sealed class LanPolicy
     }
 
     /// <summary>
+    /// The one judgement over a host and what it resolved to (2026-10-15, the admin-tools plan: lifted out of <see cref="ConnectAsync"/> so
+    /// <see cref="WebFetcher.PreflightAsync"/> and the network tools ask the same thing): the refusal <paramref name="reach"/> gives, and when
+    /// none the addresses to use — under <c>lan</c> a public name's private addresses alone, otherwise all of them. A host is LAN when its
+    /// spelling is (<see cref="IsPrivateHost"/>) or any address is. Pure.
+    /// </summary>
+    public static Admission Admit(string host, IReadOnlyList<IPAddress> addresses, NetworkReach reach)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(addresses);
+        bool privateName = IsPrivateHost(host);
+        var refusal = Judge(reach, privateName || AnyPrivate(addresses));
+        if (refusal != NetworkRefusal.None)
+        {
+            return new Admission([], refusal);
+        }
+
+        return reach == NetworkReach.LocalAreaNetwork && !privateName
+            ? new Admission(addresses.Where(IsPrivate).ToArray(), NetworkRefusal.None)
+            : new Admission(addresses, NetworkRefusal.None);
+    }
+
+    /// <summary>
     /// The <see cref="SocketsHttpHandler.ConnectCallback"/>: resolve, judge, connect. The judgement
     /// is skipped for a request carrying <see cref="ExemptKey"/> and under <c>both</c>; under
-    /// <c>local_area_network</c> a resolved name is connected to its private addresses alone.
+    /// <c>local_area_network</c> a resolved name is connected to its private addresses alone (<see cref="Admit"/>).
     /// </summary>
     public async ValueTask<Stream> ConnectAsync(SocketsHttpConnectionContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
         string host = context.DnsEndPoint.Host;
-        var addresses = await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
+        var resolved = await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
         bool exempt = context.InitialRequestMessage?.Options.TryGetValue(ExemptKey, out bool value) == true && value;
-        var reach = exempt ? NetworkReach.Both : _reach();
-        bool lan = IsPrivateHost(host) || AnyPrivate(addresses);
-        var refusal = Judge(reach, lan);
-        if (refusal != NetworkRefusal.None)
+        var admission = Admit(host, resolved, exempt ? NetworkReach.Both : _reach());
+        if (admission.Refusal != NetworkRefusal.None)
         {
-            throw new NetworkRefusedException(host, refusal);
+            throw new NetworkRefusedException(host, admission.Refusal);
         }
 
-        if (reach == NetworkReach.LocalAreaNetwork && !IsPrivateHost(host))
-        {
-            addresses = addresses.Where(IsPrivate).ToArray();
-        }
-
+        var addresses = admission.Addresses as IPAddress[] ?? admission.Addresses.ToArray();
         var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
         try
         {

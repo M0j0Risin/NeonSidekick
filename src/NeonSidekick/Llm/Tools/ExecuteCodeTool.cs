@@ -242,6 +242,14 @@ public sealed class ExecuteCodeTool : AIFunction
             return new ToolShownResult(ShellText.ServerDatabasePoliced(ServerDatabasePolice.FamilyOf(servers, server.Family)), ShellText.ServerDatabaseShown(server.Family, server.Token, null));
         }
 
+        // The admin police (2026-10-15, the admin-tools plan): a script that changes a service, a task or the directory while their tools are on.
+        if (effective.ShellPolice && _files.AdminFamilies?.Invoke() is { } admin && AdminPolice.Find(code, admin) is { } changed)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.AdminLogLine(request, changed.Family, changed.Token, null));
+            _gate.NoteRefused(request);
+            return new ToolShownResult(ShellText.AdminPoliced(changed.Family), ShellText.AdminShown(changed.Family, changed.Token, null));
+        }
+
         // The police before the gate (Shell police, 2026-09-22): a script naming a path outside the working directory is refused, and the pane is never asked about it.
         if (effective.ShellPolice && PathPolice.Judge(code, _files, workingDirectory, isScript: true) is { } outside)
         {
@@ -345,7 +353,8 @@ public sealed class ExecuteCodeTool : AIFunction
         }
 
         // The event-log tools read every computer redacted for a script (2026-10-15, the event-log plan): the main chat reads full by calling them itself.
-        var offered = _tools().Where(t => !Excluded.Contains(t.Name)).Select(t => t is EventLogTool eventLog ? eventLog.AsRedacted() : t).ToList();
+        // Every tool with a redacted twin since later that day (the admin-tools plan, IRedactedTwin): services, tasks and the directory too.
+        var offered = _tools().Where(t => !Excluded.Contains(t.Name)).Select(RedactedTwins.Of).ToList();
         if (!offered.Any(t => string.Equals(t.Name, tool, StringComparison.Ordinal)))
         {
             return ShellText.UnknownTool(tool);

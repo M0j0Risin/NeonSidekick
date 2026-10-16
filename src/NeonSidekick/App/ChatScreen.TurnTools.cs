@@ -81,6 +81,22 @@ internal sealed record TurnToolInputs
     /// <summary>The event-log tools (2026-10-15): offered while <see cref="EventLogEnabled"/> (<c>Event log tools</c>, Windows).</summary>
     public IReadOnlyList<AIFunction>? EventLog { get; init; }
     public bool EventLogEnabled { get; init; }
+
+    /// <summary>The network tools (2026-10-15, the admin-tools plan): offered while <see cref="NetworkEnabled"/> (<c>Network tools</c>); <c>net_certs</c> cut by the caller unless <c>Network certificate stores</c> is on.</summary>
+    public IReadOnlyList<AIFunction>? Network { get; init; }
+    public bool NetworkEnabled { get; init; }
+
+    /// <summary>The services tools (2026-10-15): offered while <see cref="ServicesEnabled"/> (<c>Service tools</c>, Windows); the changes cut by the caller (<c>ChatScreen.ServiceToolsFor</c>).</summary>
+    public IReadOnlyList<AIFunction>? Services { get; init; }
+    public bool ServicesEnabled { get; init; }
+
+    /// <summary>The task tools (2026-10-15): offered while <see cref="TasksEnabled"/> (<c>Task tools</c>, Windows); <c>task_control</c> cut by the caller.</summary>
+    public IReadOnlyList<AIFunction>? Tasks { get; init; }
+    public bool TasksEnabled { get; init; }
+
+    /// <summary>The directory tools (2026-10-15): offered while <see cref="DirectoryEnabled"/> (<c>Directory tools</c>, Windows, a domain ticked).</summary>
+    public IReadOnlyList<AIFunction>? Directory { get; init; }
+    public bool DirectoryEnabled { get; init; }
     public IReadOnlySet<string>? Disabled { get; init; }
     public PlanTurn? Plan { get; init; }
     public bool PlanReadOnly { get; init; }
@@ -129,6 +145,10 @@ internal sealed partial class ChatScreen
         var uncTools = inputs.Unc;
         var dockerTools = inputs.Docker;
         var eventLogTools = inputs.EventLog;
+        var networkTools = inputs.Network;
+        var serviceTools = inputs.Services;
+        var taskTools = inputs.Tasks;
+        var directoryTools = inputs.Directory;
         var comfyTools = inputs.Comfy;
         var homeTools = inputs.Home;
         var printTools = inputs.Print;
@@ -150,13 +170,13 @@ internal sealed partial class ChatScreen
         {
             // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
             // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
-            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, eventLogTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
+            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, eventLogTools, networkTools, serviceTools, taskTools, directoryTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
         }
 
         if (inputs.OnlyTools is { } only)
         {
             // Botchat limited tools (2026-10-04): every name not on the list joins the disabled set, the same way.
-            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, eventLogTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
+            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, eventLogTools, networkTools, serviceTools, taskTools, directoryTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
         }
 
         if (disabledTools is { Count: > 0 })
@@ -177,6 +197,10 @@ internal sealed partial class ChatScreen
             uncTools = uncTools is null ? null : Without(uncTools, disabledTools);
             dockerTools = dockerTools is null ? null : Without(dockerTools, disabledTools);
             eventLogTools = eventLogTools is null ? null : Without(eventLogTools, disabledTools);
+            networkTools = networkTools is null ? null : Without(networkTools, disabledTools);
+            serviceTools = serviceTools is null ? null : Without(serviceTools, disabledTools);
+            taskTools = taskTools is null ? null : Without(taskTools, disabledTools);
+            directoryTools = directoryTools is null ? null : Without(directoryTools, disabledTools);
             comfyTools = comfyTools is null ? null : Without(comfyTools, disabledTools);
             homeTools = homeTools is null ? null : Without(homeTools, disabledTools);
             printTools = printTools is null ? null : Without(printTools, disabledTools);
@@ -254,6 +278,33 @@ internal sealed partial class ChatScreen
         // The event-log tools after the Docker tools (2026-10-15): Event log tools on (Windows) is the group's switch; their sentence after the Docker ones.
         bool eventLog = inputs.EventLogEnabled && eventLogTools is { Count: > 0 };
         tools = eventLog ? [.. tools, .. eventLogTools!] : tools;
+        // The admin families after the event logs (2026-10-15, the admin-tools plan): network, services, tasks, the directory, each its switch;
+        // their sentences ride as one AdminRules value (the write sentences while a change tool is left, the certificate one with net_certs).
+        var admin = AdminRules.None;
+        if (inputs.NetworkEnabled && networkTools is { Count: > 0 })
+        {
+            tools = [.. tools, .. networkTools];
+            admin |= AdminRules.Network | (networkTools.Any(t => t is NetCertsTool) ? AdminRules.NetworkCerts : AdminRules.None);
+        }
+
+        if (inputs.ServicesEnabled && serviceTools is { Count: > 0 })
+        {
+            tools = [.. tools, .. serviceTools];
+            admin |= AdminRules.Services | (serviceTools.Any(t => t is ServiceControlTool or ServiceStartTypeTool) ? AdminRules.ServiceWrites : AdminRules.None);
+        }
+
+        if (inputs.TasksEnabled && taskTools is { Count: > 0 })
+        {
+            tools = [.. tools, .. taskTools];
+            admin |= AdminRules.Tasks | (taskTools.Any(t => t is TaskControlTool) ? AdminRules.TaskWrites : AdminRules.None);
+        }
+
+        if (inputs.DirectoryEnabled && directoryTools is { Count: > 0 })
+        {
+            tools = [.. tools, .. directoryTools];
+            admin |= AdminRules.Directory;
+        }
+
         // The image tools after the SQL tools (2026-09-24): ComfyUI tools, a URL and a workflow are the group's switch; no rule — the description carries the workflows and the prompt styles.
         bool comfy = inputs.ComfyEnabled && comfyTools is { Count: > 0 };
         tools = comfy ? [.. tools, .. comfyTools!] : tools;
@@ -302,7 +353,7 @@ internal sealed partial class ChatScreen
         tools = ask is not null ? [.. tools, .. askTools!] : tools;
         // … and the rules say so after the shell sentence, naming the groups offered.
         bool native = shell && inputs.ShellNative;
-        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, ServerWritesOf(tools), images, advisors, shopping, eventLog);
+        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, ServerWritesOf(tools), images, advisors, shopping, eventLog, admin);
         return new TurnToolSet(
             tools,
             offered,

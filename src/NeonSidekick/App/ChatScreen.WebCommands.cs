@@ -371,7 +371,11 @@ internal sealed partial class ChatScreen
             Docker: argText => Docker.DockerCommand.Complete(docker, argText),
             Advisors: () => advisors,
             Shopping: argText => Shopping.ShoppingCommand.Complete(argText, stores, items),
-            EventLog: EventLogChoices);
+            EventLog: EventLogChoices,
+            Net: NetChoices,
+            Services: ServiceChoices,
+            Tasks: TaskChoices,
+            Ad: AdChoices);
         var sources = new CompletionSources(
             () => commands,
             (command, argText) => ArgumentPaths(command, argText, arguments) is { } paths

@@ -64,7 +64,7 @@ public partial class ChatScreenTests
     {
         // Alphabetical since 2026-10-04 (the user's ask; between the timers and the files, where the turn offers it, until then).
         _settings.Update(d => d.TtsOutput = false);
-        _console.Profile.Height = 200;
+        _console.Profile.Height = 260;   // 200 until the admin groups (later still on 2026-10-15) pushed Timers past the pane's foot
         _geometry = new ScreenGeometry(() => null);
         PushLine("/tools");
         _console.Input.PushKey(Keys.Escape);

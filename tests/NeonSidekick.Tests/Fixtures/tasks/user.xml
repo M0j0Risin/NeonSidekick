@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<!-- A plain user's task: every 2 days at 06:00 repeating every 15 minutes for 2 hours, a monthly trigger switched off. Not privileged. -->
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Author>CORP\ops</Author>
+    <Description>Pulls the reports.</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <CalendarTrigger>
+      <Repetition>
+        <Interval>PT15M</Interval>
+        <Duration>PT2H</Duration>
+      </Repetition>
+      <StartBoundary>2026-04-01T06:00:00</StartBoundary>
+      <ScheduleByDay>
+        <DaysInterval>2</DaysInterval>
+      </ScheduleByDay>
+    </CalendarTrigger>
+    <CalendarTrigger>
+      <StartBoundary>2026-04-01T07:00:00</StartBoundary>
+      <Enabled>false</Enabled>
+      <ScheduleByMonth>
+        <DaysOfMonth>
+          <Day>1</Day>
+          <Day>15</Day>
+        </DaysOfMonth>
+        <Months>
+          <January />
+          <July />
+        </Months>
+      </ScheduleByMonth>
+    </CalendarTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>CORP\ops</UserId>
+      <LogonType>Password</LogonType>
+    </Principal>
+  </Principals>
+  <Settings>
+    <Enabled>false</Enabled>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\reports\pull.cmd</Command>
+    </Exec>
+  </Actions>
+</Task>

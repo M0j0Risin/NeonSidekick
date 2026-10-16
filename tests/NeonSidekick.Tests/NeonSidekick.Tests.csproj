@@ -63,6 +63,9 @@
          video, a live broadcast, HTML-escaped titles and a channel hit to skip; the videos.list details (a length, P0D for the
          broadcast, a hidden view count); quotaExceeded, an invalid key, the API not enabled, a referrer-restricted key. -->
     <None Include="Fixtures\youtube\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Scheduled tasks' definitions (2026-10-15, the admin-tools plan): IRegisteredTask::get_Xml's shape, one per principal the privileged
+         guard reads — SYSTEM by its SID, a user with highest privileges, a group, a plain user — with the triggers TaskWords puts in words. -->
+    <None Include="Fixtures\tasks\*.xml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

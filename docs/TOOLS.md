@@ -8,9 +8,10 @@ Each group has a switch (*File tools*, *Web tools*…), and the Offered tab of `
 
 - [Where tools are offered](#where-tools-are-offered)
 - [Always offered](#always-offered): [Clock](#clock), [Help](#help)
-- [Core](#core): [Ask](#ask), [Web](#web), [Shell](#shell), [Timers](#timers)
+- [Core](#core): [Ask](#ask), [Web](#web), [Network](#network), [Shell](#shell), [Timers](#timers)
 - [Files](#files): [File](#file), [Image](#image), [UNC shares and outside folders](#unc-shares-and-outside-folders), [GitLib](#gitlib), [Obsidian](#obsidian)
-- [Apps](#apps): [Docker](#docker), [Event logs](#event-logs), [ComfyUI](#comfyui), [YouTube](#youtube)
+- [Apps](#apps): [Docker](#docker), [ComfyUI](#comfyui), [YouTube](#youtube)
+- [Admin](#admin): [Event logs](#event-logs), [Services](#services), [Scheduled tasks](#scheduled-tasks), [Active Directory](#active-directory)
 - [Databases](#databases): [How the database tools work](#how-the-database-tools-work), [SQL Server](#sql-server), [MySQL and MariaDB](#mysql-and-mariadb), [SQLite](#sqlite), [PostgreSQL](#postgresql), [Oracle](#oracle)
 - [Devices](#devices): [Printing](#printing), [Camera](#camera), [Screen](#screen)
 - [Home](#home): [Home Assistant](#home-assistant), [Shopping list](#shopping-list)
@@ -21,9 +22,9 @@ Each group has a switch (*File tools*, *Web tools*…), and the Offered tab of `
 
 * **A group appears only when it can work:** Obsidian needs a vault, the databases and UNC a connection or share you ticked, Home Assistant its URL and key, ComfyUI its URL and a workflow.
 * **Headless** ([HEADLESS.md](HEADLESS.md)) has no timers, `ask_user`, camera or screen tools, Browser window or `_execute` database tools, and YouTube can't play.
-* **Headless, what would ask you on a pane is refused:** a shell command off the allow list under `ask`, a Docker change, a print under `ask`, a Home Assistant service that needs your yes, clearing the whole shopping list, an advisor under *Advisor confirm*.
+* **Headless, what would ask you on a pane is refused:** a shell command off the allow list under `ask`, a Docker change, a service or task change (never offered there), a print under `ask`, a Home Assistant service that needs your yes, clearing the whole shopping list, an advisor under *Advisor confirm*.
 * **Plan mode** ([COMMANDS.md](COMMANDS.md#plan-mode)) keeps each group's reading tools plus `ask_user`, `camera_capture`, the screen tools and `neon_advisor`, and adds `present_plan`. It drops every tool that changes or starts something (`start_timer`, `open`, `open_url`, `process`, `image_edit`, `unc_fetch`…) and every MCP tool.
-* **On a Mac** the Browser window, Docker servers and the event logs are Windows only, and the camera and screen tools and YouTube playback need macOS 14 or later. Other differences are in each section and [MAC.md](MAC.md#what-works).
+* **On a Mac** the Browser window, Docker servers, the event logs, services, scheduled tasks and Active Directory are Windows only, and the camera and screen tools and YouTube playback need macOS 14 or later. Other differences are in each section and [MAC.md](MAC.md#what-works).
 
 ## Always offered
 
@@ -78,6 +79,27 @@ The app's own browser (Windows only), where you solve a bot check the web tools 
 * **Solving:** the window comes to the front; ESC or *Give up* on the pane, or closing the window, gives up, and so does 5 minutes. Once the page loads with no check showing, the window closes and the tool goes on with that page.
 * **Cookies:** the window's cookies for the site go to the web tools for this run, so the next fetch usually needs no window. A site that ties its clearance to the browser's connection may still refuse a download.
 * The window's bar, keys, history and saved links: [The Browser window](INTERFACE.md#the-browser-window).
+
+### Network
+
+Under *Network tools*. Small checks on one host at a time, for "is it up, what does it resolve to, is the port open, when does its certificate end": the app's own clients, nothing started (no `ping.exe`, `nslookup` or `openssl`). `/net` is your own hand on them ([COMMANDS.md](COMMANDS.md)) and works with the tools off.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `net_dns` | `name, type?, server?` | A name's records. A (the default) and AAAA through this machine's resolver; CNAME, MX, TXT, NS, SOA, PTR, SRV and CAA through the app's own DNS client against this machine's DNS servers, or the `server` named (which counts as a host). |
+| `net_ping` | `host, count?` | Echoes (4 by default, 10 at most): answered or not, the loss and the round trips. |
+| `net_trace` | `host, max_hops?, names?` | The route, hop by hop (30 at most, about 45 seconds); `names` looks each hop's name up. |
+| `net_port` | `host, ports` | Whether TCP ports (16 at most) are open, refused or silent, on every address the host has. |
+| `net_tls` | `host, port?, server_name?, starttls?` | A TLS handshake (port 443 by default): the protocol, the cipher, the certificate's names, issuer and days left, and what is wrong with its chain. Ports 25, 587, 143, 110, 389 and 3389 speak their STARTTLS or RDP preamble first. |
+| `net_certs` | `store?, location?, filter?, expiring_within_days?, limit?` | One of this machine's certificate stores, soonest to end first; nothing exported. Only with *Network certificate stores* on. |
+
+* **One host per call:** a name or an address. A range, a block, a list, a URL or `host:port` is refused, and so is an address spelled the old short way (`10.1`, a bare number).
+* **Reach:** *Network tools reach* decides what a host may resolve to: `same-as-web` (the default) follows *Web browser network mode*; `internet`, `lan` or `both` set it for these tools alone. Every address a name resolves to is judged, and under `lan` only the private ones are used.
+* **Host lists:** *Network tools denied hosts* always wins; *Network tools allowed hosts*, when not empty, is the only place the tools may go. An entry is a name (`fs01.corp.example`), a wildcard (`*.corp.example`) or an address block (`10.20.0.0/16`, `fd00::/8`).
+* **A budget per turn:** *Network tools max hosts per turn* (8) and *Network tools max ports per turn* (32), counted by address, so two names for one machine count once. Scripts and advisors spend the main chat's budget; bots have their own. The answer says when a budget runs out, and the model is told once a turn how much is left.
+* **TLS checks never fetch:** no certificate is downloaded and no revocation list is asked for, so the chain is judged from what the server sent and this machine already trusts. No credential is ever sent.
+* **What a server wrote is untrusted:** TXT records, certificate names, a banner. Each is fenced as quoted data (`⟪ ⟫`), and an answer is held to 16,000 characters.
+* **On a Mac** ping uses an unprivileged ICMP socket; a trace there is not proven yet ([MAC.md](MAC.md)). `net_certs`' `my` is your login keychain and `root` the system's trust; the other stores are not kept there.
 
 ### Shell
 
@@ -324,60 +346,6 @@ The same tools work over the engine's socket (Docker Desktop, OrbStack, Colima o
 * A `tcp://` or `ssh://` engine is refused. `docker_stats` shows the Linux VM's CPU and memory, not the Mac's.
 * **Docker servers stay Windows only:** Docker on a Mac passes no GPU to containers. A Mac's local server is the [embedded model](SETTINGS.md#embedded).
 
-### Event logs
-
-Under *Event log tools*. **Windows only.** They read what Windows itself recorded (a crash, a failed service start, a driver error, a failed sign-in, a PowerShell script block) from this PC, from `.evtx` files in the working directory, and from remote computers you name. Everything is read-only, through Windows' own event log API in the app: nothing is started, no `wevtutil`. `/eventlog` is your own hand on them ([COMMANDS.md](COMMANDS.md)) and works with the tools off.
-
-| Tool | Arguments | What it does |
-|---|---|---|
-| `eventlog_logs` | `filter?, all?, computer?` | The computers offered, a computer's logs with records, size and last write (200 looked into on this PC, 40 on a remote one; `all` adds the empty, disabled, Analytic and Debug ones), and the `.evtx` files in the working directory. |
-| `eventlog_search` | `log, level?, id?, provider?, field?, since?, until?, audit?, text?, before_record?, limit?, computer?` | A log's events newest first, a line each; the answer ends with the next page as the whole call to make. |
-| `eventlog_summary` | `log, since?, level?, computer?` | Counts by provider and id since a time (a day by default), the top 30, each with its newest time and a sample message. |
-| `eventlog_event` | `log, record, computer?` | One event in full: system values, message, named fields, and (under `full`) its XML. At most 32,000 characters. |
-
-* **The log** is a name `eventlog_logs` lists (`app`, `sys`, `sec`, `setup` and `ps` for PowerShell/Operational), or an `.evtx` path in the working directory (never with `computer`).
-* **Default view:** with no `level` or `audit`, Security shows its audit failures and every other log its critical events, errors and warnings.
-* **Filters** go into Windows' own query: `level` (`critical,error,warning,information,verbose` or `all`), `id` (`41,1074` or `4700-4799`), `provider`, `since`/`until` (an age such as `2h`, or a moment in your time zone), `audit`, and `field` (`Name=value`, EventData's named values; `UserData` values are reached by `text`). At most 20 terms; `text` is matched in the app, over the provider, the fields and the message.
-* **Limits:** *Event log max events* per page (100 at most); *Event log scan limit* events looked at per call (a quarter of it on a remote computer) and 10 seconds, after which the answer says how far back it got. A read gives up after 30 s (60 s remote).
-* **Security** needs the Event Log Readers group, or the app run as administrator. Analytic and Debug logs read oldest-first only and can't be searched.
-
-#### Event log computers
-
-Computers live in `eventlog.json`, in the home or profile folder like the [database connections](#managing-connections) (the profile's wins by name). `local` is this PC, built in. A computer is read only once ticked in *Event log computers offered*, for the model and `/eventlog` alike; until you change it, `local` alone is ticked. *Event log add/edit computer* walks through one and tests it (the newest System event under its account); *Event log set password* changes a runas password.
-
-* **`host`** (required): the computer's name or address (`localhost` is a loopback session).
-* **`auth`**: `windows` (default, as you) or `runas`, with **`user`** (`DOMAIN\name` or `name@domain`; `lab-box\admin` for the machine's own account) and **`passwordStore`** `file` or `credman` (`NeonSidekick/eventlog/<name>`). **`authMethod`**: `default`, `negotiate`, `kerberos` or `ntlm`.
-* **`logs`**: the logs allowed, case ignored, `*` any run but `/` (`Microsoft-Windows-*/Operational`, `*/*` every slashed name). Absent: all.
-* **`detail`**: `redacted` (default) or `full`, what the main chat's model reads (see below).
-* **`description`**: what the computer is; the model reads it to choose.
-* An entry named `local` may set only `logs`, `detail` and `description`.
-
-```json
-{
-  "computers": {
-    "local": { "logs": ["Application", "System", "Setup", "Microsoft-Windows-*/Operational"] },
-    "fs01": { "host": "fs01.corp.example", "description": "file server", "detail": "full" },
-    "dc01": {
-      "host": "dc01",
-      "auth": "runas",
-      "user": "CORP\\svc-logreader",
-      "passwordStore": "credman",
-      "logs": ["Security", "System", "Directory Service"]
-    }
-  }
-}
-```
-
-**A remote computer needs:** the "Remote Event Log Management" firewall rule on, and the account in its Event Log Readers group. A local administrator's network sign-in is filtered by UAC, so membership is the dependable way. `--eventlog-check <computer>` tests one.
-
-#### Who sees what
-
-* **`redacted`** hides secret-looking values: fields named like a password, secret, API key, private key or connection string, and in free text URL passwords, `password=…`, `-Password x`, `/pass:x`, `-p x`, `net user u <pw>`, `net use … /user:u <pw>`, `schtasks /RP`, `ConvertTo-SecureString '…' -AsPlainText`, `PSCredential`, `$password = '…'`, `Authorization:` headers, JWTs and PEM blocks. The message is formatted from the hidden values, so a secret doesn't slip in that way, and `text` and `field` match the hidden values only. **It is best-effort:** no rule knows every secret in free text.
-* **`full`** is the main chat's alone. Bots, advisors and a script's `execute_code` bridge always read redacted, and an advisor's recent lines name an event-log call, never its result.
-* **A `.evtx` file** takes `local`'s detail and no `logs` applies to it: a log exported from a `redacted` computer and read as a file is read under `local`'s detail.
-* **Out of any rule's reach:** what the main model quotes, and saved sessions, which keep what the main chat saw. Set `full` only for computers whose events you are content to have anywhere the conversation goes.
-* **Event text is untrusted:** any program or user can write an event. Each message and value is fenced as quoted data (`⟪ ⟫`), the model is told it is never an instruction, and an event whose source isn't registered says "source not registered: any program could have written this". Control characters are replaced.
-
 ### ComfyUI
 
 Under *ComfyUI tools*. `generate_image` runs **your own ComfyUI workflows** on your server (*ComfyUI URL*) and shows the pictures to the model.
@@ -486,6 +454,158 @@ Under *YouTube tools*. Videos play in the app's [video window](INTERFACE.md#the-
 * **The key:** `youtube_search` and `youtube_playlist` need one, and each search spends daily quota; playing needs none. Watch Later and private playlists are out of reach (the app never signs in).
 * **Saved videos** are your bookmarks, per profile, in `youtube.json`. One resumes a few seconds before where you left it; one seen to the end starts over. `/youtube save`, `list` and `unsave` are your own hand on the list.
 * **Known issue:** `seek` and `volume` on a paused video answer with the old value. The change itself happens, and the next answer shows it.
+
+## Admin
+
+Windows' own records and machinery: the event logs, the services, the scheduled tasks and Active Directory. **Windows only**, all through Windows' own APIs inside the app: nothing is started (no `wevtutil`, `sc`, `schtasks` or PowerShell). Each has its own command (`/eventlog`, `/services`, `/tasks`, `/ad`), your own hand, which works with the tools off.
+
+The services and tasks reach computers you name in `services.json` and `tasks.json`; the directory reaches domains in `ad.json`. Each sits in the home or profile folder like the [database connections](#managing-connections) (the profile's wins by name), each entry is used only once ticked in its *… offered* setting, and its *add/edit* wizard walks through one and tests it. A remote computer reached with `runas` has not been tried against a real second machine here yet; this PC and `localhost` have.
+
+### Event logs
+
+Under *Event log tools*. They read what Windows itself recorded (a crash, a failed service start, a driver error, a failed sign-in, a PowerShell script block) from this PC, from `.evtx` files in the working directory, and from remote computers you name. Everything is read-only, through Windows' own event log API in the app: nothing is started, no `wevtutil`. `/eventlog` is your own hand on them ([COMMANDS.md](COMMANDS.md)) and works with the tools off.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `eventlog_logs` | `filter?, all?, computer?` | The computers offered, a computer's logs with records, size and last write (200 looked into on this PC, 40 on a remote one; `all` adds the empty, disabled, Analytic and Debug ones), and the `.evtx` files in the working directory. |
+| `eventlog_search` | `log, level?, id?, provider?, field?, since?, until?, audit?, text?, before_record?, limit?, computer?` | A log's events newest first, a line each; the answer ends with the next page as the whole call to make. |
+| `eventlog_summary` | `log, since?, level?, computer?` | Counts by provider and id since a time (a day by default), the top 30, each with its newest time and a sample message. |
+| `eventlog_event` | `log, record, computer?` | One event in full: system values, message, named fields, and (under `full`) its XML. At most 32,000 characters. |
+
+* **The log** is a name `eventlog_logs` lists (`app`, `sys`, `sec`, `setup` and `ps` for PowerShell/Operational), or an `.evtx` path in the working directory (never with `computer`).
+* **Default view:** with no `level` or `audit`, Security shows its audit failures and every other log its critical events, errors and warnings.
+* **Filters** go into Windows' own query: `level` (`critical,error,warning,information,verbose` or `all`), `id` (`41,1074` or `4700-4799`), `provider`, `since`/`until` (an age such as `2h`, or a moment in your time zone), `audit`, and `field` (`Name=value`, EventData's named values; `UserData` values are reached by `text`). At most 20 terms; `text` is matched in the app, over the provider, the fields and the message.
+* **Limits:** *Event log max events* per page (100 at most); *Event log scan limit* events looked at per call (a quarter of it on a remote computer) and 10 seconds, after which the answer says how far back it got. A read gives up after 30 s (60 s remote).
+* **Security** needs the Event Log Readers group, or the app run as administrator. Analytic and Debug logs read oldest-first only and can't be searched.
+
+#### Event log computers
+
+Computers live in `eventlog.json`, in the home or profile folder like the [database connections](#managing-connections) (the profile's wins by name). `local` is this PC, built in. A computer is read only once ticked in *Event log computers offered*, for the model and `/eventlog` alike; until you change it, `local` alone is ticked. *Event log add/edit computer* walks through one and tests it (the newest System event under its account); *Event log set password* changes a runas password.
+
+* **`host`** (required): the computer's name or address (`localhost` is a loopback session).
+* **`auth`**: `windows` (default, as you) or `runas`, with **`user`** (`DOMAIN\name` or `name@domain`; `lab-box\admin` for the machine's own account) and **`passwordStore`** `file` or `credman` (`NeonSidekick/eventlog/<name>`). **`authMethod`**: `default`, `negotiate`, `kerberos` or `ntlm`.
+* **`logs`**: the logs allowed, case ignored, `*` any run but `/` (`Microsoft-Windows-*/Operational`, `*/*` every slashed name). Absent: all.
+* **`detail`**: `redacted` (default) or `full`, what the main chat's model reads (see below).
+* **`description`**: what the computer is; the model reads it to choose.
+* An entry named `local` may set only `logs`, `detail` and `description`.
+
+```json
+{
+  "computers": {
+    "local": { "logs": ["Application", "System", "Setup", "Microsoft-Windows-*/Operational"] },
+    "fs01": { "host": "fs01.corp.example", "description": "file server", "detail": "full" },
+    "dc01": {
+      "host": "dc01",
+      "auth": "runas",
+      "user": "CORP\\svc-logreader",
+      "passwordStore": "credman",
+      "logs": ["Security", "System", "Directory Service"]
+    }
+  }
+}
+```
+
+**A remote computer needs:** the "Remote Event Log Management" firewall rule on, and the account in its Event Log Readers group. A local administrator's network sign-in is filtered by UAC, so membership is the dependable way. `--eventlog-check <computer>` tests one.
+
+#### Who sees what
+
+* **`redacted`** hides secret-looking values: fields named like a password, secret, API key, private key or connection string, and in free text URL passwords, `password=…`, `-Password x`, `/pass:x`, `-p x`, `net user u <pw>`, `net use … /user:u <pw>`, `schtasks /RP`, `ConvertTo-SecureString '…' -AsPlainText`, `PSCredential`, `$password = '…'`, `Authorization:` headers, JWTs and PEM blocks. The message is formatted from the hidden values, so a secret doesn't slip in that way, and `text` and `field` match the hidden values only. **It is best-effort:** no rule knows every secret in free text.
+* **`full`** is the main chat's alone. Bots, advisors and a script's `execute_code` bridge always read redacted, and an advisor's recent lines name an event-log call, never its result.
+* **A `.evtx` file** takes `local`'s detail and no `logs` applies to it: a log exported from a `redacted` computer and read as a file is read under `local`'s detail.
+* **Out of any rule's reach:** what the main model quotes, and saved sessions, which keep what the main chat saw. Set `full` only for computers whose events you are content to have anywhere the conversation goes.
+* **Event text is untrusted:** any program or user can write an event. Each message and value is fenced as quoted data (`⟪ ⟫`), the model is told it is never an instruction, and an event whose source isn't registered says "source not registered: any program could have written this". Control characters are replaced.
+
+### Services
+
+Under *Service tools*. The model reads the services on this PC and the computers you tick, and with *Service writes* may start, stop or restart one, or change how it starts, each time asking you first.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `service_list` | `computer?, state?, start?, filter?, drivers?, limit?, offset?` | The services, a line each: name, display name, state, process, a failure's exit code. `state` is `running`, `stopped` or `failed`; `start` is `automatic`, `delayed`, `manual` or `disabled`. |
+| `service_info` | `name, computer?` | One service whole: state, start type, account, program, recovery actions, what it depends on and what depends on it. |
+| `service_control` | `name, action, computer?` | `start`, `stop` or `restart`, after your yes. Its list of actions is what every ticked readwrite computer allows. |
+| `service_start_type` | `name, start_type, computer?` | `automatic`, `delayed`, `manual` or `disabled`, after your yes. Off in a new profile's Offered tab. |
+
+**A change goes through one order of checks**, and the first that fails is the answer: *Service writes* → the computer's `access` → the visible list → `control` → a driver (never changed) → the app's protected list → the computer's own `protected` list → `controlActions` → running dependents (a stop or restart names them and stops) → the question on the pane (the action, the service, the computer, the account and the full program path). Headless and the bots never get the two changes.
+
+* **Protected by the app, always:** RPC and DCOM, the session manager, the security accounts, the event log, WMI, the firewall and Defender, the Task Scheduler, file sharing, Netlogon, DNS and DHCP clients, Remote Desktop, the crypto and sign-in services, and a few more (`ServiceGuard`). They can be started, never stopped, restarted or changed in start type. A computer's `protected` adds to the list, never takes from it.
+* **Rights:** reading needs nothing special on this PC; a change needs the app run as administrator, or rights granted on the service. Some services (RPC among them) don't let an account that isn't elevated list what depends on them: `service_info` says so and the Service Control Manager then refuses a stop that would break them.
+
+```json
+{
+  "computers": {
+    "local": { "access": "readwrite", "control": ["Spooler", "MyApp*"], "controlActions": ["start", "restart"] },
+    "app01": { "host": "app01.corp.example", "description": "app server", "services": ["MSSQL*", "W3SVC", "MyApp*"],
+      "access": "readwrite", "control": ["MyApp*"], "protected": ["MSSQL*"], "detail": "full" }
+  }
+}
+```
+
+The keys every computer of `services.json` and `tasks.json` takes:
+
+* **`host`**, **`auth`**, **`user`**, **`passwordStore`**, **`credential`**: as `eventlog.json`'s (`NeonSidekick/services/<name>`, `NeonSidekick/tasks/<name>` in Credential Manager).
+* **`access`**: `read` (the default) or `readwrite`. Nothing is changed on a `read` computer, whatever else is set.
+* **`control`**: what may be changed (case ignored, `*` any run). Absent: nothing.
+* **`controlActions`**: the actions allowed. Absent: all; `[]`: none. Services: `start`, `stop`, `restart`, `start_type` (`restart` is its own word). Tasks: `run`, `end`, `enable`, `disable`.
+* **`detail`**: `redacted` (the default: secret-like values in program paths and command lines hidden from the model) or `full`; the main chat's alone, as the event logs'.
+* **`description`**: what the computer is; the model reads it to choose.
+* **Services' own:** `services`, the services visible (absent: all), and `protected`. **Tasks' own:** `folders`, the folders visible (absent: all; a pattern ending in `\` means that folder's own tasks), and `privileged`.
+* `local` is this PC, built in and read-only until its entry says otherwise; it takes every key but the sign-in ones.
+
+**A remote computer needs** the account to have rights there; a local administrator's network sign-in is filtered by UAC's remote restrictions, so a domain account in its Administrators group is the dependable way. Services travel over RPC (the "Remote Service Management" firewall rule), tasks over the Task Scheduler's own RPC ("Remote Scheduled Tasks Management"). `--services-check <computer>` and `--tasks-check <computer>` test one ([COMMANDLINE.md](COMMANDLINE.md)).
+
+### Scheduled tasks
+
+Under *Task tools*. The model reads the scheduled tasks on this PC and the computers you tick, and with *Task writes* may run, end, enable or disable one, each time asking you first.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `task_list` | `computer?, folder?, recursive?, state?, filter?, include_microsoft?, limit?, offset?` | The tasks, a line each: path, state, last run and result, next run. Windows' own under `\Microsoft\` only with `include_microsoft`. |
+| `task_info` | `path, computer?` | One task whole: its triggers in words ("every week on Monday at 02:30", "at startup after 5 minutes"), its actions, who it runs as and how, its last result and time limit. |
+| `task_control` | `path, action, computer?` | `run`, `end`, `enable` or `disable`, after your yes. Only Task Scheduler's own run, stop and enable are ever called: nothing is created, deleted or rewritten. |
+
+* **The order of checks:** *Task writes* → `access` → `folders` → `control` → a task of Windows' own (only by a `control` pattern starting `\Microsoft\`) → `controlActions` → **privileged** → the question.
+* **Privileged:** a task that runs as SYSTEM or a service account, as a group, or with highest privileges. Running or ending one is refused unless the computer's entry says `"privileged": true`; enabling and disabling it are not, since they run nothing. A definition that can't be read counts as privileged.
+* **A run's question** shows who it runs as, at what level, and every command line in full (never redacted: you decide on them).
+* **History:** `/tasks`' **history** opens the task's runs on `/eventlog`, when the Task Scheduler's own log is on (Task Scheduler's *Enable All Tasks History*).
+* Times are the computer's own clock.
+
+### Active Directory
+
+Under *Directory tools*. Read-only, always: the app's LDAP layer declares no call that writes. The model looks up users, groups and computers in the domains you tick, and finds locked accounts, expiring passwords and stale ones.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `ad_user` | `name, domain?` | A user's card: enabled, locked and when (and where to find the source machine: Security event 4740 on the PDC emulator), bad passwords, password set and expiry, last sign-in, account expiry, title, department, manager, OU, flags and groups (nested). |
+| `ad_group` | `name, nested?, limit?, domain?` | A group's members, direct or through member groups. |
+| `ad_computer` | `name, domain?` | A computer's card: its OS, enabled, a domain controller or not, last sign-in, machine password, OU. |
+| `ad_find` | `kind, days?, words?, limit?, domain?` | `locked`, `password_expiring` (within 14 days), `disabled`, `stale_users` or `stale_computers` (not signed in for 90 days, the never-signed-in listed apart), or `name` (names holding `words`). |
+| `ad_domain` | `domain?` | Its domain controllers, functional levels, the role holders (the PDC emulator among them), the password and lockout policy. |
+
+* **Lockout and expiry** come from the attributes the domain computes when it does, and are worked out from the domain's or a fine-grained policy otherwise; each card says which. Last sign-in is `lastLogonTimestamp`, up to about 14 days stale.
+* **Searches stop at 1,000 entries** (and 30 seconds each), and say so.
+* **Never read:** passwords and their hashes, LAPS and BitLocker recovery values, managed and key credentials, certificates and photos.
+* **`redacted`** (the default) leaves phones, addresses, employee numbers and home folders out; `full` is the main chat's alone.
+* **`current`** is this PC's own domain when it is joined, built in (signing in as you, Kerberos). Other domains come from `ad.json`:
+
+```json
+{
+  "domains": {
+    "corp": { "domain": "corp.example", "server": "dc01.corp.example", "description": "the office" },
+    "lab": { "domain": "lab.example", "server": "localhost", "auth": "runas", "user": "LAB\\reader", "passwordStore": "credman" }
+  }
+}
+```
+
+* **`domain`** (required): its DNS name. **`server`**: a domain controller (the domain's name when absent). **`baseDn`**: where to search (the domain when absent).
+* **`tls`**: `true` for LDAPS on 636, the certificate checked against this machine's trust; otherwise 389, signed and sealed.
+* **`auth`**, **`user`**, **`passwordStore`**: as above (`NeonSidekick/ad/<name>`). From a PC outside the domain, `runas` signs in with NTLM inside Negotiate.
+* **`detail`**, **`description`**: as above.
+* Configured domains are your own entries: *Network tools reach* doesn't judge them. `--ad-check <domain>` tests one.
+
+### What the shell may not do while these are on
+
+While *Service tools*, *Task tools* or *Directory tools* is on and *Shell police* is too, a `run_command` line, the script files it runs, an `execute_code` script or a `process` write that would change a service (`sc stop`, `net stop`, `Restart-Service`…), a scheduled task (`schtasks /run`, `Disable-ScheduledTask`…) or the directory (`Set-ADUser`, `Unlock-ADAccount`, `dsmod`, `ldapmodify`, `net user … /domain` with a change…) is refused before any approval, whatever *Shell command policy* says: changes go through the tools, their checks and your yes. Reading passes (`sc query`, `Get-Service`, `schtasks /query`, `Get-ADUser`). Like the forbidden strings, it's a tripwire, not a sandbox.
 
 ## Databases
 

@@ -25,7 +25,7 @@ public static class HelpText
 
     // The panes' one-liners: README's Available Panes, kept short.
     public const string SettingsPaneSummary = "the app's settings, in four tabs with a second strip under three: Client (Chat: the profile and the screen; Sessions; Botchat), Servers (Common: what every LLM server reads; Http: what only an OpenAI-compatible HTTP server reads; Embedded, Docker, Anthropic with the Claude Code server and /claude, OpenAI), Advisors (the profile advisors) and Voice (TTS: speech output; STT: voice input)";
-    public const string ToolsPaneSummary = "the model's tools: Offered lists every tool, on or off (Enter flips one); Core, Files, Apps, Databases, Devices and Home hold each tool group's settings, one menu per group on a second strip (←/→ walk every menu, Tab jumps a whole tab), with the pane's own options under Core › Options";
+    public const string ToolsPaneSummary = "the model's tools: Offered lists every tool, on or off (Enter flips one); Core, Files, Apps, Admin, Databases, Devices and Home hold each tool group's settings, one menu per group on a second strip (←/→ walk every menu, Tab jumps a whole tab), with the pane's own options under Core › Options";
     public const string SkillsPaneSummary = "agent skills (SKILL.md folders): Offered lists and manages the installed skills, Reflection sets how the model writes and improves skills on its own, Options holds the skill switches and the project file";
     public const string McpPaneSummary = "external MCP servers: Servers lists and edits them, Tools shows what each offers, Options holds the master switch and the timeout";
 

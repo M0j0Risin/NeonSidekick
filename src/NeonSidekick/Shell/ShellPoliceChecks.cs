@@ -58,6 +58,14 @@ public static class ShellPoliceChecks
             return new ShellPoliceRefusal(ShellText.ServerDatabasePoliced(ServerDatabasePolice.FamilyOf(servers, server.Family)), ShellText.ServerDatabaseShown(server.Family, server.Token, server.File));
         }
 
+        // The admin police (2026-10-15, the admin-tools plan): while the services, tasks or directory tools are on, a line, or a script file it
+        // runs, that changes one of them is refused whatever the policy; the families' tools (their checks, their pane) are the one way.
+        if (files.AdminFamilies?.Invoke() is { } admin && AdminPolice.Judge(command, scripts, admin) is { } changed)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.AdminLogLine(request, changed.Family, changed.Token, changed.File));
+            return new ShellPoliceRefusal(ShellText.AdminPoliced(changed.Family), ShellText.AdminShown(changed.Family, changed.Token, changed.File));
+        }
+
         // A line naming a path outside the working directory (Shell police, 2026-09-22): refused, the pane never asked about it.
         if (PathPolice.Judge(command, files, workdir, isScript: false, request.Kind) is { } outside)
         {

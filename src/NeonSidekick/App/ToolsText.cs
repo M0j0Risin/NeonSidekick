@@ -37,7 +37,8 @@ public static class ToolsText
     /// </summary>
     public static readonly string[] SwitchWords =
     [
-        ToolbarItems.Ask, ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Image, ToolbarItems.Web, ToolbarItems.Advisors, ToolbarItems.Docker, ToolbarItems.EventLog, ToolbarItems.Obsidian,
+        ToolbarItems.Ask, ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Image, ToolbarItems.Web, ToolbarItems.Advisors, ToolbarItems.Docker, ToolbarItems.EventLog,
+        ToolbarItems.Network, ToolbarItems.Services, ToolbarItems.Tasks, ToolbarItems.Directory, ToolbarItems.Obsidian,
         ToolbarItems.Sql, ToolbarItems.Oracle, ToolbarItems.MySql, ToolbarItems.Sqlite, ToolbarItems.Postgres, ToolbarItems.Unc, ToolbarItems.Ha, ToolbarItems.Comfy,
         ToolbarItems.Camera, ToolbarItems.Print, ShoppingSwitchWord, TimersSwitchWord,
     ];
@@ -62,6 +63,10 @@ public static class ToolsText
         ToolbarItems.Advisors => SettingsField.Advisors,   // 2026-10-10, the profile advisors' switch (/settings › Advisors)
         ToolbarItems.Docker => SettingsField.DockerTools,
         ToolbarItems.EventLog => SettingsField.EventLogTools,   // 2026-10-15, the event logs' switch
+        ToolbarItems.Network => SettingsField.NetworkTools,   // 2026-10-15, the admin-tools plan
+        ToolbarItems.Services => SettingsField.ServiceTools,
+        ToolbarItems.Tasks => SettingsField.TaskTools,
+        ToolbarItems.Directory => SettingsField.DirectoryTools,
         ToolbarItems.Obsidian => SettingsField.ObsidianTools,
         ToolbarItems.Sql => SettingsField.SqlTools,
         ToolbarItems.Oracle => SettingsField.OracleTools,
@@ -201,6 +206,21 @@ public static class ToolsText
     /// <summary>The event-log tools' menu and group (2026-10-15, the event-log plan): on Apps after Docker. Pinned.</summary>
     public const string EventLogTabTitle = "EventLog";
 
+    /// <summary>The network tools' menu and group (2026-10-15, the admin-tools plan): on Core after Web. Pinned.</summary>
+    public const string NetworkMenuTitle = "Network";
+
+    /// <summary>The services tools' menu and group (2026-10-15): on Admin after EventLog. Pinned.</summary>
+    public const string ServicesMenuTitle = "Services";
+
+    /// <summary>The task tools' menu and group (2026-10-15): on Admin after Services. Pinned.</summary>
+    public const string TasksMenuTitle = "Tasks";
+
+    /// <summary>The directory tools' menu and group (2026-10-15): on Admin after Tasks. Pinned.</summary>
+    public const string DirectoryMenuTitle = "Directory";
+
+    /// <summary>The tab of the administrative menus (2026-10-15, the admin-tools plan): EventLog (off Apps), Services, Tasks, Directory; after Apps. Pinned.</summary>
+    public const string AdminTabTitle = "Admin";
+
     /// <summary>The image tools' tab and group (2026-09-24), after HA, before GitLib, since 2026-10-03 (the user's order; after Obsidian, before SQL, from 2026-09-27); "Images" until later on 2026-09-24 (the user's call: it is ComfyUI's tab).</summary>
     public const string ComfyTabTitle = "ComfyUI";
 
@@ -237,7 +257,7 @@ public static class ToolsText
     /// The settings menus in <see cref="SettingsMenu.ToolsTabFields"/>' order, each list's title (2026-10-09): every one was a tab of its own
     /// until then, and the constants above stay its name — the Offered tab's group heading and <c>/sys</c>' group too. Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, ImageMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle, ShoppingMenuTitle, EventLogTabTitle, TimersMenuTitle];
+    public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, ImageMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle, ShoppingMenuTitle, EventLogTabTitle, TimersMenuTitle, NetworkMenuTitle, ServicesMenuTitle, TasksMenuTitle, DirectoryMenuTitle];
 
     /// <summary>The tabs in strip order — Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Screen (2026-10-04), Obsidian, SQL, MySQL, Oracle, ClaudeCLI, Docker, HA, ComfyUI, GitLib, Options, the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04); before it (Camera after Ask since 2026-10-02; Docker after UNC since 2026-10-02; Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down until 2026-10-09.
     /// Since then (the user's call) the five database tabs are menus on one Database tab, where SQL stood, and Print, Camera, Screen,
@@ -250,15 +270,16 @@ public static class ToolsText
     /// after File on Files (<see cref="ImageMenuTitle"/>), and later still the ClaudeCode menu went (the Claude Code advisor tool retired, <c>/claude</c>'s
     /// rows to <c>/settings</c>' Anthropic tab), Integrations opening on Docker. Later still on 2026-10-10 (the user's ask) Ask, Web and Shell went
     /// under one Standard tab after Offered (<see cref="CoreTabTitle"/>), Options its last menu (the user's ask): Offered, Standard, Files, Integrations, Database, Media; Standard renamed Core and Media Devices later still (the user's call). Since 2026-10-11 (the user's ask) Home is
-    /// the last, HomeAssistant and Shopping on it, and Integrations is Apps: Offered, Core, Files, Apps, Databases, Devices, Home.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, CoreTabTitle, FilesTabTitle, AppsTabTitle, DatabaseTabTitle, DevicesTabTitle, HomeTabTitle];
+    /// the last, HomeAssistant and Shopping on it, and Integrations is Apps: Offered, Core, Files, Apps, Databases, Devices, Home. Since 2026-10-15 (the admin-tools
+    /// plan) Admin after Apps holds EventLog (off Apps), Services, Tasks and Directory, and Core holds Network after Web.</summary>
+    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, CoreTabTitle, FilesTabTitle, AppsTabTitle, AdminTabTitle, DatabaseTabTitle, DevicesTabTitle, HomeTabTitle];
 
     /// <summary>
     /// The menus each tab after Offered holds, as indexes into <see cref="SettingsMenu.ToolsTabFields"/> and <see cref="MenuTitles"/> (2026-10-09):
     /// one for a plain tab, its rows the tab's; more for a group tab — <see cref="CoreTabTitle"/> (later on 2026-10-10), <see cref="FilesTabTitle"/>, <see cref="AppsTabTitle"/> (2026-10-10),
     /// <see cref="DatabaseTabTitle"/>, <see cref="DevicesTabTitle"/> and <see cref="HomeTabTitle"/> (2026-10-11) — whose menus are sub-tabs on a second strip (<see cref="ToolsMenu"/>). Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[0, 1, 2, 23, 20], [3, 4, 5, 19, 9], [15, 22, 17, 18], [10, 11, 12, 13, 14], [6, 7, 8], [16, 21]];
+    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[0, 1, 24, 2, 23, 20], [3, 4, 5, 19, 9], [15, 17, 18], [22, 25, 26, 27], [10, 11, 12, 13, 14], [6, 7, 8], [16, 21]];
 
     /// <summary>Whether tab <paramref name="tab"/> (a <see cref="TabTitles"/> index) holds menus rather than rows: Core, Files, Apps, Databases, Devices and Home.</summary>
     public static bool IsGroupTab(int tab) => tab > 0 && tab < TabTitles.Count && TabMenus[tab - 1].Count > 1;
@@ -373,6 +394,18 @@ public static class ToolsText
     /// user that something needs Windows (2026-10-11, the user's ask), so it says what is missing here instead. Pinned.
     /// </summary>
     public const string NoEventLogsReason = "there are no event logs to read here";
+
+    /// <summary>Why a family's changes are not offered (2026-10-15, the admin-tools plan's item 30). Pinned.</summary>
+    public const string NoReadWriteComputerReason = "no ticked computer has \"access\": \"readwrite\"";
+
+    public const string NoActionAllowedReason = "every readwrite computer's \"controlActions\" is empty";
+
+    public const string NoStartTypeAllowedReason = "no readwrite computer allows start_type";
+
+    /// <summary>Why <c>net_ping</c> and <c>net_trace</c> are not offered (2026-10-15). Pinned.</summary>
+    public const string NoPingReason = "there is no way to send a ping here";
+
+    public const string NoTraceReason = "route tracing is not available here";
 
     /// <summary>The YouTube group off with its switch on (2026-10-05): no key to search with and no video window to play in.</summary>
     public const string NoYouTubeReason = "no YouTube API key is set and there is no video window";

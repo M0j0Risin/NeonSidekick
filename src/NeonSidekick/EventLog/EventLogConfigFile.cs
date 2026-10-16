@@ -67,42 +67,8 @@ public sealed record EventLogCatalog(IReadOnlyList<EventLogComputer> Computers, 
     public static bool Allows(IReadOnlyList<string>? logs, string channel)
     {
         ArgumentNullException.ThrowIfNull(channel);
-        return logs is null || logs.Any(p => Glob(p.Trim(), channel.Trim()));
-    }
-
-    /// <summary>A pattern against a name, case ignored, <c>*</c> any run but <c>/</c>. Iterative with one backtrack point per star.</summary>
-    private static bool Glob(string pattern, string name)
-    {
-        int p = 0, n = 0, star = -1, mark = 0;
-        while (n < name.Length)
-        {
-            if (p < pattern.Length && pattern[p] == '*')
-            {
-                star = p++;
-                mark = n;
-            }
-            else if (p < pattern.Length && char.ToUpperInvariant(pattern[p]) == char.ToUpperInvariant(name[n]))
-            {
-                p++;
-                n++;
-            }
-            else if (star >= 0 && name[mark] != '/')
-            {
-                p = star + 1;
-                n = ++mark;
-            }
-            else
-            {
-                return false;
-            }
-        }
-
-        while (p < pattern.Length && pattern[p] == '*')
-        {
-            p++;
-        }
-
-        return p == pattern.Length;
+        // The pattern rule is Computers/NameGlob's since later on 2026-10-15 (the admin-tools plan), '/' the separator.
+        return logs is null || global::NeonSidekick.Computers.NameGlob.Any(logs, channel, '/');
     }
 }
 
@@ -131,7 +97,7 @@ public sealed class EventLogConfigFile
         "{\n" +
         "  // One entry per computer. Its name is what the model passes as \"computer\", and what /eventlog computer:<name> reads.\n" +
         "  // \"local\" is this PC, built in: its entry may only narrow its \"logs\", set its \"detail\" or describe it.\n" +
-        "  // A computer is read only once it is ticked in Event log computers offered (/tools › Apps › EventLog).\n" +
+        "  // A computer is read only once it is ticked in Event log computers offered (/tools › Admin › EventLog).\n" +
         "  // Remove the leading // from an example to use it, and put it inside \"computers\" below.\n" +
         "  //\n" +
         "  // This PC, narrowed to four logs:\n" +
@@ -141,7 +107,7 @@ public sealed class EventLogConfigFile
         "  // \"fs01\": { \"host\": \"fs01.corp.example\", \"description\": \"file server\", \"detail\": \"full\" },\n" +
         "  //\n" +
         "  // As another account (it needs the Event Log Readers group there), the password in " + SqlText.CredentialStore + " as\n" +
-        "  // NeonSidekick/eventlog/<name> — set it with Event log set password on /tools › Apps › EventLog, or:\n" +
+        "  // NeonSidekick/eventlog/<name> — set it with Event log set password on /tools › Admin › EventLog, or:\n" +
         "  // " + SqlText.CredentialCommand("NeonSidekick/eventlog/dc01", "CORP\\svc-logreader") + "\n" +
         "  // \"dc01\": { \"host\": \"dc01\", \"auth\": \"runas\", \"user\": \"CORP\\\\svc-logreader\", \"passwordStore\": \"credman\",\n" +
         "  //   \"logs\": [\"Security\", \"System\", \"Directory Service\"] },\n" +
@@ -360,7 +326,7 @@ public static class EventLogSecrets
         }
 
         var decrypted = WindowsCredentials.Unprotect(password);
-        return decrypted.Error is { } error ? CredentialResult.Failed(error.Replace(SqlText.SqlMenuPath, "/tools › Apps › EventLog", StringComparison.Ordinal)) : decrypted;
+        return decrypted.Error is { } error ? CredentialResult.Failed(error.Replace(SqlText.SqlMenuPath, "/tools › Admin › EventLog", StringComparison.Ordinal)) : decrypted;
     }
 
     /// <summary>Saves <paramref name="password"/> for <paramref name="computer"/> in its store; the status line's sentence either way.</summary>
