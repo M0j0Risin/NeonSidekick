@@ -216,6 +216,74 @@ public partial class ToolsMenuTests
     }
 
     /// <summary>
+    /// A menu whose switch is off is <see cref="MenuTab.Off"/> (2026-10-16, the user's ask: its title dim and italic on the strip), and a
+    /// group when every menu of it with a switch is; Core's Options has none and is never off, Shell is off under the policy <c>off</c>.
+    /// </summary>
+    [Fact]
+    public void AMenuWhoseSwitchIsOff_IsOff_AndAGroupWhenAllItsMenusAre()
+    {
+        var (_, pane, settings) = PaneMenu();
+        int database = TabIndex(ToolsText.DatabaseTabTitle);
+        int core = TabIndex(ToolsText.CoreTabTitle);
+        MenuPage PageOf() => ToolsMenu.Page(ToolsText.OfferedRows(Facts()), _settings.Current, settings, database);
+        MenuTab Sub(MenuPage page, int tab, string title) => page.Tabs![tab].SubTabs!.Single(t => t.Title == title);
+
+        _settings.Update(d =>
+        {
+            d.SqlTools = false;
+            d.MySqlTools = d.SqliteTools = d.PostgresTools = d.OracleTools = true;
+            d.WebTools = d.TimerTools = d.AskUser = true;
+            d.ShellCommandPolicy = "ask";
+        });
+        var page = PageOf();
+        Assert.Equal([true, false, false, false, false], page.Tabs![database].SubTabs!.Select(t => t.Off));
+        Assert.False(page.Tabs[database].Off);
+        Assert.False(page.Tabs[core].Off);
+        Assert.False(Sub(page, core, ToolsText.ShellTabTitle).Off);
+        Assert.False(page.Tabs[0].Off);   // Offered has no switch
+
+        _settings.Update(d => d.MySqlTools = d.SqliteTools = d.PostgresTools = d.OracleTools = false);
+        Assert.True(PageOf().Tabs![database].Off);
+
+        _settings.Update(d =>
+        {
+            d.WebTools = d.TimerTools = d.AskUser = false;
+            d.ShellCommandPolicy = "off";
+        });
+        page = PageOf();
+        Assert.True(page.Tabs![core].Off);
+        Assert.False(Sub(page, core, ToolsText.OptionsTabTitle).Off);
+        Assert.True(Sub(page, core, ToolsText.ShellTabTitle).Off);
+
+        _settings.Update(d => d.ShellCommandPolicy = "nonsense");   // an unknown word reads off, as Resolve falls back to off
+        Assert.True(Sub(PageOf(), core, ToolsText.ShellTabTitle).Off);
+        _settings.Update(d => d.ShellCommandPolicy = "yolo");
+        page = PageOf();
+        Assert.False(Sub(page, core, ToolsText.ShellTabTitle).Off);
+        Assert.False(page.Tabs![core].Off);
+
+        // The strip draws it: the group's second strip carries TabOff's markup on SQL's title, the rest stay idle.
+        _settings.Update(d => d.SqlTools = false);
+        _settings.Update(d => d.MySqlTools = true);
+        string strips = string.Concat(MenuPane.TopRows(PageOf(), 240));
+        Assert.Contains($"[{Theme.TabActiveOff.ToMarkup()}]SQL[/]", strips);   // the sub-tab on show
+        Assert.Contains($"[{Theme.TabIdle.ToMarkup()}]MySQL[/]", strips);
+        Assert.Contains($"[{Theme.TabOff.ToMarkup()}]SQLite[/]", strips);
+        pane.Dispose();
+    }
+
+    /// <summary>Every <c>/tools</c> menu but Options has a switch the strip can read (2026-10-16): a new menu without one first fails here.</summary>
+    [Fact]
+    public void EveryMenuButOptions_HasASwitch()
+    {
+        var saved = new AppSettingsData();
+        for (int m = 0; m < ToolsText.MenuTitles.Count; m++)
+        {
+            Assert.True((ToolsText.MenuSwitchOn(m, saved) is null) == (ToolsText.MenuTitles[m] == ToolsText.OptionsTabTitle), ToolsText.MenuTitles[m]);
+        }
+    }
+
+    /// <summary>
     /// The Tools pane keeps its height on a group: the second strip's row is taken out of the padding under the list. Offered is the one
     /// plain tab since later on 2026-10-10 (Ask under Standard), so the group's menu is held to its frame.
     /// </summary>

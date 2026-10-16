@@ -318,10 +318,12 @@ public sealed class InfoPane
     /// <summary>
     /// The strip laid out for <paramref name="width"/> columns (<see cref="TabStripLayout"/>): one markup
     /// line per row, the first as <see cref="TabStripMarkup"/> draws it, the later ones indented to the
-    /// first title's column, the <see cref="LabelSeparator"/>'s bar carried down, with the same separators and styles.
+    /// first title's column, the <see cref="LabelSeparator"/>'s bar carried down, with the same separators and styles. The titles in
+    /// <paramref name="off"/> (2026-10-16, <see cref="MenuTab.Off"/>) are drawn <see cref="Theme.TabOff"/>, the active one among them
+    /// <see cref="Theme.TabActiveOff"/>; null for none, the strip byte for byte as before.
     /// </summary>
-    public static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, int active, int width, IReadOnlyList<string?>? badges = null) =>
-        TabStripRows(label, titles, Set(active), Theme.TabActive, width, badges);
+    public static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, int active, int width, IReadOnlyList<string?>? badges = null, IReadOnlySet<int>? off = null) =>
+        TabStripRows(label, titles, Set(active), Theme.TabActive, width, badges, off: off);
 
     /// <summary>
     /// The strip with a toggle after the titles (2026-10-12, <see cref="InfoToggle"/>): <paramref name="toggle"/>'s title laid out as one
@@ -354,10 +356,11 @@ public sealed class InfoPane
 
     /// <summary>
     /// The second strip (2026-10-10, <see cref="SubStripLayout"/>): every row the label's width of blanks and the bar carried down, the
-    /// first then <see cref="SubStripLead"/>, the titles drawn as the first strip draws them, <paramref name="active"/> underlined. Pinned.
+    /// first then <see cref="SubStripLead"/>, the titles drawn as the first strip draws them, <paramref name="active"/> underlined, those in
+    /// <paramref name="off"/> dim and italic (2026-10-16). Pinned.
     /// </summary>
-    public static IReadOnlyList<string> SubStripRows(string label, IReadOnlyList<string> titles, int active, int width, IReadOnlyList<string?>? badges = null) =>
-        TabStripRows(label, titles, Set(active), Theme.TabActive, width, badges, sub: true);
+    public static IReadOnlyList<string> SubStripRows(string label, IReadOnlyList<string> titles, int active, int width, IReadOnlyList<string?>? badges = null, IReadOnlySet<int>? off = null) =>
+        TabStripRows(label, titles, Set(active), Theme.TabActive, width, badges, sub: true, off: off);
 
     private static IReadOnlySet<int> Set(int active) => active < 0 ? new HashSet<int>() : new HashSet<int> { active };
 
@@ -370,8 +373,8 @@ public sealed class InfoPane
         TextCells.Width(titles[i]) + 2 + (BadgeOf(badges, i) is { } badge ? TextCells.Width(badge) : 0);
 
     // toggle: null for a strip of titles alone; else the last title is a toggle's (2026-10-12), on or off. actions: the pane's buttons, the
-    // first titles (2026-10-14), a bar after each.
-    private static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, IReadOnlySet<int> active, Style lit, int width, IReadOnlyList<string?>? badges, bool sub = false, bool? toggle = null, IReadOnlyList<InfoAction>? actions = null)
+    // first titles (2026-10-14), a bar after each. off: the plain titles whose switch is off (2026-10-16), dim and italic.
+    private static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, IReadOnlySet<int> active, Style lit, int width, IReadOnlyList<string?>? badges, bool sub = false, bool? toggle = null, IReadOnlyList<InfoAction>? actions = null, IReadOnlySet<int>? off = null)
     {
         int lead = actions?.Count ?? 0;
         ArgumentNullException.ThrowIfNull(label);
@@ -407,7 +410,9 @@ public sealed class InfoPane
 
             // The spaces either side are unstyled (2026-10-07): the underline sits under the title alone; the click still takes them.
             var style = i < lead ? (actions![i].Lit ? Theme.TabLit : Theme.TabIdle)
-                : isToggle ? (toggle == true ? Theme.TabLit : Theme.TabIdle) : active.Contains(i) ? lit : Theme.TabIdle;
+                : isToggle ? (toggle == true ? Theme.TabLit : Theme.TabIdle)
+                : off is not null && off.Contains(i) ? (active.Contains(i) ? Theme.TabActiveOff : Theme.TabOff)
+                : active.Contains(i) ? lit : Theme.TabIdle;
             line.Append($" [{style.ToMarkup()}]{Markup.Escape(titles[i])}[/]");
             if (BadgeOf(badges, i) is { } badge)
             {

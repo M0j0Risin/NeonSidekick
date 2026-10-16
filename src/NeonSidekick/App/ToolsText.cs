@@ -282,6 +282,33 @@ public static class ToolsText
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 23, 0, 20], [3, 4, 5, 19, 9], [15, 17, 18], [24, 22, 25, 26, 27], [10, 11, 12, 13, 14], [7, 8, 6], [16, 21]];
 
+    /// <summary>
+    /// Whether menu <paramref name="menu"/>'s switch (a <see cref="MenuTitles"/> index) is on in <paramref name="saved"/> (2026-10-16, the user's
+    /// ask: the strip draws a menu whose switch is off dim and italic, <see cref="MenuTab.Off"/>, so one sees what is off without opening
+    /// each): its first row (<see cref="SettingsMenu.ToolsTabFields"/>) when that is a switch, read as the row draws it; Shell's
+    /// <c>Shell command policy</c> on unless <c>off</c> (<see cref="Shell.CommandPolicy.TryParse"/>, not <c>Resolve</c>, so drawing logs no
+    /// warning; an unknown word reads off, as <c>Resolve</c> falls back to it); null for Options (<see cref="SettingsField.ToolsDollarMention"/>
+    /// is a mention's switch, not a group's) and any menu without one. Only the menu's own switch counts: not <c>LLM offer tools</c>, not a
+    /// tool turned off on Offered, not "needs Windows". Pure.
+    /// </summary>
+    public static bool? MenuSwitchOn(int menu, AppSettingsData saved)
+    {
+        ArgumentNullException.ThrowIfNull(saved);
+        if (MenuTitles[menu] == OptionsTabTitle)
+        {
+            return null;
+        }
+
+        var first = SettingsMenu.ToolsTabFields[menu][0];
+        if (first == SettingsField.ShellCommandPolicy)
+        {
+            NeonSidekick.Shell.CommandPolicy.TryParse(saved.ShellCommandPolicy, out var mode);
+            return mode != NeonSidekick.Shell.CommandPolicyMode.Off;
+        }
+
+        return SettingsMenu.IsToggle(first) ? SettingsMenu.IsOn(first, saved) : null;
+    }
+
     /// <summary>Whether tab <paramref name="tab"/> (a <see cref="TabTitles"/> index) holds menus rather than rows: Core, Files, Apps, Admin, Databases, Devices and Home.</summary>
     public static bool IsGroupTab(int tab) => tab > 0 && tab < TabTitles.Count && TabMenus[tab - 1].Count > 1;
 

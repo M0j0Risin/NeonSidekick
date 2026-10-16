@@ -99,7 +99,7 @@ internal sealed class ToolsMenu
             var menus = ToolsText.TabMenus[t - 1];
             tabs[t] = menus.Count > 1
                 ? GroupTab(t, saved, menu, subs is not null && t < subs.Count ? subs[t] : 0)
-                : menu.FieldsTab(ToolsText.TabTitles[t], SettingsMenu.ToolsTabFields[menus[0]], saved, sections: SettingsMenu.ToolsMenuSections[menus[0]]);
+                : menu.FieldsTab(ToolsText.TabTitles[t], SettingsMenu.ToolsTabFields[menus[0]], saved, sections: SettingsMenu.ToolsMenuSections[menus[0]]) with { Off = ToolsText.MenuSwitchOn(menus[0], saved) == false };
         }
 
         return MenuPage.Tabbed(ToolsText.Label, tabs, tab, SettingsMenu.TabKeys) with
@@ -117,18 +117,32 @@ internal sealed class ToolsMenu
     /// <summary>
     /// Group tab <paramref name="tab"/> (2026-10-10): its menus as sub-tabs, each with its rows as its tab had them
     /// (<see cref="SettingsMenu.FieldsTab"/>) and its own band, <paramref name="sub"/> the one on show; the strip's badge counts every
-    /// row of the five whose value is not the default (<see cref="SettingsMenu.GroupBadge"/>).
+    /// row of the five whose value is not the default (<see cref="SettingsMenu.GroupBadge"/>). A menu whose switch is off is
+    /// <see cref="MenuTab.Off"/>, and the group too when every menu of it with a switch is (2026-10-16, the user's ask; Core's Options,
+    /// with none, left out of the count).
     /// </summary>
     private static MenuTab GroupTab(int tab, AppSettingsData saved, SettingsMenu menu, int sub)
     {
         var menus = ToolsText.TabMenus[tab - 1];
-        var subs = menus.Select(m =>
+        var switches = menus.Select(m => ToolsText.MenuSwitchOn(m, saved)).ToList();
+        var subs = menus.Select((m, i) =>
         {
             var fields = SettingsMenu.ToolsTabFields[m];
             var sections = SettingsMenu.ToolsMenuSections[m];
-            return menu.FieldsTab(ToolsText.MenuTitles[m], fields, saved, sections: sections) with { Footer = row => SettingsMenu.SectionedField(fields, sections, row) is { } field ? menu.FieldFooter(field, saved) : null };
+            return menu.FieldsTab(ToolsText.MenuTitles[m], fields, saved, sections: sections) with
+            {
+                Footer = row => SettingsMenu.SectionedField(fields, sections, row) is { } field ? menu.FieldFooter(field, saved) : null,
+                Off = switches[i] == false,
+            };
         }).ToList();
-        return new MenuTab(ToolsText.TabTitles[tab], []) { SubTabs = subs, Sub = Math.Clamp(sub, 0, subs.Count - 1), Badge = menu.GroupBadge(menus, saved) };
+        var known = switches.OfType<bool>().ToList();
+        return new MenuTab(ToolsText.TabTitles[tab], [])
+        {
+            SubTabs = subs,
+            Sub = Math.Clamp(sub, 0, subs.Count - 1),
+            Badge = menu.GroupBadge(menus, saved),
+            Off = known.Count > 0 && known.All(on => !on),
+        };
     }
 
     /// <summary>

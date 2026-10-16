@@ -29,6 +29,13 @@ public sealed record MenuTab(string Title, IReadOnlyList<string> Rows)
     /// </summary>
     public string? Badge { get; init; }
 
+    /// <summary>
+    /// Its title drawn dim and italic on the strip (2026-10-16, the user's ask: <see cref="Theme.TabOff"/>, <see cref="Theme.TabActiveOff"/>
+    /// while on it): a <c>/tools</c> menu whose switch is off (<c>ToolsText.MenuSwitchOn</c>), or a group whose menus all are. No marker and
+    /// no width of its own, so the layout and the click spans are the same either way.
+    /// </summary>
+    public bool Off { get; init; }
+
     /// <summary>The tab's hint row; null for the page's.</summary>
     public string? Hint { get; init; }
 
@@ -1254,6 +1261,9 @@ public sealed class MenuPane : INoticeSink
 
     private static List<string?> Badges(IReadOnlyList<MenuTab> tabs) => tabs.Select(t => t.Badge).ToList();
 
+    /// <summary>The indices of the tabs that are <see cref="MenuTab.Off"/> (2026-10-16): the strip draws their titles dim and italic.</summary>
+    private static HashSet<int> Offs(IReadOnlyList<MenuTab> tabs) => Enumerable.Range(0, tabs.Count).Where(i => tabs[i].Off).ToHashSet();
+
     /// <summary>The indices of the buttons that are <see cref="MenuButton.On"/>: the strip draws them highlighted (later on 2026-09-29).</summary>
     private static HashSet<int> Lit(IReadOnlyList<MenuButton> buttons) => Enumerable.Range(0, buttons.Count).Where(i => buttons[i].On && !buttons[i].Hidden).ToHashSet();
 
@@ -1380,7 +1390,7 @@ public sealed class MenuPane : INoticeSink
         ArgumentNullException.ThrowIfNull(page);
         return page.Tabs is { } withButtons && page.TabButtons && page.Buttons is { Count: > 0 } tabButtons
                 ? InfoPane.TabStripRows(page.Title, [.. Titles(withButtons), .. Titles(tabButtons)], TabAndLit(page.Tab, withButtons.Count, tabButtons), width)
-            : page.Tabs is { } tabs ? [.. InfoPane.TabStripRows(page.Title, Titles(tabs), page.Tab, width, Badges(tabs)), .. SubStripRows(page, width)]
+            : page.Tabs is { } tabs ? [.. InfoPane.TabStripRows(page.Title, Titles(tabs), page.Tab, width, Badges(tabs), Offs(tabs)), .. SubStripRows(page, width)]
             : page.Buttons is { Count: > 0 } buttons ? InfoPane.TabStripRows(page.Title, Titles(buttons), Lit(buttons), width)
             : [TitleMarkup(page.Title)];
     }
@@ -1390,7 +1400,7 @@ public sealed class MenuPane : INoticeSink
     {
         ArgumentNullException.ThrowIfNull(page);
         return page.Tabs is { } tabs && page.Tab >= 0 && page.Tab < tabs.Count && tabs[page.Tab].SubTabs is { Count: > 0 } subs
-            ? InfoPane.SubStripRows(page.Title, Titles(subs), page.Sub, width, Badges(subs))
+            ? InfoPane.SubStripRows(page.Title, Titles(subs), page.Sub, width, Badges(subs), Offs(subs))
             : [];
     }
 

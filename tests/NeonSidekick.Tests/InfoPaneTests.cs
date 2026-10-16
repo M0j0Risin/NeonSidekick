@@ -654,6 +654,38 @@ public class InfoPaneTests : IDisposable
         Assert.Equal([(0, 8), (0, 15)], InfoPane.SubStripLayout("Help", ["SQL", "MySQL"], 80, ["²", null]).Places);
     }
 
+    /// <summary>
+    /// Titles whose switch is off (2026-10-16, <c>/tools</c>' dim tabs): <see cref="Theme.TabOff"/>, dim and italic, the one on show
+    /// <see cref="Theme.TabActiveOff"/>; the others as ever, the text and the layout unchanged, and no set drawing byte for byte as before.
+    /// </summary>
+    [Fact]
+    public void OffTitles_AreDimAndItalic_OnBothStrips_AndMoveNothing()
+    {
+        string[] titles = ["Alpha", "Beta", "Gamma", "Delta"];
+        var off = new HashSet<int> { 1, 2 };
+        Assert.Contains("italic", Theme.TabOff.ToMarkup());
+        Assert.Contains("italic", Theme.TabActiveOff.ToMarkup());
+        Assert.Contains("underline", Theme.TabActiveOff.ToMarkup());
+
+        foreach (var draw in new Func<IReadOnlySet<int>?, IReadOnlyList<string>>[]
+        {
+            o => InfoPane.SubStripRows("Help", titles, 2, 28, null, o),
+            o => InfoPane.TabStripRows("Help", titles, 2, 28, null, o),
+        })
+        {
+            var plain = draw(null);
+            var dimmed = draw(off);
+            Assert.Equal(plain, draw(new HashSet<int>()));
+            Assert.Equal(plain.Select(Markup.Remove), dimmed.Select(Markup.Remove));
+            string all = string.Concat(dimmed);
+            Assert.Contains($"[{Theme.TabIdle.ToMarkup()}]Alpha[/]", all);
+            Assert.Contains($"[{Theme.TabOff.ToMarkup()}]Beta[/]", all);
+            Assert.Contains($"[{Theme.TabActiveOff.ToMarkup()}]Gamma[/]", all);
+            Assert.Contains($"[{Theme.TabIdle.ToMarkup()}]Delta[/]", all);
+            Assert.Contains($"[{Theme.TabActive.ToMarkup()}]Gamma[/]", string.Concat(plain));
+        }
+    }
+
     [Fact]
     public void TabAt_OnALaterRow_HitsTheTitleThere_AndMissesTheIndent()
     {

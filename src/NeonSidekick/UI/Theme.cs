@@ -172,6 +172,14 @@ public static class Theme
     public static Style TabLit => new(Accent.Foreground, decoration: Decoration.Bold);
     /// <summary>A tab one is not on (2026-10-07): body text, a step up from the dim it was, so the titles read as choices.</summary>
     public static Style TabIdle => new(Body.Foreground);
+    /// <summary>
+    /// A tab whose switch is off (2026-10-16, the user's ask: a <c>/tools</c> menu whose group switch is off, or a group whose menus all
+    /// are, <see cref="UI.MenuTab.Off"/>): the dim text, italic, since dim alone is weak on a few themes (blueprint, chalkboard, commodore)
+    /// and italic still shows on a terminal with no colour. Derived from <see cref="DimText"/>'s slot, so a theme's override counts.
+    /// </summary>
+    public static Style TabOff => new(DimText.Foreground, decoration: Decoration.Italic);
+    /// <summary>The tab one is on when its switch is off (2026-10-16): <see cref="TabOff"/> bold and underlined, the underline still marking where one is.</summary>
+    public static Style TabActiveOff => new(DimText.Foreground, decoration: Decoration.Bold | Decoration.Underline | Decoration.Italic);
     /// <summary>The strip's separators (2026-10-07): the <c>│</c> after the label and the <c>·</c> between titles, in the rule's colour.</summary>
     public static Style TabSeparator => new(PaneRule.Foreground);
     /// <summary>
