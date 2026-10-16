@@ -28,7 +28,7 @@ public sealed class ServerWriteTests
         Assert.True(DatabaseWriteModes.IsReadWrite("read-write"));
         Assert.False(DatabaseWriteModes.IsReadWrite(null));
         Assert.Equal("the PostgreSQL tools only read", DatabaseWriteModes.Describe("read-only", Family));
-        Assert.Equal("postgres_execute may change a readwrite connection's database, each change allowed on a pane", DatabaseWriteModes.Describe("read-write", Family));
+        Assert.Equal("postgres_execute may change a readwrite connection's database, each change asking you first", DatabaseWriteModes.Describe("read-write", Family));
     }
 
     [Fact]

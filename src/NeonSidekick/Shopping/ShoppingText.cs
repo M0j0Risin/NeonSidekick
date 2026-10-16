@@ -188,7 +188,7 @@ public static class ShoppingText
     public static string StoreAdded(ShopStore store, string folder, bool active) =>
         "Added the store \"" + store.Name + "\"" + (active ? " (the active store)" : "") + "; its reference documents go in " + folder + ".";
 
-    public static string StoreUsed(ShopStore store) => "\"" + store.Name + "\" is the active store; the list now walks through it.";
+    public static string StoreUsed(ShopStore store) => "\"" + store.Name + "\" is the active store; the list now follows its aisles.";
 
     public static string NewSection(string name) => "new section \"" + name + "\"";
 

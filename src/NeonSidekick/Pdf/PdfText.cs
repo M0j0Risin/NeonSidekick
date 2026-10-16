@@ -104,7 +104,7 @@ public static class PdfText
         PdfEditPlan.MergeWord => "join PDFs into one",
         PdfEditPlan.ExtractWord => "copy pages into a new PDF",
         PdfEditPlan.DeleteWord => "a PDF without some pages",
-        _ => "turn pages",
+        _ => "rotate pages",
     };
 
     /// <summary>A word an edit does not take (2026-10-14). Pinned.</summary>

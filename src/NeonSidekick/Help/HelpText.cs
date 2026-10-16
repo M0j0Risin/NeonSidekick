@@ -24,8 +24,8 @@ public static class HelpText
     public const int MaxMatches = 8;
 
     // The panes' one-liners: README's Available Panes, kept short.
-    public const string SettingsPaneSummary = "the app's settings, in four tabs with a second strip under three: Client (Chat: the profile and the screen; Sessions; Botchat), Servers (Common: what every LLM server reads; Http: what only an OpenAI-compatible HTTP server reads; Embedded, Docker, Anthropic with the Claude Code server and /claude, OpenAI), Advisors (the profile advisors) and Voice (TTS: speech output; STT: voice input)";
-    public const string ToolsPaneSummary = "the model's tools: Offered lists every tool, on or off (Enter flips one); Core, Files, Apps, Admin, Databases, Devices and Home hold each tool group's settings, one menu per group on a second strip (←/→ walk every menu, Tab jumps a whole tab), with the pane's own options under Core › Options";
+    public const string SettingsPaneSummary = "the app's settings, in four tabs, three with a second row of tabs: Client (Chat: the profile and the screen; Sessions; Botchat), Servers (Common: what every LLM server reads; Http: what only an OpenAI-compatible HTTP server reads; Embedded, Docker, Anthropic with the Claude Code server and /claude, OpenAI), Advisors (the profile advisors) and Voice (TTS: speech output; STT: voice input)";
+    public const string ToolsPaneSummary = "the model's tools: Offered lists every tool, on or off (Enter flips one); Core, Files, Apps, Admin, Databases, Devices and Home hold each tool group's settings, one menu per group on a second row of tabs (←/→ step through every menu, Tab skips to the next main tab), with the pane's own options under Core › Options";
     public const string SkillsPaneSummary = "agent skills (SKILL.md folders): Offered lists and manages the installed skills, Reflection sets how the model writes and improves skills on its own, Options holds the skill switches and the project file";
     public const string McpPaneSummary = "external MCP servers: Servers lists and edits them, Tools shows what each offers, Options holds the master switch and the timeout";
 
@@ -129,7 +129,7 @@ public static class HelpText
     public static string Setting(HelpRow row, string defaultValue, string description)
     {
         ArgumentNullException.ThrowIfNull(row);
-        string menu = row.Menu is null ? "" : $", then {row.Menu} on the second strip";   // "Enter on" the menu until 2026-10-10, when the menus became sub-tabs
+        string menu = row.Menu is null ? "" : $", then {row.Menu} on the second row of tabs";   // "Enter on" the menu until 2026-10-10, when the menus became sub-tabs
         return $"Setting {row.Label}\n  Where: {row.Path} (open {row.Pane}, go to the {row.Tab} tab{menu}, Enter on the row edits it)\n  Default: {defaultValue}\n  What it does: {description}";
     }
 
@@ -153,13 +153,13 @@ public static class HelpText
     }
 
     /// <summary>
-    /// What a group tab holds (2026-10-09): <c>the menus Print, Camera, … (a second strip under the tab; ←/→ walk them)</c>. Pinned. "Enter opens
+    /// What a group tab holds (2026-10-09): <c>the menus Print, Camera, … (a second row of tabs under the tab; ←/→ step through them)</c>. Pinned. "Enter opens
     /// one, each a strip of its rows" until 2026-10-10, when the menus became sub-tabs.
     /// </summary>
     public static string MenusTab(IReadOnlyList<string> menus)
     {
         ArgumentNullException.ThrowIfNull(menus);
-        return "the menus " + string.Join(", ", menus) + " (a second strip under the tab; ←/→ walk them)";
+        return "the menus " + string.Join(", ", menus) + " (a second row of tabs under the tab; ←/→ step through them)";
     }
 
     /// <summary>

@@ -504,7 +504,7 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>The summary's hidden-save row. Pinned.</summary>
-    public const string OracleWizardSaveHiddenRow = "Save, hidden from the model until ticked in Oracle connections offered";
+    public const string OracleWizardSaveHiddenRow = "Save, hidden from the model until you tick it in Oracle connections offered";
 
     /// <summary>
     /// The draft tried as it stands, nothing written: a one-entry catalog of it, its password handed over as a plain

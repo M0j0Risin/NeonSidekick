@@ -76,12 +76,12 @@ internal sealed partial class SettingsMenu
     public const string ComputerWizardAuthQuestion = "Who it is reached as.";
     public const string ComputerWizardUserQuestion = "The account: DOMAIN\\name or name@domain (lab-box\\admin for the machine's own account).";
     public const string ComputerWizardAccessQuestion = "Whether anything may be changed here (each change still needs the writes switch, the lists below and your yes).";
-    public const string ComputerWizardControlQuestion = "What may be changed, joined by commas (* any run); empty for nothing.";
+    public const string ComputerWizardControlQuestion = "What may be changed, joined by commas (* matches any characters); empty for nothing.";
     public const string ComputerWizardActionsQuestion = "The actions allowed, joined by commas; all (or empty) for every one, none for none.";
     public const string ComputerWizardDetailQuestion = "What the main chat's model reads here (the bots and advisors always read redacted).";
     public const string ComputerWizardDescriptionQuestion = "What the computer is, in your words (optional): the model reads it to pick one.";
     public const string ComputerWizardSummaryCaption = "Check the computer: Test reads it under its account without saving; Enter on a row below changes it.";
-    public const string ComputerWizardSaveHiddenRow = "Save, hidden from the model until ticked";
+    public const string ComputerWizardSaveHiddenRow = "Save, hidden from the model until you tick it";
     public const string ComputerWizardTestRow = "Test the computer";
     public const string ComputerWizardHostRequired = "A host is required.";
     public const string ComputerWizardCancelledNotice = "No computer added.";
@@ -101,7 +101,7 @@ internal sealed partial class SettingsMenu
     private ComputerWizardSpec<ServiceComputerConfig> ServiceWizard => new(
         ServiceConfigFile.Family, SettingsField.ServiceAddComputer, SettingsField.ServiceComputersOffered,
         d => d.ServiceComputersOffered, (d, next) => d.ServiceComputersOffered = next, ServiceJsonContext.Default.ServiceComputerConfig,
-        "Services", "The services visible here, joined by commas (* any run, e.g. MSSQL*); empty for all.", c => c.Services, (c, v) => c.Services = v,
+        "Services", "The services visible here, joined by commas (* matches any characters, e.g. MSSQL*); empty for all.", c => c.Services, (c, v) => c.Services = v,
         ComputerWizardControlQuestion,
         "Protected", "Services never stopped, restarted or retyped here, over the app's own list, joined by commas; empty for the app's alone.",
         c => c.Protected, (c, v) => c.Protected = v, null, null,

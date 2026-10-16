@@ -24,7 +24,7 @@ public static class UserLineStyle
     public static string Describe(string name) => name switch
     {
         Quiet => "the › in the user color, your words in the body's",
-        Slab => "your line on a faint slab",
+        Slab => "your line on a faint fill",
         Bold => "your line bold in the user color",
         _ => "",
     };

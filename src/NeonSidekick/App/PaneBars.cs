@@ -47,7 +47,7 @@ public static class PaneBars
     {
         Hints => "key hints, shown while there is one",
         Status => "always shown; the busy row under a reply",
-        Toolbar => "the panes' glyphs and the path",
+        Toolbar => "the panes' icons and the path",
         Perf => "the meters",
         Home => "Home Assistant's chips",
         _ => "",

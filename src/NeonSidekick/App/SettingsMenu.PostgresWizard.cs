@@ -30,7 +30,7 @@ internal sealed partial class SettingsMenu
     public const string PostgresWizardUserQuestion = "The database user (the real guard is an account with only SELECT grants).";
     public const string PostgresWizardTlsQuestion = "Encryption of the connection.";
     public const string PostgresWizardHostRequired = "A host is required.";
-    public const string PostgresWizardSaveHiddenRow = "Save, hidden from the model until ticked in PostgreSQL connections offered";
+    public const string PostgresWizardSaveHiddenRow = "Save, hidden from the model until you tick it in PostgreSQL connections offered";
 
     public static string PostgresWizardPortError(string typed) => $"'{typed}' is not a port (1 to 65535).";
 

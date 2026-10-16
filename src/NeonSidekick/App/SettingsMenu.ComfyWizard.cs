@@ -81,7 +81,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<string> ComfyWizardClipSkipRows = ["none", "2"];
 
     public const string ComfyWizardSaveOfferedRow = "Save, and offer it to the model";
-    public const string ComfyWizardSaveHiddenRow = "Save, hidden from the model until ticked in ComfyUI workflows offered";
+    public const string ComfyWizardSaveHiddenRow = "Save, hidden from the model until you tick it in ComfyUI workflows offered";
     public const string ComfyWizardTestRow = "Test the workflow";
     public const string ComfyWizardCancelRow = "Cancel";
     public const string ComfyWizardCancelledNotice = "No workflow added.";

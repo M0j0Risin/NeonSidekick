@@ -44,7 +44,7 @@ public static class DatabaseWriteModes
         return name switch
         {
             "read-only" => $"the {family.Title} tools only read",
-            "read-write" => $"{family.ToolName} may change a readwrite connection's database, each change allowed on a pane",
+            "read-write" => $"{family.ToolName} may change a readwrite connection's database, each change asking you first",
             _ => "",
         };
     }

@@ -42,7 +42,7 @@ public class SplashModeTests
     [Fact]
     public void Describe_IsPinned()
     {
-        Assert.Equal("one picture fills the screen under the banner at startup; ← → walk them", SplashMode.Describe("fullsize"));
+        Assert.Equal("one picture fills the screen under the banner at startup; ← → step through them", SplashMode.Describe("fullsize"));
         Assert.Equal("the pictures as thumbnails at the image thumbnail size, a screenful at a time; ← → page", SplashMode.Describe("tiled"));
         Assert.Equal("the banner alone at startup", SplashMode.Describe("off"));
         Assert.Equal("", SplashMode.Describe("other"));

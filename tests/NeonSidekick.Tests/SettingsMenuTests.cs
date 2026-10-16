@@ -1260,7 +1260,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("Welcome splash", SettingsMenu.FieldName(SettingsField.WelcomeSplash));
         Assert.Equal("fullsize", SettingsMenu.FieldValue(SettingsField.WelcomeSplash, data, _settings.ProfileDirectory));
         Assert.Equal("tiled", SettingsMenu.FieldValue(SettingsField.WelcomeSplash, new AppSettingsData { WelcomeSplashMode = "tiled" }, _settings.ProfileDirectory));
-        Assert.Equal("fullsize [#9A8BB8]one picture fills the screen under the banner at startup; ← → walk them[/]", SettingsMenu.WelcomeSplashModeLabel("fullsize"));
+        Assert.Equal("fullsize [#9A8BB8]one picture fills the screen under the banner at startup; ← → step through them[/]", SettingsMenu.WelcomeSplashModeLabel("fullsize"));
         Assert.Equal("tiled    [#9A8BB8]the pictures as thumbnails at the image thumbnail size, a screenful at a time; ← → page[/]", SettingsMenu.WelcomeSplashModeLabel("tiled"));
         Assert.Equal("off      [#9A8BB8]the banner alone at startup[/]", SettingsMenu.WelcomeSplashModeLabel("off"));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.WelcomeSplash) || SettingsMenu.IsLlmField(SettingsField.WelcomeSplash) || SettingsMenu.IsTtsField(SettingsField.WelcomeSplash) || SettingsMenu.IsVoiceField(SettingsField.WelcomeSplash));
@@ -4578,7 +4578,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("\n▸ Session retention (days)    30 days\n", Output);
         Assert.Contains("\n  · Session naming mode: first-line\n", Output);
         Assert.Contains("\n▸ Session naming mode         first-line\n", Output);
-        AssertPickerEnds("\n" + Titled(GroupBreadcrumb(SettingsTab.Sessions, "Session show name")) + "\n \n▸ all            every session name shows on the rule above the input row\n  model-written  only a model-written or typed name shows; the first line never does\n  none           the rule stays bare\n", 120);
+        AssertPickerEnds("\n" + Titled(GroupBreadcrumb(SettingsTab.Sessions, "Session show name")) + "\n \n▸ all            every session name shows on the line above the input row\n  model-written  only a model-written or typed name shows; the first line never does\n  none           the rule stays bare\n", 120);
         Assert.Contains("\n  · Session show name: none\n", Output);
         Assert.Contains("\n▸ Session show name           none\n", Output);
         Assert.False(SettingsMenu.IsToggle(SettingsField.SessionShowName));

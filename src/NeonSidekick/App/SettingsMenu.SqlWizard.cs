@@ -72,7 +72,7 @@ internal sealed partial class SettingsMenu
         ["mandatory  encrypted, the certificate checked unless trusted below (the default)", "strict     TDS 8: TLS first, the certificate always checked", "optional   encrypted only if the server asks"];
 
     public const string SqlWizardSaveOfferedRow = "Save, and offer it to the model";
-    public const string SqlWizardSaveHiddenRow = "Save, hidden from the model until ticked in SQL connections offered";
+    public const string SqlWizardSaveHiddenRow = "Save, hidden from the model until you tick it in SQL connections offered";
     public const string SqlWizardTestRow = "Test the connection";
     public const string SqlWizardCancelRow = "Cancel";
 

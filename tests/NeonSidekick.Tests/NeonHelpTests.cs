@@ -139,7 +139,7 @@ public class NeonHelpTests
     public void ASettingByName_IsWhereItIs_ItsDefault_AndWhatItDoes(string query)
     {
         Assert.Equal(
-            "Setting Camera watch interval (s)\n  Where: /tools › Devices › Camera › Camera watch interval (s) (open /tools, go to the Devices tab, then Camera on the second strip, Enter on the row edits it)\n  Default: 10\n  What it does: " + HelpSettings.Describe(SettingsField.CameraWatchSeconds),
+            "Setting Camera watch interval (s)\n  Where: /tools › Devices › Camera › Camera watch interval (s) (open /tools, go to the Devices tab, then Camera on the second row of tabs, Enter on the row edits it)\n  Default: 10\n  What it does: " + HelpSettings.Describe(SettingsField.CameraWatchSeconds),
             Invoke(query));
     }
 
@@ -223,7 +223,7 @@ public class NeonHelpTests
     public void TheImageMenu_IsFound_AndItsRowsNameIt()
     {
         Assert.StartsWith("Tab /tools › Files › Image:", Invoke("/tools image"), StringComparison.Ordinal);
-        Assert.Contains("\n  Where: /tools › Files › Image › Image edit mode (open /tools, go to the Files tab, then Image on the second strip, Enter on the row edits it)\n", Invoke("Image edit mode", "setting"));
+        Assert.Contains("\n  Where: /tools › Files › Image › Image edit mode (open /tools, go to the Files tab, then Image on the second row of tabs, Enter on the row edits it)\n", Invoke("Image edit mode", "setting"));
         Assert.Contains("\n  Where: /tools › Files › Image › Pasted images folder ", Invoke("Pasted images folder", "setting"));
     }
 
@@ -236,7 +236,7 @@ public class NeonHelpTests
         Assert.StartsWith("Tab /tools › Databases: " + HelpText.MenusTab(["SQL", "MySQL", "SQLite", "PostgreSQL", "Oracle"]) + "\n- SQL: SQL tools, SQL mode, ", text, StringComparison.Ordinal);
         Assert.Contains("\n- Oracle: Oracle tools, ", text);
         Assert.EndsWith("\nAsk for one menu (/tools sql) for its rows' defaults and what each does.", text, StringComparison.Ordinal);
-        Assert.Equal("the menus Print, Camera (a second strip under the tab; ←/→ walk them)", HelpText.MenusTab(["Print", "Camera"]));
+        Assert.Equal("the menus Print, Camera (a second row of tabs under the tab; ←/→ step through them)", HelpText.MenusTab(["Print", "Camera"]));
         Assert.Equal([(ToolsText.CoreTabTitle, "Ask"), (ToolsText.CoreTabTitle, "Web"), (ToolsText.CoreTabTitle, ToolsText.NetworkMenuTitle), (ToolsText.CoreTabTitle, "Shell"), (ToolsText.CoreTabTitle, ToolsText.TimersMenuTitle), (ToolsText.CoreTabTitle, "Options"), (ToolsText.FilesTabTitle, "File")], HelpLocation.Menus("/tools").Take(7));   // Network after Web later still on 2026-10-15 (the admin-tools plan)   // Timers before Options since later on 2026-10-15   // the Standard group first since later on 2026-10-10, then Files; Shopping before Options on 2026-10-11 until it went to Home later that day
         Assert.Equal([(SettingsMenu.ClientTabTitle, "Chat"), (SettingsMenu.ClientTabTitle, "Sessions"), (SettingsMenu.ClientTabTitle, "Botchat"), (SettingsMenu.ClientTabTitle, SettingsMenu.WebUiTabTitle), (SettingsMenu.ServersTabTitle, "Common")], HelpLocation.Menus("/settings").Take(5));   // the Servers and Voice groups since 2026-10-10; Common and Http (the LLM tab) later that day; the Client group first later still; Web UI under Client since 2026-10-14
     }

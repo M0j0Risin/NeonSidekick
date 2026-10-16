@@ -41,7 +41,8 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Pictures as input:** paste or drop one on the input line, or take one with the webcam (`/camera`) or of the screen (`/screen`).
 * **Its own windows:** a picture viewer and thumbnail browser (`/view`), a live camera view (`/camera live`), the log (`/log`), a background process's output (`/process`), a YouTube player (`/youtube`) and a web browser (`/browser`, Windows only), where you can sign in to a site or pass its bot check and lend its cookies to the web tools.
 * **Auto-complete** for commands, files, folders, skills and tools, and **find** in the transcript (`/find`).
-* **Message queue:** keep typing while the model works; messages go out in order. `/prompts` keeps the ones you send often.
+* **Message queue:** keep typing while the model works; messages go out in order.
+* **Saved prompts:** keep the messages you send often and send one from a pane, or from your phone through the Web UI (`/prompts`).
 * **Voice in and out:** Whisper speech-to-text with push-to-talk or a wake word ("hey neon"), and Kokoro text-to-speech with voice presets you can mix; both run in-process (or speech through a Kokoro server).
 * **Headless mode:** `--headless` runs over stdin/stdout for scripts and scheduled jobs ([HEADLESS.md](docs/HEADLESS.md)).
 * **Web UI:** the chat, the model's questions and the shopping list in a browser, from a phone on your home network or your tailnet (`/webui`, [the Web UI](docs/INTERFACE.md#web-ui)).
@@ -105,7 +106,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 **On a Mac?** It runs on Apple Silicon (M1 and later). Docker servers, the browser window, the admin tools (event logs, services, tasks, Active Directory), the `printer` PDF engine and the NVFP4 models need Windows, and the camera, screen capture and YouTube playback need macOS 14 or later. [On a Mac](docs/MAC.md) covers setup and every difference.
 
 Only for some features:
-* **Running a model inside the app:** an NVIDIA card (driver 580 or newer) or any Vulkan card; without one it works, but slowly. On a Mac it runs on the GPU; a 16 GB Mac suits the smaller Gemma models.
+* **Running a model inside the app:** an NVIDIA card (driver 580 or newer) or any Vulkan card; without one it works, but slowly. 16 GB of VRAM runs the smaller models, and 32 GB runs the biggest of the included models.
 * **Web pages that need a real browser, and PDFs:** Edge, Chrome or Brave (or Chromium on a Mac).
 * **`/claude` and the Claude Code server:** Claude Code installed.
 * **Scripts in Python or Node:** Python or Node installed.

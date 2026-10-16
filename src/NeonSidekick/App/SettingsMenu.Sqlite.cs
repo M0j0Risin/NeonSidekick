@@ -214,7 +214,7 @@ internal sealed partial class SettingsMenu
         : "The database file: a full path (D:\\data\\app.db), or one relative to sqlite.json's folder.";
     public const string SqliteWizardDescriptionQuestion = "What the database holds, in your words (optional): the model reads it to pick one.";
     public const string SqliteWizardSummaryCaption = "Check the database: Test opens it read-only without saving; Enter on a row below changes it.";
-    public const string SqliteWizardSaveHiddenRow = "Save, hidden from the model until ticked in SQLite databases offered";
+    public const string SqliteWizardSaveHiddenRow = "Save, hidden from the model until you tick it in SQLite databases offered";
     public const string SqliteWizardTestRow = "Test the database";
     public const string SqliteWizardPathRequired = "A file is required.";
     public const string SqliteWizardCancelledNotice = "No database added.";

@@ -50,7 +50,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<string> UncWizardAccessRows =
         ["read       search and read only (the default)", "readwrite  also write, move and delete — permanently, while UNC writes is on"];
 
-    public const string UncWizardSaveHiddenRow = "Save, hidden from the model until ticked in UNC shares offered";
+    public const string UncWizardSaveHiddenRow = "Save, hidden from the model until you tick it in UNC shares offered";
     public const string UncWizardTestRow = "Test the share";
     public const string UncWizardPathRequired = "A path is required.";
     public const string UncWizardCancelledNotice = "No share added.";

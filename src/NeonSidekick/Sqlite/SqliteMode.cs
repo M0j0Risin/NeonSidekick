@@ -41,7 +41,7 @@ public static class SqliteModes
     public static string Describe(string name) => name switch
     {
         "read-only" => "the SQLite tools only read",
-        "read-write" => "sqlite_execute may change a database or create one, each change allowed on a pane",
+        "read-write" => "sqlite_execute may change a database or create one, each change asking you first",
         _ => "",
     };
 

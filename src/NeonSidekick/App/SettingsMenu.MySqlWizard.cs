@@ -28,7 +28,7 @@ internal sealed partial class SettingsMenu
     public const string MySqlWizardTlsQuestion = "Encryption of the connection.";
     public const string MySqlWizardHostRequired = "A host is required.";
     public const string MySqlWizardDatabaseRequired = "A database is required: the connection reaches that one alone.";
-    public const string MySqlWizardSaveHiddenRow = "Save, hidden from the model until ticked in MySQL connections offered";
+    public const string MySqlWizardSaveHiddenRow = "Save, hidden from the model until you tick it in MySQL connections offered";
 
     public static string MySqlWizardPortError(string typed) => $"'{typed}' is not a port (1 to 65535).";
 

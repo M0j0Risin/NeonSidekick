@@ -28,7 +28,7 @@ internal sealed partial class SettingsMenu
     public const string EventLogWizardAuthQuestion = "Who its logs are read as.";
     public const string EventLogWizardUserQuestion = "The account to read them as: DOMAIN\\name or name@domain (lab-box\\admin for the machine's own account).";
     public const string EventLogWizardMethodQuestion = "How the sign-in is made (default lets Windows choose).";
-    public const string EventLogWizardLogsQuestion = "The logs allowed, joined by commas (* any run but /, e.g. Microsoft-Windows-*/Operational); empty for all.";
+    public const string EventLogWizardLogsQuestion = "The logs allowed, joined by commas (* matches any characters except /, e.g. Microsoft-Windows-*/Operational); empty for all.";
     public const string EventLogWizardDetailQuestion = "What the main chat's model reads of these events (the bots and advisors always read redacted).";
     public const string EventLogWizardDescriptionQuestion = "What the computer is, in your words (optional): the model reads it to pick one.";
     public const string EventLogWizardSummaryCaption = "Check the computer: Test reads its newest System event without saving; Enter on a row below changes it.";
@@ -44,7 +44,7 @@ internal sealed partial class SettingsMenu
     /// <summary>The store picks, <c>file</c> then <c>credman</c>. Pinned.</summary>
     public static readonly IReadOnlyList<string> EventLogWizardStoreRows = SqlText.StoreRows("eventlog.json");
 
-    public const string EventLogWizardSaveHiddenRow = "Save, hidden from the model until ticked in Event log computers offered";
+    public const string EventLogWizardSaveHiddenRow = "Save, hidden from the model until you tick it in Event log computers offered";
     public const string EventLogWizardTestRow = "Test the computer";
     public const string EventLogWizardHostRequired = "A host is required.";
     public const string EventLogWizardCancelledNotice = "No computer added.";

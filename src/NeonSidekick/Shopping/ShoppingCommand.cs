@@ -80,7 +80,7 @@ public static class ShoppingCommand
         ("uncheck", "untick an item: /shopping uncheck <item|n>"),
         ("remove", "take an item off the list: /shopping remove <item|n>"),
         ("rename", "rename an item: /shopping rename <item|n> to <new-name>"),
-        ("list", "print the list walked through the store: /shopping list [<store>]"),
+        ("list", "print the list in the store's aisle order: /shopping list [<store>]"),
         ("clear", "remove the ticked items; /shopping clear all empties the list, after a yes"),
         ("store", "the stores; /shopping store <name> shops there, store add|remove <name>, store rename <name> to <new>"),
         ("export", "write the list to " + ShoppingText.ExportFilePattern + ": /shopping export [<store>] [verbose]"),
@@ -206,9 +206,9 @@ public static class ShoppingCommand
                 [new(head + "add ", "a new store: /shopping store add <name>"), new(head + "rename ", "/shopping store rename <name> to <new-name>"), new(head + "remove ", "a store and its layout gone, after a yes"), .. stores.Select(s => new CompletionItem(head + s, "shop at " + s))],
                 argText),
             "check" or "tick" or "uncheck" or "untick" or "remove" or "rename" => MentionCompleter.Matches(items.Select(i => new CompletionItem(head + i, "")).ToList(), argText),
-            "list" => MentionCompleter.Matches(stores.Select(s => new CompletionItem(head + s, "the list walked through " + s)).ToList(), argText),
+            "list" => MentionCompleter.Matches(stores.Select(s => new CompletionItem(head + s, "the list in the aisle order of " + s)).ToList(), argText),
             "reindex" => MentionCompleter.Matches(stores.Select(s => new CompletionItem(head + s, "read " + s + "'s documents again")).ToList(), argText),
-            "export" or "print" => MentionCompleter.Matches([new(head + VerboseWord, "the roomy form: a heading per aisle, a box per item"), .. stores.Select(s => new CompletionItem(head + s, "the list walked through " + s))], argText),
+            "export" or "print" => MentionCompleter.Matches([new(head + VerboseWord, "the roomy form: a heading per aisle, a box per item"), .. stores.Select(s => new CompletionItem(head + s, "the list in the aisle order of " + s))], argText),
             _ => [],
         };
     }

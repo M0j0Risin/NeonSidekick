@@ -37,7 +37,7 @@ public static class ScreenAskMode
     /// <summary>The menu hint next to a mode. Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "ask" => "you allow each screenshot (once, or for the session) on a pane",
+        "ask" => "you allow each screenshot first (once, or for the session)",
         "allow" => "the model takes screenshots without asking",
         _ => "",
     };

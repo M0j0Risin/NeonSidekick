@@ -167,7 +167,7 @@ public sealed class ShoppingToolsTests : IDisposable
         await Call(layout, ("action", "add_store"), ("name", "H-E-B"));
         await Call(layout, ("action", "add_store"), ("name", "Costco"), ("notes", "the one on 1604"));
         await Call(layout, ("action", "add_location"), ("name", "Aisle 3"), ("section", "Pantry"));
-        Assert.Equal("\"Costco\" is the active store; the list now walks through it.", await Call(layout, ("action", "use_store"), ("name", "costco")));
+        Assert.Equal("\"Costco\" is the active store; the list now follows its aisles.", await Call(layout, ("action", "use_store"), ("name", "costco")));
         Assert.Equal(ShoppingText.NoSuchLocation(_holder.Current().FindStore("Costco")!, "Aisle 3", []), await Call(layout, ("action", "set_walk"), ("name", "Aisle 3"), ("walk", 2)));
 
         string stores = await Call(Tool(ShoppingStoresTool.ToolName));

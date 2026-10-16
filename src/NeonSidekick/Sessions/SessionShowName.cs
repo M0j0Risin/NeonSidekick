@@ -61,7 +61,7 @@ public static class SessionShowName
     /// <summary>The menu hint next to a choice. Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "all" => "every session name shows on the rule above the input row",
+        "all" => "every session name shows on the line above the input row",
         "model-written" => "only a model-written or typed name shows; the first line never does",
         "none" => "the rule stays bare",
         _ => "",

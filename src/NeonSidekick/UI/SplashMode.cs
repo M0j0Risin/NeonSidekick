@@ -63,7 +63,7 @@ public static class SplashMode
     /// <summary>The menu hint next to a mode. Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "fullsize" => "one picture fills the screen under the banner at startup; ← → walk them",
+        "fullsize" => "one picture fills the screen under the banner at startup; ← → step through them",
         "tiled" => "the pictures as thumbnails at the image thumbnail size, a screenful at a time; ← → page",
         "off" => "the banner alone at startup",
         _ => "",
