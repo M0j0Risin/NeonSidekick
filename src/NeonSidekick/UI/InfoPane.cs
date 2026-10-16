@@ -18,6 +18,13 @@ public sealed record InfoTab(string Title, Func<IRenderable> Content)
     /// the pane stays open. Null: the content takes no clicks, as before.
     /// </summary>
     public Action<string>? LineDoubleClicked { get; init; }
+
+    /// <summary>
+    /// Told a double-clicked content line's index and plain text (2026-10-15, the AD gaps plan: a <c>/ad</c> card's row opens that object's card):
+    /// true closes the pane as a pressed button does, <see cref="InfoPane.Pressed"/> null and <see cref="InfoPane.ChosenLine"/> the line; false
+    /// keeps it open. Tried before <see cref="LineDoubleClicked"/>.
+    /// </summary>
+    public Func<int, string, bool>? LineChosen { get; init; }
 }
 
 /// <summary>
@@ -114,8 +121,12 @@ public sealed class InfoPane
             hint.Append(key).Append(" = ").Append(word).Append(" · ");
         }
 
-        return hint.Append("type = find · ESC = close").ToString();
+        // A button answers its bare letter, so a find that starts with one starts with Shift (2026-10-15, the menus' TypeOrShiftKeys).
+        return hint.Append(buttons.Count > 0 ? ShiftFindKeys : "type = find").Append(" · ESC = close").ToString();
     }
+
+    /// <summary>The find's keys on a pane with lettered buttons (2026-10-15, <see cref="MenuFilter.TypeOrShiftKeys"/>'s wording). Pinned.</summary>
+    public const string ShiftFindKeys = "type / Shift+letter = find";
 
     /// <summary>What sits between the tabs' last title and a toggle's (2026-10-12): a dim bar, one cell as <see cref="TitleSeparator"/>, so the layout is the strip's.</summary>
     public const string ToggleSeparator = "│";
@@ -477,6 +488,9 @@ public sealed class InfoPane
     /// <summary>The pane's button (<see cref="InfoAction"/>) that closed the last visit, or null when it closed otherwise.</summary>
     public InfoAction? Pressed { get; private set; }
 
+    /// <summary>The content line a tab's <see cref="InfoTab.LineChosen"/> closed the last visit on (its text), or null when it closed otherwise.</summary>
+    public string? ChosenLine { get; private set; }
+
     /// <summary>The tab shown when the pane last closed (later on 2026-10-15): a host that opens it again after a button keeps the user's tab.</summary>
     public int LastTab { get; private set; }
 
@@ -498,6 +512,7 @@ public sealed class InfoPane
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(tabs);
         Pressed = null;
+        ChosenLine = null;
         _actions = actions ?? [];
         if (tabs.Count == 0)
         {
@@ -569,14 +584,22 @@ public sealed class InfoPane
                         continue;
                     }
 
-                    // A double-click on a content line (later on 2026-10-15) goes to the tab's handler, when it has one; the pane stays.
-                    if (click.Button == MouseButton.Left && tabs[active].LineDoubleClicked is { } lineClicked && !(tabs[active].Toggle is not null && _toggled.Contains(active))
+                    // A double-click on a content line (later on 2026-10-15) goes to the tab's handlers, when it has one: a chosen line closes
+                    // the pane (a /ad card's row, the AD gaps plan), otherwise the pane stays.
+                    if (click.Button == MouseButton.Left && (tabs[active].LineDoubleClicked is not null || tabs[active].LineChosen is not null) && !(tabs[active].Toggle is not null && _toggled.Contains(active))
                         && _pane.TryHitOverlay(click.X, click.Y, out int row) && row > _stripRows && row <= _stripRows + _shown && _content is { } shownLines)
                     {
                         int line = _first + row - _stripRows - 1;
                         if (line < shownLines.Count && _clicks.Second(ContentClickBase + line))
                         {
-                            lineClicked(TextFind.LineText(shownLines[line]));
+                            string text = TextFind.LineText(shownLines[line]);
+                            if (tabs[active].LineChosen?.Invoke(line, text) == true)
+                            {
+                                ChosenLine = text;
+                                return;
+                            }
+
+                            tabs[active].LineDoubleClicked?.Invoke(text);
                         }
 
                         continue;
@@ -663,13 +686,15 @@ public sealed class InfoPane
                     _clicks.Reset();
                     next = (active + step + tabs.Count) % tabs.Count;
                 }
-                else if (_find.Length == 0 && FindChar(k) is char key && _actions.FirstOrDefault(a => char.ToLowerInvariant(a.Key) == char.ToLowerInvariant(key)) is { } button)
+                else if (_find.Length == 0 && !ShiftedLetter(k) && FindChar(k) is char key && _actions.FirstOrDefault(a => char.ToLowerInvariant(a.Key) == char.ToLowerInvariant(key)) is { } button)
                 {
-                    // A button's key (2026-10-14) while no find is typed, as the toggle's: the pane closes and says which.
+                    // A button's key (2026-10-14) while no find is typed, as the toggle's: the pane closes and says which. Its bare letter only
+                    // since 2026-10-15 (the AD gaps plan: a card's c, a, n, u would stop a find for "nancy" or "admin"): Shift+letter starts the
+                    // find, judged by the modifier as MenuPane's shiftedLetter is, not the case, so Caps Lock leaves the buttons be on Windows.
                     Pressed = button;
                     return;
                 }
-                else if (_find.Length == 0 && tabs[active].Toggle is { } keyed && FindChar(k) is char pressed
+                else if (_find.Length == 0 && !ShiftedLetter(k) && tabs[active].Toggle is { } keyed && FindChar(k) is char pressed
                     && char.ToLowerInvariant(pressed) == char.ToLowerInvariant(keyed.Key))
                 {
                     // The toggle's key wins while no find is typed (2026-10-12), as a menu button's does; once one is, it goes on the find.
@@ -775,6 +800,9 @@ public sealed class InfoPane
             _mouse?.Invoke(false);
         }
     }
+
+    /// <summary>A letter typed with Shift: always the find's, never a button's (2026-10-15, the menus' rule, MenuPane's shiftedLetter).</summary>
+    internal static bool ShiftedLetter(ConsoleKeyInfo key) => (key.Modifiers & ConsoleModifiers.Shift) != 0 && char.IsLetter(key.KeyChar);
 
     /// <summary>The lines ↑, ↓, PgUp and PgDn move the view; null for every other key.</summary>
     private int? ScrollStep(ConsoleKeyInfo key) => key.Key switch

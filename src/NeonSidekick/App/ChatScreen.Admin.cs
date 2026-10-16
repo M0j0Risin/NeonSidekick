@@ -1,6 +1,7 @@
 using Microsoft.Extensions.AI;
 using NeonSidekick.ActiveDirectory;
 using NeonSidekick.Computers;
+using NeonSidekick.Files;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Network;
 using NeonSidekick.Services;
@@ -55,7 +56,7 @@ internal sealed partial class ChatScreen
         _taskBotTools = TaskTools(_tasks, _effective, null, forceRedacted: true);
         var joined = joinedDomain ?? (() => DomainJoin.Current);
         _directory = new DirectoryAccess(directorySystem, () => DirectoryConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory, joined()), () => _effective().DirectoryDomainsOffered, joined, _time);
-        _directoryTools = DirectoryTools(_directory);
+        _directoryTools = DirectoryTools(_directory, saveRoot: DirectorySaveRootNow);
         _directoryBotTools = DirectoryTools(_directory, forceRedacted: true);
     }
 
@@ -84,15 +85,30 @@ internal sealed partial class ChatScreen
             ? [new TaskListTool(access, effective, true), new TaskInfoTool(access, effective, true)]
             : [new TaskListTool(access, effective), new TaskInfoTool(access, effective), new TaskControlTool(access, effective, confirm)];
 
-    /// <summary>The five directory tools, every one a read.</summary>
-    public static IReadOnlyList<AIFunction> DirectoryTools(DirectoryAccess access, bool forceRedacted = false) =>
+    /// <summary>
+    /// The six directory tools, every one a read of the directory; <c>ad_group</c>, <c>ad_find</c> and <c>ad_ou</c> may save a list as a CSV in the
+    /// working directory (2026-10-15, the AD gaps plan), asking <paramref name="saveRoot"/> per call; the twins never save.
+    /// </summary>
+    public static IReadOnlyList<AIFunction> DirectoryTools(DirectoryAccess access, bool forceRedacted = false, Func<DirectorySaveRoot>? saveRoot = null) =>
     [
         new AdUserTool(access, forceRedacted),
-        new AdGroupTool(access, forceRedacted),
+        new AdGroupTool(access, forceRedacted, saveRoot),
         new AdComputerTool(access, forceRedacted),
-        new AdFindTool(access, forceRedacted),
+        new AdFindTool(access, forceRedacted, saveRoot),
+        new AdOuTool(access, forceRedacted, saveRoot),
         new AdDomainTool(access, forceRedacted),
     ];
+
+    /// <summary>
+    /// Where the model's <c>to</c> may write, asked per call (2026-10-15, the AD gaps plan, §1b): the working directory as it stands (it follows
+    /// <c>/cwd</c>), only while *File tools* is on and plan mode is off. Shared with headless, which passes its own two answers.
+    /// </summary>
+    public static DirectorySaveRoot DirectorySaveRootFor(bool fileTools, bool planMode, WorkingDirectory files) =>
+        !fileTools ? DirectorySaveRoot.Refused(DirectoryText.SaveNeedsFileTools)
+        : planMode ? DirectorySaveRoot.Refused(DirectoryText.SaveInPlanMode)
+        : new DirectorySaveRoot(files, null);
+
+    private DirectorySaveRoot DirectorySaveRootNow() => DirectorySaveRootFor(_effective().FileTools, _plan.Active, _files);
 
     public static readonly IReadOnlySet<string> NetworkToolNames = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -113,7 +129,7 @@ internal sealed partial class ChatScreen
 
     public static readonly IReadOnlySet<string> DirectoryToolNames = new HashSet<string>(StringComparer.Ordinal)
     {
-        AdUserTool.ToolName, AdGroupTool.ToolName, AdComputerTool.ToolName, AdFindTool.ToolName, AdDomainTool.ToolName,
+        AdUserTool.ToolName, AdGroupTool.ToolName, AdComputerTool.ToolName, AdFindTool.ToolName, AdOuTool.ToolName, AdDomainTool.ToolName,
     };
 
     // ── When each is offered ────────────────────────────────────────────────
@@ -511,9 +527,18 @@ internal sealed partial class ChatScreen
         await HandleEventLogAsync(line, sink, cancellationToken, onWatcher).ConfigureAwait(false);
     }
 
+    /// <summary>One card on <c>/ad</c>'s back-trail: what it read (its answer, domain, PDC), its title, and a group card's two switches.</summary>
+    private sealed record AdCard(DirectoryCommandResult Result, string Title, bool Nested, string Members);
+
+    /// <summary>The most cards <c>/ad</c>'s back-trail keeps.</summary>
+    private const int AdTrail = 20;
+
     /// <summary>
-    /// <c>/ad [line]</c> (2026-10-15): the answer as a card on the info pane with copy, ask and — on a locked user whose PDC emulator is a
-    /// ticked event-log computer — "Search 4740 on &lt;PDC&gt;"; without the pane, or from the Web UI's page, its lines.
+    /// <c>/ad [line]</c> (2026-10-15; the AD gaps plan the same day): the answer as a card in columns on the info pane with copy, ask and — on a
+    /// locked user whose PDC emulator is a ticked event-log computer — "Search 4740 on &lt;PDC&gt;"; on a group card <c>n</c> (direct ⇄ nested) and
+    /// <c>u</c> (all members ⇄ users only), read again in place; a double-click on a row opens that object's card by its DN in the same domain, and
+    /// ESC goes back to the card before, drawn from the trail without asking the directory again. A name several accounts share is a card of
+    /// the candidates. Without the pane, or from the Web UI's page, its lines (the card unbounded).
     /// </summary>
     private async Task HandleAdAsync(string args, INoticeSink sink, CancellationToken cancellationToken, bool onWatcher = false)
     {
@@ -523,44 +548,87 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var result = onWatcher
-            ? await DirectoryCommand.RunAsync(_directory, args, cancellationToken).ConfigureAwait(false)
-            : await _transcript.WithSpinnerAsync(DirectoryText.Working, () => DirectoryCommand.RunAsync(_directory, args, cancellationToken)).ConfigureAwait(false);
-        if (!_pane.Enabled || FromWebNow || result.Failed)
+        Task<DirectoryCommandResult> Read(Func<Task<DirectoryCommandResult>> read) => onWatcher ? read() : _transcript.WithSpinnerAsync(DirectoryText.Working, read);
+        var result = await Read(() => DirectoryCommand.RunAsync(_directory, args, cancellationToken, () => _files)).ConfigureAwait(false);
+        if (!_pane.Enabled || FromWebNow || (result.Failed && result.Answer?.Candidates is null))
         {
             await ShowCommandLinesAsync(DirectoryCommand.Word, args, result.Lines, result.Failed, sink, cancellationToken).ConfigureAwait(false);
             return;
         }
 
-        string text = string.Join('\n', result.Lines);
-        string? lockoutOn = result.LockedPdc is { } pdc ? EventLogComputerOn(pdc) : null;
-        var actions = new List<InfoAction> { new("copy", 'c', "copy"), new("ask", 'a', "ask the model") };
-        if (lockoutOn is not null)
+        var stack = new List<AdCard> { new(result, result.Title ?? args, result.Args?.Nested ?? false, result.Args?.Members ?? "all") };
+        while (stack.Count > 0)
         {
-            actions.Add(new InfoAction(DirectoryCommand.LockoutButton(result.LockedPdc!), 's', "search the PDC emulator's Security log"));
-        }
+            var card = stack[^1];
+            var answer = card.Result.Answer!;
+            var view = new DirectoryCardView(answer);
+            DirectoryRowTarget? chosen = null;
+            string? lockoutOn = card.Result.LockedPdc is { } pdc ? EventLogComputerOn(pdc) : null;
+            var actions = new List<InfoAction> { new("copy", 'c', "copy"), new("ask", 'a', "ask the model") };
+            if (lockoutOn is not null)
+            {
+                actions.Add(new InfoAction(DirectoryCommand.LockoutButton(card.Result.LockedPdc!), 's', "search the PDC emulator's Security log"));
+            }
 
-        string title = DirectoryText.Glyph + " Directory · " + (result.Title ?? args);
-        while (true)
-        {
-            await _info.ShowAsync(title, [new InfoTab(result.Title ?? "answer", () => new Spectre.Console.Text(text))], 0, cancellationToken, actions).ConfigureAwait(false);
+            if (answer is { Kind: "group", Failed: false, Self: not null })
+            {
+                actions.Add(new InfoAction(card.Nested ? DirectoryText.DirectButton : DirectoryText.NestedButton, 'n', "nested or direct"));
+                actions.Add(new InfoAction(card.Members == "users" ? DirectoryText.AllMembersButton : DirectoryText.UsersOnlyButton, 'u', "users only or all"));
+            }
+
+            string title = DirectoryText.Glyph + " Directory · " + card.Title + (stack.Count > 1 ? " ‹ " + stack[^2].Title : "");
+            var tab = new InfoTab(card.Title, () => view) { LineChosen = (index, _) => (chosen = view.TargetAt(index)) is not null };
+            await _info.ShowAsync(title, [tab], 0, cancellationToken, actions).ConfigureAwait(false);
+            if (chosen is { } target)
+            {
+                var opened = await Read(() => DirectoryCommand.OpenAsync(_directory, card.Result.Domain, target, cancellationToken)).ConfigureAwait(false);
+                if (opened.Answer is null || (opened.Failed && opened.Answer.Candidates is null))
+                {
+                    sink.Notice(string.Join(' ', opened.Lines));
+                    continue;
+                }
+
+                if (stack.Count >= AdTrail)
+                {
+                    stack.RemoveAt(0);
+                }
+
+                stack.Add(new AdCard(opened, opened.Title ?? target.Name, false, "all"));
+                continue;
+            }
+
             switch (_info.Pressed?.Key)
             {
                 case 'c':
-                    if (_copy(text))
+                    if (_copy(string.Join('\n', DirectoryRender.CardText(answer))))
                     {
                         sink.Notice("(" + DirectoryText.Glyph + " copied)");
                     }
 
                     continue;
                 case 'a':
-                    LeaveDraft(DirectoryCommand.AskDraft(result.Title ?? args, _directory.Catalog().Find(DirectoryCommand.Parse(args).Args?.Domain).Domain?.DomainName ?? ""), onWatcher);
+                    var asked = _directory.Catalog().Find(card.Result.Domain).Domain;
+                    LeaveDraft(DirectoryCommand.AskDraft(card.Title, asked?.Name ?? "", asked?.DomainName ?? ""), onWatcher);
                     return;
                 case 's':
                     await HandleEventLogAsync(DirectoryCommand.LockoutLine(lockoutOn!), sink, cancellationToken, onWatcher).ConfigureAwait(false);
                     return;
+                case 'n':
+                case 'u':
+                    bool nested = _info.Pressed.Key == 'n' ? !card.Nested : card.Nested;
+                    string members = _info.Pressed.Key == 'u' ? (card.Members == "users" ? "all" : "users") : card.Members;
+                    var again = await Read(() => DirectoryCommand.GroupAsync(_directory, card.Result.Domain, answer.Self!, nested, members, cancellationToken)).ConfigureAwait(false);
+                    if (again.Answer is null || again.Failed)
+                    {
+                        sink.Notice(string.Join(' ', again.Lines));
+                        continue;
+                    }
+
+                    stack[^1] = new AdCard(again, again.Title ?? card.Title, nested, members);
+                    continue;
                 default:
-                    return;
+                    stack.RemoveAt(stack.Count - 1);
+                    continue;
             }
         }
     }

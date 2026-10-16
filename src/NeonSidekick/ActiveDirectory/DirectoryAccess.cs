@@ -75,10 +75,22 @@ public sealed class DirectoryAccess
         return (new DirectorySource(found, new DirectoryTarget(found.Server, found.Port, found.Config.UsesTls, login), forceRedacted || !found.Config.Full), null);
     }
 
-    public async Task<DirectoryResult<T>> RunAsync<T>(DirectorySource source, Func<IDirectorySession, T> work, CancellationToken cancellationToken)
+    public Task<DirectoryResult<T>> RunAsync<T>(DirectorySource source, Func<IDirectorySession, T> work, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(work);
+        return RunAsync(source, (session, _) => work(session), cancellationToken);
+    }
+
+    /// <summary>
+    /// <see cref="RunAsync{T}(DirectorySource, Func{IDirectorySession, T}, CancellationToken)"/> whose work is handed a deadline (2026-10-15, the AD
+    /// gaps plan): <see cref="DirectoryLimits.CallBudget"/> from this call's start and the caller's token, so a walk answers with what it has before
+    /// <see cref="Timeout"/> abandons it, and ESC stops it starting searches.
+    /// </summary>
+    public async Task<DirectoryResult<T>> RunAsync<T>(DirectorySource source, Func<IDirectorySession, DirectoryDeadline, T> work, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(work);
+        var deadline = DirectoryDeadline.From(Time, DirectoryLimits.CallBudget, cancellationToken);
         if (System is not { } system)
         {
             return DirectoryResult<T>.Failed(DirectoryText.NoneHere);
@@ -89,7 +101,7 @@ public sealed class DirectoryAccess
         var started = Stopwatch.GetTimestamp();
         try
         {
-            var value = await Task.Run(() => system.Run(source.Target, work), CancellationToken.None).WaitAsync(linked.Token).ConfigureAwait(false);
+            var value = await Task.Run(() => system.Run(source.Target, session => work(session, deadline)), CancellationToken.None).WaitAsync(linked.Token).ConfigureAwait(false);
             DiagnosticLog.Debug(DirectoryText.Category, $"{source.Domain.Name} ({source.Target.Server}) read in {Stopwatch.GetElapsedTime(started).TotalMilliseconds.ToString("0", CultureInfo.InvariantCulture)} ms");
             return DirectoryResult<T>.Ok(value);
         }

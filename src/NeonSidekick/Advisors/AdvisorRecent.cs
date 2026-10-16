@@ -116,7 +116,12 @@ public static class AdvisorRecent
         // tools — the user gave the certificate stores their own switch for privacy; the other network results are not withheld.
         yield return (App.ChatScreen.ServiceToolNames, call => Services.ServiceText.WithheldFromAdvisor(call.Name, Argument(call, Llm.Tools.ServiceTool.NameArgument)));
         yield return (App.ChatScreen.TaskToolNames, call => Tasks.TaskText.WithheldFromAdvisor(call.Name, Argument(call, Llm.Tools.TaskTool.PathArgument)));
-        yield return (App.ChatScreen.DirectoryToolNames, call => ActiveDirectory.DirectoryText.WithheldFromAdvisor(call.Name, Argument(call, Llm.Tools.DirectoryTool.NameArgument)));
+        yield return (App.ChatScreen.DirectoryToolNames, call => ActiveDirectory.DirectoryText.WithheldFromAdvisor(call.Name, Argument(call, call.Name switch
+        {
+            Llm.Tools.AdOuTool.ToolName => Llm.Tools.AdOuTool.OuArgument,
+            Llm.Tools.AdFindTool.ToolName => Llm.Tools.AdFindTool.KindArgument,
+            _ => Llm.Tools.DirectoryTool.NameArgument,
+        })));
         yield return (CertificateToolNames, call => "(" + call.Name + ": read it with your own network tools)");
     }
 

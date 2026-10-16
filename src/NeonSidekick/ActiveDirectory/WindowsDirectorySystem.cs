@@ -116,7 +116,7 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
             return results.Entries.Count > 0 ? results.Entries[0] : throw new DirectoryException(LdapNative.NoSuchObject, "RootDSE answered nothing");
         }
 
-        public DirectoryResults Search(string baseDn, DirectoryScope scope, string filter, IReadOnlyList<string> attributes, int sizeLimit, bool paged)
+        public DirectoryResults Search(string baseDn, DirectoryScope scope, string filter, IReadOnlyList<string> attributes, int sizeLimit, bool paged, TimeSpan? timeLimit = null)
         {
             ArgumentNullException.ThrowIfNull(baseDn);
             ArgumentNullException.ThrowIfNull(filter);
@@ -134,7 +134,9 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
                 fixed (char* b = baseDn)
                 fixed (char* f = filter)
                 {
-                    return paged ? Paged(b, scope, f, list, sizeLimit) : Single(b, scope, f, list, sizeLimit);
+                    // A walk's search gets what its deadline has left (2026-10-15, the AD gaps plan), whole seconds, at least one.
+                    int seconds = Math.Max(1, (int)Math.Ceiling((timeLimit ?? DirectoryLimits.SearchTime).TotalSeconds));
+                    return paged ? Paged(b, scope, f, list, sizeLimit, seconds) : Single(b, scope, f, list, sizeLimit, seconds);
                 }
             }
             finally
@@ -147,9 +149,9 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
             }
         }
 
-        private DirectoryResults Single(char* baseDn, DirectoryScope scope, char* filter, char** attributes, int sizeLimit)
+        private DirectoryResults Single(char* baseDn, DirectoryScope scope, char* filter, char** attributes, int sizeLimit, int seconds)
         {
-            var timeout = new LdapNative.LTimeval { Seconds = (int)DirectoryLimits.SearchTime.TotalSeconds };
+            var timeout = new LdapNative.LTimeval { Seconds = seconds };
             nint result = 0;
             int code = LdapNative.SearchExtS(ld, baseDn, (uint)scope, filter, attributes, 0, null, null, &timeout, (uint)sizeLimit, &result);
             try
@@ -161,7 +163,7 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
 
                 var entries = new List<DirectoryEntry>();
                 Read(result, entries, sizeLimit);
-                return new DirectoryResults(entries, code != LdapNative.Success);
+                return new DirectoryResults(entries, code != LdapNative.Success, code == LdapNative.TimeLimitExceeded);
             }
             finally
             {
@@ -172,9 +174,9 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
             }
         }
 
-        private DirectoryResults Paged(char* baseDn, DirectoryScope scope, char* filter, char** attributes, int sizeLimit)
+        private DirectoryResults Paged(char* baseDn, DirectoryScope scope, char* filter, char** attributes, int sizeLimit, int seconds)
         {
-            nint search = LdapNative.SearchInitPage(ld, baseDn, (uint)scope, filter, attributes, 0, null, null, (uint)DirectoryLimits.SearchTime.TotalSeconds, (uint)sizeLimit, null);
+            nint search = LdapNative.SearchInitPage(ld, baseDn, (uint)scope, filter, attributes, 0, null, null, (uint)seconds, (uint)sizeLimit, null);
             if (search == 0)
             {
                 int failed = LdapNative.GetLastError();
@@ -183,11 +185,12 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
 
             var entries = new List<DirectoryEntry>();
             bool truncated = false;
+            bool timedOut = false;
             try
             {
                 while (entries.Count < sizeLimit)
                 {
-                    var timeout = new LdapNative.LTimeval { Seconds = (int)DirectoryLimits.SearchTime.TotalSeconds };
+                    var timeout = new LdapNative.LTimeval { Seconds = seconds };
                     uint total = 0;
                     nint result = 0;
                     int code = LdapNative.GetNextPageS(ld, search, &timeout, (uint)DirectoryLimits.PageSize, &total, &result);
@@ -202,6 +205,7 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
                         {
                             Read(result, entries, sizeLimit);
                             truncated = true;
+                            timedOut = code == LdapNative.TimeLimitExceeded;
                             break;
                         }
 
@@ -222,7 +226,7 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
                 }
 
                 truncated |= entries.Count >= sizeLimit;
-                return new DirectoryResults(entries, truncated);
+                return new DirectoryResults(entries, truncated, timedOut);
             }
             finally
             {

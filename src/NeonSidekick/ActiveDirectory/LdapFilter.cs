@@ -51,11 +51,27 @@ public static class LdapFilter
 
     public static string GroupByName(string name) => "(&" + Groups + "(|(sAMAccountName=" + Escape(name) + ")(cn=" + Escape(name) + ")(displayName=" + Escape(name) + ")(mail=" + Escape(name) + ")))";
 
-    /// <summary>A computer by its name: the account (with or without its <c>$</c>), the cn, or the DNS name.</summary>
+    /// <summary>
+    /// The service accounts (2026-10-15, the AD gaps plan): group managed, standalone managed and Windows Server 2025's delegated one, by class,
+    /// since <c>(objectCategory=computer)</c> does not match them (each has a category of its own).
+    /// </summary>
+    public const string ServiceAccounts = "(|(objectClass=msDS-GroupManagedServiceAccount)(objectClass=msDS-ManagedServiceAccount)(objectClass=msDS-DelegatedManagedServiceAccount))";
+
+    public const string Contacts = "(objectClass=contact)";
+
+    public const string Ous = "(objectClass=organizationalUnit)";
+
+    /// <summary>The containers an OU path may name: an OU, a container (<c>CN=Users</c>), the builtin domain.</summary>
+    public const string OuLike = "(|(objectClass=organizationalUnit)(objectClass=container)(objectClass=builtinDomain))";
+
+    /// <summary>
+    /// A computer by its name: the account (with or without its <c>$</c>), the cn, or the DNS name. A service account matches too (2026-10-15, the
+    /// AD gaps plan: <c>ad_computer svc_web$</c> finds a gMSA), by its own term here only: <see cref="Computers"/> stays machines for the rest.
+    /// </summary>
     public static string ComputerByName(string name)
     {
         string bare = name.TrimEnd('$');
-        return "(&" + Computers + "(|(sAMAccountName=" + Escape(bare + "$") + ")(cn=" + Escape(bare) + ")(dNSHostName=" + Escape(name) + ")))";
+        return "(&(|" + Computers + ServiceAccounts + ")(|(sAMAccountName=" + Escape(bare + "$") + ")(cn=" + Escape(bare) + ")(dNSHostName=" + Escape(name) + ")))";
     }
 
     private static string AnyName(string name)
@@ -64,15 +80,84 @@ public static class LdapFilter
         return "(|(sAMAccountName=" + v + ")(userPrincipalName=" + v + ")(displayName=" + v + ")(cn=" + v + ")(mail=" + v + "))";
     }
 
-    /// <summary>Anything whose names hold the words: <c>*words*</c>, the words escaped.</summary>
-    public static string NameContains(string words)
+    /// <summary>One object by its DN, inside a kind's term: what a clicked row opens (2026-10-15, the AD gaps plan).</summary>
+    public static string ByDn(string kindTerm, string dn) => "(&" + kindTerm + "(distinguishedName=" + Escape(dn) + "))";
+
+    /// <summary>Any of <paramref name="dns"/> (the members a walk resolves, 50 at a time).</summary>
+    public static string ByDns(IEnumerable<string> dns) => "(|" + string.Concat(dns.Select(d => "(distinguishedName=" + Escape(d) + ")")) + ")";
+
+    /// <summary>
+    /// Anything whose names hold the words: <c>*words*</c>, the words escaped. The description too since 2026-10-15 (the AD gaps plan); users, groups
+    /// and computers without a type, the one kind asked with one (<see cref="TypeTerm"/>).
+    /// </summary>
+    public static string NameContains(string words, string? type = null)
     {
         string v = "*" + Escape(words.Trim()) + "*";
-        return "(&(|" + "(&" + Users + ")" + Groups + Computers + ")(|(sAMAccountName=" + v + ")(displayName=" + v + ")(cn=" + v + ")(mail=" + v + ")(userPrincipalName=" + v + ")))";
+        return type switch
+        {
+            "ou" => "(&" + Ous + "(|(ou=" + v + ")(name=" + v + ")(description=" + v + ")))",
+            "contact" => "(&" + Contacts + "(|(cn=" + v + ")(displayName=" + v + ")(mail=" + v + ")(description=" + v + ")))",
+            _ => "(&" + (type is null ? "(|(&" + Users + ")" + Groups + Computers + ")" : TypeTerm(type)) + "(|(sAMAccountName=" + v + ")(displayName=" + v + ")(cn=" + v + ")(mail=" + v + ")(userPrincipalName=" + v + ")(description=" + v + ")))",
+        };
     }
 
-    /// <summary>The nested members of a group: the in-chain rule (<c>1.2.840.113556.1.4.1941</c>, Samba 4.2+).</summary>
-    public static string NestedMembersOf(string groupDn) => "(memberOf:1.2.840.113556.1.4.1941:=" + Escape(groupDn) + ")";
+    /// <summary>The term for one of <c>ad_find</c>'s types: user, group, computer, ou, contact, service.</summary>
+    public static string TypeTerm(string type) => type switch
+    {
+        "user" => "(&" + Users + ")",
+        "group" => Groups,
+        "computer" => Computers,
+        "ou" => Ous,
+        "contact" => Contacts,
+        "service" => ServiceAccounts,
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type, "not a type"),
+    };
+
+    /// <summary>Objects of <paramref name="type"/> whose <paramref name="attribute"/> holds the words.</summary>
+    public static string FieldContains(string type, string attribute, string words) =>
+        "(&" + TypeTerm(type) + "(" + attribute + "=*" + Escape(words.Trim()) + "*))";
+
+    /// <summary>Computers whose operating system holds the words.</summary>
+    public static string OsContains(string words) => "(&" + Computers + "(operatingSystem=*" + Escape(words.Trim()) + "*))";
+
+    /// <summary>Users whose password never expires (UAC 65536).</summary>
+    public const string PasswordNeverExpires = "(&" + Users + "(userAccountControl:1.2.840.113556.1.4.803:=65536))";
+
+    /// <summary>Users whose account expires between two FILETIMEs (0 and the largest value never fall in a range).</summary>
+    public static string AccountExpiresBetween(long from, long to) =>
+        "(&" + Users + "(accountExpires>=" + from.ToString(CultureInfo.InvariantCulture) + ")(accountExpires<=" + to.ToString(CultureInfo.InvariantCulture) + "))";
+
+    /// <summary>Objects of the types (users, groups and computers by default) made since a moment, as GeneralizedTime.</summary>
+    public static string CreatedSince(string? type, DateTimeOffset since) =>
+        "(&" + (type is null ? "(|(&" + Users + ")" + Groups + Computers + ")" : TypeTerm(type)) + "(whenCreated>=" + AdValues.ToGeneralizedTime(since) + "))";
+
+    /// <summary>Groups with no member that are no system object: the candidates for <c>empty_groups</c> (someone's primary group is taken out after).</summary>
+    public const string EmptyGroupCandidates = "(&" + Groups + "(!(member=*))(!(isCriticalSystemObject=TRUE)))";
+
+    /// <summary>Objects (of the kind's term, none for any) whose primary group is one of <paramref name="rids"/>.</summary>
+    public static string PrimaryGroupIn(string? kindTerm, IEnumerable<uint> rids)
+    {
+        string any = "(|" + string.Concat(rids.Select(r => "(primaryGroupID=" + r.ToString(CultureInfo.InvariantCulture) + ")")) + ")";
+        return kindTerm is null ? any : "(&" + kindTerm + any + ")";
+    }
+
+    /// <summary>The objects once marked protected (<c>adminCount=1</c>).</summary>
+    public const string AdminCount = "(adminCount=1)";
+
+    /// <summary>An OU or container named <paramref name="name"/> (its <c>ou</c> or <c>cn</c>).</summary>
+    public static string OuNamed(string name) => "(&" + OuLike + "(|(ou=" + Escape(name) + ")(cn=" + Escape(name) + ")))";
+
+    /// <summary>The OU tree's OUs (every depth) and the top's containers: the advanced-view ones are hidden after, from the attribute read.</summary>
+    public const string TreeOus = Ous;
+
+    public const string TreeContainers = "(|(objectClass=container)(objectClass=builtinDomain))";
+
+    /// <summary>
+    /// A domain's fine-grained password policies: everything one level under the Password Settings Container, by presence — an ordinary account
+    /// may not read a PSO's <c>objectClass</c>, and a term on an attribute it cannot read never matches (checked on Samba as <c>reader</c>,
+    /// 2026-10-15: <c>(objectClass=msDS-PasswordSettings)</c> found nothing where <c>(objectClass=*)</c> listed ShortPasswords).
+    /// </summary>
+    public const string PasswordSettingsObjects = "(objectClass=*)";
 
     /// <summary>Objects with any of <paramref name="sids"/>: one <c>objectSid</c> term each.</summary>
     public static string BySids(IEnumerable<byte[]> sids) => "(|" + string.Concat(sids.Select(s => "(objectSid=" + EscapeBytes(s) + ")")) + ")";

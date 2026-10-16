@@ -43,7 +43,7 @@ public sealed record ComputerCatalog<TConfig>(IReadOnlyList<Computer<TConfig>> C
     /// </summary>
     public (Computer<TConfig>? Computer, string? Error) Find(string? name)
     {
-        string offered = string.Join(", ", Computers.Select(c => c.Name));
+        string offered = ComputerText.Names(Computers.Select(c => c.Name));
         if (!string.IsNullOrWhiteSpace(name))
         {
             return Named(name) is { } found ? (found, null) : (null, ComputerText.UnknownComputer(name.Trim(), offered, Family));

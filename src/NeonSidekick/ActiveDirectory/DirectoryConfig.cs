@@ -153,15 +153,29 @@ public sealed record DirectoryCatalog(IReadOnlyList<DirectoryDomain> Domains, IR
         return this with { Domains = kept, Hidden = Hidden + Domains.Count - kept.Count };
     }
 
-    /// <summary>The domain a call means: the named one; omitted, <c>current</c> when ticked, else the only one. The refusal otherwise.</summary>
+    /// <summary>
+    /// The domain a call means: the one named by its entry's name or, failing that, by its DNS name (2026-10-15, the user's report: the answers
+    /// say "in lab.neon.test", so a model naturally passed that for the entry <c>lab</c>), a trailing dot ignored; omitted, <c>current</c> when
+    /// ticked, else the only one. The refusal otherwise, naming each ticked one and its DNS name.
+    /// </summary>
     public (DirectoryDomain? Domain, string? Error) Find(string? name)
     {
-        string offered = string.Join(", ", Domains.Select(d => d.Name));
+        string offered = string.Join(", ", Domains.Select(d => "'" + d.Name + "'" + (d.IsCurrent || string.Equals(d.Name, d.DomainName, StringComparison.OrdinalIgnoreCase) ? "" : " (" + d.DomainName + ")")));
         if (!string.IsNullOrWhiteSpace(name))
         {
-            return Domains.FirstOrDefault(d => string.Equals(d.Name, name.Trim(), StringComparison.OrdinalIgnoreCase)) is { } found
-                ? (found, null)
-                : (null, DirectoryText.UnknownDomain(name.Trim(), offered));
+            string wanted = name.Trim().TrimEnd('.');
+            if (Domains.FirstOrDefault(d => string.Equals(d.Name, wanted, StringComparison.OrdinalIgnoreCase)) is { } named)
+            {
+                return (named, null);
+            }
+
+            var byDns = Domains.Where(d => string.Equals(d.DomainName, wanted, StringComparison.OrdinalIgnoreCase)).ToList();
+            return byDns.Count switch
+            {
+                1 => (byDns[0], null),
+                0 => (null, DirectoryText.UnknownDomain(name.Trim(), offered)),
+                _ => (null, DirectoryText.DomainNeeded(Computers.ComputerText.Names(byDns.Select(d => d.Name)))),
+            };
         }
 
         if (Domains.Count == 0)

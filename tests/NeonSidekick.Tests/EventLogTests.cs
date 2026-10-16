@@ -364,8 +364,8 @@ public sealed class EventLogTests : IDisposable
         Assert.Empty(catalog.Offered([]).Computers);
         Assert.Equal("local", catalog.Offered(null).Find(null).Computer!.Name);
         Assert.Equal("dc01", catalog.Offered(["dc01"]).Find(null).Computer!.Name);
-        Assert.Equal(EventLogText.ComputerNeeded("dc01, x"), new EventLogCatalog([dc, dc with { Name = "x" }], []).Find(null).Error);
-        Assert.Equal(EventLogText.UnknownComputer("fs01", "local"), catalog.Offered(null).Find("fs01").Error);
+        Assert.Equal(EventLogText.ComputerNeeded("'dc01', 'x'"), new EventLogCatalog([dc, dc with { Name = "x" }], []).Find(null).Error);
+        Assert.Equal(EventLogText.UnknownComputer("fs01", "'local'"), catalog.Offered(null).Find("fs01").Error);
         Assert.Equal(EventLogText.NoComputerTicked, catalog.Offered([]).Find(null).Error);
     }
 

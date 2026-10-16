@@ -211,4 +211,44 @@ public sealed class LiveAdminTests : IDisposable
         var (ok, text) = await DirectoryAccess.TestAsync(new WindowsDirectorySystem(), access.Catalog().Domains.Single(), TimeProvider.System, CancellationToken.None);
         Assert.True(ok, text);
     }
+
+    /// <summary>
+    /// The AD gaps plan's reads against Samba (2026-10-15), over the seed recorded in the <c>live-ad-tests-samba</c> memory (OU=Neon › Engineering
+    /// and Sales; erin, frank, grace; Tier0 ⊂ Domain Admins; All-Hands with the contact Vendor Rep; Unused): Samba answers the walk's forward reads
+    /// and DN batches, <c>primaryGroupID</c>, <c>directReports</c>, <c>canonicalName</c>, <c>showInAdvancedViewOnly</c> and GeneralizedTime filters,
+    /// each search under the call's deadline, and a list saves as a CSV.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    [LiveDirectoryFact]
+    public async Task Directory_SearchesBrowsesAndNests()
+    {
+        var access = DirectoryFromScratchHome();
+        Func<DirectorySaveRoot> root = () => new DirectorySaveRoot(new Files.WorkingDirectory(() => _root, TimeProvider.System), null);
+        var find = new AdFindTool(access, saveRoot: root);
+        Assert.Contains("⟪Neon/Engineering⟫", await Call(find, ("kind", "name"), ("words", "eng"), ("type", "ou")));
+        Assert.Contains("⟪Company-wide mail list⟫", await Call(find, ("kind", "name"), ("words", "mail list"), ("type", "group")));
+        string staff = await Call(new AdGroupTool(access), ("name", "Staff"), ("nested", true), ("members", "users"));
+        Assert.Contains("(user bob) via ⟪Engineers⟫", staff);
+        Assert.Contains("(user carol) direct", staff);
+        Assert.Contains(" by primary group)", await Call(new AdGroupTool(access), ("name", "Domain Users"), ("limit", 5)));
+        Assert.Contains("⟪Vendor Rep⟫ (contact)", await Call(new AdGroupTool(access), ("name", "All-Hands")));
+        string tree = await Call(new AdOuTool(access));
+        Assert.Contains("⟪Neon/Engineering⟫", tree);
+        Assert.DoesNotContain("⟪System⟫", tree);   // advanced view only
+        Assert.Contains("erin  user  ⟪Erin Ng⟫", await Call(new AdOuTool(access), ("ou", "Neon/Engineering")));
+        Assert.Contains("erin  ⟪Erin Ng⟫", await Call(find, ("kind", "password_never_expires")));
+        Assert.Contains("frank  ⟪Frank Ode⟫  expires ", await Call(find, ("kind", "account_expiring")));
+        Assert.Contains("erin  user  ⟪Erin Ng⟫  created ", await Call(find, ("kind", "created"), ("days", 3650), ("ou", "Neon")));
+        Assert.Contains("erin  ⟪Erin Ng⟫  ⟪Engineering⟫", await Call(find, ("kind", "field"), ("field", "department"), ("words", "engin")));
+        string privileged = await Call(find, ("kind", "privileged"));
+        Assert.Contains("grace  user  ⟪Grace Hu⟫  ", privileged);
+        Assert.Contains("via ⟪Tier0⟫", privileged);
+        Assert.Contains("⟪Unused⟫", await Call(find, ("kind", "empty_groups")));
+        Assert.Contains("direct reports (1): ⟪Frank Ode⟫", await Call(new AdUserTool(access), ("name", "erin")));
+        Assert.Contains("manager: ⟪Erin Ng⟫", await Call(new AdUserTool(access), ("name", "frank")));
+        Assert.Contains("⟪ShortPasswords⟫  " + DirectoryText.PolicyUnreadable, await Call(new AdDomainTool(access)));   // listed, its settings unreadable as reader
+        string saved = await Call(new AdGroupTool(access, saveRoot: root), ("name", "Staff"), ("nested", true), ("to", "staff.csv"));
+        Assert.Contains(DirectoryText.SavedPrefix, saved);
+        Assert.StartsWith("name,kind,account,via,dn", File.ReadAllLines(Path.Combine(_root, "staff.csv"))[0]);
+    }
 }

@@ -40,7 +40,7 @@ public sealed record EventLogCatalog(IReadOnlyList<EventLogComputer> Computers, 
     /// </summary>
     public (EventLogComputer? Computer, string? Error) Find(string? name)
     {
-        string offered = string.Join(", ", Computers.Select(c => c.Name));
+        string offered = global::NeonSidekick.Computers.ComputerText.Names(Computers.Select(c => c.Name));
         if (!string.IsNullOrWhiteSpace(name))
         {
             return Named(name) is { } found ? (found, null) : (null, EventLogText.UnknownComputer(name.Trim(), offered));

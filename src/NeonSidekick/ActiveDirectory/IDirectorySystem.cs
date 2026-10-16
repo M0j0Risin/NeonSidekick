@@ -27,6 +27,18 @@ public sealed record DirectoryEntry(string Dn, IReadOnlyDictionary<string, IRead
     /// <summary>The returned attribute name carrying a range option for <paramref name="name"/> (<c>member;range=0-1499</c>); null when none.</summary>
     public string? RangedName(string name) =>
         Attributes.Keys.FirstOrDefault(k => k.StartsWith(name + ";range=", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// A many-valued attribute's values as text, and whether only its first range came back (2026-10-15, the user's ask, the AD gaps plan): past
+    /// the server's <c>MaxValRange</c> (1,500 by default, up to 5,000 on 2008 and later) a value list comes back as <c>memberOf;range=0-1499</c>,
+    /// which <see cref="Values"/> already reads; <c>Partial</c> says the range named an end, so "via", direct reports and an entry's groups never
+    /// come back silently short. No further rounds are read here.
+    /// </summary>
+    public (IReadOnlyList<string> Values, bool Partial) ValuesOrFirstRange(string name)
+    {
+        string? ranged = RangedName(name);
+        return (Texts(name), ranged is not null && !ranged.EndsWith("-*", StringComparison.Ordinal));
+    }
 }
 
 /// <summary>How a search goes: base, one level or the subtree.</summary>
@@ -37,8 +49,11 @@ public enum DirectoryScope
     Subtree = 2,
 }
 
-/// <summary>What a search gave: the entries, and whether a limit cut it short.</summary>
-public sealed record DirectoryResults(IReadOnlyList<DirectoryEntry> Entries, bool Truncated);
+/// <summary>
+/// What a search gave: the entries, whether a limit cut it short, and whether that limit was time (2026-10-15, the AD gaps plan: a note then says
+/// "stopped at the time limit", not the size cap).
+/// </summary>
+public sealed record DirectoryResults(IReadOnlyList<DirectoryEntry> Entries, bool Truncated, bool TimedOut = false);
 
 /// <summary>Who a session binds as: the account and its password (never logged), handed to Negotiate as an explicit identity.</summary>
 public sealed record DirectoryLogin(string User, string Password);
@@ -60,9 +75,10 @@ public interface IDirectorySession
 
     /// <summary>
     /// A search: <paramref name="attributes"/> only (never <c>*</c>), at most <paramref name="sizeLimit"/> entries; with <paramref name="paged"/>
-    /// the paged-results control in pages of <see cref="DirectoryLimits.PageSize"/>.
+    /// the paged-results control in pages of <see cref="DirectoryLimits.PageSize"/>; <paramref name="timeLimit"/> the most it may take on the server
+    /// and the client (null: <see cref="DirectoryLimits.SearchTime"/>; 2026-10-15, the AD gaps plan: a walk's searches get what its deadline has left).
     /// </summary>
-    DirectoryResults Search(string baseDn, DirectoryScope scope, string filter, IReadOnlyList<string> attributes, int sizeLimit, bool paged);
+    DirectoryResults Search(string baseDn, DirectoryScope scope, string filter, IReadOnlyList<string> attributes, int sizeLimit, bool paged, TimeSpan? timeLimit = null);
 }
 
 /// <summary>
@@ -91,4 +107,43 @@ public static class DirectoryLimits
 
     /// <summary>The range a multi-valued attribute is read in past which it is read again.</summary>
     public const int RangeStep = 1500;
+
+    /// <summary>
+    /// The most entries a group's members, or a <c>to</c> save, read (2026-10-15, the AD gaps plan): the sort and the total need them all, where
+    /// <see cref="MaxEntries"/> stays the most an answer lists.
+    /// </summary>
+    public const int MaxCounted = 10_000;
+
+    /// <summary>The most groups a nested walk reads the members of (cycles end on a visited set before this).</summary>
+    public const int MaxWalkedGroups = 200;
+
+    /// <summary>The time a walk leaves itself: no search starts with less.</summary>
+    public static readonly TimeSpan LeastSearchTime = TimeSpan.FromSeconds(2);
+
+    /// <summary>A call's own budget from its start (<see cref="DirectoryAccess.Timeout"/>'s 45 s covers the bind too).</summary>
+    public static readonly TimeSpan CallBudget = TimeSpan.FromSeconds(40);
+}
+
+/// <summary>
+/// When a call's work must stop starting searches (2026-10-15, the AD gaps plan): the moment its budget ends on <see cref="Time"/>, and the
+/// caller's token, so ESC (or a web Stop) stops a walk too — an abandoned call's work no longer runs to its end. <see cref="None"/> never ends.
+/// </summary>
+public readonly record struct DirectoryDeadline(DateTimeOffset? Ends, TimeProvider? Time, CancellationToken Token)
+{
+    public static DirectoryDeadline None => default;
+
+    public static DirectoryDeadline From(TimeProvider time, TimeSpan budget, CancellationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(time);
+        return new DirectoryDeadline(time.GetUtcNow() + budget, time, token);
+    }
+
+    /// <summary>The time left; null with no deadline.</summary>
+    public TimeSpan? Left => Ends is { } ends && Time is { } time ? ends - time.GetUtcNow() : null;
+
+    /// <summary>Whether another search may start: not cancelled, and at least <see cref="DirectoryLimits.LeastSearchTime"/> left.</summary>
+    public bool CanStart => !Token.IsCancellationRequested && (Left is not { } left || left >= DirectoryLimits.LeastSearchTime);
+
+    /// <summary>The next search's time limit: the time left, at most <see cref="DirectoryLimits.SearchTime"/>; null (the default) with no deadline.</summary>
+    public TimeSpan? Limit => Left is { } left ? (left < DirectoryLimits.SearchTime ? left : DirectoryLimits.SearchTime) : null;
 }

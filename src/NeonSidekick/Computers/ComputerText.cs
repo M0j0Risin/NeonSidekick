@@ -7,6 +7,12 @@ namespace NeonSidekick.Computers;
 /// </summary>
 public static class ComputerText
 {
+    /// <summary>
+    /// Names as a refusal lists them, each in single quotes (2026-10-15, the user's report: a model read "the ticked ones are: lab." as
+    /// the name <c>lab.</c>, the sentence's full stop and all). Pinned.
+    /// </summary>
+    public static string Names(IEnumerable<string> names) => string.Join(", ", names.Select(n => "'" + n + "'"));
+
     /// <summary>What <c>local</c> is called where a host would stand.</summary>
     public const string ThisPc = "this PC";
 

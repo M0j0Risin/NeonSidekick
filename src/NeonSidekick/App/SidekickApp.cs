@@ -852,7 +852,9 @@ public sealed class SidekickApp
         var tasks = new Tasks.TaskAccess(_taskSystem, () => Tasks.TaskConfigFile.Family.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory), () => EffectiveSettings.TaskComputersOffered, _time);
         var taskTools = ChatScreen.TaskTools(tasks, () => EffectiveSettings, confirm: null);
         var directory = new ActiveDirectory.DirectoryAccess(_directorySystem, () => ActiveDirectory.DirectoryConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory, _joinedDomain()), () => EffectiveSettings.DirectoryDomainsOffered, _joinedDomain, _time);
-        var directoryTools = ChatScreen.DirectoryTools(directory);
+        // Plan mode (2026-09-26), made here since the directory's to asks it (2026-10-15, the AD gaps plan).
+        var plan = new Plans.PlanSession();
+        var directoryTools = ChatScreen.DirectoryTools(directory, saveRoot: () => ChatScreen.DirectorySaveRootFor(EffectiveSettings.FileTools, plan.Active, files));
         // The print tools (2026-09-28): no pane to ask on, so under ask (the default) the model's print is refused; /print works.
         var printTools = ChatScreen.PrintTools(print, confirm: null);
         // The shell tools (2026-09-21): headless has no pane to ask on, so the gate has no asker — under ask the
@@ -885,9 +887,8 @@ public sealed class SidekickApp
         var neonAdvisor = ChatScreen.AdvisorTool(advisorHost, () => EffectiveSettings, () => _settings.ProfileName, advisorThreads, () => lastInputs is null ? ([], "") : ChatScreen.AdvisorTurnTools(lastInputs, markdown: false), () => session.History.Messages, null, new HeadlessNeonAdvisorView(this), session.Usage.AddAdvisors);
         var neonAdvisorTools = new List<Microsoft.Extensions.AI.AIFunction> { neonAdvisor };
         var sessionTools = ChatScreen.SessionTools(sessions, () => EffectiveSettings, () => sessionId, _time);
-        // Plan mode (2026-09-26): no pane to approve on, so a presented plan is saved and the user approves it with
+        // Plan mode (2026-09-26, made above): no pane to approve on, so a presented plan is saved and the user approves it with
         // /plan approve; the saved line is printed once the turn is over, never inside the streamed reply.
-        var plan = new Plans.PlanSession();
         var presentPlan = new Llm.Tools.PresentPlanTool(plan, files, _time, (_, _) => Task.FromResult(new Plans.PlanVerdict(Plans.PlanChoice.Saved)), () => HeadlessGapLimit(EffectiveSettings.PlanGapPasses));
         var planState = new HeadlessPlanState();
         // The gap-closing loop's next pass (2026-10-13): sent as the next line without reading stdin, since headless has no pane to chain on.
@@ -1265,7 +1266,7 @@ public sealed class SidekickApp
                         SlashCommand.Net => await NetLinesAsync(network, adminArgs, cancellationToken).ConfigureAwait(false),
                         SlashCommand.Services => await ServiceLinesAsync(services, adminArgs, cancellationToken).ConfigureAwait(false),
                         SlashCommand.Tasks => await TaskLinesAsync(tasks, adminArgs, cancellationToken).ConfigureAwait(false),
-                        _ => await AdLinesAsync(directory, adminArgs, cancellationToken).ConfigureAwait(false),
+                        _ => await AdLinesAsync(directory, adminArgs, files, cancellationToken).ConfigureAwait(false),
                     };
                     foreach (string adminLine in adminLines)
                     {
@@ -2656,9 +2657,10 @@ public sealed class SidekickApp
         return (result.Lines, result.Failed);
     }
 
-    private static async Task<(IReadOnlyList<string> Lines, bool Failed)> AdLinesAsync(ActiveDirectory.DirectoryAccess access, string args, CancellationToken cancellationToken)
+    /// <summary>Headless <c>/ad</c>: the card unbounded; <c>to:</c> saves into the run's working directory (2026-10-15, the AD gaps plan).</summary>
+    private static async Task<(IReadOnlyList<string> Lines, bool Failed)> AdLinesAsync(ActiveDirectory.DirectoryAccess access, string args, WorkingDirectory files, CancellationToken cancellationToken)
     {
-        var result = await ActiveDirectory.DirectoryCommand.RunAsync(access, args, cancellationToken).ConfigureAwait(false);
+        var result = await ActiveDirectory.DirectoryCommand.RunAsync(access, args, cancellationToken, () => files).ConfigureAwait(false);
         return (result.Lines, result.Failed);
     }
 

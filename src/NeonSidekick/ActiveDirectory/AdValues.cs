@@ -163,7 +163,11 @@ public static class AdValues
         null => "unknown",
     };
 
-    /// <summary>The DN's first RDN's value: <c>CN=Jane Doe,OU=…</c> → <c>Jane Doe</c>.</summary>
+    /// <summary>
+    /// The DN's first RDN's value: <c>CN=Jane Doe,OU=…</c> → <c>Jane Doe</c>. RFC 4514's two escapes are read: a <c>\</c> before a character
+    /// (<c>\,</c>), and a hex pair (<c>\2C</c> for a comma, <c>\C3\A9</c> for é as UTF-8 bytes; 2026-10-15, the AD gaps plan: copied through as
+    /// <c>2C</c> until then).
+    /// </summary>
     public static string FirstName(string dn)
     {
         ArgumentNullException.ThrowIfNull(dn);
@@ -174,8 +178,17 @@ public static class AdValues
         }
 
         var name = new StringBuilder();
+        var bytes = new List<byte>();
         for (int i = eq + 1; i < dn.Length; i++)
         {
+            if (dn[i] == '\\' && IsHexPair(dn, i + 1))
+            {
+                bytes.Add(Convert.ToByte(dn.Substring(i + 1, 2), 16));
+                i += 2;
+                continue;
+            }
+
+            Flush(name, bytes);
             if (dn[i] == '\\' && i + 1 < dn.Length)
             {
                 name.Append(dn[++i]);
@@ -190,7 +203,200 @@ public static class AdValues
             name.Append(dn[i]);
         }
 
+        Flush(name, bytes);
         return name.ToString();
+    }
+
+    private static bool IsHexPair(string text, int at) => at + 1 < text.Length && Uri.IsHexDigit(text[at]) && Uri.IsHexDigit(text[at + 1]);
+
+    private static void Flush(StringBuilder name, List<byte> bytes)
+    {
+        if (bytes.Count > 0)
+        {
+            name.Append(Encoding.UTF8.GetString([.. bytes]));
+            bytes.Clear();
+        }
+    }
+
+    /// <summary>
+    /// A DN under <paramref name="baseDn"/> as its path, as <c>canonicalName</c> spells it without the domain: <c>OU=Engineering,OU=Neon,DC=…</c> →
+    /// <c>Neon/Engineering</c>, each name's <c>/</c> and <c>\</c> escaped with a <c>\</c> (canonicalName's own escaping, Microsoft's TechNet wiki
+    /// "Active Directory: Characters to Escape"; 2026-10-15, the AD gaps plan), so a path worked out here and a computed one compare equal; ""
+    /// for the base itself. Pure.
+    /// </summary>
+    public static string CanonicalPath(string dn, string baseDn)
+    {
+        ArgumentNullException.ThrowIfNull(dn);
+        ArgumentNullException.ThrowIfNull(baseDn);
+        var names = new List<string>();
+        string rest = dn;
+        for (int guard = 0; rest.Length > 0 && !string.Equals(rest, baseDn, StringComparison.OrdinalIgnoreCase) && guard < 64; guard++)
+        {
+            names.Add(FirstName(rest).Replace("\\", "\\\\", StringComparison.Ordinal).Replace("/", "\\/", StringComparison.Ordinal));
+            rest = Parent(rest);
+        }
+
+        names.Reverse();
+        return string.Join('/', names);
+    }
+
+    /// <summary>A computed <c>canonicalName</c> (<c>lab.neon.test/Neon/Engineering</c>) as its path in the domain (<c>Neon/Engineering</c>). Pure.</summary>
+    public static string PathOfCanonical(string canonical)
+    {
+        ArgumentNullException.ThrowIfNull(canonical);
+        int slash = canonical.IndexOf('/', StringComparison.Ordinal);
+        return slash < 0 ? "" : canonical[(slash + 1)..].TrimEnd('/');
+    }
+
+    /// <summary>
+    /// A path's parts split on its unescaped <c>/</c>, each unescaped (<c>\/</c> → <c>/</c>, <c>\\</c> → <c>\</c>): <c>Neon/Sales\/EMEA</c> →
+    /// <c>Neon</c>, <c>Sales/EMEA</c>. Pure.
+    /// </summary>
+    public static IReadOnlyList<string> PathParts(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        var parts = new List<string>();
+        var part = new StringBuilder();
+        for (int i = 0; i < path.Length; i++)
+        {
+            if (path[i] == '\\' && i + 1 < path.Length)
+            {
+                part.Append(path[++i]);
+            }
+            else if (path[i] == '/')
+            {
+                parts.Add(part.ToString());
+                part.Clear();
+            }
+            else
+            {
+                part.Append(path[i]);
+            }
+        }
+
+        parts.Add(part.ToString());
+        return parts.Where(p => p.Length > 0).ToList();
+    }
+
+    /// <summary>
+    /// <c>groupType</c> in words (2026-10-15, the AD gaps plan): security or distribution (0x80000000), its scope — global (0x2), domain local
+    /// (0x4), universal (0x8) — and builtin (0x1, a system group). Pure.
+    /// </summary>
+    public static string GroupKind(long groupType)
+    {
+        string kind = (groupType & 0x80000000L) != 0 ? "security" : "distribution";
+        string scope = (groupType & 0x8) != 0 ? "universal" : (groupType & 0x4) != 0 ? "domain local" : (groupType & 0x2) != 0 ? "global" : "";
+        return kind + (scope.Length > 0 ? " " + scope : "") + ((groupType & 0x1) != 0 ? ", builtin" : "");
+    }
+
+    /// <summary>A binary SID's RID, its last sub-authority (a group's 513 for Domain Users); null when it is not one. Pure.</summary>
+    public static uint? Rid(ReadOnlySpan<byte> sid)
+    {
+        if (sid.Length < 8 || sid[0] != 1 || sid[1] == 0 || sid.Length < 8 + (4 * sid[1]))
+        {
+            return null;
+        }
+
+        return BinaryPrimitives.ReadUInt32LittleEndian(sid[(8 + (4 * (sid[1] - 1)))..]);
+    }
+
+    /// <summary>A SID's text (<c>S-1-5-32-544</c>) as its binary form, for an <c>objectSid</c> term; null when it is not one. Pure.</summary>
+    public static byte[]? SidBytes(string sid)
+    {
+        ArgumentNullException.ThrowIfNull(sid);
+        var parts = sid.Split('-');
+        if (parts.Length < 3 || parts[0] != "S" || parts[1] != "1" || parts.Length - 3 > 15
+            || !long.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out long authority))
+        {
+            return null;
+        }
+
+        var bytes = new byte[8 + (4 * (parts.Length - 3))];
+        bytes[0] = 1;
+        bytes[1] = (byte)(parts.Length - 3);
+        for (int i = 0; i < 6; i++)
+        {
+            bytes[2 + i] = (byte)(authority >> (8 * (5 - i)));
+        }
+
+        for (int i = 3; i < parts.Length; i++)
+        {
+            if (!uint.TryParse(parts[i], NumberStyles.None, CultureInfo.InvariantCulture, out uint sub))
+            {
+                return null;
+            }
+
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(8 + (4 * (i - 3))), sub);
+        }
+
+        return bytes;
+    }
+
+    /// <summary>A moment as GeneralizedTime for a filter (<c>20261015123456.0Z</c>). Pure.</summary>
+    public static string ToGeneralizedTime(DateTimeOffset moment) => moment.UtcDateTime.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture) + ".0Z";
+
+    /// <summary>
+    /// <c>gPLink</c>'s links (2026-10-15, the AD gaps plan): one string of <c>[LDAP://cn={GUID},cn=policies,…;flags]</c>, its flags 1 disabled and
+    /// 2 enforced; the count of links, of disabled and of enforced. Zeros for none. Pure.
+    /// </summary>
+    public static (int Links, int Disabled, int Enforced) GpLinks(string? gpLink)
+    {
+        if (string.IsNullOrWhiteSpace(gpLink))
+        {
+            return (0, 0, 0);
+        }
+
+        int links = 0, disabled = 0, enforced = 0;
+        int at = 0;
+        while ((at = gpLink.IndexOf('[', at)) >= 0)
+        {
+            int close = gpLink.IndexOf(']', at);
+            if (close < 0)
+            {
+                break;
+            }
+
+            string link = gpLink[(at + 1)..close];
+            if (link.StartsWith("LDAP://", StringComparison.OrdinalIgnoreCase))
+            {
+                links++;
+                int semi = link.LastIndexOf(';');
+                if (semi >= 0 && int.TryParse(link[(semi + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out int flags))
+                {
+                    disabled += (flags & 1) != 0 ? 1 : 0;
+                    enforced += (flags & 2) != 0 ? 1 : 0;
+                }
+            }
+
+            at = close + 1;
+        }
+
+        return (links, disabled, enforced);
+    }
+
+    public const string KindServiceAccount = "service account";
+
+    /// <summary>The service accounts' classes: group managed, standalone managed, and Windows Server 2025's delegated one (Akamai's dMSA research).</summary>
+    public static readonly IReadOnlyList<string> ServiceAccountClasses = ["msDS-GroupManagedServiceAccount", "msDS-ManagedServiceAccount", "msDS-DelegatedManagedServiceAccount"];
+
+    /// <summary>
+    /// An object's kind by its <c>objectClass</c> chain (2026-10-15, the AD gaps plan). The order matters, since the chain holds every class
+    /// above: a gMSA's is top, person, organizationalPerson, user, computer, msDS-GroupManagedServiceAccount, so the service-account classes come
+    /// first, then computer (whose chain holds user), group, contact (a person but no user), a foreign security principal, an OU or container;
+    /// user last. Pure.
+    /// </summary>
+    public static string KindOf(IReadOnlyList<string> classes)
+    {
+        ArgumentNullException.ThrowIfNull(classes);
+        bool Has(string c) => classes.Contains(c, StringComparer.OrdinalIgnoreCase);
+        return ServiceAccountClasses.Any(Has) ? KindServiceAccount
+            : Has("computer") ? "computer"
+            : Has("group") ? "group"
+            : Has("contact") ? "contact"
+            : Has("foreignSecurityPrincipal") ? "foreign"
+            : Has("organizationalUnit") ? "ou"
+            : Has("container") || Has("builtinDomain") ? "container"
+            : "user";
     }
 
     /// <summary>The DN of the container holding <paramref name="dn"/> (its parent); "" for a root.</summary>

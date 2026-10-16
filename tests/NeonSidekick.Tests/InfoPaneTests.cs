@@ -329,6 +329,65 @@ public class InfoPaneTests : IDisposable
         Assert.Equal(1, info.LastTab);
     }
 
+    /// <summary>
+    /// A chosen line (2026-10-15, the AD gaps plan: a <c>/ad</c> card's row opens its card): a double-click the tab's <see cref="InfoTab.LineChosen"/>
+    /// answers true for closes the pane with the line, <see cref="InfoPane.Pressed"/> null; one it answers false for keeps it open and still tells
+    /// <see cref="InfoTab.LineDoubleClicked"/>; an ESC after a chosen line names none.
+    /// </summary>
+    [Fact]
+    public async Task AChosenLine_ClosesThePaneWithIt_AFalseOneKeepsIt()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var told = new List<string>();
+        var asked = new List<int>();
+        input.PushClick(2, 103);                         // line2 (index 1), twice: answered false, the pane stays
+        input.PushClick(2, 103);
+        input.PushClick(2, 104);                         // line3 (index 2), twice: chosen
+        input.PushClick(2, 104);
+        var info = new InfoPane(pane, keys);
+        var tab = new InfoTab("One", () => new Text(Numbered(5))) { LineDoubleClicked = told.Add, LineChosen = (i, _) => { asked.Add(i); return i == 2; } };
+
+        await info.ShowAsync(InfoPane.Title, [tab], 0, CancellationToken.None, [new InfoAction("copy", 'c', "copy")]);
+
+        Assert.Equal([1, 2], asked);
+        Assert.Equal(["line2"], told);
+        Assert.Equal("line3", info.ChosenLine);
+        Assert.Null(info.Pressed);
+        Assert.False(pane.OverlayOpen);
+        pane.Show();
+        input.Push(Keys.Escape);
+        await info.ShowAsync(InfoPane.Title, [tab], 0, CancellationToken.None);
+        Assert.Null(info.ChosenLine);   // cleared at each visit
+    }
+
+    /// <summary>
+    /// A button answers its bare letter; Shift+letter starts the find with that letter (2026-10-15, the AD gaps plan: a card's c, a, n, u would stop a
+    /// find for "nancy" or "admin"), by the modifier, as the menus' filter is; and the hint says so.
+    /// </summary>
+    [Fact]
+    public async Task ShiftLetter_StartsTheFind_ABareLetterPressesTheButton()
+    {
+        _console.Profile.Width = 80;
+        using var pane = Pane();
+        pane.Show();
+        var buttons = new InfoAction[] { new("nested", 'n', "nested or direct") };
+        _console.Input.PushKey(new ConsoleKeyInfo('N', ConsoleKey.N, shift: true, alt: false, control: false));
+        _console.Input.PushKey(Keys.Char('a'));          // the find under way takes a letter, a button's or not
+        _console.Input.PushKey(Keys.Char('n'));
+        _console.Input.PushKey(Keys.Escape);             // clears the find
+        _console.Input.PushKey(Keys.Char('n'));          // now the button
+        var info = new InfoPane(pane, Source());
+
+        await info.ShowAsync("/ad", [Tab("One", "Nancy\nAdmin")], 0, CancellationToken.None, buttons);
+
+        Assert.Contains("find: Nan · 1 of 1", Output);
+        Assert.Same(buttons[0], info.Pressed);
+        Assert.EndsWith(InfoPane.ShiftFindKeys + " · ESC = close", InfoPane.ButtonsHint([('n', "nested or direct")], tabs: false));
+        Assert.Equal("type / Shift+letter = filter", MenuFilter.TypeOrShiftKeys);   // the menus' wording, "find" here
+    }
+
     /// <summary>A paste and a right-click go onto the find (2026-10-14, the user's call): the first line of each, the matches marked.</summary>
     [Fact]
     public async Task APaste_AndARightClick_GoOntoTheFind()
@@ -631,8 +690,8 @@ public class InfoPaneTests : IDisposable
         Assert.Contains($"[{Theme.TabActive.ToMarkup()}]Two[/]", InfoPane.TabStripRows("Help", ["One", "Two"], 1, 80, ("chk", true))[0]);
         Assert.Equal(2, InfoPane.TabAt("Help", ["One", "Two", "chk"], 80, 18, 0));
         Assert.Null(InfoPane.TabAt("Help", ["One", "Two", "chk"], 80, 17, 0));   // the bar
-        Assert.Equal("↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · k = key check · type = find · ESC = close", InfoPane.ToggleHint('k', "key check"));
-        Assert.Equal("↑/↓ PgUp/PgDn = scroll · k = key check · type = find · ESC = close", InfoPane.ToggleHint('k', "key check", tabs: false));
+        Assert.Equal("↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · k = key check · type / Shift+letter = find · ESC = close", InfoPane.ToggleHint('k', "key check"));
+        Assert.Equal("↑/↓ PgUp/PgDn = scroll · k = key check · type / Shift+letter = find · ESC = close", InfoPane.ToggleHint('k', "key check", tabs: false));
     }
 
     [Fact]
@@ -693,7 +752,7 @@ public class InfoPaneTests : IDisposable
         var places = InfoPane.TabStripLayout("Help", ["enabled", "lan", "One", "Two"], 80).Places;
         Assert.Equal(0, InfoPane.TabAt("Help", ["enabled", "lan", "One", "Two"], 80, places[0].Column, 0));   // a click's hit: the buttons' indexes first
         Assert.Equal(1, InfoPane.TabAt("Help", ["enabled", "lan", "One", "Two"], 80, places[1].Column + 1, 0));
-        Assert.Equal("↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · e = on/off · r = lan/local · type = find · ESC = close", InfoPane.ButtonsHint([('e', "on/off"), ('r', "lan/local")]));
+        Assert.Equal("↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · e = on/off · r = lan/local · type / Shift+letter = find · ESC = close", InfoPane.ButtonsHint([('e', "on/off"), ('r', "lan/local")]));
         Assert.Equal(InfoPane.ToggleHint('k', "key check", tabs: false), InfoPane.ButtonsHint([('k', "key check")], tabs: false));
     }
 

@@ -217,8 +217,12 @@ public sealed class FakeTaskSystem : ITaskSystem
 
 /// <summary>
 /// A directory in memory: entries by DN with text or binary values, and a search that understands the filters the app builds well enough for the
-/// tests — an equality term on any attribute (case ignored), a presence term, <c>&gt;=</c>/<c>&lt;=</c> on numbers, AND, OR, NOT, the
-/// in-chain rule over <c>memberOf</c>, the UAC bit rule, a <c>*words*</c> substring and an <c>objectSid</c> of escaped bytes.
+/// tests — an equality term on any attribute (case ignored), a presence term, <c>&gt;=</c>/<c>&lt;=</c> on numbers (and on GeneralizedTime as
+/// text), AND, OR, NOT, the in-chain rule over <c>memberOf</c>, the UAC bit rule, a <c>*words*</c> substring, an <c>objectSid</c> of escaped
+/// bytes and <c>distinguishedName</c> equality (2026-10-15, the AD gaps plan). <c>objectCategory</c> is judged by an entry's most specific class,
+/// the last in its <c>objectClass</c> chain, as AD's is (a gMSA's chain holds computer, its category is its own); <c>canonicalName</c> is
+/// constructed when asked for; one-level scope is the children alone. Each search's time limit is recorded and <see cref="OnSearch"/> runs before
+/// it (a test advances its clock there).
 /// </summary>
 public sealed class FakeDirectorySystem : IDirectorySystem
 {
@@ -236,7 +240,38 @@ public sealed class FakeDirectorySystem : IDirectorySystem
 
     public List<string> Filters { get; } = [];
 
+    /// <summary>Each search's time limit, in order (null: the default).</summary>
+    public List<TimeSpan?> TimeLimits { get; } = [];
+
+    /// <summary>Told each search's filter before it runs.</summary>
+    public Action<string>? OnSearch { get; set; }
+
     public int? FailWith { get; set; }
+
+    /// <summary>Puts <paramref name="member"/> in <paramref name="group"/>: the group's <c>member</c> and the member's <c>memberOf</c> kept in step.</summary>
+    public void AddMember(string group, string member)
+    {
+        Values(group, "member").Add(B(member));
+        Values(member, "memberOf").Add(B(group));
+    }
+
+    /// <summary>Makes <paramref name="manager"/> the manager of <paramref name="report"/>: <c>manager</c> and <c>directReports</c> in step.</summary>
+    public void AddReport(string manager, string report)
+    {
+        Values(report, "manager").Add(B(manager));
+        Values(manager, "directReports").Add(B(report));
+    }
+
+    private List<byte[]> Values(string dn, string attribute)
+    {
+        var map = Entries[dn];
+        if (!map.TryGetValue(attribute, out var list))
+        {
+            map[attribute] = list = [];
+        }
+
+        return list;
+    }
 
     public static byte[] B(string text) => System.Text.Encoding.UTF8.GetBytes(text);
 
@@ -270,13 +305,20 @@ public sealed class FakeDirectorySystem : IDirectorySystem
     {
         public DirectoryEntry RootDse() => owner.Root;
 
-        public DirectoryResults Search(string baseDn, DirectoryScope scope, string filter, IReadOnlyList<string> attributes, int sizeLimit, bool paged)
+        public DirectoryResults Search(string baseDn, DirectoryScope scope, string filter, IReadOnlyList<string> attributes, int sizeLimit, bool paged, TimeSpan? timeLimit = null)
         {
+            owner.OnSearch?.Invoke(filter);
             owner.Filters.Add(filter);
+            owner.TimeLimits.Add(timeLimit);
             var found = new List<DirectoryEntry>();
             foreach (var (dn, map) in owner.Entries)
             {
-                bool inScope = scope == DirectoryScope.Base ? string.Equals(dn, baseDn, StringComparison.OrdinalIgnoreCase) : dn.EndsWith(baseDn, StringComparison.OrdinalIgnoreCase);
+                bool inScope = scope switch
+                {
+                    DirectoryScope.Base => string.Equals(dn, baseDn, StringComparison.OrdinalIgnoreCase),
+                    DirectoryScope.OneLevel => string.Equals(AdValues.Parent(dn), baseDn, StringComparison.OrdinalIgnoreCase),
+                    _ => string.Equals(dn, baseDn, StringComparison.OrdinalIgnoreCase) || dn.EndsWith("," + baseDn, StringComparison.OrdinalIgnoreCase),
+                };
                 if (!inScope || (scope != DirectoryScope.Base && !Filter.Matches(filter, dn, map, owner)))
                 {
                     continue;
@@ -295,6 +337,12 @@ public sealed class FakeDirectorySystem : IDirectorySystem
                     {
                         picked[attribute] = values;
                     }
+                    else if (string.Equals(attribute, "canonicalName", StringComparison.OrdinalIgnoreCase) && Domain(dn) is { Length: > 0 } domain)
+                    {
+                        // Constructed, as AD and Samba compute it: the domain's DNS name, then the path.
+                        string path = AdValues.CanonicalPath(dn, domain);
+                        picked[attribute] = [B(AdValues.DnsName(domain) + "/" + path)];
+                    }
                 }
 
                 found.Add(new DirectoryEntry(dn, picked));
@@ -305,6 +353,13 @@ public sealed class FakeDirectorySystem : IDirectorySystem
             }
 
             return new DirectoryResults(found, false);
+        }
+
+        /// <summary>The DN's domain part: its <c>DC=</c> names.</summary>
+        private static string Domain(string dn)
+        {
+            int at = dn.IndexOf("DC=", StringComparison.OrdinalIgnoreCase);
+            return at < 0 ? "" : dn[at..];
         }
 
         /// <summary>Range retrieval in pages of 2, so a test of four members walks two ranges.</summary>
@@ -388,21 +443,27 @@ public sealed class FakeDirectorySystem : IDirectorySystem
                 return Number(map, name) is { } n && (n & bit) != 0;
             }
 
-            if (term.Contains(">=", StringComparison.Ordinal))
+            if (term.Contains(">=", StringComparison.Ordinal) || term.Contains("<=", StringComparison.Ordinal))
             {
-                var parts = term.Split(">=");
-                return Number(map, parts[0]) is { } n && n >= long.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
-            }
+                bool atLeast = term.Contains(">=", StringComparison.Ordinal);
+                var parts = term.Split(atLeast ? ">=" : "<=");
+                if (long.TryParse(parts[1], System.Globalization.CultureInfo.InvariantCulture, out long bound))
+                {
+                    return Number(map, parts[0]) is { } n && (atLeast ? n >= bound : n <= bound);
+                }
 
-            if (term.Contains("<=", StringComparison.Ordinal))
-            {
-                var parts = term.Split("<=");
-                return Number(map, parts[0]) is { } n && n <= long.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+                // GeneralizedTime: compared as text, which orders it.
+                return map.TryGetValue(parts[0], out var texts) && texts.Count > 0
+                    && (atLeast ? string.CompareOrdinal(System.Text.Encoding.UTF8.GetString(texts[0]), parts[1]) >= 0 : string.CompareOrdinal(System.Text.Encoding.UTF8.GetString(texts[0]), parts[1]) <= 0);
             }
 
             int eq = term.IndexOf('=', StringComparison.Ordinal);
             string attribute = term[..eq];
             string value = term[(eq + 1)..];
+            if (string.Equals(attribute, "distinguishedName", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Equals(dn, Unescape(value), StringComparison.OrdinalIgnoreCase);
+            }
             if (!map.TryGetValue(attribute, out var values))
             {
                 return string.Equals(attribute, "objectCategory", StringComparison.OrdinalIgnoreCase) && Category(map, value);
@@ -429,14 +490,13 @@ public sealed class FakeDirectorySystem : IDirectorySystem
             return values.Any(v => string.Equals(System.Text.Encoding.UTF8.GetString(v), wanted, StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>The entry's category, by its most specific class (the last in its chain): a user and a contact are a person, as in AD.</summary>
         private static bool Category(Dictionary<string, List<byte[]>> map, string value) =>
-            map.TryGetValue("objectClass", out var classes) && classes.Any(c => System.Text.Encoding.UTF8.GetString(c) switch
+            map.TryGetValue("objectClass", out var classes) && classes.Count > 0 && System.Text.Encoding.UTF8.GetString(classes[^1]) switch
             {
-                "user" => value == "person",
-                "computer" => value == "computer",
-                "group" => value == "group",
-                _ => false,
-            });
+                "user" or "contact" => value == "person",
+                var other => string.Equals(other, value, StringComparison.OrdinalIgnoreCase),
+            };
 
         private static bool InChain(string dn, string group, FakeDirectorySystem owner, int depth)
         {
