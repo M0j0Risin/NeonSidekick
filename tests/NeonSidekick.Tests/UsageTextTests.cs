@@ -430,4 +430,65 @@ public class UsageTextTests
         tally.Add(Usage(100, 20, 1, 0.5, 1));
         Assert.Contains("advisors: 1 request · 300 in · 40 out", UsageText.Lines(tally, null));
     }
+
+    // ── The sections, shared with the Web UI's card (2026-10-16) ──
+
+    [Fact]
+    public void Sections_AreThePanesInItsOrder_TheExtrasUnderTheLaunch()
+    {
+        var tally = Filled();
+        tally.AddBots(Usage(500, 50, 1, 0.5, 1), requests: 3);
+
+        var shown = UsageText.Sections(tally, Window);
+
+        Assert.False(shown.Nothing || shown.NothingYet);
+        Assert.Empty(shown.Apart);
+        Assert.Equal(
+            [UsageText.ContextHeading, UsageText.LastReplyHeading, UsageText.ConversationHeading, UsageText.SessionHeading],
+            shown.Sections.Select(s => s.Heading));
+        Assert.Equal(ContextLengthProbe.MaxModelLenSource, shown.Sections[0].Note);
+        Assert.Equal(UsageText.ContextRows(tally, Window), shown.Sections[0].Rows);
+        Assert.Equal(UsageText.Rows(tally.LastReply, averaged: false), shown.Sections[1].Rows);
+        Assert.Equal((UsageText.BotsLabel, UsageText.ApartValue(3, Usage(500, 50, 1, 0.5, 1))), shown.Sections[3].Rows[^1]);
+    }
+
+    [Fact]
+    public void Sections_BeforeAnythingWasCounted_TheContextAlone_TheExtrasApart_OrNothing()
+    {
+        Assert.True(UsageText.Sections(new TokenTally(), null).Nothing);
+
+        var windowOnly = UsageText.Sections(new TokenTally(), Window);
+        Assert.Equal((false, true), (windowOnly.Nothing, windowOnly.NothingYet));
+        Assert.Equal([UsageText.ContextHeading], windowOnly.Sections.Select(s => s.Heading));
+
+        var bots = new TokenTally();
+        bots.AddBots(Usage(500, 50, 1, 0.5, 1), requests: 3);
+        var apart = UsageText.Sections(bots, null);
+        Assert.False(apart.Nothing);
+        Assert.Equal([UsageText.BotsLabel], apart.Apart.Select(r => r.Label));
+        Assert.Equal(UsageText.WindowUnknown, apart.Sections[0].Note);
+    }
+
+    [Fact]
+    public void TheWebUsageCard_IsTheMeterAndTheTiles_FromTheSameSections()
+    {
+        var tally = Filled();
+        var card = NeonSidekick.WebUi.WebUsageView.Of(tally, Window);
+
+        Assert.Equal(UsageText.Label, card.Title);
+        Assert.Equal(new NeonSidekick.WebUi.WebUsageContext(UsageText.ContextHeading, "1.2k", "4.1k", 30, ContextLengthProbe.MaxModelLenSource), card.Context);
+        Assert.Equal([UsageText.LastReplyHeading, UsageText.ConversationHeading, UsageText.SessionHeading], card.Sections.Select(s => s.Heading));
+        Assert.Equal(UsageText.Rows(tally.LastReply, averaged: false).Select(r => (r.Label, r.Value)), card.Sections[0].Rows.Select(r => (r.Label, r.Value)));
+        Assert.Null(card.Empty);
+
+        var nothing = NeonSidekick.WebUi.WebUsageView.Of(new TokenTally(), null);
+        Assert.Equal((null, 0, UsageText.NothingCounted), (nothing.Context, nothing.Sections.Count, nothing.Empty));
+
+        var bots = new TokenTally();
+        bots.AddBots(Usage(500, 50, 1, 0.5, 1), requests: 3);
+        var apart = NeonSidekick.WebUi.WebUsageView.Of(bots, null);
+        Assert.Equal((UsageText.WindowUnknown, null, null), (apart.Context!.Source, apart.Context.Window, apart.Context.Percent));
+        Assert.Equal(UsageText.NothingCounted, apart.Empty);
+        Assert.Equal([UsageText.SessionHeading], apart.Sections.Select(s => s.Heading));   // the extras in a tile of their own
+    }
 }

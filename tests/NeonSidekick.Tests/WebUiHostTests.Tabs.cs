@@ -60,6 +60,8 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/events", WebTab.Chat)]
     [InlineData("/api/usage", WebTab.Chat)]
     [InlineData("/api/prompts", WebTab.Chat)]
+    [InlineData("/api/memory", WebTab.Chat)]
+    [InlineData("/api/history", WebTab.Chat)]
     [InlineData("/api/entry/4", WebTab.Chat)]
     [InlineData("/api/picture/0123456789abcdef0123456789abcdef/1/thumb", WebTab.Chat)]
     [InlineData("/api/shopping", WebTab.Shopping)]
@@ -84,6 +86,11 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/complete", "{\"text\":\"/\",\"cursor\":1,\"seq\":1}", WebTab.Chat)]
     [InlineData("/api/strip/select", "{\"id\":1}", WebTab.Chat)]
     [InlineData("/api/picture/delete", "{\"id\":1}", WebTab.Chat)]
+    [InlineData("/api/prompts/save", "{\"text\":\"x\"}", WebTab.Chat)]
+    [InlineData("/api/prompts/delete", "{\"id\":\"p1\"}", WebTab.Chat)]
+    [InlineData("/api/memory/save", "{\"text\":\"x\"}", WebTab.Chat)]
+    [InlineData("/api/memory/delete", "{\"text\":\"x\"}", WebTab.Chat)]
+    [InlineData("/api/history/clear", "{}", WebTab.Chat)]
     [InlineData("/api/shopping/check", "{\"id\":1,\"on\":true}", WebTab.Shopping)]
     [InlineData("/api/shopping/store", "{\"id\":1}", WebTab.Shopping)]
     [InlineData("/api/home/tap", "{\"ref\":\"x\"}", WebTab.Home)]
@@ -103,6 +110,11 @@ public sealed partial class WebUiHostTests
         Assert.Empty(_backend.StripPicks);
         Assert.Empty(_backend.Checks);
         Assert.Empty(_backend.Stores);
+        Assert.Empty(_backend.PromptsSaved);
+        Assert.Empty(_backend.PromptsDeleted);
+        Assert.Empty(_backend.MemoriesSaved);
+        Assert.Empty(_backend.MemoriesDeleted);
+        Assert.Equal(0, _backend.HistoryClears);
     }
 
     [Fact]
@@ -173,7 +185,7 @@ public sealed partial class WebUiHostTests
         using var sent = await _client.SendAsync(Post("/api/send", "{\"id\":\"a\",\"text\":\"/prompts\"}"));
 
         var sheet = JsonSerializer.Deserialize(await prompts.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebPrompts)!;
-        Assert.Equal([new WebPrompt(1, "one"), new WebPrompt(2, "two")], sheet.Items);
+        Assert.Equal([new WebPrompt(1, "one", "p1"), new WebPrompt(2, "two", "p2")], sheet.Items);
         Assert.Equal("no-store", prompts.Headers.CacheControl?.ToString());
         Assert.Equal(HttpStatusCode.Unauthorized, unsigned.StatusCode);
         Assert.Equal(WebUiText.OpenPrompts, JsonSerializer.Deserialize(await sent.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebResult)!.Open);
@@ -201,6 +213,90 @@ public sealed partial class WebUiHostTests
         Assert.Equal(WebTab.Chat, WebUiHost.TabOf("/api/picture/delete"));
     }
 
+    // ── The sheet (2026-10-16): prompts saved and deleted, memories, the history ──
+
+    [Theory]
+    [InlineData("/api/prompts/save", "{\"text\":\"Summarize.\"}")]
+    [InlineData("/api/prompts/delete", "{\"id\":\"p1\"}")]
+    [InlineData("/api/memory/save", "{\"text\":\"Likes tea.\"}")]
+    [InlineData("/api/memory/delete", "{\"text\":\"Likes tea.\"}")]
+    [InlineData("/api/history/clear", "{}")]
+    public async Task TheSheetsChanges_NeedTheCookieAndTheHeader_AreActs_AndAnswerTheBackendsSentence(string path, string json)
+    {
+        _backend.PromptList.Add("one");
+        _backend.MemoryList.Add(new WebMemory("Likes tea.", false));
+        _backend.HistoryLines.Add("hi");
+
+        using var unsigned = await _client.SendAsync(Post(path, json, signedIn: false));
+        using var crossSite = await _client.SendAsync(Post(path, json, csrf: false));
+        Assert.Equal((HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden), (unsigned.StatusCode, crossSite.StatusCode));
+        Assert.Equal((0, 0, 0, 0, 0), (_backend.PromptsSaved.Count, _backend.PromptsDeleted.Count, _backend.MemoriesSaved.Count, _backend.MemoriesDeleted.Count, _backend.HistoryClears));
+
+        using var done = await _client.SendAsync(Post(path, json));
+        Assert.Equal(HttpStatusCode.OK, done.StatusCode);
+        var body = JsonSerializer.Deserialize(await done.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebResult)!;
+        Assert.True(body.Ok);
+        Assert.False(string.IsNullOrEmpty(body.Message));
+        Assert.Equal(1, _backend.PromptsSaved.Count + _backend.PromptsDeleted.Count + _backend.MemoriesSaved.Count + _backend.MemoriesDeleted.Count + _backend.HistoryClears);
+
+        _backend.ListReply = new WebReply(WebOutcome.Refused, "Error: no.");
+        using var refused = await _client.SendAsync(Post(path, json));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, refused.StatusCode);
+
+        using var get = await _client.SendAsync(Get(path));
+        Assert.Equal(HttpStatusCode.NotFound, get.StatusCode);   // a change is a post
+        Assert.Equal(WebRateBucket.Act, WebRateLimit.BucketOf(path, post: true));
+        Assert.Null(WebRateLimit.BucketOf(path, post: false));
+    }
+
+    [Theory]
+    [InlineData("/api/prompts/save", "{\"words\":1")]
+    [InlineData("/api/prompts/delete", "[]")]
+    [InlineData("/api/memory/save", "nope")]
+    [InlineData("/api/memory/delete", "{")]
+    public async Task ASheetChangeThatDoesNotRead_Is400(string path, string json)
+    {
+        using var response = await _client.SendAsync(Post(path, json));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(_backend.PromptsSaved);
+        Assert.Empty(_backend.MemoriesSaved);
+    }
+
+    [Fact]
+    public async Task TheMemories_AndTheHistory_AreReadBehindTheCookie_TheHistoryTagged()
+    {
+        _backend.MemoryList.AddRange([new WebMemory("Likes tea.", false), new WebMemory("Uses Obsidian.", true)]);
+        _backend.MemoryModeOff = true;
+        _backend.HistoryLines.AddRange(["first", "second"]);
+
+        using var memories = await _client.SendAsync(Get("/api/memory"));
+        using var unsigned = await _client.SendAsync(Get("/api/memory", signedIn: false));
+        var sheet = JsonSerializer.Deserialize(await memories.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebMemories)!;
+        Assert.Equal([new WebMemory("Likes tea.", false), new WebMemory("Uses Obsidian.", true)], sheet.Items);
+        Assert.True(sheet.ModeOff);
+        Assert.Equal("no-store", memories.Headers.CacheControl?.ToString());
+        Assert.Equal(HttpStatusCode.Unauthorized, unsigned.StatusCode);
+
+        using var history = await _client.SendAsync(Get("/api/history"));
+        Assert.Equal(["first", "second"], JsonSerializer.Deserialize(await history.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebHistory)!.Lines);
+        string etag = history.Headers.ETag!.ToString();
+        var again = Get("/api/history");
+        again.Headers.TryAddWithoutValidation("If-None-Match", etag);
+        using var same = await _client.SendAsync(again);
+        Assert.Equal(HttpStatusCode.NotModified, same.StatusCode);   // the same lines: no body
+
+        lock (_backend.ListsGate)
+        {
+            _backend.HistoryLines.Add("third");
+        }
+
+        var changed = Get("/api/history");
+        changed.Headers.TryAddWithoutValidation("If-None-Match", etag);
+        using var fresh = await _client.SendAsync(changed);
+        Assert.Equal(HttpStatusCode.OK, fresh.StatusCode);
+        Assert.Equal(["first", "second", "third"], JsonSerializer.Deserialize(await fresh.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebHistory)!.Lines);
+    }
+
     [Fact]
     public async Task TheNothingOnPagesScript_NeedsNoCookie_AndThePageIsNotStatic()
     {
@@ -215,6 +311,14 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/pulse", null)]
     [InlineData("/api/events", WebTab.Chat)]
     [InlineData("/api/strip/select", WebTab.Chat)]
+    [InlineData("/api/prompts/save", WebTab.Chat)]
+    [InlineData("/api/prompts/delete", WebTab.Chat)]
+    [InlineData("/api/memory", WebTab.Chat)]
+    [InlineData("/api/memory/save", WebTab.Chat)]
+    [InlineData("/api/memory/delete", WebTab.Chat)]
+    [InlineData("/api/history", WebTab.Chat)]
+    [InlineData("/api/history/clear", WebTab.Chat)]
+    [InlineData("/api/memoryx", null)]
     [InlineData("/api/entry/12", WebTab.Chat)]
     [InlineData("/api/picture/r/1/full", WebTab.Chat)]
     [InlineData("/api/shopping", WebTab.Shopping)]

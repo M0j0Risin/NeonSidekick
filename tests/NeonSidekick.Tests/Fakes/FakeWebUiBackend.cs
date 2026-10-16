@@ -32,6 +32,14 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
     public WebReply Send(WebSendRequest request, IPAddress? remote)
     {
         Sent.Enqueue(request);
+        if (Reply.Outcome == WebOutcome.Ok && !string.IsNullOrWhiteSpace(request.Text))
+        {
+            lock (ListsGate)
+            {
+                HistoryLines.Add(request.Text);   // remembered as accepted (2026-10-16), as the screen's session does
+            }
+        }
+
         return Reply;
     }
 
@@ -80,14 +88,159 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
         return Completion with { Seq = request.Seq };
     }
 
-    public WebUsageCard Card { get; set; } = new("Usage", ["Context: 1,000 of 8,000 tokens (13%)"]);
+    public WebUsageCard Card { get; set; } = new(
+        "📊 Usage",
+        new WebUsageContext("Context", "1.0k", "8.0k", 13, "configured"),
+        [new WebUsageSection("Last reply", "", [new WebUsageRow("Total", "1,000"), new WebUsageRow("Speed", "42.0 tok/s")])],
+        null);
 
     public WebUsageCard Usage() => Card;
 
-    /// <summary>The saved prompts the sheet lists (later on 2026-10-15).</summary>
+    /// <summary>
+    /// The saved prompts the sheet lists (later on 2026-10-15); each one's id is <c>p</c> and its place from 1 (2026-10-16), so a delete names
+    /// one. Under <see cref="ListsGate"/> while a page may read or change them.
+    /// </summary>
     public List<string> PromptList { get; } = [];
 
-    public WebPrompts Prompts() => new(NeonSidekick.Prompts.SavedPromptText.PaneTitle, [.. PromptList.Select((t, i) => new WebPrompt(i + 1, t))]);
+    /// <summary>The lock over the sheet's lists (2026-10-16): the page's requests change them on Kestrel's threads.</summary>
+    public object ListsGate { get; } = new();
+
+    public WebPrompts Prompts()
+    {
+        lock (ListsGate)
+        {
+            return new([.. PromptList.Select((t, i) => new WebPrompt(i + 1, t, PromptId(i + 1)))]);
+        }
+    }
+
+    /// <summary>The fake's id for the prompt at <paramref name="number"/>.</summary>
+    public static string PromptId(int number) => "p" + number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>The answer a sheet change gets (Ok with a sentence of the fake's own unless set), and the requests it was asked (2026-10-16).</summary>
+    public WebReply? ListReply { get; set; }
+
+    public ConcurrentQueue<string> PromptsSaved { get; } = new();
+
+    public ConcurrentQueue<string> PromptsDeleted { get; } = new();
+
+    public ConcurrentQueue<string> MemoriesSaved { get; } = new();
+
+    public ConcurrentQueue<string> MemoriesDeleted { get; } = new();
+
+    public int HistoryClears;
+
+    public WebReply SavePrompt(WebTextBody request, IPAddress? remote)
+    {
+        PromptsSaved.Enqueue(request.Text ?? "");
+        if (ListReply is { } reply)
+        {
+            return reply;
+        }
+
+        lock (ListsGate)
+        {
+            PromptList.Add(request.Text ?? "");
+        }
+
+        return new WebReply(WebOutcome.Ok, "Saved.");
+    }
+
+    public WebReply DeletePrompt(WebPromptDelete request, IPAddress? remote)
+    {
+        PromptsDeleted.Enqueue(request.Id ?? "");
+        if (ListReply is { } reply)
+        {
+            return reply;
+        }
+
+        lock (ListsGate)
+        {
+            int at = Enumerable.Range(1, PromptList.Count).FirstOrDefault(n => PromptId(n) == request.Id);
+            if (at == 0)
+            {
+                return new WebReply(WebOutcome.NotFound, WebUiText.PromptGone);
+            }
+
+            PromptList.RemoveAt(at - 1);
+        }
+
+        return new WebReply(WebOutcome.Ok, "Removed.");
+    }
+
+    /// <summary>The memories the 💾 tab lists, and whether the mode is off (2026-10-16).</summary>
+    public List<WebMemory> MemoryList { get; } = [];
+
+    public bool MemoryModeOff { get; set; }
+
+    public WebMemories Memories()
+    {
+        lock (ListsGate)
+        {
+            return new([.. MemoryList], MemoryModeOff);
+        }
+    }
+
+    public WebReply SaveMemory(WebTextBody request, IPAddress? remote)
+    {
+        MemoriesSaved.Enqueue(request.Text ?? "");
+        if (ListReply is { } reply)
+        {
+            return reply;
+        }
+
+        lock (ListsGate)
+        {
+            MemoryList.Add(new WebMemory(request.Text ?? "", false));
+        }
+
+        return new WebReply(WebOutcome.Ok, "Remembered.");
+    }
+
+    public WebReply DeleteMemory(WebTextBody request, IPAddress? remote)
+    {
+        MemoriesDeleted.Enqueue(request.Text ?? "");
+        if (ListReply is { } reply)
+        {
+            return reply;
+        }
+
+        lock (ListsGate)
+        {
+            if (MemoryList.RemoveAll(m => m.Text == request.Text) == 0)
+            {
+                return new WebReply(WebOutcome.NotFound, WebUiText.MemoryGone);
+            }
+        }
+
+        return new WebReply(WebOutcome.Ok, "Removed.");
+    }
+
+    /// <summary>The message history the page walks (2026-10-16), oldest first.</summary>
+    public List<string> HistoryLines { get; } = [];
+
+    public WebHistory History()
+    {
+        lock (ListsGate)
+        {
+            return new([.. HistoryLines]);
+        }
+    }
+
+    public WebReply ClearHistory(IPAddress? remote)
+    {
+        Interlocked.Increment(ref HistoryClears);
+        if (ListReply is { } reply)
+        {
+            return reply;
+        }
+
+        lock (ListsGate)
+        {
+            HistoryLines.Clear();
+        }
+
+        return new WebReply(WebOutcome.Ok, "Cleared.");
+    }
 
     public IWebHome? Home { get; set; }
 

@@ -376,7 +376,14 @@ public sealed partial class WebUiHostTests : IAsyncLifetime
         using var card = await _client.SendAsync(Get("/api/usage"));
         Assert.Equal(HttpStatusCode.OK, card.StatusCode);
         var read = System.Text.Json.JsonSerializer.Deserialize(await card.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebUsageCard)!;
-        Assert.Equal(_backend.Card.Lines, read.Lines);
+        Assert.Equal((_backend.Card.Title, _backend.Card.Context), (read.Title, read.Context));
+        Assert.Equal(_backend.Card.Sections.SelectMany(s => s.Rows), read.Sections.SelectMany(s => s.Rows));
+
+        // Tagged (2026-10-16): the open card re-reads it as a reply runs, and an unchanged one is a 304 with no body.
+        var again = Get("/api/usage");
+        again.Headers.TryAddWithoutValidation("If-None-Match", card.Headers.ETag!.ToString());
+        using var same = await _client.SendAsync(again);
+        Assert.Equal(HttpStatusCode.NotModified, same.StatusCode);
     }
 
     [Fact]
@@ -407,6 +414,11 @@ public sealed partial class WebUiHostTests : IAsyncLifetime
             byte[] bytes = await png.Content.ReadAsByteArrayAsync();
             Assert.Equal([0x89, (byte)'P', (byte)'N', (byte)'G'], bytes[..4]);
         }
+
+        // The favicon is the app icon itself (2026-10-16): assets/icon.svg embedded under the favicon's name, never a copy that can drift.
+        using var favicon = await _client.GetAsync("/favicon.svg");
+        Assert.Equal("image/svg+xml", favicon.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(File.ReadAllText(Path.Combine(RepoRoot(), "assets", "icon.svg")), await favicon.Content.ReadAsStringAsync());
 
         using var script = await _client.GetAsync("/signin.js");
         Assert.Equal(HttpStatusCode.OK, script.StatusCode);
@@ -666,5 +678,18 @@ public sealed partial class WebUiHostTests : IAsyncLifetime
             readers.ForEach(r => r.Dispose());
             responses.ForEach(r => r.Dispose());
         }
+    }
+
+    /// <summary>The repository root: the folder above the test binaries that holds the solution file.</summary>
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "NeonSidekick.slnx")))
+        {
+            dir = dir.Parent;
+        }
+
+        Assert.NotNull(dir);
+        return dir.FullName;
     }
 }

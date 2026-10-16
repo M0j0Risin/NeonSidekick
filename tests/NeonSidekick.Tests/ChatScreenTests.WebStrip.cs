@@ -75,7 +75,7 @@ public partial class ChatScreenTests
 
         Assert.Equal([("withdrawn", "/loop 2 hi")], TextBacks(subscription!));
         Assert.Single(_chat.Requests);   // the second pass never ran
-        Assert.DoesNotContain("/loop 2 hi", _running!.InputHistoryForTests);
+        Assert.Contains("/loop 2 hi", _running!.InputHistoryForTests);   // in the history as sent (2026-10-16), withdrawn or not, as a PC line
         subscription!.Dispose();
     }
 

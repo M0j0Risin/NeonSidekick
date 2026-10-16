@@ -327,9 +327,6 @@ public static class WebUiText
     /// <summary>The status row's word while the PC works with no label to show (2026-10-15: no pane at the PC).</summary>
     public const string Working = "working";
 
-    /// <summary>The usage card's title (2026-10-15).</summary>
-    public const string UsageTitle = "Usage";
-
     /// <summary>The ✕ inside the page's message box (later on 2026-10-15): its label.</summary>
     public const string ClearDraft = "Clear the draft";
 
@@ -373,11 +370,11 @@ public static class WebUiText
     /// <summary>A Page line that reached the PC (never by the page's own path): what it is.</summary>
     public const string OpensOnThePage = "That opens on the page itself.";
 
-    /// <summary>The 📣 button's label.</summary>
-    public const string PromptsButton = "Saved prompts";
+    /// <summary>The 📣 button's label, and the sheet's (2026-10-16: its three tabs named).</summary>
+    public const string PromptsButton = "Prompts, memory and history";
 
-    /// <summary>The sheet with nothing saved.</summary>
-    public const string PromptsNone = "No saved prompts yet: /prompts save <text> at the PC saves one.";
+    /// <summary>The sheet's prompts tab with nothing saved (2026-10-16: the page saves them too).</summary>
+    public const string PromptsNone = "No saved prompts yet. ⇪ saves the draft as one.";
 
     /// <summary>A row's ➤.</summary>
     public const string PromptsSend = "Send this prompt";
@@ -386,7 +383,79 @@ public static class WebUiText
     public const string Filter = "Filter";
 
     /// <summary>The sheet's ✕.</summary>
-    public const string ClosePrompts = "Close the saved prompts";
+    public const string ClosePrompts = "Close the sheet";
+
+    // ── The sheet's tabs, its ⇪ and its 🗑️ (2026-10-16, the user's ask) ──
+
+    /// <summary>The sheet's three tabs.</summary>
+    public const string PromptsTab = "📣 Prompts";
+
+    public const string MemoryTab = "💾 Memory";
+
+    public const string HistoryTab = "🕘 History";
+
+    /// <summary>The memory tab with none saved.</summary>
+    public const string MemoryNone = "No memories yet. ⇪ saves the draft as one.";
+
+    /// <summary>The history tab with nothing in it.</summary>
+    public const string HistoryNone = "No messages in the history yet.";
+
+    /// <summary>The bar's ⇪ on the prompts and memory tabs.</summary>
+    public const string SaveDraft = "⇪ save draft";
+
+    /// <summary>⇪ with an empty draft, and a memory save of nothing.</summary>
+    public const string DraftEmpty = "The draft is empty: type the text to save first.";
+
+    /// <summary>A row's 🗑️, and its label once armed.</summary>
+    public const string DeleteRow = "Delete";
+
+    public const string DeleteRowArmed = "Delete?";
+
+    /// <summary>The history tab's clear all, and its label once armed.</summary>
+    public const string ClearAll = "🗑️ clear all";
+
+    public const string ClearAllArmed = "Clear all?";
+
+    /// <summary>A memory turned off, after its text.</summary>
+    public const string MemoryOff = "off";
+
+    /// <summary>The memory tab's line while <i>Memory mode</i> is off.</summary>
+    public const string MemoryModeOff = "Memory is off: the model doesn't see these, and saving is refused (/memory read-write turns it on).";
+
+    /// <summary>A delete of a saved prompt that is gone already.</summary>
+    public const string PromptGone = "That prompt is no longer saved.";
+
+    /// <summary>A delete of a memory that is gone already.</summary>
+    public const string MemoryGone = "That memory is no longer saved.";
+
+    /// <summary>A memory the store could not remove (the file could not be written).</summary>
+    public const string MemoryNotRemoved = "Could not remove the memory; the log has the reason.";
+
+    /// <summary>The PC's hint row after the page saved a prompt (its number at the PC) or deleted one.</summary>
+    public static string PromptSavedFlash(int number) => "📱 saved prompt " + number.ToString(CultureInfo.InvariantCulture);
+
+    public const string PromptDeletedFlash = "📱 deleted a saved prompt";
+
+    /// <summary>The PC's hint row after the page saved a memory or deleted one.</summary>
+    public const string MemorySavedFlash = "📱 saved a memory";
+
+    public const string MemoryDeletedFlash = "📱 deleted a memory";
+
+    /// <summary>The PC's hint row after the page cleared the message history.</summary>
+    public static string HistoryClearedFlash(int count) => "📱 cleared " + App.ChatScreen.HistoryMessages(count);
+
+    /// <summary>The audit lines for the sheet's changes: what changed and from where, never a prompt's or a memory's text (the log is shareable).</summary>
+    public static string PromptSavedLogLine(int number, IPAddress? remote) =>
+        "Web UI saved prompt " + number.ToString(CultureInfo.InvariantCulture) + " from " + Where(remote) + ".";
+
+    public static string PromptDeletedLogLine(IPAddress? remote) => "Web UI deleted a saved prompt from " + Where(remote) + ".";
+
+    public static string MemorySavedLogLine(IPAddress? remote) => "Web UI saved a memory from " + Where(remote) + ".";
+
+    public static string MemoryDeletedLogLine(IPAddress? remote) => "Web UI deleted a memory from " + Where(remote) + ".";
+
+    public static string HistoryClearedLogLine(int count, IPAddress? remote) =>
+        "Web UI cleared the message history (" + App.ChatScreen.HistoryMessages(count) + ") from " + Where(remote) + ".";
 
     // ── The page's 🗑️ (later on 2026-10-15) ──
 
@@ -426,7 +495,9 @@ public static class WebUiText
     /// <summary>The page's own words, sent with every snapshot.</summary>
     public static readonly WebWords Words = new(PictureGone, PictureTooLarge, OpenOriginal, SendAsMessage, UseLine, DraftFilled, Undo, Working, CloseChoice,
         UI.TranscriptRenderer.NoReplyText, UI.ThinkingFoldText.LiveBare, EntryGone,
-        ClearDraft, DraftCleared, ExpandAll, CollapseAll, ToTop, ToBottom, StripButton, StripOne, StripMany, CloseStrip, Live, LiveLabel, DeletePicture, DeleteArmed, PromptsButton, PromptsNone, PromptsSend, Filter, ClosePrompts);
+        ClearDraft, DraftCleared, ExpandAll, CollapseAll, ToTop, ToBottom, StripButton, StripOne, StripMany, CloseStrip, Live, LiveLabel, DeletePicture, DeleteArmed, PromptsButton, PromptsNone, PromptsSend, Filter, ClosePrompts,
+        PromptsTab, MemoryTab, HistoryTab, MemoryNone, HistoryNone, SaveDraft, DraftEmpty, DeleteRow, DeleteRowArmed, ClearAll, ClearAllArmed, MemoryOff,
+        MemoryModeOff);
 
     /// <summary>A folded entry whose text the page asked for after the transcript let it go (2026-10-15).</summary>
     public const string EntryGone = "(no longer available)";

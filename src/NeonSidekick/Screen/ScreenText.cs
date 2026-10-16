@@ -61,11 +61,17 @@ public static class ScreenText
         return Size(monitor.Bounds) + (monitor.Primary ? ", primary" : "") + (monitor.Number == ownMonitor ? ", this app's" : "");
     }
 
-    /// <summary>A window's note on the list: <c>"notes.txt - Notepad" (Notepad)</c>, as <see cref="List"/> names it. Pinned.</summary>
-    public static string WindowNote(ScreenWindow window)
+    /// <summary>What marks this app's own window on the list and in the completion list (2026-10-16): <c>, this app</c>. Pinned (the model reads it).</summary>
+    public const string OwnWindowMark = ", this app";
+
+    /// <summary>
+    /// A window's note on the list: <c>"notes.txt - Notepad" (Notepad)</c>, as <see cref="List"/> names it; <paramref name="own"/> adds
+    /// <see cref="OwnWindowMark"/> (2026-10-16, the app's own window offered too). Pinned.
+    /// </summary>
+    public static string WindowNote(ScreenWindow window, bool own = false)
     {
         ArgumentNullException.ThrowIfNull(window);
-        return $"\"{window.Title}\"" + (window.Process.Length > 0 ? $" ({window.Process})" : "");
+        return $"\"{window.Title}\"" + (window.Process.Length > 0 ? $" ({window.Process})" : "") + (own ? OwnWindowMark : "");
     }
 
     /// <summary>A monitor's or a window's id as the targets write it.</summary>
@@ -183,7 +189,7 @@ public static class ScreenText
         lines.Add(windows.Count == 0 ? "Windows: none" : "Windows (front to back):");
         foreach (var w in windows.Take(MaxListed))
         {
-            lines.Add($"  window:{N(w.Id)}  \"{w.Title}\"" + (w.Process.Length > 0 ? $" ({w.Process})" : "") + $" {Size(w.Bounds)}" + (w.Id == ownWindow ? ", this app" : ""));
+            lines.Add($"  window:{N(w.Id)}  \"{w.Title}\"" + (w.Process.Length > 0 ? $" ({w.Process})" : "") + $" {Size(w.Bounds)}" + (w.Id == ownWindow ? OwnWindowMark : ""));
         }
 
         if (windows.Count > MaxListed)

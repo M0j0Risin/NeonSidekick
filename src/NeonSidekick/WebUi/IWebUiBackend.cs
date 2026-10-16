@@ -98,6 +98,27 @@ public interface IWebUiBackend
     /// <summary>The profile's saved prompts for the page's sheet (later on 2026-10-15); reads only.</summary>
     WebPrompts Prompts();
 
+    /// <summary>The page's draft saved as a prompt (2026-10-16, the sheet's ⇪): the <c>/prompts save</c> answer; refused for an empty or too long one.</summary>
+    WebReply SavePrompt(WebTextBody request, IPAddress? remote);
+
+    /// <summary>A saved prompt deleted by its id (2026-10-16, the sheet's 🗑️); NotFound when it is gone.</summary>
+    WebReply DeletePrompt(WebPromptDelete request, IPAddress? remote);
+
+    /// <summary>The profile's memories for the sheet's 💾 tab (2026-10-16); reads only.</summary>
+    WebMemories Memories();
+
+    /// <summary>The page's draft saved as a memory (2026-10-16): <c>/remember</c>'s answer, refused while <i>Memory mode</i> is off.</summary>
+    WebReply SaveMemory(WebTextBody request, IPAddress? remote);
+
+    /// <summary>A memory deleted by its text (2026-10-16; memories have no ids), in any mode; NotFound when it is gone.</summary>
+    WebReply DeleteMemory(WebTextBody request, IPAddress? remote);
+
+    /// <summary>The profile's message history for ↑/↓ and the sheet's 🕘 tab (2026-10-16): no drafts set aside, no paste tokens; reads only.</summary>
+    WebHistory History();
+
+    /// <summary>The message history cleared from the 🕘 tab (2026-10-16): what <c>/msgclear</c>'s yes does, the two taps having been the yes.</summary>
+    WebReply ClearHistory(IPAddress? remote);
+
     /// <summary>The Home tab (2026-10-15), or null in a build without one.</summary>
     IWebHome? Home { get; }
 

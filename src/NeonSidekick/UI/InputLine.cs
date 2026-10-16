@@ -180,10 +180,14 @@ public sealed partial class InputLine
     /// <summary>What a masked read draws for each character (one cell). Pinned.</summary>
     public const char MaskGlyph = '•';
     private readonly DoubleClick _hintClicks;
-    private readonly List<string> _history = new();
-
-    /// <summary>The history's last line is a draft ESC cleared (<see cref="RememberDraft"/>), held here and never stored.</summary>
-    private bool _lastIsDraft;
+    /// <summary>
+    /// The history, oldest first: each line and whether it is a draft set aside (<see cref="RememberDraft"/>: ESC, or a draft a saved prompt
+    /// replaced), held for Up and never stored. Each entry carries its own mark since 2026-10-16 (the Web UI's copy leaves every such draft out,
+    /// not just the last one, which was all the old flag could tell). Behind <see cref="_historyGate"/>: the idle read, the live line under a
+    /// reply, the voice, <c>/msgclear</c> and the Web UI's request threads (a page's line is remembered as the page sends it) all change it.
+    /// </summary>
+    private readonly List<(string Text, bool Draft)> _history = new();
+    private readonly Lock _historyGate = new();
     private readonly PasteBlocks _pastes = new();
 
     /// <summary>A line drawn where the cursor is (a pass-through pane over <paramref name="console"/>); <paramref name="copyToClipboard"/> as the pane ctor's.</summary>
@@ -271,8 +275,41 @@ public sealed partial class InputLine
     /// </summary>
     public const string DropOnLineHint = "🖼️ drop on line";
 
-    /// <summary>Submitted lines this session, oldest first; consecutive duplicates collapsed. A collapsed paste is its token here (the block is in <see cref="Pastes"/>).</summary>
-    public IReadOnlyList<string> History => _history;
+    /// <summary>
+    /// Submitted lines this session, oldest first; consecutive duplicates collapsed. A collapsed paste is its token here (the block is in
+    /// <see cref="Pastes"/>). A copy, taken under the lock (2026-10-16): the list changes on other threads.
+    /// </summary>
+    public IReadOnlyList<string> History => HistorySnapshot();
+
+    /// <summary>How many lines the history holds now.</summary>
+    public int HistoryCount
+    {
+        get
+        {
+            lock (_historyGate)
+            {
+                return _history.Count;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The history's lines, oldest first, as a copy (2026-10-16); without <paramref name="includeDrafts"/> the drafts set aside are left out —
+    /// the Web UI's copy, since a draft thrown away (a password in the wrong box) is never stored and so never leaves this machine either.
+    /// </summary>
+    public IReadOnlyList<string> HistorySnapshot(bool includeDrafts = true)
+    {
+        lock (_historyGate)
+        {
+            return [.. _history.Where(e => includeDrafts || !e.Draft).Select(e => e.Text)];
+        }
+    }
+
+    /// <summary>
+    /// The draft the last Enter at the idle line submitted, in its token form (2026-10-16): what the screen puts back on the row when the
+    /// message is withdrawn. It used to read the history's last line, which a Web UI line remembered meanwhile could have become.
+    /// </summary>
+    public string? LastSubmittedDraft { get; private set; }
 
     /// <summary>The long pastes of this session, behind the tokens the drafts hold.</summary>
     public PasteBlocks Pastes => _pastes;
@@ -295,21 +332,27 @@ public sealed partial class InputLine
             return;
         }
 
-        if (_history.Count > 0 && string.Equals(_history[^1], text, StringComparison.Ordinal))
+        bool tell;
+        lock (_historyGate)
         {
-            // The same line again: a held draft now sent is stored now, the de-duplication having kept it from being added twice.
-            if (keep && _lastIsDraft)
+            if (_history.Count > 0 && string.Equals(_history[^1].Text, text, StringComparison.Ordinal))
             {
-                _lastIsDraft = false;
-                Remembered?.Invoke(text);
+                // The same line again: a held draft now sent is stored now, the de-duplication having kept it from being added twice.
+                tell = keep && _history[^1].Draft;
+                if (tell)
+                {
+                    _history[^1] = (text, false);
+                }
             }
-
-            return;
+            else
+            {
+                _history.Add((text, !keep));
+                tell = keep;
+            }
         }
 
-        _history.Add(text);
-        _lastIsDraft = !keep;
-        if (keep)
+        // Told outside the lock (2026-10-16): the listener writes SQLite, and may read the history itself.
+        if (tell)
         {
             Remembered?.Invoke(text);
         }
@@ -329,14 +372,19 @@ public sealed partial class InputLine
     public void ReplaceHistory(IEnumerable<string> lines)
     {
         ArgumentNullException.ThrowIfNull(lines);
-        _history.Clear();
-        _lastIsDraft = false;
+        var fresh = new List<(string, bool)>();
         foreach (string line in lines)
         {
-            if (line.Length > 0 && (_history.Count == 0 || !string.Equals(_history[^1], line, StringComparison.Ordinal)))
+            if (line.Length > 0 && (fresh.Count == 0 || !string.Equals(fresh[^1].Item1, line, StringComparison.Ordinal)))
             {
-                _history.Add(line);
+                fresh.Add((line, false));
             }
+        }
+
+        lock (_historyGate)
+        {
+            _history.Clear();
+            _history.AddRange(fresh);
         }
     }
 

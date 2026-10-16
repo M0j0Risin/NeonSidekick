@@ -55,7 +55,7 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task AWebLine_LeavesThePcsHalfTypedDraft_OnItsRow()
+    public async Task AWebLine_LeavesThePcsHalfTypedDraft_OnItsRow_AndJoinsTheHistory()
     {
         _settings.Update(d => d.TtsOutput = false);
         _chat.EnqueueText("One.");
@@ -73,10 +73,11 @@ public partial class ChatScreenTests
 
         Assert.Equal("from the phone", LastUser(_chat.Requests[0]));
         Assert.Equal("dra", LastUser(_chat.Requests[1]));   // the PC's own draft, sent by its own Enter
-        Assert.DoesNotContain("from the phone", _input_History());
+        // One history since 2026-10-16 (the user's call): the page's line joined it as the page sent it, ahead of the PC's.
+        Assert.Equal(["from the phone", "dra", "/exit"], _input_History());
     }
 
-    /// <summary>The PC's ↑ history as the screen's input line keeps it: the page's lines never join it.</summary>
+    /// <summary>The PC's ↑ history as the screen's input line keeps it: the page's lines join it as the page sends them (2026-10-16).</summary>
     private IReadOnlyList<string> _input_History() => _running!.InputHistoryForTests;
 
     [Fact]

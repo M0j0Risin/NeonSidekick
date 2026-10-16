@@ -338,9 +338,19 @@ public sealed class WebUiHost : IWebUiHost
                         response.Headers.CacheControl = "no-store";
                         await JsonAsync(context, StatusCodes.Status200OK, _backend.Prompts(), WebUiJsonContext.Default.WebPrompts).ConfigureAwait(false);
                         return;
+                    case MemoryPath:
+                        // The sheet's 💾 tab (2026-10-16): read each time it opens.
+                        response.Headers.CacheControl = "no-store";
+                        await JsonAsync(context, StatusCodes.Status200OK, _backend.Memories(), WebUiJsonContext.Default.WebMemories).ConfigureAwait(false);
+                        return;
+                    case HistoryPath:
+                        // The message history (2026-10-16): read at each walk and as the box takes focus, so an unchanged one is a 304.
+                        await TaggedJsonAsync(context, _backend.History(), WebUiJsonContext.Default.WebHistory).ConfigureAwait(false);
+                        return;
                     case "/api/usage":
-                        // The usage card (2026-10-15): the /usage figures on the page alone.
-                        await JsonAsync(context, StatusCodes.Status200OK, _backend.Usage(), WebUiJsonContext.Default.WebUsageCard).ConfigureAwait(false);
+                        // The usage card (2026-10-15): the /usage figures on the page alone; tagged since 2026-10-16, as the open card
+                        // re-reads it while a reply runs and most ticks change nothing it shows.
+                        await TaggedJsonAsync(context, _backend.Usage(), WebUiJsonContext.Default.WebUsageCard).ConfigureAwait(false);
                         return;
                     case "/api/pulse":
                         // The Chat badge on the other tabs (2026-10-15).
@@ -393,6 +403,11 @@ public sealed class WebUiHost : IWebUiHost
                     "/api/shopping/store" => await ReadAsync(context, WebUiJsonContext.Default.WebStoreRequest).ConfigureAwait(false) is { } store ? _backend.UseStore(store, remote) : null,
                     "/api/strip/select" => await ReadAsync(context, WebUiJsonContext.Default.WebStripSelect).ConfigureAwait(false) is { } pick ? _backend.SelectStripPicture(pick, remote) : null,
                     PictureDeletePath => await ReadAsync(context, WebUiJsonContext.Default.WebPictureDelete).ConfigureAwait(false) is { } gone ? _backend.DeletePicture(gone, remote) : null,
+                    PromptSavePath => await ReadAsync(context, WebUiJsonContext.Default.WebTextBody).ConfigureAwait(false) is { } prompt ? _backend.SavePrompt(prompt, remote) : null,
+                    PromptDeletePath => await ReadAsync(context, WebUiJsonContext.Default.WebPromptDelete).ConfigureAwait(false) is { } unsaved ? _backend.DeletePrompt(unsaved, remote) : null,
+                    MemorySavePath => await ReadAsync(context, WebUiJsonContext.Default.WebTextBody).ConfigureAwait(false) is { } memory ? _backend.SaveMemory(memory, remote) : null,
+                    MemoryDeletePath => await ReadAsync(context, WebUiJsonContext.Default.WebTextBody).ConfigureAwait(false) is { } forget ? _backend.DeleteMemory(forget, remote) : null,
+                    HistoryClearPath => _backend.ClearHistory(remote),   // the body is not read, as Stop's
                     "/api/home/tap" or "/api/home/act" or "/api/home/scene" or "/api/home/say" or "/api/home/video" => await HomePostAsync(context, path, remote).ConfigureAwait(false),
                     _ => new WebReply(WebOutcome.NotFound),
                 };
@@ -485,7 +500,8 @@ public sealed class WebUiHost : IWebUiHost
 
     /// <summary>
     /// The tab an API belongs to (later on 2026-10-15), or null for one every page reads (<c>/api/pulse</c>). Chat's: the stream, a message, Stop, an
-    /// answer, the dropdown, the usage card, a deferred entry, a picture and the strip's select. Pure.
+    /// answer, the dropdown, the usage card, a deferred entry, a picture and the strip's select; the sheet's prompts, memories and history
+    /// (2026-10-16). Pure.
     /// </summary>
     public static WebTab? TabOf(string path)
     {
@@ -501,6 +517,7 @@ public sealed class WebUiHost : IWebUiHost
         }
 
         return path is "/api/events" or "/api/send" or "/api/stop" or "/api/answer" or "/api/complete" or "/api/usage" or "/api/strip/select" or "/api/prompts"
+                or PromptSavePath or PromptDeletePath or MemoryPath or MemorySavePath or MemoryDeletePath or HistoryPath or HistoryClearPath
             || path.StartsWith(EntryPrefix, StringComparison.Ordinal) || path.StartsWith(PicturePrefix, StringComparison.Ordinal)
             ? WebTab.Chat
             : null;
@@ -548,6 +565,27 @@ public sealed class WebUiHost : IWebUiHost
 
     /// <summary>The page's 🗑️ (later on 2026-10-15): a post of the picture's id; a Chat API in the Act bucket.</summary>
     public const string PictureDeletePath = "/api/picture/delete";
+
+    /// <summary>The sheet's ⇪ on its 📣 tab (2026-10-16): the page's draft saved as a prompt; a Chat API in the Act bucket.</summary>
+    public const string PromptSavePath = "/api/prompts/save";
+
+    /// <summary>A prompt row's 🗑️ (2026-10-16): the prompt's id.</summary>
+    public const string PromptDeletePath = "/api/prompts/delete";
+
+    /// <summary>The sheet's 💾 tab (2026-10-16).</summary>
+    public const string MemoryPath = "/api/memory";
+
+    /// <summary>The sheet's ⇪ on its 💾 tab (2026-10-16): the page's draft saved as a memory.</summary>
+    public const string MemorySavePath = "/api/memory/save";
+
+    /// <summary>A memory row's 🗑️ (2026-10-16): the memory's text.</summary>
+    public const string MemoryDeletePath = "/api/memory/delete";
+
+    /// <summary>The message history (2026-10-16): ↑/↓ on the page and the sheet's 🕘 tab.</summary>
+    public const string HistoryPath = "/api/history";
+
+    /// <summary>The 🕘 tab's clear all (2026-10-16).</summary>
+    public const string HistoryClearPath = "/api/history/clear";
 
     /// <summary>Where the pictures are served: <c>/api/picture/{run}/{id}/{thumb|mid|full}</c>.</summary>
     public const string PicturePrefix = "/api/picture/";

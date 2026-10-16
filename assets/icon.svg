@@ -7,6 +7,7 @@
     (feGaussianBlur, which Svg.Skia renders) for the glow, then the crisp tube on top.
     Keep shapes bold: the 16 px frame must still read as "pink box with cyan bars".
     tools/IconGen.cs renders this to src/NeonSidekick/Assets/app.ico; commit both.
+    The Web UI serves this file itself as its favicon (embedded as webui/favicon.svg, 2026-10-16).
   -->
   <defs>
     <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">

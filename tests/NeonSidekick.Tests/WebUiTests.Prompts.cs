@@ -32,12 +32,11 @@ public sealed partial class WebUiTests
     [Fact]
     public void ThePromptsSheet_NumbersThePromptsFromOne_InTheirOrder()
     {
-        _session.PromptsNow = () => ["first one", "second one"];
+        _session.PromptsNow = () => [new("a1", "first one", DateTimeOffset.UnixEpoch), new("b2", "second one", DateTimeOffset.UnixEpoch)];
 
         var sheet = _session.Prompts();
 
-        Assert.Equal(NeonSidekick.Prompts.SavedPromptText.PaneTitle, sheet.Title);
-        Assert.Equal([new WebPrompt(1, "first one"), new WebPrompt(2, "second one")], sheet.Items);
+        Assert.Equal([new WebPrompt(1, "first one", "a1"), new WebPrompt(2, "second one", "b2")], sheet.Items);
         _session.PromptsNow = () => throw new IOException("locked");
         Assert.Empty(_session.Prompts().Items);
     }

@@ -172,6 +172,9 @@ public partial class ChatScreenTests
 
         await RunAsync();
 
-        Assert.Equal([new WebPrompt(1, "Summarize this."), new WebPrompt(2, "Review the diff")], Web.Prompts().Items);
+        var items = Web.Prompts().Items;
+        Assert.Equal([(1, "Summarize this."), (2, "Review the diff")], items.Select(p => (p.Number, p.Text)));
+        // Each with the store's own id (2026-10-16), what the sheet's 🗑️ names.
+        Assert.Equal(new NeonSidekick.Prompts.SavedPrompts(_settings.ProfileDirectory, _time).List().Select(p => p.Id), items.Select(p => p.Id));
     }
 }

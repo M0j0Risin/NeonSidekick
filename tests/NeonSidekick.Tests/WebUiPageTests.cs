@@ -81,7 +81,7 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
         await page.WaitAsync("document.querySelector('#status .spin').classList.contains('hidden')", "the spinner gone with its label");
         await page.EvalAsync("document.getElementById('usage').click()");
         await page.WaitAsync("!document.getElementById('usage-card').classList.contains('hidden')", "the usage card");
-        Assert.Contains("1,000 of 8,000", await page.TextAsync("document.getElementById('usage-lines').textContent"), StringComparison.Ordinal);
+        Assert.Contains("1.0k / 8.0k", await page.TextAsync("document.getElementById('usage-context').textContent"), StringComparison.Ordinal);
     }
 
     [WindowsFact]

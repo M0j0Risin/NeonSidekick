@@ -131,19 +131,52 @@ public static class UsageText
     /// </summary>
     public static IRenderable StatisticsTab(TokenTally tally, ContextLength? window)
     {
-        ArgumentNullException.ThrowIfNull(tally);
-        var apart = ApartRows(tally);
-        if (tally.Session.IsEmpty && window is null && apart.Count == 0)
+        var shown = Sections(tally, window);
+        if (shown.Nothing)
         {
             return new Text(NothingCounted, Theme.DimText);
         }
 
-        // The sections as they will stand, so the label column is sized once over all of them.
-        var sections = new List<(string Heading, string Note, IReadOnlyList<(string Label, string Value)> Rows)>
+        int width = LabelWidth(shown.Sections.SelectMany(s => s.Rows).Concat(shown.Apart));
+        var parts = new List<IRenderable>();
+        foreach (var section in shown.Sections)
         {
-            // The Context section first: the window is known before anything was counted, and its note is the source — where the figure came from.
-            (ContextHeading, window?.Source ?? WindowUnknown, ContextRows(tally, window)),
-        };
+            if (parts.Count > 0)
+            {
+                parts.Add(new Text(" "));
+            }
+
+            parts.Add(new SectionRule(SectionRule.Markup(section.Heading, note: section.Note)));
+            if (section.Rows.Count > 0)
+            {
+                parts.Add(Body(section.Rows, width));
+            }
+        }
+
+        if (shown.NothingYet)
+        {
+            // Nothing counted yet: said under the Context section, the /claude runs, the bots and the advisors (if any) under it.
+            parts.Add(new Text(" "));
+            parts.Add(new Indented(new Text(NothingCounted, Theme.DimText), SystemPromptSummary.BodyIndent));
+            if (shown.Apart.Count > 0)
+            {
+                parts.Add(Body(shown.Apart, width));
+            }
+        }
+
+        return new Rows(parts);
+    }
+
+    /// <summary>
+    /// What the Statistics tab shows, before it is drawn (2026-10-16, so the Web UI's usage card shows the same and its words can't drift): the
+    /// Context section first (its note the window's source), then, once anything was counted, the last reply, this conversation and the launch
+    /// with the extras (skill learning, <c>/claude</c>, the bots, the advisors) under it. While nothing was counted (<see cref="UsageSections.NothingYet"/>)
+    /// the extras stand apart (<see cref="UsageSections.Apart"/>); with no window and no extras either, <see cref="UsageSections.Nothing"/>. Pure.
+    /// </summary>
+    public static UsageSections Sections(TokenTally tally, ContextLength? window)
+    {
+        ArgumentNullException.ThrowIfNull(tally);
+        var apart = ApartRows(tally);
         var extra = new List<(string, string)>(4);
         if (tally.LearningRequests > 0 && !tally.Session.IsEmpty)
         {
@@ -151,43 +184,18 @@ public static class UsageText
         }
 
         extra.AddRange(apart);
-
+        // The Context section first: the window is known before anything was counted, and its note is the source — where the figure came from.
+        var sections = new List<UsageSection> { new(ContextHeading, window?.Source ?? WindowUnknown, ContextRows(tally, window)) };
         if (!tally.Session.IsEmpty)
         {
-            sections.Add((LastReplyHeading, tally.LastReply.IsEmpty ? NoReportNote : "", RowsOf(tally.LastReply, averaged: false)));
+            sections.Add(new(LastReplyHeading, tally.LastReply.IsEmpty ? NoReportNote : "", RowsOf(tally.LastReply, averaged: false)));
             // No SummedNote on the pane's two summed headings since 2026-10-12 (the user's call); the plain lines keep it.
-            sections.Add((ConversationHeading, tally.UnreportedReplies > 0 ? Unreported(tally.UnreportedReplies) : "", RowsOf(tally.Conversation, averaged: true)));
-            sections.Add((SessionHeading, "", [.. RowsOf(tally.Session, averaged: true), .. extra]));
+            sections.Add(new(ConversationHeading, tally.UnreportedReplies > 0 ? Unreported(tally.UnreportedReplies) : "", RowsOf(tally.Conversation, averaged: true)));
+            sections.Add(new(SessionHeading, "", [.. RowsOf(tally.Session, averaged: true), .. extra]));
         }
 
-        int width = LabelWidth(sections.SelectMany(s => s.Rows).Concat(extra));
-        var parts = new List<IRenderable>();
-        foreach (var (heading, note, rows) in sections)
-        {
-            if (parts.Count > 0)
-            {
-                parts.Add(new Text(" "));
-            }
-
-            parts.Add(new SectionRule(SectionRule.Markup(heading, note: note)));
-            if (rows.Count > 0)
-            {
-                parts.Add(Body(rows, width));
-            }
-        }
-
-        if (tally.Session.IsEmpty)
-        {
-            // Nothing counted yet: said under the Context section, the /claude runs, the bots and the advisors (if any) under it.
-            parts.Add(new Text(" "));
-            parts.Add(new Indented(new Text(NothingCounted, Theme.DimText), SystemPromptSummary.BodyIndent));
-            if (extra.Count > 0)
-            {
-                parts.Add(Body(extra, width));
-            }
-        }
-
-        return new Rows(parts);
+        bool nothingYet = tally.Session.IsEmpty;
+        return new UsageSections(sections, nothingYet ? extra : [], nothingYet, nothingYet && window is null && apart.Count == 0);
 
         static IReadOnlyList<(string, string)> RowsOf(TokenUsage usage, bool averaged) => usage.IsEmpty ? [] : Rows(usage, averaged);
     }
@@ -478,3 +486,12 @@ public sealed record UsageParts(string Tokens, string? Percent, string? Speed)
     /// <summary>The figures as the hint row reads them: <c>4.6k / 151.4k · 3% · 42 tok/s</c>.</summary>
     public string Joined => Tokens + (Percent is null ? "" : UsageText.Sep + Percent) + (Speed is null ? "" : UsageText.Sep + Speed);
 }
+
+/// <summary>One section of the <c>/usage</c> pane (2026-10-16): its heading, its note on the rule, its label and value rows.</summary>
+public sealed record UsageSection(string Heading, string Note, IReadOnlyList<(string Label, string Value)> Rows);
+
+/// <summary>
+/// The <c>/usage</c> pane's sections as <see cref="UsageText.Sections"/> gives them (2026-10-16): in order, the Context one first; the extras
+/// standing apart while nothing was counted (<see cref="NothingYet"/>); and <see cref="Nothing"/> when there is nothing to show at all.
+/// </summary>
+public sealed record UsageSections(IReadOnlyList<UsageSection> Sections, IReadOnlyList<(string Label, string Value)> Apart, bool NothingYet, bool Nothing);

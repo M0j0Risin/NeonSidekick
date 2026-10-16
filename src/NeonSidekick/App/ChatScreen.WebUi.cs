@@ -53,7 +53,7 @@ internal sealed partial class ChatScreen
             FlashOnPc = text => _pane.Flash(text),
             // The page's status row (2026-10-15): the PC's spinner and usage, read without waiting on the pane's lock.
             StatusNow = WebStatusNow,
-            UsageLines = () => UsageText.Lines(_session.Usage, _session.ContextLength),
+            UsageNow = () => WebUsageView.Of(_session.Usage, _session.ContextLength),
             // The Home tab (2026-10-15): its side, and its lease's end checked on the session's 1-second tick.
             Home = new HomeSide(this),
             Tick = HomeWebTick,
@@ -70,8 +70,18 @@ internal sealed partial class ChatScreen
             PointNow = PcPointNow,
             // The overlay's 🗑️ (later on 2026-10-15): the screen's own path for the id, File deletes to Recycle bin read now.
             PictureDelete = WebDeletePicture,
-            // The page's saved prompts sheet (later on 2026-10-15): the loaded profile's, read at each opening.
-            PromptsNow = () => [.. SavedPromptsNow().List().Select(p => p.Text)],
+            // The page's saved prompts sheet (later on 2026-10-15): the loaded profile's, read at each opening; with their ids since 2026-10-16.
+            PromptsNow = () => SavedPromptsNow().List(),
+            // The sheet's ⇪ and 🗑️, its 💾 and 🕘 tabs, and ↑/↓ on the page (2026-10-16): ChatScreen.WebLists.cs.
+            PromptSave = WebSavePrompt,
+            PromptDelete = WebDeletePrompt,
+            MemoriesNow = WebMemoriesNow,
+            MemorySave = WebSaveMemory,
+            MemoryDelete = WebDeleteMemory,
+            HistoryNow = WebHistoryNow,
+            HistoryClear = WebClearHistory,
+            // A line the page sent joins the message history as the page sends it, as Enter does a typed one (the history's lock allows it).
+            Accepted = text => _input.Remember(text),
         };
         return (session, new WebUiController(webUiHost, session));
     }
@@ -990,6 +1000,9 @@ internal sealed partial class ChatScreen
     /// <summary>For the tests: the session the fake server drives.</summary>
     internal WebUiSession WebUiSessionForTests => _webUi;
 
-    /// <summary>For the tests: the PC's ↑ history, which the page's lines never join.</summary>
+    /// <summary>For the tests: the PC's ↑ history, which the page's lines join as the page sends them (2026-10-16).</summary>
     internal IReadOnlyList<string> InputHistoryForTests => _input.History;
+
+    /// <summary>For the tests: a line added to the ↑ history as a spoken one is (2026-10-16: a paste's token, which a test can't type).</summary>
+    internal void RememberForTests(string line) => _input.Remember(line);
 }

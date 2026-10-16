@@ -45,6 +45,18 @@ public sealed class WebPictureDelete
     public int Id { get; set; }
 }
 
+/// <summary>The page's draft for the sheet's ⇪ (a prompt or a memory), and a memory deleted by its text (2026-10-16: memories have no ids).</summary>
+public sealed class WebTextBody
+{
+    public string? Text { get; set; }
+}
+
+/// <summary>A saved prompt the sheet's 🗑️ deletes (2026-10-16): its id, as <see cref="WebPrompt.Id"/> gave it.</summary>
+public sealed class WebPromptDelete
+{
+    public string? Id { get; set; }
+}
+
 /// <summary>A picture of the strip picked on the page (later on 2026-10-15): the PC's highlight and its open viewer move to it.</summary>
 public sealed class WebStripSelect
 {
@@ -354,8 +366,24 @@ public sealed record WebStatus(string? Label, long? ElapsedMs, long? StepMs, Web
 /// <summary>The usage figures apart (2026-10-15, <c>UsageText.HintParts</c>): the tokens in use, the share, the speed; a narrow phone drops the first, then the last.</summary>
 public sealed record WebUsage(string Tokens, string? Percent, string? Speed);
 
-/// <summary>The full <c>/usage</c> figures for the page's card (2026-10-15): its title and its lines.</summary>
-public sealed record WebUsageCard(string Title, IReadOnlyList<string> Lines);
+/// <summary>
+/// The full <c>/usage</c> figures for the page's card (2026-10-15; a meter and tiles since 2026-10-16, the user's ask: the lines in a text box
+/// read as amateurish): the PC pane's own title, the context (null while nothing is known of it), the PC pane's sections in its order, and
+/// <see cref="Empty"/> while nothing was counted. Built from <c>UsageText.Sections</c>, the pane's own source.
+/// </summary>
+public sealed record WebUsageCard(string Title, WebUsageContext? Context, IReadOnlyList<WebUsageSection> Sections, string? Empty);
+
+/// <summary>
+/// The card's meter (2026-10-16): its heading, the tokens in use and the window as the status row writes them (<c>38.4k</c>), the share
+/// (past 100 after a server-side trim), and where the window's size came from (or <c>unknown</c>).
+/// </summary>
+public sealed record WebUsageContext(string Heading, string? InUse, string? Window, int? Percent, string Source);
+
+/// <summary>One of the card's tiles (2026-10-16): the pane's section heading, its note, its rows.</summary>
+public sealed record WebUsageSection(string Heading, string Note, IReadOnlyList<WebUsageRow> Rows);
+
+/// <summary>A tile's row (2026-10-16): the pane's label and value, as the PC shows them.</summary>
+public sealed record WebUsageRow(string Label, string Value);
 
 /// <summary>
 /// The words the page puts on its own (later on 2026-10-14), the app's like every other: a picture's fallbacks (after the file's name alone),
@@ -364,13 +392,31 @@ public sealed record WebUsageCard(string Title, IReadOnlyList<string> Lines);
 public sealed record WebWords(string PictureGone, string PictureTooLarge, string OpenOriginal, string SendAsMessage = "", string UseLine = "", string DraftFilled = "", string Undo = "", string Working = "", string Close = "", string NoReply = "", string ThinkingLive = "", string Gone = "",
     string ClearDraft = "", string DraftCleared = "", string ExpandAll = "", string CollapseAll = "", string ToTop = "", string ToBottom = "", string StripButton = "", string StripOne = "", string StripMany = "", string CloseStrip = "",
     string Live = "", string LiveLabel = "", string DeletePicture = "", string DeleteArmed = "",
-    string PromptsButton = "", string PromptsNone = "", string PromptsSend = "", string Filter = "", string ClosePrompts = "");
+    string PromptsButton = "", string PromptsNone = "", string PromptsSend = "", string Filter = "", string ClosePrompts = "",
+    string PromptsTab = "", string MemoryTab = "", string HistoryTab = "", string MemoryNone = "", string HistoryNone = "", string SaveDraft = "",
+    string DraftEmpty = "", string DeleteRow = "", string DeleteRowArmed = "", string ClearAll = "", string ClearAllArmed = "", string MemoryOff = "",
+    string MemoryModeOff = "");
 
-/// <summary>The page's saved prompts sheet (later on 2026-10-15): its title and the profile's prompts, numbered as at the PC.</summary>
-public sealed record WebPrompts(string Title, IReadOnlyList<WebPrompt> Items);
+/// <summary>
+/// The page's saved prompts, the sheet's 📣 tab (later on 2026-10-15): the profile's prompts, numbered as at the PC. The title went on
+/// 2026-10-16, when the sheet took tabs that carry the names.
+/// </summary>
+public sealed record WebPrompts(IReadOnlyList<WebPrompt> Items);
 
-/// <summary>One saved prompt: its number at the PC (from 1, the user's order) and its text.</summary>
-public sealed record WebPrompt(int Number, string Text);
+/// <summary>One saved prompt: its number at the PC (from 1, the user's order), its text, and its id (2026-10-16, what a delete names).</summary>
+public sealed record WebPrompt(int Number, string Text, string Id);
+
+/// <summary>
+/// The sheet's 💾 tab (2026-10-16): the profile's memories in the PC pane's order, and whether <i>Memory mode</i> is off (the tab says so,
+/// and a save is refused).
+/// </summary>
+public sealed record WebMemories(IReadOnlyList<WebMemory> Items, bool ModeOff);
+
+/// <summary>A memory: its text, and whether it is turned off (kept, but the model doesn't see it).</summary>
+public sealed record WebMemory(string Text, bool Off);
+
+/// <summary>The profile's message history for the page (2026-10-16): its lines oldest first, the PC's drafts set aside and paste tokens left out.</summary>
+public sealed record WebHistory(IReadOnlyList<string> Lines);
 
 /// <summary>The open asks, whole (an <c>asks</c> event).</summary>
 public sealed record WebAsks(IReadOnlyList<WebAskView> Asks);
@@ -451,6 +497,10 @@ public sealed class WebStoreRequest
 [JsonSerializable(typeof(WebStatus))]
 [JsonSerializable(typeof(WebUsageCard))]
 [JsonSerializable(typeof(WebPrompts))]
+[JsonSerializable(typeof(WebTextBody))]
+[JsonSerializable(typeof(WebPromptDelete))]
+[JsonSerializable(typeof(WebMemories))]
+[JsonSerializable(typeof(WebHistory))]
 [JsonSerializable(typeof(WebAsks))]
 [JsonSerializable(typeof(WebShopping))]
 public sealed partial class WebUiJsonContext : JsonSerializerContext;

@@ -4272,4 +4272,75 @@ public class InputLineTests : IDisposable
         _line.Remember("maybe");
         Assert.Equal(new[] { "hello", "maybe" }, stored);                // and never again
     }
+
+    // ── The history from other threads, and the Web UI's copy (2026-10-16) ──
+
+    /// <summary>
+    /// Each draft set aside keeps its mark after later lines (the old flag knew only the last), so the Web UI's copy leaves every one out; one
+    /// sent after all loses it. The PC's own walk still finds them all.
+    /// </summary>
+    [Fact]
+    public async Task HistorySnapshot_WithoutDrafts_LeavesOutEveryDraftSetAside_EvenUnderLaterLines()
+    {
+        Push([.. Chars("sk-secret"), Keys.Escape, .. Chars("hello"), Keys.Enter]);
+        await SubmitAsync();
+        _line.RememberDraft("replaced by a prompt");
+        _line.Remember("from the phone");
+        Push([.. Chars("maybe"), Keys.Escape, Keys.Up, Keys.Enter]);
+        await SubmitAsync();
+
+        Assert.Equal(new[] { "sk-secret", "hello", "replaced by a prompt", "from the phone", "maybe" }, _line.HistorySnapshot());
+        Assert.Equal(new[] { "hello", "from the phone", "maybe" }, _line.HistorySnapshot(includeDrafts: false));   // "maybe" was sent after all
+        Assert.Equal(5, _line.HistoryCount);
+    }
+
+    [Fact]
+    public void History_IsACopy_TheLineChangingOnLeavesItAsItWas()
+    {
+        _line.Remember("one");
+        var before = _line.History;
+        _line.Remember("two");
+
+        Assert.Equal(new[] { "one" }, before);
+        Assert.Equal(new[] { "one", "two" }, _line.History);
+    }
+
+    /// <summary>Remembered is told outside the history's lock: a listener that reads the history (or adds to it) never deadlocks.</summary>
+    [Fact]
+    public void Remembered_IsToldOutsideTheLock_SoAListenerMayReadTheHistory()
+    {
+        var seen = new List<int>();
+        _line.Remembered = _ => seen.Add(Task.Run(() => _line.HistoryCount).Wait(TimeSpan.FromSeconds(5)) ? _line.HistoryCount : -1);
+
+        _line.Remember("one");
+        _line.Remember("two");
+
+        Assert.Equal(new[] { 1, 2 }, seen);
+    }
+
+    [Fact]
+    public async Task LinesFromAnotherThread_JoinWhileTheLineReads_AndUpFindsThem()
+    {
+        await Task.Run(() => _line.Remember("from the phone"));
+        Push(Keys.Up, Keys.Enter);
+
+        Assert.Equal("from the phone", await SubmitAsync());
+    }
+
+    /// <summary>
+    /// The draft Enter submitted is the line's own record (2026-10-16): a line remembered from elsewhere since (a Web UI line on a request's
+    /// thread) never takes its place, as the history's last line would have.
+    /// </summary>
+    [Fact]
+    public async Task LastSubmittedDraft_IsWhatEnterSent_NotTheHistorysLastLine()
+    {
+        Assert.Null(_line.LastSubmittedDraft);
+        Type("mine");
+        Push(Keys.Enter);
+        await SubmitAsync();
+        _line.Remember("from the phone");
+
+        Assert.Equal("mine", _line.LastSubmittedDraft);
+        Assert.Equal("from the phone", _line.History[^1]);
+    }
 }

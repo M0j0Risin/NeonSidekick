@@ -858,11 +858,12 @@ public sealed partial class WebUiTests : IDisposable
     }
 
     [Fact]
-    public void TheUsageCard_IsTheScreensLines_UnderItsTitle()
+    public void TheUsageCard_IsTheScreens_ElseNothingCounted()
     {
-        Assert.Equal((WebUiText.UsageTitle, 0), (_session.Usage().Title, _session.Usage().Lines.Count));
-        _session.UsageLines = () => ["Context: 1,000 of 8,000 tokens (13%)"];
-        Assert.Equal(["Context: 1,000 of 8,000 tokens (13%)"], _session.Usage().Lines);
+        Assert.Equal((NeonSidekick.App.UsageText.Label, null, 0, NeonSidekick.App.UsageText.NothingCounted), (_session.Usage().Title, _session.Usage().Context, _session.Usage().Sections.Count, _session.Usage().Empty));
+        var card = new WebUsageCard(NeonSidekick.App.UsageText.Label, new WebUsageContext("Context", "1.0k", "8.0k", 13, "configured"), [], null);
+        _session.UsageNow = () => card;
+        Assert.Same(card, _session.Usage());
     }
 
     private static List<WebEvent> Drain(WebEventHub.Subscription subscription)

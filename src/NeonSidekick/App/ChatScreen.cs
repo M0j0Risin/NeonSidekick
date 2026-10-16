@@ -7892,7 +7892,7 @@ internal sealed partial class ChatScreen
     public static string MsgClearedNotice(int count) => $"(cleared {HistoryMessages(count)})";
 
     /// <summary><c>1 message</c>, <c>12 messages</c>: the message history's lines counted (<c>command lines</c> until 2026-10-10, the user's rename).</summary>
-    private static string HistoryMessages(int count) => count == 1 ? "1 message" : $"{count.ToString(System.Globalization.CultureInfo.InvariantCulture)} messages";
+    internal static string HistoryMessages(int count) => count == 1 ? "1 message" : $"{count.ToString(System.Globalization.CultureInfo.InvariantCulture)} messages";
 
     // The keys (/keycopy, 2026-09-28).
 
@@ -8367,7 +8367,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task MsgClearAsync(CancellationToken cancellationToken)
     {
-        int count = Math.Max(_sessions.CommandHistoryCount, _input.History.Count);
+        int count = Math.Max(_sessions.CommandHistoryCount, _input.HistoryCount);
         if (count == 0)
         {
             _flow.Notice(MsgClearNothingNotice);
@@ -8383,11 +8383,23 @@ internal sealed partial class ChatScreen
         // The wipe and its line on the turn task when the question was asked mid-turn.
         RunOrPost(() =>
         {
-            _sessions.ClearCommandHistory();
-            _input.ReplaceHistory([]);
+            ClearMessageHistory();
             _transcript.Notice(MsgClearedNotice(count));
             DrainDiagnostics();
         });
+    }
+
+    /// <summary>
+    /// The message history wiped, stored and in memory (2026-10-16: <c>/msgclear</c>'s yes and the Web UI's 🕘 clear all): thread-safe, the store
+    /// and the line each behind their own lock, so a request's thread may call it. How many went, counted as <c>/msgclear</c> counts them.
+    /// </summary>
+    private int ClearMessageHistory()
+    {
+        var sessions = _sessions;
+        int count = Math.Max(sessions.CommandHistoryCount, _input.HistoryCount);
+        sessions.ClearCommandHistory();
+        _input.ReplaceHistory([]);
+        return count;
     }
 
     /// <summary>Whether a typed confirmation means yes.</summary>
@@ -10451,9 +10463,10 @@ internal sealed partial class ChatScreen
                 else
                 {
                     (result, hit, tailArmed) = await ReadLineAsync(cancellationToken, replay, fromDraft).ConfigureAwait(false);
-                    if (result is InputResult.Submitted && _input.History.Count > 0)
+                    // The line Enter submitted, from the line itself (2026-10-16): the history's last line may be a Web UI line remembered since.
+                    if (result is InputResult.Submitted && _input.LastSubmittedDraft is { } typed)
                     {
-                        _sentDraft = _input.History[^1];
+                        _sentDraft = typed;
                         _sentFromWeb = false;
                     }
 
@@ -13883,31 +13896,32 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var result = _memory.Add(args, enableDisabled: true);   // the user's own add enables a disabled one again (2026-10-13)
-        switch (result.Outcome)
+        var (text, error) = RememberAnswer(_memory.Add(args, enableDisabled: true));   // the user's own add enables a disabled one again (2026-10-13)
+        if (error)
         {
-            case MemoryAddOutcome.Added:
-                _transcript.Notice(RememberedNotice(result.Text));
-                break;
-            case MemoryAddOutcome.Enabled:
-                _transcript.Notice(RememberEnabledNotice(result.Text));
-                break;
-            case MemoryAddOutcome.Duplicate:
-                _transcript.Notice(AlreadyRememberedNotice(result.Text));
-                break;
-            case MemoryAddOutcome.Full:
-                _transcript.Error(MemoryFullError);
-                break;
-            case MemoryAddOutcome.Empty:
-                _transcript.Error(RememberUsageError);
-                break;
-            default:
-                _transcript.Error(MemoryFailedError);
-                break;
+            _transcript.Error(text);
+        }
+        else
+        {
+            _transcript.Notice(text);
         }
 
         DrainDiagnostics();
     }
+
+    /// <summary>
+    /// <c>/remember</c>'s answer to the store's outcome, and whether it is an error (2026-10-16: shared with the Web UI's 💾 ⇪, so their words
+    /// can't drift). Pure.
+    /// </summary>
+    public static (string Text, bool Error) RememberAnswer(MemoryAddResult result) => result.Outcome switch
+    {
+        MemoryAddOutcome.Added => (RememberedNotice(result.Text), false),
+        MemoryAddOutcome.Enabled => (RememberEnabledNotice(result.Text), false),
+        MemoryAddOutcome.Duplicate => (AlreadyRememberedNotice(result.Text), false),
+        MemoryAddOutcome.Full => (MemoryFullError, true),
+        MemoryAddOutcome.Empty => (RememberUsageError, true),
+        _ => (MemoryFailedError, true),
+    };
 
     /// <summary>
     /// <c>/memory</c> (2026-09-22, the user's ask, twice): bare, the list pane; <c>forget</c>, the

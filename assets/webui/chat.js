@@ -743,6 +743,7 @@ function applyStatus(s) {
     stepStarted = status.stepMs !== undefined && status.stepMs !== null ? now - status.stepMs : null;
   }
   drawStatus();
+  usageChanged(status);
 }
 
 function usageText(u) {
@@ -784,12 +785,92 @@ function drawStatus() {
 narrow.addEventListener('change', drawStatus);
 tiny.addEventListener('change', drawStatus);
 
+// The usage card (2026-10-15; a meter and tiles since 2026-10-16, the user's ask: the lines in a text box read as amateurish): the PC pane's
+// own sections, the Context one as a meter (amber past 80%, red past 95%; the fill capped at full while the number says past 100 after a
+// server-side trim) and the others as tiles. Open, it follows a reply: a status whose usage changed reads it again, at most once a second,
+// the last change always read (an unchanged card is a 304).
+const usageTitle = document.getElementById('usage-title');
+const usageContext = document.getElementById('usage-context');
+const usageTiles = document.getElementById('usage-tiles');
+const usageEmpty = document.getElementById('usage-empty');
+let usageKey = '';
+let usageTimer = null;
+let usageAgain = false;
+
+function renderUsage(card) {
+  usageTitle.textContent = card.title;
+  usageContext.replaceChildren();
+  const c = card.context;
+  usageContext.classList.toggle('hidden', !c);
+  if (c) {
+    const head = el('div', 'usage-head');
+    head.appendChild(el('span', 'usage-heading', c.heading));
+    const figures = c.inUse && c.window ? c.inUse + ' / ' + c.window : c.inUse || c.window || '';
+    head.appendChild(el('span', 'usage-figures', figures));
+    if (c.percent !== undefined && c.percent !== null) head.appendChild(el('span', 'usage-share', c.percent + '%'));
+    usageContext.appendChild(head);
+    if (c.percent !== undefined && c.percent !== null) {
+      const meter = el('div', 'meter' + (c.percent >= 95 ? ' full' : c.percent >= 80 ? ' warn' : ''));
+      meter.setAttribute('role', 'meter');
+      meter.setAttribute('aria-valuemin', '0');
+      meter.setAttribute('aria-valuemax', '100');
+      meter.setAttribute('aria-valuenow', String(Math.min(c.percent, 100)));
+      meter.setAttribute('aria-label', c.heading + ' ' + c.percent + '%');
+      const fill = el('div', 'meter-fill');
+      fill.style.width = Math.min(c.percent, 100) + '%';
+      meter.appendChild(fill);
+      usageContext.appendChild(meter);
+    }
+    usageContext.appendChild(el('div', 'usage-source', c.source));
+  }
+  usageEmpty.textContent = card.empty || '';
+  usageEmpty.classList.toggle('hidden', !card.empty);
+  usageTiles.replaceChildren(...(card.sections || []).map(section => {
+    const tile = el('section', 'usage-tile');
+    const head = el('h3', null, section.heading);
+    if (section.note) head.appendChild(el('span', 'usage-note', ' ' + section.note));
+    tile.appendChild(head);
+    const list = el('dl');
+    for (const row of section.rows || []) {
+      const line = el('div', 'usage-row' + (row.value.length > 18 ? ' long' : ''));
+      line.appendChild(el('dt', null, row.label));
+      line.appendChild(el('dd', null, row.value));
+      list.appendChild(line);
+    }
+    tile.appendChild(list);
+    return tile;
+  }));
+}
+
+async function readUsage() {
+  const r = await Neon.get('/api/usage', true);
+  if (r.ok && r.json) renderUsage(r.json);   // a 304: the card as drawn
+  return r.ok;
+}
+
+// A status whose usage changed, while the card is open: read again, once a second at most, the last change never dropped.
+function usageChanged(s) {
+  const key = JSON.stringify(s && s.usage || null);
+  if (key === usageKey) return;
+  usageKey = key;
+  if (usageCard.classList.contains('hidden')) return;
+  if (usageTimer) { usageAgain = true; return; }
+  readUsage();
+  usageTimer = setTimeout(function tick() {
+    if (usageAgain && !usageCard.classList.contains('hidden')) {
+      usageAgain = false;
+      readUsage();
+      usageTimer = setTimeout(tick, 1000);
+      return;
+    }
+    usageAgain = false;
+    usageTimer = null;
+  }, 1000);
+}
+
 async function toggleUsage() {
   if (!usageCard.classList.contains('hidden')) { closeUsage(); return; }
-  const r = await Neon.get('/api/usage', false);
-  if (!r.ok || !r.json) return;
-  document.getElementById('usage-title').textContent = r.json.title;
-  document.getElementById('usage-lines').textContent = (r.json.lines || []).join('\n');
+  if (!await readUsage()) return;
   document.getElementById('usage-close').textContent = words.close || 'Close';
   closeDrawer();   // one footer panel at a time
   closePrompts(false);
@@ -975,9 +1056,18 @@ function saveDraft() {
   try { sessionStorage.setItem('neon.draft', draft.value); } catch { /* private mode */ }
 }
 
+// The box's height to its text (2026-10-16, the user's screenshot: a one-line draft showed a scrollbar under the ✕): the page sizes boxes by
+// their border, so the border goes on top of scrollHeight, which leaves it out; the box scrolls only past its cap, and the ✕ keeps clear of
+// the scrollbar then.
 function grow() {
   draft.style.height = 'auto';
-  draft.style.height = Math.min(draft.scrollHeight, window.innerHeight * 0.4) + 'px';
+  const border = draft.offsetHeight - draft.clientHeight;
+  const cap = window.innerHeight * 0.4;
+  const want = draft.scrollHeight + border;
+  draft.style.height = Math.min(want, cap) + 'px';
+  draft.style.overflowY = want > cap ? 'auto' : 'hidden';
+  const bar = draft.offsetWidth - draft.clientWidth - border;
+  draft.parentElement.style.setProperty('--sb', Math.max(0, bar) + 'px');
   syncClear();   // every change to the box, the script's too, passes here
 }
 
@@ -1003,6 +1093,7 @@ async function sendText(text, opts) {
   sendBtn.disabled = false;
   if (r.ok) {
     if (fromDraft && draft.value === text) draft.value = '';
+    remembered(text);   // the app has it in the history now; the page's copy at once
     pendingId = null;
     pendingText = null;
     if (fromDraft) {
@@ -1011,7 +1102,7 @@ async function sendText(text, opts) {
       grow();
     }
     say('');
-    if (r.json && r.json.open === 'prompts') openPrompts();   // bare /prompts: the page's own sheet
+    if (r.json && r.json.open === 'prompts') openPrompts('prompts');   // bare /prompts: the page's own sheet, on its Prompts tab
     return;
   }
   // A refused command (later on 2026-10-14): the app's reason, and what it offers instead.
@@ -1021,66 +1112,142 @@ async function sendText(text, opts) {
   sayWith(r.message || 'That message did not go through.', actions);
 }
 
-// ── The saved prompts (later on 2026-10-15, the user's ask) ───────────
-// 📣 at the box's left, and bare /prompts sent from the page, open the profile's saved prompts as a footer panel, read from the app each time it
-// opens. A tap on a row puts the prompt on the draft (ahead of what's there, with Undo); its ➤ sends it at once, as typed (a command meets the
-// page's command rules), the draft left alone. One footer panel at a time: the sheet, the drawer and the usage card replace each other — the
-// sheet and the drawer swap their history entry (replaceState), never back-then-push, whose late pop would take the new entry with it. Esc,
-// Back, ✕, a tap on the transcript or a question arriving close it; a picture tapped under it opens the overlay over it.
+// ── The sheet: saved prompts, memories, the message history (later on 2026-10-15; three tabs since 2026-10-16, the user's ask) ──
+// 📣 at the box's left, and bare /prompts sent from the page, open the sheet as a footer panel, on the tab used last (bare /prompts on Prompts);
+// each tab is read from the app as it shows. 📣 Prompts: a tap on a row puts the prompt on the draft (ahead of what's there, with Undo), its ➤
+// sends it at once, as typed (a command meets the page's command rules), its 🗑️ deletes it; ⇪ saves the draft as one. 💾 Memory: the profile's
+// memories, a turned-off one marked, each with its 🗑️; ⇪ saves the draft as one (refused while Memory mode is off, which the tab says). 🕘
+// History: the message history, newest first, a row and its ➤ as a prompt's; clear all empties it. A 🗑️ or clear all is two taps, the
+// picture 🗑️'s way: the first arms it for 3 s, the second acts; Esc disarms first. ⇪ keeps the draft. One footer panel at a time: the sheet,
+// the drawer and the usage card replace each other — the sheet and the drawer swap their history entry (replaceState), never back-then-push,
+// whose late pop would take the new entry with it. A tab change keeps the entry. Esc, Back, ✕, a tap on the transcript or a question arriving
+// close it; a picture tapped under it opens the overlay over it.
 
 const promptsBtn = document.getElementById('prompts-button');
 const promptsEl = document.getElementById('prompts');
-const promptsHead = document.getElementById('prompts-head');
+const promptsTabs = [...document.querySelectorAll('#prompts .sheet-tab')];
+const promptsAction = document.getElementById('prompts-action');
 const promptsClose = document.getElementById('prompts-close');
+const promptsNote = document.getElementById('prompts-note');
 const promptsFilter = document.getElementById('prompts-filter');
 const promptsList = document.getElementById('prompts-list');
+const SheetTabs = ['prompts', 'memory', 'history'];
 let promptsOpen = false;
 let promptsOpening = false;
+let sheetTab = 'prompts';
+try { if (SheetTabs.includes(sessionStorage.getItem('neon.sheetTab'))) sheetTab = sessionStorage.getItem('neon.sheetTab'); } catch { /* private mode */ }
+let sheetArmed = null;   // { button, timer, paint }
+let promptsActionNow = promptsAction;   // the bar's action button as it stands (each tab's is a fresh one)
 
 function showPrompts(on) {
   const was = nearBottom();
   promptsOpen = on;
   promptsEl.classList.toggle('hidden', !on);
+  if (!on) sheetDisarm();
   keepBottom(was);
   floatSoon();
 }
 
-function renderPrompts(sheet) {
-  promptsHead.textContent = sheet.title;
-  const items = sheet.items || [];
+// A 🗑️ or clear all: the first tap arms it (red, its label says so) for 3 s, the second acts. One armed at a time.
+function sheetDisarm() {
+  if (!sheetArmed) return;
+  clearTimeout(sheetArmed.timer);
+  const was = sheetArmed;
+  sheetArmed = null;
+  was.paint(false);
+}
+
+function armTwice(button, paint, act) {
+  paint(false);
+  button.addEventListener('click', ev => {
+    ev.stopPropagation();
+    if (sheetArmed && sheetArmed.button === button) {
+      sheetDisarm();
+      act();
+      return;
+    }
+    sheetDisarm();
+    sheetArmed = { button, paint, timer: setTimeout(sheetDisarm, 3000) };
+    paint(true);
+  });
+}
+
+function paintArmed(button, label) {
+  return on => {
+    button.classList.toggle('armed', on);
+    const text = label(on);
+    button.setAttribute('aria-label', text);
+    button.title = text;
+  };
+}
+
+function rowDelete(onConfirm) {
+  const del = el('button', 'row-delete', '🗑️');
+  del.type = 'button';
+  armTwice(del, paintArmed(del, on => on ? (words.deleteRowArmed || 'Delete?') : (words.deleteRow || 'Delete')), onConfirm);
+  return del;
+}
+
+function paintTabs() {
+  for (const tab of promptsTabs) {
+    const on = tab.dataset.tab === sheetTab;
+    tab.setAttribute('aria-selected', on ? 'true' : 'false');
+    tab.tabIndex = on ? 0 : -1;
+    tab.classList.toggle('on', on);
+  }
+}
+
+// The bar's action: ⇪ save draft on the prompts and memory tabs, a two-tap clear all on the history's.
+function paintAction() {
+  sheetDisarm();
+  const fresh = promptsActionNow.cloneNode(false);   // its listeners gone with the old one
+  promptsActionNow.replaceWith(fresh);
+  promptsActionNow = fresh;
+  if (sheetTab === 'history') {
+    armTwice(fresh, on => {
+      fresh.classList.toggle('armed', on);
+      actionLabel(fresh, on ? (words.clearAllArmed || 'Clear all?') : (words.clearAll || '🗑️ clear all'));
+    }, clearHistoryNow);
+  } else {
+    actionLabel(fresh, words.saveDraft || '⇪ save draft');
+    fresh.addEventListener('click', saveDraftToSheet);
+  }
+}
+
+// The action's label as its glyph and its words, so a narrow phone shows the glyph alone (the whole label kept for a screen reader).
+function actionLabel(button, text) {
+  const space = text.indexOf(' ');
+  const glyph = space > 0 && !/^[A-Za-z]/.test(text) ? text.slice(0, space) : '';
+  button.replaceChildren(el('span', 'tab-glyph', glyph), el('span', 'tab-word', glyph ? text.slice(space + 1) : text));
+  button.classList.toggle('has-glyph', !!glyph);
+  button.setAttribute('aria-label', text);
+  button.title = text;
+}
+
+async function readSheet(tab) {
+  const path = tab === 'memory' ? '/api/memory' : tab === 'history' ? '/api/history' : '/api/prompts';
+  const r = await Neon.get(path, tab === 'history');
+  if (tab === 'history') {
+    if (r.ok && r.json) msgHistory.lines = r.json.lines || [];   // a 304 keeps the lines the page holds
+    return r.ok ? { lines: msgHistory.lines } : null;
+  }
+  return r.ok && r.json ? r.json : null;
+}
+
+function renderSheet(tab, sheet) {
+  paintTabs();
+  paintAction();
   promptsFilter.value = '';
   promptsFilter.placeholder = words.filter || 'Filter';
   promptsFilter.setAttribute('aria-label', words.filter || 'Filter');
-  promptsFilter.classList.toggle('hidden', items.length <= 8);
-  const rows = [];
-  if (!items.length) {
-    promptsList.replaceChildren(el('div', 'prompts-none', words.promptsNone || 'No saved prompts yet.'));
+  promptsNote.textContent = tab === 'memory' && sheet.modeOff ? (words.memoryModeOff || 'Memory is off.') : '';
+  promptsNote.classList.toggle('hidden', !promptsNote.textContent);
+  const rows = tab === 'memory' ? memoryRows(sheet) : tab === 'history' ? historyRows(sheet) : promptRows(sheet);
+  promptsFilter.classList.toggle('hidden', rows.length <= 8);
+  if (!rows.length) {
+    const none = tab === 'memory' ? words.memoryNone : tab === 'history' ? words.historyNone : words.promptsNone;
+    promptsList.replaceChildren(el('div', 'prompts-none', none || ''));
     return;
-  }
-  for (const item of items) {
-    const row = el('div', 'prompt-row');
-    const fill = el('button', 'prompt-text');
-    fill.type = 'button';
-    fill.title = item.text;
-    fill.appendChild(el('span', 'num', String(item.number)));
-    fill.appendChild(document.createTextNode(item.text));
-    fill.setAttribute('aria-label', item.number + ' ' + item.text);
-    fill.addEventListener('click', () => {
-      closePrompts(true);
-      takeDraft(item.text);
-      draft.focus();
-    });
-    const go = el('button', 'prompt-send', '➤');
-    go.type = 'button';
-    go.setAttribute('aria-label', words.promptsSend || 'Send this prompt');
-    go.title = words.promptsSend || 'Send this prompt';
-    go.addEventListener('click', () => {
-      closePrompts(false);
-      sendText(item.text, { fromDraft: false });
-    });
-    row.appendChild(fill);
-    row.appendChild(go);
-    rows.push({ row, text: item.text.toLowerCase() });
   }
   promptsList.replaceChildren(...rows.map(r => r.row));
   promptsFilter.oninput = () => {
@@ -1089,14 +1256,107 @@ function renderPrompts(sheet) {
   };
 }
 
-async function openPrompts() {
+// A row whose text fills the draft and whose ➤ sends it: a saved prompt's, a history line's.
+function sendableRow(text, number, extra) {
+  const row = el('div', 'prompt-row');
+  const fill = el('button', 'prompt-text');
+  fill.type = 'button';
+  fill.title = text;
+  if (number) fill.appendChild(el('span', 'num', String(number)));
+  fill.appendChild(document.createTextNode(text));
+  fill.setAttribute('aria-label', (number ? number + ' ' : '') + text);
+  fill.addEventListener('click', () => {
+    closePrompts(true);
+    takeDraft(text);
+    draft.focus();
+  });
+  const go = el('button', 'prompt-send', '➤');
+  go.type = 'button';
+  go.setAttribute('aria-label', words.promptsSend || 'Send this prompt');
+  go.title = words.promptsSend || 'Send this prompt';
+  go.addEventListener('click', () => {
+    closePrompts(false);
+    sendText(text, { fromDraft: false });
+  });
+  row.appendChild(fill);
+  if (extra) row.appendChild(extra);
+  row.appendChild(go);
+  return { row, text: text.toLowerCase() };
+}
+
+function promptRows(sheet) {
+  return (sheet.items || []).map(item => sendableRow(item.text, item.number, rowDelete(() => sheetChange('/api/prompts/delete', { id: item.id }))));
+}
+
+function memoryRows(sheet) {
+  return (sheet.items || []).map(item => {
+    const row = el('div', 'prompt-row memory-row' + (item.off ? ' off' : ''));
+    const text = el('div', 'prompt-text');
+    text.appendChild(document.createTextNode(item.text));
+    if (item.off) text.appendChild(el('span', 'off-mark', ' · ' + (words.memoryOff || 'off')));
+    row.appendChild(text);
+    row.appendChild(rowDelete(() => sheetChange('/api/memory/delete', { text: item.text })));
+    return { row, text: item.text.toLowerCase() };
+  });
+}
+
+function historyRows(sheet) {
+  return [...(sheet.lines || [])].reverse().map(line => sendableRow(line, 0, null));
+}
+
+// A change made on the sheet: posted, its sentence said, the tab read again.
+async function sheetChange(path, body) {
+  const r = await post(path, body);
+  say(r.message || '');
+  await refreshSheet();
+  return r;
+}
+
+async function refreshSheet() {
+  const tab = sheetTab;
+  const sheet = await readSheet(tab);
+  if (sheet && promptsOpen && tab === sheetTab) renderSheet(tab, sheet);
+}
+
+function saveDraftToSheet() {
+  if (!draft.value.trim()) { say(words.draftEmpty || 'The draft is empty.'); return; }
+  sheetChange(sheetTab === 'memory' ? '/api/memory/save' : '/api/prompts/save', { text: draft.value });   // the draft stays
+}
+
+async function clearHistoryNow() {
+  const r = await sheetChange('/api/history/clear', {});
+  if (r.ok) { msgHistory.lines = []; msgHistory.cleared = []; historyReset(); }
+}
+
+function focusSheet() {
+  const first = !promptsFilter.classList.contains('hidden') ? promptsFilter : promptsList.querySelector('button') || promptsActionNow;
+  if (first) first.focus({ preventScroll: true });
+}
+
+async function selectTab(tab) {
+  if (!SheetTabs.includes(tab)) return;
+  sheetTab = tab;
+  try { sessionStorage.setItem('neon.sheetTab', tab); } catch { /* private mode */ }
+  paintTabs();
+  const sheet = await readSheet(tab);
+  if (!sheet || !promptsOpen || tab !== sheetTab) return;
+  renderSheet(tab, sheet);
+  focusSheet();
+}
+
+async function openPrompts(tab) {
   if (promptsOpen || promptsOpening) return;
+  if (tab) {
+    sheetTab = tab;
+    try { sessionStorage.setItem('neon.sheetTab', tab); } catch { /* private mode */ }
+  }
   promptsOpening = true;
-  const r = await Neon.get('/api/prompts', false);
+  const want = sheetTab;
+  const sheet = await readSheet(want);
   promptsOpening = false;
-  if (!r.ok || !r.json || promptsOpen) return;
+  if (!sheet || promptsOpen) return;
   closeUsage();
-  renderPrompts(r.json);
+  renderSheet(want, sheet);
   if (drawerOpen && !shown) {
     hideDrawer();
     history.replaceState({ prompts: true }, '');   // the drawer's entry becomes the sheet's
@@ -1104,8 +1364,7 @@ async function openPrompts() {
     history.pushState({ prompts: true }, '');
   }
   showPrompts(true);
-  const first = promptsFilter.classList.contains('hidden') ? promptsList.querySelector('button') : promptsFilter;
-  if (first) first.focus({ preventScroll: true });
+  focusSheet();
 }
 
 function hidePrompts(toBox) {
@@ -1124,9 +1383,20 @@ function closePrompts(toBox) {
 
 promptsBtn.addEventListener('click', () => { if (promptsOpen) closePrompts(false); else openPrompts(); });
 promptsClose.addEventListener('click', () => closePrompts(false));
+for (const tab of promptsTabs) {
+  tab.addEventListener('click', () => { if (tab.dataset.tab !== sheetTab) selectTab(tab.dataset.tab); });
+  // The ARIA tabs' keys: ← and → move between them.
+  tab.addEventListener('keydown', ev => {
+    if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+    ev.preventDefault();
+    const at = (SheetTabs.indexOf(sheetTab) + (ev.key === 'ArrowRight' ? 1 : SheetTabs.length - 1)) % SheetTabs.length;
+    selectTab(SheetTabs[at]).then(() => promptsTabs[at].focus({ preventScroll: true }));
+  });
+}
 document.addEventListener('keydown', ev => {
   if (ev.key !== 'Escape' || ev.defaultPrevented || shown || !promptsOpen || !usageCard.classList.contains('hidden')) return;
   ev.preventDefault();
+  if (sheetArmed) { sheetDisarm(); return; }   // an armed 🗑️ first, then the sheet
   closePrompts(false);
 });
 
@@ -1159,6 +1429,9 @@ clearBtn.addEventListener('click', () => {
   const before = draft.value;
   if (!before) return;
   draft.value = '';
+  // To the walk's end, in this tab alone (2026-10-16), as ESC's draft at the PC: ↑ brings it back.
+  if (before.trim() && !msgHistory.cleared.includes(before)) msgHistory.cleared.push(before);
+  historyReset();
   saveDraft();
   grow();
   hideList();
@@ -1455,10 +1728,20 @@ function applyWords() {
   stripClose.setAttribute('aria-label', words.closeStrip);
   stripClose.title = words.closeStrip;
   drawerEl.setAttribute('aria-label', words.stripButton);
-  promptsBtn.setAttribute('aria-label', words.promptsButton || 'Saved prompts');
-  promptsBtn.title = words.promptsButton || 'Saved prompts';
+  promptsBtn.setAttribute('aria-label', words.promptsButton || 'Prompts, memory and history');
+  promptsBtn.title = words.promptsButton || 'Prompts, memory and history';
+  promptsEl.setAttribute('aria-label', words.promptsButton || 'Prompts, memory and history');
   promptsClose.setAttribute('aria-label', words.closePrompts || 'Close');
   promptsClose.title = words.closePrompts || 'Close';
+  const tabWords = { prompts: words.promptsTab || '📣 Prompts', memory: words.memoryTab || '💾 Memory', history: words.historyTab || '🕘 History' };
+  for (const tab of promptsTabs) {
+    const label = tabWords[tab.dataset.tab];
+    tab.querySelector('.tab-glyph').textContent = label.split(' ')[0];
+    tab.querySelector('.tab-word').textContent = label.split(' ').slice(1).join(' ');
+    tab.setAttribute('aria-label', label);
+    tab.title = label;
+  }
+  if (promptsOpen) paintAction();
   overlayLive.setAttribute('aria-label', words.liveLabel || 'following new pictures');
   overlayLive.title = words.liveLabel || 'following new pictures';
   paintExpand();
@@ -1623,6 +1906,84 @@ draft.addEventListener('keydown', ev => {
 draft.addEventListener('compositionstart', () => { composing = true; });
 draft.addEventListener('compositionend', () => { composing = false; queryCompletion(); });
 draft.addEventListener('input', () => { if (!composing) queryCompletion(); });
+
+// ── The message history (2026-10-16, the user's ask: the PC's ↑/↓ on the page) ──
+// One history with the PC: the profile's lines, the page's among them (the app remembers a line as the page sends it). ↑ steps back through
+// them, ↓ forward, and past the newest the draft in progress comes back — on a wrapped draft only from its first row (↑) or its end (↓), the
+// box moving the caret first, as the PC's row does; a recalled line walks on until a key changes it. Read from the app as the box takes focus
+// and as a walk starts (a 304 keeps the lines held); a line sent here joins the page's copy at once. What the ✕ clears goes to the walk's end,
+// in this tab alone, as ESC's draft does at the PC: never sent, gone at a reload. With the completion list open its keys are the list's.
+
+const msgHistory = { lines: [], cleared: [], index: -1, saved: '', walking: false };
+
+function walkList() { return msgHistory.lines.concat(msgHistory.cleared); }
+
+function historyReset() {
+  msgHistory.index = -1;   // at the bottom
+  msgHistory.walking = false;
+}
+
+async function readHistory() {
+  const r = await Neon.get('/api/history', true);
+  if (r.ok && r.json) msgHistory.lines = r.json.lines || [];
+}
+
+function remembered(text) {
+  const lines = msgHistory.lines;
+  if (text && lines[lines.length - 1] !== text) lines.push(text);
+  msgHistory.cleared = msgHistory.cleared.filter(t => t !== text);
+  historyReset();
+}
+
+function recall(text) {
+  draft.value = text;   // no input event: the walk goes on, and the dropdown stays shut
+  draft.setSelectionRange(text.length, text.length);
+  saveDraft();
+  grow();
+}
+
+// The box fits one row: ↑/↓ have no row to move to, so they walk at once.
+function oneRow() {
+  const style = getComputedStyle(draft);
+  const line = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.4;
+  return draft.scrollHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) < line * 1.5;
+}
+
+function walkStep(delta) {
+  const list = walkList();
+  let at = msgHistory.index < 0 || msgHistory.index > list.length ? list.length : msgHistory.index;   // a list that shrank: clamped
+  if (delta < 0) {
+    if (at === 0) return;
+    if (at === list.length) msgHistory.saved = draft.value;
+    at--;
+    recall(list[at]);
+  } else {
+    if (at >= list.length) return;
+    at++;
+    recall(at === list.length ? msgHistory.saved : list[at]);
+  }
+  msgHistory.index = at;
+  msgHistory.walking = true;
+}
+
+draft.addEventListener('focus', () => { readHistory(); });
+draft.addEventListener('input', () => { msgHistory.walking = false; });   // a typed key ends the walk (the PC's "any other key")
+draft.addEventListener('keydown', async ev => {
+  if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
+  if (completion || ev.isComposing || composing || ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey) return;
+  const up = ev.key === 'ArrowUp';
+  const caret = draft.selectionStart;
+  const none = caret === draft.selectionEnd;
+  const atEnd = none && (up ? caret === 0 : caret === draft.value.length);
+  if (!msgHistory.walking && !atEnd && !oneRow()) return;   // the box moves the caret a row
+  ev.preventDefault();
+  if (!msgHistory.walking && msgHistory.index < 0) {
+    const before = draft.value;
+    await readHistory();   // a walk starts on the app's lines now
+    if (draft.value !== before) return;
+  }
+  walkStep(up ? -1 : 1);
+});
 draft.addEventListener('blur', () => setTimeout(hideList, 150));
 
 sendBtn.addEventListener('click', () => send(false));

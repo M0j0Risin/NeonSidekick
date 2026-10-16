@@ -159,7 +159,8 @@ public sealed class WebCommandsTests
     [InlineData("/webui", WebCommandKind.Refused)]
     [InlineData("/cmd dir", WebCommandKind.Refused)]
     [InlineData("/profile work", WebCommandKind.Refused)]
-    [InlineData("/msgclear", WebCommandKind.Refused)]
+    [InlineData("/msgclear", WebCommandKind.Run)]   // 2026-10-16: the page shares the message history, and may clear it
+    [InlineData("/msgclear all", WebCommandKind.Refused)]
     [InlineData("/sessions", WebCommandKind.Refused)]
     [InlineData("/skills", WebCommandKind.Refused)]
     [InlineData("/youtube", WebCommandKind.Refused)]

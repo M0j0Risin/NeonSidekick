@@ -248,15 +248,26 @@ public sealed class ScreenPureTests
     }
 
     [Fact]
-    public void Complete_AfterWindow_TheWindowsFrontToBack_TheAppsOwnLeftOut_ByIdOrTitleOrProcess()
+    public void Complete_AfterWindow_TheWindowsFrontToBack_TheAppsOwnLast_ByIdOrTitleOrProcess()
     {
+        // The app's own window comes last, marked as /screen list marks it (2026-10-16, the user's report: it was left out).
         var all = ScreenTarget.Complete("window:", TwoMonitors, 2, ThreeWindows, 100);
-        Assert.Equal([new("window:200", "\"notes.txt - Notepad\" (Notepad)"), new CompletionItem("window:2001", "\"Error - Contoso Browser\" (browser)")], all);
+        Assert.Equal(
+            [
+                new("window:200", "\"notes.txt - Notepad\" (Notepad)"),
+                new("window:2001", "\"Error - Contoso Browser\" (browser)"),
+                new CompletionItem("window:100", "\"Neon\" (WindowsTerminal)" + ScreenText.OwnWindowMark),
+            ],
+            all);
 
         Assert.Equal(["window:200", "window:2001"], ScreenTarget.Complete("window:20", TwoMonitors, 2, ThreeWindows, 100).Select(i => i.Text));  // the id's start
         Assert.Equal(["window:200"], ScreenTarget.Complete("window:NOTE", TwoMonitors, 2, ThreeWindows, 100).Select(i => i.Text));             // the title, any case
         Assert.Equal(["window:2001"], ScreenTarget.Complete("window:browser", TwoMonitors, 2, ThreeWindows, 100).Select(i => i.Text));         // the process
+        Assert.Equal(["window:100"], ScreenTarget.Complete("window:neon", TwoMonitors, 2, ThreeWindows, 100).Select(i => i.Text));             // the own one by its title
+        Assert.Equal(["window:100"], ScreenTarget.Complete("window:terminal", TwoMonitors, 2, ThreeWindows, 100).Select(i => i.Text));         // ...and its process
+        Assert.Equal(["window:100"], ScreenTarget.Complete("window:10", TwoMonitors, 2, ThreeWindows, 100).Select(i => i.Text));               // ...and its id
         Assert.Empty(ScreenTarget.Complete("window:200", TwoMonitors, 2, ThreeWindows, 100));                                                // typed in full
+        Assert.Empty(ScreenTarget.Complete("window:100", TwoMonitors, 2, ThreeWindows, 100));                                                // the own one too
         Assert.Equal(["window:100", "window:200", "window:2001"], ScreenTarget.Complete("window:", [], null, ThreeWindows, null).Select(i => i.Text));  // no own window known
     }
 
@@ -265,6 +276,12 @@ public sealed class ScreenPureTests
     {
         var many = Enumerable.Range(1, ScreenText.MaxListed + 5).Select(i => new ScreenWindow(i, "w" + i, "p", new ScreenRect(0, 0, 1, 1))).ToList();
         Assert.Equal(ScreenText.MaxListed, ScreenTarget.Complete("window:", [], null, many, null).Count);
+
+        // The own window, even far down the list, is kept at the cap: the others stop one short (2026-10-16).
+        var capped = ScreenTarget.Complete("window:", [], null, many, many.Count);
+        Assert.Equal(ScreenText.MaxListed, capped.Count);
+        Assert.Equal("window:" + ScreenText.Id(many.Count), capped[^1].Text);
+        Assert.EndsWith(ScreenText.OwnWindowMark, capped[^1].Note, StringComparison.Ordinal);
     }
 }
 

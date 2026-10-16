@@ -115,4 +115,23 @@ public sealed class PromptsCommandTests : IDisposable
         Assert.Equal([SavedPromptText.Cleared(1)], PromptsCommand.Headless(prompts, "list --clear"));   // at once, no question
         Assert.Empty(prompts.List());
     }
+
+    /// <summary>The Web UI's ⇪ reads whether the answer was a refusal and the prompt's number (2026-10-16), never the sentence's prefix.</summary>
+    [Fact]
+    public void SaveAnswer_SaysWhetherItRefused_AndThePromptsNumber()
+    {
+        var prompts = Prompts();
+
+        Assert.Equal((false, 1), (Saved("Summarize.", out int one), one));
+        Assert.Equal((false, 1), (Saved("Summarize.", out int again), again));   // already saved: no refusal
+        Assert.Equal((false, 2), (Saved("Review.", out int two), two));
+        Assert.Equal((true, 0), (Saved("   ", out int none), none));
+        Assert.Equal((true, 0), (Saved(new string('x', SavedPrompts.MaxLength + 1), out int big), big));
+
+        bool Saved(string text, out int number)
+        {
+            PromptsCommand.SaveAnswer(prompts, text, out bool refused, out number);
+            return refused;
+        }
+    }
 }

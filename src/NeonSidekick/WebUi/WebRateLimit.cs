@@ -58,7 +58,8 @@ public sealed class WebRateLimit
 
         return path switch
         {
-            "/api/shopping/check" or "/api/shopping/store" or "/api/strip/select" or WebUiHost.PictureDeletePath or "/api/home/tap" or "/api/home/act" or "/api/home/scene" or "/api/home/video" => WebRateBucket.Act,
+            "/api/shopping/check" or "/api/shopping/store" or "/api/strip/select" or WebUiHost.PictureDeletePath or "/api/home/tap" or "/api/home/act" or "/api/home/scene" or "/api/home/video"
+                or WebUiHost.PromptSavePath or WebUiHost.PromptDeletePath or WebUiHost.MemorySavePath or WebUiHost.MemoryDeletePath or WebUiHost.HistoryClearPath => WebRateBucket.Act,   // the sheet's (2026-10-16)
             "/api/home/say" => WebRateBucket.Say,
             WebUiAuth.SignInPath => WebRateBucket.SignIn,
             _ => null,

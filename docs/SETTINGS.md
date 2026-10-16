@@ -39,7 +39,7 @@ The app itself, this side of the connection.
 | User avatar | Your emoji, at the start of each of your lines in the transcript in place of `›`. Enter opens the same [picker](INTERFACE.md#the-avatar-picker); 🚫 goes back to `›`. | 🙊 |
 | Queue mode | `automatic`: a message sent during a reply waits in `/queue` and goes when the reply ends. `manual`: every message waits until you press `➤ send` (`s`) on `/queue`. `off`: no list. | `automatic` |
 | Queue cancel mode | What a canceled reply does with the queue: `hold` keeps it until your next message, `drain` sends the next one at once, `empty` drops them all. | `empty` |
-| Keep message history | Saves the ↑/↓ history (the newest 1,000 lines) in the profile's `sessions.db`. Off deletes it at the next profile load; `/msgclear` empties it. | on |
+| Keep message history | Saves the ↑/↓ history (the newest 1,000 lines, the Web UI's sent lines among them) in the profile's `sessions.db`. Off deletes it at the next profile load; `/msgclear` empties it. | on |
 | Command typo intercept | A command typed without its slash (`clear`), or with extra ones, asks *Did you mean /clear?* before it is sent as text. | on |
 | Show /exit in autocomplete | Lists `/exit` in the `/` list. Typed in full, it works either way. | off |
 | Emoji picker | Shows a dim ☺ at the right end of the input row; a click opens the emoji picker at the cursor. Ctrl+J opens it too, shown or not (not on a Mac). | on |

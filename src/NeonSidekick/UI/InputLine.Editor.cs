@@ -140,7 +140,7 @@ public sealed partial class InputLine
             _line = line;
             _text = new StringBuilder(initialText);
             _cursor = _text.Length;
-            _historyIndex = line._history.Count;
+            _historyIndex = line.HistoryCount;
         }
 
         /// <summary>The draft in its token form.</summary>
@@ -168,7 +168,7 @@ public sealed partial class InputLine
             _percenting = onPane && _line._connections is not null;
             _careting = onPane && _line._workflows is not null;
             _starring = onPane && _line._shares is not null;
-            _historyIndex = _line._history.Count;
+            _historyIndex = _line.HistoryCount;
             _draft = "";
             _goalCol = -1;
             _walking = false;
@@ -250,7 +250,7 @@ public sealed partial class InputLine
                 _line.Remember(line.Draft);
             }
 
-            _historyIndex = _line._history.Count;
+            _historyIndex = _line.HistoryCount;
             _draft = "";
             _text.Clear();
             _cursor = 0;
@@ -658,6 +658,7 @@ public sealed partial class InputLine
                         _line.Remember(draftText);
                     }
 
+                    _line.LastSubmittedDraft = _o.Mask ? null : draftText;
                     var images = _line._pastes.ImagesIn(draftText);
                     // The chat line's draft is the session's (2026-09-25): sent, the row starts empty.
                     _text.Clear();
@@ -685,7 +686,7 @@ public sealed partial class InputLine
                     if (_o.Remember && !_o.Mask)
                     {
                         _line.RememberDraft(_text.ToString());
-                        _historyIndex = _line._history.Count;   // the walk starts past it, so the next Up is the line just cleared
+                        _historyIndex = _line.HistoryCount;   // the walk starts past it, so the next Up is the line just cleared
                         _walking = false;
                     }
 
@@ -952,7 +953,8 @@ public sealed partial class InputLine
                         break;
                     }
 
-                    var history = _line._history;
+                    // A copy (2026-10-16): the Web UI's request threads may add a line meanwhile.
+                    var history = _line.HistorySnapshot();
                     // ReplaceHistory under a live walk (a /msgclear under a reply, 2026-09-25) can leave the index past the end.
                     _historyIndex = Math.Min(_historyIndex, history.Count);
                     if (delta < 0)

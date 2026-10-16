@@ -179,16 +179,25 @@ public static class PromptsCommand
     }
 
     /// <summary><c>save &lt;text&gt;</c>'s answer, the screen's and headless.</summary>
-    public static string SaveAnswer(SavedPrompts prompts, string text)
+    public static string SaveAnswer(SavedPrompts prompts, string text) => SaveAnswer(prompts, text, out _, out _);
+
+    /// <summary>
+    /// <see cref="SaveAnswer(SavedPrompts, string)"/> saying whether it was a refusal and the prompt's number (2026-10-16, the Web UI's ⇪: its
+    /// answer's status, and the PC's flash, without reading the sentence); 0 for a refusal.
+    /// </summary>
+    public static string SaveAnswer(SavedPrompts prompts, string text, out bool refused, out int number)
     {
         ArgumentNullException.ThrowIfNull(prompts);
         var outcome = prompts.Add(text, out var saved);
-        if (SavedPromptText.Refusal(outcome) is { } refused)
+        if (SavedPromptText.Refusal(outcome) is { } refusal)
         {
-            return refused;
+            refused = true;
+            number = 0;
+            return refusal;
         }
 
-        int number = NumberOf(prompts, saved!);
+        refused = false;
+        number = NumberOf(prompts, saved!);
         return outcome == SavedPromptOutcome.AlreadySaved ? SavedPromptText.AlreadySaved(saved!, number) : SavedPromptText.Saved(saved!, number);
     }
 

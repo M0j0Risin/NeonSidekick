@@ -248,13 +248,14 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 .compose { display: flex; gap: 8px; align-items: flex-end; }
 /* The ✕ that clears the draft (later on 2026-10-15), inside the box at its right; the box keeps its text clear of it. */
 .draft-box { position: relative; flex: 1; min-width: 0; display: flex; }
-.draft-box textarea { padding-right: 40px; }
+.draft-box textarea { padding-right: 44px; }
+/* Inset from the box's border and its corner, and left of its scrollbar while it scrolls (--sb, set by grow(); 2026-10-16, the user's screenshot). */
 .clear-draft {
   position: absolute;
-  top: 0;
-  right: 0;
-  width: 44px;
-  min-height: 44px;
+  top: 1px;
+  right: calc(4px + var(--sb, 0px));
+  width: 40px;
+  min-height: 42px;
   padding: 0;
   background: none;
   border: 0;
@@ -317,6 +318,25 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 .prompt-row .prompt-text .num { color: var(--dim); margin-right: 6px; }
 .prompt-row .prompt-send { flex: none; width: 44px; min-height: 44px; padding: 0; }
 .prompts-none { color: var(--dim); font-size: 14px; }
+/* The sheet's tabs, its ⇪ or clear all, and a row's 🗑️ (2026-10-16): the tabs in the nav's look, the 🗑️ red while armed, as the overlay's. */
+.sheet-bar { flex-wrap: nowrap; }
+.sheet-tabs { display: flex; gap: 4px; flex: 1; min-width: 0; }
+.strip-bar .sheet-tab { min-height: 36px; padding: 2px 10px; background: none; border-color: transparent; color: var(--dim); white-space: nowrap; }
+.strip-bar .sheet-tab.on { color: var(--text); background: var(--panel-2); }
+.sheet-bar .tab-glyph:not(:empty) { margin-right: 4px; }
+.strip-bar .sheet-action { min-height: 36px; white-space: nowrap; }
+.sheet-action.armed, .row-delete.armed { background: var(--error, #c0392b); color: #fff; border-color: transparent; }
+.prompt-row .row-delete { flex: none; width: 44px; min-height: 44px; padding: 0; }
+.prompt-row .row-delete.armed { width: auto; padding: 0 10px; font-size: 13px; }
+.prompts-note { color: var(--warn); font-size: 14px; }
+.memory-row .prompt-text { display: flex; align-items: center; padding: 6px 10px; -webkit-line-clamp: unset; line-clamp: unset; overflow-wrap: anywhere; }
+.memory-row.off .prompt-text { color: var(--dim); }
+.memory-row .off-mark { color: var(--dim); white-space: pre; }
+@media (max-width: 420px) {
+  .sheet-tab .tab-word, .sheet-action.has-glyph .tab-word { display: none; }
+  .sheet-bar .tab-glyph:not(:empty) { margin-right: 0; }
+  .strip-bar .sheet-tab { padding: 2px 8px; }
+}
 .strip-bar { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--dim); }
 .strip-bar span { flex: 1; min-width: 0; }
 .strip-bar button { min-height: 32px; padding: 2px 10px; }
@@ -358,7 +378,30 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
   position: relative;
 }
 .status .usage::after { content: ""; position: absolute; inset: -12px -6px; }   /* a finger-sized target on a 20px row */
-.usage-card pre { max-height: 40vh; }
+/* The usage card (2026-10-16, the user's ask): a meter for the context, then the pane's sections as tiles, three across when wide. */
+.usage-card { max-height: 70vh; overflow-y: auto; }
+.usage-context { margin-bottom: 10px; }
+.usage-head { display: flex; align-items: baseline; gap: 10px; font-variant-numeric: tabular-nums; }
+.usage-heading { color: var(--dim); }
+.usage-figures { flex: 1; font-weight: 600; }
+.usage-share { font-weight: 600; }
+.meter { height: 8px; margin: 6px 0 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.meter-fill { height: 100%; background: var(--accent); transition: width 0.3s ease; }
+.meter.warn .meter-fill { background: var(--warn); }
+.meter.full .meter-fill { background: var(--error); }
+@media (prefers-reduced-motion: reduce) { .meter-fill { transition: none; } }
+.usage-source { color: var(--dim); font-size: 12px; }
+.usage-empty { color: var(--dim); margin-bottom: 8px; }
+.usage-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.usage-tile { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; min-width: 0; }
+.usage-tile h3 { font-size: 14px; margin: 0 0 6px; }
+.usage-note { color: var(--dim); font-weight: 400; font-size: 12px; }
+.usage-tile dl { margin: 0; }
+.usage-row { display: flex; gap: 8px; justify-content: space-between; font-size: 14px; line-height: 22px; }
+.usage-row dt { color: var(--dim); }
+.usage-row dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
+.usage-row.long { flex-direction: column; gap: 0; }
+.usage-row.long dd { text-align: left; }
 .complete {
   max-height: 34vh;
   overflow-y: auto;
@@ -376,6 +419,7 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
   flex: 1;
   min-height: 44px;
   max-height: 40vh;
+  overflow-y: hidden;   /* grow() turns it on past the cap */
   resize: none;
   background: var(--bg);
   color: var(--text);

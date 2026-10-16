@@ -61,7 +61,6 @@ public static class WebCommands
         SlashCommand.WebUi,
         SlashCommand.Cmd,
         SlashCommand.Profile,
-        SlashCommand.MsgClear,
         SlashCommand.Session,
         SlashCommand.Skills,
         SlashCommand.YouTube,
@@ -81,6 +80,7 @@ public static class WebCommands
         SlashCommand.Plan, SlashCommand.Process, SlashCommand.Learn, SlashCommand.Imagine, SlashCommand.Comfy, SlashCommand.HomeAssistant,
         SlashCommand.Docker, SlashCommand.EventLog, SlashCommand.Net, SlashCommand.Services, SlashCommand.Tasks, SlashCommand.Ad, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.Shopping, SlashCommand.Print, SlashCommand.Pdf,
         SlashCommand.Rename, SlashCommand.Claude, SlashCommand.Advisor, SlashCommand.Test, SlashCommand.Avatar, SlashCommand.Loop,
+        SlashCommand.MsgClear,
     };
 
     /// <summary>Whether any form of <paramref name="command"/> may run from the page (the dropdown's commands).</summary>
@@ -130,6 +130,8 @@ public static class WebCommands
             SlashCommand.Help => text.Length > 0 ? WebCommandVerdict.Run : Pane(word, "/help <words>"),
             SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Compact or SlashCommand.Remember or SlashCommand.Timer
                 or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Test or SlashCommand.Pdf or SlashCommand.Imagine => WebCommandVerdict.Run,
+            // 2026-10-16, the user's ask: the page shares the message history now, so it may clear it; the yes is asked on the page and the PC.
+            SlashCommand.MsgClear => WebCommandVerdict.Run,
             SlashCommand.Rewind => WebCommandVerdict.Pick,
             SlashCommand.Model or SlashCommand.Reasoning => text.Length > 0 ? WebCommandVerdict.Run : WebCommandVerdict.Pick,
             SlashCommand.Plan => Is(first, PlanText.OpenWord) && FirstWord(text[first.Length..].Trim()).Length == 0 ? WebCommandVerdict.List : WebCommandVerdict.Run,

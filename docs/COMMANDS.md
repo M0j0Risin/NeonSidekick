@@ -79,7 +79,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/memory read-write\|read-only\|off\|on` | Sets *Memory mode* (`on` is read-write). |
 | `/memory forget\|edit` | Forgets every memory after a yes, or opens `memory.json` in your editor. |
 | `/remember <text>` | Adds a memory; refused while *Memory mode* is `off`. |
-| `/msgclear` | Clears this profile's message history (what ↑/↓ recall) after a yes. |
+| `/msgclear` | Clears this profile's message history (what ↑/↓ recall) after a yes. From the Web UI too, asking on the page and the PC. |
 | `/usage` | Token usage and performance, with rows for `/claude`, `/botchat` and the advisors; `~` marks an estimate. |
 
 ### Models and servers

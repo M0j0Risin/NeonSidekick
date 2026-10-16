@@ -60,6 +60,11 @@ public sealed class WebRateLimitTests
     [InlineData("/api/home/act", WebRateBucket.Act)]
     [InlineData("/api/home/scene", WebRateBucket.Act)]
     [InlineData("/api/home/video", WebRateBucket.Act)]
+    [InlineData("/api/prompts/save", WebRateBucket.Act)]   // the sheet's (2026-10-16)
+    [InlineData("/api/prompts/delete", WebRateBucket.Act)]
+    [InlineData("/api/memory/save", WebRateBucket.Act)]
+    [InlineData("/api/memory/delete", WebRateBucket.Act)]
+    [InlineData("/api/history/clear", WebRateBucket.Act)]
     [InlineData("/api/home/say", WebRateBucket.Say)]
     [InlineData("/signin", WebRateBucket.SignIn)]
     public void TheLimitedPosts_CountAgainstTheirKind(string path, WebRateBucket bucket)
@@ -72,6 +77,8 @@ public sealed class WebRateLimitTests
     [InlineData("/api/answer", true)]
     [InlineData("/signin", false)]
     [InlineData("/api/home", false)]
+    [InlineData("/api/history", false)]
+    [InlineData("/api/memory", false)]
     public void EverythingElse_IsNotLimited(string path, bool post)
     {
         Assert.Null(WebRateLimit.BucketOf(path, post));

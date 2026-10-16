@@ -36,15 +36,26 @@
     <div id="asks"></div>
     <section class="ask usage-card hidden" id="usage-card" role="dialog" aria-labelledby="usage-title">
       <h2 id="usage-title"></h2>
-      <pre id="usage-lines"></pre>
+      <div class="usage-context" id="usage-context"></div>
+      <div class="usage-empty hidden" id="usage-empty"></div>
+      <div class="usage-tiles" id="usage-tiles"></div>
       <div class="choices"><button type="button" id="usage-close"></button></div>
     </section>
     <div class="banner waiting hidden" id="waiting"></div>
     <div class="queued hidden" id="queued"></div>
     <div class="banner message hidden" id="message"></div>
     <div class="complete hidden" id="complete" role="listbox"></div>
-    <section class="prompts hidden" id="prompts" role="region" aria-labelledby="prompts-head">
-      <div class="strip-bar"><span id="prompts-head"></span><button type="button" id="prompts-close">✕</button></div>
+    <section class="prompts hidden" id="prompts" role="region">
+      <div class="strip-bar sheet-bar">
+        <div class="sheet-tabs" role="tablist">
+          <button type="button" class="sheet-tab" role="tab" data-tab="prompts"><span class="tab-glyph">📣</span><span class="tab-word">Prompts</span></button>
+          <button type="button" class="sheet-tab" role="tab" data-tab="memory"><span class="tab-glyph">💾</span><span class="tab-word">Memory</span></button>
+          <button type="button" class="sheet-tab" role="tab" data-tab="history"><span class="tab-glyph">🕘</span><span class="tab-word">History</span></button>
+        </div>
+        <button type="button" class="sheet-action" id="prompts-action"></button>
+        <button type="button" id="prompts-close">✕</button>
+      </div>
+      <div class="prompts-note hidden" id="prompts-note"></div>
       <input type="search" id="prompts-filter" class="hidden" autocomplete="off">
       <div class="prompts-list" id="prompts-list"></div>
     </section>

@@ -76,10 +76,12 @@ public sealed record ScreenTarget(ScreenTargetKind Kind, string Argument = "", i
     /// <summary>
     /// The input line's list after <c>/screen </c> (2026-10-04, the user's report: it had none): the words
     /// (<see cref="ScreenText.CompletionWords"/>) while the first is typed; after <c>monitor:</c> each of
-    /// <paramref name="monitors"/>; after <c>window:</c> each of <paramref name="windows"/> front to back, the app's own
-    /// (<paramref name="ownWindow"/>) left out, matched by the id's start or by any part of its title or process name (the
-    /// user's pick: <c>window:note</c> offers Notepad), at most <see cref="ScreenText.MaxListed"/>. A space ends it: the
-    /// <c>monitor 2</c> and <c>window notes</c> forms are typed as they are. Pure.
+    /// <paramref name="monitors"/>; after <c>window:</c> each of <paramref name="windows"/> front to back, matched by the id's start
+    /// or by any part of its title or process name (the user's pick: <c>window:note</c> offers Notepad), at most
+    /// <see cref="ScreenText.MaxListed"/>. The app's own (<paramref name="ownWindow"/>) comes last, marked as <c>/screen list</c> marks
+    /// it (2026-10-16, the user's report: it was left out, though the list showed it and <c>window:</c> captured it); first in front-to-back
+    /// order, it would top every list ahead of the window one usually wants. The others stop one short of the cap while it is held, so the
+    /// cap never drops it. A space ends it: the <c>monitor 2</c> and <c>window notes</c> forms are typed as they are. Pure.
     /// </summary>
     public static IReadOnlyList<CompletionItem> Complete(
         string argText, IReadOnlyList<ScreenMonitor> monitors, int? ownMonitor, IReadOnlyList<ScreenWindow> windows, long? ownWindow)
@@ -102,13 +104,9 @@ public sealed record ScreenTarget(ScreenTargetKind Kind, string Argument = "", i
         {
             string rest = argText[ScreenText.WindowPrefix.Length..];
             var items = new List<CompletionItem>();
+            CompletionItem? own = null;
             foreach (var window in windows)
             {
-                if (window.Id == ownWindow)
-                {
-                    continue;
-                }
-
                 string id = ScreenText.Id(window.Id);
                 if (string.Equals(id, rest, StringComparison.Ordinal))
                 {
@@ -121,12 +119,25 @@ public sealed record ScreenTarget(ScreenTargetKind Kind, string Argument = "", i
                     || window.Title.Contains(rest, StringComparison.OrdinalIgnoreCase)
                     || window.Process.Contains(rest, StringComparison.OrdinalIgnoreCase))
                 {
-                    items.Add(new CompletionItem(ScreenText.WindowPrefix + id, ScreenText.WindowNote(window)));
-                    if (items.Count == ScreenText.MaxListed)
+                    if (window.Id == ownWindow)
                     {
-                        break;
+                        own = new CompletionItem(ScreenText.WindowPrefix + id, ScreenText.WindowNote(window, own: true));
+                    }
+                    else if (items.Count < ScreenText.MaxListed)
+                    {
+                        items.Add(new CompletionItem(ScreenText.WindowPrefix + id, ScreenText.WindowNote(window)));
                     }
                 }
+            }
+
+            if (own is { } last)
+            {
+                if (items.Count == ScreenText.MaxListed)
+                {
+                    items.RemoveAt(items.Count - 1);
+                }
+
+                items.Add(last);
             }
 
             return items;

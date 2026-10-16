@@ -267,29 +267,102 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// </summary>
     public Func<(WebStatus Status, string Key)>? StatusNow { get; set; }
 
-    /// <summary>The full <c>/usage</c> lines for the page's card (2026-10-15, reads only); null gives an empty card.</summary>
-    public Func<IReadOnlyList<string>>? UsageLines { get; set; }
+    /// <summary>
+    /// The full <c>/usage</c> figures for the page's card (2026-10-15, reads only; the card's meter and tiles since 2026-10-16); null gives an
+    /// empty card.
+    /// </summary>
+    public Func<WebUsageCard>? UsageNow { get; set; }
 
-    public WebUsageCard Usage() => new(WebUiText.UsageTitle, UsageLines?.Invoke() ?? []);
+    public WebUsageCard Usage() => UsageNow?.Invoke() ?? new WebUsageCard(App.UsageText.Label, null, [], App.UsageText.NothingCounted);
 
-    /// <summary>The profile's saved prompts' texts in their order (later on 2026-10-15, reads only); null lists none.</summary>
-    public Func<IReadOnlyList<string>>? PromptsNow { get; set; }
+    /// <summary>The profile's saved prompts in their order (later on 2026-10-15, reads only; whole since 2026-10-16, for their ids); null lists none.</summary>
+    public Func<IReadOnlyList<NeonSidekick.Prompts.SavedPrompt>>? PromptsNow { get; set; }
 
     public WebPrompts Prompts()
     {
-        IReadOnlyList<string> texts;
+        IReadOnlyList<NeonSidekick.Prompts.SavedPrompt> prompts;
         try
         {
-            texts = PromptsNow?.Invoke() ?? [];
+            prompts = PromptsNow?.Invoke() ?? [];
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             DiagnosticLog.Debug(Category, "Web UI: the saved prompts could not be read: " + e.Message);
-            texts = [];
+            prompts = [];
         }
 
-        return new WebPrompts(NeonSidekick.Prompts.SavedPromptText.PaneTitle, [.. texts.Select((t, i) => new WebPrompt(i + 1, t))]);
+        return new WebPrompts([.. prompts.Select((p, i) => new WebPrompt(i + 1, p.Text, p.Id))]);
     }
+
+    /// <summary>The screen's save of the page's draft as a prompt (2026-10-16); null: no saves.</summary>
+    public Func<string, IPAddress?, WebReply>? PromptSave { get; set; }
+
+    /// <summary>The screen's delete of a saved prompt by its id (2026-10-16); null: no deletes.</summary>
+    public Func<string, IPAddress?, WebReply>? PromptDelete { get; set; }
+
+    public WebReply SavePrompt(WebTextBody request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return PromptSave is { } save ? save(request.Text ?? "", remote) : new WebReply(WebOutcome.NotFound);
+    }
+
+    public WebReply DeletePrompt(WebPromptDelete request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return PromptDelete is { } delete && !string.IsNullOrEmpty(request.Id) ? delete(request.Id, remote) : new WebReply(WebOutcome.NotFound, WebUiText.PromptGone);
+    }
+
+    /// <summary>The profile's memories as the sheet's 💾 tab shows them (2026-10-16, reads only); null lists none.</summary>
+    public Func<WebMemories>? MemoriesNow { get; set; }
+
+    public WebMemories Memories()
+    {
+        try
+        {
+            return MemoriesNow?.Invoke() ?? new WebMemories([], false);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            DiagnosticLog.Debug(Category, "Web UI: the memories could not be read: " + e.Message);
+            return new WebMemories([], false);
+        }
+    }
+
+    /// <summary>The screen's save of the page's draft as a memory (2026-10-16, <c>/remember</c>'s); null: no saves.</summary>
+    public Func<string, IPAddress?, WebReply>? MemorySave { get; set; }
+
+    /// <summary>The screen's delete of a memory by its text (2026-10-16); null: no deletes.</summary>
+    public Func<string, IPAddress?, WebReply>? MemoryDelete { get; set; }
+
+    public WebReply SaveMemory(WebTextBody request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return MemorySave is { } save ? save(request.Text ?? "", remote) : new WebReply(WebOutcome.NotFound);
+    }
+
+    public WebReply DeleteMemory(WebTextBody request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return MemoryDelete is { } delete && !string.IsNullOrEmpty(request.Text) ? delete(request.Text, remote) : new WebReply(WebOutcome.NotFound, WebUiText.MemoryGone);
+    }
+
+    /// <summary>The message history as the page gets it (2026-10-16, reads only, thread-safe): oldest first, no drafts set aside, no paste tokens.</summary>
+    public Func<IReadOnlyList<string>>? HistoryNow { get; set; }
+
+    public WebHistory History() => new(HistoryNow?.Invoke() ?? []);
+
+    /// <summary>The screen's wipe of the message history (2026-10-16, the 🕘 tab's clear all); null: none.</summary>
+    public Func<IPAddress?, WebReply>? HistoryClear { get; set; }
+
+    public WebReply ClearHistory(IPAddress? remote) => HistoryClear is { } clear ? clear(remote) : new WebReply(WebOutcome.NotFound);
+
+    /// <summary>
+    /// A line the page sent, told as <see cref="Send"/> accepts it (2026-10-16: queued, or bare <c>/prompts</c> opening the sheet): the screen
+    /// remembers it in the message history, as Enter does a typed line — at once, not when the line runs, so a line sent under a reply is
+    /// already there for the page's next ↑. Called on the request's thread; never for a refusal, an empty or too long line, a full queue or a
+    /// retry already taken.
+    /// </summary>
+    public Action<string>? Accepted { get; set; }
 
     public WebEntry? Entry(long seq) => Feed.EntryOf(seq, WebUiMarkdown.ToHtml);
 
@@ -506,6 +579,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
             DiagnosticLog.Info(Category, WebUiText.CommandLogLine(WebCommands.Word(text), remote, verdict.Kind == WebCommandKind.Refused ? "refused" : verdict.Kind.ToString().ToLowerInvariant()));
             if (verdict.Kind == WebCommandKind.Page)
             {
+                Accepted?.Invoke(text);
                 return new WebReply(WebOutcome.Ok, Open: verdict.Open);   // later on 2026-10-15: the page opens its own sheet, nothing queued for the PC
             }
 
@@ -527,6 +601,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         }
 
         _lines.Enqueue(new WebLine(text, request.Id, remote, request.AsText));
+        Accepted?.Invoke(text);
         PublishState();
         Nudge?.Invoke();
         return WebReply.Ok;

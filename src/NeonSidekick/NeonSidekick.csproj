@@ -277,6 +277,9 @@
     <!-- The Web UI's pages (2026-10-14): plain HTML, CSS and JavaScript, no library, served by WebUi/WebUiAssets from memory
          (no web root on disk). -->
     <EmbeddedResource Include="..\..\assets\webui\*.*" LogicalName="webui/%(Filename)%(Extension)" Visible="false" />
+    <!-- Its favicon is the app icon itself (2026-10-16, the user's ask: the tab showed a hand-drawn mark of its own), one file for the
+         tab, app.ico and the Add to Home Screen icons (tools/IconGen.cs renders those from it). -->
+    <EmbeddedResource Include="..\..\assets\icon.svg" LogicalName="webui/favicon.svg" Visible="false" />
     <!-- The emoji catalog (2026-10-10, the avatar picker): assets\emoji\emoji.tsv, written by tools\EmojiGen.cs from Unicode's
          emoji-test.txt and CLDR's annotations (Unicode License v3), read once by Emojis/EmojiCatalog. Rerun the tool; never edit. -->
     <EmbeddedResource Include="..\..\assets\emoji\emoji.tsv" LogicalName="emoji/emoji.tsv" Visible="false" />
