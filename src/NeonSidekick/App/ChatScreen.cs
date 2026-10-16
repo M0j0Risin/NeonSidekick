@@ -14714,11 +14714,12 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The extra embedded servers stopped (later on 2026-09-29): the notice naming their models when any ran; with none, a word
-    /// only when <paramref name="asked"/> (<c>/botchat --kill</c>). The main server is never among them.
+    /// only when <paramref name="asked"/> (<c>/botchat --kill</c>). The main server is never among them, nor since 2026-10-16 an
+    /// advisor's (the user's call): the bots let go of theirs, and one an advisor also holds keeps running.
     /// </summary>
     private void StopBotExtras(bool asked)
     {
-        var stopped = _session.Embedded?.StopExtras() ?? [];
+        var stopped = _session.Embedded?.StopExtras(NeonSidekick.EmbeddedLlm.ExtraOwner.BotChat) ?? [];
         if (stopped.Count > 0)
         {
             var catalog = _session.Embedded!.Catalog;
@@ -14743,8 +14744,8 @@ internal sealed partial class ChatScreen
     private bool BotChatResumable =>
         !_botChatRunning && Volatile.Read(ref _lastBotChat) is { } saved && Profiles.NameEquals(saved.Starter, _settings.ProfileName);
 
-    /// <summary>Whether extra embedded servers run with no chat to use them (2026-10-11, the hint strip's <see cref="BotChat.ExtrasGlyph"/>).</summary>
-    private bool BotExtrasIdle => !_botChatRunning && _session.Embedded?.Extras.Count > 0;
+    /// <summary>Whether the bots' extra embedded servers run with no chat to use them (2026-10-11, the hint strip's <see cref="BotChat.ExtrasGlyph"/>; an advisor's not counted since 2026-10-16, which <c>/botchat --kill</c> leaves).</summary>
+    private bool BotExtrasIdle => !_botChatRunning && _session.Embedded?.ExtrasOf(NeonSidekick.EmbeddedLlm.ExtraOwner.BotChat).Count > 0;
 
     /// <summary>The strip with the botchat glyphs ahead of the rest (2026-10-11, <see cref="BotChat.Strip"/>), as <see cref="PlanStrip"/>. Pinned.</summary>
     public static string BotChatStrip(bool resumable, bool extras, string strip) => BotChat.Strip(resumable, extras, strip, GlyphSeparator);
@@ -14809,7 +14810,7 @@ internal sealed partial class ChatScreen
         var (results, cancelled) = await UnderWatchAsync(BotChat.LinkingSpinner, token =>
         {
             // Made in cast order, so the first embedded bot is the first at the session's embedded gate (later on 2026-09-29).
-            jobs = cast.Select(bot => bot.Profile is { } profile ? _session.LinkAsync(profile, embeddedMode, token) : Task.FromResult<(BotLink?, string?)>((null, null))).ToArray();
+            jobs = cast.Select(bot => bot.Profile is { } profile ? _session.LinkAsync(profile, embeddedMode, NeonSidekick.EmbeddedLlm.ExtraOwner.BotChat, token) : Task.FromResult<(BotLink?, string?)>((null, null))).ToArray();
             return Task.WhenAll(jobs);
         }, cancellationToken).ConfigureAwait(false);
         if (cancelled)

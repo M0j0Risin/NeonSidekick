@@ -97,7 +97,7 @@ public partial class ChatScreenTests
     {
         _settings.Update(d => d.TtsOutput = false);
         var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
-        await embedded.StartExtraAsync(EmbeddedModelCatalog.Find("gemma-4-e2b")!, new AppSettingsData(), null, CancellationToken.None);
+        await embedded.StartExtraAsync(EmbeddedModelCatalog.Find("gemma-4-e2b")!, new AppSettingsData(), ExtraOwner.BotChat, null, CancellationToken.None);
         PushLine("/botchat --kill now");
         PushLine("/botchat --KILL");
         PushLine("/botchat --kill");
@@ -112,13 +112,36 @@ public partial class ChatScreenTests
         Assert.Empty(_chat.Requests);
     }
 
+    /// <summary>
+    /// <c>/botchat --kill</c> and a botchat's end leave an advisor's extra running (2026-10-16, the user's call: it stopped with the
+    /// bots' until then), and the 🧟 glyph counts only the bots'.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_Kill_LeavesAnAdvisorsExtra()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b", "gemma-4-e4b-qat"));
+        await embedded.StartExtraAsync(EmbeddedModelCatalog.Find("gemma-4-e2b")!, new AppSettingsData(), ExtraOwner.BotChat, null, CancellationToken.None);
+        await embedded.StartExtraAsync(EmbeddedModelCatalog.Find("gemma-4-e4b-qat")!, new AppSettingsData(), ExtraOwner.Advisor, null, CancellationToken.None);
+        PushLine("/botchat --kill");
+        PushLine("/botchat --kill");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(BotChat.ExtrasStoppedNotice(["Gemma 4 E2B"]), output);
+        Assert.Contains(BotChat.NoExtrasNotice, output);
+        Assert.Equal("gemma-4-e4b-qat", Assert.Single(embedded.Extras).ModelId);
+        Assert.Empty(embedded.ExtrasOf(ExtraOwner.BotChat));
+    }
+
     /// <summary>Ctrl+Alt+K (2026-10-11, the user's ask) is <c>/botchat --kill</c> from the keyboard: the extras stopped, then none.</summary>
     [Fact]
     public async Task BotChat_CtrlAltK_StopsTheExtras_AsTheTypedKillDoes()
     {
         _settings.Update(d => d.TtsOutput = false);
         var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
-        await embedded.StartExtraAsync(EmbeddedModelCatalog.Find("gemma-4-e2b")!, new AppSettingsData(), null, CancellationToken.None);
+        await embedded.StartExtraAsync(EmbeddedModelCatalog.Find("gemma-4-e2b")!, new AppSettingsData(), ExtraOwner.BotChat, null, CancellationToken.None);
         var input = WhenIdle(i =>
         {
             i.Push(Keys.CtrlAlt(ConsoleKey.K));

@@ -1086,7 +1086,7 @@ public sealed class AppSettingsData
     /// <summary>
     /// Whether a multi-server botchat's extra embedded servers stop when the chat ends, however it ends (later on 2026-09-29,
     /// the user's ask and name; on by default); off, they keep running — a later botchat naming the same models reuses them —
-    /// until <c>/botchat --kill</c> or the app's exit. Read when the chat ends. No variable.
+    /// until <c>/botchat --kill</c> or the app's exit. Never an advisor's extra (2026-10-16), even one a bot shared. Read when the chat ends. No variable.
     /// </summary>
     public bool BotChatMultiEmbeddedKill { get; set; } = true;
 
@@ -2962,8 +2962,8 @@ public sealed class AppSettingsData
     /// <summary>
     /// What an advisor whose profile names another embedded model than the running one gets (2026-10-10, the user's call; Botchat
     /// multi-embedded's values, <see cref="App.BotChatMultiEmbedded.Names"/>): <c>parent-server</c> (the default) the running model,
-    /// with a warning; <c>multi-server</c> an extra <c>llama-server</c> of its own, kept for later calls (until the embedded switch goes off, a botchat stops
-    /// its extras, or the exit). Anything else reads as
+    /// with a warning; <c>multi-server</c> an extra <c>llama-server</c> of its own, kept for later calls until the embedded switch goes off or the exit
+    /// (since 2026-10-16 a botchat's end and <c>/botchat --kill</c> no longer stop it: the extras carry their owners, <see cref="EmbeddedLlm.ExtraOwner"/>). Anything else reads as
     /// <c>parent-server</c>. No variable.
     /// </summary>
     public string AdvisorEmbedded { get; set; } = App.BotChatMultiEmbedded.Default;

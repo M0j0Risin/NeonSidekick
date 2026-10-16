@@ -10,7 +10,8 @@ namespace NeonSidekick.EmbeddedLlm;
 /// removing, and the one server — started for a model under the settings, reused while nothing it depends on changed,
 /// stopped when another server is chosen. <see cref="EmbeddedLlmService"/> is the real one; the tests fake it. Beside it,
 /// later on 2026-09-29 (the user's ask: <c>Botchat multi-embedded</c> <c>multi-server</c>), the extra servers a botchat starts
-/// for the bots' other embedded models, one per model (<see cref="StartExtraAsync"/>, <see cref="StopExtras"/>).
+/// for the bots' other embedded models, one per model (<see cref="StartExtraAsync"/>, <see cref="StopExtras()"/>), and since
+/// 2026-10-10 an advisor's under <c>Advisor embedded mode</c> <c>multi-server</c>; each held by the <see cref="ExtraOwner"/>s using it.
 /// </summary>
 public interface IEmbeddedLlm : IAsyncDisposable
 {
@@ -54,15 +55,25 @@ public interface IEmbeddedLlm : IAsyncDisposable
     /// <summary>The extra servers running, in the order they started (later on 2026-09-29); empty when none is.</summary>
     IReadOnlyList<EmbeddedServerInfo> Extras { get; }
 
-    /// <summary>
-    /// An extra server for <paramref name="model"/> under <paramref name="effective"/> (a bot's own profile), beside the main
-    /// one: the running extra of that model whatever its launch, else one started on a host of its own. Throws
-    /// <see cref="EmbeddedLlmException"/>, <see cref="EmbeddedLlmText.NotInstalled"/> for a model not on disk.
-    /// </summary>
-    Task<EmbeddedServerInfo> StartExtraAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken);
+    /// <summary>The extra servers <paramref name="owner"/> holds (2026-10-16): the botchat glyph counts only the bots'.</summary>
+    IReadOnlyList<EmbeddedServerInfo> ExtrasOf(ExtraOwner owner);
 
-    /// <summary>Stops every extra server, never the main one; the ones that were running.</summary>
+    /// <summary>
+    /// An extra server for <paramref name="model"/> under <paramref name="effective"/> (a bot's or an advisor's own profile), beside
+    /// the main one, held for <paramref name="owner"/>: the running extra of that model whatever its launch (its owner added), else
+    /// one started on a host of its own. Throws <see cref="EmbeddedLlmException"/>, <see cref="EmbeddedLlmText.NotInstalled"/> for
+    /// a model not on disk.
+    /// </summary>
+    Task<EmbeddedServerInfo> StartExtraAsync(EmbeddedModel model, AppSettingsData effective, ExtraOwner owner, Action<string>? phase, CancellationToken cancellationToken);
+
+    /// <summary>Stops every extra server, whoever holds it, never the main one; the ones that were running.</summary>
     IReadOnlyList<EmbeddedServerInfo> StopExtras();
+
+    /// <summary>
+    /// <paramref name="owner"/> lets go of its extra servers (2026-10-16, the user's call: a botchat's end stopped an advisor's
+    /// too); the ones no other owner still holds stop. The ones that stopped.
+    /// </summary>
+    IReadOnlyList<EmbeddedServerInfo> StopExtras(ExtraOwner owner);
 
     /// <summary>Whether a start, main or extra, is in progress — the runtime's download included (2026-10-01, for the kill switch).</summary>
     bool Starting { get; }
@@ -74,6 +85,17 @@ public interface IEmbeddedLlm : IAsyncDisposable
     /// or loading; empty when there was nothing, which the screen reads as "another server: do nothing".
     /// </summary>
     IReadOnlyList<string> Kill();
+}
+
+/// <summary>
+/// Who an extra embedded server is for (2026-10-16, the user's call): a <c>multi-server</c> botchat's bots or an advisor. One
+/// model's extra may serve both; a botchat's end (<c>Botchat stop extra servers</c>) and <c>/botchat --kill</c> let go of the
+/// bots' hold only, so an advisor's server is kept for its later calls.
+/// </summary>
+public enum ExtraOwner
+{
+    BotChat,
+    Advisor,
 }
 
 /// <summary>
@@ -103,10 +125,16 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
     private readonly Func<string?, BackendChoice> _choose;
     private readonly Func<long?> _totalVram;
     private readonly Func<ILlamaServerHost> _extraHost;
-    private readonly List<(string ModelId, ILlamaServerHost Host)> _extras = [];
+    private readonly List<ExtraServer> _extras = [];
     private readonly Lock _extrasLock = new();
     private readonly SemaphoreSlim _extrasGate = new(1, 1);
     private bool _cudaFailed;
+
+    /// <summary>One model's extra host and who holds it (2026-10-16); the owners only mean something while it runs, and a start onto a stopped host begins them afresh. Under <see cref="_extrasLock"/>.</summary>
+    private sealed record ExtraServer(string ModelId, ILlamaServerHost Host)
+    {
+        public HashSet<ExtraOwner> Owners { get; } = [];
+    }
 
     // The kill switch (2026-10-01): the starts in progress, by model id, and how many kills there were — a start that saw
     // one since it began is the kill's, whatever it then threw.
@@ -201,7 +229,15 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
         }
     }
 
-    public async Task<EmbeddedServerInfo> StartExtraAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    public IReadOnlyList<EmbeddedServerInfo> ExtrasOf(ExtraOwner owner)
+    {
+        lock (_extrasLock)
+        {
+            return _extras.Where(e => e.Owners.Contains(owner)).Select(e => e.Host.Running).OfType<EmbeddedServerInfo>().ToList();
+        }
+    }
+
+    public async Task<EmbeddedServerInfo> StartExtraAsync(EmbeddedModel model, AppSettingsData effective, ExtraOwner owner, Action<string>? phase, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(effective);
@@ -213,24 +249,33 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
         await _extrasGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            ILlamaServerHost host;
+            ExtraServer extra;
             lock (_extrasLock)
             {
                 var known = _extras.FirstOrDefault(e => string.Equals(e.ModelId, model.Id, StringComparison.OrdinalIgnoreCase));
-                if (known.Host?.Running is { } up)
+                if (known?.Host.Running is { } up)
                 {
-                    return up;   // a second bot on the model, or a later botchat: the running extra, whatever its launch
+                    known.Owners.Add(owner);
+                    return up;   // a second bot on the model, a later botchat or an advisor: the running extra, whatever its launch
                 }
 
-                host = known.Host ?? _extraHost();
-                if (known.Host is null)
+                extra = known ?? new ExtraServer(model.Id, _extraHost());
+                if (known is null)
                 {
-                    _extras.Add((model.Id, host));
+                    _extras.Add(extra);
                 }
+
+                extra.Owners.Clear();   // stopped since (the kill switch, a removal, a crash): whoever held it then holds it no more
             }
 
-            DiagnosticLog.Info(Category, $"Starting an extra llama-server for {model.Id} (a multi-server botchat).");
-            return await StartOnHostAsync(host, model, effective, phase, cancellationToken).ConfigureAwait(false);
+            DiagnosticLog.Info(Category, $"Starting an extra llama-server for {model.Id} ({(owner == ExtraOwner.Advisor ? "an advisor" : "a multi-server botchat")}).");
+            var info = await StartOnHostAsync(extra.Host, model, effective, phase, cancellationToken).ConfigureAwait(false);
+            lock (_extrasLock)
+            {
+                extra.Owners.Add(owner);
+            }
+
+            return info;
         }
         finally
         {
@@ -238,7 +283,12 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
         }
     }
 
-    public IReadOnlyList<EmbeddedServerInfo> StopExtras()
+    public IReadOnlyList<EmbeddedServerInfo> StopExtras() => StopExtrasWhere(null);
+
+    public IReadOnlyList<EmbeddedServerInfo> StopExtras(ExtraOwner owner) => StopExtrasWhere(owner);
+
+    /// <summary>Every extra with <paramref name="owner"/> null; else <paramref name="owner"/>'s hold dropped and the ones nobody holds now stopped.</summary>
+    private List<EmbeddedServerInfo> StopExtrasWhere(ExtraOwner? owner)
     {
         var stopped = new List<EmbeddedServerInfo>();
         _extrasGate.Wait();
@@ -247,7 +297,17 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
             List<ILlamaServerHost> hosts;
             lock (_extrasLock)
             {
-                hosts = _extras.Select(e => e.Host).ToList();
+                hosts = [];
+                foreach (var extra in _extras)
+                {
+                    if (owner is { } one && !(extra.Owners.Remove(one) && extra.Owners.Count == 0))
+                    {
+                        continue;   // not this owner's, or another still holds it
+                    }
+
+                    extra.Owners.Clear();
+                    hosts.Add(extra.Host);
+                }
             }
 
             foreach (var host in hosts)

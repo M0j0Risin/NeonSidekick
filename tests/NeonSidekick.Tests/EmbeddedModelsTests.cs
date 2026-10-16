@@ -460,8 +460,8 @@ public class EmbeddedModelsTests : IDisposable
         });
         await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None);
 
-        var extra = await service.StartExtraAsync(_model, new AppSettingsData { EmbeddedContextSize = 4096, EmbeddedVramBudget = 90 }, null, CancellationToken.None);
-        var again = await service.StartExtraAsync(_model, new AppSettingsData { EmbeddedContextSize = 8192 }, null, CancellationToken.None);
+        var extra = await service.StartExtraAsync(_model, new AppSettingsData { EmbeddedContextSize = 4096, EmbeddedVramBudget = 90 }, ExtraOwner.BotChat, null, CancellationToken.None);
+        var again = await service.StartExtraAsync(_model, new AppSettingsData { EmbeddedContextSize = 8192 }, ExtraOwner.BotChat, null, CancellationToken.None);
 
         var host = Assert.Single(hosts);
         Assert.Equal(59990, extra.Port);
@@ -478,12 +478,48 @@ public class EmbeddedModelsTests : IDisposable
         Assert.Empty(service.Extras);
         Assert.Empty(service.StopExtras());
         Assert.NotNull(service.Running);
-        await service.StartExtraAsync(_model, new AppSettingsData(), null, CancellationToken.None);
+        await service.StartExtraAsync(_model, new AppSettingsData(), ExtraOwner.BotChat, null, CancellationToken.None);
         Assert.Single(hosts);   // the stopped host is started again, not a new one
         service.Remove(_model);
         Assert.Empty(service.Extras);
         await service.DisposeAsync();
         Assert.True(host.Disposed);
+    }
+
+    [Fact]
+    public async Task StopExtras_ForAnOwner_StopsOnlyWhatNoOtherOwnerHolds()
+    {
+        // 2026-10-16 (the user's call): a botchat's end stopped an advisor's extra too. Now each owner lets go of its own hold.
+        InstallByHand();
+        var hosts = new List<FakeLlamaServerHost>();
+        await using var service = new EmbeddedLlmService(_files, new FakeLlamaServerHost(), Cuda, () => 8L << 30, () =>
+        {
+            var host = new FakeLlamaServerHost { Port = 59990 - hosts.Count };
+            hosts.Add(host);
+            return host;
+        });
+
+        await service.StartExtraAsync(_model, new AppSettingsData(), ExtraOwner.Advisor, null, CancellationToken.None);
+        Assert.Empty(service.StopExtras(ExtraOwner.BotChat));   // the bots never held it
+        Assert.Single(service.ExtrasOf(ExtraOwner.Advisor));
+        Assert.Empty(service.ExtrasOf(ExtraOwner.BotChat));
+
+        await service.StartExtraAsync(_model, new AppSettingsData(), ExtraOwner.BotChat, null, CancellationToken.None);   // a bot on the same model shares it
+        Assert.Single(hosts);
+        Assert.Single(service.ExtrasOf(ExtraOwner.BotChat));
+        Assert.Empty(service.StopExtras(ExtraOwner.BotChat));   // the advisor still holds it
+        Assert.Single(service.Extras);
+        Assert.Empty(service.ExtrasOf(ExtraOwner.BotChat));
+
+        Assert.Equal("tiny-model", Assert.Single(service.StopExtras(ExtraOwner.Advisor)).ModelId);   // the last hold gone: it stops
+        Assert.Empty(service.Extras);
+
+        // A start after a stop holds it for the new owner alone; the plain StopExtras (the switch off) stops it whoever holds it.
+        await service.StartExtraAsync(_model, new AppSettingsData(), ExtraOwner.BotChat, null, CancellationToken.None);
+        Assert.Empty(service.ExtrasOf(ExtraOwner.Advisor));
+        await service.StartExtraAsync(_model, new AppSettingsData(), ExtraOwner.Advisor, null, CancellationToken.None);
+        Assert.Single(service.StopExtras());
+        Assert.Empty(service.Extras);
     }
 
     [Fact]
@@ -496,7 +532,7 @@ public class EmbeddedModelsTests : IDisposable
             return new FakeLlamaServerHost();
         });
 
-        await Assert.ThrowsAsync<EmbeddedLlmException>(() => service.StartExtraAsync(_model, new AppSettingsData(), null, CancellationToken.None));
+        await Assert.ThrowsAsync<EmbeddedLlmException>(() => service.StartExtraAsync(_model, new AppSettingsData(), ExtraOwner.BotChat, null, CancellationToken.None));
         Assert.Equal(0, made);
     }
 
@@ -722,7 +758,7 @@ public class EmbeddedModelsTests : IDisposable
             return host;
         });
         await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None);
-        await service.StartExtraAsync(_model, new AppSettingsData(), null, CancellationToken.None);
+        await service.StartExtraAsync(_model, new AppSettingsData(), ExtraOwner.BotChat, null, CancellationToken.None);
 
         Assert.Equal(["tiny-model"], service.Kill());
 
@@ -730,7 +766,7 @@ public class EmbeddedModelsTests : IDisposable
         Assert.Empty(service.Extras);
         Assert.Equal((1, 1), (main.Kills, hosts.Single().Kills));
         Assert.Equal(0, main.Stops);
-        await service.StartExtraAsync(_model, new AppSettingsData(), null, CancellationToken.None);
+        await service.StartExtraAsync(_model, new AppSettingsData(), ExtraOwner.BotChat, null, CancellationToken.None);
         Assert.Single(hosts);
     }
 

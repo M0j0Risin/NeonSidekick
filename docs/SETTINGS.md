@@ -85,7 +85,7 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 |---|---|---|
 | Botchat LLM mode | `single`: every bot uses this profile's server, model and reasoning. `multi`: each bot uses its own profile's server, model and reasoning (a blank URL borrows this profile's server). | `single` |
 | Botchat embedded mode | Under `multi`, for bots that want another embedded model. `parent-server`: they share the running model. `multi-server`: one extra `llama-server` per model (more memory). | `parent-server` |
-| Botchat stop extra servers | Stops the `multi-server` extras when the chat ends. Off, they run until `/botchat --kill` or you quit. | on |
+| Botchat stop extra servers | Stops the bots' `multi-server` extras when the chat ends (never an advisor's). Off, they run until `/botchat --kill` or you quit. | on |
 | Botchat ComfyUI enabled | Gives the bots this profile's *ComfyUI workflows offered* for pictures. Needs *ComfyUI tools* and a *ComfyUI URL*. | off |
 | Botchat ComfyUI limited workflows | With *Botchat ComfyUI enabled* off, the workflows the bots get (a checklist). None ticked: no pictures. | none |
 | Botchat image mode | `automatic`: the app writes a prompt from each reply and draws it. `autonomous`: the bots get `generate_image` and draw when they choose. See [Botchat pictures](#botchat-pictures). | `automatic` |

@@ -56,7 +56,13 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
 
     private readonly List<EmbeddedServerInfo> _extras = new();
 
+    // Who holds each running extra, by model id (2026-10-16), as the real service keeps it.
+    private readonly Dictionary<string, HashSet<ExtraOwner>> _owners = new(StringComparer.OrdinalIgnoreCase);
+
     public IReadOnlyList<EmbeddedServerInfo> Extras => _extras.ToList();
+
+    public IReadOnlyList<EmbeddedServerInfo> ExtrasOf(ExtraOwner owner) =>
+        _extras.Where(e => _owners.TryGetValue(e.ModelId, out var held) && held.Contains(owner)).ToList();
 
     public List<string> ExtraStarts { get; } = new();
 
@@ -141,7 +147,7 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
         return Running;
     }
 
-    public async Task<EmbeddedServerInfo> StartExtraAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    public async Task<EmbeddedServerInfo> StartExtraAsync(EmbeddedModel model, AppSettingsData effective, ExtraOwner owner, Action<string>? phase, CancellationToken cancellationToken)
     {
         if (!State(model).IsInstalled)
         {
@@ -150,6 +156,7 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
 
         if (_extras.FirstOrDefault(e => string.Equals(e.ModelId, model.Id, StringComparison.OrdinalIgnoreCase)) is { } up)
         {
+            _owners[model.Id].Add(owner);
             return up;
         }
 
@@ -165,6 +172,7 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
         int n = ExtraStarts.Count;
         var info = new EmbeddedServerInfo(ExtraUrl(n), Port - n, "extra-key-" + n, LlamaBackend.Cuda, model.Id, effective.EmbeddedVision);
         _extras.Add(info);
+        _owners[model.Id] = [owner];
         return info;
     }
 
@@ -173,6 +181,20 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
         var stopped = _extras.ToList();
         ExtraStops += stopped.Count;
         _extras.Clear();
+        _owners.Clear();
+        return stopped;
+    }
+
+    public IReadOnlyList<EmbeddedServerInfo> StopExtras(ExtraOwner owner)
+    {
+        var stopped = _extras.Where(e => _owners.TryGetValue(e.ModelId, out var held) && held.Remove(owner) && held.Count == 0).ToList();
+        ExtraStops += stopped.Count;
+        foreach (var info in stopped)
+        {
+            _extras.Remove(info);
+            _owners.Remove(info.ModelId);
+        }
+
         return stopped;
     }
 

@@ -8,7 +8,8 @@ namespace NeonSidekick.App;
 /// <summary>
 /// The app's <see cref="IAdvisorHost"/> (2026-10-10, the profile advisors): an advisor's profile read off disk without loading it
 /// (<see cref="Profiles.ReadProfileFile"/>, its <c>persona.md</c>), and its link made by the session the way a <c>/botchat</c> bot's is
-/// (<see cref="LlmSession.LinkAsync(AppSettingsData, BotEmbeddedMode, CancellationToken)"/>) under <c>Advisor embedded mode</c>.
+/// (<see cref="LlmSession.LinkAsync(AppSettingsData, BotEmbeddedMode, ExtraOwner, CancellationToken)"/>) under <c>Advisor embedded mode</c>,
+/// an extra embedded server held as <see cref="ExtraOwner.Advisor"/>'s (2026-10-16: a botchat's end no longer stops it).
 /// A link is kept for the advisor's later calls while the session's server, the advisor's <c>profile.json</c> and the mode are
 /// as they were; otherwise, or after <see cref="Forget"/>, it is disposed and made again. Disposed with the screen (or headless).
 /// An advisor on the Claude Code server runs its turns with the tools under its thread's conversation, on a <c>claude</c> process
@@ -69,7 +70,7 @@ internal sealed class AdvisorHost : IAdvisorHost, IDisposable
         }
 
         stale?.Link.Dispose();
-        var (link, problem) = await _session.LinkAsync(profile.Settings, mode, cancellationToken).ConfigureAwait(false);
+        var (link, problem) = await _session.LinkAsync(profile.Settings, mode, ExtraOwner.Advisor, cancellationToken).ConfigureAwait(false);
         if (link is null)
         {
             return (null, problem);

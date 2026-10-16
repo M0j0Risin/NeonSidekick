@@ -242,7 +242,7 @@ internal sealed class LlmSession : IDisposable
 
         if (!effective.EmbeddedLlmServer)
         {
-            _embedded?.StopExtras();   // the switch off (later on 2026-09-29): a multi-server botchat's extras go too
+            _embedded?.StopExtras();   // the switch off (later on 2026-09-29): a multi-server botchat's extras go too, and an advisor's
         }
 
         if (docker)
@@ -797,14 +797,15 @@ internal sealed class LlmSession : IDisposable
     /// the chat out (the user's call). Its model is the profile's, else the first its server lists. The caller disposes the link.
     /// </summary>
     public Task<(BotLink? Link, string? Problem)> LinkAsync(AppSettingsData profile, CancellationToken cancellationToken) =>
-        LinkAsync(profile, BotEmbeddedMode.ParentServer, cancellationToken);
+        LinkAsync(profile, BotEmbeddedMode.ParentServer, ExtraOwner.BotChat, cancellationToken);
 
     /// <summary>
     /// <see cref="LinkAsync(AppSettingsData, CancellationToken)"/> under <c>Botchat multi-embedded</c> (later on 2026-09-29, the
     /// user's ask): <paramref name="embeddedMode"/> says what a bot naming another embedded model than the running one gets —
-    /// the running one, with <see cref="BotLink.SharedEmbedded"/> set for the warning, or an extra server of its own.
+    /// the running one, with <see cref="BotLink.SharedEmbedded"/> set for the warning, or an extra server of its own, held for
+    /// <paramref name="owner"/> (2026-10-16: a botchat's end lets go of the bots' extras only, never an advisor's).
     /// </summary>
-    public async Task<(BotLink? Link, string? Problem)> LinkAsync(AppSettingsData profile, BotEmbeddedMode embeddedMode, CancellationToken cancellationToken)
+    public async Task<(BotLink? Link, string? Problem)> LinkAsync(AppSettingsData profile, BotEmbeddedMode embeddedMode, ExtraOwner owner, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(profile);
         (string Wanted, string Running)? shared = null;
@@ -863,7 +864,7 @@ internal sealed class LlmSession : IDisposable
         }
         else if (EmbeddedEndpoint.IsEmbedded(profile.LlmUrl))
         {
-            var (embedded, problem, sharing) = await LinkEmbeddedAsync(profile, model, embeddedMode, cancellationToken).ConfigureAwait(false);
+            var (embedded, problem, sharing) = await LinkEmbeddedAsync(profile, model, embeddedMode, owner, cancellationToken).ConfigureAwait(false);
             if (embedded is null)
             {
                 return (null, problem);
@@ -914,7 +915,7 @@ internal sealed class LlmSession : IDisposable
     /// <see cref="BotEmbeddedMode.MultiServer"/> an extra server of its own (<see cref="IEmbeddedLlm.StartExtraAsync"/>). One
     /// link at a time (<see cref="_embeddedLinks"/>), so under parent-server the first embedded bot's model is the one that starts.
     /// </summary>
-    private async Task<(LlmEndpoint? Endpoint, string? Problem, (string Wanted, string Running)? Shared)> LinkEmbeddedAsync(AppSettingsData profile, string? model, BotEmbeddedMode mode, CancellationToken cancellationToken)
+    private async Task<(LlmEndpoint? Endpoint, string? Problem, (string Wanted, string Running)? Shared)> LinkEmbeddedAsync(AppSettingsData profile, string? model, BotEmbeddedMode mode, ExtraOwner owner, CancellationToken cancellationToken)
     {
         if (_embedded is null || !EmbeddedEndpoint.Offered)
         {
@@ -952,7 +953,7 @@ internal sealed class LlmSession : IDisposable
             try
             {
                 var info = mode == BotEmbeddedMode.MultiServer
-                    ? await _embedded.StartExtraAsync(wanted, profile, null, cancellationToken).ConfigureAwait(false)
+                    ? await _embedded.StartExtraAsync(wanted, profile, owner, null, cancellationToken).ConfigureAwait(false)
                     : await _embedded.StartAsync(wanted, profile, null, cancellationToken).ConfigureAwait(false);
                 return (EmbeddedEndpointOf(info), null, null);
             }

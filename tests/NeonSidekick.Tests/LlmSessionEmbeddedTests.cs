@@ -393,9 +393,9 @@ public class LlmSessionEmbeddedTests
         await session.ConnectAsync(Embedded("gemma-4-e2b"), CancellationToken.None);
 
         var links = await Task.WhenAll(
-            session.LinkAsync(Embedded("gemma-4-e4b-qat"), BotEmbeddedMode.MultiServer, CancellationToken.None),
-            session.LinkAsync(Embedded("gemma-4-e4b-qat"), BotEmbeddedMode.MultiServer, CancellationToken.None),
-            session.LinkAsync(Embedded("gemma-4-e2b"), BotEmbeddedMode.MultiServer, CancellationToken.None));
+            session.LinkAsync(Embedded("gemma-4-e4b-qat"), BotEmbeddedMode.MultiServer, ExtraOwner.BotChat, CancellationToken.None),
+            session.LinkAsync(Embedded("gemma-4-e4b-qat"), BotEmbeddedMode.MultiServer, ExtraOwner.BotChat, CancellationToken.None),
+            session.LinkAsync(Embedded("gemma-4-e2b"), BotEmbeddedMode.MultiServer, ExtraOwner.BotChat, CancellationToken.None));
 
         Assert.Equal(["gemma-4-e4b-qat"], _embedded.ExtraStarts);   // one extra for the two bots on it
         Assert.Equal(FakeEmbeddedLlm.ExtraUrl(1), links[0].Link!.Endpoint.LiveUrl);
@@ -415,14 +415,15 @@ public class LlmSessionEmbeddedTests
         using var session = Session();
         await session.ConnectAsync(Embedded("gemma-4-e2b"), CancellationToken.None);
 
-        var (good, _) = await session.LinkAsync(Embedded("gemma-4-e4b"), BotEmbeddedMode.MultiServer, CancellationToken.None);
+        // An advisor's extra (2026-10-16: held as the advisor's, which only the switch, the kill switch or the exit stops).
+        var (good, _) = await session.LinkAsync(Embedded("gemma-4-e4b"), BotEmbeddedMode.MultiServer, ExtraOwner.Advisor, CancellationToken.None);
         _embedded.ExtraStartFailure = "out of memory";
-        var (none, problem) = await session.LinkAsync(Embedded("gemma-4-e4b-qat"), BotEmbeddedMode.MultiServer, CancellationToken.None);
+        var (none, problem) = await session.LinkAsync(Embedded("gemma-4-e4b-qat"), BotEmbeddedMode.MultiServer, ExtraOwner.BotChat, CancellationToken.None);
 
         Assert.NotNull(good);
         Assert.Null(none);
         Assert.Equal(EmbeddedLlmText.StartFailed("out of memory"), problem);
-        Assert.Single(_embedded.Extras);
+        Assert.Equal("gemma-4-e4b", Assert.Single(_embedded.ExtrasOf(ExtraOwner.Advisor)).ModelId);
 
         await session.ConnectAsync(new AppSettingsData { EmbeddedLlmServer = false }, CancellationToken.None);
         Assert.Empty(_embedded.Extras);
