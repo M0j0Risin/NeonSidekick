@@ -118,7 +118,7 @@ docker run \
 
 ## Qwen3.8 27B without a drafter
 
-No drafter leaves room for the full 262k context.
+Without a drafter, there's room for the full 262k context.
 
 ```bash
 docker run \

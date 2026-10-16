@@ -37,7 +37,7 @@ From top to bottom:
 ## The input line
 
 * **Editing**, even during a reply: ←/→, Home/End (again for the whole message), Ctrl+←/→ by word, Shift to select. Ctrl+Backspace and Ctrl+Delete delete a word (Option+Delete on a Mac).
-* **Enter** sends; Ctrl+Enter starts a new line. ↑/↓ walk earlier messages and move through a wrapped draft.
+* **Enter** sends; Ctrl+Enter starts a new line. ↑/↓ step through earlier messages and move through a wrapped draft.
 * **Copy and paste:** Ctrl+A or a drag selects, Ctrl+C copies, Ctrl+X cuts. A right-click or Alt+V pastes, pictures too.
 * **Ctrl+C** with nothing selected stops the speech, else cancels the reply; twice at an idle line, it exits.
 * **Lists:** `/` commands, `@` files, `#` skills, `$` tools, `%` database connections, `^` ComfyUI workflows, `*` UNC shares. They work inside a command's text too, except in `/read`, `/view`, `/print` and `/pdf`. See [Completion lists](#completion-lists).
@@ -51,10 +51,10 @@ From top to bottom:
 ### Pasting a picture or a PDF
 
 * A right-click or Alt+V puts a copied picture on the line as `[Image #n]`; so does Ctrl+V where the terminal passes it (Windows Terminal keeps Ctrl+V for text). With no picture, the text is pasted.
-* Sent, the picture is saved in *Pasted images folder* under the profile's `images` folder, and the model gets its path.
+* Once sent, the picture is saved in *Pasted images folder* under the profile's `images` folder, and the model gets its path.
 * **A PDF** dropped on the line (or its path pasted) is attached as `[PDF #n report.pdf]`; on a `/command` line it stays its path. Its text is read in the background with your browser; sending waits for it under *Reading the attached PDF*, and ESC there keeps the draft.
-  * The Anthropic and OpenAI APIs get the PDF itself (Anthropic reads 100 pages at most; a longer one is warned of). Other servers get its text, its first 100 pages: a scan or a locked PDF is refused there, and a text longer than half the model's window is cut, the rest left to `read_pdf`.
-  * The line's pictures and PDFs together may come to *LLM max images (MB)*. The model gets the PDF's path in the sent text, and a saved session keeps its text, not the file.
+  * The Anthropic and OpenAI APIs get the PDF itself (Anthropic reads 100 pages at most; you're warned about a longer one). Other servers get its text, its first 100 pages: a scan or a locked PDF is refused there, and a text longer than half the model's context window is cut, the rest left to `read_pdf`.
+  * The line's pictures and PDFs together may total at most *LLM max images (MB)*. The model gets the PDF's path in the sent text, and a saved session keeps its text, not the file.
 * **On a Mac** Cmd+V pastes text only; use Ctrl+V, Option+V (with Option as Meta) or a right-click. A picture or PDF file copied in Finder is attached by name.
 
 ### Completion lists
@@ -68,12 +68,12 @@ A list opens over the input line as you type `/` at the start, a command's argum
 ## Panes
 
 * **Keys:** ←/→ switch tabs, ↑/↓ move, Enter edits or toggles, Space flips an on/off row, ESC closes or goes back a page.
-* **Second row of tabs** (`/settings`, `/tools`, `/skills`' Offered, `/mcp`'s Tools): ←/→ walk every one into the next tab; Tab and Shift+Tab jump a whole tab.
+* **Second row of tabs** (`/settings`, `/tools`, `/skills`' Offered, `/mcp`'s Tools): ←/→ step through each sub-tab and on into the next tab; Tab and Shift+Tab jump a whole tab.
 * **Under the list:** the row's description and default. A number after a tab's name (`Client³`) counts its settings changed from the default.
 * **Height:** a pane keeps its height while it opens a value picker, a yes/no, a folder browse or details, so its title stays put; a taller details page gives the height back when it closes.
 * **Type to filter** on `/sessions`, `/server`, `/model`, `/docker`, the saved lists, the allowed commands and the Offered tabs; the first ESC clears it. Where a pane has lettered buttons, a letter presses its button and Shift+letter starts a filter. A paste (Ctrl+V or a right-click) adds its first line, up to 40 characters.
-* **Find** on the read-only panes (`/help`, `/sys`, `/about`, `/tree`, `/docker logs`…): type to mark every match; Enter or F3 goes to the next, Shift+Enter or Shift+F3 back (Shift+F3 on a Mac). A paste (Ctrl+V or a right-click) adds its first line, up to 40 characters.
-* **Asking first:** a remove asks, with No on the cursor; `y` or `n` answers.
+* **Find** on the read-only panes (`/help`, `/sys`, `/about`, `/tree`, `/docker logs`…): type to mark every match; Enter or F3 goes to the next, Shift+Enter or Shift+F3 back (Shift+F3 on a Mac). Where the pane has lettered buttons (`/webui`, an `/ad` card, `/help`'s key check), a letter presses its button and Shift+letter starts the find. A paste (Ctrl+V or a right-click) adds its first line, up to 40 characters.
+* **Asking first:** removing something asks first, with No highlighted; `y` or `n` answers.
 * **Mouse:** a click moves the cursor, a double-click picks a row or tab. A click on the `▲▼` row under a long list pages up (`▲`) or down (`▼`). On the input line a double-click selects a word, on the `›` the whole draft. The × at the top right is ESC; a double-click outside a pane closes it.
 * **On a Mac**, to select terminal text with the mouse, hold Fn (Terminal.app) or Option (iTerm2), or toggle the app's mouse with Cmd+R in Terminal.app.
 
@@ -89,17 +89,17 @@ In every list ↑/↓ move, Enter or a double-click picks, ESC closes; key lette
 | `/rewind` | Enter rewinds to before the message |
 | `/sessions` | Enter opens · type to filter |
 | `/find` | type to find · a paste or right-click adds its first line · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · ESC or a double-click outside done |
-| Info panes (`/help`, `/sys`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find · ESC closes |
+| Info panes (`/help`, `/sys`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find (Shift+letter where the pane has lettered buttons) · ESC closes |
 | **Saved lists** | |
 | `/eventlog` | ←/→ logs · Enter opens the event (`c` copy, `a` ask, ESC back to the list) · `r` refresh · `m` more · `c` computer · type to filter, Shift+letter to start one with a button's letter |
 | `/services` | ←/→ states · Enter opens the service (`c` copy, `a` ask, and on a readwrite computer `s` start, `x` stop, `r` restart, `t` start type, each asking) · `r` refresh · `c` computer · type to filter |
 | `/tasks` | ←/→ states · Enter opens the task (`c` copy, `a` ask, `h` history, and as allowed `r` run, `e` end, `n` enable, `d` disable, each asking) · `r` refresh · `c` computer · `f` folder · `w` Windows' own · type to filter |
-| `/ad` card | `c` copy · `a` ask · on a locked user, **Search 4740** opens the PDC emulator's lockout events on `/eventlog` |
+| `/ad` card | Columns under a dim header row, the long ones cut to the pane · a double-click on a row (a member, a result, a group, the manager or owner) opens that object's card, ESC goes back to the one before · `c` copy (the whole card, nothing cut) · `a` ask · on a group, `n` nested or direct, `u` users only or all · on a locked user, **Search 4740** opens the PDC emulator's lockout events on `/eventlog` · a name several accounts share opens as a card of them · Shift+letter starts a find |
 | `/youtube list` | Enter plays |
 | `/youtube <words>`, `/youtube playlist` | Enter plays · `s` saves the video |
 | `/prompts` | Enter puts the prompt on the draft line · `a` add · `s` save the draft · `e` edit (a long one in the draft editor) |
 | `/browser list` | Enter opens in the [Browser window](#the-browser-window) · `a` add · `n` name · `e` address |
-| All three | `d` or Delete removes (asks) · `c` clears all (asks) · Shift+↑/↓, Shift+Home/End move · type to filter |
+| `/youtube list`, `/prompts`, `/browser list` | `d` or Delete removes (asks) · `c` clears all (asks) · Shift+↑/↓, Shift+Home/End move · type to filter |
 | **Tools and safety** | |
 | `/tools shell` | `c` the allowed commands · `p` the police |
 | `/tools shell allowed` | Enter removes (asks) · `p` steps *Shell command policy* (yolo asks; a no goes on to off) · type to filter |
@@ -132,15 +132,15 @@ In every list ↑/↓ move, Enter or a double-click picks, ESC closes; key lette
 
 ### The event log pane
 
-`/eventlog` shows a computer's events newest first, a tab per log (Application, System, Security, Setup, and the one you named). Each row is the time, a level glyph (◆ critical, ● error, ▲ warning, ○ information; ✗ and ✓ for Security's audit failures and successes), the provider, the id and the message's first line; a dim line marks each new day. A tab reads "(no access)" once Windows refused it. The title row's `⟳ refresh`, `more` (lit while there is a next page) and `computer` (with more than one ticked) are buttons. An event's page shows everything Windows recorded, its XML too, as plain text: nothing an event holds is read as markup or a terminal code.
+`/eventlog` shows a computer's events newest first, a tab per log (Application, System, Security, Setup, and the one you named). Each row is the time, a level icon (◆ critical, ● error, ▲ warning, ○ information; ✗ and ✓ for Security's audit failures and successes), the provider, the id and the message's first line; a dim line marks each new day. A tab reads "(no access)" once Windows refused it. The title row's `⟳ refresh`, `more` (lit while there is a next page) and `computer` (with more than one ticked) are buttons. An event's page shows everything Windows recorded, its XML too, as plain text: nothing an event holds is read as markup or a terminal code.
 
 ### The services and tasks panes
 
-`/services` lists a computer's services a row each (name, display name, state, a failure's exit code), a tab per state. `/tasks` lists its scheduled tasks (path, state, last run and result, next run), Windows' own under `\Microsoft\` hidden until `w`. Enter opens one whole, with the actions its computer allows as buttons; each asks on a yes/no pane first, and a refusal (protected, a driver, privileged, not in `control`) says why. Times are the computer's own clock.
+`/services` lists a computer's services a row each (name, display name, state, a failure's exit code), a tab per state. `/tasks` lists its scheduled tasks (path, state, last run and result, next run), Windows' own under `\Microsoft\` hidden until `w`. Enter opens one whole, with the actions its computer allows as buttons; each asks you first, and a refusal (protected, a driver, privileged, not in `control`) says why. Times are the computer's own clock.
 
 ### Folder picker
 
-`/cwd browse` and the *Working directory (cwd)* and *Obsidian vault* rows open a folder tree. `⌂ profile` (the profile's `files` folder) and `▣ images` sit above the drives. Space, → and ← open and close folders (so does a click on a folder's glyph), `-` collapses all, and Enter or a double-click on a name chooses.
+`/cwd browse` and the *Working directory (cwd)* and *Obsidian vault* rows open a folder tree. `⌂ profile` (the profile's `files` folder) and `▣ images` sit above the drives. Space, → and ← open and close folders (so does a click on a folder's icon), `-` collapses all, and Enter or a double-click on a name chooses.
 
 ### File browser
 
@@ -214,12 +214,12 @@ In a pane over a reply, rows that would disturb it (a reconnect, the profile, th
 
 ## The hints bar
 
-The keys that apply just now, on a row of their own over the status bar (*Hints bar*). It shows one hint at a time, the first of:
+The keys that apply right now, on a row of their own over the status bar (*Hints bar*). It shows one hint at a time, the first of:
 
 1. The kill switch's warning (Ctrl+Alt+X, press again to unload).
 2. A waiting second press: Ctrl+C to exit, ESC to rewind, Delete for a splash picture.
 3. An open pane's keys.
-4. What the arrows do just now: the splash's pages, the picture strip, `/read`'s keys.
+4. What the arrows do right now: the splash's pages, the picture strip, `/read`'s keys.
 
 * **auto** (the default): the bar takes a row when a hint comes and keeps it, blank, until you send, a reply ends, a pane opens or closes, the window is resized, or 10 seconds pass with no hint and no key. Typing never moves the input line.
 * **always** keeps the row; **off** puts the hints back at the end of the status bar's left group.
@@ -231,7 +231,7 @@ The keys that apply just now, on a row of their own over the status bar (*Hints 
 The row under the hints bar (*Status bar*). [Bar checklists](#bar-checklists) moves and pins its sections:
 
 * **Left by default:** **Status** (🔊 🎤 👂 ✋, 🧠, 🏷️…), **Spinner** (during a reply, with its clock and **esc to stop**; always on), **Queued**, **Timers**, **Reading** (`/read`, `/echo`) and **Usage** (context and tokens).
-* **Right by default:** **Model** (name and reasoning glyph) and **Working directory** (off by default).
+* **Right by default:** **Model** (name and reasoning icon) and **Working directory** (off by default).
 * During a reply the busy row keeps the same sides.
 * **Narrow window:** the model's name and the path shrink, then go; then the right group gives way, then the left. The spinner goes last.
 * **Background setups** (an embedded model's download, MCP servers connecting, the voice models' first load) show 📥, 🔌, 🎙️ or 🔈 while the input line stays yours.
@@ -239,7 +239,7 @@ The row under the hints bar (*Status bar*). [Bar checklists](#bar-checklists) mo
 | Double-click | Does |
 |---|---|
 | the model name | `/server` |
-| the reasoning glyph | `/reasoning` |
+| the reasoning icon | `/reasoning` |
 | the working directory | `/cwd browse` |
 | the tokens or spinner | `/usage` |
 | 🖼️/🎨 (ComfyUI rendering) | cancels the pictures; the reply goes on |
@@ -253,32 +253,32 @@ The row under the hints bar (*Status bar*). [Bar checklists](#bar-checklists) mo
 
 ## The toolbar
 
-Glyphs under the status bar (*Tool bar*), each shown while it is checked there. A click says what a glyph is; a double-click or a right-click opens it. A tool group that is off sits on a dark slab.
+Icons under the status bar (*Tool bar*), each shown while it is checked there. A click says what an icon is; a double-click or a right-click opens it. A tool group that is off shows on a dark background.
 
 | Toolbar item | Shown | Opens |
 |---|---|---|
 | ⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 | always | `/settings`, `/profile`, `/theme`, `/tools`, `/mcp`, `/skills`, `/sys`, `/sessions`, `/usage` |
-| 📱 | slab while *Web UI* is off | `/webui` (after 🧮) |
-| 💾 | slab while *Memory mode* is `off` | `/memory` |
+| 📱 | dark background while *Web UI* is off | `/webui` (after 🧮) |
+| 💾 | dark background while *Memory mode* is `off` | `/memory` |
 | 📣 | always | `/prompts` |
-| ⏳ | slab while *Queue mode* is `off` | `/queue` |
-| 🙋 | slab while *Ask user* is off | `/tools ask` |
+| ⏳ | dark background while *Queue mode* is `off` | `/queue` |
+| 🙋 | dark background while *Ask user* is off | `/tools ask` |
 | 🔒 / 🔓 | *Shell command policy* `ask` / `yolo` (none under `off`) | `/tools shell allowed` |
 | 👮 / 🥷 | *Shell police* on / off (none while the policy is `off`) | `/tools shell police` |
-| 🐚 | slab under `off` | `/tools shell` |
-| 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | slab while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` |
-| 🪵 | slab while off, and always off Windows | `/tools eventlog` |
-| 📡 | slab while off | `/tools network` |
-| 🧩 📅 🏢 | slab while off, and always off Windows | `/tools services`, `tasks`, `directory` |
+| 🐚 | dark background under `off` | `/tools shell` |
+| 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | dark background while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` |
+| 🪵 | dark background while off, and always off Windows | `/tools eventlog` |
+| 📡 | dark background while off | `/tools network` |
+| 🧩 📅 🏢 | dark background while off, and always off Windows | `/tools services`, `tasks`, `directory` |
 | 📄 ⚡ | always | the [log window](#the-log-window); `/process` |
 | 🎞️ 🪟 | always | the [picture viewer](#the-picture-viewer); the [thumbnail browser](#the-thumbnail-browser) (ComfyUI's folder) |
 | 📺 ⭐ 🛒 | always | `/youtube list`, `/browser list`, `/shopping` |
 | the working directory (`~` for your user folder) | pinned right | `/cwd browse` |
-| **Model name** and its glyph | pinned right, with a server connected | `/server`; the glyph `/reasoning` |
+| **Model name** and its icon | pinned right, with a server connected | `/server`; the icon `/reasoning` |
 | blank space | — | `/settings` |
 
 * **Dividers** (`│`) show only between two visible items ([Bar checklists](#bar-checklists)).
-* **Narrow window:** the glyphs come first; the model name and the path shrink, then go; then items drop from the right group, then the left.
+* **Narrow window:** the icons come first; the model name and the path shrink, then go; then items drop from the right group, then the left.
 
 ## The performance bar
 
@@ -299,7 +299,7 @@ Chips for Home Assistant rooms and devices and the shopping list (*Home bar*); s
 * **🛒 n** counts the shopping lines still to get; it needs no Home Assistant and opens `/shopping`.
 * **Clicks:** a click shows a chip's state. A double-click acts: toggles a light, switch or fan, turns a room's lights off (or on), runs a scene, plays or pauses, closes or opens a cover. A right-click opens its pane of actions (a room's: its devices). A chip shows `…` until the change is reported, `!` after six seconds without.
 * **Asks first:** unlocking, opening a garage, gate or door, and disarming an alarm. An alarm that wants a code is disarmed in Home Assistant itself.
-* **Live:** while shown, one WebSocket watches the bar's devices; hidden for 15 seconds, it closes. A dropped one retries after 1, 2, 4… up to 30 seconds; a refused key isn't retried until the URL or key changes.
+* **Live:** while shown, one WebSocket watches the bar's devices; once the bar has been hidden for 15 seconds, it closes. A dropped one retries after 1, 2, 4… up to 30 seconds; a refused key isn't retried until the URL or key changes.
 * **Narrow window:** names shrink, then the side groups give way, then the center pages behind ‹ ›.
 * A double-click or a right-click on blank space opens `/settings`.
 
@@ -334,15 +334,15 @@ The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar 
 
 ## The welcome splash
 
-* `fullsize`: one picture; ←/→ step through them. Delete twice on an empty line moves one of the profile's pictures to the folder's `.trash`.
-* `tiled`: thumbnails at *Image thumbnail size*; ←/→ page, a double-click opens one.
+* *Welcome splash* `fullsize`: one picture; ←/→ step through them. Delete twice on an empty line moves one of the profile's pictures to the folder's `.trash`.
+* *Welcome splash* `tiled`: thumbnails at *Image thumbnail size*; ←/→ page, a double-click opens one.
 * Pictures in the profile's `images\splash_images\` replace the built-in ones. `/splash` shows the splash whatever *Welcome splash* says.
 
 ## The app's windows
 
 What every window shares:
 
-* **Focus:** opened by its key chord, a window stays behind the terminal; typed, it comes to the front. However it closes (Esc, Alt+F4, ×, its chord), the terminal gets the keyboard back.
+* **Focus:** opened by its key chord, a window stays behind the terminal; opened by a typed command, it comes to the front. However it closes (Esc, Alt+F4, ×, its chord), the terminal gets the keyboard back.
 * **Keys:** Tab brings the terminal forward, and a Ctrl or Alt chord the window doesn't use runs in the chat. The Browser window keeps every key for its pages; on Windows the video window keeps Tab.
 * **Place and look:** a window reopens where it last closed, closes with the app, and wears the theme unless *Themed external windows* is off.
 * **On a Mac** they need the Mac's desktop (not over SSH). ⌘W closes, ⌃⌘F is full screen (F11 too, once macOS's Show Desktop shortcut is off), and Option chords run in the chat.
@@ -439,24 +439,24 @@ A browser window (Windows only): the web tools open it for bot checks ([TOOLS.md
 A browser front end the app hosts for the loaded profile: the chat as it happens, a message line of its own, the questions the model's tools ask, the house, and the shopping list. Turn it on with `/webui on` or *Web UI* (`/settings` › Client › Web UI). Not headless.
 
 * **Signing in:** `/webui` shows a tab per home network address of this machine, each with a QR code and its sign-in link: the Ethernet and Wi-Fi adapters with a gateway, the fastest first (`localhost` under `local`). This machine's Tailscale address (100.64/10, on Tailscale's own adapter) comes after them, its tab headed Tailscale (see Away from home). Other VPN tunnels and WSL's virtual switch aren't listed, though a browser through them still connects with the address typed; with no home adapter, every private address is listed. Scan the code with the phone's camera, or open the link in a browser on the same network. The link signs the browser in and leaves the address bar at once; the browser keeps a cookie for a year. `/webui copy` puts the link on the clipboard.
-* **Away from home:** install Tailscale on this PC and the phone and sign both in to the same tailnet; scan the Tailscale tab's code once (it's another host to the browser, so another cookie, beside the home network's). The phone then reaches the Web UI wherever it is, with Tailscale on. Nothing to open on the router; *Web UI reach* must be `lan`. Windows' firewall treats Tailscale's network as it treats the home one: if Windows calls it Public, the phone can't connect (see The firewall).
-* **The token:** each profile has its own, kept encrypted. `/webui reset` makes a new one and signs every browser out, and so does changing the port (the cookie is named by the port). A link sent through a messaging service hands that service the token too; `/webui reset` afterwards. A profile folder copied from another machine makes a new token.
+* **Away from home:** install Tailscale on this PC and the phone and sign both in to the same tailnet; scan the Tailscale tab's code once (the browser treats it as a different site, so it keeps a second cookie beside the home network's). The phone then reaches the Web UI wherever it is, with Tailscale on. Nothing to open on the router; *Web UI reach* must be `lan`. Windows' firewall treats Tailscale's network as it treats the home one: if Windows calls it Public, the phone can't connect (see The firewall).
+* **The token:** each profile has its own, kept encrypted. `/webui reset` makes a new one and signs every browser out, and so does changing the port (the cookie is named by the port). A link sent through a messaging service hands that service the token too; run `/webui reset` afterwards. A profile folder copied from another machine makes a new token.
 * **The tabs:** Chat, Home and Shopping, each only while its controls are on (`/settings` › Client › Web UI): *Web UI chat controls* (on by default), *Web UI home controls* and *Web UI shopping controls* (both off by default, so after an upgrade the Shopping tab is gone until it's turned on). The nav shows the tabs that are on. With Chat off the page opens on Home, else Shopping; with none on it says so, names the three settings, and opens a tab by itself once one is turned on. A tab turned off while it's open goes to one that's on.
 * **Chat off:** the phone has no transcript, no message line, and can't answer the PC's questions (they're the Chat tab's); they open on the PC as always. The Chat badge goes with it. The PC is unchanged.
-* **The pages:** in one fixed dark style. The page's own draft line stays in the browser; it never shows what you type at the PC, nor the PC what you type there. Enter sends on a desktop, a phone adds a line (tap ➤). Stop (■) shows while a reply runs. A ✕ inside the message box while it holds text clears it; *Undo* under it puts the text back, unless you've typed since.
-* **Saved prompts:** 📣 at the message box's left (or `/prompts` sent from the page) opens the profile's saved prompts, numbered as at the PC and read fresh each time. A tap on one puts it on the message line ahead of what's there, with *Undo*; its ➤ sends it at once, as if typed, and leaves the message line alone. A filter shows past eight. ✕, Esc, Back or a tap on the transcript closes it; it, the picture drawer and the usage card replace each other. Saving and removing prompts stays at the PC (`/prompts`).
+* **The pages:** in one fixed dark style. The page's own draft line stays in the browser; it never shows what you type at the PC, nor the PC what you type there. Enter sends on a desktop; on a phone it adds a line (tap ➤ to send). Stop (■) shows while a reply runs. A ✕ inside the message box while it holds text clears it; *Undo* under it puts the text back, unless you've typed since.
+* **Saved prompts:** 📣 at the message box's left (or `/prompts` sent from the page) opens the profile's saved prompts, numbered as at the PC and read fresh each time. A tap on one puts it on the message line ahead of what's there, with *Undo*; its ➤ sends it at once, as if typed, and leaves the message line alone. A filter box appears once there are more than eight. ✕, Esc, Back or a tap on the transcript closes it; it, the picture drawer and the usage card replace each other. Saving and removing prompts stays at the PC (`/prompts`).
 * **The floating buttons:** faded at the transcript's right edge until touched. ↕ (under the header) opens every fold on the page (thinking, tool runs, diffs), as Ctrl+O does at the PC; it stays on for the tab, so folds that arrive open too, and a second tap closes them all. It shows only while there is something to fold. ⤒ goes to the top and ⤓ to the bottom (above the message box), each hidden at its end. They hide under a full-screen picture and the usage card. The bottom ones ride above a phone's keyboard; check that by hand on a phone, as no test can show it.
 * **The picture strip:** 🎞️ (above ⤓) shows while *ComfyUI picture strip* is on and there are ComfyUI pictures; a dot on it says a picture came since you last looked. A tap opens a drawer over the status row: the pictures newest first, the one the PC's strip has highlighted outlined (the drawer opens scrolled to it, and scrolls to it as the PC's pick moves). A tap on one opens it full screen (swipe through the strip's pictures, the newest first) and moves the PC's highlight and its open picture viewer and thumbnail browser to it, as a click on the PC's strip does; a fast swipe moves them once. On the newest it's *live*: a new picture replaces it, with no pick sent to the PC (its viewer, if live, follows on its own). Nothing opens on the PC. ✕, Back, Esc or a tap on the transcript closes the drawer; a question arriving or the usage card closes it too. The PC's × and the page's ✕ each close only their own strip. On a Mac, where the app makes no thumbnails, the drawer shows the original pictures scaled down.
 * **The status row:** one slim line over the message box. While the PC works it shows the PC's spinner as the busy row does: the stage (*thinking*, *writing*, a tool's name, a fun verb under *LLM fun verbs*, a model's load, a command's own label) and its clock, with a tool's own clock first while one runs. On the right, the usage the Status bar shows: the tokens in use, the share of the window, the speed (marked `~` while estimated under *LLM mid-turn usage*). At rest it shows the usage alone, and nothing before the first reply. A narrow phone drops the token count first, then the speed. A tap on the usage opens the full `/usage` figures in a card on the page (✕ or Esc closes it); `/usage` typed on the page stays refused.
 * **What the page shows:** your lines and the replies (Markdown, the links opened in a new tab), the pictures, the tool lines and the first line of their results, the notices, a divider for `/new`. It starts afresh when the screen does (`/clear`, a rewind, a resume, a theme change, a profile switch). Not shown: the panes you open at the PC.
-* **As the terminal shows it:** the model's thinking streams into a short box under *💭 thinking…* and folds to *💭 thought for 4.2s — …* when the answer starts (a tap opens it), with *LLM show thinking* on. An edit's diff shows under its tool line, its added and removed rows on green and red, cut at *Diff max lines* and folded past *Diff collapse count*. A run of tool lines past *Tool collapse count* shows its last few while it runs and folds under its summary (`🛠️ 6 tool calls · 1 failed — read_file ×4…`) when it ends; a tap opens it. A `/cmd` run's output shows in monospace, its error output in the warning color. A reply that said nothing reads *(no reply)*. Text after a tool line reads on without the reply's glyph once the reply has spoken, as at the PC. A fold the page makes on its own keeps your reading place. Long code blocks are never folded on the page.
+* **As the terminal shows it:** the model's thinking streams into a short box under *💭 thinking…* and folds to *💭 thought for 4.2s — …* when the answer starts (a tap opens it), with *LLM show thinking* on. An edit's diff shows under its tool line, its added and removed rows on green and red, cut at *Diff max lines* and folded past *Diff collapse count*. A run of tool lines past *Tool collapse count* shows its last few while it runs and folds under its summary (`🛠️ 6 tool calls · 1 failed — read_file ×4…`) when it ends; a tap opens it. A `/cmd` run's output shows in monospace, its error output in the warning color. A reply that said nothing reads *(no reply)*. Text after a tool line reads on without the reply's icon once the reply has spoken, as at the PC. A fold the page makes on its own keeps your reading place. Long code blocks are never folded on the page.
 * **Pictures:** every picture the chat holds shows on the page as a thumbnail, even with *Show image thumbnails* off or one the terminal can't draw: `generate_image`'s and `/imagine`'s, a pasted or dropped one, a restored session's, the splash. The model's own `camera_capture` and `screen_capture` pictures show nowhere, as at the PC. A tap opens it full screen, newest first as the picture strip and the PC's viewer: swipe or ‹ (newer) › (older) for the others, Back, ✕, Esc or a tap closes it, and *Open original* opens the file itself in a new tab. On the newest picture (the far left) it's *live*, as the PC's viewer: a new picture replaces it as it arrives. Step back to an older one and it holds there; step onto the newest again and it follows again.
   * **It follows the PC:** a picture you move to at the PC (a click or an arrow on its picture strip, a step in its picture viewer, a pick in its thumbnail browser, or opening one in the viewer) moves an open full view to the same file, whether opened from the transcript or the drawer. Moved to an older picture it holds there; moved to the newest it's live again. The page's own taps, a slide show and a closed full view move nothing.
   * **🗑️ deletes the picture:** tap it twice (the first tap turns it red for 3 seconds; Delete twice on a desktop). It follows *File deletes to Recycle bin*, as the PC viewer's Del does: to the Recycle bin (the Trash on a Mac), or for good. The view moves to the next older picture, the PC's strip drops it and its hint row says so, and the log names the picture. A step, a swipe, a new picture or a move from the PC disarms it; Esc disarms it before it closes the view. A picture with no file of its own (pasted, a camera watch frame) has no 🗑️. A HEIC, TIFF or JXL original is sent as a JPEG. A file over 20 MB shows its name and opens as the original. A picture is served only while the page's transcript holds it: after `/clear` or a rewind its address answers nothing. A picture whose file is gone says so under its name.
 * **Messages from the page:** sent from the idle line, after anything queued at the PC. During a reply they wait (counted in the status bar's Queued, not listed in `/queue`), and they're sent as the reply ends even under *Queue mode* `manual`; a held queue (*Queue cancel mode* `hold`) holds them too. `/clear`, `/new`, a resume, a rewind, a profile switch or *Queue cancel mode* `empty` drops them and puts the text back on the page; `/queue clear` leaves them. Slash commands run only with *Web UI commands* on (see Commands from the page). At most 20 wait at once; a message holds up to 48 KB.
 * **Stop on the page:** ends a reply, a compact, a botchat, an advisor, `/imagine`, `/test` or `/loop`'s wait and each pass's reply, and stops speech. Before the reply's first word it takes the message back to the page, as ESC does at the PC. It never stops a model loading (Ctrl+C at the PC) or your editor under `/draft`.
-* **Questions:** a command's approval, `ask_user`, an allow (the camera, the screen, a database write), a yes/no (Docker, Home Assistant, a print, the shopping list's clear, an advisor), the plan's approval and a reflection's skill show on the PC's pane and on the page at once, in the PC's own words; the first answer wins, and the PC says when the page answered. The page shows a command or a statement whole. Not on the page: Close gaps (the plan's), the bot check, the camera's shutter. While the PC waits on one of those, the page says "waiting for an answer at the PC".
-* **Shopping:** the list walked through the active store, as the model reads it; a tap ticks or unticks a line. With two or more stores a *Store* picker sits over the list: a pick makes that store the active one, as `/shopping store <name>` does, and the list is walked through it at once. The page re-reads the list (and the store) every five seconds while it's open, and the PC's open `/shopping` pane follows a store or a tick made from the page within a second. A tick or a store picked on the page flashes on the PC's hint row (📱).
+* **Questions:** a command's approval, `ask_user`, an allow (the camera, the screen, a database write), a yes/no (Docker, Home Assistant, a print, the shopping list's clear, an advisor), the plan's approval and a reflection's skill show at the PC and on the page at once, in the PC's own words; the first answer wins, and the PC says when the page answered. The page shows a command or a statement whole. Not on the page: Close gaps (the plan's), the bot check, the camera's shutter. While the PC waits on one of those, the page says "waiting for an answer at the PC".
+* **Shopping:** the list in the active store's aisle order, as the model reads it; a tap ticks or unticks a line. With two or more stores a *Store* picker sits over the list: a pick makes that store the active one, as `/shopping store <name>` does, and the list is reordered for it at once. The page re-reads the list (and the store) every five seconds while it's open, and the PC's open `/shopping` pane follows a store or a tick made from the page within a second. A tick or a store picked on the page flashes on the PC's hint row (📱).
 * **The dropdown:** as at the PC, typing completes the `@ # $ % ^ *` mentions and, with *Web UI commands* on, the commands and their words. Only the commands and words the page may run are offered. ↑/↓ move, Tab or Enter take one, Esc closes it, or tap a row; Enter sends only while it's closed. `@` and the path words list the working directory only while *File tools* is on. *Web UI connection details* off names the `%` and `*` connections without their server and database.
 * **A new version:** after an upgrade the page reloads itself once, its draft kept, so a phone left open runs the new page. A page opened before this version doesn't; reload it by hand once.
 * **The Chat badge:** on Home and Shopping, the Chat link shows a dot while a reply runs and a count while a question waits for you (or the PC waits on an answer), and the tab's title shows `(n)`. An Android phone vibrates once on a new question; an iPhone can't (Safari has no vibration), so the badge and the title carry it there.
@@ -471,7 +471,7 @@ A browser front end the app hosts for the loaded profile: the chat as it happens
 * **The pane's buttons:** `📱 Web UI │ enabled │ lan │ reset │ 192.168.1.217 · 100.78.20.125`. The first three are buttons, ahead of the address tabs: *enabled*/*disabled* (`e`) turns *Web UI* on or off, *lan*/*local* (`l`) switches *Web UI reach*, and *reset* (`r`) makes a new token after a yes, as `/webui reset` does. The server starts, stops or restarts at once and the pane opens again. The pane opens over a reply too, its buttons acting at once: a phone watching that reply drops for a moment and reconnects (or, after a reset, signs in again). With one address (`localhost` under `local`) the pane has one tab and shows no title for it.
 * **Copying and opening the link:** *copy* (`c`, after *reset*) puts the shown tab's sign-in link on the clipboard. A double-click on the link opens that address on this PC, as `/webui browser` does, and the pane stays open.
 * **Opening it on this PC:** `/webui browser` opens `http://127.0.0.1:<port>` signed in: in the Browser window under *Web open links in* `browser-window` (a one-time link while *Web browser privacy* is `keep-history`, else the usual link), else in your default browser (`--external` always), signed in as *Web browser sign in mode* says. A one-time link is good once, for a minute; a link checker's HEAD request doesn't spend it. The transcript and the log say where it opened, never the link; the Browser window keeps no sign-in link in its history or saved links, never shows one to the model, and never hands the Web UI's cookie to the web tools.
-* **The toolbar's 📱** opens the pane (*Tool bar*, off by default). It sits on a dark slab while *Web UI* is off.
+* **The toolbar's 📱** opens the pane (*Tool bar*, off by default). It sits on a dark background while *Web UI* is off.
 * **A port that won't open:** another program uses it, or Windows reserves it (`netsh int ipv4 show excludedportrange protocol=tcp` lists the reserved ranges). Pick another in *Web UI port*.
 * **Without the pane** (a redirected console), `/webui` prints the links as notices, so the token reaches the scrollback.
 
@@ -484,13 +484,13 @@ A browser front end the app hosts for the loaded profile: the chat as it happens
 * **Scenes:** every scene in Home Assistant, a row of buttons.
 * **Ask the house:** a line for Home Assistant's Assist (as `/ha say`), its answer under it.
 * **Now playing:** the PC's YouTube window, its title, place and sound, with a remote (play or pause, 10 seconds back or on, quieter, louder, mute, and the playlist's previous and next). Only while a video is open.
-* **The PC:** CPU, RAM, GPU and VRAM as bars, and the network's rates, even with the performance bar off. **The model:** its name, server and window, whether it loads or works, and the usage.
+* **The PC:** CPU, RAM, GPU and VRAM as bars, and the network's rates, even with the performance bar off. **The model:** its name, server and context window, whether it loads or works, and the usage.
 * ***Web UI home controls*** (off by default): with it off, there is no Home tab. On, the tab shows and acts: the tiles, the sheets, the scenes, Ask the house and the remote. Unlocking, opening a garage, gate or door, and disarming ask on the page first, as the home bar asks at the PC. It covers this tab alone: `/ha` typed in Chat follows *Web UI commands*.
-* **While it's open:** the tab keeps its devices' states and the PC's meters live, even with the home bar or the performance bar off; ten seconds after the phone leaves, they're let go. Each action is logged with the phone's address and flashes on the PC's hint row (📱), never Ask the house's words.
+* **While it's open:** the tab keeps its devices' states and the PC's meters live, even with the home bar or the performance bar off; ten seconds after the phone leaves, the app stops watching them. Each action is logged with the phone's address and flashes on the PC's hint row (📱), but never what was asked of the house.
 
 ### Commands from the page
 
-With *Web UI commands* on (off by default; `/settings` › Client › Web UI), the page sends slash commands too. They run at the idle line, as typed at the PC, after anything queued there; a command sent under a `/botchat` waits for its end. A question a command asks shows on the PC's pane and on the page at once, and the first answer wins. A command typed at the PC asks at the PC alone, as before. Off, every command is refused, and the reason names the setting.
+With *Web UI commands* on (off by default; `/settings` › Client › Web UI), the page sends slash commands too. They run at the idle line, as typed at the PC, after anything queued there; a command sent under a `/botchat` waits for its end. A question a command asks shows at the PC and on the page at once, and the first answer wins. A command typed at the PC asks at the PC alone, as before. Off, every command is refused, and the reason names the setting.
 
 | Kind | Commands | On the page |
 |---|---|---|
@@ -502,8 +502,8 @@ With *Web UI commands* on (off by default; `/settings` › Client › Web UI), t
 | Other | Every form that opens a pane or a window at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`…) | Refused, naming the form that works here when there is one |
 
 * **`/loop`:** a loop of messages runs as at the PC; a looped `/imagine` runs, a looped `/read` is refused (it is the PC's). Stop ends a pass or the wait between two, and with it the loop. A line `/loop` can't read gets the PC's own error. Bare `/shopping` points at the Shopping tab, or at *Web UI shopping controls* while the tab is off.
-* **What differs from the PC:** `/ha` and `/docker` ask before a change (they act unasked at the PC); `/ha` runs a read or a safe service (*Home Assistant safe services*) at once. A bare `/docker` lists the containers. `/prompts <n>` and `/rewind` put the text on the page's draft, ahead of what's there, with *Undo*; a rewound message's pictures, PDFs and pasted blocks come back on the PC's line only. `/test` clears the chat first, as at the PC.
-* **Refused when it runs:** `/model <id>` and `/reasoning` while the connect would look for a server (no *LLM URL*, the scan on), or `/model <id>` naming an embedded model not installed: those pickers are the PC's. The settings are checked again as the line runs, so one switched off meanwhile is refused there, with an error line.
+* **What differs from the PC:** `/ha` and `/docker` ask before a change (they act unasked at the PC); `/ha` runs a read or a safe service (*Home Assistant safe services*) without asking. A bare `/docker` lists the containers. `/prompts <n>` and `/rewind` put the text on the page's draft, ahead of what's there, with *Undo*; a rewound message's pictures, PDFs and pasted blocks come back on the PC's line only. `/test` clears the chat first, as at the PC.
+* **Refused when it runs:** `/model <id>` and `/reasoning` while connecting would mean scanning for a server (no *LLM URL*, the scan on), or `/model <id>` naming an embedded model not installed: those pickers are the PC's. The settings are checked again as the line runs, so one switched off meanwhile is refused there, with an error line.
 * **Stop:** the page's Stop ends `/claude` too. A model loading after `/model` or `/reasoning` can't be stopped from the page (Ctrl+C at the PC).
 * **An unknown command:** the page offers *Send as a message* (a path like `/home/me` goes to the model as typed), and for `//tools` *Use /tools*.
-* **The log:** each command from the page is logged with its word, the address and the verdict, never its words.
+* **The log:** each command from the page is logged with the command's name, the address and the verdict, never the rest of the line.

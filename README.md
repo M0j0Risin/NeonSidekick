@@ -196,7 +196,7 @@ Everything is set from panes, and each explains itself: the highlighted row's de
 On a Mac, Ctrl+D picks the model (a Mac terminal sends Ctrl+M as Enter). `/help` › Keys and [Keyboard shortcuts](docs/INTERFACE.md#keyboard-shortcuts) list every key.
 
 ### Status bar, hints and toolbar
-The [hints bar](docs/INTERFACE.md#the-hints-bar) under the input line shows the keys that apply just now, while there are any. The [status bar](docs/INTERFACE.md#the-status-bar) under it shows the model, the context used and what runs in the background; double-click the model to switch. The [toolbar](docs/INTERFACE.md#the-toolbar) below has an icon per pane and tool group: click to see what it is, double-click to open it. Ctrl+T hides it.
+The [hints bar](docs/INTERFACE.md#the-hints-bar) under the input line shows the keys that apply right now, while there are any. The [status bar](docs/INTERFACE.md#the-status-bar) under it shows the model, the context used and what runs in the background; double-click the model to switch. The [toolbar](docs/INTERFACE.md#the-toolbar) below has an icon per pane and tool group: click to see what it is, double-click to open it. Ctrl+T hides it.
 
 ### Settings worth knowing first
 

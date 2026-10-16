@@ -2,7 +2,7 @@
 
 How to run Neon Sidekick from scripts with `--headless`. Back to the [README](../README.md).
 
-`NeonSidekick.exe --headless` is a plain stdin/stdout prompt: no TUI, no voice, no timers and no panes to ask on. It answers each line of input on stdout and exits at `/exit` or the end of input with code 0, or 3 if a shell command was refused ([When a command is refused](#when-a-command-is-refused)). From a checkout, use `dotnet run --project src/NeonSidekick -- --headless …`.
+`NeonSidekick.exe --headless` is a plain stdin/stdout prompt: no TUI, no voice, no timers and nothing that can ask you a question. It answers each line of input on stdout and exits at `/exit` or the end of input with code 0, or 3 if a shell command was refused ([When a command is refused](#when-a-command-is-refused)). From a checkout, use `dotnet run --project src/NeonSidekick -- --headless …`.
 
 ```powershell
 NeonSidekick.exe --headless                                               # type messages yourself (over SSH, or where the TUI misbehaves)
@@ -27,9 +27,9 @@ NeonSidekick.exe --headless < job.txt > run_output.txt                    # one 
 - **A fresh profile does little headless.** The model gets only the clock, help, memory, past-session and skill tools, and no server is looked for (*LLM server scan mode* `off`). Set the profile up first in the TUI (`/settings`, `/tools`) or its `profile.json`: a server (or pass `--url`) and the tool groups the job needs.
 - **Tick the "… offered" lists first.** The SQL, Oracle, MySQL, PostgreSQL, SQLite, UNC and ComfyUI tools offer nothing until entries are ticked on `/tools`. SQLite files in the working directory need no ticking.
 - **In `profile.json`** the lists are `SqlConnectionsOffered`, `OracleConnectionsOffered`, `MySqlConnectionsOffered`, `PostgresConnectionsOffered`, `SqliteDatabasesOffered`, `UncSharesOffered` and `ComfyWorkflowsOffered`.
-- **`delete` follows *File deletes to Recycle bin*** (on by default): it moves to the Recycle bin (the Trash on a Mac), as in the TUI.
-- **What needs a pane is left out.** The database write tools (`sqlite_execute`, `sql_execute`, `oracle_execute`, `mysql_execute`, `postgres_execute`), `camera_capture`, `screen_capture`, `screen_list` and the YouTube playing tools are never offered.
-- **Calls that would ask are refused:** the model's Docker changes, `print_file` under *Print action policy* `ask`, Home Assistant calls outside the safe services under *Home Assistant action policy* `ask`, `neon_advisor` under *Advisor confirm*, and `shopping_clear` with `all`. A web tool that meets a bot check reports it; there is no Browser window.
+- **`delete` follows *File deletes to Recycle bin*** (on by default): the `delete` tool moves files to the Recycle bin (the Trash on a Mac), as in the TUI.
+- **Tools that need the screen are left out.** The database write tools (`sqlite_execute`, `sql_execute`, `oracle_execute`, `mysql_execute`, `postgres_execute`), `camera_capture`, `screen_capture`, `screen_list` and the YouTube playing tools are never offered.
+- **Calls that would ask you first are refused:** the model's Docker changes, `print_file` under *Print action policy* `ask`, Home Assistant calls outside the safe services under *Home Assistant action policy* `ask`, `neon_advisor` under *Advisor confirm*, and `shopping_clear` with `all`. A web tool that meets a bot check reports it; there is no Browser window.
 - **On a Mac** ([On a Mac](MAC.md)) the executable is `NeonSidekick`, and `run_command` uses `zsh` unless the profile names another shell. The examples carry over: `echo "Ping." | NeonSidekick --headless --cwd ~/src/myapp`.
 
 ## What the output looks like
@@ -62,32 +62,32 @@ They need no server unless the row says so.
 |---|---|
 | `/exit` | Ends the run (exit code 0), as the end of input does. |
 | `/new`, `/clear`, `/splash` | Forget the conversation; the next message starts a new stored session. |
-| `/rewind [n]` | Goes back n messages (1 by default) at once and prints the dropped one to send again; what tools changed stays changed. |
+| `/rewind [n]` | Goes back n messages (1 by default) immediately and prints the dropped message so you can send it again; what tools changed stays changed. |
 | `/compact [focus]` | Shrinks the conversation now. Needs a server. |
 | `/plan …` | [Plan mode](COMMANDS.md#plan-mode), approved by typing (see below). Needs a server and *LLM offer tools*. |
 | `/claude <message>` | Asks [Claude Code](COMMANDS.md#claude-code-from-the-chat); the reply follows `Claude: `, then the cost. Nothing is asked: what *Claude Code command permissions* doesn't allow is denied. |
 | `/advisor [<name> <question>]` | Lists the advisors, or prints one advisor's answer and adds it to the conversation. |
-| `/skills add <source> [--global\|--profile] [--yes]` | [Installs a skill](SETTINGS.md#installing-skills); without `--yes` it only previews, and several matches print as ids to type back. |
+| `/skills add <source> [--global\|--profile] [--yes]` | [Installs a skill](SETTINGS.md#installing-skills); without `--yes` it only previews, and several matches are listed as ids you can type back. |
 | `/ha …`, `/docker …` | Drive Home Assistant and Docker directly; *Home Assistant action policy* and *Docker writes* don't apply. |
-| `/eventlog …` | Prints a log's events as lines, newest first, with the [event logs'](TOOLS.md#event-logs) words; full text, the ticked computers only. Windows only. |
-| `/net …` | Runs a [network](TOOLS.md#network) check and prints it; never judged by the reach, the host lists or the budget, with a line saying when the model's call would be refused. |
-| `/services …`, `/tasks …` | Print a computer's [services](TOOLS.md#services) or [scheduled tasks](TOOLS.md#scheduled-tasks) as lines; the ticked computers only. Changes need the pane, so headless has none (the model's `service_control`, `service_start_type` and `task_control` aren't offered either). Windows only. |
-| `/ad …` | Prints a user's, group's or computer's card, a find or the domain from [Active Directory](TOOLS.md#active-directory); the ticked domains only. Windows only. |
-| `/shopping …` | The [shopping list](TOOLS.md#shopping-list); the bare word prints it, and `clear all` and `store remove` act at once. |
+| `/eventlog …` | Prints a log's events as lines, newest first, taking the same filter words as the [event-log tools](TOOLS.md#event-logs); full text, ticked computers only. Windows only. |
+| `/net …` | Runs a [network](TOOLS.md#network) check and prints it; ignores *Network tools reach*, the host lists and the per-turn budget, and adds a line when the model's own call would be refused. |
+| `/services …`, `/tasks …` | Print a computer's [services](TOOLS.md#services) or [scheduled tasks](TOOLS.md#scheduled-tasks) as lines; the ticked computers only. Changes need an on-screen confirmation, so headless mode can't make them (the model's `service_control`, `service_start_type` and `task_control` aren't offered either). Windows only. |
+| `/ad …` | Prints a user's, group's or computer's card, an OU, a find or the domain from [Active Directory](TOOLS.md#active-directory), in columns; the ticked domains only. `to:<file.csv or folder>` saves a list as a CSV in the working directory. Windows only. |
+| `/shopping …` | The [shopping list](TOOLS.md#shopping-list); the bare word prints it, and `clear all` and `store remove` act without asking. |
 | `/print …`, `/pdf …` | [Print](TOOLS.md#printing) or [make a PDF](TOOLS.md#making-pdfs) of a file, a web page (`/pdf`) or the last reply; *Print action policy* doesn't apply. On a Mac, `/pdf` has only the `browser` engine. `/pdf merge\|extract\|delete\|rotate` [edit PDFs](TOOLS.md#editing-pdfs) here too. |
 | `/test …` | Runs the [benchmark tests](COMMANDS.md#benchmark-tests), a `[notice]` per test. The listing and `history` need no server; a run does. |
-| `/prompts …`, `/browser save\|list\|unsave …` | The saved prompts and saved links: listed, printed, added or removed. `list --clear` empties a list at once. Other `/browser` forms are errors. |
+| `/prompts …`, `/browser save\|list\|unsave …` | The saved prompts and saved links: listed, printed, added or removed. `list --clear` empties a list without asking. Other `/browser` forms are errors. |
 | `/youtube …` | Searches (needs a *YouTube API key*) and lists playlists and saved videos; playing a video is an error. |
 | `/camera list`, `/screen list` | List the cameras, or the monitors and windows; other forms are errors. On a Mac they need macOS 14 or later. |
-| `/avatar …` | Prints or sets the *Model avatar* (`user`: your *User avatar*); words pick the best match. |
+| `/avatar …` | Prints or sets the *Model avatar* (`/avatar user …` sets your *User avatar*); a description picks the closest emoji. |
 | `/help <words>` | Asks the model to look the words up in the app's manual (`neon_help`). With no server, or `neon_help` off, it prints the manual's own answer (after a `[notice]` when a server is there). |
-| `/webui …` | An error: the [Web UI](INTERFACE.md#web-ui) is the screen's alone in this version. |
+| `/webui …` | An error: the [Web UI](INTERFACE.md#web-ui) runs only with the full-screen app in this version. |
 
 - Case doesn't matter. `/exit`, `/new`, `/clear` and `/splash` must be alone on the line: `/new please` goes to the model as text.
 - With no server, messages and the commands that need one get `Neon: [error] No LLM server. Set NEONSIDEKICK_LLM_URL and restart.`
 - Automatic compaction (*LLM auto compact (%)*) and the mid-reply guard (*LLM tool compact mode*) run headless too, as `[notice]` lines.
 - **Plan mode:** a presented plan is saved as `.neon/plans/<name>.md` and a `[notice]` names it. Then type `/plan approve [--fresh]`, `cancel`, `show`, `save [<name>]`, `open [<name>]` (alone, it lists the plans) or `gaps [model|advisor|any]`.
-- **`/plan gaps`** runs every pass without waiting, each echoed as a `You:` line. With no ESC, *LLM plan gap passes* 0 means 20, and under *Advisor confirm* the model reviews alone.
+- **`/plan gaps`** runs every pass without waiting, each echoed as a `You:` line. Since there's no ESC to stop the passes, *LLM plan gap passes* 0 (no limit) means 20, and under *Advisor confirm* the model reviews alone.
 
 ### Everything else goes to the model as text
 
@@ -97,7 +97,7 @@ Any other `/…` line is sent to the model as a message, so `/model gemma` switc
 |---|---|
 | `/server`, `/model`, `/cwd`, `/profile` | `--url`, `--model`, `--cwd`, `--profile` (or their variables). |
 | `/reasoning`, `/sampling` | `NEONSIDEKICK_LLM_REASONING`, `NEONSIDEKICK_LLM_SAMPLING`. |
-| `/settings`, `//`, `/tools`, `/skills`, `/mcp`, `/profile push\|pull`, `/cmd`, `/msgclear` | Set things up in the TUI, or edit `profile.json` and `mcp.json`. A key typed there in plain text is encrypted at the next load. |
+| `/settings`, `//`, `/tools`, `/skills`, `/mcp`, `/profile push\|pull`, `/cmd`, `/msgclear` | Set things up in the TUI, or edit `profile.json` and `mcp.json`. An API key typed there in plain text is encrypted at the next load. |
 | `/remember`, `/memory`, `/sessions`, `/imagine`, `/process`, `/tree`, `/vault` | Ask the model: it has the memory, session, ComfyUI, `process`, file and Obsidian tools when they're on. |
 | `/loop` | Repeat the line, or loop in the script. |
 | `/usage` | `--log` records the run. |
@@ -112,7 +112,7 @@ Each flag lasts one run and outranks its variable and the saved setting. Each ex
 | `--url <url>` | The LLM server: a URL, or `embedded`, `claude-code` or `docker:<container>` (below). Its key goes in `NEONSIDEKICK_LLM_API_KEY`, never on the command line. | `--url http://gpu-box:8080/v1` |
 | `--model <id>` | The model; with `--url` it pins both for a reproducible run. | `--url http://127.0.0.1:1234/v1 --model gemma-3-27b-it` |
 | `--cwd <path>` | The working directory, where the file, GitLib, shell and download tools work. | `--cwd D:\Repo\MyApp` |
-| `--profile <name>` | The profile; with no flag or `NEONSIDEKICK_PROFILE` it is `neon`, never the one the TUI last used. An unknown name exits with code 2. | `--profile automation` |
+| `--profile <name>` | The profile; with neither the flag nor `NEONSIDEKICK_PROFILE` it is `neon`, never the one the TUI last used. An unknown name exits with code 2. | `--profile automation` |
 | `--log <path>` | Every diagnostic line to a file, starting with the flags, profile and variables in force; `{ts}` becomes the start time. | `--log C:\Logs\neon_{ts}.log` |
 | `--yolo` | Every shell command runs without asking ([below](#running-yolo-every-shell-command-allowed)). | `--yolo --cwd D:\Repo\MyApp` |
 | `--no-police` | The path police off ([below](#turning-off-the-path-police)). | `--no-police --cwd D:\Repo\MyApp` |
@@ -124,14 +124,14 @@ Special servers for `--url`:
 - **The Anthropic or OpenAI API:** `--url https://api.anthropic.com` (or `https://api.openai.com`) with `NEONSIDEKICK_ANTHROPIC_API=on` and its key (or the `OPENAI` pair); without them the URL is ignored. Requests are billed to the key's account.
 - **The embedded model:** `--url embedded`, with `--model` naming an installed model (else the first). A run never downloads a model, but fetches the llama.cpp runtime the first time. On a Mac it runs on Metal.
 - **The Claude Code server:** `--url claude-code` with `NEONSIDEKICK_CLAUDE_CODE_SERVER=on` runs your logged-in Claude Code as the model ([Anthropic](SETTINGS.md#anthropic)); `--model` is `fable`, `opus`, `sonnet` (the default) or `haiku`.
-- **A Docker server (Windows only):** `--url docker:<container>` stops the profile's other chosen containers and starts this one ([Docker servers](TOOLS.md#docker-servers)). It keeps running after the run unless *Docker server stop on exit* is on.
+- **A Docker server (Windows only):** `--url docker:<container>` stops the profile's other chosen containers and starts this one ([Docker servers](TOOLS.md#docker-servers)). The container keeps running after the app exits unless *Docker server stop on exit* is on.
 
 ## Running "yolo": every shell command allowed
 
 The shell policy for a run comes from `--yolo`, then `NEONSIDEKICK_COMMAND_POLICY` (`off`, `ask` or `yolo`), then the profile's *Shell command policy*. Neither the flag nor the variable is saved.
 
 - `off` (the default): no shell tools.
-- `ask`: nothing can ask, so only commands on the profile's *Shell allowed commands* run.
+- `ask`: there's no screen to ask on, so only commands on the profile's *Shell allowed commands* run.
 - `yolo`: every `run_command` command and `execute_code` script runs without asking. Use it only when you trust the job and the folder.
 
 `yolo` does **not** turn off the shell police. With *Shell police* on (the default), these are still refused and count toward exit code 3: a path outside the working directory, the *Shell police forbidden strings* (disk wipes, shutdown, `push --force`, `reset --hard`…; see [Shell guards](SETTINGS.md#shell-guards)), and reaching a database some other way while its tools are on.
@@ -141,7 +141,7 @@ The shell policy for a run comes from `--yolo`, then `NEONSIDEKICK_COMMAND_POLIC
 NEONSIDEKICK_COMMAND_POLICY=yolo NeonSidekick --headless --cwd ~/src/myapp < job.txt   # bash or zsh: the variable for one command
 ```
 
-In PowerShell, `$env:` changes last for the session, so remove the variable afterwards (`try { … } finally { Remove-Item Env:NEONSIDEKICK_COMMAND_POLICY }`). `--yolo` works in the TUI too: no approval pane for that launch, and the toolbar shows 🔓.
+In PowerShell, `$env:` changes last for the session, so remove the variable afterwards (`try { … } finally { Remove-Item Env:NEONSIDEKICK_COMMAND_POLICY }`). `--yolo` works in the TUI too: for that launch the app never asks before running a command, and the toolbar shows 🔓.
 
 ### Turning off the path police
 
@@ -165,7 +165,7 @@ Stay on `ask` and allow only the prefixes the job needs (`dotnet build`, `git st
 
 ## When a command is refused
 
-Under `ask`, a command not on the allow list is not run; nothing waits or crashes. The model is told it was refused, not to work around it, and which prefixes are allowed:
+Under `ask`, a command not on the allow list is not run; nothing waits or crashes. The model is told that the command was refused, that it must not work around the refusal, and which prefixes are allowed:
 
 ```
 [tool] run_command {"command":"npm install"}

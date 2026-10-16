@@ -11,7 +11,7 @@ Options apply to this launch only and are never saved. Both `--option value` and
 | `--model <id>` | Uses this model. |
 | `--cwd <path>` | Uses this working directory; a relative path starts from where you launch. |
 | `--profile <name>` | Opens this profile without changing the saved choice in `settings.json`. An unknown name lists the profiles and exits with code 2. |
-| `--yolo` | Runs every shell command and script without asking. The path police still applies unless `--no-police`. |
+| `--yolo` | Runs every shell command and script without asking. The path police still applies unless you also pass `--no-police`. |
 | `--no-police` | Turns off the shell police: commands may name paths outside the working directory, and the forbidden strings and database checks stop. |
 | `--log <path>` | Appends every diagnostic line to a file, making its folder if needed. `{ts}` in the path becomes the start time, so each run gets its own log (`logs/neon_{ts}.log` → `logs/neon_20261003-142530.log`). `/log file` opens it. |
 | `--headless` | A plain text prompt over stdin/stdout, no TUI; it loads the profile `neon` unless `--profile` or `NEONSIDEKICK_PROFILE` names another. See [HEADLESS.md](HEADLESS.md). |
@@ -26,9 +26,9 @@ Options apply to this launch only and are never saved. Both `--option value` and
 | `--unc-check <share>` | The same for a share in `unc.json`. On a Mac it mounts the network share and unmounts it on exit. |
 | `--eventlog-check <computer>` | The same for a computer in `eventlog.json`, or `local`: its session and sign-in, its newest System event, and whether its Security log is readable. Windows only. |
 | `--network-check <host>` | Tests the network tools against a host: a DNS lookup, a ping, port 443 and a TLS handshake, and opens a certificate store. Reads only. |
-| `--services-check <computer>` | The same for a computer in `services.json`, or `local`: its services listed under its account and one read whole. Changes nothing. Windows only. |
+| `--services-check <computer>` | The same for a computer in `services.json`, or `local`: its services listed under its account, and one read in full. Changes nothing. Windows only. |
 | `--tasks-check <computer>` | The same for a computer in `tasks.json`, or `local`: the Task Scheduler connected, the tasks listed and one read. Windows only. |
-| `--ad-check <domain>` | The same for a domain in `ad.json`, or `current`: the bind, the domain's head and policy, and one user read. Windows only. |
+| `--ad-check <domain>` | The same for a domain in `ad.json`, or `current`: the bind, the domain's root object and policy, and one user read. Windows only. |
 | `--docker-check` | The same for the Docker engine: Docker Desktop's pipe on Windows, the engine's socket on a Mac. |
 | `--camera-check` | Opens the camera, reports brightness and noise, and encodes a test photo (nothing saved; the light comes on briefly), then exits. On a Mac it needs macOS 14 or later and the terminal app's Camera permission. |
 | `--version` | Prints the version and exits. |

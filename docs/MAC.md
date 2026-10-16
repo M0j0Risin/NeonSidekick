@@ -20,7 +20,7 @@ You need a Mac with Apple Silicon (M1 or later). Download and unpack the Mac pac
 * **Permissions belong to the terminal app** (Terminal or iTerm2), not to Neon Sidekick. macOS asks the first time the microphone, camera or screen is used, and the answer covers everything run in that terminal.
 * **Changing a refusal.** Turn the terminal on in System Settings › Privacy & Security › Microphone, Camera, or Screen & System Audio Recording. After allowing Screen Recording, quit and reopen the terminal.
 * **Being asked again.** Quit the app and reset the terminal's answer: `tccutil reset Microphone com.apple.Terminal` (or `Camera`, `ScreenCapture`; `com.googlecode.iterm2` for iTerm2).
-* **The app's windows need the Mac's desktop.** Over SSH there are none, and a double-clicked picture opens in the app macOS opens it with.
+* **The app's windows need the Mac's desktop.** Over SSH there are none, and a double-clicked picture opens in its default app.
 
 ## What works
 
@@ -42,13 +42,13 @@ You need a Mac with Apple Silicon (M1 or later). Download and unpack the Mac pac
 | Printing | Works (CUPS) | Office files are refused ([Printing](TOOLS.md#printing)). |
 | PDFs: `convert_to_pdf`, `/pdf`, `read_pdf`, `pdf_edit`, attaching | Works, browser only | Making, reading, editing and attaching a PDF need Edge, Chrome, Brave or Chromium in `/Applications`, or the one *Web browser path* names. The `printer` engine (Microsoft Print to PDF) needs Windows. |
 | Docker tools and `/docker` | Works | Docker Desktop, OrbStack, Colima or Rancher Desktop ([Docker on a Mac](TOOLS.md#docker-on-a-mac)). CPU and memory figures are the Linux VM's. |
-| Event logs: the event-log tools and `/eventlog` | Not available | They read Windows' own event logs; a Mac has none. The group is never offered, 🪵 stays on the slab, and `/eventlog` says there are no event logs to read. |
-| Services, scheduled tasks and Active Directory: their tools, `/services`, `/tasks`, `/ad` | Not available | They read Windows' own services, Task Scheduler and LDAP client; a Mac has none of them. The groups are never offered, 🧩 📅 🏢 stay on the slab, and each command says there is nothing of its kind to read. |
+| Event logs: the event-log tools and `/eventlog` | Not available | They read Windows' own event logs; a Mac has none. The group is never offered, the toolbar's 🪵 stays dimmed, and `/eventlog` says there are no event logs to read. |
+| Services, scheduled tasks and Active Directory: their tools, `/services`, `/tasks`, `/ad` | Not available | They read Windows' own services, Task Scheduler and LDAP client; a Mac has none of them. The groups are never offered, the toolbar's 🧩 📅 🏢 stay dimmed, and each command says there is nothing of its kind to read. |
 | Network tools and `/net` | Works | Ping uses an unprivileged ICMP socket; a trace there is not proven yet. `net_certs`' `my` is your login keychain and `root` the system's trust; the other stores are not kept on a Mac. |
 | Docker servers | Not available | Docker Desktop on a Mac passes no GPU to containers; the embedded model is the Mac's local server instead. |
 | UNC shares and outside folders | Works | A share is `smb://server/share`, mounted under `/Volumes` while the app runs ([UNC shares on a Mac](TOOLS.md#unc-shares-on-a-mac)). |
 | `/keycheck` | Works | Finds macOS's own shortcuts, apps' exclusive hotkeys and the terminal's Option key. Most apps' shared hotkeys don't show. |
-| Web UI (`/webui`) | Expected to work | Unproven until a Mac publish runs it. The token is kept with the keychain, and macOS asks to let the app accept incoming connections the first time it serves the network. The Tailscale tab is a `utun` interface's 100.64/10 address there (Tailscale's own adapter has no name of its own on a Mac). An iPhone's HEIC photo is sent to the page as a JPEG, as on Windows. Its pictures load their originals, scaled down, where a thumbnail would be (the app makes none on a Mac), in the transcript and the chat page's picture strip alike; unproven too. The Home tab's *Now playing* needs macOS 14 or later (the Mac's video window), and its PC card shows only the meters the Mac reads. |
+| Web UI (`/webui`) | Expected to work | Unproven until a Mac publish runs it. The token is kept in the Keychain, and macOS asks to let the app accept incoming connections the first time it serves the network. The Tailscale tab shows a `utun` interface's 100.64/10 address (Tailscale's own adapter has no name of its own on a Mac). An iPhone's HEIC photo is sent to the page as a JPEG, as on Windows. Pictures show their originals, scaled down, instead of thumbnails (the app makes none on a Mac), in both the transcript and the chat page's picture strip; this is also unproven. The Home tab's *Now playing* needs macOS 14 or later (the Mac's video window), and its PC card shows only the meters the Mac reads. |
 
 ## What differs
 
@@ -58,7 +58,7 @@ You need a Mac with Apple Silicon (M1 or later). Download and unpack the Mac pac
 * **Dot-files** show in listings and searches. Only items hidden with `chflags hidden`, and `.git` folders, are skipped.
 * **The embedded model.** Pick one in `/settings` › Servers › Embedded › *Embedded models*; the app downloads llama.cpp's Mac build with it. The server stops when the app ends, even if it crashes.
 * **GPU memory.** The GPU may use about two thirds of the Mac's memory (10.7 GB of 16 GB), so a 16 GB Mac suits the Gemma 4 E2B and E4B models best.
-* **The app's windows** have no Dock icon or menu bar. A window you open with a command takes the keyboard, while the video and camera windows, and one a chord opens behind, leave it with the terminal; Tab gives it back, and so does closing the last window.
+* **The app's windows** have no Dock icon or menu bar. A window you open with a command takes the keyboard focus. The video and camera windows, and any window a shortcut opens in the background, leave the focus with the terminal. Tab returns the focus to the terminal, and so does closing the last window.
 * **Window keys.** ⌘W closes, ⌃⌘F is full screen (F11 too, once macOS's Show Desktop shortcut is off) and ⌫ stands in for Del. A Control-click opens the [picture menu](INTERFACE.md#the-picture-menu), with *Show in Finder*. Every window's keys are in [The app's windows](INTERFACE.md#the-apps-windows).
 * **Deletes go to the Trash.** *File deletes to Recycle bin* reads *File deletes to Trash*; a volume with no Trash (a network or FAT volume) deletes directly. Not yet proven on a Mac.
 * **Printing** goes through CUPS onto the printer's default paper, in Helvetica Neue and Menlo, so a printout can wrap a little differently than on Windows.
@@ -66,12 +66,12 @@ You need a Mac with Apple Silicon (M1 or later). Download and unpack the Mac pac
 * **Thumbnails and the splash** are drawn in half blocks: full color in iTerm2, 256 colors (banded) in Terminal.app.
 * **A microphone that sends only silence** gets one warning. A MacBook's microphone and camera are off with the lid closed: open the lid or pick another input in System Settings › Sound.
 * **Echo.** Interrupting a reply by voice works with headphones and with a MacBook's own speakers; *STT interrupt echo guard (%)* keeps the reply's own words from counting.
-* **The [video window](INTERFACE.md#the-video-window)** opens a link in the player in your default browser. Its cookies and cache are in `~/Library/WebKit/NeonSidekick/WebsiteDataStore/`; delete that folder to clear them.
-* **Copy and paste.** Cmd+V is the terminal's paste, text only. The app's paste (Ctrl+V, Option+V or a right-click on the input line) takes a picture first, such as a screenshot copied with ⌃⇧⌘4; a file copied in Finder pastes as its path, which attaches a picture or a PDF. A right-click into a pane's filter or find pastes the first copied file's path; on Windows, files copied in Explorer paste nothing there.
+* **The [video window](INTERFACE.md#the-video-window)** opens a link you click in the player in your default browser. Its cookies and cache are in `~/Library/WebKit/NeonSidekick/WebsiteDataStore/`; delete that folder to clear them.
+* **Copy and paste.** Cmd+V is the terminal's paste, text only. The app's paste (Ctrl+V, Option+V or a right-click on the input line) takes a picture first, such as a screenshot copied with ⌃⇧⌘4; a file copied in Finder pastes as its path, which attaches a picture or a PDF. A right-click in a menu's filter or find box pastes the first copied file's path; on Windows, files copied in Explorer paste nothing there.
 * **Stand-in keys.** A Mac terminal can't send some chords, so Ctrl+D opens `/model`, Ctrl+] `/terminal` and Ctrl+Option+A `/memory`, and Option+Delete deletes a word. See [Keyboard shortcuts](INTERFACE.md#keyboard-shortcuts).
 * **No key for these.** Type `/find` (a Mac terminal sends Ctrl+Shift+F as Ctrl+F, which is `/perfbar`), and use Shift+F3 to go back in a find. Click the ☺ for the emoji picker (Ctrl+J arrives as a line break).
 * **Editors.** `/sys persona` and the like open the file in its default app. For `/draft`, set *Draft editor* to a command that waits, such as `code --wait` or `open -W -t`; vim can't share the terminal with the app.
-* **Selecting text with the mouse** while the app has it: hold Fn (Terminal.app) or Option (iTerm2), or press Cmd+R in Terminal.app to turn the app's mouse off and on.
+* **Selecting text with the mouse** while the app is using the mouse: hold Fn (Terminal.app) or Option (iTerm2), or press Cmd+R in Terminal.app to turn the app's mouse off and on.
 
 ## SQL Server sign-in
 
@@ -112,7 +112,7 @@ If it fails:
 * **`Cannot find KDC for realm`:** the Mac can't reach a domain controller. Check the network or VPN and the realm's spelling; `dig +short SRV _kerberos._tcp.ad.example.edu` should list the controllers, and if it lists none, IT can give you an `/etc/krb5.conf` that names them.
 * **`Clock skew too great`:** the clock is more than 5 minutes off. Turn on *Set time and date automatically* (System Settings › General › Date & Time).
 * **`Matching credential … not found`:** the ticket was taken with the realm in lowercase. Run `kdestroy -p <principal>`, then `kinit` again in capitals.
-* **`The target principal name is incorrect. Cannot generate SSPI context.`:** no ticket could be had for the server's name. Its domain doesn't trust yours ([above](#a-server-in-another-domain)), or its Kerberos name (SPN) isn't registered for that host and port, which its admin must fix; `kgetcred` tells the two apart.
+* **`The target principal name is incorrect. Cannot generate SSPI context.`:** the app couldn't get a ticket for the server's name. Its domain doesn't trust yours ([above](#a-server-in-another-domain)), or its Kerberos name (SPN) isn't registered for that host and port, which its admin must fix; `kgetcred` tells the two apart.
 
 On the server, `sys.dm_exec_connections.auth_scheme` shows `KERBEROS` for such a connection (`NTLM` for a Windows client that fell back).
 

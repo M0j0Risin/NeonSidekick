@@ -60,7 +60,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/clear` | Starts a new conversation and clears the screen. |
 | `/splash` | Starts a new conversation and shows the splash screen. |
 | `/compact [<focus>]` | Shrinks the context (*LLM compact mode*); a focus tells the summary what to keep. |
-| `/rewind [<n>]` | Goes back to an earlier message after a yes: it and everything after leave the conversation and stored session, its text back on the input row. What tools changed stays. |
+| `/rewind [<n>]` | Goes back to an earlier message after a yes: it and everything after it leave the conversation and the stored session, and its text goes back on the input row. What tools changed stays. |
 | `/copy [<n>\|all] [--thinking]` | Copies the last reply, the last *n*, or the whole transcript as Markdown; `--thinking` adds the thinking. |
 | `/draft` | Writes the next message in your editor; it is sent when you save and close. |
 | `/echo <text>` | Prints a line as a reply, spoken when *TTS output* is on. |
@@ -71,7 +71,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/queue cancel hold\|drain\|empty` | Sets *Queue cancel mode*: after a canceled reply, keep the queue, send the next, or drop them all. |
 | `/prompts` | Your saved prompts, kept per profile (`prompts.json`) and never shown to the model; Enter puts one on the draft line, the old draft going to the input history. |
 | `/prompts <n>`, `/prompts save <text>`, `/prompts remove <n>` | Puts prompt *n* on the draft line, saves the rest of the line (a pasted block too), or removes prompt *n*. |
-| `/prompts list [--clear]` | Prints the prompts, numbered; `--clear` removes them all after a yes (headless: at once). |
+| `/prompts list [--clear]` | Prints the prompts, numbered; `--clear` removes them all after a yes (headless: without asking). |
 | `/sessions [<id>]` | Lists the stored sessions, or restores one with its pictures (`#12` works too). |
 | `/sessions purge <id>\|all`, `/sessions purge older <age>` | Deletes one stored session, every one, or those older than an age (`30` days, `12h`, `1d 6h`). |
 | `/sessions title [<text>]`, `/rename [<name>]` | Renames the current session; alone, opens a box with its name. |
@@ -154,7 +154,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/camera`, `/camera snap` | Opens the camera pane to take a photo, or takes one at once, and puts it on the input line. See [Camera](#camera). |
 | `/camera list`, `/camera use <n>\|<name>` | Lists the cameras, or chooses one by number or name (*Camera device*). |
 | `/camera live` | Shows the camera live in the [camera window](INTERFACE.md#the-camera-window) until you close it. |
-| `/camera watch [<seconds>\|off]` | Looks every *Camera watch interval (s)* (or 2–3600 seconds); a changed picture rides your next message. |
+| `/camera watch [<seconds>\|off]` | Checks the camera every *Camera watch interval (s)* (or the 2–3600 seconds given); a changed picture goes with your next message. |
 | `/camera off` | Ends live view and watch mode. |
 | `/camera view`, `/camera thumbs` | Opens the picture viewer or the thumbnail browser on *Camera output folder*. |
 | `/screen` | Captures the app's monitor onto the input line; *Screen tools* and *Screen policy* don't apply. See [Screen capture](#screen-capture). |
@@ -185,26 +185,26 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/browser clear history\|all` | Clears its history, or after a yes everything it keeps (cookies and sign-ins too); saved links stay. Windows only. |
 | `/browser <n>` | Opens saved link *n* in the Browser window. Windows only. |
 | `/browser save [<url> [<name>]]` | Saves a link (the words after the address name it), or with no address the page the window shows. Headless, give the address. |
-| `/browser list`, `/browser list --clear` | The saved links in a pane; `--clear` removes them all after a yes (headless: at once). |
+| `/browser list`, `/browser list --clear` | The saved links in a pane; `--clear` removes them all after a yes (headless: without asking). |
 | `/browser unsave <n>\|<url>` | Removes one saved link. Works headless too. |
 | `/youtube`, `/youtube status` | Says what the video window is playing. |
-| `/youtube <words>`, `/youtube search <words>` | Searches YouTube and opens a picker (a *YouTube API key*, 100 quota units a search); `search` takes words that start like a verb. |
+| `/youtube <words>`, `/youtube search <words>` | Searches YouTube and opens a picker (needs a *YouTube API key*; 100 quota units a search); use `search` when the words start with one of `/youtube`'s own words (`play`, `list`…). |
 | `/youtube search [--switches] <words>` | Searches with `--playlists`, `--channels`, `--order relevance\|date\|views\|rating\|title`, `--length short\|medium\|long`, `--since today\|week\|month\|year\|<date>`, `--region <cc>`, `--lang <code>`, `--live`, `--captions`, `--safe none\|moderate\|strict`. |
 | `/youtube play <id>\|<link> [<time>]` | Plays a video from the time given or the link's own; no key needed. |
 | `/youtube play <playlist>\|<link> [<n>]` | Plays a public playlist, or a channel's uploads, from entry *n*; no key needed. |
 | `/youtube next\|previous`, `/youtube entry <n>` | Plays the playlist's next, previous or *n*th video. |
 | `/youtube playlist [<id>\|<link>]` | A playlist's videos in a pane (a key: 1 unit, plus 1 per 50 videos); alone, the one playing. |
-| `/youtube play\|resume`, `/youtube pause`, `/youtube seek <time>`, `/youtube volume <level>`, `/youtube mute\|unmute`, `/youtube close` | Resume, pause, seek, set the volume (0–100), mute or unmute, or close the window. |
+| `/youtube play\|resume`, `/youtube pause`, `/youtube seek <time>`, `/youtube volume <level>`, `/youtube mute\|unmute`, `/youtube close` | Resumes, pauses, seeks, sets the volume (0–100), mutes or unmutes, or closes the window. |
 | `/youtube save [<id>\|<link>]` | Saves the video playing, or the one named, to this profile's saved videos. |
-| `/youtube list`, `/youtube list --clear` | The saved videos in a pane; `--clear` removes them all after a yes (headless: at once). |
+| `/youtube list`, `/youtube list --clear` | The saved videos in a pane; `--clear` removes them all after a yes (headless: without asking). |
 | `/youtube unsave <n>\|<id>\|<link>` | Removes one saved video. |
 | `/webui` | Shows the [Web UI](INTERFACE.md#web-ui): on or off, its port and reach, and a tab per address with a QR code to scan with a phone and the sign-in link. Its buttons: `e` turns it on or off, `l` switches the reach between `lan` and `local`, `r` makes a new token after a yes, `c` copies the shown tab's link. A double-click on the link opens it on this PC, as `/webui browser` does. Opens over a reply too. Not headless. |
 | `/webui on\|off` | Turns the Web UI on or off for this profile; the server starts or stops at once. |
-
-Which commands the Web UI's page may send, and how each shows there: [Commands from the page](INTERFACE.md#commands-from-the-page).
 | `/webui copy` | Puts the first sign-in link on the clipboard. It holds the token: paste it only where you trust. |
 | `/webui reset` | Makes a new sign-in token after a yes; every browser signed in will be signed out. |
 | `/webui browser [--external]` | Opens the Web UI on this PC, already signed in: in the Browser window under *Web open links in* `browser-window`, else in your default browser, signed in as *Web browser sign in mode* says. `--external` always uses the default browser. The Web UI must be on. Runs at once under a reply. |
+
+Which commands the Web UI's page may send, and how each shows there: [Commands from the page](INTERFACE.md#commands-from-the-page).
 
 ### Integrations
 
@@ -231,7 +231,7 @@ Which commands the Web UI's page may send, and how each shows there: [Commands f
 | `/print reply [<options>]`, `/print printers` | Prints the last reply, or lists the printers. |
 | `/pdf <file> [to=<path>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF of a file, beside it unless `to=` says (*PDF engine*; on a Mac, a browser). See [Making PDFs](TOOLS.md#making-pdfs). |
 | `/pdf <url> [to=<path>] [overwrite]`, `/pdf reply [<options>]` | Makes a PDF of a web page (*Web browser network mode* applies; a link that is a PDF already is refused) or of the last reply. |
-| `/pdf merge <file> <file>…`, `/pdf extract\|delete <file> pages=<pages>`, `/pdf rotate <file> angle=90\|180\|270 [pages=…]`, each `[to=<path>] [overwrite]` | Joins PDFs in order, copies pages into a new PDF or writes one without them, or turns pages, into a new PDF beside the first. A browser is needed whatever *PDF engine* says. See [Editing PDFs](TOOLS.md#editing-pdfs). |
+| `/pdf merge <file> <file>…`, `/pdf extract\|delete <file> pages=<pages>`, `/pdf rotate <file> angle=90\|180\|270 [pages=…]`, each `[to=<path>] [overwrite]` | Joins PDFs in order, copies pages into a new PDF or writes one without them, or rotates pages, into a new PDF beside the first. A browser is needed whatever *PDF engine* says. See [Editing PDFs](TOOLS.md#editing-pdfs). |
 | `/claude <message>`, `/claude new` | Asks Claude Code and streams its reply, or starts a new Claude Code conversation. See [Claude Code from the chat](#claude-code-from-the-chat). |
 | `/gituser [force]` | Writes *GitLib user email* and *GitLib user name* into the repository's config; `force` replaces a `[user]` already there. Needs *GitLib tools*. |
 | `/shopping` | The shopping list in a pane, in the active store's aisle order; headless, it prints. See [Shopping list](TOOLS.md#shopping-list). |
@@ -239,13 +239,13 @@ Which commands the Web UI's page may send, and how each shows there: [Commands f
 | `/shopping check\|uncheck\|remove <item>`, `/shopping rename <item> to <new-name>` | Ticks, unticks, removes or renames an item, by name or number. |
 | `/shopping list [<store>]`, `/shopping print [<store>] [verbose]` | Prints the list in a store's order to the screen, or to the printer. |
 | `/shopping export [<store>] [verbose]` | Writes what's left to buy to a new `shopping-list-<time>.md` in the working directory. |
-| `/shopping clear [all]` | Removes the ticked items; `all` empties the list after a yes (headless: at once). |
-| `/shopping store [<name>]`, `/shopping store rename <name> to <new-name>`, `/shopping store add\|remove <name>` | Lists the stores or shops at one, renames one, or adds or removes one (after a yes; its folder stays). |
+| `/shopping clear [all]` | Removes the ticked items; `all` empties the list after a yes (headless: without asking). |
+| `/shopping store [<name>]`, `/shopping store rename <name> to <new-name>`, `/shopping store add\|remove <name>` | Lists the stores or makes one the active store, renames one, or adds or removes one (after a yes; its folder stays). |
 | `/shopping reindex [<store>]` | Reads a store's reference documents again. |
 
 ### Admin
 
-Your own hand on the [Admin](TOOLS.md#admin) tools and [Network](TOOLS.md#network): each works with its tools off and reaches only the computers or domains ticked for them. Windows only, but for `/net`.
+Run the [Admin](TOOLS.md#admin) and [Network](TOOLS.md#network) tools yourself: each works with its tools off and reaches only the computers or domains ticked for them. All but `/net` are Windows only.
 
 | Command | What it does |
 |---|---|
@@ -257,7 +257,7 @@ Your own hand on the [Admin](TOOLS.md#admin) tools and [Network](TOOLS.md#networ
 | `/net certs [<store>] [user\|machine] [<words>]` | One of this machine's certificate stores (`my` by default), soonest to end first; nothing exported. |
 | `/eventlog` | This PC's event logs (or the only ticked computer's) in a pane: Application, System, Security and Setup as tabs, newest first. `r` reads the tab again, `m` adds the next page, `c` picks another ticked computer; Enter opens an event with **copy** and **ask** (a draft asking the model about it). Works with *Event log tools* off; full text. See [Event logs](TOOLS.md#event-logs). |
 | `/eventlog <log>\|<file.evtx> [<term>…] [<words>]` | Opens on that log (`app`, `sys`, `sec`, `setup`, `ps`) or an `.evtx` in the working directory, narrowed by `computer:dc01`, `level:error,warning`, `id:41,1074`, `provider:<name>`, `field:<Name>=<value>`, `since:2h`, `until:<time>`, `audit:failure\|success` and words to find. Without the pane, and from the Web UI, it lists the events. |
-| `/services [computer:<name>] [state:running\|stopped\|failed\|all] [<words>]` | A computer's services in a pane: Running, Stopped, Failed and All as tabs, `r` reads again, `c` another ticked computer; type to filter. Enter opens a service with **copy**, **ask** and, on a `readwrite` computer, the actions its `controlActions` allow (start, stop, restart, start type), each asking first. It skips *Service writes*, never the rest of the [order of checks](TOOLS.md#services). Without the pane, and from the Web UI, it lists them. |
+| `/services [computer:<name>] [state:running\|stopped\|failed\|all] [<words>]` | A computer's services in a pane: Running, Stopped, Failed and All as tabs, `r` reads again, `c` another ticked computer; type to filter. Enter opens a service with **copy**, **ask** and, on a `readwrite` computer, the actions its `controlActions` allow (start, stop, restart, start type), each asking first. It ignores *Service writes* but still follows the rest of the [order of checks](TOOLS.md#services). Without the pane, and from the Web UI, it lists them. |
 | `/tasks [computer:<name>] [folder:<path>] [state:ready\|running\|disabled\|all] [microsoft] [<words>]` | A computer's scheduled tasks in a pane: Ready, Running, Disabled and All as tabs, `r` reads again, `c` another computer, `f` a folder, `w` Windows' own under `\Microsoft\`. Enter opens a task (its triggers in words, actions, who it runs as, last result) with **copy**, **ask**, **history** (its runs on `/eventlog`, when Task Scheduler's log is on) and the actions its computer allows (run, end, enable, disable), each asking first; privileged tasks are guarded. See [Scheduled tasks](TOOLS.md#scheduled-tasks). |
 | `/ad <name>` | Looks a name up in Active Directory (account, display name, cn, mail, UPN or description) and opens the matches as a card in columns with **copy** and **ask**; a double-click on a row opens its card. Read-only. See [Active Directory](TOOLS.md#active-directory). |
 | `/ad user <name>` | A user's card: enabled, locked and when (with a **Search 4740** button when the PDC emulator is a ticked event-log computer), bad passwords, password expiry, last sign-in, groups, manager, direct reports, title, department and OU. |
@@ -418,7 +418,7 @@ A monitor, every monitor or one window, through GDI on Windows or ScreenCaptureK
 * **Targets:** `screen` (the app's monitor, the default), `all`, `monitor:N`, `window:<id or title words>` and `behind` (the window right behind the app's).
 * **A window** comes out whole even when covered; a minimized one must be restored first. Protected video comes out black.
 * **Screenshots** are JPEGs in *Screen output folder* under the profile's `images` folder, at most 2048 pixels on the longer side.
-* **Asking:** under *Screen policy* `ask`, the model's capture shows on a pane first; **Allow for this session** lasts until the session ends.
+* **Asking:** under *Screen policy* `ask`, the app asks you before each of the model's captures; **Allow for this session** lasts until the session ends.
 * **Stored sessions** keep a line instead of the picture unless *Screen keep in sessions* is on: a screenshot can hold anything.
 * **On a Mac** the terminal needs the Screen Recording permission (System Settings › Privacy & Security › Screen & System Audio Recording; reopen the terminal after). Without it nothing is captured.
 * On a Mac, windows on another desktop or minimized aren't listed, and `behind` is the window behind the terminal.
@@ -494,7 +494,7 @@ Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.jso
 | `primary` | The main accent: headings, borders, keywords. |
 | `secondary` | The counter-accent: your lines, the spinner, table headers, inline code, the selection. |
 | `tertiary` | The third accent: section headings, bullets, the quote bar, function calls. |
-| `deep` | Structure: the pane rule, table borders, the slab under a switched-off toolbar item. |
+| `deep` | Structure: the pane rule, table borders, the dark background under a switched-off toolbar item. |
 | `highlight` | String literals. |
 | `warm` | Numbers. |
 | `tint` | A soft accent: `$variables`. |
@@ -514,7 +514,7 @@ Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.jso
 * **Menus and help:** `menuHighlight`, `menuHighlightDim`, `menuDisabled`, `menuFooter`, `helpForm` (`/help`'s forms), `helpSlot` (their placeholders).
 * **Replies:** `markdownBold`, `markdownItalic`, `markdownCode`, `markdownCodeBlock`, `markdownCodeLabel`, `thinking`, `markdownHeading1`, `markdownHeading`, `markdownHeading3`, `markdownBullet`, `markdownQuoteBar`, `markdownQuote`, `markdownLinkUrl`, `markdownRule`.
 * **Code highlighting:** `codeKeyword`, `codeType`, `codeString`, `codeNumber`, `codeComment`, `codePunctuation`, `codeFunction`, `codeVariable`, `codeAttribute`, `codeTag`, `codeHeading`, `codeInserted`, `codeDeleted`.
-* **File diffs:** `diffAdded`, `diffRemoved` (the background is the slab under the line).
+* **File diffs:** `diffAdded`, `diffRemoved` (the background colors the whole line).
 
 ### Voice presets
 

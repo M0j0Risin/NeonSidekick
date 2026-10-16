@@ -6,7 +6,7 @@ The Docker containers the live tests run against. Each live test is skipped unle
 |---|---|---|
 | `sql_server_dev` | SQL Server 2022 with AdventureWorks2022, for the SQL tools. | [microsoft/mssql-server](https://hub.docker.com/r/microsoft/mssql-server) (`mcr.microsoft.com/mssql/server:2022-latest`) |
 | `oracle_free_dev` | Oracle Database 23ai Free (`FREEPDB1`), for the Oracle tools. | [gvenzl/oracle-free](https://hub.docker.com/r/gvenzl/oracle-free) (`23-slim-faststart`) |
-| `mysql_dev` | MySQL 8.4, for the MySQL tools; also the container the Docker tools read. | [mysql](https://hub.docker.com/_/mysql) (`8.4`) |
+| `mysql_dev` | MySQL 8.4, for the MySQL tools; also the container the Docker tools' live tests inspect. | [mysql](https://hub.docker.com/_/mysql) (`8.4`) |
 | `mariadb_dev` | MariaDB 11, for the MySQL tools' MariaDB side. | [mariadb](https://hub.docker.com/_/mariadb) (`11`) |
 | `postgres_dev` | PostgreSQL 17, for the PostgreSQL tools. | [postgres](https://hub.docker.com/_/postgres) (`17`) |
 | `samba_ad_dev` | Samba 4.24.7 Active Directory domain controller (`LAB.NEON.TEST`), for the directory tools. | [diegogslomp/samba-ad-dc](https://hub.docker.com/r/diegogslomp/samba-ad-dc) (`4.24.7`) |

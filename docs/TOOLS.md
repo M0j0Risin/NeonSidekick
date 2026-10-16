@@ -22,7 +22,7 @@ Each group has a switch (*File tools*, *Web tools*…), and the Offered tab of `
 
 * **A group appears only when it can work:** Obsidian needs a vault, the databases and UNC a connection or share you ticked, Home Assistant its URL and key, ComfyUI its URL and a workflow.
 * **Headless** ([HEADLESS.md](HEADLESS.md)) has no timers, `ask_user`, camera or screen tools, Browser window or `_execute` database tools, and YouTube can't play.
-* **Headless, what would ask you on a pane is refused:** a shell command off the allow list under `ask`, a Docker change, a service or task change (never offered there), a print under `ask`, a Home Assistant service that needs your yes, clearing the whole shopping list, an advisor under *Advisor confirm*.
+* **Headless, anything that would stop to ask you is refused:** a shell command off the allow list under `ask`, a Docker change, a service or task change (never offered there), a print under `ask`, a Home Assistant service that needs your yes, clearing the whole shopping list, an advisor under *Advisor confirm*.
 * **Plan mode** ([COMMANDS.md](COMMANDS.md#plan-mode)) keeps each group's reading tools plus `ask_user`, `camera_capture`, the screen tools and `neon_advisor`, and adds `present_plan`. It drops every tool that changes or starts something (`start_timer`, `open`, `open_url`, `process`, `image_edit`, `unc_fetch`…) and every MCP tool.
 * **On a Mac** the Browser window, Docker servers, the event logs, services, scheduled tasks and Active Directory are Windows only, and the camera and screen tools and YouTube playback need macOS 14 or later. Other differences are in each section and [MAC.md](MAC.md#what-works).
 
@@ -52,7 +52,7 @@ Under *Ask user*. Not offered headless.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `ask_user` | `questions` | Multiple-choice questions on a pane: up to *Ask max questions*, each with 2 to *Ask max choices per question* options, `single` or `multi`; you can type your own answer. ESC declines them all. |
+| `ask_user` | `questions` | Asks you multiple-choice questions: up to *Ask max questions*, each with 2 to *Ask max choices per question* options, `single` or `multi`; you can type your own answer. ESC declines them all. |
 
 ### Web
 
@@ -76,13 +76,13 @@ Under *Web tools*.
 The app's own browser (Windows only), where you solve a bot check the web tools can't get past.
 
 * **When:** `web_fetch`, `web_search`, `download_file` and `convert_to_pdf` offer it on a 403, a 503 that names no wait, or a check's page; never for a rate limit, and never headless. *Web browser botcheck window* decides whether it asks you first, opens at once or never opens.
-* **Solving:** the window comes to the front; ESC or *Give up* on the pane, or closing the window, gives up, and so does 5 minutes. Once the page loads with no check showing, the window closes and the tool goes on with that page.
+* **Solving:** the window comes to the front; pressing ESC or *Give up*, or closing the window, gives up, and so does waiting 5 minutes. Once the page loads with no check showing, the window closes and the tool goes on with that page.
 * **Cookies:** the window's cookies for the site go to the web tools for this run, so the next fetch usually needs no window. A site that ties its clearance to the browser's connection may still refuse a download.
 * The window's bar, keys, history and saved links: [The Browser window](INTERFACE.md#the-browser-window).
 
 ### Network
 
-Under *Network tools*. Small checks on one host at a time, for "is it up, what does it resolve to, is the port open, when does its certificate end": the app's own clients, nothing started (no `ping.exe`, `nslookup` or `openssl`). `/net` is your own hand on them ([COMMANDS.md](COMMANDS.md)) and works with the tools off.
+Under *Network tools*. Small checks on one host at a time, for "is it up, what does it resolve to, is the port open, when does its certificate end": the app's own clients, nothing started (no `ping.exe`, `nslookup` or `openssl`). `/net` lets you run them yourself ([COMMANDS.md](COMMANDS.md)), even with the tools off.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -116,7 +116,7 @@ Under *Shell command policy*. Commands run on your machine in the working direct
 | Tool | Arguments | What it does |
 |---|---|---|
 | `run_command` | `command, shell?, workdir?, timeout?, background?, notify?` | Runs a command in `powershell` (default), `cmd` or `bash`; on a Mac `zsh` (default), `bash` or `powershell`. `background` (or a long timeout) returns a `proc_…` id; `notify` tells you when it exits. |
-| `execute_code` | `language, code, timeout?` | Runs a one-off `python` (`python3` on a Mac), `node` or `powershell` script. It asks like `run_command`; an allow for the session covers that language. |
+| `execute_code` | `language, code, timeout?` | Runs a one-off `python` (`python3` on a Mac), `node` or `powershell` script. It asks like `run_command`; allowing it for the session covers that language. |
 | `process` | `action, session_id?, data?, timeout?, until?, offset?, limit?` | Up to 16 background commands (and the last 64 finished), by id prefix: `list`, `poll`, `log` (last 5,000 lines), `wait` (`until` a line holds a text), `kill`, `write` / `submit`, `close`. |
 
 * **The tool bridge:** with *Shell tool bridge* on, a script can call the app's other tools (Python `from neon_tools import call`, Node `neon.call(...)`, PowerShell `Invoke-NeonTool`), except `execute_code` and `ask_user`. A `run_command` through it still asks, and can't run in the background.
@@ -154,7 +154,7 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 | `unzip` | `path, to?, overwrite?` | Extracts a `.zip` into a folder, all or nothing. Off in a new profile. |
 | `open` | `path?, share?` | Opens a file in its own program, a picture where *Image viewer* says, or a folder in Explorer (Finder on a Mac); `share` opens one on a UNC share. |
 | `convert_to_pdf` | `path?, url?, markdown?, title?, to?, overwrite?, landscape?, paper?` | Makes a PDF from one of a file, a web page (needs *Web tools*) or Markdown; see [Making PDFs](#making-pdfs). |
-| `pdf_edit` | `action, path?, paths?, pages?, angle?, fields?, flatten?, to?, overwrite?` | Merges PDFs, takes pages out into a new one, leaves pages out, turns pages, or fills in a form, into a new PDF; see [Editing PDFs](#editing-pdfs). |
+| `pdf_edit` | `action, path?, paths?, pages?, angle?, fields?, flatten?, to?, overwrite?` | Merges PDFs, splits pages out into a new one, deletes pages, rotates pages, or fills in a form, into a new PDF; see [Editing PDFs](#editing-pdfs). |
 
 * In the `images` folder, `open` opens only pictures and folders. A `runas` UNC share can't be opened.
 
@@ -168,18 +168,18 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 * **`pictures`:** the pages as pictures, at most *File view image max images* a call, for a scan, a chart or a form; a model that can't see pictures gets nothing from them. A saved session keeps a line naming each page, not the picture.
 * **`fields`:** a form's fields instead of its text: each name, kind, value now and the values it takes, which `pdf_edit`'s `fill_form` sets. An XFA form says so.
 * **Limits:** 32 MB; a locked PDF is refused. Chinese, Japanese and Korean text reads with pdf.js's own CMaps, built in.
-* **On a share:** `share`, or a full `\\server\share` path, reads a PDF on an offered UNC share where it is.
+* **On a share:** `share`, or a full `\\server\share` path, reads a PDF on an offered UNC share in place, without copying it.
 * The text is cached until the file changes, so a second call on the same PDF starts no browser.
 * The browser reads the PDF on a page cut off from the network, in a profile of its own (`%TEMP%\NeonSidekick\browser-pdf`, `$TMPDIR/NeonSidekick/browser-pdf` on a Mac), never the one that keeps the web tools' cookies.
-* **On the web:** `web_fetch` reads a PDF link the same way, its outline and first 40 pages, and pages through it as through a long page; `download_file` then `read_pdf` reads the rest or draws its pages. A PDF up to 32 MB, its download allowed 2 minutes. Under *Web browser mode* `browser` a PDF is still fetched over HTTP: headless Chromium would only download it. Past a bot check, the Browser window hands its cookies over and the PDF is fetched again.
+* **On the web:** `web_fetch` reads a PDF link the same way, its outline and first 40 pages, and pages through it as through a long page; `download_file` then `read_pdf` reads the rest or draws its pages. It takes a PDF up to 32 MB and gives its download 2 minutes. Under *Web browser mode* `browser` a PDF is still fetched over HTTP: headless Chromium would only download it. Past a bot check, the Browser window hands its cookies over and the PDF is fetched again.
 
 #### Editing PDFs
 
-`pdf_edit` and `/pdf merge|extract|delete|rotate` change PDFs in the working directory with pdf-lib, in the same headless browser and network-less page as [reading](#reading-pdfs). They need Edge, Chrome, Brave or (on a Mac) Chromium whatever *PDF engine* says.
+`pdf_edit` and `/pdf merge|extract|delete|rotate` change PDFs in the working directory with pdf-lib, in the same headless browser and network-less page as [reading](#reading-pdfs). They need Edge, Chrome, Brave or (on a Mac) Chromium, whatever *PDF engine* is set to.
 
 * **`merge`:** the PDFs in `paths` joined in order (20 at most, 64 MB together).
-* **`extract`:** the pages given copied into a new PDF. **`delete`:** the PDF without them; never every page.
-* **`rotate`:** pages turned by `angle` (90, 180, 270; -90 the other way), every page when `pages` is left out.
+* **`extract`:** the pages given copied into a new PDF. **`delete`:** a copy without those pages (it never removes every page).
+* **`rotate`:** pages rotated by `angle` (90, 180, 270; -90 the other way), every page when `pages` is left out.
 * **`fill_form`:** each field in `fields` set by name (`read_pdf` with `fields: true` lists them): text, `true`/`false` for a check box, an option for a choice or radio group, a list for a multi-choice list. A name the form doesn't have, or an option it doesn't offer, is refused with the real ones and nothing is written. `flatten: true` bakes the values into the pages. Only AcroForm fields: an XFA form is refused.
 * **Output:** a new PDF beside the first, named for what was done (`report-p2-5.pdf`, `a-merged.pdf`, `report-edited.pdf`, `report-rotated.pdf`, `form-filled.pdf`; `-2`, `-3`… when taken), or `to`. The original is replaced only when `to` names it with `overwrite`.
 * **Limits:** each PDF up to 32 MB; a PDF locked with a password is refused, never decrypted. Local only: a PDF on a UNC share is copied in first (`unc_fetch`).
@@ -192,7 +192,7 @@ Under *Image tools* (`/tools image`, or the toolbar's 🌄), whether *File tools
 |---|---|---|
 | `view_image` | `path?, paths?` | Attaches pictures to the next message, up to *File view image max images*, so the model can see them. On a Mac it also takes HEIC/HEIF, TIFF and AVIF. |
 | `image_info` | `path?, paths?` | A picture's format, size, frames, transparency, orientation and metadata (EXIF, GPS, XMP…), and what `image_edit` can write here. |
-| `image_edit` | `path, to?, overwrite?, format?, quality?, max_kb?, width?, height?, scale?, fit?, anchor?, interpolation?, crop_x?, crop_y?, crop_width?, crop_height?, rotate?, flip?, filter?, brightness?, contrast?, saturation?, hue?, tint?, tint_amount?, blur?, sharpen?, pad?, background?, metadata?, dpi?, chroma?, colors?, dither?, interlace?, view?` | Resizes, crops, turns, recolors and converts a picture into a new file ([Editing pictures](#editing-pictures)). |
+| `image_edit` | `path, to?, overwrite?, format?, quality?, max_kb?, width?, height?, scale?, fit?, anchor?, interpolation?, crop_x?, crop_y?, crop_width?, crop_height?, rotate?, flip?, filter?, brightness?, contrast?, saturation?, hue?, tint?, tint_amount?, blur?, sharpen?, pad?, background?, metadata?, dpi?, chroma?, colors?, dither?, interlace?, view?` | Resizes, crops, rotates, recolors and converts a picture into a new file ([Editing pictures](#editing-pictures)). |
 | `set_splash_image` | `path, name?` | Copies a picture into the profile's `images\splash_images` for the welcome splash; the first one replaces the bundled set. |
 
 #### Editing pictures
@@ -212,9 +212,9 @@ Under *Image tools* (`/tools image`, or the toolbar's 🌄), whether *File tools
 
 Under *UNC tools*. They reach named network shares (`\\server\share`, or a folder under one) and local folders outside the working directory (`D:\Data`), as you (`windows`) or another Windows account (`runas`, like `runas /netonly`).
 
-* **Setting up:** shares live in `unc.json`, in the home or profile folder like the [database connections](#managing-connections). *UNC add/edit share* walks through one and tests it; *UNC set password* changes a password; *UNC shares offered* picks what the model sees.
+* **Setting up:** shares live in `unc.json`, in the home or profile folder like the [database connections](#managing-connections). *UNC add/edit share* walks you through adding one and tests it; *UNC set password* changes a password; *UNC shares offered* picks what the model sees.
 * **Changes need two keys:** *UNC writes* on **and** the share's `access` `readwrite`. They are permanent (no trash) and logged; `unc_delete` starts off even then.
-* A share silent for 10 seconds is given up on. The shell can't use a `runas` sign-in: `unc_fetch` the file instead.
+* A share that doesn't answer within 10 seconds is given up on. The shell can't use a `runas` sign-in: `unc_fetch` the file instead.
 
 A share's fields in `unc.json`:
 
@@ -262,7 +262,7 @@ A share's fields in `unc.json`:
 * **Paths:** `smb://server/share`, `\\server\share` and `//server/share` read the same, so one `unc.json` serves both. A local folder is a full path; a drive path is skipped.
 * **The mount:** the app mounts a share on first use, hidden from Finder and **read-only** for `access: read`, and unmounts it at exit (or the next start after a crash).
 * **While mounted, anything you run can read the share.** Only the shell police keeps the model's shell off it, and it reads only the paths written in a command.
-* **Signing in:** as you means your Kerberos ticket or a Keychain password Finder saved; `runas` mounts as the account (`name@REALM` or `DOMAIN\name`) with its stored password.
+* **Signing in:** as you, it uses your Kerberos ticket or a Keychain password Finder saved; `runas` mounts as the account (`name@REALM` or `DOMAIN\name`) with its stored password.
 
 ### GitLib
 
@@ -305,10 +305,10 @@ Under *Obsidian tools*, on the vault *Obsidian vault* names. They work on its fi
 
 ### Docker
 
-Under *Docker tools*. They talk to the engine directly, over *Docker engine pipe* (a socket on a Mac, [below](#docker-on-a-mac)); the app never starts `docker` or Docker Desktop. A container is named by its name, a unique part of it, or a 4+ character id prefix. `/docker` is your own hand on them ([COMMANDS.md](COMMANDS.md)).
+Under *Docker tools*. They talk to the engine directly, over *Docker engine pipe* (a socket on a Mac, [below](#docker-on-a-mac)); the app never starts `docker` or Docker Desktop. A container is named by its name, a unique part of it, or a 4+ character id prefix. `/docker` lets you run them yourself ([COMMANDS.md](COMMANDS.md)).
 
-* **Changes need two keys:** *Docker writes* offers them, and each call asks on the pane first (headless refuses). `docker_remove` and `docker_prune` start off even then. Every change is logged.
-* **Secrets:** `docker_inspect` shows environment variable names, never values, and hides secret-looking labels and passwords. Logs can't be cleaned, so the model is told never to repeat a secret from one.
+* **Changes need two keys:** *Docker writes* offers them, and each call asks you first (headless refuses). `docker_remove` and `docker_prune` start off even then. Every change is logged.
+* **Secrets:** `docker_inspect` shows environment variable names, never values, and hides secret-looking labels and passwords. Logs can't be redacted, so the model is told never to repeat a secret from one.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -332,7 +332,7 @@ Containers that serve an OpenAI-compatible API (vLLM, SGLang…) can be `/server
 * The list holds containers matching *Docker server match words* or labeled `neonsidekick.llm=true`. Examples: [vLLM](DOCKER_WINDOWS_VLLM.md), [SGLang](DOCKER_WINDOWS_SGLANG.md).
 * **Picking one:** `/server` lists a row per chosen container; `docker:<container>` picks one (also in `--url` and `NEONSIDEKICK_LLM_URL`).
 * **Switching** stops the other chosen containers (*Docker server stop timeout (s)*), waits *Docker server post-stop delay (s)*, starts this one and waits up to *Docker server ready timeout (s)*. If a stop fails, nothing starts.
-* **Leaving** for another server that uses this machine's GPU (the embedded model, a local server, a blank *LLM URL*) stops the containers; hosted APIs, the Claude Code server and other machines leave them running. *Docker server stop on exit* stops the one in use at exit.
+* **Leaving** for another server that uses this machine's GPU (the embedded model, a local server, a blank *LLM URL*) stops the containers; switching to a hosted API, the Claude Code server or another machine's server leaves them running. *Docker server stop on exit* stops the one in use at exit.
 * Bots and advisors share a running container but never start or stop one.
 
 #### Docker on a Mac
@@ -452,23 +452,23 @@ Under *YouTube tools*. Videos play in the app's [video window](INTERFACE.md#the-
 | `youtube_save` | `action, video` | `add` a video (`current` for the window's), or `remove` one (also by number). |
 
 * **The key:** `youtube_search` and `youtube_playlist` need one, and each search spends daily quota; playing needs none. Watch Later and private playlists are out of reach (the app never signs in).
-* **Saved videos** are your bookmarks, per profile, in `youtube.json`. One resumes a few seconds before where you left it; one seen to the end starts over. `/youtube save`, `list` and `unsave` are your own hand on the list.
+* **Saved videos** are your bookmarks, per profile, in `youtube.json`. One resumes a few seconds before where you left it; one seen to the end starts over. `/youtube save`, `list` and `unsave` let you manage the list yourself.
 * **Known issue:** `seek` and `volume` on a paused video answer with the old value. The change itself happens, and the next answer shows it.
 
 ## Admin
 
-Windows' own records and machinery: the event logs, the services, the scheduled tasks and Active Directory. **Windows only**, all through Windows' own APIs inside the app: nothing is started (no `wevtutil`, `sc`, `schtasks` or PowerShell). Each has its own command (`/eventlog`, `/services`, `/tasks`, `/ad`), your own hand, which works with the tools off.
+Windows' own records and machinery: the event logs, the services, the scheduled tasks and Active Directory. **Windows only**, all through Windows' own APIs inside the app: nothing is started (no `wevtutil`, `sc`, `schtasks` or PowerShell). Each has its own command (`/eventlog`, `/services`, `/tasks`, `/ad`) that lets you run them yourself, even with the tools off.
 
-The services and tasks reach computers you name in `services.json` and `tasks.json`; the directory reaches domains in `ad.json`. Each sits in the home or profile folder like the [database connections](#managing-connections) (the profile's wins by name), each entry is used only once ticked in its *… offered* setting, and its *add/edit* wizard walks through one and tests it. A remote computer reached with `runas` has not been tried against a real second machine here yet; this PC and `localhost` have.
+The services and tasks reach computers you name in `services.json` and `tasks.json`; the directory reaches domains in `ad.json`. Each sits in the home or profile folder like the [database connections](#managing-connections) (when both name the same one, the profile's wins), each entry is used only after you tick it in its *… offered* setting, and its *add/edit* wizard walks you through adding one and tests it. A remote computer reached with `runas` has not been tried against a real second machine here yet; this PC and `localhost` have.
 
 ### Event logs
 
-Under *Event log tools*. They read what Windows itself recorded (a crash, a failed service start, a driver error, a failed sign-in, a PowerShell script block) from this PC, from `.evtx` files in the working directory, and from remote computers you name. Everything is read-only, through Windows' own event log API in the app: nothing is started, no `wevtutil`. `/eventlog` is your own hand on them ([COMMANDS.md](COMMANDS.md)) and works with the tools off.
+Under *Event log tools*. They read what Windows itself recorded (a crash, a failed service start, a driver error, a failed sign-in, a PowerShell script block) from this PC, from `.evtx` files in the working directory, and from remote computers you name. Everything is read-only, through Windows' own event log API in the app: nothing is started, no `wevtutil`. `/eventlog` lets you run them yourself ([COMMANDS.md](COMMANDS.md)), even with the tools off.
 
 | Tool | Arguments | What it does |
 |---|---|---|
 | `eventlog_logs` | `filter?, all?, computer?` | The computers offered, a computer's logs with records, size and last write (200 looked into on this PC, 40 on a remote one; `all` adds the empty, disabled, Analytic and Debug ones), and the `.evtx` files in the working directory. |
-| `eventlog_search` | `log, level?, id?, provider?, field?, since?, until?, audit?, text?, before_record?, limit?, computer?` | A log's events newest first, a line each; the answer ends with the next page as the whole call to make. |
+| `eventlog_search` | `log, level?, id?, provider?, field?, since?, until?, audit?, text?, before_record?, limit?, computer?` | A log's events newest first, a line each; the answer ends with the exact call that fetches the next page. |
 | `eventlog_summary` | `log, since?, level?, computer?` | Counts by provider and id since a time (a day by default), the top 30, each with its newest time and a sample message. |
 | `eventlog_event` | `log, record, computer?` | One event in full: system values, message, named fields, and (under `full`) its XML. At most 32,000 characters. |
 
@@ -480,11 +480,11 @@ Under *Event log tools*. They read what Windows itself recorded (a crash, a fail
 
 #### Event log computers
 
-Computers live in `eventlog.json`, in the home or profile folder like the [database connections](#managing-connections) (the profile's wins by name). `local` is this PC, built in. A computer is read only once ticked in *Event log computers offered*, for the model and `/eventlog` alike; until you change it, `local` alone is ticked. *Event log add/edit computer* walks through one and tests it (the newest System event under its account); *Event log set password* changes a runas password.
+Computers live in `eventlog.json`, in the home or profile folder like the [database connections](#managing-connections) (when both name the same one, the profile's wins). `local` is this PC, built in. The app reads a computer only after you tick it in *Event log computers offered*, for the model and `/eventlog` alike; until you change it, `local` alone is ticked. *Event log add/edit computer* walks you through adding one and tests it (the newest System event under its account); *Event log set password* changes a runas password.
 
 * **`host`** (required): the computer's name or address (`localhost` is a loopback session).
 * **`auth`**: `windows` (default, as you) or `runas`, with **`user`** (`DOMAIN\name` or `name@domain`; `lab-box\admin` for the machine's own account) and **`passwordStore`** `file` or `credman` (`NeonSidekick/eventlog/<name>`). **`authMethod`**: `default`, `negotiate`, `kerberos` or `ntlm`.
-* **`logs`**: the logs allowed, case ignored, `*` any run but `/` (`Microsoft-Windows-*/Operational`, `*/*` every slashed name). Absent: all.
+* **`logs`**: the logs allowed, case ignored, `*` matches any characters except `/` (`Microsoft-Windows-*/Operational`, `*/*` every slashed name). Absent: all.
 * **`detail`**: `redacted` (default) or `full`, what the main chat's model reads (see below).
 * **`description`**: what the computer is; the model reads it to choose.
 * An entry named `local` may set only `logs`, `detail` and `description`.
@@ -510,7 +510,7 @@ Computers live in `eventlog.json`, in the home or profile folder like the [datab
 #### Who sees what
 
 * **`redacted`** hides secret-looking values: fields named like a password, secret, API key, private key or connection string, and in free text URL passwords, `password=…`, `-Password x`, `/pass:x`, `-p x`, `net user u <pw>`, `net use … /user:u <pw>`, `schtasks /RP`, `ConvertTo-SecureString '…' -AsPlainText`, `PSCredential`, `$password = '…'`, `Authorization:` headers, JWTs and PEM blocks. The message is formatted from the hidden values, so a secret doesn't slip in that way, and `text` and `field` match the hidden values only. **It is best-effort:** no rule knows every secret in free text.
-* **`full`** is the main chat's alone. Bots, advisors and a script's `execute_code` bridge always read redacted, and an advisor's recent lines name an event-log call, never its result.
+* **`full`** is read only by the main chat. Bots, advisors and a script's `execute_code` bridge always read redacted, and an advisor's recent lines name an event-log call, never its result.
 * **A `.evtx` file** takes `local`'s detail and no `logs` applies to it: a log exported from a `redacted` computer and read as a file is read under `local`'s detail.
 * **Out of any rule's reach:** what the main model quotes, and saved sessions, which keep what the main chat saw. Set `full` only for computers whose events you are content to have anywhere the conversation goes.
 * **Event text is untrusted:** any program or user can write an event. Each message and value is fenced as quoted data (`⟪ ⟫`), the model is told it is never an instruction, and an event whose source isn't registered says "source not registered: any program could have written this". Control characters are replaced.
@@ -526,7 +526,7 @@ Under *Service tools*. The model reads the services on this PC and the computers
 | `service_control` | `name, action, computer?` | `start`, `stop` or `restart`, after your yes. Its list of actions is what every ticked readwrite computer allows. |
 | `service_start_type` | `name, start_type, computer?` | `automatic`, `delayed`, `manual` or `disabled`, after your yes. Off in a new profile's Offered tab. |
 
-**A change goes through one order of checks**, and the first that fails is the answer: *Service writes* → the computer's `access` → the visible list → `control` → a driver (never changed) → the app's protected list → the computer's own `protected` list → `controlActions` → running dependents (a stop or restart names them and stops) → the question on the pane (the action, the service, the computer, the account and the full program path). Headless and the bots never get the two changes.
+**A change goes through one order of checks**, and the first that fails is the answer: *Service writes* → the computer's `access` → the visible list → `control` → a driver (never changed) → the app's protected list → the computer's own `protected` list → `controlActions` → running dependents (a stop or restart names them and stops) → asking you, showing the action, the service, the computer, the account and the full program path. Headless and the bots never get the two changing tools.
 
 * **Protected by the app, always:** RPC and DCOM, the session manager, the security accounts, the event log, WMI, the firewall and Defender, the Task Scheduler, file sharing, Netlogon, DNS and DHCP clients, Remote Desktop, the crypto and sign-in services, and a few more (`ServiceGuard`). They can be started, never stopped, restarted or changed in start type. A computer's `protected` adds to the list, never takes from it.
 * **Rights:** reading needs nothing special on this PC; a change needs the app run as administrator, or rights granted on the service. Some services (RPC among them) don't let an account that isn't elevated list what depends on them: `service_info` says so and the Service Control Manager then refuses a stop that would break them.
@@ -545,9 +545,9 @@ The keys every computer of `services.json` and `tasks.json` takes:
 
 * **`host`**, **`auth`**, **`user`**, **`passwordStore`**, **`credential`**: as `eventlog.json`'s (`NeonSidekick/services/<name>`, `NeonSidekick/tasks/<name>` in Credential Manager).
 * **`access`**: `read` (the default) or `readwrite`. Nothing is changed on a `read` computer, whatever else is set.
-* **`control`**: what may be changed (case ignored, `*` any run). Absent: nothing.
-* **`controlActions`**: the actions allowed. Absent: all; `[]`: none. Services: `start`, `stop`, `restart`, `start_type` (`restart` is its own word). Tasks: `run`, `end`, `enable`, `disable`.
-* **`detail`**: `redacted` (the default: secret-like values in program paths and command lines hidden from the model) or `full`; the main chat's alone, as the event logs'.
+* **`control`**: what may be changed (case ignored, `*` matches any characters). Absent: nothing.
+* **`controlActions`**: the actions allowed. Absent: all; `[]`: none. Services: `start`, `stop`, `restart`, `start_type` (`restart` must be listed on its own). Tasks: `run`, `end`, `enable`, `disable`.
+* **`detail`**: `redacted` (the default: secret-like values in program paths and command lines hidden from the model) or `full`, read only by the main chat, as with the event logs.
 * **`description`**: what the computer is; the model reads it to choose.
 * **Services' own:** `services`, the services visible (absent: all), and `protected`. **Tasks' own:** `folders`, the folders visible (absent: all; a pattern ending in `\` means that folder's own tasks), and `privileged`.
 * `local` is this PC, built in and read-only until its entry says otherwise; it takes every key but the sign-in ones.
@@ -567,25 +567,50 @@ Under *Task tools*. The model reads the scheduled tasks on this PC and the compu
 * **The order of checks:** *Task writes* → `access` → `folders` → `control` → a task of Windows' own (only by a `control` pattern starting `\Microsoft\`) → `controlActions` → **privileged** → the question.
 * **Privileged:** a task that runs as SYSTEM or a service account, as a group, or with highest privileges. Running or ending one is refused unless the computer's entry says `"privileged": true`; enabling and disabling it are not, since they run nothing. A definition that can't be read counts as privileged.
 * **A run's question** shows who it runs as, at what level, and every command line in full (never redacted: you decide on them).
-* **History:** `/tasks`' **history** opens the task's runs on `/eventlog`, when the Task Scheduler's own log is on (Task Scheduler's *Enable All Tasks History*).
+* **History:** The *history* button on `/tasks` opens the task's runs on `/eventlog`, when the Task Scheduler's own log is on (Task Scheduler's *Enable All Tasks History*).
 * Times are the computer's own clock.
 
 ### Active Directory
 
-Under *Directory tools*. Read-only, always: the app's LDAP layer declares no call that writes. The model looks up users, groups and computers in the domains you tick, and finds locked accounts, expiring passwords and stale ones.
+Under *Directory tools*. The directory is never written: the app's LDAP layer declares no call that writes. A list tool's `to` argument writes a CSV in the working directory, and only with *File tools* on and never in plan mode. The model looks up users, groups, computers and OUs in the domains you tick, and finds locked accounts, expiring passwords, stale and privileged ones.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `ad_user` | `name, domain?` | A user's card: enabled, locked and when (and where to find the source machine: Security event 4740 on the PDC emulator), bad passwords, password set and expiry, last sign-in, account expiry, title, department, manager, OU, flags and groups (nested). |
-| `ad_group` | `name, nested?, limit?, domain?` | A group's members, direct or through member groups. |
-| `ad_computer` | `name, domain?` | A computer's card: its OS, enabled, a domain controller or not, last sign-in, machine password, OU. |
-| `ad_find` | `kind, days?, words?, limit?, domain?` | `locked`, `password_expiring` (within 14 days), `disabled`, `stale_users` or `stale_computers` (not signed in for 90 days, the never-signed-in listed apart), or `name` (names holding `words`). |
-| `ad_domain` | `domain?` | Its domain controllers, functional levels, the role holders (the PDC emulator among them), the password and lockout policy. |
+| `ad_user` | `name, domain?` | A user's card: enabled, locked and when (and where to find the source machine: Security event 4740 on the PDC emulator), bad passwords, password set and expiry, last sign-in, account expiry, title, department, manager, direct reports, OU, flags and groups. |
+| `ad_group` | `name, nested?, members?, limit?, to?, domain?` | A group's card (type, owner, mail, created, the groups it is in) and its members, direct or `nested` (at any depth); `members` is `all`, `users`, `computers` or `groups`. |
+| `ad_computer` | `name, domain?` | A computer's card, or a managed service account's: its OS, enabled, a domain controller or not, last sign-in, machine password, OU, owner and groups. |
+| `ad_find` | `kind, days?, words?, type?, field?, ou?, limit?, to?, domain?` | A structured search; the kinds are below. |
+| `ad_ou` | `ou?, limit?, to?, domain?` | The OU tree as paths with descriptions, or one OU: its owner, linked GPOs (and how many disabled or enforced) and the objects directly in it, counted by kind, its child OUs first. |
+| `ad_domain` | `domain?` | Its domain controllers, functional levels, the role holders (the PDC emulator among them), the password and lockout policy, and the fine-grained password policies this account may see. |
 
+`ad_find`'s kinds:
+
+| kind | What it finds | Takes |
+|---|---|---|
+| `name` | names (account, display name, cn, mail, UPN) or descriptions holding `words`; users, groups and computers, or the one `type` | `words`, `type`, `ou` |
+| `field` | a `type`'s (user by default) `field` holding `words`: `department`, `title`, `company`, `office` or `description` | `words`, `field`, `type`, `ou` |
+| `os` | computers whose operating system holds `words` | `words`, `ou` |
+| `locked`, `disabled`, `password_never_expires` | users in that state | `ou` |
+| `password_expiring` | passwords ending within `days` (14) | `days`, `ou` |
+| `account_expiring` | accounts ending within `days` (30); the already expired listed separately | `days`, `ou` |
+| `stale_users`, `stale_computers` | not signed in for `days` (90); the never-signed-in listed separately | `days`, `ou` |
+| `created` | objects made in the last `days` (30): users, groups and computers, or the one `type` | `days`, `type`, `ou` |
+| `privileged` | the members at any depth of the protected groups | — |
+| `empty_groups` | groups with no members that are nobody's primary group and aren't system groups | `ou` |
+
+* **`type`**: `user`, `group`, `computer`, `ou`, `contact` or `service` (a managed service account). A bare `name` search leaves OUs, contacts and service accounts out. A group, computer, OU or service account has only the `description` field.
+* **`ou`**: a path such as `Neon/Engineering` (a `/` in a name written `\/`, a `\` as `\\`), a DN, or a name; only an OU or container under the domain. A name several OUs share is refused with their paths.
+* **Nested members** are every member at any depth, each with the group it comes through (`via`), or `direct`. The members by primary group (how every user is in Domain Users, which no member list holds) are counted too. Members of nested groups in another domain are not listed. Every member is read (up to 10,000), sorted by account, the first `limit` listed, the total in the head line.
+* **Kinds of member**: user, computer, group, contact, service account, a foreign principal (by its SID), "not readable" or "in another domain". Only `members: all` shows the last five.
+* **`ad_user`'s groups** are its nested security groups (`tokenGroups`) and its direct groups, so a distribution group shows; without `tokenGroups`, the direct groups and the primary group.
+* **`privileged`**: Domain Admins, Schema Admins, Enterprise Admins, Key Admins, Enterprise Key Admins, Administrators, Account Operators, Server Operators, Print Operators, Backup Operators and Replicator, found by SID (not Domain Controllers, whose members are DCs by design). A group the domain doesn't have is named. Listed separately: objects marked `adminCount=1` that no protected group reaches any more (krbtgt and the built-in Administrator are expected).
+* **`office`** is personal data: refused on a `redacted` domain.
 * **Lockout and expiry** come from the attributes the domain computes when it does, and are worked out from the domain's or a fine-grained policy otherwise; each card says which. Last sign-in is `lastLogonTimestamp`, up to about 14 days stale.
-* **Searches stop at 1,000 entries** (and 30 seconds each), and say so.
+* **`domain`** takes a ticked entry's name or its DNS name (`lab` or `lab.neon.test`); left out, it is `current` when ticked, else the only one.
+* **Searches stop at 1,000 entries** (10,000 for a group's members and for `to`), and say which cap cut them. A call has 40 seconds: a walk or a long list answers with what it read, "stopped at the time limit".
+* **`to`** saves the whole list, up to 10,000 rows, as a CSV: a `.csv` path in the working directory, or a folder there (a name made from the question, `ad-group-staff.csv`, `-2` when taken). Never over an existing file; checked before anything is read. UTF-8 with a BOM, the card's columns and `dn`, dates as dates, a cell starting `=`, `+`, `-` or `@` guarded. Needs *File tools*, never in plan mode; the transcript's note names the file.
 * **Never read:** passwords and their hashes, LAPS and BitLocker recovery values, managed and key credentials, certificates and photos.
-* **`redacted`** (the default) leaves phones, addresses, employee numbers and home folders out; `full` is the main chat's alone.
+* **`redacted`** (the default) leaves phones, addresses, employee numbers and home folders out; `full` is read only by the main chat.
 * **`current`** is this PC's own domain when it is joined, built in (signing in as you, Kerberos). Other domains come from `ad.json`:
 
 ```json
@@ -659,7 +684,7 @@ Changes go through each family's `_execute` tool. It needs **two keys**: the fam
 
    In SQL Server, a batch's lone first word reads as `EXEC` of it, so a typo there is a procedure call. A SQLite trigger also needs the kinds its body does.
 2. **The gate:** one statement per call (a routine's body counts as one). Always refused, for example: transaction words, `SET`/`USE`, `GRANT`/`REVOKE`, users and roles, creating or dropping databases, dynamic SQL, file access (`BULK INSERT`, `LOAD DATA`, `COPY`, `ATTACH`) and links to other servers.
-3. **Your yes:** every change asks on a pane that shows the statement (`v` shows all of it): *Deny*, *Allow once*, or *Allow for this session* (that connection or file only, until `/new`, `/clear` or a profile switch).
+3. **Your yes:** every change asks you first, showing the statement (`v` shows all of it): *Deny*, *Allow once*, or *Allow for this session* (that connection or file only, until `/new`, `/clear` or a profile switch).
 4. **The run:** the statement commits on its own; a failed, timed-out or canceled one changes nothing. Every change is logged with the connection, the rows changed and the statement.
 5. **The account is still the real guard.** Give a `readwrite` connection only the permissions you want the model to use.
 
@@ -807,7 +832,7 @@ The SQLite tools read database **files**: no server, no password. A database is 
 
 * Queries end with `LIMIT n`, and `params` binds `@name`; positional `$1` is refused.
 * Refused in queries, for example: `COPY`, `DO`, `dblink`, functions that reach files or other backends, and server-wide views (`pg_database`, `pg_roles`, `pg_stat_activity`).
-* The wizard warns of a superuser role but doesn't refuse it. PostgreSQL lets every role connect to a new database unless `CONNECT` is revoked from `PUBLIC`; the test names which ones it could.
+* The wizard warns of a superuser role but doesn't refuse it. PostgreSQL lets every role connect to a new database unless `CONNECT` is revoked from `PUBLIC`; the test names the databases it could connect to.
 
 ### Oracle
 
@@ -852,7 +877,7 @@ The SQLite tools read database **files**: no server, no password. A database is 
 Under *Print tools*. `/print` and these tools print on any installed printer (on a Mac, those in System Settings › Printers & Scanners).
 
 * **Drawn by the app:** text and code as a listing, Markdown formatted, a picture (PNG, JPEG, GIF, WebP, BMP) on one page, each page headed with the file's name and *page N of M*.
-* **Anything else on Windows** (a PDF, an Office file) goes to its own program on the default printer, with no printer, copies, pages or landscape.
+* **Anything else on Windows** (a PDF, an Office file) goes to its own program on the default printer, with no choice of printer, copies, pages or landscape.
 * **On a Mac** a PDF prints as it is (no landscape); Office and other files are refused.
 * ESC cancels a print. *Print action policy* decides whether `print_file` asks first.
 
@@ -902,7 +927,7 @@ Under *Home Assistant tools*, with *Home Assistant URL* and *Home Assistant API 
 
 * **Names, not ids:** "the den", "kitchen and hallway" or "all"; a room uses its group light if it has one. An ambiguous name comes back as a question.
 * *Home Assistant action policy* decides what runs unasked; under `ask` only safe services do. States are read at most every 30 seconds.
-* [The home bar](INTERFACE.md#the-home-bar) is your own hand: it needs the URL and key, not these tools or the policy.
+* [The home bar](INTERFACE.md#the-home-bar) lets you control the home yourself: it needs the URL and key, not these tools or the policy.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -921,7 +946,7 @@ Under *Home Assistant tools*, with *Home Assistant URL* and *Home Assistant API 
 Under *Shopping tools*. One list per profile and any number of stores, in the profile's `db\shopping\shopping.db`. The list sorts itself into the active store's walking order, ticked lines last.
 
 * **Layout facts:** a store learns where a product, brand or category is (`Aisle 7`, `Dairy`); a guessed fact is marked `(guess)` until you confirm it.
-* **Reference documents:** guides and floor maps go in `db\shopping\reference\<store>` (PDFs, `.md`, `.txt`, pictures), indexed when needed (`/shopping reindex` rereads them). PDFs are read through the browser *Web browser path* names.
+* **Reference documents:** guides and floor maps go in `db\shopping\reference\<store>` (PDFs, `.md`, `.txt`, pictures), indexed when needed (`/shopping reindex` rereads them). PDFs are read in the browser that *Web browser path* names.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -929,7 +954,7 @@ Under *Shopping tools*. One list per profile and any number of stores, in the pr
 | `shopping_add` | `items, store?` | Adds lines (`"2 soy milk"`); a name already there gets the quantity added. |
 | `shopping_check` | `items, checked?` | Ticks (or unticks) lines, by name or number. |
 | `shopping_remove` | `items` | Takes lines off the list. |
-| `shopping_clear` | `all?` | Removes the ticked lines; `all` empties the whole list, only after your yes on the pane. |
+| `shopping_clear` | `all?` | Removes the ticked lines; `all` empties the whole list, only after your yes. |
 | `shopping_locate` | `term, store?` | Where a product would go and why, with matching reference lines. |
 | `shopping_reference` | `query?, file?, page?, picture?, reread?, store?` | Searches, lists or reads a page of the store's reference documents; `reread` indexes them again. |
 | `shopping_place` | `term, kind?, location?, section?, source?, note?, forget?, store?` | Records or forgets where a product, brand or category is; `source` is `user`, `reference` or `guess`. |
