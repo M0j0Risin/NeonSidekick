@@ -43,7 +43,7 @@ internal sealed partial class ChatScreen
     public const string ConnectTitle = "🖥️ Connect a model";
 
     /// <summary>The page's hint row. Pinned.</summary>
-    public const string ConnectKeys = "Enter = choose · ESC = not now";
+    public const string ConnectKeys = "Enter = choose · Esc = not now";
 
     /// <summary>
     /// The page's rows for this screen: every way to a model that is offered here — a scan, a URL, the embedded catalog (where the

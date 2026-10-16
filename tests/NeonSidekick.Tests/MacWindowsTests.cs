@@ -77,7 +77,7 @@ public sealed class MacWindowsTests
     [Fact]
     public void TheMacWords_AreTheirOwn_AndWindowsKeepsItsOwn()
     {
-        Assert.Equal("(← or wheel up newer · → or wheel down older · Home newest · End oldest · right-click picture menu · F9 slide show · F10 random · ↑ ↓ slide time · ⌃⌘F full screen · ⌫ twice delete · TAB terminal · ESC or ⌘W close)", ViewerText.KeysMac);
+        Assert.Equal("(← or wheel up newer · → or wheel down older · Home newest · End oldest · right-click picture menu · F9 slide show · F10 random · ↑ ↓ slide time · ⌃⌘F full screen · ⌫ twice delete · Tab terminal · Esc or ⌘W close)", ViewerText.KeysMac);
         Assert.Equal("The picture viewer needs the Mac's desktop: there is no window server here (over SSH, say).", ViewerText.UnavailableMac);
         Assert.Equal(OperatingSystem.IsMacOS() ? ViewerText.KeysMac : ViewerText.Keys, ViewerText.KeysHere);
         Assert.Equal(OperatingSystem.IsMacOS() ? ViewerText.UnavailableMac : ViewerText.Unavailable, ViewerText.UnavailableHere);
@@ -112,7 +112,7 @@ public sealed class MacWindowsTests
     [Fact]
     public void TheThumbsMacWords_AreTheirOwn()
     {
-        Assert.Equal("(click shows a picture in the viewer · double-click or Enter opens it · arrows move · right-click for the picture menu · + − ⌘+wheel or pinch size · ⌫ twice deletes · F5 refresh · ⌃⌘F full screen · TAB terminal · ESC or ⌘W close)", ThumbsText.KeysMac);
+        Assert.Equal("(click shows a picture in the viewer · double-click or Enter opens it · arrows move · right-click for the picture menu · + − ⌘+wheel or pinch size · ⌫ twice deletes · F5 refresh · ⌃⌘F full screen · Tab terminal · Esc or ⌘W close)", ThumbsText.KeysMac);
         Assert.Equal("The thumbnail browser needs the Mac's desktop: there is no window server here (over SSH, say).", ThumbsText.UnavailableMac);
         Assert.Equal(OperatingSystem.IsMacOS() ? ThumbsText.KeysMac : ThumbsText.Keys, ThumbsText.KeysHere);
         Assert.Equal("Show in Finder", PictureMenuText.ShowInFinder);

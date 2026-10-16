@@ -92,7 +92,7 @@ public static class SkillInstallText
 
     public const string PickHitTitle = "Install which skill?";
     public const string PickSkillTitle = "The repository holds several skills — install which?";
-    public const string PickKeys = "↑↓ = move · Enter = preview · ESC = cancel";
+    public const string PickKeys = "↑↓ = move · Enter = preview · Esc = cancel";
 
     /// <summary>The gap between two columns.</summary>
     public const string ColumnGap = "  ";
@@ -170,11 +170,11 @@ public static class SkillInstallText
     public const string GlobalRow = "Install to the global skills (every profile)";
     public static string UpdateRow(SkillScope scope) => $"Replace the one in the {SkillScopes.Name(scope)} skills (update from the same source)";
     public const string CancelRow = "Cancel";
-    public const string InstallKeys = "p / g / c = pick · Enter = choose · ESC = cancel";
+    public const string InstallKeys = "p / g / c = pick · Enter = choose · Esc = cancel";
 
     /// <summary>The install page's keys while the profile has <c>Global skills</c> off (2026-10-13): no <c>g</c>, no global row. Pinned.</summary>
-    public const string InstallKeysProfileOnly = "p / c = pick · Enter = choose · ESC = cancel";
-    public const string UpdateKeys = "u / c = pick · Enter = choose · ESC = cancel";
+    public const string InstallKeysProfileOnly = "p / c = pick · Enter = choose · Esc = cancel";
+    public const string UpdateKeys = "u / c = pick · Enter = choose · Esc = cancel";
 
     public static string InstallCaption(SkillCandidate candidate, SkillSource source)
     {

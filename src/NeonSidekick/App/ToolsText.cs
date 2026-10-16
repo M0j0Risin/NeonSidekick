@@ -163,7 +163,7 @@ public static class ToolsText
     /// <summary>The shopping list's menu and group (2026-10-11, the user's ask): on Home after HomeAssistant since later that day (the user's ask; on Core, after Shell, before Options, until then). Pinned.</summary>
     public const string ShoppingMenuTitle = "Shopping";
 
-    /// <summary>The timer tools' menu and group (later on 2026-10-15, the user's ask): on Core after Shell, before Options; the Offered group's heading too. Pinned.</summary>
+    /// <summary>The timer tools' menu and group (later on 2026-10-15, the user's ask): on Core after Shell (before Options until 2026-10-16, when Ask came after it: the user's order); the Offered group's heading too. Pinned.</summary>
     public const string TimersMenuTitle = "Timers";
     /// <summary><c>Git</c> until 2026-09-21, when the user asked for <c>Git (native)</c> (the in-process LibGit2Sharp tools as against git through the shell), and <c>Git</c> again since 2026-09-29, the user's call: the tab and the Offered heading, the rows keep their <c>Git native …</c> labels. <c>GitLib</c> since 2026-09-30 (the user's ask), the tab, the heading, the rows and the tools' names (<c>gitlib_status</c> …) alike.</summary>
     public const string GitTabTitle = "GitLib";
@@ -191,10 +191,10 @@ public static class ToolsText
     /// <summary>The UNC tools' tab and group (2026-09-30), after Files, before Print, since 2026-10-03 (the user's order; after MySQL, before Docker, until then).</summary>
     public const string UncTabTitle = "UNC";
 
-    /// <summary>The camera's tab and group (2026-10-02, <c>camera_capture</c> and the camera's rows), after Print, before Obsidian, since 2026-10-03 (the user's order; right after Ask until then).</summary>
+    /// <summary>The camera's tab and group (2026-10-02, <c>camera_capture</c> and the camera's rows), after Print, before Obsidian, since 2026-10-03 (the user's order; right after Ask until then); Devices' first since 2026-10-16 (the user's order).</summary>
     public const string CameraTabTitle = "Camera";
 
-    /// <summary>The screen capture's tab and group (2026-10-04): <c>screen_capture</c> and <c>screen_list</c>, after Camera, before Obsidian.</summary>
+    /// <summary>The screen capture's tab and group (2026-10-04): <c>screen_capture</c> and <c>screen_list</c>, after Camera, before Obsidian; before Print since 2026-10-16 (the user's order).</summary>
     public const string ScreenTabTitle = "Screen";
 
     /// <summary>The YouTube tab (2026-10-05, the YouTube plan): the search key and the video window's tools; after ComfyUI, before GitLib (the user's place, later that day; after Screen until then).</summary>
@@ -203,10 +203,10 @@ public static class ToolsText
     /// <summary>The Docker tools' tab and group (2026-10-02), Apps' (Integrations' until 2026-10-11) first menu since 2026-10-10 (the ClaudeCode tab before it went); after Claude, before HA, since 2026-10-03 (the user's order; after UNC, before GitLib, until then).</summary>
     public const string DockerTabTitle = "Docker";
 
-    /// <summary>The event-log tools' menu and group (2026-10-15, the event-log plan): on Apps after Docker. Pinned.</summary>
+    /// <summary>The event-log tools' menu and group (2026-10-15, the event-log plan): on Apps after Docker, then on Admin first; after Network since 2026-10-16 (the user's order). Pinned.</summary>
     public const string EventLogTabTitle = "EventLog";
 
-    /// <summary>The network tools' menu and group (2026-10-15, the admin-tools plan): on Core after Web. Pinned.</summary>
+    /// <summary>The network tools' menu and group (2026-10-15, the admin-tools plan): on Core after Web; Admin's first since 2026-10-16 (the user's order). Pinned.</summary>
     public const string NetworkMenuTitle = "Network";
 
     /// <summary>The services tools' menu and group (2026-10-15): on Admin after EventLog. Pinned.</summary>
@@ -218,7 +218,7 @@ public static class ToolsText
     /// <summary>The directory tools' menu and group (2026-10-15): on Admin after Tasks. Pinned.</summary>
     public const string DirectoryMenuTitle = "Directory";
 
-    /// <summary>The tab of the administrative menus (2026-10-15, the admin-tools plan): EventLog (off Apps), Services, Tasks, Directory; after Apps. Pinned.</summary>
+    /// <summary>The tab of the administrative menus (2026-10-15, the admin-tools plan): EventLog (off Apps), Services, Tasks, Directory; after Apps. Network (off Core) first since 2026-10-16 (the user's order). Pinned.</summary>
     public const string AdminTabTitle = "Admin";
 
     /// <summary>The image tools' tab and group (2026-09-24), after HA, before GitLib, since 2026-10-03 (the user's order; after Obsidian, before SQL, from 2026-09-27); "Images" until later on 2026-09-24 (the user's call: it is ComfyUI's tab).</summary>
@@ -233,16 +233,16 @@ public static class ToolsText
     /// <summary>The Home Assistant tools' group on <c>/sys</c> and the Offered tab (2026-09-28): the full name, the tab's short one being for the strip alone (2026-10-01).</summary>
     public const string HomeAssistantGroupTitle = "Home Assistant";
 
-    /// <summary>The print tools' tab and group (2026-09-28), after UNC, before Camera, since 2026-10-03 (the user's order; after Claude, before Obsidian, from later on 2026-10-01; after Home Assistant until then).</summary>
+    /// <summary>The print tools' tab and group (2026-09-28), after UNC, before Camera, since 2026-10-03 (the user's order; after Claude, before Obsidian, from later on 2026-10-01; after Home Assistant until then); Devices' last, after Screen, since 2026-10-16 (the user's order).</summary>
     public const string PrintTabTitle = "Print";
 
-    /// <summary>The tab that holds the Ask, Web, Shell and Options menus (2026-10-10, the user's ask): after Offered, before Files, each a tab of its own until then (Options the strip's last). "Standard" until later that day (the user's call). Pinned.</summary>
+    /// <summary>The tab that holds the Ask, Web, Shell and Options menus (2026-10-10, the user's ask): after Offered, before Files, each a tab of its own until then (Options the strip's last). "Standard" until later that day (the user's call). Web, Shell, Timers, Ask, Options since 2026-10-16 (the user's order; Network to Admin). Pinned.</summary>
     public const string CoreTabTitle = "Core";
 
     /// <summary>The tab that holds the five database menus (2026-10-09, the user's call): SQL, MySQL, SQLite, Postgres and Oracle, each a tab of its own until then.</summary>
     public const string DatabaseTabTitle = "Databases";   // "Database" until later on 2026-10-10 (the user's ask)
 
-    /// <summary>The tab that holds the device menus (2026-10-09, the user's call): Print, Camera and Screen since 2026-10-10 (ComfyUI and YouTube on Integrations since, the user's ask), each a tab of its own until 2026-10-09. "Media" until later on 2026-10-10 (the user's call). Pinned.</summary>
+    /// <summary>The tab that holds the device menus (2026-10-09, the user's call): Print, Camera and Screen since 2026-10-10 (ComfyUI and YouTube on Integrations since, the user's ask), each a tab of its own until 2026-10-09. "Media" until later on 2026-10-10 (the user's call). Camera, Screen, Print since 2026-10-16 (the user's order). Pinned.</summary>
     public const string DevicesTabTitle = "Devices";
 
     /// <summary>The tab that holds the menus of the apps and services the tools reach (2026-10-10, the user's pick): Docker, ComfyUI and YouTube — ClaudeCode first too until later that day, when the Claude Code
@@ -271,7 +271,8 @@ public static class ToolsText
     /// rows to <c>/settings</c>' Anthropic tab), Integrations opening on Docker. Later still on 2026-10-10 (the user's ask) Ask, Web and Shell went
     /// under one Standard tab after Offered (<see cref="CoreTabTitle"/>), Options its last menu (the user's ask): Offered, Standard, Files, Integrations, Database, Media; Standard renamed Core and Media Devices later still (the user's call). Since 2026-10-11 (the user's ask) Home is
     /// the last, HomeAssistant and Shopping on it, and Integrations is Apps: Offered, Core, Files, Apps, Databases, Devices, Home. Since 2026-10-15 (the admin-tools
-    /// plan) Admin after Apps holds EventLog (off Apps), Services, Tasks and Directory, and Core holds Network after Web.</summary>
+    /// plan) Admin after Apps holds EventLog (off Apps), Services, Tasks and Directory, and Core holds Network after Web. Since 2026-10-16 (the user's order) Core is Web, Shell, Timers, Ask, Options,
+    /// Admin Network, EventLog, Services, Tasks, Directory, and Devices Camera, Screen, Print.</summary>
     public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, CoreTabTitle, FilesTabTitle, AppsTabTitle, AdminTabTitle, DatabaseTabTitle, DevicesTabTitle, HomeTabTitle];
 
     /// <summary>
@@ -279,9 +280,9 @@ public static class ToolsText
     /// one for a plain tab, its rows the tab's; more for a group tab — <see cref="CoreTabTitle"/> (later on 2026-10-10), <see cref="FilesTabTitle"/>, <see cref="AppsTabTitle"/> (2026-10-10),
     /// <see cref="DatabaseTabTitle"/>, <see cref="DevicesTabTitle"/> and <see cref="HomeTabTitle"/> (2026-10-11) — whose menus are sub-tabs on a second strip (<see cref="ToolsMenu"/>). Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[0, 1, 24, 2, 23, 20], [3, 4, 5, 19, 9], [15, 17, 18], [22, 25, 26, 27], [10, 11, 12, 13, 14], [6, 7, 8], [16, 21]];
+    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 23, 0, 20], [3, 4, 5, 19, 9], [15, 17, 18], [24, 22, 25, 26, 27], [10, 11, 12, 13, 14], [7, 8, 6], [16, 21]];
 
-    /// <summary>Whether tab <paramref name="tab"/> (a <see cref="TabTitles"/> index) holds menus rather than rows: Core, Files, Apps, Databases, Devices and Home.</summary>
+    /// <summary>Whether tab <paramref name="tab"/> (a <see cref="TabTitles"/> index) holds menus rather than rows: Core, Files, Apps, Admin, Databases, Devices and Home.</summary>
     public static bool IsGroupTab(int tab) => tab > 0 && tab < TabTitles.Count && TabMenus[tab - 1].Count > 1;
 
     /// <summary>The menu titled <paramref name="title"/>'s index into <see cref="MenuTitles"/>; −1 for none.</summary>

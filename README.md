@@ -138,7 +138,7 @@ If no model server answers when the app starts, it opens **Connect a model**:
 | Use the Anthropic API / Use the OpenAI API | You have an API key (billed per message). |
 | Use Claude Code | You have Claude Code and a Claude subscription. |
 
-Pick one and the app walks you through it; ESC skips, and `/server` brings the page back. Then type a message and press Enter.
+Pick one and the app walks you through it; Esc skips, and `/server` brings the page back. Then type a message and press Enter.
 
 Good to know:
 * Settings, memories and conversations are saved in `%USERPROFILE%\.neonsidekick` (`~/.neonsidekick` on a Mac).
@@ -170,13 +170,13 @@ Everything is set from panes, and each explains itself: the highlighted row's de
 | `/usage` | Ctrl+U | Speed and token statistics. |
 
 ### Getting around
-* **Keyboard:** ←/→ switch tabs, ↑/↓ move, Enter edits or toggles, Space flips an on/off row, ESC closes. ←/→ also step through a tab's sub-tabs on the second row; Tab skips to the next main tab.
+* **Keyboard:** ←/→ switch tabs, ↑/↓ move, Enter edits or toggles, Space flips an on/off row, Esc closes. ←/→ also step through a tab's sub-tabs on the second row; Tab skips to the next main tab.
 * **Mouse:** a double-click picks a row or tab; the × at the top right closes the pane.
 * **Lost?** Ask the model where a setting is; its `neon_help` tool knows them all.
 
 ### The input line
 * **Enter** sends; during a reply it queues the message.
-* **ESC** stops a reply; twice on an empty line it opens `/rewind`.
+* **Esc** stops a reply; twice on an empty line it opens `/rewind`.
 * **↑/↓** bring back earlier messages.
 * **`/`** lists commands, **`@`** files and folders, **`#`** skills and **`$`** tools.
 * **Ctrl+O** opens or folds tool calls, code and thinking.

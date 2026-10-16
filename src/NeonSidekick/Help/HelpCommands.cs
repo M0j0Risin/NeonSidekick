@@ -29,7 +29,7 @@ public static class HelpCommands
         ]),
         new("/ad",
         [
-            new("/ad <name> [domain:<name>]", "Look up a name in Active Directory: users, groups and computers whose account name, display name, cn, mail, UPN or description holds it. The answer opens as a card in columns with **copy** and **ask**; a double-click on a row opens that object's card, ESC goes back. Read-only; it works with *Directory tools* off, reaches only the domains ticked in *Directory domains offered*. The key words (`domain:`, `to:`, `members:`, `type:`, `field:`, `ou:`) may stand anywhere on the line. Windows only."),
+            new("/ad <name> [domain:<name>]", "Look up a name in Active Directory: users, groups and computers whose account name, display name, cn, mail, UPN or description holds it. The answer opens as a card in columns with **copy** and **ask**; a double-click on a row opens that object's card, Esc goes back. Read-only; it works with *Directory tools* off, reaches only the domains ticked in *Directory domains offered*. The key words (`domain:`, `to:`, `members:`, `type:`, `field:`, `ou:`) may stand anywhere on the line. Windows only."),
             new("/ad user <name>", "A user's card: enabled, locked and when (with the PDC emulator where Security event 4740 records the source machine, and a **Search 4740** button when that DC is a ticked event-log computer), bad passwords, password expiry, last sign-in, groups (nested security groups and direct distribution groups), manager, direct reports, title, department and OU."),
             new("/ad group <name> [nested] [members:users|computers|groups] [to:<file-or-folder>]", "A group's card (type, owner, the groups it is in) and its members, direct or (with `nested`) at any depth, each with the group it comes through, and the members by primary group; `members:` keeps one kind. On the card **n** switches nested and direct, **u** users only and all. `to:` saves every member (up to 10,000) as a CSV in the working directory, never over a file."),
             new("/ad computer <name>", "A computer's card, or a managed service account's: its operating system, whether it is enabled, its last sign-in, OU, description, owner and groups."),
@@ -75,7 +75,7 @@ public static class HelpCommands
         ]),
         new("/camera",
         [
-            new("/camera", "Open the camera pane to take a photo: Space takes it, `r` takes it again, Enter puts it on the input line as `[Image #N]`, ESC drops it. Under *Camera preview* `live` a camera window of its own shows the shot as you frame it. The photo is saved in the *Camera output folder* under the profile's `images` folder. Without the pane, it takes one at once."),
+            new("/camera", "Open the camera pane to take a photo: Space takes it, `r` takes it again, Enter puts it on the input line as `[Image #N]`, Esc drops it. Under *Camera preview* `live` a camera window of its own shows the shot as you frame it. The photo is saved in the *Camera output folder* under the profile's `images` folder. Without the pane, it takes one at once."),
             new("/camera snap", "Take a photo at once and put it on the input line."),
             new("/camera list", "List the cameras in a pane, numbered, the chosen one marked."),
             new("/camera use <n>|<name>", "Choose the camera by its number in the list, its name, or the start of its name (*Camera device*)."),
@@ -96,7 +96,7 @@ public static class HelpCommands
         ]),
         new("/cmd",
         [
-            new("/cmd <command>", "Run a shell line yourself in the working directory, in the *Shell default shell*, its output drawn as it prints; ESC kills it. It passes the model's checks: *Shell command policy* `off` refuses it, the shell police refuse what they refuse under any policy, and under `ask` a line not on *Shell allowed commands* goes to the approval pane. The line and its output go into the conversation, so the model sees them, cut at *Shell output max chars* (the whole in `.shell\\cmd_….log`)."),
+            new("/cmd <command>", "Run a shell line yourself in the working directory, in the *Shell default shell*, its output drawn as it prints; Esc kills it. It passes the model's checks: *Shell command policy* `off` refuses it, the shell police refuse what they refuse under any policy, and under `ask` a line not on *Shell allowed commands* goes to the approval pane. The line and its output go into the conversation, so the model sees them, cut at *Shell output max chars* (the whole in `.shell\\cmd_….log`)."),
             new("/cmd --shell <shell> <command>", "Run the line in another shell: `powershell`, `cmd` or `bash` on Windows; `zsh`, `bash` or `powershell` on a Mac."),
             new("/cmd --bg <command>", "Run the line in the background while you chat, after the same checks (with `--shell` too, in either order). `/process` lists it and its window shows the output live; Ctrl+K twice there stops it. When it ends or is stopped, its output is shown (cut at *Shell output max chars*, the whole in `.shell\\proc_….log`) and goes into the conversation before your next message; the model's process tool never sees it."),
         ]),
@@ -161,7 +161,7 @@ public static class HelpCommands
         ]),
         new("/find",
         [
-            new("/find [<words>]", "Find words in the transcript: a find row opens over the input row, every match is marked, and the transcript scrolls to the newest. Typing changes the words, and a paste (Ctrl+V or a right-click) adds its first line; Enter or F3 goes to the next match up (older), Shift+Enter or Shift+F3 back down, PgUp/PgDn scroll. Folded blocks that hold a match open, and fold again when the find ends. ESC, or a double-click outside it, ends it at the bottom of the transcript. Ctrl+Shift+F runs it too."),
+            new("/find [<words>]", "Find words in the transcript: a find row opens over the input row, every match is marked, and the transcript scrolls to the newest. Typing changes the words, and a paste (Ctrl+V or a right-click) adds its first line; Enter or F3 goes to the next match up (older), Shift+Enter or Shift+F3 back down, PgUp/PgDn scroll. Folded blocks that hold a match open, and fold again when the find ends. Esc, or a double-click outside it, ends it at the bottom of the transcript. Ctrl+Shift+F runs it too."),
         ]),
         new("/gituser",
         [
@@ -213,18 +213,18 @@ public static class HelpCommands
         ]),
         new("/log",
         [
-            new("/log", "Open the log window: this run's diagnostic lines, colored by level, following the newest while it is at the bottom. Scrolling away pauses it; Ctrl+E, Ctrl+End or scrolling back to the bottom follows again, and Ctrl+Home goes to the top. Drag to select, Ctrl+A selects all, Ctrl+C copies; F11 or a double-click is full screen, and Esc leaves full screen, then closes the window. TAB brings the terminal forward, and any other Ctrl or Alt chord runs in the chat (Ctrl+G closes the window). Opened by Ctrl+G, it stays behind the terminal, which keeps the keyboard."),
+            new("/log", "Open the log window: this run's diagnostic lines, colored by level, following the newest while it is at the bottom. Scrolling away pauses it; Ctrl+E, Ctrl+End or scrolling back to the bottom follows again, and Ctrl+Home goes to the top. Drag to select, Ctrl+A selects all, Ctrl+C copies; F11 or a double-click is full screen, and Esc leaves full screen, then closes the window. Tab brings the terminal forward, and any other Ctrl or Alt chord runs in the chat (Ctrl+G closes the window). Opened by Ctrl+G, it stays behind the terminal, which keeps the keyboard."),
             new("/log file", "Open the diagnostic log file in your editor; only when the app was started with `--log <path>`."),
             new("/log path", "Copy the diagnostic log file's path to the clipboard; only when the app was started with `--log <path>`."),
         ]),
         new("/loop",
         [
-            new("/loop <count>|infinite [<delay>] <message>", "Send the message that many times, or until ESC or Ctrl+C, waiting for each reply. A delay is one word such as `30s`, `5m` or `1h30m` (never a bare number), up to 24 hours."),
+            new("/loop <count>|infinite [<delay>] <message>", "Send the message that many times, or until Esc or Ctrl+C, waiting for each reply. A delay is one word such as `30s`, `5m` or `1h30m` (never a bare number), up to 24 hours."),
             new("/loop <count>|infinite [<delay>] /imagine|/read <arguments>", "Run `/imagine` or `/read` itself on each pass, with no model in between; no other command can be looped."),
         ]),
         new("/mcp",
         [
-            new("/mcp", "Open the MCP pane: connect external MCP servers and switch their tools on or off. On the Tools tab, typing narrows the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, a second ESC closes."),
+            new("/mcp", "Open the MCP pane: connect external MCP servers and switch their tools on or off. On the Tools tab, typing narrows the list to the tools whose name or description holds the text; Backspace erases, Esc clears it, a second Esc closes."),
         ]),
         new("/memory",
         [
@@ -234,7 +234,7 @@ public static class HelpCommands
         ]),
         new("/model",
         [
-            new("/model [<id>]", "Pick a model from the server's list, or set one by its id, as typed (the server is not asked). The list is A to Z with the model in use under the cursor; typing narrows it, Backspace erases, ESC clears it, a second ESC keeps the model. On the embedded LLM, it lists the installed embedded models. Ctrl+M runs it too."),
+            new("/model [<id>]", "Pick a model from the server's list, or set one by its id, as typed (the server is not asked). The list is A to Z with the model in use under the cursor; typing narrows it, Backspace erases, Esc clears it, a second Esc keeps the model. On the embedded LLM, it lists the installed embedded models. Ctrl+M runs it too."),
         ]),
         new("/msgclear",
         [
@@ -279,7 +279,7 @@ public static class HelpCommands
             new("/plan approve [--fresh]", "While planning, approve the presented plan by typing instead of on the pane (you may edit the file first)."),
             new("/plan cancel", "While planning, leave plan mode; the file is kept, marked `canceled`."),
             new("/plan save [<name>]", "While planning, keep a reply that looks like a plan as the plan when the model never called `present_plan` (a notice says so), and bring up the approval pane."),
-            new("/plan gaps [model|advisor|any]", "While planning, review the presented plan pass after pass until a pass finds no gaps, then bring the approval pane back; the pane's *Close gaps…* does the same. `model` reviews alone (the default), `advisor` has an advisor find the gaps each pass, `any` consults advisors where a role fits. ESC stops it; *LLM plan gap passes* caps the passes."),
+            new("/plan gaps [model|advisor|any]", "While planning, review the presented plan pass after pass until a pass finds no gaps, then bring the approval pane back; the pane's *Close gaps…* does the same. `model` reviews alone (the default), `advisor` has an advisor find the gaps each pass, `any` consults advisors where a role fits. Esc stops it; *LLM plan gap passes* caps the passes."),
             new("/plan open <name>", "Pick a plan up again, in or out of plan mode (names complete from `.neon/plans/`). Plan mode turns on over that file, the file goes back to `draft`, and the model reads it and asks what should change; `/plan approve` then carries out only the unticked steps."),
             new("/plan open", "List the plans with their status and progress in a pane."),
         ]),
@@ -292,7 +292,7 @@ public static class HelpCommands
         new("/process",
         [
             new("/process", "List the background processes on a pane, the model's (`run_command` with `background`) and your `/cmd --bg` ones: the id, running or how it ended, how long it has run, the shell and the command. Enter or a double-click opens one in the process window; **kill** (`k`) stops the highlighted one after a yes; the filter button (`f`) steps from all to the running ones, the ended ones and back. The toolbar's ⚡ opens it too, as does a double-click on the ▶ count on the rule under the input line."),
-            new("/process <id>", "Open the process window on one process (any unique start of its id; Tab completes it). It shows the output live, following the newest line while at the bottom, stderr in the warning color, its state in the title. Scroll, select and copy as in the log window; TAB brings the terminal forward, and `/process` with another id switches the window to that process. Ctrl+K twice within 3 seconds stops it: the chat says you stopped it, and the model hears so on its next turn."),
+            new("/process <id>", "Open the process window on one process (any unique start of its id; Tab completes it). It shows the output live, following the newest line while at the bottom, stderr in the warning color, its state in the title. Scroll, select and copy as in the log window; Tab brings the terminal forward, and `/process` with another id switches the window to that process. Ctrl+K twice within 3 seconds stops it: the chat says you stopped it, and the model hears so on its next turn."),
         ]),
         new("/profile",
         [
@@ -330,7 +330,7 @@ public static class HelpCommands
         ]),
         new("/read",
         [
-            new("/read [<file> [<n>]|<n>]", "Read a text file or a PDF from the working directory aloud as a reply (a PDF's first 40 pages, read with Edge, Chrome or Brave and joined back into sentences; ESC stops the read). Alone, it resumes; a number starts from that sentence (a file named only with digits is typed `./5`). On an empty line, Space pauses and resumes, and ←/→ step a sentence back or forward (while paused they only move the position, and Space or `/read` plays from there). The hints bar shows the keys that apply: `← → ␣ pause`, `← → ␣ play` or `␣ replay`."),
+            new("/read [<file> [<n>]|<n>]", "Read a text file or a PDF from the working directory aloud as a reply (a PDF's first 40 pages, read with Edge, Chrome or Brave and joined back into sentences; Esc stops the read). Alone, it resumes; a number starts from that sentence (a file named only with digits is typed `./5`). On an empty line, Space pauses and resumes, and ←/→ step a sentence back or forward (while paused they only move the position, and Space or `/read` plays from there). The hints bar shows the keys that apply: `← → ␣ pause`, `← → ␣ play` or `␣ replay`."),
         ]),
         new("/reasoning",
         [
@@ -346,7 +346,7 @@ public static class HelpCommands
         ]),
         new("/rewind",
         [
-            new("/rewind [<n>]", "Go back to an earlier message. A list of the messages you sent opens (the cursor on the last, or n back); after a yes, the picked message and everything after it leave the conversation, and its text returns to the input row, pictures, PDFs and pasted blocks included, to edit and send again. A stored session loses the same turns. Only the conversation rewinds: what a tool changed (files written, commands run, commits) stays, and the yes/no names those tools. Messages compacted into a summary cannot be picked. ESC twice on an empty input line opens it too."),
+            new("/rewind [<n>]", "Go back to an earlier message. A list of the messages you sent opens (the cursor on the last, or n back); after a yes, the picked message and everything after it leave the conversation, and its text returns to the input row, pictures, PDFs and pasted blocks included, to edit and send again. A stored session loses the same turns. Only the conversation rewinds: what a tool changed (files written, commands run, commits) stays, and the yes/no names those tools. Messages compacted into a summary cannot be picked. Esc twice on an empty input line opens it too."),
         ]),
         new("/sampling",
         [
@@ -408,7 +408,7 @@ public static class HelpCommands
         ]),
         new("/skills",
         [
-            new("/skills", "Open the Skills pane: the skills on Offered, then the Reflection and Options settings. Enter on a skill opens its page: move it (between the profile and global skills while *Global skills* is on, or to another profile), rename, edit, revert to a kept version, lock, disable or delete it, each change after a yes. A locked skill cannot be changed by the model, a reflection or an update until it is unlocked; a disabled one (⛔, its row dim) stays in its folder but is never offered to the model. On Offered, typing narrows the list; Backspace erases, ESC clears it, a second ESC closes."),
+            new("/skills", "Open the Skills pane: the skills on Offered, then the Reflection and Options settings. Enter on a skill opens its page: move it (between the profile and global skills while *Global skills* is on, or to another profile), rename, edit, revert to a kept version, lock, disable or delete it, each change after a yes. A locked skill cannot be changed by the model, a reflection or an update until it is unlocked; a disabled one (⛔, its row dim) stays in its folder but is never offered to the model. On Offered, typing narrows the list; Backspace erases, Esc clears it, a second Esc closes."),
             new("/skills add <source> [--global|--profile]", "Install an Agent Skill from the web after a preview: search words, `owner/repo[/skill]`, a GitHub URL (the repository, a `/tree/…` folder or a `SKILL.md`) or a `.zip` URL. A pane asks where it goes (the cursor on Cancel); `--global` and the global choice only while *Global skills* is on. Refused while a reply runs."),
             new("/skills purge list|commit <age>", "List the skills unused for that long (`list`; `30` days, `12h`, `90m`), deleting nothing, or delete them, folder and record, after a yes that lists them (`commit`)."),
         ]),
@@ -458,9 +458,9 @@ public static class HelpCommands
         ]),
         new("/tools",
         [
-            new("/tools", "Open the tools pane: switch the model's tools on or off on Offered, and edit each tool group's settings on its own tab. On Offered, typing narrows the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, a second ESC closes."),
-            new("/tools <group>", "Open a group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping` or `timers`. `shell` opens the *Shell command policy* picker (yolo asks first). Buttons at the top open related settings, and ESC comes back: `shell`'s allowed commands and police (`c`, `p`), `web`'s browser modes (`a`, `h`, `b`), `files`' browser mode (`b`), `image`'s edit mode (`e`), `advisors`' list (`a`), `obsidian`'s vault (`v`), `print`'s printer (`p`), `camera`'s watch, live, snap and screen (`w`, `l`, `s`, `c`), and the offered list of the database, UNC and ComfyUI groups. The toolbar's tool icons run it."),
-            new("/tools shell allowed", "Open the *Shell allowed commands* list; Enter removes a prefix after a yes. The policy button (`p`) steps *Shell command policy* from off to ask to yolo, yolo after a yes (a no goes on to off); ESC closes it. The toolbar's lock and Ctrl+Alt+L run it."),
+            new("/tools", "Open the tools pane: switch the model's tools on or off on Offered, and edit each tool group's settings on its own tab. On Offered, typing narrows the list to the tools whose name or description holds the text; Backspace erases, Esc clears it, a second Esc closes."),
+            new("/tools <group>", "Open a group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping` or `timers`. `shell` opens the *Shell command policy* picker (yolo asks first). Buttons at the top open related settings, and Esc comes back: `shell`'s allowed commands and police (`c`, `p`), `web`'s browser modes (`a`, `h`, `b`), `files`' browser mode (`b`), `image`'s edit mode (`e`), `advisors`' list (`a`), `obsidian`'s vault (`v`), `print`'s printer (`p`), `camera`'s watch, live, snap and screen (`w`, `l`, `s`, `c`), and the offered list of the database, UNC and ComfyUI groups. The toolbar's tool icons run it."),
+            new("/tools shell allowed", "Open the *Shell allowed commands* list; Enter removes a prefix after a yes. The policy button (`p`) steps *Shell command policy* from off to ask to yolo, yolo after a yes (a no goes on to off); Esc closes it. The toolbar's lock and Ctrl+Alt+L run it."),
             new("/tools shell police", "Open the *Shell police* on/off page; turning it off asks first, and **strings** (`s`) opens *Shell police forbidden strings*. The toolbar's officer and Ctrl+Alt+O run it."),
         ]),
         new("/tree",

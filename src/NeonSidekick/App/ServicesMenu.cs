@@ -23,11 +23,11 @@ internal sealed class ServicesMenu
     public static readonly IReadOnlyList<string> TabTitles = ["Running", "Stopped", "Failed", "All"];
 
     public static readonly InfoAction CopyAction = new("copy", 'c', "copy");
-    public static readonly InfoAction AskAction = new("ask", 'a', "ask the model");
-    public static readonly InfoAction StartAction = new("start", 's', "start it");
-    public static readonly InfoAction StopAction = new("stop", 'x', "stop it");
-    public static readonly InfoAction RestartAction = new("restart", 'r', "restart it");
-    public static readonly InfoAction StartTypeAction = new("start type", 't', "change its start type");
+    public static readonly InfoAction AskAction = new("ask", 'a', "ask");
+    public static readonly InfoAction StartAction = new("start", 's', "start");
+    public static readonly InfoAction StopAction = new("stop", 'x', "stop");
+    public static readonly InfoAction RestartAction = new("restart", 'r', "restart");
+    public static readonly InfoAction StartTypeAction = new("start type", 't', "start type");
 
     public static string TitleFor(string where) => Title + " · " + where;
 

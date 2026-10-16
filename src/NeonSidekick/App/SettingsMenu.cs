@@ -1138,7 +1138,7 @@ public enum SettingsField
 
     // ── The admin families (2026-10-15, the admin-tools plan): kept together, NetworkTools first and DirectoryDomainsGlobal last (FieldValue's range) ──
 
-    /// <summary>A toggle: whether a turn offers the network tools (<see cref="Settings.AppSettingsData.NetworkTools"/>). The Network menu on <c>/tools</c> › Core, after Web; read at each turn.</summary>
+    /// <summary>A toggle: whether a turn offers the network tools (<see cref="Settings.AppSettingsData.NetworkTools"/>). The Network menu on <c>/tools</c> › Admin, its first (on Core after Web until 2026-10-16, the user's order); read at each turn.</summary>
     NetworkTools,
 
     /// <summary>A picker: where the network tools may reach (<see cref="Settings.AppSettingsData.NetworkToolsReach"/>): same-as-web, internet, lan, both.</summary>
@@ -1355,23 +1355,23 @@ internal sealed partial class SettingsMenu
     // later on 2026-09-21 (the user's ask; the toolbar's where the pane has one), so the crumbs
     // (Breadcrumb) carry it too. Pinned.
     public const string Title = ChatScreen.SettingsToolGlyph + " Settings";
-    public const string TitleKeys = "Enter = edit · ESC = close";
+    public const string TitleKeys = "Enter = edit · Esc = close";
 
     /// <summary>The settings list's hint on the pane, where the rows sit under tabs.</summary>
-    public const string TabKeys = "Enter = edit · Space = flip · ←/→ tabs · ESC = close";   // Space since 2026-10-04
+    public const string TabKeys = "Enter = edit · Space = flip · ←/→ tabs · Esc = close";   // Space since 2026-10-04
 
     /// <summary>The hint row of <c>/settings</c>' own tabs (2026-10-04): <see cref="TabKeys"/> and the search a typed letter starts. Pinned.</summary>
-    public const string SettingsTabKeys = "Enter = edit · Space = flip · type = search · ←/→ tabs · ESC = close";
-    public const string EditKeys = "Enter = save · ESC = back";
+    public const string SettingsTabKeys = "Enter = edit · Space = flip · type = search · ←/→ tabs · Esc = close";
+    public const string EditKeys = "Enter = save · Esc = back";
 
     /// <summary>The Model avatar and User avatar rows' value while there is none (2026-10-10). Pinned.</summary>
     public const string NoAvatarLabel = "(none)";
-    public const string PickKeys = "Enter = choose · ESC = back";
+    public const string PickKeys = "Enter = choose · Esc = back";
 
     /// <summary>The hint of a picker with a <c>(none)</c> row (<c>TTS voice 2</c>): Backspace moves the cursor to it.</summary>
-    public const string NoneKeys = "Enter = choose · Backspace = none · ESC = back";
-    public const string SwitchKeys = "Enter = switch · a–z = jump · ESC = back";
-    public const string KeepKeys = "Enter = choose · ESC = keep";
+    public const string NoneKeys = "Enter = choose · Backspace = none · Esc = back";
+    public const string SwitchKeys = "Enter = switch · a–z = jump · Esc = back";
+    public const string KeepKeys = "Enter = choose · Esc = keep";
 
     /// <summary>The model picker's hint on the pane (2026-10-03, the user's ask): <see cref="KeepKeys"/> with the type-to-filter. Pinned.</summary>
     public const string ModelKeys = "Enter = choose · " + MenuFilter.TypeAndKeepKeys;
@@ -1380,11 +1380,11 @@ internal sealed partial class SettingsMenu
     /// The theme pickers' hints (2026-10-03, the user's ask): <see cref="KeepKeys"/> and <see cref="PickKeys"/> with the letter
     /// jump (<see cref="MenuPage.JumpNames"/>).
     /// </summary>
-    public const string ThemeKeepKeys = "Enter = choose · a–z = jump · ESC = keep";
-    public const string ThemePickKeys = "Enter = choose · a–z = jump · ESC = back";
+    public const string ThemeKeepKeys = "Enter = choose · a–z = jump · Esc = keep";
+    public const string ThemePickKeys = "Enter = choose · a–z = jump · Esc = back";
 
     /// <summary>The yes/no pane's hint (<see cref="ConfirmAsync"/>). Pinned.</summary>
-    public const string ConfirmKeys = "y / n = pick · Enter = choose · ESC = no";
+    public const string ConfirmKeys = "y / n = pick · Enter = choose · Esc = no";
 
     /// <summary>The yes/no pane's rows, <c>No</c> first — the row the cursor opens on. Pinned.</summary>
     public static readonly IReadOnlyList<string> ConfirmRows = ["No", "Yes"];
@@ -1584,14 +1584,14 @@ internal sealed partial class SettingsMenu
 
     /// <summary><c>/profile</c>'s picker label; ESC keeps the loaded profile. The settings row's level is <see cref="Breadcrumb"/> over <see cref="FieldName"/> (no glyph under the crumb) + <see cref="SwitchKeys"/>.</summary>
     public const string ProfileTitle = ChatScreen.ProfileToolGlyph + " Profile";   // the glyph the toolbar wears for the picker (later on 2026-09-29)
-    public const string ProfileKeys = "Enter = switch · a–z = jump · ESC = keep";
+    public const string ProfileKeys = "Enter = switch · a–z = jump · Esc = keep";
 
     /// <summary>The <c>/server</c> picker's label; ESC keeps the server in use.</summary>
     public const string ServerTitle = "🖥️ LLM server";
 
     /// <summary>The startup picker's label, when several servers answered a blank URL, or any did at the app's start (2026-09-23; "Several LLM servers answered" until then); ESC takes the first listed, as before.</summary>
     public const string StartupServerTitle = "🖥️ Pick an LLM server";
-    public const string StartupServerKeys = "Enter = choose · ESC = the first listed";
+    public const string StartupServerKeys = "Enter = choose · Esc = the first listed";
 
     private static readonly SettingsField[] Fields = Enum.GetValues<SettingsField>();
 
@@ -1758,7 +1758,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.ShoppingTools, SettingsField.ShoppingList, SettingsField.ShoppingStores],
         [SettingsField.EventLogTools, SettingsField.EventLogComputersOffered, SettingsField.EventLogSetPassword, SettingsField.EventLogAddComputer, SettingsField.EventLogMaxEvents, SettingsField.EventLogScanLimit, SettingsField.EventLogComputersProfile, SettingsField.EventLogComputersGlobal],
         [SettingsField.TimerTools],
-        // The admin families (2026-10-15, the admin-tools plan): Network on Core after Web; Services, Tasks and Directory on Admin after EventLog.
+        // The admin families (2026-10-15, the admin-tools plan): Services, Tasks and Directory on Admin after EventLog; Network on Core after Web, on Admin first since 2026-10-16 (the user's order).
         [SettingsField.NetworkTools, SettingsField.NetworkToolsReach, SettingsField.NetworkMaxHostsPerTurn, SettingsField.NetworkMaxPortsPerTurn, SettingsField.NetworkAllowedHosts, SettingsField.NetworkDeniedHosts, SettingsField.NetworkCertificateStores],
         [SettingsField.ServiceTools, SettingsField.ServiceWrites, SettingsField.ServiceComputersOffered, SettingsField.ServiceSetPassword, SettingsField.ServiceAddComputer, SettingsField.ServiceComputersProfile, SettingsField.ServiceComputersGlobal],
         [SettingsField.TaskTools, SettingsField.TaskWrites, SettingsField.TaskComputersOffered, SettingsField.TaskSetPassword, SettingsField.TaskAddComputer, SettingsField.TaskComputersProfile, SettingsField.TaskComputersGlobal],
@@ -1926,7 +1926,7 @@ internal sealed partial class SettingsMenu
     public const string EmbeddedContextFitLabel = "fit";
 
     /// <summary>The catalog picker's title and keys (2026-09-29).</summary>
-    public const string EmbeddedModelsKeys = "Enter = choose · " + NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.CatalogKeys + " · ESC = back";
+    public const string EmbeddedModelsKeys = "Enter = choose · " + NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.CatalogKeys + " · Esc = back";
     public const string UseNowRow = "Use now";
     public const string BackRow = "Back";
 
@@ -3381,7 +3381,7 @@ internal sealed partial class SettingsMenu
         Markup.Escape((enabled ? "[x] " : "[ ] ") + name.PadRight(11)) + Theme.DimMarkup(Shell.CodeLanguages.Describe(name) + (installed ? "" : NotFoundSuffix));
 
     /// <summary>The checklists' hint (the code-languages list's first; A and N since 2026-09-29, <see cref="ChecklistButtons"/>). Pinned.</summary>
-    public const string ToggleKeys = "Enter / Space = on or off · a = all · n = none · ESC = back";
+    public const string ToggleKeys = "Enter / Space = on or off · a = all · n = none · Esc = back";
 
     /// <summary>
     /// The checklists' first title-row button (2026-09-29, the user's ask, the Folders pane's <c>collapse all</c> its
@@ -3421,14 +3421,14 @@ internal sealed partial class SettingsMenu
     private const int DefaultsIndex = 2;
 
     /// <summary>The hint of a checklist with a default: <see cref="ToggleKeys"/> with D (2026-09-29, Show toolbar's; SQLite statements allowed's since 2026-10-05). Pinned.</summary>
-    public const string DefaultToggleKeys = "Enter / Space = on or off · a = all · n = none · d = default · ESC = back";
+    public const string DefaultToggleKeys = "Enter / Space = on or off · a = all · n = none · d = default · Esc = back";
 
     /// <summary>
     /// Show toolbar's hint (2026-10-12, the user's ask: the home bar picker's move keys on this checklist): <see cref="DefaultToggleKeys"/>
     /// with the move. Shift+Home/End (to the top or the bottom) and Delete (unchecks) work too, but the hint leaves them out to stay
     /// on one row of a 120-cell window; the docs and <c>neon_help</c> name them. Pinned.
     /// </summary>
-    public const string ToolbarToggleKeys = "Space = on or off · Shift+↑↓ = move · Shift+←→ = side · + = divider · a = all · n = none · d = default · ESC = back";   // the side since 2026-10-13 (the user's ask: pinned left or right); + = divider later that day, Enter left unnamed to keep one row
+    public const string ToolbarToggleKeys = "Space = on or off · Shift+↑↓ = move · Shift+←→ = side · + = divider · a = all · n = none · d = default · Esc = back";   // the side since 2026-10-13 (the user's ask: pinned left or right); + = divider later that day, Enter left unnamed to keep one row
 
     /// <summary>The Tool bar checklist's fourth title-row button (2026-10-13, the user's ask: dividers on the tool bar): a new divider after the cursor's item. Pinned.</summary>
     public const string DividerButton = "+ divider";
@@ -3451,13 +3451,13 @@ internal sealed partial class SettingsMenu
     /// default); they went on 2026-10-12, and since 2026-10-14 (the user's ask) one button after default steps through them
     /// (<see cref="PerfBarMode.LookButton"/>, <c>l = look</c>), as the Queue pane's mode button does. Pinned.
     /// </summary>
-    public const string PerfBarToggleKeys = "Space = on or off · Shift+↑↓ = move · Shift+←→ = side · a = all · n = none · d = default · l = look · ESC = back";   // Enter left unnamed since the look came (2026-10-14), to keep one row, as the tool bar's   // the side since later on 2026-10-13 (the user's ask: pinned left, center or right)
+    public const string PerfBarToggleKeys = "Space = on or off · Shift+↑↓ = move · Shift+←→ = side · a = all · n = none · d = default · l = look · Esc = back";   // Enter left unnamed since the look came (2026-10-14), to keep one row, as the tool bar's   // the side since later on 2026-10-13 (the user's ask: pinned left, center or right)
 
     /// <summary>The Hint bar checklist's hint (2026-10-12): the toolbar's keys, the same string until the tool bar's dividers (2026-10-13). Pinned.</summary>
-    public const string StatusBarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · Shift+←→ = side · a = all · n = none · d = default · ESC = back";
+    public const string StatusBarToggleKeys = "Enter / Space = on or off · Shift+↑↓ = move · Shift+←→ = side · a = all · n = none · d = default · Esc = back";
 
     /// <summary>The Toolbar order page's hint (2026-10-12): the move keys and default, nothing to check. Pinned.</summary>
-    public const string BarOrderKeys = "Shift+↑↓ = move · Shift+Home/End = top or bottom · d = default · ESC = back";
+    public const string BarOrderKeys = "Shift+↑↓ = move · Shift+Home/End = top or bottom · d = default · Esc = back";
 
     /// <summary>The Toolbar order page's title row (2026-10-12, the user's ask: a way back to the default order on the page): <see cref="DefaultsButton"/> alone, index 0.</summary>
     public static readonly IReadOnlyList<MenuButton> BarOrderButtons = [new(DefaultsButton, DefaultsKey)];
@@ -3482,7 +3482,7 @@ internal sealed partial class SettingsMenu
     public const string NoAllowedCommandsRow = "(none)";
 
     /// <summary>The allowed-commands list's hint: Enter removes, P steps the policy (<see cref="CommandPolicyButtons"/>, 2026-10-02 as O, A and Y; P since later on 2026-10-13). Pinned.</summary>
-    public const string AllowedCommandsKeys = "Enter = remove · p = policy · ESC = back";
+    public const string AllowedCommandsKeys = "Enter = remove · p = policy · Esc = back";
 
     /// <summary>The question before an allowed prefix goes (2026-10-07, every list's remove asks). Pinned.</summary>
     public static string RemovePrefixQuestion(string prefix) => $"Remove \"{prefix}\" from the allowed commands? It will ask again.";
@@ -3497,7 +3497,7 @@ internal sealed partial class SettingsMenu
     public const string ForbiddenStringNote = "a command that holds this is refused, whatever the policy says";
 
     /// <summary>The allowed-commands list's hint while nothing is allowed for good: no prefix to remove, the policy button still there (2026-10-02). Pinned.</summary>
-    public const string AllowedCommandsEmptyKeys = "p = policy · ESC = back";
+    public const string AllowedCommandsEmptyKeys = "p = policy · Esc = back";
 
     /// <summary>
     /// The allowed-commands list's first title-row button (2026-10-12, the user's ask: the third policy beside ask and yolo, first):
@@ -3569,7 +3569,7 @@ internal sealed partial class SettingsMenu
     public const string AddForbiddenRow = "+ Add a string…";
 
     /// <summary>The forbidden-strings list's hint: the top row adds, a string's row removes it. Pinned.</summary>
-    public const string ForbiddenKeys = "Enter = add or remove · ESC = back";
+    public const string ForbiddenKeys = "Enter = add or remove · Esc = back";
 
     /// <summary>The notice after a string is added: <c>Shell police forbidden strings: rm -rf added</c>. Pinned.</summary>
     public static string ForbiddenAddedNotice(string entry) => FieldName(SettingsField.ShellPoliceForbiddenStrings) + ": " + entry + " added";
@@ -3594,7 +3594,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<MenuButton> ForbiddenButtons = [new(RestoreForbiddenButton, RestoreForbiddenKey)];
 
     /// <summary>The forbidden-strings list's hint on the pane, where the button is (2026-10-08); the prompt keeps <see cref="ForbiddenKeys"/>. Pinned.</summary>
-    public const string ForbiddenPaneKeys = "Enter = add or remove · r = restore defaults · ESC = back";
+    public const string ForbiddenPaneKeys = "Enter = add or remove · r = restore defaults · Esc = back";
 
     /// <summary>
     /// The yes/no before <see cref="RestoreForbiddenButton"/> replaces the list (2026-10-08): an empty list is filled, a list with
@@ -3628,7 +3628,7 @@ internal sealed partial class SettingsMenu
     public const char PoliceStringsKey = 's';
 
     /// <summary>The police's on/off page's hint: <see cref="PickKeys"/> with the strings button's key. Pinned.</summary>
-    public const string PoliceToggleKeys = "Enter = choose · s = strings · ESC = back";
+    public const string PoliceToggleKeys = "Enter = choose · s = strings · Esc = back";
 
     /// <summary>
     /// The police's on/off page's one button (2026-10-03): <see cref="PoliceStringsTitle"/> for <paramref name="count"/> strings,
@@ -3660,7 +3660,7 @@ internal sealed partial class SettingsMenu
     public const char PolicyPoliceKey = 'p';
 
     /// <summary>The command-policy picker's hint on the pane, where the two buttons are (2026-10-09). Pinned.</summary>
-    public const string CommandPolicyPageKeys = "Enter = choose · c = allowed · p = police · ESC = back";
+    public const string CommandPolicyPageKeys = "Enter = choose · c = allowed · p = police · Esc = back";
 
     /// <summary>
     /// The command-policy picker's buttons (2026-10-09): <see cref="PolicyAllowedTitle"/> for <paramref name="allowed"/> prefixes, lit
@@ -3692,7 +3692,7 @@ internal sealed partial class SettingsMenu
     public const char OfferedKey = 'o';
 
     /// <summary>The offered tool pages' hint: <see cref="PickKeys"/> with the offered button's key (2026-10-05). Pinned.</summary>
-    public const string OfferedToggleKeys = "Enter = choose · o = offered · ESC = back";
+    public const string OfferedToggleKeys = "Enter = choose · o = offered · Esc = back";
 
     /// <summary>
     /// The offered tool pages' one button (2026-10-05): <see cref="OfferedTitle"/> for the offered row's <paramref name="value"/>,
@@ -3763,10 +3763,10 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>The Web tools page's hint: <see cref="PickKeys"/> with the browser-mode button's key (2026-10-04; M since later on 2026-10-13). Pinned.</summary>
-    public const string WebToggleKeys = "Enter = choose · m = browser mode · ESC = back";
+    public const string WebToggleKeys = "Enter = choose · m = browser mode · Esc = back";
 
     /// <summary><see cref="WebToggleKeys"/> with the open-browser button's key, where the screen has a Browser window (later on 2026-10-13). Pinned.</summary>
-    public const string WebToggleOpenKeys = "Enter = choose · m = browser mode · o = open browser · ESC = back";
+    public const string WebToggleOpenKeys = "Enter = choose · m = browser mode · o = open browser · Esc = back";
 
     /// <summary>The notice after a prefix is removed from the allowed list: <c>Shell allowed commands: git push removed</c>. Pinned.</summary>
     public static string PrefixRemovedNotice(string prefix) => FieldName(SettingsField.ShellCommandAllowed) + ": " + prefix + " removed";
@@ -4876,7 +4876,7 @@ internal sealed partial class SettingsMenu
         // The embedded filter buttons only while an embedded model is listed; the typed filter always (2026-10-07, the user's ask).
         bool embedded = servers.Any(s => NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(s.BaseUrl));
         var labels = ServerLabels(servers);
-        string baseHint = embedded ? keys.Replace(" · ESC", " · " + NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.Keys + " · ESC", StringComparison.Ordinal) : keys;
+        string baseHint = embedded ? keys.Replace(" · Esc", " · " + NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.Keys + " · Esc", StringComparison.Ordinal) : keys;
         string text = "";
         try
         {

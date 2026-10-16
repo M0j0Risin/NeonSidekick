@@ -20,7 +20,7 @@ public static class MenuFilter
     public const string TypeKeys = "type = filter";
 
     /// <summary>The hint row's piece while a filter is typed. Pinned.</summary>
-    public const string FilteringKeys = "Backspace = erase · ESC = clear filter";
+    public const string FilteringKeys = "Backspace = erase · Esc = clear filter";
 
     /// <summary>
     /// Whether a row whose name is <paramref name="name"/> and description <paramref name="description"/> stays under
@@ -112,10 +112,10 @@ public static class MenuFilter
     public static string NoMatchNameRow(string filter) => Theme.DimMarkup(NoMatchNameLine(filter));
 
     /// <summary>The end of a filtering tab's own hint while nothing is typed (<c>ToolsText.OfferedKeys</c>, <c>SkillsMenu.LoadedKeys</c>). Pinned.</summary>
-    public const string TypeAndCloseKeys = TypeKeys + " · ESC = close";
+    public const string TypeAndCloseKeys = TypeKeys + " · Esc = close";
 
     /// <summary>The end of a filtering picker's hint where ESC keeps what is in use (the model picker, 2026-10-03). Pinned.</summary>
-    public const string TypeAndKeepKeys = TypeKeys + " · ESC = keep";
+    public const string TypeAndKeepKeys = TypeKeys + " · Esc = keep";
 
     /// <summary>
     /// <see cref="TypeKeys"/> on a list with lettered buttons (2026-10-13, the user's pick): a button's letter presses it while nothing
@@ -124,10 +124,10 @@ public static class MenuFilter
     public const string TypeOrShiftKeys = "type / Shift+letter = filter";
 
     /// <summary><see cref="TypeAndCloseKeys"/> on a list with lettered buttons (2026-10-13). Pinned.</summary>
-    public const string TypeOrShiftAndCloseKeys = TypeOrShiftKeys + " · ESC = close";
+    public const string TypeOrShiftAndCloseKeys = TypeOrShiftKeys + " · Esc = close";
 
     /// <summary><see cref="TypeAndKeepKeys"/> on a list with lettered buttons (2026-10-13). Pinned.</summary>
-    public const string TypeOrShiftAndKeepKeys = TypeOrShiftKeys + " · ESC = keep";
+    public const string TypeOrShiftAndKeepKeys = TypeOrShiftKeys + " · Esc = keep";
 
     /// <summary>
     /// A filtering tab's hint: <paramref name="keys"/> (which ends in <see cref="TypeAndCloseKeys"/> or <see cref="TypeAndKeepKeys"/>, or
@@ -161,7 +161,7 @@ public static class MenuFilter
     {
         ArgumentNullException.ThrowIfNull(keys);
         ArgumentNullException.ThrowIfNull(filter);
-        int esc = keys.LastIndexOf("ESC = ", StringComparison.Ordinal);
+        int esc = keys.LastIndexOf("Esc = ", StringComparison.Ordinal);
         string head = esc > 0 ? keys[..esc] : keys + " · ";
         string type = letteredButtons ? TypeOrShiftKeys : TypeKeys;   // 2026-10-13: the page has lettered buttons, so a filter may start with Shift
         return filter.Length > 0 ? WithoutLetterKeys(head) + FilteringKeys : head + type + (esc > 0 ? " · " + keys[esc..] : "");

@@ -30,7 +30,7 @@ public static class SamplingText
     public const string ClearRowName = "clear all on this tab";
 
     /// <summary>The hint of the pane, which edits every row by typing. Pinned.</summary>
-    public const string Keys = "Enter = edit · blank = server default · ←/→ tabs · ESC = close";
+    public const string Keys = "Enter = edit · blank = server default · ←/→ tabs · Esc = close";
 
     /// <summary>The caption while the Anthropic API is connected: its requests carry none of this. Pinned.</summary>
     public const string ClaudeApiCaption = "The Anthropic API ignores sampling; these apply to OpenAI-compatible servers.";

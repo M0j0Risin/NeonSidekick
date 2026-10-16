@@ -189,7 +189,7 @@ public partial class ScreenPaneTests : IDisposable
         _time.Advance(ScreenPane.Tick);
         Assert.Equal("", Output[mark..]);
 
-        pane.ShowOverlay(new Markup("a"), "ESC closes");
+        pane.ShowOverlay(new Markup("a"), "Esc closes");
         Assert.False(pane.TryHitLowerRuleTitle(36, 101));
         pane.CloseOverlay();
         Assert.True(pane.TryHitLowerRuleTitle(36, 101));
@@ -326,7 +326,7 @@ public partial class ScreenPaneTests : IDisposable
         Assert.False(pane.TryHitRuleTitle(35, 98));
         Assert.False(pane.TryHitRuleTitle(35, 100));
 
-        pane.ShowOverlay(new Markup("a"), "ESC closes");
+        pane.ShowOverlay(new Markup("a"), "Esc closes");
         Assert.False(pane.TryHitRuleTitle(35, 99));
         pane.CloseOverlay();
         Assert.True(pane.TryHitRuleTitle(35, 99));
@@ -372,7 +372,7 @@ public partial class ScreenPaneTests : IDisposable
         _time.Advance(ScreenPane.Tick);
         Assert.Equal("", Output[mark..]);
 
-        pane.ShowOverlay(new Markup("a"), "ESC closes");
+        pane.ShowOverlay(new Markup("a"), "Esc closes");
         Assert.False(pane.TryHitFoldButton(2, 99));
         pane.CloseOverlay();
         Assert.True(pane.TryHitFoldButton(2, 99));
@@ -1072,11 +1072,11 @@ public partial class ScreenPaneTests : IDisposable
     [Fact]
     public void TheHint_IsDrawnUnderTheRow_AndRedrawnWhenItChanges()
     {
-        string hint = "ESC clears";
+        string hint = "Esc clears";
         using var pane = Pane();
         pane.Hint = () => hint;
         pane.Show();
-        Assert.EndsWith(InputLine.PromptGlyph + "\n" + Rule(40) + "\nESC clears", Output);
+        Assert.EndsWith(InputLine.PromptGlyph + "\n" + Rule(40) + "\nEsc clears", Output);
 
         hint = "⏰ tea 09:00";
         _time.Advance(ScreenPane.Tick);
@@ -1217,10 +1217,10 @@ public partial class ScreenPaneTests : IDisposable
 
         using (pane.BeginBusy("thinking"))
         {
-            pane.ShowOverlay(new Markup("a"), "ESC closes");
-            Assert.EndsWith(Theme.SpinnerFrames[0] + " thinking 00:00 · ESC closes", Output);
+            pane.ShowOverlay(new Markup("a"), "Esc closes");
+            Assert.EndsWith(Theme.SpinnerFrames[0] + " thinking 00:00 · Esc closes", Output);
             _time.Advance(ScreenPane.Tick);
-            Assert.EndsWith(Theme.SpinnerFrames[1] + " thinking 00:00 · ESC closes", Output);
+            Assert.EndsWith(Theme.SpinnerFrames[1] + " thinking 00:00 · Esc closes", Output);
             pane.CloseOverlay();
             Assert.EndsWith(" thinking 00:00", Output);
         }
@@ -1232,17 +1232,17 @@ public partial class ScreenPaneTests : IDisposable
     public void BusyRow_IsPinned()
     {
         Assert.Equal("thinking 00:12", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), ""));
-        Assert.Equal("thinking 00:12 · ESC closes · ←/→ tabs · ↑/↓ scroll", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes · ←/→ tabs · ↑/↓ scroll"));
+        Assert.Equal("thinking 00:12 · Esc closes · ←/→ tabs · ↑/↓ scroll", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "Esc closes · ←/→ tabs · ↑/↓ scroll"));
         // The queued part between the label and the overlay's hint (2026-09-18); empty, the row as before.
         Assert.Equal("thinking 00:12 · 📤 2 queued", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "", "📤 2 queued"));
-        Assert.Equal("thinking 00:12 · 📤 2 queued · ESC closes", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", "📤 2 queued"));
-        Assert.Equal(ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes"), ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", ""));
+        Assert.Equal("thinking 00:12 · 📤 2 queued · Esc closes", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "Esc closes", "📤 2 queued"));
+        Assert.Equal(ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "Esc closes"), ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "Esc closes", ""));
         // The tally right after the label (2026-09-25), ahead of the queued part; empty, the row as before.
-        Assert.Equal("thinking 00:12 · ~1.7k / 4.1k · ~42% · 📤 2 queued · ESC closes", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", "📤 2 queued", "~1.7k / 4.1k · ~42%"));
-        Assert.Equal(ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", "📤 2 queued"), ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "ESC closes", "📤 2 queued", ""));
+        Assert.Equal("thinking 00:12 · ~1.7k / 4.1k · ~42% · 📤 2 queued · Esc closes", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "Esc closes", "📤 2 queued", "~1.7k / 4.1k · ~42%"));
+        Assert.Equal(ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "Esc closes", "📤 2 queued"), ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "Esc closes", "📤 2 queued", ""));
         // A label after the tally (the ComfyUI generation's, 2026-09-25): the two swap, nothing else moves; no tally, the row as before.
-        Assert.Equal("1.2k / 4.1k · 30% · 🎨 00:12 · 📤 2 queued · ESC closes", ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "ESC closes", "📤 2 queued", "1.2k / 4.1k · 30%", labelAfterUsage: true));
-        Assert.Equal(ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "ESC closes", "📤 2 queued"), ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "ESC closes", "📤 2 queued", "", labelAfterUsage: true));
+        Assert.Equal("1.2k / 4.1k · 30% · 🎨 00:12 · 📤 2 queued · Esc closes", ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "Esc closes", "📤 2 queued", "1.2k / 4.1k · 30%", labelAfterUsage: true));
+        Assert.Equal(ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "Esc closes", "📤 2 queued"), ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "Esc closes", "📤 2 queued", "", labelAfterUsage: true));
     }
 
     /// <summary>
@@ -1494,8 +1494,8 @@ public partial class ScreenPaneTests : IDisposable
 
             // Under an overlay's hint the part is hidden and its zone with it; closed, back.
             int mark = Output.Length;
-            pane.ShowOverlay(new Markup("a"), "ESC closes");
-            Assert.Contains("🔊 · " + Theme.SpinnerFrames[0] + " thinking 00:00 · ESC closes", Output[mark..]);
+            pane.ShowOverlay(new Markup("a"), "Esc closes");
+            Assert.Contains("🔊 · " + Theme.SpinnerFrames[0] + " thinking 00:00 · Esc closes", Output[mark..]);
             Assert.DoesNotContain("queued", Output[mark..]);
             Assert.False(pane.TryHitQueued(column, 102));
             pane.CloseOverlay();
@@ -1722,8 +1722,8 @@ public partial class ScreenPaneTests : IDisposable
     [InlineData("idle", "llama", 1, "…")]
     [InlineData("idle", "qwen3-30b-a3b-instruct-q8", 40, "idle                qwen3-30b-a3b-instr…")] // a short left: the half, as before
     [InlineData("work · a longer hint", "qwen3-30b-a3b-instruct-q8", 40, "work · a longer hint  qwen3-30b-a3b-ins…")] // the name gives way to a left that fits
-    [InlineData("Enter = edit · ESC = close", "qwen3-30b-a3b-instruct-q8", 40, "Enter = edit · ESC = close  qwen3-30b-a…")] // the name in what the left leaves, the left whole
-    [InlineData("Enter = edit · ESC = close · more", "qwen3-30b-a3b-instruct-q8", 40, "Enter = edit · ESC = close · more")] // under TrailerMinCells: the name gone
+    [InlineData("Enter = edit · Esc = close", "qwen3-30b-a3b-instruct-q8", 40, "Enter = edit · Esc = close  qwen3-30b-a…")] // the name in what the left leaves, the left whole
+    [InlineData("Enter = edit · Esc = close · more", "qwen3-30b-a3b-instruct-q8", 40, "Enter = edit · Esc = close · more")] // under TrailerMinCells: the name gone
     public void PinRight_IsPinned(string left, string trailer, int cells, string expected) =>
         Assert.Equal(expected, ScreenPane.PinRight(left, trailer, cells));
 
@@ -1734,8 +1734,8 @@ public partial class ScreenPaneTests : IDisposable
     [InlineData("", "", "◕", 10, "         ◕")]                              // a mark alone
     [InlineData("idle", "llama", "◕", 5, "idle")]                            // no room: the name and its mark gone, the left whole
     [InlineData("work · a longer hint", "qwen3-30b-a3b-instruct-q8", "◕", 40, "work · a longer hint  qwen3-30b-a3b-i… ◕")] // the name gives way, the left whole
-    [InlineData("Enter = edit · ESC = close", "qwen3-30b-a3b-instruct-q8", "◕", 40, "Enter = edit · ESC = close  qwen3-30b… ◕")] // the name in what the left and the mark leave
-    [InlineData("Enter = edit · ESC = close · more", "qwen3-30b-a3b-instruct-q8", "◕", 40, "Enter = edit · ESC = close · more")] // the name collapses, its mark with it
+    [InlineData("Enter = edit · Esc = close", "qwen3-30b-a3b-instruct-q8", "◕", 40, "Enter = edit · Esc = close  qwen3-30b… ◕")] // the name in what the left and the mark leave
+    [InlineData("Enter = edit · Esc = close · more", "qwen3-30b-a3b-instruct-q8", "◕", 40, "Enter = edit · Esc = close · more")] // the name collapses, its mark with it
     public void PinRight_WithAMark_IsPinned(string left, string trailer, string mark, int cells, string expected) =>
         Assert.Equal(expected, ScreenPane.PinRight(left, trailer, mark, cells));
 
@@ -1813,8 +1813,8 @@ public partial class ScreenPaneTests : IDisposable
         Assert.EndsWith("idle" + new string(' ', 36) + "Qwen3.8-27B-Uncensored-HauhauCS-Aggr… ◕", Output);
 
         // A 50-cell overlay hint stays whole; the name takes the 25 left after the gap and the mark.
-        pane.ShowOverlay(new Markup("a"), "Enter = move, rename, edit or delete · ESC = close");
-        Assert.EndsWith("Enter = move, rename, edit or delete · ESC = close  Qwen3.8-27B-Uncensored-H… ◕", Output);
+        pane.ShowOverlay(new Markup("a"), "Enter = move, rename, edit or delete · Esc = close");
+        Assert.EndsWith("Enter = move, rename, edit or delete · Esc = close  Qwen3.8-27B-Uncensored-H… ◕", Output);
         pane.CloseOverlay();
 
         // So does a 50-cell spinner row.
@@ -5402,7 +5402,7 @@ public partial class ScreenPaneTests : IDisposable
     {
         Assert.Equal("🛠️ read_file 00:03 · 00:12", ScreenPane.BusyText("🛠️ read_file", TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(3)));
         Assert.Equal("thinking 00:12", ScreenPane.BusyText("thinking", TimeSpan.FromSeconds(12), null));
-        Assert.Equal("esc to stop", ScreenPane.StopHint);
+        Assert.Equal("Esc to stop", ScreenPane.StopHint);
         Assert.Equal(TimeSpan.FromSeconds(2), ScreenPane.FlashLasts);
     }
 

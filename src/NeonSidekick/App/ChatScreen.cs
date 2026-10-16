@@ -375,7 +375,7 @@ internal sealed partial class ChatScreen
     public static string SplashDeleteArmedHint(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
-        return "DEL again to trash " + name;
+        return "Del again to trash " + name;
     }
     /// <summary>
     /// A connect or model download cancelled by Ctrl+C under its spinner (2026-09-17); the app stays.
@@ -424,8 +424,8 @@ internal sealed partial class ChatScreen
 
     // The /loop words and lines (2026-09-21, the user's ask). Pinned.
     public const string LoopInfiniteWord = "infinite";
-    public const string LoopInfiniteNote = "send the message until ESC or Ctrl+C stops it: /loop infinite [delay] <message>";
-    public const string LoopUsageError = "Usage: /loop <count> [delay] <message>, or /loop infinite [delay] <message>; delay like 30s, 5m, 1h30m (ESC or Ctrl+C stops it).";
+    public const string LoopInfiniteNote = "send the message until Esc or Ctrl+C stops it: /loop infinite [delay] <message>";
+    public const string LoopUsageError = "Usage: /loop <count> [delay] <message>, or /loop infinite [delay] <message>; delay like 30s, 5m, 1h30m (Esc or Ctrl+C stops it).";
     /// <summary>The longest wait between passes: <c>/timer</c>'s ceiling, 24 hours (2026-09-24).</summary>
     public static readonly TimeSpan LoopMaxDelay = TimeSpan.FromHours(24);
     /// <summary>The notice before the wait between two passes.</summary>
@@ -1392,7 +1392,7 @@ internal sealed partial class ChatScreen
             // A ComfyUI generation's label after the tally (2026-09-25, the user's call): /imagine, a botchat picture and the model's generate_image alike.
             // Either kind since 2026-09-26: 🖼️ text-to-image, 🎨 image-to-image.
             LabelAfterUsage = ComfyText.IsGeneratingLabel,
-            // "esc to stop" at the busy row's end while the turn runs (2026-10-04, the UI review), not under a menu's own spinner.
+            // "Esc to stop" at the busy row's end while the turn runs (2026-10-04, the UI review), not under a menu's own spinner.
             StopHintShown = () => _turnRunning,
             // The Hints bar (2026-10-14, the user's ask: the keys on a row of their own over the Status bar): the setting, cached as
             // the Status bar's is, and the screen's two rungs of its ladder, the armed prompt and the keys' lead.
@@ -2722,7 +2722,7 @@ internal sealed partial class ChatScreen
         {
             new("Enter", "send the message · change a setting in a menu"),
             new("Ctrl+Enter", "start a new line in the message"),
-            new("ESC", "stop the speech · clear the line · cancel the reply · back out of a menu"),
+            new("Esc", "stop the speech · clear the line · cancel the reply · back out of a menu"),
             new(RewindText.KeyLabel, RewindText.KeyMeaning, "/rewind"),
             new("Up / Down", "recall earlier messages · move through a wrapped draft · move in menus"),
             new("Left / Right", "switch tabs in menus · hold Shift to select text"),
@@ -4521,7 +4521,7 @@ internal sealed partial class ChatScreen
     public static string TypoTitle(string command) => $"Did you mean {command}?";
 
     /// <summary>The typo pane's hint row. Pinned. (Ctrl+C backs out like ESC — the line is sent as typed.)</summary>
-    public const string TypoKeys = "Enter = use the command · ESC = send as typed";
+    public const string TypoKeys = "Enter = use the command · Esc = send as typed";
 
     /// <summary>The typo pane's one row: the command and, after <see cref="MentionCompleter.NoteGap"/> cells, its summary dim — the completion list's shape; the pane adds the pointer. Pinned.</summary>
     public static string TypoRow(CompletionItem item)
@@ -7324,7 +7324,7 @@ internal sealed partial class ChatScreen
     // ── /draft (2026-09-19) ─────────────────────────────────────────────────
 
     /// <summary>The hint row while the editor holds the draft (the <see cref="ListeningLabel"/> shape). Pinned.</summary>
-    public const string DraftingLabel = "drafting in your editor…  save and close to send   ESC = cancel";
+    public const string DraftingLabel = "drafting in your editor…  save and close to send   Esc = cancel";
 
     /// <summary>The file came back empty, whitespace alone, or never saved: nothing sent. Pinned.</summary>
     public const string DraftEmptyNotice = "(nothing sent: the draft is empty)";
@@ -10267,13 +10267,13 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>The spinner while listening. Pinned.</summary>
-    public static string ListeningLabel(string key) => $"listening…  {key} or Enter = done   ESC = discard";
+    public static string ListeningLabel(string key) => $"listening…  {key} or Enter = done   Esc = discard";
 
     /// <summary>The spinner while listening after the wake word. Pinned.</summary>
-    public static string WakeListeningLabel(string phrase, string key) => $"heard \"{phrase}\"…  {key} or Enter = done   ESC = discard";
+    public static string WakeListeningLabel(string phrase, string key) => $"heard \"{phrase}\"…  {key} or Enter = done   Esc = discard";
 
     /// <summary>The spinner while listening after an interruption: the request is what is said now, the phrase itself is not it. Pinned.</summary>
-    public static string InterruptedLabel(string key) => $"interrupted — say your request…  {key} or Enter = done   ESC = discard";
+    public static string InterruptedLabel(string key) => $"interrupted — say your request…  {key} or Enter = done   Esc = discard";
 
     /// <summary>
     /// What to print when a turn ends, and what to do next, decided once after everything has
@@ -10320,17 +10320,17 @@ internal sealed partial class ChatScreen
         return cancelled ? TurnCancelledByCommandLog : null;
     }
 
-    public const string TurnCancelledByKeysLog = "Turn canceled by the keys (ESC or Ctrl+C) after the model's first event.";
+    public const string TurnCancelledByKeysLog = "Turn canceled by the keys (Esc or Ctrl+C) after the model's first event.";
     public const string TurnWithdrawnLog = "Turn withdrawn: the keys before the model's first event; the message goes back to the line.";
     public const string TurnInterruptedLog = "Turn interrupted by the wake phrase.";
     public const string TurnEndedByAppTokenLog = "Turn ended by the app token.";
     public const string TurnCancelledByCommandLog = "Turn canceled by a mid-turn command.";
 
     /// <summary>The first ESC over a reply being heard (the log's Debug line; the transcript's is <see cref="SpeechStoppedNotice"/>).</summary>
-    public const string SpeechStoppedLogLine = "Speech stopped by the first ESC; the text streamed on.";
+    public const string SpeechStoppedLogLine = "Speech stopped by the first Esc; the text streamed on.";
 
     /// <summary>The idle line's ESC over the tail.</summary>
-    public const string TailStoppedLogLine = "Tail stopped by ESC.";
+    public const string TailStoppedLogLine = "Tail stopped by Esc.";
 
     public static (string? Notice, TurnOutcome Outcome) TurnEndNotice(bool cancelled, bool stoppedEarly, Interrupt interrupt, bool heardPhrase, bool appCancelled, bool returned)
     {
@@ -16062,7 +16062,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>A listen ended by ESC before anything was transcribed.</summary>
-    public const string ListenDiscardedLogLine = "Listen discarded (ESC).";
+    public const string ListenDiscardedLogLine = "Listen discarded (Esc).";
 
     /// <summary>The tracker's backstop: two interruptions in a row that heard nothing.</summary>
     public const string InterruptDisabledLogLine = "Interrupt switched off for this session: two interruptions in a row heard nothing.";

@@ -24,7 +24,7 @@ public class MenuPaneTests : IDisposable
     private ScreenPane Pane(bool geometry = true) =>
         new(_console, geometry ? new ScreenGeometry(() => null) : null, _time) { Hint = () => "idle" };
 
-    private static MenuPage Page(params string[] rows) => new("Settings", rows, "Enter = pick · ESC = back");
+    private static MenuPage Page(params string[] rows) => new("Settings", rows, "Enter = pick · Esc = back");
 
     private static string Rule(int width) => new(ScreenPane.RuleGlyph, width);
 
@@ -100,7 +100,7 @@ public class MenuPaneTests : IDisposable
         Assert.True(menu.IsOpen);
         Assert.True(pane.OverlayOpen);
         // The first draw: the title, the spacer, the rows with the cursor on the first.
-        Assert.Contains(Rule(40) + "\n" + Titled("Settings") + "\n \n▸ one\n  two\n  three\n" + Rule(40) + "\nEnter = pick · ESC = back\n", Output);
+        Assert.Contains(Rule(40) + "\n" + Titled("Settings") + "\n \n▸ one\n  two\n  three\n" + Rule(40) + "\nEnter = pick · Esc = back\n", Output);
         // Down three times wraps to the first; Up from there is the last.
         Assert.Contains("\n  one\n  two\n▸ three\n", Output);
 
@@ -175,7 +175,7 @@ public class MenuPaneTests : IDisposable
         var menu = new MenuPane(pane, _keys);
         var copied = new List<string>();
         var input = new InputLine(pane, _keys, copyToClipboard: text => { copied.Add(text); return true; });
-        var page = new MenuPage("Settings", ["one", "two"], "Enter = save · ESC = back");
+        var page = new MenuPage("Settings", ["one", "two"], "Enter = save · Esc = back");
         Push(Keys.CtrlC);
 
         Assert.IsType<InputResult.Cancelled>(await menu.EditAsync(page, 1, input, "old", allowEmpty: false, CancellationToken.None));
@@ -411,7 +411,7 @@ public class MenuPaneTests : IDisposable
         pane.Show();
         var menu = new MenuPane(pane, _keys);
         var input = new InputLine(pane, _keys);
-        var page = new MenuPage("Settings", ["one", "two"], "Enter = save · ESC = back");
+        var page = new MenuPage("Settings", ["one", "two"], "Enter = save · Esc = back");
         _console.Input.PushText("x");
         Push(Keys.Escape);
 
@@ -421,7 +421,7 @@ public class MenuPaneTests : IDisposable
         Assert.True(menu.IsOpen);
         Assert.True(pane.OverlayOpen);
         // The list with the edited row marked, the slot pre-filled under it, the edit hint.
-        Assert.Contains(Rule(40) + "\n" + Titled("Settings") + "\n \n  one\n▸ two\n› \n" + Rule(40) + "\nEnter = save · ESC = back", Output);
+        Assert.Contains(Rule(40) + "\n" + Titled("Settings") + "\n \n  one\n▸ two\n› \n" + Rule(40) + "\nEnter = save · Esc = back", Output);
         Assert.Contains("old", Output);
         Assert.Contains("oldx", Output);
 
@@ -444,7 +444,7 @@ public class MenuPaneTests : IDisposable
         "Settings",
         [new MenuTab("One", ["a", "b"]), new MenuTab("Two", ["c"]), new MenuTab("Three", ["d", "e", "f"])],
         tab,
-        "Enter = pick · ←/→ tabs · ESC = back");
+        "Enter = pick · ←/→ tabs · Esc = back");
 
     [Fact]
     public void Tabbed_ShowsTheTabsRows_AndClampsTheTab()
@@ -471,7 +471,7 @@ public class MenuPaneTests : IDisposable
 
         // Right from One (on "b") lands on Two with the cursor on its first row; Tab twice wraps past Three to One.
         Assert.Equal(new MenuPick(0, 0), picked);
-        Assert.Contains(Rule(40) + "\n" + Titled("Settings │ One · Two · Three ") + "\n \n▸ a\n  b\n \n" + Rule(40) + "\nEnter = pick · ←/→ tabs · ESC = back\n", Output);   // padded to Three's height (2026-10-01)
+        Assert.Contains(Rule(40) + "\n" + Titled("Settings │ One · Two · Three ") + "\n \n▸ a\n  b\n \n" + Rule(40) + "\nEnter = pick · ←/→ tabs · Esc = back\n", Output);   // padded to Three's height (2026-10-01)
         Assert.Contains("\n" + Titled("Settings │ One · Two · Three ") + "\n \n  a\n▸ b\n", Output);
         Assert.Contains("\n" + Titled("Settings │ One · Two · Three ") + "\n \n▸ c\n \n \n" + Rule(40), Output);
         Assert.Contains("\n" + Titled("Settings │ One · Two · Three ") + "\n \n▸ d\n  e\n  f\n", Output);
@@ -518,7 +518,7 @@ public class MenuPaneTests : IDisposable
         "Settings",
         [new MenuTab("One", ["a"]), new MenuTab("Group", []) { SubTabs = [new MenuTab("X", ["x1", "x2"]), new MenuTab("Y", ["y1"]) { Hint = "y keys" }], Sub = sub }, new MenuTab("Three", ["d"])],
         tab,
-        "Enter = pick · ←/→ tabs · ESC = back");
+        "Enter = pick · ←/→ tabs · Esc = back");
 
     /// <summary>The second strip under the first: the label's width of blanks, the bar, the hook, then the sub-tabs' titles.</summary>
     private const string SubStrip = "         │ ↳ X · Y ";
@@ -759,10 +759,10 @@ public class MenuPaneTests : IDisposable
         var input = new InputLine(pane, _keys);
         Push(Keys.Char('x'), Keys.Enter);
 
-        var result = await menu.EditAsync(Tabbed(2) with { Hint = "Enter = save · ESC = back" }, 1, input, "", allowEmpty: false, CancellationToken.None);
+        var result = await menu.EditAsync(Tabbed(2) with { Hint = "Enter = save · Esc = back" }, 1, input, "", allowEmpty: false, CancellationToken.None);
 
         Assert.Equal("x", Assert.IsType<InputResult.Submitted>(result).Text);
-        Assert.Contains(Rule(40) + "\n" + Titled("Settings │ One · Two · Three ") + "\n \n  d\n▸ e\n  f\n› \n" + Rule(40) + "\nEnter = save · ESC = back", Output);
+        Assert.Contains(Rule(40) + "\n" + Titled("Settings │ One · Two · Three ") + "\n \n  d\n▸ e\n  f\n› \n" + Rule(40) + "\nEnter = save · Esc = back", Output);
         menu.Close();
     }
 
@@ -1054,7 +1054,7 @@ public class MenuPaneTests : IDisposable
 
         Assert.Equal(new MenuPick(0, 0), await menu.PickAsync(Sided("one", "two", "three"), 0, CancellationToken.None));
 
-        Assert.Contains(Rule(40) + "\n" + Titled("Settings") + "\n \n▸ one\n  two\n  three\n" + Rule(40) + "\nEnter = pick · ESC = back", Output);
+        Assert.Contains(Rule(40) + "\n" + Titled("Settings") + "\n \n▸ one\n  two\n  three\n" + Rule(40) + "\nEnter = pick · Esc = back", Output);
         Assert.DoesNotContain("side", Output);
         menu.Close();
     }
@@ -1632,7 +1632,7 @@ public class MenuPaneTests : IDisposable
             new MenuTab("Submit", ["One — (no answer)", "Submit"]),
         ],
         tab,
-        "Enter = pick · ←/→ tabs · ESC = back") with { SpaceToggles = true, TabCursors = [1, 2, 1] };
+        "Enter = pick · ←/→ tabs · Esc = back") with { SpaceToggles = true, TabCursors = [1, 2, 1] };
 
     [Fact]
     public void Tabbed_TakesTheTabsCaptionAndHint_TheBaseHintKept()
@@ -1640,9 +1640,9 @@ public class MenuPaneTests : IDisposable
         var page = Questions();
         Assert.Equal("Which color do you like best of all?", page.Caption);
         Assert.Equal("Enter = choose", page.Hint);
-        Assert.Equal("Enter = pick · ←/→ tabs · ESC = back", page.BaseHint);
+        Assert.Equal("Enter = pick · ←/→ tabs · Esc = back", page.BaseHint);
         Assert.Equal("Toppings?", Questions(1).Caption);
-        Assert.Equal("Enter = pick · ←/→ tabs · ESC = back", Questions(1).Hint);
+        Assert.Equal("Enter = pick · ←/→ tabs · Esc = back", Questions(1).Hint);
         Assert.Null(Questions(2).Caption);
         Assert.Null(Tabbed().Caption);
         Assert.Null(Page("one").BaseHint);
@@ -1665,7 +1665,7 @@ public class MenuPaneTests : IDisposable
         // The strip, the caption row (37 cells fit the 40), the spacer, the rows, the tab's own hint.
         Assert.Contains(Rule(40) + "\n" + Titled("Questions │ One · Two · Submit ") + "\nWhich color do you like best of all?\n \n▸ ( ) red\n  ( ) blue\n \n" + Rule(40) + "\nEnter = choose\n", Output);
         // The switch: the other tab's caption, its cursor on the page's row for it (2), the base hint.
-        Assert.Contains("\n" + Titled("Questions │ One · Two · Submit ") + "\nToppings?\n \n  [ ] a\n  [ ] b\n▸ [ ] c\n" + Rule(40) + "\nEnter = pick · ←/→ tabs · ESC = back", Output);
+        Assert.Contains("\n" + Titled("Questions │ One · Two · Submit ") + "\nToppings?\n \n  [ ] a\n  [ ] b\n▸ [ ] c\n" + Rule(40) + "\nEnter = pick · ←/→ tabs · Esc = back", Output);
         menu.Close();
     }
 
@@ -1793,8 +1793,8 @@ public class MenuPaneTests : IDisposable
         Assert.Equal("Nothing here has \"zz\" in its name or description.", MenuFilter.NoMatchLine("zz"));
         Assert.Equal("Enter = on · " + MenuFilter.TypeAndCloseKeys, MenuFilter.Hint("Enter = on · " + MenuFilter.TypeAndCloseKeys, ""));
         Assert.Equal("Enter = on · " + MenuFilter.FilteringKeys, MenuFilter.Hint("Enter = on · " + MenuFilter.TypeAndCloseKeys, "x"));
-        Assert.Equal("type = filter · ESC = close", MenuFilter.TypeAndCloseKeys);
-        Assert.Equal("Backspace = erase · ESC = clear filter", MenuFilter.FilteringKeys);
+        Assert.Equal("type = filter · Esc = close", MenuFilter.TypeAndCloseKeys);
+        Assert.Equal("Backspace = erase · Esc = clear filter", MenuFilter.FilteringKeys);
     }
 
     [Fact]
@@ -1819,7 +1819,7 @@ public class MenuPaneTests : IDisposable
 
         // Left from the first tab wraps to Submit, whose cursor is 1; Space still toggles after the switch.
         Assert.Equal(new MenuPick(2, 1, Toggle: true), await menu.PickAsync(Questions(), 0, CancellationToken.None));
-        Assert.Contains("\n  One — (no answer)\n▸ Submit\n \n \n" + Rule(40) + "\nEnter = pick · ←/→ tabs · ESC = back", Output);
+        Assert.Contains("\n  One — (no answer)\n▸ Submit\n \n \n" + Rule(40) + "\nEnter = pick · ←/→ tabs · Esc = back", Output);
         menu.Close();
     }
 

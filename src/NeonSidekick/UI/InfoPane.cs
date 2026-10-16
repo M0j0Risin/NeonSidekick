@@ -97,33 +97,46 @@ public sealed class InfoPane
     public const string Title = "❓ Help";
 
     /// <summary>The hint row under the pane (the find and PgUp/PgDn since 2026-10-07, in the <c>key = what</c> form of the menus' hints). Pinned.</summary>
-    public const string HintText = "↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · type = find · ESC = close";
+    public const string HintText = "↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · type = find · Esc = close";
 
     /// <summary>The hint row under a pane of one tab (2026-10-04): no tabs to switch. Pinned.</summary>
-    public const string SingleTabHintText = "↑/↓ PgUp/PgDn = scroll · type = find · ESC = close";
+    public const string SingleTabHintText = "↑/↓ PgUp/PgDn = scroll · type = find · Esc = close";
 
     /// <summary>
     /// The hint row on a tab with a toggle (2026-10-12): <see cref="HintText"/> (or <see cref="SingleTabHintText"/> on a pane of one
     /// tab) with the toggle's key before the find, <c>k = key check</c>. Pinned.
     /// </summary>
-    public static string ToggleHint(char key, string word, bool tabs = true) => ButtonsHint([(key, word)], tabs);
+    public static string ToggleHint(char key, string word, bool tabs = true, int cells = int.MaxValue) => ButtonsHint([(key, word)], tabs, cells);
 
     /// <summary>
     /// The hint row with the pane's buttons (2026-10-14, <see cref="InfoAction"/>, and a tab's toggle after them): each <c>key = word</c> before
-    /// the find, in the strip's order, <c>e = on/off · r = lan/local</c>. Pinned.
+    /// the find, in the strip's order, <c>e = on/off · r = lan/local</c>. Pinned. A hint wider than <paramref name="cells"/> leaves out
+    /// <see cref="ScrollLead"/> (2026-10-16, the user's ask: every hint fits a 120-column window; ↑/↓ and PgUp/PgDn scroll every info
+    /// pane, so they are the words a short row can spare). The pane passes its window's width less one, the Hints bar's room.
     /// </summary>
-    public static string ButtonsHint(IReadOnlyList<(char Key, string Word)> buttons, bool tabs = true)
+    public static string ButtonsHint(IReadOnlyList<(char Key, string Word)> buttons, bool tabs = true, int cells = int.MaxValue)
     {
         ArgumentNullException.ThrowIfNull(buttons);
-        var hint = new System.Text.StringBuilder(tabs ? "↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · " : "↑/↓ PgUp/PgDn = scroll · ");
+        var rest = new System.Text.StringBuilder(tabs ? "←/→ = tabs · " : "");
         foreach (var (key, word) in buttons)
         {
-            hint.Append(key).Append(" = ").Append(word).Append(" · ");
+            rest.Append(key).Append(" = ").Append(word).Append(" · ");
         }
 
         // A button answers its bare letter, so a find that starts with one starts with Shift (2026-10-15, the menus' TypeOrShiftKeys).
-        return hint.Append(buttons.Count > 0 ? ShiftFindKeys : "type = find").Append(" · ESC = close").ToString();
+        string tail = rest.Append(buttons.Count > 0 ? ShiftFindKeys : "type = find").Append(" · Esc = close").ToString();
+        string full = ScrollLead + tail;
+        return TextCells.Width(full) > cells ? tail : full;
     }
+
+    /// <summary>What leads <see cref="ButtonsHint"/> while the window has room for it (2026-10-16).</summary>
+    public const string ScrollLead = "↑/↓ PgUp/PgDn = scroll · ";
+
+    /// <summary>
+    /// The Hints bar's room in a 120-column window, the width every hint is held to (2026-10-16, the user's ask; the bar draws a
+    /// hint in the window's width less one, <c>ScreenPane.WriteHintsRow</c>). Pinned by <c>ConsistencyPassTests</c>.
+    /// </summary>
+    public const int HintCells = 119;
 
     /// <summary>The find's keys on a pane with lettered buttons (2026-10-15, <see cref="MenuFilter.TypeOrShiftKeys"/>'s wording). Pinned.</summary>
     public const string ShiftFindKeys = "type / Shift+letter = find";
@@ -140,8 +153,8 @@ public sealed class InfoPane
     /// </summary>
     public static string FindHint(string find, int index, int count) =>
         count > 0
-            ? $"find: {find} · {(index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)} of {count.ToString(System.Globalization.CultureInfo.InvariantCulture)} · Enter = next · {FindBack} = back · ESC = clear"
-            : $"find: {find} · no match · Backspace = erase · ESC = clear";
+            ? $"find: {find} · {(index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)} of {count.ToString(System.Globalization.CultureInfo.InvariantCulture)} · Enter = next · {FindBack} = back · Esc = clear"
+            : $"find: {find} · no match · Backspace = erase · Esc = clear";
 
     /// <summary>The rows above the content when the strip fits one row: the strip and the spacer; a strip that takes more rows (<see cref="TabStripLayout"/>) adds them.</summary>
     public const int HeaderRows = 2;
@@ -967,8 +980,8 @@ public sealed class InfoPane
         }
 
         string hint = _find.Length > 0 ? FindHint(_find, _hit, _hits.Count)
-            : _actions.Count > 0 ? ButtonsHint([.. _actions.Select(a => (a.Key, a.Word)), .. toggle is null ? Array.Empty<(char, string)>() : [(toggle.Key, toggle.Word)]], tabs: tabs.Count > 1)
-            : toggle is not null ? ToggleHint(toggle.Key, toggle.Word, tabs: tabs.Count > 1)
+            : _actions.Count > 0 ? ButtonsHint([.. _actions.Select(a => (a.Key, a.Word)), .. toggle is null ? Array.Empty<(char, string)>() : [(toggle.Key, toggle.Word)]], tabs: tabs.Count > 1, cells: width - 1)
+            : toggle is not null ? ToggleHint(toggle.Key, toggle.Word, tabs: tabs.Count > 1, cells: width - 1)
             : tabs.Count == 1 ? SingleTabHintText : HintText;
         _pane.ShowOverlay(new Rows(lines), hint, close: true);
     }

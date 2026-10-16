@@ -133,7 +133,7 @@ public sealed class BotCheckTests : IDisposable
         Assert.Equal("example.com wants a person to pass a bot check (HTTP 403 Forbidden) before reading https://example.com/page. Open it in the Browser window to solve it?", BotCheckText.AskCaption(request));
         Assert.Equal("example.com wants a person to pass a bot check before searching https://example.com/page. Open it in the Browser window to solve it?", BotCheckText.AskCaption(request with { Use = BotCheckUse.Search, Why = "" }));
         Assert.Equal(["reading", "searching", "downloading", "printing"], new[] { BotCheckUse.Fetch, BotCheckUse.Search, BotCheckUse.Download, BotCheckUse.Pdf }.Select(BotCheckText.Doing));
-        Assert.Equal("Solve the check for example.com in the Browser window; it closes by itself once the page is through. ESC gives up.", BotCheckText.WaitCaption(request));
+        Assert.Equal("Solve the check for example.com in the Browser window; it closes by itself once the page is through. Esc gives up.", BotCheckText.WaitCaption(request));
 
         string url = "https://example.com/";
         Assert.Equal("; the user declined to solve it in the Browser window", BotCheckText.For(BotCheckResult.Ended(BotCheckEnd.Declined, url)));

@@ -68,7 +68,7 @@ public class MemoryMenuTests : IDisposable
 
         await _menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(MemoryMenu.Title + "   Enter = choose · ESC = close", _console.Output);
+        Assert.Contains(MemoryMenu.Title + "   Enter = choose · Esc = close", _console.Output);
         Assert.Contains("one", _console.Output);
         Assert.Contains("two", _console.Output);
         Assert.Equal(new[] { "one", "two" }, _store.Snapshot());
@@ -323,15 +323,15 @@ public class MemoryMenuTests : IDisposable
         var undated = new MemoryEntry { Text = "z" };
 
         Assert.Equal("💾 Memory", MemoryMenu.Title);
-        Assert.Equal(MemoryMenu.Title + "   Enter = choose · a = add · ESC = close", SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys));   // choose and add since 2026-10-13
+        Assert.Equal(MemoryMenu.Title + "   Enter = choose · a = add · Esc = close", SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys));   // choose and add since 2026-10-13
         Assert.Equal("(💾 nothing remembered)", MemoryMenu.EmptyNotice);
-        Assert.Equal("Enter = choose · a = add · m = memory mode · ESC = close", MemoryMenu.SwitchKeys);   // 2026-10-03; one cycling button since later on 2026-10-13
-        Assert.Equal("a = add · m = memory mode · ESC = close", MemoryMenu.EmptySwitchKeys);
-        Assert.Equal("Enter = choose · m = memory mode · ESC = close", MemoryMenu.WithoutAdd(MemoryMenu.SwitchKeys));
+        Assert.Equal("Enter = choose · a = add · m = memory mode · Esc = close", MemoryMenu.SwitchKeys);   // 2026-10-03; one cycling button since later on 2026-10-13
+        Assert.Equal("a = add · m = memory mode · Esc = close", MemoryMenu.EmptySwitchKeys);
+        Assert.Equal("Enter = choose · m = memory mode · Esc = close", MemoryMenu.WithoutAdd(MemoryMenu.SwitchKeys));
         Assert.Equal(["mode: read-write", "+ add"], MemoryMenu.Buttons(MemoryAccess.ReadWrite, add: true).Select(b => b.Title));
         Assert.Equal('a', MemoryMenu.Buttons(MemoryAccess.ReadWrite, add: true)[^1].Key);
         Assert.Equal("💾 \"x\"", MemoryMenu.ActionTitle("x"));
-        Assert.Equal("Enter = choose · ESC = back", MemoryMenu.ActionKeys);
+        Assert.Equal("Enter = choose · Esc = back", MemoryMenu.ActionKeys);
         Assert.Equal("(💾 edited: x)", MemoryMenu.EditedNotice("x"));
         Assert.Equal("(💾 disabled: x)", MemoryMenu.DisabledNotice("x"));
         Assert.Equal("(💾 enabled: x)", MemoryMenu.EnabledNotice("x"));

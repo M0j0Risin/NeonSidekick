@@ -54,7 +54,7 @@ internal sealed class SkillsMenu
 {
     // The key hints. Pinned.
     public const string LoadedKeys = "Enter = move, rename, edit, revert, lock, disable, delete · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;   // the filter since 2026-10-03; lock since 2026-10-07; disable since 2026-10-09
-    public const string OtherKeys = "←/→ tabs · ESC = close";
+    public const string OtherKeys = "←/→ tabs · Esc = close";
     public const string ScopeKeys = SettingsMenu.PickKeys;
 
     /// <summary>The scope page's last row, always offered since 2026-09-23 (behind <c>Allow skill delete</c> until then). Pinned.</summary>
@@ -106,7 +106,7 @@ internal sealed class SkillsMenu
     public static readonly IReadOnlyList<MenuButton> VersionButtons = [new(YouTube.YouTubeText.RemoveButton, 'd'), new(QueueMenu.ClearAllButton, QueueMenu.ClearAllKey)];
 
     /// <summary>The revert list's hint with its buttons (2026-10-07). Pinned.</summary>
-    public const string VersionsKeys = "Enter = put back · d = remove · c = clear all · ESC = back";
+    public const string VersionsKeys = "Enter = put back · d = remove · c = clear all · Esc = back";
 
     /// <param name="facts">The catalog as of a fresh scan and the rest the tabs show; read when the list opens and again after every change.</param>
     /// <param name="settings">The store the Options tab's rows show and save to.</param>

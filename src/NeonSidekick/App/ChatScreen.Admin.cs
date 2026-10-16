@@ -564,16 +564,16 @@ internal sealed partial class ChatScreen
             var view = new DirectoryCardView(answer);
             DirectoryRowTarget? chosen = null;
             string? lockoutOn = card.Result.LockedPdc is { } pdc ? EventLogComputerOn(pdc) : null;
-            var actions = new List<InfoAction> { new("copy", 'c', "copy"), new("ask", 'a', "ask the model") };
+            var actions = new List<InfoAction> { new("copy", 'c', "copy"), new("ask", 'a', "ask") };
             if (lockoutOn is not null)
             {
-                actions.Add(new InfoAction(DirectoryCommand.LockoutButton(card.Result.LockedPdc!), 's', "search the PDC emulator's Security log"));
+                actions.Add(new InfoAction(DirectoryCommand.LockoutButton(card.Result.LockedPdc!), 's', DirectoryText.LockoutWord));
             }
 
             if (answer is { Kind: "group", Failed: false, Self: not null })
             {
-                actions.Add(new InfoAction(card.Nested ? DirectoryText.DirectButton : DirectoryText.NestedButton, 'n', "nested or direct"));
-                actions.Add(new InfoAction(card.Members == "users" ? DirectoryText.AllMembersButton : DirectoryText.UsersOnlyButton, 'u', "users only or all"));
+                actions.Add(new InfoAction(card.Nested ? DirectoryText.DirectButton : DirectoryText.NestedButton, 'n', DirectoryText.NestingWord));
+                actions.Add(new InfoAction(card.Members == "users" ? DirectoryText.AllMembersButton : DirectoryText.UsersOnlyButton, 'u', DirectoryText.MembersWord));
             }
 
             string title = DirectoryText.Glyph + " Directory · " + card.Title + (stack.Count > 1 ? " ‹ " + stack[^2].Title : "");

@@ -46,13 +46,13 @@ public static class ThumbsText
     public static string Opened(string folder) => $"(🖼️ thumbnails of {folder})";
 
     /// <summary>The window's keys and mouse, the line under <see cref="Opened"/>. Pinned.</summary>
-    public const string Keys = "(click shows a picture in the viewer · double-click or Enter opens it · arrows move · right-click for the picture menu · + − or Ctrl+wheel size · Del twice deletes · F5 refresh · F11 full screen · TAB terminal · ESC close)";
+    public const string Keys = "(click shows a picture in the viewer · double-click or Enter opens it · arrows move · right-click for the picture menu · + − or Ctrl+wheel size · Del twice deletes · F5 refresh · F11 full screen · Tab terminal · Esc close)";
 
     /// <summary>
     /// The browser's keys on a Mac (2026-10-07, phase 2): ⌘ for the size beside + −, a pinch, ⌫ for Del, ⌃⌘F for full screen (F11 is
     /// macOS's Show Desktop), ⌘W beside ESC; Control-click is a right-click; TAB to the terminal since phase 4. Pinned.
     /// </summary>
-    public const string KeysMac = "(click shows a picture in the viewer · double-click or Enter opens it · arrows move · right-click for the picture menu · + − ⌘+wheel or pinch size · ⌫ twice deletes · F5 refresh · ⌃⌘F full screen · TAB terminal · ESC or ⌘W close)";
+    public const string KeysMac = "(click shows a picture in the viewer · double-click or Enter opens it · arrows move · right-click for the picture menu · + − ⌘+wheel or pinch size · ⌫ twice deletes · F5 refresh · ⌃⌘F full screen · Tab terminal · Esc or ⌘W close)";
 
     /// <summary>The keys line for this system: <see cref="KeysMac"/> on a Mac, <see cref="Keys"/> elsewhere.</summary>
     public static string KeysHere => OperatingSystem.IsMacOS() ? KeysMac : Keys;

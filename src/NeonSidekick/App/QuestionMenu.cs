@@ -27,10 +27,10 @@ internal sealed class QuestionMenu
 {
     // The strip's label and the tabs' hints. Pinned.
     public const string Title = "Questions";
-    public const string SingleKeys = "Enter = choose · Space = mark · ←/→ tabs · ESC = cancel";
-    public const string MultiKeys = "Space / Enter = toggle · ←/→ tabs · ESC = cancel";
-    public const string SubmitKeys = "Enter = submit or revisit · ←/→ tabs · ESC = cancel";
-    public const string OtherKeys = "Enter = save · ESC = back";
+    public const string SingleKeys = "Enter = choose · Space = mark · ←/→ tabs · Esc = cancel";
+    public const string MultiKeys = "Space / Enter = toggle · ←/→ tabs · Esc = cancel";
+    public const string SubmitKeys = "Enter = submit or revisit · ←/→ tabs · Esc = cancel";
+    public const string OtherKeys = "Enter = save · Esc = back";
 
     // The marks ahead of an option, ASCII on purpose (no East-Asian-ambiguous glyph on the row). Pinned.
     public const string SingleOn = "(x) ";

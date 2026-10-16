@@ -114,7 +114,7 @@ public static class CameraText
     public const string SnapButton = "␣ snap";
     public const string RetakeButton = "r retake";
 
-    public const string PaneHint = "Space takes the photo · r takes it again · Enter picks · ESC cancels";
+    public const string PaneHint = "Space takes the photo · r takes it again · Enter picks · Esc cancels";
 
     /// <summary>The status line before a shot: the camera still opening, or on and ready.</summary>
     public static string Waiting(string? device) => device is null ? "The camera is opening…" : $"{device} is on: frame the shot, then press Space.";
@@ -137,7 +137,7 @@ public static class CameraText
     public const string DenyRow = "Deny";
     public const string AllowOnceRow = "Allow once";
     public const string AllowSessionRow = "Allow for this session";
-    public const string AllowHint = "d / o / s = pick · Enter = choose · ESC = deny";   // the approval pane's form since 2026-10-07
+    public const string AllowHint = "d / o / s = pick · Enter = choose · Esc = deny";   // the approval pane's form since 2026-10-07
 
     /// <summary>The live window's title while framing, and over a held shot.</summary>
     public static string LiveTitle(string? device) => $"📷 {device ?? UnnamedCamera} — live";

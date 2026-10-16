@@ -552,8 +552,12 @@ public static class ShoppingText
     /// <summary>The add page's first row: Enter types new lines. Pinned.</summary>
     public const string AddItemRow = "+ type a new item…";
 
-    /// <summary>The add page's hint row. Pinned.</summary>
-    public const string AddKeys = "Enter = add (the first row types new ones) · x = forget a bought line · " + UI.MenuFilter.TypeOrShiftKeys + " · Esc = back";   // the filter's Shift since 2026-10-13
+    /// <summary>
+    /// The add page's hint row, without the filter's piece: the page puts it before <c>Esc</c> through <see cref="UI.MenuFilter.HintBeforeEsc"/>,
+    /// which also gives the filter's keys while one is typed (2026-10-16: <c>Esc = back</c> was no ending <see cref="UI.MenuFilter.Hint"/> knew,
+    /// so a typed filter kept <c>x = forget…</c> and never named Backspace). Pinned.
+    /// </summary>
+    public const string AddKeys = "Enter = add (the first row types new ones) · x = forget a bought line · Esc = back";
 
     /// <summary>The add page's caption with nothing bought yet. Pinned.</summary>
     public const string NothingBoughtYet = "Lines ticked and cleared are remembered here, to add again.";
@@ -615,8 +619,11 @@ public static class ShoppingText
     /// <summary>The pane's title: the toolbar's cart and the store the list walks through, or <c>Shopping list</c> with none (the store alone since later on 2026-10-11, for the buttons' room). Pinned.</summary>
     public static string PaneLabel(ShopStore? store) => "🛒 " + (store?.Name ?? "Shopping list");
 
-    /// <summary>The pane's hint row. Pinned.</summary>
-    public const string PaneKeys = "Enter / Space = tick · i = add · p = place · n = rename · r = remove · a = tick all · c = clear · s = stores · + / - = quantity · Esc = close";
+    /// <summary>
+    /// The pane's hint row. Pinned. Its words are the buttons' own (2026-10-16, the user's ask: every hint fits a 120-column window;
+    /// Enter ticks as Space does, INTERFACE.md's pane keys say so).
+    /// </summary>
+    public const string PaneKeys = "Space = tick · i = add · p = place · n = rename · r = del · a = all · c = clear · s = store · + / - = qty · Esc = close";
 
     /// <summary>
     /// The pane's buttons' titles and keys, each with a glyph in the other panes' style (2026-10-11, the user's ask: <c>⊠ clear all</c>,

@@ -33,7 +33,7 @@ public class KeyCheckTests
 
     [Theory]
     [InlineData("")]
-    [InlineData("ESC ESC")]
+    [InlineData("Esc Esc")]
     [InlineData("Up / Down")]
     [InlineData("say \"hey neon\"")]
     [InlineData("Ctrl+")]
@@ -60,7 +60,7 @@ public class KeyCheckTests
         var chords = KeyCheck.Chords(rows.Select(r => r.Pair), ConsoleKey.F4);
         Assert.Contains(chords, c => c.Label == "F4" && !c.Chord.HasModifier);
         Assert.Contains(chords, c => c.Label == "Ctrl+Alt+M" && c.Chord == CtrlAlt(ConsoleKey.M) && c.Meaning == (OperatingSystem.IsMacOS() ? "open the memory pane (in the app's windows; Ctrl+Alt+A in the terminal) (/memory)" : "open the memory pane (/memory)"));
-        Assert.DoesNotContain(chords, c => c.Label is "Enter" or "ESC" or "Up / Down" or "PgUp / PgDn" or "Up" or "PgUp");
+        Assert.DoesNotContain(chords, c => c.Label is "Enter" or "Esc" or "Up / Down" or "PgUp / PgDn" or "Up" or "PgUp");
         Assert.Equal(rows.Where(r => KeyChord.TryParse(r.Key, out var k) && k.HasModifier).Select(r => r.Key), chords.Where(c => c.Chord.HasModifier && rows.Any(r => r.Key == c.Label)).Select(c => c.Label));   // the tab's order
 
         Assert.DoesNotContain(KeyCheck.Chords(ChatScreen.KeyRows(voiceOn: false, ConsoleKey.F4, false, "").Select(r => r.Pair), null), c => !c.Chord.HasModifier);

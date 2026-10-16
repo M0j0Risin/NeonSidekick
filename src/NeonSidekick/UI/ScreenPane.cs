@@ -3800,7 +3800,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         step is { } own ? BusyText(label, own) + HintSeparator + ElapsedText.Countdown(elapsed) : BusyText(label, elapsed);
 
     /// <summary>The dim part a turn's busy row ends with while no pane is open over it (2026-10-04, the UI review). Pinned.</summary>
-    public const string StopHint = "esc to stop";
+    public const string StopHint = "Esc to stop";
 
     /// <summary>
     /// Whether the busy row ends with <see cref="StopHint"/> (2026-10-04): the screen says so while its turn is the one running — not

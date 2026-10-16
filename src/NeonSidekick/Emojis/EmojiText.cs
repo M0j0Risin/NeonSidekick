@@ -64,7 +64,7 @@ public static class EmojiText
     public const string ResultsHeading = "Results";
     public const string ForYouHeading = "From the profile's name and persona";
     public const string NothingRecent = "Nothing picked yet: the emoji you pick show here.";
-    public const string NoMatch = "No emoji matches; Backspace edits, ESC clears.";
+    public const string NoMatch = "No emoji matches; Backspace edits, Esc clears.";
 
     /// <summary>The action that picks at random. Pinned.</summary>
     public const string RandomGlyph = "🎲";
@@ -82,7 +82,7 @@ public static class EmojiText
     public const string Keys = "arrows = move · Tab = category · Enter = pick · " + UI.MenuFilter.TypeAndKeepKeys;
 
     /// <summary>The tone grid's hint row. Pinned.</summary>
-    public const string ToneKeys = "←/→ = tone · Enter = pick · ESC = back";
+    public const string ToneKeys = "←/→ = tone · Enter = pick · Esc = back";
 
     /// <summary>The tone grid's title after the crumb.</summary>
     public const string ToneTitle = "Skin tone";

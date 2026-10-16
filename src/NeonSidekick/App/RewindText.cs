@@ -18,7 +18,7 @@ public static class RewindText
     public const string Title = NoticeGlyphs.Rewind + "Rewind";
 
     /// <summary>The picker's key hints. Pinned.</summary>
-    public const string Keys = "Enter = rewind to before this message · ESC = close";   // close since 2026-10-07: the pane's top level
+    public const string Keys = "Enter = rewind to before this message · Esc = close";   // close since 2026-10-07: the pane's top level
 
     /// <summary>
     /// The picker's caption over the rows (2026-10-03, the user's wording). What is not undone is the confirmation's to say
@@ -33,7 +33,7 @@ public static class RewindText
     /// The hint row while a first ESC on an empty line is fresh (the double Ctrl+C's shape): the next ESC opens the picker.
     /// Pinned.
     /// </summary>
-    public const string ArmedHint = "ESC again to rewind the conversation";
+    public const string ArmedHint = "Esc again to rewind the conversation";
 
     /// <summary>What the replay draws in place of a compact's summary turn when no session row holds the turns. Pinned.</summary>
     public const string CompactedNotice = "(" + NoticeGlyphs.Rewind + "earlier turns were compacted into a summary)";
@@ -45,7 +45,7 @@ public static class RewindText
     public const string KeyMeaning = "on an empty line, rewind to an earlier message";   // its command, /rewind, in the tab's own column since 2026-10-05
 
     /// <summary>The Keys tab's key column for the double ESC. Pinned.</summary>
-    public const string KeyLabel = "ESC ESC";
+    public const string KeyLabel = "Esc Esc";
 
     /// <summary><c>/rewind abc</c>, <c>/rewind 0</c> or a count past the turns held. Pinned.</summary>
     public static string UsageError(int turns) =>

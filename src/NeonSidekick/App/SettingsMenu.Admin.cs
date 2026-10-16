@@ -10,8 +10,8 @@ using Spectre.Console;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// The admin families' rows (2026-10-15, the admin-tools plan): the Network menu on <c>/tools</c> › Core (its switch, reach picker, budget,
-/// host lists and the certificate stores' switch) and the Services, Tasks and Directory menus on <c>/tools</c> › Admin (switches, offered
+/// The admin families' rows (2026-10-15, the admin-tools plan): the Network menu (its switch, reach picker, budget,
+/// host lists and the certificate stores' switch; on <c>/tools</c> › Core until 2026-10-16, Admin's first since) and the Services, Tasks and Directory menus on <c>/tools</c> › Admin (switches, offered
 /// checklists, passwords, wizards, edit rows). One value function and one edit dispatcher for every field from <see cref="SettingsField.NetworkTools"/>
 /// to <see cref="SettingsField.DirectoryDomainsGlobal"/>.
 /// </summary>
@@ -20,7 +20,7 @@ internal sealed partial class SettingsMenu
     /// <summary>The top row of a host list. Pinned.</summary>
     public const string AddHostRow = "+ Add a host…";
 
-    public const string HostListKeys = "Enter = add or remove · ESC = back";
+    public const string HostListKeys = "Enter = add or remove · Esc = back";
 
     /// <summary>A host list's value: <c>(empty)</c>, or how many entries. Pinned.</summary>
     public static string HostListValue(IReadOnlyList<string> hosts) =>

@@ -25,7 +25,7 @@ internal sealed class ProcessMenu
 {
     // The label and the key hints. Pinned.
     public const string Title = ChatScreen.ProcessToolGlyph + " Process";
-    public const string Keys = "Enter = open window · k = kill · f = filter · ESC = close";   // f since later on 2026-10-13 (r / e before)
+    public const string Keys = "Enter = open window · k = kill · f = filter · Esc = close";   // f since later on 2026-10-13 (r / e before)
 
     /// <summary>
     /// The title row's button: the highlighted process stopped, after a yes/no. Two spaces after the glyph (2026-10-05, the user's

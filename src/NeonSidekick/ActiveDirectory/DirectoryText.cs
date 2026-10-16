@@ -276,6 +276,11 @@ public static class DirectoryText
     public const string UsersOnlyButton = "users only";
     public const string AllMembersButton = "all members";
 
+    /// <summary>The card's buttons' words on the Hints bar (2026-10-16, the user's ask: every hint fits a 120-column window).</summary>
+    public const string LockoutWord = "search 4740";
+    public const string NestingWord = "nesting";
+    public const string MembersWord = "users/all";
+
     /// <summary>How a value was worked out, beside it.</summary>
     public const string Computed = "computed by the domain";
 

@@ -41,15 +41,15 @@ internal sealed class MemoryMenu
     // The label and the key hints: the pane shows the label as its title and the keys in its hint
     // row; the prompt host joins them (SettingsMenu.PromptTitle). Pinned.
     public const string Title = ChatScreen.MemoryToolGlyph + " Memory";   // the glyph the toolbar wears for the pane too (2026-09-22)
-    public const string Keys = "Enter = choose · a = add · ESC = close";   // close since 2026-10-07: the pane's top level; choose and add since 2026-10-13
+    public const string Keys = "Enter = choose · a = add · Esc = close";   // close since 2026-10-07: the pane's top level; choose and add since 2026-10-13
 
     /// <summary>The list's hint on a console without the pane (no title row, so no add). Pinned.</summary>
-    public const string PlainKeys = "Enter = choose · ESC = close";
+    public const string PlainKeys = "Enter = choose · Esc = close";
     public const string EmptyNotice = "(" + NoticeGlyphs.Memory + "nothing remembered)";   // the disk since 2026-09-22
 
     /// <summary>The pane's hints with Memory mode's button on the title row (2026-10-03; one cycling button since later on 2026-10-13): the rows, then with nothing remembered. Pinned.</summary>
-    public const string SwitchKeys = "Enter = choose · a = add · m = memory mode · ESC = close";
-    public const string EmptySwitchKeys = "a = add · m = memory mode · ESC = close";
+    public const string SwitchKeys = "Enter = choose · a = add · m = memory mode · Esc = close";
+    public const string EmptySwitchKeys = "a = add · m = memory mode · Esc = close";
 
     /// <summary>The title row's add button (2026-10-13, the user's ask: a new memory from the pane): after Memory mode's. Pinned.</summary>
     public const string AddButton = "+ add";
@@ -84,10 +84,10 @@ internal sealed class MemoryMenu
     public static string ActionTitle(string text) => $"{NoticeGlyphs.Memory}\"{text}\"";
 
     /// <summary>The choice's hint (2026-10-13). Pinned.</summary>
-    public const string ActionKeys = "Enter = choose · ESC = back";
+    public const string ActionKeys = "Enter = choose · Esc = back";
 
     /// <summary>The input row's hint while a memory is edited or added (2026-10-13). Pinned.</summary>
-    public const string EditKeys = "Enter = save · ESC = back";
+    public const string EditKeys = "Enter = save · Esc = back";
 
     public static string EditedNotice(string text) => $"({NoticeGlyphs.Memory}edited: {text})";
 

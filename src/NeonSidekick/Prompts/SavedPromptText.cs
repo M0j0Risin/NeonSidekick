@@ -28,8 +28,11 @@ public static class SavedPromptText
     public const string RemoveButton = YouTube.YouTubeText.RemoveButton;
     public const char RemoveKey = 'd';
 
-    /// <summary>The pane's hint row while nothing is typed.</summary>
-    public const string PaneKeys = "Enter = to the draft · a = add · s = save draft · e = edit · d = remove · c = clear all · Shift+↑↓ = move · " + MenuFilter.TypeOrShiftAndCloseKeys;
+    /// <summary>
+    /// The pane's hint row while nothing is typed. Shift+↑↓ moves a prompt but has no room here (2026-10-16, the user's ask: every hint
+    /// fits a 120-column window; INTERFACE.md's pane keys name it).
+    /// </summary>
+    public const string PaneKeys = "Enter = use · a = add · s = save draft · e = edit · d = remove · c = clear · " + MenuFilter.TypeOrShiftAndCloseKeys;
 
     /// <summary>The one dim row of an empty list, under the same buttons, so add and save draft work on it.</summary>
     public const string EmptyRow = "No saved prompts yet: a adds one, and s saves the draft.";
@@ -146,7 +149,7 @@ public static class SavedPromptText
     public const string EditorUnavailable = "A prompt of several lines is edited in the draft editor, which is not available here.";
 
     /// <summary>The spinner's label while the draft editor has a prompt open (<c>/draft</c>'s, with the prompt's words).</summary>
-    public const string EditingLabel = "editing the prompt in your editor…  save and close to keep it   ESC = stop waiting";
+    public const string EditingLabel = "editing the prompt in your editor…  save and close to keep it   Esc = stop waiting";
 
     public static string EditorFailed(string detail) => $"Could not open the prompt in the editor: {detail}";
 

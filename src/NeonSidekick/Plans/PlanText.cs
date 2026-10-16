@@ -177,7 +177,7 @@ public static class PlanText
     public const string GapsConfirmFallbackNotice = Glyph + " Advisor confirm is on and headless cannot ask, so the model reviews the plan alone.";
 
     /// <summary>Headless (2026-10-13): no ESC to stop a loop with no limit.</summary>
-    public static string GapsHeadlessCapNotice(int cap) => $"{Glyph} LLM plan gap passes is 0 (no limit), but headless has no ESC: at most {N(cap)} passes.";
+    public static string GapsHeadlessCapNotice(int cap) => $"{Glyph} LLM plan gap passes is 0 (no limit), but headless has no Esc: at most {N(cap)} passes.";
 
     /// <summary>The --log line of a pass: its gaps whole, and whether it asked an advisor.</summary>
     public static string PassLogLine(int pass, int revision, IReadOnlyList<string> gaps, bool advisorAsked)
@@ -217,13 +217,13 @@ public static class PlanText
 
     /// <summary>The gap-closing loop's row (2026-10-13), after Keep refining.</summary>
     public const string CloseGapsRow = "Close gaps…";
-    public const string ApprovalKeys = "a / f / r / g / c = pick · Enter = choose · ESC = keep refining";
+    public const string ApprovalKeys = "a / f / r / g / c = pick · Enter = choose · Esc = keep refining";
 
     /// <summary>The second page Close gaps… opens while advisors are offered: who reviews.</summary>
     public const string ReviewerTitle = "Close gaps: who reviews?";
     public static readonly IReadOnlyList<string> ReviewerRows = ["Close gaps (model)", "Close gaps (advisor)", "Close gaps (any)"];
-    public const string ReviewerKeys = "m / a / y = pick · Enter = choose · ESC = back";
-    public const string FeedbackKeys = "Enter = send · ESC = back";
+    public const string ReviewerKeys = "m / a / y = pick · Enter = choose · Esc = back";
+    public const string FeedbackKeys = "Enter = send · Esc = back";
     public const string FeedbackPrompt = "What should change? Type it below (empty for nothing in particular).";
 
     public static string FeedbackNotice(string feedback) => $"{Glyph} Sent back with: {feedback}";

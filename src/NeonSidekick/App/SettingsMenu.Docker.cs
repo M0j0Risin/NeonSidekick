@@ -32,7 +32,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<MenuButton> DockerToolsButtons = [new(DockerManageButtonTitle, DockerManageKey)];
 
     /// <summary>The Docker tools page's hint: <see cref="PickKeys"/> with the manage button's key. Pinned.</summary>
-    public const string DockerToolsKeys = "Enter = choose · m = manage · ESC = back";
+    public const string DockerToolsKeys = "Enter = choose · m = manage · Esc = back";
 
     /// <summary>The Docker tab's strip title (2026-10-02, after Embedded, the user's place). Pinned.</summary>
     public const string DockerTabTitle = "Docker";

@@ -60,7 +60,7 @@ public sealed class ProcessMenuTests : IDisposable
     public void Strings_ArePinned()
     {
         Assert.Equal("⚡ Process", ProcessMenu.Title);
-        Assert.Equal("Enter = open window · k = kill · f = filter · ESC = close", ProcessMenu.Keys);   // f since later on 2026-10-13
+        Assert.Equal("Enter = open window · k = kill · f = filter · Esc = close", ProcessMenu.Keys);   // f since later on 2026-10-13
         Assert.Equal("✖  kill", ProcessMenu.KillButton);
         Assert.Equal('k', ProcessMenu.KillKey);
         Assert.Equal("show: all", ProcessMenu.AllButton);

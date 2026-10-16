@@ -1735,7 +1735,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("LLM: ", output);
         Assert.DoesNotContain("TTS: ", output);
         Assert.DoesNotContain("STT: ", output);
-        Assert.DoesNotContain("ESC = ", output);
+        Assert.DoesNotContain("Esc = ", output);
         Assert.DoesNotContain("/help = commands", output);
     }
 
@@ -2049,7 +2049,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(2, Count(output, llmLine));
         Assert.DoesNotContain("TTS: ", output);
         Assert.DoesNotContain("STT: ", output);
-        Assert.DoesNotContain("ESC = ", output);
+        Assert.DoesNotContain("Esc = ", output);
         Assert.DoesNotContain("(conversation cleared)", output);
         Assert.True(after.IndexOf(llmLine, StringComparison.Ordinal) < after.IndexOf("› b", StringComparison.Ordinal));
 
@@ -5206,7 +5206,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ·     zip                   off  ", output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", output);
         Assert.Contains("  ·   Options\n  ·     $-mention enabled: on\n", output);
-        Assert.Contains("  · Core\n  ·   Ask\n  ·     Ask user: on\n", output);
+        Assert.Contains("  · Core\n  ·   Web\n  ·     Web tools: on\n", output);   // Web first since 2026-10-16 (the user's order; Ask until then)
+        Assert.Contains("  ·   Ask\n  ·     Ask user: on\n", output);
         Assert.Contains("  · Files\n  ·   File\n  ·     File tools: on\n", output);   // the Files group's File menu since 2026-10-10
         Assert.Contains("  ·   Web\n  ·     Web tools: on\n", output);
         Assert.Empty(_chat.Requests);
@@ -5258,7 +5259,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ·     zip                   off  ", output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", output);
         Assert.Contains("  ·   Options\n  ·     $-mention enabled: on\n", output);
-        Assert.Contains("  · Core\n  ·   Ask\n  ·     Ask user: on\n", output);
+        Assert.Contains("  · Core\n  ·   Web\n  ·     Web tools: on\n", output);   // Web first since 2026-10-16 (the user's order; Ask until then)
+        Assert.Contains("  ·   Ask\n  ·     Ask user: on\n", output);
         Assert.Contains("  · Files\n  ·   File\n  ·     File tools: on\n", output);   // the Files group's File menu since 2026-10-10
         Assert.Contains("  ·   Web\n  ·     Web tools: on\n", output);
         Assert.Empty(_chat.Requests);
@@ -7070,12 +7072,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("✋ Interrupting needs the wake word; /stt wake on turns it on.", ChatScreen.InterruptNeedsWakeNotice);
         Assert.Equal("✋ Interrupting off with the wake word.", ChatScreen.InterruptOffWithWakeNotice);
         Assert.Equal("(✋ interrupted)", ChatScreen.InterruptedNotice);
-        Assert.Equal("interrupted — say your request…  F4 or Enter = done   ESC = discard", ChatScreen.InterruptedLabel("F4"));
+        Assert.Equal("interrupted — say your request…  F4 or Enter = done   Esc = discard", ChatScreen.InterruptedLabel("F4"));
         Assert.Equal(TimeSpan.FromMilliseconds(300), ChatScreen.InterruptSettle);
-        Assert.Equal("heard \"neon\"…  F4 or Enter = done   ESC = discard", ChatScreen.WakeListeningLabel("neon", "F4"));
+        Assert.Equal("heard \"neon\"…  F4 or Enter = done   Esc = discard", ChatScreen.WakeListeningLabel("neon", "F4"));
         Assert.Equal("👂 Wake word on; it listens once voice input is on (/stt).", ChatScreen.WakeOnNeedsVoiceNotice);
         Assert.Equal("👂 Wake word off.", ChatScreen.WakeOffNotice);
-        Assert.Equal("listening…  F4 or Enter = done   ESC = discard", ChatScreen.ListeningLabel("F4"));
+        Assert.Equal("listening…  F4 or Enter = done   Esc = discard", ChatScreen.ListeningLabel("F4"));
         Assert.Equal("(🎤 heard nothing)", ChatScreen.HeardNothingNotice);
         Assert.Equal("(🎤 discarded)", ChatScreen.VoiceDiscardedNotice);
         Assert.Equal("🎤 Voice input is off; /stt turns it on.", ChatScreen.VoiceOffHint);
@@ -9912,7 +9914,7 @@ public partial class ChatScreenTests : IDisposable
             input => { input.PushClick(ToolbarBlank(), 103); input.PushClick(ToolbarBlank(), 103); },  // under off: the blanks, so /settings
             Key(Keys.Escape),
             Line("/tools"),
-            input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape),   // the Shell tab, the policy picker on off, yolo picked and confirmed (2026-10-03), the pane closed: the row redrawn with the open lock
+            input => input.Push([.. Enumerable.Repeat(Keys.Right, ToolsMenuTests.LeafIndex(ToolsText.ShellTabTitle)), Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape]),   // the Shell tab, the policy picker on off, yolo picked and confirmed (2026-10-03), the pane closed: the row redrawn with the open lock
             input => { input.PushClick(42, 103); input.PushClick(42, 103); },    // 🔓: the list (+3 since ⏳, 2026-10-13) (+3 since 📣, 2026-10-14) (+3 since 📱, 2026-10-14)
             Key(Keys.Escape),
             Line("/exit"));
@@ -9941,7 +9943,7 @@ public partial class ChatScreenTests : IDisposable
             input => { input.PushClick(ToolbarBlank(), 103); input.PushClick(ToolbarBlank(), 103); },  // under off: the blanks, so /settings
             Key(Keys.Escape),
             Line("/tools"),
-            input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape),   // the Shell tab, the policy picker on off, yolo picked and confirmed (2026-10-03), the pane closed: the row redrawn with the open lock
+            input => input.Push([.. Enumerable.Repeat(Keys.Right, ToolsMenuTests.LeafIndex(ToolsText.ShellTabTitle)), Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape]),   // the Shell tab, the policy picker on off, yolo picked and confirmed (2026-10-03), the pane closed: the row redrawn with the open lock
             input => { input.PushClick(42, 103); input.PushClick(42, 103); },    // 🔓: the list (+3 since ⏳, 2026-10-13) (+3 since 📣, 2026-10-14) (+3 since 📱, 2026-10-14)
             Key(Keys.Escape),
             Line("/exit"));
@@ -9992,7 +9994,7 @@ public partial class ChatScreenTests : IDisposable
             input => { input.PushClick(42, 103); input.PushClick(42, 103); },    // 🔒 still at 33: the list (+3 since ⏳, 2026-10-13) (+3 since 📣, 2026-10-14) (+3 since 📱, 2026-10-14)
             Key(Keys.Escape),
             Line("/tools"),
-            input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape),   // the Shell tab's third row, Shell police: its page on "on", off picked and confirmed (2026-10-02); the pane closed: the officer gone
+            input => input.Push([.. Enumerable.Repeat(Keys.Right, ToolsMenuTests.LeafIndex(ToolsText.ShellTabTitle)), Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape]),   // the Shell tab's third row, Shell police: its page on "on", off picked and confirmed (2026-10-02); the pane closed: the officer gone
             input => { input.PushClick(45, 103); input.PushClick(45, 103); },    // 🥷 now (2026-10-02): the police page again (+3 since ⏳, 2026-10-13) (+3 since 📣, 2026-10-14) (+3 since 📱, 2026-10-14)
             Key(Keys.Escape),
             Line("/exit"));
@@ -10286,7 +10288,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ⏰ " + CookingAlert, output);
         Assert.Contains("  ⏰ cooking timer still ringing (1 minute) — press Enter to silence", output);
         Assert.Equal(2, output.Split("  ⏰ ").Length - 1);
-        Assert.DoesNotContain("ESC = ", output);   // ESC silenced the timer and printed nothing
+        Assert.DoesNotContain("Esc = ", output);   // ESC silenced the timer and printed nothing
         Assert.Empty(_synth.Spoken);
     }
 
@@ -10418,7 +10420,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(1, Count(output, switched));
         // Start, then the reconnect under the new profile: the discovered LLM line twice, nothing the settings name.
         Assert.Equal(2, Count(output, llmLine));
-        Assert.DoesNotContain("ESC = ", output);
+        Assert.DoesNotContain("Esc = ", output);
         Assert.DoesNotContain("TTS: ", output);
         Assert.DoesNotContain("STT: ", output);
         Assert.Equal("work", _settings.ProfileName);
@@ -11914,8 +11916,8 @@ public partial class ChatScreenTests : IDisposable
         [
             new("Enter", "send the message · change a setting in a menu"),
             new("Ctrl+Enter", "start a new line in the message"),   // 2026-09-22
-            new("ESC", "stop the speech · clear the line · cancel the reply · back out of a menu"),
-            new("ESC ESC", "on an empty line, rewind to an earlier message", "/rewind"),   // 2026-09-30
+            new("Esc", "stop the speech · clear the line · cancel the reply · back out of a menu"),
+            new("Esc Esc", "on an empty line, rewind to an earlier message", "/rewind"),   // 2026-09-30
             new("Up / Down", "recall earlier messages · move through a wrapped draft · move in menus"),
             new("Left / Right", "switch tabs in menus · hold Shift to select text"),
             new("Home / End", "go to the start or end of the line · hold Shift to select"),   // 2026-10-04: the line's ends
@@ -12032,7 +12034,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Null(Keys.ShortcutLine(Keys.CtrlL));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.X)));
-        Assert.All(rows.Where(r => r.Command is not null && !chords.ContainsKey(r.Key)), r => Assert.Contains(r.Key, new[] { "ESC ESC", "say \"hey neon\"" }));
+        Assert.All(rows.Where(r => r.Command is not null && !chords.ContainsKey(r.Key)), r => Assert.Contains(r.Key, new[] { "Esc Esc", "say \"hey neon\"" }));
         Assert.All(rows, r => Assert.DoesNotContain("(/", r.Meaning, StringComparison.Ordinal));   // the command in its own column
         Assert.DoesNotContain(rows, r => r.Meaning.Contains("quit", StringComparison.OrdinalIgnoreCase));   // Ctrl+Q quit once; /queue's since 2026-10-05
     }
@@ -14145,9 +14147,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(SettingsMenu.DockerManageButtonTitle, output);
         Assert.Contains(SettingsMenu.DockerToolsKeys, output);
         Assert.Contains(DockerMenu.Title, output);
-        Assert.Contains("type = filter · ESC = back", output);   // DockerMenu.BackKeys: the host's page comes back
+        Assert.Contains("type = filter · Esc = back", output);   // DockerMenu.BackKeys: the host's page comes back
         Assert.Contains("\n▸ ● mariadb_dev     running (healthy)  3307→3306/tcp  mariadb:11\n", output);
-        int list = output.LastIndexOf("type = filter · ESC = back", StringComparison.Ordinal);
+        int list = output.LastIndexOf("type = filter · Esc = back", StringComparison.Ordinal);
         Assert.True(output.LastIndexOf(SettingsMenu.DockerToolsKeys, StringComparison.Ordinal) > list);   // the page drawn again after the list
         Assert.False(_settings.Current.DockerTools);   // nothing saved by the visit
     }
@@ -14915,7 +14917,7 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null, () => 100);
         _chat.EnqueueText("One ", "two ", "three.");
         _chat.EnqueueText("Later.");
-        // No strip: the frame at 0, " writing 00:00 · esc to stop · " after it (the stop hint after the spinner since 2026-10-13), then the count.
+        // No strip: the frame at 0, " writing 00:00 · Esc to stop · " after it (the stop hint after the spinner since 2026-10-13), then the count.
         int column = 1 + TextCells.Width(" " + ScreenPane.BusyText(TurnStages.WritingLabel, TimeSpan.Zero) + ScreenPane.HintSeparator + ScreenPane.StopHint + ScreenPane.HintSeparator);
         _chat.BeforeUpdate = async (i, _) =>
         {
@@ -14937,7 +14939,7 @@ public partial class ChatScreenTests : IDisposable
             else if (i == 2)
             {
                 _scripted!.Push(Keys.Escape);
-                Assert.True(SpinWait.SpinUntil(() => !_scripted.IsAvailable, TimeSpan.FromSeconds(5)), "the clicks and ESC were never read");
+                Assert.True(SpinWait.SpinUntil(() => !_scripted.IsAvailable, TimeSpan.FromSeconds(5)), "the clicks and Esc were never read");
             }
 
             await Task.Delay(40, CancellationToken.None);
@@ -18250,7 +18252,7 @@ public partial class ChatScreenTests : IDisposable
 
     [Fact]
     public void SplashDeleteArmedHint_IsPinned() =>
-        Assert.Equal("DEL again to trash one.png", ChatScreen.SplashDeleteArmedHint("one.png"));
+        Assert.Equal("Del again to trash one.png", ChatScreen.SplashDeleteArmedHint("one.png"));
 
     // ── Delete Delete removes a profile's splash picture (2026-09-24, the user's ask) ─────────────────
 
@@ -18444,7 +18446,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(File.Exists(Path.Combine(folder, "one.bmp")));
         Assert.True(File.Exists(Path.Combine(folder, "two.bmp")));
         Assert.False(Directory.Exists(Path.Combine(folder, SplashImages.TrashFolderName)));
-        Assert.DoesNotContain("DEL again", output);
+        Assert.DoesNotContain("Del again", output);
         Assert.Equal(1, Refreshes(output));
     }
 
@@ -18483,7 +18485,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Single(_splashLoads);
         Assert.Equal(1, Refreshes(output));   // /exit's wipe alone
-        Assert.DoesNotContain("DEL again", output);
+        Assert.DoesNotContain("Del again", output);
     }
 
     [WindowsFact]
@@ -20478,7 +20480,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void DraftText_IsPinned()
     {
-        Assert.Equal("drafting in your editor…  save and close to send   ESC = cancel", ChatScreen.DraftingLabel);
+        Assert.Equal("drafting in your editor…  save and close to send   Esc = cancel", ChatScreen.DraftingLabel);
         Assert.Equal("(nothing sent: the draft is empty)", ChatScreen.DraftEmptyNotice);
         Assert.Equal("(draft canceled; nothing sent)", ChatScreen.DraftCancelledNotice);
         Assert.Equal("/draft needs an editor; not available here.", ChatScreen.DraftUnavailableError);
@@ -23693,7 +23695,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.TypoCommand("/", commands));
         Assert.Null(ChatScreen.TypoCommand("haiku", SlashCommands.Completions));
         Assert.Equal("Did you mean /clear?", ChatScreen.TypoTitle("/clear"));
-        Assert.Equal("Enter = use the command · ESC = send as typed", ChatScreen.TypoKeys);
+        Assert.Equal("Enter = use the command · Esc = send as typed", ChatScreen.TypoKeys);
         Assert.Equal("/clear" + new string(' ', MentionCompleter.NoteGap) + Theme.DimMarkup("clear the screen"), ChatScreen.TypoRow(new CompletionItem("/clear", "clear the screen")));
     }
 
@@ -24852,13 +24854,13 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void ScreenLogLines_ArePinned()
     {
-        Assert.Equal("Turn canceled by the keys (ESC or Ctrl+C) after the model's first event.", ChatScreen.TurnCancelledByKeysLog);
+        Assert.Equal("Turn canceled by the keys (Esc or Ctrl+C) after the model's first event.", ChatScreen.TurnCancelledByKeysLog);
         Assert.Equal("Turn withdrawn: the keys before the model's first event; the message goes back to the line.", ChatScreen.TurnWithdrawnLog);
         Assert.Equal("Turn interrupted by the wake phrase.", ChatScreen.TurnInterruptedLog);
         Assert.Equal("Turn ended by the app token.", ChatScreen.TurnEndedByAppTokenLog);
         Assert.Equal("Turn canceled by a mid-turn command.", ChatScreen.TurnCancelledByCommandLog);
-        Assert.Equal("Speech stopped by the first ESC; the text streamed on.", ChatScreen.SpeechStoppedLogLine);
-        Assert.Equal("Tail stopped by ESC.", ChatScreen.TailStoppedLogLine);
+        Assert.Equal("Speech stopped by the first Esc; the text streamed on.", ChatScreen.SpeechStoppedLogLine);
+        Assert.Equal("Tail stopped by Esc.", ChatScreen.TailStoppedLogLine);
         Assert.Equal("App", ChatScreen.AppCategory);
         Assert.Equal(["/exit", "Ctrl+C twice", "end of input", "the app token"], new[] { ChatScreen.ExitByCommand, ChatScreen.ExitByInterrupt, ChatScreen.ExitByEndOfInput, ChatScreen.ExitByAppToken });
         Assert.Equal("Command /sessions: purge older 7", ChatScreen.CommandLogLine(SlashCommand.Session, "/sessions purge older 7"));
@@ -24871,7 +24873,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("Session 12 restored: 6 turns", ChatScreen.SessionRestoredLogLine(12, 6));
         Assert.Equal("Session 3 restored: 1 turn", ChatScreen.SessionRestoredLogLine(3, 1));
         Assert.Equal("Queue cancel mode hold applied after a canceled reply (2 waiting)", ChatScreen.QueueCancelLogLine(QueueCancel.Hold, 2));
-        Assert.Equal("Listen discarded (ESC).", ChatScreen.ListenDiscardedLogLine);
+        Assert.Equal("Listen discarded (Esc).", ChatScreen.ListenDiscardedLogLine);
         Assert.Equal("Interrupt switched off for this session: two interruptions in a row heard nothing.", ChatScreen.InterruptDisabledLogLine);
         Assert.Equal("ask_user: 2 questions answered", ChatScreen.AskUserAnsweredLogLine(2));
         Assert.Equal("ask_user: 1 question answered", ChatScreen.AskUserAnsweredLogLine(1));

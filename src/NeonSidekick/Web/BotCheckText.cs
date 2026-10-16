@@ -18,7 +18,7 @@ public static class BotCheckText
     public const string GiveUpRow = "Give up";
 
     /// <summary>The waiting pane's hint.</summary>
-    public const string WaitHint = "Enter / ESC = give up";
+    public const string WaitHint = "Enter / Esc = give up";
 
     /// <summary>What the tool was doing, for the pane: <c>reading</c>, <c>searching</c>, <c>downloading</c>, <c>printing</c>.</summary>
     public static string Doing(BotCheckUse use) => use switch
@@ -45,7 +45,7 @@ public static class BotCheckText
     public static string WaitCaption(BotCheckRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return "Solve the check for " + request.Url.Host + " in the Browser window; it closes by itself once the page is through. ESC gives up.";
+        return "Solve the check for " + request.Url.Host + " in the Browser window; it closes by itself once the page is through. Esc gives up.";
     }
 
     /// <summary>

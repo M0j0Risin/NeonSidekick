@@ -141,9 +141,9 @@ public class TranscriptFindTests : IDisposable
 
         Assert.All(tops, top => Assert.Equal(-1, top));
         Assert.Contains(TranscriptFind.Hint(0, 0), _console.Output);
-        Assert.Equal("no match · Backspace = erase · ESC = done", TranscriptFind.Hint(0, 0));
-        Assert.Equal($"1 of 2 · Enter = older · {InfoPane.FindBack} = newer · PgUp/PgDn = scroll · ESC = done", TranscriptFind.Hint(1, 2));
-        Assert.Equal("type = find · ESC = done", TranscriptFind.EmptyHint);
+        Assert.Equal("no match · Backspace = erase · Esc = done", TranscriptFind.Hint(0, 0));
+        Assert.Equal($"1 of 2 · Enter = older · {InfoPane.FindBack} = newer · PgUp/PgDn = scroll · Esc = done", TranscriptFind.Hint(1, 2));
+        Assert.Equal("type = find · Esc = done", TranscriptFind.EmptyHint);
     }
 
     /// <summary>The words given up front open the folded run that holds them at once, and the end of the find folds it again.</summary>

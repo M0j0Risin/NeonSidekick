@@ -71,8 +71,8 @@ public class InfoPaneTests : IDisposable
         Assert.Contains(Rule(40) + "\n" + Titled("/screen list") + "\n \nMonitors:\n" + Rule(40) + "\n" + ScreenPane.Fit(InfoPane.SingleTabHintText, 39) + "\n", Output);
         Assert.DoesNotContain("/screen list   /screen list", Output);
         Assert.Single(_built);   // built once: the keys drew nothing again
-        Assert.Equal("↑/↓ PgUp/PgDn = scroll · type = find · ESC = close", InfoPane.SingleTabHintText);   // the find since 2026-10-07
-        Assert.Equal("↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · type = find · ESC = close", InfoPane.HintText);
+        Assert.Equal("↑/↓ PgUp/PgDn = scroll · type = find · Esc = close", InfoPane.SingleTabHintText);   // the find since 2026-10-07
+        Assert.Equal("↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · type = find · Esc = close", InfoPane.HintText);
     }
 
     [Fact]
@@ -384,7 +384,7 @@ public class InfoPaneTests : IDisposable
 
         Assert.Contains("find: Nan · 1 of 1", Output);
         Assert.Same(buttons[0], info.Pressed);
-        Assert.EndsWith(InfoPane.ShiftFindKeys + " · ESC = close", InfoPane.ButtonsHint([('n', "nested or direct")], tabs: false));
+        Assert.EndsWith(InfoPane.ShiftFindKeys + " · Esc = close", InfoPane.ButtonsHint([('n', "nested or direct")], tabs: false));
         Assert.Equal("type / Shift+letter = filter", MenuFilter.TypeOrShiftKeys);   // the menus' wording, "find" here
     }
 
@@ -690,8 +690,8 @@ public class InfoPaneTests : IDisposable
         Assert.Contains($"[{Theme.TabActive.ToMarkup()}]Two[/]", InfoPane.TabStripRows("Help", ["One", "Two"], 1, 80, ("chk", true))[0]);
         Assert.Equal(2, InfoPane.TabAt("Help", ["One", "Two", "chk"], 80, 18, 0));
         Assert.Null(InfoPane.TabAt("Help", ["One", "Two", "chk"], 80, 17, 0));   // the bar
-        Assert.Equal("↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · k = key check · type / Shift+letter = find · ESC = close", InfoPane.ToggleHint('k', "key check"));
-        Assert.Equal("↑/↓ PgUp/PgDn = scroll · k = key check · type / Shift+letter = find · ESC = close", InfoPane.ToggleHint('k', "key check", tabs: false));
+        Assert.Equal("↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · k = key check · type / Shift+letter = find · Esc = close", InfoPane.ToggleHint('k', "key check"));
+        Assert.Equal("↑/↓ PgUp/PgDn = scroll · k = key check · type / Shift+letter = find · Esc = close", InfoPane.ToggleHint('k', "key check", tabs: false));
     }
 
     [Fact]
@@ -711,7 +711,7 @@ public class InfoPaneTests : IDisposable
         Assert.Equal(["Two", "One", "chk", "One", "chk", "Two"], _built);   // the open measures One, never the toggle
         Assert.Contains(Titled(InfoPane.Title + " │ One · Two │ chk ", 60), Output);
         Assert.Contains("\nchecked\n", Output);
-        Assert.Contains(ScreenPane.Fit(InfoPane.ToggleHint('k', "check"), 59), Output);
+        Assert.Contains(ScreenPane.Fit(InfoPane.ToggleHint('k', "check", cells: 59), 59), Output);   // the scroll lead left out at 60 columns
         Assert.Contains(ScreenPane.Fit(InfoPane.HintText, 59), Output);
         Assert.False(pane.OverlayOpen);
     }
@@ -752,8 +752,47 @@ public class InfoPaneTests : IDisposable
         var places = InfoPane.TabStripLayout("Help", ["enabled", "lan", "One", "Two"], 80).Places;
         Assert.Equal(0, InfoPane.TabAt("Help", ["enabled", "lan", "One", "Two"], 80, places[0].Column, 0));   // a click's hit: the buttons' indexes first
         Assert.Equal(1, InfoPane.TabAt("Help", ["enabled", "lan", "One", "Two"], 80, places[1].Column + 1, 0));
-        Assert.Equal("↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · e = on/off · r = lan/local · type / Shift+letter = find · ESC = close", InfoPane.ButtonsHint([('e', "on/off"), ('r', "lan/local")]));
+        Assert.Equal("↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · e = on/off · r = lan/local · type / Shift+letter = find · Esc = close", InfoPane.ButtonsHint([('e', "on/off"), ('r', "lan/local")]));
         Assert.Equal(InfoPane.ToggleHint('k', "key check", tabs: false), InfoPane.ButtonsHint([('k', "key check")], tabs: false));
+    }
+
+    /// <summary>
+    /// A hint wider than the room given leaves out its scroll lead (2026-10-16, the user's ask: every hint fits a 120-column window);
+    /// one that fits keeps it, and no room given keeps it always.
+    /// </summary>
+    [Fact]
+    public void ButtonsHint_PastItsRoom_LeavesOutTheScrollLead()
+    {
+        (char, string)[] buttons = [('e', "on/off"), ('r', "lan/local")];
+        string full = InfoPane.ButtonsHint(buttons);
+        Assert.StartsWith(InfoPane.ScrollLead, full);
+        Assert.Equal(full, InfoPane.ButtonsHint(buttons, cells: TextCells.Width(full)));
+        Assert.Equal(full[InfoPane.ScrollLead.Length..], InfoPane.ButtonsHint(buttons, cells: TextCells.Width(full) - 1));
+        Assert.Equal(full[InfoPane.ScrollLead.Length..], InfoPane.ButtonsHint(buttons, cells: 10));   // never cut further: the bar's Fit does that
+        Assert.Equal(InfoPane.ButtonsHint([('k', "key check")], cells: 30), InfoPane.ToggleHint('k', "key check", cells: 30));
+    }
+
+    private static readonly InfoAction[] WideButtons = [new("enabled", 'e', "switch the server on or off"), new("lan", 'r', "lan or local")];
+
+    /// <summary>The pane gives its hint the window's width less one: at 120 columns a wide one loses its scroll lead, at 240 it keeps it.</summary>
+    [Theory]
+    [InlineData(120, false)]
+    [InlineData(240, true)]
+    public async Task AButtonPanesHint_FitsItsWindow(int columns, bool lead)
+    {
+        _console.Profile.Width = columns;
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var info = new InfoPane(pane, keys);
+        input.Push(Keys.Escape);
+
+        await info.ShowAsync(InfoPane.Title, [Tab("One", "first"), Tab("Two", "second")], 0, CancellationToken.None, WideButtons);
+
+        string full = InfoPane.ButtonsHint([.. WideButtons.Select(b => (b.Key, b.Word))]);
+        Assert.True(TextCells.Width(full) > 119 && TextCells.Width(full) - InfoPane.ScrollLead.Length <= 119);   // the case under test
+        Assert.Equal(lead, Output.Contains(full, StringComparison.Ordinal));
+        Assert.Contains(full[InfoPane.ScrollLead.Length..], Output);
     }
 
     /// <summary>A button's key closes the pane and names it; a click on its title does the same; a plain close names nothing.</summary>
@@ -771,7 +810,7 @@ public class InfoPaneTests : IDisposable
 
         Assert.Same(Buttons[1], info.Pressed);
         Assert.False(pane.OverlayOpen);
-        Assert.Contains(ScreenPane.Fit(InfoPane.ButtonsHint([('e', "on/off"), ('r', "lan/local")]), 59), Output);
+        Assert.Contains(ScreenPane.Fit(InfoPane.ButtonsHint([('e', "on/off"), ('r', "lan/local")], cells: 59), 59), Output);
 
         pane.Show();
         int column = InfoPane.TabStripLayout(InfoPane.Title, ["enabled", "lan", "One", "Two"], 60).Places[0].Column;
@@ -1007,8 +1046,8 @@ public class InfoPaneTests : IDisposable
         int none = Output.IndexOf(InfoPane.FindHint("bz", 0, 0), StringComparison.Ordinal);
         int erased = Output.IndexOf(InfoPane.FindHint("b", 0, 1), none, StringComparison.Ordinal);
         Assert.True(none > 0 && erased > none, Output);
-        Assert.Equal("find: bz · no match · Backspace = erase · ESC = clear", InfoPane.FindHint("bz", 0, 0));
-        Assert.Equal($"find: b · 1 of 1 · Enter = next · {InfoPane.FindBack} = back · ESC = clear", InfoPane.FindHint("b", 0, 1));
+        Assert.Equal("find: bz · no match · Backspace = erase · Esc = clear", InfoPane.FindHint("bz", 0, 0));
+        Assert.Equal($"find: b · 1 of 1 · Enter = next · {InfoPane.FindBack} = back · Esc = clear", InfoPane.FindHint("b", 0, 1));
         Assert.True(Output.IndexOf(InfoPane.SingleTabHintText, erased, StringComparison.Ordinal) > erased, Output);   // all erased: the pane's own hint
         Assert.False(pane.OverlayOpen);
     }

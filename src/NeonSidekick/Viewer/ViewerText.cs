@@ -89,14 +89,14 @@ public static class ViewerText
 
     /// <summary>The viewer's keys, the line under <see cref="Opened"/> (later on 2026-09-27): newest at the left since 2026-10-03,
     /// TAB back to the terminal; the wheel and the right-click menu since 2026-10-04. Pinned.</summary>
-    public const string Keys = "(← or wheel up newer · → or wheel down older · Home newest · End oldest · right-click picture menu · F9 slide show · F10 random · ↑ ↓ slide time · F11 full screen · DEL twice delete · TAB terminal · ESC close)";
+    public const string Keys = "(← or wheel up newer · → or wheel down older · Home newest · End oldest · right-click picture menu · F9 slide show · F10 random · ↑ ↓ slide time · F11 full screen · Del twice delete · Tab terminal · Esc close)";
 
     /// <summary>
     /// The viewer's keys on a Mac (2026-10-07, the viewer over AppKit): the Mac's extras in (⌫ for Del, ⌘W beside ESC, and ⌃⌘F for
     /// full screen in F11's place: macOS keeps F11 for Show Desktop unless the user frees it, which still works then) and, since
     /// phase 4, TAB to the terminal as on Windows. Pinned.
     /// </summary>
-    public const string KeysMac = "(← or wheel up newer · → or wheel down older · Home newest · End oldest · right-click picture menu · F9 slide show · F10 random · ↑ ↓ slide time · ⌃⌘F full screen · ⌫ twice delete · TAB terminal · ESC or ⌘W close)";
+    public const string KeysMac = "(← or wheel up newer · → or wheel down older · Home newest · End oldest · right-click picture menu · F9 slide show · F10 random · ↑ ↓ slide time · ⌃⌘F full screen · ⌫ twice delete · Tab terminal · Esc or ⌘W close)";
 
     /// <summary>The keys line for this system: <see cref="KeysMac"/> on a Mac, <see cref="Keys"/> elsewhere.</summary>
     public static string KeysHere => OperatingSystem.IsMacOS() ? KeysMac : Keys;

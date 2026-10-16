@@ -265,7 +265,7 @@ function renderScreen(t) {
     }),
     line("ln", st(t, "paneRule", "─".repeat(W))),
     line("ln", st(t, "user", "› /theme "), st(t, "selectedText", t.n), st(t, "spinner", "  ⠋"), st(t, "pasteLabel", "  [Pasted text #1 +12 lines]")),
-    line("ln", st(t, "hint", "  esc to cancel · 1.2k tokens · "), st(t, "trailerMark", "◆"), st(t, "hint", " gemma-4")),
+    line("ln", st(t, "hint", "  Esc to cancel · 1.2k tokens · "), st(t, "trailerMark", "◆"), st(t, "hint", " gemma-4")),
     line("ln", st(t, "placeholder", "  Type a message or /help for more info")),
   ];
   rows.forEach(r => el.append(r));

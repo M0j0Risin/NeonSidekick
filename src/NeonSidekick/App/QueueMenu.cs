@@ -33,13 +33,13 @@ internal sealed class QueueMenu
 {
     // The label and the key hints: the pane shows the label as its title and the keys in its hint row. Pinned.
     public const string Title = ChatScreen.QueueToolGlyph + " Queue";
-    public const string Keys = "Enter = remove · m = mode · k = cancel mode · c = clear all · ESC = close";   // close since 2026-10-07: the pane's top level; m and k 2026-10-13
+    public const string Keys = "Enter = remove · m = mode · k = cancel mode · c = clear all · Esc = close";   // close since 2026-10-07: the pane's top level; m and k 2026-10-13
 
     /// <summary>The key hints with the <see cref="SendButton"/> on the title row (2026-10-05). Pinned.</summary>
-    public const string KeysWithSend = "Enter = remove · s = send · m = mode · k = cancel mode · c = clear all · ESC = close";
+    public const string KeysWithSend = "Enter = remove · s = send · m = mode · k = cancel mode · c = clear all · Esc = close";
 
     /// <summary>The key hints over the empty queue (2026-10-13): the mode buttons alone. Pinned.</summary>
-    public const string EmptyKeys = "m = mode · k = cancel mode · ESC = close";
+    public const string EmptyKeys = "m = mode · k = cancel mode · Esc = close";
     public const string EmptyNotice = "(" + NoticeGlyphs.Queue + "nothing queued)";   // the hourglass since 2026-09-22
 
     /// <summary>The one button on the title row (2026-09-21), drawn as a dim tab: every queued message dropped.</summary>

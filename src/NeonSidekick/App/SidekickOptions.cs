@@ -177,7 +177,7 @@ public sealed record SidekickOptions(
         "\n" +
         "Exit codes: 0 done, 1 a check failed, 2 bad argument or unknown profile, 3 headless run in which a shell command was refused\n" +
         "\n" +
-        "Keys: ESC = cancel/back";
+        "Keys: Esc = cancel/back";
 
     /// <summary>The empty option set; every flag false, no values, no error.</summary>
     public static SidekickOptions None { get; } = new(false, false, false, false, false, false, null, null, null, null, null, false, false, null);

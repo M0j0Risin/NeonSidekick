@@ -190,7 +190,7 @@ public class SkillsMenuTests : IDisposable
     [Fact]
     public void Strings_ArePinned()
     {
-        Assert.Equal("Enter = choose · ESC = back", SkillsMenu.ScopeKeys);
+        Assert.Equal("Enter = choose · Esc = back", SkillsMenu.ScopeKeys);
         Assert.Equal("delete", SkillsMenu.DeleteWord);
         Assert.Equal("(kept)", SkillsMenu.KeptNotice);
         Assert.Equal("(🎓 external skills are read only here; move the folder by hand)", SkillsMenu.ExternalReadOnlyNotice);
@@ -354,7 +354,7 @@ public class SkillsMenuTests : IDisposable
         Assert.Equal([3L, 1L], kept.Select(r => r.Id));
         Assert.Empty(_restored);
         Assert.Equal("(↩️ removed v2 of haiku)", SkillRecordText.VersionRemovedNotice("haiku", "v2"));
-        Assert.Equal("Enter = put back · d = remove · c = clear all · ESC = back", SkillsMenu.VersionsKeys);
+        Assert.Equal("Enter = put back · d = remove · c = clear all · Esc = back", SkillsMenu.VersionsKeys);
     }
 
     /// <summary>The revert list's c (2026-10-07): every kept version removed after a yes; the list goes, with no "nothing kept" notice after it.</summary>

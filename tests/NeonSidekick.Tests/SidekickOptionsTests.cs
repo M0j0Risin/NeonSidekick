@@ -361,7 +361,7 @@ public class SidekickOptionsTests
         Assert.Contains("--log <path>   append every diagnostic line (Trace and up) to a file; {ts} in the path becomes the start time (yyyyMMdd-HHmmss)", SidekickOptions.Usage);
         Assert.Contains("--version", SidekickOptions.Usage);
         Assert.Contains("--help", SidekickOptions.Usage);
-        Assert.Contains("ESC = cancel/back", SidekickOptions.Usage);
+        Assert.Contains("Esc = cancel/back", SidekickOptions.Usage);
         Assert.DoesNotContain("Ctrl+Q", SidekickOptions.Usage);
         Assert.DoesNotContain("quit", SidekickOptions.Usage.Split("Keys:")[1]);
     }

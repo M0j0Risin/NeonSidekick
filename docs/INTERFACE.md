@@ -11,7 +11,7 @@ The screen, the input line, panes, keys, the bars and the app's own windows. Bac
 
 ## Words used here
 
-* **Pane:** the box that opens at the bottom of the screen for settings, lists and questions. ESC closes it.
+* **Pane:** the box that opens at the bottom of the screen for settings, lists and questions. Esc closes it.
 * **Tab:** one page of a pane. Some tabs hold a second row of tabs.
 * **Profile:** a named set of settings, memories, sessions and files, each in its own folder (`/profile`).
 * **Working directory:** the only folder the model's file tools can reach. It starts as the profile's `files` folder; `/cwd` changes it.
@@ -42,8 +42,8 @@ From top to bottom:
 * **Ctrl+C** with nothing selected stops the speech, else cancels the reply; twice at an idle line, it exits.
 * **Lists:** `/` commands, `@` files, `#` skills, `$` tools, `%` database connections, `^` ComfyUI workflows, `*` UNC shares. They work inside a command's text too, except in `/read`, `/view`, `/print` and `/pdf`. See [Completion lists](#completion-lists).
 * **Drop a picture** from the picture strip or the transcript onto the input row to attach it (**🖼️ drop on line**).
-* **During a reply** Enter queues the message. ESC stops the speech, then closes an open list, then cancels the reply; it never clears your draft.
-* **At the idle line** ESC clears the draft (↑ brings it back); ESC twice on an empty line opens `/rewind`.
+* **During a reply** Enter queues the message. Esc stops the speech, then closes an open list, then cancels the reply; it never clears your draft.
+* **At the idle line** Esc clears the draft (↑ brings it back); Esc twice on an empty line opens `/rewind`.
 * **Voice:** with *STT input* on, the *STT push-to-talk key* records a message; with *STT wake* on, saying the wake phrase does.
 * **Tool calls** show as `🛠️ read_file notes.md` with the result under them (`→ 4 lines`, ✗ when it failed). Long results fold once the run ends; Ctrl+O or `/expand` opens them.
 * **During `/read`** (📖): Space on an empty line pauses and resumes; ←/→ step a sentence.
@@ -52,7 +52,7 @@ From top to bottom:
 
 * A right-click on the input line or Alt+V puts a copied picture on the line as `[Image #n]`; so does Ctrl+V where the terminal passes it (Windows Terminal keeps Ctrl+V for text). With no picture, the text is pasted.
 * Once sent, the picture is saved in *Pasted images folder* under the profile's `images` folder, and the model gets its path.
-* **A PDF** dropped on the line (or its path pasted) is attached as `[PDF #n report.pdf]`; on a `/command` line it stays its path. Its text is read in the background with your browser; sending waits for it under *Reading the attached PDF*, and ESC there keeps the draft.
+* **A PDF** dropped on the line (or its path pasted) is attached as `[PDF #n report.pdf]`; on a `/command` line it stays its path. Its text is read in the background with your browser; sending waits for it under *Reading the attached PDF*, and Esc there keeps the draft.
   * The Anthropic and OpenAI APIs get the PDF itself (Anthropic reads 100 pages at most; you're warned about a longer one). Other servers get its text, its first 100 pages: a scan or a locked PDF is refused there, and a text longer than half the model's context window is cut, the rest left to `read_pdf`.
   * The line's pictures and PDFs together may total at most *LLM max images (MB)*. The model gets the PDF's path in the sent text, and a saved session keeps its text, not the file.
 * **On a Mac** Cmd+V pastes text only; use Ctrl+V, Option+V (with Option as Meta) or a right-click on the input line. A picture or PDF file copied in Finder is attached by name.
@@ -61,25 +61,25 @@ From top to bottom:
 
 A list opens over the input line as you type `/` at the start, a command's argument, or `@`, `#`, `$`, `%`, `^` or `*` before a word.
 
-* **Keys:** ↑/↓ move the highlight, Enter or Tab applies it, ESC closes the list (it stays closed for that word).
+* **Keys:** ↑/↓ move the highlight, Enter or Tab applies it, Esc closes the list (it stays closed for that word).
 * **Mouse:** a click highlights a row, a double-click applies it. The wheel over the list moves the highlight; elsewhere it scrolls the transcript. A click on the `▲▼` row pages.
 * A right-click on the list does nothing (no paste), and a click off the list leaves it open.
 
 ## Panes
 
-* **Keys:** ←/→ switch tabs, ↑/↓ move, Enter edits or toggles, Space flips an on/off row, ESC closes or goes back a page.
+* **Keys:** ←/→ switch tabs, ↑/↓ move, Enter edits or toggles, Space flips an on/off row, Esc closes or goes back a page.
 * **Second row of tabs** (`/settings`, `/tools`, `/skills`' Offered, `/mcp`'s Tools): ←/→ step through each sub-tab and on into the next tab; Tab and Shift+Tab jump a whole tab.
 * **Under the list:** the row's description and default. A number after a tab's name (`Client³`) counts its settings changed from the default.
 * **Height:** a pane keeps its height while it opens a value picker, a yes/no, a folder browse or details, so its title stays put; a taller details page gives the height back when it closes.
-* **Type to filter** on `/sessions`, `/server`, `/model`, `/docker`, the saved lists, the allowed commands and the Offered tabs; the first ESC clears it. Where a pane has lettered buttons, a letter presses its button and Shift+letter starts a filter. A paste (Ctrl+V or a right-click) adds its first line, up to 40 characters.
+* **Type to filter** on `/sessions`, `/server`, `/model`, `/docker`, the saved lists, the allowed commands and the Offered tabs; the first Esc clears it. Where a pane has lettered buttons, a letter presses its button and Shift+letter starts a filter. A paste (Ctrl+V or a right-click) adds its first line, up to 40 characters.
 * **Find** on the read-only panes (`/help`, `/sys`, `/about`, `/tree`, `/docker logs`…): type to mark every match; Enter or F3 goes to the next, Shift+Enter or Shift+F3 back (Shift+F3 on a Mac). Where the pane has lettered buttons (`/webui`, an `/ad` card, `/help`'s key check), a letter presses its button and Shift+letter starts the find. A paste (Ctrl+V or a right-click) adds its first line, up to 40 characters.
 * **Asking first:** removing something asks first, with No highlighted; `y` or `n` answers.
-* **Mouse:** a click moves the cursor, a double-click picks a row or tab. A click on the `▲▼` row under a long list pages up (`▲`) or down (`▼`). On the input line a double-click selects a word, on the `›` the whole draft. The × at the top right is ESC; a double-click outside a pane closes it.
+* **Mouse:** a click moves the cursor, a double-click picks a row or tab. A click on the `▲▼` row under a long list pages up (`▲`) or down (`▼`). On the input line a double-click selects a word, on the `›` the whole draft. The × at the top right is Esc; a double-click outside a pane closes it.
 * **On a Mac**, to select terminal text with the mouse, hold Fn (Terminal.app) or Option (iTerm2), or toggle the app's mouse with Cmd+R in Terminal.app.
 
 ### Pane keys
 
-In every list ↑/↓ move, Enter or a double-click picks, ESC closes; key letters act at once.
+In every list ↑/↓ move, Enter or a double-click picks, Esc closes; key letters act at once.
 
 | Pane | Keys |
 |---|---|
@@ -88,13 +88,13 @@ In every list ↑/↓ move, Enter or a double-click picks, ESC closes; key lette
 | `/queue` | Enter removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) · `m` *Queue mode* · `k` *Queue cancel mode* |
 | `/rewind` | Enter rewinds to before the message |
 | `/sessions` | Enter opens · type to filter |
-| `/find` | type to find · a paste or right-click adds its first line · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · ESC or a double-click outside done |
-| Info panes (`/help`, `/sys`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find (Shift+letter where the pane has lettered buttons) · ESC closes |
+| `/find` | type to find · a paste or right-click adds its first line · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · Esc or a double-click outside done |
+| Info panes (`/help`, `/sys`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find (Shift+letter where the pane has lettered buttons) · Esc closes |
 | **Saved lists** | |
-| `/eventlog` | ←/→ logs · Enter opens the event (`c` copy, `a` ask, ESC back to the list) · `r` refresh · `m` more · `c` computer · type to filter, Shift+letter to start one with a button's letter |
+| `/eventlog` | ←/→ logs · Enter opens the event (`c` copy, `a` ask, Esc back to the list) · `r` refresh · `m` more · `c` computer · type to filter, Shift+letter to start one with a button's letter |
 | `/services` | ←/→ states · Enter opens the service (`c` copy, `a` ask, and on a readwrite computer `s` start, `x` stop, `r` restart, `t` start type, each asking) · `r` refresh · `c` computer · type to filter |
 | `/tasks` | ←/→ states · Enter opens the task (`c` copy, `a` ask, `h` history, and as allowed `r` run, `e` end, `n` enable, `d` disable, each asking) · `r` refresh · `c` computer · `f` folder · `w` Windows' own · type to filter |
-| `/ad` card | Columns under a dim header row, the long ones cut to the pane · a double-click on a row (a member, a result, a group, the manager or owner) opens that object's card, ESC goes back to the one before · `c` copy (the whole card, nothing cut) · `a` ask · on a group, `n` nested or direct, `u` users only or all · on a locked user, **Search 4740** opens the PDC emulator's lockout events on `/eventlog` · a name several accounts share opens as a card of them · Shift+letter starts a find |
+| `/ad` card | Columns under a dim header row, the long ones cut to the pane · a double-click on a row (a member, a result, a group, the manager or owner) opens that object's card, Esc goes back to the one before · `c` copy (the whole card, nothing cut) · `a` ask · on a group, `n` nested or direct, `u` users only or all · on a locked user, **Search 4740** opens the PDC emulator's lockout events on `/eventlog` · a name several accounts share opens as a card of them · Shift+letter starts a find |
 | `/youtube list` | Enter plays |
 | `/youtube <words>`, `/youtube playlist` | Enter plays · `s` saves the video |
 | `/prompts` | Enter puts the prompt on the draft line · `a` add · `s` save the draft · `e` edit (a long one in the draft editor) |
@@ -108,9 +108,9 @@ In every list ↑/↓ move, Enter or a double-click picks, ESC closes; key lette
 | `/tools web` | `m` *Web browser mode* · `o` opens the Browser window (Windows only) |
 | `/tools files` · `image` · `obsidian` · `advisors` · `print` | `b` *File browser/tree mode* · `e` *Image edit mode* · `v` *Obsidian vault* · `a` *Advisor list* · `p` *Print default printer* |
 | `/tools camera` | `w` watch · `l` live · `s` snap · `c` screen |
-| The camera pane | Space takes · `r` retake · Enter attaches · ESC drops |
-| The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · ESC denies |
-| A database write's approval | `d` deny · `o` once · `s` session · `v` the whole statement · ESC denies |
+| The camera pane | Space takes · `r` retake · Enter attaches · Esc drops |
+| The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · Esc denies |
+| A database write's approval | `d` deny · `o` once · `s` session · `v` the whole statement · Esc denies |
 | **Servers and processes** | |
 | `/server`, `/model` | Enter chooses · type to filter |
 | *Embedded models* | `s` size · `i` installed or not · `d` drafter · `o` sort · `x` uncensored |
@@ -217,20 +217,20 @@ In a pane over a reply, rows that would disturb it (a reconnect, the profile, th
 The keys that apply right now, on a row of their own over the status bar (*Hints bar*). It shows one hint at a time, the first of:
 
 1. The kill switch's warning (Ctrl+Alt+X, press again to unload).
-2. A waiting second press: Ctrl+C to exit, ESC to rewind, Delete for a splash picture.
+2. A waiting second press: Ctrl+C to exit, Esc to rewind, Delete for a splash picture.
 3. An open pane's keys.
 4. What the arrows do right now: the splash's pages, the picture strip, `/read`'s keys.
 
 * **auto** (the default): the bar takes a row when a hint comes and keeps it, blank, until you send, a reply ends, a pane opens or closes, the window is resized, or 10 seconds pass with no hint and no key. Typing never moves the input line.
 * **always** keeps the row; **off** puts the hints back at the end of the status bar's left group.
-* During a reply it shows only a pane's keys or the kill switch's warning; **esc to stop** stays on the status bar.
+* During a reply it shows only a pane's keys or the kill switch's warning; **Esc to stop** stays on the status bar.
 * A double-click on it opens `/settings`. It moves with the other bars in *Toolbar order*.
 
 ## The status bar
 
 The row under the hints bar (*Status bar*). [Bar checklists](#bar-checklists) moves and pins its sections:
 
-* **Left by default:** **Status** (🔊 🎤 👂 ✋, 🧠, 🏷️…), **Spinner** (during a reply, with its clock and **esc to stop**; always on), **Queued**, **Timers**, **Reading** (`/read`, `/echo`) and **Usage** (context and tokens).
+* **Left by default:** **Status** (🔊 🎤 👂 ✋, 🧠, 🏷️…), **Spinner** (during a reply, with its clock and **Esc to stop**; always on), **Queued**, **Timers**, **Reading** (`/read`, `/echo`) and **Usage** (context and tokens).
 * **Right by default:** **Model** (name and reasoning icon) and **Working directory** (off by default).
 * During a reply the busy row keeps the same sides.
 * **Narrow window:** the model's name and the path shrink, then go; then the right group gives way, then the left. The spinner goes last.
@@ -330,7 +330,7 @@ The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar 
 
 * Enter on *Model avatar* (or `/avatar`) opens a grid of every emoji Windows Terminal draws (Unicode Emoji 15.1, no flags). *User avatar* opens it for your own lines.
 * **Tabs:** **⭐ For you** (matching the profile's name and persona), **🕘 Recent**, then the Unicode groups. Tab and Shift+Tab step them; the arrows move; a double-click picks.
-* Type to search (`fox`, `red heart`) or paste an emoji; ESC clears. 🎲 picks at random; 🚫 clears the avatar.
+* Type to search (`fox`, `red heart`) or paste an emoji; Esc clears. 🎲 picks at random; 🚫 clears the avatar.
 * Enter on a hand or a person opens its six skin tones. Other profiles' avatars are marked.
 * Recent picks and the last skin tone are kept in `emoji.json` in the home folder, shared by every profile.
 
@@ -445,7 +445,7 @@ A browser front end the app hosts for the loaded profile: the chat as it happens
 * **The token:** each profile has its own, kept encrypted. `/webui reset` makes a new one and signs every browser out, and so does changing the port (the cookie is named by the port). A link sent through a messaging service hands that service the token too; run `/webui reset` afterwards. A profile folder copied from another machine makes a new token.
 * **The tabs:** Chat, Home, Shopping and YouTube, each only while its controls are on (`/settings` › Client › Web UI): *Web UI chat controls* (on by default), *Web UI home controls*, *Web UI shopping controls* and *Web UI YouTube controls* (all three off by default, so after an upgrade the Shopping tab is gone until it's turned on). Chat stays a link in the header; Home, Shopping and YouTube sit behind ☰, which reads the open tab's name there (🏠 Home ▾). Its menu lists only the tabs that are on, and ☰ goes when none of the three is on. A pick, a tap outside, Esc or a scroll closes it. With Chat off the page opens on Home, else Shopping, else YouTube; with none on it says so, names the four settings, and opens a tab by itself once one is turned on. A tab turned off while it's open goes to one that's on.
 * **Chat off:** the phone has no transcript, no message line, and can't answer the PC's questions (they're the Chat tab's); they open on the PC as always. The Chat badge goes with it. The PC is unchanged.
-* **The pages:** in one fixed dark style. The page's own draft line stays in the browser; it never shows what you type at the PC, nor the PC what you type there. Sent messages share one history, though: a line sent from the page joins the profile's message history as you send it, so ↑ brings it back at the PC too, and ↑/↓ on the page step through the history as at the PC (on a draft of several rows, from its first or last row). A draft you clear at the PC with ESC never reaches the page. Enter sends on a desktop; on a phone it adds a line (tap ➤ to send). Stop (■) shows while a reply runs. A ✕ inside the message box while it holds text clears it; *Undo* under it puts the text back, unless you've typed since, and ↑ brings it back too.
+* **The pages:** in one fixed dark style. The page's own draft line stays in the browser; it never shows what you type at the PC, nor the PC what you type there. Sent messages share one history, though: a line sent from the page joins the profile's message history as you send it, so ↑ brings it back at the PC too, and ↑/↓ on the page step through the history as at the PC (on a draft of several rows, from its first or last row). A draft you clear at the PC with Esc never reaches the page. Enter sends on a desktop; on a phone it adds a line (tap ➤ to send). Stop (■) shows while a reply runs. A ✕ inside the message box while it holds text clears it; *Undo* under it puts the text back, unless you've typed since, and ↑ brings it back too.
 * **Prompts, memory and history:** 📣 at the message box's left opens a sheet with three tabs, on the one you used last (`/prompts` sent from the page opens it on Prompts). Each tab is read fresh as it opens.
   * **📣 Prompts:** the profile's saved prompts, numbered as at the PC. A tap on one puts it on the message line ahead of what's there, with *Undo*; its ➤ sends it at once, as if typed, and leaves the message line alone. ⇪ saves the message line as a new prompt and leaves it there.
   * **💾 Memory:** the profile's memories, a turned-off one marked *off*. ⇪ saves the message line as a memory, as `/remember` does; with *Memory mode* off the tab says so and saving is refused.
@@ -461,7 +461,7 @@ A browser front end the app hosts for the loaded profile: the chat as it happens
   * **It follows the PC:** a picture you move to at the PC (a click or an arrow on its picture strip, a step in its picture viewer, a pick in its thumbnail browser, or opening one in the viewer) moves an open full view to the same file, whether opened from the transcript or the drawer. Moved to an older picture it holds there; moved to the newest it's live again. The page's own taps, a slide show and a closed full view move nothing.
   * **🗑️ deletes the picture:** tap it twice (the first tap turns it red for 3 seconds; Delete twice on a desktop). It follows *File deletes to Recycle bin*, as the PC viewer's Del does: to the Recycle bin (the Trash on a Mac), or for good. The view moves to the next older picture, the PC's strip drops it and its hint row says so, and the log names the picture. A step, a swipe, a new picture or a move from the PC disarms it; Esc disarms it before it closes the view. A picture with no file of its own (pasted, a camera watch frame) has no 🗑️. A HEIC, TIFF or JXL original is sent as a JPEG. A file over 20 MB shows its name and opens as the original. A picture is served only while the page's transcript holds it: after `/clear` or a rewind its address answers nothing. A picture whose file is gone says so under its name.
 * **Messages from the page:** sent from the idle line, after anything queued at the PC. During a reply they wait (counted in the status bar's Queued, not listed in `/queue`), and they're sent as the reply ends even under *Queue mode* `manual`; a held queue (*Queue cancel mode* `hold`) holds them too. `/clear`, `/new`, a resume, a rewind, a profile switch or *Queue cancel mode* `empty` drops them and puts the text back on the page; `/queue clear` leaves them. Slash commands run only with *Web UI commands* on (see Commands from the page). At most 20 wait at once; a message holds up to 48 KB.
-* **Stop on the page:** ends a reply, a compact, a botchat, an advisor, `/imagine`, `/test` or `/loop`'s wait and each pass's reply, and stops speech. Before the reply's first word it takes the message back to the page, as ESC does at the PC. It never stops a model loading (Ctrl+C at the PC) or your editor under `/draft`.
+* **Stop on the page:** ends a reply, a compact, a botchat, an advisor, `/imagine`, `/test` or `/loop`'s wait and each pass's reply, and stops speech. Before the reply's first word it takes the message back to the page, as Esc does at the PC. It never stops a model loading (Ctrl+C at the PC) or your editor under `/draft`.
 * **Questions:** a command's approval, `ask_user`, an allow (the camera, the screen, a database write), a yes/no (Docker, Home Assistant, a print, the shopping list's clear, an advisor), the plan's approval and a reflection's skill show at the PC and on the page at once, in the PC's own words; the first answer wins, and the PC says when the page answered. The page shows a command or a statement whole. Not on the page: Close gaps (the plan's), the bot check, the camera's shutter. While the PC waits on one of those, the page says "waiting for an answer at the PC".
 * **Shopping:** the list in the active store's aisle order, as the model reads it; a tap ticks or unticks a line. With two or more stores a *Store* picker sits over the list: a pick makes that store the active one, as `/shopping store <name>` does, and the list is reordered for it at once. The page re-reads the list (and the store) every five seconds while it's open, and the PC's open `/shopping` pane follows a store or a tick made from the page within a second. A tick or a store picked on the page flashes on the PC's hint row (📱).
 * **The dropdown:** as at the PC, typing completes the `@ # $ % ^ *` mentions and, with *Web UI commands* on, the commands and their words. Only the commands and words the page may run are offered. ↑/↓ move, Tab or Enter take one, Esc closes it, or tap a row; Enter sends only while it's closed. `@` and the path words list the working directory only while *File tools* is on. *Web UI connection details* off names the `%` and `*` connections without their server and database.

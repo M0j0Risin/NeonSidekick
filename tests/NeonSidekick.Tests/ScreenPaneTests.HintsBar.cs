@@ -59,8 +59,8 @@ public partial class ScreenPaneTests
         Assert.EndsWith(Rule(40) + "\nidle", Output);
         Assert.DoesNotContain(Arrows, Output);   // the screen puts the keys on the Status bar itself when the bar is off
 
-        pane.ShowOverlay(new Markup("a"), "ESC closes");
-        Assert.EndsWith(Rule(40) + "\nESC closes", Output);   // a pane's keys on the Status bar, as ever
+        pane.ShowOverlay(new Markup("a"), "Esc closes");
+        Assert.EndsWith(Rule(40) + "\nEsc closes", Output);   // a pane's keys on the Status bar, as ever
         Assert.Equal(0, pane.HintsRows);
     }
 
@@ -154,9 +154,9 @@ public partial class ScreenPaneTests
     public void HintsBar_APanesKeys_TakeTheBar_TheStatusBarKeepsItsOwn_ClosingTakesTheRow()
     {
         using var pane = HintsPane(HintsBarMode.Auto, () => null);
-        pane.ShowOverlay(new Markup("a"), "ESC closes");
+        pane.ShowOverlay(new Markup("a"), "Esc closes");
         Assert.Equal(1, pane.HintsRows);
-        Assert.EndsWith(Rule(40) + "\nESC closes\nidle", Output);
+        Assert.EndsWith(Rule(40) + "\nEsc closes\nidle", Output);
 
         pane.CloseOverlay();
         Assert.Equal(0, pane.HintsRows);
@@ -213,8 +213,8 @@ public partial class ScreenPaneTests
             Assert.Contains(ScreenPane.StopHint, Output[mark..]);
 
             mark = Output.Length;
-            pane.ShowOverlay(new Markup("a"), "ESC closes");
-            Assert.Contains("\nESC closes\n", Output[mark..]);
+            pane.ShowOverlay(new Markup("a"), "Esc closes");
+            Assert.Contains("\nEsc closes\n", Output[mark..]);
             Assert.EndsWith(ScreenPane.StopHint, Output.TrimEnd());   // the way out stays with the spinner on the Status bar
             pane.CloseOverlay();
         }

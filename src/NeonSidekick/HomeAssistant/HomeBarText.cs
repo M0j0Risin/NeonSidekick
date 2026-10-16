@@ -285,7 +285,7 @@ public static class HomeBarText
     public const string OtherTab = "Other";
 
     /// <summary>The bar tab's hint: the move keys.</summary>
-    public const string BarHint = "Shift+↑↓ = move · Shift+←→ = side · Shift+Home/End = top/bottom · Del = remove · Enter = more · ESC = close";
+    public const string BarHint = "Shift+↑↓ = move · Shift+←→ = side · Shift+Home/End = top/bottom · Del = remove · Enter = more · Esc = close";
 
     /// <summary>The other tabs' hint, before the filter's keys.</summary>
     public const string PickHint = "Space / Enter = add or remove";
@@ -327,7 +327,7 @@ public static class HomeBarText
     /// <summary>The rename's input row: its crumb's last step and its keys (2026-10-12).</summary>
     public const string RenameTitle = "Rename on the bar";
 
-    public const string RenameKeys = "Enter = save · blank = the emoji alone · ESC = keep";
+    public const string RenameKeys = "Enter = save · blank = the emoji alone · Esc = keep";
 
     /// <summary>The emoji grid's crumb's last step (later on 2026-10-12).</summary>
     public const string EmojiTitle = "Emoji";
@@ -363,7 +363,7 @@ public static class HomeBarText
     public const string Cooler = "Cooler";
 
     /// <summary>A room pane's hint. Pinned.</summary>
-    public const string RoomKeys = "Space = switch · Enter = its actions · ESC = close";
+    public const string RoomKeys = "Space = switch · Enter = its actions · Esc = close";
 
     /// <summary>A brightness step's label.</summary>
     public static string Brightness(int percent) => "Brightness " + percent.ToString(CultureInfo.InvariantCulture) + "%";

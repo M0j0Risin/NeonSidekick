@@ -236,7 +236,7 @@ public sealed partial class WebUiPageTests
         await page.EvalAsync("document.getElementById('clear-draft').click()");
         await page.WaitAsync(Draft + ".value === ''", "cleared");
         await KeyAsync(page, "ArrowUp");
-        await page.WaitAsync(Draft + ".value === 'half a thought'", "the cleared text back, as ESC's at the PC");
+        await page.WaitAsync(Draft + ".value === 'half a thought'", "the cleared text back, as Esc's at the PC");
         await KeyAsync(page, "ArrowUp");
         await page.WaitAsync(Draft + ".value === 'hello there'", "then the history");
     }

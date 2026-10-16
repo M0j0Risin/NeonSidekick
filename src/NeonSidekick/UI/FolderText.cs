@@ -19,7 +19,7 @@ public static class FolderText
     public const char CollapseAllKey = '-';
 
     /// <summary>The hint row under the pane.</summary>
-    public const string Hint = "Enter = choose · Space = expand/collapse · - = collapse all · ESC = back";
+    public const string Hint = "Enter = choose · Space = expand/collapse · - = collapse all · Esc = back";
 
     /// <summary>A node with subfolders to show, or not yet read.</summary>
     public const string CollapsedGlyph = "▸";
@@ -37,7 +37,7 @@ public static class FolderText
     public const string BrowseTitle = FolderGlyph + " Browse";
 
     /// <summary><c>/browse</c>'s hint row (2026-10-09): Enter opens a file and the pane stays; on a folder it opens or closes it.</summary>
-    public const string BrowseHint = "Enter = open file · Space = expand/collapse · - = collapse all · ESC = back";
+    public const string BrowseHint = "Enter = open file · Space = expand/collapse · - = collapse all · Esc = back";
 
     /// <summary><c>/browse</c> with no pane to open (a redirected console). Pinned.</summary>
     public const string BrowseNeedsPaneNotice = "/browse needs the interactive screen.";

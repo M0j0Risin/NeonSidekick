@@ -13,7 +13,7 @@ internal sealed partial class SettingsMenu
     public static string SearchCrumbLabel(string query) => "Search: " + query;
 
     /// <summary>The search page's hint row. Pinned.</summary>
-    public const string SearchKeys = "Enter = edit · type to search · ESC = clear, then close";
+    public const string SearchKeys = "Enter = edit · type to search · Esc = clear, then close";
 
     /// <summary>The search page's one row while nothing is typed. Pinned.</summary>
     public const string SearchEmptyLine = "Type words from a setting's name, its tab or what it does.";
@@ -22,7 +22,7 @@ internal sealed partial class SettingsMenu
     public const string ChangedLabel = "Changed";
 
     /// <summary>The changed settings page's hint row. Pinned.</summary>
-    public const string ChangedKeys = "Enter = edit · r = back to the default · ESC = close";
+    public const string ChangedKeys = "Enter = edit · r = back to the default · Esc = close";
 
     /// <summary>The changed settings page's reset button. Pinned.</summary>
     public const string ResetButton = "↺ default";

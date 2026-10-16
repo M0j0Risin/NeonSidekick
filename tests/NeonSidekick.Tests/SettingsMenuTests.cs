@@ -972,7 +972,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.TimerTools,              // later on 2026-10-15: the timer tools' switch (/tools › Core › Timers)
                 SettingsField.FileDeletesToRecycleBin, // later on 2026-10-15: deletes to the Recycle bin (/tools › Files › File, second)
                 SettingsField.WebBrowserSignInMode,    // later on 2026-10-15: how /webui browser signs the default browser in (/tools › Core › Web)
-                // later still on 2026-10-15, the admin-tools plan: the four admin families together (Core › Network, Admin › Services, Tasks, Directory)
+                // later still on 2026-10-15, the admin-tools plan: the four admin families together (Admin › Network, Services, Tasks, Directory; Network on Core until 2026-10-16)
                 SettingsField.NetworkTools, SettingsField.NetworkToolsReach, SettingsField.NetworkMaxHostsPerTurn, SettingsField.NetworkMaxPortsPerTurn, SettingsField.NetworkAllowedHosts, SettingsField.NetworkDeniedHosts, SettingsField.NetworkCertificateStores,
                 SettingsField.ServiceTools, SettingsField.ServiceWrites, SettingsField.ServiceComputersOffered, SettingsField.ServiceSetPassword, SettingsField.ServiceAddComputer, SettingsField.ServiceComputersProfile, SettingsField.ServiceComputersGlobal,
                 SettingsField.TaskTools, SettingsField.TaskWrites, SettingsField.TaskComputersOffered, SettingsField.TaskSetPassword, SettingsField.TaskAddComputer, SettingsField.TaskComputersProfile, SettingsField.TaskComputersGlobal,
@@ -1397,8 +1397,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal('p', SettingsMenu.CommandPolicyButtons("ask").Single().Key);
         Assert.All(new[] { "off", "ask", "yolo" }, p => Assert.False(SettingsMenu.CommandPolicyButtons(p).Single().On));
         Assert.Equal(["ask", "yolo", "off", "off"], new[] { "off", "ask", "yolo", "never" }.Select(SettingsMenu.NextPolicy));
-        Assert.Equal("Enter = remove · p = policy · ESC = back", SettingsMenu.AllowedCommandsKeys);
-        Assert.Equal("p = policy · ESC = back", SettingsMenu.AllowedCommandsEmptyKeys);
+        Assert.Equal("Enter = remove · p = policy · Esc = back", SettingsMenu.AllowedCommandsKeys);
+        Assert.Equal("p = policy · Esc = back", SettingsMenu.AllowedCommandsEmptyKeys);
         Assert.Equal("Yolo declined: Shell command policy: off", SettingsMenu.YoloDeclinedNotice);
         // The git rows (2026-09-20): the Git tab (Git (native), the last, since later on 2026-09-21) — the switch, then the two caps alphabetically; typed, none a reconnect.
         Assert.Equal(new[] { SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName }, ToolsMenuTests.TabFields(ToolsText.GitTabTitle));
@@ -2918,7 +2918,7 @@ public partial class SettingsMenuTests : IDisposable
         Push(Keys.Down, Keys.Enter);            // the second row left: E2B
         Assert.Same(servers[2], await menu.PickServerAsync(servers, null, SettingsMenu.StartupServerTitle, CancellationToken.None));
         Assert.Contains(" size: 8GB · ⇉ drafter · ⇅ sort (name) · ◌ uncensored ", Output);   // uncensored last (later on 2026-09-30); the glyphs since 2026-10-03; 32GB gone since 2026-10-05
-        Assert.Contains("ESC = the first listed", Output);
+        Assert.Contains("Esc = the first listed", Output);
 
         Push(Keys.Char('x'), Keys.Enter);       // uncensored (X since later on 2026-09-30): no embedded row passes, LM Studio is still there to pick
         Assert.Same(servers[0], await menu.PickServerAsync(servers, null, SettingsMenu.ServerTitle, CancellationToken.None));
@@ -3021,7 +3021,7 @@ public partial class SettingsMenuTests : IDisposable
     [Fact]
     public void ServerStrings_ArePinned()
     {
-        Assert.Equal(SettingsMenu.ServerTitle + "   Enter = choose · ESC = keep", SettingsMenu.PromptTitle(SettingsMenu.ServerTitle, SettingsMenu.KeepKeys));
+        Assert.Equal(SettingsMenu.ServerTitle + "   Enter = choose · Esc = keep", SettingsMenu.PromptTitle(SettingsMenu.ServerTitle, SettingsMenu.KeepKeys));
         Assert.Equal("LM Studio      [#EFE6FF]http://127.0.0.1:1234/v1[/][#9A8BB8]  1 chat model[/]", SettingsMenu.ServerLabel(Server(1234, "LM Studio", "lm")));
         Assert.Equal("Not a usable server URL: bad", SettingsMenu.ServerUrlError("bad"));
         Assert.Equal("http://127.0.0.1:9/v1 did not answer /v1/models (refused); using it anyway because you asked.",
@@ -3818,8 +3818,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains(SettingsMenu.UnchangedNotice, Output);
         Assert.False(pane.OverlayOpen);
 
-        Assert.Equal("Enter = choose · type = filter · ESC = keep", SettingsMenu.ModelKeys);
-        Assert.Equal("Enter = choose · Backspace = erase · ESC = clear filter", MenuFilter.Hint(SettingsMenu.ModelKeys, "x"));
+        Assert.Equal("Enter = choose · type = filter · Esc = keep", SettingsMenu.ModelKeys);
+        Assert.Equal("Enter = choose · Backspace = erase · Esc = clear filter", MenuFilter.Hint(SettingsMenu.ModelKeys, "x"));
         Assert.Equal("Nothing here has \"zz\" in its name.", MenuFilter.NoMatchNameLine("zz"));
         pane.Dispose();
     }

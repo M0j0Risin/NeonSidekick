@@ -80,7 +80,7 @@ public class QueueMenuTests : IDisposable
         // The mode buttons (2026-10-13, the user's ask): between send and clear all, the words in force; alone over the empty queue.
         Assert.Equal([new MenuButton("➤ send", 's'), new MenuButton("mode: manual", 'm'), new MenuButton("cancel: hold", 'k'), new MenuButton("⊠ clear all", 'c')], QueueMenu.Buttons(send: true, (Queueing.Manual, QueueCancel.Hold)));
         Assert.Equal([new MenuButton("mode: automatic", 'm'), new MenuButton("cancel: empty", 'k')], QueueMenu.Buttons(send: false, (Queueing.Automatic, QueueCancel.Empty), empty: true));
-        Assert.Equal("Enter = remove · s = send · m = mode · k = cancel mode · c = clear all · ESC = close", QueueMenu.KeysWithSend);
+        Assert.Equal("Enter = remove · s = send · m = mode · k = cancel mode · c = clear all · Esc = close", QueueMenu.KeysWithSend);
         Assert.Equal("(⏳ nothing queued)", QueueMenu.EmptyNotice);
         Assert.Equal("(⏳ removed: and then?)", QueueMenu.RemovedNotice("and then?"));
         Assert.Equal("[#9A8BB8]1[/]  a [[b]]", QueueMenu.RowMarkup(0, "a [b]"));

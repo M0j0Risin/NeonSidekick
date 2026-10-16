@@ -67,7 +67,7 @@ public sealed record MentionList(int Start, int End, string Query, IReadOnlyList
 public static class MentionCompleter
 {
     /// <summary>The hint row while the list is open. The user's wording (2026-09-16), pinned.</summary>
-    public const string Hint = "↑/↓ pick · Enter/Tab apply · ESC close";
+    public const string Hint = "↑/↓ pick · Enter/Tab apply · Esc close";
 
     /// <summary>The dim row under the list when a cap cut it. Pinned.</summary>
     public const string TruncatedRow = "… keep typing to narrow the list";

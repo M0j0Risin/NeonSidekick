@@ -96,7 +96,7 @@ public static class TerminalHandoff
         IntPtr root = console == IntPtr.Zero ? IntPtr.Zero : GetAncestor(console, GaRootOwner);
         s_terminal = root != IntPtr.Zero && IsWindowVisible(root) ? root : GetForegroundWindow();
         DiagnosticLog.Debug("Viewer", s_terminal == IntPtr.Zero
-            ? "No terminal window found: TAB in the app's windows does nothing."
+            ? "No terminal window found: Tab in the app's windows does nothing."
             : $"Terminal window 0x{s_terminal:X} ({(s_terminal == root ? "the console's root owner" : "in front at startup")}).");
     }
 

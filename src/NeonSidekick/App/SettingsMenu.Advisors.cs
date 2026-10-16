@@ -17,7 +17,7 @@ internal sealed partial class SettingsMenu
     public const string AddAdvisorRow = "+ Add an advisor…";
 
     /// <summary>The list editor's keys. Pinned.</summary>
-    public const string AdvisorListKeys = "Enter = add, or change the advisor · ESC = back";
+    public const string AdvisorListKeys = "Enter = add, or change the advisor · Esc = back";
 
     /// <summary>An entry's two choices, in order. Pinned.</summary>
     public static readonly IReadOnlyList<string> AdvisorEntryRows = ["Change the role", "Remove"];

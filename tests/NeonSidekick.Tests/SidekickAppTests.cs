@@ -203,7 +203,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("N E O N   S I D E K I C K", output);
         Assert.Contains("N E O N   S I D E K I C K  v" + SidekickApp.Version, output);   // the version shares the title line
         Assert.Contains("─", output);
-        Assert.DoesNotContain("ESC", output);   // the keys live in the pane's hint row
+        Assert.DoesNotContain("Esc", output);   // the keys live in the pane's hint row
     }
 
     [Fact]
@@ -1560,7 +1560,7 @@ public partial class SidekickAppTests : IDisposable
 
         string output = await InteractiveAsync();
 
-        Assert.DoesNotContain("ESC = ", output);   // ESC on the line prints nothing; the hint row names the key
+        Assert.DoesNotContain("Esc = ", output);   // ESC on the line prints nothing; the hint row names the key
         Assert.Contains("› still here", output);
         Assert.Contains(ChatScreen.NoAssistantError, output);   // no server: the message was still handled
         Assert.DoesNotContain("› never sent", output);

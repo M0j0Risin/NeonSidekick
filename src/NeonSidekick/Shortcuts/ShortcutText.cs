@@ -53,7 +53,7 @@ public static class ShortcutText
     public static readonly IReadOnlyList<string> OfferRows = ["No", "Yes", "Yes, with a log (" + DesktopShortcut.LogSwitch + ")"];
 
     /// <summary>The offer's hint row. Pinned.</summary>
-    public const string OfferKeys = "y / n / l = pick · Enter = choose · ESC = no";
+    public const string OfferKeys = "y / n / l = pick · Enter = choose · Esc = no";
 
     /// <summary>The offer's hotkeys: <c>n</c> to <c>No</c>, <c>y</c> to <c>Yes</c>, <c>l</c> to the log row (Enter still picks). Pinned.</summary>
     public static readonly IReadOnlyDictionary<char, int> OfferHotkeys = new Dictionary<char, int> { ['n'] = 0, ['y'] = 1, ['l'] = 2 };

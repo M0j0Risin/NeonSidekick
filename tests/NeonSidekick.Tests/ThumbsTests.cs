@@ -547,7 +547,7 @@ public sealed class ThumbsTests
         Assert.Equal("(🖼️ thumbnails closed)", ThumbsText.Closed);
         Assert.Equal("thumbs", ThumbsText.ThumbsWord);
         Assert.Contains("Ctrl+wheel", ThumbsText.Keys);
-        Assert.Contains("TAB terminal", ThumbsText.Keys);
+        Assert.Contains("Tab terminal", ThumbsText.Keys);
         Assert.Contains("Del twice deletes", ThumbsText.Keys);
         Assert.Equal(@"No pictures in D:\p yet", ThumbsText.Empty(@"D:\p"));
         Assert.Equal("Under 500 KB", PictureMenuText.Under(500));

@@ -110,7 +110,7 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 * **`autonomous`:** the bots get `generate_image`, limited to those workflows. A call a bot writes out as text still runs, and if a call fails, the app draws the picture itself.
 * **Reworks:** once there's a picture and an image → image workflow, the prompt writer chooses between a new picture and a rework.
 * **Async on:** 🖼️ (🎨 for a rework) shows on the status bar while a picture renders.
-* **Async off:** ESC on a reply waiting for its picture cuts that bot short; ESC under the picture's spinner skips the picture.
+* **Async off:** Esc on a reply waiting for its picture cuts that bot short; Esc under the picture's spinner skips the picture.
 
 #### Web UI
 
@@ -147,7 +147,7 @@ Settings every server reads, whatever its kind.
 | LLM max tool iterations | Tool round trips one message may make (1–10000). | 10000 |
 | LLM request timeout (s) | The longest one HTTP request may take (up to 3600). | 3600 |
 | LLM turn timeout (s) | The longest one whole turn may take, tool calls included (up to 21600). | 21600 |
-| LLM plan gap passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs before the plan comes back with gaps left (0–20; 0 is no cap, or 20 in a headless run). ESC stops it. | 5 |
+| LLM plan gap passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs before the plan comes back with gaps left (0–20; 0 is no cap, or 20 in a headless run). Esc stops it. | 5 |
 | LLM context length | The context window in tokens, for the usage percentage. 0 takes the server's figure. | 0 (the server's) |
 | LLM mid-turn usage | The status bar's usage during a reply: `estimate` (live, marked `~`) or `last-known` (the last finished request's figures). | `last-known` |
 | LLM max turns | User turns the model sees before the oldest drop off (1–500). `auto` keeps them all while auto compact can run, else 24. | `auto` |
@@ -290,7 +290,7 @@ Claude Code (for `/claude` and as a `/server` choice), then the Anthropic API.
 **Claude Code** is last in `/server` (or `/server claude-code`), with `fable`, `opus`, `sonnet` and `haiku`.
 * One `claude` process runs for the session; `/clear`, `/new` and a profile switch start a new one. Messages count against your Claude Code plan.
 * It runs with its own tools off and gets the app's tools instead, so approvals and `ask_user` apply as for any model.
-* ESC interrupts the reply. Claude Code compacts its own conversation (a 200,000-token context window), so *LLM auto compact* does nothing.
+* Esc interrupts the reply. Claude Code compacts its own conversation (a 200,000-token context window), so *LLM auto compact* does nothing.
 
 #### OpenAI
 
@@ -461,14 +461,6 @@ Every tool, grouped, with the description the model reads. Enter or Space switch
 
 The tools most profiles use, and the pane's own options.
 
-#### Ask
-
-| Setting | What it does | Default |
-|---|---|---|
-| Ask user | Offers `ask_user`: multiple-choice questions you answer in the app. `/tools ask` and the toolbar's 🙋 open its on/off page. | on |
-| Ask max questions | Questions per call (1–10). | 10 |
-| Ask max choices per question | Options per question (2–15). | 10 |
-
 #### Web
 
 | Setting | What it does | Default |
@@ -486,20 +478,6 @@ The tools most profiles use, and the pane's own options.
 | Web SearXNG URL | The SearXNG instance, for `searxng`. | empty |
 | Web search max results | Hits per search (1–20). | 20 |
 | Web download max (MB) | The largest file `download_file` saves (1–102,400). | 50 |
-
-#### Network
-
-See [Network](TOOLS.md#network).
-
-| Setting | What it does | Default |
-|---|---|---|
-| Network tools | Offers `net_dns`, `net_ping`, `net_trace`, `net_port` and `net_tls`, each on one host, judged by the reach and the host lists and counted against the turn's budget; `net_certs` too with *Network certificate stores*. `/net` works either way. | off |
-| Network tools reach | What a host may resolve to: `same-as-web` follows *Web browser network mode*; `internet`, `lan` or `both` for these tools alone. | `same-as-web` |
-| Network tools max hosts per turn | Distinct hosts (by address) the model's calls may reach in one turn, scripts' and advisors' included (1–64). | 8 |
-| Network tools max ports per turn | Distinct ports `net_port` and `net_tls` may try in one turn (1–256). | 32 |
-| Network tools allowed hosts | When not empty, the only hosts the tools may reach: names, `*.corp.example` wildcards or address blocks (`10.20.0.0/16`). A bad entry is refused as you type it. | empty (anything the reach admits) |
-| Network tools denied hosts | Hosts never reached, in the same forms; wins over the allowed list. | empty |
-| Network certificate stores | Also offers `net_certs`, which lists one of this machine's certificate stores (nothing exported). On a Mac `my` is your login keychain and `root` the system's trust. | off |
 
 #### Shell
 
@@ -537,6 +515,14 @@ See [Network](TOOLS.md#network).
 | Setting | What it does | Default |
 |---|---|---|
 | Timer tools | Offers `start_timer`, `stop_timer` and `list_timers`. Off, the model has none and its prompt drops the timer sentence; `/timer` and timers already running keep working. `/tools timers` opens its on/off page. | on |
+
+#### Ask
+
+| Setting | What it does | Default |
+|---|---|---|
+| Ask user | Offers `ask_user`: multiple-choice questions you answer in the app. `/tools ask` and the toolbar's 🙋 open its on/off page. | on |
+| Ask max questions | Questions per call (1–10). | 10 |
+| Ask max choices per question | Options per question (2–15). | 10 |
 
 #### Options
 
@@ -657,7 +643,21 @@ The apps and services the tools reach. `/claude`'s settings are on `/settings` �
 
 ### Admin
 
-Windows' own records and machinery. Windows only: on a Mac the rows are there but the tools are never offered. See [Admin](TOOLS.md#admin).
+Network checks, then Windows' own records and machinery. The network checks work everywhere; the rest are Windows only: on a Mac their rows are there but the tools are never offered. See [Admin](TOOLS.md#admin).
+
+#### Network
+
+See [Network](TOOLS.md#network).
+
+| Setting | What it does | Default |
+|---|---|---|
+| Network tools | Offers `net_dns`, `net_ping`, `net_trace`, `net_port` and `net_tls`, each on one host, judged by the reach and the host lists and counted against the turn's budget; `net_certs` too with *Network certificate stores*. `/net` works either way. | off |
+| Network tools reach | What a host may resolve to: `same-as-web` follows *Web browser network mode*; `internet`, `lan` or `both` for these tools alone. | `same-as-web` |
+| Network tools max hosts per turn | Distinct hosts (by address) the model's calls may reach in one turn, scripts' and advisors' included (1–64). | 8 |
+| Network tools max ports per turn | Distinct ports `net_port` and `net_tls` may try in one turn (1–256). | 32 |
+| Network tools allowed hosts | When not empty, the only hosts the tools may reach: names, `*.corp.example` wildcards or address blocks (`10.20.0.0/16`). A bad entry is refused as you type it. | empty (anything the reach admits) |
+| Network tools denied hosts | Hosts never reached, in the same forms; wins over the allowed list. | empty |
+| Network certificate stores | Also offers `net_certs`, which lists one of this machine's certificate stores (nothing exported). On a Mac `my` is your login keychain and `root` the system's trust. | off |
 
 #### EventLog
 
@@ -806,24 +806,14 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `p
 
 ### Devices
 
-The printer, camera and screen tools.
-
-#### Print
-
-| Setting | What it does | Default |
-|---|---|---|
-| Print tools | Offers `list_printers` and `print_file`. `/print` works either way. On a Mac they print through CUPS, to the printers set up in System Settings. | off |
-| Print action policy | `off`: list printers only. `ask`: each print waits for your yes (refused headless). `allow`: prints without asking. `/print` never asks. | `ask` |
-| Print default printer | Where a print goes when none is named. | empty (the system default) |
-| Print font size (pt) | The body text size for printed listings and Markdown (6–24). | 10 |
-| PDF engine | What makes PDFs for `convert_to_pdf` and `/pdf`: `auto` (a Chromium browser, else Microsoft Print to PDF), `browser` or `printer`. On a Mac only the browser makes PDFs. Editing a PDF needs the browser whatever this says. See [Making PDFs](TOOLS.md#making-pdfs). | `auto` |
+The camera, screen and printer tools.
 
 #### Camera
 
 | Setting | What it does | Default |
 |---|---|---|
 | Camera tool | Offers `camera_capture`, so the model can ask you for a photo; never headless or to an embedded model without vision. `/camera` works either way. On a Mac: macOS 14 or later. | off |
-| Camera shutter | `user`: the app shows you the request; Space takes the photo, `r` retakes, Enter sends, ESC declines. `model`: you allow or deny, and the app takes it. | `user` |
+| Camera shutter | `user`: the app shows you the request; Space takes the photo, `r` retakes, Enter sends, Esc declines. `model`: you allow or deny, and the app takes it. | `user` |
 | Camera preview | `live`: a [camera window](INTERFACE.md#the-camera-window) shows the picture while you frame it. `post`: the picture viewer opens on the photo. `off`: no window. | `live` |
 | Camera device | The camera, by its system name. `(first camera)`, or one that isn't connected, uses the first. | empty (the first camera) |
 | Camera resolution | The size asked for (`640x480`, `1280x720` or `1920x1080`); the camera uses its nearest. | `1280x720` |
@@ -843,6 +833,16 @@ The printer, camera and screen tools.
 | Screen preview | The picture viewer opens on each screenshot, so you see what was sent. | on |
 | Screen output folder | Where screenshots are saved, under the profile's `images` folder. | `screen_images` |
 | Screen keep in sessions | Keeps screenshots in stored sessions. Off, a stored session keeps a line naming the screenshot instead. | off |
+
+#### Print
+
+| Setting | What it does | Default |
+|---|---|---|
+| Print tools | Offers `list_printers` and `print_file`. `/print` works either way. On a Mac they print through CUPS, to the printers set up in System Settings. | off |
+| Print action policy | `off`: list printers only. `ask`: each print waits for your yes (refused headless). `allow`: prints without asking. `/print` never asks. | `ask` |
+| Print default printer | Where a print goes when none is named. | empty (the system default) |
+| Print font size (pt) | The body text size for printed listings and Markdown (6–24). | 10 |
+| PDF engine | What makes PDFs for `convert_to_pdf` and `/pdf`: `auto` (a Chromium browser, else Microsoft Print to PDF), `browser` or `printer`. On a Mac only the browser makes PDFs. Editing a PDF needs the browser whatever this says. See [Making PDFs](TOOLS.md#making-pdfs). | `auto` |
 
 ### Home
 

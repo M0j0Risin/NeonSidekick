@@ -51,7 +51,7 @@ public sealed class CameraMenu
     /// The allow page's hint with the whole-text view (2026-10-07, the consistency pass: a database write's statement is cut at the
     /// caption's three rows, as the shell approval's command was). Pinned.
     /// </summary>
-    public const string AllowHintWithView = "d / o / s = pick · v = view · Enter = choose · ESC = deny";
+    public const string AllowHintWithView = "d / o / s = pick · v = view · Enter = choose · Esc = deny";
 
     public bool Enabled => _pane.Enabled;
 

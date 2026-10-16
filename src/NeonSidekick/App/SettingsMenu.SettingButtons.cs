@@ -84,7 +84,7 @@ internal sealed partial class SettingsMenu
     public static string SettingButtonKeys(IReadOnlyList<SettingButton> buttons)
     {
         ArgumentNullException.ThrowIfNull(buttons);
-        return "Enter = choose · " + string.Join(" · ", buttons.Select(b => b.Key + " = " + b.Word)) + " · ESC = back";
+        return "Enter = choose · " + string.Join(" · ", buttons.Select(b => b.Key + " = " + b.Word)) + " · Esc = back";
     }
 
     /// <summary>

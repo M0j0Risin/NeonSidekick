@@ -8,12 +8,12 @@ Each group has a switch (*File tools*, *Web tools*…), and the Offered tab of `
 
 - [Where tools are offered](#where-tools-are-offered)
 - [Always offered](#always-offered): [Clock](#clock), [Help](#help)
-- [Core](#core): [Ask](#ask), [Web](#web), [Network](#network), [Shell](#shell), [Timers](#timers)
+- [Core](#core): [Web](#web), [Shell](#shell), [Timers](#timers), [Ask](#ask)
 - [Files](#files): [File](#file), [Image](#image), [UNC shares and outside folders](#unc-shares-and-outside-folders), [GitLib](#gitlib), [Obsidian](#obsidian)
 - [Apps](#apps): [Docker](#docker), [ComfyUI](#comfyui), [YouTube](#youtube)
-- [Admin](#admin): [Event logs](#event-logs), [Services](#services), [Scheduled tasks](#scheduled-tasks), [Active Directory](#active-directory)
+- [Admin](#admin): [Network](#network), [Event logs](#event-logs), [Services](#services), [Scheduled tasks](#scheduled-tasks), [Active Directory](#active-directory)
 - [Databases](#databases): [How the database tools work](#how-the-database-tools-work), [SQL Server](#sql-server), [MySQL and MariaDB](#mysql-and-mariadb), [SQLite](#sqlite), [PostgreSQL](#postgresql), [Oracle](#oracle)
-- [Devices](#devices): [Printing](#printing), [Camera](#camera), [Screen](#screen)
+- [Devices](#devices): [Camera](#camera), [Screen](#screen), [Printing](#printing)
 - [Home](#home): [Home Assistant](#home-assistant), [Shopping list](#shopping-list)
 - [Set elsewhere](#set-elsewhere): [Memory](#memory), [Skills](#skills), [Sessions](#sessions), [Advisors](#advisors), [Plan](#plan)
 - [MCP servers](#mcp-servers)
@@ -46,14 +46,6 @@ These have no group switch. To withhold one, switch it off on the Offered tab.
 
 ## Core
 
-### Ask
-
-Under *Ask user*. Not offered headless.
-
-| Tool | Arguments | What it does |
-|---|---|---|
-| `ask_user` | `questions` | Asks you multiple-choice questions: up to *Ask max questions*, each with 2 to *Ask max choices per question* options, `single` or `multi`; you can type your own answer. ESC declines them all. |
-
 ### Web
 
 Under *Web tools*.
@@ -76,37 +68,16 @@ Under *Web tools*.
 The app's own browser (Windows only), where you solve a bot check the web tools can't get past.
 
 * **When:** `web_fetch`, `web_search`, `download_file` and `convert_to_pdf` offer it on a 403, a 503 that names no wait, or a check's page; never for a rate limit, and never headless. *Web browser botcheck window* decides whether it asks you first, opens at once or never opens.
-* **Solving:** the window comes to the front; pressing ESC or *Give up*, or closing the window, gives up, and so does waiting 5 minutes. Once the page loads with no check showing, the window closes and the tool goes on with that page.
+* **Solving:** the window comes to the front; pressing Esc or *Give up*, or closing the window, gives up, and so does waiting 5 minutes. Once the page loads with no check showing, the window closes and the tool goes on with that page.
 * **Cookies:** the window's cookies for the site go to the web tools for this run, so the next fetch usually needs no window. A site that ties its clearance to the browser's connection may still refuse a download.
 * The window's bar, keys, history and saved links: [The Browser window](INTERFACE.md#the-browser-window).
-
-### Network
-
-Under *Network tools*. Small checks on one host at a time, for "is it up, what does it resolve to, is the port open, when does its certificate end": the app's own clients, nothing started (no `ping.exe`, `nslookup` or `openssl`). `/net` lets you run them yourself ([COMMANDS.md](COMMANDS.md)), even with the tools off.
-
-| Tool | Arguments | What it does |
-|---|---|---|
-| `net_dns` | `name, type?, server?` | A name's records. A (the default) and AAAA through this machine's resolver; CNAME, MX, TXT, NS, SOA, PTR, SRV and CAA through the app's own DNS client against this machine's DNS servers, or the `server` named (which counts as a host). |
-| `net_ping` | `host, count?` | Echoes (4 by default, 10 at most): answered or not, the loss and the round trips. |
-| `net_trace` | `host, max_hops?, names?` | The route, hop by hop (30 at most, about 45 seconds); `names` looks each hop's name up. |
-| `net_port` | `host, ports` | Whether TCP ports (16 at most) are open, refused or silent, on every address the host has. |
-| `net_tls` | `host, port?, server_name?, starttls?` | A TLS handshake (port 443 by default): the protocol, the cipher, the certificate's names, issuer and days left, and what is wrong with its chain. Ports 25, 587, 143, 110, 389 and 3389 speak their STARTTLS or RDP preamble first. |
-| `net_certs` | `store?, location?, filter?, expiring_within_days?, limit?` | One of this machine's certificate stores, soonest to end first; nothing exported. Only with *Network certificate stores* on. |
-
-* **One host per call:** a name or an address. A range, a block, a list, a URL or `host:port` is refused, and so is an address spelled the old short way (`10.1`, a bare number).
-* **Reach:** *Network tools reach* decides what a host may resolve to: `same-as-web` (the default) follows *Web browser network mode*; `internet`, `lan` or `both` set it for these tools alone. Every address a name resolves to is judged, and under `lan` only the private ones are used.
-* **Host lists:** *Network tools denied hosts* always wins; *Network tools allowed hosts*, when not empty, is the only place the tools may go. An entry is a name (`fs01.corp.example`), a wildcard (`*.corp.example`) or an address block (`10.20.0.0/16`, `fd00::/8`).
-* **A budget per turn:** *Network tools max hosts per turn* (8) and *Network tools max ports per turn* (32), counted by address, so two names for one machine count once. Scripts and advisors spend the main chat's budget; bots have their own. The answer says when a budget runs out, and the model is told once a turn how much is left.
-* **TLS checks never fetch:** no certificate is downloaded and no revocation list is asked for, so the chain is judged from what the server sent and this machine already trusts. No credential is ever sent.
-* **What a server wrote is untrusted:** TXT records, certificate names, a banner. Each is fenced as quoted data (`⟪ ⟫`), and an answer is held to 16,000 characters.
-* **On a Mac** ping uses an unprivileged ICMP socket; a trace there is not proven yet ([MAC.md](MAC.md)). `net_certs`' `my` is your login keychain and `root` the system's trust; the other stores are not kept there.
 
 ### Shell
 
 Under *Shell command policy*. Commands run on your machine in the working directory, guarded by *Shell command policy* and *Shell police* ([Shell guards](SETTINGS.md#shell-guards)).
 
 * Commands run hidden, with colors, pagers and input turned off. A line longer than 8,192 characters is cut.
-* A command that times out, or that you stop with ESC, is stopped along with everything it started.
+* A command that times out, or that you stop with Esc, is stopped along with everything it started.
 * Background commands stop when the app closes, even after a crash. On a Mac, a program that starts its own session (a daemon) can slip away.
 * A program a command opens (`start notepad`, `code .`) stays open.
 * On a Mac, a command that asks something at the terminal (a `sudo` password) fails at once instead of waiting.
@@ -130,6 +101,14 @@ Under *Timer tools* (on by default). Off, the model has no timer tools and its p
 | `start_timer` | `name?, hours?, minutes?, seconds?` | Starts a named countdown that alerts you when it ends; several can run at once. |
 | `stop_timer` | `name` | Stops a running timer, or silences one that has gone off. |
 | `list_timers` | — | Every running timer and its time left. |
+
+### Ask
+
+Under *Ask user*. Not offered headless.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `ask_user` | `questions` | Asks you multiple-choice questions: up to *Ask max questions*, each with 2 to *Ask max choices per question* options, `single` or `multi`; you can type your own answer. Esc declines them all. |
 
 ## Files
 
@@ -458,9 +437,30 @@ Under *YouTube tools*. Videos play where *YouTube open links in* says: the app's
 
 ## Admin
 
-Windows' own records and machinery: the event logs, the services, the scheduled tasks and Active Directory. **Windows only**, all through Windows' own APIs inside the app: nothing is started (no `wevtutil`, `sc`, `schtasks` or PowerShell). Each has its own command (`/eventlog`, `/services`, `/tasks`, `/ad`) that lets you run them yourself, even with the tools off.
+Checks on the network, then Windows' own records and machinery: the event logs, the services, the scheduled tasks and Active Directory. The network checks work everywhere; the rest are **Windows only**, all through Windows' own APIs inside the app: nothing is started (no `wevtutil`, `sc`, `schtasks` or PowerShell). Each has its own command (`/net`, `/eventlog`, `/services`, `/tasks`, `/ad`) that lets you run them yourself, even with the tools off.
 
 The services and tasks reach computers you name in `services.json` and `tasks.json`; the directory reaches domains in `ad.json`. Each sits in the home or profile folder like the [database connections](#managing-connections) (when both name the same one, the profile's wins), each entry is used only after you tick it in its *… offered* setting, and its *add/edit* wizard walks you through adding one and tests it. A remote computer reached with `runas` has not been tried against a real second machine here yet; this PC and `localhost` have.
+
+### Network
+
+Under *Network tools*. Small checks on one host at a time, for "is it up, what does it resolve to, is the port open, when does its certificate end": the app's own clients, nothing started (no `ping.exe`, `nslookup` or `openssl`). `/net` lets you run them yourself ([COMMANDS.md](COMMANDS.md)), even with the tools off.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `net_dns` | `name, type?, server?` | A name's records. A (the default) and AAAA through this machine's resolver; CNAME, MX, TXT, NS, SOA, PTR, SRV and CAA through the app's own DNS client against this machine's DNS servers, or the `server` named (which counts as a host). |
+| `net_ping` | `host, count?` | Echoes (4 by default, 10 at most): answered or not, the loss and the round trips. |
+| `net_trace` | `host, max_hops?, names?` | The route, hop by hop (30 at most, about 45 seconds); `names` looks each hop's name up. |
+| `net_port` | `host, ports` | Whether TCP ports (16 at most) are open, refused or silent, on every address the host has. |
+| `net_tls` | `host, port?, server_name?, starttls?` | A TLS handshake (port 443 by default): the protocol, the cipher, the certificate's names, issuer and days left, and what is wrong with its chain. Ports 25, 587, 143, 110, 389 and 3389 speak their STARTTLS or RDP preamble first. |
+| `net_certs` | `store?, location?, filter?, expiring_within_days?, limit?` | One of this machine's certificate stores, soonest to end first; nothing exported. Only with *Network certificate stores* on. |
+
+* **One host per call:** a name or an address. A range, a block, a list, a URL or `host:port` is refused, and so is an address spelled the old short way (`10.1`, a bare number).
+* **Reach:** *Network tools reach* decides what a host may resolve to: `same-as-web` (the default) follows *Web browser network mode*; `internet`, `lan` or `both` set it for these tools alone. Every address a name resolves to is judged, and under `lan` only the private ones are used.
+* **Host lists:** *Network tools denied hosts* always wins; *Network tools allowed hosts*, when not empty, is the only place the tools may go. An entry is a name (`fs01.corp.example`), a wildcard (`*.corp.example`) or an address block (`10.20.0.0/16`, `fd00::/8`).
+* **A budget per turn:** *Network tools max hosts per turn* (8) and *Network tools max ports per turn* (32), counted by address, so two names for one machine count once. Scripts and advisors spend the main chat's budget; bots have their own. The answer says when a budget runs out, and the model is told once a turn how much is left.
+* **TLS checks never fetch:** no certificate is downloaded and no revocation list is asked for, so the chain is judged from what the server sent and this machine already trusts. No credential is ever sent.
+* **What a server wrote is untrusted:** TXT records, certificate names, a banner. Each is fenced as quoted data (`⟪ ⟫`), and an answer is held to 16,000 characters.
+* **On a Mac** ping uses an unprivileged ICMP socket; a trace there is not proven yet ([MAC.md](MAC.md)). `net_certs`' `my` is your login keychain and `root` the system's trust; the other stores are not kept there.
 
 ### Event logs
 
@@ -808,7 +808,7 @@ The SQLite tools read database **files**: no server, no password. A database is 
 ```
 
 * `params` binds `@name`, `:name`, `$name` or `#name`; positional `?` is refused.
-* **Reading** opens the file read-only, whatever the mode. A statement past *SQLite query timeout (s)*, or one you stop with ESC, is interrupted.
+* **Reading** opens the file read-only, whatever the mode. A statement past *SQLite query timeout (s)*, or one you stop with Esc, is interrupted.
 * **Always refused:** `ATTACH`/`DETACH`, `VACUUM INTO`, `writable_schema` and `load_extension()`.
 * **The rest of the app keeps out:** while *SQLite tools* is on, the shell police refuses a command or script that reaches SQLite, and the file tools never change a database file (`.db`, `.db3`, `.sqlite`, `.sqlite3`, their journals, or one `sqlite.json` names). Reading and copying one still work.
 * **Creating a database:** `create: true` needs `create` ticked and *SQLite sandbox files* on. The file must end `.db`, `.sqlite`, `.sqlite3` or `.db3`, in a folder that exists in the working directory. If the statement fails, the new file is removed.
@@ -873,30 +873,6 @@ The SQLite tools read database **files**: no server, no password. A database is 
 
 ## Devices
 
-### Printing
-
-Under *Print tools*. `/print` and these tools print on any installed printer (on a Mac, those in System Settings › Printers & Scanners).
-
-* **Drawn by the app:** text and code as a listing, Markdown formatted, a picture (PNG, JPEG, GIF, WebP, BMP) on one page, each page headed with the file's name and *page N of M*.
-* **Anything else on Windows** (a PDF, an Office file) goes to its own program on the default printer, with no choice of printer, copies, pages or landscape.
-* **On a Mac** a PDF prints as it is (no landscape); Office and other files are refused.
-* ESC cancels a print. *Print action policy* decides whether `print_file` asks first.
-
-| Tool | Arguments | What it does |
-|---|---|---|
-| `list_printers` | — | The printers, marking the system's default and *Print default printer*. |
-| `print_file` | `path, printer?, copies?, pages?, landscape?` | Prints a working-directory file on a printer (else *Print default printer*, else the default), 1–10 copies, pages like `1-3,5`. |
-
-#### Making PDFs
-
-`/pdf` and `convert_to_pdf` make a PDF in the working directory.
-
-* **Sources:** Markdown (pictures from the working directory only), text and code, a picture, an HTML file (scripts removed), or a web page (when *Web browser network mode* allows it). A PDF, local or a link, is refused with a pointer to `read_pdf`, `pdf_edit`, `web_fetch` or `download_file`.
-* **Pages:** US Letter by default (`paper` `a4` or `legal`), portrait unless `landscape`; a web page keeps its own layout.
-* **The engine** (*PDF engine*): Edge, Chrome, Brave or (on a Mac) Chromium. On Windows without one, Microsoft Print to PDF draws Markdown, text and pictures in black and white; on a Mac only the browser works.
-* **Output:** beside the source (`example.com-intro.pdf` for a page), or `to`; an existing PDF is replaced only with `overwrite`.
-* **A web page behind a bot check** goes to [the Browser window](#the-browser-window), which prints the page you let through.
-
 ### Camera
 
 Under *Camera tool*. Not offered headless, or when the embedded model can't see pictures.
@@ -919,6 +895,30 @@ Under *Screen tools*. Not offered headless, or when the embedded model can't see
 
 * A denied capture isn't asked for again that turn.
 * On a Mac (macOS 14 or later) your terminal needs Screen Recording permission (System Settings › Privacy & Security › Screen & System Audio Recording, then reopen it); without it `screen_list` gives monitors only.
+
+### Printing
+
+Under *Print tools*. `/print` and these tools print on any installed printer (on a Mac, those in System Settings › Printers & Scanners).
+
+* **Drawn by the app:** text and code as a listing, Markdown formatted, a picture (PNG, JPEG, GIF, WebP, BMP) on one page, each page headed with the file's name and *page N of M*.
+* **Anything else on Windows** (a PDF, an Office file) goes to its own program on the default printer, with no choice of printer, copies, pages or landscape.
+* **On a Mac** a PDF prints as it is (no landscape); Office and other files are refused.
+* Esc cancels a print. *Print action policy* decides whether `print_file` asks first.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `list_printers` | — | The printers, marking the system's default and *Print default printer*. |
+| `print_file` | `path, printer?, copies?, pages?, landscape?` | Prints a working-directory file on a printer (else *Print default printer*, else the default), 1–10 copies, pages like `1-3,5`. |
+
+#### Making PDFs
+
+`/pdf` and `convert_to_pdf` make a PDF in the working directory.
+
+* **Sources:** Markdown (pictures from the working directory only), text and code, a picture, an HTML file (scripts removed), or a web page (when *Web browser network mode* allows it). A PDF, local or a link, is refused with a pointer to `read_pdf`, `pdf_edit`, `web_fetch` or `download_file`.
+* **Pages:** US Letter by default (`paper` `a4` or `legal`), portrait unless `landscape`; a web page keeps its own layout.
+* **The engine** (*PDF engine*): Edge, Chrome, Brave or (on a Mac) Chromium. On Windows without one, Microsoft Print to PDF draws Markdown, text and pictures in black and white; on a Mac only the browser works.
+* **Output:** beside the source (`example.com-intro.pdf` for a page), or `to`; an existing PDF is replaced only with `overwrite`.
+* **A web page behind a bot check** goes to [the Browser window](#the-browser-window), which prints the page you let through.
 
 ## Home
 

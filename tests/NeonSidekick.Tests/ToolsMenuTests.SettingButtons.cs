@@ -45,9 +45,9 @@ public partial class ToolsMenuTests
         Assert.Equal([false], SettingsMenu.SettingButtons(SettingsMenu.SettingButtonsFor(SettingsField.ImageTools)!, changed, dir).Select(b => b.On));
         Assert.Equal([new MenuButton("≡ vault (Vault)", 'v', true)], SettingsMenu.SettingButtons(SettingsMenu.SettingButtonsFor(SettingsField.ObsidianTools)!, changed, dir));
 
-        Assert.Equal("Enter = choose · b = browser · ESC = back", SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(SettingsField.FileTools)!));
-        Assert.Equal("Enter = choose · e = edit mode · ESC = back", SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(SettingsField.ImageTools)!));
-        Assert.Equal("Enter = choose · m = max · v = voice · o = order · s = safe · ESC = back", SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(SettingsField.YouTubeTools)!));
+        Assert.Equal("Enter = choose · b = browser · Esc = back", SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(SettingsField.FileTools)!));
+        Assert.Equal("Enter = choose · e = edit mode · Esc = back", SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(SettingsField.ImageTools)!));
+        Assert.Equal("Enter = choose · m = max · v = voice · o = order · s = safe · Esc = back", SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(SettingsField.YouTubeTools)!));
     }
 
     /// <summary>Every page with setting buttons carries them on its title row and its keys in the hint; ESC leaves the switch as it was.</summary>

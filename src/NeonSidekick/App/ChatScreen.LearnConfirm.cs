@@ -28,7 +28,7 @@ internal sealed partial class ChatScreen
     public static readonly IReadOnlyList<string> LearnAskRows = ["Keep", "View", "Discard"];
 
     /// <summary>The ask's keys. Pinned.</summary>
-    public const string LearnAskKeys = "Enter = choose · ESC = discard";
+    public const string LearnAskKeys = "Enter = choose · Esc = discard";
 
     /// <summary>The ask's title: <c>🧠 A reflection wants to create skill “haiku”</c>, <c>… update skill “haiku”</c>, <c>… change notes.md in skill “haiku”</c>. Pinned.</summary>
     public static string LearnAskTitle(SkillProposal proposal)

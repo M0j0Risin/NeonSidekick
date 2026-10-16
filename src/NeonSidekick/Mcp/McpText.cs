@@ -131,7 +131,7 @@ public static class McpText
     public static readonly IReadOnlyList<string> TabTitles = [ServersTabTitle, ToolsTabTitle, OptionsTabTitle];
 
     /// <summary>The Servers tab's hint.</summary>
-    public const string ServersKeys = "Enter / Space = on or off · Enter on failed = retry · ←/→ tabs · ESC = close";
+    public const string ServersKeys = "Enter / Space = on or off · Enter on failed = retry · ←/→ tabs · Esc = close";
 
     /// <summary>The Servers and Tools tabs' first line while the master switch is off (shortened later on 2026-09-20: the server rows are inert then).</summary>
     public const string OffLine = "MCP servers is off (the Options tab)";

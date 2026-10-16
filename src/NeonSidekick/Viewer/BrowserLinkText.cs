@@ -28,8 +28,11 @@ public static class BrowserLinkText
     public const string RemoveButton = YouTube.YouTubeText.RemoveButton;
     public const char RemoveKey = 'd';
 
-    /// <summary>The pane's hint row while nothing is typed. Pinned.</summary>
-    public const string PaneKeys = "Enter = open · a = add · n = name · e = address · d = remove · c = clear all · Shift+↑↓ = move · " + MenuFilter.TypeOrShiftAndCloseKeys;
+    /// <summary>
+    /// The pane's hint row while nothing is typed. Pinned. Shift+↑↓ moves a link but has no room here (2026-10-16, the user's ask: every
+    /// hint fits a 120-column window; INTERFACE.md's pane keys name it).
+    /// </summary>
+    public const string PaneKeys = "Enter = open · a = add · n = name · e = address · d = remove · c = clear · " + MenuFilter.TypeOrShiftAndCloseKeys;
 
     /// <summary>The one dim row of an empty list, under the same buttons, so add works on it. Pinned.</summary>
     public const string EmptyRow = "No saved links yet: a adds one, and Ctrl+D in the Browser window saves its page.";

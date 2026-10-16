@@ -35,7 +35,7 @@ internal sealed class EventLogMenu
     /// <summary>The event page's buttons: copy its text, and ask the model about it. Pinned.</summary>
     public static readonly InfoAction CopyAction = new("copy", 'c', "copy");
 
-    public static readonly InfoAction AskAction = new("ask", 'a', "ask the model");
+    public static readonly InfoAction AskAction = new("ask", 'a', "ask");
 
     /// <summary>A tab's title once a read of it was refused. Pinned.</summary>
     public static string NoAccessTitle(string log) => log + " (no access)";

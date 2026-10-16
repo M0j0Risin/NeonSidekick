@@ -285,7 +285,7 @@ internal sealed class ShoppingMenu
                 rows.Add(MenuFilter.NoMatchRow(filter));
             }
 
-            var page = new MenuPage(ShoppingText.AddTitle, rows, MenuFilter.Hint(ShoppingText.AddKeys, filter))
+            var page = new MenuPage(ShoppingText.AddTitle, rows, MenuFilter.HintBeforeEsc(ShoppingText.AddKeys, filter, letteredButtons: true))
             {
                 Buttons = AddButtons,
                 Filter = filter,

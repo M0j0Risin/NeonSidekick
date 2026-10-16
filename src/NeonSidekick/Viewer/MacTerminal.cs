@@ -63,7 +63,7 @@ internal static unsafe partial class MacTerminal
         nint terminal = Terminal();
         if (terminal == 0)
         {
-            DiagnosticLog.Debug("Viewer", "No terminal found: TAB does nothing.");
+            DiagnosticLog.Debug("Viewer", "No terminal found: Tab does nothing.");
             return false;
         }
 

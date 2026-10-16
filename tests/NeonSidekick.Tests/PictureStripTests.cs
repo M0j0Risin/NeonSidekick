@@ -548,7 +548,7 @@ public partial class PictureStripTests : IDisposable
         Assert.True(pane.TryHitStripArrow(0, 95, out int left));
         Assert.Equal(-1, left);
 
-        pane.ShowOverlay(new Markup("a"), "ESC closes");
+        pane.ShowOverlay(new Markup("a"), "Esc closes");
         Assert.False(pane.TryHitStripArrow(0, 95, out _));   // under an overlay there is no strip
     }
 
@@ -584,7 +584,7 @@ public partial class PictureStripTests : IDisposable
         Assert.False(pane.TryHitStripReopen(2, 98));
         Assert.False(pane.TryHitFoldButton(2, 99));
 
-        pane.ShowOverlay(new Markup("a"), "ESC closes");
+        pane.ShowOverlay(new Markup("a"), "Esc closes");
         Assert.False(pane.TryHitStripReopen(2, 99));
         pane.CloseOverlay();
         Assert.True(pane.TryHitStripReopen(2, 99));

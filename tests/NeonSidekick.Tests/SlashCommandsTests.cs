@@ -563,7 +563,7 @@ public class SlashCommandsTests
             Assert.Contains(word, SlashCommands.HelpText);
         }
 
-        Assert.Contains("ESC", SlashCommands.HelpText);
+        Assert.Contains("Esc", SlashCommands.HelpText);
         Assert.DoesNotContain("Ctrl+Q", SlashCommands.HelpText);
         Assert.DoesNotContain("(also", SlashCommands.HelpText);
         string Summary(string command) => SlashCommands.HelpEntries.Single(e => e.Command == command).Summary;

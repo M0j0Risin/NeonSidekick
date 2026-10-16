@@ -25,11 +25,11 @@ public partial class ToolsMenuTests
     public void TheSubStrips_ArePinned()
     {
         Assert.Equal("         │ ↳ SQL · MySQL · SQLite · PostgreSQL · Oracle ", SubStrip(ToolsText.DatabaseTabTitle));
-        Assert.Equal("         │ ↳ Print · Camera · Screen ", SubStrip(ToolsText.DevicesTabTitle));   // ComfyUI and YouTube on Integrations since 2026-10-10
+        Assert.Equal("         │ ↳ Camera · Screen · Print ", SubStrip(ToolsText.DevicesTabTitle));   // the user's order since 2026-10-16; ComfyUI and YouTube on Integrations since 2026-10-10
         Assert.Equal("         │ ↳ File · Image · UNC · GitLib · Obsidian ", SubStrip(ToolsText.FilesTabTitle));   // 2026-10-10; Image later that day
         Assert.Equal("         │ ↳ Docker · ComfyUI · YouTube ", SubStrip(ToolsText.AppsTabTitle));   // EventLog 2026-10-15 until later that day (Admin); 2026-10-10; ClaudeCode first until later that day; HomeAssistant until 2026-10-11
-        Assert.Equal("         │ ↳ EventLog · Services · Tasks · Directory ", SubStrip(ToolsText.AdminTabTitle));   // later still on 2026-10-15 (the admin-tools plan)
-        Assert.Equal("         │ ↳ Ask · Web · Network · Shell · Timers · Options ", SubStrip(ToolsText.CoreTabTitle));
+        Assert.Equal("         │ ↳ Network · EventLog · Services · Tasks · Directory ", SubStrip(ToolsText.AdminTabTitle));   // Network first since 2026-10-16 (the user's order); later still on 2026-10-15 (the admin-tools plan)
+        Assert.Equal("         │ ↳ Web · Shell · Timers · Ask · Options ", SubStrip(ToolsText.CoreTabTitle));   // the user's order since 2026-10-16
         Assert.Equal("         │ ↳ HomeAssistant · Shopping ", SubStrip(ToolsText.HomeTabTitle));   // 2026-10-11 (the user's ask)
     }
 
@@ -76,7 +76,7 @@ public partial class ToolsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(Strips(ToolsText.DevicesTabTitle) + HeadingOver(ToolsText.PrintTabTitle, SettingsField.PrintTools) + "▸ " + SettingsMenu.FieldName(SettingsField.PrintTools) + "  ", Output);
+        Assert.Contains(Strips(ToolsText.DevicesTabTitle) + HeadingOver(ToolsText.CameraTabTitle, SettingsField.CameraTools) + "▸ " + SettingsMenu.FieldName(SettingsField.CameraTools) + "  ", Output);   // Camera first since 2026-10-16 (Print until then)
         pane.Dispose();
     }
 
@@ -85,16 +85,16 @@ public partial class ToolsMenuTests
     {
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.OracleTabTitle));      // Database's last menu
-        Push(Keys.Right);                           // Media's first
+        Push(Keys.Right);                           // Devices' first, Camera (Print until 2026-10-16)
         Push(Keys.Left);                            // Oracle again
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         string oracle = Strips(ToolsText.DatabaseTabTitle) + HeadingOver(ToolsText.OracleTabTitle, SettingsField.OracleTools) + "▸ " + SettingsMenu.FieldName(SettingsField.OracleTools) + "  ";
-        string print = Strips(ToolsText.DevicesTabTitle) + HeadingOver(ToolsText.PrintTabTitle, SettingsField.PrintTools) + "▸ " + SettingsMenu.FieldName(SettingsField.PrintTools) + "  ";
-        Assert.Contains(print, Output);
-        Assert.True(Output.LastIndexOf(oracle, StringComparison.Ordinal) > Output.IndexOf(print, StringComparison.Ordinal));
+        string camera = Strips(ToolsText.DevicesTabTitle) + HeadingOver(ToolsText.CameraTabTitle, SettingsField.CameraTools) + "▸ " + SettingsMenu.FieldName(SettingsField.CameraTools) + "  ";
+        Assert.Contains(camera, Output);
+        Assert.True(Output.LastIndexOf(oracle, StringComparison.Ordinal) > Output.IndexOf(camera, StringComparison.Ordinal));
         pane.Dispose();
     }
 
@@ -103,9 +103,9 @@ public partial class ToolsMenuTests
     {
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.SqliteTabTitle));      // Database, SQLite
-        Push(Keys.Tab);                             // Media, on its first
-        Push(Keys.Tab);                             // Offered: past Media's three, the strip wrapped (Options, a tab of its own, until later on 2026-10-10)
-        Push(Keys.ShiftTab, Keys.ShiftTab);         // Media, then Databases on SQLite
+        Push(Keys.Tab);                             // Devices, on its first
+        Push(Keys.Tab);                             // Home, on its first
+        Push(Keys.ShiftTab, Keys.ShiftTab);         // Devices, then Databases on SQLite
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -201,13 +201,13 @@ public partial class ToolsMenuTests
         var page = ToolsMenu.Page(ToolsText.OfferedRows(Facts()), saved, settings, database, subs: subs);
 
         Assert.Equal(["SQL", "MySQL", "SQLite", "PostgreSQL", "Oracle"], page.Tabs![database].SubTabs!.Select(t => t.Title));
-        Assert.Equal(["Print", "Camera", "Screen"], page.Tabs[media].SubTabs!.Select(t => t.Title));   // ComfyUI and YouTube on Integrations since 2026-10-10
+        Assert.Equal(["Camera", "Screen", "Print"], page.Tabs[media].SubTabs!.Select(t => t.Title));   // the user's order since 2026-10-16; ComfyUI and YouTube on Integrations since 2026-10-10
         Assert.Equal(4, page.Sub);
         Assert.Equal(TabFields(ToolsText.OracleTabTitle).Count + SettingsMenu.ToolsMenuSections[ToolsText.MenuIndex(ToolsText.OracleTabTitle)].Count, page.Rows.Count);   // its headings too (2026-10-10)
         Assert.Null(page.Tabs[database].Shown.Footer!(0));   // the first heading says nothing
         Assert.Equal(SettingsMenu.FieldFooter(SettingsField.OracleTools).Text, page.Tabs[database].Shown.Footer!(1)!.Text);
         Assert.Null(page.Tabs[database].Shown.Footer!(page.Rows.Count));
-        Assert.Equal(SettingsMenu.FieldFooter(SettingsField.CameraShutter).Text, page.Tabs[media].SubTabs![1].Footer!(2)!.Text);
+        Assert.Equal(SettingsMenu.FieldFooter(SettingsField.CameraShutter).Text, page.Tabs[media].SubTabs![0].Footer!(2)!.Text);   // Camera first since 2026-10-16
         Assert.True(page.Tabs[media].SubTabs!.All(t => t.SpaceToggles));
         Assert.Equal(settings.GroupBadge(ToolsText.TabMenus[database - 1], saved), page.Tabs[database].Badge);
         Assert.NotNull(page.Tabs[database].Badge);

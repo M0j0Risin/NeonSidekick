@@ -245,7 +245,7 @@ Which commands the Web UI's page may send, and how each shows there: [Commands f
 
 ### Admin
 
-Run the [Admin](TOOLS.md#admin) and [Network](TOOLS.md#network) tools yourself: each works with its tools off and reaches only the computers or domains ticked for them. All but `/net` are Windows only.
+Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#network) among them: each works with its tools off and reaches only the computers or domains ticked for them. All but `/net` are Windows only.
 
 | Command | What it does |
 |---|---|
@@ -297,7 +297,7 @@ Run the [Admin](TOOLS.md#admin) and [Network](TOOLS.md#network) tools yourself: 
 | `/plan open <name>`, `/plan open` | Picks a plan up again (approving runs only the unticked steps), or lists the plans. |
 | `/botchat [<profile> ...] [--] [<topic>]` | Lets profiles talk to each other until you stop them. See [Bot conversations](#bot-conversations). |
 | `/botchat --resume [<line>]`, `/botchat --kill` | Carries on the last bot conversation, or stops the extra embedded servers the bots started. |
-| `/loop <count>\|infinite [<delay>] <message>`, `/loop <count>\|infinite [<delay>] /imagine\|/read <arguments>` | Sends a message, or runs `/imagine` or `/read`, that many times or until ESC. See [Loops](#loops). |
+| `/loop <count>\|infinite [<delay>] <message>`, `/loop <count>\|infinite [<delay>] /imagine\|/read <arguments>` | Sends a message, or runs `/imagine` or `/read`, that many times or until Esc. See [Loops](#loops). |
 | `/test [<id>\|reasoning\|structured\|long\|all\|history]` | Runs benchmark tests against the connected model. See [Benchmark tests](#benchmark-tests). |
 | `/learn [<note>]`, `/learn sessions [<n>\|<search>]` | Writes or improves a skill in the background from the last turn, or from stored sessions (the newest 5, *n* up to 20, or a search). Needs *Agent skills* and *LLM offer tools* on. |
 | `/timer [<duration> [<name>]]`, `/timer stop <name>\|all` | Lists or starts timers (`10m`, `1h30m`; a bare number is minutes; up to 24 hours), or stops one or all. Works with *Timer tools* off. |
@@ -314,7 +314,7 @@ Run the [Admin](TOOLS.md#admin) and [Network](TOOLS.md#network) tools yourself: 
 * **Approving:** the pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Keep refining…** (`r`), **Close gaps…** (`g`) and **Cancel plan** (`c`). The run ticks the plan's steps; the file ends `done`, or `incomplete`.
 * **Closing gaps:** **Close gaps…** (or `/plan gaps`) reviews the plan pass by pass. Each pass is one turn that fixes what would make the work stall (a missing step, an open choice, an unread file) and saves a revision.
 * **Who reviews:** with advisors offered, the model alone (`m`), an advisor whose role fits (`a`), or the model consulting advisors (`y`).
-* **When it stops:** at a pass with no gaps (the approval pane comes back), at *LLM plan gap passes*, when a pass changes nothing or repeats itself, when you type a message, or on ESC.
+* **When it stops:** at a pass with no gaps (the approval pane comes back), at *LLM plan gap passes*, when a pass changes nothing or repeats itself, when you type a message, or on Esc.
 * `/new`, `/clear` and a profile switch leave plan mode.
 
 ### Bot conversations
@@ -327,7 +327,7 @@ Run the [Admin](TOOLS.md#admin) and [Network](TOOLS.md#network) tools yourself: 
 * **Servers:** bots use this profile's server, or their own under *Botchat LLM mode* `multi`. `/botchat --kill` stops the extra embedded servers (*Botchat embedded mode*).
 * **Tools:** pictures ([Botchat pictures](SETTINGS.md#botchat-pictures)), tools, skills and memory, per the Botchat settings. Advisors are never offered; bots on the Claude Code server get no tools.
 * **Joining in:** a line you type joins before the next reply; with *STT input* on, push-to-talk cuts in.
-* **Stopping:** ESC stops the voice, then the current bot, then the chat. `/botchat --resume` carries on.
+* **Stopping:** Esc stops the voice, then the current bot, then the chat. `/botchat --resume` carries on.
 * Each bot's pronouns come from its first TTS voice (`am_`, `bm_`… male, else female). The chat is saved as its own session under *Session logging*.
 
 ### Claude Code from the chat
@@ -338,7 +338,7 @@ Run the [Admin](TOOLS.md#admin) and [Network](TOOLS.md#network) tools yourself: 
 * The pair joins the conversation tagged `[to Claude]` and `[Claude]`, so the local model can build on it; Claude doesn't see the local conversation.
 * Each session keeps one Claude conversation; `/claude new`, `/clear`, `/new` and a profile switch start another.
 * *Claude Code command permissions* sets what Claude may do; anything more is denied, never asked.
-* It works with no LLM server; ESC stops it. Your own Claude Code setup (sign-in, `CLAUDE.md`, skills, MCP servers, hooks) applies.
+* It works with no LLM server; Esc stops it. Your own Claude Code setup (sign-in, `CLAUDE.md`, skills, MCP servers, hooks) applies.
 
 ### Advisor
 
@@ -355,7 +355,7 @@ Run the [Admin](TOOLS.md#admin) and [Network](TOOLS.md#network) tools yourself: 
 `/cmd <command>` runs a line you type in the working directory, as the model's `run_command` would.
 
 * **The same checks:** *Shell command policy* `off` refuses it, the shell police refuse what they always refuse, and under `ask` a line not on *Shell allowed commands* asks.
-* **Time:** *Shell default timeout (s)*, at most *Shell max timeout (s)*. ESC stops the line and everything it started.
+* **Time:** *Shell default timeout (s)*, at most *Shell max timeout (s)*. Esc stops the line and everything it started.
 * **Output** past *Shell output max chars* isn't drawn; the whole goes to a log in the working directory's `.shell` folder.
 * **The model sees it**, tagged `[I ran in the shell (<shell>)]` and `[shell output]`.
 * **In the background:** `/cmd --bg` gives the chat back at once, with no timeout, up to 16 at a time. Ctrl+K twice in its process window stops it.
@@ -365,7 +365,7 @@ Run the [Admin](TOOLS.md#admin) and [Network](TOOLS.md#network) tools yourself: 
 ### Loops
 
 * A delay waits after each reply: `/loop infinite 1m check the build`. It is one word (`30s`, `5m`, `1h30m`, never a bare number), up to 24 hours.
-* ESC or Ctrl+C stops the loop; a canceled or failed turn ends it.
+* Esc or Ctrl+C stops the loop; a canceled or failed turn ends it.
 * `/imagine …` and `/read …` run with no model in between (`/loop infinite 5s /imagine score_9, 1girl`). No other command can be looped.
 * A loop runs from the Web UI's page too (with *Web UI commands* on); the page's Stop ends it, and `/read` can't be looped from there.
 
@@ -402,7 +402,7 @@ Run the [Admin](TOOLS.md#admin) and [Network](TOOLS.md#network) tools yourself: 
 
 A USB or built-in webcam, through Media Foundation on Windows or AVFoundation on a Mac (macOS 14 or later); nothing to install. The model's camera tool is in [TOOLS.md](TOOLS.md#camera).
 
-* **The pane:** Space takes the photo, `r` retakes, Enter attaches it as `[Image #N]`, ESC drops it. Under *Camera preview* `live`, a window shows the shot as you frame it.
+* **The pane:** Space takes the photo, `r` retakes, Enter attaches it as `[Image #N]`, Esc drops it. Under *Camera preview* `live`, a window shows the shot as you frame it.
 * **One stream:** the pane, live view, botchat and watch mode share the camera, which closes a few seconds after the last lets go. 📷 shows on the status bar while it is on.
 * **Photos** are JPEGs in *Camera output folder* under the profile's `images` folder; a retaken or dropped one is deleted. Botchat and watch pictures aren't saved.
 * **Stored sessions** keep a line instead of the picture unless *Camera keep in sessions* is on.

@@ -2349,7 +2349,7 @@ public sealed class AppSettingsData
 
     // ─── Network checks ─────────────────────────────────────────────────────────
     // The network tools and /net (2026-10-15, the admin-tools plan: ping, trace, ports, DNS, TLS and the certificate stores, in-process —
-    // no process-start site, no shipped DLL; the Mac too). On /tools › Core's Network menu, after Web.
+    // no process-start site, no shipped DLL; the Mac too). On /tools › Admin's Network menu, its first (Core's, after Web, until 2026-10-16).
 
     /// <summary>
     /// Whether a turn offers the network tools (2026-10-15): <c>net_dns</c>, <c>net_ping</c>, <c>net_trace</c>, <c>net_port</c> and

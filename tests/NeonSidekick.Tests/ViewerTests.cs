@@ -650,7 +650,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Contains("F9 slide show", ViewerText.Keys);
         Assert.Contains("F10 random", ViewerText.Keys);
         Assert.Contains("← or wheel up newer · → or wheel down older · Home newest · End oldest · right-click picture menu", ViewerText.Keys);   // 2026-10-03; the wheel and the menu 2026-10-04
-        Assert.Contains("TAB terminal", ViewerText.Keys);
+        Assert.Contains("Tab terminal", ViewerText.Keys);
         Assert.Equal("▶ 5 s", ViewerText.SlideShowTail(5, false));
         Assert.Equal("▶ 5 s · random", ViewerText.SlideShowTail(5, true));
     }

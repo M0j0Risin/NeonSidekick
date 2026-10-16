@@ -16,7 +16,7 @@ namespace NeonSidekick.UI;
 public sealed class TranscriptFind
 {
     /// <summary>The hint row while nothing is typed. Pinned.</summary>
-    public const string EmptyHint = "type = find · ESC = done";
+    public const string EmptyHint = "type = find · Esc = done";
 
     /// <summary>The find row's label. Pinned.</summary>
     public const string Label = "find:";
@@ -27,8 +27,8 @@ public sealed class TranscriptFind
     /// </summary>
     public static string Hint(int ordinal, int count) =>
         count > 0
-            ? $"{ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)} of {count.ToString(System.Globalization.CultureInfo.InvariantCulture)} · Enter = older · {InfoPane.FindBack} = newer · PgUp/PgDn = scroll · ESC = done"
-            : "no match · Backspace = erase · ESC = done";
+            ? $"{ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)} of {count.ToString(System.Globalization.CultureInfo.InvariantCulture)} · Enter = older · {InfoPane.FindBack} = newer · PgUp/PgDn = scroll · Esc = done"
+            : "no match · Backspace = erase · Esc = done";
 
     /// <summary>The find row: the label, the text and a bar where the next character goes.</summary>
     public static string RowMarkup(string find) =>

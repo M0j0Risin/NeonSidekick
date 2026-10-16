@@ -1143,7 +1143,7 @@ internal sealed partial class ChatScreen
     public static string AskUserAnsweredLogLine(int questions) =>
         string.Create(System.Globalization.CultureInfo.InvariantCulture, $"ask_user: {questions} question{(questions == 1 ? "" : "s")} answered");
 
-    public const string AskUserNotAnsweredLogLine = "ask_user: not answered (ESC).";
+    public const string AskUserNotAnsweredLogLine = "ask_user: not answered (Esc).";
     public const string AskUserNotAskedLogLine = "ask_user: never asked (no watcher to run the pane).";
 
     /// <summary>

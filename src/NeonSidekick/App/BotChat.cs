@@ -1139,7 +1139,7 @@ public static partial class BotChat
 
     // ── The screen's words (pinned) ──────────────────────────────────────────
 
-    public const string UsageError = "Usage: /botchat [profile ...] [[--] topic]: names two or more profiles (this one always joins), or none for every profile; after --, the rest is the topic whatever its first word; ESC stops the voice, then cuts the bot replying short, then ends the chat (Ctrl+Alt+B at once), and /botchat --resume [line] (or Ctrl+Alt+B) carries it on.";
+    public const string UsageError = "Usage: /botchat [profile ...] [[--] topic]: names two or more profiles (this one always joins), or none for every profile; after --, the rest is the topic whatever its first word; Esc stops the voice, then cuts the bot replying short, then ends the chat (Ctrl+Alt+B at once), and /botchat --resume [line] (or Ctrl+Alt+B) carries it on.";
 
     public const string TooFewError = "/botchat needs at least two profiles: add one with /profile add <name>.";
 
@@ -1149,8 +1149,8 @@ public static partial class BotChat
     /// <summary>The line above the chat: the cast and how to stop it.</summary>
     public static string StartNotice(IReadOnlyList<string> names, string topic) =>
         topic.Length > 0
-            ? $"(botchat: {JoinNames(names)} on \"{topic}\"; type to join in; ESC stops the voice, then the reply, then the chat; Ctrl+Alt+B ends it at once)"
-            : $"(botchat: {JoinNames(names)}; type to join in; ESC stops the voice, then the reply, then the chat; Ctrl+Alt+B ends it at once)";
+            ? $"(botchat: {JoinNames(names)} on \"{topic}\"; type to join in; Esc stops the voice, then the reply, then the chat; Ctrl+Alt+B ends it at once)"
+            : $"(botchat: {JoinNames(names)}; type to join in; Esc stops the voice, then the reply, then the chat; Ctrl+Alt+B ends it at once)";
 
     /// <summary>The notice under a bot's reply the ESC ladder cut short (2026-09-25): the chat goes on with the next bot. Pinned.</summary>
     public static string CutShortNotice(string name) => $"(botchat: {name} cut short)";
@@ -1310,7 +1310,7 @@ public static partial class BotChat
     public static string ResumeNotice(IReadOnlyList<string> names, string topic, int replies)
     {
         string about = topic.Length > 0 ? $" on \"{topic}\"" : "";
-        return $"(botchat resumed: {JoinNames(names)}{about}, {UsageText.Plural(replies, "reply", "replies")} so far; type to join in; ESC stops the voice, then the reply, then the chat; Ctrl+Alt+B ends it at once)";
+        return $"(botchat resumed: {JoinNames(names)}{about}, {UsageText.Plural(replies, "reply", "replies")} so far; type to join in; Esc stops the voice, then the reply, then the chat; Ctrl+Alt+B ends it at once)";
     }
 
     /// <summary>The session's title (2026-09-24): <c>Botchat: neon, ada and max</c>.</summary>

@@ -197,9 +197,9 @@ public class NeonHelpTests
         Assert.StartsWith("Tab /tools › Home › HomeAssistant:", Invoke("/tools home assistant"), StringComparison.Ordinal);   // on Home since 2026-10-11
         Assert.StartsWith("Tab /tools › Home: " + HelpText.MenusTab(["HomeAssistant", "Shopping"]), Invoke("/tools home"), StringComparison.Ordinal);   // the tab said whole wins over HomeAssistant
         Assert.StartsWith("Tab /tools › Apps: " + HelpText.MenusTab(["Docker", "ComfyUI", "YouTube"]), Invoke("/tools apps"), StringComparison.Ordinal);
-        Assert.StartsWith("Tab /tools › Admin: " + HelpText.MenusTab(["EventLog", "Services", "Tasks", "Directory"]), Invoke("/tools admin"), StringComparison.Ordinal);   // later still on 2026-10-15 (the admin-tools plan)
+        Assert.StartsWith("Tab /tools › Admin: " + HelpText.MenusTab(["Network", "EventLog", "Services", "Tasks", "Directory"]), Invoke("/tools admin"), StringComparison.Ordinal);   // Network first since 2026-10-16 (the user's order); later still on 2026-10-15 (the admin-tools plan)
         Assert.StartsWith("Tab /tools › Admin › EventLog:", Invoke("/tools eventlog"), StringComparison.Ordinal);
-        Assert.StartsWith("Tab /tools › Core › Network:", Invoke("/tools network"), StringComparison.Ordinal);
+        Assert.StartsWith("Tab /tools › Admin › Network:", Invoke("/tools network"), StringComparison.Ordinal);   // on Core until 2026-10-16
     }
 
     /// <summary>
@@ -237,7 +237,7 @@ public class NeonHelpTests
         Assert.Contains("\n- Oracle: Oracle tools, ", text);
         Assert.EndsWith("\nAsk for one menu (/tools sql) for its rows' defaults and what each does.", text, StringComparison.Ordinal);
         Assert.Equal("the menus Print, Camera (a second row of tabs under the tab; ←/→ step through them)", HelpText.MenusTab(["Print", "Camera"]));
-        Assert.Equal([(ToolsText.CoreTabTitle, "Ask"), (ToolsText.CoreTabTitle, "Web"), (ToolsText.CoreTabTitle, ToolsText.NetworkMenuTitle), (ToolsText.CoreTabTitle, "Shell"), (ToolsText.CoreTabTitle, ToolsText.TimersMenuTitle), (ToolsText.CoreTabTitle, "Options"), (ToolsText.FilesTabTitle, "File")], HelpLocation.Menus("/tools").Take(7));   // Network after Web later still on 2026-10-15 (the admin-tools plan)   // Timers before Options since later on 2026-10-15   // the Standard group first since later on 2026-10-10, then Files; Shopping before Options on 2026-10-11 until it went to Home later that day
+        Assert.Equal([(ToolsText.CoreTabTitle, "Web"), (ToolsText.CoreTabTitle, "Shell"), (ToolsText.CoreTabTitle, ToolsText.TimersMenuTitle), (ToolsText.CoreTabTitle, "Ask"), (ToolsText.CoreTabTitle, "Options"), (ToolsText.FilesTabTitle, "File"), (ToolsText.FilesTabTitle, ToolsText.ImageMenuTitle)], HelpLocation.Menus("/tools").Take(7));   // the user's order since 2026-10-16 (Network to Admin)   // Network after Web later still on 2026-10-15 (the admin-tools plan)   // Timers before Options since later on 2026-10-15   // the Standard group first since later on 2026-10-10, then Files; Shopping before Options on 2026-10-11 until it went to Home later that day
         Assert.Equal([(SettingsMenu.ClientTabTitle, "Chat"), (SettingsMenu.ClientTabTitle, "Sessions"), (SettingsMenu.ClientTabTitle, "Botchat"), (SettingsMenu.ClientTabTitle, SettingsMenu.WebUiTabTitle), (SettingsMenu.ServersTabTitle, "Common")], HelpLocation.Menus("/settings").Take(5));   // the Servers and Voice groups since 2026-10-10; Common and Http (the LLM tab) later that day; the Client group first later still; Web UI under Client since 2026-10-14
     }
 

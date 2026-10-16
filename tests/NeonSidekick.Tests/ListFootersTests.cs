@@ -95,8 +95,8 @@ public class ListFootersTests
     [Fact]
     public void AHintWithAnyEsc_GainsTheFilter_BeforeIt()
     {
-        Assert.Equal("Enter = choose · type = filter · ESC = keep", MenuFilter.HintBeforeEsc("Enter = choose · ESC = keep", ""));
-        Assert.Equal("Enter = choose · " + MenuFilter.FilteringKeys, MenuFilter.HintBeforeEsc("Enter = choose · ESC = the first listed", "qw"));
+        Assert.Equal("Enter = choose · type = filter · Esc = keep", MenuFilter.HintBeforeEsc("Enter = choose · Esc = keep", ""));
+        Assert.Equal("Enter = choose · " + MenuFilter.FilteringKeys, MenuFilter.HintBeforeEsc("Enter = choose · Esc = the first listed", "qw"));
         Assert.Equal("Enter = pick · type = filter", MenuFilter.HintBeforeEsc("Enter = pick", ""));
     }
 }

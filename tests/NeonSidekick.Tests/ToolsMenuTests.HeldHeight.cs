@@ -1,3 +1,4 @@
+using NeonSidekick.App;
 using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
@@ -14,14 +15,14 @@ public partial class ToolsMenuTests
     {
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
         var heights = new List<int>();
-        var steps = new Queue<ConsoleKeyInfo>([Keys.Right, Keys.Enter, Keys.Escape, Keys.Escape]);
+        var steps = new Queue<ConsoleKeyInfo[]>([ToTab(ToolsText.AskTabTitle), [Keys.Enter], [Keys.Escape], [Keys.Escape]]);   // the presses to Ask at once (Core's fourth since 2026-10-16)
         // At every read the script waits for, the pane as drawn, then the next key: Offered, Core › Ask, the picker, Core › Ask again.
         input.OnWait = () =>
         {
             heights.Add(pane.DrawnRows);
-            if (steps.TryDequeue(out var key))
+            if (steps.TryDequeue(out var keys))
             {
-                input.Push(key);
+                input.Push(keys);
             }
         };
 

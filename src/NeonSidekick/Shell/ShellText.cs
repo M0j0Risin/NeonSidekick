@@ -602,7 +602,7 @@ public static class ShellText
     public const string ScriptApprovalTitle = "Run this script?";
     public const string DenyRow = "Deny";
     public const string OnceRow = "Allow once";
-    public const string ApprovalKeys = "d / o / s / a = pick · v = view · Enter = choose · ESC = deny";
+    public const string ApprovalKeys = "d / o / s / a = pick · v = view · Enter = choose · Esc = deny";
 
     /// <summary>
     /// The approval pane's title-row button (2026-10-07, the user's ask: the caption cut a long command at three rows and showed a

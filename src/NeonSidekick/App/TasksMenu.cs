@@ -19,17 +19,17 @@ internal sealed class TasksMenu
 {
     public const string Title = TaskText.Glyph + " Tasks";
 
-    public const string Keys = "Enter = open · r = refresh · c = computer · f = folder · w = Windows' own · ←/→ states · " + MenuFilter.TypeOrShiftAndCloseKeys;
+    public const string Keys = "Enter = open · r = refresh · c = computer · f = folder · w = Windows' own · " + MenuFilter.TypeOrShiftAndCloseKeys;
 
     public static readonly IReadOnlyList<string> TabTitles = ["Ready", "Running", "Disabled", "All"];
 
     public static readonly InfoAction CopyAction = new("copy", 'c', "copy");
-    public static readonly InfoAction AskAction = new("ask", 'a', "ask the model");
-    public static readonly InfoAction RunAction = new("run", 'r', "run it now");
-    public static readonly InfoAction EndAction = new("end", 'e', "end it");
-    public static readonly InfoAction EnableAction = new("enable", 'n', "enable it");
-    public static readonly InfoAction DisableAction = new("disable", 'd', "disable it");
-    public static readonly InfoAction HistoryAction = new("history", 'h', "its run history");
+    public static readonly InfoAction AskAction = new("ask", 'a', "ask");
+    public static readonly InfoAction RunAction = new("run", 'r', "run");
+    public static readonly InfoAction EndAction = new("end", 'e', "end");
+    public static readonly InfoAction EnableAction = new("enable", 'n', "enable");
+    public static readonly InfoAction DisableAction = new("disable", 'd', "disable");
+    public static readonly InfoAction HistoryAction = new("history", 'h', "runs");
 
     public static string TitleFor(string where, string folder) => Title + " · " + where + " · " + folder;
 

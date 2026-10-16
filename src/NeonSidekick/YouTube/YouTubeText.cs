@@ -487,7 +487,7 @@ public static class YouTubeText
     public const char SaveKey = 's';
 
     /// <summary>The search picker's hint row: <c>SettingsMenu.PickKeys</c> with the save key. Pinned.</summary>
-    public const string PickKeys = "Enter = play · s = save · ESC = back";
+    public const string PickKeys = "Enter = play · s = save · Esc = back";
 
     /// <summary>No saved videos to show.</summary>
     public const string NoneSaved = "No saved videos yet: /youtube save keeps the one playing, /youtube save <id|link> any other.";
