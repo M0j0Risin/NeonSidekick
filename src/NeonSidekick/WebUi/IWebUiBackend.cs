@@ -175,6 +175,17 @@ public interface IWebUiBackend
     /// <summary>The video playing saved (later on 2026-10-16, the ☆).</summary>
     WebReply SaveCurrent(IPAddress? remote) => new(WebOutcome.NotFound);
 
+    /// <summary>
+    /// A bot check card's picture of the Browser window (2026-10-17), at most <paramref name="width"/> pixels wide: Forbidden with <i>Web UI bot
+    /// check control</i> off, NotFound unless <paramref name="askId"/> is the live check's, the picture else (null when the window didn't draw).
+    /// </summary>
+    Task<(WebOutcome Outcome, WebBotCheckFrame? Frame)> BotCheckFrameAsync(string askId, int width, CancellationToken cancellationToken) =>
+        Task.FromResult<(WebOutcome, WebBotCheckFrame?)>((WebOutcome.NotFound, null));
+
+    /// <summary>A bot check card's input sent into the Browser window (2026-10-17): Forbidden, NotFound, Refused (an input it can't send) or Ok.</summary>
+    Task<WebReply> BotCheckInputAsync(WebBotCheckInput input, IPAddress? remote, CancellationToken cancellationToken) =>
+        Task.FromResult(new WebReply(WebOutcome.NotFound));
+
     /// <summary>An entry whole while the transcript holds it (2026-10-15: a page opening what its snapshot deferred), or null.</summary>
     WebEntry? Entry(long seq);
 

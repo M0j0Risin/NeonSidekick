@@ -1227,6 +1227,9 @@ public enum SettingsField
 
     /// <summary>A picker over <see cref="Skills.ReflectionMode.Names"/>: whether a reflection may write a new skill or only improve one that exists (<see cref="Settings.AppSettingsData.ReflectionMode"/>). The Reflection tab of <c>/skills</c>, the first row of What it may change, above <see cref="ReflectionConfirmMode"/> (2026-10-16, the user's ask and words); no reconnect (read when a reflection is decided). Last in the enum, as every newcomer.</summary>
     ReflectionMode,
+
+    /// <summary>A toggle: whether a Web UI page may see and drive the Browser window during a bot check (<see cref="Settings.AppSettingsData.WebUiBotCheckControl"/>). The Web UI tab's Guardrails run under <see cref="WebUiConnectionDetails"/> (2026-10-17, the user's ask); read at each request. Last in the enum, as every newcomer.</summary>
+    WebUiBotCheckControl,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1668,7 +1671,7 @@ internal sealed partial class SettingsMenu
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
          SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
-        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
+        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiBotCheckControl, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
         [SettingsField.LlmUrl, SettingsField.LlmModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.PlanGapPasses,
@@ -2186,7 +2189,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.Advisors or SettingsField.AdvisorConfirm
             or SettingsField.ShoppingTools or SettingsField.EventLogTools
             or SettingsField.WebUi or SettingsField.WebUiCommands or SettingsField.WebUiConnectionDetails or SettingsField.WebUiHomeControls or SettingsField.WebUiProfileTheme
-            or SettingsField.WebUiChatControls or SettingsField.WebUiShoppingControls or SettingsField.WebUiYouTubeControls
+            or SettingsField.WebUiChatControls or SettingsField.WebUiShoppingControls or SettingsField.WebUiYouTubeControls or SettingsField.WebUiBotCheckControl
             or SettingsField.TimerTools or SettingsField.FileDeletesToRecycleBin
             or SettingsField.NetworkTools or SettingsField.NetworkCertificateStores or SettingsField.ServiceTools or SettingsField.ServiceWrites
             or SettingsField.TaskTools or SettingsField.TaskWrites or SettingsField.DirectoryTools;
@@ -2270,6 +2273,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebUiReach => "Web UI reach",
         SettingsField.WebUiCommands => "Web UI commands",
         SettingsField.WebUiConnectionDetails => "Web UI connection details",
+        SettingsField.WebUiBotCheckControl => "Web UI bot check control",
         SettingsField.WebUiHomeControls => "Web UI home controls",
         SettingsField.WebUiChatControls => "Web UI chat controls",
         SettingsField.WebUiShoppingControls => "Web UI shopping controls",
@@ -2906,6 +2910,7 @@ internal sealed partial class SettingsMenu
             SettingsField.WebUi => OnOff(data.WebUi),
             SettingsField.WebUiCommands => OnOff(data.WebUiCommands),
             SettingsField.WebUiConnectionDetails => OnOff(data.WebUiConnectionDetails),
+            SettingsField.WebUiBotCheckControl => OnOff(data.WebUiBotCheckControl),
             SettingsField.WebUiHomeControls => OnOff(data.WebUiHomeControls),
             SettingsField.WebUiChatControls => OnOff(data.WebUiChatControls),
             SettingsField.WebUiShoppingControls => OnOff(data.WebUiShoppingControls),
@@ -7904,6 +7909,7 @@ internal sealed partial class SettingsMenu
             SettingsField.WebUi => data.WebUi,
             SettingsField.WebUiCommands => data.WebUiCommands,
             SettingsField.WebUiConnectionDetails => data.WebUiConnectionDetails,
+            SettingsField.WebUiBotCheckControl => data.WebUiBotCheckControl,
             SettingsField.WebUiHomeControls => data.WebUiHomeControls,
             SettingsField.WebUiChatControls => data.WebUiChatControls,
             SettingsField.WebUiShoppingControls => data.WebUiShoppingControls,
@@ -8032,6 +8038,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.WebUi: data.WebUi = on; break;
             case SettingsField.WebUiCommands: data.WebUiCommands = on; break;
             case SettingsField.WebUiConnectionDetails: data.WebUiConnectionDetails = on; break;
+            case SettingsField.WebUiBotCheckControl: data.WebUiBotCheckControl = on; break;
             case SettingsField.WebUiHomeControls: data.WebUiHomeControls = on; break;
             case SettingsField.WebUiChatControls: data.WebUiChatControls = on; break;
             case SettingsField.WebUiShoppingControls: data.WebUiShoppingControls = on; break;
@@ -8167,6 +8174,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebUi => on ? "web server enabled" : "web server disabled",   // the user's wording, 2026-10-14
         SettingsField.WebUiCommands => on ? "the page runs the commands it may, and completes them" : "the page sends messages; its dropdown offers the mentions alone",
         SettingsField.WebUiConnectionDetails => on ? "the page's dropdown shows the % and * connections' notes" : "the page's dropdown names the connections alone",
+        SettingsField.WebUiBotCheckControl => on ? "a page's bot check card shows the Browser window and drives it" : "a page's bot check card allows and gives up alone",
         SettingsField.WebUiHomeControls => on ? "the Home tab toggles, runs scenes, asks Assist and plays the video" : "there is no Home tab",
         SettingsField.WebUiChatControls => on ? "the page has its Chat tab" : "there is no Chat tab; / goes to the first tab that is on",
         SettingsField.WebUiShoppingControls => on ? "the Shopping tab adds, ticks, changes and removes lines, picks the store" : "there is no Shopping tab",

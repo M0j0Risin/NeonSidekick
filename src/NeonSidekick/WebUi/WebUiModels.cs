@@ -354,7 +354,8 @@ public sealed record WebAskView(
     IReadOnlyList<WebQuestion>? Questions,
     string? SubmitLabel,
     IReadOnlyList<WebPickItem>? Items = null,
-    string? Current = null);
+    string? Current = null,
+    bool Live = false);
 
 /// <summary>
 /// What the page's header and composer show: the profile and its two avatars, the model, whether a reply runs (Stop) or a model loads,
@@ -433,7 +434,10 @@ public sealed record WebWords(string PictureGone, string PictureTooLarge, string
     string PromptsButton = "", string PromptsNone = "", string PromptsSend = "", string PromptsToDraft = "", string Filter = "", string ClosePrompts = "",
     string PromptsTab = "", string MemoryTab = "", string HistoryTab = "", string MemoryNone = "", string HistoryNone = "", string SaveDraft = "",
     string DraftEmpty = "", string DeleteRow = "", string DeleteRowArmed = "", string ClearAll = "", string ClearAllArmed = "", string MemoryOff = "",
-    string MemoryModeOff = "");
+    string MemoryModeOff = "",
+    string BotCheckHint = "", string BotCheckPicture = "", string BotCheckZoom = "", string BotCheckScrollUp = "", string BotCheckScrollDown = "",
+    string BotCheckTypeHere = "", string BotCheckSend = "", string BotCheckEnter = "", string BotCheckBackspace = "", string BotCheckTab = "",
+    string BotCheckStalled = "");
 
 /// <summary>
 /// The page's saved prompts, the sheet's 📣 tab (later on 2026-10-15): the profile's prompts, numbered as at the PC. The title went on
@@ -640,6 +644,30 @@ public sealed class WebSavedPlay
     public string? Id { get; set; }
 }
 
+/// <summary>
+/// An input from a bot check card's live view (2026-10-17): the ask it was sent from, its kind (<c>tap</c>, <c>down</c>, <c>up</c>, <c>scroll</c>,
+/// <c>text</c>, <c>key</c>), the place as fractions of the picture, a scroll's distance in CSS pixels, a text, a key's name.
+/// </summary>
+public sealed class WebBotCheckInput
+{
+    public string? AskId { get; set; }
+
+    public string? Kind { get; set; }
+
+    public double X { get; set; }
+
+    public double Y { get; set; }
+
+    public double DeltaY { get; set; }
+
+    public string? Text { get; set; }
+
+    public string? Key { get; set; }
+}
+
+/// <summary>A picture of the Browser window for a bot check card (2026-10-17): the JPEG and its tag (the ETag the page sends back).</summary>
+public sealed record WebBotCheckFrame(byte[] Jpeg, string Tag);
+
 /// <summary>A saved video named by its id (later on 2026-10-16): the remove.</summary>
 public sealed class WebSavedId
 {
@@ -747,6 +775,7 @@ public sealed class WebVideoReport
 [JsonSerializable(typeof(WebSavedPlaying))]
 [JsonSerializable(typeof(WebSavedPlay))]
 [JsonSerializable(typeof(WebSavedId))]
+[JsonSerializable(typeof(WebBotCheckInput))]
 [JsonSerializable(typeof(WebSavedMove))]
 [JsonSerializable(typeof(WebVideoResume))]
 [JsonSerializable(typeof(WebVideoOwner))]

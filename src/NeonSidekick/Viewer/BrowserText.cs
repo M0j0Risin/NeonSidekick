@@ -67,4 +67,18 @@ public static class BrowserText
 
     /// <summary>A page that did not load at all (no name, no answer): the detail of a <see cref="Web.BotCheckEnd.Refused"/> with no status. Pinned.</summary>
     public const string DidNotLoad = "the page did not load";
+
+    // ── The page's live view (2026-10-17): why an input from the Web UI was refused (BrowserRemote.Check) ──
+
+    /// <summary>A tap, hold or scroll whose place is off the picture.</summary>
+    public const string RemoteOffView = "that place is off the window's page";
+
+    /// <summary>A text input with nothing in it.</summary>
+    public const string RemoteNoText = "there is no text to type";
+
+    /// <summary>A text input past the most one sends.</summary>
+    public static string RemoteTooLong(int most) => $"that text is too long: send at most {most.ToString(CultureInfo.InvariantCulture)} characters at a time";
+
+    /// <summary>A key the page has no button for.</summary>
+    public const string RemoteNoSuchKey = "that key can't be sent: Enter, Backspace and Tab can";
 }

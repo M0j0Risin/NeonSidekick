@@ -900,6 +900,7 @@ function renderAsks(list) {
   asks = list || [];
   asksEl.replaceChildren();
   for (const ask of asks) asksEl.appendChild(askCard(ask));
+  stopBotViews(new Set(asks.filter(a => a.live).map(a => a.id)));
   if (asks.length > lastAskCount) {
     // One footer panel at a time (later on 2026-10-15): the question the PC waits on closes the drawer. Under the overlay the drawer goes at
     // once (it can't be seen) and its entry is stepped over when the overlay closes, so the picture isn't pulled away.
@@ -939,6 +940,7 @@ function askCard(ask) {
     return card;
   }
   if (ask.items && ask.items.length) card.appendChild(pickList(card, ask));
+  if (ask.live) card.appendChild(botCheckView(ask));
   const choices = el('div', 'choices');
   for (const choice of ask.choices) {
     const b = el('button', null, choice.label);
@@ -952,6 +954,241 @@ function askCard(ask) {
   }
   card.appendChild(choices);
   return card;
+}
+
+// ── A bot check's card (2026-10-17): the PC's Browser window, live, driven from here ──────────
+// While a bot check runs in the PC's Browser window (Web UI bot check control on), its card shows the window — a picture read about three
+// times a second, nothing sent while it is unchanged (the ETag) — and sends taps, holds, scrolls and typing into it, so a check met away
+// from home can be passed from the phone. The view outlives renderAsks' rebuilds: kept by its ask's id and moved into the new card, stopped
+// once its ask is gone. Its picture's box is exactly the picture (no letterbox), so a tap's place is a fraction of the window's view.
+const botViews = new Map();   // ask id → { el, stop }
+
+function botCheckView(ask) {
+  let view = botViews.get(ask.id);
+  if (!view) {
+    view = makeBotView(ask.id);
+    botViews.set(ask.id, view);
+  }
+  return view.el;
+}
+
+function stopBotViews(live) {
+  for (const [id, view] of botViews) {
+    if (!live.has(id)) {
+      view.stop();
+      botViews.delete(id);
+    }
+  }
+}
+
+function makeBotView(askId) {
+  const root = el('div', 'botcheck-view');
+  const box = el('div', 'botcheck-box');
+  const img = el('img', 'botcheck-picture');
+  img.alt = words.botCheckPicture || "The PC's Browser window";
+  img.draggable = false;
+  box.appendChild(img);
+  const stalled = el('p', 'botcheck-stalled hidden', words.botCheckStalled || "The window isn't drawing right now.");
+  const hint = el('p', 'botcheck-hint', words.botCheckHint || 'Tap to click; touch and hold to press and hold.');
+  const zooms = [1, 2, 3];
+  let zoom = 0;
+  function button(label, name, run) {
+    const b = el('button', null, label);
+    b.type = 'button';
+    b.title = name;
+    b.setAttribute('aria-label', name);
+    b.addEventListener('click', run);
+    return b;
+  }
+  const bar = el('div', 'botcheck-bar');
+  bar.append(
+    button('▲', words.botCheckScrollUp || 'Scroll up', () => send({ kind: 'scroll', x: 0.5, y: 0.5, deltaY: -600 })),
+    button('▼', words.botCheckScrollDown || 'Scroll down', () => send({ kind: 'scroll', x: 0.5, y: 0.5, deltaY: 600 })),
+    button('🔍', words.botCheckZoom || 'Zoom', () => {
+      zoom = (zoom + 1) % zooms.length;
+      img.style.width = (100 * zooms[zoom]) + '%';
+      read();
+    }),
+    button('⏎', words.botCheckEnter || 'Enter', () => send({ kind: 'key', key: 'Enter' })),
+    button('⌫', words.botCheckBackspace || 'Backspace', () => send({ kind: 'key', key: 'Backspace' })),
+    button('⇥', words.botCheckTab || 'Tab', () => send({ kind: 'key', key: 'Tab' })));
+  const typing = el('div', 'botcheck-type');
+  const field = el('input');
+  field.type = 'text';
+  field.autocomplete = 'off';
+  field.placeholder = words.botCheckTypeHere || 'Type into the window';
+  // Enter in the box is its Type: the text goes in, no Enter key with it (⏎ sends that alone).
+  field.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      typeNow();
+    }
+  });
+  function typeNow() {
+    const text = field.value;
+    if (!text) return;
+    field.value = '';
+    send({ kind: 'text', text });
+  }
+  typing.append(field, button(words.botCheckSend || 'Type', words.botCheckSend || 'Type', typeNow));
+  root.append(box, stalled, hint, bar, typing);
+
+  // The pictures: one read at a time, the next ~330 ms after the last lands; none while the tab is hidden or the card is out of view.
+  let stopped = false;
+  let tag = null;
+  let timer = null;
+  let reading = false;
+  let again = false;
+  let inView = true;
+  const observer = 'IntersectionObserver' in window
+    ? new IntersectionObserver(seen => { inView = seen.some(s => s.isIntersecting); if (inView) read(); })
+    : null;
+  if (observer) observer.observe(root);
+  const onVisible = () => { if (!document.hidden) read(); };
+  document.addEventListener('visibilitychange', onVisible);
+
+  function soon() {
+    clearTimeout(timer);
+    if (!stopped) timer = setTimeout(read, 330);
+  }
+
+  function dataUrl(blob) {
+    return new Promise((done, failed) => {
+      const reader = new FileReader();
+      reader.onload = () => done(reader.result);
+      reader.onerror = failed;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function over() {
+    // The check is over, or the PC turned the control off: the card keeps Give up until its ask closes.
+    stop();
+    box.classList.add('hidden');
+    stalled.classList.add('hidden');
+    hint.classList.add('hidden');
+    bar.classList.add('hidden');
+    typing.classList.add('hidden');
+  }
+
+  async function read() {
+    if (stopped) return;
+    clearTimeout(timer);
+    if (document.hidden || !inView) return;
+    if (reading) { again = true; return; }
+    reading = true;
+    try {
+      const width = Math.round(Math.max(320, (box.clientWidth || 360) * (window.devicePixelRatio || 1) * zooms[zoom]));
+      const headers = {};
+      if (tag) headers['If-None-Match'] = tag;
+      const r = await fetch('/api/botcheck/frame?ask=' + encodeURIComponent(askId) + '&w=' + width, { credentials: 'same-origin', cache: 'no-store', headers });
+      if (r.status === 401) { location.reload(); return; }
+      if (r.status === 200) {
+        const src = await dataUrl(await r.blob());
+        tag = r.headers.get('ETag');
+        if (!stopped) img.src = src;
+        stalled.classList.add('hidden');
+      } else if (r.status === 304) {
+        stalled.classList.add('hidden');
+      } else if (r.status === 503) {
+        stalled.classList.remove('hidden');
+      } else if (r.status === 403 || r.status === 404) {
+        let j = null;
+        try { j = await r.json(); } catch { /* none */ }
+        if (j && j.tabOff) { Neon.leave(); return; }
+        over();
+        return;
+      }
+    } catch { /* the next read tries again */ } finally {
+      reading = false;
+    }
+    if (again) { again = false; read(); } else soon();
+  }
+
+  // The input: one post at a time, so an up never overtakes its down; each asks for a fresh picture.
+  const queue = [];
+  let sending = false;
+  function send(input) {
+    if (stopped) return;
+    queue.push(input);
+    pump();
+  }
+  async function pump() {
+    if (sending) return;
+    sending = true;
+    while (queue.length && !stopped) {
+      const r = await post('/api/botcheck/input', Object.assign({ askId }, queue.shift()));
+      if (r.status === 403 || r.status === 404) { queue.length = 0; over(); break; }
+      if (!r.ok && r.message) say(r.message);
+      read();
+    }
+    sending = false;
+  }
+
+  // The pointer: a quick tap clicks; one held still past 150 ms presses, and lets go where it pressed; one that moves first pans the zoomed box.
+  let press = null;
+  const clamp = v => Math.min(1, Math.max(0, v));
+  function at(ev) {
+    const r = img.getBoundingClientRect();
+    return { x: clamp((ev.clientX - r.left) / r.width), y: clamp((ev.clientY - r.top) / r.height) };
+  }
+  img.addEventListener('pointerdown', ev => {
+    if (ev.button !== 0 || !img.src || press) return;
+    const p = at(ev);
+    const held = { id: ev.pointerId, x: p.x, y: p.y, sx: ev.clientX, sy: ev.clientY, down: false, timer: 0 };
+    held.timer = setTimeout(() => {
+      if (press !== held) return;
+      held.down = true;
+      send({ kind: 'down', x: held.x, y: held.y });
+    }, 150);
+    press = held;
+  });
+  img.addEventListener('pointermove', ev => {
+    if (!press || press.id !== ev.pointerId || press.down) return;
+    if (Math.hypot(ev.clientX - press.sx, ev.clientY - press.sy) > 10) {
+      clearTimeout(press.timer);
+      press = null;
+    }
+  });
+  function release(ev, cancelled) {
+    if (!press || press.id !== ev.pointerId) return;
+    clearTimeout(press.timer);
+    if (press.down) send({ kind: 'up', x: press.x, y: press.y });
+    else if (!cancelled) send({ kind: 'tap', x: press.x, y: press.y });
+    press = null;
+  }
+  img.addEventListener('pointerup', ev => release(ev, false));
+  img.addEventListener('pointercancel', ev => release(ev, true));
+  img.addEventListener('contextmenu', ev => ev.preventDefault());
+  // A desktop wheel over the picture scrolls the window there, its turns gathered into one post every 150 ms.
+  let wheel = null;
+  img.addEventListener('wheel', ev => {
+    ev.preventDefault();
+    const p = at(ev);
+    const lines = ev.deltaMode === 1 ? 40 : ev.deltaMode === 2 ? 600 : 1;
+    if (wheel) {
+      wheel.deltaY += ev.deltaY * lines;
+      return;
+    }
+    wheel = { x: p.x, y: p.y, deltaY: ev.deltaY * lines };
+    setTimeout(() => {
+      const w = wheel;
+      wheel = null;
+      if (w.deltaY) send({ kind: 'scroll', x: w.x, y: w.y, deltaY: Math.round(w.deltaY) });
+    }, 150);
+  }, { passive: false });
+
+  function stop() {
+    if (stopped) return;
+    stopped = true;
+    clearTimeout(timer);
+    if (press) clearTimeout(press.timer);
+    if (observer) observer.disconnect();
+    document.removeEventListener('visibilitychange', onVisible);
+  }
+
+  read();
+  return { el: root, stop };
 }
 
 // A pick card (later on 2026-10-14: /model, /reasoning, /rewind from the page): a filter over the rows, the one in use marked and in view.

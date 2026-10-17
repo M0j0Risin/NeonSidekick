@@ -1,6 +1,7 @@
 using NeonSidekick.Diagnostics;
 using NeonSidekick.UI;
 using NeonSidekick.Web;
+using NeonSidekick.WebUi;
 using Spectre.Console;
 
 namespace NeonSidekick.App;
@@ -28,6 +29,11 @@ internal sealed partial class ChatScreen
     /// <c>automatic</c> straight on. Then the window opens on the address and the pane waits beside it — ESC or Give up ends the wait,
     /// as the window's own close does — until the page is through, for at most <see cref="BotCheck.SolveTimeout"/>.
     /// </summary>
+    /// <remarks>
+    /// Both panes are on the Web UI's page too since 2026-10-17 (the user's ask: a check met from the phone waited at the PC until they were
+    /// home): the allow through <see cref="AllowBothAsync"/>, the wait as a <c>botcheck</c> card (<see cref="WaitBothAsync"/>) that shows the
+    /// window and drives it under <i>Web UI bot check control</i> (<c>ChatScreen.BotCheckWeb.cs</c>).
+    /// </remarks>
     private async Task<BotCheckResult?> SolveBotCheckAsync(BotCheckRequest request, CancellationToken turnToken)
     {
         if (_browserWindow is not { } window)
@@ -57,7 +63,8 @@ internal sealed partial class ChatScreen
                 return null;
             }
 
-            var allow = await RunCameraPaneAsync(token => _cameraMenu.AllowAsync(BotCheckText.AskCaption(request), token, BotCheckText.AskTitle), null, turnToken).ConfigureAwait(false);
+            string caption = BotCheckText.AskCaption(request);
+            var allow = await AllowBothAsync(BotCheckText.AskTitle, caption, null, token => _cameraMenu.AllowAsync(caption, token, BotCheckText.AskTitle), turnToken).ConfigureAwait(false);
             if (allow is not { } choice)
             {
                 return null;
@@ -88,20 +95,16 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>The window on the check and, when there is a pane, the wait beside it: ESC or Give up ends it; the window's answer either way.</summary>
+    /// <summary>The window on the check and the wait beside it, at the PC and on the page: ESC or Give up ends it; the window's answer either way.</summary>
     private async Task<BotCheckResult> SolveInWindowAsync(Viewer.IBrowserWindow window, BotCheckRequest request, CancellationToken turnToken)
     {
         using var timeout = new CancellationTokenSource(BotCheck.SolveTimeout, _time);
         using var solving = CancellationTokenSource.CreateLinkedTokenSource(turnToken, timeout.Token);
         var solve = window.SolveAsync(request, solving.Token);
-        bool gaveUp = false;
-        if (_pane.Enabled)
+        bool gaveUp = await WaitBothAsync(window, request, solve, turnToken).ConfigureAwait(false);
+        if (gaveUp)
         {
-            gaveUp = await RunCameraPaneAsync(token => WaitBesideAsync(request, solve, token), false, turnToken).ConfigureAwait(false);
-            if (gaveUp)
-            {
-                await solving.CancelAsync().ConfigureAwait(false);
-            }
+            await solving.CancelAsync().ConfigureAwait(false);
         }
 
         var result = await solve.ConfigureAwait(false);
@@ -112,6 +115,88 @@ internal sealed partial class ChatScreen
 
         DiagnosticLog.Info(WebFetcher.Category, $"The bot check on {request.Url.Host} in the Browser window: {result.End}.");
         return result;
+    }
+
+    /// <summary>
+    /// The wait beside the window (2026-10-17): a <c>botcheck</c> card on the page, opened first (so a turn from the page never leaves a pane at the
+    /// PC with nothing on the page), then the PC's waiting pane. True when the user gave up on either side, false once the window answered. The
+    /// pane's false (the window answered, no watcher to run it) never ends the wait on its own: the card stays up until the window answers or
+    /// someone gives up. Each side claims before it counts (<see cref="WebAskHandle.TryClaim"/>), as <see cref="AskBothAsync"/>'s do; not that
+    /// helper itself, which returns at once when no watcher runs the pane. While the wait runs it is the live check
+    /// (<see cref="_botCheckLive"/>), the only door the page's pictures and input reach the window through.
+    /// </summary>
+    private async Task<bool> WaitBothAsync(Viewer.IBrowserWindow window, BotCheckRequest request, Task<BotCheckResult> solve, CancellationToken turnToken)
+    {
+        bool live = _effective().WebUiBotCheckControl;
+        var handle = _webUi.Asks.Open(new WebAskSpec("botcheck", BotCheckText.WaitTitle, [new WebChoice(BotCheckGiveUpChoice, BotCheckText.GiveUpRow)],
+            Body: BotCheckText.WaitCaption(request), Live: live));
+        using var webAnswered = new CancellationTokenSource();
+        var check = new BotCheckLive(handle.Id, window, request.Url.Host);
+        SetBotCheckLive(check);
+        try
+        {
+            Task<bool> pane = _pane.Enabled
+                ? RunCameraPaneAsync(async token =>
+                {
+                    using var either = CancellationTokenSource.CreateLinkedTokenSource(token, webAnswered.Token);
+                    bool gave = await WaitBesideAsync(request, solve, either.Token).ConfigureAwait(false);
+                    return gave && !webAnswered.IsCancellationRequested && handle.TryClaim(AskSource.Pc);
+                }, false, turnToken)
+                : Task.FromResult(false);
+            var waiting = new List<Task> { solve, pane, handle.Answered };
+            while (true)
+            {
+                var first = await Task.WhenAny(waiting).ConfigureAwait(false);
+                if (first == handle.Answered)
+                {
+                    var answer = await handle.Answered.ConfigureAwait(false);
+                    VoiceSession.SafeCancel(webAnswered);
+                    string said = handle.Describe(answer);
+                    DiagnosticLog.Info(WebUiCategory, WebUiText.AnsweredLogLine(BotCheckText.WaitTitle, said, handle.Remote));
+                    _transcript.Notice(WebUiText.AnsweredNotice(said));
+                    await Quietly(pane).ConfigureAwait(false);
+                    return true;
+                }
+
+                if (first == pane)
+                {
+                    if (pane.IsCompletedSuccessfully && pane.Result)
+                    {
+                        return true;
+                    }
+
+                    waiting.Remove(pane);   // no answer from the PC: the window and the page still may
+                    continue;
+                }
+
+                // The window answered: the PC's pane closes on its own (it races the same solve).
+                handle.TryClaim(AskSource.Pc);
+                VoiceSession.SafeCancel(webAnswered);
+                await Quietly(pane).ConfigureAwait(false);
+                return false;
+            }
+        }
+        finally
+        {
+            SetBotCheckLive(null);
+            check.End();
+            _webUi.Asks.Close(handle);
+        }
+    }
+
+    /// <summary>The bot check card's one choice.</summary>
+    internal const string BotCheckGiveUpChoice = "giveup";
+
+    // A pane's task awaited for its end alone: a turn's cancel under it is the turn's to report.
+    private static async Task Quietly(Task task)
+    {
+        try
+        {
+            await task.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     /// <summary>The waiting pane, until the window answers (false) or the user gives up on it (true: ESC, Give up, or the pane closed under it).</summary>

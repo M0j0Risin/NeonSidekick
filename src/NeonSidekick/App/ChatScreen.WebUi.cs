@@ -89,6 +89,9 @@ internal sealed partial class ChatScreen
             SavedClear = WebClearSaved,
             SavedMove = WebMoveSaved,
             SavedSave = WebSaveCurrent,
+            // A bot check card's picture of the Browser window and its input (2026-10-17): ChatScreen.BotCheckWeb.cs.
+            BotCheckFrame = WebBotCheckFrameAsync,
+            BotCheckInput = WebBotCheckInputAsync,
             // A line the page sent joins the message history as the page sends it, as Enter does a typed one (the history's lock allows it).
             Accepted = text => _input.Remember(text),
         };

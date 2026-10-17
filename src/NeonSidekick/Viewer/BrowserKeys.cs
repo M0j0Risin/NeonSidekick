@@ -146,6 +146,74 @@ public static class BrowserAnswers
         }
     }
 
+    /// <summary>A <c>Page.captureScreenshot</c> answer's picture (2026-10-17, the Web UI's live view): its bytes; false for an answer with none.</summary>
+    public static bool TryReadScreenshot(string? json, out byte[] picture)
+    {
+        picture = [];
+        if (string.IsNullOrEmpty(json))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("data", out var data)
+                && data.ValueKind == JsonValueKind.String && data.TryGetBytesFromBase64(out byte[]? bytes) && bytes is { Length: > 0 })
+            {
+                picture = bytes;
+                return true;
+            }
+
+            return false;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// A <c>Page.getLayoutMetrics</c> answer's visible part (2026-10-17): its <c>cssVisualViewport</c>'s place in the document, size and zoom
+    /// (1 when it gives none, as an older runtime's may); false for an answer without one, or one with no size.
+    /// </summary>
+    public static bool TryReadViewport(string? json, out BrowserViewport viewport)
+    {
+        viewport = new BrowserViewport(0, 0, 0, 0, 1);
+        if (string.IsNullOrEmpty(json))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Object || !document.RootElement.TryGetProperty("cssVisualViewport", out var visual)
+                || visual.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            double width = Number(visual, "clientWidth");
+            double height = Number(visual, "clientHeight");
+            if (width <= 0 || height <= 0)
+            {
+                return false;
+            }
+
+            double zoom = Number(visual, "zoom");
+            viewport = new BrowserViewport(Number(visual, "pageX"), Number(visual, "pageY"), width, height, zoom > 0 ? zoom : 1);
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static double Number(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out double d) && double.IsFinite(d) ? d : 0;
+
     /// <summary>The cookies of a <c>Network.getAllCookies</c> answer that would be sent to one of <paramref name="hosts"/>; none for an answer that is not one.</summary>
     public static IReadOnlyList<BrowserCookie> CookiesFor(string? json, IReadOnlyCollection<string> hosts)
     {

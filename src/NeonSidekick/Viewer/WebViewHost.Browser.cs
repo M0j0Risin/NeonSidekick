@@ -200,6 +200,7 @@ internal sealed unsafe partial class WebViewHost
         private bool _refused;
         private int _cookies;
         private long _pdfBytes;
+        private int _frameBytes;
         private bool _viewPending;
         private bool _viewing;
         private bool _viewed;
@@ -331,7 +332,47 @@ internal sealed unsafe partial class WebViewHost
                         return;
                     }
 
-                    Print();
+                    Remote();
+                });
+            });
+            if (!sent)
+            {
+                Finish(false, "CallDevToolsProtocolMethod was refused");
+            }
+        }
+
+        // The Web UI's live view of a bot check (2026-10-17): the visible part read, a JPEG of it, and a mouse move sent, all over DevTools.
+        private void Remote()
+        {
+            _step = "the live view";
+            bool sent = Host!.CallDevTools("Page.getLayoutMetrics", "{}", (hr, json) =>
+            {
+                if (hr < 0 || !BrowserAnswers.TryReadViewport(json, out var viewport))
+                {
+                    Finish(false, $"Page.getLayoutMetrics gave no visible part (0x{hr.ToString("X8", CultureInfo.InvariantCulture)})");
+                    return;
+                }
+
+                Host.CallDevTools("Page.captureScreenshot", BrowserRemote.ScreenshotParameters(viewport, 640, 1), (shot, picture) =>
+                {
+                    if (shot < 0 || !BrowserAnswers.TryReadScreenshot(picture, out byte[] jpeg) || BrowserRemote.JpegWidth(jpeg) is null)
+                    {
+                        Finish(false, $"Page.captureScreenshot gave no JPEG (0x{shot.ToString("X8", CultureInfo.InvariantCulture)})");
+                        return;
+                    }
+
+                    _frameBytes = jpeg.Length;
+                    var (method, move) = BrowserRemote.Commands(new BrowserInput(BrowserInputKind.Scroll, 0.5, 0.5, 0), viewport)[0];
+                    Host.CallDevTools(method, move, (moved, _) =>
+                    {
+                        if (moved < 0)
+                        {
+                            Finish(false, $"Input.dispatchMouseEvent failed (0x{moved.ToString("X8", CultureInfo.InvariantCulture)})");
+                            return;
+                        }
+
+                        Print();
+                    });
                 });
             });
             if (!sent)
@@ -442,7 +483,7 @@ internal sealed unsafe partial class WebViewHost
                     return;
                 }
 
-                Finish(true, $"runtime {version}; the bar's address box and a tooltip; the blank page's navigation and address, its DOM, a history entry gone back from and cleared, {_cookies.ToString(CultureInfo.InvariantCulture)} cookie set and read over DevTools, a PDF of {_pdfBytes.ToString(CultureInfo.InvariantCulture)} B, a file: navigation refused, a download canceled, the PDF staged and shown on {PdfView.HostName}");
+                Finish(true, $"runtime {version}; the bar's address box and a tooltip; the blank page's navigation and address, its DOM, a history entry gone back from and cleared, {_cookies.ToString(CultureInfo.InvariantCulture)} cookie set and read over DevTools, a picture of {_frameBytes.ToString(CultureInfo.InvariantCulture)} B and a mouse move over DevTools, a PDF of {_pdfBytes.ToString(CultureInfo.InvariantCulture)} B, a file: navigation refused, a download canceled, the PDF staged and shown on {PdfView.HostName}");
             });
         }
 

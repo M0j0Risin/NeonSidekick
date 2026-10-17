@@ -3326,6 +3326,15 @@ public sealed class AppSettingsData
     public bool WebUiConnectionDetails { get; set; }
 
     /// <summary>
+    /// Whether a Web UI page may see and drive the Browser window during a bot check (2026-10-17, the user's call: on by default). On, the
+    /// page's bot check card shows the window live, and its taps, holds, scrolls and typing go into it; off, the card answers the allow ask and
+    /// Give up alone. A signed-in page could otherwise click and type in a window holding the Browser profile's cookies, if only while a check
+    /// the user allowed runs. Read when a check's wait opens and at each request, so a change needs no restart. The Chat tab's alone
+    /// (<see cref="WebUiChatControls"/>). No variable.
+    /// </summary>
+    public bool WebUiBotCheckControl { get; set; } = true;
+
+    /// <summary>
     /// Whether the Web UI has its Home tab (2026-10-15, the user's call: off by default): on, the tab shows the home bar's tiles, and they
     /// toggle, its sheets run a device's actions, its scenes run, <i>Ask the house</i> asks Home Assistant's Assist and the video remote plays
     /// and pauses the PC's YouTube window — the home bar's own confirms (an unlock, a garage, gate or door opening, a disarm) still asked on the

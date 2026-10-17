@@ -959,6 +959,7 @@ public sealed class AppSettings : IDisposable
         WebUiReach = source.WebUiReach,
         WebUiCommands = source.WebUiCommands,
         WebUiConnectionDetails = source.WebUiConnectionDetails,
+        WebUiBotCheckControl = source.WebUiBotCheckControl,
         WebUiHomeControls = source.WebUiHomeControls,
         WebUiChatControls = source.WebUiChatControls,
         WebUiShoppingControls = source.WebUiShoppingControls,

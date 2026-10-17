@@ -425,6 +425,20 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
 
     public WebReply SaveCurrent(IPAddress? remote) => Saved(() => SavedSave?.Invoke(remote));
 
+    // ── A bot check's card (2026-10-17): the screen's hooks; a null hook is a 404 ──
+
+    /// <summary>The screen's picture of the Browser window for a live bot check card.</summary>
+    public Func<string, int, CancellationToken, Task<(WebOutcome Outcome, WebBotCheckFrame? Frame)>>? BotCheckFrame { get; set; }
+
+    /// <summary>The screen's send of a card's input into the Browser window.</summary>
+    public Func<WebBotCheckInput, IPAddress?, CancellationToken, Task<WebReply>>? BotCheckInput { get; set; }
+
+    public Task<(WebOutcome Outcome, WebBotCheckFrame? Frame)> BotCheckFrameAsync(string askId, int width, CancellationToken cancellationToken) =>
+        BotCheckFrame?.Invoke(askId, width, cancellationToken) ?? Task.FromResult<(WebOutcome, WebBotCheckFrame?)>((WebOutcome.NotFound, null));
+
+    public Task<WebReply> BotCheckInputAsync(WebBotCheckInput input, IPAddress? remote, CancellationToken cancellationToken) =>
+        BotCheckInput?.Invoke(input, remote, cancellationToken) ?? Task.FromResult(new WebReply(WebOutcome.NotFound));
+
     // A saved list's change: the hook's reply, a 404 with no hook, the list's file failing a refusal with its reason.
     private static WebReply Saved(Func<WebReply?> change)
     {
@@ -1033,7 +1047,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     {
         var spec = handle.Spec;
         return new WebAskView(handle.Id, spec.Kind, spec.Title, spec.Body, spec.Lines, spec.Markdown is { } markdown ? WebUiMarkdown.ToHtml(markdown) : null,
-            spec.Choices, spec.TextChoice, spec.Questions, spec.SubmitLabel, spec.Items, spec.Current);
+            spec.Choices, spec.TextChoice, spec.Questions, spec.SubmitLabel, spec.Items, spec.Current, spec.Live);
     }
 
     // ── Message ids ───────────────────────────────────────────────────────────

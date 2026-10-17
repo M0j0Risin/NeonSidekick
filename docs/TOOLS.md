@@ -69,6 +69,7 @@ The app's own browser (Windows only), where you solve a bot check the web tools 
 
 * **When:** `web_fetch`, `web_search`, `download_file` and `convert_to_pdf` offer it on a 403, a 503 that names no wait, or a check's page; never for a rate limit, and never headless. *Web browser botcheck window* decides whether it asks you first, opens at once or never opens.
 * **Solving:** the window comes to the front; pressing Esc or *Give up*, or closing the window, gives up, and so does waiting 5 minutes. Once the page loads with no check showing, the window closes and the tool goes on with that page.
+* **From the phone:** the allow question and *Give up* are on the Web UI's Chat tab too, and with *Web UI bot check control* on the card shows the window live to tap, hold, scroll and type into ([A bot check from the page](INTERFACE.md#a-bot-check-from-the-page)). The challenge still runs in the PC's window: its pass is a cookie only that browser can use.
 * **Cookies:** the window's cookies for the site go to the web tools for this run, so the next fetch usually needs no window. A site that ties its clearance to the browser's connection may still refuse a download.
 * The window's bar, keys, history and saved links: [The Browser window](INTERFACE.md#the-browser-window).
 

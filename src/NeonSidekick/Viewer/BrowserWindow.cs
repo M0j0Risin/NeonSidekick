@@ -87,6 +87,9 @@ public static class BrowserWindow
     /// <summary>The home page's address now (<see cref="BrowserAddress.Home"/>): the setting's page, else the blank page.</summary>
     public static string HomeAddress() => BrowserAddress.Home(HomePage?.Invoke())?.AbsoluteUri ?? BrowserPage.Blank;
 
+    /// <summary>How long the Web UI's live view waits on the window for a picture or an input's answer (2026-10-17): DevTools calls have no timeout of their own.</summary>
+    public static readonly TimeSpan RemoteTimeout = TimeSpan.FromSeconds(5);
+
     /// <summary>The window as an <see cref="IBrowserWindow"/> (<c>Program</c> hands it to the app on Windows).</summary>
     public static IBrowserWindow Window { get; } = new WindowsBrowserWindow();
 
@@ -256,6 +259,41 @@ public static class BrowserWindow
             OpenNow() is { } window ? window.CurrentPageAsync() : Task.FromResult<(string Url, string? Title)?>(null);
 
         public void LinksChanged() => OpenNow()?.LinksChanged();
+
+        // The Web UI's live view (2026-10-17): the open window only, never one started for it; a view that does not answer in RemoteTimeout is none.
+        public async Task<BrowserFrame?> FrameAsync(int maxWidth, CancellationToken cancellationToken)
+        {
+            if (OpenNow() is not { } window)
+            {
+                return null;
+            }
+
+            try
+            {
+                return await window.FrameAsync(maxWidth).WaitAsync(RemoteTimeout, cancellationToken).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                return null;
+            }
+        }
+
+        public async Task<bool> InputAsync(BrowserInput input, CancellationToken cancellationToken)
+        {
+            if (OpenNow() is not { } window)
+            {
+                return false;
+            }
+
+            try
+            {
+                return await window.InputAsync(input).WaitAsync(RemoteTimeout, cancellationToken).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                return false;
+            }
+        }
 
         public async Task<string?> ClearAsync(BrowserClear kind)
         {
@@ -656,6 +694,7 @@ internal sealed unsafe partial class BrowserWindowThread
 
         EndClears(_failure ?? BrowserText.Closed);
         EndPages();
+        EndRemote();
 
         SettleVisits(_failure is { } why ? BrowserVisit.Empty with { Failure = why } : BrowserVisit.Empty);
     }
@@ -674,6 +713,9 @@ internal sealed unsafe partial class BrowserWindowThread
                 return IntPtr.Zero;
             case WmTimer when wParam == PollTimer:
                 Tick();
+                return IntPtr.Zero;
+            case WmTimer when wParam == ReleaseTimer:
+                ReleaseHeld(_job);
                 return IntPtr.Zero;
             case WmTimer when wParam == HarvestTimer:
                 KillTimer(hwnd, HarvestTimer);
@@ -828,6 +870,15 @@ internal sealed unsafe partial class BrowserWindowThread
         public bool Busy;
         public bool Finishing;
         public bool PdfWritten;
+
+        /// <summary>The visible part as the last look read it (the Web UI's live view, 2026-10-17); null before any.</summary>
+        public BrowserViewport? Viewport;
+
+        /// <summary>How many pixels a device-independent one came to in the last picture: the PC's display scale.</summary>
+        public double PixelsPerDip = 1;
+
+        /// <summary>Where the page's held button is down, in CSS pixels; null with none held.</summary>
+        public (double X, double Y)? Held;
         public bool WasFile;
         public bool Truncated;
     }
@@ -868,6 +919,7 @@ internal sealed unsafe partial class BrowserWindowThread
             KillTimer(_hwnd, PollTimer);
         }
 
+        ReleaseHeld(job);
         job.Finishing = true;
         Settle(job.Done, result);
         DiagnosticLog.Info("Browser", $"The bot check on {job.Request.Url.Host} ended: {result.End}{(result.Detail.Length > 0 ? " (" + result.Detail + ")" : "")}.");

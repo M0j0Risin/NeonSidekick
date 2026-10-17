@@ -17,6 +17,9 @@ public enum WebRateBucket
 
     /// <summary>The YouTube tab's player reports (2026-10-16): a tick a second and a command's answers, 10 a second, bursts of 30.</summary>
     Report,
+
+    /// <summary>A bot check card's taps, holds, scrolls and typing (2026-10-17): 10 a second, bursts of 30, more than any finger.</summary>
+    BotCheck,
 }
 
 /// <summary>
@@ -50,6 +53,7 @@ public sealed class WebRateLimit
         WebRateBucket.Say => (1, 0.5),
         WebRateBucket.SignIn => (5, 5.0 / 60),
         WebRateBucket.Report => (30, 10),
+        WebRateBucket.BotCheck => (30, 10),
         _ => throw new ArgumentOutOfRangeException(nameof(bucket), bucket, null),
     };
 
@@ -72,6 +76,7 @@ public sealed class WebRateLimit
             "/api/home/say" => WebRateBucket.Say,
             WebUiAuth.SignInPath => WebRateBucket.SignIn,
             WebUiHost.YouTubeReportPath or WebUiHost.YouTubeSeenPath => WebRateBucket.Report,   // the YouTube tab's (2026-10-16; seen later that day); its stream's GET is unlimited, as Chat's
+            WebUiHost.BotCheckInputPath => WebRateBucket.BotCheck,   // a bot check card's input (2026-10-17); its pictures' GET is bounded by the screen's one capture at a time
             _ => null,
         };
     }

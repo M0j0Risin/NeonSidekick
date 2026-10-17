@@ -508,7 +508,50 @@ public static class WebUiText
         UI.TranscriptRenderer.NoReplyText, UI.ThinkingFoldText.LiveBare, EntryGone,
         ClearDraft, DraftCleared, ExpandAll, CollapseAll, ToTop, ToBottom, StripButton, StripOne, StripMany, CloseStrip, Live, LiveLabel, DeletePicture, DeleteArmed, PromptsButton, PromptsNone, PromptsSend, PromptsToDraft, Filter, ClosePrompts,
         PromptsTab, MemoryTab, HistoryTab, MemoryNone, HistoryNone, SaveDraft, DraftEmpty, DeleteRow, DeleteRowArmed, ClearAll, ClearAllArmed, MemoryOff,
-        MemoryModeOff);
+        MemoryModeOff,
+        BotCheckHint, BotCheckPicture, BotCheckZoom, BotCheckScrollUp, BotCheckScrollDown, BotCheckTypeHere, BotCheckSend, BotCheckEnter, BotCheckBackspace, BotCheckTab,
+        BotCheckStalled);
+
+    // ── A bot check's card (2026-10-17): the Browser window on the page while a check runs in it ──
+
+    /// <summary>The line under the picture.</summary>
+    public const string BotCheckHint = "This is the PC's Browser window. Tap to click; touch and hold to press and hold.";
+
+    /// <summary>The picture's alternative text.</summary>
+    public const string BotCheckPicture = "The PC's Browser window";
+
+    /// <summary>The zoom button's name (fit, 2×, 3×).</summary>
+    public const string BotCheckZoom = "Zoom";
+
+    /// <summary>The scroll buttons' names.</summary>
+    public const string BotCheckScrollUp = "Scroll up";
+    public const string BotCheckScrollDown = "Scroll down";
+
+    /// <summary>The text box's placeholder.</summary>
+    public const string BotCheckTypeHere = "Type into the window";
+
+    /// <summary>The text box's button.</summary>
+    public const string BotCheckSend = "Type";
+
+    /// <summary>The key buttons' names.</summary>
+    public const string BotCheckEnter = "Enter";
+    public const string BotCheckBackspace = "Backspace";
+    public const string BotCheckTab = "Tab";
+
+    /// <summary>Over the last picture while the window isn't drawing.</summary>
+    public const string BotCheckStalled = "The window isn't drawing right now (is the PC locked or asleep?). Give up, or wait and it may come back.";
+
+    /// <summary>A bot check card's input or picture refused with Web UI bot check control off.</summary>
+    public const string BotCheckControlOff = "Web UI bot check control is off: the page can't see or drive the Browser window.";
+
+    /// <summary>A picture or input for a check that is over, or never was.</summary>
+    public const string BotCheckGone = "That bot check is over.";
+
+    /// <summary>The PC's hint row when a page first drives a check.</summary>
+    public static string BotCheckDrivenFlash(string host) => "📱 the Web UI is driving the bot check on " + host;
+
+    /// <summary>The audit line when a page first drives a check: the address, never what it types.</summary>
+    public static string BotCheckDrivenLogLine(string host, IPAddress? remote) => "The Web UI at " + Where(remote) + " is driving the bot check on " + host + ".";
 
     /// <summary>A folded entry whose text the page asked for after the transcript let it go (2026-10-15).</summary>
     public const string EntryGone = "(no longer available)";

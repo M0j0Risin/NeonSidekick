@@ -10,7 +10,9 @@ namespace NeonSidekick.Tests.Fakes;
 /// answers <see cref="ClearAnswer"/>; every <see cref="Close"/> is counted. The saved links (later still): <see cref="Current"/> is the page
 /// a bare <c>/browser save</c> reads (<see cref="CurrentHold"/>: it never answers), <see cref="LinksChangedCount"/> counts the pane's
 /// changes, and with <see cref="HoldVisit"/> every visit stays open until <see cref="EndVisit"/>, all of them answered at once as the
-/// window does.
+/// window does. The Web UI's live view (2026-10-17): while a held check runs, <see cref="FrameAsync"/> answers <see cref="Frame"/> and
+/// <see cref="InputAsync"/> records each input and answers true; with none running, null and false, as the window does. <see cref="EndHeld"/>
+/// ends the held checks with an answer of the test's choosing.
 /// </summary>
 public sealed class FakeBrowserWindow : IBrowserWindow
 {
@@ -38,13 +40,91 @@ public sealed class FakeBrowserWindow : IBrowserWindow
         }
 
         var held = new TaskCompletionSource<BotCheckResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_running)
+        {
+            _running.Add((request, held));
+        }
+
         cancellationToken.Register(() =>
         {
             CancelSeen = true;
             held.TrySetResult(BotCheckResult.Ended(BotCheckEnd.GaveUp, request.Url.AbsoluteUri));
         });
+        _ = held.Task.ContinueWith(_ =>
+        {
+            lock (_running)
+            {
+                _running.RemoveAll(r => r.Done == held);
+            }
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         return held.Task;
     }
+
+    private readonly List<(BotCheckRequest Request, TaskCompletionSource<BotCheckResult> Done)> _running = [];
+
+    /// <summary>Whether a held check is running now.</summary>
+    public bool Running
+    {
+        get
+        {
+            lock (_running)
+            {
+                return _running.Count > 0;
+            }
+        }
+    }
+
+    /// <summary>The held checks ended: each answered <paramref name="answer"/> (cleared with <see cref="Html"/> when null), as the window's page getting through.</summary>
+    public void EndHeld(Func<BotCheckRequest, BotCheckResult>? answer = null)
+    {
+        (BotCheckRequest Request, TaskCompletionSource<BotCheckResult> Done)[] running;
+        lock (_running)
+        {
+            running = [.. _running];
+        }
+
+        foreach (var (request, done) in running)
+        {
+            done.TrySetResult(answer?.Invoke(request) ?? Cleared(request, Html));
+        }
+    }
+
+    /// <summary>The picture a running check answers (a tiny JPEG by default).</summary>
+    public BrowserFrame? Frame { get; set; } = new(TinyJpeg, BrowserRemote.TagOf(TinyJpeg));
+
+    /// <summary>How many pictures were asked for while a check ran.</summary>
+    public int FrameAsks => Volatile.Read(ref _frameAsks);
+
+    private int _frameAsks;
+
+    /// <summary>Every input sent while a check ran, in order.</summary>
+    public System.Collections.Concurrent.ConcurrentQueue<BrowserInput> Inputs { get; } = new();
+
+    public Task<BrowserFrame?> FrameAsync(int maxWidth, CancellationToken cancellationToken)
+    {
+        if (!Running)
+        {
+            return Task.FromResult<BrowserFrame?>(null);
+        }
+
+        Interlocked.Increment(ref _frameAsks);
+        return Task.FromResult(Frame);
+    }
+
+    public Task<bool> InputAsync(BrowserInput input, CancellationToken cancellationToken)
+    {
+        if (!Running)
+        {
+            return Task.FromResult(false);
+        }
+
+        Inputs.Enqueue(input);
+        return Task.FromResult(true);
+    }
+
+    /// <summary>A 1×1 baseline JPEG a browser draws.</summary>
+    public static byte[] TinyJpeg { get; } = Convert.FromBase64String(
+        "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==");
 
     public bool HoldVisit { get; set; }
 

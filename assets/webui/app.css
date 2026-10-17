@@ -501,6 +501,18 @@ button:disabled { opacity: 0.45; cursor: default; }
 .ask .pick-item.current .label::before { content: "● "; color: var(--accent); }
 .ask legend { padding: 0 4px; font-weight: 600; }
 .ask label { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
+/* A bot check's card (2026-10-17): the PC's Browser window, live. The picture's box is the picture alone (no padding, border or letterbox):
+   a tap's place is a fraction of it. Zoomed past the card, the box scrolls; a held touch never opens the picture's own menu. */
+#asks:has(.botcheck-view) { max-height: 85vh; }
+.botcheck-view { margin: 0 0 10px; }
+.botcheck-box { max-height: 55vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.botcheck-picture { display: block; width: 100%; max-width: none; height: auto; margin: 0; padding: 0; border: 0; touch-action: pan-x pan-y; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; cursor: pointer; }
+.botcheck-stalled { color: var(--warn); margin: 6px 0 0; }
+.botcheck-hint { color: var(--dim); font-size: 13px; margin: 6px 0; }
+.botcheck-bar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
+.botcheck-bar button { min-width: 44px; min-height: 40px; }
+.botcheck-type { display: flex; gap: 6px; }
+.botcheck-type input { flex: 1; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: inherit; }
 .ask label input[type="text"] { flex: 1; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; }
 
 /* ── Shopping ───────────────────────────────────────────────────── */

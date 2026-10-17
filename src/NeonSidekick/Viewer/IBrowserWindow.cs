@@ -56,4 +56,17 @@ public interface IBrowserWindow
     /// (<see cref="BrowserText.BotCheckWaiting"/>: an open would end it as given up). Starts no window; cheap enough for every call.
     /// </summary>
     string? Unavailable();
+
+    /// <summary>
+    /// A picture of what the window shows while a bot check runs in it (2026-10-17, the Web UI's live view): a JPEG at most
+    /// <paramref name="maxWidth"/> pixels wide and its tag. Null with no check running, no window open (none is started for it), or a view
+    /// that did not draw in time. Never throws.
+    /// </summary>
+    Task<BrowserFrame?> FrameAsync(int maxWidth, CancellationToken cancellationToken) => Task.FromResult<BrowserFrame?>(null);
+
+    /// <summary>
+    /// The page's input (<see cref="BrowserInput"/>, one <see cref="BrowserRemote.Check"/> passed) sent into the window's bot check: true once
+    /// sent; false with no check running, one finishing, no window open, or a view that did not answer in time. Never throws.
+    /// </summary>
+    Task<bool> InputAsync(BrowserInput input, CancellationToken cancellationToken) => Task.FromResult(false);
 }

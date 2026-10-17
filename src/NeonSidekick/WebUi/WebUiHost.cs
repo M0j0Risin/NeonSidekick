@@ -400,6 +400,9 @@ public sealed class WebUiHost : IWebUiHost
                         // re-reads it while a reply runs and most ticks change nothing it shows.
                         await TaggedJsonAsync(context, _backend.Usage(), WebUiJsonContext.Default.WebUsageCard).ConfigureAwait(false);
                         return;
+                    case BotCheckFramePath:
+                        await BotCheckFrameAsync(context).ConfigureAwait(false);
+                        return;
                     case "/api/pulse":
                         // The Chat badge on the other tabs (2026-10-15).
                         await TaggedJsonAsync(context, _backend.Pulse(), WebUiJsonContext.Default.WebPulse).ConfigureAwait(false);
@@ -471,6 +474,7 @@ public sealed class WebUiHost : IWebUiHost
                     YouTubeSavedClearPath => _backend.ClearSaved(remote),   // the body is not read, as Stop's
                     YouTubeSavedMovePath => await ReadAsync(context, WebUiJsonContext.Default.WebSavedMove).ConfigureAwait(false) is { } move ? _backend.MoveSaved(move, remote) : null,
                     YouTubeSavedSavePath => _backend.SaveCurrent(remote),
+                    BotCheckInputPath => await ReadAsync(context, WebUiJsonContext.Default.WebBotCheckInput).ConfigureAwait(false) is { } input ? await _backend.BotCheckInputAsync(input, remote, context.RequestAborted).ConfigureAwait(false) : null,
                     "/api/home/tap" or "/api/home/act" or "/api/home/scene" or "/api/home/say" or "/api/home/video" => await HomePostAsync(context, path, remote).ConfigureAwait(false),
                     _ => new WebReply(WebOutcome.NotFound),
                 };
@@ -603,6 +607,7 @@ public sealed class WebUiHost : IWebUiHost
 
         return path is "/api/events" or "/api/send" or "/api/stop" or "/api/answer" or "/api/complete" or "/api/usage" or "/api/strip/select" or "/api/prompts"
                 or PromptSavePath or PromptDeletePath or MemoryPath or MemorySavePath or MemoryDeletePath or HistoryPath or HistoryClearPath
+                or BotCheckFramePath or BotCheckInputPath
             || path.StartsWith(EntryPrefix, StringComparison.Ordinal) || path.StartsWith(PicturePrefix, StringComparison.Ordinal)
             ? WebTab.Chat
             : null;
@@ -643,6 +648,56 @@ public sealed class WebUiHost : IWebUiHost
         context.Response.ContentType = "application/json; charset=utf-8";
         context.Response.ContentLength = bytes.Length;
         await context.Response.Body.WriteAsync(bytes, context.RequestAborted).ConfigureAwait(false);
+    }
+
+    /// <summary>A bot check card's picture of the Browser window (2026-10-17): <c>?ask=&amp;w=</c>, tagged.</summary>
+    public const string BotCheckFramePath = "/api/botcheck/frame";
+
+    /// <summary>A bot check card's input (2026-10-17): a post of <see cref="WebBotCheckInput"/>, in its own bucket.</summary>
+    public const string BotCheckInputPath = "/api/botcheck/input";
+
+    /// <summary>The narrowest and widest picture a card may ask for, in pixels.</summary>
+    public const int BotCheckMinWidth = 320;
+    public const int BotCheckMaxWidth = 1600;
+
+    /// <summary>
+    /// A bot check card's picture (2026-10-17): the screen's answer for the ask and the width (clamped), its tag the ETag, an unchanged picture a
+    /// 304 with no body. 403 with <i>Web UI bot check control</i> off, 404 for a check that is over, 503 when the window didn't draw in time.
+    /// </summary>
+    private async Task BotCheckFrameAsync(HttpContext context)
+    {
+        string askId = context.Request.Query["ask"].ToString();
+        int width = int.TryParse(context.Request.Query["w"].ToString(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int w)
+            ? Math.Clamp(w, BotCheckMinWidth, BotCheckMaxWidth)
+            : BotCheckMaxWidth;
+        var (outcome, frame) = await _backend.BotCheckFrameAsync(askId, width, context.RequestAborted).ConfigureAwait(false);
+        var response = context.Response;
+        if (outcome != WebOutcome.Ok)
+        {
+            await ResultAsync(context, StatusOf(outcome), new WebResult(false, outcome == WebOutcome.Forbidden ? WebUiText.BotCheckControlOff : WebUiText.BotCheckGone)).ConfigureAwait(false);
+            return;
+        }
+
+        if (frame is null)
+        {
+            response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            return;
+        }
+
+        string etag = "\"" + frame.Tag + "\"";
+        response.Headers.CacheControl = "no-store";
+        response.Headers.ETag = etag;
+        response.Headers["Cross-Origin-Resource-Policy"] = "same-origin";
+        if (context.Request.Headers.IfNoneMatch == etag)
+        {
+            response.StatusCode = StatusCodes.Status304NotModified;
+            return;
+        }
+
+        response.StatusCode = StatusCodes.Status200OK;
+        response.ContentType = "image/jpeg";
+        response.ContentLength = frame.Jpeg.Length;
+        await response.Body.WriteAsync(frame.Jpeg, context.RequestAborted).ConfigureAwait(false);
     }
 
     /// <summary>Where a deferred entry is read whole: <c>/api/entry/{seq}</c> (2026-10-15).</summary>

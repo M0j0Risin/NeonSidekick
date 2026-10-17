@@ -293,6 +293,53 @@ public IWebHome? Home { get; set; }
 
     public IWebVideo? Video => VideoPlayer;
 
+    // ── A bot check's card (2026-10-17) ──────────────────────────────────────
+
+    /// <summary>The live check's ask id: the only one the card's picture and input reach; null with none.</summary>
+    public string? BotCheckLiveId { get; set; }
+
+    /// <summary><i>Web UI bot check control</i>: off answers Forbidden.</summary>
+    public bool BotCheckControl { get; set; } = true;
+
+    /// <summary>The window's picture; null: it didn't draw (the host's 503).</summary>
+    public WebBotCheckFrame? BotCheckPicture { get; set; } = new(FakeBrowserWindow.TinyJpeg, "aaaabbbbccccdddd");
+
+    /// <summary>Each picture's width asked for, in order.</summary>
+    public ConcurrentQueue<int> BotCheckWidths { get; } = new();
+
+    /// <summary>Each input sent, in order.</summary>
+    public ConcurrentQueue<WebBotCheckInput> BotCheckInputs { get; } = new();
+
+    public Task<(WebOutcome Outcome, WebBotCheckFrame? Frame)> BotCheckFrameAsync(string askId, int width, CancellationToken cancellationToken)
+    {
+        BotCheckWidths.Enqueue(width);
+        return Task.FromResult<(WebOutcome, WebBotCheckFrame?)>(
+            !BotCheckControl ? (WebOutcome.Forbidden, null)
+            : askId != BotCheckLiveId ? (WebOutcome.NotFound, null)
+            : (WebOutcome.Ok, BotCheckPicture));
+    }
+
+    public Task<WebReply> BotCheckInputAsync(WebBotCheckInput input, IPAddress? remote, CancellationToken cancellationToken)
+    {
+        if (!BotCheckControl)
+        {
+            return Task.FromResult(new WebReply(WebOutcome.Forbidden, WebUiText.BotCheckControlOff));
+        }
+
+        if (input.AskId != BotCheckLiveId)
+        {
+            return Task.FromResult(new WebReply(WebOutcome.NotFound, WebUiText.BotCheckGone));
+        }
+
+        if (NeonSidekick.App.ChatScreen.BotCheckInputOf(input) is not { } read || NeonSidekick.Viewer.BrowserRemote.Check(read) is not null)
+        {
+            return Task.FromResult(new WebReply(WebOutcome.Refused, "refused"));
+        }
+
+        BotCheckInputs.Enqueue(input);
+        return Task.FromResult(WebReply.Ok);
+    }
+
     // ── The YouTube tab's saved list (later on 2026-10-16), over an in-memory list ─────────────────────────────
 
     /// <summary>The saved list, the user's order; guarded by <see cref="ListsGate"/>.</summary>
