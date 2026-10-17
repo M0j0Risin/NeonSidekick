@@ -1404,6 +1404,15 @@ public sealed class AppSettingsData
     public string ReflectionConfirmMode { get; set; } = Skills.ReflectionConfirmMode.Default;
 
     /// <summary>
+    /// What a reflection may write (<c>Skills.ReflectionMode</c>, 2026-10-16, the user's ask and words): <c>create-update</c> (the default,
+    /// a reflection as it always was: a new skill or an improvement to one that exists) or <c>update-only</c> (only an improvement to a
+    /// skill that exists, its supporting files too under <c>Reflection edit supporting files</c>; never a new one, and with no skill it
+    /// could update no reflection is started). Read when a reflection is decided, no reconnect; the Reflection tab of <c>/skills</c>, the
+    /// first row of What it may change, labeled <c>Reflection mode</c>. No variable.
+    /// </summary>
+    public string ReflectionMode { get; set; } = Skills.ReflectionMode.Default;
+
+    /// <summary>
     /// What a reflection may do to a skill installed with <c>/skills add</c> (<c>Skills.ReflectionInstalledSkills</c>, 2026-10-02, the
     /// user's call in the reflection audit): <c>read-only</c> refuses its <c>skill_editor</c> any change to one and asks for a companion skill
     /// instead, so a later update from the same origin stays clean; <c>allow-and-mark</c> (the default since 2026-10-03, the user's call;

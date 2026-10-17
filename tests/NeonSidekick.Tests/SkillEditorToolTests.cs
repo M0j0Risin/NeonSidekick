@@ -197,4 +197,102 @@ public class SkillEditorToolTests : IDisposable
         Assert.Equal(SkillText.Missing("pdf", SkillScope.Profile), tool.Describe("update", "global", "pdf", null, "Rewritten."));
         Assert.Equal("---\nname: pdf\ndescription: d\n---\n\ni\n", File.ReadAllText(file));
     }
+
+    // ── Reflection mode update-only (2026-10-16) ────────────────────────────
+
+    private SkillEditorTool UpdateOnly(bool files = false, Func<SkillProposal, CancellationToken, Task<bool>>? confirm = null) =>
+        new(() => _roots, () => _external, files ? new SkillFileAccess(TimeProvider.System) : null, confirm: confirm, create: false);
+
+    private string PutSkill(string name)
+    {
+        string dir = Path.Combine(_roots.Profile, name);
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, SkillCatalog.FileName), "---\nname: " + name + "\ndescription: Writes " + name + ".\n---\n\nCount the syllables.\n");
+        return dir;
+    }
+
+    private static string[] ActionEnum(SkillEditorTool tool) =>
+        [.. tool.JsonSchema.GetProperty("properties").GetProperty("action").GetProperty("enum").EnumerateArray().Select(e => e.GetString()!)];
+
+    /// <summary>The schema offers no create and no scope (with the file actions or without, Global skills on or off), and no description names a create.</summary>
+    [Fact]
+    public void UpdateOnly_TheSchemaOffersNoCreate_AndNoScope_AndTheDescriptionNeverNamesIt()
+    {
+        var plain = UpdateOnly();
+        var withFiles = UpdateOnly(files: true);
+        var globalOff = new SkillEditorTool(() => _roots with { GlobalOn = false }, () => false, create: false);
+        foreach (var tool in new[] { plain, withFiles, globalOff })
+        {
+            var properties = tool.JsonSchema.GetProperty("properties");
+            Assert.False(properties.TryGetProperty("scope", out _));
+            Assert.DoesNotContain("creat", properties.GetRawText(), StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("creat", tool.Description, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("companion", tool.Description, StringComparison.OrdinalIgnoreCase);
+            Assert.False(tool.OffersCreate);
+            Assert.Equal(["action", "name"], tool.JsonSchema.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
+            Assert.Equal("The name of a listed skill to change, as the list shows it.", properties.GetProperty("name").GetProperty("description").GetString());
+            Assert.All(properties.EnumerateObject(), p => Assert.False(string.IsNullOrWhiteSpace(p.Value.GetProperty("description").GetString())));
+        }
+
+        Assert.Equal(["update"], ActionEnum(plain));
+        Assert.Equal(["update"], ActionEnum(globalOff));
+        Assert.Equal(["update", "write_file", "edit_file"], ActionEnum(withFiles));
+        Assert.Equal(["action", "name", "description", "instructions", "summary"], plain.JsonSchema.GetProperty("properties").EnumerateObject().Select(p => p.Name));
+        Assert.StartsWith("Updates a skill that exists: ", plain.Description, StringComparison.Ordinal);
+        Assert.EndsWith("Never deletes anything.", plain.Description, StringComparison.Ordinal);
+        Assert.EndsWith(" " + SkillEditorTool.UpdateOnlyFilesSentence, withFiles.Description, StringComparison.Ordinal);
+        Assert.Equal("A skill's supporting files (the ones load_skill lists beside its instructions) are kept current with write_file (the whole file) or edit_file (old_text to new_text), paths relative to the skill folder; the SKILL.md itself only through update.", SkillEditorTool.UpdateOnlyFilesSentence);
+
+        // The main chat's editor is unchanged.
+        Assert.True(_tool.OffersCreate);
+        Assert.StartsWith("Creates or updates a skill", _tool.Description, StringComparison.Ordinal);
+        Assert.Equal(["create", "update"], ActionEnum(_tool));
+    }
+
+    /// <summary>A create sent anyway is refused before the scope, the ask and the write; its word is pinned.</summary>
+    [Fact]
+    public async Task UpdateOnly_ACreateIsRefused_BeforeAnyAsk_AndNothingIsWritten()
+    {
+        bool asked = false;
+        var tool = UpdateOnly(files: true, confirm: (_, _) => { asked = true; return Task.FromResult(true); });
+
+        Assert.Equal(SkillText.CreateRefused, await tool.DescribeAsync("create", "", "haiku", "Writes haiku.", "Five, seven, five.", null, CancellationToken.None));
+        Assert.Equal(SkillText.CreateRefused, (string)(await tool.InvokeAsync(Args(("action", " Create "), ("scope", "team"), ("name", "haiku"), ("description", "d"), ("instructions", "i")), CancellationToken.None))!);
+        Assert.False(asked);
+        Assert.Null(tool.LastResult);
+        Assert.False(Directory.Exists(_roots.Profile));
+        Assert.False(Directory.Exists(_roots.Global));
+        Assert.Equal("Error: this reflection only updates a skill that exists (Reflection mode is update-only); answer nothing if no listed skill covers the topic", SkillText.CreateRefused);
+    }
+
+    /// <summary>An update goes through; a missing name, an unknown action and a locked skill each answer without pointing to a create.</summary>
+    [Fact]
+    public async Task UpdateOnly_AnUpdateGoesThrough_AndItsErrorsNeverPointToACreate()
+    {
+        string dir = PutSkill("haiku");
+        var tool = UpdateOnly(files: true);
+
+        Assert.StartsWith("updated skill 'haiku'", tool.Describe("update", "", "haiku", null, "Five, seven, five."), StringComparison.Ordinal);
+        Assert.Contains("Five, seven, five.", File.ReadAllText(Path.Combine(dir, SkillCatalog.FileName)), StringComparison.Ordinal);
+        Assert.StartsWith("skill 'haiku' (profile): ", tool.DescribeWrite("haiku", "data.txt", "x"), StringComparison.Ordinal);
+
+        Assert.Equal(SkillText.MissingUpdateOnly("tanka"), tool.Describe("update", "", "tanka", null, "x"));
+        Assert.Equal(SkillText.MissingUpdateOnly("tanka"), tool.DescribeWrite("tanka", "data.txt", "x"));
+        Assert.Equal(SkillText.MissingUpdateOnly("tanka"), tool.DescribeEdit("tanka", "data.txt", "a", "b", false));
+        Assert.Equal("Error: there is no skill 'tanka'; this reflection only updates a listed skill — pick one from the list or answer nothing", SkillText.MissingUpdateOnly("tanka"));
+        Assert.False(Directory.Exists(Path.Combine(_roots.Profile, "tanka")));
+
+        Assert.Equal("Error: 'delete' is not an action; use update, write_file or edit_file", (string)(await tool.InvokeAsync(Args(("action", "delete"), ("name", "x")), CancellationToken.None))!);
+        Assert.Equal("Error: 'delete' is not an action; use update", UpdateOnly().Describe("delete", "", "x", null, null));
+        Assert.Equal("Error: 'write_file' is not an action; use update", UpdateOnly().DescribeWrite("haiku", "data.txt", "x"));
+
+        SkillLock.Set(dir, true, DateTimeOffset.UnixEpoch);
+        Assert.Equal(SkillText.LockedUpdateOnly("haiku"), tool.Describe("update", "", "haiku", null, "Locked out."));
+        Assert.Equal("Error: skill 'haiku' is locked by the user; it cannot be changed until they unlock it on /skills; leave it as it is, and answer nothing if no other listed skill covers the topic", SkillText.LockedUpdateOnly("haiku"));
+
+        // The default editor keeps its words.
+        Assert.Equal(SkillText.Locked("haiku"), _tool.Describe("update", "", "haiku", null, "Locked out."));
+        Assert.Equal(SkillText.Missing("tanka", SkillScope.Profile), _tool.Describe("update", "", "tanka", null, "x"));
+        Assert.Equal("Error: 'delete' is not an action; use create or update", _tool.Describe("delete", "", "x", null, null));
+    }
 }

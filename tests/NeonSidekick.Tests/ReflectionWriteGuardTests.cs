@@ -136,4 +136,44 @@ public class ReflectionWriteGuardTests : IDisposable
         Assert.Equal(SkillText.LoadBeforeRewrite("haiku"), (string)refused.Result!);
         Assert.Contains("Learned.", File.ReadAllText(Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName)), StringComparison.Ordinal);
     }
+
+    // ── Reflection mode update-only (2026-10-16) ────────────────────────────
+
+    /// <summary>Under update-only the locked and installed refusals point to no companion skill; their words are pinned.</summary>
+    [Fact]
+    public void UpdateOnly_TheLockedAndInstalledRefusals_PointToNoCompanion()
+    {
+        string pdf = Put("pdf");
+        File.WriteAllText(Path.Combine(pdf, SkillProvenance.FileName), new SkillProvenance { Repo = "owner/repo" }.ToJson());
+        SkillLock.Set(Put("tanka"), true, DateTimeOffset.UnixEpoch);
+        var guard = new ReflectionWriteGuard(() => _roots, false, ReflectionInstalledPolicy.ReadOnly, create: false);
+
+        Assert.Equal(SkillText.LockedUpdateOnly("tanka"), guard.Refusal("tanka", rewrite: true));
+        Assert.Equal(SkillText.InstalledReadOnlyUpdateOnly("pdf", "owner/repo"), guard.Refusal("pdf", rewrite: false));
+        Assert.Equal("Error: skill 'pdf' was installed from owner/repo, and a reflection leaves an installed skill as it is; answer nothing if no other listed skill covers the topic", SkillText.InstalledReadOnlyUpdateOnly("pdf", "owner/repo"));
+        Assert.Equal("Error: skill 'pdf' was installed from a skill source, and a reflection leaves an installed skill as it is; answer nothing if no other listed skill covers the topic", SkillText.InstalledReadOnlyUpdateOnly("pdf", ""));
+        Assert.DoesNotContain("companion", SkillText.LockedUpdateOnly("tanka"), StringComparison.Ordinal);
+
+        // The default guard keeps its words.
+        var both = new ReflectionWriteGuard(() => _roots, false, ReflectionInstalledPolicy.ReadOnly);
+        Assert.Equal(SkillText.Locked("tanka"), both.Refusal("tanka", rewrite: true));
+        Assert.Equal(SkillText.InstalledReadOnly("pdf", "owner/repo"), both.Refusal("pdf", rewrite: false));
+    }
+
+    /// <summary>What counts as a skill a reflection could update: not external, not locked, not installed under read-only.</summary>
+    [Fact]
+    public void Updatable_LeavesOutExternal_Locked_AndInstalledUnderReadOnly()
+    {
+        string pdf = Put("pdf");
+        File.WriteAllText(Path.Combine(pdf, SkillProvenance.FileName), new SkillProvenance { Repo = "owner/repo" }.ToJson());
+        SkillLock.Set(Put("tanka"), true, DateTimeOffset.UnixEpoch);
+        _catalog.Scan(external: false);
+        Skill Of(string name) => _catalog.Skills.Single(s => s.Name == name);
+
+        Assert.True(ReflectionWriteGuard.Updatable(Of("haiku"), ReflectionInstalledPolicy.ReadOnly));
+        Assert.False(ReflectionWriteGuard.Updatable(Of("tanka"), ReflectionInstalledPolicy.AllowAndMark));
+        Assert.False(ReflectionWriteGuard.Updatable(Of("pdf"), ReflectionInstalledPolicy.ReadOnly));
+        Assert.True(ReflectionWriteGuard.Updatable(Of("pdf"), ReflectionInstalledPolicy.AllowAndMark));
+        Assert.False(ReflectionWriteGuard.Updatable(new Skill("ext", "d", SkillScope.External, Path.Combine(_roots.External, "ext")), ReflectionInstalledPolicy.AllowAndMark));
+    }
 }

@@ -122,9 +122,25 @@ public static class SkillText
     // ── skill_editor ────────────────────────────────────────────────────────
 
     /// <param name="files">Whether the tool offers the file actions (2026-09-27): a reflection with <c>Reflection edit supporting files</c> off is told create or update alone.</param>
-    public static string BadAction(string raw, bool files = false) => files
-        ? $"Error: '{raw.Trim()}' is not an action; use {SkillEditorTool.CreateAction}, {SkillEditorTool.UpdateAction}, {SkillEditorTool.WriteFileAction} or {SkillEditorTool.EditFileAction}"
-        : $"Error: '{raw.Trim()}' is not an action; use {SkillEditorTool.CreateAction} or {SkillEditorTool.UpdateAction}";
+    /// <param name="create">Whether the tool offers create (2026-10-16): a reflection under <c>Reflection mode</c> <c>update-only</c> is never told it. Pinned.</param>
+    public static string BadAction(string raw, bool files = false, bool create = true) => (files, create) switch
+    {
+        (true, true) => $"Error: '{raw.Trim()}' is not an action; use {SkillEditorTool.CreateAction}, {SkillEditorTool.UpdateAction}, {SkillEditorTool.WriteFileAction} or {SkillEditorTool.EditFileAction}",
+        (false, true) => $"Error: '{raw.Trim()}' is not an action; use {SkillEditorTool.CreateAction} or {SkillEditorTool.UpdateAction}",
+        (true, false) => $"Error: '{raw.Trim()}' is not an action; use {SkillEditorTool.UpdateAction}, {SkillEditorTool.WriteFileAction} or {SkillEditorTool.EditFileAction}",
+        (false, false) => $"Error: '{raw.Trim()}' is not an action; use {SkillEditorTool.UpdateAction}",
+    };
+
+    /// <summary>
+    /// A create from a reflection under <c>Reflection mode</c> <c>update-only</c> (2026-10-16): refused before any ask or write; its schema
+    /// never offered the action, so only a model that ignored it reads this. Pinned.
+    /// </summary>
+    public const string CreateRefused =
+        "Error: this reflection only updates a skill that exists (Reflection mode is update-only); answer nothing if no listed skill covers the topic";
+
+    /// <summary><see cref="Missing"/> for a reflection under <c>update-only</c> (2026-10-16): never pointing to a create. Pinned.</summary>
+    public static string MissingUpdateOnly(string name) =>
+        $"Error: there is no skill '{name}'; this reflection only updates a listed skill — pick one from the list or answer nothing";
 
     /// <summary>A file action with no <c>path</c> (2026-09-27).</summary>
     public static string NoPath => $"Error: {SkillEditorTool.PathArgument} is empty; name the file, relative to the skill folder (data/mapping.json)";
@@ -180,6 +196,10 @@ public static class SkillText
     public static string Locked(string name) =>
         $"Error: skill '{name}' is locked by the user; it cannot be changed until they unlock it on /skills. To keep what these turns taught, create a companion skill (a new name) instead";
 
+    /// <summary><see cref="Locked"/> for a reflection under <c>Reflection mode</c> <c>update-only</c> (2026-10-16): no companion skill to point to. Pinned.</summary>
+    public static string LockedUpdateOnly(string name) =>
+        $"Error: skill '{name}' is locked by the user; it cannot be changed until they unlock it on /skills; leave it as it is, and answer nothing if no other listed skill covers the topic";
+
     /// <summary>
     /// A change, or a create of its name, refused for a disabled skill (2026-10-09, <see cref="SkillDisable"/>), the model's and a
     /// reflection's alike: the user switched it off, and a second skill for its topic would bring back what they turned off. Pinned.
@@ -190,6 +210,10 @@ public static class SkillText
     /// <summary>A reflection's write refused for an installed skill under <c>Reflection edit downloaded skills</c> = <c>read-only</c> (2026-10-02). Pinned.</summary>
     public static string InstalledReadOnly(string name, string origin) =>
         $"Error: skill '{name}' was installed from {(string.IsNullOrWhiteSpace(origin) ? "a skill source" : origin)}, and a reflection leaves an installed skill as it is; to keep what these turns taught, create a companion skill (a new name) instead";
+
+    /// <summary><see cref="InstalledReadOnly"/> for a reflection under <c>Reflection mode</c> <c>update-only</c> (2026-10-16): no companion skill to point to. Pinned.</summary>
+    public static string InstalledReadOnlyUpdateOnly(string name, string origin) =>
+        $"Error: skill '{name}' was installed from {(string.IsNullOrWhiteSpace(origin) ? "a skill source" : origin)}, and a reflection leaves an installed skill as it is; answer nothing if no other listed skill covers the topic";
 
     /// <summary>A reflection's rewrite refused for a skill it did not load first (2026-10-02). Pinned.</summary>
     public static string LoadBeforeRewrite(string name) =>

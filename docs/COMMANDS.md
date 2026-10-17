@@ -299,7 +299,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/botchat --resume [<line>]`, `/botchat --kill` | Carries on the last bot conversation, or stops the extra embedded servers the bots started. |
 | `/loop <count>\|infinite [<delay>] <message>`, `/loop <count>\|infinite [<delay>] /imagine\|/read <arguments>` | Sends a message, or runs `/imagine` or `/read`, that many times or until Esc. See [Loops](#loops). |
 | `/test [<id>\|reasoning\|structured\|long\|all\|history]` | Runs benchmark tests against the connected model. See [Benchmark tests](#benchmark-tests). |
-| `/learn [<note>]`, `/learn sessions [<n>\|<search>]` | Writes or improves a skill in the background from the last turn, or from stored sessions (the newest 5, *n* up to 20, or a search). Needs *Agent skills* and *LLM offer tools* on. |
+| `/learn [<note>]`, `/learn sessions [<n>\|<search>]` | Writes or improves a skill in the background from the last turn, or from stored sessions (the newest 5, *n* up to 20, or a search); under *Reflection mode* `update-only` it only improves an existing skill. Needs *Agent skills* and *LLM offer tools* on. |
 | `/timer [<duration> [<name>]]`, `/timer stop <name>\|all` | Lists or starts timers (`10m`, `1h30m`; a bare number is minutes; up to 24 hours), or stops one or all. Works with *Timer tools* off. |
 
 ## Command details

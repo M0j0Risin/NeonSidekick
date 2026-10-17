@@ -22,16 +22,37 @@ public sealed class ReflectionWriteGuard
     private readonly Func<SkillRoots> _roots;
     private readonly bool _external;
     private readonly ReflectionInstalledPolicy _installed;
+    private readonly bool _create;
     private readonly Dictionary<string, string> _loaded = new(StringComparer.OrdinalIgnoreCase);
 
     /// <param name="roots">The roots the reflection writes under (fixed at its decision).</param>
     /// <param name="external">Whether the external root is read, as the editor reads it.</param>
     /// <param name="installed">What the reflection may do to an installed skill (<c>Reflection edit downloaded skills</c>).</param>
-    public ReflectionWriteGuard(Func<SkillRoots> roots, bool external, ReflectionInstalledPolicy installed)
+    /// <param name="create">
+    /// Whether the reflection may create (<c>Reflection mode</c>, 2026-10-16): false under <c>update-only</c>, where the locked and installed
+    /// refusals never point to a companion skill (a create the editor would refuse) and say to leave the skill as it is instead.
+    /// </param>
+    public ReflectionWriteGuard(Func<SkillRoots> roots, bool external, ReflectionInstalledPolicy installed, bool create = true)
     {
         _roots = roots ?? throw new ArgumentNullException(nameof(roots));
         _external = external;
         _installed = installed;
+        _create = create;
+    }
+
+    /// <summary>
+    /// Whether a reflection could update <paramref name="skill"/> at all (2026-10-16, <c>Reflection mode</c> <c>update-only</c>: with none, no
+    /// reflection is started): not an external skill (the app never writes one), not locked when the catalog scanned (the guard checks the
+    /// disk again at the write), and not an installed skill under <see cref="ReflectionInstalledPolicy.ReadOnly"/>. Callers pass the catalog's
+    /// offered skills (<see cref="SkillCatalog.Skills"/>): a disabled or shadowed one is not among them, nor a global one while the profile has
+    /// <c>Global skills</c> off.
+    /// </summary>
+    public static bool Updatable(Skill skill, ReflectionInstalledPolicy installed)
+    {
+        ArgumentNullException.ThrowIfNull(skill);
+        return skill.Scope != SkillScope.External
+            && !skill.Locked
+            && !(installed == ReflectionInstalledPolicy.ReadOnly && SkillProvenance.Read(skill.Directory) is not null);
     }
 
     /// <summary>The policy in force for installed skills.</summary>
@@ -72,12 +93,12 @@ public sealed class ReflectionWriteGuard
         {
             // Locked (later on 2026-10-09, the user's call): said first too, so a reflection spends no call on a load the editor would
             // refuse anyway; the sentence is the editor's own, pointing to a companion skill.
-            return SkillText.Locked(name);
+            return _create ? SkillText.Locked(name) : SkillText.LockedUpdateOnly(name);
         }
 
         if (_installed == ReflectionInstalledPolicy.ReadOnly && SkillProvenance.Read(directory) is { } origin)
         {
-            return SkillText.InstalledReadOnly(name, origin.Repo);
+            return _create ? SkillText.InstalledReadOnly(name, origin.Repo) : SkillText.InstalledReadOnlyUpdateOnly(name, origin.Repo);
         }
 
         if (!rewrite)

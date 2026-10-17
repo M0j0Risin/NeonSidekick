@@ -393,9 +393,10 @@ The loaded skills with their scope (`profile`, `global` or `external`), version,
 | Reflection cooldown (min) | How long automatic reflections wait after one wrote a skill (0–1440; 0 is off). | 5 |
 | Reflection cooldown mode | `last-written-skill`: only turns that used the skill just written wait. `all-skills`: every automatic reflection waits. | `last-written-skill` |
 | Reflection yield to turns | A message sent during a reflection pauses it, so the reply gets the server. Turn it off if your server handles parallel requests. | on |
+| Reflection mode | What a reflection may write: `create-update` a new skill or an improvement to one; `update-only` only an improvement to a skill that exists, never a new one. With no skill to update, no reflection runs and `/learn` says so. | `create-update` |
 | Reflection confirm mode | Whether a reflection asks before it writes: `none` never, `all` always, `new` before a new skill, `edit` before an edit. It asks at the idle line: **Keep**, **View** or **Discard**. | `none` |
 | Reflection edit supporting files | Lets a reflection change a skill's supporting files too, not just its `SKILL.md`. | off |
-| Reflection edit downloaded skills | For skills from `/skills add`: `read-only` makes the reflection write a companion skill instead; `allow-and-mark` lets it change the skill, and a later update warns first. | `allow-and-mark` |
+| Reflection edit downloaded skills | For skills from `/skills add`: `read-only` makes the reflection write a companion skill instead (unless *Reflection mode* is `update-only`); `allow-and-mark` lets it change the skill, and a later update warns first. | `allow-and-mark` |
 
 ### Options
 
@@ -436,7 +437,7 @@ The loaded skills with their scope (`profile`, `global` or `external`), version,
 
 Enter on a skill, then `lock`, keeps it as it is until you choose `unlock`. While it is locked:
 
-* The model and reflection can load it but not change it; a reflection writes a companion skill instead.
+* The model and reflection can load it but not change it; a reflection writes a companion skill instead (unless *Reflection mode* is `update-only`).
 * Rename, move, delete and revert refuse with "unlock it first"; `edit` still opens it. `/skills add` won't update it, and `/skills purge` leaves it out.
 * The lock is a `.neon-lock` file in the skill's folder: the app's refusal, not a file-system guard, so a shell command can still reach the folder.
 

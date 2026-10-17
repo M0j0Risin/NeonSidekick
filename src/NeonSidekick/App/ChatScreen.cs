@@ -3577,6 +3577,12 @@ internal sealed partial class ChatScreen
     /// <summary>After a double-click on the strip's brain (2026-09-18): the running reflection cancelled, the one waiting in the slot untouched. Pinned.</summary>
     public const string LearnCancelledNotice = "(" + LearnGlyph + "learning canceled)";
 
+    /// <summary>
+    /// The refusal for <c>/learn</c> and <c>/learn sessions</c> under <c>Reflection mode</c> <c>update-only</c> with no skill a reflection could
+    /// update (2026-10-16, <see cref="ReflectionWriteGuard.Updatable"/>): nothing is asked of the model. Pinned.
+    /// </summary>
+    public const string LearnNothingToUpdateError = "Reflection mode is update-only (/skills › Reflection), and there is no skill to update yet.";
+
     /// <summary>The refusal for <c>/learn</c> with no turn to learn from. Pinned.</summary>
     public const string LearnNoTurnError = "Nothing to learn from yet; send a message first.";
 
@@ -3697,9 +3703,10 @@ internal sealed partial class ChatScreen
     /// reflection follows too), the external flag, the level, the request cap. The one pending slot holds one of these
     /// while a reflection runs (<see cref="_pendingLearn"/>). <c>Files</c>: the supporting-file actions when
     /// <c>Reflection edit supporting files</c> was on at the decision (2026-09-27), null otherwise. <c>Confirm</c>: <c>Reflection confirm mode</c>
-    /// at the decision (2026-10-12), which of its writes wait for the user (<see cref="LearnConfirm"/>).
+    /// at the decision (2026-10-12), which of its writes wait for the user (<see cref="LearnConfirm"/>). <c>Mode</c>: <c>Reflection mode</c> at the
+    /// decision (2026-10-16), whether it may create a skill or only update one; a queued or paused-and-rerun reflection keeps it.
     /// </summary>
-    private sealed record PendingLearn(ReflectionMaterial Material, bool Forced, SkillRoots Roots, bool External, ReasoningEffort Effort, int MaxRequests, CancellationToken Token, SessionEvidence? Sessions, SessionStore? Store, long? SessionId, int TurnOrdinal, SkillFileAccess? Files = null, ReflectionInstalledPolicy Installed = ReflectionInstalledPolicy.AllowAndMark, ReflectionConfirmScope Confirm = ReflectionConfirmScope.None)
+    private sealed record PendingLearn(ReflectionMaterial Material, bool Forced, SkillRoots Roots, bool External, ReasoningEffort Effort, int MaxRequests, CancellationToken Token, SessionEvidence? Sessions, SessionStore? Store, long? SessionId, int TurnOrdinal, SkillFileAccess? Files = null, ReflectionInstalledPolicy Installed = ReflectionInstalledPolicy.AllowAndMark, ReflectionConfirmScope Confirm = ReflectionConfirmScope.None, ReflectionWriteMode Mode = ReflectionWriteMode.CreateUpdate)
     {
         /// <summary>The queued line: the turn's or the pass's — the one progress line (a start prints nothing since later still on 2026-09-19).</summary>
         public string QueuedNotice => Material is ReflectionMaterial.Sessions ? LearnSessionsQueuedNotice : LearnQueuedNotice;
@@ -3784,6 +3791,22 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        // Reflection mode update-only with no skill to update (2026-10-16): no reflection, no request. /learn says so; an automatic one
+        // logs it and keeps the tally, as the cooldown does, so the next qualifying turn after a skill appears reflects on it all.
+        if (NothingToUpdate(effective))
+        {
+            if (forced)
+            {
+                _transcript.Error(LearnNothingToUpdateError);
+            }
+            else
+            {
+                DiagnosticLog.Debug(SkillCatalog.Category, NothingToUpdateLogLine(tally));
+            }
+
+            return;
+        }
+
         var turn = assistant.History.LastTurns(ReflectionWindow.Resolve(effective));
         if (turn.Count == 0)
         {
@@ -3803,12 +3826,35 @@ internal sealed partial class ChatScreen
         var (query, result) = evidence is null ? (null, null) : SkillLearner.Evidence(evidence, LastUserLine(turn));
         var material = new ReflectionMaterial.Turn(turn, focus, query, result);
         var pending = new PendingLearn(material, forced, _catalog.Roots, effective.ExternalSkills, ReflectionReasoning.Resolve(effective), ReflectionMaxRequests.Resolve(effective), cancellationToken,
-            evidence, effective.SessionLogging ? _sessions : null, _sessionId, _sessionId is { } sessionId ? _sessions.Summary(sessionId)?.Turns ?? 0 : 0, ReflectionFiles(effective), ReflectionInstalledSkills.Resolve(effective), ReflectionConfirmMode.Resolve(effective));
+            evidence, effective.SessionLogging ? _sessions : null, _sessionId, _sessionId is { } sessionId ? _sessions.Summary(sessionId)?.Turns ?? 0 : 0, ReflectionFiles(effective), ReflectionInstalledSkills.Resolve(effective), ReflectionConfirmMode.Resolve(effective),
+            ReflectionMode.Resolve(effective));
         string log = tally + (result is null ? "" : "; with the earlier sessions found for the turn");
         if (QueueOrStart(pending, log))
         {
             _learnTrace = null;
         }
+    }
+
+    /// <summary>
+    /// Whether <c>Reflection mode</c> is <c>update-only</c> and no offered skill is one a reflection could update (2026-10-16,
+    /// <see cref="ReflectionWriteGuard.Updatable"/> under <c>Reflection edit downloaded skills</c>): then none is started.
+    /// </summary>
+    private bool NothingToUpdate(AppSettingsData effective)
+    {
+        if (ReflectionMode.Resolve(effective) != ReflectionWriteMode.UpdateOnly)
+        {
+            return false;
+        }
+
+        var installed = ReflectionInstalledSkills.Resolve(effective);
+        return !_catalog.Skills.Any(skill => ReflectionWriteGuard.Updatable(skill, installed));
+    }
+
+    /// <summary><c>No reflection: 4 calls, 0 errors; Reflection mode is update-only and no skill can be updated.</c> — the Debug line when an automatic one is skipped for it (2026-10-16). Pinned.</summary>
+    public static string NothingToUpdateLogLine(TurnTrace tally)
+    {
+        ArgumentNullException.ThrowIfNull(tally);
+        return "No reflection: " + tally + "; Reflection mode is update-only and no skill can be updated.";
     }
 
     /// <summary>The user's line the last turn of <paramref name="turn"/> opened with — the words the evidence search reads.</summary>
@@ -4047,10 +4093,12 @@ internal sealed partial class ChatScreen
         };
         // A guard of its own each run (2026-10-02): a paused reflection run again loads afresh before it may rewrite. Over the same live
         // roots as the pass (2026-10-13), so after a flip it never asks for a load of a skill load_skill no longer serves.
-        var guard = new ReflectionWriteGuard(SkillLearner.Live(pending.Roots, globalOn), pending.External, pending.Installed);
+        // Reflection mode at the decision (2026-10-16): update-only offers no create, in the guard's words as in the editor's.
+        bool create = pending.Mode == ReflectionWriteMode.CreateUpdate;
+        var guard = new ReflectionWriteGuard(SkillLearner.Live(pending.Roots, globalOn), pending.External, pending.Installed, create);
         // Its ask (2026-10-12, Reflection confirm mode): null under confirm-none, so a reflection writes as it always has.
         var confirm = LearnConfirm(pending.Confirm);
-        var job = _session.StartLearning((a, token) => SkillLearner.RunAsync(a, pending.Material, pending.Roots, pending.External, pending.Effort, token, pending.MaxRequests, pending.Sessions, pending.Files, _skillRecords, guard, confirm, globalOn), pending.Token);
+        var job = _session.StartLearning((a, token) => SkillLearner.RunAsync(a, pending.Material, pending.Roots, pending.External, pending.Effort, token, pending.MaxRequests, pending.Sessions, pending.Files, _skillRecords, guard, confirm, globalOn, create), pending.Token);
         if (job is null)
         {
             return;
@@ -4153,6 +4201,13 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        // Reflection mode update-only with no skill to update (2026-10-16): no pass, before the sessions are read.
+        if (NothingToUpdate(effective))
+        {
+            _transcript.Error(LearnNothingToUpdateError);
+            return;
+        }
+
         var ids = new List<long>();
         if (action.Query is { } query)
         {
@@ -4190,7 +4245,8 @@ internal sealed partial class ChatScreen
         ReconcileSkills();
         var material = new ReflectionMaterial.Sessions(records, action.Query);
         var evidence = new SessionEvidence(_sessions, _effective, _sessionId, _time);
-        var pending = new PendingLearn(material, true, _catalog.Roots, effective.ExternalSkills, ReflectionReasoning.Resolve(effective), ReflectionMaxRequests.Resolve(effective), cancellationToken, evidence, _sessions, null, 0, ReflectionFiles(effective), ReflectionInstalledSkills.Resolve(effective), ReflectionConfirmMode.Resolve(effective));
+        var pending = new PendingLearn(material, true, _catalog.Roots, effective.ExternalSkills, ReflectionReasoning.Resolve(effective), ReflectionMaxRequests.Resolve(effective), cancellationToken, evidence, _sessions, null, 0, ReflectionFiles(effective), ReflectionInstalledSkills.Resolve(effective), ReflectionConfirmMode.Resolve(effective),
+            ReflectionMode.Resolve(effective));
         QueueOrStart(pending, action.Query is null ? "the last " + SessionText.Sessions(records.Count) : SessionText.Sessions(records.Count) + " matching " + LogText.Quoted(action.Query));
     }
 

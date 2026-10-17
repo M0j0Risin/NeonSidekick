@@ -590,4 +590,79 @@ public class SkillLearnerTests : IDisposable
         Assert.False(SkillLearner.Live(_roots with { GlobalOn = false }, () => true)().GlobalOn);
         Assert.Same(_roots, SkillLearner.Live(_roots, null)());
     }
+
+    // ── Reflection mode update-only (2026-10-16) ────────────────────────────
+
+    /// <summary>The update-only request: its own instruction and ask, no create and no companion skill anywhere; the default unchanged.</summary>
+    [Fact]
+    public void Build_UpdateOnly_NeverInvitesACreate_AndTheDefaultIsUnchanged()
+    {
+        var skills = new List<Skill> { new("docker-deploy", "Deploys a & b.", SkillScope.Profile, "d") };
+        var turn = Turn(new ChatMessage(ChatRole.User, "hi"), new ChatMessage(ChatRole.Assistant, "hello"));
+        var usage = new Dictionary<string, string> { ["docker-deploy"] = "loaded 2 times" };
+
+        var request = SkillLearner.Build(turn, skills, "keep it", create: false);
+        Assert.Equal(SkillLearner.UpdateOnlyInstruction + "\n\n" + SkillsPrompt.Catalog(skills), request[0].Text);
+        Assert.Equal(SkillLearner.Request("keep it", create: false), request[^1].Text);
+        Assert.Equal("Reflect on the turns above. Update a listed skill if they taught a reusable procedure it should hold; otherwise answer nothing. The user asked to keep: keep it", request[^1].Text);
+        Assert.Contains("Never create a new skill: when no listed skill covers the topic, answer with the single word nothing.", SkillLearner.UpdateOnlyInstructionBody, StringComparison.Ordinal);
+        var pass = SkillLearner.Build(new ReflectionMaterial.Sessions([], "docker"), skills, usage, TimeZoneInfo.Utc, files: true, create: false);
+        Assert.StartsWith(SkillLearner.UpdateOnlySessionsPassInstruction + "\n\n" + SkillLearner.UpdateOnlyUsageInstruction + "\n\n" + SkillLearner.SupportingFilesInstruction + "\n\n", pass[0].Text, StringComparison.Ordinal);
+        Assert.Equal("Reflect on the sessions above. Find the procedure that recurs or the pitfall met more than once; update ONE listed skill for it, or answer nothing. The sessions were found by searching for: docker", pass[^1].Text);
+        foreach (var message in request.Concat(pass))
+        {
+            Assert.DoesNotContain("action create", message.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain("companion", message.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain("or create", message.Text, StringComparison.Ordinal);
+        }
+
+        // The default, byte for byte as before the split.
+        Assert.Equal(SkillLearner.Instruction + "\n\n" + SkillsPrompt.Catalog(skills), SkillLearner.Build(turn, skills, "keep it")[0].Text);
+        Assert.Contains("Prefer improving a skill that already covers the topic over adding another: read it with load_skill first, then call skill_editor with action update and the whole improved body, keeping what still holds. Create a new skill (action create, scope profile) only when no listed skill covers the topic. Call skill_editor at most once,", SkillLearner.InstructionBody, StringComparison.Ordinal);
+        Assert.Equal("A skill's usage line says what is known of it: a skill loaded often and still followed by errors needs its steps fixed, and one a reflection wrote a moment ago needs a real reason to be rewritten. A skill edited by hand carries the user's own wording: keep it, and change it only for a reason these turns show. A skill installed from a source is someone else's: prefer a companion skill for what is yours to add.", SkillLearner.UsageInstruction);
+        Assert.Equal("Reflect on the turns above. Update or create a skill if they taught a reusable procedure; otherwise answer nothing.", SkillLearner.Request(null));
+    }
+
+    /// <summary>With no skill a reflection could update, nothing is asked: no request, nothing written, the outcome Nothing.</summary>
+    [Fact]
+    public async Task UpdateOnly_WithNoSkillToUpdate_AsksNothing()
+    {
+        _client.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, CreateArgs("deploy-x")));
+        string locked = Path.Combine(_roots.Profile, "locked-one");
+        Put(_roots.Profile, "locked-one", "Locked.", "1. Step.");
+        SkillLock.Set(locked, true, DateTimeOffset.UnixEpoch);
+
+        var result = await SkillLearner.RunAsync(_assistant, new ReflectionMaterial.Turn(Turn(new ChatMessage(ChatRole.User, "deploy x"), new ChatMessage(ChatRole.Assistant, "Done.")), null), _roots, false, ReasoningEffort.None, CancellationToken.None, 4, null, create: false);
+
+        Assert.Equal((SkillLearnOutcome.Nothing, 0, 0L), (result.Outcome, result.Requests, result.Usage.Total));
+        Assert.Null(result.Edit);
+        Assert.Empty(_client.Requests);
+        Assert.False(Directory.Exists(Path.Combine(_roots.Profile, "deploy-x")));
+        Assert.Equal("Reflection: update-only and no skill to update; nothing asked.", SkillLearner.NothingToUpdateLogLine);
+    }
+
+    /// <summary>With a skill to update, a scripted create is refused (the schema offered none) and the next request's update is written.</summary>
+    [Fact]
+    public async Task UpdateOnly_ACreateIsRefused_TheUpdateGoesThrough()
+    {
+        Put(_roots.Profile, "deploy-x", "Deploys X.", "1. Old step.");
+        _client.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, CreateArgs("deploy-y")));
+        _client.Enqueue(FakeChatClient.Call("r2", SkillEditorTool.ToolName, new Dictionary<string, object?>
+        {
+            [SkillEditorTool.ActionArgument] = SkillEditorTool.UpdateAction,
+            [SkillEditorTool.NameArgument] = "deploy-x",
+            [SkillEditorTool.DescriptionArgument] = "Deploys X, checked.",
+        }));
+
+        var result = await SkillLearner.RunAsync(_assistant, new ReflectionMaterial.Turn(Turn(new ChatMessage(ChatRole.User, "deploy x"), new ChatMessage(ChatRole.Assistant, "Done.")), null), _roots, false, ReasoningEffort.None, CancellationToken.None, 4, null, create: false);
+
+        Assert.Equal((SkillLearnOutcome.Learned, 2), (result.Outcome, result.Requests));
+        Assert.Equal(SkillEditOutcome.Updated, result.Edit!.Outcome);
+        Assert.False(Directory.Exists(Path.Combine(_roots.Profile, "deploy-y")));
+        var refused = _client.Requests[1].SelectMany(m => m.Contents).OfType<FunctionResultContent>().Single(r => r.CallId == "r1");
+        Assert.Equal(SkillText.CreateRefused, (string)refused.Result!);
+        Assert.Equal(SkillLearner.UpdateOnlyInstruction, _client.Requests[0][0].Text[..SkillLearner.UpdateOnlyInstruction.Length]);
+        var editor = _client.Options[0]!.Tools!.OfType<SkillEditorTool>().Single();
+        Assert.False(editor.OffersCreate);
+    }
 }

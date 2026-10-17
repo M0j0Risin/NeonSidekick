@@ -125,12 +125,51 @@ public sealed class SkillEditorTool : AIFunction
         }
         """);
 
+    // The two schemas of a reflection under Reflection mode update-only (2026-10-16): no create in the action's enum, no scope (it only
+    // ever placed a new skill), and no word anywhere that invites a create. Read before the Global skills split: with no scope there is
+    // no profile twin to pick.
+    private static readonly JsonElement UpdateSchema = ToolSchema.Parse(
+        """
+        {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["update"], "description": "update changes a listed skill's description, instructions or both, wherever it lives." },
+            "name": { "type": "string", "description": "The name of a listed skill to change, as the list shows it." },
+            "description": { "type": "string", "description": "One or two sentences on what the skill does and when to use it, with the words a task would contain; at most 1,024 characters. Optional: left out, the skill keeps the one it has." },
+            "instructions": { "type": "string", "description": "The skill's Markdown body: the steps to follow, examples, edge cases. Replaces the whole body." },
+            "summary": { "type": "string", "description": "One or two sentences on what you changed and why, for the user to read; never part of the skill. Optional." }
+          },
+          "required": ["action", "name"]
+        }
+        """);
+
+    private static readonly JsonElement UpdateFileSchema = ToolSchema.Parse(
+        """
+        {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["update", "write_file", "edit_file"], "description": "update changes a listed skill's description, instructions or both, wherever it lives; write_file writes a supporting file of a listed skill (a mapping, examples, a script) whole with content, a new file or over the old one; edit_file replaces old_text with new_text in one." },
+            "name": { "type": "string", "description": "The name of a listed skill to change, as the list shows it." },
+            "description": { "type": "string", "description": "One or two sentences on what the skill does and when to use it, with the words a task would contain; at most 1,024 characters. Optional: left out, the skill keeps the one it has." },
+            "instructions": { "type": "string", "description": "The skill's Markdown body: the steps to follow, examples, edge cases. Replaces the whole body on update." },
+            "path": { "type": "string", "description": "write_file / edit_file: the supporting file, relative to the skill folder (data/mapping.json), as load_skill lists it. Never SKILL.md; change that with update." },
+            "content": { "type": "string", "description": "write_file: the whole new content of the file." },
+            "old_text": { "type": "string", "description": "edit_file: the text to replace, copied from the file as load_skill shows it; it must occur exactly once unless replace_all is true. Small differences in spacing, indentation, quotes and dashes are tolerated." },
+            "new_text": { "type": "string", "description": "edit_file: the text to put in its place. Empty removes old_text." },
+            "replace_all": { "type": "boolean", "description": "edit_file: true replaces every occurrence of old_text. Default false: exactly one." },
+            "summary": { "type": "string", "description": "One or two sentences on what you changed and why, for the user to read; never part of the skill. Optional." }
+          },
+          "required": ["action", "name"]
+        }
+        """);
+
     private readonly Func<SkillRoots> _roots;
     private readonly Func<bool> _external;
     private readonly SkillFileAccess? _files;
     private readonly Action<SkillRoots, SkillEditResult>? _edited;
     private readonly ReflectionWriteGuard? _guard;
     private readonly Func<SkillProposal, CancellationToken, Task<bool>>? _confirm;
+    private readonly bool _create;
 
     /// <param name="roots">Read per call: the profile root moves with a profile switch.</param>
     /// <param name="external">Read per call: whether the external folder is in the catalog (<c>Agent skills</c> and <c>Use external skills</c> both on), so a skill there blocks its name.</param>
@@ -146,9 +185,15 @@ public sealed class SkillEditorTool : AIFunction
     /// <see cref="SkillEditOutcome.Declined"/>. The host decides which kinds it asks the user about and says yes to the rest at once. The
     /// guard's checks come first and its load hash is read again at the write, after the wait. Null in the main chat.
     /// </param>
+    /// <param name="create">
+    /// Whether <c>create</c> is offered (2026-10-16, <c>Reflection mode</c>): false for a reflection under <c>update-only</c>, whose schema,
+    /// description and errors never name it and whose create, sent anyway, is refused (<see cref="SkillText.CreateRefused"/>) before any ask.
+    /// The main chat's editor always offers it.
+    /// </param>
     public SkillEditorTool(Func<SkillRoots> roots, Func<bool> external, SkillFileAccess? files = null, Action<SkillRoots, SkillEditResult>? edited = null, ReflectionWriteGuard? guard = null,
-        Func<SkillProposal, CancellationToken, Task<bool>>? confirm = null)
+        Func<SkillProposal, CancellationToken, Task<bool>>? confirm = null, bool create = true)
     {
+        _create = create;
         _confirm = confirm;
         _roots = roots ?? throw new ArgumentNullException(nameof(roots));
         _edited = edited;
@@ -160,9 +205,21 @@ public sealed class SkillEditorTool : AIFunction
     /// <summary>Whether <c>write_file</c> and <c>edit_file</c> are offered.</summary>
     public bool OffersFiles => _files is not null;
 
+    /// <summary>Whether <c>create</c> is offered (2026-10-16): false for a reflection under <c>Reflection mode</c> <c>update-only</c>.</summary>
+    public bool OffersCreate => _create;
+
     public override string Name => ToolName;
 
-    public override string Description =>
+    public override string Description => _create ? CreateUpdateDescription : UpdateOnlyDescription;
+
+    /// <summary>The description under <c>Reflection mode</c> <c>update-only</c> (2026-10-16): updates alone, the files sentence's own close.</summary>
+    private string UpdateOnlyDescription =>
+        "Updates a skill that exists: a named folder of instructions kept for later sessions, listed in the system prompt and loaded with " + LoadSkillTool.ToolName + ". " +
+        "Use it to improve a listed skill with a procedure worked out since. " +
+        "The description should say what the skill does and when to use it; the instructions the steps. Never deletes anything." +
+        (_files is null ? "" : " " + UpdateOnlyFilesSentence);
+
+    private string CreateUpdateDescription =>
         "Creates or updates a skill: a named folder of instructions kept for later sessions, listed in the system prompt from the next reply on and loaded with " + LoadSkillTool.ToolName + ". " +
         "Use it when the user asks you to remember how to do something, or when a procedure you worked out is worth keeping. " +
         "The description should say what the skill does and when to use it; the instructions the steps. " +
@@ -173,8 +230,15 @@ public sealed class SkillEditorTool : AIFunction
     public const string FilesSentence =
         "A skill's supporting files (the ones load_skill lists beside its instructions) are kept current with write_file (the whole file) or edit_file (old_text to new_text), paths relative to the skill folder; the SKILL.md itself only through create and update.";
 
-    /// <summary>The schema for the live roots (2026-10-13): the profile-only twins while the profile has <c>Global skills</c> off.</summary>
-    public override JsonElement JsonSchema => _roots().GlobalOn
+    /// <summary><see cref="FilesSentence"/> for an editor that offers no create (2026-10-16, <c>Reflection mode</c> <c>update-only</c>). Pinned.</summary>
+    public const string UpdateOnlyFilesSentence =
+        "A skill's supporting files (the ones load_skill lists beside its instructions) are kept current with write_file (the whole file) or edit_file (old_text to new_text), paths relative to the skill folder; the SKILL.md itself only through update.";
+
+    /// <summary>
+    /// The schema for the live roots (2026-10-13): the profile-only twins while the profile has <c>Global skills</c> off; the update-only
+    /// pair, which has no scope, for an editor that offers no create (2026-10-16).
+    /// </summary>
+    public override JsonElement JsonSchema => !_create ? (_files is null ? UpdateSchema : UpdateFileSchema) : _roots().GlobalOn
         ? (_files is null ? Schema : FileSchema)
         : (_files is null ? ProfileSchema : ProfileFileSchema);
 
@@ -201,7 +265,14 @@ public sealed class SkillEditorTool : AIFunction
         {
             case CreateAction: create = true; break;
             case UpdateAction: create = false; break;
-            default: return SkillText.BadAction(action, _files is not null);
+            default: return SkillText.BadAction(action, _files is not null, _create);
+        }
+
+        // Reflection mode update-only (2026-10-16): a create the schema never offered is refused first, before the scope, the guard and
+        // any ask.
+        if (create && !_create)
+        {
+            return SkillText.CreateRefused;
         }
 
         // Blank is the profile; an update redirects to where the skill lives, so its scope is never refused.
@@ -251,7 +322,7 @@ public sealed class SkillEditorTool : AIFunction
             : SkillEditor.Update(roots, where, name, description, instructions, external);
         LastResult = result with { Summary = SkillText.CleanSummary(summary) };
         _edited?.Invoke(roots, LastResult);   // with the summary: the skill records keep it as the event's detail (2026-10-02)
-        return SkillText.Edited(result);
+        return Say(result);
     }
 
     /// <summary><c>write_file</c>: <paramref name="content"/> as the whole of <paramref name="path"/> in skill <paramref name="name"/> (2026-09-27).</summary>
@@ -287,6 +358,17 @@ public sealed class SkillEditorTool : AIFunction
         return SkillText.Edited(LastResult);
     }
 
+    /// <summary>
+    /// The editor's sentence for <paramref name="result"/>: <see cref="SkillText.Edited"/>, but under <c>update-only</c> (2026-10-16) a missing
+    /// skill and a locked one never point to a create.
+    /// </summary>
+    private string Say(SkillEditResult result) => (_create, result.Outcome) switch
+    {
+        (false, SkillEditOutcome.Missing) => SkillText.MissingUpdateOnly(result.Name),
+        (false, SkillEditOutcome.Locked) => SkillText.LockedUpdateOnly(result.Name),
+        _ => SkillText.Edited(result),
+    };
+
     /// <summary>A skill's SKILL.md as it stands, for an update's ask (2026-10-12); null when it cannot be read.</summary>
     private static string? ReadSkillMd(SkillRoots roots, SkillScope scope, string name)
     {
@@ -308,7 +390,7 @@ public sealed class SkillEditorTool : AIFunction
         LastResult = null;
         if (_files is null)
         {
-            return SkillText.BadAction(WriteFileAction);
+            return SkillText.BadAction(WriteFileAction, create: _create);
         }
 
         if (string.IsNullOrWhiteSpace(path))
@@ -338,7 +420,7 @@ public sealed class SkillEditorTool : AIFunction
         var result = act(_files);
         LastResult = result with { Summary = SkillText.CleanSummary(summary) };
         _edited?.Invoke(_roots(), LastResult);
-        return SkillText.Edited(result);
+        return Say(result);
     }
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

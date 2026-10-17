@@ -123,6 +123,12 @@ public static class SkillLearner
     /// <summary>The pass's system prompt (the catalog follows it): <see cref="SessionsOpening"/> + <see cref="InstructionBody"/>. Pinned.</summary>
     public const string SessionsPassInstruction = SessionsOpening + InstructionBody;
 
+    /// <summary>A turn reflection's system prompt under <c>Reflection mode</c> <c>update-only</c> (2026-10-16): <see cref="TurnOpening"/> + <see cref="UpdateOnlyInstructionBody"/>. Pinned.</summary>
+    public const string UpdateOnlyInstruction = TurnOpening + UpdateOnlyInstructionBody;
+
+    /// <summary>A <c>/learn sessions</c> pass's system prompt under <c>update-only</c> (2026-10-16): <see cref="SessionsOpening"/> + <see cref="UpdateOnlyInstructionBody"/>. Pinned.</summary>
+    public const string UpdateOnlySessionsPassInstruction = SessionsOpening + UpdateOnlyInstructionBody;
+
     /// <summary>
     /// Appended to <see cref="Instruction"/> when the earlier sessions found for the turn are seeded
     /// (<c>Reflection includes sessions</c>, 2026-09-19): what the evidence is for, and the caution
@@ -138,20 +144,42 @@ public static class SkillLearner
     /// <see cref="SessionsInstruction"/>'s last until then, read only with the sessions): what the line says and what to make of it —
     /// errors after a load, a reflection's fresh write, the user's own wording, an installed skill. Pinned.
     /// </summary>
-    public const string UsageInstruction =
-        "A skill's usage line says what is known of it: a skill loaded often and still followed by errors needs its steps fixed, and one a reflection wrote a moment ago needs a real reason to be rewritten. " +
-        "A skill edited by hand carries the user's own wording: keep it, and change it only for a reason these turns show. " +
+    public const string UsageInstruction = UsageLead + " " +
         "A skill installed from a source is someone else's: prefer a companion skill for what is yours to add.";
 
+    /// <summary><see cref="UsageInstruction"/> under <c>Reflection mode</c> <c>update-only</c> (2026-10-16): without the companion skill, which is a create. Pinned.</summary>
+    public const string UpdateOnlyUsageInstruction = UsageLead;
+
+    /// <summary>The usage sentences both modes share (2026-10-16, split out of <see cref="UsageInstruction"/>).</summary>
+    private const string UsageLead =
+        "A skill's usage line says what is known of it: a skill loaded often and still followed by errors needs its steps fixed, and one a reflection wrote a moment ago needs a real reason to be rewritten. " +
+        "A skill edited by hand carries the user's own wording: keep it, and change it only for a reason these turns show.";
+
     /// <summary>The rest of the instruction, shared by the turn and the pass. Pinned.</summary>
-    public const string InstructionBody =
+    public const string InstructionBody = InstructionLead +
+        "Prefer improving a skill that already covers the topic over adding another: read it with load_skill first, then call skill_editor with action update and the whole improved body, keeping what still holds. " +
+        "Create a new skill (action create, scope profile) only when no listed skill covers the topic. " +
+        InstructionClose;
+
+    /// <summary>
+    /// <see cref="InstructionBody"/> under <c>Reflection mode</c> <c>update-only</c> (2026-10-16, the user's ask): the same lead and close, the
+    /// middle an update of the listed skill that covers the topic, or the one word <see cref="NothingWord"/>. Pinned.
+    /// </summary>
+    public const string UpdateOnlyInstructionBody = InstructionLead +
+        "Improve the listed skill that covers the topic: read it with load_skill first, then call skill_editor with action update and the whole improved body, keeping what still holds. " +
+        "Never create a new skill: when no listed skill covers the topic, answer with the single word " + NothingWord + ". " +
+        InstructionClose;
+
+    /// <summary>What a skill is and how to write one, both bodies' opening (2026-10-16, split out of <see cref="InstructionBody"/>).</summary>
+    private const string InstructionLead =
         "A skill is a folder of instructions a future session loads when a task matches its description: a lowercase hyphenated name (at most 64 characters), " +
         "a description that says what it does and when to use it (at most 1,024 characters, with the words such a task would contain), " +
         "and a short Markdown body — when to use it, the steps in order, the pitfalls met and how they were avoided. " +
         "Write for a future session with no memory of this one: general steps, not this turn's story; no one-off facts, no paths or names specific to this machine unless the procedure needs them. " +
-        "The last turn is the one to learn from; the turns before it are its lead-up with their tool results shortened — a mistake made there and put right later, or a correction the user gave, is a pitfall worth keeping. " +
-        "Prefer improving a skill that already covers the topic over adding another: read it with load_skill first, then call skill_editor with action update and the whole improved body, keeping what still holds. " +
-        "Create a new skill (action create, scope profile) only when no listed skill covers the topic. " +
+        "The last turn is the one to learn from; the turns before it are its lead-up with their tool results shortened — a mistake made there and put right later, or a correction the user gave, is a pitfall worth keeping. ";
+
+    /// <summary>Both bodies' close (2026-10-16, split out of <see cref="InstructionBody"/>): one call with a summary, or nothing.</summary>
+    private const string InstructionClose =
         "Call skill_editor at most once, with a summary: one or two sentences saying what you changed and why, for the user to read. A turn that was a simple question, a chat, or a task any session could do without notes teaches nothing: then answer with the single word " + NothingWord + " and no tool call.";
 
     /// <summary>
@@ -165,17 +193,27 @@ public static class SkillLearner
     /// <summary>The catalog's stand-in when no skill is installed. Pinned.</summary>
     public const string NoSkillsLine = "No skills are installed yet.";
 
-    /// <summary>The closing user message: the ask, and the user's own focus when <c>/learn</c> gave one. Pinned.</summary>
-    public static string Request(string? focus)
+    /// <summary>
+    /// The closing user message: the ask, and the user's own focus when <c>/learn</c> gave one. <paramref name="create"/> false (2026-10-16,
+    /// <c>Reflection mode</c> <c>update-only</c>) asks for an update alone. Pinned.
+    /// </summary>
+    public static string Request(string? focus, bool create = true)
     {
-        const string line = "Reflect on the turns above. Update or create a skill if they taught a reusable procedure; otherwise answer " + NothingWord + ".";
+        string line = create
+            ? "Reflect on the turns above. Update or create a skill if they taught a reusable procedure; otherwise answer " + NothingWord + "."
+            : "Reflect on the turns above. Update a listed skill if they taught a reusable procedure it should hold; otherwise answer " + NothingWord + ".";
         return string.IsNullOrWhiteSpace(focus) ? line : line + " The user asked to keep: " + focus.Trim();
     }
 
-    /// <summary>The closing user message of a <c>/learn sessions</c> pass: the ask, and the text that found the sessions when there was one. Pinned.</summary>
-    public static string SessionsRequest(string? query)
+    /// <summary>
+    /// The closing user message of a <c>/learn sessions</c> pass: the ask, and the text that found the sessions when there was one.
+    /// <paramref name="create"/> false (2026-10-16, <c>update-only</c>) asks for an update alone. Pinned.
+    /// </summary>
+    public static string SessionsRequest(string? query, bool create = true)
     {
-        const string line = "Reflect on the sessions above. Find the procedure that recurs or the pitfall met more than once; update or create ONE skill for it, or answer " + NothingWord + ".";
+        string line = create
+            ? "Reflect on the sessions above. Find the procedure that recurs or the pitfall met more than once; update or create ONE skill for it, or answer " + NothingWord + "."
+            : "Reflect on the sessions above. Find the procedure that recurs or the pitfall met more than once; update ONE listed skill for it, or answer " + NothingWord + ".";
         return string.IsNullOrWhiteSpace(query) ? line : line + " The sessions were found by searching for: " + query.Trim();
     }
 
@@ -249,8 +287,8 @@ public static class SkillLearner
     }
 
     /// <summary>The whole request of a turn reflection with no session evidence: the instruction and the catalog as the system message, the cleaned turn, the closing ask.</summary>
-    public static List<ChatMessage> Build(IReadOnlyList<ChatMessage> turn, IReadOnlyList<Skill> catalog, string? focus) =>
-        Build(new ReflectionMaterial.Turn(turn, focus), catalog, null, TimeZoneInfo.Utc);
+    public static List<ChatMessage> Build(IReadOnlyList<ChatMessage> turn, IReadOnlyList<Skill> catalog, string? focus, bool create = true) =>
+        Build(new ReflectionMaterial.Turn(turn, focus), catalog, null, TimeZoneInfo.Utc, create: create);
 
     /// <summary>
     /// The whole request. A <see cref="ReflectionMaterial.Turn"/>: the instruction (+ <see cref="SessionsInstruction"/>
@@ -263,13 +301,17 @@ public static class SkillLearner
     /// then <see cref="SessionsRequest"/>.
     /// </summary>
     /// <param name="files">Whether the reflection may write supporting files: <see cref="SupportingFilesInstruction"/> joins the instruction (2026-09-27).</param>
-    public static List<ChatMessage> Build(ReflectionMaterial material, IReadOnlyList<Skill> catalog, IReadOnlyDictionary<string, string>? usage, TimeZoneInfo zone, bool files = false)
+    /// <param name="create">
+    /// Whether the reflection may create (2026-10-16, <c>Reflection mode</c>): false picks the update-only instruction, usage sentences and
+    /// closing ask, none of which invites a create or names a companion skill.
+    /// </param>
+    public static List<ChatMessage> Build(ReflectionMaterial material, IReadOnlyList<Skill> catalog, IReadOnlyDictionary<string, string>? usage, TimeZoneInfo zone, bool files = false, bool create = true)
     {
         ArgumentNullException.ThrowIfNull(material);
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(zone);
         bool usageLines = usage is not null && catalog.Any(s => usage.TryGetValue(s.Name, out string? line) && line.Length > 0);
-        string catalogBlock = (usageLines ? UsageInstruction + "\n\n" : "") + (files ? SupportingFilesInstruction + "\n\n" : "") + (catalog.Count == 0 ? NoSkillsLine : SkillsPrompt.Catalog(catalog, usage));
+        string catalogBlock = (usageLines ? (create ? UsageInstruction : UpdateOnlyUsageInstruction) + "\n\n" : "") + (files ? SupportingFilesInstruction + "\n\n" : "") + (catalog.Count == 0 ? NoSkillsLine : SkillsPrompt.Catalog(catalog, usage));
         switch (material)
         {
             case ReflectionMaterial.Turn turn:
@@ -278,7 +320,7 @@ public static class SkillLearner
                 var transcript = Transcript(turn.Messages);
                 var request = new List<ChatMessage>(transcript.Count + 4)
                 {
-                    new(ChatRole.System, Instruction + (seeded ? "\n\n" + SessionsInstruction : "") + "\n\n" + catalogBlock),
+                    new(ChatRole.System, (create ? Instruction : UpdateOnlyInstruction) + (seeded ? "\n\n" + SessionsInstruction : "") + "\n\n" + catalogBlock),
                 };
                 request.AddRange(transcript);
                 if (seeded)
@@ -287,7 +329,7 @@ public static class SkillLearner
                     request.Add(new ChatMessage(ChatRole.Tool, [new FunctionResultContent(SessionsCallId, turn.SeededResult!)]));
                 }
 
-                request.Add(new ChatMessage(ChatRole.User, Request(turn.Focus)));
+                request.Add(new ChatMessage(ChatRole.User, Request(turn.Focus, create)));
                 return request;
             }
 
@@ -295,14 +337,14 @@ public static class SkillLearner
             {
                 var request = new List<ChatMessage>(sessions.Records.Count + 2)
                 {
-                    new(ChatRole.System, SessionsPassInstruction + "\n\n" + catalogBlock),
+                    new(ChatRole.System, (create ? SessionsPassInstruction : UpdateOnlySessionsPassInstruction) + "\n\n" + catalogBlock),
                 };
                 foreach (var record in sessions.Records)
                 {
                     request.Add(new ChatMessage(ChatRole.User, SessionText.Read(record, 1, 0, zone, MaxSessionChars)));
                 }
 
-                request.Add(new ChatMessage(ChatRole.User, SessionsRequest(sessions.Query)));
+                request.Add(new ChatMessage(ChatRole.User, SessionsRequest(sessions.Query, create)));
                 return request;
             }
 
@@ -397,9 +439,13 @@ public static class SkillLearner
     /// editor's ask before each write (<see cref="SkillEditorTool"/>); a no ends the pass <see cref="SkillLearnOutcome.Declined"/>.
     /// <paramref name="globalOn"/> (2026-10-13, the profile's <c>Global skills</c>): read at each use while the pass runs, so a flip off made
     /// after the reflection was decided reaches its catalog, its editor and its guard (null: the decision's roots stand).
+    /// <paramref name="create"/> (2026-10-16, <c>Reflection mode</c>): false under <c>update-only</c>, where the request and the editor never
+    /// offer a create; with no skill in the catalog it could update (<see cref="ReflectionWriteGuard.Updatable"/>, the guard's installed
+    /// policy) nothing is asked and the result is <see cref="SkillLearnOutcome.Nothing"/> with no request — the host's own check at the
+    /// decision normally stops it first; this one catches the skills changing in between.
     /// </summary>
     public static async Task<SkillLearnResult> RunAsync(Assistant assistant, ReflectionMaterial material, SkillRoots roots, bool external, ReasoningEffort effort, CancellationToken cancellationToken, int maxRequests, SessionEvidence? sessions, SkillFileAccess? files = null, SkillRecords? records = null, ReflectionWriteGuard? guard = null,
-        Func<SkillProposal, CancellationToken, Task<bool>>? confirm = null, Func<bool>? globalOn = null)
+        Func<SkillProposal, CancellationToken, Task<bool>>? confirm = null, Func<bool>? globalOn = null, bool create = true)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(material);
@@ -409,7 +455,14 @@ public static class SkillLearner
         var live = Live(roots, globalOn);
         var catalog = new SkillCatalog(live);
         catalog.Scan(external);
-        var editor = new SkillEditorTool(live, () => external, files, guard: guard, confirm: confirm);
+        var installed = guard?.Installed ?? ReflectionInstalledPolicy.AllowAndMark;
+        if (!create && !catalog.Skills.Any(skill => ReflectionWriteGuard.Updatable(skill, installed)))
+        {
+            DiagnosticLog.Info(SkillCatalog.Category, NothingToUpdateLogLine);
+            return new SkillLearnResult(SkillLearnOutcome.Nothing, null, "", TokenUsage.Zero, 0);
+        }
+
+        var editor = new SkillEditorTool(live, () => external, files, guard: guard, confirm: confirm, create: create);
         var tools = new List<AIFunction>(3);
         if (catalog.Skills.Count > 0)
         {
@@ -425,7 +478,7 @@ public static class SkillLearner
         // The catalog it reads lists the disabled skills too (2026-10-09, the user's ask: SkillsPrompt.DisabledTag), so it writes no
         // duplicate of one; load_skill above stays over the offered ones.
         var usage0 = records is null ? null : UsageLines(records, catalog.All);
-        var messages = Build(material, catalog.All, usage0, sessions?.Time.LocalTimeZone ?? records?.Zone ?? TimeZoneInfo.Utc, files is not null);
+        var messages = Build(material, catalog.All, usage0, sessions?.Time.LocalTimeZone ?? records?.Zone ?? TimeZoneInfo.Utc, files is not null, create);
         var usage = TokenUsage.Zero;
         int requests = 0;
         try
@@ -497,6 +550,9 @@ public static class SkillLearner
             return new SkillLearnResult(SkillLearnOutcome.Failed, null, explained, usage, requests);
         }
     }
+
+    /// <summary>The Info line when an update-only reflection finds no skill it could update at its start (2026-10-16). Pinned.</summary>
+    public const string NothingToUpdateLogLine = "Reflection: update-only and no skill to update; nothing asked.";
 
     /// <summary>The first non-blank line of a reply, trimmed, for a log line or a detail.</summary>
     internal static string FirstLine(string text)

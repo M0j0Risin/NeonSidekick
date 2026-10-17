@@ -174,6 +174,7 @@ public class AppSettingsTests : IDisposable
         ReflectionYieldsToTurns = false,
         ReflectionEditsSupportingFiles = true,
         ReflectionInstalledSkills = "read-only",
+        ReflectionMode = "update-only",
         DiffMaxLines = 33,
         DiffCollapseCount = 7,
         SkillCompactMode = "unprotected",
@@ -327,6 +328,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.ReflectionYieldsToTurns, actual.ReflectionYieldsToTurns);
         Assert.Equal(expected.ReflectionEditsSupportingFiles, actual.ReflectionEditsSupportingFiles);
         Assert.Equal(expected.ReflectionInstalledSkills, actual.ReflectionInstalledSkills);
+        Assert.Equal(expected.ReflectionMode, actual.ReflectionMode);
         Assert.Equal(expected.DiffMaxLines, actual.DiffMaxLines);
         Assert.Equal(expected.DiffCollapseCount, actual.DiffCollapseCount);
         Assert.Equal(expected.SkillCompactMode, actual.SkillCompactMode);
@@ -536,6 +538,7 @@ public class AppSettingsTests : IDisposable
             d.ReflectionYieldsToTurns = full.ReflectionYieldsToTurns;
             d.ReflectionEditsSupportingFiles = full.ReflectionEditsSupportingFiles;
             d.ReflectionInstalledSkills = full.ReflectionInstalledSkills;
+            d.ReflectionMode = full.ReflectionMode;
             d.DiffMaxLines = full.DiffMaxLines;
             d.DiffCollapseCount = full.DiffCollapseCount;
             d.SkillCompactMode = full.SkillCompactMode;
@@ -697,6 +700,7 @@ public class AppSettingsTests : IDisposable
                 d.ReflectionYieldsToTurns = full.ReflectionYieldsToTurns;
                 d.ReflectionEditsSupportingFiles = full.ReflectionEditsSupportingFiles;
                 d.ReflectionInstalledSkills = full.ReflectionInstalledSkills;
+                d.ReflectionMode = full.ReflectionMode;
                 d.DiffMaxLines = full.DiffMaxLines;
                 d.DiffCollapseCount = full.DiffCollapseCount;
                 d.SkillCompactMode = full.SkillCompactMode;
@@ -1708,6 +1712,7 @@ public class AppSettingsTests : IDisposable
         Assert.True(s.ReflectionYieldsToTurns);
         Assert.False(s.ReflectionEditsSupportingFiles);   // 2026-09-27: off for now, the user's call
         Assert.Equal("allow-and-mark", s.ReflectionInstalledSkills);   // 2026-10-03: read-only before, the user's call
+        Assert.Equal("create-update", s.ReflectionMode);   // 2026-10-16: a reflection as it always was
         Assert.Equal(10, s.DiffMaxLines);   // later on 2026-10-03: 40 before, the user's call
         Assert.Equal(10, s.DiffCollapseCount);   // 2026-10-04, the user's pick
         Assert.Equal(1, AppSettingsData.MinAskMaxQuestions);

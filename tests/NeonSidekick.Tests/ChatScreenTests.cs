@@ -21453,7 +21453,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Matches(@"  · Offered\n  ·   haiku  profile  v1  " + SkillChanged + @"Writes haiku\. Use when asked for one\.\n  · " + Regex.Escape(SkillsText.LoadedTitle) + @"\n  ·   " + Regex.Escape(SkillsText.NoneLoadedLine) + @"\n  · Reflection\n", output);   // Reflection right after Offered since 2026-09-22; the loaded skills between them since 2026-10-12
         Assert.Contains("  · Options\n  ·   Agent skills: on\n  ·   Global skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n", output);   // Global skills under Agent skills since 2026-10-13   // the Options section last (2026-09-22; between Offered and Reflection from 2026-09-19), the Project file row among it since 2026-10-01
-        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection include sessions: off\n  ·   Reflection cooldown (min): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection yield to turns: off\n  ·   Reflection confirm mode: none\n  ·   Reflection edit supporting files: off\n  ·   Reflection edit downloaded skills: allow-and-mark\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
+        Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection include sessions: off\n  ·   Reflection cooldown (min): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection yield to turns: off\n  ·   Reflection mode: create-update\n  ·   Reflection confirm mode: none\n  ·   Reflection edit supporting files: off\n  ·   Reflection edit downloaded skills: allow-and-mark\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
         Assert.DoesNotContain("  · Project\n", output);   // the Project section, the toggle row alone from later on 2026-09-19, went on 2026-10-01
         Assert.DoesNotContain("Roots", output);
         Assert.DoesNotContain("Working directory", output);
@@ -21743,6 +21743,69 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(reflection, m => m.Contents.OfType<FunctionResultContent>().Any(r => r.CallId == Assistant.OpeningClockCallId));
         Assert.Equal(1, _session.Usage.LearningRequests);
         Assert.True(File.Exists(Path.Combine(ProfileSkills, "greeting", SkillCatalog.FileName)));
+    }
+
+    /// <summary>
+    /// Reflection mode update-only (2026-10-16, the user's ask): an automatic reflection over a qualifying turn gets the update-only
+    /// instruction and an editor with no create; a create it sends anyway is refused and writes no folder, and its "nothing" ends it.
+    /// </summary>
+    [Fact]
+    public async Task ReflectionMode_UpdateOnly_AutoLearn_ACreateIsRefused_AndNoSkillIsWritten()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ReflectionAutoLearn = true; d.ReflectionMode = "update-only"; });
+        PutSkill(ProfileSkills, "haiku");
+        EnqueueFiveCallTurn();
+        _chat.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, CreateSkillArgs("clock-check")));
+        _chat.EnqueueText(SkillLearner.NothingWord);
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            switch (step)
+            {
+                case 0: step++; PushLine(input, "what time is it, twice"); break;
+                case 1:
+                    if (_session.Learning is { IsCompleted: true })
+                    {
+                        step++;
+                        PushLine(input, "/exit");
+                    }
+
+                    break;
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.False(Directory.Exists(Path.Combine(ProfileSkills, "clock-check")));
+        Assert.DoesNotContain("(🧠 learned", output);
+        Assert.Equal(4, _chat.Requests.Count);   // the turn's two, the reflection's two
+        Assert.StartsWith(SkillLearner.UpdateOnlyInstruction + "\n\n", _chat.Requests[2][0].Text, StringComparison.Ordinal);
+        Assert.Equal(SkillLearner.Request(null, create: false), _chat.Requests[2][^1].Text);
+        Assert.False(_chat.Options[2]!.Tools!.OfType<SkillEditorTool>().Single().OffersCreate);
+        var refused = _chat.Requests[3].SelectMany(m => m.Contents).OfType<FunctionResultContent>().Single(r => r.CallId == "r1");
+        Assert.Equal(SkillText.CreateRefused, (string)refused.Result!);
+    }
+
+    /// <summary>
+    /// Reflection mode update-only with no skill to update (2026-10-16): <c>/learn</c> says so and asks nothing, and an automatic
+    /// reflection over a qualifying turn is never started.
+    /// </summary>
+    [Fact]
+    public async Task ReflectionMode_UpdateOnly_WithNoSkill_LearnSaysSo_AndNothingIsAsked()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ReflectionAutoLearn = true; d.ReflectionMode = "update-only"; });
+        EnqueueFiveCallTurn();
+        LinesWhenIdle("what time is it, twice", "/learn keep it", "/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + ChatScreen.LearnNothingToUpdateError, output);
+        Assert.Equal("Reflection mode is update-only (/skills › Reflection), and there is no skill to update yet.", ChatScreen.LearnNothingToUpdateError);
+        Assert.Equal(2, _chat.Requests.Count);   // the turn's two; no reflection request, automatic or forced
+        Assert.Null(_session.Learning);
+        Assert.Empty(Directory.EnumerateDirectories(ProfileSkills));
+        Assert.Equal("No reflection: " + new TurnTrace() + "; Reflection mode is update-only and no skill can be updated.", ChatScreen.NothingToUpdateLogLine(new TurnTrace()));
     }
 
     /// <summary>

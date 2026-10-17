@@ -208,7 +208,7 @@ public static class HelpCommands
         ]),
         new("/learn",
         [
-            new("/learn [<note>]", "Write or improve a skill in the background from the last turn, a note steering what to keep. Needs *Agent skills* and *LLM offer tools* on."),
+            new("/learn [<note>]", "Write or improve a skill in the background from the last turn, a note steering what to keep; under *Reflection mode* `update-only` it only improves an existing skill. Needs *Agent skills* and *LLM offer tools* on."),
             new("/learn sessions [<n>|<search>]", "Do the same from stored sessions: the newest 5, the newest n (1–20), or those a search finds."),
         ]),
         new("/log",

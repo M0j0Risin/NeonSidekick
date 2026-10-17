@@ -1224,6 +1224,9 @@ public enum SettingsField
 
     /// <summary>A toggle: whether the Web UI has its YouTube tab (<see cref="Settings.AppSettingsData.WebUiYouTubeControls"/>). The Web UI tab under <see cref="WebUiShoppingControls"/> (2026-10-16, the user's ask); read at each request. Last in the enum, as every newcomer.</summary>
     WebUiYouTubeControls,
+
+    /// <summary>A picker over <see cref="Skills.ReflectionMode.Names"/>: whether a reflection may write a new skill or only improve one that exists (<see cref="Settings.AppSettingsData.ReflectionMode"/>). The Reflection tab of <c>/skills</c>, the first row of What it may change, above <see cref="ReflectionConfirmMode"/> (2026-10-16, the user's ask and words); no reconnect (read when a reflection is decided). Last in the enum, as every newcomer.</summary>
+    ReflectionMode,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1703,7 +1706,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> SkillsTabFields =
     [
         [SettingsField.AgentSkills, SettingsField.GlobalSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention],
-        [SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionConfirmMode, SettingsField.ReflectionEditsSupportingFiles, SettingsField.ReflectionInstalledSkills],
+        [SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionMode, SettingsField.ReflectionConfirmMode, SettingsField.ReflectionEditsSupportingFiles, SettingsField.ReflectionInstalledSkills],
     ];
 
     /// <summary>
@@ -2544,6 +2547,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionMaxRequests => "Reflection max requests",
         SettingsField.ReflectionCooldownMinutes => "Reflection cooldown (min)",
         SettingsField.ReflectionCooldownMode => "Reflection cooldown mode",
+        SettingsField.ReflectionMode => "Reflection mode",   // the user's name (2026-10-16)
         SettingsField.ReflectionConfirmMode => "Reflection confirm mode",   // the user's name (2026-10-12)
         SettingsField.ReflectionIncludesSessions => "Reflection include sessions",
         SettingsField.ReflectionYieldsToTurns => "Reflection yield to turns",
@@ -2928,6 +2932,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ReflectionMaxRequests => Requests(data.ReflectionMaxRequests),
             SettingsField.ReflectionCooldownMinutes => Minutes(data.ReflectionCooldownMinutes),
             SettingsField.ReflectionCooldownMode => data.ReflectionCooldownMode,
+            SettingsField.ReflectionMode => data.ReflectionMode,
             SettingsField.ReflectionConfirmMode => data.ReflectionConfirmMode,
             SettingsField.ReflectionInstalledSkills => data.ReflectionInstalledSkills,
             SettingsField.ReflectionIncludesSessions => OnOff(data.ReflectionIncludesSessions),
@@ -5242,6 +5247,11 @@ internal sealed partial class SettingsMenu
             return await PickReflectionCooldownModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
+        if (field == SettingsField.ReflectionMode)
+        {
+            return await PickReflectionModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
         if (field == SettingsField.ReflectionConfirmMode)
         {
             return await PickReflectionConfirmModeAsync(saved, cancellationToken).ConfigureAwait(false);
@@ -7404,6 +7414,25 @@ internal sealed partial class SettingsMenu
 
         string name = Skills.ReflectionCooldownMode.Names[index];
         Apply(SettingsField.ReflectionCooldownMode, d => d.ReflectionCooldownMode = name);
+        return true;
+    }
+
+    /// <summary>A <c>Reflection mode</c> choice and its hint (2026-10-16), the confirm mode's shape. Pinned.</summary>
+    public static string ReflectionModeLabel(string name) =>
+        Markup.Escape(name.PadRight(14)) + Theme.DimMarkup(Skills.ReflectionMode.Describe(name));
+
+    /// <summary>The reflection-mode picker under the settings list: one <see cref="ReflectionModeLabel"/> row per <see cref="Skills.ReflectionMode.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickReflectionModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var page = new MenuPage(Crumb(FieldName(SettingsField.ReflectionMode)), Skills.ReflectionMode.Names.Select(ReflectionModeLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(Skills.ReflectionMode.Names, saved.ReflectionMode)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = Skills.ReflectionMode.Names[index];
+        Apply(SettingsField.ReflectionMode, d => d.ReflectionMode = name);
         return true;
     }
 
