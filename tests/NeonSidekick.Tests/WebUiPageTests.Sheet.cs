@@ -123,6 +123,44 @@ public sealed partial class WebUiPageTests
         await page.WaitAsync(SheetShown + " && document.querySelector('.sheet-tab.on').dataset.tab === 'prompts'", "bare /prompts on its tab");
     }
 
+    /// <summary>
+    /// 📣 shows the glyph of the tab the sheet opens on, through a tap, ←/→, a close, a reload and bare <c>/prompts</c>; the tabs read Prompts,
+    /// History, Memory, and → focuses the tab it selects (index.html's order and the script's agree) (2026-10-17, the user's asks).
+    /// </summary>
+    [WindowsFact]
+    public async Task TheButton_ShowsTheCurrentTab_AndTheTabsReadPromptsHistoryMemory()
+    {
+        _backend.Reply = new WebReply(WebOutcome.Ok, Open: WebUiText.OpenPrompts);
+        if (await PromptsPageAsync(prompts: ["one"]) is not { } page)
+        {
+            return;
+        }
+
+        static string Glyph(string label) => JsonSerializer.Serialize(label.Split(' ')[0]);
+        const string Button = "document.getElementById('prompts-button').textContent";
+
+        Assert.Equal("prompts,history,memory", await page.TextAsync("[...document.querySelectorAll('.sheet-tab')].map(t => t.dataset.tab).join()"));
+        await page.WaitAsync(Button + " === " + Glyph(WebUiText.PromptsTab), "📣 at first");
+        await OpenSheetAsync(page);
+
+        await ClickTabAsync(page, "history");
+        await page.WaitAsync(Button + " === " + Glyph(WebUiText.HistoryTab), "🕘 on the history tab");
+        await KeyAsync(page, "ArrowRight", "document.querySelector('.sheet-tab[data-tab=\"history\"]')");
+        await page.WaitAsync(Button + " === " + Glyph(WebUiText.MemoryTab) + " && document.activeElement.dataset.tab === 'memory'", "→ on to memory, focused");
+
+        await page.EvalAsync("document.getElementById('prompts-close').click()");
+        await page.WaitAsync(SheetHidden + " && " + Button + " === " + Glyph(WebUiText.MemoryTab), "💾 kept after a close");
+
+        await page.EvalAsync("location.reload()");
+        await page.WaitAsync("document.getElementById('prompts-button') !== null && history.state === null", "a reload's own entry");
+        await page.WaitAsync(Button + " === " + Glyph(WebUiText.MemoryTab), "💾 kept after a reload");
+
+        await page.EvalAsync(Draft + ".value = '/prompts'");
+        await page.EvalAsync("document.getElementById('send').click()");
+        await page.WaitAsync(SheetShown + " && document.querySelector('.sheet-tab.on').dataset.tab === 'prompts' && " + Button + " === " + Glyph(WebUiText.PromptsTab),
+            "bare /prompts back on 📣");
+    }
+
     [WindowsFact]
     public async Task TheHistoryTab_ListsNewestFirst_ARowFillsTheDraft_AndClearAllTakesTwoTaps()
     {

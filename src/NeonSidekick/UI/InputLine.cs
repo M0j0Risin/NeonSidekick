@@ -185,8 +185,13 @@ public sealed partial class InputLine
     /// replaced), held for Up and never stored. Each entry carries its own mark since 2026-10-16 (the Web UI's copy leaves every such draft out,
     /// not just the last one, which was all the old flag could tell). Behind <see cref="_historyGate"/>: the idle read, the live line under a
     /// reply, the voice, <c>/msgclear</c> and the Web UI's request threads (a page's line is remembered as the page sends it) all change it.
+    /// The newest <see cref="HistoryCap"/> entries, drafts among them, the oldest dropped past it (2026-10-17, the user's call: it grew
+    /// for the whole run until then).
     /// </summary>
     private readonly List<(string Text, bool Draft)> _history = new();
+
+    /// <summary>The most entries the history holds: the stored history's cap, so the two never drift apart (2026-10-17).</summary>
+    public const int HistoryCap = Sessions.SessionStore.CommandHistoryCap;
     private readonly Lock _historyGate = new();
     private readonly PasteBlocks _pastes = new();
 
@@ -347,6 +352,11 @@ public sealed partial class InputLine
             else
             {
                 _history.Add((text, !keep));
+                if (_history.Count > HistoryCap)
+                {
+                    _history.RemoveRange(0, _history.Count - HistoryCap);
+                }
+
                 tell = keep;
             }
         }
@@ -366,8 +376,8 @@ public sealed partial class InputLine
 
     /// <summary>
     /// The history replaced by <paramref name="lines"/>, oldest first, a line equal to the one before it skipped
-    /// (2026-09-25: the profile's stored history at startup and after a switch, empty after <c>/msgclear</c>).
-    /// <see cref="Remembered"/> is not told. A walk starts at the bottom again at the next read.
+    /// (2026-09-25: the profile's stored history at startup and after a switch, empty after <c>/msgclear</c>), the newest
+    /// <see cref="HistoryCap"/> kept. <see cref="Remembered"/> is not told. A walk starts at the bottom again at the next read.
     /// </summary>
     public void ReplaceHistory(IEnumerable<string> lines)
     {
@@ -379,6 +389,11 @@ public sealed partial class InputLine
             {
                 fresh.Add((line, false));
             }
+        }
+
+        if (fresh.Count > HistoryCap)
+        {
+            fresh.RemoveRange(0, fresh.Count - HistoryCap);
         }
 
         lock (_historyGate)

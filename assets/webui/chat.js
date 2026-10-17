@@ -1394,11 +1394,12 @@ async function sendText(text, opts) {
 
 // ── The sheet: saved prompts, memories, the message history (later on 2026-10-15; three tabs since 2026-10-16, the user's ask) ──
 // 📣 at the box's left, and bare /prompts sent from the page, open the sheet as a footer panel, on the tab used last (bare /prompts on Prompts);
-// each tab is read from the app as it shows. 📣 Prompts: a tap on a row sends the prompt at once, as typed (a command meets the page's command
-// rules; 2026-10-16, the user's ask), its ✎ puts it on the draft (ahead of what's there, with Undo; the tap's until then, ➤ sending), its 🗑️
-// deletes it; ⇪ saves the draft as one. 💾 Memory: the profile's
-// memories, a turned-off one marked, each with its 🗑️; ⇪ saves the draft as one (refused while Memory mode is off, which the tab says). 🕘
-// History: the message history, newest first, a row and its ➤ as a prompt's; clear all empties it. A 🗑️ or clear all is two taps, the
+// the button shows that tab's glyph, 📣, 🕘 or 💾 (2026-10-17, the user's ask). Each tab is read from the app as it shows, in the order
+// Prompts, History, Memory (2026-10-17; Memory second until then). 📣 Prompts: a tap on a row sends the prompt at once, as typed (a command
+// meets the page's command rules; 2026-10-16, the user's ask), its ✎ puts it on the draft (ahead of what's there, with Undo; the tap's until
+// then, ➤ sending), its 🗑️ deletes it; ⇪ saves the draft as one. 🕘 History: the message history, newest first, a row and its ➤ as a
+// prompt's; clear all empties it. 💾 Memory: the profile's memories, a turned-off one marked, each with its 🗑️; ⇪ saves the draft as one
+// (refused while Memory mode is off, which the tab says). A 🗑️ or clear all is two taps, the
 // picture 🗑️'s way: the first arms it for 3 s, the second acts; Esc disarms first. ⇪ keeps the draft. One footer panel at a time: the sheet,
 // the drawer and the usage card replace each other — the sheet and the drawer swap their history entry (replaceState), never back-then-push,
 // whose late pop would take the new entry with it. A tab change keeps the entry. Esc, Back, ✕, a tap on the transcript or a question arriving
@@ -1412,12 +1413,31 @@ const promptsClose = document.getElementById('prompts-close');
 const promptsNote = document.getElementById('prompts-note');
 const promptsFilter = document.getElementById('prompts-filter');
 const promptsList = document.getElementById('prompts-list');
-const SheetTabs = ['prompts', 'memory', 'history'];
+const SheetTabs = ['prompts', 'history', 'memory'];   // index.html's order: ←/→ step through this and focus promptsTabs at the same index
 let promptsOpen = false;
 let promptsOpening = false;
 let sheetTab = 'prompts';
 try { if (SheetTabs.includes(sessionStorage.getItem('neon.sheetTab'))) sheetTab = sessionStorage.getItem('neon.sheetTab'); } catch { /* private mode */ }
 let promptsActionNow = promptsAction;   // the bar's action button as it stands (each tab's is a fresh one)
+
+// A tab's label as the words give it ('📣 Prompts'), and its glyph alone, the label's first word.
+function tabLabel(tab) {
+  return { prompts: words.promptsTab || '📣 Prompts', history: words.historyTab || '🕘 History', memory: words.memoryTab || '💾 Memory' }[tab];
+}
+
+function tabGlyph(tab) { return tabLabel(tab).split(' ')[0]; }
+
+// 📣 shows the glyph of the tab the sheet opens on (2026-10-17); its name stays the sheet's.
+function paintPromptsButton() { promptsBtn.textContent = tabGlyph(sheetTab); }
+
+// The tab chosen, remembered for this browser tab, and shown on the button.
+function setSheetTab(tab) {
+  sheetTab = tab;
+  try { sessionStorage.setItem('neon.sheetTab', tab); } catch { /* private mode */ }
+  paintPromptsButton();
+}
+
+paintPromptsButton();
 
 function showPrompts(on) {
   const was = nearBottom();
@@ -1583,8 +1603,7 @@ function focusSheet() {
 
 async function selectTab(tab) {
   if (!SheetTabs.includes(tab)) return;
-  sheetTab = tab;
-  try { sessionStorage.setItem('neon.sheetTab', tab); } catch { /* private mode */ }
+  setSheetTab(tab);
   paintTabs();
   const sheet = await readSheet(tab);
   if (!sheet || !promptsOpen || tab !== sheetTab) return;
@@ -1594,10 +1613,7 @@ async function selectTab(tab) {
 
 async function openPrompts(tab) {
   if (promptsOpen || promptsOpening) return;
-  if (tab) {
-    sheetTab = tab;
-    try { sessionStorage.setItem('neon.sheetTab', tab); } catch { /* private mode */ }
-  }
+  if (tab) setSheetTab(tab);
   promptsOpening = true;
   const want = sheetTab;
   const sheet = await readSheet(want);
@@ -1976,14 +1992,14 @@ function applyWords() {
   stripClose.setAttribute('aria-label', words.closeStrip);
   stripClose.title = words.closeStrip;
   drawerEl.setAttribute('aria-label', words.stripButton);
-  promptsBtn.setAttribute('aria-label', words.promptsButton || 'Prompts, memory and history');
-  promptsBtn.title = words.promptsButton || 'Prompts, memory and history';
-  promptsEl.setAttribute('aria-label', words.promptsButton || 'Prompts, memory and history');
+  promptsBtn.setAttribute('aria-label', words.promptsButton || 'Prompts, history and memory');
+  promptsBtn.title = words.promptsButton || 'Prompts, history and memory';
+  promptsEl.setAttribute('aria-label', words.promptsButton || 'Prompts, history and memory');
   promptsClose.setAttribute('aria-label', words.closePrompts || 'Close');
   promptsClose.title = words.closePrompts || 'Close';
-  const tabWords = { prompts: words.promptsTab || '📣 Prompts', memory: words.memoryTab || '💾 Memory', history: words.historyTab || '🕘 History' };
+  paintPromptsButton();
   for (const tab of promptsTabs) {
-    const label = tabWords[tab.dataset.tab];
+    const label = tabLabel(tab.dataset.tab);
     tab.querySelector('.tab-glyph').textContent = label.split(' ')[0];
     tab.querySelector('.tab-word').textContent = label.split(' ').slice(1).join(' ');
     tab.setAttribute('aria-label', label);

@@ -4357,6 +4357,37 @@ public class InputLineTests : IDisposable
         Assert.Equal(new[] { "one", "two" }, _line.History);
     }
 
+    /// <summary>The history holds the newest <see cref="InputLine.HistoryCap"/> entries (2026-10-17, the user's call), a draft set aside among them.</summary>
+    [Fact]
+    public void Remember_PastTheCap_DropsTheOldest()
+    {
+        Assert.Equal(Sessions.SessionStore.CommandHistoryCap, InputLine.HistoryCap);
+        int last = InputLine.HistoryCap + 4;
+        for (int i = 0; i <= last; i++)
+        {
+            _line.Remember("line " + i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        Assert.Equal(InputLine.HistoryCap, _line.HistoryCount);
+        Assert.Equal("line 5", _line.History[0]);
+        Assert.Equal("line " + last.ToString(System.Globalization.CultureInfo.InvariantCulture), _line.History[^1]);
+
+        _line.RememberDraft("set aside");
+        Assert.Equal(InputLine.HistoryCap, _line.HistoryCount);
+        Assert.Equal("line 6", _line.History[0]);
+        Assert.Equal("set aside", _line.History[^1]);
+    }
+
+    [Fact]
+    public void ReplaceHistory_KeepsTheNewestCap()
+    {
+        var lines = Enumerable.Range(0, InputLine.HistoryCap + 5).Select(i => "line " + i.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToList();
+
+        _line.ReplaceHistory(lines);
+
+        Assert.Equal(lines.Skip(5), _line.History);
+    }
+
     /// <summary>Remembered is told outside the history's lock: a listener that reads the history (or adds to it) never deadlocks.</summary>
     [Fact]
     public void Remembered_IsToldOutsideTheLock_SoAListenerMayReadTheHistory()

@@ -912,8 +912,12 @@ public sealed class SessionStore : IDisposable
 
     // ── The message history (2026-09-25) ────────────────────────────────────
 
-    /// <summary>The most lines <c>command_history</c> keeps; an append past it drops the oldest. Pinned.</summary>
-    public const int CommandHistoryCap = 1000;
+    /// <summary>
+    /// The most lines <c>command_history</c> keeps; an append past it drops the oldest, and so does each open (an older file's longer
+    /// history cut once). The input line's list keeps the same cap (<c>InputLine</c>). 1,000 until 2026-10-17, when it became 100 (the
+    /// user's call, the list in memory capped with it). Pinned.
+    /// </summary>
+    public const int CommandHistoryCap = 100;
 
     /// <summary>
     /// The input line's Up/Down history as stored (2026-09-25, the user's ask: <c>Keep message history</c>): the lines
@@ -1023,11 +1027,7 @@ public sealed class SessionStore : IDisposable
                     added++;
                 }
 
-                using var trim = connection.CreateCommand();
-                trim.Transaction = transaction;
-                trim.CommandText = "DELETE FROM command_history WHERE id <= (SELECT id FROM command_history ORDER BY id DESC LIMIT 1 OFFSET $cap)";
-                trim.Parameters.AddWithValue("$cap", CommandHistoryCap);
-                trim.ExecuteNonQuery();
+                TrimCommandHistory(connection, transaction);
                 transaction.Commit();
                 return added;
             }
@@ -1226,6 +1226,17 @@ public sealed class SessionStore : IDisposable
                 schema.ExecuteNonQuery();
             }
 
+            // A history longer than the cap (a file from before 2026-10-17, when the cap went from 1,000 to 100) cut at the open, so the
+            // counts, the reads and a profile copy see the cap at once. Best effort: a failed trim never turns sessions off.
+            try
+            {
+                TrimCommandHistory(connection, null);
+            }
+            catch (SqliteException ex)
+            {
+                Fail("trim the message history", ex);
+            }
+
             _connection = connection;
             return connection;
         }
@@ -1245,6 +1256,16 @@ public sealed class SessionStore : IDisposable
         command.Parameters.AddWithValue("$table", table);
         command.Parameters.AddWithValue("$column", column);
         return command.ExecuteScalar() is long count && count > 0;
+    }
+
+    /// <summary><c>command_history</c> cut to the newest <see cref="CommandHistoryCap"/> lines: after each append and at each open.</summary>
+    private static void TrimCommandHistory(SqliteConnection connection, SqliteTransaction? transaction)
+    {
+        using var trim = connection.CreateCommand();
+        trim.Transaction = transaction;
+        trim.CommandText = "DELETE FROM command_history WHERE id <= (SELECT id FROM command_history ORDER BY id DESC LIMIT 1 OFFSET $cap)";
+        trim.Parameters.AddWithValue("$cap", CommandHistoryCap);
+        trim.ExecuteNonQuery();
     }
 
     /// <summary>The stored <c>meta</c> schema number, or -1 while the store is unavailable. A read for the tests.</summary>

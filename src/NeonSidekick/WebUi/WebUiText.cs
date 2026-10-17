@@ -371,8 +371,8 @@ public static class WebUiText
     /// <summary>A Page line that reached the PC (never by the page's own path): what it is.</summary>
     public const string OpensOnThePage = "That opens on the page itself.";
 
-    /// <summary>The 📣 button's label, and the sheet's (2026-10-16: its three tabs named).</summary>
-    public const string PromptsButton = "Prompts, memory and history";
+    /// <summary>The 📣 button's label, and the sheet's (2026-10-16: its three tabs named; in their order since 2026-10-17, History before Memory).</summary>
+    public const string PromptsButton = "Prompts, history and memory";
 
     /// <summary>The sheet's prompts tab with nothing saved (2026-10-16: the page saves them too).</summary>
     public const string PromptsNone = "No saved prompts yet. ⇪ saves the draft as one.";

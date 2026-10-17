@@ -78,7 +78,7 @@ public class SessionStoreTests : IDisposable
     [Fact]
     public void CommandHistory_KeepsTheNewestCapLines()
     {
-        Assert.Equal(1000, SessionStore.CommandHistoryCap);
+        Assert.Equal(100, SessionStore.CommandHistoryCap);   // 1,000 until 2026-10-17
         var lines = Enumerable.Range(0, SessionStore.CommandHistoryCap + 5).Select(i => "line " + i.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToList();
         Assert.Equal(lines.Count, _store.AddCommandHistory(lines, overwrite: false));
         _store.AppendCommand("last");
@@ -87,6 +87,33 @@ public class SessionStoreTests : IDisposable
         Assert.Equal(SessionStore.CommandHistoryCap, kept.Count);
         Assert.Equal("line 6", kept[0]);
         Assert.Equal("last", kept[^1]);
+    }
+
+    /// <summary>A file from before the cap went to 100 (2026-10-17) holds more: cut at the next open, so its counts and reads see the cap at once.</summary>
+    [Fact]
+    public void CommandHistory_AnOlderLongerHistory_IsCutToTheCapAtOpen()
+    {
+        _store.AppendCommand("line 0");
+        _store.Dispose();
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder { DataSource = Path.Combine(_dir, SessionStore.FolderName, SessionStore.FileName), Pooling = false }.ToString()))
+        {
+            connection.Open();
+            using var insert = connection.CreateCommand();
+            insert.CommandText = "INSERT INTO command_history(at, text) VALUES ('2026-10-01T00:00:00.0000000Z', $text)";
+            var text = insert.Parameters.Add("$text", Microsoft.Data.Sqlite.SqliteType.Text);
+            for (int i = 1; i <= SessionStore.CommandHistoryCap + 20; i++)
+            {
+                text.Value = "line " + i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                insert.ExecuteNonQuery();
+            }
+        }
+
+        using var again = new SessionStore(_dir, _time);
+        Assert.Equal(SessionStore.CommandHistoryCap, again.CommandHistoryCount);
+        var kept = again.CommandHistory();
+        Assert.Equal(SessionStore.CommandHistoryCap, kept.Count);
+        Assert.Equal("line 21", kept[0]);
+        Assert.Equal("line " + (SessionStore.CommandHistoryCap + 20).ToString(System.Globalization.CultureInfo.InvariantCulture), kept[^1]);
     }
 
     [Fact]
