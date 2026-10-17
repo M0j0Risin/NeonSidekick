@@ -40,6 +40,13 @@ public sealed class VaultMoveTool : VaultTool
         ArgumentNullException.ThrowIfNull(arguments);
         string note = ReadNote(arguments);
         string to = ToolArguments.ReadString(arguments, ToArgument);
+        // A folder ending in / keeps the note's own name (2026-10-17, the shopping list's tripwire): that is the name judged.
+        string landing = to.EndsWith('/') ? to + note.Split('/', '\\')[^1] : to;
+        if (ShoppingListRefusal(landing) is { } refused)
+        {
+            return new ValueTask<object?>(refused);
+        }
+
         return OffThread(() => Vault.Move(note, to), cancellationToken);
     }
 }

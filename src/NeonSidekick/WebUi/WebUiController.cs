@@ -44,7 +44,6 @@ public sealed class WebUiController : IAsyncDisposable
     private readonly SemaphoreSlim _gate = new(1, 1);
     private IWebUiHost? _host;
     private WebUiWanted _settled = WebUiWanted.Off;
-    private bool _firewallSaid;
     private bool _disposed;
 
     /// <param name="factory">Makes a server over the session (<see cref="WebUiHost"/> in the app); null = no Web UI in this build.</param>
@@ -113,14 +112,10 @@ public sealed class WebUiController : IAsyncDisposable
             }
 
             Volatile.Write(ref _host, host);
-            DiagnosticLog.Info(Category, "Web UI serving " + wanted + ".");
+            // A start writes nothing in the transcript (2026-10-17, the user's ask: the address and the firewall's warning were noise at
+            // every start); the log keeps the address, and /webui shows it with the sign-in link.
             string address = wanted.Audience == WebUiAudience.Local ? "localhost" : PrivateAddresses().FirstOrDefault()?.Host ?? "localhost";
-            _session.Notice(WebUiText.ServingNotice(WebUiAuth.Address(address, host.Port)));
-            if (wanted.Audience == WebUiAudience.LocalAreaNetwork && OperatingSystem.IsWindows() && !_firewallSaid)
-            {
-                _firewallSaid = true;
-                _session.Notice(WebUiText.FirewallNotice);
-            }
+            DiagnosticLog.Info(Category, "Web UI serving " + wanted + " at " + WebUiAuth.Address(address, host.Port) + ".");
         }
         finally
         {
@@ -183,10 +178,12 @@ public sealed class WebUiController : IAsyncDisposable
     /// The sign-in addresses among <paramref name="adapters"/>: the private IPv4 addresses (no loopback, no link-local) of the physical ones —
     /// Ethernet or Wi-Fi — that have an IPv4 gateway, the fastest first. A VPN's tunnel (NordLynx, Tailscale: a virtual type) and Hyper-V's
     /// switch for WSL (Ethernet, but no gateway) are left out; a browser through them still connects when its address is typed. When no
-    /// adapter passes, every private address is offered, as before, so the pane is never without a link. Tailscale's address follows the home
-    /// network's, for a phone away from home: in the tailnet range (100.64/10) and on Tailscale's own adapter (later on 2026-10-14, the user's
+    /// adapter passes, every private address is offered, as before, so the pane is never without a link. Tailscale's address, for a phone away
+    /// from home, comes first (2026-10-17, the user's ask: its link works at home and away, so its tab is the one to open on; it followed the
+    /// home network's until then): in the tailnet range (100.64/10) and on Tailscale's own adapter (later on 2026-10-14, the user's
     /// pick: a provider's carrier-grade NAT address or another VPN can hold the range too, <see cref="IsTailscaleAdapter(WebUiAdapter)"/>). An
-    /// address is marked Tailscale's by the same test, in the fallback too, where a 100.x on another tunnel is listed unmarked. Pure.
+    /// address is marked Tailscale's by the same test, in the fallback too (first there as well), where a 100.x on another tunnel is listed
+    /// unmarked. Pure.
     /// </summary>
     public static IReadOnlyList<WebUiAddress> ChooseAddresses(IReadOnlyList<WebUiAdapter> adapters)
     {
@@ -204,14 +201,15 @@ public sealed class WebUiController : IAsyncDisposable
         var home = Addresses(adapters.Where(a => a.HasGateway && IsPhysical(a.Type)).OrderByDescending(a => a.Speed)).ToList();
         if (home.Count == 0)
         {
-            return Addresses(adapters.Where(a => a.Type != NetworkInterfaceType.Loopback)).ToList();
+            // Tailscale's first here too (2026-10-17); a stable sort keeps the rest in the adapters' order.
+            return [.. Addresses(adapters.Where(a => a.Type != NetworkInterfaceType.Loopback)).OrderByDescending(a => a.Tailscale)];
         }
 
-        // Tailscale's own address after the home network's (later on 2026-10-14, the user's ask): its tailnet range, 100.64.0.0/10, on
-        // Tailscale's adapter (later that day), so a phone away from home has a code to scan too — while NordLynx's 10.x, WSL's 172.x and any
-        // other 100.x stay off the pane.
+        // Tailscale's own address (later on 2026-10-14, the user's ask): its tailnet range, 100.64.0.0/10, on Tailscale's adapter (later that
+        // day), so a phone away from home has a code to scan too — while NordLynx's 10.x, WSL's 172.x and any other 100.x stay off the pane.
+        // First since 2026-10-17 (the user's ask), the home network's after it.
         var tailnet = adapters.Where(IsTailscaleAdapter).SelectMany(a => a.Addresses).Where(IsTailnet).Select(a => new WebUiAddress(a.ToString(), true));
-        return [.. home.Concat(tailnet).DistinctBy(a => a.Host, StringComparer.Ordinal)];
+        return [.. tailnet.Concat(home).DistinctBy(a => a.Host, StringComparer.Ordinal)];
     }
 
     /// <summary>

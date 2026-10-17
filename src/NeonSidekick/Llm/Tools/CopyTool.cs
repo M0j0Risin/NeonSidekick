@@ -57,6 +57,11 @@ public sealed class CopyTool : FileTool
             return new ValueTask<object?>(error);
         }
 
+        if (ShoppingListRefusal(from, to) is { } refused)
+        {
+            return new ValueTask<object?>(refused);
+        }
+
         return new ValueTask<object?>(Describe(from, to, overwrite.Value));
     }
 }

@@ -45,6 +45,32 @@ public abstract class FileTool : AIFunction
     protected static string ReadPath(AIFunctionArguments arguments) => ToolArguments.ReadString(arguments, PathArgument);
 
     /// <summary>
+    /// The shopping list's tripwire for a write onto <paramref name="path"/> (2026-10-17, the user's report: the model now and then kept the list
+    /// in a file): <see cref="Shopping.ShoppingText.NotAFile"/> while the working directory's <see cref="WorkingDirectory.ShoppingListGuard"/>
+    /// says the shopping tools are offered and the name is a list's (<see cref="Shopping.ShoppingFileGuard"/>), else null. Read on the tool's
+    /// own <see cref="Files"/> whatever folder <see cref="FilesFor"/> picks, so a write routed to the images folder is judged the same.
+    /// </summary>
+    protected string? ShoppingListRefusal(string path) =>
+        Files.ShoppingListGuard?.Invoke() == true && Shopping.ShoppingFileGuard.IsShoppingListName(path) ? Shopping.ShoppingText.NotAFile(path) : null;
+
+    /// <summary>
+    /// <see cref="ShoppingListRefusal(string)"/> for a copy or move's destination: <paramref name="to"/> itself, or — when it names a folder
+    /// (ends in a separator, or is an existing folder) — the source's own name inside it, the name the file will have.
+    /// </summary>
+    protected string? ShoppingListRefusal(string from, string to)
+    {
+        if (Files.ShoppingListGuard?.Invoke() != true)
+        {
+            return null;
+        }
+
+        bool folder = to.EndsWith('/') || to.EndsWith('\\')
+            || (Files.Resolve(to, forWrite: false, out string full) == FileOutcome.Ok && Directory.Exists(full));
+        string name = folder ? to.TrimEnd('/', '\\') + "/" + Path.GetFileName(from.TrimEnd('/', '\\')) : to;
+        return ShoppingListRefusal(name);
+    }
+
+    /// <summary>
     /// A path argument a tool cannot do without (2026-09-18: a <c>write_file</c> sent with <c>content</c>
     /// alone was answered <c>'' is a folder, not a file</c>): false with <see cref="FileText.PathRequired"/>
     /// in <paramref name="error"/> when it is missing or blank, else the trimmed value. <c>search_files</c>,

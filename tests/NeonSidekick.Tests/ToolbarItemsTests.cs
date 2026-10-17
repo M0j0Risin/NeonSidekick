@@ -38,7 +38,7 @@ public sealed class ToolbarItemsTests
         // Settings, Tools, Skills, Memory, the lock, the officer, the Shell, Files and Web switches and the path since 2026-10-05
         // (the user's pick; the last seven alone from 2026-10-03; the lock, the officer and the path from 2026-10-02; Settings, Tools, Skills, Sessions and the path from later on 2026-09-29, every
         // item before).
-        Assert.Equal(["settings", "tools", "skills", "memory", "prompts", "queue", "cmdlist", "police", "shell", "files", "image", "web", "path"], ToolbarItems.Defaults);   // 🌄 since 2026-10-10, ⏳ since 2026-10-13, 📣 since 2026-10-14
+        Assert.Equal(["settings", "webui", "tools", "skills", "memory", "prompts", "queue", "cmdlist", "police", "shell", "files", "image", "web", "path"], ToolbarItems.Defaults);   // 🌄 since 2026-10-10, ⏳ since 2026-10-13, 📣 since 2026-10-14, 📱 since 2026-10-17 (drawn after 🌐)
         Assert.Equal(ToolbarItems.Defaults, ToolbarItems.Names.Where(ToolbarItems.Resolve(null).Contains));
         Assert.Equal(ToolbarItems.Names, ToolbarItems.Names.Where(ToolbarItems.Resolve([.. ToolbarItems.Names]).Contains));
         Assert.Empty(ToolbarItems.Resolve([]));
@@ -74,7 +74,7 @@ public sealed class ToolbarItemsTests
     [Fact]
     public void Save_TheDefaultsAreNull_ElseStripOrder_EveryItemAFullList()
     {
-        Assert.Null(ToolbarItems.Save(new HashSet<string> { "path", "web", "image", "files", "shell", "police", "cmdlist", "queue", "prompts", "memory", "skills", "tools", "settings" }));
+        Assert.Null(ToolbarItems.Save(new HashSet<string> { "path", "web", "webui", "image", "files", "shell", "police", "cmdlist", "queue", "prompts", "memory", "skills", "tools", "settings" }));
         Assert.Equal(ToolbarItems.Names, ToolbarItems.Save(ToolbarItems.Names.ToHashSet()));
         Assert.Equal([], ToolbarItems.Save(new HashSet<string>()));
         Assert.Equal(["usage", "path"], ToolbarItems.Save(new HashSet<string> { "path", "usage" }));
@@ -99,7 +99,7 @@ public sealed class ToolbarItemsTests
     [Fact]
     public void Value_AndLabels_ArePinned()
     {
-        Assert.Equal("13 of 47", ToolbarItems.Value(null));   // the defaults (of 43 until 📡 🧩 📅 🏢, later still on 2026-10-15; of 42 until 🪵, 2026-10-15; of 41 since 📈 went, 2026-10-14; 📣 2026-10-14; ⏳ 2026-10-13, of 40 with it; 🌄 2026-10-10; 2026-10-05; 7 from 2026-10-03, 3 from 2026-10-02, of 13 until 2026-10-03; of 37 since 🙋, 2026-10-09; of 39 since Model name, 2026-10-12)
+        Assert.Equal("14 of 47", ToolbarItems.Value(null));   // the defaults (13 until 📱, 2026-10-17; of 43 until 📡 🧩 📅 🏢, later still on 2026-10-15; of 42 until 🪵, 2026-10-15; of 41 since 📈 went, 2026-10-14; 📣 2026-10-14; ⏳ 2026-10-13, of 40 with it; 🌄 2026-10-10; 2026-10-05; 7 from 2026-10-03, 3 from 2026-10-02, of 13 until 2026-10-03; of 37 since 🙋, 2026-10-09; of 39 since Model name, 2026-10-12)
         Assert.Equal("all", ToolbarItems.Value([.. ToolbarItems.Names]));
         Assert.Equal("off", ToolbarItems.Value([]));
         Assert.Equal("2 of 47", ToolbarItems.Value(["usage", "path"]));

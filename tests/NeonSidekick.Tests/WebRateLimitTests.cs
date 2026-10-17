@@ -73,6 +73,8 @@ public sealed class WebRateLimitTests
     [InlineData("/api/memory/save", WebRateBucket.Act)]
     [InlineData("/api/memory/delete", WebRateBucket.Act)]
     [InlineData("/api/history/clear", WebRateBucket.Act)]
+    [InlineData("/api/learn/cancel", WebRateBucket.Act)]   // the status row's 🧠 (2026-10-17)
+    [InlineData("/api/queue/resume", WebRateBucket.Act)]   // the held queue's Resume (2026-10-17)
     [InlineData("/api/home/say", WebRateBucket.Say)]
     [InlineData("/signin", WebRateBucket.SignIn)]
     public void TheLimitedPosts_CountAgainstTheirKind(string path, WebRateBucket bucket)

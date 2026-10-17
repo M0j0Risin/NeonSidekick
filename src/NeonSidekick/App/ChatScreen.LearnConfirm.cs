@@ -122,10 +122,12 @@ internal sealed partial class ChatScreen
                 return false;
             }
 
-            // The Web UI's page asks at once (2026-10-14), even before the idle line reaches it: Keep or Discard, the proposal whole (no View).
+            // The Web UI's page asks at once (2026-10-14), even before the idle line reaches it: Keep or Discard. Since 2026-10-17 (the user's
+            // question: on a phone the whole proposal, an update's SKILL.md and all, pushed the buttons far down) the summary is the body, as
+            // the PC's caption, and the proposal sits folded under the buttons behind View, the PC's own word.
             var web = _webUi.Asks.Open(new WebUi.WebAskSpec("learn", LearnAskTitle(proposal),
                 [new WebUi.WebChoice("keep", LearnAskRows[0]), new WebUi.WebChoice("discard", LearnAskRows[2])],
-                Body: LearnAskDetail(proposal)));
+                Body: LearnAskCaption(proposal), Detail: LearnAskDetail(proposal), DetailLabel: LearnAskRows[1]));
             var ask = new LearnAsk(proposal, new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)) { Web = web };
             _ = web.Answered.ContinueWith(answered =>
             {

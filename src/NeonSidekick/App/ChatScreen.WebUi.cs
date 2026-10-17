@@ -82,6 +82,11 @@ internal sealed partial class ChatScreen
             MemoryDelete = WebDeleteMemory,
             HistoryNow = WebHistoryNow,
             HistoryClear = WebClearHistory,
+            // The status row's 🧠 (2026-10-17): the reflection canceled from the page, as Ctrl+L does.
+            LearnCancel = WebCancelLearn,
+            // The queue held after a cancel (2026-10-17): the page's lines from before it wait for the hold to lift, its Resume lifts it.
+            CancelHoldNow = () => _queue.Held,
+            QueueResume = WebResumeQueue,
             // The YouTube tab's saved list (later on 2026-10-16): ChatScreen.WebSaved.cs; none without a web player.
             SavedVideosNow = () => _webVideo is null ? null : WebSavedNow(),
             SavedPlay = WebPlaySaved,
@@ -118,9 +123,16 @@ internal sealed partial class ChatScreen
     /// A pane opening (later on 2026-10-14): one a command from the page opened with no ask on the page leaves the page waiting on the PC — the
     /// safety net <see cref="WaitingAtPc"/> names it on the page; the log says so, and the tests fail on it (<see cref="WebPaneWithoutAskForTests"/>).
     /// </summary>
+    /// <remarks>
+    /// Also while a turn the page started runs (2026-10-17, the user's question: a turn's panes run on the watcher, which reads as the PC's, so
+    /// the camera's PC-only shutter went unseen): a page line sent (<see cref="_sentFromWeb"/>) or a page command dispatching
+    /// (<see cref="_webDispatching"/>). A pane the user opens at the PC under such a turn trips it too (a Debug line; only tests listen). Its blind
+    /// spot, kept: "no ask open" is any ask, so a PC-only pane opened while an unrelated ask waits on the page goes unrecorded.
+    /// </remarks>
     private void PaneOpening(string title)
     {
-        if (FromWebNow && _webUi.Asks.OpenAsks().Count == 0)
+        bool fromWeb = FromWebNow || (_turnRunning && (_sentFromWeb || _webDispatching));
+        if (fromWeb && _webUi.Asks.OpenAsks().Count == 0)
         {
             DiagnosticLog.Debug(WebUiCategory, "Web UI: a command from the page opened \"" + title + "\" at the PC with nothing on the page.");
             WebPaneWithoutAskForTests?.Invoke(title);
@@ -606,7 +618,9 @@ internal sealed partial class ChatScreen
             effective.WebUiShoppingControls,
             // The YouTube tab (2026-10-16), and the banner's words while a video waits for it.
             YouTubeTab: WebTabsNow().YouTube,
-            Watch: _webVideo?.Waiting == true ? WebUiText.WatchBanner : null);
+            Watch: _webVideo?.Waiting == true ? WebUiText.WatchBanner : null,
+            // The held queue's banner (2026-10-17): while the hold stands and something waits behind it, the PC's queue or the page's held lines.
+            QueueHeld: _queue.Held && (_queue.Count > 0 || _webUi.CancelHeldCount > 0) ? WebUiText.QueueHeld : null);
     }
 
     /// <summary>
@@ -654,13 +668,16 @@ internal sealed partial class ChatScreen
             ? UsageText.HintParts(_session.Usage, _session.ContextLength)
             : _botTurnRunning ? null
             : UsageText.BusyHintParts(_session.Usage, _session.ContextLength, MidTurnUsageMode.TryParse(_effective().LlmMidTurnUsage, out var mode) ? mode : MidTurnUsage.LastKnown, _session.Meter.Read());
+        // The reflection's 🧠 (2026-10-17, the user's ask): the PC's strip shows it while one runs, so the page does too.
+        bool learning = _session.IsLearning;
         var status = new WebStatus(
             busy?.Label,
             busy is { } running ? (long)running.Elapsed.TotalMilliseconds : null,
             step ? (long)busy!.Value.Step.TotalMilliseconds : null,
-            parts is null ? null : new WebUsage(parts.Tokens, parts.Percent, parts.Speed));
+            parts is null ? null : new WebUsage(parts.Tokens, parts.Percent, parts.Speed),
+            learning);
         string key = (busy is { } r ? r.Label + "\n" + r.Since.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\n" + (step ? r.StageSince : 0).ToString(System.Globalization.CultureInfo.InvariantCulture) : "")
-            + "\n" + parts?.Joined;
+            + "\n" + parts?.Joined + (learning ? "\n🧠" : "");
         return (status, key);
     }
 
@@ -701,12 +718,51 @@ internal sealed partial class ChatScreen
         return WebReply.Ok;
     }
 
+    /// <summary>
+    /// The status row's 🧠, tapped twice (2026-10-17, the user's ask: a reflection could hold the server with no sign on the page): Ctrl+L's
+    /// cancel (<see cref="CancelLearnNow"/>, safe on a Kestrel thread), the audit line, the PC's hint row. The canceled notice reaches the page
+    /// through the transcript. Conflict when nothing runs or waits paused.
+    /// </summary>
+    private WebReply WebCancelLearn(IPAddress? remote)
+    {
+        if (!CancelLearnNow())
+        {
+            return new WebReply(WebOutcome.Conflict, WebUiText.NoReflection);
+        }
+
+        DiagnosticLog.Info(WebUiCategory, WebUiText.LearnCancelledLogLine(remote));
+        _webUi.FlashPc(WebUiText.LearnCancelledFlash);
+        return WebReply.Ok;
+    }
+
+    /// <summary>
+    /// The held queue's Resume (2026-10-17, the user's question: under Queue cancel mode hold the page could never release it): the hold lifted
+    /// as a reply ending on its own lifts it, the idle line woken to send the next, the audit line, the PC's hint row; nothing in the transcript.
+    /// Conflict when nothing is held. <c>MessageQueue.Held</c> is lock-guarded, so a Kestrel thread may clear it.
+    /// </summary>
+    private WebReply WebResumeQueue(IPAddress? remote)
+    {
+        if (!_queue.Held)
+        {
+            return new WebReply(WebOutcome.Conflict, WebUiText.NotHeld);
+        }
+
+        _queue.Held = false;
+        DiagnosticLog.Info(WebUiCategory, WebUiText.QueueResumedLogLine(remote));
+        _webUi.FlashPc(WebUiText.QueueResumedFlash);
+        _webUi.PublishState();
+        WebNudge();
+        return WebReply.Ok;
+    }
+
     // ── The page's messages ───────────────────────────────────────────────
 
     /// <summary>The next message from the page as the idle line sends it: its text alone, never through the PC's paste store.</summary>
     private SubmittedLine? TakeWebLine()
     {
-        if (_queue.Held || !_webUi.TryTakeLine(out var line))
+        // A hold after a cancel (Queue cancel mode hold) keeps the lines that waited behind the reply, never one sent since: the page's next
+        // message goes as the PC's typed one does (2026-10-17, the user's question); the session sets the held ones apart.
+        if (!_webUi.TryTakeLine(out var line))
         {
             return null;
         }

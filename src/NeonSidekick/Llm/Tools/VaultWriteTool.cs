@@ -64,6 +64,11 @@ public sealed class VaultWriteTool : VaultTool
         }
 
         string note = ReadNote(arguments);
+        if (ShoppingListRefusal(note) is { } refused)
+        {
+            return new ValueTask<object?>(refused);
+        }
+
         string content = ToolArguments.ReadString(arguments, ContentArgument);
         string heading = ToolArguments.ReadString(arguments, VaultReadTool.HeadingArgument);
         return OffThread(() => Vault.Write(note, content, mode, heading), cancellationToken);

@@ -54,6 +54,63 @@ public partial class ChatScreenTests
         Assert.Equal(SlashCommands.WebUiWord, ChatScreen.OffPaneLine(new ScreenPane.OffPaneHit(null, new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.WebUiToolGlyph, 0))));
     }
 
+    /// <summary>
+    /// The safety net sees a turn's panes (2026-10-17, the user's question): a pane opened at the PC while a turn the page started runs, with no
+    /// ask on the page, is recorded — a turn's panes run on the watcher, which reads as the PC's, so the camera's PC-only shutter went unseen
+    /// until then. (A pane the user opens at the PC is such a pane too; it stands for any tool hook's here.)
+    /// </summary>
+    [Fact]
+    public async Task APaneOpened_UnderATurnThePageStarted_WithNoAskOnThePage_IsRecorded()
+    {
+        _webUiHost = _ => new RecordingHost();
+        _settings.Update(d => { d.TtsOutput = false; d.WebUi = true; d.WebUiReach = "local"; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("One ", "two ", "three.");
+        _chat.BeforeUpdate = async (i, _) =>
+        {
+            if (i == 0)
+            {
+                PushLine("/webui");
+            }
+            else if (i == 1)
+            {
+                Scripted().Push(Keys.Escape);
+            }
+
+            await Task.Delay(40, CancellationToken.None);
+        };
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            if (_running is null)
+            {
+                return;
+            }
+
+            _running.WebPaneWithoutAskForTests ??= title => { lock (_pcOnlyPanes) { _pcOnlyPanes.Add(title); } };
+            if (step == 0)
+            {
+                step++;
+                SendFromPage("hi");
+            }
+            else if (step == 1 && _chat.Requests.Count == 1 && Output.Contains("three.", StringComparison.Ordinal) && _keys is not { PendingLine.IsCompleted: false })
+            {
+                step++;
+                PushLine(input, "/exit");
+            }
+        };
+
+        await RunAsync(input);
+
+        lock (_pcOnlyPanes)
+        {
+            Assert.Contains(_pcOnlyPanes, title => title.Contains(WebUiText.PaneTitle, StringComparison.Ordinal));
+            _pcOnlyPanes.Clear();   // the fixture's end asserts none; this test opened one on purpose
+        }
+    }
+
     [Fact]
     public async Task WebUiTyped_UnderAReply_OpensThePane_AndTheReplyEndsAsWritten()
     {
@@ -79,7 +136,7 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task TheEnabledButton_UnderAReply_StartsTheServer_ItsNoticesOnce_TheReplyWhole()
+    public async Task TheEnabledButton_UnderAReply_StartsTheServer_ItsSavedNoticeOnce_TheReplyWhole()
     {
         var made = new List<RecordingHost>();
         _webUiHost = _ => { var host = new RecordingHost(); made.Add(host); return host; };
@@ -102,7 +159,6 @@ public partial class ChatScreenTests
         Assert.Equal(WebUiAudience.Local, host.Started!.Audience);
         AssertReplyWhole();
         Assert.Equal(1, Lines(SettingsMenu.SavedNotice(SettingsField.WebUi, _settings.Current, _settings.ProfileDirectory)));
-        Assert.Equal(1, Lines(WebUiText.ServingNotice(WebUiAuth.Address("localhost", host.Port))));
     }
 
     [Fact]

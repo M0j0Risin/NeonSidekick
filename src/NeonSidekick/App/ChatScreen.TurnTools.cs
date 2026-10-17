@@ -231,9 +231,14 @@ internal sealed partial class ChatScreen
         // The rule quotes the caps the offered tool itself reads, so the two never disagree.
         AskLimits? ask = askTools is { Count: > 0 } ? askTools.OfType<AskUserTool>().FirstOrDefault()?.Limits ?? AskLimits.Default : null;
         IReadOnlyList<AIFunction> offered = files ? [.. standingTools, .. fileTools!] : standingTools;
+        // The shopping tools right after the standing ones, ahead of the file tools (2026-10-17, the user's report: "add milk to my shopping list"
+        // went to a file now and then; after YouTube's from 2026-10-11): Shopping tools on; their sentence follows the file sentence. The opening
+        // calls are still found among the standing and file tools alone (offered).
+        bool shopping = inputs.ShoppingEnabled && shoppingTools is { Count: > 0 };
+        IReadOnlyList<AIFunction> tools = shopping ? [.. standingTools, .. shoppingTools!, .. (files ? fileTools! : [])] : offered;
         // The picture tools right after the file tools (2026-10-10, their own group): Image tools is the switch, File tools or not; the picture sentence rides with them.
         bool images = inputs.ImagesEnabled && imageTools is { Count: > 0 };
-        IReadOnlyList<AIFunction> tools = images ? [.. offered, .. imageTools!] : offered;
+        tools = images ? [.. tools, .. imageTools!] : tools;
         // The git tools right after the file tools (2026-09-20): the sandbox's tools together, the setting GitLib tools a per-group offer.
         bool git = inputs.GitEnabled && gitTools is { Count: > 0 };
         tools = git ? [.. tools, .. gitTools!] : tools;
@@ -345,9 +350,6 @@ internal sealed partial class ChatScreen
         // The YouTube tools after the screen's (2026-10-05): YouTube tools on, the search with a key, the rest with a video window; no rule — the descriptions carry it.
         bool youTube = inputs.YouTubeEnabled && youTubeTools is { Count: > 0 };
         tools = youTube ? [.. tools, .. youTubeTools!] : tools;
-        // The shopping tools after YouTube's (2026-10-11): Shopping tools on; their sentence after the Home Assistant one, which names the other lists.
-        bool shopping = inputs.ShoppingEnabled && shoppingTools is { Count: > 0 };
-        tools = shopping ? [.. tools, .. shoppingTools!] : tools;
         // present_plan while planning (2026-09-26): after everything else, ahead of the question tool, which stays last.
         tools = plan is not null ? [.. tools, plan.Tool] : tools;
         tools = ask is not null ? [.. tools, .. askTools!] : tools;

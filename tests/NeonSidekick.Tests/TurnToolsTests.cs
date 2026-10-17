@@ -42,6 +42,24 @@ public sealed class TurnToolsTests
         Assert.True(set.Rules.Mcp);
     }
 
+    /// <summary>
+    /// The shopping tools right after the standing ones, ahead of the file tools, and their sentence straight after the file sentence (2026-10-17,
+    /// the user's report: "add milk to my shopping list" now and then went to a file); the opening calls still found among the standing and file
+    /// tools alone.
+    /// </summary>
+    [Fact]
+    public void TheShoppingTools_ComeBeforeTheFileTools_AndTheirSentenceAfterTheFileSentence()
+    {
+        var set = ChatScreen.ComposeTurnTools(Inputs() with { Shopping = [new NamedTool("shopping_add"), new NamedTool("shopping_list")], ShoppingEnabled = true });
+
+        Assert.Equal(["get_current_time", "shopping_add", "shopping_list", "read_file", "write_file", "web_search", "web_fetch", "chrome__open", "chrome__click"], Names(set));
+        Assert.Equal(["get_current_time", "read_file", "write_file"], set.Offered.Select(t => t.Name));
+        Assert.Contains(Assistant.FileRuleWithoutDelete + " " + Assistant.ShoppingRule, set.Rules.DefaultRules(markdown: false), StringComparison.Ordinal);
+
+        var noFiles = ChatScreen.ComposeTurnTools(Inputs() with { FilesEnabled = false, Shopping = [new NamedTool("shopping_add")], ShoppingEnabled = true });
+        Assert.Equal(["get_current_time", "shopping_add", "web_search", "web_fetch", "chrome__open", "chrome__click"], Names(noFiles));
+    }
+
     [Fact]
     public void OnlyTools_KeepsThoseNames_AndAnEmptiedGroupDropsItsRule()
     {

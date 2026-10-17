@@ -216,8 +216,9 @@ public class ProfilesTests : IDisposable
             Services.ServiceConfigFile.Family.ProfilePath(profile), Tasks.TaskConfigFile.Family.ProfilePath(profile), McpConfigFile.ProfilePath(profile),
             new MemoryStore(profile).FilePath, new Bench.BenchHistory(profile).FilePath, new SavedPrompts(profile).FilePath,
             new YouTube.YouTubeLibrary(profile).FilePath, new Viewer.BrowserLinks(profile).FilePath, Viewer.BrowserHistory.PathFor(profile),
+            Emojis.EmojiPrefs.PathFor(profile),   // a profile's since 2026-10-17 (the user's ask)
         };
-        Assert.Equal(17, profileFiles.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(18, profileFiles.Distinct(StringComparer.OrdinalIgnoreCase).Count());
         Assert.All(profileFiles, path => Assert.Equal(configs, Path.GetDirectoryName(path)));
 
         var globalFiles = new[]
@@ -226,9 +227,8 @@ public class ProfilesTests : IDisposable
             Postgres.PostgresConfigFile.GlobalPath(home), Sqlite.SqliteConfigFile.GlobalPath(home), Unc.UncConfigFile.GlobalPath(home),
             EventLog.EventLogConfigFile.GlobalPath(home), ActiveDirectory.DirectoryConfigFile.GlobalPath(home),
             Services.ServiceConfigFile.Family.GlobalPath(home), Tasks.TaskConfigFile.Family.GlobalPath(home), McpConfigFile.GlobalPath(home),
-            Emojis.EmojiPrefs.PathFor(home),
         };
-        Assert.Equal(12, globalFiles.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(11, globalFiles.Distinct(StringComparer.OrdinalIgnoreCase).Count());
         Assert.All(globalFiles, path => Assert.Equal(Profiles.ConfigsDirectory(home), Path.GetDirectoryName(path)));
         Assert.Empty(globalFiles.Intersect(profileFiles, StringComparer.OrdinalIgnoreCase));
     }

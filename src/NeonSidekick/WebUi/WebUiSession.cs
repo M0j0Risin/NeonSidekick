@@ -44,6 +44,13 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     private readonly Func<ShoppingList?> _shopping;
     private readonly Action _shoppingChanged;
     private readonly ConcurrentQueue<WebLine> _lines = new();
+
+    /// <summary>
+    /// The lines that waited behind a reply canceled under <i>Queue cancel mode</i> <c>hold</c> (2026-10-17, the user's question): set apart by
+    /// <see cref="HoldForCancel"/>, taken only once the screen's hold lifts (<see cref="CancelHoldNow"/>), while a line sent after the cancel
+    /// goes at once — the page's next message, as the PC's typed one.
+    /// </summary>
+    private readonly ConcurrentQueue<WebLine> _cancelHeld = new();
     private readonly ConcurrentQueue<(string Text, bool Error)> _notices = new();
     private readonly ConcurrentQueue<string> _flashes = new();
     private int _flashing;
@@ -356,6 +363,16 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
 
     public WebReply ClearHistory(IPAddress? remote) => HistoryClear is { } clear ? clear(remote) : new WebReply(WebOutcome.NotFound);
 
+    /// <summary>The screen's cancel of the running reflection (2026-10-17, the status row's 🧠); null: none.</summary>
+    public Func<IPAddress?, WebReply>? LearnCancel { get; set; }
+
+    public WebReply CancelLearning(IPAddress? remote) => LearnCancel is { } cancel ? cancel(remote) : new WebReply(WebOutcome.NotFound);
+
+    /// <summary>The screen's release of its queue held after a cancel (2026-10-17, the banner's Resume); null: none.</summary>
+    public Func<IPAddress?, WebReply>? QueueResume { get; set; }
+
+    public WebReply ResumeQueue(IPAddress? remote) => QueueResume is { } resume ? resume(remote) : new WebReply(WebOutcome.NotFound);
+
     /// <summary>
     /// A line the page sent, told as <see cref="Send"/> accepts it (2026-10-16: queued, or bare <c>/prompts</c> opening the sheet): the screen
     /// remembers it in the message history, as Enter does a typed line — at once, not when the line runs, so a line sent under a reply is
@@ -493,26 +510,67 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// <summary>Wakes the screen's idle line: a message or a notice is waiting (the screen's <c>SignalAlert</c>, and its act signal under a botchat).</summary>
     public Action? Nudge { get; set; }
 
-    /// <summary>Whether a message waits.</summary>
-    public bool LinesReady => !_lines.IsEmpty;
+    /// <summary>
+    /// Whether the screen's queue is held after a cancel (2026-10-17, its <c>MessageQueue.Held</c>, read each time): while true the lines set
+    /// apart by <see cref="HoldForCancel"/> wait; null never holds.
+    /// </summary>
+    public Func<bool>? CancelHoldNow { get; set; }
+
+    private bool CancelHolding => CancelHoldNow?.Invoke() == true;
+
+    /// <summary>The lines waiting now set apart under the screen's hold (lines that waited behind a canceled reply).</summary>
+    public int CancelHeldCount => _cancelHeld.Count;
+
+    /// <summary>
+    /// The screen's hold applied (2026-10-17, <c>ApplyQueueCancelMode</c>'s <c>hold</c>): the lines waiting now are set apart until it lifts;
+    /// a line sent after this is the page's next message and goes at once.
+    /// </summary>
+    public void HoldForCancel()
+    {
+        bool moved = false;
+        while (_lines.TryDequeue(out var line))
+        {
+            _cancelHeld.Enqueue(line);
+            moved = true;
+        }
+
+        if (moved)
+        {
+            PublishState();
+        }
+    }
+
+    /// <summary>Whether a message can be taken: a fresh one, or a held one once the hold lifted (a held one alone never wakes the idle line).</summary>
+    public bool LinesReady => !_lines.IsEmpty || (!_cancelHeld.IsEmpty && !CancelHolding);
 
     /// <summary>Whether a notice waits.</summary>
     public bool NoticesReady => !_notices.IsEmpty;
 
-    /// <summary>The messages waiting now, oldest first (the state's list): the queue's, then the screen's held ones.</summary>
-    public IReadOnlyList<string> Waiting => [.. _lines.Select(l => l.Text), .. HeldForPc?.Invoke() ?? []];
+    /// <summary>The messages waiting now, oldest first (the state's list): the ones held after a cancel, the queue's, then the screen's pended ones.</summary>
+    public IReadOnlyList<string> Waiting => [.. _cancelHeld.Select(l => l.Text), .. _lines.Select(l => l.Text), .. HeldForPc?.Invoke() ?? []];
 
-    /// <summary>How many messages wait (the Status bar's Queued count).</summary>
-    public int WaitingCount => _lines.Count;
+    /// <summary>How many messages wait (the Status bar's Queued count), held ones too.</summary>
+    public int WaitingCount => _lines.Count + _cancelHeld.Count;
 
-    /// <summary>The next message for the idle line, oldest first.</summary>
-    public bool TryTakeLine(out WebLine line) => _lines.TryDequeue(out line!);
+    /// <summary>
+    /// The next message for the idle line, oldest first: once the screen's hold lifted, the ones held after a cancel first; while it holds, only a
+    /// line sent since (2026-10-17).
+    /// </summary>
+    public bool TryTakeLine(out WebLine line)
+    {
+        if (!CancelHolding && _cancelHeld.TryDequeue(out line!))
+        {
+            return true;
+        }
+
+        return _lines.TryDequeue(out line!);
+    }
 
     /// <summary>Every waiting message dropped and handed back to the pages' drafts (a conversation cleared); their count.</summary>
     public int DropLines()
     {
         int dropped = 0;
-        while (_lines.TryDequeue(out var line))
+        while (_cancelHeld.TryDequeue(out var line) || _lines.TryDequeue(out line))
         {
             dropped++;
             HandBack("dropped", line.Text);
@@ -693,7 +751,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
             return WebReply.Ok;   // a retry of a message already taken
         }
 
-        if (_lines.Count >= MaxWaiting)
+        if (WaitingCount >= MaxWaiting)
         {
             Forget(request.Id);
             return new WebReply(WebOutcome.TooMany, WebUiText.QueueFull(MaxWaiting));
@@ -1047,7 +1105,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     {
         var spec = handle.Spec;
         return new WebAskView(handle.Id, spec.Kind, spec.Title, spec.Body, spec.Lines, spec.Markdown is { } markdown ? WebUiMarkdown.ToHtml(markdown) : null,
-            spec.Choices, spec.TextChoice, spec.Questions, spec.SubmitLabel, spec.Items, spec.Current, spec.Live);
+            spec.Choices, spec.TextChoice, spec.Questions, spec.SubmitLabel, spec.Items, spec.Current, spec.Live, spec.Detail, spec.DetailLabel);
     }
 
     // ── Message ids ───────────────────────────────────────────────────────────

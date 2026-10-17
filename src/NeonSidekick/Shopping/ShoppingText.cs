@@ -183,6 +183,14 @@ public static class ShoppingText
     /// <summary>A tool that needs a store, with none set up. Pinned (prompt text).</summary>
     public const string NoStore = "Error: no store is set up yet. Ask the user which store they shop at, then shopping_layout add_store with its name.";
 
+    /// <summary>
+    /// The file and vault tools' refusal of a write onto a shopping or grocery list's name while the shopping tools are offered
+    /// (<see cref="ShoppingFileGuard"/>, 2026-10-17): the tools to use instead, and the user's way to a copy as a file. Pinned.
+    /// </summary>
+    public static string NotAFile(string path) =>
+        "Error: the user's shopping list is not a file or a note: add items with shopping_add, read it with shopping_list. " +
+        "If the user wants a copy as a file, tell them /shopping export writes one. Nothing was written to " + path.Trim() + ".";
+
     public static string StoreExists(ShopStore store) => "there is a store \"" + store.Name + "\" already";
 
     public static string StoreAdded(ShopStore store, string folder, bool active) =>

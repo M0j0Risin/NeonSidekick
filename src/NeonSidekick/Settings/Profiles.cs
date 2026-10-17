@@ -155,7 +155,7 @@ public static class Profiles
 
     /// <summary>
     /// <c>&lt;home&gt;\configs\&lt;fileName&gt;</c> (2026-10-16, the user's call, no migration): the home's own JSON files, every family's
-    /// <c>GlobalPath</c> and <c>emoji.json</c>, in the home's <c>configs</c> as a profile's are in its own. A file left at the home's top is not read.
+    /// <c>GlobalPath</c> (and <c>emoji.json</c> until 2026-10-17, a profile's since), in the home's <c>configs</c> as a profile's are in its own. A file left at the home's top is not read.
     /// </summary>
     public static string HomeConfigPath(string home, string fileName) => ConfigPath(home, fileName);
 

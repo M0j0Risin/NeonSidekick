@@ -67,6 +67,12 @@ public sealed class ObsidianVault
         _time = time ?? throw new ArgumentNullException(nameof(time));
     }
 
+    /// <summary>
+    /// Whether the shopping tools are offered (2026-10-17, the user's report), read at each <c>vault_write</c> and <c>vault_move</c>: while true
+    /// they refuse a note named as a shopping or grocery list (<see cref="Shopping.ShoppingFileGuard"/>). Null never refuses.
+    /// </summary>
+    public Func<bool>? ShoppingListGuard { get; set; }
+
     /// <summary>Whether <paramref name="root"/> is a vault: an existing folder with a <c>.obsidian</c> folder in it.</summary>
     public static bool IsVault(string? root)
     {

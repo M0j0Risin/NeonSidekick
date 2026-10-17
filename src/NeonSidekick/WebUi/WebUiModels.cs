@@ -238,7 +238,8 @@ public sealed record WebHomeRoom(string Key, string? Ref, string Name, bool OnBa
 /// control (<c>switch</c>, <c>button</c> or <c>none</c>), a switch's state, the button's (or the switch's) action label and whether it asks first
 /// (the action at index 0 of its sheet's), its mark, and its tone and tint as a tile's.
 /// </summary>
-public sealed record WebHomeDevice(string Entity, string Glyph, string Name, string State, string? Note, string Control, bool? On, string? Label, bool Ask, string? Mark, string Tone, string? Color);
+/// <remarks><see cref="Short"/> (2026-10-17, the user's phone): the name without its box's in front ("Aura" in Living Room), as a scene's label; null when that changes nothing.</remarks>
+public sealed record WebHomeDevice(string Entity, string Glyph, string Name, string State, string? Note, string Control, bool? On, string? Label, bool Ask, string? Mark, string Tone, string? Color, string? Short = null);
 
 /// <summary>
 /// The video playing, as the tab shows it: its state, the video, the clock, the sound, a playlist's place, a failure's sentence, and (2026-10-16)
@@ -355,7 +356,9 @@ public sealed record WebAskView(
     string? SubmitLabel,
     IReadOnlyList<WebPickItem>? Items = null,
     string? Current = null,
-    bool Live = false);
+    bool Live = false,
+    string? Detail = null,
+    string? DetailLabel = null);
 
 /// <summary>
 /// What the page's header and composer show: the profile and its two avatars, the model, whether a reply runs (Stop) or a model loads,
@@ -381,7 +384,8 @@ public sealed record WebState(
     bool HomeTab = true,
     bool ShoppingTab = true,
     bool YouTubeTab = false,
-    string? Watch = null);
+    string? Watch = null,
+    string? QueueHeld = null);
 
 /// <summary>
 /// What a page gets on (re)connecting: the transcript, the open asks, the state, the app's words the page shows of its own, the drafts held for
@@ -400,7 +404,8 @@ public sealed record WebStrip(IReadOnlyList<WebPicture> Pictures, int? Selected)
 /// and since its step did (the step only while the PC shows that clock), and the usage figures, every one optional. The page runs the clocks
 /// itself from the moment the event lands.
 /// </summary>
-public sealed record WebStatus(string? Label, long? ElapsedMs, long? StepMs, WebUsage? Usage);
+/// <remarks><see cref="Learning"/> (2026-10-17, the user's ask): a reflection runs, the PC's strip 🧠; the page shows its own, two taps cancel it.</remarks>
+public sealed record WebStatus(string? Label, long? ElapsedMs, long? StepMs, WebUsage? Usage, bool Learning = false);
 
 /// <summary>The usage figures apart (2026-10-15, <c>UsageText.HintParts</c>): the tokens in use, the share, the speed; a narrow phone drops the first, then the last.</summary>
 public sealed record WebUsage(string Tokens, string? Percent, string? Speed);
@@ -437,7 +442,8 @@ public sealed record WebWords(string PictureGone, string PictureTooLarge, string
     string MemoryModeOff = "",
     string BotCheckHint = "", string BotCheckPicture = "", string BotCheckZoom = "", string BotCheckScrollUp = "", string BotCheckScrollDown = "",
     string BotCheckTypeHere = "", string BotCheckSend = "", string BotCheckEnter = "", string BotCheckBackspace = "", string BotCheckTab = "",
-    string BotCheckStalled = "");
+    string BotCheckStalled = "",
+    string LearnCancel = "", string LearnCancelArmed = "", string Resume = "");
 
 /// <summary>
 /// The page's saved prompts, the sheet's 📣 tab (later on 2026-10-15): the profile's prompts, numbered as at the PC. The title went on

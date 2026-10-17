@@ -135,4 +135,11 @@ internal sealed partial class ChatScreen
         ArgumentNullException.ThrowIfNull(effective);
         return effective.ShoppingTools;
     }
+
+    /// <summary>
+    /// Whether the file and vault tools refuse a shopping or grocery list's name (2026-10-17, the user's report; <c>Shopping.ShoppingFileGuard</c>):
+    /// while the shopping group is offered and <c>shopping_add</c> is not switched off on <c>/tools</c> — the tool the refusal points to.
+    /// </summary>
+    public static bool ShoppingListGuarded(AppSettingsData effective) =>
+        ShoppingOffered(effective) && !ToolsText.DisabledSet(effective.ToolsDisabled).Contains(ShoppingAddTool.ToolName);
 }

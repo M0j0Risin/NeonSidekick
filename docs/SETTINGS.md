@@ -38,7 +38,7 @@ The app itself, this side of the connection.
 | Model avatar | The profile's emoji, at the start of its replies, its `/botchat` lines and the window title. Enter (or `/avatar`) opens the [avatar picker](INTERFACE.md#the-avatar-picker). | 🤖 |
 | User avatar | Your emoji, at the start of each of your lines in the transcript in place of `›`. Enter opens the same [picker](INTERFACE.md#the-avatar-picker); 🚫 goes back to `›`. | 🙊 |
 | Queue mode | `automatic`: a message sent during a reply waits in `/queue` and goes when the reply ends. `manual`: every message waits until you press `➤ send` (`s`) on `/queue`. `off`: no list. | `automatic` |
-| Queue cancel mode | What a canceled reply does with the queue: `hold` keeps it until your next message, `drain` sends the next one at once, `empty` drops them all. | `empty` |
+| Queue cancel mode | What a canceled reply does with the queue: `hold` keeps it until your next message, `drain` sends the next one at once, `empty` drops them all. Under `hold` a message from the Web UI counts as your next message too, and the page's **Resume** sends what was held. | `empty` |
 | Keep message history | Saves the ↑/↓ history (the newest 1,000 lines, the Web UI's sent lines among them) in the profile's `sessions.db`. Off deletes it at the next profile load; `/msgclear` empties it. | on |
 | Command typo intercept | A command typed without its slash (`clear`), or with extra ones, asks *Did you mean /clear?* before it is sent as text. | on |
 | Show /exit in autocomplete | Lists `/exit` in the `/` list. Typed in full, it works either way. | off |
@@ -58,7 +58,7 @@ The app itself, this side of the connection.
 | Menus max height | How much of the window a pane may take: `half`, `three-quarters` or `full`. Longer lists scroll. | `full` |
 | Hints bar | Whether the keys' hints get a bar of their own over the status bar: `auto` (a row while there is a hint, held until the next send), `always`, or `off` (the hints share the status bar). See [The hints bar](INTERFACE.md#the-hints-bar). | `auto` |
 | Status bar | Which sections the status bar shows, their order, and which side each is pinned to. Enter opens the checklist; see [The status bar](INTERFACE.md#the-status-bar) and [Bar checklists](INTERFACE.md#bar-checklists). | `default`: every section but Working directory; Model and Working directory pinned right |
-| Tool bar | Which icons the toolbar shows, their order, and which side each is pinned to. Enter (or `/toolbar edit`) opens the checklist; see [The toolbar](INTERFACE.md#the-toolbar). | Settings, Tools, Skills, Memory, Saved prompts, Queue, Shell allowed commands, Shell police, Shell, Files, Image, Web, path (13 of 42), with three dividers |
+| Tool bar | Which icons the toolbar shows, their order, and which side each is pinned to. Enter (or `/toolbar edit`) opens the checklist; see [The toolbar](INTERFACE.md#the-toolbar). | Settings, Tools, Skills, Memory, Saved prompts, Queue, Shell allowed commands, Shell police, Shell, Files, Image, Web, Web UI, path (14 of 47), with three dividers |
 | Performance bar | Which meters the performance bar shows, and where. Enter (or `/perfbar edit`) opens the checklist, whose **look:** button (`l`) steps the look; `/perfbar text`, `gauge` or `led` picks it too. See [The performance bar](INTERFACE.md#the-performance-bar). | CPU, RAM, GPU, VRAM, `led` |
 | Home bar | Home Assistant rooms and devices, and the shopping list's 🛒, as chips on a row of their own. Enter (or `/homebar edit`) opens the [picker](INTERFACE.md#the-home-bar). | off |
 | Toolbar order | The order of the five bars under the input line (**Order** on the pane). Enter opens the list; Shift+↑/↓ moves a bar. | `default` (hints bar, status bar, toolbar, performance bar, home bar) |
@@ -395,7 +395,7 @@ The loaded skills with their scope (`profile`, `global` or `external`), version,
 | Reflection cooldown mode | `last-written-skill`: only turns that used the skill just written wait. `all-skills`: every automatic reflection waits. | `last-written-skill` |
 | Reflection yield to turns | A message sent during a reflection pauses it, so the reply gets the server. Turn it off if your server handles parallel requests. | on |
 | Reflection mode | What a reflection may write: `create-update` a new skill or an improvement to one; `update-only` only an improvement to a skill that exists, never a new one. With no skill to update, no reflection runs and `/learn` says so. | `create-update` |
-| Reflection confirm mode | Whether a reflection asks before it writes: `none` never, `all` always, `new` before a new skill, `edit` before an edit. It asks at the idle line: **Keep**, **View** or **Discard**. | `none` |
+| Reflection confirm mode | Whether a reflection asks before it writes: `none` never, `all` always, `new` before a new skill, `edit` before an edit. It asks at the idle line: **Keep**, **View** or **Discard**. With the Web UI on, the page asks at once too, with the summary, Keep, Discard and the proposal under View; the first answer wins. | `none` |
 | Reflection edit supporting files | Lets a reflection change a skill's supporting files too, not just its `SKILL.md`. | off |
 | Reflection edit downloaded skills | For skills from `/skills add`: `read-only` makes the reflection write a companion skill instead (unless *Reflection mode* is `update-only`); `allow-and-mark` lets it change the skill, and a later update warns first. | `allow-and-mark` |
 
@@ -592,14 +592,6 @@ Network shares and folders outside the working directory; see [UNC shares](TOOLS
 | GitLib user email | The `user.email` `/gituser` writes into the repository's config. | empty |
 | GitLib user name | The `user.name` `/gituser` writes beside it. | empty |
 
-#### Obsidian
-
-| Setting | What it does | Default |
-|---|---|---|
-| Obsidian tools | Offers the vault tools (search, list, read, links, daily, write, properties, move) once a vault is set. | off |
-| Obsidian vault | The vault's folder (the one holding `.obsidian`), separate from the working directory. | empty |
-| Obsidian allow delete (.trash) | Offers `vault_delete`, which moves a note or attachment into the vault's `.trash`. | on |
-
 ### Apps
 
 The apps and services the tools reach. `/claude`'s settings are on `/settings` › Servers › [Anthropic](#anthropic).
@@ -642,6 +634,14 @@ The apps and services the tools reach. `/claude`'s settings are on `/settings` �
 | YouTube open links in | Where a video plays: `youtube-window` (the app's video window), `browser-window` (the app's Browser window), `default-browser`, or `webui-window` (the Web UI's [YouTube tab](INTERFACE.md#the-youtube-tab), on your phone or browser). It covers `youtube_play`, `/youtube play` and its lists, `open_url` on a video or playlist link while *YouTube tools* is on, and the video window's own video and playlist links. In a browser the model can't see or control the video. `webui-window` plays in the video window while the Web UI isn't serving or *Web UI YouTube controls* is off, and goes to the tab shown most recently (with none in view the video waits for one); `browser-window` uses your default browser where there is no Browser window (a Mac). The YouTube tab runs YouTube's player script in the Web UI's page, so while it is open that script can do what the page can, though never read the sign-in cookie. | `youtube-window` |
 | YouTube autoplay | Whether a played video starts at once or waits for play. | on |
 | YouTube while speaking | What a playing video does while the app speaks or listens: `pause`, `duck` (to 15 %) or `none`. | `pause` |
+
+#### Obsidian
+
+| Setting | What it does | Default |
+|---|---|---|
+| Obsidian tools | Offers the vault tools (search, list, read, links, daily, write, properties, move) once a vault is set. | off |
+| Obsidian vault | The vault's folder (the one holding `.obsidian`), separate from the working directory. | empty |
+| Obsidian allow delete (.trash) | Offers `vault_delete`, which moves a note or attachment into the vault's `.trash`. | on |
 
 ### Admin
 
@@ -815,7 +815,7 @@ The camera, screen and printer tools.
 | Setting | What it does | Default |
 |---|---|---|
 | Camera tool | Offers `camera_capture`, so the model can ask you for a photo; never headless or to an embedded model without vision. `/camera` works either way. On a Mac: macOS 14 or later. | off |
-| Camera shutter | `user`: the app shows you the request; Space takes the photo, `r` retakes, Enter sends, Esc declines. `model`: you allow or deny, and the app takes it. | `user` |
+| Camera shutter | `user`: the app shows you the request; Space takes the photo, `r` retakes, Enter sends, Esc declines. The Web UI offers **Take and send** (no preview) or **Cancel** at once. `model`: you allow or deny, and the app takes it. | `user` |
 | Camera preview | `live`: a [camera window](INTERFACE.md#the-camera-window) shows the picture while you frame it. `post`: the picture viewer opens on the photo. `off`: no window. | `live` |
 | Camera device | The camera, by its system name. `(first camera)`, or one that isn't connected, uses the first. | empty (the first camera) |
 | Camera resolution | The size asked for (`640x480`, `1280x720` or `1920x1080`); the camera uses its nearest. | `1280x720` |

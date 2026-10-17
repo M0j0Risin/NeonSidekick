@@ -17,6 +17,8 @@ const stopBtn = document.getElementById('stop');
 const asksEl = document.getElementById('asks');
 const waitingEl = document.getElementById('waiting');
 const queuedEl = document.getElementById('queued');
+const heldEl = document.getElementById('queue-held');
+const resumeBtn = document.getElementById('queue-resume');
 const completeEl = document.getElementById('complete');
 const profileEl = document.getElementById('profile');
 const modelEl = document.getElementById('model');
@@ -698,6 +700,10 @@ function applyState(s) {
   drawStatus();   // a busy PC with no label to show still spins
   waitingEl.textContent = s.waitingAtPc ? '⏸ Waiting for an answer at the PC: ' + s.waitingAtPc : '';
   waitingEl.classList.toggle('hidden', !s.waitingAtPc);
+  // The held queue (2026-10-17): the banner while a cancel holds the waiting lines, its Resume sending them.
+  heldEl.querySelector('.queue-held-text').textContent = s.queueHeld || '';
+  resumeBtn.textContent = words.resume || 'Resume';
+  heldEl.classList.toggle('hidden', !s.queueHeld);
   queuedEl.replaceChildren();
   for (const line of s.queued || []) queuedEl.appendChild(el('div', null, '⏳ ' + line.replace(/\s+/g, ' ')));
   queuedEl.classList.toggle('hidden', !(s.queued || []).length);
@@ -715,6 +721,7 @@ const frameEl = spinEl.querySelector('.frame');
 const labelEl = spinEl.querySelector('.label');
 const clockEl = spinEl.querySelector('.clock');
 const usageBtn = document.getElementById('usage');
+const learnBtn = document.getElementById('learn');
 const usageCard = document.getElementById('usage-card');
 const Frames = ['⠋', '⠙', '⠸', '⠴', '⠧', '⠇', '⠏'];   // the PC's (Theme.SpinnerFrames)
 const still = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -755,9 +762,30 @@ function usageText(u) {
   return parts.join(' · ');
 }
 
+resumeBtn.addEventListener('click', async () => {
+  resumeBtn.disabled = true;
+  const r = await post('/api/queue/resume', {});
+  resumeBtn.disabled = false;
+  if (r.ok) heldEl.classList.add('hidden');
+  else say(r.message || '');
+});
+
+// The reflection's 🧠 (2026-10-17, the user's ask): shown while the PC's strip shows it; two taps cancel the reflection, as the PC's
+// double-click or Ctrl+L does. The redraws only show or hide it, so an armed tap survives them; a reflection ending while it is armed
+// disarms it, so a tap on a later 🧠 is never the second of an old pair.
+let learnArmed = false;
+const paintLearn = Neon.paintArmed(learnBtn, on => on ? (words.learnCancelArmed || 'Tap again to cancel the reflection') : (words.learnCancel || 'A reflection is running: tap twice to cancel it'));
+Neon.armTwice(learnBtn, on => { learnArmed = on; paintLearn(on); }, async () => {
+  const r = await post('/api/learn/cancel', {});
+  if (!r.ok) say(r.message || '');
+});
+
 function drawStatus() {
   const label = status && status.label;
   const spinning = !!label || !!(state && state.busy);
+  const learning = !!(status && status.learning);
+  if (!learning && learnArmed) Neon.disarm();
+  learnBtn.classList.toggle('hidden', !learning);
   spinEl.classList.toggle('hidden', !spinning);
   if (spinning) {
     frameEl.textContent = still.matches ? '⏳' : Frames[frame % Frames.length];
@@ -773,7 +801,7 @@ function drawStatus() {
   const usage = usageText(status && status.usage);
   usageBtn.textContent = usage;
   usageBtn.classList.toggle('hidden', !usage);
-  statusEl.classList.toggle('hidden', !spinning && !usage);
+  statusEl.classList.toggle('hidden', !spinning && !usage && !learning);
   if (spinning && !spinTimer) {
     spinTimer = setInterval(() => { frame++; drawStatus(); }, 100);
   } else if (!spinning && spinTimer) {
@@ -896,11 +924,16 @@ function updateTitle() {
 
 // ── The asks ──────────────────────────────────────────────────────────
 
+// The asks' folded details opened by the user (2026-10-17: the reflection's proposal under View), kept by ask id across the rebuilds below.
+const openDetails = new Set();
+
 function renderAsks(list) {
   asks = list || [];
   asksEl.replaceChildren();
   for (const ask of asks) asksEl.appendChild(askCard(ask));
   stopBotViews(new Set(asks.filter(a => a.live).map(a => a.id)));
+  const live = new Set(asks.map(a => a.id));
+  for (const id of [...openDetails]) if (!live.has(id)) openDetails.delete(id);
   if (asks.length > lastAskCount) {
     // One footer panel at a time (later on 2026-10-15): the question the PC waits on closes the drawer. Under the overlay the drawer goes at
     // once (it can't be seen) and its entry is stepped over when the overlay closes, so the picture isn't pulled away.
@@ -953,6 +986,16 @@ function askCard(ask) {
     choices.appendChild(b);
   }
   card.appendChild(choices);
+  // A long text folded under the buttons (2026-10-17, the user's question: the reflection's proposal pushed Keep and Discard far down on a
+  // phone): the body is the summary, the whole proposal behind View; an open fold stays open when another ask redraws the cards.
+  if (ask.detail) {
+    const fold = el('details', 'detail');
+    fold.appendChild(el('summary', null, ask.detailLabel || 'View'));
+    fold.appendChild(el('pre', null, ask.detail));
+    fold.open = openDetails.has(ask.id);
+    fold.addEventListener('toggle', () => { if (fold.open) openDetails.add(ask.id); else openDetails.delete(ask.id); });
+    card.appendChild(fold);
+  }
   return card;
 }
 

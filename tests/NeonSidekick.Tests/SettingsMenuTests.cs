@@ -1254,7 +1254,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(HintsBarMode.Off, SettingsMenu.FieldValue(SettingsField.HintsBar, new AppSettingsData { HintsBar = " OFF " }, _settings.ProfileDirectory));
         Assert.Equal(HintsBarMode.Auto, SettingsMenu.FieldValue(SettingsField.HintsBar, new AppSettingsData { HintsBar = "nonsense" }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.HintsBar) || SettingsMenu.IsLlmField(SettingsField.HintsBar));
-        Assert.Equal("13 of 47", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults (📣 since 2026-10-14; ⏳ since 2026-10-13, of 40 with it; 🌄 since 2026-10-10): 5 of 13 from later on 2026-09-29, 3 from 2026-10-02; of 30 and 7 from 2026-10-03; 10 since 2026-10-05; of 39 with Model name, 2026-10-12
+        Assert.Equal("14 of 47", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults (📱 since 2026-10-17; 📣 since 2026-10-14; ⏳ since 2026-10-13, of 40 with it; 🌄 since 2026-10-10): 5 of 13 from later on 2026-09-29, 3 from 2026-10-02; of 30 and 7 from 2026-10-03; 10 since 2026-10-05; of 39 with Model name, 2026-10-12
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [] }, _settings.ProfileDirectory));
         Assert.Equal("3 of 47", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = ["usage", "PATH", " tools ", "nonsense"] }, _settings.ProfileDirectory));
         Assert.Equal("all", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [.. ToolbarItems.Names] }, _settings.ProfileDirectory));
@@ -3366,7 +3366,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\neon\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     13 of 47\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
+        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     14 of 47\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
         Assert.DoesNotContain("File /tree max entries", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -3390,7 +3390,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"/profiles/neon/files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     13 of 47\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
+        Assert.Contains(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     14 of 47\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
         Assert.DoesNotContain("File /tree max entries", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -4794,7 +4794,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Equal(["tools", "skills", "memory", "prompts", "queue", "cmdlist", "police", "shell", "files", "image", "web"], _settings.Current.ToolbarItems);
+        Assert.Equal(["webui", "tools", "skills", "memory", "prompts", "queue", "cmdlist", "police", "shell", "files", "image", "web"], _settings.Current.ToolbarItems);   // 📱 a default since 2026-10-17
         Assert.Contains("[x] ⚙️  Settings", Output);
         Assert.Contains("[ ] ⚙️  Settings", Output);
         Assert.Contains("[x] 📂  Working directory path", Output);
@@ -4802,8 +4802,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("[ ] 🔌  MCP", Output);
         Assert.Contains("[ ] 🪪  Profile", Output);
         Assert.DoesNotContain("📈  Performance", Output);   // retired (2026-10-14)
-        Assert.Contains("  · Tool bar: 12 of 47", Output);   // "Toolbar" until later on 2026-10-12
-        Assert.Contains("  · Tool bar: 11 of 47", Output);
+        Assert.Contains("  · Tool bar: 13 of 47", Output);   // "Toolbar" until later on 2026-10-12; 12 until 📱 became a default, 2026-10-17
+        Assert.Contains("  · Tool bar: 12 of 47", Output);   // 11 until 📱 became a default, 2026-10-17
         pane.Dispose();
     }
 
@@ -5180,7 +5180,7 @@ public partial class SettingsMenuTests : IDisposable
     [Fact]
     public async Task OnThePane_ShowToolbar_TheDefaultsAgain_SaveNull()
     {
-        _settings.Update(d => d.ToolbarItems = ["settings", "tools", "skills", "memory", "prompts", "queue", "cmdlist", "police", "shell", "files", "image", "web"]);
+        _settings.Update(d => d.ToolbarItems = ["settings", "webui", "tools", "skills", "memory", "prompts", "queue", "cmdlist", "police", "shell", "files", "image", "web"]);
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
@@ -5191,7 +5191,7 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Null(_settings.Current.ToolbarItems);
-        Assert.Contains("  · Tool bar: 13 of 47", Output);
+        Assert.Contains("  · Tool bar: 14 of 47", Output);
         pane.Dispose();
     }
 

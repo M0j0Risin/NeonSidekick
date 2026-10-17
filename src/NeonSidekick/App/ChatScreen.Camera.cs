@@ -8,6 +8,7 @@ using NeonSidekick.Llm.Tools;
 using NeonSidekick.Settings;
 using NeonSidekick.UI;
 using NeonSidekick.Viewer;
+using NeonSidekick.WebUi;
 
 namespace NeonSidekick.App;
 
@@ -82,7 +83,9 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The model's <c>camera_capture</c>, on the turn task: a photo declined earlier in the turn is not asked for again; under
     /// the <c>user</c> shutter the shutter pane, under <c>model</c> the allow pane (unless allowed for the session) and the app's
-    /// own shot. A sent photo's path is remembered as the camera's.
+    /// own shot. A sent photo's path is remembered as the camera's. Since 2026-10-17 (the user's question: a turn from the Web UI stopped
+    /// at the PC's shutter with nothing to answer on the page) the <c>user</c> shutter asks on the page too (<see cref="AskBothAsync"/>):
+    /// Take and send — the <c>model</c> shutter's shot, no preview on the page — or Cancel, a decline as the pane's; the first answer wins.
     /// </summary>
     private async Task<CameraAnswer> ShootForModelAsync(string prompt, CancellationToken turnToken)
     {
@@ -97,7 +100,7 @@ internal sealed partial class ChatScreen
         }
 
         var answer = CameraShutterMode.Resolve(_effective()) == CameraShutter.User
-            ? await RunCameraPaneAsync(token => ShutterAsync(CameraText.ModelPaneTitle, prompt, CameraText.SendRow, token), new CameraAnswer.NoScreen(), turnToken).ConfigureAwait(false)
+            ? await UserShutterAsync(prompt, turnToken).ConfigureAwait(false)
             : await ModelShutterAsync(prompt, turnToken).ConfigureAwait(false);
         if (answer is CameraAnswer.Declined or CameraAnswer.Denied)
         {
@@ -219,6 +222,26 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// The <c>user</c> shutter for the model (2026-10-17): the shutter pane at the PC and a card on the Web UI's page at once. The page's Take
+    /// and send is <see cref="SnapForModelAsync"/> (null from the card's mapping stands for it); its Cancel a decline; a pane closed with no
+    /// answer, or no watcher to run it, is <see cref="CameraAnswer.NoScreen"/> as before. The pane, cancelled by the page's answer, discards its
+    /// own shot as it closes; the shot here takes its own lease (the session's leases are counted over one stream, so the two may overlap).
+    /// </summary>
+    private async Task<CameraAnswer> UserShutterAsync(string prompt, CancellationToken turnToken)
+    {
+        var spec = new WebAskSpec("camera", CameraText.ModelPaneTitle,
+            [new WebChoice("take", CameraText.TakeAndSendRow), new WebChoice("decline", CameraText.CancelRow)], Body: prompt);
+        var outcome = await AskBothAsync<CameraAnswer?>(spec, async token => await ShutterAsync(CameraText.ModelPaneTitle, prompt, CameraText.SendRow, token).ConfigureAwait(false),
+            a => a.Choice == "take" ? null : new CameraAnswer.Declined(), "The camera pane failed: ", turnToken).ConfigureAwait(false);
+        if (outcome.Who == AskSource.Web && outcome.Value is null)
+        {
+            return await SnapForModelAsync(turnToken).ConfigureAwait(false);
+        }
+
+        return outcome.Value ?? new CameraAnswer.NoScreen();
+    }
+
+    /// <summary>
     /// The <c>model</c> shutter: the allow pane (Deny / once / the session, skipped once the session allowed it), then the
     /// app's own shot through the preview mode in force; the live view holds the shot a moment after.
     /// </summary>
@@ -240,6 +263,15 @@ internal sealed partial class ChatScreen
             _cameraAllowed = choice == CameraAllow.Session;
         }
 
+        return await SnapForModelAsync(turnToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The app's own shot for the model (out of <see cref="ModelShutterAsync"/> on 2026-10-17, for the Web UI's Take and send too): a lease, the
+    /// preview mode in force, the snap; the live view holds the shot a moment after. A camera failure is <see cref="CameraAnswer.Failed"/>.
+    /// </summary>
+    private async Task<CameraAnswer> SnapForModelAsync(CancellationToken turnToken)
+    {
         CameraPreviewRun? preview = null;
         try
         {

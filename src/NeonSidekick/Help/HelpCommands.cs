@@ -489,7 +489,7 @@ public static class HelpCommands
         [
             new("/webui", "Show the Web UI: on or off, its port and reach, and a tab per address with a QR code to scan with a phone on the same network and the sign-in link to open in a browser; its buttons: e turns it on or off, l switches the reach between lan and local, r makes a new token after a yes, c copies the shown link. A double-click on the link opens it on this PC, as `/webui browser` does. The link signs the browser in and leaves the address bar at once; the browser keeps a cookie for a year. *Web UI* (`/settings` › Client › Web UI) turns it on. Opens over a reply too."),
             new("/webui on|off", "Turn the Web UI on or off for this profile: the server starts or stops at once."),
-            new("/webui copy", "Copy the first sign-in link to the clipboard."),
+            new("/webui copy", "Copy the first sign-in link (Tailscale's when there is one) to the clipboard."),
             new("/webui browser [--external]", "Open the Web UI on this PC, signed in: in the Browser window under *Web open links in* `browser-window`, else in your default browser, signed in as *Web browser sign in mode* says (a link good once for a minute, or the usual link). `--external` always uses the default browser. The Web UI must be on."),
             new("/webui reset", "Make a new sign-in token, after a yes: every browser signed in will be signed out, and `/webui` shows the new link."),
         ]),

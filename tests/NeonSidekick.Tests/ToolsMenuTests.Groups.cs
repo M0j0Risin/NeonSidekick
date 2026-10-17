@@ -26,8 +26,8 @@ public partial class ToolsMenuTests
     {
         Assert.Equal("         │ ↳ SQL · MySQL · SQLite · PostgreSQL · Oracle ", SubStrip(ToolsText.DatabaseTabTitle));
         Assert.Equal("         │ ↳ Camera · Screen · Print ", SubStrip(ToolsText.DevicesTabTitle));   // the user's order since 2026-10-16; ComfyUI and YouTube on Integrations since 2026-10-10
-        Assert.Equal("         │ ↳ File · Image · UNC · GitLib · Obsidian ", SubStrip(ToolsText.FilesTabTitle));   // 2026-10-10; Image later that day
-        Assert.Equal("         │ ↳ Docker · ComfyUI · YouTube ", SubStrip(ToolsText.AppsTabTitle));   // EventLog 2026-10-15 until later that day (Admin); 2026-10-10; ClaudeCode first until later that day; HomeAssistant until 2026-10-11
+        Assert.Equal("         │ ↳ File · Image · UNC · GitLib ", SubStrip(ToolsText.FilesTabTitle));   // 2026-10-10; Image later that day; Obsidian to Apps on 2026-10-17
+        Assert.Equal("         │ ↳ Docker · ComfyUI · YouTube · Obsidian ", SubStrip(ToolsText.AppsTabTitle));   // EventLog 2026-10-15 until later that day (Admin); 2026-10-10; ClaudeCode first until later that day; HomeAssistant until 2026-10-11
         Assert.Equal("         │ ↳ Network · EventLog · Services · Tasks · Directory ", SubStrip(ToolsText.AdminTabTitle));   // Network first since 2026-10-16 (the user's order); later still on 2026-10-15 (the admin-tools plan)
         Assert.Equal("         │ ↳ Web · Shell · Timers · Ask · Options ", SubStrip(ToolsText.CoreTabTitle));   // the user's order since 2026-10-16
         Assert.Equal("         │ ↳ HomeAssistant · Shopping ", SubStrip(ToolsText.HomeTabTitle));   // 2026-10-11 (the user's ask)

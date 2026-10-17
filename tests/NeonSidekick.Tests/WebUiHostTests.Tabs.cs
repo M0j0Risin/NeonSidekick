@@ -92,6 +92,8 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/memory/save", "{\"text\":\"x\"}", WebTab.Chat)]
     [InlineData("/api/memory/delete", "{\"text\":\"x\"}", WebTab.Chat)]
     [InlineData("/api/history/clear", "{}", WebTab.Chat)]
+    [InlineData("/api/learn/cancel", "{}", WebTab.Chat)]
+    [InlineData("/api/queue/resume", "{}", WebTab.Chat)]
     [InlineData("/api/shopping/check", "{\"id\":1,\"on\":true}", WebTab.Shopping)]
     [InlineData("/api/shopping/store", "{\"id\":1}", WebTab.Shopping)]
     [InlineData("/api/shopping/add", "{\"text\":\"milk\"}", WebTab.Shopping)]   // the list's own controls (2026-10-16)
@@ -259,6 +261,51 @@ public sealed partial class WebUiHostTests
         Assert.Null(WebRateLimit.BucketOf(path, post: false));
     }
 
+    /// <summary>
+    /// The status row's 🧠 (2026-10-17, the user's ask): a post with no body that reaches the backend's cancel once signed in and
+    /// carrying the header, an act in its bucket, its Conflict a 409 with the sentence.
+    /// </summary>
+    [Fact]
+    public async Task TheLearnCancel_NeedsTheCookieAndTheHeader_IsAnAct_AndAnswersTheBackend()
+    {
+        using var unsigned = await _client.SendAsync(Post(WebUiHost.LearnCancelPath, "{}", signedIn: false));
+        using var crossSite = await _client.SendAsync(Post(WebUiHost.LearnCancelPath, "{}", csrf: false));
+        Assert.Equal((HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden), (unsigned.StatusCode, crossSite.StatusCode));
+        Assert.Equal(0, _backend.LearnCancels);
+
+        using var done = await _client.SendAsync(Post(WebUiHost.LearnCancelPath, "{}"));
+        Assert.Equal(HttpStatusCode.OK, done.StatusCode);
+        Assert.Equal(1, _backend.LearnCancels);
+
+        _backend.LearnReply = new WebReply(WebOutcome.Conflict, WebUiText.NoReflection);
+        using var none = await _client.SendAsync(Post(WebUiHost.LearnCancelPath, "{}"));
+        Assert.Equal(HttpStatusCode.Conflict, none.StatusCode);
+        var body = JsonSerializer.Deserialize(await none.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebResult)!;
+        Assert.Equal(WebUiText.NoReflection, body.Message);
+
+        Assert.Equal(WebRateBucket.Act, WebRateLimit.BucketOf(WebUiHost.LearnCancelPath, post: true));
+        Assert.Equal(WebTab.Chat, WebUiHost.TabOf(WebUiHost.LearnCancelPath));
+    }
+
+    /// <summary>The held queue's Resume (2026-10-17): the same shape as the 🧠's cancel.</summary>
+    [Fact]
+    public async Task TheQueuesResume_NeedsTheCookieAndTheHeader_IsAnAct_AndAnswersTheBackend()
+    {
+        using var unsigned = await _client.SendAsync(Post(WebUiHost.QueueResumePath, "{}", signedIn: false));
+        using var crossSite = await _client.SendAsync(Post(WebUiHost.QueueResumePath, "{}", csrf: false));
+        Assert.Equal((HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden), (unsigned.StatusCode, crossSite.StatusCode));
+        Assert.Equal(0, _backend.Resumes);
+
+        using var done = await _client.SendAsync(Post(WebUiHost.QueueResumePath, "{}"));
+        Assert.Equal(HttpStatusCode.OK, done.StatusCode);
+        Assert.Equal(1, _backend.Resumes);
+
+        _backend.ResumeReply = new WebReply(WebOutcome.Conflict, WebUiText.NotHeld);
+        using var none = await _client.SendAsync(Post(WebUiHost.QueueResumePath, "{}"));
+        Assert.Equal(HttpStatusCode.Conflict, none.StatusCode);
+        Assert.Equal(WebRateBucket.Act, WebRateLimit.BucketOf(WebUiHost.QueueResumePath, post: true));
+    }
+
     [Theory]
     [InlineData("/api/prompts/save", "{\"words\":1")]
     [InlineData("/api/prompts/delete", "[]")]
@@ -328,6 +375,8 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/memory/delete", WebTab.Chat)]
     [InlineData("/api/history", WebTab.Chat)]
     [InlineData("/api/history/clear", WebTab.Chat)]
+    [InlineData("/api/learn/cancel", WebTab.Chat)]
+    [InlineData("/api/queue/resume", WebTab.Chat)]
     [InlineData("/api/memoryx", null)]
     [InlineData("/api/entry/12", WebTab.Chat)]
     [InlineData("/api/picture/r/1/full", WebTab.Chat)]

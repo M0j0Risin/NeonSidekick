@@ -28,9 +28,10 @@ public sealed class ShoppingAddTool(ShoppingList list) : ShoppingTool(list)
 
     public override string Name => ToolName;
 
-    /// <summary>Pinned.</summary>
+    /// <summary>Pinned. Names the phrasings that mean it since 2026-10-17 (the user's report: "add milk to my shopping list" went to a file now and then).</summary>
     public override string Description =>
-        "Adds items to the user's shopping list (an item already on it gets the quantity added) and says where each is at the store. " +
+        "Adds items to the user's shopping or grocery list. Use it when they ask to add or put something on the list, or say they need or are out of a grocery or household item; " +
+        "an item already on it gets the quantity added, and the answer says where each is at the store. " +
         "Add only real products the user asked for; if a name is unclear (two unrelated words, a typo), ask which product they meant first.";
 
     public override JsonElement JsonSchema => Schema;

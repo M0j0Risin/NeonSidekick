@@ -96,7 +96,7 @@ internal sealed partial class SettingsMenu
             return await TypeAvatarAsync(SettingsField.UserAvatar, saved, SetUser, cancellationToken).ConfigureAwait(false);
         }
 
-        var context = new AvatarContext(EmojiCatalog.Shipped, EmojiPrefs.Load(_settings.StorageDirectory), saved, _settings.ProfileName,
+        var context = new AvatarContext(EmojiCatalog.Shipped, EmojiPrefs.Load(_settings.ProfileDirectory), saved, _settings.ProfileName,
             new Dictionary<string, List<string>>(StringComparer.Ordinal), [], ForUser: true);
         string? chosen;
         try
@@ -137,7 +137,7 @@ internal sealed partial class SettingsMenu
             return null;
         }
 
-        var context = new AvatarContext(EmojiCatalog.Shipped, EmojiPrefs.Load(_settings.StorageDirectory), "", _settings.ProfileName,
+        var context = new AvatarContext(EmojiCatalog.Shipped, EmojiPrefs.Load(_settings.ProfileDirectory), "", _settings.ProfileName,
             new Dictionary<string, List<string>>(StringComparer.Ordinal), [], ForDraft: true);
         string? chosen = await ChooseEmojiAsync(context, EmojiText.PickerTitle, "", cancellationToken).ConfigureAwait(false);
         return string.IsNullOrEmpty(chosen) ? null : chosen;
@@ -279,7 +279,7 @@ internal sealed partial class SettingsMenu
 
         if (avatar.Length > 0)
         {
-            EmojiPrefs.Load(_settings.StorageDirectory).Picked(avatar);
+            EmojiPrefs.Load(_settings.ProfileDirectory).Picked(avatar);
         }
 
         if (user)
@@ -381,7 +381,7 @@ internal sealed partial class SettingsMenu
         }
 
         var catalog = EmojiCatalog.Shipped;
-        return new AvatarContext(catalog, EmojiPrefs.Load(home), AvatarRules.Normalize(_settings.Current.ModelAvatar), profile, usedBy,
+        return new AvatarContext(catalog, EmojiPrefs.Load(_settings.ProfileDirectory), AvatarRules.Normalize(_settings.Current.ModelAvatar), profile, usedBy,
             EmojiSuggest.For(profile, persona, catalog.Entries));
     }
 

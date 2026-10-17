@@ -347,7 +347,10 @@ function deviceRow(device) {
   if (device.note) row.title = device.note;
   const text = el('span', 'room-row-text');
   text.appendChild(el('span', 'glyph', device.glyph));
-  text.appendChild(el('span', 'room-row-name', device.name));
+  // Its box's name left off (2026-10-17, the user's phone); the whole name its title.
+  const name = el('span', 'room-row-name', device.short || device.name);
+  if (device.short) name.title = device.name;
+  text.appendChild(name);
   text.appendChild(el('span', 'room-row-state', device.state));
   row.appendChild(text);
   const action = { index: 0, label: device.label, ask: device.ask };

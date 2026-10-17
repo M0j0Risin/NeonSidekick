@@ -196,7 +196,7 @@ public class NeonHelpTests
         Assert.StartsWith("Tab /tools › Files › GitLib:", Invoke("/tools git"), StringComparison.Ordinal);
         Assert.StartsWith("Tab /tools › Home › HomeAssistant:", Invoke("/tools home assistant"), StringComparison.Ordinal);   // on Home since 2026-10-11
         Assert.StartsWith("Tab /tools › Home: " + HelpText.MenusTab(["HomeAssistant", "Shopping"]), Invoke("/tools home"), StringComparison.Ordinal);   // the tab said whole wins over HomeAssistant
-        Assert.StartsWith("Tab /tools › Apps: " + HelpText.MenusTab(["Docker", "ComfyUI", "YouTube"]), Invoke("/tools apps"), StringComparison.Ordinal);
+        Assert.StartsWith("Tab /tools › Apps: " + HelpText.MenusTab(["Docker", "ComfyUI", "YouTube", "Obsidian"]), Invoke("/tools apps"), StringComparison.Ordinal);   // Obsidian last since 2026-10-17 (the user's order)
         Assert.StartsWith("Tab /tools › Admin: " + HelpText.MenusTab(["Network", "EventLog", "Services", "Tasks", "Directory"]), Invoke("/tools admin"), StringComparison.Ordinal);   // Network first since 2026-10-16 (the user's order); later still on 2026-10-15 (the admin-tools plan)
         Assert.StartsWith("Tab /tools › Admin › EventLog:", Invoke("/tools eventlog"), StringComparison.Ordinal);
         Assert.StartsWith("Tab /tools › Admin › Network:", Invoke("/tools network"), StringComparison.Ordinal);   // on Core until 2026-10-16
@@ -211,7 +211,7 @@ public class NeonHelpTests
     {
         Assert.StartsWith("Tab /tools › Files › File:", Invoke("/tools file"), StringComparison.Ordinal);
         string group = Invoke("/tools files");
-        Assert.StartsWith("Tab /tools › Files: " + HelpText.MenusTab(["File", "Image", "UNC", "GitLib", "Obsidian"]), group, StringComparison.Ordinal);
+        Assert.StartsWith("Tab /tools › Files: " + HelpText.MenusTab(["File", "Image", "UNC", "GitLib"]), group, StringComparison.Ordinal);   // Obsidian on Apps since 2026-10-17
         Assert.EndsWith("\nAsk for one menu (/tools file) for its rows' defaults and what each does.", group, StringComparison.Ordinal);
         Assert.StartsWith("Tab /tools › Files › File:", Invoke("file tab"), StringComparison.Ordinal);
         Assert.DoesNotContain("Tab /tools › Files:", Invoke("file tab"));

@@ -14,13 +14,6 @@ public static class WebUiText
 
     // ── At the PC ─────────────────────────────────────────────────────────────
 
-    /// <summary>The server is up: its address (never the token) and where the link is. Pinned.</summary>
-    public static string ServingNotice(string address) =>
-        "(" + Glyph + "Web UI on " + address + " — /webui shows the sign-in link)";
-
-    /// <summary>The first time it serves the home network on Windows: the firewall may ask. Pinned.</summary>
-    public const string FirewallNotice = "(" + Glyph + "Windows may ask to let NeonSidekick through its firewall: allow it on private networks for a phone to connect)";
-
     /// <summary>The server stopped. Pinned.</summary>
     public const string StoppedNotice = "(" + Glyph + "Web UI stopped)";
 
@@ -261,7 +254,7 @@ public static class WebUiText
     public static string RefusedAtDispatch(string reason) => "From the Web UI: " + reason;
 
     /// <summary><c>/model &lt;id&gt;</c> or <c>/reasoning</c> from the page while the connect would scan for a server.</summary>
-    public const string WouldScan = "the server would be looked for (no LLM URL, the scan on): pick it at the PC.";
+    public const string WouldScan = "the server would be looked for (none saved is in use): pick it at the PC.";
 
     /// <summary><c>/model &lt;id&gt;</c> from the page naming an embedded model not installed.</summary>
     public const string WouldInstall = "that embedded model is not installed: install it at the PC.";
@@ -468,6 +461,39 @@ public static class WebUiText
     public static string HistoryClearedLogLine(int count, IPAddress? remote) =>
         "Web UI cleared the message history (" + App.ChatScreen.HistoryMessages(count) + ") from " + Where(remote) + ".";
 
+    // ── The held queue (2026-10-17, the user's question: under Queue cancel mode hold the page's lines waited with nothing saying why) ──
+
+    /// <summary>The banner over the page's waiting lines while they are held after a cancel.</summary>
+    public const string QueueHeld = "Held after a cancel: these wait until a reply ends or you resume.";
+
+    /// <summary>The banner's button.</summary>
+    public const string Resume = "Resume";
+
+    /// <summary>The page's Resume with nothing held (a reply ended meanwhile).</summary>
+    public const string NotHeld = "Nothing is held.";
+
+    /// <summary>The PC's hint row after the page's Resume.</summary>
+    public const string QueueResumedFlash = "📱 resumed the queue";
+
+    /// <summary>The audit line.</summary>
+    public static string QueueResumedLogLine(IPAddress? remote) => "Web UI resumed the held queue from " + Where(remote) + ".";
+
+    // ── The status row's 🧠 (2026-10-17, the user's ask: no sign on the page that a reflection held the server, and no way to stop it) ──
+
+    /// <summary>The 🧠's label while a reflection runs, and once the first tap armed it.</summary>
+    public const string LearnCancel = "A reflection is running: tap twice to cancel it";
+
+    public const string LearnCancelArmed = "Tap again to cancel the reflection";
+
+    /// <summary>The page's cancel with no reflection running (it ended between the status and the tap).</summary>
+    public const string NoReflection = "No reflection is running.";
+
+    /// <summary>The PC's hint row after the page canceled the reflection.</summary>
+    public const string LearnCancelledFlash = "📱 canceled the reflection";
+
+    /// <summary>The audit line.</summary>
+    public static string LearnCancelledLogLine(IPAddress? remote) => "Web UI canceled the reflection from " + Where(remote) + ".";
+
     // ── The page's 🗑️ (later on 2026-10-15) ──
 
     /// <summary>The overlay's 🗑️, and its label once armed.</summary>
@@ -510,7 +536,7 @@ public static class WebUiText
         PromptsTab, MemoryTab, HistoryTab, MemoryNone, HistoryNone, SaveDraft, DraftEmpty, DeleteRow, DeleteRowArmed, ClearAll, ClearAllArmed, MemoryOff,
         MemoryModeOff,
         BotCheckHint, BotCheckPicture, BotCheckZoom, BotCheckScrollUp, BotCheckScrollDown, BotCheckTypeHere, BotCheckSend, BotCheckEnter, BotCheckBackspace, BotCheckTab,
-        BotCheckStalled);
+        BotCheckStalled, LearnCancel, LearnCancelArmed, Resume);
 
     // ── A bot check's card (2026-10-17): the Browser window on the page while a check runs in it ──
 

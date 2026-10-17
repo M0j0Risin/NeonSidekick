@@ -2,16 +2,26 @@ using NeonSidekick.Emojis;
 
 namespace NeonSidekick.Tests;
 
-/// <summary>The avatar picker's <c>&lt;home&gt;/configs/emoji.json</c> (2026-10-10; in <c>configs</c> since 2026-10-16): recent picks and the last skin tone.</summary>
+/// <summary>
+/// The avatar picker's <c>emoji.json</c> (2026-10-10; in <c>configs</c> since 2026-10-16): recent picks and the last skin tone, per profile
+/// since 2026-10-17 (the user's ask; the home's until then, no longer read). <c>_home</c> is the profile's folder these tests load.
+/// </summary>
 public sealed class EmojiPrefsTests : IDisposable
 {
-    private readonly string _home = Path.Combine(Path.GetTempPath(), "neon-emoji-" + Guid.NewGuid().ToString("N"));
+    private readonly string _root;
+    private readonly string _home;
+
+    public EmojiPrefsTests()
+    {
+        _root = Path.Combine(Path.GetTempPath(), "neon-emoji-" + Guid.NewGuid().ToString("N"));
+        _home = NeonSidekick.Settings.Profiles.Directory(_root, "neon");
+    }
 
     public void Dispose()
     {
-        if (Directory.Exists(_home))
+        if (Directory.Exists(_root))
         {
-            Directory.Delete(_home, recursive: true);
+            Directory.Delete(_root, recursive: true);
         }
     }
 
@@ -36,8 +46,28 @@ public sealed class EmojiPrefsTests : IDisposable
         var again = EmojiPrefs.Load(_home);
         Assert.Equal(["🦊", "👍🏽", "🐙"], again.Recent);
         Assert.Equal(3, again.Tone);
-        Assert.True(File.Exists(Path.Combine(_home, "configs", EmojiPrefs.FileName)));   // the home's configs since 2026-10-16
+        Assert.True(File.Exists(Path.Combine(_home, "configs", EmojiPrefs.FileName)));   // the profile's configs since 2026-10-17
         Assert.False(File.Exists(Path.Combine(_home, EmojiPrefs.FileName)));
+    }
+
+    /// <summary>Each profile its own (2026-10-17, the user's ask): a pick in one is not in another, and the home's old file is not read.</summary>
+    [Fact]
+    public void EachProfile_KeepsItsOwn_AndTheHomesFileIsNotRead()
+    {
+        string other = NeonSidekick.Settings.Profiles.Directory(_root, "work");
+        EmojiPrefs.Load(_home).Picked("🦊", tone: 2);
+        EmojiPrefs.Load(other).Picked("🐙");
+        Assert.Equal(["🦊"], EmojiPrefs.Load(_home).Recent);
+        Assert.Equal(2, EmojiPrefs.Load(_home).Tone);
+        Assert.Equal(["🐙"], EmojiPrefs.Load(other).Recent);
+        Assert.Equal(0, EmojiPrefs.Load(other).Tone);
+
+        string homes = NeonSidekick.Settings.Profiles.HomeConfigPath(_root, EmojiPrefs.FileName);
+        Directory.CreateDirectory(Path.GetDirectoryName(homes)!);
+        File.WriteAllText(homes, "{ \"recent\": [\"🐸\"], \"tone\": 4 }");
+        string fresh = NeonSidekick.Settings.Profiles.Directory(_root, "fresh");
+        Assert.Empty(EmojiPrefs.Load(fresh).Recent);   // no migration: the old file is the user's to delete
+        Assert.Equal(0, EmojiPrefs.Load(fresh).Tone);
     }
 
     [Fact]

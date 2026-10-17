@@ -42,6 +42,7 @@
       <div class="choices"><button type="button" id="usage-close"></button></div>
     </section>
     <div class="banner waiting hidden" id="waiting"></div>
+    <div class="banner queue-held hidden" id="queue-held"><span class="queue-held-text"></span><button type="button" class="queue-resume" id="queue-resume"></button></div>
     <div class="queued hidden" id="queued"></div>
     <div class="banner message hidden" id="message"></div>
     <div class="complete hidden" id="complete" role="listbox"></div>
@@ -64,6 +65,7 @@
       <div class="strip-row" id="strip-row"></div>
     </section>
     <div class="status hidden" id="status">
+      <button type="button" class="learn-button hidden" id="learn">🧠</button>
       <span class="spin hidden" role="status" aria-live="polite"><span class="frame" aria-hidden="true"></span><span class="label"></span><span class="clock" aria-hidden="true"></span></span>
       <button type="button" class="usage hidden" id="usage"></button>
     </div>

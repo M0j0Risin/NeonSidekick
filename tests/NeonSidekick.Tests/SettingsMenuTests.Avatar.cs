@@ -76,7 +76,7 @@ public partial class SettingsMenuTests
         Assert.Contains("  · Model avatar: 🦊 fox", Output);
         Assert.Contains(EmojiText.Caption("fox", EmojiSearch.Rank("fox", EmojiCatalog.Shipped.Entries).Count, EmojiCatalog.Shipped.Entries.Count), Output);
         Assert.Contains(EmojiText.PreviewLine("🦊", "neon"), Output);
-        Assert.Equal(["🦊"], EmojiPrefs.Load(_dir).Recent);
+        Assert.Equal(["🦊"], EmojiPrefs.Load(_settings.ProfileDirectory).Recent);
         pane.Dispose();
     }
 
@@ -94,7 +94,7 @@ public partial class SettingsMenuTests
 
         Assert.Equal("👍🏽", _settings.Current.ModelAvatar);
         Assert.Contains(EmojiText.ToneTitle, Output);
-        Assert.Equal(3, EmojiPrefs.Load(_dir).Tone);
+        Assert.Equal(3, EmojiPrefs.Load(_settings.ProfileDirectory).Tone);
         pane.Dispose();
     }
 
@@ -157,7 +157,7 @@ public partial class SettingsMenuTests
     {
         _console.Profile.Width = 160;
         Profiles.Create(_dir, "ada", new AppSettingsData { ModelAvatar = "🐙" });
-        EmojiPrefs.Load(_dir).Picked("🦊");
+        EmojiPrefs.Load(_settings.ProfileDirectory).Picked("🦊");
         var (menu, pane) = PaneMenu();
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
         Push(Keys.ShiftTab);                  // no For you for "neon" (a word every profile has): Smileys first, Recent before it

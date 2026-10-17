@@ -593,7 +593,7 @@ internal sealed partial class ChatScreen
         sink.Notice(HomeBarItems.GlyphOf(next, reference) is { } shown ? HomeBarText.GlyphSet(name, shown) : HomeBarText.GlyphReset(name, own));
         if (!reset && HomeBarItems.GlyphOf(next, reference) is { } picked)
         {
-            Emojis.EmojiPrefs.Load(_settings.StorageDirectory).Picked(picked);
+            Emojis.EmojiPrefs.Load(_settings.ProfileDirectory).Picked(picked);
         }
     }
 

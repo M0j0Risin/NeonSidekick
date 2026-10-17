@@ -1208,6 +1208,8 @@ internal sealed partial class ChatScreen
         _files.ServerDatabases = () => Shell.ServerDatabasePolice.For(_effective(), _settings.ProfileDirectory, _settings.StorageDirectory);
         // The admin police (2026-10-15, the admin-tools plan): services, tasks and the directory guarded while their tools are on.
         _files.AdminFamilies = () => Shell.AdminPolice.For(_effective());
+        // The shopping list's tripwire (2026-10-17): the write tools refuse a list's name while the shopping tools are offered.
+        _files.ShoppingListGuard = () => ShoppingListGuarded(_effective());
         // delete's bin while File deletes to Recycle bin is on (later on 2026-10-15).
         _files.RecycleDeletes = () => _effective().FileDeletesToRecycleBin ? _recycleBin : null;
         _images = new WorkingDirectory(() => _settings.ProfileImagesDirectory, time, WorkingDirectoryOptions.Images);
@@ -1236,7 +1238,7 @@ internal sealed partial class ChatScreen
         _git = new GitAccess(_files, time);
         _gitTools = GitTools(_git, _effective);
         // The vault tools (2026-09-22): their own root, the setting Obsidian vault read at every call.
-        _vault = new ObsidianVault(() => _effective().ObsidianVault, time);
+        _vault = new ObsidianVault(() => _effective().ObsidianVault, time) { ShoppingListGuard = () => ShoppingListGuarded(_effective()) };
         _vaultTools = ObsidianTools(_vault, _effective);
         // The SQL tools (2026-09-23): the loaded profile's sql.json over the home's, read at every call, so a profile switch or an edit needs no rebuild.
         // Narrowed to the connections the profile offers (later that day): every tool, the rules and the %-mention see only those.
@@ -3316,6 +3318,8 @@ internal sealed partial class ChatScreen
         {
             case QueueCancel.Hold:
                 _queue.Held = true;
+                // The page's lines that waited behind the reply are held with the PC's (2026-10-17); one it sends from now on goes at once.
+                _webUi.HoldForCancel();
                 break;
             case QueueCancel.Empty:
                 DropQueue();
@@ -4063,16 +4067,30 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void CancelLearnByKey()
     {
-        if (!_session.IsLearning && Volatile.Read(ref _pausedLearn) is null)
+        if (!CancelLearnNow())
         {
             DiagnosticLog.Debug(SkillCatalog.Category, LearnKeyIdleLog);
-            return;
+        }
+    }
+
+    /// <summary>
+    /// The brain's cancel from any thread (out of <see cref="CancelLearnByKey"/> on 2026-10-17, for the Web UI's 🧠 too): the paused reflection
+    /// forgotten, the running one cancelled, <see cref="LearnCancelledNotice"/> queued for <see cref="DrainLearn"/> and the idle read nudged.
+    /// False, and nothing done, with nothing running or paused. Every piece is safe off the turn task: <see cref="ForgetPausedLearn"/>'s
+    /// exchange, <see cref="LlmSession.CancelLearning"/>'s safe cancel, the concurrent queue, <see cref="SignalAlert"/>'s volatile read.
+    /// </summary>
+    private bool CancelLearnNow()
+    {
+        if (!_session.IsLearning && Volatile.Read(ref _pausedLearn) is null)
+        {
+            return false;
         }
 
         ForgetPausedLearn();
         _session.CancelLearning();
         _learnNotices.Enqueue(LearnCancelledNotice);
         SignalAlert();
+        return true;
     }
 
     /// <summary>
@@ -11788,6 +11806,39 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// Whether the saved URL stands for no server (<see cref="ConnectLlmAsync"/>'s test, its own since 2026-10-17): blank; a saved Anthropic API
+    /// URL with the Anthropic API off or keyless (2026-09-27), the OpenAI API's likewise (2026-10-03); a saved embedded URL with Embedded servers
+    /// enabled off (2026-09-29); a saved Claude CLI URL with the Claude Code server off or the CLI gone (2026-09-30); a Docker URL not chosen (a
+    /// chosen one connects before this is read, 2026-10-02).
+    /// </summary>
+    private bool BlankLlmUrl(AppSettingsData effective) =>
+        string.IsNullOrWhiteSpace(effective.LlmUrl)
+        || (Llm.Anthropic.ClaudeApi.IsClaudeApi(effective.LlmUrl) && !Llm.Anthropic.ClaudeApi.Offered(effective))
+        || (Llm.OpenAIPlatform.OpenAIApi.IsOpenAIApi(effective.LlmUrl) && !Llm.OpenAIPlatform.OpenAIApi.Offered(effective))
+        || EmbeddedLlm.EmbeddedEndpoint.SwitchedOff(effective)
+        || (ClaudeCliEndpoint.IsClaudeCli(effective.LlmUrl) && !_session.ClaudeCliOffered(effective))
+        || DockerEndpoint.IsDocker(effective.LlmUrl);
+
+    /// <summary>
+    /// With no server saved, whether the connect resolves without looking for one (<see cref="ConnectLlmAsync"/>'s test, its own since
+    /// 2026-10-17): the scan off and nothing else offered — no hosted API, no embedded model, no Claude Code server, no Docker server.
+    /// </summary>
+    private bool ConnectsWithoutLooking(AppSettingsData effective) =>
+        !Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective)) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !Llm.OpenAIPlatform.OpenAIApi.Offered(effective)
+        && !EmbeddedOffered && !_session.ClaudeCliOffered(effective) && !_session.DockerOffered(effective);
+
+    /// <summary>
+    /// Whether a connect now would look for a server and may open the PC's pickers (2026-10-17, the user's question: a <c>/reasoning</c> from the
+    /// Web UI could leave the page waiting on the PC's server, model or reasoning picker): no embedded or chosen Docker server (they connect
+    /// their own way), no server saved (<see cref="BlankLlmUrl"/>), something to look through (<see cref="ConnectsWithoutLooking"/> false), and
+    /// menus to show. Discovery may find one server and pick nothing, but that cannot be known ahead; the page is sent to the PC either way.
+    /// </summary>
+    private bool ConnectWouldPick(AppSettingsData effective) =>
+        !EmbeddedLlm.EmbeddedEndpoint.Chosen(effective)
+        && !(DockerEndpoint.Chosen(effective) && _session.DockerServers is not null)
+        && BlankLlmUrl(effective) && !ConnectsWithoutLooking(effective) && _menu.CanShowMenus();
+
+    /// <summary>
     /// Resolves the LLM endpoint under the spinner and reports the outcome as transcript lines.
     /// With a blank URL and menus available the local ports are probed here (not in
     /// <see cref="LlmSession.ConnectAsync"/>) so that, when several servers answer — or any does at
@@ -11801,6 +11852,10 @@ internal sealed partial class ChatScreen
     /// URL under <c>LLM server scan mode</c> <c>disabled</c> asks nothing: the session's connect drops the
     /// old endpoint and resolves null at once, no spinner, and the report says why (2026-09-15).
     /// </summary>
+    /// <remarks>
+    /// Its two tests are their own methods since 2026-10-17 (<see cref="BlankLlmUrl"/>, <see cref="ConnectsWithoutLooking"/>), so the Web UI's
+    /// guard (<see cref="ConnectWouldPick"/>) reads the very ones the connect does.
+    /// </remarks>
     /// <param name="quiet">The banner was just drawn above, or the settings pane just closed: report only what the settings cannot say.</param>
     /// <param name="startup">The app's first connect (<see cref="RunAsync"/>): the server picker opens for a single answer too.</param>
     private async Task ConnectLlmAsync(CancellationToken cancellationToken, bool quiet = false, bool startup = false)
@@ -11824,16 +11879,8 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        // A saved Anthropic API URL with the Anthropic API off or keyless stands for nothing (2026-09-27): found as a blank one; the
-        // OpenAI API's likewise (2026-10-03). So does a saved embedded URL with Embedded servers enabled off (2026-09-29), and a saved Claude CLI URL with the
-        // Claude Code server off or the CLI gone (2026-09-30).
-        bool blankUrl = string.IsNullOrWhiteSpace(effective.LlmUrl)
-            || (Llm.Anthropic.ClaudeApi.IsClaudeApi(effective.LlmUrl) && !Llm.Anthropic.ClaudeApi.Offered(effective))
-            || (Llm.OpenAIPlatform.OpenAIApi.IsOpenAIApi(effective.LlmUrl) && !Llm.OpenAIPlatform.OpenAIApi.Offered(effective))
-            || EmbeddedLlm.EmbeddedEndpoint.SwitchedOff(effective)
-            || (ClaudeCliEndpoint.IsClaudeCli(effective.LlmUrl) && !_session.ClaudeCliOffered(effective))
-            || DockerEndpoint.IsDocker(effective.LlmUrl);   // a chosen one connected above (2026-10-02); any other stands for nothing
-        if (blankUrl && !Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective)) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !Llm.OpenAIPlatform.OpenAIApi.Offered(effective) && !EmbeddedOffered && !_session.ClaudeCliOffered(effective) && !_session.DockerOffered(effective))
+        bool blankUrl = BlankLlmUrl(effective);
+        if (blankUrl && ConnectsWithoutLooking(effective))
         {
             await _session.ConnectAsync(effective, cancellationToken).ConfigureAwait(false);
             DrainDiagnostics();

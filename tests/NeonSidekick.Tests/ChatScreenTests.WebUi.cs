@@ -186,6 +186,96 @@ public partial class ChatScreenTests
         subscription!.Dispose();
     }
 
+    /// <summary>
+    /// Under Queue cancel mode hold (2026-10-17, the user's question): the page's line that waited behind a canceled reply is held, the state's
+    /// banner says so, and the page's next message runs at once, as a typed one does at the PC; when its reply ends the held line follows.
+    /// </summary>
+    [Fact]
+    public async Task UnderHold_ThePagesNextMessageRuns_AndTheHeldOneFollowsItsReply()
+    {
+        var (requests, held) = await HeldQueueRunAsync(resume: false);
+
+        Assert.Equal(WebUiText.QueueHeld, held!.QueueHeld);
+        Assert.Contains("after the reply", held.Queued);
+        Assert.Equal(["start", "the next one", "after the reply"], requests);
+    }
+
+    /// <summary>The banner's Resume (2026-10-17) sends the held line at once; a second Resume, nothing held, is a Conflict.</summary>
+    [Fact]
+    public async Task UnderHold_ThePagesResume_SendsTheHeldLine()
+    {
+        var (requests, held) = await HeldQueueRunAsync(resume: true);
+
+        Assert.Equal(WebUiText.QueueHeld, held!.QueueHeld);
+        Assert.Equal(["start", "after the reply"], requests);
+        Assert.Equal((WebOutcome.Conflict, WebUiText.NotHeld), (Web.ResumeQueue(null).Outcome, Web.ResumeQueue(null).Message));
+    }
+
+    /// <summary>
+    /// A PC line whose reply the page's Stop cancels after its first word (a plain cancel, not a withdrawal) while a page line waits behind it,
+    /// under hold; then either a fresh page line or the page's Resume. The user lines the model got, in order, and the state while held.
+    /// </summary>
+    private async Task<(List<string> Requests, WebState? Held)> HeldQueueRunAsync(bool resume)
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.QueueCancelMode = "hold"; });
+        _chat.EnqueueText("One. ", "Two.");
+        _chat.EnqueueText("Next.");
+        _chat.EnqueueText("Held.");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (i == 1 && _chat.Requests.Count == 1)
+            {
+                Assert.Equal(WebOutcome.Ok, Web.Send(new WebSendRequest { Text = "after the reply" }, null).Outcome);   // waits: a reply runs
+                Assert.Equal(WebOutcome.Ok, Web.Stop(null).Outcome);
+                await Task.Delay(TimeSpan.FromSeconds(30), ct);   // the Stop ends it long before
+            }
+        };
+        WebState? held = null;
+        int expected = resume ? 2 : 3;
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            if (_running is null)
+            {
+                return;
+            }
+
+            switch (step)
+            {
+                case 0: step++; PushLine(input, "start"); break;
+                case 1:
+                    if (Web.Snapshot().State is { QueueHeld: not null } state)
+                    {
+                        step++;
+                        held = state;
+                        if (resume)
+                        {
+                            Assert.Equal(WebOutcome.Ok, Web.ResumeQueue(null).Outcome);
+                        }
+                        else
+                        {
+                            Assert.Equal(WebOutcome.Ok, Web.Send(new WebSendRequest { Text = "the next one" }, null).Outcome);
+                        }
+                    }
+
+                    break;
+                case 2:
+                    if (_chat.Requests.Count >= expected && Web.WaitingCount == 0 && Output.Contains(resume ? "Next." : "Held.", StringComparison.Ordinal))
+                    {
+                        step++;
+                        PushLine(input, "/exit");
+                    }
+
+                    break;
+            }
+        };
+
+        await RunAsync(input);
+        var requests = _chat.Requests.Select(r => r.Last(m => m.Role == ChatRole.User).Text).ToList();
+        return (requests, held);
+    }
+
     private sealed class RecordingHost : IWebUiHost
     {
         public WebUiBinding? Started { get; private set; }
@@ -541,6 +631,30 @@ public partial class ChatScreenTests
 
         Assert.Contains(WebUiText.RefusedAtDispatch(WebUiText.WouldScan), output);
         Assert.Equal(model, _settings.Current.LlmModel);
+    }
+
+    /// <summary>
+    /// A reasoning level from the page (2026-10-17, the user's question) is refused as <c>/model</c>'s is when its reconnect would look for a
+    /// server — here a saved Anthropic API URL with the Anthropic API off, which the connect reads as no server — and no PC pane opens.
+    /// </summary>
+    [Fact]
+    public async Task AReasoningLevelFromThePage_IsRefused_WhenItsReconnectWouldLookForAServer()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebUiCommands = true; });
+        string reasoning = _settings.Current.LlmReasoning;
+        var input = WebSteps(
+            _ =>
+            {
+                _settings.Update(d => { d.LlmUrl = Llm.Anthropic.ClaudeApi.BaseUrl.ToString(); d.LlmScanMode = "local"; });
+                SendFromPage("/reasoning high");
+            },
+            i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        Assert.Contains(WebUiText.RefusedAtDispatch(WebUiText.WouldScan), output);
+        Assert.Equal(reasoning, _settings.Current.LlmReasoning);
+        Assert.Empty(_pcOnlyPanes);
     }
 
     [Fact]

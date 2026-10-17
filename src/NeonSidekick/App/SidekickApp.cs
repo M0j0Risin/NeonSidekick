@@ -780,6 +780,8 @@ public sealed class SidekickApp
         files.Databases = () => EffectiveSettings.SqliteTools ? ChatScreen.SqliteDatabaseGuard(_settings.ProfileDirectory, _settings.StorageDirectory) : null;
         files.ServerDatabases = () => Shell.ServerDatabasePolice.For(EffectiveSettings, _settings.ProfileDirectory, _settings.StorageDirectory);
         files.AdminFamilies = () => Shell.AdminPolice.For(EffectiveSettings);
+        // The shopping list's tripwire (2026-10-17): the write tools refuse a list's name while the shopping tools are offered.
+        files.ShoppingListGuard = () => ChatScreen.ShoppingListGuarded(EffectiveSettings);
         files.RecycleDeletes = () => EffectiveSettings.FileDeletesToRecycleBin ? _recycleBin : null;   // later on 2026-10-15
         // The UNC shares' door first (2026-10-01): open reaches the offered shares too.
         var unc = new Unc.UncAccess(() => Unc.UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.UncSharesOffered), _time);
@@ -806,7 +808,8 @@ public sealed class SidekickApp
         var webTools = ChatScreen.WebTools(_web, files, () => EffectiveSettings, links: new Llm.Tools.WebLinkHooks(() => new Viewer.BrowserLinks(_settings.ProfileDirectory, _time), _time));
         var git = new Git.GitAccess(files, _time);
         var gitTools = ChatScreen.GitTools(git, () => EffectiveSettings);
-        var vaultTools = ChatScreen.ObsidianTools(new Obsidian.ObsidianVault(() => EffectiveSettings.ObsidianVault, _time), () => EffectiveSettings);
+        var vault = new Obsidian.ObsidianVault(() => EffectiveSettings.ObsidianVault, _time) { ShoppingListGuard = () => ChatScreen.ShoppingListGuarded(EffectiveSettings) };
+        var vaultTools = ChatScreen.ObsidianTools(vault, () => EffectiveSettings);
         var sql = new Sql.SqlAccess(() => Sql.SqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.SqlConnectionsOffered));
         // sql_execute never headless (2026-10-05): no pane to allow a change on.
         var sqlTools = ChatScreen.SqlToolsFor(ChatScreen.SqlTools(sql, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false, sql.Catalog());
@@ -2433,7 +2436,7 @@ public sealed class SidekickApp
         });
         if (chosen.Length > 0)
         {
-            Emojis.EmojiPrefs.Load(_settings.StorageDirectory).Picked(chosen);
+            Emojis.EmojiPrefs.Load(_settings.ProfileDirectory).Picked(chosen);
         }
 
         return chosen.Length == 0 ? (user ? Emojis.EmojiText.UserCleared : Emojis.EmojiText.Cleared) : Said(chosen);

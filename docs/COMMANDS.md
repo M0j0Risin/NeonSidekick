@@ -200,7 +200,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/youtube unsave <n>\|<id>\|<link>` | Removes one saved video. |
 | `/webui` | Shows the [Web UI](INTERFACE.md#web-ui): on or off, its port and reach, and a tab per address with a QR code to scan with a phone and the sign-in link. Its buttons: `e` turns it on or off, `l` switches the reach between `lan` and `local`, `r` makes a new token after a yes, `c` copies the shown tab's link. A double-click on the link opens it on this PC, as `/webui browser` does. Opens over a reply too. Not headless. |
 | `/webui on\|off` | Turns the Web UI on or off for this profile; the server starts or stops at once. |
-| `/webui copy` | Puts the first sign-in link on the clipboard. It holds the token: paste it only where you trust. |
+| `/webui copy` | Puts the first sign-in link (Tailscale's when there is one) on the clipboard. It holds the token: paste it only where you trust. |
 | `/webui reset` | Makes a new sign-in token after a yes; every browser signed in will be signed out. |
 | `/webui browser [--external]` | Opens the Web UI on this PC, already signed in: in the Browser window under *Web open links in* `browser-window`, else in your default browser, signed in as *Web browser sign in mode* says. `--external` always uses the default browser. The Web UI must be on. Runs at once under a reply. |
 

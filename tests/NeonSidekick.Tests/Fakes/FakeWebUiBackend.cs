@@ -283,6 +283,28 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
         return new WebReply(WebOutcome.Ok, "Cleared.");
     }
 
+    /// <summary>The status row's 🧠 (2026-10-17): how many cancels arrived; <see cref="LearnReply"/> answers them (Ok by default).</summary>
+    public int LearnCancels;
+
+    public WebReply? LearnReply { get; set; }
+
+    public WebReply CancelLearning(IPAddress? remote)
+    {
+        Interlocked.Increment(ref LearnCancels);
+        return LearnReply ?? WebReply.Ok;
+    }
+
+    /// <summary>The held queue's Resume (2026-10-17): how many arrived; <see cref="ResumeReply"/> answers them (Ok by default).</summary>
+    public int Resumes;
+
+    public WebReply? ResumeReply { get; set; }
+
+    public WebReply ResumeQueue(IPAddress? remote)
+    {
+        Interlocked.Increment(ref Resumes);
+        return ResumeReply ?? WebReply.Ok;
+    }
+
 public IWebHome? Home { get; set; }
 
     /// <summary>

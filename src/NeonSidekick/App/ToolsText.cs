@@ -148,7 +148,7 @@ public static class ToolsText
     /// <summary>The last tab (second from later on 2026-09-19, the user's ask, until 2026-09-22, the user's ask again): the pane's own settings — the <c>$</c>-mention switch and the two folds — in the <c>/skills</c> Options tab's shape (<see cref="SettingsMenu.ToolsTabFields"/>' last list).</summary>
     public const string OptionsTabTitle = "Options";
     public const string AskTabTitle = "Ask";
-    /// <summary>The file tools' Offered heading and, since 2026-10-10 (the user's pick), the tab holding the File, UNC, GitLib and Obsidian menus (Image after File since later that day); their tab until then.</summary>
+    /// <summary>The file tools' Offered heading and, since 2026-10-10 (the user's pick), the tab holding the File, UNC and GitLib menus (Image after File since later that day; Obsidian too until 2026-10-17, Apps' since); their tab until then.</summary>
     public const string FilesTabTitle = "Files";
 
     /// <summary>The file tools' menu on the Files tab (2026-10-10, the user's pick: the tab "Files" over the menu "File", so <c>/tools file</c> and <c>/tools files</c> each name one). Pinned.</summary>
@@ -245,7 +245,7 @@ public static class ToolsText
     /// <summary>The tab that holds the device menus (2026-10-09, the user's call): Print, Camera and Screen since 2026-10-10 (ComfyUI and YouTube on Integrations since, the user's ask), each a tab of its own until 2026-10-09. "Media" until later on 2026-10-10 (the user's call). Camera, Screen, Print since 2026-10-16 (the user's order). Pinned.</summary>
     public const string DevicesTabTitle = "Devices";
 
-    /// <summary>The tab that holds the menus of the apps and services the tools reach (2026-10-10, the user's pick): Docker, ComfyUI and YouTube — ClaudeCode first too until later that day, when the Claude Code
+    /// <summary>The tab that holds the menus of the apps and services the tools reach (2026-10-10, the user's pick): Docker, ComfyUI and YouTube, and Obsidian after them since 2026-10-17 (the user's order) — ClaudeCode first too until later that day, when the Claude Code
     /// advisor tool was retired and <c>/claude</c>'s rows went to <c>/settings</c>' Anthropic tab (the user's call); HomeAssistant too until 2026-10-11, when it went to
     /// <see cref="HomeTabTitle"/>. "Integrations" until then (the user's pick: it no longer held every integration). Pinned.</summary>
     public const string AppsTabTitle = "Apps";
@@ -272,7 +272,8 @@ public static class ToolsText
     /// under one Standard tab after Offered (<see cref="CoreTabTitle"/>), Options its last menu (the user's ask): Offered, Standard, Files, Integrations, Database, Media; Standard renamed Core and Media Devices later still (the user's call). Since 2026-10-11 (the user's ask) Home is
     /// the last, HomeAssistant and Shopping on it, and Integrations is Apps: Offered, Core, Files, Apps, Databases, Devices, Home. Since 2026-10-15 (the admin-tools
     /// plan) Admin after Apps holds EventLog (off Apps), Services, Tasks and Directory, and Core holds Network after Web. Since 2026-10-16 (the user's order) Core is Web, Shell, Timers, Ask, Options,
-    /// Admin Network, EventLog, Services, Tasks, Directory, and Devices Camera, Screen, Print.</summary>
+    /// Admin Network, EventLog, Services, Tasks, Directory, and Devices Camera, Screen, Print. Since 2026-10-17 (the user's order) Obsidian is
+    /// Apps' last menu, after YouTube (Files' last until then): Files File, Image, UNC, GitLib; Apps Docker, ComfyUI, YouTube, Obsidian.</summary>
     public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, CoreTabTitle, FilesTabTitle, AppsTabTitle, AdminTabTitle, DatabaseTabTitle, DevicesTabTitle, HomeTabTitle];
 
     /// <summary>
@@ -280,7 +281,7 @@ public static class ToolsText
     /// one for a plain tab, its rows the tab's; more for a group tab — <see cref="CoreTabTitle"/> (later on 2026-10-10), <see cref="FilesTabTitle"/>, <see cref="AppsTabTitle"/> (2026-10-10),
     /// <see cref="DatabaseTabTitle"/>, <see cref="DevicesTabTitle"/> and <see cref="HomeTabTitle"/> (2026-10-11) — whose menus are sub-tabs on a second strip (<see cref="ToolsMenu"/>). Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 23, 0, 20], [3, 4, 5, 19, 9], [15, 17, 18], [24, 22, 25, 26, 27], [10, 11, 12, 13, 14], [7, 8, 6], [16, 21]];
+    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 23, 0, 20], [3, 4, 5, 19], [15, 17, 18, 9], [24, 22, 25, 26, 27], [10, 11, 12, 13, 14], [7, 8, 6], [16, 21]];
 
     /// <summary>
     /// Whether menu <paramref name="menu"/>'s switch (a <see cref="MenuTitles"/> index) is on in <paramref name="saved"/> (2026-10-16, the user's

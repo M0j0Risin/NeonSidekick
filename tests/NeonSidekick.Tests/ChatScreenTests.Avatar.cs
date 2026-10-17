@@ -155,7 +155,7 @@ public partial class ChatScreenTests
 
         Assert.Contains(EmojiText.PickerTitle, output);
         Assert.Equal("hi " + cat, _chat.Requests[0].Last(m => m.Role == Microsoft.Extensions.AI.ChatRole.User).Text);
-        Assert.Equal(cat, EmojiPrefs.Load(_settings.StorageDirectory).Recent[0]);
+        Assert.Equal(cat, EmojiPrefs.Load(_settings.ProfileDirectory).Recent[0]);
     }
 
     /// <summary>

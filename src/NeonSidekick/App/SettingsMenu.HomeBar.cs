@@ -285,7 +285,7 @@ internal sealed partial class SettingsMenu
     {
         string name = HomeBarItems.NameOf(reference, catalog);
         string current = HomeBarItems.GlyphOf(_settings.Current.HomeBarGlyphs, reference) ?? "";
-        var context = new AvatarContext(EmojiCatalog.Shipped, EmojiPrefs.Load(_settings.StorageDirectory), current, _settings.ProfileName,
+        var context = new AvatarContext(EmojiCatalog.Shipped, EmojiPrefs.Load(_settings.ProfileDirectory), current, _settings.ProfileName,
             new Dictionary<string, List<string>>(StringComparer.Ordinal), [], HomeDefault: HomeChips.DefaultGlyph(reference, catalog));
         string title = Crumb(FieldName(SettingsField.ShowHomeBar)) + " › " + name + " › " + HomeBarText.EmojiTitle;
         return await ChooseEmojiAsync(context, title, "", cancellationToken).ConfigureAwait(false) is { } chosen && SetHomeItemGlyph(reference, catalog, chosen);

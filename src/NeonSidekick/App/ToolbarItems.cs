@@ -104,7 +104,8 @@ public static class ToolbarItems
     ];
 
     /// <summary>
-    /// What a profile that never chose shows (2026-10-05, the user's pick): Settings, Tools, Skills, Memory, Saved prompts (2026-10-14, the user's ask),
+    /// What a profile that never chose shows (2026-10-05, the user's pick): Settings, the Web UI (2026-10-17, the user's ask; drawn after Web,
+    /// <see cref="DefaultOrder"/>), Tools, Skills, Memory, Saved prompts (2026-10-14, the user's ask),
     /// Queue (2026-10-13, the user's pick), Shell allowed
     /// commands, Shell police, the Shell, Files, Image (2026-10-10, the user's ask) and Web switches and the path — the lock and the officer still only under a
     /// policy other than off. Tools, Shell allowed commands, Shell police, the three switches and the path from 2026-10-03; Shell
@@ -112,7 +113,7 @@ public static class ToolbarItems
     /// 2026-09-29, every item before; a profile that saved the defaults as null follows. In <see cref="Names"/> order, which
     /// <see cref="Save"/> compares by. Pinned.
     /// </summary>
-    public static readonly string[] Defaults = [Settings, Tools, Skills, Memory, Prompts, Queue, CmdList, Police, Shell, Files, Image, Web, Path];
+    public static readonly string[] Defaults = [Settings, WebUi, Tools, Skills, Memory, Prompts, Queue, CmdList, Police, Shell, Files, Image, Web, Path];
 
     /// <summary>
     /// The glyph an item draws on the checklist (the lock's closed one for <see cref="CmdList"/>; the folder for the path
@@ -322,18 +323,25 @@ public static class ToolbarItems
     }
 
     /// <summary>
-    /// The default order (2026-10-13, the user's ask: <c>⚙️ 🛠️ 🎓 | 💾 📣 ⏳ | 🔒 👮 🐚 | 📁 🌄 🌐</c>, 📣 since 2026-10-14): <see cref="Names"/> with a divider ahead of
+    /// The default order (2026-10-13, the user's ask: <c>⚙️ 🛠️ 🎓 | 💾 📣 ⏳ | 🔒 👮 🐚 | 📁 🌄 🌐 📱</c>, 📣 since 2026-10-14, 📱 after 🌐 since 2026-10-17): <see cref="Names"/> with a divider ahead of
     /// Memory (later still that day, the user's ask; after Usage, so 💾 📣 ⏳ stay together when System prompt, Sessions or Usage is checked), one after
     /// Queue (ahead of Ask, unchecked by default; after Memory until Queue came later that day) and one after Shell, numbered from the left. A
     /// divider whose neighbours are hidden is not drawn (<see cref="ItemOrder.ShownDividers"/>). Pinned.
     /// </summary>
     public static readonly string[] DefaultOrder =
     [
-        .. Names.TakeWhile(id => id != Memory), ItemOrder.DividerPrefix + "1",
-        .. Names.SkipWhile(id => id != Memory).TakeWhile(id => id != Ask), ItemOrder.DividerPrefix + "2",
-        .. Names.SkipWhile(id => id != Ask).TakeWhile(id => id != Files), ItemOrder.DividerPrefix + "3",
-        .. Names.SkipWhile(id => id != Files),
+        .. DefaultNames.TakeWhile(id => id != Memory), ItemOrder.DividerPrefix + "1",
+        .. DefaultNames.SkipWhile(id => id != Memory).TakeWhile(id => id != Ask), ItemOrder.DividerPrefix + "2",
+        .. DefaultNames.SkipWhile(id => id != Ask).TakeWhile(id => id != Files), ItemOrder.DividerPrefix + "3",
+        .. DefaultNames.SkipWhile(id => id != Files),
     ];
+
+    /// <summary>
+    /// <see cref="Names"/> as <see cref="DefaultOrder"/> lays them out (2026-10-17, the user's ask: the Web UI's 📱 right after Web's 🌐, and on
+    /// by default in <see cref="Defaults"/>): Names itself, the checklist's own order, keeps it after Themes, so a profile's saved order and the
+    /// tests that pin <c>ToolbarOrder</c> to Names see no change.
+    /// </summary>
+    private static string[] DefaultNames => [.. Names.Where(id => id != WebUi).SelectMany(id => id == Web ? new[] { Web, WebUi } : [id])];
 
     /// <summary>
     /// The checklist's and the strip's order for <paramref name="saved"/> (<see cref="Settings.AppSettingsData.ToolbarOrder"/>,

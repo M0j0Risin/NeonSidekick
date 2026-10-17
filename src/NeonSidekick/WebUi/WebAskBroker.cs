@@ -18,7 +18,9 @@ public enum AskSource
 /// A <c>pick</c> (later on 2026-10-14: bare <c>/model</c>, <c>/reasoning</c>, <c>/rewind</c> from the page) carries <see cref="Items"/> — answered by an
 /// item's id — and the one in use (<see cref="Current"/>); an <c>info</c> carries its <see cref="Lines"/> and one choice, <c>close</c>. A <c>botcheck</c>
 /// (2026-10-17) is the wait while a bot check runs in the Browser window, its one choice Give up; <see cref="Live"/> puts the window's picture and
-/// controls on its card (<i>Web UI bot check control</i>).
+/// controls on its card (<i>Web UI bot check control</i>). <see cref="Detail"/> (2026-10-17, the user's question about the reflection's ask) is a
+/// long text the page shows folded under the buttons, opened by <see cref="DetailLabel"/>: the reflection's proposal whole, its summary the
+/// body, as the PC shows the summary and keeps the rest behind View.
 /// </remarks>
 public sealed record WebAskSpec(
     string Kind,
@@ -32,7 +34,9 @@ public sealed record WebAskSpec(
     string? SubmitLabel = null,
     IReadOnlyList<WebPickItem>? Items = null,
     string? Current = null,
-    bool Live = false);
+    bool Live = false,
+    string? Detail = null,
+    string? DetailLabel = null);
 
 /// <summary>
 /// One open ask: its id, the answer the page gave (when the page claimed it), and the claim both sides race for. The first claim wins

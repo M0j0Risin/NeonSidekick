@@ -31,6 +31,14 @@ public abstract class VaultTool : AIFunction
 
     protected static string ReadNote(AIFunctionArguments arguments) => ToolArguments.ReadString(arguments, NoteArgument);
 
+    /// <summary>
+    /// The shopping list's tripwire for a note written or moved to <paramref name="note"/> (2026-10-17, the user's report; the file tools'
+    /// <c>FileTool.ShoppingListRefusal</c>): <see cref="Shopping.ShoppingText.NotAFile"/> while the vault's
+    /// <see cref="ObsidianVault.ShoppingListGuard"/> holds and the name is a list's, else null.
+    /// </summary>
+    protected string? ShoppingListRefusal(string note) =>
+        Vault.ShoppingListGuard?.Invoke() == true && Shopping.ShoppingFileGuard.IsShoppingListName(note) ? Shopping.ShoppingText.NotAFile(note) : null;
+
     /// <summary>The act off the caller's thread: the vault is read and written synchronously, and the turn loop is the UI's.</summary>
     protected static async ValueTask<object?> OffThread(Func<string> act, CancellationToken cancellationToken) =>
         await Task.Run(act, cancellationToken).ConfigureAwait(false);

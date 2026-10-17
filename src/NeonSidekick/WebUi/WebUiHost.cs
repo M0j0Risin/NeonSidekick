@@ -467,6 +467,8 @@ public sealed class WebUiHost : IWebUiHost
                     MemorySavePath => await ReadAsync(context, WebUiJsonContext.Default.WebTextBody).ConfigureAwait(false) is { } memory ? _backend.SaveMemory(memory, remote) : null,
                     MemoryDeletePath => await ReadAsync(context, WebUiJsonContext.Default.WebTextBody).ConfigureAwait(false) is { } forget ? _backend.DeleteMemory(forget, remote) : null,
                     HistoryClearPath => _backend.ClearHistory(remote),   // the body is not read, as Stop's
+                    LearnCancelPath => _backend.CancelLearning(remote),   // the status row's 🧠 (2026-10-17); no body either
+                    QueueResumePath => _backend.ResumeQueue(remote),   // the held queue's banner (2026-10-17); no body either
                     YouTubeReportPath => await YouTubeReportAsync(context, remote).ConfigureAwait(false),
                     YouTubeSeenPath => await YouTubeSeenAsync(context, remote).ConfigureAwait(false),
                     YouTubeSavedPlayPath => await ReadAsync(context, WebUiJsonContext.Default.WebSavedPlay).ConfigureAwait(false) is { } play ? _backend.PlaySaved(play, remote) : null,
@@ -607,6 +609,7 @@ public sealed class WebUiHost : IWebUiHost
 
         return path is "/api/events" or "/api/send" or "/api/stop" or "/api/answer" or "/api/complete" or "/api/usage" or "/api/strip/select" or "/api/prompts"
                 or PromptSavePath or PromptDeletePath or MemoryPath or MemorySavePath or MemoryDeletePath or HistoryPath or HistoryClearPath
+                or LearnCancelPath or QueueResumePath
                 or BotCheckFramePath or BotCheckInputPath
             || path.StartsWith(EntryPrefix, StringComparison.Ordinal) || path.StartsWith(PicturePrefix, StringComparison.Ordinal)
             ? WebTab.Chat
@@ -726,6 +729,12 @@ public sealed class WebUiHost : IWebUiHost
 
     /// <summary>The 🕘 tab's clear all (2026-10-16).</summary>
     public const string HistoryClearPath = "/api/history/clear";
+
+    /// <summary>The status row's 🧠, tapped twice (2026-10-17): the running reflection canceled.</summary>
+    public const string LearnCancelPath = "/api/learn/cancel";
+
+    /// <summary>The held queue's Resume (2026-10-17): the lines held after a cancel sent.</summary>
+    public const string QueueResumePath = "/api/queue/resume";
 
     /// <summary>The Shopping tab's 🕘 sheet (2026-10-16): what was bought before and is not on the list now.</summary>
     public const string ShopBoughtPath = "/api/shopping/bought";

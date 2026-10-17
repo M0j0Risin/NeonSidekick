@@ -204,6 +204,27 @@ public sealed class WebHomeViewTests
         Assert.Equal(["light.porch_1", "light.porch_2"], zone.Devices.Select(d => d.Entity));
     }
 
+    /// <summary>
+    /// A row's name drops its box's in front (2026-10-17, the user's phone): "Den Lamp" in Den is "Lamp", the whole name kept as the row's
+    /// name; a name that doesn't start with the box's, or is only the box's ("Kitchen" in Kitchen), has no short form.
+    /// </summary>
+    [Fact]
+    public void TheRooms_ARowsShortName_IsItsNameWithoutTheBoxs()
+    {
+        var live = RoomLive();
+        var entities = new Dictionary<string, HaLiveEntity>(live.Entities, StringComparer.Ordinal)
+        {
+            ["light.den_lamp"] = Entity("light.den_lamp", "on", "{\"friendly_name\":\"Den Lamp\",\"brightness\":204}"),
+        };
+        var rooms = Rooms(live with { Entities = entities }, []);
+
+        var den = rooms.Single(r => r.Key == "den");
+        Assert.Equal(("Den Lamp", "Lamp"), (den.Devices[0].Name, den.Devices[0].Short));
+        Assert.Equal(("TV", (string?)null), (den.Devices[1].Name, den.Devices[1].Short));
+        Assert.Equal(("Kitchen", (string?)null), (rooms.Single(r => r.Key == "kitchen").Devices[0].Name, rooms.Single(r => r.Key == "kitchen").Devices[0].Short));
+        Assert.All(rooms.Single(r => r.Key == "device:hue-zone").Devices, d => Assert.Null(d.Short));   // "Porch 1" in "Porch zone": whole
+    }
+
     /// <summary>A zone the feed doesn't hold yet is found from the catalog's state; a box with no light has no switch; a stale feed dims every switch.</summary>
     [Fact]
     public void TheRooms_AZoneFromTheCatalogsState_NoLightsNoSwitch_AndAStaleFeed()

@@ -494,6 +494,15 @@ public sealed class WorkingDirectory
     public Func<DatabaseGuard?>? Databases { get; set; }
 
     /// <summary>
+    /// Whether the shopping tools are offered (2026-10-17, the user's report), read at each write tool's call: while true, <c>write_file</c>,
+    /// <c>patch_file</c>, <c>copy</c> and <c>move</c> refuse a destination named as a shopping or grocery list
+    /// (<see cref="Shopping.ShoppingFileGuard"/>). Set on the working directory alone; null (a share's, a test's) never refuses. The check is the
+    /// tools', not <see cref="Resolve(string, bool, out string)"/>'s: a delete, a move's source and the app's own writes
+    /// (<c>/shopping export</c>) are never refused.
+    /// </summary>
+    public Func<bool>? ShoppingListGuard { get; set; }
+
+    /// <summary>
     /// The bin a <see cref="Delete"/> moves to (later on 2026-10-15, <c>File deletes to Recycle bin</c>), read at each delete: the screen's and
     /// headless's working directory hand the system's bin while the setting is on, else null. Null (unset, a share's, a test's) deletes directly.
     /// </summary>

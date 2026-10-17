@@ -65,6 +65,11 @@ public sealed class PatchFileTool : FileTool
             return new ValueTask<object?>(error);
         }
 
+        if (ShoppingListRefusal(path) is { } refused)
+        {
+            return new ValueTask<object?>(refused);
+        }
+
         // The diff beside the sentence for the transcript (2026-10-03, ToolDiffResult); the model gets the sentence alone.
         var edited = Files.EditText(
             path,

@@ -148,6 +148,12 @@ public interface IWebUiBackend
     /// <summary>The message history cleared from the 🕘 tab (2026-10-16): what <c>/msgclear</c>'s yes does, the two taps having been the yes.</summary>
     WebReply ClearHistory(IPAddress? remote);
 
+    /// <summary>The running reflection canceled from the status row's 🧠 (2026-10-17), the two taps having been the yes; NotFound without a screen.</summary>
+    WebReply CancelLearning(IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>The queue held after a cancel released from the page's banner (2026-10-17); NotFound without a screen.</summary>
+    WebReply ResumeQueue(IPAddress? remote) => new(WebOutcome.NotFound);
+
     /// <summary>The Home tab (2026-10-15), or null in a build without one.</summary>
     IWebHome? Home { get; }
 

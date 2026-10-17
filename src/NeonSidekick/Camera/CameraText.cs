@@ -110,6 +110,9 @@ public static class CameraText
     public const string RetakeRow = "Take it again";
     public const string CancelRow = "Cancel";
 
+    /// <summary>The Web UI's shutter card's take (2026-10-17): the page has no preview, so a tap takes the photo and sends it at once.</summary>
+    public const string TakeAndSendRow = "Take and send";
+
     /// <summary>The title row's buttons: Space takes the photo, r takes it again.</summary>
     public const string SnapButton = "␣ snap";
     public const string RetakeButton = "r retake";

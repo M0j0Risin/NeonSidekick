@@ -78,13 +78,18 @@ internal sealed partial class ChatScreen
 
         if (command is SlashCommand.Model or SlashCommand.Reasoning)
         {
+            // The connect's own test (2026-10-17, the user's question: a saved hosted API switched off, an embedded server switched off or an
+            // unchosen Docker URL scanned too, opening the PC's pickers; only a blank URL with the scan on was caught until then).
             var effective = _effective();
-            if (string.IsNullOrWhiteSpace(effective.LlmUrl) && Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective)))
+            if (ConnectWouldPick(effective))
             {
                 return WebUiText.WouldScan;
             }
 
-            if (command == SlashCommand.Model && args.Trim() is { Length: > 0 } id && EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(effective.LlmUrl)
+            // The model the connect would load: the one named by /model, the saved one for /reasoning (2026-10-17: its reconnect installs a
+            // missing model as /model's does).
+            string id = command == SlashCommand.Model ? args.Trim() : effective.LlmModel ?? "";
+            if (id.Length > 0 && EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(effective.LlmUrl)
                 && _session.Embedded is { } embedded && EmbeddedLlm.EmbeddedModelCatalog.Find(id, embedded.Catalog) is { } named
                 && !embedded.State(named).IsInstalled)
             {

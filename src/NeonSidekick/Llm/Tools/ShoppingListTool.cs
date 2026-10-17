@@ -20,7 +20,7 @@ public sealed class ShoppingListTool(ShoppingList list) : ShoppingTool(list)
 
     /// <summary>Pinned.</summary>
     public override string Description =>
-        "Shows the user's shopping list, grouped by aisle in the order the store is walked (the active store unless one is named), with ticked lines and likely duplicates.";
+        "Shows the user's shopping or grocery list (what's on it, what's still to buy), grouped by aisle in the order the store is walked (the active store unless one is named), with ticked lines and likely duplicates.";
 
     public override JsonElement JsonSchema => Schema;
 

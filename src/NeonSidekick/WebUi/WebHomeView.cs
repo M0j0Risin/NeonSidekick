@@ -320,7 +320,11 @@ public static class WebHomeView
                     : on > 0;
             }
 
-            var devices = members.Select(m => Device(m, live, catalog, mark, stale)).ToList();
+            // A device's row drops its box's name in front (2026-10-17, the user's phone: "Living Room Table Lamp Back" in Living Room), as the
+            // scenes' labels do; the full name stays its title, its switch's label and its sheet's.
+            var devices = members.Select(m => Device(m, live, catalog, mark, stale))
+                .Select(d => named && LabelIn(d.Name, name) is var label && label != d.Name ? d with { Short = label } : d)
+                .ToList();
             return new WebHomeRoom(key, reference, name, onBar.Contains(key, StringComparer.Ordinal), value, tone, marked, color, switchedOn, devices, scenes);
         }).ToList();
     }

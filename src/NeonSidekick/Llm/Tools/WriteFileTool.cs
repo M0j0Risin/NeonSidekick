@@ -114,6 +114,11 @@ public sealed class WriteFileTool : FileTool
             return new ValueTask<object?>(error);
         }
 
+        if (ShoppingListRefusal(path) is { } refused)
+        {
+            return new ValueTask<object?>(refused);
+        }
+
         // No mode on a file the model read whole, wrote or patched this session and that is unchanged since (2026-10-10, the user's call: a run
         // retried twice, each a whole request, for files it had just read or made): it is replaced, as mode overwrite would. A file it
         // never saw, or one changed since, is still refused; an explicit create still never replaces.

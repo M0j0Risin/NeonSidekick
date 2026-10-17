@@ -9,8 +9,8 @@ Each group has a switch (*File tools*, *Web tools*…), and the Offered tab of `
 - [Where tools are offered](#where-tools-are-offered)
 - [Always offered](#always-offered): [Clock](#clock), [Help](#help)
 - [Core](#core): [Web](#web), [Shell](#shell), [Timers](#timers), [Ask](#ask)
-- [Files](#files): [File](#file), [Image](#image), [UNC shares and outside folders](#unc-shares-and-outside-folders), [GitLib](#gitlib), [Obsidian](#obsidian)
-- [Apps](#apps): [Docker](#docker), [ComfyUI](#comfyui), [YouTube](#youtube)
+- [Files](#files): [File](#file), [Image](#image), [UNC shares and outside folders](#unc-shares-and-outside-folders), [GitLib](#gitlib)
+- [Apps](#apps): [Docker](#docker), [ComfyUI](#comfyui), [YouTube](#youtube), [Obsidian](#obsidian)
 - [Admin](#admin): [Network](#network), [Event logs](#event-logs), [Services](#services), [Scheduled tasks](#scheduled-tasks), [Active Directory](#active-directory)
 - [Databases](#databases): [How the database tools work](#how-the-database-tools-work), [SQL Server](#sql-server), [MySQL and MariaDB](#mysql-and-mariadb), [SQLite](#sqlite), [PostgreSQL](#postgresql), [Oracle](#oracle)
 - [Devices](#devices): [Camera](#camera), [Screen](#screen), [Printing](#printing)
@@ -265,22 +265,6 @@ Under *GitLib tools*: git inside the app, for when the model should never run `g
 | `gitlib_discard` | `paths?, ref?, path?` | Throws away uncommitted changes in `paths`, or resets hard (untracked files stay). |
 | `gitlib_delete` | `kind, name?, index?, path?` | Removes a local `branch` (never the checked-out one), a `tag`, or a `stash` by index. |
 
-### Obsidian
-
-Under *Obsidian tools*, on the vault *Obsidian vault* names. They work on its files directly; Obsidian needn't be running. Notes are found by name, `[[wikilink]]`, alias or path.
-
-| Tool | Arguments | What it does |
-|---|---|---|
-| `vault_search` | `query, tag?, folder?, max_results?` | Matching lines as `path:line`, and notes whose name or alias matches, within a tag or folder if given. |
-| `vault_list` | `what?, folder?, tag?, property?, value?, max_results?` | Notes by folder, tag or property (`status: draft`), or every tag or property key with its count. |
-| `vault_read` | `note, heading?, start_line?, max_lines?` | A note with its properties, one heading's section, or a window of lines. |
-| `vault_links` | `note` | The note's links and embeds, and every backlink. |
-| `vault_daily` | `date?, append?` | The daily note for a day (`today`, `+3`, `2026-09-22`), made from the vault's template if missing; `append` adds to it. |
-| `vault_write` | `note, content, mode?, heading?` | `create`, `overwrite`, `append` or `prepend`, to the note or one heading's section. |
-| `vault_properties` | `note, set?, remove?` | Lists, sets or removes properties in one write; only the named keys change. |
-| `vault_move` | `note, to` | Renames or moves a note and rewrites every link to it. |
-| `vault_delete` | `note` | Moves a note or attachment (never a folder) to the vault's `.trash`. Only while *Obsidian allow delete (.trash)* is on. |
-
 ## Apps
 
 ### Docker
@@ -435,6 +419,22 @@ Under *YouTube tools*. Videos play where *YouTube open links in* says: the app's
 * **Saved videos** are your bookmarks, per profile, in `youtube.json`. One resumes a few seconds before where you left it; one seen to the end starts over. `/youtube save`, `list` and `unsave` let you manage the list yourself.
 * **Known issue:** `seek` and `volume` on a paused video answer with the old value. The change itself happens, and the next answer shows it.
 * **Where it plays:** in a browser the app can't see or control the video, so `youtube_status` says only where it went and `youtube_control` says it can't. In the Web UI's tab a video with no tab in view waits for one. A video YouTube won't embed goes to the browser through `open_url`.
+
+### Obsidian
+
+Under *Obsidian tools*, on the vault *Obsidian vault* names. They work on its files directly; Obsidian needn't be running. Notes are found by name, `[[wikilink]]`, alias or path.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `vault_search` | `query, tag?, folder?, max_results?` | Matching lines as `path:line`, and notes whose name or alias matches, within a tag or folder if given. |
+| `vault_list` | `what?, folder?, tag?, property?, value?, max_results?` | Notes by folder, tag or property (`status: draft`), or every tag or property key with its count. |
+| `vault_read` | `note, heading?, start_line?, max_lines?` | A note with its properties, one heading's section, or a window of lines. |
+| `vault_links` | `note` | The note's links and embeds, and every backlink. |
+| `vault_daily` | `date?, append?` | The daily note for a day (`today`, `+3`, `2026-09-22`), made from the vault's template if missing; `append` adds to it. |
+| `vault_write` | `note, content, mode?, heading?` | `create`, `overwrite`, `append` or `prepend`, to the note or one heading's section. |
+| `vault_properties` | `note, set?, remove?` | Lists, sets or removes properties in one write; only the named keys change. |
+| `vault_move` | `note, to` | Renames or moves a note and rewrites every link to it. |
+| `vault_delete` | `note` | Moves a note or attachment (never a folder) to the vault's `.trash`. Only while *Obsidian allow delete (.trash)* is on. |
 
 ## Admin
 
@@ -949,6 +949,7 @@ Under *Shopping tools*. One list per profile and any number of stores, in the pr
 
 * **Layout facts:** a store learns where a product, brand or category is (`Aisle 7`, `Dairy`); a guessed fact is marked `(guess)` until you confirm it.
 * **Reference documents:** guides and floor maps go in `db\shopping\reference\<store>` (PDFs, `.md`, `.txt`, pictures), indexed when needed (`/shopping reindex` rereads them). PDFs are read in the browser that *Web browser path* names.
+* **Never a file:** while these tools are offered, the file tools (`write_file`, `patch_file`, `copy`, `move`) and the vault's `vault_write` and `vault_move` won't write a file or note named as a shopping or grocery list (`shopping-list.md`, `Groceries.md`); the model is pointed to `shopping_add`. `/shopping export` still writes its copy, and an old list file can be read or deleted.
 
 | Tool | Arguments | What it does |
 |---|---|---|

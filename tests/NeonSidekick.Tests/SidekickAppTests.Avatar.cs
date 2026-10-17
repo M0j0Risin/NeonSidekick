@@ -17,7 +17,7 @@ public partial class SidekickAppTests
         Assert.Contains(EmojiText.Cleared, output);
         Assert.Contains(EmojiText.AlreadyNone, output);
         Assert.Equal("", _settings.Current.ModelAvatar);
-        Assert.Equal(["🐙"], EmojiPrefs.Load(_dir).Recent);
+        Assert.Equal(["🐙"], EmojiPrefs.Load(_settings.ProfileDirectory).Recent);
     }
 
     /// <summary><c>/avatar user</c> headless (2026-10-12, the user's ask): the user avatar said, set and cleared in its own words; the model's untouched.</summary>
